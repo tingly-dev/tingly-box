@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -25,19 +26,13 @@ func NewHandler(importer *Importer, cfg *config.Config) *Handler {
 func (h *Handler) ImportOpenAISessions(c *gin.Context) {
 	var req ImportOpenAISessionsRequest
 	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		apierr.Failure(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	result, err := h.importer.ImportOpenAISessions(req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		apierr.Failure(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -64,10 +59,7 @@ func (h *Handler) ImportOpenAISessions(c *gin.Context) {
 			}
 		}
 		if err := h.config.SetScenarioExtensions(typ.ScenarioCodex, extensions); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   "failed to persist Codex import state: " + err.Error(),
-			})
+			apierr.Failure(c, http.StatusInternalServerError, "failed to persist Codex import state: "+err.Error())
 			return
 		}
 	}

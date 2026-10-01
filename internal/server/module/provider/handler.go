@@ -15,6 +15,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
+	"github.com/tingly-dev/tingly-box/internal/server/module/bind"
 
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/config"
@@ -40,7 +42,7 @@ func NewHandler(cfg *config.Config, qm providerquota.Manager) *Handler {
 
 // badRequest writes the module's standard 400 error envelope.
 func badRequest(c *gin.Context, format string, args ...any) {
-	c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": fmt.Sprintf(format, args...)})
+	apierr.Failure(c, http.StatusBadRequest, fmt.Sprintf(format, args...))
 }
 
 // maskForResponse masks sensitive data and returns a safe ProviderResponse.
@@ -107,13 +109,13 @@ func (h *Handler) GetProviders(c *gin.Context) {
 func (h *Handler) GetProvider(c *gin.Context) {
 	uid := c.Param("uuid")
 	if uid == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Provider name is required"})
+		apierr.Failure(c, http.StatusBadRequest, "Provider name is required")
 		return
 	}
 
 	p, err := h.config.GetProviderByUUID(uid)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Provider not found"})
+		apierr.Failure(c, http.StatusNotFound, "Provider not found")
 		return
 	}
 
@@ -126,8 +128,7 @@ func (h *Handler) GetProvider(c *gin.Context) {
 // CreateProvider adds a new provider.
 func (h *Handler) CreateProvider(c *gin.Context) {
 	var req CreateProviderRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+	if !bind.JSON(c, &req, apierr.Failure) {
 		return
 	}
 
@@ -185,17 +186,11 @@ func (h *Handler) CreateProvider(c *gin.Context) {
 	// api_key auth, and Google-style providers cannot opt in.
 	if req.APIBaseOpenAI != "" || req.APIBaseAnthropic != "" {
 		if req.AuthType != string(typ.AuthTypeAPIKey) {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Dual base URLs (api_base_openai / api_base_anthropic) are only supported for api_key auth providers",
-			})
+			apierr.Failure(c, http.StatusBadRequest, "Dual base URLs (api_base_openai / api_base_anthropic) are only supported for api_key auth providers")
 			return
 		}
 		if req.APIStyle == string(protocol.APIStyleGoogle) {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Dual base URLs are not supported for Google-style providers",
-			})
+			apierr.Failure(c, http.StatusBadRequest, "Dual base URLs are not supported for Google-style providers")
 			return
 		}
 	}
@@ -238,7 +233,7 @@ func (h *Handler) CreateProvider(c *gin.Context) {
 			"name":     req.Name,
 			"api_base": req.APIBase,
 		}).Error(err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -263,16 +258,13 @@ func (h *Handler) CreateProvider(c *gin.Context) {
 func (h *Handler) DeleteProvider(c *gin.Context) {
 	uid := c.Param("uuid")
 	if uid == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Provider name is required"})
+		apierr.Failure(c, http.StatusBadRequest, "Provider name is required")
 		return
 	}
 
 	// Builtin providers (e.g. virtual-model defaults) are not deletable.
 	if existing, err := h.config.GetProviderByUUID(uid); err == nil && existing.IsBuiltin() {
-		c.JSON(http.StatusForbidden, gin.H{
-			"success": false,
-			"error":   "Builtin providers cannot be deleted (you can disable them instead)",
-		})
+		apierr.Failure(c, http.StatusForbidden, "Builtin providers cannot be deleted (you can disable them instead)")
 		return
 	}
 
@@ -282,7 +274,7 @@ func (h *Handler) DeleteProvider(c *gin.Context) {
 			"success": false,
 			"name":    uid,
 		}).Error(err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -299,29 +291,25 @@ func (h *Handler) DeleteProvider(c *gin.Context) {
 func (h *Handler) UpdateProvider(c *gin.Context) {
 	uid := c.Param("uuid")
 	if uid == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Provider name is required"})
+		apierr.Failure(c, http.StatusBadRequest, "Provider name is required")
 		return
 	}
 
 	var req UpdateProviderRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+	if !bind.JSON(c, &req, apierr.Failure) {
 		return
 	}
 
 	p, err := h.config.GetProviderByUUID(uid)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Provider not found"})
+		apierr.Failure(c, http.StatusNotFound, "Provider not found")
 		return
 	}
 
 	// Builtin providers are immutable except for Enabled (toggled via the
 	// dedicated ToggleProvider endpoint).
 	if p.IsBuiltin() {
-		c.JSON(http.StatusForbidden, gin.H{
-			"success": false,
-			"error":   "Builtin providers are read-only (use the toggle endpoint to enable/disable)",
-		})
+		apierr.Failure(c, http.StatusForbidden, "Builtin providers are read-only (use the toggle endpoint to enable/disable)")
 		return
 	}
 
@@ -378,17 +366,11 @@ func (h *Handler) UpdateProvider(c *gin.Context) {
 	// not be rejected for carrying them.
 	if p.APIBaseOpenAI != "" || p.APIBaseAnthropic != "" {
 		if p.AuthType != typ.AuthTypeAPIKey && p.AuthType != "" && !p.IsDual() {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Dual base URLs (api_base_openai / api_base_anthropic) are only supported for api_key auth providers",
-			})
+			apierr.Failure(c, http.StatusBadRequest, "Dual base URLs (api_base_openai / api_base_anthropic) are only supported for api_key auth providers")
 			return
 		}
 		if p.APIStyle == protocol.APIStyleGoogle {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Dual base URLs are not supported for Google-style providers",
-			})
+			apierr.Failure(c, http.StatusBadRequest, "Dual base URLs are not supported for Google-style providers")
 			return
 		}
 	}
@@ -400,7 +382,7 @@ func (h *Handler) UpdateProvider(c *gin.Context) {
 			"name":    uid,
 			"updates": req,
 		}).Error(err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -421,13 +403,13 @@ func (h *Handler) UpdateProvider(c *gin.Context) {
 func (h *Handler) ToggleProvider(c *gin.Context) {
 	uid := c.Param("uuid")
 	if uid == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Provider name is required"})
+		apierr.Failure(c, http.StatusBadRequest, "Provider name is required")
 		return
 	}
 
 	p, err := h.config.GetProviderByUUID(uid)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Provider not found"})
+		apierr.Failure(c, http.StatusNotFound, "Provider not found")
 		return
 	}
 
@@ -440,7 +422,7 @@ func (h *Handler) ToggleProvider(c *gin.Context) {
 			"name":    uid,
 			"enabled": p.Enabled,
 		}).Error(err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -482,7 +464,7 @@ func modelListExpiry(source config.ModelListSource) time.Time {
 func (h *Handler) UpdateProviderModelsByUUID(c *gin.Context) {
 	uid := c.Param("uuid")
 	if uid == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Provider name is required"})
+		apierr.Failure(c, http.StatusBadRequest, "Provider name is required")
 		return
 	}
 
@@ -541,10 +523,7 @@ func (h *Handler) GetProviderModelsByUUID(c *gin.Context) {
 	uid := c.Param("uuid")
 
 	if h.config.GetModelManager() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Provider model manager not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Provider model manager not available")
 		return
 	}
 
@@ -578,19 +557,12 @@ func (h *Handler) GetProviderModelsByUUID(c *gin.Context) {
 func (h *Handler) ImportProviders(c *gin.Context) {
 	cfg := h.config
 	if cfg == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
 		return
 	}
 
 	var req ImportProvidersRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+	if !bind.JSON(c, &req, apierr.Failure) {
 		return
 	}
 
@@ -600,10 +572,7 @@ func (h *Handler) ImportProviders(c *gin.Context) {
 
 	result, err := dataio.Import(req.Data, cfg, dataio.FormatAuto, opts)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Failed to import providers: " + err.Error(),
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Failed to import providers: "+err.Error())
 		return
 	}
 
@@ -644,44 +613,32 @@ func (h *Handler) ImportProviders(c *gin.Context) {
 func (h *Handler) ExportProvider(c *gin.Context) {
 	cfg := h.config
 	if cfg == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
 		return
 	}
 
 	uid := c.Query("uuid")
 	if uid == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "uuid is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "uuid is required")
 		return
 	}
 
 	formatStr := c.DefaultQuery("format", string(dataio.FormatBase64))
 	format := dataio.Format(formatStr)
 	if format != dataio.FormatBase64 && format != dataio.FormatJSONL {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   fmt.Sprintf("invalid format %q: supported formats are base64 and jsonl", formatStr),
-		})
+		apierr.Failure(c, http.StatusBadRequest, fmt.Sprintf("invalid format %q: supported formats are base64 and jsonl", formatStr))
 		return
 	}
 
 	p, err := cfg.GetProviderByUUID(uid)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Provider not found"})
+		apierr.Failure(c, http.StatusNotFound, "Provider not found")
 		return
 	}
 
 	result, err := dataio.Export(&dataio.ExportRequest{Providers: []*typ.Provider{p}}, format)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to export provider: " + err.Error(),
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Failed to export provider: "+err.Error())
 		return
 	}
 

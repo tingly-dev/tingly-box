@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
@@ -40,23 +41,23 @@ func logPairAudit(c *gin.Context, action, uuid, message string) {
 // every reveal is recorded in the audit log.
 func (h *Handler) GetPairingCode(c *gin.Context) {
 	if h.store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ImBot settings store not available"})
+		apierr.Message(c, http.StatusServiceUnavailable, "ImBot settings store not available")
 		return
 	}
 
 	uuid := c.Param("uuid")
 	if uuid == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "UUID is required"})
+		apierr.Message(c, http.StatusBadRequest, "UUID is required")
 		return
 	}
 
 	settings, err := h.store.GetSettingsByUUID(uuid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierr.Message(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if settings.UUID == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ImBot settings not found"})
+		apierr.Message(c, http.StatusNotFound, "ImBot settings not found")
 		return
 	}
 
@@ -70,12 +71,12 @@ func (h *Handler) GetPairingCode(c *gin.Context) {
 	}
 
 	if h.botMgr == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Bot manager unavailable"})
+		apierr.Message(c, http.StatusServiceUnavailable, "Bot manager unavailable")
 		return
 	}
 	pm := h.botMgr.PairingManager()
 	if pm == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Pairing manager unavailable"})
+		apierr.Message(c, http.StatusServiceUnavailable, "Pairing manager unavailable")
 		return
 	}
 
@@ -103,46 +104,44 @@ func (h *Handler) GetPairingCode(c *gin.Context) {
 // The previous code is invalidated immediately. Every rotation is audited.
 func (h *Handler) RotatePairingCode(c *gin.Context) {
 	if h.store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ImBot settings store not available"})
+		apierr.Message(c, http.StatusServiceUnavailable, "ImBot settings store not available")
 		return
 	}
 
 	uuid := c.Param("uuid")
 	if uuid == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "UUID is required"})
+		apierr.Message(c, http.StatusBadRequest, "UUID is required")
 		return
 	}
 
 	settings, err := h.store.GetSettingsByUUID(uuid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierr.Message(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if settings.UUID == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ImBot settings not found"})
+		apierr.Message(c, http.StatusNotFound, "ImBot settings not found")
 		return
 	}
 
 	if !resolveRequirePairing(settings) {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "TOFU pairing is not enabled for this bot. Enable Require Pairing in the bot settings first.",
-		})
+		apierr.Message(c, http.StatusBadRequest, "TOFU pairing is not enabled for this bot. Enable Require Pairing in the bot settings first.")
 		return
 	}
 
 	if h.botMgr == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Bot manager unavailable"})
+		apierr.Message(c, http.StatusServiceUnavailable, "Bot manager unavailable")
 		return
 	}
 	pm := h.botMgr.PairingManager()
 	if pm == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Pairing manager unavailable"})
+		apierr.Message(c, http.StatusServiceUnavailable, "Pairing manager unavailable")
 		return
 	}
 
 	code, expiresAt := pm.Mint(uuid)
 	if code == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to mint pairing code"})
+		apierr.Message(c, http.StatusInternalServerError, "Failed to mint pairing code")
 		return
 	}
 

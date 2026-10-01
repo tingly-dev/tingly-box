@@ -7,6 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
+	"github.com/tingly-dev/tingly-box/internal/server/module/bind"
 
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -27,10 +29,7 @@ func NewHandler(cfg *config.Config) *Handler {
 // GetRules returns all rules, filtered by scenario
 func (h *Handler) GetRules(c *gin.Context) {
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
 		return
 	}
 
@@ -47,10 +46,7 @@ func (h *Handler) GetRules(c *gin.Context) {
 		}
 		rules = filteredRules
 	} else {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Scenario not found in request",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Scenario not found in request")
 		return
 	}
 
@@ -66,27 +62,18 @@ func (h *Handler) GetRules(c *gin.Context) {
 func (h *Handler) GetRule(c *gin.Context) {
 	ruleUUID := c.Param("uuid")
 	if ruleUUID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Rule UUID is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Rule UUID is required")
 		return
 	}
 
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
 		return
 	}
 
 	rule := h.config.GetRuleByUUID(ruleUUID)
 	if rule == nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error":   "Rule not found",
-		})
+		apierr.Failure(c, http.StatusNotFound, "Rule not found")
 		return
 	}
 
@@ -101,42 +88,26 @@ func (h *Handler) GetRule(c *gin.Context) {
 // CreateRule creates a new rule
 func (h *Handler) CreateRule(c *gin.Context) {
 	var rule typ.Rule
-	if err := c.ShouldBindJSON(&rule); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+	if !bind.JSON(c, &rule, apierr.Failure) {
 		return
 	}
 	if rule.Scenario == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Unknown scenario",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Unknown scenario")
 		return
 	}
 	if !typ.CanBindRulesToScenario(rule.Scenario) {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Unknown scenario",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Unknown scenario")
 		return
 	}
 	rule.UUID = uuid.NewString()
 
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
 		return
 	}
 
 	if err := h.config.AddRule(rule); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to save rule: " + err.Error(),
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Failed to save rule: "+err.Error())
 		return
 	}
 
@@ -177,44 +148,28 @@ func (h *Handler) CreateRule(c *gin.Context) {
 func (h *Handler) UpdateRule(c *gin.Context) {
 	uid := c.Param("uuid")
 	if uid == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Rule name is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Rule name is required")
 		return
 	}
 
 	var rule typ.Rule
 
-	if err := c.ShouldBindJSON(&rule); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+	if !bind.JSON(c, &rule, apierr.Failure) {
 		return
 	}
 
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
 		return
 	}
 	if !typ.CanBindRulesToScenario(rule.Scenario) {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Unknown scenario",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Unknown scenario")
 		return
 	}
 
 	rule.UUID = uid
 	if err := h.config.UpdateRule(uid, rule); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to save rule: " + err.Error(),
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Failed to save rule: "+err.Error())
 		return
 	}
 
@@ -255,27 +210,18 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 func (h *Handler) DeleteRule(c *gin.Context) {
 	ruleUUID := c.Param("uuid")
 	if ruleUUID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Rule name is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Rule name is required")
 		return
 	}
 
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
 		return
 	}
 
 	err := h.config.DeleteRule(ruleUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to delete rule: " + err.Error(),
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Failed to delete rule: "+err.Error())
 		return
 	}
 

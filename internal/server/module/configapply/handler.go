@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/config"
@@ -43,12 +44,12 @@ func NewHandler(cfg *config.Config, host string) *Handler {
 func (h *Handler) GetClaudeConfig(c *gin.Context) {
 	snapshot, err := agent.ReadMainClaudeCodeSettings()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	prefs, err := agent.ClaudeCodePrefsFromEnv(snapshot.Env)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	defaultMode, ok := agent.NormalizeClaudeCodeDefaultMode(snapshot.DefaultMode)
@@ -87,7 +88,7 @@ func (h *Handler) GetClaudeCodeEnv(c *gin.Context) {
 func (h *Handler) GetCodexConfig(c *gin.Context) {
 	prefs, writeCatalog, exists, err := config.ReadCodexConfig()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if prefs == nil {
@@ -112,10 +113,7 @@ type HTTPTransportConfigUpdate struct {
 func (h *Handler) GetConfig(c *gin.Context) {
 	cfg := h.config
 	if cfg == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
 		return
 	}
 
@@ -136,10 +134,7 @@ func (h *Handler) GetConfig(c *gin.Context) {
 func (h *Handler) UpdateConfig(c *gin.Context) {
 	cfg := h.config
 	if cfg == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
 		return
 	}
 
@@ -148,10 +143,7 @@ func (h *Handler) UpdateConfig(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Invalid request body: " + err.Error(),
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Invalid request body: "+err.Error())
 		return
 	}
 
@@ -167,10 +159,7 @@ func (h *Handler) UpdateConfig(c *gin.Context) {
 
 	// Save the configuration
 	if err := cfg.Save(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to save configuration: " + err.Error(),
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Failed to save configuration: "+err.Error())
 		return
 	}
 

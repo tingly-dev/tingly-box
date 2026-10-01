@@ -12,6 +12,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot/platform/weixin"
 	"github.com/tingly-dev/tingly-box/internal/db"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
+	"github.com/tingly-dev/tingly-box/internal/server/module/bind"
 )
 
 // WeChatQRLoginHandler handles Weixin QR code login flow
@@ -91,14 +93,13 @@ type QRStatusResponse struct {
 // QRStart initiates the QR code login flow
 func (h *WeChatQRLoginHandler) QRStart(c *gin.Context) {
 	var req QRStartRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bind.JSON(c, &req, apierr.Message) {
 		return
 	}
 
 	botUUID := c.Param("uuid")
 	if botUUID != req.BotUUID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "UUID mismatch"})
+		apierr.Message(c, http.StatusBadRequest, "UUID mismatch")
 		return
 	}
 
@@ -114,12 +115,12 @@ func (h *WeChatQRLoginHandler) QRStart(c *gin.Context) {
 		existing, err := h.settingsStore.GetSettingsByUUID(botUUID)
 		if err != nil {
 			logrus.WithError(err).WithField("bot", botUUID).Error("Failed to check bot existence")
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate bot"})
+			apierr.Message(c, http.StatusInternalServerError, "Failed to validate bot")
 			return
 		}
 		if existing.UUID == "" {
 			logrus.WithField("bot", botUUID).Warn("Bot not found for QR login")
-			c.JSON(http.StatusNotFound, gin.H{"error": "Bot not found"})
+			apierr.Message(c, http.StatusNotFound, "Bot not found")
 			return
 		}
 	}
@@ -138,7 +139,7 @@ func (h *WeChatQRLoginHandler) QRStart(c *gin.Context) {
 	qrResp, err := h.qrClient.GetBotQRCode(c.Request.Context(), botType)
 	if err != nil {
 		logrus.WithError(err).WithField("bot", botUUID).Error("Failed to get QR code")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get QR code"})
+		apierr.Message(c, http.StatusInternalServerError, "Failed to get QR code")
 		return
 	}
 
@@ -176,7 +177,7 @@ func (h *WeChatQRLoginHandler) QRStatus(c *gin.Context) {
 	qrID := c.Query("qrcode_id")
 
 	if qrID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing qrcode_id parameter"})
+		apierr.Message(c, http.StatusBadRequest, "Missing qrcode_id parameter")
 		return
 	}
 
@@ -193,7 +194,7 @@ func (h *WeChatQRLoginHandler) QRStatus(c *gin.Context) {
 	}).Info("QR status check")
 
 	if !exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "No active QR session found"})
+		apierr.Message(c, http.StatusNotFound, "No active QR session found")
 		return
 	}
 
@@ -203,7 +204,7 @@ func (h *WeChatQRLoginHandler) QRStatus(c *gin.Context) {
 			"expected_qrID": session.qrID,
 			"provided_qrID": qrID,
 		}).Warn("QR ID mismatch")
-		c.JSON(http.StatusNotFound, gin.H{"error": "QR ID mismatch"})
+		apierr.Message(c, http.StatusNotFound, "QR ID mismatch")
 		return
 	}
 

@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imagegen"
 	"github.com/tingly-dev/tingly-box/internal/server/module/info"
 	"github.com/tingly-dev/tingly-box/internal/server/module/onboarding"
@@ -43,20 +44,8 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 		},
 	})
 
-	// Add global middleware
-	manager.AddGlobalMiddleware(
-		func(c *gin.Context) {
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
-
-			if c.Request.Method == "OPTIONS" {
-				c.AbortWithStatus(204)
-				return
-			}
-			c.Next()
-		},
-	)
+	// CORS (including OPTIONS preflight) is applied once, engine-wide, by
+	// setupMiddleware; routes registered here inherit it.
 
 	// Auth validation endpoint (no auth required) - for validating tokens before login
 	apiAuth := manager.NewGroup("api", "v1", "")
@@ -488,18 +477,12 @@ func (s *Server) GetUserToken(c *gin.Context) {
 func (s *Server) ResetUserToken(c *gin.Context) {
 	newToken, err := config.GenerateUserToken()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to generate token",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Failed to generate token")
 		return
 	}
 
 	if err := s.config.SetUserToken(newToken); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to save token",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Failed to save token")
 		return
 	}
 
@@ -518,18 +501,12 @@ func (s *Server) ResetUserToken(c *gin.Context) {
 func (s *Server) ResetModelToken(c *gin.Context) {
 	newToken, err := config.GenerateModelToken()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to generate token",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Failed to generate token")
 		return
 	}
 
 	if err := s.config.SetModelToken(newToken); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to save token",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Failed to save token")
 		return
 	}
 

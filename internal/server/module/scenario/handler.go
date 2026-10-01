@@ -6,6 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
+	"github.com/tingly-dev/tingly-box/internal/server/module/bind"
 
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/config"
@@ -44,10 +46,7 @@ func (h *Handler) GetScenarioDescriptors(c *gin.Context) {
 
 func (h *Handler) GetScenarios(c *gin.Context) {
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
 		return
 	}
 
@@ -63,27 +62,18 @@ func (h *Handler) GetScenarios(c *gin.Context) {
 func (h *Handler) GetScenarioConfig(c *gin.Context) {
 	scenario := typ.RuleScenario(c.Param("scenario"))
 	if scenario == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Scenario parameter is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Scenario parameter is required")
 		return
 	}
 
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
 		return
 	}
 
 	config := h.config.GetScenarioConfig(scenario)
 	if config == nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error":   "Scenario config not found",
-		})
+		apierr.Failure(c, http.StatusNotFound, "Scenario config not found")
 		return
 	}
 
@@ -96,35 +86,22 @@ func (h *Handler) GetScenarioConfig(c *gin.Context) {
 // SetScenarioConfig creates or updates scenario configuration
 func (h *Handler) SetScenarioConfig(c *gin.Context) {
 	var config typ.ScenarioConfig
-	if err := c.ShouldBindJSON(&config); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+	if !bind.JSON(c, &config, apierr.Failure) {
 		return
 	}
 
 	if config.Scenario == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Scenario field is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Scenario field is required")
 		return
 	}
 
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
 		return
 	}
 
 	if err := h.config.SetScenarioConfig(config); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to save scenario config: " + err.Error(),
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Failed to save scenario config: "+err.Error())
 		return
 	}
 
@@ -139,27 +116,18 @@ func (h *Handler) SetScenarioConfig(c *gin.Context) {
 func (h *Handler) GetScenarioFlag(c *gin.Context) {
 	scenario := typ.RuleScenario(c.Param("scenario"))
 	if scenario == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Scenario parameter is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Scenario parameter is required")
 		return
 	}
 
 	flag := c.Param("flag")
 	if flag == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Flag parameter is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Flag parameter is required")
 		return
 	}
 
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
 		return
 	}
 
@@ -179,47 +147,32 @@ func (h *Handler) GetScenarioFlag(c *gin.Context) {
 func (h *Handler) SetScenarioFlag(c *gin.Context) {
 	scenario := typ.RuleScenario(c.Param("scenario"))
 	if scenario == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Scenario parameter is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Scenario parameter is required")
 		return
 	}
 
 	flag := c.Param("flag")
 	if flag == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Flag parameter is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Flag parameter is required")
 		return
 	}
 
 	request := new(ScenarioFlagUpdateRequest)
 	if err := c.ShouldBindJSON(&request); err != nil {
 		logrus.Printf("[ERROR] SetScenarioFlag ShouldBindJSON failed: %v, scenario=%s, flag=%s", err, scenario, flag)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		apierr.Failure(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	logrus.Printf("[DEBUG] SetScenarioFlag success: scenario=%s, flag=%s, value=%v", scenario, flag, request.Value)
 
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
 		return
 	}
 
 	if err := h.config.SetScenarioFlag(scenario, flag, request.Value); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to save scenario flag: " + err.Error(),
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Failed to save scenario flag: "+err.Error())
 		return
 	}
 
@@ -238,27 +191,18 @@ func (h *Handler) SetScenarioFlag(c *gin.Context) {
 func (h *Handler) GetScenarioStringFlag(c *gin.Context) {
 	scenario := typ.RuleScenario(c.Param("scenario"))
 	if scenario == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Scenario parameter is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Scenario parameter is required")
 		return
 	}
 
 	flag := c.Param("flag")
 	if flag == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Flag parameter is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Flag parameter is required")
 		return
 	}
 
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
 		return
 	}
 
@@ -278,47 +222,32 @@ func (h *Handler) GetScenarioStringFlag(c *gin.Context) {
 func (h *Handler) SetScenarioStringFlag(c *gin.Context) {
 	scenario := typ.RuleScenario(c.Param("scenario"))
 	if scenario == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Scenario parameter is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Scenario parameter is required")
 		return
 	}
 
 	flag := c.Param("flag")
 	if flag == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Flag parameter is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Flag parameter is required")
 		return
 	}
 
 	request := new(ScenarioStringFlagUpdateRequest)
 	if err := c.ShouldBindJSON(&request); err != nil {
 		logrus.Printf("[ERROR] SetScenarioStringFlag ShouldBindJSON failed: %v, scenario=%s, flag=%s", err, scenario, flag)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		apierr.Failure(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	logrus.Printf("[DEBUG] SetScenarioStringFlag: scenario=%s, flag=%s, value=%s", scenario, flag, request.Value)
 
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
 		return
 	}
 
 	if err := h.config.SetScenarioStringFlag(scenario, flag, request.Value); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to save scenario flag: " + err.Error(),
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Failed to save scenario flag: "+err.Error())
 		return
 	}
 
@@ -337,27 +266,18 @@ func (h *Handler) SetScenarioStringFlag(c *gin.Context) {
 func (h *Handler) GetScenarioIntFlag(c *gin.Context) {
 	scenario := typ.RuleScenario(c.Param("scenario"))
 	if scenario == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Scenario parameter is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Scenario parameter is required")
 		return
 	}
 
 	flag := c.Param("flag")
 	if flag == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Flag parameter is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Flag parameter is required")
 		return
 	}
 
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
 		return
 	}
 
@@ -377,47 +297,32 @@ func (h *Handler) GetScenarioIntFlag(c *gin.Context) {
 func (h *Handler) SetScenarioIntFlag(c *gin.Context) {
 	scenario := typ.RuleScenario(c.Param("scenario"))
 	if scenario == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Scenario parameter is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Scenario parameter is required")
 		return
 	}
 
 	flag := c.Param("flag")
 	if flag == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Flag parameter is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Flag parameter is required")
 		return
 	}
 
 	request := new(ScenarioIntFlagUpdateRequest)
 	if err := c.ShouldBindJSON(&request); err != nil {
 		logrus.Printf("[ERROR] SetScenarioIntFlag ShouldBindJSON failed: %v, scenario=%s, flag=%s", err, scenario, flag)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		apierr.Failure(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	logrus.Printf("[DEBUG] SetScenarioIntFlag: scenario=%s, flag=%s, value=%d", scenario, flag, request.Value)
 
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
 		return
 	}
 
 	if err := h.config.SetScenarioIntFlag(scenario, flag, request.Value); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to save scenario flag: " + err.Error(),
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Failed to save scenario flag: "+err.Error())
 		return
 	}
 
@@ -436,11 +341,11 @@ func (h *Handler) SetScenarioIntFlag(c *gin.Context) {
 func (h *Handler) GetProfiles(c *gin.Context) {
 	scenario := typ.RuleScenario(c.Param("scenario"))
 	if scenario == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "scenario parameter is required"})
+		apierr.Failure(c, http.StatusBadRequest, "scenario parameter is required")
 		return
 	}
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "config not available"})
+		apierr.Failure(c, http.StatusInternalServerError, "config not available")
 		return
 	}
 
@@ -452,27 +357,26 @@ func (h *Handler) GetProfiles(c *gin.Context) {
 func (h *Handler) CreateProfile(c *gin.Context) {
 	scenario := typ.RuleScenario(c.Param("scenario"))
 	if scenario == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "scenario parameter is required"})
+		apierr.Failure(c, http.StatusBadRequest, "scenario parameter is required")
 		return
 	}
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "config not available"})
+		apierr.Failure(c, http.StatusInternalServerError, "config not available")
 		return
 	}
 
 	var req ProfileCreateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+	if !bind.JSON(c, &req, apierr.Failure) {
 		return
 	}
 	if req.Name == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "name is required"})
+		apierr.Failure(c, http.StatusBadRequest, "name is required")
 		return
 	}
 
 	meta, err := h.config.CreateProfile(scenario, req.Name, req.Unified)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -492,29 +396,28 @@ func (h *Handler) CreateProfile(c *gin.Context) {
 func (h *Handler) UpdateProfile(c *gin.Context) {
 	scenario := typ.RuleScenario(c.Param("scenario"))
 	if scenario == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "scenario parameter is required"})
+		apierr.Failure(c, http.StatusBadRequest, "scenario parameter is required")
 		return
 	}
 	profileID := c.Param("id")
 	if profileID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "profile id is required"})
+		apierr.Failure(c, http.StatusBadRequest, "profile id is required")
 		return
 	}
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "config not available"})
+		apierr.Failure(c, http.StatusInternalServerError, "config not available")
 		return
 	}
 
 	var req ProfileUpdateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+	if !bind.JSON(c, &req, apierr.Failure) {
 		return
 	}
 
 	// If name is not provided, preserve existing profile name
 	existing, ok := h.config.GetProfile(scenario, profileID)
 	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "profile not found"})
+		apierr.Failure(c, http.StatusBadRequest, "profile not found")
 		return
 	}
 	oldName := existing.Name
@@ -523,7 +426,7 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 	}
 
 	if err := h.config.UpdateProfile(scenario, profileID, req.Name, req.Unified); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -547,24 +450,24 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 func (h *Handler) resolveProfileClaudeConfig(c *gin.Context) (typ.ProfileMeta, string, agent.CCProfileSettingsResolution, bool) {
 	scenario := typ.RuleScenario(c.Param("scenario"))
 	if scenario != typ.ScenarioClaudeCode {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Claude Code profile configuration is only available for claude_code"})
+		apierr.Failure(c, http.StatusBadRequest, "Claude Code profile configuration is only available for claude_code")
 		return typ.ProfileMeta{}, "", agent.CCProfileSettingsResolution{}, false
 	}
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "config not available"})
+		apierr.Failure(c, http.StatusInternalServerError, "config not available")
 		return typ.ProfileMeta{}, "", agent.CCProfileSettingsResolution{}, false
 	}
 	profileID := c.Param("id")
 	profile, ok := h.config.GetProfile(scenario, profileID)
 	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "profile not found"})
+		apierr.Failure(c, http.StatusNotFound, "profile not found")
 		return typ.ProfileMeta{}, "", agent.CCProfileSettingsResolution{}, false
 	}
 	profiledScenario := string(typ.ProfiledScenarioName(scenario, profileID))
 	baseURL := middleware.BaseURLFromRequest(c, h.config.GetServerPort())
 	resolved, err := agent.ResolveCCProfileSettings(h.config, baseURL, h.config.GetModelToken(), profiledScenario, profile)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return typ.ProfileMeta{}, "", agent.CCProfileSettingsResolution{}, false
 	}
 	return profile, profiledScenario, resolved, true
@@ -597,22 +500,22 @@ func (h *Handler) materializeAndRespondProfileClaudeConfig(
 ) {
 	updated, ok := h.config.GetProfile(typ.ScenarioClaudeCode, profileID)
 	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "profile not found"})
+		apierr.Failure(c, http.StatusNotFound, "profile not found")
 		return
 	}
 	baseURL := middleware.BaseURLFromRequest(c, h.config.GetServerPort())
 	if _, err := agent.MaterializeCCProfileSettings(h.config, baseURL, h.config.GetModelToken(), profiledScenario, updated); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": materializeErrorPrefix + err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, materializeErrorPrefix+err.Error())
 		return
 	}
 	refreshed, err := agent.ResolveCCProfileSettings(h.config, baseURL, h.config.GetModelToken(), profiledScenario, updated)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	response, err := profileClaudeConfigResponse(updated, refreshed)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, response)
@@ -627,7 +530,7 @@ func (h *Handler) GetProfileClaudeConfig(c *gin.Context) {
 	}
 	response, err := profileClaudeConfigResponse(profile, resolved)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, response)
@@ -646,7 +549,7 @@ func (h *Handler) UpdateProfileClaudeConfig(c *gin.Context) {
 		if err != nil {
 			message = err.Error()
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": message})
+		apierr.Failure(c, http.StatusBadRequest, message)
 		return
 	}
 	desiredDefaultMode := req.DefaultMode
@@ -654,16 +557,16 @@ func (h *Handler) UpdateProfileClaudeConfig(c *gin.Context) {
 		desiredDefaultMode = resolved.InheritedDefaultMode
 	}
 	if _, valid := agent.NormalizeClaudeCodeDefaultMode(desiredDefaultMode); !valid {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "invalid defaultMode: " + desiredDefaultMode})
+		apierr.Failure(c, http.StatusBadRequest, "invalid defaultMode: "+desiredDefaultMode)
 		return
 	}
 	overrides, err := agent.DiffCCProfileConfig(resolved.BasePreferences, resolved.InheritedDefaultMode, *req.Preferences, desiredDefaultMode)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	if err := h.config.UpdateClaudeCodeProfileConfig(typ.ScenarioClaudeCode, profile.ID, overrides); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	h.materializeAndRespondProfileClaudeConfig(c, profile.ID, profiledScenario,
@@ -678,7 +581,7 @@ func (h *Handler) DeleteProfileClaudeConfig(c *gin.Context) {
 		return
 	}
 	if err := h.config.UpdateClaudeCodeProfileConfig(typ.ScenarioClaudeCode, profile.ID, nil); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	h.materializeAndRespondProfileClaudeConfig(c, profile.ID, profiledScenario, "")
@@ -688,16 +591,16 @@ func (h *Handler) DeleteProfileClaudeConfig(c *gin.Context) {
 func (h *Handler) DeleteProfile(c *gin.Context) {
 	scenario := typ.RuleScenario(c.Param("scenario"))
 	if scenario == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "scenario parameter is required"})
+		apierr.Failure(c, http.StatusBadRequest, "scenario parameter is required")
 		return
 	}
 	profileID := c.Param("id")
 	if profileID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "profile id is required"})
+		apierr.Failure(c, http.StatusBadRequest, "profile id is required")
 		return
 	}
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "config not available"})
+		apierr.Failure(c, http.StatusInternalServerError, "config not available")
 		return
 	}
 
@@ -709,7 +612,7 @@ func (h *Handler) DeleteProfile(c *gin.Context) {
 	}
 
 	if err := h.config.DeleteProfile(scenario, profileID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusBadRequest, err.Error())
 		return
 	}
 

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/config"
@@ -40,7 +41,7 @@ func collectDshRuleModels(cfg *config.Config) []string {
 func (h *Handler) GetDshConfig(c *gin.Context) {
 	prefs, exists, err := config.ReadDshSettings()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if prefs == nil {

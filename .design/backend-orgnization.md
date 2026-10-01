@@ -36,7 +36,7 @@ Audit date: 2026-10-01. LOC are non-test Go lines unless noted. Items marked
 - `max_tokens` and `thinking` rewrites each exist 2–3 times (`protocol/ops`, `protocol/transform`, `protocolserver/transform`).
 - `protocolserver/transform` has 2 importers → fold into `protocolserver` or `protocol/transform`.
 - `client`: xai/kimi/opencode/claude round-trippers are near-clones (header stamping); one-line `ListModels` delegates; `probe_rewrite.go` belongs in `internal/probe`.
-- Cross-cutting handler patterns: 4+ error shapes (~150 `gin.H{"error":…}`, 303 `"success": false`, `apierr` used in 3 files); no shared bind/validate (81 `ShouldBindJSON`); no shared pagination; CORS applied twice with different behaviour.
+- Cross-cutting handler patterns: 4+ error shapes (~150 `gin.H{"error":…}`, 303 `"success": false`, `apierr` used in 3 files); no shared bind/validate (81 `ShouldBindJSON`); no shared pagination; CORS applied twice (the two copies were byte-for-byte equivalent — the audit's first reading of "inconsistent" was wrong; the swagger-group copy never ran because the engine-level one answers OPTIONS via the NoRoute chain).
 - Tool layers: `toolengine.ServerToolExecutor` and `servertool.Executor` both "execute one MCP call"; two incompatible `ToolCall` types.
 - Session persistence in 4 places (`afk/session`, `agentboot/history`, `remote/session`, DB remote tables) — needs a field-level diff before merging.
 - OAuth CLI (`command/oauth.go`) re-implements flow orchestration and keeps its own `supportedProviders()` *(inferred)*.
@@ -74,7 +74,7 @@ Steps are stacked as separate commits on one branch, in this order.
 |---|---|---|
 | 0 | This document | done |
 | 1 | `internal/server/config` → `internal/config` (pure move, no behaviour change) | done |
-| 2 | Shared HTTP helpers: `apierr`, `bind`, `paginate`; remove duplicate CORS | todo |
+| 2 | Shared HTTP helpers: `apierr`, `bind`, `paginate`; remove duplicate CORS | done (see §4) |
 | 3 | `Module` interface + migrate module registration | todo |
 | 4 | Move non-HTTP modules out of `server/module/` (`tokenrefresh`, `quotawindow`, `providerquota`) | todo |
 | 5 | Split `guardrails_handler.go` into a module | todo |
@@ -85,6 +85,11 @@ Steps are stacked as separate commits on one branch, in this order.
 
 - Pure moves are done with `tingly-go move` so they stay type-checked and mechanical; each step is verified with `go build ./... && go vet ./...` plus tests of the touched packages.
 - Behaviour changes (error shape, CORS) are kept out of the pure-move commits.
+
+- **Error shapes are wire contract.** Three shapes exist (`{"error":{message,type}}`, `{"error":"…"}`, `{"success":false,"error":"…"}`) and the web UI consumes each, so `apierr` offers one named writer per shape (`Send`, `Message`, `Failure`) instead of unifying them. Unifying shapes is a separate, frontend-coordinated change. `bind.JSON` takes the writer so each endpoint keeps its shape.
+- Step 2 migrated every single-key `gin.H{"error": …}` / `{"success": false, "error": …}` response under `internal/server` (~460 lines) and 25 `ShouldBindJSON` sites that answered with the bare binder error. 33 other bind sites use bespoke messages and are left as-is; so are 11 multi-key error bodies.
+- `paginate.Limit/Offset` replaced four hand-rolled "default 100, clamp N" parsers (`log_handler` ×3, `model_request_handler`, `sharing`). `desk`'s limit keeps its own semantics (0 = service default, unclamped).
+- `sharing`'s private `sendError` was a copy of `apierr.Send`; removed.
 
 ## 5. Open questions
 

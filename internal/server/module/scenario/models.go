@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
@@ -53,11 +54,11 @@ type ClaudeCodeModelTier struct {
 // is written: a profile's env is resolved, not materialized.
 func (h *Handler) GetClaudeCodeModels(c *gin.Context) {
 	if typ.RuleScenario(c.Param("scenario")) != typ.ScenarioClaudeCode {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "model tiers are only available for claude_code"})
+		apierr.Failure(c, http.StatusBadRequest, "model tiers are only available for claude_code")
 		return
 	}
 	if h.config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "config not available"})
+		apierr.Failure(c, http.StatusInternalServerError, "config not available")
 		return
 	}
 
@@ -67,20 +68,20 @@ func (h *Handler) GetClaudeCodeModels(c *gin.Context) {
 	if profileID == "" {
 		list, err := tbclient.NewTBClient(h.config).GetClaudeCodeEnv(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+			apierr.Failure(c, http.StatusInternalServerError, err.Error())
 			return
 		}
 		env = envMap(list)
 	} else {
 		profile, ok := h.config.GetProfile(typ.ScenarioClaudeCode, profileID)
 		if !ok {
-			c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "profile not found"})
+			apierr.Failure(c, http.StatusNotFound, "profile not found")
 			return
 		}
 		scenario = string(typ.ProfiledScenarioName(typ.ScenarioClaudeCode, profile.ID))
 		resolved, err := agent.ResolveCCProfileSettings(h.config, "", "", scenario, profile)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+			apierr.Failure(c, http.StatusInternalServerError, err.Error())
 			return
 		}
 		env = resolved.Env

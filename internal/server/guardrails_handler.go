@@ -18,6 +18,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
+	"github.com/tingly-dev/tingly-box/internal/server/module/bind"
 	"gopkg.in/yaml.v3"
 
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
@@ -441,7 +443,7 @@ func toProtectedCredentialResponse(credential guardrailscore.ProtectedCredential
 func (h *GuardrailsHandler) GetGuardrailsBuiltins(c *gin.Context) {
 	policies, err := guardrails.LoadBuiltinPolicies()
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	c.JSON(200, guardrailsBuiltinsResponse{Policies: policies})
@@ -450,19 +452,19 @@ func (h *GuardrailsHandler) GetGuardrailsBuiltins(c *gin.Context) {
 // GetGuardrailsRegistry lists downloadable policies from a remote registry.
 func (h *GuardrailsHandler) GetGuardrailsRegistry(c *gin.Context) {
 	if strings.TrimSpace(GuardrailsRegistryGitHubURL) == "" {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "guardrails registry source is not configured"})
+		apierr.Failure(c, http.StatusServiceUnavailable, "guardrails registry source is not configured")
 		return
 	}
 
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
-		c.JSON(500, gin.H{"success": false, "error": "config directory not set"})
+		apierr.Failure(c, 500, "config directory not set")
 		return
 	}
 
 	forceRefresh := c.Query("refresh") == "1" || strings.EqualFold(c.Query("refresh"), "true")
 	index, err := h.loadGuardrailsRegistryIndex(c.Request.Context(), forceRefresh)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusBadGateway, err.Error())
 		return
 	}
 
@@ -475,7 +477,7 @@ func (h *GuardrailsHandler) GetGuardrailsRegistry(c *gin.Context) {
 // GetGuardrailsConfig returns the current guardrails config file content and parsed config.
 func (h *GuardrailsHandler) GetGuardrailsConfig(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
-		c.JSON(500, gin.H{"success": false, "error": "config directory not set"})
+		apierr.Failure(c, 500, "config directory not set")
 		return
 	}
 
@@ -493,19 +495,19 @@ func (h *GuardrailsHandler) GetGuardrailsConfig(c *gin.Context) {
 			})
 			return
 		}
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
 	rootCfg, importedCfgs, fullCfg, err := loadGuardrailsConfigSources(path)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
@@ -522,23 +524,22 @@ func (h *GuardrailsHandler) GetGuardrailsConfig(c *gin.Context) {
 // UpdateGuardrailsConfig saves a new guardrails config and reloads the engine.
 func (h *GuardrailsHandler) UpdateGuardrailsConfig(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
-		c.JSON(500, gin.H{"success": false, "error": "config directory not set"})
+		apierr.Failure(c, 500, "config directory not set")
 		return
 	}
 
 	var req guardrailsConfigUpdateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+	if !bind.JSON(c, &req, apierr.Failure) {
 		return
 	}
 	if strings.TrimSpace(req.Content) == "" {
-		c.JSON(400, gin.H{"success": false, "error": "content is empty"})
+		apierr.Failure(c, 400, "content is empty")
 		return
 	}
 
 	cfg, err := decodeGuardrailsConfig([]byte(req.Content))
 	if err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 400, err.Error())
 		return
 	}
 
@@ -547,12 +548,12 @@ func (h *GuardrailsHandler) UpdateGuardrailsConfig(c *gin.Context) {
 
 	path, err := config.EnsurePath(h.deps.Config.ConfigDir)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
 	if err := h.persistGuardrailsConfigAndReload(path, cfg, []byte(req.Content), "guardrails config update"); err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	logrus.Infof("Guardrails config updated: %s", path)
@@ -568,31 +569,30 @@ func (h *GuardrailsHandler) UpdateGuardrailsConfig(c *gin.Context) {
 // into guardrails/custom/import.yaml and ensures the root config imports it.
 func (h *GuardrailsHandler) ImportGuardrailsFragment(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
-		c.JSON(500, gin.H{"success": false, "error": "config directory not set"})
+		apierr.Failure(c, 500, "config directory not set")
 		return
 	}
 
 	var req guardrailsFragmentImportRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+	if !bind.JSON(c, &req, apierr.Failure) {
 		return
 	}
 	if strings.TrimSpace(req.Content) == "" {
-		c.JSON(400, gin.H{"success": false, "error": "content is empty"})
+		apierr.Failure(c, 400, "content is empty")
 		return
 	}
 
 	fragmentCfg, err := decodeGuardrailsConfigFile([]byte(req.Content))
 	if err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 400, err.Error())
 		return
 	}
 	if err := guardrails.ValidateImportedFragment(fragmentCfg); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 400, err.Error())
 		return
 	}
 	if len(fragmentCfg.Policies) == 0 {
-		c.JSON(400, gin.H{"success": false, "error": "imported fragment does not contain any policies"})
+		apierr.Failure(c, 400, "imported fragment does not contain any policies")
 		return
 	}
 
@@ -601,7 +601,7 @@ func (h *GuardrailsHandler) ImportGuardrailsFragment(c *gin.Context) {
 
 	path, err := config.EnsurePath(h.deps.Config.ConfigDir)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
@@ -611,16 +611,16 @@ func (h *GuardrailsHandler) ImportGuardrailsFragment(c *gin.Context) {
 	if _, err := os.Stat(path); err == nil {
 		rootCfg, importedCfgs, fullCfg, err = loadGuardrailsConfigSources(path)
 		if err != nil {
-			c.JSON(400, gin.H{"success": false, "error": err.Error()})
+			apierr.Failure(c, 400, err.Error())
 			return
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
 	if err := validateGuardrailsFragmentPolicyIDs(fragmentCfg, fullCfg); err != nil {
-		c.JSON(409, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 409, err.Error())
 		return
 	}
 
@@ -629,7 +629,7 @@ func (h *GuardrailsHandler) ImportGuardrailsFragment(c *gin.Context) {
 		rootGroupUpdated = ensureGuardrailsDefaultGroup(&rootCfg)
 	}
 	if !guardrailsGroupsExist(rootCfg.Groups, collectGuardrailsPolicyGroups(fragmentCfg.Policies)) {
-		c.JSON(400, gin.H{"success": false, "error": "imported fragment references unknown policy groups"})
+		apierr.Failure(c, 400, "imported fragment references unknown policy groups")
 		return
 	}
 
@@ -642,20 +642,20 @@ func (h *GuardrailsHandler) ImportGuardrailsFragment(c *gin.Context) {
 
 	targetData, err := marshalGuardrailsPolicyFragment(targetCfg)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	writes := []guardrailsFileWrite{{Path: targetPath, Data: targetData}}
 	if rootUpdated || rootGroupUpdated {
 		rootData, err := config.MarshalConfig(rootCfg)
 		if err != nil {
-			c.JSON(500, gin.H{"success": false, "error": err.Error()})
+			apierr.Failure(c, 500, err.Error())
 			return
 		}
 		writes = append(writes, guardrailsFileWrite{Path: path, Data: rootData})
 	}
 	if err := h.persistGuardrailsFilesAndReload(mergedCfg, writes, "guardrails fragment import"); err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
@@ -670,17 +670,16 @@ func (h *GuardrailsHandler) ImportGuardrailsFragment(c *gin.Context) {
 // the user so the UI can download one or more source files directly.
 func (h *GuardrailsHandler) ExportGuardrailsFragments(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
-		c.JSON(500, gin.H{"success": false, "error": "config directory not set"})
+		apierr.Failure(c, 500, "config directory not set")
 		return
 	}
 
 	var req guardrailsFragmentExportRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+	if !bind.JSON(c, &req, apierr.Failure) {
 		return
 	}
 	if len(req.Paths) == 0 {
-		c.JSON(400, gin.H{"success": false, "error": "at least one import path is required"})
+		apierr.Failure(c, 400, "at least one import path is required")
 		return
 	}
 
@@ -689,13 +688,13 @@ func (h *GuardrailsHandler) ExportGuardrailsFragments(c *gin.Context) {
 
 	path, err := config.FindConfig(h.deps.Config.ConfigDir)
 	if err != nil {
-		c.JSON(404, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 404, err.Error())
 		return
 	}
 
 	rootCfg, importedCfgs, _, err := loadGuardrailsConfigSources(path)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
@@ -721,12 +720,12 @@ func (h *GuardrailsHandler) ExportGuardrailsFragments(c *gin.Context) {
 
 		resolved, ok := allowed[importPath]
 		if !ok {
-			c.JSON(404, gin.H{"success": false, "error": fmt.Sprintf("import %q not found", importPath)})
+			apierr.Failure(c, 404, fmt.Sprintf("import %q not found", importPath))
 			return
 		}
 		data, err := os.ReadFile(resolved)
 		if err != nil {
-			c.JSON(500, gin.H{"success": false, "error": err.Error()})
+			apierr.Failure(c, 500, err.Error())
 			return
 		}
 		childCfg := importedCfgs[resolved]
@@ -738,7 +737,7 @@ func (h *GuardrailsHandler) ExportGuardrailsFragments(c *gin.Context) {
 		})
 	}
 	if len(files) == 0 {
-		c.JSON(400, gin.H{"success": false, "error": "no imports selected"})
+		apierr.Failure(c, 400, "no imports selected")
 		return
 	}
 
@@ -751,24 +750,24 @@ func (h *GuardrailsHandler) ExportGuardrailsFragments(c *gin.Context) {
 // ReloadGuardrailsConfig reloads guardrails from disk and rebuilds the runtime.
 func (h *GuardrailsHandler) ReloadGuardrailsConfig(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
-		c.JSON(500, gin.H{"success": false, "error": "config directory not set"})
+		apierr.Failure(c, 500, "config directory not set")
 		return
 	}
 
 	path, err := config.FindConfig(h.deps.Config.ConfigDir)
 	if err != nil {
-		c.JSON(404, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 404, err.Error())
 		return
 	}
 
 	cfg, err := guardrails.LoadConfig(path)
 	if err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 400, err.Error())
 		return
 	}
 
 	if err := h.rebuildGuardrailsRuntime(cfg, "guardrails config reload"); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 400, err.Error())
 		return
 	}
 	logrus.Infof("Guardrails config reloaded: %s", path)
@@ -784,23 +783,22 @@ func (h *GuardrailsHandler) ReloadGuardrailsConfig(c *gin.Context) {
 // guardrails/remote and wires it into root imports.
 func (h *GuardrailsHandler) InstallGuardrailsRegistryPolicy(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "config directory not set"})
+		apierr.Failure(c, http.StatusInternalServerError, "config directory not set")
 		return
 	}
 	if strings.TrimSpace(GuardrailsRegistryGitHubURL) == "" {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "guardrails registry source is not configured"})
+		apierr.Failure(c, http.StatusServiceUnavailable, "guardrails registry source is not configured")
 		return
 	}
 
 	var req guardrailsRegistryInstallRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+	if !bind.JSON(c, &req, apierr.Failure) {
 		return
 	}
 
 	policyID := strings.TrimSpace(req.ID)
 	if policyID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "id is required"})
+		apierr.Failure(c, http.StatusBadRequest, "id is required")
 		return
 	}
 	installLog := logrus.WithField("policy_id", policyID)
@@ -812,7 +810,7 @@ func (h *GuardrailsHandler) InstallGuardrailsRegistryPolicy(c *gin.Context) {
 	index, err := h.loadGuardrailsRegistryIndex(installCtx, false)
 	if err != nil {
 		installLog.WithError(err).Warn("Guardrails registry install failed loading registry index")
-		c.JSON(guardrailsFetchStatus(err), gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, guardrailsFetchStatus(err), err.Error())
 		return
 	}
 
@@ -824,11 +822,11 @@ func (h *GuardrailsHandler) InstallGuardrailsRegistryPolicy(c *gin.Context) {
 		}
 	}
 	if entry == nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "policy not found in registry"})
+		apierr.Failure(c, http.StatusNotFound, "policy not found in registry")
 		return
 	}
 	if strings.TrimSpace(entry.Path) == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "registry policy is missing path"})
+		apierr.Failure(c, http.StatusBadRequest, "registry policy is missing path")
 		return
 	}
 	installLog.WithField("entry_path", entry.Path).Info("Guardrails registry downloading policy fragment")
@@ -836,20 +834,17 @@ func (h *GuardrailsHandler) InstallGuardrailsRegistryPolicy(c *gin.Context) {
 	fragmentData, fragmentCfg, err := downloadGuardrailsRegistryFragment(installCtx, GuardrailsRegistryGitHubURL, *entry)
 	if err != nil {
 		installLog.WithError(err).Warn("Guardrails registry install failed downloading fragment")
-		c.JSON(guardrailsFetchStatus(err), gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, guardrailsFetchStatus(err), err.Error())
 		return
 	}
 	fragmentCfg, err = selectGuardrailsRegistryPolicyFragment(fragmentCfg, policyID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		apierr.Failure(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	fragmentData, err = marshalGuardrailsPolicyFragment(fragmentCfg)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -858,7 +853,7 @@ func (h *GuardrailsHandler) InstallGuardrailsRegistryPolicy(c *gin.Context) {
 
 	path, err := config.EnsurePath(h.deps.Config.ConfigDir)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -868,17 +863,17 @@ func (h *GuardrailsHandler) InstallGuardrailsRegistryPolicy(c *gin.Context) {
 	if _, err := os.Stat(path); err == nil {
 		rootCfg, importedCfgs, fullCfg, err = loadGuardrailsConfigSources(path)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+			apierr.Failure(c, http.StatusBadRequest, err.Error())
 			return
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	for _, policy := range fullCfg.Policies {
 		if policy.ID == policyID {
-			c.JSON(http.StatusConflict, gin.H{"success": false, "error": "policy already exists"})
+			apierr.Failure(c, http.StatusConflict, "policy already exists")
 			return
 		}
 	}
@@ -888,10 +883,7 @@ func (h *GuardrailsHandler) InstallGuardrailsRegistryPolicy(c *gin.Context) {
 		rootGroupUpdated = ensureGuardrailsDefaultGroup(&rootCfg)
 	}
 	if !guardrailsGroupsExist(rootCfg.Groups, collectGuardrailsPolicyGroups(fragmentCfg.Policies)) {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "registry policy references unknown policy groups",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "registry policy references unknown policy groups")
 		return
 	}
 
@@ -905,14 +897,14 @@ func (h *GuardrailsHandler) InstallGuardrailsRegistryPolicy(c *gin.Context) {
 	if rootUpdated || rootGroupUpdated {
 		rootData, err := config.MarshalConfig(rootCfg)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+			apierr.Failure(c, http.StatusInternalServerError, err.Error())
 			return
 		}
 		writes = append(writes, guardrailsFileWrite{Path: path, Data: rootData})
 	}
 	if err := h.persistGuardrailsFilesAndReload(mergedCfg, writes, "guardrails registry install"); err != nil {
 		installLog.WithError(err).Warn("Guardrails registry install failed persisting files")
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	installLog.Info("Guardrails registry install completed")
@@ -946,19 +938,18 @@ func selectGuardrailsRegistryPolicyFragment(cfg guardrailscore.Config, policyID 
 // UpdateGuardrailsPolicy updates a single policy and reloads the engine.
 func (h *GuardrailsHandler) UpdateGuardrailsPolicy(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
-		c.JSON(500, gin.H{"success": false, "error": "config directory not set"})
+		apierr.Failure(c, 500, "config directory not set")
 		return
 	}
 
 	policyID := c.Param("id")
 	if strings.TrimSpace(policyID) == "" {
-		c.JSON(400, gin.H{"success": false, "error": "policy id is required"})
+		apierr.Failure(c, 400, "policy id is required")
 		return
 	}
 
 	var req guardrailsPolicyUpdateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+	if !bind.JSON(c, &req, apierr.Failure) {
 		return
 	}
 
@@ -967,23 +958,23 @@ func (h *GuardrailsHandler) UpdateGuardrailsPolicy(c *gin.Context) {
 
 	path, err := config.EnsurePath(h.deps.Config.ConfigDir)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
 	rootCfg, importedCfgs, fullCfg, err := loadGuardrailsConfigSources(path)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	if !guardrailsevaluate.IsPolicyConfig(fullCfg) {
-		c.JSON(400, gin.H{"success": false, "error": "policy editor APIs require a policy config"})
+		apierr.Failure(c, 400, "policy editor APIs require a policy config")
 		return
 	}
 
 	sourcePath, err := findGuardrailsPolicySourcePath(path, rootCfg, importedCfgs, policyID)
 	if err != nil {
-		c.JSON(404, gin.H{"success": false, "error": "policy not found"})
+		apierr.Failure(c, 404, "policy not found")
 		return
 	}
 
@@ -1001,7 +992,7 @@ func (h *GuardrailsHandler) UpdateGuardrailsPolicy(c *gin.Context) {
 		if req.ID != nil && strings.TrimSpace(*req.ID) != "" && *req.ID != policyID {
 			for _, existing := range fullCfg.Policies {
 				if existing.ID == *req.ID && existing.ID != policyID {
-					c.JSON(409, gin.H{"success": false, "error": "policy already exists"})
+					apierr.Failure(c, 409, "policy already exists")
 					return
 				}
 			}
@@ -1013,7 +1004,7 @@ func (h *GuardrailsHandler) UpdateGuardrailsPolicy(c *gin.Context) {
 		if req.Groups != nil {
 			nextGroups := normalizeGuardrailsPolicyGroups(*req.Groups)
 			if !guardrailsGroupsExist(fullCfg.Groups, nextGroups) {
-				c.JSON(400, gin.H{"success": false, "error": "one or more policy groups do not exist"})
+				apierr.Failure(c, 400, "one or more policy groups do not exist")
 				return
 			}
 			sourceCfg.Policies[i].Groups = nextGroups
@@ -1041,7 +1032,7 @@ func (h *GuardrailsHandler) UpdateGuardrailsPolicy(c *gin.Context) {
 		break
 	}
 	if !found {
-		c.JSON(404, gin.H{"success": false, "error": "policy not found"})
+		apierr.Failure(c, 404, "policy not found")
 		return
 	}
 
@@ -1054,18 +1045,18 @@ func (h *GuardrailsHandler) UpdateGuardrailsPolicy(c *gin.Context) {
 
 	updated, err := marshalGuardrailsPolicyFragment(sourceCfg)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	if sourcePath == path {
 		updated, err = config.MarshalConfig(sourceCfg)
 		if err != nil {
-			c.JSON(500, gin.H{"success": false, "error": err.Error()})
+			apierr.Failure(c, 500, err.Error())
 			return
 		}
 	}
 	if err := h.persistGuardrailsFilesAndReload(mergedCfg, []guardrailsFileWrite{{Path: sourcePath, Data: updated}}, "guardrails policy update"); err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	logrus.Infof("Guardrails policy updated: %s", policyID)
@@ -1080,17 +1071,16 @@ func (h *GuardrailsHandler) UpdateGuardrailsPolicy(c *gin.Context) {
 // CreateGuardrailsPolicy creates a new policy and reloads the engine.
 func (h *GuardrailsHandler) CreateGuardrailsPolicy(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
-		c.JSON(500, gin.H{"success": false, "error": "config directory not set"})
+		apierr.Failure(c, 500, "config directory not set")
 		return
 	}
 
 	var req guardrailsPolicyCreateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+	if !bind.JSON(c, &req, apierr.Failure) {
 		return
 	}
 	if strings.TrimSpace(req.ID) == "" || strings.TrimSpace(req.Kind) == "" {
-		c.JSON(400, gin.H{"success": false, "error": "id and kind are required"})
+		apierr.Failure(c, 400, "id and kind are required")
 		return
 	}
 
@@ -1099,7 +1089,7 @@ func (h *GuardrailsHandler) CreateGuardrailsPolicy(c *gin.Context) {
 
 	path, err := config.EnsurePath(h.deps.Config.ConfigDir)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
@@ -1109,27 +1099,27 @@ func (h *GuardrailsHandler) CreateGuardrailsPolicy(c *gin.Context) {
 	if _, err := os.Stat(path); err == nil {
 		rootCfg, importedCfgs, fullCfg, err = loadGuardrailsConfigSources(path)
 		if err != nil {
-			c.JSON(400, gin.H{"success": false, "error": err.Error()})
+			apierr.Failure(c, 400, err.Error())
 			return
 		}
 		if !guardrailsevaluate.IsPolicyConfig(fullCfg) {
-			c.JSON(400, gin.H{"success": false, "error": "policy editor APIs require a policy config"})
+			apierr.Failure(c, 400, "policy editor APIs require a policy config")
 			return
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
 	for _, policy := range fullCfg.Policies {
 		if policy.ID == req.ID {
-			c.JSON(409, gin.H{"success": false, "error": "policy already exists"})
+			apierr.Failure(c, 409, "policy already exists")
 			return
 		}
 	}
 	policyGroups := normalizeGuardrailsPolicyGroups(req.Groups)
 	if !guardrailsGroupsExist(fullCfg.Groups, policyGroups) {
-		c.JSON(400, gin.H{"success": false, "error": "one or more policy groups do not exist"})
+		apierr.Failure(c, 400, "one or more policy groups do not exist")
 		return
 	}
 
@@ -1147,7 +1137,7 @@ func (h *GuardrailsHandler) CreateGuardrailsPolicy(c *gin.Context) {
 
 	builtinIDs, err := builtinGuardrailsPolicyIDSet()
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
@@ -1164,20 +1154,20 @@ func (h *GuardrailsHandler) CreateGuardrailsPolicy(c *gin.Context) {
 
 	targetData, err := marshalGuardrailsPolicyFragment(targetCfg)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	writes := []guardrailsFileWrite{{Path: targetPath, Data: targetData}}
 	if rootUpdated {
 		rootData, err := config.MarshalConfig(rootCfg)
 		if err != nil {
-			c.JSON(500, gin.H{"success": false, "error": err.Error()})
+			apierr.Failure(c, 500, err.Error())
 			return
 		}
 		writes = append(writes, guardrailsFileWrite{Path: path, Data: rootData})
 	}
 	if err := h.persistGuardrailsFilesAndReload(mergedCfg, writes, "guardrails policy create"); err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	logrus.Infof("Guardrails policy created: %s", req.ID)
@@ -1192,13 +1182,13 @@ func (h *GuardrailsHandler) CreateGuardrailsPolicy(c *gin.Context) {
 // DeleteGuardrailsPolicy deletes a policy and reloads the engine.
 func (h *GuardrailsHandler) DeleteGuardrailsPolicy(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
-		c.JSON(500, gin.H{"success": false, "error": "config directory not set"})
+		apierr.Failure(c, 500, "config directory not set")
 		return
 	}
 
 	policyID := c.Param("id")
 	if strings.TrimSpace(policyID) == "" {
-		c.JSON(400, gin.H{"success": false, "error": "policy id is required"})
+		apierr.Failure(c, 400, "policy id is required")
 		return
 	}
 
@@ -1207,23 +1197,23 @@ func (h *GuardrailsHandler) DeleteGuardrailsPolicy(c *gin.Context) {
 
 	path, err := config.EnsurePath(h.deps.Config.ConfigDir)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
 	rootCfg, importedCfgs, fullCfg, err := loadGuardrailsConfigSources(path)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	if !guardrailsevaluate.IsPolicyConfig(fullCfg) {
-		c.JSON(400, gin.H{"success": false, "error": "policy editor APIs require a policy config"})
+		apierr.Failure(c, 400, "policy editor APIs require a policy config")
 		return
 	}
 
 	sourcePath, err := findGuardrailsPolicySourcePath(path, rootCfg, importedCfgs, policyID)
 	if err != nil {
-		c.JSON(404, gin.H{"success": false, "error": "policy not found"})
+		apierr.Failure(c, 404, "policy not found")
 		return
 	}
 
@@ -1242,7 +1232,7 @@ func (h *GuardrailsHandler) DeleteGuardrailsPolicy(c *gin.Context) {
 		nextPolicies = append(nextPolicies, policy)
 	}
 	if !found {
-		c.JSON(404, gin.H{"success": false, "error": "policy not found"})
+		apierr.Failure(c, 404, "policy not found")
 		return
 	}
 	sourceCfg.Policies = nextPolicies
@@ -1256,18 +1246,18 @@ func (h *GuardrailsHandler) DeleteGuardrailsPolicy(c *gin.Context) {
 
 	updated, err := marshalGuardrailsPolicyFragment(sourceCfg)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	if sourcePath == path {
 		updated, err = config.MarshalConfig(sourceCfg)
 		if err != nil {
-			c.JSON(500, gin.H{"success": false, "error": err.Error()})
+			apierr.Failure(c, 500, err.Error())
 			return
 		}
 	}
 	if err := h.persistGuardrailsFilesAndReload(mergedCfg, []guardrailsFileWrite{{Path: sourcePath, Data: updated}}, "guardrails policy delete"); err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	logrus.Infof("Guardrails policy deleted: %s", policyID)
@@ -1284,19 +1274,18 @@ func (h *GuardrailsHandler) DeleteGuardrailsPolicy(c *gin.Context) {
 // UpdateGuardrailsGroup updates a single group and reloads the engine.
 func (h *GuardrailsHandler) UpdateGuardrailsGroup(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
-		c.JSON(500, gin.H{"success": false, "error": "config directory not set"})
+		apierr.Failure(c, 500, "config directory not set")
 		return
 	}
 
 	groupID := c.Param("id")
 	if strings.TrimSpace(groupID) == "" {
-		c.JSON(400, gin.H{"success": false, "error": "group id is required"})
+		apierr.Failure(c, 400, "group id is required")
 		return
 	}
 
 	var req guardrailsGroupUpdateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+	if !bind.JSON(c, &req, apierr.Failure) {
 		return
 	}
 
@@ -1305,17 +1294,17 @@ func (h *GuardrailsHandler) UpdateGuardrailsGroup(c *gin.Context) {
 
 	path, err := config.EnsurePath(h.deps.Config.ConfigDir)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
 	rootCfg, importedCfgs, fullCfg, err := loadGuardrailsConfigSources(path)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	if !guardrailsevaluate.IsPolicyConfig(fullCfg) {
-		c.JSON(400, gin.H{"success": false, "error": "group editor APIs require a policy config"})
+		apierr.Failure(c, 400, "group editor APIs require a policy config")
 		return
 	}
 
@@ -1329,7 +1318,7 @@ func (h *GuardrailsHandler) UpdateGuardrailsGroup(c *gin.Context) {
 		if req.ID != nil && strings.TrimSpace(*req.ID) != "" && *req.ID != groupID {
 			for _, existing := range rootCfg.Groups {
 				if existing.ID == *req.ID {
-					c.JSON(409, gin.H{"success": false, "error": "group already exists"})
+					apierr.Failure(c, 409, "group already exists")
 					return
 				}
 			}
@@ -1350,7 +1339,7 @@ func (h *GuardrailsHandler) UpdateGuardrailsGroup(c *gin.Context) {
 		break
 	}
 	if !found {
-		c.JSON(404, gin.H{"success": false, "error": "group not found"})
+		apierr.Failure(c, 404, "group not found")
 		return
 	}
 
@@ -1369,7 +1358,7 @@ func (h *GuardrailsHandler) UpdateGuardrailsGroup(c *gin.Context) {
 			importedCfgs[resolved] = childCfg
 			childData, err := marshalGuardrailsPolicyFragment(childCfg)
 			if err != nil {
-				c.JSON(500, gin.H{"success": false, "error": err.Error()})
+				apierr.Failure(c, 500, err.Error())
 				return
 			}
 			writes = append(writes, guardrailsFileWrite{Path: resolved, Data: childData})
@@ -1379,12 +1368,12 @@ func (h *GuardrailsHandler) UpdateGuardrailsGroup(c *gin.Context) {
 	mergedCfg := mergeGuardrailsImportedConfigs(rootCfg, importedCfgs, path)
 	updated, err := config.MarshalConfig(rootCfg)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	writes = append(writes, guardrailsFileWrite{Path: path, Data: updated})
 	if err := h.persistGuardrailsFilesAndReload(mergedCfg, writes, "guardrails group update"); err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	logrus.Infof("Guardrails group updated: %s", groupID)
@@ -1399,17 +1388,16 @@ func (h *GuardrailsHandler) UpdateGuardrailsGroup(c *gin.Context) {
 // CreateGuardrailsGroup creates a new group and reloads the engine.
 func (h *GuardrailsHandler) CreateGuardrailsGroup(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
-		c.JSON(500, gin.H{"success": false, "error": "config directory not set"})
+		apierr.Failure(c, 500, "config directory not set")
 		return
 	}
 
 	var req guardrailsGroupCreateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+	if !bind.JSON(c, &req, apierr.Failure) {
 		return
 	}
 	if strings.TrimSpace(req.ID) == "" {
-		c.JSON(400, gin.H{"success": false, "error": "id is required"})
+		apierr.Failure(c, 400, "id is required")
 		return
 	}
 
@@ -1418,7 +1406,7 @@ func (h *GuardrailsHandler) CreateGuardrailsGroup(c *gin.Context) {
 
 	path, err := config.EnsurePath(h.deps.Config.ConfigDir)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
@@ -1428,21 +1416,21 @@ func (h *GuardrailsHandler) CreateGuardrailsGroup(c *gin.Context) {
 	if _, err := os.Stat(path); err == nil {
 		rootCfg, importedCfgs, fullCfg, err = loadGuardrailsConfigSources(path)
 		if err != nil {
-			c.JSON(400, gin.H{"success": false, "error": err.Error()})
+			apierr.Failure(c, 400, err.Error())
 			return
 		}
 		if !guardrailsevaluate.IsPolicyConfig(fullCfg) {
-			c.JSON(400, gin.H{"success": false, "error": "group editor APIs require a policy config"})
+			apierr.Failure(c, 400, "group editor APIs require a policy config")
 			return
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
 	for _, group := range rootCfg.Groups {
 		if group.ID == req.ID {
-			c.JSON(409, gin.H{"success": false, "error": "group already exists"})
+			apierr.Failure(c, 409, "group already exists")
 			return
 		}
 	}
@@ -1457,11 +1445,11 @@ func (h *GuardrailsHandler) CreateGuardrailsGroup(c *gin.Context) {
 	mergedCfg := mergeGuardrailsImportedConfigs(rootCfg, importedCfgs, path)
 	updated, err := config.MarshalConfig(rootCfg)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	if err := h.persistGuardrailsFilesAndReload(mergedCfg, []guardrailsFileWrite{{Path: path, Data: updated}}, "guardrails group create"); err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	logrus.Infof("Guardrails group created: %s", req.ID)
@@ -1476,17 +1464,17 @@ func (h *GuardrailsHandler) CreateGuardrailsGroup(c *gin.Context) {
 // DeleteGuardrailsGroup deletes a group and reloads the engine.
 func (h *GuardrailsHandler) DeleteGuardrailsGroup(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
-		c.JSON(500, gin.H{"success": false, "error": "config directory not set"})
+		apierr.Failure(c, 500, "config directory not set")
 		return
 	}
 
 	groupID := c.Param("id")
 	if strings.TrimSpace(groupID) == "" {
-		c.JSON(400, gin.H{"success": false, "error": "group id is required"})
+		apierr.Failure(c, 400, "group id is required")
 		return
 	}
 	if groupID == guardrailscore.DefaultPolicyGroupID {
-		c.JSON(400, gin.H{"success": false, "error": "default group cannot be deleted"})
+		apierr.Failure(c, 400, "default group cannot be deleted")
 		return
 	}
 
@@ -1495,24 +1483,24 @@ func (h *GuardrailsHandler) DeleteGuardrailsGroup(c *gin.Context) {
 
 	path, err := config.EnsurePath(h.deps.Config.ConfigDir)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
 	rootCfg, importedCfgs, fullCfg, err := loadGuardrailsConfigSources(path)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	if !guardrailsevaluate.IsPolicyConfig(fullCfg) {
-		c.JSON(400, gin.H{"success": false, "error": "group editor APIs require a policy config"})
+		apierr.Failure(c, 400, "group editor APIs require a policy config")
 		return
 	}
 
 	for _, policy := range fullCfg.Policies {
 		for _, policyGroupID := range normalizeGuardrailsPolicyGroups(policy.Groups) {
 			if policyGroupID == groupID {
-				c.JSON(400, gin.H{"success": false, "error": "group is still referenced by one or more policies"})
+				apierr.Failure(c, 400, "group is still referenced by one or more policies")
 				return
 			}
 		}
@@ -1528,7 +1516,7 @@ func (h *GuardrailsHandler) DeleteGuardrailsGroup(c *gin.Context) {
 		nextGroups = append(nextGroups, group)
 	}
 	if !found {
-		c.JSON(404, gin.H{"success": false, "error": "group not found"})
+		apierr.Failure(c, 404, "group not found")
 		return
 	}
 	rootCfg.Groups = nextGroups
@@ -1536,11 +1524,11 @@ func (h *GuardrailsHandler) DeleteGuardrailsGroup(c *gin.Context) {
 	mergedCfg := mergeGuardrailsImportedConfigs(rootCfg, importedCfgs, path)
 	updated, err := config.MarshalConfig(rootCfg)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	if err := h.persistGuardrailsFilesAndReload(mergedCfg, []guardrailsFileWrite{{Path: path, Data: updated}}, "guardrails group delete"); err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	logrus.Infof("Guardrails group deleted: %s", groupID)
@@ -1560,12 +1548,12 @@ func (h *GuardrailsHandler) DeleteGuardrailsGroup(c *gin.Context) {
 func (h *GuardrailsHandler) GetGuardrailsCredentials(c *gin.Context) {
 	store, err := h.credentialStore()
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	credentials, err := store.List()
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 	response := make([]protectedCredentialResponse, 0, len(credentials))
@@ -1580,13 +1568,13 @@ func (h *GuardrailsHandler) GetGuardrailsCredentials(c *gin.Context) {
 func (h *GuardrailsHandler) GetGuardrailsCredential(c *gin.Context) {
 	store, err := h.credentialStore()
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
 	credentialID := strings.TrimSpace(c.Param("id"))
 	if credentialID == "" {
-		c.JSON(400, gin.H{"success": false, "error": "credential id is required"})
+		apierr.Failure(c, 400, "credential id is required")
 		return
 	}
 
@@ -1596,11 +1584,11 @@ func (h *GuardrailsHandler) GetGuardrailsCredential(c *gin.Context) {
 		if errors.Is(err, guardrailsutils.ErrProtectedCredentialNotFound) {
 			status = 404
 		}
-		c.JSON(status, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, status, err.Error())
 		return
 	}
 	if len(resolved) == 0 {
-		c.JSON(404, gin.H{"success": false, "error": "protected credential not found"})
+		apierr.Failure(c, 404, "protected credential not found")
 		return
 	}
 
@@ -1617,13 +1605,12 @@ func (h *GuardrailsHandler) GetGuardrailsCredential(c *gin.Context) {
 func (h *GuardrailsHandler) CreateGuardrailsCredential(c *gin.Context) {
 	store, err := h.credentialStore()
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
 	var req protectedCredentialCreateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+	if !bind.JSON(c, &req, apierr.Failure) {
 		return
 	}
 
@@ -1634,12 +1621,12 @@ func (h *GuardrailsHandler) CreateGuardrailsCredential(c *gin.Context) {
 
 	credential, err := guardrailscore.NewProtectedCredential(req.Name, req.Type, req.Secret, req.Description, req.Tags, enabled)
 	if err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 400, err.Error())
 		return
 	}
 	credential, err = store.Create(credential)
 	if err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 400, err.Error())
 		return
 	}
 	h.deps.Runtime.RefreshGuardrailsCredentialCacheOrWarn("guardrails credential create")
@@ -1653,19 +1640,18 @@ func (h *GuardrailsHandler) CreateGuardrailsCredential(c *gin.Context) {
 func (h *GuardrailsHandler) UpdateGuardrailsCredential(c *gin.Context) {
 	store, err := h.credentialStore()
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
 	credentialID := strings.TrimSpace(c.Param("id"))
 	if credentialID == "" {
-		c.JSON(400, gin.H{"success": false, "error": "credential id is required"})
+		apierr.Failure(c, 400, "credential id is required")
 		return
 	}
 
 	var req protectedCredentialUpdateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+	if !bind.JSON(c, &req, apierr.Failure) {
 		return
 	}
 
@@ -1701,7 +1687,7 @@ func (h *GuardrailsHandler) UpdateGuardrailsCredential(c *gin.Context) {
 		if errors.Is(err, guardrailsutils.ErrProtectedCredentialNotFound) {
 			status = 404
 		}
-		c.JSON(status, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, status, err.Error())
 		return
 	}
 	h.deps.Runtime.RefreshGuardrailsCredentialCacheOrWarn("guardrails credential update")
@@ -1715,13 +1701,13 @@ func (h *GuardrailsHandler) UpdateGuardrailsCredential(c *gin.Context) {
 func (h *GuardrailsHandler) DeleteGuardrailsCredential(c *gin.Context) {
 	store, err := h.credentialStore()
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, 500, err.Error())
 		return
 	}
 
 	credentialID := strings.TrimSpace(c.Param("id"))
 	if credentialID == "" {
-		c.JSON(400, gin.H{"success": false, "error": "credential id is required"})
+		apierr.Failure(c, 400, "credential id is required")
 		return
 	}
 	if err := store.Delete(credentialID); err != nil {
@@ -1729,7 +1715,7 @@ func (h *GuardrailsHandler) DeleteGuardrailsCredential(c *gin.Context) {
 		if errors.Is(err, guardrailsutils.ErrProtectedCredentialNotFound) {
 			status = 404
 		}
-		c.JSON(status, gin.H{"success": false, "error": err.Error()})
+		apierr.Failure(c, status, err.Error())
 		return
 	}
 	h.deps.Runtime.RefreshGuardrailsCredentialCacheOrWarn("guardrails credential delete")

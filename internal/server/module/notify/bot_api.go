@@ -31,6 +31,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 
 	"github.com/tingly-dev/tingly-box/remote/access"
 	"github.com/tingly-dev/tingly-box/remote/channel"
@@ -169,13 +170,13 @@ func (h *BotAPIHandler) Notify(c *gin.Context) {
 
 	var req notifyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body: " + err.Error()})
+		apierr.Message(c, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
 	}
 	externalChatID, decision, err := h.resolveAuthorizedTarget(c.Request.Context(), botUUID, req.Target, req.ChatID)
 	if err != nil {
 		logrus.WithError(err).WithField("bot", botUUID).Warn("bot notify target resolution failed")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "target resolution failed"})
+		apierr.Message(c, http.StatusInternalServerError, "target resolution failed")
 		return
 	}
 	if !decision.Allowed {
@@ -188,13 +189,13 @@ func (h *BotAPIHandler) Notify(c *gin.Context) {
 	if !ok {
 		// Uniform 404 for unknown and stopped bots — see spec §3.5 (defend in
 		// depth: an authenticated caller must not probe which bots exist).
-		c.JSON(http.StatusNotFound, gin.H{"error": "bot not running"})
+		apierr.Message(c, http.StatusNotFound, "bot not running")
 		return
 	}
 	if h.access == nil && h.isChatDisabled(externalChatID) {
 		// Disable cuts both directions: same body as an unknown chat so the
 		// caller cannot distinguish blocked from nonexistent.
-		c.JSON(http.StatusNotFound, gin.H{"error": "chat not reachable"})
+		apierr.Message(c, http.StatusNotFound, "chat not reachable")
 		return
 	}
 
@@ -222,7 +223,7 @@ func (h *BotAPIHandler) Notify(c *gin.Context) {
 			"chat_id": externalChatID,
 			"err":     err.Error(),
 		})
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "delivery failed"})
+		apierr.Message(c, http.StatusInternalServerError, "delivery failed")
 		return
 	}
 
@@ -240,19 +241,19 @@ func (h *BotAPIHandler) Interact(c *gin.Context) {
 	botUUID := c.Param("bot")
 
 	if h.results == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "interaction registry unavailable"})
+		apierr.Message(c, http.StatusServiceUnavailable, "interaction registry unavailable")
 		return
 	}
 
 	var req interactRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body: " + err.Error()})
+		apierr.Message(c, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
 	}
 	externalChatID, decision, err := h.resolveAuthorizedTarget(c.Request.Context(), botUUID, req.Target, req.ChatID)
 	if err != nil {
 		logrus.WithError(err).WithField("bot", botUUID).Warn("bot interact target resolution failed")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "target resolution failed"})
+		apierr.Message(c, http.StatusInternalServerError, "target resolution failed")
 		return
 	}
 	if !decision.Allowed {
@@ -263,22 +264,22 @@ func (h *BotAPIHandler) Interact(c *gin.Context) {
 
 	kind := interaction.Kind(req.Kind)
 	if !validKind(kind) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid kind %q (want confirm|choose|ask)", req.Kind)})
+		apierr.Message(c, http.StatusBadRequest, fmt.Sprintf("invalid kind %q (want confirm|choose|ask)", req.Kind))
 		return
 	}
 	if (kind == interaction.KindConfirm || kind == interaction.KindChoose) && len(req.Options) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("kind %q requires at least one option", req.Kind)})
+		apierr.Message(c, http.StatusBadRequest, fmt.Sprintf("kind %q requires at least one option", req.Kind))
 		return
 	}
 
 	ch, ok := h.resolveChannel(botUUID)
 	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"error": "bot not running"})
+		apierr.Message(c, http.StatusNotFound, "bot not running")
 		return
 	}
 	if h.access == nil && h.isChatDisabled(externalChatID) {
 		// Disable cuts both directions — see Notify.
-		c.JSON(http.StatusNotFound, gin.H{"error": "chat not reachable"})
+		apierr.Message(c, http.StatusNotFound, "chat not reachable")
 		return
 	}
 
@@ -287,7 +288,7 @@ func (h *BotAPIHandler) Interact(c *gin.Context) {
 	if !h.results.Begin(id) {
 		// Practically unreachable (id is freshly random) — keep the contract
 		// honest rather than panicking.
-		c.JSON(http.StatusConflict, gin.H{"error": "request id collision, retry"})
+		apierr.Message(c, http.StatusConflict, "request id collision, retry")
 		return
 	}
 
@@ -334,7 +335,7 @@ func (h *BotAPIHandler) Wait(c *gin.Context) {
 	}
 	requestID := c.Param("request_id")
 	if requestID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing request_id"})
+		apierr.Message(c, http.StatusBadRequest, "missing request_id")
 		return
 	}
 
@@ -383,14 +384,14 @@ func (h *BotAPIHandler) ListChats(c *gin.Context) {
 		return
 	}
 	if h.chats == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "chat listing unavailable"})
+		apierr.Message(c, http.StatusServiceUnavailable, "chat listing unavailable")
 		return
 	}
 
 	chats, err := h.chats.ListChats(botUUID, includeDisabled)
 	if err != nil {
 		logrus.WithError(err).WithField("bot", botUUID).Warn("bot chats list failed")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "chat listing failed"})
+		apierr.Message(c, http.StatusInternalServerError, "chat listing failed")
 		return
 	}
 	if chats == nil {
@@ -414,17 +415,17 @@ func (h *BotAPIHandler) DeleteChat(c *gin.Context) {
 	chatID := c.Param("chat_id")
 
 	if h.chats == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "chat management unavailable"})
+		apierr.Message(c, http.StatusServiceUnavailable, "chat management unavailable")
 		return
 	}
 
 	if err := h.chats.DeleteChat(botUUID, chatID); err != nil {
 		if errors.Is(err, ErrChatNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "chat not found"})
+			apierr.Message(c, http.StatusNotFound, "chat not found")
 			return
 		}
 		logrus.WithError(err).WithFields(logrus.Fields{"bot": botUUID, "chat_id": chatID}).Warn("bot chat delete failed")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "chat delete failed"})
+		apierr.Message(c, http.StatusInternalServerError, "chat delete failed")
 		return
 	}
 
@@ -447,27 +448,27 @@ func (h *BotAPIHandler) SetChatDisabled(c *gin.Context) {
 	chatID := c.Param("chat_id")
 
 	if h.chats == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "chat management unavailable"})
+		apierr.Message(c, http.StatusServiceUnavailable, "chat management unavailable")
 		return
 	}
 
 	var req setChatDisabledRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body: " + err.Error()})
+		apierr.Message(c, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
 	}
 	if req.Disabled == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "disabled field is required"})
+		apierr.Message(c, http.StatusBadRequest, "disabled field is required")
 		return
 	}
 
 	if err := h.chats.SetChatDisabled(botUUID, chatID, *req.Disabled); err != nil {
 		if errors.Is(err, ErrChatNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "chat not found"})
+			apierr.Message(c, http.StatusNotFound, "chat not found")
 			return
 		}
 		logrus.WithError(err).WithFields(logrus.Fields{"bot": botUUID, "chat_id": chatID}).Warn("bot chat disable failed")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "chat update failed"})
+		apierr.Message(c, http.StatusInternalServerError, "chat update failed")
 		return
 	}
 

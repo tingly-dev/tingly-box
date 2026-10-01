@@ -12,6 +12,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot/platform/feishu"
 	"github.com/tingly-dev/tingly-box/internal/db"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
+	"github.com/tingly-dev/tingly-box/internal/server/module/bind"
 )
 
 // FeishuRegHandler drives the Feishu/Lark one-click app registration flow
@@ -60,14 +62,13 @@ func NewFeishuRegHandler(settingsStore *db.ImBotSettingsStore) *FeishuRegHandler
 // QRStart initiates the one-click registration flow and returns the QR link.
 func (h *FeishuRegHandler) QRStart(c *gin.Context) {
 	var req FeishuRegStartRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bind.JSON(c, &req, apierr.Message) {
 		return
 	}
 
 	botUUID := c.Param("uuid")
 	if botUUID != req.BotUUID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "UUID mismatch"})
+		apierr.Message(c, http.StatusBadRequest, "UUID mismatch")
 		return
 	}
 
@@ -81,11 +82,11 @@ func (h *FeishuRegHandler) QRStart(c *gin.Context) {
 		existing, err := h.settingsStore.GetSettingsByUUID(botUUID)
 		if err != nil {
 			logrus.WithError(err).WithField("bot", botUUID).Error("Failed to check bot existence")
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate bot"})
+			apierr.Message(c, http.StatusInternalServerError, "Failed to validate bot")
 			return
 		}
 		if existing.UUID == "" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Bot not found"})
+			apierr.Message(c, http.StatusNotFound, "Bot not found")
 			return
 		}
 	}
@@ -199,7 +200,7 @@ func (h *FeishuRegHandler) QRStatus(c *gin.Context) {
 	sess, exists := h.sessions[botUUID]
 	h.mu.RUnlock()
 	if !exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "No active registration session found"})
+		apierr.Message(c, http.StatusNotFound, "No active registration session found")
 		return
 	}
 

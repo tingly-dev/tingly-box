@@ -14,6 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/db"
 	desksvc "github.com/tingly-dev/tingly-box/internal/desk"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
 	debugmodule "github.com/tingly-dev/tingly-box/internal/server/module/debug"
@@ -67,10 +68,7 @@ func (s *Server) StopServer(c *gin.Context) {
 	// Get the global server instance
 	server := GetGlobalServer()
 	if server == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"success": false,
-			"error":   "No server instance available to stop",
-		})
+		apierr.Failure(c, http.StatusServiceUnavailable, "No server instance available to stop")
 		return
 	}
 
@@ -79,10 +77,7 @@ func (s *Server) StopServer(c *gin.Context) {
 	defer cancel()
 
 	if err := server.Stop(ctx); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   fmt.Sprintf("Failed to stop server: %v", err),
-		})
+		apierr.Failure(c, http.StatusInternalServerError, fmt.Sprintf("Failed to stop server: %v", err))
 		return
 	}
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
 
 	"github.com/tingly-dev/tingly-box/imbot"
@@ -72,13 +73,13 @@ func NewHandler(ctx context.Context, cfg *config.Config, channelRegistry *channe
 // ListSettings returns all ImBot configurations
 func (h *Handler) ListSettings(c *gin.Context) {
 	if h.store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ImBot settings store not available"})
+		apierr.Message(c, http.StatusServiceUnavailable, "ImBot settings store not available")
 		return
 	}
 
 	settings, err := h.store.ListSettings()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierr.Message(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -93,25 +94,25 @@ func (h *Handler) ListSettings(c *gin.Context) {
 // GetSettings returns a single ImBot configuration by UUID
 func (h *Handler) GetSettings(c *gin.Context) {
 	if h.store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ImBot settings store not available"})
+		apierr.Message(c, http.StatusServiceUnavailable, "ImBot settings store not available")
 		return
 	}
 
 	uuid := c.Param("uuid")
 	if uuid == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "UUID is required"})
+		apierr.Message(c, http.StatusBadRequest, "UUID is required")
 		return
 	}
 
 	settings, err := h.store.GetSettingsByUUID(uuid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierr.Message(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	// Check if settings were found (empty UUID means not found)
 	if settings.UUID == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ImBot settings not found"})
+		apierr.Message(c, http.StatusNotFound, "ImBot settings not found")
 		return
 	}
 
@@ -126,7 +127,7 @@ func (h *Handler) GetSettings(c *gin.Context) {
 // CreateSettings creates a new ImBot configuration
 func (h *Handler) CreateSettings(c *gin.Context) {
 	if h.store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ImBot settings store not available"})
+		apierr.Message(c, http.StatusServiceUnavailable, "ImBot settings store not available")
 		return
 	}
 
@@ -183,7 +184,7 @@ func (h *Handler) CreateSettings(c *gin.Context) {
 
 	created, err := h.store.CreateSettings(settings)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierr.Message(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	// Every Bot is born with a complete, explicit capability set. The default
@@ -227,26 +228,26 @@ func (h *Handler) CreateSettings(c *gin.Context) {
 // UpdateSettings updates an existing ImBot configuration
 func (h *Handler) UpdateSettings(c *gin.Context) {
 	if h.store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ImBot settings store not available"})
+		apierr.Message(c, http.StatusServiceUnavailable, "ImBot settings store not available")
 		return
 	}
 
 	uuid := c.Param("uuid")
 	if uuid == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "UUID is required"})
+		apierr.Message(c, http.StatusBadRequest, "UUID is required")
 		return
 	}
 
 	// Get current settings to check if enabled status is changing
 	currentSettings, err := h.store.GetSettingsByUUID(uuid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierr.Message(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	// Check if settings exist
 	if currentSettings.UUID == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ImBot settings not found"})
+		apierr.Message(c, http.StatusNotFound, "ImBot settings not found")
 		return
 	}
 
@@ -365,7 +366,7 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 	settings.Scenarios = currentSettings.Scenarios
 
 	if err := h.store.UpdateSettings(uuid, settings); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierr.Message(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -421,7 +422,7 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 	// Fetch updated settings
 	updated, err := h.store.GetSettingsByUUID(uuid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierr.Message(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -436,13 +437,13 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 // DeleteSettings deletes an ImBot configuration
 func (h *Handler) DeleteSettings(c *gin.Context) {
 	if h.store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ImBot settings store not available"})
+		apierr.Message(c, http.StatusServiceUnavailable, "ImBot settings store not available")
 		return
 	}
 
 	uuid := c.Param("uuid")
 	if uuid == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "UUID is required"})
+		apierr.Message(c, http.StatusBadRequest, "UUID is required")
 		return
 	}
 
@@ -457,7 +458,7 @@ func (h *Handler) DeleteSettings(c *gin.Context) {
 	}
 
 	if err := h.store.DeleteSettings(uuid); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierr.Message(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -474,19 +475,19 @@ func (h *Handler) DeleteSettings(c *gin.Context) {
 // ToggleSettings toggles the enabled status of an ImBot configuration
 func (h *Handler) ToggleSettings(c *gin.Context) {
 	if h.store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ImBot settings store not available"})
+		apierr.Message(c, http.StatusServiceUnavailable, "ImBot settings store not available")
 		return
 	}
 
 	uuid := c.Param("uuid")
 	if uuid == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "UUID is required"})
+		apierr.Message(c, http.StatusBadRequest, "UUID is required")
 		return
 	}
 
 	newStatus, err := h.store.ToggleSettings(uuid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierr.Message(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -550,13 +551,13 @@ func (h *Handler) GetPlatforms(c *gin.Context) {
 func (h *Handler) GetPlatformConfig(c *gin.Context) {
 	platform := c.Query("platform")
 	if platform == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Platform parameter is required"})
+		apierr.Message(c, http.StatusBadRequest, "Platform parameter is required")
 		return
 	}
 
 	config, exists := imbot.GetPlatformConfig(platform)
 	if !exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Unknown platform"})
+		apierr.Message(c, http.StatusNotFound, "Unknown platform")
 		return
 	}
 
@@ -647,19 +648,19 @@ func (h *Handler) RestartBotByUUID(ctx context.Context, uuid string) error {
 // Restarts a single bot without affecting the rest of the server.
 func (h *Handler) RestartBot(c *gin.Context) {
 	if h.botMgr == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Bot manager not available"})
+		apierr.Message(c, http.StatusServiceUnavailable, "Bot manager not available")
 		return
 	}
 
 	uuid := c.Param("uuid")
 	if uuid == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "UUID is required"})
+		apierr.Message(c, http.StatusBadRequest, "UUID is required")
 		return
 	}
 
 	if err := h.botMgr.RestartBot(c.Request.Context(), uuid); err != nil {
 		logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to restart bot")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierr.Message(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -672,13 +673,13 @@ func (h *Handler) RestartBot(c *gin.Context) {
 // not restart bots whose enabled state has not changed.
 func (h *Handler) Reload(c *gin.Context) {
 	if h.botMgr == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Bot manager not available"})
+		apierr.Message(c, http.StatusServiceUnavailable, "Bot manager not available")
 		return
 	}
 
 	if err := h.botMgr.Sync(c.Request.Context()); err != nil {
 		logrus.WithError(err).Warn("Failed to reload bots")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierr.Message(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
