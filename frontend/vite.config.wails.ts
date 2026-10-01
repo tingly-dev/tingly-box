@@ -22,8 +22,6 @@ export default defineConfig(({mode}) => {
         ].filter(Boolean),
         resolve: {
             alias: {
-                // Wails mode: use real bindings
-                '@/bindings': '/src/bindings-wails',
                 '@': path.resolve(__dirname, './src'),
             }
         },

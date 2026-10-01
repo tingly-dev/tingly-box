@@ -8,7 +8,6 @@ import path from 'path';
 export default defineConfig({
     resolve: {
         alias: {
-            '@/bindings': path.resolve(__dirname, './src/bindings-web'),
             '@': path.resolve(__dirname, './src'),
         },
     },

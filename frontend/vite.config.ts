@@ -32,8 +32,6 @@ export default defineConfig(({ mode }) => {
         },
         resolve: {
             alias: {
-                // Web mode: always use mock bindings
-                '@/bindings': '/src/bindings-web',
                 '@': path.resolve(__dirname, './src'),
             }
         },

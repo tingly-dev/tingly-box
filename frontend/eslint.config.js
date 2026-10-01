@@ -51,7 +51,7 @@ export default defineConfig([
   },
   // Wails bindings (runtime-generated)
   {
-    files: ['src/bindings/**/*', 'src/bindings-wails/**/*'],
+    files: ['src/bindings/**/*'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': 'off',

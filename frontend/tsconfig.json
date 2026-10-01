@@ -6,9 +6,6 @@
   "compilerOptions": {
     "baseUrl": "./",
     "paths": {
-      "@/bindings": [
-        "./src/bindings-web/index.ts"
-      ],
       "@/*": [
         "./src/*"
       ]

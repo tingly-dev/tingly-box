@@ -1,12 +1,11 @@
-import { host } from '@/host';
 import { Error as ErrorIcon, Refresh } from '@/components/icons';
 import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Paper, Stack, Typography } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
-import { Suspense, useEffect, useMemo } from 'react';
+import { Suspense, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { resolveLanguage } from '@/i18n';
-import { BrowserRouter, Routes, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
 import { HealthProvider, useHealth } from './contexts/HealthContext';
@@ -78,11 +77,6 @@ const AppDialogs = () => {
 };
 
 function AppContent() {
-    const navigate = useNavigate();
-
-    // The desktop shell's tray menu asks for pages by path.
-    useEffect(() => host.onShellNavigate(path => navigate(path)), [navigate]);
-
     return (
         <Suspense fallback={<RouteFallback />}>
             <Routes>
