@@ -2,18 +2,23 @@ package mcp
 
 import (
 	"github.com/tingly-dev/tingly-box/internal/mcp/local"
+	"github.com/tingly-dev/tingly-box/internal/server/module"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // RegisterRoutes registers all MCP configuration routes with swagger documentation
-func RegisterRoutes(router *swagger.RouteGroup, handler *Handler, localHandler *local.Handler, transportHandler *local.TransportHandler) {
-	router.GET("/mcp/config", handler.GetMCPRuntimeConfig,
+var _ module.Module = (*Handler)(nil)
+
+func (h *Handler) RegisterRoutes(rt *module.Routes) {
+	router := rt.V1
+	localHandler, transportHandler := h.GetLocalHandler(), h.GetTransportHandler()
+	router.GET("/mcp/config", h.GetMCPRuntimeConfig,
 		swagger.WithDescription("Get global MCP runtime configuration"),
 		swagger.WithTags("mcp"),
 		swagger.WithResponseModel(MCPRuntimeConfigResponse{}),
 	)
 
-	router.PUT("/mcp/config", handler.SetMCPRuntimeConfig,
+	router.PUT("/mcp/config", h.SetMCPRuntimeConfig,
 		swagger.WithDescription("Set global MCP runtime configuration"),
 		swagger.WithTags("mcp"),
 		swagger.WithRequestModel(MCPRuntimeConfigRequest{}),

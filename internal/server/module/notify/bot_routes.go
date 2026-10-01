@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"github.com/tingly-dev/tingly-box/internal/server/module"
 	"github.com/tingly-dev/tingly-box/remote/access"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
@@ -98,10 +99,13 @@ type BotChatsResponse struct {
 //	GET  /bots/:bot/interact/:id  long-poll for the reply
 //	GET  /bots/:bot/chats         discover the chat_id the other three need
 //
-// The group's base path determines the full URL; registered under apiV1 this
+// The group's base path determines the full URL; registered under the V1 group this
 // yields /api/v1/bots/:bot/... — see .design/bot-interaction-api.md.
-func RegisterBotRoutes(router *swagger.RouteGroup, handler *BotAPIHandler) {
-	router.POST("/bots/:bot/notify", handler.Notify,
+var _ module.Module = (*BotAPIHandler)(nil)
+
+func (h *BotAPIHandler) RegisterRoutes(rt *module.Routes) {
+	router := rt.V1
+	router.POST("/bots/:bot/notify", h.Notify,
 		swagger.WithTags("bot-interaction"),
 		swagger.WithDescription("Deliver a one-way notification to a running bot's chat. Requires the operator user token."),
 		swagger.WithPathParam("bot", "string", "Target bot UUID"),
@@ -114,7 +118,7 @@ func RegisterBotRoutes(router *swagger.RouteGroup, handler *BotAPIHandler) {
 		),
 	)
 
-	router.POST("/bots/:bot/interact", handler.Interact,
+	router.POST("/bots/:bot/interact", h.Interact,
 		swagger.WithTags("bot-interaction"),
 		swagger.WithDescription("Start an interactive prompt on a running bot's chat and return a request_id to long-poll for the reply."),
 		swagger.WithPathParam("bot", "string", "Target bot UUID"),
@@ -127,7 +131,7 @@ func RegisterBotRoutes(router *swagger.RouteGroup, handler *BotAPIHandler) {
 		),
 	)
 
-	router.GET("/bots/:bot/interact/:request_id", handler.Wait,
+	router.GET("/bots/:bot/interact/:request_id", h.Wait,
 		swagger.WithTags("bot-interaction"),
 		swagger.WithDescription("Long-poll for the reply to an interactive prompt started by POST /bots/:bot/interact."),
 		swagger.WithPathParam("bot", "string", "Target bot UUID"),

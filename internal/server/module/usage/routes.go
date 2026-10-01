@@ -2,13 +2,17 @@ package usage
 
 import (
 	"github.com/tingly-dev/tingly-box/internal/middleware"
+	"github.com/tingly-dev/tingly-box/internal/server/module"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // RegisterRoutes registers the usage API routes with swagger documentation
-func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
+var _ module.Module = (*Handler)(nil)
+
+func (h *Handler) RegisterRoutes(rt *module.Routes) {
+	router := rt.V1
 	// GET /api/v1/usage/stats - Get aggregated usage statistics
-	router.GET("/usage/stats", handler.GetStats,
+	router.GET("/usage/stats", h.GetStats,
 		swagger.WithMiddleware(middleware.Gzip()),
 		swagger.WithTags("usage"),
 		swagger.WithDescription("Returns aggregated usage statistics with flexible grouping and filtering"),
@@ -102,7 +106,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	)
 
 	// GET /api/v1/usage/timeseries - Get time-series usage data
-	router.GET("/usage/timeseries", handler.GetTimeSeries,
+	router.GET("/usage/timeseries", h.GetTimeSeries,
 		swagger.WithMiddleware(middleware.Gzip()),
 		swagger.WithTags("usage"),
 		swagger.WithDescription("Returns time-series data for usage with configurable intervals"),
@@ -157,7 +161,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	)
 
 	// GET /api/v1/usage/records - Get individual usage records
-	router.GET("/usage/records", handler.GetRecords,
+	router.GET("/usage/records", h.GetRecords,
 		swagger.WithMiddleware(middleware.Gzip()),
 		swagger.WithTags("usage"),
 		swagger.WithDescription("Returns individual usage records (for debugging/audit)"),
@@ -227,7 +231,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	)
 
 	// GET /api/v1/usage/performance - Get response-performance percentiles
-	router.GET("/usage/performance", handler.GetPerformanceSummary,
+	router.GET("/usage/performance", h.GetPerformanceSummary,
 		swagger.WithMiddleware(middleware.Gzip()),
 		swagger.WithTags("usage"),
 		swagger.WithDescription("Returns TTFT, per-request output TPS, and latency percentiles over successful requests"),
@@ -256,7 +260,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	)
 
 	// DELETE /api/v1/usage/records - Delete old usage records
-	router.DELETE("/usage/records", handler.DeleteOldRecords,
+	router.DELETE("/usage/records", h.DeleteOldRecords,
 		swagger.WithTags("usage"),
 		swagger.WithDescription("Deletes usage records older than the specified number of days"),
 		swagger.WithRequestModel(DeleteOldRecordsRequest{}),

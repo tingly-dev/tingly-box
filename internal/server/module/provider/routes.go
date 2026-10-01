@@ -1,11 +1,15 @@
 package provider
 
 import (
+	"github.com/tingly-dev/tingly-box/internal/server/module"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // RegisterRoutes wires all provider endpoints onto the given route group.
-func RegisterRoutes(api *swagger.RouteGroup, h *Handler) {
+var _ module.Module = (*Handler)(nil)
+
+func (h *Handler) RegisterRoutes(rt *module.Routes) {
+	api := rt.V2
 	api.GET("/providers", h.GetProviders,
 		swagger.WithDescription("Get all configured providers with masked tokens"),
 		swagger.WithTags("providers"),

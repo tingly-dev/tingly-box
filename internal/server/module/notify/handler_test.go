@@ -3,6 +3,7 @@ package notify
 import (
 	"context"
 	"encoding/json"
+	"github.com/tingly-dev/tingly-box/internal/server/module"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -97,7 +98,7 @@ func TestNotifyAndWait_PreToolUseAllow(t *testing.T) {
 	handler := NewHandlerWithRouting(scenarios, results, runtime)
 
 	router := gin.New()
-	RegisterRoutes(router, handler)
+	handler.RegisterRoutes(&module.Routes{Engine: router})
 	srv := httptest.NewServer(router)
 	defer srv.Close()
 
@@ -180,7 +181,7 @@ func TestWaitUnknownIDReturns404(t *testing.T) {
 	results := interaction.New[interaction.Result](time.Second)
 	handler := NewHandlerWithRouting(scenario.NewRegistry(), results, nil)
 	router := gin.New()
-	RegisterRoutes(router, handler)
+	handler.RegisterRoutes(&module.Routes{Engine: router})
 	srv := httptest.NewServer(router)
 	defer srv.Close()
 
@@ -201,7 +202,7 @@ func TestNotifyPushFallsBackToDesktopWhenUnregistered(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler := NewHandler() // no routing
 	router := gin.New()
-	RegisterRoutes(router, handler)
+	handler.RegisterRoutes(&module.Routes{Engine: router})
 	srv := httptest.NewServer(router)
 	defer srv.Close()
 
@@ -245,7 +246,7 @@ func TestNotifyAndWait_AutoChannelHeadless(t *testing.T) {
 	handler := NewHandlerWithRouting(scenarios, results, runtime)
 
 	router := gin.New()
-	RegisterRoutes(router, handler)
+	handler.RegisterRoutes(&module.Routes{Engine: router})
 	srv := httptest.NewServer(router)
 	defer srv.Close()
 

@@ -19,6 +19,10 @@ type Routes struct {
 	V1 *swagger.RouteGroup
 	// V2 is /api/v2 behind user authentication.
 	V2 *swagger.RouteGroup
+	// UserAuth is the user-authentication middleware already applied to V1
+	// and V2, for the few routes that also attach it per-route
+	// (swagger.WithMiddleware) so the generated spec records it.
+	UserAuth gin.HandlerFunc
 	// Engine is for routes that live outside the swagger-managed /api groups
 	// (status line, notify hooks) and for callback routes that need their own
 	// path layout.

@@ -2,26 +2,11 @@ package server
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/config"
-	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
-	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
-	debugmodule "github.com/tingly-dev/tingly-box/internal/server/module/debug"
+	"github.com/tingly-dev/tingly-box/internal/server/module"
 	guardrailsmodule "github.com/tingly-dev/tingly-box/internal/server/module/guardrails"
-	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
-	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
-	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
-	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
-	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/providerquota"
-	"github.com/tingly-dev/tingly-box/internal/server/module/sharing"
-	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
-	team "github.com/tingly-dev/tingly-box/internal/server/module/team"
-	"github.com/tingly-dev/tingly-box/internal/server/module/uiprefs"
-	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
-	virtualmodelmodule "github.com/tingly-dev/tingly-box/internal/server/module/virtualmodel"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
@@ -52,91 +37,19 @@ func GenerateOpenAPI(cfg *config.Config) (string, error) {
 	manager := swagger.NewRouteManager(engine)
 
 	// Register all routes using the same logic as the running server
-	registerAllAPIRoutes(engine, manager, server, cfg)
+	registerAllAPIRoutes(manager, server)
 
 	// Generate and return OpenAPI v3 JSON
 	return manager.GenerateOpenAPI(swagger.VersionV3)
 }
 
-// registerAllAPIRoutes registers all API routes for both the running server and OpenAPI generation
-// This is extracted from UseUIEndpoints to allow OpenAPI generation without starting the server
-func registerAllAPIRoutes(engine *gin.Engine, manager *swagger.RouteManager, s *Server, cfg *config.Config) {
-	// Claude Code status line endpoints (no auth required) - register from claudecode module
-	quotaMgr := statusline.NewCache()
-	statusHandler := statusline.NewHandler(cfg, nil, quotaMgr, nil)
-	statusline.RegisterRoutes(engine, statusHandler)
+// registerAllAPIRoutes registers all API routes for OpenAPI generation without
+// starting the server. It mounts the same module set as the running server
+// (see engineModules / apiModules).
+func registerAllAPIRoutes(manager *swagger.RouteManager, s *Server) {
+	engineMods, statusHandler := s.engineModules(true)
+	module.Mount(&module.Routes{Engine: s.engine}, engineMods...)
 
-	// Claude Code notification hook endpoint (no auth required)
-	notifyHandler := notifymodule.NewHandler()
-	notifymodule.RegisterRoutes(engine, notifyHandler)
-
-	// Web API endpoints (uses the same method as the running server)
-	s.UseWebAPIEndpoints(manager)
-
-	// OAuth API routes - register from oauth module
-	apiV1 := manager.NewGroup("api", "v1", "")
-	apiV1.Router.Use(s.getUserAuthMiddleware())
-	oauthmodule.RegisterRoutes(apiV1, s.getUserAuthMiddleware(), s.oauthHandler)
-	virtualmodelmodule.RegisterRoutes(
-		apiV1,
-		s.getUserAuthMiddleware(),
-		virtualmodelmodule.NewHandler(s.virtualModelService),
-	)
-	// Register callback routes (unauthenticated)
-	oauthmodule.RegisterCallbackRoutes(manager, s.oauthHandler)
-
-	// Runtime memory diagnostics routes
-	debugmodule.RegisterRoutes(apiV1, s.getUserAuthMiddleware(), debugmodule.NewHandler())
-
-	// Usage API routes - register from usage module
-	sm := cfg.StoreManager()
-	if sm != nil {
-		usageHandler := usagemodule.NewHandler(sm.Usage())
-		usagemodule.RegisterRoutes(apiV1, usageHandler)
-	}
-
-	// ImBot settings API routes - register from imbotsettings module. No
-	// channel registry here — this path only generates OpenAPI docs and
-	// never drives real chats (see the bot-interaction API registration
-	// below, which mirrors server_control.go's nil-channel handler).
-	ctx := context.Background()
-	imbotHandler, err := imbot.NewHandler(ctx, cfg, nil)
-	if err != nil {
-		fmt.Printf("Failed to create imbotsettings handler: %v\n", err)
-	} else {
-		imbot.RegisterRoutes(apiV1, imbotHandler)
-	}
-
-	// Bot interaction API — registers for OpenAPI generation with a nil-channel
-	// handler; at runtime server_control.go re-registers it with the real
-	// channel/interaction registries once the bot middle layer is wired.
-	botAPI := notifymodule.NewBotAPIHandler(nil, nil, nil)
-	notifymodule.RegisterBotRoutes(apiV1, botAPI)
-
-	// Config apply API routes
-	configapplyHandler := configapply.NewHandler(cfg, "")
-	configapply.RegisterRoutes(apiV1, configapplyHandler)
-
-	uiprefs.RegisterRoutes(apiV1, uiprefs.NewHandler(cfg))
-
-	codexImportHandler := codeximport.NewHandler(nil, cfg)
-	codeximport.RegisterRoutes(apiV1, codexImportHandler)
-
-	// MCP runtime API routes
-	mcpHandler := mcpmodule.NewHandler(cfg)
-	mcpmodule.RegisterRoutes(apiV1, mcpHandler, mcpHandler.GetLocalHandler(), mcpHandler.GetTransportHandler())
-
-	// Schema generation only references these handlers, so no live token store
-	// is required here.
-	sharing.RegisterRoutes(apiV1, sharing.NewHandler(nil))
-	team.RegisterRoutes(apiV1, team.NewHandler(nil))
-
-	// Provider quota API routes — nil manager; schema generation only
-	// references the handler, and available() guards every method at
-	// request time (there is no request time here).
-	quotaHandler := providerQuotaModule.NewHandler(nil, logrus.StandardLogger())
-	providerQuotaModule.RegisterRoutes(apiV1, quotaHandler)
-
-	// Schema only: never build the live service here (see newDeskService).
-	registerDeskRoutes(apiV1, nil, nil, s.deskEnabled)
+	rt := s.UseWebAPIEndpoints(manager)
+	module.Mount(rt, s.apiModules(context.Background(), true, statusHandler)...)
 }

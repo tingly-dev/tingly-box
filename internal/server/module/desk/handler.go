@@ -20,6 +20,9 @@ import (
 type Handler struct {
 	svc    *desk.Service
 	routes RouteResolver // optional: nil leaves the status's routing and quota empty
+	// enabled reports whether the desk feature flag is on. nil is treated as
+	// off, so a Handler that was never given a gate serves nothing (see gate).
+	enabled func() bool
 }
 
 // RouteResolver resolves where a model request is routed and the quota it
@@ -30,6 +33,12 @@ type RouteResolver interface {
 
 func NewHandler(svc *desk.Service, routes RouteResolver) *Handler {
 	return &Handler{svc: svc, routes: routes}
+}
+
+// WithGate sets the feature-flag predicate that every route is gated on.
+func (h *Handler) WithGate(enabled func() bool) *Handler {
+	h.enabled = enabled
+	return h
 }
 
 // sendServiceError maps a desk.Service error to an HTTP response

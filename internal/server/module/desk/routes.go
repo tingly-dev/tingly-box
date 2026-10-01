@@ -2,6 +2,7 @@ package desk
 
 import (
 	"errors"
+	"github.com/tingly-dev/tingly-box/internal/server/module"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -25,11 +26,13 @@ func gate(enabled func() bool) gin.HandlerFunc {
 	}
 }
 
-// RegisterRoutes wires /desk onto an authenticated route group.
-// enabled reports whether the desk feature flag is on; every
-// route 404s while it is off (see gate).
-func RegisterRoutes(apiV1 *swagger.RouteGroup, h *Handler, enabled func() bool) {
-	mw := swagger.WithMiddleware(gate(enabled))
+var _ module.Module = (*Handler)(nil)
+
+// RegisterRoutes wires /desk onto the authenticated V1 group. Every route
+// 404s while the handler's gate (see WithGate) reports the feature off.
+func (h *Handler) RegisterRoutes(rt *module.Routes) {
+	apiV1 := rt.V1
+	mw := swagger.WithMiddleware(gate(h.enabled))
 
 	apiV1.GET("/desk/folders/recent", h.RecentFolders,
 		swagger.WithTags("desk"),

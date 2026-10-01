@@ -1,11 +1,17 @@
 package info
 
-import "github.com/tingly-dev/tingly-box/swagger"
+import (
+	"github.com/tingly-dev/tingly-box/internal/server/module"
+	"github.com/tingly-dev/tingly-box/swagger"
+)
 
-// RegisterRoutes wires the /info/* endpoints onto the given route groups.
-// apiAuth receives routes that need no authentication (health check).
-// apiV1 receives the authenticated info routes.
-func RegisterRoutes(apiAuth, apiV1 *swagger.RouteGroup, h *Handler) {
+var _ module.Module = (*Handler)(nil)
+
+// RegisterRoutes wires the /info/* endpoints onto the route groups.
+// Public receives routes that need no authentication (health check).
+// V1 receives the authenticated info routes.
+func (h *Handler) RegisterRoutes(rt *module.Routes) {
+	apiAuth, apiV1 := rt.Public, rt.V1
 	apiAuth.GET("/info/health", h.GetHealthInfo,
 		swagger.WithTags("info"),
 		swagger.WithResponseModel(HealthInfoResponse{}),

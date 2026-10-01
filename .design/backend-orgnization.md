@@ -75,7 +75,7 @@ Steps are stacked as separate commits on one branch, in this order.
 | 0 | This document | done |
 | 1 | `internal/server/config` → `internal/config` (pure move, no behaviour change) | done |
 | 2 | Shared HTTP helpers: `apierr`, `bind`, `paginate`; remove duplicate CORS | done (see §4) |
-| 3 | `Module` interface + migrate module registration | todo |
+| 3 | `Module` interface + migrate module registration | done (see §4) |
 | 4 | Move non-HTTP modules out of `server/module/` (`tokenrefresh`, `quotawindow` → `internal/worker/`) | done (see §4) |
 | 5 | Split `guardrails_handler.go` into a module (`module/guardrails`) | done |
 | 6 | Remove `webui_handler.go` / `guardrails_runtime_adapter.go` migration leftovers | done (see §4) |
@@ -95,6 +95,10 @@ Steps are stacked as separate commits on one branch, in this order.
 - `tokenrefresh` depended on the OAuth HTTP module for one 3-line `oauth.Option`; `WithKimiDeviceID` moved to `ai/oauth/options.go`, which is where an `oauth.Option` belongs and removes the worker→HTTP-module edge.
 
 - **Step 6 findings.** `WebHandler` was not half-finished: it already carries status, log, request-trace and token handlers; only its comments (and `server.go`'s, which still said `aimodel`/`module/visionproxy`) were stale and are corrected. The unexported guardrails forwarders were inlined to `s.guardrailsState.*`; the exported ones stay because they implement `GuardrailsRuntime`. Static-asset serving moved to `webui_static.go`, `RuntimeAuditSink` to `server_control.go` next to its only use.
+
+- **Module contract.** `internal/server/module` defines `Routes` (Public/V1/V2 groups, Engine, Manager, UserAuth) and `Module` (`RegisterRoutes(*Routes)`) plus `Mount`. Every HTTP module's package-level `RegisterRoutes(...)` became a method on its handler; each picks the group it needs (V2 for skill/probe/provider/providercatalog, V1 otherwise, Engine for statusline/notify, Public+V1 for info). Handler-owned extras that used to be parameters moved onto the handler (`desk.Handler.WithGate`, `mcp` reads its own sub-handlers, `oauth` registers its callback routes itself, `notify.BotAPIHandler` is its own Module).
+- **One module list.** `server_modules.go` (`engineModules`, `apiModules`) is the only place that decides which modules exist and how they are built; the running server (`UseUIEndpoints`) and OpenAPI generation (`registerAllAPIRoutes`) both call it with a `schema` flag. Previously each kept its own ~100-line copy, which had already drifted (sharing/team, different `imbot` error handling, desk wiring). `schema` only matters where a runtime side effect must not happen at generation time (remote registries, live desk service) or where a route is documented unconditionally. `openapi.json` regenerates byte-identical before and after.
+- **Side effect removed:** `oauth.RegisterRoutes` used to call `router.Router.Use(authMiddleware)` on the shared `/api/v1` group, which already carried auth — so every module registered after oauth ran user-auth twice. Dropped; routes behave the same, one auth pass fewer. `debug` and `virtualmodel` still attach auth per route (`rt.UserAuth`) so the spec records it.
 
 ## 5. Open questions
 

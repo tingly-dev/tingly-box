@@ -1,8 +1,14 @@
 package team
 
-import "github.com/tingly-dev/tingly-box/swagger"
+import (
+	"github.com/tingly-dev/tingly-box/internal/server/module"
+	"github.com/tingly-dev/tingly-box/swagger"
+)
 
-func RegisterRoutes(group *swagger.RouteGroup, h *Handler) {
+var _ module.Module = (*Handler)(nil)
+
+func (h *Handler) RegisterRoutes(rt *module.Routes) {
+	group := rt.V1
 	group.GET("/teams", h.List,
 		swagger.WithTags("teams"),
 		swagger.WithDescription("List teams"),
