@@ -865,7 +865,7 @@ must show:
 | `block_tools` | all | upstream tool list |
 | `clean_header`, `claude_code_compat` | Anthropic clients | upstream body / roles |
 | `cursor_compat`, `cursor_compat_auto` | Chat clients | upstream content (Chat target), client usage |
-| `skip_usage` | OpenAI clients | client response usage |
+| `skip_usage` | all | client response usage: stripped for Chat clients, kept for every other client |
 | `vision_proxy_service` | all | describer called, no image upstream, description upstream |
 | `openai_endpoint_override` | all clients × chat / responses | endpoint hit |
 | `context_1m` | → Anthropic | upstream `anthropic-beta` |
@@ -874,8 +874,12 @@ must show:
 | `claude_org_id` | Anthropic clients → Claude OAuth | upstream organization header |
 
 `thinking_effort` and `use_max_completion_tokens` / `use_max_tokens` are
-crossed in §10.5. Pre-existing gaps are registered as known gaps FP1–FP3 (see
-the bottom of `flag_paths.go`). Run it with:
+crossed in §10.5. It exposed three pre-existing gaps: FP1 (usage not stripped
+for a Chat client on a Responses provider) is fixed in #1918; FP2 (`skip_usage`
+ignored for Responses clients) was a wrong expectation — the usage hints are
+for Chat clients only — and the case now checks that other clients keep their
+usage; FP3 (no rule recording for a Responses client on an Anthropic or Chat
+provider) is still registered at the bottom of `flag_paths.go`. Run it with:
 
 ```bash
 go test ./internal/protocoltest -run TestFlagPaths -count=1

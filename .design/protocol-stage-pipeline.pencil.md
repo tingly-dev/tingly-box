@@ -182,7 +182,8 @@
   ③ 转换推导的档位 ────────► OpenAIConfig.ReasoningEffort ─────┘   按 vendor 分档
                               ▲
                               └─ RuleThinkingTransform.syncConfig 两边同步
-                                 buildOpenAIConfigFromRequest：带 thinking 扩展字段时猜 low
+                                 （已删 #1918）buildOpenAIConfigFromRequest：带 thinking 扩展字段时猜 low
+                                 现在：Chat 客户端的字段只留在请求上；DeepSeek transform 补自己的默认档 high
 
   以后（待定，见正文开放问题）：请求上一个 effort 字段 + "是否由网关推导"，③ 写一次，④ 只读这一处
 ```
@@ -211,14 +212,15 @@
   以前两条都只在 rule = ""（按客户端）时出现：rule 设了档位时，④ 的 RuleThinkingTransform 会补上。
 ```
 
-### 偏差 6–8：rule flag 在部分路径上不生效（harness `flag_paths`，known gap FP1–FP3）
+### 偏差 6–8：rule flag 在部分路径上不生效（harness `flag_paths`；FP1 已修、FP2 撤销 #1918，FP3 待定）
 
 ```
                          → Anthropic       → Chat           → Responses
   skip_usage / cursor_compat（Chat 客户端）
-                            ✓                 ✓                ✗ FP1  usage 仍回给客户端
-  skip_usage（Responses 客户端）
-                            ✗ FP2             ✗ FP2            ✗ FP2
+     以前：                 ✓                 ✓                ✗ FP1  usage 仍回给客户端
+     现在：                 ✓                 ✓                ✓      三种 provider 的 Chat 回写都走 shouldStripChatUsage
+  skip_usage（Responses / Anthropic 客户端）
+                            保留 usage        保留 usage       保留 usage   ← 正确行为：用量提示是 Chat 客户端专用
   recording（Responses 客户端）
                             ✗ FP3 无记录      ✗ FP3 无记录     ✓
 

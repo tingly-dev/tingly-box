@@ -130,19 +130,22 @@ run*Attempt（每个 failover attempt）
 |---|---|---|---|
 | 1 | 四个 `run*Attempt` 各自解析 target（三份 provider 风格 switch，Chat 另有一次 `tempFlags`）；preVendor 列表同时传给 `transformRequest` 与 `serve*`；`skip_usage` / `cursor_compat` 提示只在 OpenAI 入口写入 `Extra` | 共用的 attempt plan（规则 3）：`internal/protocolserver/attempt_plan.go` 的 `planAttempt` 解析 provider、target、flags、preBase / preVendor 与输出上限；`transformRequest` 按 `servedByStage()` 决定跑整链还是只跑 source 半段，并统一写入用量提示 | 已完成（#1901） |
 | 2 | 输出上限分散在三处且各不相同：Anthropic 入口的 `ExecuteAnthropicPreChain`（Source 侧，补齐 + 上限 + budget 截断）、Chat 入口 handler 内联截断 `max_tokens`、Responses 入口不截断 | Source 侧只补齐 Anthropic 必填的 `max_tokens`（`MaxTokensDefaultTransform`）；上限与 budget 截断移到 Target 半段的 `OutputLimitTransform`，按形态生效（规则 1、2）。删除 `ExecuteAnthropicPreChain`、handler 内联截断与 `KeepThinkingBudget`。统一后 Chat 的 `max_completion_tokens` 与 Responses 的 `max_output_tokens` 也按模型上限截断（此前不截） | 已完成（#1902） |
-| 3 | Chat 形态的 thinking 意图有两个来源：`req.ReasoningEffort`（客户端原值，原样透传）与 `OpenAIConfig.ReasoningEffort`（网关推导值，按 vendor 分档），靠 `RuleThinkingTransform.syncConfig` 同步；`buildOpenAIConfigFromRequest` 在 Chat 客户端带 `thinking` 扩展字段时猜一个 `low` | 见下 | 待定 |
+| 3 | Chat 形态的 thinking 意图有两个来源：`req.ReasoningEffort`（客户端原值，原样透传）与 `OpenAIConfig.ReasoningEffort`（网关推导值，按 vendor 分档），靠 `RuleThinkingTransform.syncConfig` 同步；~~`buildOpenAIConfigFromRequest` 在 Chat 客户端带 `thinking` 扩展字段时猜一个 `low`~~（已删，#1918） | 见下 | 部分完成（剩第一个开放问题） |
 | 4 | ③ Anthropic → Responses 转换不把客户端的 thinking budget 带成 `reasoning.effort`（只有 rule 的档位能到） | 转换处按 `thinking.EffortFromBudget` 产出，与 → Chat 共用 `anthropicViewReasoningEffort`；只在请求本身开启 thinking（enabled / adaptive）时带，历史里的 thinking 块不算 | 已完成（#1917，TL2） |
 | 5 | ③ Chat / Responses → Anthropic 转换不把客户端的 reasoning effort 带成 thinking（只有 rule 的档位能到） | 转换处按 `thinking.BudgetMapping` 产出 thinking 与 `output_config.effort`，并给回答留空间（客户端没设上限：`max_tokens` 加上 budget；设了：budget 至多占一半，放不下 1024 就不开），交给 ④ 与 vendor 按模型能力落地；④ vendor 对所有 Anthropic target 做 thinking 与请求其余部分的协调（`ReconcileBetaThinkingWithRequest`）：最后一条带 `tool_use` 的 assistant 消息不以 thinking 块开头、或 tool_choice 强制用工具时关闭 thinking，否则丢掉 thinking 不允许的采样参数（temperature ≠ 1、top_k，top_p 抬到 0.95） | 已完成（#1917，TL3） |
-| 6 | 响应整形只在部分路径上读用量提示：Chat 客户端 → Responses provider 时，`skip_usage` / `cursor_compat` 不剥 usage | 用量提示在 `transformRequest` 已统一写入，所有回写路径统一读 | 待定（harness known gap FP1） |
-| 7 | `skip_usage` 对 Responses 客户端不生效（任何 target） | 同上 | 待定（FP2） |
+| 6 | 响应整形只在部分路径上读用量提示：Chat 客户端 → Responses provider 时，`skip_usage` / `cursor_compat` 不剥 usage | 用量提示是 Chat 客户端专用的（Cursor 这类处理不了 usage chunk）：所有 Chat 客户端回写路径统一用 `shouldStripChatUsage` 判断；Responses / Anthropic 客户端保留 usage | 已完成（#1918，FP1） |
+| 7 | ~~`skip_usage` 对 Responses 客户端不生效~~ | 不是偏差：用量提示只作用于 Chat 客户端，harness 改为断言其它客户端保留 usage | 撤销（#1918，原 FP2） |
 | 8 | rule 级 recording：Responses 客户端 → Anthropic / Chat provider 时不出记录（→ Responses 正常） | 录制在两条路径上同样落盘 | 待定（FP3） |
 
-偏差 3 需要先定语义再动代码，目前的开放问题：
+偏差 3 需要先定语义再动代码，开放问题：
 
 - 客户端直接给出的 `reasoning_effort`（例如 Chat 客户端的 `xhigh`）发往未验证的 OpenAI 兼容 host 时，
   要不要和网关推导值一样按 `genericEffortTiers` 收窄？现状是原样透传，只收窄推导值。
-- Chat 客户端带 DeepSeek 风格的 `thinking: {type: enabled}` 扩展字段、但没给 effort 时，
-  是保留现状补一个 `low`，还是不补、交给 vendor 默认？
+- ~~Chat 客户端带 DeepSeek 风格的 `thinking: {type: enabled}` 扩展字段、但没给 effort 时，
+  是保留现状补一个 `low`，还是不补、交给 vendor 默认？~~ 已定（#1918）：这是 vendor 自己的开关，
+  通用层不从 Chat 客户端的字段推导任何档位（`BaseTransform` 对 Chat 请求不再产出 `OpenAIConfig`）；
+  DeepSeek 的 vendor transform 在开关打开且没有 `reasoning_effort` 时写出 DeepSeek 文档的默认档 `high`，
+  其它 vendor 原样收到开关、走各自默认。
 
 这两点定下来之后，`OpenAIConfig` 可以收敛成"请求上的 effort 字段 + 它是否由网关推导"这一个事实，
 由 Bridge / `BaseTransform` 共用的产出函数写入，vendor 只读这一处。
