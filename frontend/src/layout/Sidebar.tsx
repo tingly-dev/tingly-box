@@ -380,50 +380,52 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     </Button>
                 </Box>
             </Popover>
-            {/* Footer bottom row: the slogan, and under it the GitHub star
-                (icon only) — brand and community together, apart from the version's
-                app state above. One quiet, always-there link instead of a
-                banner over every agent page. Still footerHeight tall, so its
-                bottom lines up with the activity bar's footer. */}
+            {/* Footer bottom row: the slogan, ending in the GitHub star —
+                brand and community together, apart from the version's app
+                state above. One quiet, always-there link instead of a banner
+                over every agent page. The star is part of the sentence, like a
+                sign-off: no break opportunity between it and the last word, so
+                a slogan that wraps carries the star along instead of leaving it
+                alone on a line. Still footerHeight tall, so its bottom lines up
+                with the activity bar's footer. */}
             <Box
                 sx={{
                     height: footerHeight, py: 1, px: 2, borderTop: '1px solid', borderColor: 'divider',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 0.25,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
             >
-                <Tooltip title={t('layout.sidebar.sloganTooltip')} placement="top" arrow>
-                    <Typography
-                        variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            textAlign: 'center',
-                            display: 'block',
-                            fontStyle: 'italic',
-                            cursor: 'default',
-                        }}
-                    >
-                        {t('layout.slogan')}
-                    </Typography>
-                </Tooltip>
-                <Tooltip title={t('layout.githubStar.text')} placement="top" arrow>
-                    {/* Just the star: the icon says it in every language, and
-                        the tooltip explains it. */}
-                    <Box
-                        component="a"
-                        href={REPO_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={t('layout.githubStar.cta')}
-                        sx={{
-                            display: 'flex',
-                            color: 'warning.main',
-                            transition: 'transform 0.2s ease',
-                            '&:hover': { transform: 'scale(1.15)' },
-                        }}
-                    >
-                        <IconStar sx={{ fontSize: 16 }} />
-                    </Box>
-                </Tooltip>
+                <Typography
+                    variant="caption"
+                    component="div"
+                    sx={{ color: 'text.secondary', textAlign: 'center', fontStyle: 'italic' }}
+                >
+                    <Tooltip title={t('layout.sidebar.sloganTooltip')} placement="top" arrow>
+                        <Box component="span" sx={{ cursor: 'default' }}>{t('layout.slogan')}</Box>
+                    </Tooltip>
+                    <Tooltip title={t('layout.githubStar.text')} placement="top" arrow>
+                        {/* Just the star: the icon says it in every language, and
+                            the tooltip explains it. Neutral like the activity
+                            bar's icons — not the update badge's orange, which
+                            would make it read as a status asking for action. */}
+                        <Box
+                            component="a"
+                            href={REPO_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={t('layout.githubStar.cta')}
+                            sx={{
+                                display: 'inline-flex',
+                                verticalAlign: '-2px',
+                                ml: 0.75,
+                                color: 'text.secondary',
+                                transition: 'color 0.2s ease',
+                                '&:hover': { color: 'primary.main' },
+                            }}
+                        >
+                            <IconStar sx={{ fontSize: 14 }} />
+                        </Box>
+                    </Tooltip>
+                </Typography>
             </Box>
             {/* Update Panel Dialog */}
             <UpdatePanelDialog
