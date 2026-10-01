@@ -8,7 +8,7 @@ import NotifyTestDialog from '@/components/notify/NotifyTestDialog';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import {CHAT_CAPABILITIES} from '@/components/notify/chatCapabilities';
 import useChatProbe, {type ChatCapability, type ChatProbeResult} from '@/components/notify/useChatProbe';
-import {ApiEntryNode, ArrowNode, ChatNode, ImBotNode, NodeContainer, getInactiveHatchSx, graphRowStyles} from '@/components/nodes';
+import {ApiEntryNode, ArrowNode, ChatNode, ImBotNode, NodeContainer, graphRowStyles} from '@/components/nodes';
 import {
     Alert,
     Box,
@@ -24,6 +24,7 @@ import {
     Typography,
 } from '@mui/material';
 import {useCallback, useEffect, useState} from 'react';
+import {PLATFORM_BRAND_ICONS} from '@/constants/platformGuides';
 import {useTranslation} from 'react-i18next';
 
 // BotNotifyGroup is one bot's panel on the IM Notify page: a header (name +
@@ -271,95 +272,83 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
     const directCount = activeTargets.filter(target => target.kind === 'direct_chat').length;
     const groupCount = activeTargets.filter(target => target.kind === 'group').length;
 
+    // One sentence answering "can this bot deliver right now?" — the same
+    // status-line shape as a Remote Control card, replacing the old chip +
+    // "2 direct · 1 groups" + On/Off label.
+    const receivers = activeTargets.filter(target => target.can_notify).length;
+    const checked = enabled && !loading;
+    const status = !enabled
+        ? t('notify.group.statusOff', {defaultValue: 'Notify off'})
+        : !checked
+            ? t('notify.group.statusChecking', {defaultValue: 'Checking targets…'})
+            : error
+                ? t('notify.group.statusError', {defaultValue: "Couldn't load targets"})
+                : receivers > 0
+                    ? t('notify.group.statusReceivers', {defaultValue: '{{count}} targets can receive', count: receivers})
+                    : activeTargets.length > 0
+                        ? t('notify.group.statusNotAllowed', {defaultValue: 'No target allowed yet'})
+                        : t('notify.group.statusNoChats', {defaultValue: 'No chats yet'});
+    const statusColor = !checked ? 'text.secondary' : (error || receivers === 0) ? 'warning.main' : 'success.main';
+    const BrandIcon = PLATFORM_BRAND_ICONS[bot.platform || ''];
+
     return (
         <Box
-            sx={(theme) => ({
-                position: 'relative',
+            sx={{
+                // Off is a quiet state, not a struck-through one: the card
+                // drops its paper background and greys its identity, and the
+                // body (a stopped bot reaches no chats) is not shown.
+                bgcolor: enabled ? 'background.paper' : 'transparent',
                 border: '1px solid',
                 borderColor: 'divider',
-                borderRadius: 1.5,
-                overflow: 'hidden',
-                // Bot off = the same diagonal-hatch "deliberately not running"
-                // affordance the bot cards use (nodes/styles.tsx).
-                // Pointer-transparent, so the enabled switch stays usable
-                // through the overlay.
-                ...(!enabled && getInactiveHatchSx(theme)),
-            })}
+                borderRadius: 2,
+                transition: 'background-color 0.18s ease-out',
+            }}
         >
-            {/* Header: name + platform + enabled switch (the on/off for driving
-                this bot) + chat count. The switch is the bot's existing enabled
-                flag — surfaced here because "can I use this bot to notify?" is
-                exactly the question this page answers. */}
-            <Box
-                sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.5,
-                    px: 2,
-                    py: 1.25,
-                    bgcolor: 'action.hover',
-                    flexWrap: 'wrap',
-                }}
-            >
-                {/* Fixed-width name column so every group's name chip aligns
-                    across rows — name length varies, but the column shouldn't. */}
-                <Tooltip title={bot.name || bot.platform}>
-                    <Typography noWrap variant="body2" sx={{fontWeight: 600, flexShrink: 0, width: {xs: 96, sm: 150}}}>
-                        {bot.name || bot.platform}
-                    </Typography>
-                </Tooltip>
-                <Chip label={bot.platform} size="small" />
-                <Box sx={{flexGrow: 1}} />
-                {enabled && (
-                    <Typography variant="body2" sx={{color: 'text.secondary'}}>
-                        {activeTargets.length > 0
-                            ? t('notify.group.targetCount', {defaultValue: '{{direct}} direct · {{groups}} groups', direct: directCount, groups: groupCount})
-                            : t('notify.group.noTargets', {defaultValue: 'No observed targets'})}
-                    </Typography>
-                )}
-                {enabled && (
-                    // Manual refresh: a chat only registers after the bot
-                    // actually receives a message on its channel, so the first
-                    // view is expected to be stale until the operator re-pulls.
-                    <Tooltip title={t('notify.group.refresh', {defaultValue: 'Refresh reachable chats'})}>
-                        <span>
-                            <IconButton
-                                size="small"
-                                onClick={loadChats}
-                                disabled={loading || isToggling}
-                                aria-label={t('notify.group.refresh', {defaultValue: 'Refresh reachable chats'})}
-                            >
-                                {loading ? <CircularProgress size={16}/> : <RefreshIcon fontSize="small"/>}
-                            </IconButton>
-                        </span>
-                    </Tooltip>
-                )}
-                <Tooltip title={enabled
-                    ? t('notify.group.disableHint', {defaultValue: 'Disable Notify for this bot'})
-                    : t('notify.group.enableHint', {defaultValue: 'Enable Notify. The bot starts automatically if needed.'})}>
-                    {/* Present one operational state. The backend reconciles
-                        the capability and Bot lifecycle as one action. */}
-                    <Stack
-                        direction="row"
-                        spacing={0.75}
-                        sx={{alignItems: 'center', cursor: isToggling ? 'wait' : 'pointer'}}
-                    >
+            {/* Header: platform + bot name, one status line, refresh, switch. */}
+            <Box sx={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, px: 2, py: 1.5}}>
+                <Box sx={{display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0}}>
+                    {BrandIcon && <BrandIcon size={24} grayscale={!enabled}/>}
+                    <Box sx={{minWidth: 0}}>
+                        <Typography noWrap variant="subtitle2" sx={{fontWeight: 600, color: enabled ? 'text.primary' : 'text.secondary'}}>
+                            {bot.name || bot.platform}
+                        </Typography>
+                        <Typography noWrap variant="caption" sx={{display: 'block', color: statusColor}}>
+                            {status}
+                        </Typography>
+                    </Box>
+                </Box>
+                <Box sx={{display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0}}>
+                    {enabled && (
+                        // Manual refresh: a chat only registers after the bot
+                        // actually receives a message on its channel, so the
+                        // first view is expected to be stale until re-pulled.
+                        <Tooltip title={t('notify.group.refresh', {defaultValue: 'Refresh reachable chats'})}>
+                            <span>
+                                <IconButton
+                                    size="small"
+                                    onClick={loadChats}
+                                    disabled={loading || isToggling}
+                                    aria-label={t('notify.group.refresh', {defaultValue: 'Refresh reachable chats'})}
+                                >
+                                    {loading ? <CircularProgress size={16}/> : <RefreshIcon fontSize="small"/>}
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+                    )}
+                    <Tooltip title={enabled
+                        ? t('notify.group.disableHint', {defaultValue: 'Disable Notify for this bot'})
+                        : t('notify.group.enableHint', {defaultValue: 'Enable Notify. The bot starts automatically if needed.'})}>
+                        {/* One operational state: the backend reconciles the
+                            capability and the Bot lifecycle as one action. */}
                         <Switch
                             size="small"
-                            color="success"
+                            color="primary"
                             checked={enabled}
                             disabled={isToggling}
                             onChange={(_, checked) => onToggle(bot.uuid!, checked)}
                         />
-                        {isToggling ? (
-                            <CircularProgress size={14} />
-                        ) : (
-                            <Typography variant="body2" sx={{color: enabled ? 'success.main' : 'text.secondary', fontWeight: 600}}>
-                                {enabled ? t('common.on', {defaultValue: 'On'}) : t('common.off', {defaultValue: 'Off'})}
-                            </Typography>
-                        )}
-                    </Stack>
-                </Tooltip>
+                    </Tooltip>
+                </Box>
             </Box>
 
             {/* Body: the notify routing graph — API entry → bot channel →
@@ -368,7 +357,8 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                 control is chat-driven (chat → bot → agent), notify is
                 API-driven (API → bot → chat). State is topology: bot off dims
                 the whole chain, a disabled chat dims only its leaf. */}
-            <Box sx={{px: {xs: 1, sm: 2}, py: 1.5}}>
+            {enabled && (
+            <Box sx={{px: {xs: 1, sm: 2}, pb: 1.5}}>
                 {loading ? (
                     <Box sx={{display: 'flex', justifyContent: 'center', py: 2}}>
                         <CircularProgress size={20} />
@@ -408,11 +398,9 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                             fork in RemoteControlGraph). */}
                         {visibleTargets.length === 0 ? (
                             <Typography variant="body2" sx={{color: 'text.disabled', py: 1, minWidth: 220}}>
-                                {!enabled
-                                    ? t('notify.group.disabledBody', {defaultValue: 'Bot is off — enable it to see and send to its reachable chats.'})
-                                    : isPairingRequired(bot)
-                                        ? t('notify.group.emptyPairFirst', {defaultValue: 'No chats yet. Pair this bot, then send it a message on {{platform}} — its Chat ID appears here.', platform: bot.platform || 'its platform'})
-                                        : t('notify.group.empty', {defaultValue: 'No chats yet. Send any message to this bot on {{platform}} and its Chat ID appears here.', platform: bot.platform || 'its platform'})}
+                                {isPairingRequired(bot)
+                                    ? t('notify.group.emptyPairFirst', {defaultValue: 'No chats yet. Pair this bot, then send it a message on {{platform}} — its Chat ID appears here.', platform: bot.platform || 'its platform'})
+                                    : t('notify.group.empty', {defaultValue: 'No chats yet. Send any message to this bot on {{platform}} and its Chat ID appears here.', platform: bot.platform || 'its platform'})}
                             </Typography>
                         ) : (
                             <Box
@@ -591,6 +579,7 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                     </Box>
                 )}
             </Box>
+            )}
 
             {/* Delete confirm — hard delete is destructive-but-recoverable
                 (natural re-register), so the dialog states exactly what goes

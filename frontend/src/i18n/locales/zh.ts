@@ -2436,7 +2436,6 @@ export default {
       "deleteChatTitle": "删除这个会话？",
       "deleteChatBody": "其配对、白名单和项目绑定都会被移除。如果它再次给 Bot 发消息，会作为全新会话重新注册（在强制配对时需要重新配对）。会话历史不受影响。若只想拦截，请改用「停用」。",
       "disableChat": "停用 —— 静默丢弃其消息",
-      "disabledBody": "Bot 已关闭 —— 启用后才能查看并发送到其可达会话。",
       "disabledChat": "已停用",
       "disableHint": "停用此 Bot 的通知",
       "empty": "暂无会话。在 {{platform}} 上给这个 Bot 发送任意消息，其 Chat ID 就会出现在这里。",
@@ -2444,11 +2443,15 @@ export default {
       "enableChat": "启用 —— 重新接收其消息",
       "enableHint": "启用通知。需要时 Bot 会自动启动。",
       "hideDisabled": "隐藏已停用",
-      "noTargets": "没有观察到目标",
       "paired": "已配对",
       "refresh": "刷新可达会话",
       "showDisabled": "显示已停用（{{count}}）",
-      "targetCount": "{{direct}} 个私聊 · {{groups}} 个群组"
+      "statusChecking": "正在检查目标…",
+      "statusError": "无法加载目标",
+      "statusNoChats": "还没有会话",
+      "statusNotAllowed": "还没有允许通知的目标",
+      "statusOff": "通知已关闭",
+      "statusReceivers": "{{count}} 个目标可接收"
     },
     "guide": {
       "title": "IM 通知 API 指南",
