@@ -8,6 +8,7 @@ import (
 	"github.com/tingly-dev/tingly-box/gui/wails3/services"
 	"github.com/wailsapp/wails/v3/pkg/application"
 
+	assets "github.com/tingly-dev/tingly-box/internal"
 	"github.com/tingly-dev/tingly-box/internal/app"
 )
 
@@ -27,7 +28,10 @@ func newAppWithServerManager(appManager *app.AppManager, serverManager *app.Serv
 	tinglyService = services.NewTinglyServiceWithServerManager(appManager, serverManager)
 
 	// Create a new Wails application by providing the necessary options.
-	embdHandler := application.AssetFileServerFS(guiDistAssets)
+	// The same embedded build the gateway serves to a browser tab on its
+	// port (internal/server/webui_handler.go): one frontend for both hosts,
+	// which tells them apart at runtime (frontend/src/host).
+	embdHandler := application.AssetFileServerFS(assets.WebDistAssets)
 	app := application.New(application.Options{
 		Name:        AppName,
 		Description: AppDescription,

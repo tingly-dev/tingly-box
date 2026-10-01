@@ -144,8 +144,8 @@ tasks:
     cmds:
       - cd frontend; pnpm build:dev
       - |
-        mkdir -p gui/wails3/dist/
-        cp -R frontend/dist/* gui/wails3/dist/
+        mkdir -p internal/web/dist/
+        cp -R frontend/dist/* internal/web/dist/
 
   wails:manual:
     cmds:

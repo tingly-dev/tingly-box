@@ -31,14 +31,36 @@ tasks:
 
   build:frontend:
     label: build:frontend (PRODUCTION={{.PRODUCTION}})
-    summary: Build the frontend project
+    summary: Build the frontend and place it where the binary embeds it
+    # The same build as the CLI's web UI (`pnpm build`), embedded from the
+    # same place (internal/web/dist, see internal/assets.go): the page picks
+    # its host bridge at runtime (frontend/src/host), so the desktop window
+    # needs no build of its own and no generated wails bindings.
+    #
+    # The copy is deliberately outside the cached build:frontend:dist below.
+    # When it lived inside, an up-to-date frontend/dist skipped the copy too,
+    # and a binary built after `task cleanup` (or a CLI build) silently
+    # embedded the placeholder instead of the UI.
+    run: once
+    deps:
+      - task: build:frontend:dist
+        vars:
+          PRODUCTION:
+            ref: .PRODUCTION
+    cmds:
+      # Clear the previous build's hashed chunks first, or every rebuild
+      # leaves its old ones in the embedded FS.
+      - rm -rf ./internal/web/dist/assets
+      - mkdir -p ./internal/web/dist
+      - cp -R frontend/dist/* ./internal/web/dist/
+
+  build:frontend:dist:
+    label: build:frontend:dist (PRODUCTION={{.PRODUCTION}})
+    summary: Build frontend/dist (skipped when the sources are unchanged)
+    internal: true
     # darwin:build:universal runs its per-arch builds as parallel deps, each of
     # which depends on this task; run:once keeps them from building the
     # frontend twice into the same dist concurrently (#4637).
-    #
-    # The same build as the CLI's web UI (`pnpm build`): the page picks its
-    # host bridge at runtime (frontend/src/host), so the desktop window needs
-    # no build of its own and no generated wails bindings.
     run: once
     dir: frontend
     sources:
@@ -49,13 +71,7 @@ tasks:
     deps:
       - task: install:frontend:deps
     cmds:
-      - |
-        pnpm run {{.BUILD_COMMAND}}
-      - |
-        cd ..
-        mkdir -p ./gui/wails3/dist
-        cp -R frontend/dist/* ./gui/wails3/dist/
-
+      - pnpm run {{.BUILD_COMMAND}}
     env:
       PRODUCTION: '{{.PRODUCTION | default "false"}}'
     vars:

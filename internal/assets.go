@@ -5,9 +5,11 @@ import (
 	_ "embed"
 )
 
-// The desktop GUI's own frontend build is embedded by gui/wails3 (assets.go),
-// not here: this package is linked into the CLI, which never serves it.
-
+// WebDistAssets is the web UI build (`pnpm build`, copied in by `task
+// web:dist` / the wails build:frontend task). Served by the gateway on its
+// port and by the desktop window's asset server (gui/wails3/app.go) alike:
+// the page picks its host bridge at runtime, so there is one build for both.
+//
 //go:embed web/dist
 var WebDistAssets embed.FS
 
