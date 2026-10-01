@@ -1,4 +1,4 @@
-package server
+package guardrails
 
 import (
 	"context"
@@ -22,7 +22,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/bind"
 	"gopkg.in/yaml.v3"
 
-	"github.com/tingly-dev/tingly-box/internal/guardrails"
+	guardrailsruntime "github.com/tingly-dev/tingly-box/internal/guardrails"
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	guardrailsevaluate "github.com/tingly-dev/tingly-box/internal/guardrails/evaluate"
 	guardrailsutils "github.com/tingly-dev/tingly-box/internal/guardrails/utils"
@@ -32,24 +32,24 @@ import (
 // easy to scan in one place. Runtime evaluation and request/response mutation
 // flows stay in their own files.
 
-// GuardrailsRuntime is the narrow slice of the root server's guardrails
-// runtime state (internal/server.guardrails_runtime.go) that the admin
+// Runtime is the narrow slice of the root server's guardrails
+// runtime state (internal/server/guardrails_runtime_adapter.go) that the admin
 // surface needs: the current runtime snapshot, the ability to swap it after
 // a config edit, and the small set of gating/derived helpers. Declared as an
 // interface — rather than depending on *server.Server — to avoid an import
-// cycle, since root server already imports this webui package.
-type GuardrailsRuntime interface {
-	CurrentGuardrailsRuntime() *guardrails.Guardrails
-	SetGuardrailsRuntime(runtime *guardrails.Guardrails, context string)
+// cycle, since the root server imports this module.
+type Runtime interface {
+	CurrentGuardrailsRuntime() *guardrailsruntime.Guardrails
+	SetGuardrailsRuntime(runtime *guardrailsruntime.Guardrails, context string)
 	GetGuardrailsSupportedScenarios() []string
 	RefreshGuardrailsCredentialCacheOrWarn(context string)
 }
 
-// GuardrailsDeps declares exactly what the guardrails admin handlers need
+// Deps declares exactly what the guardrails admin handlers need
 // from the host server.
-type GuardrailsDeps struct {
+type Deps struct {
 	Config  *config.Config
-	Runtime GuardrailsRuntime
+	Runtime Runtime
 
 	// GuardrailsConfigMu serializes config/policy/group file edits. It is the
 	// SAME mutex instance as root server's Server.guardrailsConfigMu (passed
@@ -58,19 +58,19 @@ type GuardrailsDeps struct {
 	GuardrailsConfigMu *sync.Mutex
 }
 
-// GuardrailsHandler is the aggregate handler for the guardrails admin surface
+// Handler is the aggregate handler for the guardrails admin surface
 // (config editor, policy/group CRUD, protected credentials, registry
 // install, history).
-type GuardrailsHandler struct {
-	deps GuardrailsDeps
+type Handler struct {
+	deps Deps
 }
 
-// NewGuardrailsHandler constructs the guardrails admin handler.
-func NewGuardrailsHandler(deps GuardrailsDeps) *GuardrailsHandler {
-	return &GuardrailsHandler{deps: deps}
+// NewHandler constructs the guardrails admin handler.
+func NewHandler(deps Deps) *Handler {
+	return &Handler{deps: deps}
 }
 
-func (h *GuardrailsHandler) credentialStore() (*guardrailsutils.ProtectedCredentialStore, error) {
+func (h *Handler) credentialStore() (*guardrailsutils.ProtectedCredentialStore, error) {
 	return h.deps.Config.CredentialStore()
 }
 
@@ -440,8 +440,8 @@ func toProtectedCredentialResponse(credential guardrailscore.ProtectedCredential
 // Guardrails Builtins And Config Handlers
 
 // GetGuardrailsBuiltins returns curated builtin policies for the Guardrails UI.
-func (h *GuardrailsHandler) GetGuardrailsBuiltins(c *gin.Context) {
-	policies, err := guardrails.LoadBuiltinPolicies()
+func (h *Handler) GetGuardrailsBuiltins(c *gin.Context) {
+	policies, err := guardrailsruntime.LoadBuiltinPolicies()
 	if err != nil {
 		apierr.Failure(c, 500, err.Error())
 		return
@@ -450,7 +450,7 @@ func (h *GuardrailsHandler) GetGuardrailsBuiltins(c *gin.Context) {
 }
 
 // GetGuardrailsRegistry lists downloadable policies from a remote registry.
-func (h *GuardrailsHandler) GetGuardrailsRegistry(c *gin.Context) {
+func (h *Handler) GetGuardrailsRegistry(c *gin.Context) {
 	if strings.TrimSpace(GuardrailsRegistryGitHubURL) == "" {
 		apierr.Failure(c, http.StatusServiceUnavailable, "guardrails registry source is not configured")
 		return
@@ -475,7 +475,7 @@ func (h *GuardrailsHandler) GetGuardrailsRegistry(c *gin.Context) {
 }
 
 // GetGuardrailsConfig returns the current guardrails config file content and parsed config.
-func (h *GuardrailsHandler) GetGuardrailsConfig(c *gin.Context) {
+func (h *Handler) GetGuardrailsConfig(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
 		apierr.Failure(c, 500, "config directory not set")
 		return
@@ -522,7 +522,7 @@ func (h *GuardrailsHandler) GetGuardrailsConfig(c *gin.Context) {
 }
 
 // UpdateGuardrailsConfig saves a new guardrails config and reloads the engine.
-func (h *GuardrailsHandler) UpdateGuardrailsConfig(c *gin.Context) {
+func (h *Handler) UpdateGuardrailsConfig(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
 		apierr.Failure(c, 500, "config directory not set")
 		return
@@ -567,7 +567,7 @@ func (h *GuardrailsHandler) UpdateGuardrailsConfig(c *gin.Context) {
 
 // ImportGuardrailsFragment appends one or more policies from a fragment file
 // into guardrails/custom/import.yaml and ensures the root config imports it.
-func (h *GuardrailsHandler) ImportGuardrailsFragment(c *gin.Context) {
+func (h *Handler) ImportGuardrailsFragment(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
 		apierr.Failure(c, 500, "config directory not set")
 		return
@@ -587,7 +587,7 @@ func (h *GuardrailsHandler) ImportGuardrailsFragment(c *gin.Context) {
 		apierr.Failure(c, 400, err.Error())
 		return
 	}
-	if err := guardrails.ValidateImportedFragment(fragmentCfg); err != nil {
+	if err := guardrailsruntime.ValidateImportedFragment(fragmentCfg); err != nil {
 		apierr.Failure(c, 400, err.Error())
 		return
 	}
@@ -668,7 +668,7 @@ func (h *GuardrailsHandler) ImportGuardrailsFragment(c *gin.Context) {
 
 // ExportGuardrailsFragments returns the raw imported fragment files selected by
 // the user so the UI can download one or more source files directly.
-func (h *GuardrailsHandler) ExportGuardrailsFragments(c *gin.Context) {
+func (h *Handler) ExportGuardrailsFragments(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
 		apierr.Failure(c, 500, "config directory not set")
 		return
@@ -748,7 +748,7 @@ func (h *GuardrailsHandler) ExportGuardrailsFragments(c *gin.Context) {
 }
 
 // ReloadGuardrailsConfig reloads guardrails from disk and rebuilds the runtime.
-func (h *GuardrailsHandler) ReloadGuardrailsConfig(c *gin.Context) {
+func (h *Handler) ReloadGuardrailsConfig(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
 		apierr.Failure(c, 500, "config directory not set")
 		return
@@ -760,7 +760,7 @@ func (h *GuardrailsHandler) ReloadGuardrailsConfig(c *gin.Context) {
 		return
 	}
 
-	cfg, err := guardrails.LoadConfig(path)
+	cfg, err := guardrailsruntime.LoadConfig(path)
 	if err != nil {
 		apierr.Failure(c, 400, err.Error())
 		return
@@ -781,7 +781,7 @@ func (h *GuardrailsHandler) ReloadGuardrailsConfig(c *gin.Context) {
 
 // InstallGuardrailsRegistryPolicy downloads a remote policy fragment into
 // guardrails/remote and wires it into root imports.
-func (h *GuardrailsHandler) InstallGuardrailsRegistryPolicy(c *gin.Context) {
+func (h *Handler) InstallGuardrailsRegistryPolicy(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
 		apierr.Failure(c, http.StatusInternalServerError, "config directory not set")
 		return
@@ -936,7 +936,7 @@ func selectGuardrailsRegistryPolicyFragment(cfg guardrailscore.Config, policyID 
 // Guardrails Policy Handlers
 
 // UpdateGuardrailsPolicy updates a single policy and reloads the engine.
-func (h *GuardrailsHandler) UpdateGuardrailsPolicy(c *gin.Context) {
+func (h *Handler) UpdateGuardrailsPolicy(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
 		apierr.Failure(c, 500, "config directory not set")
 		return
@@ -1069,7 +1069,7 @@ func (h *GuardrailsHandler) UpdateGuardrailsPolicy(c *gin.Context) {
 }
 
 // CreateGuardrailsPolicy creates a new policy and reloads the engine.
-func (h *GuardrailsHandler) CreateGuardrailsPolicy(c *gin.Context) {
+func (h *Handler) CreateGuardrailsPolicy(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
 		apierr.Failure(c, 500, "config directory not set")
 		return
@@ -1180,7 +1180,7 @@ func (h *GuardrailsHandler) CreateGuardrailsPolicy(c *gin.Context) {
 }
 
 // DeleteGuardrailsPolicy deletes a policy and reloads the engine.
-func (h *GuardrailsHandler) DeleteGuardrailsPolicy(c *gin.Context) {
+func (h *Handler) DeleteGuardrailsPolicy(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
 		apierr.Failure(c, 500, "config directory not set")
 		return
@@ -1272,7 +1272,7 @@ func (h *GuardrailsHandler) DeleteGuardrailsPolicy(c *gin.Context) {
 // Guardrails Group Handlers
 
 // UpdateGuardrailsGroup updates a single group and reloads the engine.
-func (h *GuardrailsHandler) UpdateGuardrailsGroup(c *gin.Context) {
+func (h *Handler) UpdateGuardrailsGroup(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
 		apierr.Failure(c, 500, "config directory not set")
 		return
@@ -1386,7 +1386,7 @@ func (h *GuardrailsHandler) UpdateGuardrailsGroup(c *gin.Context) {
 }
 
 // CreateGuardrailsGroup creates a new group and reloads the engine.
-func (h *GuardrailsHandler) CreateGuardrailsGroup(c *gin.Context) {
+func (h *Handler) CreateGuardrailsGroup(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
 		apierr.Failure(c, 500, "config directory not set")
 		return
@@ -1462,7 +1462,7 @@ func (h *GuardrailsHandler) CreateGuardrailsGroup(c *gin.Context) {
 }
 
 // DeleteGuardrailsGroup deletes a group and reloads the engine.
-func (h *GuardrailsHandler) DeleteGuardrailsGroup(c *gin.Context) {
+func (h *Handler) DeleteGuardrailsGroup(c *gin.Context) {
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
 		apierr.Failure(c, 500, "config directory not set")
 		return
@@ -1545,7 +1545,7 @@ func (h *GuardrailsHandler) DeleteGuardrailsGroup(c *gin.Context) {
 // Credential list responses intentionally mask secrets; the edit dialog uses
 // GetGuardrailsCredential when it needs the underlying value.
 // GetGuardrailsCredentials returns protected credentials without exposing raw secrets.
-func (h *GuardrailsHandler) GetGuardrailsCredentials(c *gin.Context) {
+func (h *Handler) GetGuardrailsCredentials(c *gin.Context) {
 	store, err := h.credentialStore()
 	if err != nil {
 		apierr.Failure(c, 500, err.Error())
@@ -1565,7 +1565,7 @@ func (h *GuardrailsHandler) GetGuardrailsCredentials(c *gin.Context) {
 
 // GetGuardrailsCredential returns a single protected credential, including the
 // current secret, for the local editor dialog.
-func (h *GuardrailsHandler) GetGuardrailsCredential(c *gin.Context) {
+func (h *Handler) GetGuardrailsCredential(c *gin.Context) {
 	store, err := h.credentialStore()
 	if err != nil {
 		apierr.Failure(c, 500, err.Error())
@@ -1602,7 +1602,7 @@ func (h *GuardrailsHandler) GetGuardrailsCredential(c *gin.Context) {
 	})
 }
 
-func (h *GuardrailsHandler) CreateGuardrailsCredential(c *gin.Context) {
+func (h *Handler) CreateGuardrailsCredential(c *gin.Context) {
 	store, err := h.credentialStore()
 	if err != nil {
 		apierr.Failure(c, 500, err.Error())
@@ -1637,7 +1637,7 @@ func (h *GuardrailsHandler) CreateGuardrailsCredential(c *gin.Context) {
 	})
 }
 
-func (h *GuardrailsHandler) UpdateGuardrailsCredential(c *gin.Context) {
+func (h *Handler) UpdateGuardrailsCredential(c *gin.Context) {
 	store, err := h.credentialStore()
 	if err != nil {
 		apierr.Failure(c, 500, err.Error())
@@ -1698,7 +1698,7 @@ func (h *GuardrailsHandler) UpdateGuardrailsCredential(c *gin.Context) {
 	})
 }
 
-func (h *GuardrailsHandler) DeleteGuardrailsCredential(c *gin.Context) {
+func (h *Handler) DeleteGuardrailsCredential(c *gin.Context) {
 	store, err := h.credentialStore()
 	if err != nil {
 		apierr.Failure(c, 500, err.Error())
@@ -1725,7 +1725,7 @@ func (h *GuardrailsHandler) DeleteGuardrailsCredential(c *gin.Context) {
 // Guardrails History Handlers
 
 // GetGuardrailsHistory returns the most recent guardrails history rows.
-func (h *GuardrailsHandler) GetGuardrailsHistory(c *gin.Context) {
+func (h *Handler) GetGuardrailsHistory(c *gin.Context) {
 	runtime := h.deps.Runtime.CurrentGuardrailsRuntime()
 	history := (*guardrailsutils.Store)(nil)
 	if runtime != nil {
@@ -1745,7 +1745,7 @@ func (h *GuardrailsHandler) GetGuardrailsHistory(c *gin.Context) {
 }
 
 // ClearGuardrailsHistory deletes all persisted guardrails history rows.
-func (h *GuardrailsHandler) ClearGuardrailsHistory(c *gin.Context) {
+func (h *Handler) ClearGuardrailsHistory(c *gin.Context) {
 	runtime := h.deps.Runtime.CurrentGuardrailsRuntime()
 	if runtime != nil && runtime.HistoryStore() != nil {
 		runtime.HistoryStore().Clear()
@@ -1836,7 +1836,7 @@ func loadGuardrailsConfigSources(rootPath string) (guardrailscore.Config, map[st
 		imported[resolved] = childCfg
 	}
 
-	merged, err := guardrails.LoadConfig(rootPath)
+	merged, err := guardrailsruntime.LoadConfig(rootPath)
 	if err != nil {
 		return zero, nil, zero, err
 	}
@@ -1865,7 +1865,7 @@ func findGuardrailsPolicySourcePath(rootPath string, rootCfg guardrailscore.Conf
 }
 
 func builtinGuardrailsPolicyIDSet() (map[string]struct{}, error) {
-	policies, err := guardrails.LoadBuiltinPolicies()
+	policies, err := guardrailsruntime.LoadBuiltinPolicies()
 	if err != nil {
 		return nil, err
 	}
@@ -1981,7 +1981,7 @@ func writeGuardrailsRegistryCache(path string, resp guardrailsRegistryResponse) 
 	return config.WriteFileAtomic(path, data)
 }
 
-func (h *GuardrailsHandler) loadGuardrailsRegistryIndex(ctx context.Context, forceRefresh bool) (guardrailsRegistryIndex, error) {
+func (h *Handler) loadGuardrailsRegistryIndex(ctx context.Context, forceRefresh bool) (guardrailsRegistryIndex, error) {
 	var index guardrailsRegistryIndex
 	if h.deps.Config == nil || h.deps.Config.ConfigDir == "" {
 		return index, fmt.Errorf("config directory not set")
@@ -2028,7 +2028,7 @@ func downloadGuardrailsRegistryFragment(ctx context.Context, registryURL string,
 	if err != nil {
 		return nil, cfg, err
 	}
-	if err := guardrails.ValidateImportedFragment(cfg); err != nil {
+	if err := guardrailsruntime.ValidateImportedFragment(cfg); err != nil {
 		return nil, cfg, err
 	}
 	return data, cfg, nil
@@ -2232,16 +2232,16 @@ type guardrailsFileWrite struct {
 
 // Build a replacement runtime before writing updated config so invalid changes
 // never leave disk and memory out of sync.
-func (h *GuardrailsHandler) rebuildGuardrailsRuntime(cfg guardrailscore.Config, context string) error {
+func (h *Handler) rebuildGuardrailsRuntime(cfg guardrailscore.Config, context string) error {
 	policy, err := guardrailsevaluate.BuildPolicyEngine(cfg, guardrailsevaluate.Dependencies{})
 	if err != nil {
 		return err
 	}
-	h.deps.Runtime.SetGuardrailsRuntime(&guardrails.Guardrails{Policy: policy}, context)
+	h.deps.Runtime.SetGuardrailsRuntime(&guardrailsruntime.Guardrails{Policy: policy}, context)
 	return nil
 }
 
-func (h *GuardrailsHandler) persistGuardrailsConfigAndReload(path string, cfg guardrailscore.Config, data []byte, context string) error {
+func (h *Handler) persistGuardrailsConfigAndReload(path string, cfg guardrailscore.Config, data []byte, context string) error {
 	policy, err := buildGuardrailsPolicyEngineForConfigData(path, cfg, data)
 	if err != nil {
 		return err
@@ -2249,7 +2249,7 @@ func (h *GuardrailsHandler) persistGuardrailsConfigAndReload(path string, cfg gu
 	if err := config.WriteFileAtomic(path, data); err != nil {
 		return err
 	}
-	h.deps.Runtime.SetGuardrailsRuntime(&guardrails.Guardrails{Policy: policy}, context)
+	h.deps.Runtime.SetGuardrailsRuntime(&guardrailsruntime.Guardrails{Policy: policy}, context)
 	return nil
 }
 
@@ -2274,14 +2274,14 @@ func buildGuardrailsPolicyEngineForConfigData(path string, cfg guardrailscore.Co
 		return nil, err
 	}
 
-	resolvedCfg, err := guardrails.LoadConfig(tmpPath)
+	resolvedCfg, err := guardrailsruntime.LoadConfig(tmpPath)
 	if err != nil {
 		return nil, err
 	}
 	return guardrailsevaluate.BuildPolicyEngine(resolvedCfg, guardrailsevaluate.Dependencies{})
 }
 
-func (h *GuardrailsHandler) persistGuardrailsFilesAndReload(mergedCfg guardrailscore.Config, writes []guardrailsFileWrite, context string) error {
+func (h *Handler) persistGuardrailsFilesAndReload(mergedCfg guardrailscore.Config, writes []guardrailsFileWrite, context string) error {
 	policy, err := guardrailsevaluate.BuildPolicyEngine(mergedCfg, guardrailsevaluate.Dependencies{})
 	if err != nil {
 		return err
@@ -2291,6 +2291,6 @@ func (h *GuardrailsHandler) persistGuardrailsFilesAndReload(mergedCfg guardrails
 			return err
 		}
 	}
-	h.deps.Runtime.SetGuardrailsRuntime(&guardrails.Guardrails{Policy: policy}, context)
+	h.deps.Runtime.SetGuardrailsRuntime(&guardrailsruntime.Guardrails{Policy: policy}, context)
 	return nil
 }

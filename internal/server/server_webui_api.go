@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/server/module"
 	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imagegen"
 	"github.com/tingly-dev/tingly-box/internal/server/module/info"
@@ -88,6 +89,8 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 
 	apiV2 := manager.NewGroup("api", "v2", "")
 	apiV2.Router.Use(s.getUserAuthMiddleware())
+
+	rt := &module.Routes{Public: apiAuth, V1: apiV1, V2: apiV2, Engine: s.engine, Manager: manager}
 
 	// Log API routes (HTTP request logs from memory)
 	apiV1.GET("/log", s.webHandler.GetLogs,
@@ -249,123 +252,8 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 	imagegenHandler := imagegen.NewHandler()
 	imagegen.RegisterRoutes(apiV1, imagegenHandler)
 
-	// Guardrails Management
-	apiV1.GET("/guardrails/config", s.guardrailsHandler.GetGuardrailsConfig,
-		swagger.WithDescription("Get guardrails config content and parsed config"),
-		swagger.WithTags("guardrails"),
-		swagger.WithResponseModel(guardrailsConfigResponse{}),
-	)
-	apiV1.GET("/guardrails/builtins", s.guardrailsHandler.GetGuardrailsBuiltins,
-		swagger.WithDescription("Get curated builtin guardrails policies"),
-		swagger.WithTags("guardrails"),
-		swagger.WithResponseModel(guardrailsBuiltinsResponse{}),
-	)
-	apiV1.GET("/guardrails/registry", s.guardrailsHandler.GetGuardrailsRegistry,
-		swagger.WithDescription("List downloadable guardrails policies from a remote registry"),
-		swagger.WithTags("guardrails"),
-		swagger.WithQuery("refresh", "string", "Set to 1 to refresh the registry cache"),
-		swagger.WithResponseModel(guardrailsRegistryResponse{}),
-	)
-	apiV1.POST("/guardrails/registry/install", s.guardrailsHandler.InstallGuardrailsRegistryPolicy,
-		swagger.WithDescription("Download a guardrails policy from a remote registry into the local guardrails directory"),
-		swagger.WithTags("guardrails"),
-		swagger.WithRequestModel(guardrailsRegistryInstallRequest{}),
-		swagger.WithResponseModel(guardrailsRegistryInstallResponse{}),
-	)
-	apiV1.GET("/guardrails/credentials", s.guardrailsHandler.GetGuardrailsCredentials,
-		swagger.WithDescription("List protected credentials used by guardrails pseudonymization"),
-		swagger.WithTags("guardrails"),
-		swagger.WithResponseModel(protectedCredentialsListResponse{}),
-	)
-	apiV1.GET("/guardrails/credential/:id", s.guardrailsHandler.GetGuardrailsCredential,
-		swagger.WithDescription("Get a protected credential for the local editor dialog"),
-		swagger.WithTags("guardrails"),
-		swagger.WithResponseModel(protectedCredentialDetailEnvelope{}),
-	)
-	apiV1.POST("/guardrails/credential", s.guardrailsHandler.CreateGuardrailsCredential,
-		swagger.WithDescription("Create a protected credential for guardrails pseudonymization"),
-		swagger.WithTags("guardrails"),
-		swagger.WithRequestModel(protectedCredentialCreateRequest{}),
-		swagger.WithResponseModel(protectedCredentialMutationResponse{}),
-	)
-	apiV1.PUT("/guardrails/credential/:id", s.guardrailsHandler.UpdateGuardrailsCredential,
-		swagger.WithDescription("Update a protected credential for guardrails pseudonymization"),
-		swagger.WithTags("guardrails"),
-		swagger.WithRequestModel(protectedCredentialUpdateRequest{}),
-		swagger.WithResponseModel(protectedCredentialMutationResponse{}),
-	)
-	apiV1.DELETE("/guardrails/credential/:id", s.guardrailsHandler.DeleteGuardrailsCredential,
-		swagger.WithDescription("Delete a protected credential for guardrails pseudonymization"),
-		swagger.WithTags("guardrails"),
-		swagger.WithResponseModel(protectedCredentialDeleteResponse{}),
-	)
-	apiV1.PUT("/guardrails/config", s.guardrailsHandler.UpdateGuardrailsConfig,
-		swagger.WithDescription("Update guardrails config and reload engine"),
-		swagger.WithTags("guardrails"),
-		swagger.WithRequestModel(guardrailsConfigUpdateRequest{}),
-		swagger.WithResponseModel(guardrailsConfigUpdateResponse{}),
-	)
-	apiV1.POST("/guardrails/fragment/import", s.guardrailsHandler.ImportGuardrailsFragment,
-		swagger.WithDescription("Import one or more guardrails policies into the shared custom fragment"),
-		swagger.WithTags("guardrails"),
-		swagger.WithRequestModel(guardrailsFragmentImportRequest{}),
-		swagger.WithResponseModel(guardrailsFragmentImportResponse{}),
-	)
-	apiV1.POST("/guardrails/fragment/export", s.guardrailsHandler.ExportGuardrailsFragments,
-		swagger.WithDescription("Export one or more imported guardrails policy fragments"),
-		swagger.WithTags("guardrails"),
-		swagger.WithRequestModel(guardrailsFragmentExportRequest{}),
-		swagger.WithResponseModel(guardrailsFragmentExportResponse{}),
-	)
-	apiV1.PUT("/guardrails/policy/:id", s.guardrailsHandler.UpdateGuardrailsPolicy,
-		swagger.WithDescription("Update a guardrails policy and reload engine"),
-		swagger.WithTags("guardrails"),
-		swagger.WithRequestModel(guardrailsPolicyUpdateRequest{}),
-		swagger.WithResponseModel(guardrailsPolicyUpdateResponse{}),
-	)
-	apiV1.DELETE("/guardrails/policy/:id", s.guardrailsHandler.DeleteGuardrailsPolicy,
-		swagger.WithDescription("Delete a guardrails policy and reload engine"),
-		swagger.WithTags("guardrails"),
-		swagger.WithResponseModel(guardrailsPolicyUpdateResponse{}),
-	)
-	apiV1.POST("/guardrails/policy", s.guardrailsHandler.CreateGuardrailsPolicy,
-		swagger.WithDescription("Create a new guardrails policy and reload engine"),
-		swagger.WithTags("guardrails"),
-		swagger.WithRequestModel(guardrailsPolicyCreateRequest{}),
-		swagger.WithResponseModel(guardrailsPolicyUpdateResponse{}),
-	)
-	apiV1.PUT("/guardrails/group/:id", s.guardrailsHandler.UpdateGuardrailsGroup,
-		swagger.WithDescription("Update a guardrails group and reload engine"),
-		swagger.WithTags("guardrails"),
-		swagger.WithRequestModel(guardrailsGroupUpdateRequest{}),
-		swagger.WithResponseModel(guardrailsGroupUpdateResponse{}),
-	)
-	apiV1.DELETE("/guardrails/group/:id", s.guardrailsHandler.DeleteGuardrailsGroup,
-		swagger.WithDescription("Delete a guardrails group and reload engine"),
-		swagger.WithTags("guardrails"),
-		swagger.WithResponseModel(guardrailsGroupUpdateResponse{}),
-	)
-	apiV1.POST("/guardrails/group", s.guardrailsHandler.CreateGuardrailsGroup,
-		swagger.WithDescription("Create a new guardrails group and reload engine"),
-		swagger.WithTags("guardrails"),
-		swagger.WithRequestModel(guardrailsGroupCreateRequest{}),
-		swagger.WithResponseModel(guardrailsGroupUpdateResponse{}),
-	)
-	apiV1.POST("/guardrails/reload", s.guardrailsHandler.ReloadGuardrailsConfig,
-		swagger.WithDescription("Reload guardrails config from disk"),
-		swagger.WithTags("guardrails"),
-		swagger.WithResponseModel(guardrailsReloadResponse{}),
-	)
-	apiV1.GET("/guardrails/history", s.guardrailsHandler.GetGuardrailsHistory,
-		swagger.WithDescription("Get recent guardrails interception history"),
-		swagger.WithTags("guardrails"),
-		swagger.WithResponseModel(guardrailsHistoryResponse{}),
-	)
-	apiV1.DELETE("/guardrails/history", s.guardrailsHandler.ClearGuardrailsHistory,
-		swagger.WithDescription("Clear guardrails interception history"),
-		swagger.WithTags("guardrails"),
-		swagger.WithResponseModel(guardrailsSuccessResponse{}),
-	)
+	// Guardrails admin API
+	module.Mount(rt, s.guardrailsHandler)
 
 	// History
 	apiV1.GET("/history", s.webHandler.GetHistory,

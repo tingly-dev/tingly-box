@@ -77,7 +77,7 @@ Steps are stacked as separate commits on one branch, in this order.
 | 2 | Shared HTTP helpers: `apierr`, `bind`, `paginate`; remove duplicate CORS | done (see §4) |
 | 3 | `Module` interface + migrate module registration | todo |
 | 4 | Move non-HTTP modules out of `server/module/` (`tokenrefresh`, `quotawindow` → `internal/worker/`) | done (see §4) |
-| 5 | Split `guardrails_handler.go` into a module | todo |
+| 5 | Split `guardrails_handler.go` into a module (`module/guardrails`) | done |
 | 6 | Remove `webui_handler.go` / `guardrails_runtime_adapter.go` migration leftovers | done (see §4) |
 | later | Delete `internal/task`; relocate `protocoltest`/`harness`; protocol/client dedupe; session-store diff; `pkg/notify` decision; fold `swagger`/`afk` | not started |
 
