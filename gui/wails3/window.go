@@ -23,6 +23,11 @@ var (
 	WindowMain *application.WebviewWindow
 	WindowSlim *application.WebviewWindow
 
+	// mainWindowMu serialises showMainWindow: it runs from application-event
+	// and tray goroutines (startup, dock reopen, hub panel), and two callers
+	// must not both see WindowMain == nil and create two windows.
+	mainWindowMu sync.Mutex
+
 	// windowStatePath is <configDir>/gui-state.json; set once in Start.
 	windowStatePath string
 )
@@ -39,7 +44,13 @@ var (
 // bound method. A new window loads through /login/<token>?next=<path>
 // (Login.tsx hard-reloads after auth); a warm window navigates straight to
 // the path via SetURL, since it's already authenticated.
+//
+// Call it only once the app is running (see run.go): before app.Run(), Wails
+// defers Show() and turns Maximise() into a start state that macOS applies
+// before positioning the window.
 func showMainWindow(app *application.App, tinglyService *services.TinglyService, path string) {
+	mainWindowMu.Lock()
+	defer mainWindowMu.Unlock()
 	if WindowMain == nil {
 		target := path
 		if target == "" {

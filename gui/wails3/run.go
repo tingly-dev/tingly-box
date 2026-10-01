@@ -163,8 +163,16 @@ func (l *appLauncher) Start(appManager *app.AppManager, flags command.ServerFlag
 	useAppMenu(app, openMain, opts.EnableDebug)
 
 	// Launching a desktop app should show its window: open the main window
-	// at startup, maximised (see showMainWindow).
-	showMainWindow(app, tinglyService, "")
+	// at startup, maximised (see showMainWindow) — once the app is running,
+	// not before app.Run(). Before Run, Wails only records intent: Show() is
+	// a no-op and Maximise() becomes StartState, which macOS applies by
+	// zooming the window and THEN moving it to the saved X/Y, so a window
+	// with a saved frame never opened maximised. After Run, the window is
+	// created and positioned first, then shown and maximised — the same
+	// path the tray's "Open App" has always taken.
+	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(event *application.ApplicationEvent) {
+		showMainWindow(app, tinglyService, "")
+	})
 
 	// Clicking the dock icon while the window is hidden should bring it
 	// back, like any regular macOS app. (The window is hidden, not closed,
