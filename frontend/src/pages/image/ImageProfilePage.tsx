@@ -39,7 +39,7 @@ const ImageProfilePage: React.FC = () => {
         const created = createImageProfile({
             name: t('imageProfile.untitled', { defaultValue: 'Untitled profile' }),
             refs: [],
-            prompts: [{ id: 'p1', name: t('imageProfile.promptN', { defaultValue: 'Prompt {{n}}', n: 1 }), text: '' }],
+            prompts: [{ id: 'p1', name: '', text: '' }],
             activePromptId: 'p1',
             model: '',
             size: '1024x1024',

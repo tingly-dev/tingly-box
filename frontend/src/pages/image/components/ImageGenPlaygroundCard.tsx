@@ -8,6 +8,7 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
+    Fade,
     FormControl,
     IconButton,
     InputAdornment,
@@ -45,6 +46,8 @@ import SketchCanvasDialog from './SketchCanvasDialog';
 import { createImageProfile, removeImageProfile, updateImageProfile } from '../profiles/imageProfileStore';
 import { newPromptId, type ImageProfile, type ProfilePrompt } from '../profiles/imageProfileTypes';
 import ProfilePromptTabs from '../profiles/ProfilePromptTabs';
+import { deriveLabel } from '../profiles/promptLabel';
+import { dropProfileSession } from './useImageGenRuns';
 import type {
     GenerationRun,
     ImportedImage,
@@ -114,9 +117,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         imported,
         pendingCount,
         historyTrackRef,
-        inFlightRef,
-        updateRuns,
-        updateImports,
+        clearSession,
         runGeneration,
         handleCancelRun,
         handleRetry,
@@ -124,7 +125,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         handleImportImages,
         removeRun,
         removeImport,
-    } = useImageGenRuns(showNotification);
+    } = useImageGenRuns(showNotification, profile?.id);
     const {
         referenceImages,
         setReferenceImages,
@@ -418,12 +419,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     // the files the gateway wrote to the output folder are not this panel's to
     // delete, and the confirm says so.
     const handleClearSession = useCallback(() => {
-        inFlightRef.current.forEach((controller) => controller.abort());
-        updateRuns(() => []);
-        updateImports(() => []);
+        clearSession();
         setSelectedImage(null);
         setGalleryOpen(false);
-    }, [inFlightRef, setSelectedImage, updateImports, updateRuns]);
+    }, [clearSession, setSelectedImage]);
 
     const handleRemoveRun = useCallback((id: string) => {
         setPendingRemoval({ kind: 'run', id });
@@ -470,12 +469,27 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     // The field edits the active saved prompt in place.
     useEffect(() => {
         if (!profileId) return;
-        setProfilePrompts((current) => current.map((item) => (
-            item.id === activePromptId && item.text !== prompt ? { ...item, text: prompt } : item
-        )));
+        // Same array back when nothing changed, so opening the page is not
+        // mistaken for an edit.
+        setProfilePrompts((current) => (current.some((item) => item.id === activePromptId && item.text !== prompt)
+            ? current.map((item) => (item.id === activePromptId ? { ...item, text: prompt } : item))
+            : current));
     }, [activePromptId, profileId, prompt]);
+    // A quiet "Saved" next to the title after each change — autosave the user
+    // can see happen, instead of a standing sentence explaining it.
+    const [savedFlash, setSavedFlash] = useState(false);
+    const profileRef = useRef(profile);
+    profileRef.current = profile;
     useEffect(() => {
-        if (!profileId) return;
+        const stored = profileRef.current;
+        if (!profileId || !stored) return undefined;
+        // Nothing differs from what the profile already holds (the page just
+        // opened): no write, no "Saved".
+        if (stored.refs === referenceImages && stored.prompts === profilePrompts
+            && stored.activePromptId === activePromptId && stored.model === selectedModel
+            && stored.size === size && stored.quality === quality && stored.count === count) {
+            return undefined;
+        }
         updateImageProfile(profileId, {
             refs: referenceImages,
             prompts: profilePrompts,
@@ -485,6 +499,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             quality,
             count,
         });
+        setSavedFlash(true);
+        const timer = window.setTimeout(() => setSavedFlash(false), 1500);
+        return () => window.clearTimeout(timer);
     }, [activePromptId, count, profileId, profilePrompts, quality, referenceImages, selectedModel, size]);
 
     const selectPrompt = (id: string) => {
@@ -493,20 +510,38 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     };
     const addPrompt = () => {
         const id = newPromptId();
-        setProfilePrompts((current) => [
-            ...current,
-            { id, name: t('imageProfile.promptN', { defaultValue: 'Prompt {{n}}', n: current.length + 1 }), text: '' },
-        ]);
+        setProfilePrompts((current) => [...current, { id, name: '', text: '' }]);
         setActivePromptId(id);
         setPrompt('');
     };
+    // Removing is one click, so it is undoable right where it happened
+    // (no confirm dialog, no toast to chase).
+    const [removedPrompt, setRemovedPrompt] = useState<{ item: ProfilePrompt; index: number } | null>(null);
+    useEffect(() => {
+        if (!removedPrompt) return undefined;
+        const timer = window.setTimeout(() => setRemovedPrompt(null), 8000);
+        return () => window.clearTimeout(timer);
+    }, [removedPrompt]);
     const removePrompt = (id: string) => {
+        const index = profilePrompts.findIndex((item) => item.id === id);
+        if (index === -1 || profilePrompts.length < 2) return;
         const remaining = profilePrompts.filter((item) => item.id !== id);
         setProfilePrompts(remaining);
-        if (id === activePromptId && remaining[0]) {
-            setActivePromptId(remaining[0].id);
-            setPrompt(remaining[0].text);
+        setRemovedPrompt({ item: profilePrompts[index], index });
+        if (id === activePromptId) {
+            // The neighbour takes its place, as closing a tab would.
+            const next = remaining[Math.min(index, remaining.length - 1)];
+            setActivePromptId(next.id);
+            setPrompt(next.text);
         }
+    };
+    const undoRemovePrompt = () => {
+        if (!removedPrompt) return;
+        const { item, index } = removedPrompt;
+        setProfilePrompts((current) => [...current.slice(0, index), item, ...current.slice(index)]);
+        setActivePromptId(item.id);
+        setPrompt(item.text);
+        setRemovedPrompt(null);
     };
 
     const location = useLocation();
@@ -525,9 +560,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const canSaveAsProfile = referenceImages.length > 0 || Boolean(prompt.trim());
     const handleSaveAsProfile = () => {
         const created = createImageProfile({
-            name: t('imageProfile.untitled', { defaultValue: 'Untitled profile' }),
+            // Named after what it makes; renaming is one click on the next page.
+            name: deriveLabel(prompt, 12) || t('imageProfile.untitled', { defaultValue: 'Untitled profile' }),
             refs: referenceImages,
-            prompts: [{ id: 'p1', name: t('imageProfile.promptN', { defaultValue: 'Prompt {{n}}', n: 1 }), text: prompt.trim() }],
+            prompts: [{ id: 'p1', name: '', text: prompt.trim() }],
             activePromptId: 'p1',
             model: selectedModel,
             size,
@@ -574,6 +610,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     <Edit sx={{ fontSize: 18 }} />
                                 </IconButton>
                             </Tooltip>
+                            <Fade in={savedFlash} timeout={{ enter: 150, exit: 600 }}>
+                                <Typography component="span" role="status" sx={{ fontSize: 12, fontWeight: 400, color: 'text.secondary', ml: 0.5 }}>
+                                    {t('imageProfile.saved', { defaultValue: 'Saved' })}
+                                </Typography>
+                            </Fade>
                         </Stack>
                     )
                 ) : t('playground.imageTitle', { defaultValue: 'Image Playground' })}
@@ -592,9 +633,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         </span>
                     </Tooltip>
                 )}
-                subtitle={profile ? (
-                    t('imageProfile.subtitle', { defaultValue: 'Changes save to this profile as you make them.' })
-                ) : outputDir ? (
+                subtitle={outputDir ? (
                     <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                         <Box component="span">
                             {t('playground.outputDirLabel', { defaultValue: 'Generated images are saved to' })}:
@@ -705,6 +744,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 onAdd={addPrompt}
                                 onRename={(id, name) => setProfilePrompts((current) => current.map((item) => (item.id === id ? { ...item, name } : item)))}
                                 onRemove={removePrompt}
+                                removed={removedPrompt ? {
+                                    label: removedPrompt.item.name || deriveLabel(removedPrompt.item.text) || t('imageProfile.promptN', { defaultValue: 'Prompt {{n}}', n: removedPrompt.index + 1 }),
+                                    onUndo: undoRemovePrompt,
+                                } : null}
                             />
                         )}
 
@@ -982,7 +1025,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 <ConfirmDialog
                     open={confirmDeleteProfile}
                     title={t('imageProfile.deleteTitle', { defaultValue: 'Delete {{name}}?', name: profile.name })}
-                    description={t('imageProfile.deleteBody', { defaultValue: 'Its references, description and settings are removed. Images already generated stay in the output folder.' })}
+                    description={t('imageProfile.deleteBody', { defaultValue: 'Its references, prompts, settings and history are removed. Image files already generated stay in the output folder.' })}
                     confirmLabel={t('common.delete', { defaultValue: 'Delete' })}
                     cancelLabel={t('common.cancel', { defaultValue: 'Cancel' })}
                     confirmColor="error"
@@ -990,6 +1033,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     onConfirm={() => {
                         setConfirmDeleteProfile(false);
                         removeImageProfile(profile.id);
+                        dropProfileSession(profile.id);
                         navigate('/image/playground');
                     }}
                 />

@@ -5,6 +5,7 @@ import type { Quality } from '../components/ImageGenPlayground.types';
 // field; these are what it switches between.
 export interface ProfilePrompt {
     id: string;
+    // '' = not named yet: the tab shows the prompt's opening words.
     name: string;
     text: string;
 }

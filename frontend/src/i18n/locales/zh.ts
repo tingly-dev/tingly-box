@@ -2761,23 +2761,24 @@ export default {
   "imageProfile": {
     "untitled": "未命名 Profile",
     "new": "新建 Profile",
-    "navSubtitle": "Profile",
     "notFound": "这个 Profile 已经不存在了。",
     "backToPlayground": "打开 Playground",
     "name": "Profile 名称",
     "rename": "重命名",
     "delete": "删除 Profile",
     "deleteTitle": "删除 {{name}}？",
-    "deleteBody": "会移除它的参考图、固定描述和参数。已经生成的图片仍保留在输出目录里。",
+    "deleteBody": "会移除它的参考图、提示词、参数和历史记录。已经生成的图片文件仍保留在输出目录里。",
     "saveAs": "存为 Profile",
     "saveAsHint": "把当前的参考图、描述和参数存成一个 Profile，它有自己的页面",
-    "subtitle": "改动会自动存进这个 Profile。",
     "prompts": "提示词",
     "promptN": "提示词 {{n}}",
     "addPrompt": "新建提示词",
     "renamePrompt": "提示词名称",
     "renameHint": "双击重命名",
-    "removePrompt": "移除 {{name}}"
+    "removePrompt": "移除 {{name}}",
+    "saved": "已保存",
+    "promptRemoved": "已移除「{{name}}」",
+    "undo": "撤销"
   },
   "desk": {
     "noBackgroundTasks": "暂无后台任务",
