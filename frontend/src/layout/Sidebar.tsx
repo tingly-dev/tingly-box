@@ -381,7 +381,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                 </Box>
             </Popover>
             {/* Footer bottom row: the slogan, and under it the GitHub star
-                link — brand and community together, apart from the version's
+                (icon only) — brand and community together, apart from the version's
                 app state above. One quiet, always-there link instead of a
                 banner over every agent page. Still footerHeight tall, so its
                 bottom lines up with the activity bar's footer. */}
@@ -406,25 +406,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     </Typography>
                 </Tooltip>
                 <Tooltip title={t('layout.githubStar.text')} placement="top" arrow>
+                    {/* Just the star: the icon says it in every language, and
+                        the tooltip explains it. */}
                     <Box
                         component="a"
                         href={REPO_URL}
                         target="_blank"
                         rel="noopener noreferrer"
+                        aria-label={t('layout.githubStar.cta')}
                         sx={{
                             display: 'flex',
-                            alignItems: 'center',
-                            gap: 0.5,
-                            color: 'text.secondary',
-                            textDecoration: 'none',
-                            transition: 'color 0.2s ease',
-                            '&:hover': { color: 'primary.main' },
+                            color: 'warning.main',
+                            transition: 'transform 0.2s ease',
+                            '&:hover': { transform: 'scale(1.15)' },
                         }}
                     >
-                        <IconStar sx={{ fontSize: 13, color: 'warning.main' }} />
-                        <Typography variant="caption" sx={{ color: 'inherit', whiteSpace: 'nowrap' }}>
-                            {t('layout.githubStar.cta')}
-                        </Typography>
+                        <IconStar sx={{ fontSize: 16 }} />
                     </Box>
                 </Tooltip>
             </Box>
