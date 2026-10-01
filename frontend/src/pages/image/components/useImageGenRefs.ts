@@ -121,7 +121,7 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
     // It joins the references rather than replacing them: the row holds up
     // to five, and "use this one too" is the common case. At the cap the
     // oldest makes room.
-    const handleUseAsReference = useCallback(async (src: string) => {
+    const handleUseAsReference = useCallback(async (src: string, archiveId?: string) => {
         try {
             const blob = await fetchBlob(src);
             const file = new File([blob], `reference-${Date.now()}.png`, { type: blob.type || 'image/png' });
@@ -129,6 +129,7 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
                 file,
                 previewUrl: src,
                 source: 'upload',
+                ...(archiveId ? { archiveId } : {}),
                 ...(await readImageSize(src) ?? {}),
             };
             // The user pointed at this image, so it goes in; at the cap the

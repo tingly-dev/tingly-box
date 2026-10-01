@@ -136,7 +136,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageEdit(c *gin.Context) {
 	ph.trackUsageWithTokenUsage(c, usage, nil)
 
 	// Persist edited images under the config image directory (best-effort).
-	ph.persistImageEdit(req, resp)
+	setImageIDsHeader(c, ph.persistImageEdit(req, resp))
 
 	c.JSON(http.StatusOK, resp)
 }

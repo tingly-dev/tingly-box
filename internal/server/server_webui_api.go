@@ -248,9 +248,9 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) *module.Route
 		WithRoutePreview(statusline.NewHandler(s.config, s.loadBalancer, statusline.NewCache(), nil))
 	module.Mount(rt, scenarioHandler)
 
-	// Image generation output directory (authenticated) - lets the frontend
-	// show the user where generated images are saved (~/.tingly-box/image).
-	imagegenHandler := imagegen.NewHandler()
+	// Image generation (authenticated): the output directory, the image archive
+	// under it, and the focus workbenches built on the archive.
+	imagegenHandler := imagegen.NewHandler(s.config.ConfigDir)
 	module.Mount(rt, imagegenHandler)
 
 	// Guardrails admin API

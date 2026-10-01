@@ -12,6 +12,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/vision/imagestore"
 )
 
 func TestPersistImageGeneration(t *testing.T) {
@@ -101,4 +102,26 @@ func TestPersistImageGeneration(t *testing.T) {
 		_, err := os.ReadDir(constant.GetImageDir(tmp))
 		assert.True(t, os.IsNotExist(err))
 	})
+}
+
+func TestPersistImagesReturnsArchiveIDs(t *testing.T) {
+	pngBytes := []byte("\x89PNG\r\n\x1a\nfake-image-data")
+	b64 := base64.StdEncoding.EncodeToString(pngBytes)
+	tmp := t.TempDir()
+	h := &ProtocolHandler{deps: ProtocolHandlerDeps{Config: &config.Config{ConfigDir: tmp}}}
+
+	// Two images in one response, plus a URL-only one that is not saved: the
+	// ids line up with resp.Data so the Playground can match them to results.
+	resp := &openai.ImagesResponse{Data: []openai.Image{{B64JSON: b64}, {URL: "https://example.com/x.png"}, {B64JSON: b64}}}
+	ids := h.persistImageGeneration(&openai.ImageGenerateParams{Prompt: "x"}, resp)
+	require.Len(t, ids, 3)
+	assert.NotEmpty(t, ids[0])
+	assert.Empty(t, ids[1])
+	assert.NotEmpty(t, ids[2])
+	assert.NotEqual(t, ids[0], ids[2], "same-second images must not share a name")
+
+	store := imagestore.New(constant.GetImageDir(tmp))
+	img, err := store.Get(ids[2])
+	require.NoError(t, err)
+	assert.Equal(t, "x", img.Meta.Prompt)
 }

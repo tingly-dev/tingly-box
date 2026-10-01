@@ -5,10 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
@@ -20,6 +17,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/vision/imagestore"
 )
 
 // HandleOpenAIImageGeneration serves OpenAI-compatible image generation requests
@@ -157,90 +155,52 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	ph.trackUsageWithTokenUsage(c, usage, nil)
 
 	// Persist generated images under the config image directory (best-effort).
-	ph.persistImageGeneration(&req, resp)
+	setImageIDsHeader(c, ph.persistImageGeneration(&req, resp))
 
 	c.JSON(http.StatusOK, resp)
 }
 
-// persistImageGeneration saves generated images and their prompts under the
-// configured image directory (configDir/image/YYYYMMDD/). It is best-effort:
-// any failure is logged but never blocks the response to the caller.
+// persistImageGeneration saves generated images and their prompts into the
+// image archive (configDir/image/YYYYMMDD/, see internal/vision/imagestore).
+// It is best-effort: any failure is logged but never blocks the response to
+// the caller. Returns the archive id of each image in resp.Data order ("" for
+// one that was not saved).
 //
 // This used to live inside the Codex client and wrote to .tingly-image/ in the
 // process working directory. It now belongs to the server layer so persistence
 // is uniform across providers and rooted at the application config directory.
-func (ph *ProtocolHandler) persistImageGeneration(req *openai.ImageGenerateParams, resp *openai.ImagesResponse) {
-	var meta string
+func (ph *ProtocolHandler) persistImageGeneration(req *openai.ImageGenerateParams, resp *openai.ImagesResponse) []string {
+	var meta imagestore.Meta
 	if req != nil {
-		meta = buildImagePersistMeta(imageMetaInfo{
+		meta = imagestore.Meta{
 			Prompt:  req.Prompt,
 			Model:   string(req.Model),
 			Size:    string(req.Size),
 			Quality: string(req.Quality),
 			Format:  string(req.ResponseFormat),
 			Style:   string(req.Style),
-		})
+		}
 	}
-	ph.persistImages(resp, meta)
+	return ph.persistImages(resp, meta)
 }
 
 // persistImageEdit is the edit-surface counterpart of persistImageGeneration:
 // same directory layout and best-effort semantics, with edit-shaped metadata.
-func (ph *ProtocolHandler) persistImageEdit(req *openai.ImageEditParams, resp *openai.ImagesResponse) {
-	var meta string
+func (ph *ProtocolHandler) persistImageEdit(req *openai.ImageEditParams, resp *openai.ImagesResponse) []string {
+	meta := imagestore.Meta{Operation: "edit"}
 	if req != nil {
-		meta = buildImagePersistMeta(imageMetaInfo{
-			Prompt:    req.Prompt,
-			Operation: "edit",
-			Model:     string(req.Model),
-			Size:      string(req.Size),
-			Quality:   string(req.Quality),
-		})
+		meta.Prompt = req.Prompt
+		meta.Model = string(req.Model)
+		meta.Size = string(req.Size)
+		meta.Quality = string(req.Quality)
 	}
-	ph.persistImages(resp, meta)
+	return ph.persistImages(resp, meta)
 }
 
-// imageMetaInfo carries the fields persisted alongside a generated or edited
-// image. Generation- and edit-only fields (Format/Style vs Operation) are
-// simply left zero by the caller that doesn't have them.
-type imageMetaInfo struct {
-	Prompt    string
-	Operation string
-	Model     string
-	Size      string
-	Quality   string
-	Format    string
-	Style     string
-}
-
-// buildImagePersistMeta renders the sidecar .txt content saved next to a
-// persisted image. Shared by the generation and edit surfaces so the two
-// near-identical formats don't drift independently.
-func buildImagePersistMeta(info imageMetaInfo) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "Prompt: %s\n\n", info.Prompt)
-	if info.Operation != "" {
-		fmt.Fprintf(&b, "Operation: %s\n", info.Operation)
-	}
-	fmt.Fprintf(&b, "Model: %s\nSize: %s\nQuality: %s\n", info.Model, info.Size, info.Quality)
-	if info.Format != "" {
-		fmt.Fprintf(&b, "Format: %s\n", info.Format)
-	}
-	fmt.Fprintf(&b, "Timestamp: %s\n", time.Now().Format(time.RFC3339))
-	if info.Style != "" {
-		fmt.Fprintf(&b, "Style: %s\n", info.Style)
-	}
-	return b.String()
-}
-
-// persistImages writes each base64 image in resp (plus an optional metadata
-// sidecar) under configDir/image/YYYYMMDD/. Shared by the generation and edit
-// surfaces.
-func (ph *ProtocolHandler) persistImages(resp *openai.ImagesResponse, promptMeta string) {
-	if resp == nil || len(resp.Data) == 0 {
-		return
-	}
-
+// imageStore is the archive this handler persists into, rooted at the
+// configured config directory (the same one the control-plane imagegen
+// module reads from).
+func (ph *ProtocolHandler) imageStore() *imagestore.Store {
 	baseDir := ""
 	if ph.deps.Config != nil {
 		baseDir = ph.deps.Config.ConfigDir
@@ -248,63 +208,53 @@ func (ph *ProtocolHandler) persistImages(resp *openai.ImagesResponse, promptMeta
 	if baseDir == "" {
 		baseDir = constant.GetTinglyConfDir()
 	}
+	return imagestore.New(constant.GetImageDir(baseDir))
+}
 
-	now := time.Now()
-	timestamp := now.Format("20060102-150405")
-	dateDir := filepath.Join(constant.GetImageDir(baseDir), now.Format("20060102"))
-
-	dirReady := false
-	ensureDir := func() bool {
-		if dirReady {
-			return true
-		}
-		if err := os.MkdirAll(dateDir, 0700); err != nil {
-			logrus.Errorf("[ImageGen] Failed to create image directory: %v", err)
-			return false
-		}
-		dirReady = true
-		return true
+// persistImages writes each base64 image in resp into the archive. Shared by
+// the generation and edit surfaces.
+func (ph *ProtocolHandler) persistImages(resp *openai.ImagesResponse, meta imagestore.Meta) []string {
+	if resp == nil || len(resp.Data) == 0 {
+		return nil
 	}
-
+	store := ph.imageStore()
+	ids := make([]string, len(resp.Data))
 	for i, img := range resp.Data {
 		// Only base64-encoded images can be persisted locally; URL-based
 		// responses (e.g. some DashScope/MiniMax modes) are skipped.
 		if img.B64JSON == "" {
 			continue
 		}
-		if !ensureDir() {
-			return
-		}
-
-		var filename string
-		if i == 0 {
-			filename = fmt.Sprintf("%s.png", timestamp)
-		} else {
-			filename = fmt.Sprintf("%s-%d.png", timestamp, i)
-		}
-		imagePath := filepath.Join(dateDir, filename)
-
 		imageData, err := base64.StdEncoding.DecodeString(img.B64JSON)
 		if err != nil {
 			logrus.Errorf("[ImageGen] Failed to decode base64 image data: %v", err)
 			continue
 		}
-
-		if err := os.WriteFile(imagePath, imageData, 0600); err != nil {
-			logrus.Errorf("[ImageGen] Failed to write image file: %v", err)
-			continue
+		id, err := store.Save(imageData, meta)
+		if err != nil {
+			logrus.Errorf("[ImageGen] Failed to persist image: %v", err)
 		}
-
-		logrus.Infof("[ImageGen] Saved image to: %s", imagePath)
-
-		if promptMeta == "" {
-			continue
+		if id != "" {
+			ids[i] = id
+			logrus.Infof("[ImageGen] Saved image %s under %s", id, store.Root())
 		}
+	}
+	return ids
+}
 
-		promptPath := filepath.Join(dateDir, strings.Replace(filename, ".png", ".txt", 1))
-		if err := os.WriteFile(promptPath, []byte(promptMeta), 0600); err != nil {
-			logrus.Errorf("[ImageGen] Failed to write prompt file: %v", err)
-			continue
+// imageIDsHeader carries the archive id of each returned image, in
+// response-data order, comma-separated ("" for one that was not saved). It
+// is how the Playground learns which archived file a result is, without the
+// gateway's response body departing from the OpenAI shape. Other clients
+// simply ignore it.
+const imageIDsHeader = "X-Tingly-Image-Ids"
+
+func setImageIDsHeader(c *gin.Context, ids []string) {
+	for _, id := range ids {
+		if id != "" {
+			c.Header(imageIDsHeader, strings.Join(ids, ","))
+			c.Header("Access-Control-Expose-Headers", imageIDsHeader)
+			return
 		}
 	}
 }

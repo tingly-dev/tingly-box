@@ -24,7 +24,19 @@ export interface GenerationRequest {
     // Set when re-running a failed run: its card flips back to pending
     // instead of a second card appearing.
     runId?: string;
+    // Set when the run is made inside a workbench (see useImageWorkbench).
+    workbench?: { id: string; parentId: string };
 }
+
+// The gateway names the archived file behind each returned image in this
+// header (comma-separated, in response order, "" for one it did not save).
+const IMAGE_IDS_HEADER = 'x-tingly-image-ids';
+const readImageIds = (response: Response, count: number): string[] | undefined => {
+    const raw = response.headers.get(IMAGE_IDS_HEADER);
+    if (!raw) return undefined;
+    const ids = raw.split(',');
+    return Array.from({ length: count }, (_, i) => ids[i] ?? '');
+};
 
 // Reads a File into a base64 data URL, the same representation already used
 // for generated images (`data:image/png;base64,...`) so reference thumbnails
@@ -42,8 +54,16 @@ type UseImageGenRunsNotification = (message: string, severity: 'success' | 'info
 // page navigation (module-level copy) and page reloads (IndexedDB), plus the
 // submission side of a run — firing the request, cancelling it, retrying a
 // failed one.
-export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) => {
+// Called once a run made inside a workbench has its outputs archived.
+type OnWorkbenchRunArchived = (workbenchId: string, items: { image_id: string; parent_id: string }[]) => void;
+
+export const useImageGenRuns = (
+    showNotification: UseImageGenRunsNotification,
+    onWorkbenchRunArchived?: OnWorkbenchRunArchived,
+) => {
     const { t } = useTranslation();
+    const onArchivedRef = useRef(onWorkbenchRunArchived);
+    useEffect(() => { onArchivedRef.current = onWorkbenchRunArchived; }, [onWorkbenchRunArchived]);
     const [runs, setRuns] = useState<GenerationRun[]>(() => imageGenSessionRuns);
     const [imported, setImported] = useState<ImportedImage[]>(() => imageGenSessionImports);
     const historyTrackRef = useRef<HTMLDivElement>(null);
@@ -129,6 +149,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) =
             images: [],
             sourceImages: endpoint === 'edits' ? request.sources.map((ref) => ref.previewUrl) : undefined,
             mask: request.sources[0]?.mask,
+            ...(request.workbench ? { workbenchId: request.workbench.id, workbenchParentId: request.workbench.parentId } : {}),
             status: 'pending',
         };
         updateRuns((currentRuns) => (currentRuns.some((run) => run.id === runId)
@@ -142,7 +163,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) =
             // The mask belongs to the first reference because that is the one
             // the API applies it to; nothing here chooses which image it is.
             const mask = request.sources[0]?.mask?.file;
-            const response = endpoint === 'edits'
+            const { data: response, response: raw } = endpoint === 'edits'
                 ? await client.images.edit({
                     image: editFiles.length === 1 ? editFiles[0] : editFiles,
                     ...(mask ? { mask } : {}),
@@ -151,18 +172,24 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) =
                     n: request.count,
                     size: request.size as any,
                     quality: request.quality as any,
-                }, { signal: controller.signal })
+                }, { signal: controller.signal }).withResponse()
                 : await client.images.generate({
                     model: request.model,
                     prompt: request.prompt,
                     n: request.count,
                     size: request.size as any,
                     quality: request.quality,
-                }, { signal: controller.signal });
+                }, { signal: controller.signal }).withResponse();
             const images = response.data ?? [];
+            const imageIds = readImageIds(raw, images.length);
             updateRuns((currentRuns) => currentRuns.map((run) => (
-                run.id === runId ? { ...run, images, status: 'completed', error: undefined } : run
+                run.id === runId ? { ...run, images, imageIds, status: 'completed', error: undefined } : run
             )));
+            if (request.workbench && imageIds) {
+                const { id, parentId } = request.workbench;
+                const items = imageIds.filter(Boolean).map((imageId) => ({ image_id: imageId, parent_id: parentId }));
+                if (items.length > 0) onArchivedRef.current?.(id, items);
+            }
         } catch (error: any) {
             if (controller.signal.aborted) {
                 // The user asked for this; the card records it so the request
@@ -222,6 +249,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) =
                 count: run.count ?? 1,
                 sources,
                 runId: run.id,
+                ...(run.workbenchId ? { workbench: { id: run.workbenchId, parentId: run.workbenchParentId ?? '' } } : {}),
             });
         } catch {
             showNotification(t('playground.requestFailed', { defaultValue: 'Request failed' }), 'error');

@@ -83,6 +83,7 @@ import {
     IconDotsVertical,
     IconDots,
     IconLogout,
+    IconFocusCentered,
     IconLogin,
     IconLock,
     IconListDetails,
@@ -240,6 +241,7 @@ export const Key = tablerMui(IconKey);
 export const VpnKey = tablerMui(IconKey);
 export const Login = tablerMui(IconLogin);
 export const Logout = tablerMui(IconLogout);
+export const CenterFocusStrong = tablerMui(IconFocusCentered);
 
 // --- Content / objects -------------------------------------------------------
 export const Description = tablerMui(IconFileDescription);

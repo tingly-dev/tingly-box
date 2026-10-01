@@ -3455,6 +3455,186 @@
         }
       }
     },
+    "/api/v1/imagegen/images": {
+      "get": {
+        "tags": [
+          "imagegen"
+        ],
+        "summary": "List archived generated/edited/imported images, newest first",
+        "description": "List archived generated/edited/imported images, newest first",
+        "operationId": "apiV1ImagegenImagesGet",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (default 50, max 200)",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "Return images older than this image id (from next_before)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageGenImageListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "imagegen"
+        ],
+        "summary": "Import an image into the archive (e.g. to start a workbench from it)",
+        "description": "Import an image into the archive (e.g. to start a workbench from it)",
+        "operationId": "apiV1ImagegenImagesPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageGenImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageGenImageResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imagegen/images/{id}": {
+      "get": {
+        "tags": [
+          "imagegen"
+        ],
+        "summary": "Get one archived image's metadata",
+        "description": "Get one archived image's metadata",
+        "operationId": "apiV1ImagegenImagesIdGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Archived image id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageGenImageResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "imagegen"
+        ],
+        "summary": "Delete an archived image; refused while it is a workbench root",
+        "description": "Delete an archived image; refused while it is a workbench root",
+        "operationId": "apiV1ImagegenImagesIdDelete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Archived image id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageGenOKResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Image is the root of a workbench",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imagegen/images/{id}/file": {
+      "get": {
+        "tags": [
+          "imagegen"
+        ],
+        "summary": "Get an archived image's PNG bytes",
+        "description": "Get an archived image's PNG bytes",
+        "operationId": "apiV1ImagegenImagesIdFileGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Archived image id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/imagegen/info": {
       "get": {
         "tags": [
@@ -3470,6 +3650,251 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ImageGenInfoResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imagegen/workbenches": {
+      "get": {
+        "tags": [
+          "imagegen"
+        ],
+        "summary": "List image workbenches, most recently used first",
+        "description": "List image workbenches, most recently used first",
+        "operationId": "apiV1ImagegenWorkbenchesGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageGenWorkbenchListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "imagegen"
+        ],
+        "summary": "Create a workbench focused on an archived image",
+        "description": "Create a workbench focused on an archived image",
+        "operationId": "apiV1ImagegenWorkbenchesPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageGenWorkbenchCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageGenWorkbenchResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imagegen/workbenches/{id}": {
+      "get": {
+        "tags": [
+          "imagegen"
+        ],
+        "summary": "Get one workbench",
+        "description": "Get one workbench",
+        "operationId": "apiV1ImagegenWorkbenchesIdGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Workbench id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageGenWorkbenchResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "imagegen"
+        ],
+        "summary": "Rename a workbench or change its description",
+        "description": "Rename a workbench or change its description",
+        "operationId": "apiV1ImagegenWorkbenchesIdPut",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Workbench id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageGenWorkbenchUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageGenWorkbenchResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "imagegen"
+        ],
+        "summary": "Delete a workbench (its images stay archived)",
+        "description": "Delete a workbench (its images stay archived)",
+        "operationId": "apiV1ImagegenWorkbenchesIdDelete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Workbench id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageGenOKResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imagegen/workbenches/{id}/items": {
+      "post": {
+        "tags": [
+          "imagegen"
+        ],
+        "summary": "Record archived images derived inside a workbench",
+        "description": "Record archived images derived inside a workbench",
+        "operationId": "apiV1ImagegenWorkbenchesIdItemsPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Workbench id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageGenWorkbenchAddItemsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageGenWorkbenchResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imagegen/workbenches/{id}/items/{image_id}": {
+      "delete": {
+        "tags": [
+          "imagegen"
+        ],
+        "summary": "Take an image out of a workbench (it stays archived)",
+        "description": "Take an image out of a workbench (it stays archived)",
+        "operationId": "apiV1ImagegenWorkbenchesIdItemsImage_idDelete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Workbench id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "image_id",
+            "in": "path",
+            "description": "Archived image id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageGenWorkbenchResponse"
                 }
               }
             }
@@ -12108,6 +12533,116 @@
           }
         }
       },
+      "ImageGenImage": {
+        "type": "object",
+        "properties": {
+          "bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field bytes",
+            "example": 1843210
+          },
+          "created_at": {
+            "type": "string",
+            "description": "Field created_at",
+            "example": "2026-09-30T15:30:12+08:00"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id",
+            "example": "20260930-153012-a1b2c3"
+          },
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          },
+          "operation": {
+            "type": "string",
+            "description": "Field operation"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Field prompt"
+          },
+          "quality": {
+            "type": "string",
+            "description": "Field quality"
+          },
+          "size": {
+            "type": "string",
+            "description": "Field size"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "bytes",
+          "prompt",
+          "operation",
+          "model",
+          "size",
+          "quality"
+        ]
+      },
+      "ImageGenImageListResponse": {
+        "type": "object",
+        "properties": {
+          "images": {
+            "type": "array",
+            "description": "Field images",
+            "items": {
+              "$ref": "#/components/schemas/ImageGenImage"
+            }
+          },
+          "next_before": {
+            "type": "string",
+            "description": "Field next_before"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "images"
+        ]
+      },
+      "ImageGenImageResponse": {
+        "type": "object",
+        "properties": {
+          "image": {
+            "$ref": "#/components/schemas/ImageGenImage"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "image"
+        ]
+      },
+      "ImageGenImportRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "string",
+            "description": "Field data"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          }
+        },
+        "required": [
+          "data",
+          "name"
+        ]
+      },
       "ImageGenInfoResponse": {
         "type": "object",
         "properties": {
@@ -12126,6 +12661,177 @@
           "success",
           "output_dir"
         ]
+      },
+      "ImageGenOKResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "ImageGenWorkbench": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "description": "Field created_at"
+          },
+          "description": {
+            "type": "string",
+            "description": "Field description"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "items": {
+            "type": "array",
+            "description": "Field items",
+            "items": {
+              "$ref": "#/components/schemas/ImageGenWorkbenchItem"
+            }
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "root_image_id": {
+            "type": "string",
+            "description": "Field root_image_id"
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "Field updated_at"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "root_image_id",
+          "items",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "ImageGenWorkbenchAddItemsRequest": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "description": "Field items",
+            "items": {
+              "$ref": "#/components/schemas/ImageGenWorkbenchItem"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "ImageGenWorkbenchCreateRequest": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Field description"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "root_image_id": {
+            "type": "string",
+            "description": "Field root_image_id"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "root_image_id"
+        ]
+      },
+      "ImageGenWorkbenchItem": {
+        "type": "object",
+        "properties": {
+          "added_at": {
+            "type": "string",
+            "description": "Field added_at"
+          },
+          "image_id": {
+            "type": "string",
+            "description": "Field image_id"
+          },
+          "parent_id": {
+            "type": "string",
+            "description": "Field parent_id"
+          }
+        },
+        "required": [
+          "image_id",
+          "parent_id"
+        ]
+      },
+      "ImageGenWorkbenchListResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          },
+          "workbenches": {
+            "type": "array",
+            "description": "Field workbenches",
+            "items": {
+              "$ref": "#/components/schemas/ImageGenWorkbench"
+            }
+          }
+        },
+        "required": [
+          "success",
+          "workbenches"
+        ]
+      },
+      "ImageGenWorkbenchResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          },
+          "workbench": {
+            "$ref": "#/components/schemas/ImageGenWorkbench"
+          }
+        },
+        "required": [
+          "success",
+          "workbench"
+        ]
+      },
+      "ImageGenWorkbenchUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Field description"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          }
+        }
       },
       "ImportOpenAISessionsRequest": {
         "type": "object",

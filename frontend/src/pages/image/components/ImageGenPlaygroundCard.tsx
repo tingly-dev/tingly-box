@@ -39,6 +39,9 @@ import { MAX_EDIT_REFERENCE_IMAGES, ReferenceImagesRow } from './ImageGenReferen
 import { useImageGenRefs } from './useImageGenRefs';
 import { useImageGenRuns } from './useImageGenRuns';
 import { useImageGenLightbox } from './useImageGenLightbox';
+import { archivedImageSrc, useImageWorkbench, workbenchImageIds } from './useImageWorkbench';
+import ImageWorkbenchBar, { CreateWorkbenchDialog } from './ImageWorkbenchBar';
+import type { Workbench } from '@/services/imageArchiveApi';
 import { downloadStem, formatBytes, runImage } from './imageGenSession';
 import MaskEditorDialog from './MaskEditorDialog';
 import SketchCanvasDialog from './SketchCanvasDialog';
@@ -96,6 +99,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         return () => { cancelled = true; };
     }, []);
 
+    const workbench = useImageWorkbench(showNotification);
     const {
         runs,
         imported,
@@ -111,7 +115,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         handleImportImages,
         removeRun,
         removeImport,
-    } = useImageGenRuns(showNotification);
+    } = useImageGenRuns(showNotification, (workbenchId, items) => { void workbench.addItems(workbenchId, items); });
     const {
         referenceImages,
         setReferenceImages,
@@ -332,17 +336,105 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
 
     const canSubmit = Boolean(prompt.trim()) && Boolean(model);
 
+    // Inside a workbench the subject's description goes ahead of the prompt,
+    // and the result is recorded as derived from the workbench image it was
+    // made from (the first reference that is one), else from the focus image.
+    // The run card shows the prompt as sent, description included — nothing
+    // is added out of sight.
+    const activeWorkbench = workbench.active;
     const handleSubmit = useCallback(async () => {
         if (!canSubmit) return;
+        let sentPrompt = prompt.trim();
+        let workbenchRef: { id: string; parentId: string } | undefined;
+        if (activeWorkbench) {
+            const description = activeWorkbench.description.trim();
+            if (description) sentPrompt = `${description}\n\n${sentPrompt}`;
+            const ids = new Set(workbenchImageIds(activeWorkbench));
+            const parent = referenceImages.find((ref) => ref.archiveId && ids.has(ref.archiveId))?.archiveId;
+            workbenchRef = { id: activeWorkbench.id, parentId: parent ?? activeWorkbench.root_image_id };
+        }
         await runGeneration({
-            prompt: prompt.trim(),
+            prompt: sentPrompt,
             model,
             size,
             quality,
             count,
             sources: referenceImages,
+            ...(workbenchRef ? { workbench: workbenchRef } : {}),
         });
-    }, [canSubmit, count, model, prompt, quality, referenceImages, runGeneration, size]);
+    }, [activeWorkbench, canSubmit, count, model, prompt, quality, referenceImages, runGeneration, size]);
+
+    // An archived image (a workbench's root or one derived from it) into the
+    // request, carrying its id so what is made from it is recorded as such.
+    const handleUseArchivedImage = useCallback(async (imageId: string) => {
+        if (referenceImages.some((ref) => ref.archiveId === imageId)) return;
+        try {
+            await handleUseAsReference(await archivedImageSrc(imageId), imageId);
+        } catch {
+            showNotification(t('playground.referenceLoadFailed', { defaultValue: 'Could not use this image as a reference' }), 'error');
+        }
+    }, [handleUseAsReference, referenceImages, showNotification, t]);
+
+    // Entering a workbench puts its image in the request — that is what
+    // "focus on this image" means. Leaving it changes nothing in the request.
+    // Switching straight to another workbench also takes the previous one's
+    // images out of the request: they were there because of that focus, and
+    // carrying them into a different subject is a request nobody made.
+    const enterWorkbench = useCallback((previous: Workbench | null, target: Workbench) => {
+        if (previous && previous.id !== target.id) {
+            const previousIds = new Set(workbenchImageIds(previous));
+            setReferenceImages((current) => current.filter((ref) => !ref.archiveId || !previousIds.has(ref.archiveId)));
+        }
+        void handleUseArchivedImage(target.root_image_id);
+    }, [handleUseArchivedImage, setReferenceImages]);
+
+    const handleFocusWorkbench = useCallback((id: string | null) => {
+        const previous = workbench.active;
+        const target = id ? workbench.workbenches.find((wb) => wb.id === id) : undefined;
+        workbench.focus(id);
+        if (target) enterWorkbench(previous, target);
+    }, [enterWorkbench, workbench]);
+
+    const [focusTarget, setFocusTarget] = useState<SelectedImage | null>(null);
+    // What the new workbench starts as. An image made inside a workbench
+    // carries that workbench's description ahead of its prompt; the defaults
+    // split it back apart — the subject's description stays the description,
+    // what was asked for this image becomes the name — instead of stacking
+    // one workbench's description inside the next.
+    const focusDefaults = useMemo(() => {
+        if (!focusTarget) return { name: '', description: '' };
+        const run = focusTarget.runId ? runs.find((item) => item.id === focusTarget.runId) : undefined;
+        const source = run?.workbenchId ? workbench.workbenches.find((wb) => wb.id === run.workbenchId) : undefined;
+        const prefix = source?.description.trim() ? `${source.description.trim()}\n\n` : '';
+        const asked = prefix && focusTarget.prompt.startsWith(prefix) ? focusTarget.prompt.slice(prefix.length) : focusTarget.prompt;
+        return {
+            name: (focusTarget.label || asked || '').split('\n')[0].slice(0, 40),
+            description: prefix ? source!.description : focusTarget.prompt,
+        };
+    }, [focusTarget, runs, workbench.workbenches]);
+    const [creatingWorkbench, setCreatingWorkbench] = useState(false);
+    const handleCreateWorkbench = useCallback(async (name: string, description: string) => {
+        if (!focusTarget) return;
+        setCreatingWorkbench(true);
+        const previous = workbench.active;
+        try {
+            const created: Workbench | null = await workbench.create({
+                name,
+                description,
+                imageId: focusTarget.archiveId,
+                src: focusTarget.src,
+            });
+            if (created) {
+                setFocusTarget(null);
+                setSelectedImage(null);
+                enterWorkbench(previous, created);
+            }
+        } catch {
+            showNotification(t('playground.workbench.createFailed', { defaultValue: 'Could not start the workbench' }), 'error');
+        } finally {
+            setCreatingWorkbench(false);
+        }
+    }, [enterWorkbench, focusTarget, setSelectedImage, showNotification, t, workbench]);
 
     // ⌘/Ctrl+Enter from the prompt — in the panel or in the larger editor —
     // is the keyboard's Generate button.
@@ -517,6 +609,16 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 })}
                             </Alert>
                         )}
+
+                        <ImageWorkbenchBar
+                            workbenches={workbench.workbenches}
+                            active={activeWorkbench}
+                            srcs={workbench.srcs}
+                            onFocus={handleFocusWorkbench}
+                            onUpdate={(id, body) => { void workbench.update(id, body); }}
+                            onDelete={(id) => { void workbench.remove(id); }}
+                            onUseImage={(imageId) => { void handleUseArchivedImage(imageId); }}
+                        />
 
                         {/* Reference images are optional input, not a mode. Empty, the
                             row is a one-line invitation; with images it grows into a
@@ -787,10 +889,19 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     handleOpenSketch(index);
                     setSelectedImage(null);
                 }}
-                onUseAsReference={(src) => {
-                    void handleUseAsReference(src);
+                onUseAsReference={(src, archiveId) => {
+                    void handleUseAsReference(src, archiveId);
                     setSelectedImage(null);
                 }}
+                onFocusImage={setFocusTarget}
+            />
+            <CreateWorkbenchDialog
+                open={focusTarget !== null}
+                defaultName={focusDefaults.name}
+                defaultDescription={focusDefaults.description}
+                busy={creatingWorkbench}
+                onClose={() => setFocusTarget(null)}
+                onCreate={(name, description) => { void handleCreateWorkbench(name, description); }}
             />
             <ImageGenGalleryDialog
                 open={galleryOpen}

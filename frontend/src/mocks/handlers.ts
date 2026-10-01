@@ -1703,6 +1703,42 @@ let mockSharingKeys = [
 const svgDataUrl = (svg: string): string =>
     `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`
 
+// The image archive (/api/v1/imagegen/images) and focus workbenches, in
+// memory. Unlike the real gateway — which archives only base64 results — the
+// generation mocks archive every image they return, so the workbench flow is
+// exercisable against the mock backend. One workbench is seeded so the bar
+// shows on first load.
+const mockArchive = new Map<string, { svg: string; prompt: string; operation: string; created: string }>()
+let mockArchiveSeq = 0
+const archiveMockImage = (dataUrl: string, prompt: string, operation = ''): string => {
+    mockArchiveSeq += 1
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const id = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}-${mockArchiveSeq.toString(16).padStart(6, '0')}`
+    const svg = dataUrl.startsWith('data:image/svg+xml;base64,')
+        ? decodeURIComponent(escape(atob(dataUrl.slice('data:image/svg+xml;base64,'.length))))
+        : `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><image href="${dataUrl}" width="512" height="512"/></svg>`
+    mockArchive.set(id, { svg, prompt, operation, created: now.toISOString() })
+    return id
+}
+const mockArchivedImage = (id: string) => {
+    const img = mockArchive.get(id)!
+    return { id, created_at: img.created, bytes: img.svg.length, prompt: img.prompt, operation: img.operation, model: 'gpt-image-1', size: '1024x1024', quality: 'auto' }
+}
+type MockWorkbench = { id: string; name: string; description: string; root_image_id: string; items: { image_id: string; parent_id: string; added_at: string }[]; created_at: string; updated_at: string }
+const mockWorkbenches: MockWorkbench[] = (() => {
+    const svg = (bg: string, label: string) => svgDataUrl(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="100%" height="100%" fill="${bg}"/><circle cx="256" cy="210" r="90" fill="#fde68a"/><rect x="176" y="300" width="160" height="150" rx="40" fill="#ef4444"/><text x="50%" y="490" font-family="sans-serif" font-size="28" fill="white" text-anchor="middle">${label}</text></svg>`)
+    const root = archiveMockImage(svg('#1e293b', 'Mira'), 'Mira, a girl with a red scarf')
+    const a = archiveMockImage(svg('#0f766e', 'Mira · beach'), 'Mira at the beach')
+    const b = archiveMockImage(svg('#7c2d12', 'Mira · autumn'), 'Mira in an autumn forest')
+    const at = new Date().toISOString()
+    return [{
+        id: 'a1b2c3d4e5f6', name: 'Mira', description: 'Mira: a 10-year-old girl, short black hair, red knitted scarf, round face. Keep the scarf and hairstyle in every image.',
+        root_image_id: root, items: [{ image_id: a, parent_id: root, added_at: at }, { image_id: b, parent_id: a, added_at: at }], created_at: at, updated_at: at,
+    }]
+})()
+const mockImageIdsHeaders = (ids: string[]) => ({ 'X-Tingly-Image-Ids': ids.join(','), 'Access-Control-Expose-Headers': 'X-Tingly-Image-Ids' })
+
 // Newcomer profile: nothing has run through the gateway yet. These come first
 // in the handler list, and MSW answers with the first match, so they shadow
 // the populated usage/request endpoints without touching them.
@@ -2363,6 +2399,66 @@ export const handlers = [
         return HttpResponse.json({ success: true, output_dir: '/home/demo/.tingly-box/image' })
     }),
 
+    http.get('/api/v1/imagegen/images', () => HttpResponse.json({
+        success: true,
+        images: [...mockArchive.keys()].reverse().map(mockArchivedImage),
+    })),
+    http.post('/api/v1/imagegen/images', async ({ request }) => {
+        const body = (await request.json()) as any
+        const id = archiveMockImage(String(body?.data ?? ''), String(body?.name ?? ''), 'import')
+        return HttpResponse.json({ success: true, image: mockArchivedImage(id) })
+    }),
+    http.get('/api/v1/imagegen/images/:id/file', ({ params }) => {
+        const img = mockArchive.get(String(params.id))
+        if (!img) return HttpResponse.json({ success: false, error: 'not found' }, { status: 404 })
+        return new HttpResponse(img.svg, { headers: { 'Content-Type': 'image/svg+xml' } })
+    }),
+    http.delete('/api/v1/imagegen/images/:id', ({ params }) => {
+        if (mockWorkbenches.some((wb) => wb.root_image_id === params.id)) {
+            return HttpResponse.json({ success: false, error: 'image is the root of a workbench' }, { status: 409 })
+        }
+        mockArchive.delete(String(params.id))
+        return HttpResponse.json({ success: true })
+    }),
+    http.get('/api/v1/imagegen/workbenches', () => HttpResponse.json({ success: true, workbenches: mockWorkbenches })),
+    http.post('/api/v1/imagegen/workbenches', async ({ request }) => {
+        const body = (await request.json()) as any
+        const at = new Date().toISOString()
+        const wb: MockWorkbench = {
+            id: Math.random().toString(16).slice(2, 14).padEnd(12, '0'), name: String(body?.name ?? '').trim(), description: String(body?.description ?? ''),
+            root_image_id: String(body?.root_image_id ?? ''), items: [], created_at: at, updated_at: at,
+        }
+        mockWorkbenches.unshift(wb)
+        return HttpResponse.json({ success: true, workbench: wb })
+    }),
+    http.put('/api/v1/imagegen/workbenches/:id', async ({ params, request }) => {
+        const body = (await request.json()) as any
+        const wb = mockWorkbenches.find((item) => item.id === params.id)
+        if (!wb) return HttpResponse.json({ success: false, error: 'not found' }, { status: 404 })
+        if (typeof body?.name === 'string') wb.name = body.name.trim()
+        if (typeof body?.description === 'string') wb.description = body.description
+        wb.updated_at = new Date().toISOString()
+        return HttpResponse.json({ success: true, workbench: wb })
+    }),
+    http.delete('/api/v1/imagegen/workbenches/:id', ({ params }) => {
+        const index = mockWorkbenches.findIndex((item) => item.id === params.id)
+        if (index >= 0) mockWorkbenches.splice(index, 1)
+        return HttpResponse.json({ success: true })
+    }),
+    http.post('/api/v1/imagegen/workbenches/:id/items', async ({ params, request }) => {
+        const body = (await request.json()) as any
+        const wb = mockWorkbenches.find((item) => item.id === params.id)
+        if (!wb) return HttpResponse.json({ success: false, error: 'not found' }, { status: 404 })
+        const known = new Set([wb.root_image_id, ...wb.items.map((it) => it.image_id)])
+        for (const it of body?.items ?? []) {
+            if (known.has(it.image_id)) continue
+            wb.items.push({ image_id: it.image_id, parent_id: known.has(it.parent_id) ? it.parent_id : wb.root_image_id, added_at: new Date().toISOString() })
+            known.add(it.image_id)
+        }
+        wb.updated_at = new Date().toISOString()
+        return HttpResponse.json({ success: true, workbench: wb })
+    }),
+
     // Scenario config (per-scenario UI prefs incl. unified vs. separate mode)
     http.get('/api/v1/scenario/:scenario', ({ params }) => {
         const { scenario } = params as { scenario: string }
@@ -2744,10 +2840,11 @@ export const handlers = [
         // exercisable too.
         const returned = /\[partial\]/i.test(promptText) ? Math.ceil(n / 2) : n
 
+        const data = Array.from({ length: returned }, (_, i) => ({ url: makeSvgDataUrl(i) }))
         return HttpResponse.json({
             created: Math.floor(Date.now() / 1000),
-            data: Array.from({ length: returned }, (_, i) => ({ url: makeSvgDataUrl(i) })),
-        })
+            data,
+        }, { headers: mockImageIdsHeaders(data.map((d) => archiveMockImage(d.url, String(body?.prompt ?? '')))) })
     }),
 
     // Mirrors the generations mock above but reads the standard OpenAI
@@ -2789,10 +2886,11 @@ export const handlers = [
         // Simulate a small latency so the loading state is visible
         await new Promise((r) => setTimeout(r, 600))
 
+        const data = Array.from({ length: n }, (_, i) => ({ url: makeSvgDataUrl(i) }))
         return HttpResponse.json({
             created: Math.floor(Date.now() / 1000),
-            data: Array.from({ length: n }, (_, i) => ({ url: makeSvgDataUrl(i) })),
-        })
+            data,
+        }, { headers: mockImageIdsHeaders(data.map((d) => archiveMockImage(d.url, String(form.get('prompt') ?? ''), 'edit'))) })
     }),
 
     // ============================================

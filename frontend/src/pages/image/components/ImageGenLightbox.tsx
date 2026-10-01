@@ -11,7 +11,7 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Brush, Close, ContentCopy, Create, Download, Edit, GridView, RestartAlt } from '@/components/icons';
+import { Brush, CenterFocusStrong, Close, ContentCopy, Create, Download, Edit, GridView, RestartAlt } from '@/components/icons';
 import { fullBleedDialogPaperSx, overlayPlateSx } from './ImageGenPlayground.chrome';
 import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
 import type { LightboxFrame } from './useImageGenLightbox';
@@ -43,7 +43,9 @@ interface ImageGenLightboxProps {
     // it is a re-openable sketch.
     referenceImages: ReferenceImage[];
     onEditSketch: (index: number | null) => void;
-    onUseAsReference: (src: string) => void;
+    onUseAsReference: (src: string, archiveId?: string) => void;
+    // Starts a workbench focused on the open image (see useImageWorkbench).
+    onFocusImage: (image: SelectedImage) => void;
 }
 
 // The full-bleed image viewer shared by every image on the panel — outputs,
@@ -65,6 +67,7 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
     referenceImages,
     onEditSketch,
     onUseAsReference,
+    onFocusImage,
 }) => {
     const { t } = useTranslation();
     // On by default — a mask was painted to be seen — and remembered while
@@ -286,6 +289,15 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                             </IconButton>
                         </Tooltip>
                     )}
+                    <Tooltip title={t('playground.workbench.focusAction', { defaultValue: 'Focus on this image' })}>
+                        <IconButton
+                            onClick={() => { if (selectedImage) onFocusImage(selectedImage); }}
+                            aria-label={t('playground.workbench.focusAction', { defaultValue: 'Focus on this image' })}
+                            sx={overlayIconSx}
+                        >
+                            <CenterFocusStrong fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
                     <Tooltip title={t('playground.slice.action', { defaultValue: 'Split into tiles' })}>
                         <IconButton
                             onClick={() => { if (selectedImage) onSlice(selectedImage); }}
@@ -327,7 +339,7 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                             <IconButton
                                 onClick={() => {
                                     if (!selectedImage) return;
-                                    onUseAsReference(selectedImage.src);
+                                    onUseAsReference(selectedImage.src, selectedImage.archiveId);
                                     onClose();
                                 }}
                                 aria-label={t('playground.useAsReference', { defaultValue: 'Use as reference' })}

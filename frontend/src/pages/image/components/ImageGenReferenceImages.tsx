@@ -38,6 +38,9 @@ export interface ReferenceImage {
     // which the row says out loud when one has been dragged off the front.
     // See .design/image-mask.md.
     mask?: ReferenceMask;
+    // The archived file this reference is, when it came from a workbench —
+    // so what is generated from it can be recorded as derived from it.
+    archiveId?: string;
 }
 
 interface ReferenceThumbProps {

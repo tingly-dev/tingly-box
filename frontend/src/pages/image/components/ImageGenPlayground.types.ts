@@ -50,6 +50,15 @@ export interface GenerationRun {
     size: string;
     quality: Quality;
     images: ImageResult[];
+    // The archive id the gateway saved each image under (X-Tingly-Image-Ids),
+    // in `images` order; "" for one it did not save (a URL-only result). This
+    // is what ties a result on screen to the file on disk, and what a
+    // workbench records.
+    imageIds?: string[];
+    // The workbench this run was made in, if any, and the workbench image it
+    // was derived from — recorded with its outputs once they are archived.
+    workbenchId?: string;
+    workbenchParentId?: string;
     // Data URLs of the reference images a run was built from, kept for display
     // alongside the output — the "what did I ask for" half of the history card
     // (only set when the run went through `edits`).
@@ -94,6 +103,9 @@ export interface SelectedImage {
     // image so "which part did I let the model change?" is answered where the
     // image is looked at.
     maskSrc?: string;
+    // The archived file behind this image, when there is one — an output the
+    // gateway saved, or a reference taken from a workbench.
+    archiveId?: string;
 }
 
 // One tile of the overview. A completed run contributes one tile per image it
