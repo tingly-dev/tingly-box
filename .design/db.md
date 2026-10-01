@@ -246,11 +246,16 @@ between the two releases.
 
 Rules that follow:
 
-1. **A command that only reports on the binary must not build an
-   `AppManager`.** `needsAppConfig` in `cli/tingly-box/main.go` lists them
-   (`version` today); their `Run` methods take no `*app.AppManager`, and
-   `TestVersionRunsWithoutTouchingConfigDir` asserts the config dir stays
-   empty after running one.
+1. **A CLI process opens the database only when a command asks for it.**
+   `app.AppManager` builds `AppConfig` lazily, on the first
+   `AppConfig()` / `GetGlobalConfig()` call; `ConfigDir()` and
+   `GetRuntimeServerPort()` never do. Commands that only report on the
+   binary (`version`, `mcp-builtin`) take no `*app.AppManager` at all, and
+   commands that talk to a running server (`stop`, `log`, `open`) use the
+   lock, the port file and `appconfig.UserTokenFromFile`.
+   `TestCommandsThatMustNotOpenTheDatabase` (`cli/tingly-box/main_test.go`)
+   asserts no database appears after running them. The per-command table
+   is in `.design/cli-entry-semantics.md`.
 2. **Container health checks probe the server over HTTP**
    (`/api/v1/info/health`, unauthenticated), never a CLI subcommand — the
    diagnostic should traverse the real path (`.design/ux-principles.md`),

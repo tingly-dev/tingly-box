@@ -6,13 +6,86 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/alecthomas/kong"
 
 	"github.com/tingly-dev/tingly-box/internal/command"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 )
+
+// TestCommandsThatMustNotOpenTheDatabase pins the process-model rule behind
+// #1912 at the CLI boundary: these commands run against a config dir that
+// does not exist yet, through the same AppManager main() builds, and must
+// leave it without a database. Each of them either reports on the binary
+// or talks to an already-running server through its lock, port file,
+// config.json and HTTP API; opening tingly.db from this process would make
+// it a second writer next to that server.
+//
+// `mcp-builtin` is in the same class (the server spawns it) but serves
+// stdio until EOF, so it is covered by its Run taking no AppManager instead.
+func TestCommandsThatMustNotOpenTheDatabase(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"version", []string{"version"}},
+		{"stop (not running)", []string{"stop"}},
+		{"log --once (not running)", []string{"log", "--once"}},
+		// `open` on a running server is the interesting case, but it needs
+		// a live lock holder and a browser; its not-running branch starts
+		// the server, which legitimately opens the database.
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), "conf")
+			_, parser := newTestParser(t)
+			ctx, err := parser.Parse(append([]string{"--config-dir", dir}, tc.args...))
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+
+			am, err := newAppManager(dir)
+			if err != nil {
+				t.Fatalf("newAppManager: %v", err)
+			}
+			// Same bindings as main(); a command that errors because the
+			// server is not running is fine, opening the database is not.
+			captureStdout(t, func() {
+				_ = ctx.Run(am, command.LaunchSource(""))
+			})
+
+			if am.Initialized() {
+				t.Fatalf("%q built AppConfig (and so opened the database)", tc.args)
+			}
+			if _, err := os.Stat(constant.GetDBFile(dir)); !os.IsNotExist(err) {
+				t.Fatalf("%q created %s (stat err=%v)", tc.args, constant.GetDBFile(dir), err)
+			}
+		})
+	}
+}
+
+// TestNewAppManager_ExpandsConfigDirLazily checks the CLI resolves the
+// directory up front (so ConfigDir is right for lock/port files) while
+// still deferring the build.
+func TestNewAppManager_ExpandsConfigDirLazily(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "conf")
+	am, err := newAppManager(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if am.ConfigDir() != dir {
+		t.Fatalf("ConfigDir = %q, want %q", am.ConfigDir(), dir)
+	}
+	if am.Initialized() {
+		t.Fatal("newAppManager must not build AppConfig")
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("config dir created eagerly (stat err=%v)", err)
+	}
+}
 
 func newTestParser(t *testing.T) (*CLI, *kong.Kong) {
 	t.Helper()
@@ -398,59 +471,6 @@ func TestVersionCmdPrintsAllFields(t *testing.T) {
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected %q in output, got:\n%s", want, out)
-		}
-	}
-}
-
-// TestVersionRunsWithoutTouchingConfigDir pins the fix for #1912: `tingly-box
-// version` (Docker's HEALTHCHECK) must run through the config-free path and
-// leave the data directory untouched — no config.json, no db/tingly.db, no
-// WAL — so a healthcheck can never become a second SQLite writer next to
-// the running server.
-func TestVersionRunsWithoutTouchingConfigDir(t *testing.T) {
-	dir := t.TempDir()
-	cli, parser := newTestParser(t)
-
-	ctx, err := parser.Parse([]string{"--config-dir", dir, "version"})
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	if cli.ConfigDir != dir {
-		t.Fatalf("config dir not parsed: %q", cli.ConfigDir)
-	}
-	if needsAppConfig(ctx.Command()) {
-		t.Fatalf("%q must not need an AppConfig", ctx.Command())
-	}
-
-	// The same call main() makes on this path: no bindings, so a Run method
-	// that grew an *app.AppManager parameter fails here rather than in a
-	// container's healthcheck.
-	captureStdout(t, func() {
-		if err := ctx.Run(); err != nil {
-			t.Fatalf("Run: %v", err)
-		}
-	})
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("read config dir: %v", err)
-	}
-	if len(entries) != 0 {
-		names := make([]string, 0, len(entries))
-		for _, e := range entries {
-			names = append(names, e.Name())
-		}
-		t.Fatalf("version wrote into the config dir: %v", names)
-	}
-}
-
-func TestNeedsAppConfig(t *testing.T) {
-	if needsAppConfig("version") {
-		t.Error("version must not open the data directory")
-	}
-	for _, cmd := range []string{"start", "status", "stop", "provider list"} {
-		if !needsAppConfig(cmd) {
-			t.Errorf("%q must keep its AppConfig", cmd)
 		}
 	}
 }

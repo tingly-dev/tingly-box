@@ -105,3 +105,74 @@ their restart carried no update semantics anyway.
   only npx (where invocation = intent) keeps the run-now default.
 - Surface the artifact for the next action: `start` on a running same-version
   server prints the access banner instead of "already running".
+
+## Process boundary: a CLI process is a database client
+
+Added 2026-10, from #1912.
+
+`cli/tingly-box/main.go` used to build the full `AppManager` for **every**
+subcommand before dispatching. Building one is not free of side effects:
+`appconfig.NewAppConfig` creates the config tree, opens `tingly.db` (SQLite,
+WAL) through `db.NewStoreManager` and runs every store's `AutoMigrate`, plus
+the deprecated-table drop, legacy-JSON imports and config migrations. So
+`tingly-box version` — Docker's `HEALTHCHECK`, every 30s — and
+`tingly-box mcp-builtin` — a stdio child the *running server itself* spawns
+— were each a second process writing to the server's database, just by
+being dispatched. On a Docker Desktop bind mount, where SQLite's
+cross-process locks and WAL shared memory are not honoured, that corrupted a
+user's `usage_records` right after an upgrade, when both processes were also
+migrating schema. Nothing in `internal/db` had changed between the releases.
+
+### Decision
+
+`AppManager` is **lazy** (`app.NewLazyAppManager`). It resolves the config
+directory up front and builds `AppConfig` on the first call to `AppConfig()`
+/ `GetGlobalConfig()`. A command that never asks never opens the database;
+there is no allowlist of "config-free commands" to keep in sync — the
+dependency is expressed by what each `Run` actually calls. Two accessors
+are guaranteed never to build it:
+
+- `ConfigDir()` — the lock file, port file and log paths live here.
+- `GetRuntimeServerPort()` — the lock + runtime port file, falling back to
+  `constant.DefaultServerPort` (the port is not persisted in `config.json`,
+  so there is nothing to load).
+
+`appconfig.UserTokenFromFile(configDir)` reads the one value a
+talk-to-the-running-server command needs from `config.json` without a
+`Config`.
+
+Per command, as of this note:
+
+| Command | Needs | Opens DB? |
+|---|---|---|
+| `version`, `shortcut` | nothing (`Run()` takes no `AppManager`) | never |
+| `mcp-builtin` | nothing (`Run()` takes no `AppManager`); spawned by the server | never |
+| `stop` | lock file | never |
+| `log` | lock, port file, user token from `config.json`, HTTP | never |
+| `open` on a running server | lock, port file, user token, browser | never |
+| `open` on a stopped server, `start`, `restart` | the server itself | yes — it *is* the server |
+| `status`, `provider …`, `rule …`, `agent …`, `token …`, `quota …`, `oauth`, `cc`, `profile`, `remote …`, `tui`, `swagger` | providers / rules / profiles | yes — they are the toolbox over the data |
+
+`TestCommandsThatMustNotOpenTheDatabase` (`cli/tingly-box/main_test.go`)
+runs the never-rows through the same `AppManager` `main()` builds against a
+config dir that does not exist and asserts it still does not. A `Run`
+method that grows an `*app.AppManager` parameter it does not need fails
+that test rather than a container's health check.
+
+### What this does not solve
+
+The yes-rows are correct on any filesystem SQLite supports. Against a live
+server on a Docker Desktop bind mount they carry the risk the health check
+did, which `docs/docker.md` now says; the container images probe
+`/api/v1/info/health` over HTTP instead of running a subcommand. `status`
+on a running server could be served entirely over HTTP too and stay out of
+the database — not done here, since it also lists providers and rules and
+would need an API round-trip for each; worth doing if a second report like
+#1912 names it.
+
+### UX principles applied
+
+- Diagnostics must traverse the real path: a health check asks the server,
+  not a sibling process that happens to share its files.
+- Scope side effects to the current surface: printing a version or stopping
+  a server touches nothing it does not need.

@@ -343,7 +343,7 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 		updated = true
 	}
 	if cfg.ServerPort == 0 {
-		cfg.ServerPort = 12580
+		cfg.ServerPort = constant.DefaultServerPort
 		updated = true
 	}
 	if cfg.DefaultMaxTokens == 0 {
@@ -594,7 +594,7 @@ func (c *Config) CreateDefaultConfig() error {
 	// Initialize merged fields with defaults
 	c.ProvidersV1 = make(map[string]*typ.Provider)
 	c.Providers = make([]*typ.Provider, 0)
-	c.ServerPort = 12580
+	c.ServerPort = constant.DefaultServerPort
 	c.JWTSecret = generateSecret()
 	_, defaultEnterpriseRS256PublicRef, keyErr := ensureEnterpriseContextRS256KeyPair(c.ConfigDir)
 	if keyErr != nil {

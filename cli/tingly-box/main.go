@@ -13,7 +13,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/app"
-	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/command"
 	"github.com/tingly-dev/tingly-box/pkg/fs"
 )
@@ -78,24 +77,29 @@ type CLI struct {
 	Version command.VersionCmdKong `kong:"cmd,help='Show version'"`
 }
 
-// needsAppConfig reports whether the parsed command needs an AppManager.
-//
-// Building one is not free of side effects: appconfig.NewAppConfig creates
-// the config directory, opens tingly.db (SQLite, WAL) through
-// db.NewStoreManager and runs every store's AutoMigrate. For any command
-// that only reports on the binary itself that is wasted work — and, worse,
-// a second process opening the server's database. Docker's HEALTHCHECK runs
-// `tingly-box version` every 30s for the life of the container; on Docker
-// Desktop (macOS/Windows) bind mounts, where SQLite's locking and WAL shared
-// memory are not reliable across processes, that extra writer corrupted a
-// user's usage_records table (#1912). Such commands run through ctx.Run()
-// with no bindings, so their Run methods must not take *app.AppManager.
-func needsAppConfig(command string) bool {
-	switch command {
-	case "version":
-		return false
+// newAppManager builds the command host for this process. It resolves the
+// config directory now but defers everything else: AppConfig — and with it
+// the config tree, tingly.db and every store's migration — is built on the
+// first command call that asks for it, and a command that never asks never
+// opens the database (see app.AppManager). That is what keeps `version`,
+// `stop`, `log`, `open` on a running server and the server-spawned
+// `mcp-builtin` from becoming a second SQLite writer next to the server
+// (#1912). A failed build prints the same error the eager path printed and
+// exits.
+func newAppManager(configDir string) (*app.AppManager, error) {
+	if configDir != "" {
+		expanded, err := fs.ExpandConfigDir(configDir)
+		if err != nil {
+			return nil, err
+		}
+		configDir = expanded
 	}
-	return true
+	am := app.NewLazyAppManager(configDir, func(err error) {
+		fmt.Fprintf(os.Stderr, "Error: Failed to initialize config: %v\n", err)
+		os.Exit(1)
+	})
+	am.SetVersion(version)
+	return am, nil
 }
 
 func main() {
@@ -160,40 +164,11 @@ func main() {
 		logrus.SetLevel(logrus.TraceLevel)
 	}
 
-	// Commands that only report on the binary run before any config or data
-	// directory is touched — see needsAppConfig.
-	if !needsAppConfig(ctx.Command()) {
-		if err := ctx.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		return
-	}
-
-	var appConfig *appconfig.AppConfig
-
-	configDir := cli.ConfigDir
-	if configDir != "" {
-		expandedDir, expandErr := fs.ExpandConfigDir(configDir)
-		if expandErr == nil {
-			appConfig, err = appconfig.NewAppConfig(appconfig.WithConfigDir(expandedDir))
-		} else {
-			err = expandErr
-		}
-	}
-	if appConfig == nil && err == nil {
-		appConfig, err = appconfig.NewAppConfig()
-	}
+	appManager, err := newAppManager(cli.ConfigDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to initialize config: %v\n", err)
 		os.Exit(1)
 	}
-
-	if appConfig != nil {
-		appConfig.SetVersion(version)
-	}
-
-	appManager := app.NewAppManagerWithConfig(appConfig)
 
 	// Run the selected command. command.LaunchSource carries how this process
 	// was invoked (binary/npx/npx-bundle, from --source) so `shortcut`, `start`,

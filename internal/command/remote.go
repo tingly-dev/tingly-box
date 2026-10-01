@@ -137,9 +137,16 @@ func (r *RemotePairStatusCmdKong) Run(appManager *app.AppManager) error {
 // MCPBuiltinCmdKong starts the builtin MCP server. Registered at the top level
 // as "mcp-builtin" to match the legacy command path, which is consumed by
 // internal/mcp/runtime/builtin_registry.go.
+//
+// Run takes no *app.AppManager: this process is spawned BY the running
+// server as a stdio child and lives as long as it does. It serves web
+// tools over stdio and has no business in the config directory — before
+// AppManager became lazy it opened tingly.db and ran every migration just
+// by being dispatched, a long-lived second writer next to the server
+// (#1912).
 type MCPBuiltinCmdKong struct{}
 
-func (m *MCPBuiltinCmdKong) Run(appManager *app.AppManager) error {
+func (m *MCPBuiltinCmdKong) Run() error {
 	return builtinserver.Serve()
 }
 

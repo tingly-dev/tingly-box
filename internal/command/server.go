@@ -153,23 +153,22 @@ type OpenCmdKong struct {
 }
 
 func (o *OpenCmdKong) Run(appManager *app.AppManager, source LaunchSource) error {
-	opts := o.resolveOptions(appManager.AppConfig(), 0)
-	appConfig := appManager.AppConfig()
-	fileLock := lock.NewFileLock(appConfig.ConfigDir())
+	fileLock := lock.NewFileLock(appManager.ConfigDir())
 
 	if fileLock.IsLocked() {
+		// The server is up: everything needed to open it (live port, user
+		// token) is in the runtime files and config.json, so stay out of
+		// the database the server is using.
 		port := appManager.GetRuntimeServerPort()
-		globalConfig := appManager.GetGlobalConfig()
-
-		host := opts.Host
+		host := o.Host
 		if host == "" {
 			host = "localhost"
 		}
 		resolvedHost := network.ResolveHost(host)
 
 		webUIURL := fmt.Sprintf("http://%s:%d/", resolvedHost, port)
-		if globalConfig.HasUserToken() {
-			webUIURL = fmt.Sprintf("http://%s:%d/login/%s", resolvedHost, port, globalConfig.GetUserToken())
+		if token := appconfig.UserTokenFromFile(appManager.ConfigDir()); token != "" {
+			webUIURL = fmt.Sprintf("http://%s:%d/login/%s", resolvedHost, port, token)
 		}
 
 		fmt.Printf("Opening web UI: %s\n", webUIURL)
@@ -177,17 +176,16 @@ func (o *OpenCmdKong) Run(appManager *app.AppManager, source LaunchSource) error
 	}
 
 	fmt.Println("Server is not running, starting it...")
+	opts := o.resolveOptions(appManager.AppConfig(), 0)
 	return startServer(appManager, opts, source)
 }
 
 // VersionCmdKong is the Kong version of version command.
 //
-// Run deliberately takes no *app.AppManager: printing build metadata must
-// never open the data directory. Docker's HEALTHCHECK runs `tingly-box
-// version` every 30s, and building an AppManager opens tingly.db (WAL) and
-// runs every store's AutoMigrate — a second writer process against the
-// server's database, which on Docker Desktop bind mounts (macOS/Windows)
-// can corrupt it. See cli/tingly-box/main.go needsAppConfig.
+// Run takes no *app.AppManager on purpose: printing build metadata must not
+// touch the config directory, let alone the database. Docker's HEALTHCHECK
+// used to run this every 30s, and before AppManager became lazy that was a
+// second SQLite writer next to the server (#1912).
 type VersionCmdKong struct{}
 
 func (v *VersionCmdKong) Run() error {
@@ -432,8 +430,9 @@ func openBrowserURL(url string) error {
 // - server_unix.go for Unix-like systems (uses SIGTERM/SIGKILL)
 
 func doStopServer(appManager *app.AppManager) error {
-	appConfig := appManager.AppConfig()
-	fileLock := lock.NewFileLock(appConfig.ConfigDir())
+	// Lock file only: stopping must not open the database the server is
+	// about to close.
+	fileLock := lock.NewFileLock(appManager.ConfigDir())
 
 	if !fileLock.IsLocked() {
 		fmt.Println("Server is not running")

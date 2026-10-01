@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/app"
+	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/lock"
 )
 
@@ -40,10 +41,13 @@ type logsResponse struct {
 }
 
 func (l *LogCmdKong) Run(appManager *app.AppManager) error {
-	appConfig := appManager.AppConfig()
+	// This command only talks to the running server over HTTP, so it reads
+	// the lock, port file and config.json directly and never opens the
+	// database the server is writing to.
+	configDir := appManager.ConfigDir()
 
 	// Make sure the server is actually running, otherwise the API is not reachable.
-	fileLock := lock.NewFileLock(appConfig.ConfigDir())
+	fileLock := lock.NewFileLock(configDir)
 	if !fileLock.IsLocked() {
 		return fmt.Errorf("server is not running; start it first with 'tingly-box start' / 'tb start'")
 	}
@@ -58,7 +62,7 @@ func (l *LogCmdKong) Run(appManager *app.AppManager) error {
 	}
 	baseURL := fmt.Sprintf("http://%s:%d/api/v1/system/logs", host, port)
 
-	token := appManager.GetGlobalConfig().GetUserToken()
+	token := appconfig.UserTokenFromFile(configDir)
 
 	limit := l.Limit
 	if limit <= 0 {

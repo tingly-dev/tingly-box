@@ -67,6 +67,11 @@ const (
 
 const ConfigDirName = ".tingly-box"
 
+// DefaultServerPort is the port the server listens on unless --port says
+// otherwise. It is not persisted in config.json, so a CLI process can know
+// the default without loading the configuration (see app.AppManager).
+const DefaultServerPort = 12580
+
 const DBDirName = "db"
 
 const MemoryDirName = "memory"
