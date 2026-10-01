@@ -281,17 +281,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                 })}
             </List>
             {/* Footer: version, and the GitHub star request — one quiet,
-                always-there link instead of a banner over every agent page. */}
+                always-there link instead of a banner over every agent page.
+                Two rows, not one: a dev build's version (v1.261001.1-27-g…)
+                alone fills the sidebar's width, so side by side it pushed the
+                star link out. Still footerHeight tall, so its bottom lines up
+                with the activity bar's footer. */}
             <Box
                 sx={{
-                    py: 1.5, px: 2,
+                    py: 1, px: 2,
                     borderColor: 'divider',
                     display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 1.5,
+                    gap: 0.5,
                     flexShrink: 0,
                     height: footerHeight,
+                    minWidth: 0,
                 }}
             >
                 <VersionDisplay onClick={() => setUpdatePanelOpen(true)} />

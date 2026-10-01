@@ -100,6 +100,7 @@ export const VersionDisplay: React.FC<VersionDisplayProps> = ({
                 display: 'block',
                 fontStyle: 'italic',
                 maxWidth: '100%',
+                minWidth: 0,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
@@ -112,7 +113,7 @@ export const VersionDisplay: React.FC<VersionDisplayProps> = ({
                 }),
             }}
         >
-            version {displayVersion}
+            {displayVersion}
         </Typography>
     );
 
@@ -127,6 +128,7 @@ export const VersionDisplay: React.FC<VersionDisplayProps> = ({
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 0.5,
+                    maxWidth: '100%',
                     cursor: isInteractive ? 'pointer' : 'default',
                     ...(isInteractive && {
                         '&:hover': {
@@ -151,6 +153,8 @@ export const VersionDisplay: React.FC<VersionDisplayProps> = ({
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 0.75,
+                    // A long version ellipsizes; the badge after it stays.
+                    maxWidth: '100%',
                     cursor: isInteractive ? 'pointer' : 'default',
                     position: 'relative',
                     ...(isInteractive && {
