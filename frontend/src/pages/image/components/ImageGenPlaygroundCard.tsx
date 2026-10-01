@@ -20,12 +20,12 @@ import {
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { CopyIconButton } from '@/components/CopyIconButton';
-import { AutoAwesome, Close, Description, OpenInFull } from '@/components/icons';
+import { AutoAwesome, Close, DeleteOutline, Description, Edit, OpenInFull } from '@/components/icons';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { fontMono } from '@/theme/fonts';
 import { api } from '@/services/api';
@@ -42,12 +42,8 @@ import { useImageGenLightbox } from './useImageGenLightbox';
 import { downloadStem, formatBytes, runImage } from './imageGenSession';
 import MaskEditorDialog from './MaskEditorDialog';
 import SketchCanvasDialog from './SketchCanvasDialog';
-import { useEntities } from '../entities/entityStore';
-import { composeEntities } from '../entities/composeEntities';
-import { useEntityMention } from '../entities/useEntityMention';
-import EntityMentionPicker from '../entities/EntityMentionPicker';
-import EntityCompositionPanel from '../entities/EntityCompositionPanel';
-import EntityEditorDialog, { type EntityDraft } from '../entities/EntityEditorDialog';
+import type { ImageProfile } from '../profiles/imageProfileTypes';
+import { createImageProfile, removeImageProfile, updateImageProfile } from '../profiles/imageProfileStore';
 import type {
     GenerationRun,
     ImportedImage,
@@ -66,12 +62,16 @@ interface ImageGenPlaygroundCardProps {
     rules: Rule[];
     loadingRules: boolean;
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
+    // Set on a profile's page: the panel starts from the profile, and edits
+    // to its references and settings save back to it.
+    profile?: ImageProfile;
 }
 
 const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     rules,
     loadingRules,
     showNotification,
+    profile,
 }) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
@@ -82,15 +82,18 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         return Array.from(new Set(names));
     }, [rules]);
 
-    const [selectedModel, setSelectedModel] = useState('');
+    const [selectedModel, setSelectedModel] = useState(profile?.model ?? '');
     const model = models.includes(selectedModel) ? selectedModel : (models[0] ?? '');
     const [prompt, setPrompt] = useState('');
     // The prompt in a dialog-sized editor: the panel's field is one column of a
     // fixed-height panel, which is the wrong place to read or rework a long one.
     const [promptEditorOpen, setPromptEditorOpen] = useState(false);
-    const [size, setSize] = useState('1024x1024');
-    const [quality, setQuality] = useState<Quality>('auto');
-    const [count, setCount] = useState(1);
+    const [size, setSize] = useState(profile?.size ?? '1024x1024');
+    const [quality, setQuality] = useState<Quality>(profile?.quality ?? 'auto');
+    const [count, setCount] = useState(profile?.count ?? 1);
+    // A profile's fixed description: sent ahead of the prompt on every run,
+    // so the prompt field only holds what changes this time.
+    const [basePrompt, setBasePrompt] = useState(profile?.basePrompt ?? '');
     // Where generated images land on disk — read-only, shown so the user can
     // navigate there themselves; this page never opens it for them.
     const [outputDir, setOutputDir] = useState('');
@@ -143,7 +146,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         maskInitial,
         maskedReference,
         hasMaskedReference,
-    } = useImageGenRefs({ showNotification, size });
+    } = useImageGenRefs({ showNotification, size, initialReferences: profile?.refs });
     // A brought-in image is a first-class image on this panel, not just a
     // request parameter: it opens in the same lightbox as a result, with the
     // same download and slicing tools. Its header names the file and its real
@@ -336,19 +339,20 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         }
     }, [showNotification, t]);
 
-    const canSubmit = Boolean(prompt.trim()) && Boolean(model);
+    const fullPrompt = [basePrompt.trim(), prompt.trim()].filter(Boolean).join('\n');
+    const canSubmit = Boolean(fullPrompt) && Boolean(model);
 
     const handleSubmit = useCallback(async () => {
         if (!canSubmit) return;
         await runGeneration({
-            prompt: prompt.trim(),
+            prompt: fullPrompt,
             model,
             size,
             quality,
             count,
             sources: referenceImages,
         });
-    }, [canSubmit, count, model, prompt, quality, referenceImages, runGeneration, size]);
+    }, [canSubmit, count, fullPrompt, model, quality, referenceImages, runGeneration, size]);
 
     // ⌘/Ctrl+Enter from the prompt — in the panel or in the larger editor —
     // is the keyboard's Generate button.
@@ -359,36 +363,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         }
     }, [handleSubmit]);
 
-    // Entities (prototype, .design/image-entity.md): `@name` in the prompt
-    // brings in a saved character or style. Display only for now — the run
-    // itself is unchanged.
-    const entities = useEntities();
-    const promptFieldRef = useRef<HTMLDivElement>(null);
-    const promptInputRef = useRef<HTMLTextAreaElement>(null);
-    const [entityDraft, setEntityDraft] = useState<EntityDraft | null>(null);
-    // Set while a "new entity" dialog opened from the picker is up: the
-    // `@query` it should turn into a finished mention once saved.
-    const [pendingMention, setPendingMention] = useState<{ start: number; end: number } | null>(null);
-    const mention = useEntityMention({ prompt, setPrompt, inputRef: promptInputRef, entities });
-    const composition = useMemo(
-        () => composeEntities(prompt, entities, MAX_EDIT_REFERENCE_IMAGES, referenceImages.length),
-        [entities, prompt, referenceImages.length],
-    );
-    const handlePanelPromptKeyDown = useCallback((event: React.KeyboardEvent) => {
-        if (mention.handleKeyDown(event)) return;
-        handlePromptKeyDown(event);
-    }, [handlePromptKeyDown, mention]);
-    // Arriving from the library's "Use in Playground": the entity is already
-    // in the prompt, ready for the rest of the sentence.
-    const [searchParams, setSearchParams] = useSearchParams();
-    useEffect(() => {
-        const use = searchParams.get('use');
-        if (!use) return;
-        setPrompt((current) => (current.includes(`@${use}`) ? current : `@${use} ${current}`));
-        setSearchParams((params) => { params.delete('use'); return params; }, { replace: true });
-        requestAnimationFrame(() => promptInputRef.current?.focus());
-    }, [searchParams, setSearchParams]);
-
     // Re-entry, not just retry: puts a run's entire request back into the
     // panel — prompt, model, size, quality, count and the images it was built
     // from — so the next attempt starts from what was asked and can be edited
@@ -396,7 +370,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const handleReuseRun = useCallback(async (run: GenerationRun) => {
         try {
             const sources = await runSourcesToReferences(run);
-            setPrompt(run.prompt);
+            // On a profile, a run's prompt starts with the fixed description —
+            // put back only the part that was typed for that run.
+            const base = basePrompt.trim();
+            setPrompt(base && run.prompt.startsWith(`${base}\n`) ? run.prompt.slice(base.length + 1) : run.prompt);
             setSelectedModel(run.model);
             setSize(run.size);
             setQuality(run.quality);
@@ -423,7 +400,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         } catch {
             showNotification(t('playground.reuse.failed', { defaultValue: 'Could not load this request' }), 'error');
         }
-    }, [models, runSourcesToReferences, setReferenceImages, showNotification, t]);
+    }, [basePrompt, models, runSourcesToReferences, setReferenceImages, showNotification, t]);
 
     // Opens one of a run's source images in the same lightbox its outputs use.
     const handleOpenRunSource = useCallback((run: GenerationRun, index: number) => {
@@ -481,6 +458,43 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     );
     const olderTimelineCount = timeline.length - visibleTimeline.length;
 
+    // On a profile's page the panel IS the profile: references, description
+    // and settings save as they change (like the Claude Code profile pages),
+    // so there is no "unsaved" state to manage. The prompt is per-run and
+    // never saved.
+    const profileId = profile?.id;
+    useEffect(() => {
+        if (!profileId) return;
+        updateImageProfile(profileId, { refs: referenceImages, basePrompt, model: selectedModel, size, quality, count });
+    }, [basePrompt, count, profileId, quality, referenceImages, selectedModel, size]);
+
+    const location = useLocation();
+    const [renaming, setRenaming] = useState(Boolean((location.state as { rename?: boolean } | null)?.rename));
+    const [nameDraft, setNameDraft] = useState(profile?.name ?? '');
+    const [confirmDeleteProfile, setConfirmDeleteProfile] = useState(false);
+    const commitRename = () => {
+        setRenaming(false);
+        const name = nameDraft.trim();
+        if (profileId && name) updateImageProfile(profileId, { name });
+        else setNameDraft(profile?.name ?? '');
+    };
+
+    // The common way a profile is born: set up a run that works here, then
+    // keep it. What was typed becomes the profile's fixed description.
+    const canSaveAsProfile = referenceImages.length > 0 || Boolean(prompt.trim());
+    const handleSaveAsProfile = () => {
+        const created = createImageProfile({
+            name: t('imageProfile.untitled', { defaultValue: 'Untitled profile' }),
+            refs: referenceImages,
+            basePrompt: prompt.trim(),
+            model: selectedModel,
+            size,
+            quality,
+            count,
+        });
+        navigate(`/image/profile/${created.id}`, { state: { rename: true } });
+    };
+
     const noModels = models.length === 0;
     // On lg the playground is a full-height workbench (the page gives it the
     // viewport): both panels fill the grid row, so they stay aligned without a
@@ -494,8 +508,51 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 size="full"
                 titleHeadingLevel={1}
                 sx={{ height: { lg: '100%' } }}
-                title={t('playground.imageTitle', { defaultValue: 'Image Playground' })}
-                subtitle={outputDir ? (
+                title={profile ? (
+                    renaming ? (
+                        <TextField
+                            autoFocus
+                            size="small"
+                            value={nameDraft}
+                            onChange={(event) => setNameDraft(event.target.value)}
+                            onBlur={commitRename}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter') commitRename();
+                                if (event.key === 'Escape') { setNameDraft(profile.name); setRenaming(false); }
+                            }}
+                            onFocus={(event) => event.target.select()}
+                            slotProps={{ htmlInput: { 'aria-label': t('imageProfile.name', { defaultValue: 'Profile name' }) } }}
+                            sx={{ width: 320, '& input': { fontSize: '1.25rem', fontWeight: 600, py: 0.5 } }}
+                        />
+                    ) : (
+                        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                            <span>{profile.name}</span>
+                            <Tooltip title={t('imageProfile.rename', { defaultValue: 'Rename' })}>
+                                <IconButton size="small" onClick={() => { setNameDraft(profile.name); setRenaming(true); }} aria-label={t('imageProfile.rename', { defaultValue: 'Rename' })}>
+                                    <Edit sx={{ fontSize: 18 }} />
+                                </IconButton>
+                            </Tooltip>
+                        </Stack>
+                    )
+                ) : t('playground.imageTitle', { defaultValue: 'Image Playground' })}
+                rightAction={profile ? (
+                    <Tooltip title={t('imageProfile.delete', { defaultValue: 'Delete profile' })}>
+                        <IconButton onClick={() => setConfirmDeleteProfile(true)} aria-label={t('imageProfile.delete', { defaultValue: 'Delete profile' })}>
+                            <DeleteOutline />
+                        </IconButton>
+                    </Tooltip>
+                ) : (
+                    <Tooltip title={t('imageProfile.saveAsHint', { defaultValue: 'Keep these references, description and settings as a profile with its own page' })}>
+                        <span>
+                            <Button variant="outlined" size="small" onClick={handleSaveAsProfile} disabled={!canSaveAsProfile}>
+                                {t('imageProfile.saveAs', { defaultValue: 'Save as profile' })}
+                            </Button>
+                        </span>
+                    </Tooltip>
+                )}
+                subtitle={profile ? (
+                    t('imageProfile.subtitle', { defaultValue: 'Changes to references and settings save to this profile. The prompt is for this run only.' })
+                ) : outputDir ? (
                     <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                         <Box component="span">
                             {t('playground.outputDirLabel', { defaultValue: 'Generated images are saved to' })}:
@@ -598,14 +655,31 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             scrolls inside its own outline — a fixed row count in a
                             height-constrained column is how text ends up painted
                             past the border. */}
+                        {profile && (
+                            <TextField
+                                multiline
+                                minRows={2}
+                                maxRows={4}
+                                fullWidth
+                                size="small"
+                                label={t('imageProfile.basePrompt', { defaultValue: 'Fixed description · sent with every run' })}
+                                placeholder={t('imageProfile.basePromptPlaceholder', { defaultValue: 'Who is in it, how it is drawn — what stays the same every time' })}
+                                value={basePrompt}
+                                onChange={(event) => setBasePrompt(event.target.value)}
+                                disabled={noModels}
+                            />
+                        )}
+
                         <TextField
-                            ref={promptFieldRef}
-                            inputRef={promptInputRef}
                             multiline
                             minRows={3}
                             fullWidth
-                            label={t('playground.prompt', { defaultValue: 'Prompt' })}
-                            placeholder={hasMaskedReference
+                            label={profile
+                                ? t('imageProfile.prompt', { defaultValue: 'This time' })
+                                : t('playground.prompt', { defaultValue: 'Prompt' })}
+                            placeholder={profile
+                                ? t('imageProfile.promptPlaceholder', { defaultValue: 'What changes this run — the action, the place, the moment…' })
+                                : hasMaskedReference
                                 ? t('playground.mask.promptPlaceholder', { defaultValue: 'Describe what should appear in the painted area…' })
                                 : hasSketchReference
                                 ? t('playground.sketch.promptPlaceholder', { defaultValue: 'Describe what this sketch should become…' })
@@ -613,9 +687,8 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     ? t('playground.referencePromptPlaceholder', { defaultValue: 'Describe what to make from these images…' })
                                     : t('playground.promptPlaceholder', { defaultValue: 'Describe the image you want to generate…' })}
                             value={prompt}
-                            onChange={mention.handleChange}
-                            onKeyDown={handlePanelPromptKeyDown}
-                            onBlur={mention.close}
+                            onChange={(event) => setPrompt(event.target.value)}
+                            onKeyDown={handlePromptKeyDown}
                             onDragOver={(event) => event.preventDefault()}
                             onDrop={(event) => {
                                 event.preventDefault();
@@ -686,28 +759,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     scrollbarWidth: 'thin',
                                 },
                             }}
-                        />
-
-                        <EntityMentionPicker
-                            anchorEl={promptFieldRef.current}
-                            open={mention.open}
-                            query={mention.query}
-                            candidates={mention.candidates}
-                            activeIndex={mention.activeIndex}
-                            onHover={mention.setActiveIndex}
-                            onSelect={mention.select}
-                            onCreate={(name) => {
-                                setPendingMention(mention.range());
-                                mention.close();
-                                setEntityDraft({ name });
-                            }}
-                        />
-                        <EntityCompositionPanel
-                            composition={composition}
-                            manualRefs={referenceImages.length}
-                            limit={MAX_EDIT_REFERENCE_IMAGES}
-                            onBeginMention={mention.begin}
-                            onOpenEntity={setEntityDraft}
                         />
 
                         <Box
@@ -852,22 +903,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     void handleUseAsReference(src);
                     setSelectedImage(null);
                 }}
-                onSaveAsEntity={(image) => {
-                    setEntityDraft({ refs: [image.src], prompt: image.prompt });
-                    setSelectedImage(null);
-                }}
-            />
-            <EntityEditorDialog
-                draft={entityDraft}
-                onClose={() => { setEntityDraft(null); setPendingMention(null); }}
-                onSaved={(entity) => {
-                    // Created from the picker: finish the mention that asked for it.
-                    if (pendingMention) {
-                        const { start, end } = pendingMention;
-                        setPrompt((current) => `${current.slice(0, start)}@${entity.name} ${current.slice(end)}`);
-                    }
-                    showNotification(t('imageEntity.saved', { defaultValue: 'Saved @{{name}}', name: entity.name }), 'success');
-                }}
             />
             <ImageGenGalleryDialog
                 open={galleryOpen}
@@ -907,6 +942,22 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 onClose={() => setPendingRemoval(null)}
                 onConfirm={handleConfirmRemoval}
             />
+            {profile && (
+                <ConfirmDialog
+                    open={confirmDeleteProfile}
+                    title={t('imageProfile.deleteTitle', { defaultValue: 'Delete {{name}}?', name: profile.name })}
+                    description={t('imageProfile.deleteBody', { defaultValue: 'Its references, description and settings are removed. Images already generated stay in the output folder.' })}
+                    confirmLabel={t('common.delete', { defaultValue: 'Delete' })}
+                    cancelLabel={t('common.cancel', { defaultValue: 'Cancel' })}
+                    confirmColor="error"
+                    onClose={() => setConfirmDeleteProfile(false)}
+                    onConfirm={() => {
+                        setConfirmDeleteProfile(false);
+                        removeImageProfile(profile.id);
+                        navigate('/image/playground');
+                    }}
+                />
+            )}
             <ImageSliceDialog
                 open={sliceTarget !== null}
                 src={sliceTarget?.src ?? null}
