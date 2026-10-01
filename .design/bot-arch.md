@@ -407,11 +407,14 @@ each page as a filter/tab instead of a nav level:
    │                                      a bot (shared dialog, platform +
    │                                      setup guide chosen inside it). No
    │                                      platform picker — see below.
-   └─ Notify    /notify                   purpose: read-only for now — shows
-      "which bot notifies me?"            mount status + route names derived
-                                           from each bot's scenarios JSON.
-                                           Attaching a NEW route has no
-                                           frontend surface yet (see below).
+   └─ IM Notify /notify                   purpose: every bot as one card,
+      "what can I send to, right          same shape as Remote Control —
+       now, and does it arrive?"          status line ("2 targets can
+                                          receive" / "Notify off") + switch,
+                                          and the route graph POST /notify →
+                                          platform → reachable chats, each
+                                          with its probe bench. No platform
+                                          picker.
 ```
 
 The user-facing name for the remote_agent purpose is **"Remote Control"**
@@ -426,13 +429,17 @@ vocabulary in §2/§9.
 A bot connection is just "a bot"; users pick a platform, not a channel.
 
 **Platform selection lives in the page, as a grid of equal-size tiles** —
-on Overview. Remote Control used one too until 2026-09, then dropped it:
+on Overview. Remote Control and IM Notify used one too until 2026-09, then dropped it:
 platform is a property of a bot, not a question the user brings to that
 page; most setups have one or two bots, so the picker mostly made people
 choose before they could see anything and advertised empty platforms. Its
 cards carry the platform icon instead, and the setup guide moved into
 `BotConfigDialog` next to the platform selector (add mode), which is where
-a platform actually gets chosen. Notify has no picker either. Several earlier approaches didn't survive
+a platform actually gets chosen. The two purpose pages share the card
+shape (platform icon, bot name, one status line, switch; off = quiet, no
+hatch), the "live first, order fixed at first load" list
+(`useStableBotOrder`), and a route graph that always runs left to right and
+scrolls sideways on its own when the card is narrow. Several earlier approaches didn't survive
 contact with real content and narrow viewports:
 
 - MUI `Tabs`: dropped the `active X / Y` count next to each platform, and —
