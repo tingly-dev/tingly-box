@@ -36,7 +36,7 @@ Audit date: 2026-10-01. LOC are non-test Go lines unless noted. Items marked
 - `max_tokens` and `thinking` rewrites each exist 2–3 times (`protocol/ops`, `protocol/transform`, `protocolserver/transform`).
 - `protocolserver/transform` has 2 importers → fold into `protocolserver` or `protocol/transform`.
 - `client`: xai/kimi/opencode/claude round-trippers are near-clones (header stamping); one-line `ListModels` delegates; `probe_rewrite.go` belongs in `internal/probe`.
-- Cross-cutting handler patterns: 4+ error shapes (~150 `gin.H{"error":…}`, 303 `"success": false`, `apierr` used in 3 files); no shared bind/validate (81 `ShouldBindJSON`); no shared pagination; CORS applied twice with different behaviour.
+- Cross-cutting handler patterns: 4+ error shapes (~150 `gin.H{"error":…}`, 303 `"success": false`, `apierr` used in 3 files); no shared bind/validate (81 `ShouldBindJSON`); no shared pagination; CORS applied twice (the two copies were byte-for-byte equivalent — the audit's first reading of "inconsistent" was wrong; the swagger-group copy never ran because the engine-level one answers OPTIONS via the NoRoute chain).
 - Tool layers: `toolengine.ServerToolExecutor` and `servertool.Executor` both "execute one MCP call"; two incompatible `ToolCall` types.
 - Session persistence in 4 places (`afk/session`, `agentboot/history`, `remote/session`, DB remote tables) — needs a field-level diff before merging.
 - OAuth CLI (`command/oauth.go`) re-implements flow orchestration and keeps its own `supportedProviders()` *(inferred)*.
@@ -74,17 +74,31 @@ Steps are stacked as separate commits on one branch, in this order.
 |---|---|---|
 | 0 | This document | done |
 | 1 | `internal/server/config` → `internal/config` (pure move, no behaviour change) | done |
-| 2 | Shared HTTP helpers: `apierr`, `bind`, `paginate`; remove duplicate CORS | todo |
-| 3 | `Module` interface + migrate module registration | todo |
-| 4 | Move non-HTTP modules out of `server/module/` (`tokenrefresh`, `quotawindow`, `providerquota`) | todo |
-| 5 | Split `guardrails_handler.go` into a module | todo |
-| 6 | Remove `webui_handler.go` / `guardrails_runtime_adapter.go` migration leftovers | todo |
+| 2 | Shared HTTP helpers: `apierr`, `bind`, `paginate`; remove duplicate CORS | done (see §4) |
+| 3 | `Module` interface + migrate module registration | done (see §4) |
+| 4 | Move non-HTTP modules out of `server/module/` (`tokenrefresh`, `quotawindow` → `internal/worker/`) | done (see §4) |
+| 5 | Split `guardrails_handler.go` into a module (`module/guardrails`) | done |
+| 6 | Remove `webui_handler.go` / `guardrails_runtime_adapter.go` migration leftovers | done (see §4) |
 | later | Delete `internal/task`; relocate `protocoltest`/`harness`; protocol/client dedupe; session-store diff; `pkg/notify` decision; fold `swagger`/`afk` | not started |
 
 ## 4. Decisions
 
 - Pure moves are done with `tingly-go move` so they stay type-checked and mechanical; each step is verified with `go build ./... && go vet ./...` plus tests of the touched packages.
 - Behaviour changes (error shape, CORS) are kept out of the pure-move commits.
+
+- **Error shapes are wire contract.** Three shapes exist (`{"error":{message,type}}`, `{"error":"…"}`, `{"success":false,"error":"…"}`) and the web UI consumes each, so `apierr` offers one named writer per shape (`Send`, `Message`, `Failure`) instead of unifying them. Unifying shapes is a separate, frontend-coordinated change. `bind.JSON` takes the writer so each endpoint keeps its shape.
+- Step 2 migrated every single-key `gin.H{"error": …}` / `{"success": false, "error": …}` response under `internal/server` (~460 lines) and 25 `ShouldBindJSON` sites that answered with the bare binder error. 33 other bind sites use bespoke messages and are left as-is; so are 11 multi-key error bodies.
+- `paginate.Limit/Offset` replaced four hand-rolled "default 100, clamp N" parsers (`log_handler` ×3, `model_request_handler`, `sharing`). `desk`'s limit keeps its own semantics (0 = service default, unclamped).
+- `sharing`'s private `sendError` was a copy of `apierr.Send`; removed.
+
+- **`providerquota` stays.** The audit listed it as a runtime service; it is an HTTP module (`handler.go` + `routes.go`) whose `Manager` is only a consumer-side interface. Only `tokenrefresh` and `quotawindow` were background workers, now under `internal/worker/`.
+- `tokenrefresh` depended on the OAuth HTTP module for one 3-line `oauth.Option`; `WithKimiDeviceID` moved to `ai/oauth/options.go`, which is where an `oauth.Option` belongs and removes the worker→HTTP-module edge.
+
+- **Step 6 findings.** `WebHandler` was not half-finished: it already carries status, log, request-trace and token handlers; only its comments (and `server.go`'s, which still said `aimodel`/`module/visionproxy`) were stale and are corrected. The unexported guardrails forwarders were inlined to `s.guardrailsState.*`; the exported ones stay because they implement `GuardrailsRuntime`. Static-asset serving moved to `webui_static.go`, `RuntimeAuditSink` to `server_control.go` next to its only use.
+
+- **Module contract.** `internal/server/module` defines `Routes` (Public/V1/V2 groups, Engine, Manager, UserAuth) and `Module` (`RegisterRoutes(*Routes)`) plus `Mount`. Every HTTP module's package-level `RegisterRoutes(...)` became a method on its handler; each picks the group it needs (V2 for skill/probe/provider/providercatalog, V1 otherwise, Engine for statusline/notify, Public+V1 for info). Handler-owned extras that used to be parameters moved onto the handler (`desk.Handler.WithGate`, `mcp` reads its own sub-handlers, `oauth` registers its callback routes itself, `notify.BotAPIHandler` is its own Module).
+- **One module list.** `server_modules.go` (`engineModules`, `apiModules`) is the only place that decides which modules exist and how they are built; the running server (`UseUIEndpoints`) and OpenAPI generation (`registerAllAPIRoutes`) both call it with a `schema` flag. Previously each kept its own ~100-line copy, which had already drifted (sharing/team, different `imbot` error handling, desk wiring). `schema` only matters where a runtime side effect must not happen at generation time (remote registries, live desk service) or where a route is documented unconditionally. `openapi.json` regenerates byte-identical before and after.
+- **Side effect removed:** `oauth.RegisterRoutes` used to call `router.Router.Use(authMiddleware)` on the shared `/api/v1` group, which already carried auth — so every module registered after oauth ran user-auth twice. Dropped; routes behave the same, one auth pass fewer. `debug` and `virtualmodel` still attach auth per route (`rt.UserAuth`) so the spec records it.
 
 ## 5. Open questions
 
