@@ -108,24 +108,38 @@ func enableThinking(req interface{}, effort string, budget int64) error {
 	return nil
 }
 
-const minAnthropicThinkingBudget int64 = 1024
+// MinAnthropicThinkingBudget is Anthropic's smallest accepted budget_tokens.
+const MinAnthropicThinkingBudget int64 = 1024
 
-// fitAnthropicThinkingBudget enforces Anthropic's wire constraints without
-// raising max_tokens: budget_tokens >= 1024 and budget_tokens < max_tokens.
-func fitAnthropicThinkingBudget(budget, maxTokens int64) (int64, error) {
-	if budget < minAnthropicThinkingBudget {
-		budget = minAnthropicThinkingBudget
+// FitAnthropicThinkingBudget enforces Anthropic's wire rule
+// 1024 <= budget_tokens < max_tokens without raising max_tokens (the operator
+// limit): a smaller budget is raised to 1024, one that reaches max_tokens is
+// capped to max_tokens-1. ok is false when max_tokens leaves no room for a
+// valid budget (<= 1024); the caller decides whether that turns thinking off
+// or is an error. It is the one budget fit both the rule's thinking step and
+// the target half's output limit use.
+func FitAnthropicThinkingBudget(budget, maxTokens int64) (fitted int64, ok bool) {
+	if budget < MinAnthropicThinkingBudget {
+		budget = MinAnthropicThinkingBudget
 	}
 	if maxTokens <= 0 {
-		return budget, nil
+		return budget, true
 	}
-	if maxTokens <= minAnthropicThinkingBudget {
-		return 0, fmt.Errorf("anthropic thinking requires max_tokens greater than %d (got %d)", minAnthropicThinkingBudget, maxTokens)
+	if maxTokens <= MinAnthropicThinkingBudget {
+		return 0, false
 	}
-	if budget >= maxTokens {
-		budget = maxTokens - 1
+	return min(budget, maxTokens-1), true
+}
+
+// fitAnthropicThinkingBudget is FitAnthropicThinkingBudget for a step that
+// asked for thinking explicitly (a rule level): an impossible limit is a local
+// error rather than a silently dropped request.
+func fitAnthropicThinkingBudget(budget, maxTokens int64) (int64, error) {
+	fitted, ok := FitAnthropicThinkingBudget(budget, maxTokens)
+	if !ok {
+		return 0, fmt.Errorf("anthropic thinking requires max_tokens greater than %d (got %d)", MinAnthropicThinkingBudget, maxTokens)
 	}
-	return budget, nil
+	return fitted, nil
 }
 
 // stripOpenAIThinkingExtra removes any non-standard `thinking` blob from an

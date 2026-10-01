@@ -7,6 +7,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
 	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
@@ -117,26 +118,16 @@ func (t *OutputLimitTransform) applyAnthropicBeta(req *anthropic.BetaMessageNewP
 	}
 }
 
-// minThinkingBudget is Anthropic's smallest accepted budget_tokens.
-const minThinkingBudget int64 = 1024
-
 // fitThinkingBudget keeps an Anthropic thinking budget within the model limit
-// and within Anthropic's wire rule 1024 <= budget_tokens < max_tokens, without
-// raising max_tokens (the hard operator limit). A budget over the model limit
-// shrinks to max(1024, limit/10); one that still reaches max_tokens is capped
-// to max_tokens-1. ok is false when max_tokens leaves no room for a valid
-// budget (<= 1024): thinking has to be turned off.
+// and within Anthropic's wire rule (ops.FitAnthropicThinkingBudget). A budget
+// over the model limit first shrinks to max(1024, limit/10). ok is false when
+// max_tokens leaves no room for a valid budget: the output limit is a passive
+// fit, so the caller turns thinking off rather than failing the request.
 func fitThinkingBudget(budget, maxTokens, maxAllowed int64) (fitted int64, ok bool) {
 	if budget > maxAllowed {
-		budget = max(minThinkingBudget, maxAllowed/10)
+		budget = max(ops.MinAnthropicThinkingBudget, maxAllowed/10)
 	}
-	if maxTokens <= 0 || budget < maxTokens {
-		return budget, true
-	}
-	if maxTokens <= minThinkingBudget {
-		return 0, false
-	}
-	return maxTokens - 1, true
+	return ops.FitAnthropicThinkingBudget(budget, maxTokens)
 }
 
 // applyOpenAIChat caps both of Chat Completions' competing limit fields:

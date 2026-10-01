@@ -95,6 +95,7 @@ func TestOutputLimitTransform_ThinkingBudget(t *testing.T) {
 		{name: "budget equal to max_tokens capped below it", maxTokens: 4096, budget: 4096, wantBudget: 4095},
 		{name: "max_tokens 1024 leaves no room after shrinking: thinking off", maxTokens: 1024, budget: 10240, wantBudget: 0},
 		{name: "max_tokens leaves no room: thinking off", maxTokens: 512, budget: 4096, wantBudget: 0},
+		{name: "budget under the 1024 minimum raised to it", maxTokens: 8000, budget: 500, wantBudget: 1024},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

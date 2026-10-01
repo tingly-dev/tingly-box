@@ -103,9 +103,13 @@ func transformRequest[T transform.RequestUnionConstraint](ph *ProtocolHandler, c
 	target, provider := plan.Target, plan.Provider
 	// Build transform chain with recording support. The rule-driven pre-Base and
 	// preVendor transforms are slotted into their canonical positions by the builder.
-	chain := ph.buildTransformChain(c, plan)
+	// A Stage-served plan builds only the source half: the pipeline builds the
+	// target half itself (targetTransformStage).
+	var chain *transform.TransformChain
 	if plan.servedByStage() {
 		chain = transform.NewTransformChain(ph.sourceTransforms(c, plan))
+	} else {
+		chain = ph.buildTransformChain(c, plan)
 	}
 
 	var scenarioFlags *typ.ScenarioFlags
