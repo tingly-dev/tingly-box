@@ -9,6 +9,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
+	"github.com/tingly-dev/tingly-box/internal/server/module/paginate"
 )
 
 // ModelRequestEvent is a single log line belonging to one model request,
@@ -84,11 +86,11 @@ type requestGroup struct {
 //   - scenario / provider / status: optional exact-match filters
 func (h *WebHandler) GetModelRequests(c *gin.Context) {
 	if h.deps.MultiLogger == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Logger not available"})
+		apierr.Message(c, http.StatusServiceUnavailable, "Logger not available")
 		return
 	}
 
-	limit := parseLimit(c.DefaultQuery("limit", "100"))
+	limit := paginate.Limit(c, 100, 1000)
 	scenarioFilter := c.Query("scenario")
 	providerFilter := c.Query("provider")
 	statusFilter := c.Query("status")
@@ -133,20 +135,20 @@ func (h *WebHandler) GetModelRequests(c *gin.Context) {
 // GetModelRequestDetail returns the full event timeline for a single request id.
 func (h *WebHandler) GetModelRequestDetail(c *gin.Context) {
 	if h.deps.MultiLogger == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Logger not available"})
+		apierr.Message(c, http.StatusServiceUnavailable, "Logger not available")
 		return
 	}
 
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "request id is required"})
+		apierr.Message(c, http.StatusBadRequest, "request id is required")
 		return
 	}
 
 	groups := h.collectRequestGroups()
 	g, ok := groups[id]
 	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"error": "request not found"})
+		apierr.Message(c, http.StatusNotFound, "request not found")
 		return
 	}
 
@@ -301,17 +303,6 @@ func applyToSummary(g *requestGroup, source obs.LogSource, entry *logrus.Entry) 
 			g.summary.FailoverPath += to
 		}
 	}
-}
-
-func parseLimit(s string) int {
-	limit, err := strconv.Atoi(s)
-	if err != nil || limit <= 0 {
-		limit = 100
-	}
-	if limit > 1000 {
-		limit = 1000
-	}
-	return limit
 }
 
 func stringField(data map[string]interface{}, key string) string {

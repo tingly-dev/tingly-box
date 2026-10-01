@@ -21,6 +21,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 
 	"github.com/tingly-dev/tingly-box/pkg/notify"
 	systemnotify "github.com/tingly-dev/tingly-box/pkg/notify/provider/system"
@@ -67,7 +68,7 @@ func (h *Handler) Notify(c *gin.Context) {
 
 	var payload map[string]any
 	if err := c.ShouldBindJSON(&payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		apierr.Message(c, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -122,7 +123,7 @@ func (h *Handler) Wait(c *gin.Context) {
 	}
 	requestID := c.Param("request_id")
 	if requestID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing request_id"})
+		apierr.Message(c, http.StatusBadRequest, "missing request_id")
 		return
 	}
 

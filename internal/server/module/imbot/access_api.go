@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/remote/access"
@@ -132,7 +133,7 @@ func routeFromRequest(botUUID, routeID string, req RouteWriteRequest) access.Rou
 
 func (h *Handler) requireAccess(c *gin.Context) bool {
 	if h.accessStore == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "bot access store not available"})
+		apierr.Message(c, http.StatusServiceUnavailable, "bot access store not available")
 		return false
 	}
 	return true
@@ -140,13 +141,13 @@ func (h *Handler) requireAccess(c *gin.Context) bool {
 func accessError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, db.ErrAccessTargetNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": "target not found"})
+		apierr.Message(c, http.StatusNotFound, "target not found")
 	case errors.Is(err, db.ErrInvalidCapability), errors.Is(err, db.ErrInvalidPermission):
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		apierr.Message(c, http.StatusUnprocessableEntity, err.Error())
 	case strings.HasPrefix(err.Error(), "target_has_routes"):
 		c.JSON(http.StatusConflict, gin.H{"error": "target_has_routes", "details": err.Error()})
 	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierr.Message(c, http.StatusInternalServerError, err.Error())
 	}
 }
 
@@ -168,18 +169,18 @@ func (h *Handler) PutCapability(c *gin.Context) {
 	}
 	name := access.CapabilityName(c.Param("capability"))
 	if !name.Valid() {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "unknown capability"})
+		apierr.Message(c, http.StatusUnprocessableEntity, "unknown capability")
 		return
 	}
 	var req CapabilityUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		apierr.Message(c, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	capability := access.BotCapability{BotUUID: c.Param("bot"), Name: name, Enabled: req.Enabled, Config: req.Config}
 	botSettings, err := h.store.GetSettingsByUUID(capability.BotUUID)
 	if err != nil || botSettings.UUID == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "bot not found"})
+		apierr.Message(c, http.StatusNotFound, "bot not found")
 		return
 	}
 	if err := h.accessStore.PutCapability(c.Request.Context(), capability); err != nil {
@@ -254,7 +255,7 @@ func (h *Handler) GetDirectChat(c *gin.Context) {
 		return
 	}
 	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"error": "chat not found"})
+		apierr.Message(c, http.StatusNotFound, "chat not found")
 		return
 	}
 	p, err := h.accessStore.ListDirectChatPermissions(c.Request.Context(), c.Param("bot"), chat.ID)
@@ -270,7 +271,7 @@ func (h *Handler) PutDirectChatBlocked(c *gin.Context) {
 	}
 	var req BlockedUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.Blocked == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "blocked is required"})
+		apierr.Message(c, http.StatusBadRequest, "blocked is required")
 		return
 	}
 	if err := h.accessStore.SetDirectChatBlocked(c.Request.Context(), c.Param("bot"), c.Param("chat"), *req.Blocked); err != nil {
@@ -288,7 +289,7 @@ func (h *Handler) PutDirectChatPermissions(c *gin.Context) {
 	}
 	var req PermissionsUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil || len(req.Permissions) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "permissions is required"})
+		apierr.Message(c, http.StatusBadRequest, "permissions is required")
 		return
 	}
 	perms := make([]access.Permission, 0, len(req.Permissions))
@@ -308,7 +309,7 @@ func (h *Handler) PutDirectChatPermission(c *gin.Context) {
 	}
 	var req PermissionUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		apierr.Message(c, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if err := h.accessStore.SetDirectChatPermission(c.Request.Context(), c.Param("bot"), c.Param("chat"), access.CapabilityName(c.Param("capability")), access.ActionName(c.Param("action")), req.Effect); err != nil {
@@ -359,7 +360,7 @@ func (h *Handler) GetGroup(c *gin.Context) {
 		return
 	}
 	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"error": "group not found"})
+		apierr.Message(c, http.StatusNotFound, "group not found")
 		return
 	}
 	caps, err := h.accessStore.ListGroupCapabilities(c.Request.Context(), c.Param("bot"), group.ID)
@@ -380,7 +381,7 @@ func (h *Handler) PutGroupBlocked(c *gin.Context) {
 	}
 	var req BlockedUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.Blocked == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "blocked is required"})
+		apierr.Message(c, http.StatusBadRequest, "blocked is required")
 		return
 	}
 	if err := h.accessStore.SetGroupBlocked(c.Request.Context(), c.Param("bot"), c.Param("group"), *req.Blocked); err != nil {
@@ -395,7 +396,7 @@ func (h *Handler) PutGroupCapability(c *gin.Context) {
 	}
 	var req PermissionUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		apierr.Message(c, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if err := h.accessStore.SetGroupCapability(c.Request.Context(), c.Param("bot"), c.Param("group"), access.CapabilityName(c.Param("capability")), req.Effect); err != nil {
@@ -431,7 +432,7 @@ func (h *Handler) PutGroupActor(c *gin.Context) {
 	}
 	var req GroupActorPutRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.ExternalActorID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "external_actor_id is required"})
+		apierr.Message(c, http.StatusBadRequest, "external_actor_id is required")
 		return
 	}
 	actor, err := h.accessStore.AddGroupActor(c.Request.Context(), c.Param("bot"), c.Param("group"), req.ExternalActorID, req.DisplayName, req.Label)
@@ -447,7 +448,7 @@ func (h *Handler) PutGroupActorPermission(c *gin.Context) {
 	}
 	var req PermissionUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		apierr.Message(c, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if err := h.accessStore.SetGroupActorPermission(c.Request.Context(), c.Param("bot"), c.Param("group"), c.Param("actor"), access.CapabilityName(c.Param("capability")), access.ActionName(c.Param("action")), req.Effect); err != nil {
@@ -469,12 +470,12 @@ func (h *Handler) DeleteGroupActor(c *gin.Context) {
 
 func (h *Handler) authorizeCheck(c *gin.Context, target access.TargetRef) {
 	if h.authorizer == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "authorizer unavailable"})
+		apierr.Message(c, http.StatusServiceUnavailable, "authorizer unavailable")
 		return
 	}
 	var req AuthorizeCheckRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		apierr.Message(c, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	decision := h.authorizer.Evaluate(c.Request.Context(), access.AuthorizationRequest{BotUUID: c.Param("bot"), Target: target, ActorID: req.ActorID, Capability: req.Capability, Action: req.Action, RouteID: req.RouteID, RequestID: req.RequestID})
@@ -508,7 +509,7 @@ func (h *Handler) GetRoute(c *gin.Context) {
 		return
 	}
 	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"error": "route not found"})
+		apierr.Message(c, http.StatusNotFound, "route not found")
 		return
 	}
 	c.JSON(http.StatusOK, RouteResponse{Route: route})
@@ -519,7 +520,7 @@ func (h *Handler) CreateRoute(c *gin.Context) {
 	}
 	var req RouteWriteRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.Name == "" || req.Source == "" || req.Target.ID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name, source and target are required"})
+		apierr.Message(c, http.StatusBadRequest, "name, source and target are required")
 		return
 	}
 	route, err := h.accessStore.CreateRoute(c.Request.Context(), routeFromRequest(c.Param("bot"), "", req), req.GrantNotify)
@@ -535,7 +536,7 @@ func (h *Handler) UpdateRoute(c *gin.Context) {
 	}
 	var req RouteWriteRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.Name == "" || req.Source == "" || req.Target.ID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name, source and target are required"})
+		apierr.Message(c, http.StatusBadRequest, "name, source and target are required")
 		return
 	}
 	route, err := h.accessStore.UpdateRoute(c.Request.Context(), routeFromRequest(c.Param("bot"), c.Param("route"), req), req.GrantNotify)

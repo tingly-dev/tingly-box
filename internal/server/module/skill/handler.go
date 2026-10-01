@@ -5,6 +5,8 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
+	"github.com/tingly-dev/tingly-box/internal/server/module/bind"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -23,10 +25,7 @@ func NewHandler(manager *SkillManager) *Handler {
 // GetSkillLocations returns all skill locations
 func (h *Handler) GetSkillLocations(c *gin.Context) {
 	if h.manager == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Skill manager not initialized",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Skill manager not initialized")
 		return
 	}
 
@@ -41,10 +40,7 @@ func (h *Handler) GetSkillLocations(c *gin.Context) {
 // AddSkillLocation adds a new skill location
 func (h *Handler) AddSkillLocation(c *gin.Context) {
 	if h.manager == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Skill manager not initialized",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Skill manager not initialized")
 		return
 	}
 
@@ -54,20 +50,13 @@ func (h *Handler) AddSkillLocation(c *gin.Context) {
 		IDESource typ.IDESource `json:"ide_source" binding:"required"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+	if !bind.JSON(c, &req, apierr.Failure) {
 		return
 	}
 
 	location, err := h.manager.AddLocation(req.Name, req.Path, req.IDESource)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -81,27 +70,18 @@ func (h *Handler) AddSkillLocation(c *gin.Context) {
 // RemoveSkillLocation removes a skill location
 func (h *Handler) RemoveSkillLocation(c *gin.Context) {
 	if h.manager == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Skill manager not initialized",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Skill manager not initialized")
 		return
 	}
 
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Location ID is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Location ID is required")
 		return
 	}
 
 	if err := h.manager.RemoveLocation(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -114,28 +94,19 @@ func (h *Handler) RemoveSkillLocation(c *gin.Context) {
 // GetSkillLocation retrieves a specific skill location
 func (h *Handler) GetSkillLocation(c *gin.Context) {
 	if h.manager == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Skill manager not initialized",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Skill manager not initialized")
 		return
 	}
 
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Location ID is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Location ID is required")
 		return
 	}
 
 	location, err := h.manager.GetLocation(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		apierr.Failure(c, http.StatusNotFound, err.Error())
 		return
 	}
 
@@ -148,28 +119,19 @@ func (h *Handler) GetSkillLocation(c *gin.Context) {
 // RefreshSkillLocation scans a location for updated skill list
 func (h *Handler) RefreshSkillLocation(c *gin.Context) {
 	if h.manager == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Skill manager not initialized",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Skill manager not initialized")
 		return
 	}
 
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Location ID is required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "Location ID is required")
 		return
 	}
 
 	result, err := h.manager.ScanLocation(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -183,19 +145,13 @@ func (h *Handler) RefreshSkillLocation(c *gin.Context) {
 // DiscoverIdes scans the home directory for installed IDEs with skills
 func (h *Handler) DiscoverIdes(c *gin.Context) {
 	if h.manager == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Skill manager not initialized",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Skill manager not initialized")
 		return
 	}
 
 	result, err := h.manager.DiscoverIdes()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -208,10 +164,7 @@ func (h *Handler) DiscoverIdes(c *gin.Context) {
 // ImportSkillLocations imports discovered skill locations
 func (h *Handler) ImportSkillLocations(c *gin.Context) {
 	if h.manager == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Skill manager not initialized",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Skill manager not initialized")
 		return
 	}
 
@@ -219,11 +172,7 @@ func (h *Handler) ImportSkillLocations(c *gin.Context) {
 		Locations []typ.SkillLocation `json:"locations" binding:"required"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+	if !bind.JSON(c, &req, apierr.Failure) {
 		return
 	}
 
@@ -262,27 +211,18 @@ func (h *Handler) GetSkillContent(c *gin.Context) {
 	skillPath := c.Query("skill_path")
 
 	if locationID == "" || (skillID == "" && skillPath == "") {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "location_id and either skill_id or skill_path are required",
-		})
+		apierr.Failure(c, http.StatusBadRequest, "location_id and either skill_id or skill_path are required")
 		return
 	}
 
 	if h.manager == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Skill manager not initialized",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Skill manager not initialized")
 		return
 	}
 
 	skill, err := h.manager.GetSkillContent(locationID, skillID, skillPath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -296,19 +236,13 @@ func (h *Handler) GetSkillContent(c *gin.Context) {
 // This is a comprehensive scan that checks all default IDE locations
 func (h *Handler) ScanIdes(c *gin.Context) {
 	if h.manager == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Skill manager not initialized",
-		})
+		apierr.Failure(c, http.StatusInternalServerError, "Skill manager not initialized")
 		return
 	}
 
 	result, err := h.manager.ScanIdes()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
+		apierr.Failure(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 

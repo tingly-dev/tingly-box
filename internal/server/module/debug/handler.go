@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 )
 
 // The two genuinely expensive operations on this surface — a forced double
@@ -93,7 +94,7 @@ func (h *Handler) GetHeapProfile(c *gin.Context) {
 		// Unlike memstats, a profile has no cheap degraded form — serving it
 		// IS the cost — so a throttled request is rejected outright.
 		c.Header("Retry-After", "1")
-		c.JSON(http.StatusTooManyRequests, gin.H{"error": "heap profile throttled; retry after 1s"})
+		apierr.Message(c, http.StatusTooManyRequests, "heap profile throttled; retry after 1s")
 		return
 	}
 	if c.Query("gc") == "true" {
@@ -101,7 +102,7 @@ func (h *Handler) GetHeapProfile(c *gin.Context) {
 	}
 	profile := pprof.Lookup("heap")
 	if profile == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "heap profile unavailable"})
+		apierr.Message(c, http.StatusInternalServerError, "heap profile unavailable")
 		return
 	}
 	c.Header("Content-Type", "application/octet-stream")

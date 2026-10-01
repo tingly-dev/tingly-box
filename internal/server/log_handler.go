@@ -2,12 +2,13 @@ package server
 
 import (
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
+	"github.com/tingly-dev/tingly-box/internal/server/module/paginate"
 )
 
 // LogEntry represents a log entry for API response
@@ -72,21 +73,12 @@ func convertLogrusEntry(entry *logrus.Entry) LogEntry {
 //   - since: RFC3339 timestamp to filter entries after this time
 func (h *WebHandler) GetLogs(c *gin.Context) {
 	if h.deps.MemoryLogMW == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Memory log middleware not available",
-		})
+		apierr.Message(c, http.StatusServiceUnavailable, "Memory log middleware not available")
 		return
 	}
 
 	// Parse query parameters
-	limitStr := c.DefaultQuery("limit", "100")
-	limit, err := strconv.Atoi(limitStr)
-	if err != nil || limit <= 0 {
-		limit = 100
-	}
-	if limit > 500 {
-		limit = 500 // Max limit
-	}
+	limit := paginate.Limit(c, 100, 500)
 
 	levelStr := c.Query("level")
 	sinceStr := c.Query("since")
@@ -97,9 +89,7 @@ func (h *WebHandler) GetLogs(c *gin.Context) {
 	if levelStr != "" {
 		level, err := logrus.ParseLevel(levelStr)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "Invalid log level",
-			})
+			apierr.Message(c, http.StatusBadRequest, "Invalid log level")
 			return
 		}
 		entries = h.deps.MemoryLogMW.GetEntriesByLevel(level)
@@ -107,9 +97,7 @@ func (h *WebHandler) GetLogs(c *gin.Context) {
 		// Filter by time if specified
 		since, err := time.Parse(time.RFC3339, sinceStr)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "Invalid since timestamp, use RFC3339 format",
-			})
+			apierr.Message(c, http.StatusBadRequest, "Invalid since timestamp, use RFC3339 format")
 			return
 		}
 		entries = h.deps.MemoryLogMW.GetEntriesSince(since)
@@ -136,9 +124,7 @@ func (h *WebHandler) GetLogs(c *gin.Context) {
 // ClearLogs clears all log entries
 func (h *WebHandler) ClearLogs(c *gin.Context) {
 	if h.deps.MemoryLogMW == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Memory log middleware not available",
-		})
+		apierr.Message(c, http.StatusServiceUnavailable, "Memory log middleware not available")
 		return
 	}
 
@@ -151,9 +137,7 @@ func (h *WebHandler) ClearLogs(c *gin.Context) {
 // GetLogStats returns statistics about the logs
 func (h *WebHandler) GetLogStats(c *gin.Context) {
 	if h.deps.MemoryLogMW == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Memory log middleware not available",
-		})
+		apierr.Message(c, http.StatusServiceUnavailable, "Memory log middleware not available")
 		return
 	}
 
@@ -192,22 +176,13 @@ type SystemLogsResponse struct {
 //   - limit: maximum number of recent entries to return (default: 100, max: 1000)
 func (h *WebHandler) GetSystemLogs(c *gin.Context) {
 	if h.deps.MultiLogger == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "System logger not available",
-		})
+		apierr.Message(c, http.StatusServiceUnavailable, "System logger not available")
 		return
 	}
 
 	// Parse query parameters
 	// limit - controls how many recent entries to return
-	limitStr := c.DefaultQuery("limit", "100")
-	limit, err := strconv.Atoi(limitStr)
-	if err != nil || limit <= 0 {
-		limit = 100
-	}
-	if limit > 1000 {
-		limit = 1000 // Max limit
-	}
+	limit := paginate.Limit(c, 100, 1000)
 
 	// Read logs from JSON log file, keeping system logs and HTTP access logs.
 	// AI model endpoint requests are included here; their detailed timeline
@@ -215,9 +190,7 @@ func (h *WebHandler) GetSystemLogs(c *gin.Context) {
 	entries, err := h.deps.MultiLogger.ReadJSONLogsBySource(limit, obs.LogSourceSystem, obs.LogSourceAction, obs.LogSourceUnknown, obs.LogSourceHTTP)
 	if err != nil {
 		logrus.Errorf("Failed to read system logs: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to read system logs",
-		})
+		apierr.Message(c, http.StatusInternalServerError, "Failed to read system logs")
 		return
 	}
 
@@ -241,9 +214,7 @@ func (h *WebHandler) GetSystemLogs(c *gin.Context) {
 // GetSystemLogStats returns statistics about the system logs
 func (h *WebHandler) GetSystemLogStats(c *gin.Context) {
 	if h.deps.MultiLogger == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "System logger not available",
-		})
+		apierr.Message(c, http.StatusServiceUnavailable, "System logger not available")
 		return
 	}
 
@@ -254,9 +225,7 @@ func (h *WebHandler) GetSystemLogStats(c *gin.Context) {
 	entries, err := h.deps.MultiLogger.ReadJSONLogs(500)
 	if err != nil {
 		logrus.Errorf("Failed to read system logs for stats: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to read system logs",
-		})
+		apierr.Message(c, http.StatusInternalServerError, "Failed to read system logs")
 		return
 	}
 
@@ -276,9 +245,7 @@ func (h *WebHandler) GetSystemLogStats(c *gin.Context) {
 // GetSystemLogLevel returns the current system log level
 func (h *WebHandler) GetSystemLogLevel(c *gin.Context) {
 	if h.deps.MultiLogger == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "System logger not available",
-		})
+		apierr.Message(c, http.StatusServiceUnavailable, "System logger not available")
 		return
 	}
 
@@ -301,25 +268,19 @@ type SystemLogLevelResponse struct {
 // SetSystemLogLevel sets the minimum log level for system logs
 func (h *WebHandler) SetSystemLogLevel(c *gin.Context) {
 	if h.deps.MultiLogger == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "System logger not available",
-		})
+		apierr.Message(c, http.StatusServiceUnavailable, "System logger not available")
 		return
 	}
 
 	var req SystemLogLevelRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid request: " + err.Error(),
-		})
+		apierr.Message(c, http.StatusBadRequest, "Invalid request: "+err.Error())
 		return
 	}
 
 	level, err := logrus.ParseLevel(req.Level)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid log level, use: debug, info, warn, error, fatal, panic",
-		})
+		apierr.Message(c, http.StatusBadRequest, "Invalid log level, use: debug, info, warn, error, fatal, panic")
 		return
 	}
 
@@ -354,21 +315,12 @@ type ActionHistoryResponse struct {
 //   - limit: maximum number of recent entries to return (default: 100, max: 1000)
 func (h *WebHandler) GetActionHistory(c *gin.Context) {
 	if h.deps.MultiLogger == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Logger not available",
-		})
+		apierr.Message(c, http.StatusServiceUnavailable, "Logger not available")
 		return
 	}
 
 	// Parse query parameters
-	limitStr := c.DefaultQuery("limit", "100")
-	limit, err := strconv.Atoi(limitStr)
-	if err != nil || limit <= 0 {
-		limit = 100
-	}
-	if limit > 1000 {
-		limit = 1000 // Max limit
-	}
+	limit := paginate.Limit(c, 100, 1000)
 
 	// Get action scoped logger
 	actionLogger := h.deps.MultiLogger.WithSource(obs.LogSourceAction)
@@ -407,9 +359,7 @@ func (h *WebHandler) GetActionHistory(c *gin.Context) {
 // GetActionStats returns statistics about user actions
 func (h *WebHandler) GetActionStats(c *gin.Context) {
 	if h.deps.MultiLogger == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Logger not available",
-		})
+		apierr.Message(c, http.StatusServiceUnavailable, "Logger not available")
 		return
 	}
 

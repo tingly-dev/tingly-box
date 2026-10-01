@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	pkgotel "github.com/tingly-dev/tingly-box/internal/otel"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 )
 
 // Trace API — read side of the in-memory SpanStore (.design/otel.md §7.4).
@@ -26,14 +27,14 @@ type TraceDetailResponse struct {
 func (s *Server) GetTrace(c *gin.Context) {
 	store := s.otelSetup.SpanStore()
 	if store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "tracing is not initialized"})
+		apierr.Message(c, http.StatusServiceUnavailable, "tracing is not initialized")
 		return
 	}
 
 	traceID := c.Param("trace_id")
 	spans, dropped, ok := store.GetTrace(traceID)
 	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"error": "trace not found (never sampled, or evicted from the in-memory buffer)"})
+		apierr.Message(c, http.StatusNotFound, "trace not found (never sampled, or evicted from the in-memory buffer)")
 		return
 	}
 	c.JSON(http.StatusOK, TraceDetailResponse{TraceID: traceID, Spans: spans, DroppedSpans: dropped})

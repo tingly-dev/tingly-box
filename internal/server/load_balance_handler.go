@@ -7,6 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/routing"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
+	"github.com/tingly-dev/tingly-box/internal/server/module/bind"
 
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -83,7 +85,7 @@ func (api *LoadBalancerAPI) GetRule(c *gin.Context) {
 
 	rule := api.config.GetRuleByUUID(ruleId)
 	if rule == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
+		apierr.Message(c, http.StatusNotFound, "Rule not found")
 		return
 	}
 
@@ -96,7 +98,7 @@ func (api *LoadBalancerAPI) GetRuleSummary(c *gin.Context) {
 
 	rule := api.config.GetRuleByUUID(ruleId)
 	if rule == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
+		apierr.Message(c, http.StatusNotFound, "Rule not found")
 		return
 	}
 
@@ -117,20 +119,19 @@ func (api *LoadBalancerAPI) UpdateRuleTactic(c *gin.Context) {
 		Params json.RawMessage `json:"params,omitempty"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bind.JSON(c, &req, apierr.Message) {
 		return
 	}
 
 	tacticType, ok := loadbalance.ParseTacticTypeStrict(req.Tactic)
 	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported tactic: " + req.Tactic})
+		apierr.Message(c, http.StatusBadRequest, "Unsupported tactic: "+req.Tactic)
 		return
 	}
 
 	rule := api.config.GetRuleByUUID(ruleId)
 	if rule == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
+		apierr.Message(c, http.StatusNotFound, "Rule not found")
 		return
 	}
 
@@ -143,18 +144,18 @@ func (api *LoadBalancerAPI) UpdateRuleTactic(c *gin.Context) {
 			"params": req.Params,
 		})
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encode tactic: " + err.Error()})
+			apierr.Message(c, http.StatusInternalServerError, "Failed to encode tactic: "+err.Error())
 			return
 		}
 		if err := json.Unmarshal(payload, &tactic); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tactic params: " + err.Error()})
+			apierr.Message(c, http.StatusBadRequest, "Invalid tactic params: "+err.Error())
 			return
 		}
 	}
 
 	rule.LBTactic = tactic
 	if err := api.config.UpdateRequestConfigByUUID(ruleId, *rule); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update rule: " + err.Error()})
+		apierr.Message(c, http.StatusInternalServerError, "Failed to update rule: "+err.Error())
 		return
 	}
 
@@ -168,7 +169,7 @@ func (api *LoadBalancerAPI) GetRuleStats(c *gin.Context) {
 
 	rule := api.config.GetRuleByUUID(ruleId)
 	if rule == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
+		apierr.Message(c, http.StatusNotFound, "Rule not found")
 		return
 	}
 
@@ -191,7 +192,7 @@ func (api *LoadBalancerAPI) ClearRuleStats(c *gin.Context) {
 
 	rule := api.config.GetRuleByUUID(ruleId)
 	if rule == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
+		apierr.Message(c, http.StatusNotFound, "Rule not found")
 		return
 	}
 
@@ -208,7 +209,7 @@ func (api *LoadBalancerAPI) ClearRuleStats(c *gin.Context) {
 func (api *LoadBalancerAPI) findRuleService(c *gin.Context, ruleId, serviceId string) *loadbalance.Service {
 	rule := api.config.GetRuleByUUID(ruleId)
 	if rule == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
+		apierr.Message(c, http.StatusNotFound, "Rule not found")
 		return nil
 	}
 
@@ -218,7 +219,7 @@ func (api *LoadBalancerAPI) findRuleService(c *gin.Context, ruleId, serviceId st
 		}
 	}
 
-	c.JSON(http.StatusNotFound, gin.H{"error": "Service not found in rule"})
+	apierr.Message(c, http.StatusNotFound, "Service not found in rule")
 	return nil
 }
 
@@ -268,7 +269,7 @@ func (api *LoadBalancerAPI) GetCurrentService(c *gin.Context) {
 
 	rule := api.config.GetRuleByUUID(ruleId)
 	if rule == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
+		apierr.Message(c, http.StatusNotFound, "Rule not found")
 		return
 	}
 
@@ -276,12 +277,12 @@ func (api *LoadBalancerAPI) GetCurrentService(c *gin.Context) {
 	// consume the breaker's half-open probe slot meant for real traffic.
 	selectedService, err := api.loadBalancer.PreviewService(rule)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to select service: " + err.Error()})
+		apierr.Message(c, http.StatusInternalServerError, "Failed to select service: "+err.Error())
 		return
 	}
 
 	if selectedService == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "No available service"})
+		apierr.Message(c, http.StatusNotFound, "No available service")
 		return
 	}
 
@@ -308,7 +309,7 @@ func (api *LoadBalancerAPI) GetServicesHealth(c *gin.Context) {
 
 	rule := api.config.GetRuleByUUID(ruleId)
 	if rule == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
+		apierr.Message(c, http.StatusNotFound, "Rule not found")
 		return
 	}
 
@@ -378,13 +379,13 @@ func (api *LoadBalancerAPI) ResetServiceHealth(c *gin.Context) {
 
 	healthFilter := api.loadBalancer.HealthFilter()
 	if healthFilter == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Health monitoring not available"})
+		apierr.Message(c, http.StatusServiceUnavailable, "Health monitoring not available")
 		return
 	}
 
 	monitor := healthFilter.GetHealthMonitor()
 	if monitor == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Health monitoring not available"})
+		apierr.Message(c, http.StatusServiceUnavailable, "Health monitoring not available")
 		return
 	}
 

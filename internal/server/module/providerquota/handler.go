@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
@@ -60,9 +61,7 @@ func (h *Handler) available(c *gin.Context) bool {
 	if h.manager != nil {
 		return true
 	}
-	c.JSON(http.StatusServiceUnavailable, gin.H{
-		"error": "quota tracking is not enabled on this tingly-box",
-	})
+	apierr.Message(c, http.StatusServiceUnavailable, "quota tracking is not enabled on this tingly-box")
 	return false
 }
 
@@ -95,7 +94,7 @@ func (h *Handler) QuotaHistory(c *gin.Context) {
 	}
 	var req HistoryRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid history query"})
+		apierr.Message(c, http.StatusBadRequest, "invalid history query")
 		return
 	}
 	query := quota.HistoryQuery{ProviderUUID: req.ProviderUUID, Limit: req.Limit, Daily: req.Daily}
@@ -114,13 +113,13 @@ func (h *Handler) QuotaHistory(c *gin.Context) {
 		query.EndTime, err = parseTime(req.EndTime)
 	}
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "start_time and end_time must be ISO 8601 timestamps"})
+		apierr.Message(c, http.StatusBadRequest, "start_time and end_time must be ISO 8601 timestamps")
 		return
 	}
 	usages, err := h.manager.QuotaHistory(c.Request.Context(), query)
 	if err != nil {
 		h.logger.WithError(err).Error("failed to list quota history")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list quota history"})
+		apierr.Message(c, http.StatusInternalServerError, "failed to list quota history")
 		return
 	}
 	c.JSON(http.StatusOK, ListQuotaResponse{Meta: MetaData{Total: len(usages), UpdatedAt: time.Now()}, Data: usages})
@@ -137,9 +136,7 @@ func (h *Handler) ListQuota(c *gin.Context) {
 	usages, err := h.manager.ListQuota(ctx)
 	if err != nil {
 		h.logger.WithError(err).Error("failed to list quota")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to list quota",
-		})
+		apierr.Message(c, http.StatusInternalServerError, "failed to list quota")
 		return
 	}
 
@@ -160,9 +157,7 @@ func (h *Handler) GetQuota(c *gin.Context) {
 	}
 	uuid := c.Param("uuid")
 	if uuid == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "provider_uuid is required",
-		})
+		apierr.Message(c, http.StatusBadRequest, "provider_uuid is required")
 		return
 	}
 
@@ -173,15 +168,11 @@ func (h *Handler) GetQuota(c *gin.Context) {
 		// Both sentinels mean the provider simply has nothing to show — no
 		// data yet, or no fetcher at all. Neither is a server failure.
 		if errors.Is(err, quota.ErrUsageNotFound) || errors.Is(err, quota.ErrProviderUnsupported) {
-			c.JSON(http.StatusNotFound, gin.H{
-				"error": "quota not found for provider",
-			})
+			apierr.Message(c, http.StatusNotFound, "quota not found for provider")
 			return
 		}
 		h.logger.WithError(err).WithField("provider_uuid", uuid).Error("failed to get quota")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to get quota",
-		})
+		apierr.Message(c, http.StatusInternalServerError, "failed to get quota")
 		return
 	}
 
@@ -199,9 +190,7 @@ func (h *Handler) RefreshAll(c *gin.Context) {
 	usages, err := h.manager.Refresh(ctx)
 	if err != nil {
 		h.logger.WithError(err).Error("failed to refresh all quota")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to refresh quota",
-		})
+		apierr.Message(c, http.StatusInternalServerError, "failed to refresh quota")
 		return
 	}
 
@@ -222,9 +211,7 @@ func (h *Handler) RefreshProvider(c *gin.Context) {
 	}
 	uuid := c.Param("uuid")
 	if uuid == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "provider_uuid is required",
-		})
+		apierr.Message(c, http.StatusBadRequest, "provider_uuid is required")
 		return
 	}
 
@@ -233,15 +220,11 @@ func (h *Handler) RefreshProvider(c *gin.Context) {
 	usage, err := h.manager.RefreshProvider(ctx, uuid)
 	if err != nil {
 		if errors.Is(err, quota.ErrProviderUnsupported) {
-			c.JSON(http.StatusNotFound, gin.H{
-				"error": "provider does not support quota",
-			})
+			apierr.Message(c, http.StatusNotFound, "provider does not support quota")
 			return
 		}
 		h.logger.WithError(err).WithField("provider_uuid", uuid).Error("failed to refresh provider quota")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to refresh quota",
-		})
+		apierr.Message(c, http.StatusInternalServerError, "failed to refresh quota")
 		return
 	}
 
@@ -259,9 +242,7 @@ func (h *Handler) Summary(c *gin.Context) {
 	summary, err := h.manager.Summary(ctx)
 	if err != nil {
 		h.logger.WithError(err).Error("failed to get summary")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to get summary",
-		})
+		apierr.Message(c, http.StatusInternalServerError, "failed to get summary")
 		return
 	}
 
@@ -296,9 +277,7 @@ func (h *Handler) BatchGetQuota(c *gin.Context) {
 	}
 
 	if len(req.ProviderUUIDs) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "provider_uuids cannot be empty",
-		})
+		apierr.Message(c, http.StatusBadRequest, "provider_uuids cannot be empty")
 		return
 	}
 
@@ -341,9 +320,7 @@ func (h *Handler) BatchGetQuota(c *gin.Context) {
 
 	// If everything failed, return an error.
 	if len(result) == 0 && len(fetchErrors) > 0 {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to get quota for any provider",
-		})
+		apierr.Message(c, http.StatusInternalServerError, "failed to get quota for any provider")
 		return
 	}
 
