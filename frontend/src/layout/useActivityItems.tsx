@@ -40,7 +40,6 @@ import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { useTeamContext } from '@/contexts/TeamContext';
 import { orderTeams, teamPath } from '@/utils/team';
-import { isFullEdition } from '@/utils/edition';
 import type { ActivityItem, NavItem, NavItemBase } from './types';
 import { useBotPlatformSummary } from './useBotPlatformSummary';
 
@@ -52,7 +51,7 @@ export function useActivityItems(): ActivityItem[] {
     const { skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableDesk } = useFeatureFlags();
     const { profiles } = useProfileContext();
     const { teams } = useTeamContext();
-    const botSummary = useBotPlatformSummary(isFullEdition);
+    const botSummary = useBotPlatformSummary();
 
     const [hiddenScenarios, setHiddenScenarios] = useState<Set<string>>(() => getHiddenScenarios());
     useEffect(() => {
@@ -255,7 +254,7 @@ export function useActivityItems(): ActivityItem[] {
             // (key stays 'bots' — internal id, not user-visible.)
             // Hidden via the Remote switch in the rail's Power-ups menu (same hidden set as
             // Team/Image) — hides the rail item only, bots keep running.
-            ...(isFullEdition && !hiddenScenarios.has('remote') ? [{
+            ...(!hiddenScenarios.has('remote') ? [{
                 key: 'bots' as const,
                 icon: <IconRemote sx={{ fontSize: 22 }} />,
                 label: t('layout.remote'),
@@ -274,7 +273,7 @@ export function useActivityItems(): ActivityItem[] {
                     ] : []),
                 ] as NavItem[],
             }] as ActivityItem[] : []),
-            ...(isFullEdition && promptMenuItems.length > 0 ? [{
+            ...(promptMenuItems.length > 0 ? [{
                 key: 'prompt' as const,
                 icon: <IconBrain sx={{ fontSize: 22 }} />,
                 label: t('common.prompt', { defaultValue: 'Prompt' }),

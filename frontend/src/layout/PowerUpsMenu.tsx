@@ -26,7 +26,6 @@ import { useNavigate } from 'react-router-dom';
 import type { ExperimentalFeature } from '@/components/ExperimentalFeatureGate';
 import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 import { api } from '@/services/api';
-import { isFullEdition } from '@/utils/edition';
 import { useBotPlatformSummary } from './useBotPlatformSummary';
 import { SCENARIOS, useHiddenScenarios } from '@/pages/scenario/scenarioRegistry';
 import { Z_INDEX } from '../constants/zIndex';
@@ -76,7 +75,7 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
     const [updating, setUpdating] = useState<ExperimentalFeature>();
     const [failed, setFailed] = useState(false);
     const { isHidden, toggleHidden } = useHiddenScenarios();
-    const botSummary = useBotPlatformSummary(isFullEdition);
+    const botSummary = useBotPlatformSummary();
     const botTotals = Object.values(botSummary).reduce(
         (acc, b) => ({ active: acc.active + b.active, total: acc.total + b.total }),
         { active: 0, total: 0 },
@@ -100,9 +99,9 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             }] : [];
         }),
         // Remote leads: the established power-up (drive agents from IM). Not
-        // flag-gated (full edition only) — its switch hides/shows the rail item
-        // via the same hidden set as Team/Image; connected bots keep running.
-        ...(isFullEdition ? [{
+        // flag-gated — its switch hides/shows the rail item via the same
+        // hidden set as Team/Image; connected bots keep running.
+        {
             key: 'remote',
             icon: <IconRemote sx={iconSx} />,
             name: t('layout.remote'),
@@ -113,7 +112,7 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             status: botTotals.total > 0
                 ? t('bots.activeCount', { defaultValue: 'active {{active}} / {{total}}', active: botTotals.active, total: botTotals.total })
                 : undefined,
-        }] : []),
+        },
         {
             key: 'bench',
             feature: 'bench',
@@ -124,8 +123,7 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             stage: 'beta' as const,
             enabled: enableBench,
         },
-        // Desk lives under Remote in the rail, which is full-edition only.
-        ...(isFullEdition ? [{
+        {
             key: 'desk',
             feature: 'desk' as const,
             icon: <IconCode sx={iconSx} />,
@@ -135,7 +133,7 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             stage: 'beta' as const,
             enabled: enableDesk,
             enabledNotice: t('system.experimentalFeatures.deskEnabledInfo', { defaultValue: 'Anyone who can sign in to this tingly-box can now start Claude Code sessions on this machine and approve the tool calls they make.' }),
-        }] : []),
+        },
         {
             key: 'mcp',
             feature: 'mcp',
@@ -156,28 +154,26 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             enabled: enableGuardrails,
             stage: 'exp' as const,
         },
-        ...(isFullEdition ? [
-            {
-                key: 'skill_user',
+        {
+            key: 'skill_user',
             feature: 'skill_user' as const,
-                icon: <IconSend sx={iconSx} />,
-                name: t('system.experimentalFeatures.userPrompts'),
-                description: t('system.experimentalFeatures.enableUserPrompts'),
-                path: '/prompt/user',
-                enabled: skillUser,
-                stage: 'exp' as const,
-            },
-            {
-                key: 'skill_ide',
+            icon: <IconSend sx={iconSx} />,
+            name: t('system.experimentalFeatures.userPrompts'),
+            description: t('system.experimentalFeatures.enableUserPrompts'),
+            path: '/prompt/user',
+            enabled: skillUser,
+            stage: 'exp' as const,
+        },
+        {
+            key: 'skill_ide',
             feature: 'skill_ide' as const,
-                icon: <IconBolt sx={iconSx} />,
-                name: t('system.experimentalFeatures.skills'),
-                description: t('system.experimentalFeatures.enableIdeSkills'),
-                path: '/prompt/skill',
-                enabled: skillIde,
-                stage: 'exp' as const,
-            },
-        ] : []),
+            icon: <IconBolt sx={iconSx} />,
+            name: t('system.experimentalFeatures.skills'),
+            description: t('system.experimentalFeatures.enableIdeSkills'),
+            path: '/prompt/skill',
+            enabled: skillIde,
+            stage: 'exp' as const,
+        },
     ];
 
     const toggle = async (p: PowerUp) => {

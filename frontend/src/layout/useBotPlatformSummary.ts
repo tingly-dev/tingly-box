@@ -3,11 +3,10 @@ import { api } from '@/services/api';
 
 type PlatformSummary = Record<string, { active: number; total: number }>;
 
-export function useBotPlatformSummary(enabled: boolean): PlatformSummary {
+export function useBotPlatformSummary(): PlatformSummary {
     const [summary, setSummary] = useState<PlatformSummary>({});
 
     useEffect(() => {
-        if (!enabled) return;
         let cancelled = false;
         api.getImBotSettingsList()
             .then(data => {
@@ -25,7 +24,7 @@ export function useBotPlatformSummary(enabled: boolean): PlatformSummary {
         return () => {
             cancelled = true;
         };
-    }, [enabled]);
+    }, []);
 
     return summary;
 }

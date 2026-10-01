@@ -1,7 +1,6 @@
 import { Box, CircularProgress, DialogActions, DialogContent, Button, Typography } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { isFullEdition } from '@/utils/edition';
 import { ConfigModalShell } from './config/ConfigModalShell';
 import { ManualFileSection } from './config/ManualFileSection';
 
@@ -101,8 +100,7 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
                 <Button onClick={onClose} color="inherit">
                     {t('common.cancel')}
                 </Button>
-                {/* Hide Apply button in lite edition */}
-                {isFullEdition && onApply && (
+                {onApply && (
                     <Button
                         onClick={onApply}
                         variant="contained"

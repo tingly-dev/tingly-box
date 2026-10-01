@@ -9,7 +9,6 @@ import { resolveLanguage } from '@/i18n';
 import CodeBlock from '@/components/CodeBlock';
 import { shouldIgnoreDialogClose } from '@/components/dialogClose';
 import { ManualFileSection, type ManualFileTab } from './config/ManualFileSection';
-import { isFullEdition } from '@/utils/edition';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 import ClaudeCodeQuickConfig, { CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES, derivePrefsFromRules, prefsToEnvPreview } from './ClaudeCodeQuickConfig';
 import type { ClaudeCodeDefaultMode, ClaudeCodePrefs } from './ClaudeCodeQuickConfig';
@@ -358,7 +357,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
         setShowThinkingSummariesAndClearResult(CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES);
     }, [configMode, rules, setDefaultModeAndClearResult, setPrefsAndClearResult, setShowThinkingSummariesAndClearResult]);
 
-    const canApply = isFullEdition && !!onApplyWithPrefs;
+    const canApply = !!onApplyWithPrefs;
 
     // Shared "manual setup" link line for the statusline tab descriptions —
     // points at the real repo script (same URL the installers download from).

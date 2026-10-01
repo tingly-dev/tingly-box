@@ -60,9 +60,8 @@ tasks:
     env:
       PRODUCTION: '{{.PRODUCTION | default "false"}}'
     vars:
-      # Our frontend build scripts (see frontend/package.json). The wails lite
-      # variants embed a token-free login shell suited to the desktop window.
-      BUILD_COMMAND: '{{if eq .PRODUCTION "true"}}build:wails:lite{{else}}build:dev:wails:lite{{end}}'
+      # Our frontend build scripts (see frontend/package.json).
+      BUILD_COMMAND: '{{if eq .PRODUCTION "true"}}build:wails{{else}}build:dev:wails{{end}}'
 
 
   generate:bindings:

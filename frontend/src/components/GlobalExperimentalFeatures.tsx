@@ -7,7 +7,6 @@ import React, {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useNavigate} from 'react-router-dom';
 import {api} from '../services/api';
-import {isFullEdition} from "@/utils/edition.ts";
 
 const SKILL_FEATURES = [
     {
@@ -227,8 +226,8 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
                 </Alert>
             )}
 
-            {/* Skill Features - Only in full edition */}
-            {isFullEdition && SKILL_FEATURES.map((feature) =>
+            {/* Skill Features */}
+            {SKILL_FEATURES.map((feature) =>
                 <React.Fragment key={feature.key}>
                     {featureRow(
                         feature.key,
