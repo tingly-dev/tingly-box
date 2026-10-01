@@ -85,7 +85,7 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
             // pasting the pair runs them sequentially in any shell.
             commands: [
                 versionForCommand ? `npm install -g tingly-box@${versionForCommand}` : 'npm install -g tingly-box@latest',
-                'tingly-box restart',
+                'tb restart',
             ],
             // Shown under the commands but left out of the copied text: zsh
             // (macOS default) rejects a pasted `#` comment line by default.

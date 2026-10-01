@@ -231,7 +231,7 @@ export default {
       "npm": {
         "title": "Глобальная установка (npm)",
         "description": "Обновите установленный CLI, затем перезапустите сервер",
-        "aliasNote": "tb — сокращение от tingly-box, так что `tb restart` тоже работает"
+        "aliasNote": "tb — сокращение от tingly-box; `tingly-box restart` тоже работает"
       },
       "docker": {
         "title": "Docker-образ",
