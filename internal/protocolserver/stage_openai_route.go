@@ -58,10 +58,7 @@ func (ph *ProtocolHandler) serveOpenAIOnAnthropic(c *gin.Context, plan *attemptP
 		return
 	}
 
-	disableStreamUsage := ShouldStripUsage(source.Extra)
-	if source.ScenarioFlags != nil {
-		disableStreamUsage = disableStreamUsage || source.ScenarioFlags.SkipUsage
-	}
+	stripUsage := shouldStripChatUsage(source)
 	ph.ServeStageOpenAI(c, endpoint, StageOpenAIAttempt{
 		Client:             source.SourceAPI,
 		Request:            req,
@@ -69,8 +66,8 @@ func (ph *ProtocolHandler) serveOpenAIOnAnthropic(c *gin.Context, plan *attemptP
 		ActualModel:        requestModel,
 		ResponseModel:      responseModel,
 		Streaming:          isStreaming,
-		DisableStreamUsage: disableStreamUsage,
-		StripUsage:         ShouldStripUsage(source.Extra),
+		DisableStreamUsage: stripUsage,
+		StripUsage:         stripUsage,
 	})
 }
 

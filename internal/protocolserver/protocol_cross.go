@@ -79,6 +79,7 @@ func (ph *ProtocolHandler) streamResponsesToChat(c *gin.Context, reqCtx *transfo
 	}
 
 	hc := protocol.NewHandleContext(c, responseModel)
+	hc.DisableStreamUsage = shouldStripChatUsage(reqCtx)
 	usage, err := stream.HandleResponsesToOpenAIChatStream(hc, primedStream, responseModel)
 	ph.trackUsageWithTokenUsage(c, usage, err)
 	if recorder != nil {
@@ -104,6 +105,7 @@ func (ph *ProtocolHandler) nonstreamResponsesToChat(c *gin.Context, reqCtx *tran
 	}
 
 	hc := protocol.NewHandleContext(c, reqCtx.ResponseModel)
+	hc.StripUsage = shouldStripChatUsage(reqCtx)
 	chatResp, tokenUsage, _ := nonstream.HandleResponsesToOpenAIChat(hc, responsesResp)
 	ph.trackUsageWithTokenUsage(c, tokenUsage, nil)
 	if recorder != nil {

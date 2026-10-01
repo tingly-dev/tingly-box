@@ -21,6 +21,9 @@ type responsesToChatNonStreamState struct {
 // Corresponds to stream.HandleResponsesToOpenAIChatStream.
 func HandleResponsesToOpenAIChat(hc *protocol.HandleContext, rs *responses.Response) (map[string]any, *protocol.TokenUsage, error) {
 	chatResp := BuildOpenAIChatPayloadFromResponses(rs, hc.ResponseModel)
+	if hc.StripUsage {
+		delete(chatResp, "usage")
+	}
 	hc.GinContext.JSON(http.StatusOK, chatResp)
 	return chatResp, usageconv.FromOpenAIResponses(rs.Usage), nil
 }

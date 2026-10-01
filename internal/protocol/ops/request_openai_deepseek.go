@@ -2,7 +2,9 @@ package ops
 
 import (
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/shared"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
 )
 
 // deepSeekEffortTiers is DeepSeek's own reasoning_effort tier map, built
@@ -12,14 +14,40 @@ import (
 // future edit to one into the other).
 var deepSeekEffortTiers = lowHighMaxEffortTiers()
 
+// deepSeekDefaultEffort is the level DeepSeek documents for thinking mode
+// when reasoning_effort is not given: "Thinking mode is enabled by default,
+// with the default effort being high"
+// (https://api-docs.deepseek.com/guides/thinking_mode).
+const deepSeekDefaultEffort = thinking.LevelHigh
+
 // applyDeepSeekTransform applies DeepSeek's request shaping: the
 // reasoning_content message conversion shared with Moonshot/Kimi (see
 // convertThinkingToReasoningContent), plus DeepSeek's own reasoning_effort
 // forwarding through deepSeekEffortTiers.
+//
+// A client that switches thinking on with DeepSeek's own toggle
+// (extra_body {"thinking": {"type": "enabled"}}) but gives no
+// reasoning_effort gets DeepSeek's documented default written out, so the
+// level the request runs at is visible on the wire rather than implied.
 func applyDeepSeekTransform(req *openai.ChatCompletionNewParams, providerURL, model string, config *protocol.OpenAIConfig) *openai.ChatCompletionNewParams {
+	clientEffort := req.ReasoningEffort
 	applyReasoningEffortTier(req, config, deepSeekEffortTiers)
+	if clientEffort == "" && req.ReasoningEffort == "" && deepSeekThinkingEnabled(req) {
+		req.ReasoningEffort = shared.ReasoningEffort(deepSeekEffortTiers[deepSeekDefaultEffort])
+	}
 	convertThinkingToReasoningContent(req)
 	return req
+}
+
+// deepSeekThinkingEnabled reports whether the request carries DeepSeek's
+// thinking toggle switched on: {"thinking": {"type": "enabled"}}.
+func deepSeekThinkingEnabled(req *openai.ChatCompletionNewParams) bool {
+	toggle, ok := req.ExtraFields()["thinking"].(map[string]any)
+	if !ok {
+		return false
+	}
+	kind, _ := toggle["type"].(string)
+	return kind == "enabled"
 }
 
 // convertThinkingToReasoningContent converts the x_thinking field to

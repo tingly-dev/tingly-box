@@ -24,8 +24,12 @@ type HandleContext struct {
 	OnStreamCompleteHooks []func()
 	OnStreamErrorHooks    []func(err error)
 
-	// Stream configuration flags
-	DisableStreamUsage bool // Don't include usage in streaming chunks
+	// Usage shaping for OpenAI Chat clients only (rule flags skip_usage /
+	// cursor_compat): DisableStreamUsage leaves usage out of a streamed Chat
+	// answer, StripUsage out of a complete one. Other client protocols keep
+	// their usage.
+	DisableStreamUsage bool
+	StripUsage         bool
 
 	// EstimatedInputTokens is a pre-computed input-token estimate used only as a
 	// fallback when the upstream stream reports no usage. The caller computes it

@@ -236,7 +236,6 @@ func forPairs(flag string, keep func(source, target protocol.APIType) bool, run 
 	return cases
 }
 
-func fromOpenAI(source, _ protocol.APIType) bool    { return !isAnthropicAPI(source) }
 func fromAnthropic(source, _ protocol.APIType) bool { return isAnthropicAPI(source) }
 func fromChat(source, _ protocol.APIType) bool      { return source == protocol.TypeOpenAIChat }
 
@@ -307,11 +306,16 @@ func flagPathsCases() []recorderCase {
 	}
 
 	// ── Type 3: response shaping ──────────────────────────────────────────
-	cases = append(cases, forPairs("skip_usage", fromOpenAI, func(t flagTB, env *TestEnv, source, target protocol.APIType, streaming bool) {
+	// skip_usage is for OpenAI Chat clients that choke on the usage chunk
+	// (Cursor): their answer leaves usage out, every other client keeps it.
+	cases = append(cases, forPairs("skip_usage", nil, func(t flagTB, env *TestEnv, source, target protocol.APIType, streaming bool) {
 		model := flagPathsRoute(env, source, target, typ.RuleFlags{SkipUsage: true})
 		res, _ := flagPathsSend(t, env, source, target, model, streaming, flagPathsMaterial{}, nil)
-		if clientResponseHasUsage(res) {
-			t.Errorf("client response still carries usage: %s", truncate(string(res.RawBody), 300))
+		switch has := clientResponseHasUsage(res); {
+		case source == protocol.TypeOpenAIChat && has:
+			t.Errorf("Chat client response still carries usage: %s", truncate(string(res.RawBody), 300))
+		case source != protocol.TypeOpenAIChat && !has:
+			t.Errorf("%s client response lost its usage: %s", source, truncate(string(res.RawBody), 300))
 		}
 	})...)
 
@@ -515,14 +519,6 @@ func judgeFlagPathsResult(r TestResult) TestResult {
 // Known gaps the suite exposed when it was added; each fails identically on
 // the base it was added against.
 var (
-	gapUsageChatToResponses = KnownGap{
-		ID:     "FP1",
-		Reason: "skip_usage / cursor_compat do not strip usage when an OpenAI Chat client is served by an OpenAI Responses provider",
-	}
-	gapUsageResponsesClient = KnownGap{
-		ID:     "FP2",
-		Reason: "skip_usage never strips usage for OpenAI Responses clients",
-	}
 	gapRecordingResponsesCross = KnownGap{
 		ID:     "FP3",
 		Reason: "rule-level recording writes no record for an OpenAI Responses client served by an Anthropic or OpenAI Chat provider",
@@ -530,14 +526,6 @@ var (
 )
 
 var _ = func() bool {
-	for _, mode := range []string{"nonstream", "stream"} {
-		for _, flag := range []string{"skip_usage", "cursor_compat", "cursor_compat_auto"} {
-			registerKnownGaps(gapUsageChatToResponses, fmt.Sprintf("flag_paths/%s/openai_chat->openai_responses/%s", flag, mode))
-		}
-		for _, target := range flagPathsTargets {
-			registerKnownGaps(gapUsageResponsesClient, fmt.Sprintf("flag_paths/skip_usage/openai_responses->%s/%s", target, mode))
-		}
-	}
 	for _, target := range []protocol.APIType{protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat} {
 		registerKnownGaps(gapRecordingResponsesCross, fmt.Sprintf("flag_paths/recording/openai_responses->%s/nonstream", target))
 	}

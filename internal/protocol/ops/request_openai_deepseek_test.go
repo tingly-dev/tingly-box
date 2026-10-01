@@ -267,3 +267,50 @@ func marshalMessage(t *testing.T, msg openai.ChatCompletionMessageParamUnion) ma
 	require.NoError(t, json.Unmarshal(msgBytes, &raw))
 	return raw
 }
+
+// TestDeepSeekThinkingToggleDefaultsEffort proves that DeepSeek's own
+// thinking toggle without a reasoning_effort gets DeepSeek's documented
+// default level written out, while an explicit client level, an explicit
+// "none" and a disabled toggle are left as the client sent them.
+func TestDeepSeekThinkingToggleDefaultsEffort(t *testing.T) {
+	tests := []struct {
+		name   string
+		toggle string
+		effort string
+		want   string
+	}{
+		{"enabled without effort", "enabled", "", "high"},
+		{"enabled with client effort", "enabled", "low", "low"},
+		{"enabled with explicit none", "enabled", "none", ""},
+		{"disabled", "disabled", "", ""},
+		{"no toggle", "", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &openai.ChatCompletionNewParams{
+				Model:           openai.ChatModel("deepseek-v4-flash"),
+				ReasoningEffort: openai.ReasoningEffort(tt.effort),
+			}
+			if tt.toggle != "" {
+				req.SetExtraFields(map[string]any{"thinking": map[string]any{"type": tt.toggle}})
+			}
+
+			ApplyProviderTransforms(req, "https://api.deepseek.com/v1", string(req.Model), &protocol.OpenAIConfig{})
+
+			assert.Equal(t, tt.want, string(req.ReasoningEffort))
+		})
+	}
+}
+
+// TestThinkingToggleIsDeepSeekOnly proves the default level is DeepSeek's
+// own: the same toggle sent to an unverified OpenAI-compatible host is
+// forwarded as-is, with no reasoning_effort invented for it.
+func TestThinkingToggleIsDeepSeekOnly(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{Model: openai.ChatModel("some-model")}
+	req.SetExtraFields(map[string]any{"thinking": map[string]any{"type": "enabled"}})
+
+	ApplyProviderTransforms(req, "https://llm.example.com/v1", string(req.Model), &protocol.OpenAIConfig{})
+
+	assert.Equal(t, "", string(req.ReasoningEffort))
+	assert.Equal(t, map[string]any{"type": "enabled"}, req.ExtraFields()["thinking"])
+}

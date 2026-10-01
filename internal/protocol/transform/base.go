@@ -6,7 +6,6 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
-	"github.com/openai/openai-go/v3/shared"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 )
@@ -92,9 +91,12 @@ func (t *BaseTransform) convertToOpenAIChat(ctx *TransformContext, disableStream
 		ctx.Config.OpenAIConfig = config
 
 	case *openai.ChatCompletionNewParams:
-		// Already in OpenAI Chat format, no protocol conversion needed
-		// Build fresh config for vendor transforms to detect thinking/cursor settings
-		ctx.Config.OpenAIConfig = buildOpenAIConfigFromRequest(req)
+		// Already in OpenAI Chat format, no protocol conversion needed. The
+		// client's own thinking fields (reasoning_effort, a vendor's thinking
+		// extension) stay on the request for the vendor transform to read;
+		// the config carries only what the gateway derives, and here it
+		// derives nothing.
+		ctx.Config.OpenAIConfig = &protocol.OpenAIConfig{}
 
 		ctx.Request = req
 
@@ -260,42 +262,4 @@ func (t *BaseTransform) convertToGoogle(ctx *TransformContext) error {
 	}
 
 	return nil
-}
-
-// buildOpenAIConfigFromRequest builds OpenAIConfig from an OpenAI Chat request.
-// This detects thinking configuration and other vendor-specific settings.
-func buildOpenAIConfigFromRequest(req *openai.ChatCompletionNewParams) *protocol.OpenAIConfig {
-	config := &protocol.OpenAIConfig{
-		HasThinking:     false,
-		ReasoningEffort: "",
-	}
-
-	// Check if request has thinking configuration in extra_fields
-	extraFields := req.ExtraFields()
-	if extraFields == nil {
-		return config
-	}
-
-	// Check for thinking field (used by Anthropic client → OpenAI Chat conversion)
-	if thinking, ok := extraFields["thinking"]; ok {
-		if thinkingMap, ok := thinking.(map[string]interface{}); ok {
-			config.HasThinking = true
-			// Extract reasoning effort if specified
-			// Valid values per OpenAI docs: "none", "minimal", "low", "medium", "high", "xhigh"
-			// See: https://platform.openai.com/docs/guides/reasoning
-			if effortRaw, ok := thinkingMap["effort"]; ok {
-				if effort, ok := effortRaw.(string); ok {
-					config.ReasoningEffort = shared.ReasoningEffort(effort)
-				} else {
-					// Non-string effort: default to low as safe fallback
-					config.ReasoningEffort = shared.ReasoningEffortLow
-				}
-			} else {
-				// No effort specified: default to low
-				config.ReasoningEffort = shared.ReasoningEffortLow
-			}
-		}
-	}
-
-	return config
 }

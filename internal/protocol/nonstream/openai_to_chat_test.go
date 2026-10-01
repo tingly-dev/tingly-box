@@ -157,3 +157,32 @@ func asJSONMapSlice(t *testing.T, value any) []map[string]any {
 	}
 	return result
 }
+
+// TestOpenAIResponsesToChatStripUsage proves StripUsage (skip_usage /
+// cursor_compat for a Chat client) leaves usage out of the Chat answer while
+// the returned token usage still feeds tracking.
+func TestOpenAIResponsesToChatStripUsage(t *testing.T) {
+	raw := []byte(`{
+		"id":"resp_1","created_at":1710000000,"model":"gpt-4.1","object":"response","status":"completed",
+		"output":[{"id":"msg_1","type":"message","role":"assistant","status":"completed",
+			"content":[{"type":"output_text","text":"hi","annotations":[]}]}],
+		"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}
+	}`)
+	var resp responses.Response
+	require.NoError(t, json.Unmarshal(raw, &resp))
+
+	for _, strip := range []bool{false, true} {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		hc := protocol.NewHandleContext(c, "proxy-model")
+		hc.StripUsage = strip
+		_, usage, err := HandleResponsesToOpenAIChat(hc, &resp)
+		require.NoError(t, err)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+		_, has := body["usage"]
+		assert.Equal(t, !strip, has, "strip=%v", strip)
+		assert.Equal(t, 5, usage.OutputTokens, "strip=%v", strip)
+	}
+}
