@@ -20,9 +20,10 @@ export const BOUND_METHODS = {
     openMainWindow: `${TINGLY_SERVICE}.OpenMainWindow`,
 } as const;
 
-// GUI-only route that saves through a native dialog (registered in
-// TinglyService.ServiceStartup).
+// GUI-only routes, registered in TinglyService.ServiceStartup: save through
+// a native dialog, and open a URL in the OS browser.
 export const SAVE_FILE_ROUTE = '/api/v1/gui/save';
+export const OPEN_URL_ROUTE = '/api/v1/gui/open-url';
 
 type WailsRuntime = typeof import('@wailsio/runtime');
 
@@ -48,9 +49,17 @@ export function createDesktopHost(
             await (await runtime).Call.ByName(BOUND_METHODS.openMainWindow, path);
         },
         // A WebView has no tab strip to open `_blank` into; hand the URL to
-        // the OS browser instead.
+        // the OS browser instead. Every external link in the window lands
+        // here (./externalLinks.ts). HTTP first, like saveFile; the runtime's
+        // own Browser.OpenURL (Wails IPC) only as the fallback.
         openExternal: (url) => {
-            void runtime.then(({ Browser }) => Browser.OpenURL(url));
+            void shellPost(OPEN_URL_ROUTE, {
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url }),
+            }).catch(async (error) => {
+                console.error('Opening the link through the shell failed, trying the runtime:', error);
+                await (await runtime).Browser.OpenURL(url);
+            });
         },
         saveFile: (blob, fileName) => {
             void saveViaShell(blob, fileName).catch((error) => {
@@ -68,15 +77,22 @@ export function createDesktopHost(
     // why IPC is avoided). A cancelled dialog resolves normally — only a
     // failed request falls back to the anchor.
     async function saveViaShell(blob: Blob, fileName: string): Promise<void> {
+        await shellPost(`${SAVE_FILE_ROUTE}?name=${encodeURIComponent(fileName)}`, { body: blob });
+    }
+
+    // POST to one of the GUI-only routes on the gateway's port, with the
+    // shell's user token.
+    async function shellPost(route: string, init: { headers?: Record<string, string>; body: BodyInit }): Promise<void> {
         const { Call } = await runtime;
         const [port, token] = await Promise.all([
             Call.ByName(BOUND_METHODS.getPort) as Promise<number>,
             Call.ByName(BOUND_METHODS.getUserAuthToken) as Promise<string>,
         ]);
-        const response = await fetch(
-            `http://localhost:${port}${SAVE_FILE_ROUTE}?name=${encodeURIComponent(fileName)}`,
-            { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: blob },
-        );
-        if (!response.ok) throw new Error(`save failed: HTTP ${response.status}`);
+        const response = await fetch(`http://localhost:${port}${route}`, {
+            method: 'POST',
+            headers: { ...init.headers, Authorization: `Bearer ${token}` },
+            body: init.body,
+        });
+        if (!response.ok) throw new Error(`${route} failed: HTTP ${response.status}`);
     }
 }

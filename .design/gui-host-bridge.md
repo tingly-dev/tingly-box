@@ -62,11 +62,33 @@ Wails events and bound calls have proven unreliable in these WebViews
   removed: nothing had emitted its event since);
 - takes the hub panel's "open main window" over `POST /api/v1/gui/open`,
   with the bound method only as fallback;
-- saves files over `POST /api/v1/gui/save` (below).
+- saves files over `POST /api/v1/gui/save` and opens external links over
+  `POST /api/v1/gui/open-url` (below).
 
 These are GUI-only routes registered on the gateway's engine in
 `TinglyService.ServiceStartup`, and they check the user token. A CLI server
 does not have them.
+
+## External links
+
+A WebView has nowhere to put a new tab. `<a target="_blank">` is swallowed,
+which is how the GitHub star, repo, docs and release links did nothing in
+the window. An external link without a target is worse: it navigates the
+app window itself away from the app. So the desktop window routes **every**
+external link to the OS browser in one place, `host/externalLinks.ts`,
+installed by `host/index.ts` only in the desktop shell. No call site has to
+remember `host.openExternal`, including links added later.
+
+- A `click`/`auxclick` listener runs in the bubble phase on `document`,
+  after React's root listener, so a component's own `preventDefault` wins.
+  It catches `http`, `https` and `mailto` links to another origin; in-app
+  links and `download` links are left alone. `window.open` gets the same
+  routing.
+- `openExternal` POSTs the URL to `/api/v1/gui/open-url`, a GUI-only route
+  (`gui/wails3/services/open_url.go`). It hands the URL to the OS opener,
+  only for `http`, `https` and `mailto`, since the opener runs whatever
+  handler a scheme maps to. The runtime's `Browser.OpenURL` (IPC) is only
+  the fallback.
 
 ## Saving files
 

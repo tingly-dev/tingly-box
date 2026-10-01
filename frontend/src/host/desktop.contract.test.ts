@@ -4,7 +4,7 @@
 // Go source. Read through Vite (?raw), same as routes.contract.test.tsx.
 import { describe, expect, it } from 'vitest';
 import tinglyServiceGo from '../../../gui/wails3/services/tingly_service.go?raw';
-import { BOUND_METHODS, SAVE_FILE_ROUTE, TINGLY_SERVICE } from './desktop';
+import { BOUND_METHODS, OPEN_URL_ROUTE, SAVE_FILE_ROUTE, TINGLY_SERVICE } from './desktop';
 
 describe('desktop bridge contract', () => {
     it('names the Go service by its package path', () => {
@@ -18,7 +18,7 @@ describe('desktop bridge contract', () => {
         expect(tinglyServiceGo).toMatch(new RegExp(`^func \\(s \\*TinglyService\\) ${method}\\(`, 'm'));
     });
 
-    it('posts saves to the route the service registers', () => {
-        expect(tinglyServiceGo).toContain(`POST("${SAVE_FILE_ROUTE}"`);
+    it.each([SAVE_FILE_ROUTE, OPEN_URL_ROUTE])('posts to %s, which the service registers', (route) => {
+        expect(tinglyServiceGo).toContain(`POST("${route}"`);
     });
 });

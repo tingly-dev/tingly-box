@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BOUND_METHODS, createDesktopHost, SAVE_FILE_ROUTE } from './desktop';
+import { BOUND_METHODS, createDesktopHost, OPEN_URL_ROUTE, SAVE_FILE_ROUTE } from './desktop';
 
 // A stand-in for @wailsio/runtime: just the two namespaces the bridge uses.
 function fakeRuntime() {
@@ -36,12 +36,30 @@ describe('desktop host bridge', () => {
         expect(await createDesktopHost(load).shellAuthToken()).toBeNull();
     });
 
-    it('opens external links in the OS browser', async () => {
+    it('opens external links through the shell route', async () => {
         const { runtime, load } = fakeRuntime();
+        const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{"success":true}'));
         createDesktopHost(load).openExternal('https://github.com/tingly-dev/tingly-box');
-        await Promise.resolve();
-        await Promise.resolve();
-        expect(runtime.Browser.OpenURL).toHaveBeenCalledWith('https://github.com/tingly-dev/tingly-box');
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(url).toBe(`http://localhost:12580${OPEN_URL_ROUTE}`);
+        expect(init).toMatchObject({
+            method: 'POST',
+            headers: { Authorization: 'Bearer tb-token', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: 'https://github.com/tingly-dev/tingly-box' }),
+        });
+        expect(runtime.Browser.OpenURL).not.toHaveBeenCalled();
+        fetchMock.mockRestore();
+    });
+
+    it('falls back to the runtime when the shell route fails', async () => {
+        const { runtime, load } = fakeRuntime();
+        const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('network'));
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        createDesktopHost(load).openExternal('https://example.com');
+        await vi.waitFor(() => expect(runtime.Browser.OpenURL).toHaveBeenCalledWith('https://example.com'));
+        fetchMock.mockRestore();
+        vi.restoreAllMocks();
     });
 
     it('saves through the shell route with the shell token', async () => {

@@ -108,6 +108,9 @@ func (s *TinglyService) ServiceStartup(ctx context.Context, options application.
 			PromptForSingleSelection()
 	}))
 
+	// The OS browser for external links (open_url.go). Same token check.
+	s.ginEngine().POST("/api/v1/gui/open-url", openURLHandler(s.GetUserAuthToken, wailsApp.Browser.OpenURL))
+
 	s.start(ctx)
 
 	return nil
