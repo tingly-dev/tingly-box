@@ -219,7 +219,7 @@ gpt-5.6-terra     Direct · T0       →  glm-5.1, deepseek-v4-flash            
 
 ## 4. 一并考虑：Wails v3 WebView GUI
 
-> **现状（2026-10）**：本节描述的是重构前的两份构建。已落地的实现见 `host-bridge.md`：一份构建、运行时选择 HostBridge、按名调用 Go、取消 lite edition。
+> **现状（2026-10）**：本节描述的是重构前的两份构建。已落地的实现见 `gui-host-bridge.md`：一份构建、运行时选择 HostBridge、按名调用 Go、取消 lite edition。
 
 GUI 确定继续用 **Wails v3**。现状（`gui/wails3`）：
 
