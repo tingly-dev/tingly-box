@@ -1,7 +1,9 @@
 # Backend Organization
 
-Living document. Records the audit of the Go backend, the target layout, and the
-status of each reorganization step. Update the **Status** table as steps land.
+Living document. Records the audit of the Go backend, the target layout, what has
+landed, and what is left. Sections 1–2 are the audit as it stood on 2026-10-01,
+before any step landed; where a finding turned out wrong or has since been fixed,
+§4 says so. Update §3 and §5 as work lands.
 
 Audit date: 2026-10-01. LOC are non-test Go lines unless noted. Items marked
 *(inferred)* come from structure/naming, not function-level diffs.
@@ -66,42 +68,67 @@ Keep: `ai`, `imbot`, `agentboot`, `gui/wails3`. Weak: `swagger` (sole consumer `
 | CLI/GUI | command, cli, gui |
 | Dev/test tooling | protocoltest, harness, vmodel test parts, servertest |
 
-## 3. Steps and status
+## 3. Status
 
-Steps are stacked as separate commits on one branch, in this order.
+Steps 1–6 landed as separate PRs, each one goal, in this order of dependency.
 
-| # | Step | Status |
+| Step | Change | PR |
 |---|---|---|
-| 0 | This document | done |
-| 1 | `internal/server/config` → `internal/config` (pure move, no behaviour change) | done |
-| 2 | Shared HTTP helpers: `apierr`, `bind`, `paginate`; remove duplicate CORS | done (see §4) |
-| 3 | `Module` interface + migrate module registration | done (see §4) |
-| 4 | Move non-HTTP modules out of `server/module/` (`tokenrefresh`, `quotawindow` → `internal/worker/`) | done (see §4) |
-| 5 | Split `guardrails_handler.go` into a module (`module/guardrails`) | done |
-| 6 | Remove `webui_handler.go` / `guardrails_runtime_adapter.go` migration leftovers | done (see §4) |
-| later | Delete `internal/task`; relocate `protocoltest`/`harness`; protocol/client dedupe; session-store diff; `pkg/notify` decision; fold `swagger`/`afk` | not started |
+| 1 | `internal/server/config` → `internal/config` (pure move) | #1927 |
+| 2 | Shared HTTP helpers `apierr` / `bind` / `paginate`; duplicate CORS removed | #1929 |
+| 3 | Background workers out of `server/module/` → `internal/worker/` | #1930 |
+| 4 | Guardrails adapter / `WebHandler` migration leftovers cleared | #1931 |
+| 5 | `module.Module` contract; guardrails admin extracted to `module/guardrails` | #1932 |
+| 6 | Every HTTP module adopts the contract; one module list for server and OpenAPI | #1933 |
 
-## 4. Decisions
+Everything in the table is merged. The backlog is §5.
 
-- Pure moves are done with `tingly-go move` so they stay type-checked and mechanical; each step is verified with `go build ./... && go vet ./...` plus tests of the touched packages.
-- Behaviour changes (error shape, CORS) are kept out of the pure-move commits.
+### What the server layer looks like now
 
-- **Error shapes are wire contract.** Three shapes exist (`{"error":{message,type}}`, `{"error":"…"}`, `{"success":false,"error":"…"}`) and the web UI consumes each, so `apierr` offers one named writer per shape (`Send`, `Message`, `Failure`) instead of unifying them. Unifying shapes is a separate, frontend-coordinated change. `bind.JSON` takes the writer so each endpoint keeps its shape.
-- Step 2 migrated every single-key `gin.H{"error": …}` / `{"success": false, "error": …}` response under `internal/server` (~460 lines) and 25 `ShouldBindJSON` sites that answered with the bare binder error. 33 other bind sites use bespoke messages and are left as-is; so are 11 multi-key error bodies.
-- `paginate.Limit/Offset` replaced four hand-rolled "default 100, clamp N" parsers (`log_handler` ×3, `model_request_handler`, `sharing`). `desk`'s limit keeps its own semantics (0 = service default, unclamped).
-- `sharing`'s private `sendError` was a copy of `apierr.Send`; removed.
+- `internal/config` is a leaf-level dependency, not a child of `server`.
+- `internal/server/module/module.go` defines `Routes` (Public/V1/V2 groups, Engine, Manager, UserAuth), `Module` (`RegisterRoutes(*Routes)`) and `Mount`. Every package under `server/module/` implements it and no package-level `RegisterRoutes` functions remain. The load-balancer API (`load_balance_handler.go`) and the gateway routes (`protocolserver`) register separately and are not `Module`s.
+- `internal/server/server_modules.go` (`engineModules`, `apiModules`) is the only place that decides which modules exist and how they are built. The running server and OpenAPI generation both call it, with a `schema` flag for the few runtime side effects that must not run at generation time.
+- `internal/worker/` holds the background workers (`tokenrefresh`, `quotawindow`).
+- Error responses go through `module/apierr`, request binding through `module/bind`, list limits/offsets through `module/paginate`.
 
-- **`providerquota` stays.** The audit listed it as a runtime service; it is an HTTP module (`handler.go` + `routes.go`) whose `Manager` is only a consumer-side interface. Only `tokenrefresh` and `quotawindow` were background workers, now under `internal/worker/`.
-- `tokenrefresh` depended on the OAuth HTTP module for one 3-line `oauth.Option`; `WithKimiDeviceID` moved to `ai/oauth/options.go`, which is where an `oauth.Option` belongs and removes the worker→HTTP-module edge.
+## 4. Decisions and corrections to the audit
 
-- **Step 6 findings.** `WebHandler` was not half-finished: it already carries status, log, request-trace and token handlers; only its comments (and `server.go`'s, which still said `aimodel`/`module/visionproxy`) were stale and are corrected. The unexported guardrails forwarders were inlined to `s.guardrailsState.*`; the exported ones stay because they implement `GuardrailsRuntime`. Static-asset serving moved to `webui_static.go`, `RuntimeAuditSink` to `server_control.go` next to its only use.
+### Decisions
 
-- **Module contract.** `internal/server/module` defines `Routes` (Public/V1/V2 groups, Engine, Manager, UserAuth) and `Module` (`RegisterRoutes(*Routes)`) plus `Mount`. Every HTTP module's package-level `RegisterRoutes(...)` became a method on its handler; each picks the group it needs (V2 for skill/probe/provider/providercatalog, V1 otherwise, Engine for statusline/notify, Public+V1 for info). Handler-owned extras that used to be parameters moved onto the handler (`desk.Handler.WithGate`, `mcp` reads its own sub-handlers, `oauth` registers its callback routes itself, `notify.BotAPIHandler` is its own Module).
-- **One module list.** `server_modules.go` (`engineModules`, `apiModules`) is the only place that decides which modules exist and how they are built; the running server (`UseUIEndpoints`) and OpenAPI generation (`registerAllAPIRoutes`) both call it with a `schema` flag. Previously each kept its own ~100-line copy, which had already drifted (sharing/team, different `imbot` error handling, desk wiring). `schema` only matters where a runtime side effect must not happen at generation time (remote registries, live desk service) or where a route is documented unconditionally. `openapi.json` regenerates byte-identical before and after.
-- **Side effect removed:** `oauth.RegisterRoutes` used to call `router.Router.Use(authMiddleware)` on the shared `/api/v1` group, which already carried auth — so every module registered after oauth ran user-auth twice. Dropped; routes behave the same, one auth pass fewer. `debug` and `virtualmodel` still attach auth per route (`rt.UserAuth`) so the spec records it.
+- **Pure moves use `tingly-go move`**, so they stay type-checked and mechanical. Each step was verified with `go build ./... && go vet`, the touched packages' tests, and — for anything touching routes — `openapi.json` regenerating byte-identical.
+- **Behaviour changes stay out of pure-move commits.** The only intentional ones are listed below.
+- **Error shapes are wire contract.** Three shapes exist (`{"error":{message,type}}`, `{"error":"…"}`, `{"success":false,"error":"…"}`) and the web UI consumes each, so `apierr` has one named writer per shape (`Send`, `Message`, `Failure`) instead of unifying them. `bind.JSON` takes the writer so each endpoint keeps its shape. Unifying shapes is a separate change that needs the frontend.
+- **Scope of the helper migration.** ~460 single-key error responses and 25 `ShouldBindJSON` sites that answered with the bare binder error moved to the helpers. 33 bind sites with bespoke messages and 11 multi-key error bodies were left alone on purpose. `paginate` replaced four hand-rolled "default 100, clamp N" parsers; `desk`'s limit keeps its own semantics (0 = service default, unclamped). `sharing`'s private `sendError` was a copy of `apierr.Send` and is gone.
+- **One module list.** The server and OpenAPI generation each used to carry a ~100-line copy of the wiring, and they had already drifted (sharing/team, `imbot` error handling, desk). Handler-owned extras that used to be parameters moved onto the handler (`desk.Handler.WithGate`, `mcp` reads its own sub-handlers, `oauth` registers its callback routes, `notify.BotAPIHandler` is its own `Module`).
+- **Dependency edge removed.** `tokenrefresh` depended on the OAuth HTTP module for one 3-line `oauth.Option`; `WithKimiDeviceID` moved to `ai/oauth/options.go`.
 
-## 5. Open questions
+### Intentional behaviour changes
 
-1. `pkg/notify` extra providers: reserved feature or delete?
-2. Fold `swagger` and `afk` into the root module?
+- The swagger-group CORS middleware is gone. It never ran: the engine-level `middleware.CORS()` answers preflights through the NoRoute chain.
+- `oauth.RegisterRoutes` no longer calls `router.Router.Use(authMiddleware)` on the shared `/api/v1` group, which already carried auth; previously every module registered after oauth authenticated twice. `debug` and `virtualmodel` still attach auth per route so the generated spec records it.
+
+### Corrections to the audit (§1)
+
+- **CORS was not "inconsistent".** The two copies were byte-for-byte equivalent; the problem was only duplication.
+- **`providerquota` is an HTTP module**, not a runtime service: it has `handler.go` and `routes.go`, and its `Manager` is a consumer-side interface. Only `tokenrefresh` and `quotawindow` were workers.
+- **`WebHandler` was not half-finished.** It carries status, log, request-trace and token handlers; only its comments (and `server.go`'s, which still said `aimodel` / `module/visionproxy`) were stale.
+- **`protocol/stage` is not a duplicate of `stream`.** `stage/*bridge` wrap `stream`/`nonstream`, and `protocolserver`, `toolengine` and `guardrails` use it on the production path. The open question is whether `stream` is eventually folded into `stage`.
+- Audit claims marked *(inferred)* in §1.3 are structural readings, not function-level diffs; check before acting on them.
+
+## 5. Backlog and open questions
+
+Not started, roughly in order of payoff and risk. Numbers are from `main` after step 6.
+
+1. **Delete `internal/task`** (~960 LOC): zero importers outside itself. `.design/db.md` wrongly names it as the real task subsystem.
+2. **Move dev/test tooling out of the production view**: `internal/protocoltest` (~12.7k LOC, imported only by `cli/harness`), `cli/harness`, `internal/servertest`, test parts of `vmodel`.
+3. **`Server` is still a ~60-field struct** (`server.go`, 681 LOC). Now that modules share a contract, each module's dependencies can be injected instead of read off `*Server`.
+4. **Remaining helper adoption**: 11 multi-key error bodies and ~33 bespoke `ShouldBindJSON` sites; root handlers (`log_handler`, `load_balance_handler`, `token_handler`, …) could become modules.
+5. **Protocol/client dedupe**: Claude Code impersonation logic split across `protocol/ops`, `protocol/transform`, `client/claude_*`; near-clone round-trippers in `client`; `protocolserver/transform` has two importers.
+6. **Session persistence** lives in four stores (`afk/session`, `agentboot/history`, `remote/session`, DB remote tables); needs a field-level diff before merging anything.
+7. **Observability / docs hygiene**: `internal/otel/README.md` and `.design/otel.md` still say `pkg/otel`.
+
+Open questions:
+
+1. `pkg/notify`: the webhook/discord/email/slack providers and `examples` (~1.3k LOC) have no production importer — reserved feature or delete?
+2. Fold `swagger` and `afk` into the root module? Each has a single consumer.
 3. Long-term direction of `stage` vs `stream`.
