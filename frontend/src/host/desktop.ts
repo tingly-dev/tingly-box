@@ -20,6 +20,10 @@ export const BOUND_METHODS = {
     openMainWindow: `${TINGLY_SERVICE}.OpenMainWindow`,
 } as const;
 
+// GUI-only route that saves through a native dialog (registered in
+// TinglyService.ServiceStartup).
+export const SAVE_FILE_ROUTE = '/api/v1/gui/save';
+
 type WailsRuntime = typeof import('@wailsio/runtime');
 
 export function createDesktopHost(
@@ -48,6 +52,31 @@ export function createDesktopHost(
         openExternal: (url) => {
             void runtime.then(({ Browser }) => Browser.OpenURL(url));
         },
-        saveFile: saveFileViaAnchor,
+        saveFile: (blob, fileName) => {
+            void saveViaShell(blob, fileName).catch((error) => {
+                console.error('Native save failed, falling back to a download link:', error);
+                saveFileViaAnchor(blob, fileName);
+            });
+        },
     };
+
+    // The WebView has no download handling (wails v3 wires no download
+    // delegate, so an <a download> click does nothing in WKWebView). The
+    // shell shows a native Save dialog and writes the file instead:
+    // gui/wails3/services/save_file.go. Over the gateway's HTTP port, the
+    // path every API call takes, not the Wails IPC bridge (see window.go on
+    // why IPC is avoided). A cancelled dialog resolves normally — only a
+    // failed request falls back to the anchor.
+    async function saveViaShell(blob: Blob, fileName: string): Promise<void> {
+        const { Call } = await runtime;
+        const [port, token] = await Promise.all([
+            Call.ByName(BOUND_METHODS.getPort) as Promise<number>,
+            Call.ByName(BOUND_METHODS.getUserAuthToken) as Promise<string>,
+        ]);
+        const response = await fetch(
+            `http://localhost:${port}${SAVE_FILE_ROUTE}?name=${encodeURIComponent(fileName)}`,
+            { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: blob },
+        );
+        if (!response.ok) throw new Error(`save failed: HTTP ${response.status}`);
+    }
 }

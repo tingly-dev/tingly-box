@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BOUND_METHODS, createDesktopHost } from './desktop';
+import { BOUND_METHODS, createDesktopHost, SAVE_FILE_ROUTE } from './desktop';
 
 // A stand-in for @wailsio/runtime: just the two namespaces the bridge uses.
 function fakeRuntime() {
@@ -42,5 +42,32 @@ describe('desktop host bridge', () => {
         await Promise.resolve();
         await Promise.resolve();
         expect(runtime.Browser.OpenURL).toHaveBeenCalledWith('https://github.com/tingly-dev/tingly-box');
+    });
+
+    it('saves through the shell route with the shell token', async () => {
+        const { load } = fakeRuntime();
+        const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{"saved":true}'));
+        const anchor = vi.spyOn(document, 'createElement');
+        const blob = new Blob(['x']);
+        createDesktopHost(load).saveFile(blob, 'slices.zip');
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(url).toBe(`http://localhost:12580${SAVE_FILE_ROUTE}?name=slices.zip`);
+        expect(init).toMatchObject({ method: 'POST', headers: { Authorization: 'Bearer tb-token' }, body: blob });
+        expect(anchor).not.toHaveBeenCalledWith('a');
+        fetchMock.mockRestore();
+        anchor.mockRestore();
+    });
+
+    it('falls back to a download link only when the request fails', async () => {
+        const { load } = fakeRuntime();
+        const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { status: 500 }));
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        const createObjectURL = vi.fn(() => 'blob:x');
+        Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() });
+        createDesktopHost(load).saveFile(new Blob(['x']), 'a.txt');
+        await vi.waitFor(() => expect(createObjectURL).toHaveBeenCalled());
+        fetchMock.mockRestore();
+        vi.restoreAllMocks();
     });
 });

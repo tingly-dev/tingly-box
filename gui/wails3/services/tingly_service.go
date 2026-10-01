@@ -75,6 +75,10 @@ func (s *TinglyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // ServiceStartup is called when the service starts
 func (s *TinglyService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+	// Taken first: the routes below use it from request goroutines.
+	wailsApp := application.Get()
+	s.app = wailsApp
+
 	// GUI-only route: lets the tray hub panel and a second GUI launch nudge
 	// this instance to show its main window over plain HTTP — see run.go's
 	// notifyRunningGUI and frontend HubPage.tsx. Registered before Start so
@@ -92,10 +96,16 @@ func (s *TinglyService) ServiceStartup(ctx context.Context, options application.
 		c.JSON(http.StatusOK, gin.H{"success": true})
 	})
 
-	s.Start(ctx)
+	// Native save dialog for the desktop bridge's saveFile; see
+	// save_file.go. Same token check as /gui/open.
+	s.GetGinEngine().POST("/api/v1/gui/save", saveFileHandler(s.GetUserAuthToken, func(name string) (string, error) {
+		return wailsApp.Dialog.SaveFile().
+			SetFilename(name).
+			CanCreateDirectories(true).
+			PromptForSingleSelection()
+	}))
 
-	// Store the application instance for later use
-	s.app = application.Get()
+	s.Start(ctx)
 
 	return nil
 }
