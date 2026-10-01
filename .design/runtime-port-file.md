@@ -83,3 +83,10 @@ Only cross-process CLI readers use the runtime port. In-process consumers
 (the server itself, TUI quickstart that starts the server in-process, GUI
 wails service) already hold the correct port in the in-memory config and are
 unchanged.
+
+The GUI is also a *writer*: after taking the same PID lock it writes the port
+and version files (`gui/wails3/run.go`), and its `Unlock` on exit removes
+them. Before it did, a GUI started with `--port` was invisible to every reader
+here — `tb cc` / `tb open` / `tb start` looked at 12580 — and a second GUI
+launch, which now finds the first through `GetRuntimeServerPort()` without
+opening the database, could not reach it.

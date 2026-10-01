@@ -97,7 +97,8 @@ func (l *appLauncher) Start(appManager *app.AppManager, flags command.ServerFlag
 	// process on the same port. See acquireSingleInstanceLock's doc comment.
 	// If the holder is another GUI instance, focus it and exit quietly
 	// instead of showing an error.
-	if _, err := acquireSingleInstanceLock(appManager); err != nil {
+	fileLock, err := acquireSingleInstanceLock(appManager)
+	if err != nil {
 		if notifyErr := notifyRunningGUI(appManager); notifyErr == nil {
 			log.Printf("Another GUI instance is running; asked it to show its window")
 			return nil
@@ -105,6 +106,8 @@ func (l *appLauncher) Start(appManager *app.AppManager, flags command.ServerFlag
 		runErrorApp(err.Error())
 		return err
 	}
+	// Unlock also removes the runtime port/version files written below.
+	defer fileLock.Unlock()
 
 	// Only now, holding the lock, build AppConfig (via Resolve). A desktop
 	// app serves localhost unless --host says otherwise (the CLI's empty
@@ -124,6 +127,18 @@ func (l *appLauncher) Start(appManager *app.AppManager, flags command.ServerFlag
 		// Create a minimal error-only app and run it (this will block until the user closes it)
 		runErrorApp(fmt.Sprintf("Port %d is already in use.\n\nPlease close the application using this port or use a different port with --port.\n\nDetails: %s", opts.Port, info))
 		return fmt.Errorf("port %d is already in use", opts.Port)
+	}
+
+	// The same runtime files the CLI server writes next to its lock
+	// (.design/runtime-port-file.md): they are how a second GUI launch
+	// (notifyRunningGUI) and CLI readers (`tb cc`, `tb log`, `tb open`, `tb
+	// start`'s version hint) find this instance, since --port is never
+	// persisted to config.json.
+	if err := fileLock.WritePort(opts.Port); err != nil {
+		log.Printf("Failed to record server port: %v", err)
+	}
+	if err := fileLock.WriteVersion(command.BuildVersion); err != nil {
+		log.Printf("Failed to record server version: %v", err)
 	}
 
 	// Create ServerManager with options
