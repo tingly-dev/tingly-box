@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { displayVersion } from '@/utils/version';
 import {
     Box,
     Button,
@@ -131,7 +132,7 @@ export default function HubPage() {
                         />
                         <Typography variant="caption" color="text.secondary" noWrap>
                             {isHealthy ? t('hub.status.healthy') : t('hub.status.unhealthy')}
-                            {versionKnown && ` · v${currentVersion}`}
+                            {versionKnown && ` · ${displayVersion(currentVersion)}`}
                         </Typography>
                     </Stack>
                 </Box>

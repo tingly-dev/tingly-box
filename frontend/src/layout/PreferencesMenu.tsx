@@ -3,6 +3,7 @@
 // (.design/ui-redesign.md §3.2 — they are set-once preferences, and the rail
 // ran out of room at 900px). The same controls stay on System › General.
 import { AppRegistration as IconApps, ChevronRight as IconChevronRight, MessageReport as IconMessageReport, OpenInNew as IconOpenInNew, Settings as IconSettings } from '@/components/icons';
+import { displayVersion } from '@/utils/version';
 import { Box, Divider, MenuItem, MenuList, Popover, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -63,7 +64,7 @@ export const PreferencesMenu: React.FC<PreferencesMenuProps> = ({ anchorEl, onCl
         >
             <Box sx={{ px: 2, pt: 1.75, pb: 1.25 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                    Tingly-Box <Typography component="span" variant="caption" color="text.secondary">{currentVersion}</Typography>
+                    Tingly-Box <Typography component="span" variant="caption" color="text.secondary">{displayVersion(currentVersion)}</Typography>
                 </Typography>
                 <Typography variant="caption" color="text.secondary">{t('layout.easterEgg')}</Typography>
             </Box>

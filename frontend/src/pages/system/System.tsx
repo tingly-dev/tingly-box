@@ -1,4 +1,5 @@
 import CardGrid from '@/components/CardGrid.tsx';
+import { displayVersion } from '@/utils/version';
 import { PageLayout } from '@/components/PageLayout.tsx';
 import UnifiedCard from '@/components/UnifiedCard.tsx';
 import { Logout, Refresh as RefreshIcon, CheckCircle as IconCircleCheck, Cancel as IconCircleX, Info as IconInfoCircle, Lock as IconLock, License as IconLicense, GitHub as IconBrandGithub, Translate as IconLanguage, Brush as IconBrush, Check as IconCheck, AccessTime as IconClock, Router as IconRouter, tablerMui } from '@/components/icons';
@@ -159,7 +160,7 @@ const System = () => {
         notify.success(t('system.language.saveSuccess'));
     };
 
-    const displayVersion = (currentVersion || 'Unknown').split('+')[0];
+    const shownVersion = displayVersion(currentVersion);
 
     useEffect(() => {
         loadAllData();
@@ -296,7 +297,7 @@ const System = () => {
                             label={t('system.about.version')}
                             action={
                                 <CopyIconButton
-                                    value={displayVersion}
+                                    value={shownVersion}
                                     label={t('system.about.copyVersion')}
                                     copiedLabel={t('common.copied')}
                                     iconSize={16}
@@ -308,7 +309,7 @@ const System = () => {
                         >
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                 <Tooltip
-                                    title={hasUpdate && latestVersion ? t('system.about.updateAvailable', { version: latestVersion.split('+')[0] }) : t('system.about.checkUpdate')}
+                                    title={hasUpdate && latestVersion ? t('system.about.updateAvailable', { version: displayVersion(latestVersion) }) : t('system.about.checkUpdate')}
                                     placement="top"
                                     arrow
                                 >
@@ -323,7 +324,7 @@ const System = () => {
                                             '&:hover': { color: 'primary.main' },
                                         }}
                                     >
-                                        version {(currentVersion || 'Unknown').split('+')[0]}
+                                        {shownVersion}
                                     </Typography>
                                 </Tooltip>
                                 {hasUpdate && latestVersion && (
@@ -337,7 +338,7 @@ const System = () => {
                                             '&:hover': { textDecoration: 'underline' },
                                         }}
                                     >
-                                        {t('system.about.available')} → {latestVersion.split('+')[0]}
+                                        {t('system.about.available')} → {displayVersion(latestVersion)}
                                     </Typography>
                                 )}
                             </Box>

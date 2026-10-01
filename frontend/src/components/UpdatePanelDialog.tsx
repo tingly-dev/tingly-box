@@ -1,4 +1,5 @@
 import { GitHub, AppRegistration as NPM, Refresh } from '@/components/icons';
+import { bareVersion, displayVersion } from '@/utils/version';
 import { host } from '@/host';
 import { Box, Button, Dialog, DialogActions, DialogContent, Divider, Stack, ToggleButton, ToggleButtonGroup, Typography, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
@@ -61,8 +62,8 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
         setSelectedMethodId(value);
     }, []);
 
-    const displayCurrentVersion = (currentVersion || 'Unknown').split('+')[0];
-    const displayLatestVersion = (latestVersion || currentVersion || 'Unknown').split('+')[0];
+    const displayCurrentVersion = displayVersion(currentVersion);
+    const displayLatestVersion = displayVersion(latestVersion || currentVersion);
 
     // Use backend's has_update for accurate version comparison
     const hasVersionUpdate = hasUpdate && latestVersion && currentVersion;
@@ -71,7 +72,12 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
     // If update is available, use latest version
     // If up to date, use latest version (not current_version which might be "dev" in dev mode)
     // Only fallback to currentVersion if latestVersion is not available
-    const versionForCommand = latestVersion || currentVersion;
+    //
+    // Bare (no "v", no build metadata): npm wants `tingly-box@1.2.3` and the
+    // image tag adds its own "v" below. currentVersion carries the git tag's
+    // "v", so prefixing it again produced `:vv1.2.3`.
+    const rawVersionForCommand = latestVersion || currentVersion;
+    const versionForCommand = rawVersionForCommand ? bareVersion(rawVersionForCommand) : '';
 
     // Update methods with commands - always use specific version.
     // Selected via the channel toggle below; only one method is expanded at a

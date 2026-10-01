@@ -1,4 +1,5 @@
 import { Person as IconUser, ChevronRight as IconChevronRight, Lightbulb as IconLightbulb, Error as IconAlertCircle } from '@/components/icons';
+import { displayVersion } from '@/utils/version';
 import { Box, Divider, IconButton, ListItemButton, ListItemIcon, Tooltip, Typography } from '@mui/material';
 import React, { useCallback, useState } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
@@ -81,7 +82,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
             )}
             {/* Logo */}
             <Box sx={activityLogoCellSx}>
-                <Tooltip title={`Tingly-Box v${currentVersion}`} placement="right" arrow>
+                <Tooltip title={`Tingly-Box ${displayVersion(currentVersion)}`} placement="right" arrow>
                     <Box
                         component="a"
                         href="https://github.com/tingly-dev/tingly-box"

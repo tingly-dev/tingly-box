@@ -1,4 +1,5 @@
 import { Box, Tooltip, Typography } from '@mui/material';
+import { displayVersion } from '@/utils/version';
 import React, { type ReactNode } from 'react';
 import { useVersion } from '@/contexts/VersionContext';
 import { FiberManualRecord, Check, Refresh, UpgradeOutlined } from '@/components/icons';
@@ -43,8 +44,7 @@ export const VersionDisplay: React.FC<VersionDisplayProps> = ({
     const { currentVersion, latestVersion, checking, hasUpdate } = useVersion();
     const badgeColor = useVersionBadgeColor();
 
-    const displayVersion = (currentVersion || 'Unknown').split('+')[0];
-    const displayLatestVersion = (latestVersion || 'Unknown').split('+')[0];
+    const shownVersion = displayVersion(currentVersion);
     const isInteractive = Boolean(onClick);
 
     // Use backend's has_update for accurate version comparison
@@ -113,7 +113,7 @@ export const VersionDisplay: React.FC<VersionDisplayProps> = ({
                 }),
             }}
         >
-            {displayVersion}
+            {shownVersion}
         </Typography>
     );
 
