@@ -40,7 +40,7 @@ on:
         type: boolean
         default: true
       publish_gui:
-        description: '[pkg: tingly-box-gui] desktop UI shim; needs tingly-box-gui-macos-arm64.zip already on the release (build it with the "GUI Build" workflow, attach_to_release)'
+        description: '[pkg: tingly-box-gui] desktop UI with bundled frontend'
         required: false
         type: boolean
         default: false
@@ -141,20 +141,6 @@ jobs:
           fi
 
           echo "✅ Release $RELEASE_TAG found"
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-
-      # The GUI shim downloads this asset at run time, so publishing it before
-      # the GUI is on the release would ship a package that cannot start.
-      - name: Check the GUI assets are on the release
-        if: steps.set_vars.outputs.publish_gui == 'true'
-        run: |
-          RELEASE_TAG="${{ steps.version.outputs.release_tag }}"
-          if ! gh release view "$RELEASE_TAG" --json assets -q '.assets[].name' | grep -qx 'tingly-box-gui-macos-arm64.zip'; then
-            echo "❌ Release $RELEASE_TAG has no tingly-box-gui-macos-arm64.zip."
-            echo "👉 Run the 'GUI Build' workflow with release_tag=$RELEASE_TAG and attach_to_release=true, then re-run this."
-            exit 1
-          fi
         env:
           GITHUB_TOKEN: ${{ github.token }}
 

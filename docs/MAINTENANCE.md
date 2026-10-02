@@ -110,18 +110,14 @@ All binaries are:
 
 ### GUI Builds (Optional)
 
-The GUI is packaged separately from the CLI release and the npm publish, so
-each can be run on its own:
+The GUI is packaged separately from the CLI release and the npm publish, as an
+add-on in any order:
 
 - **With a release**: dispatch `release.yml` with `build_gui=true`.
-- **Alone, onto an existing release**: Actions → "GUI Build" → Run workflow,
-  `release_tag=<existing tag>`, `attach_to_release=true`. It builds all
-  platforms, uploads them (replacing same-named assets) plus `checksums-gui.txt`,
-  and adds the desktop section to the release notes. No CLI build or harness.
-- **Test build**: same workflow with `attach_to_release=false`; packages stay
-  workflow artifacts.
-- **npm**: afterwards, run `npm.yml` with `publish_gui=true`; it refuses if the
-  release has no `tingly-box-gui-macos-arm64.zip`.
+- **Later, onto an existing release**: Actions → "GUI Build" → Run workflow with
+  `release_tag=<existing tag>`. It builds all platforms and attaches them
+  (replacing same-named assets) plus `checksums-gui.txt`. No CLI build or harness.
+- **npm**: `npm.yml` with `publish_gui=true` downloads the GUI zip from the release.
 
 Assets: `tingly-box-gui-macos-arm64.zip`, `tingly-box-gui-windows-amd64.zip`,
 `tingly-box-gui-linux-amd64.deb`, `tingly-box-gui-linux-amd64.rpm`.
@@ -192,8 +188,7 @@ Release is created, with `publish_cli=true`, `publish_gui=false`,
 left. (The explicit dispatch is needed because releases created with the
 workflow's `GITHUB_TOKEN` do not fire the `release: published` trigger.)
 
-Run it manually only to re-publish, to publish the GUI package (after the GUI
-is attached to the release, see "GUI Builds"), or to override the defaults:
+Run it manually only to re-publish, to publish the GUI package, or to override the defaults:
 
 ### Steps to Publish NPX Packages Manually
 

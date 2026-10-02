@@ -12,7 +12,7 @@ on:
         type: string
         default: ''
       build_gui:
-        description: 'Also build the desktop GUI and attach it to this release (to add the GUI to an existing release later without re-running this one, run the "GUI Build" workflow with attach_to_release)'
+        description: 'Also build the desktop GUI and attach it to this release (it can also be added to an existing release later by running the "GUI Build" workflow)'
         required: false
         type: boolean
         default: false

@@ -18,16 +18,10 @@ name: GUI Build
 # which never sets the quarantine flag; a browser download needs one
 # "Open Anyway" (see the release notes).
 #
-# Three ways to run it, none needing the CLI build or the harness:
-#   - release.yml (workflow_call): GUI built alongside a fresh release, which
-#     attaches the artifacts itself.
-#   - workflow_dispatch, attach_to_release=false (default): a test build; the
-#     packages are only workflow artifacts.
-#   - workflow_dispatch, attach_to_release=true: package the GUI on its own and
-#     attach it to an EXISTING GitHub Release (release_tag). This is how a
-#     release cut without the GUI gets one later, or a broken GUI asset is
-#     replaced, without re-running release.yml. Publishing the npm package
-#     (`tingly-box-gui`) is a separate step afterwards: npm.yml, publish_gui.
+# Run by release.yml (workflow_call, which attaches the packages itself), or
+# dispatch it by hand with an existing release tag: it builds the GUI on its own
+# and attaches the packages to that release. Meant as a later add-on, in any
+# order relative to the npm publish; fix up by hand if something is off.
 
 on:
   workflow_call:
@@ -39,15 +33,9 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Version label (e.g. v1.6.2). Empty = dev-<sha>. Required (an existing release tag) when attach_to_release is on.'
-        required: false
+        description: 'Existing release tag (e.g. v1.6.2); the packages are attached to it, replacing same-named assets'
+        required: true
         type: string
-        default: ''
-      attach_to_release:
-        description: 'Attach the packages to the existing GitHub Release named by release_tag (replaces same-named assets)'
-        required: false
-        type: boolean
-        default: false
 
 env:
   GO_VERSION: '1.26'
@@ -59,34 +47,8 @@ permissions:
   contents: read
 
 jobs:
-  # Fail fast, before the three-platform build, if attaching can't work.
-  preflight:
-    name: Check release target
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && inputs.attach_to_release
-    permissions:
-      contents: read
-    steps:
-      - name: Release must exist
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.release_tag }}
-        run: |
-          if [ -z "$TAG" ]; then
-            echo "::error::release_tag is required when attach_to_release is on"
-            exit 1
-          fi
-          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "::error::GitHub Release $TAG does not exist; create it (release.yml) first"
-            exit 1
-          fi
-
   package:
     name: Package (${{ matrix.platform }}-${{ matrix.arch }})
-    needs: preflight
-    # preflight is skipped on workflow_call / plain test builds; only a failed
-    # preflight may stop the build.
-    if: ${{ !cancelled() && needs.preflight.result != 'failure' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -108,7 +70,6 @@ jobs:
         shell: bash
         run: |
           VERSION="${{ inputs.release_tag }}"
-          [ -n "$VERSION" ] || VERSION="dev-${GITHUB_SHA:0:7}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "* \`${{ matrix.platform }}-${{ matrix.arch }}\`: version \`${VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
 
@@ -219,12 +180,12 @@ jobs:
             dist/*.rpm
           retention-days: 7
 
-  # Standalone attach: put the packages on an existing release. (Under
-  # release.yml the github-release job attaches them instead.)
+  # Standalone run: attach to the existing release. (Under release.yml the
+  # github-release job attaches them instead.)
   attach:
     name: Attach to release ${{ inputs.release_tag }}
     needs: package
-    if: github.event_name == 'workflow_dispatch' && inputs.attach_to_release
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -250,33 +211,3 @@ jobs:
         run: |
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
             *.zip *.deb *.rpm checksums-gui.txt
-
-      - name: Add the desktop section to the release notes
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.release_tag }}
-        run: |
-          START="<!-- GUI_ASSETS:START -->"
-          END="<!-- GUI_ASSETS:END -->"
-          BODY="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body)"
-          # Idempotent: release.yml (build_gui) or an earlier run already wrote
-          # the section, so a re-attach only swaps the assets.
-          case "$BODY" in *"## Desktop app (unsigned)"*) echo "Release notes already describe the desktop app"; exit 0 ;; esac
-          {
-            printf '%s\n\n' "$BODY"
-            echo "$START"
-            cat <<'NOTES'
-          ## Desktop app (unsigned)
-
-          | Platform | Download |
-          | --- | --- |
-          | macOS Apple Silicon | `tingly-box-gui-macos-arm64.zip` |
-          | Windows x64 | `tingly-box-gui-windows-amd64.zip` |
-          | Linux x64 — Ubuntu 24.04+ / Debian 13+ | `tingly-box-gui-linux-amd64.deb` |
-          | Linux x64 — Fedora 40+ | `tingly-box-gui-linux-amd64.rpm` |
-
-          The desktop builds are not signed by Apple or Microsoft. On macOS use `npx tingly-box-gui` (skips Gatekeeper), or unzip and **System Settings → Privacy & Security → Open Anyway**. On Windows choose **More info → Run anyway** if SmartScreen appears. On Linux: `sudo apt install ./tingly-box-gui-linux-amd64.deb` or `sudo dnf install ./tingly-box-gui-linux-amd64.rpm`.
-          NOTES
-            echo "$END"
-          } > notes.md
-          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
