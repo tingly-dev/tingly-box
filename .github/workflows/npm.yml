@@ -616,10 +616,11 @@ jobs:
           expected_version: ${{ needs.setup.outputs.npx_version }}
 
   # Publish GUI NPX package
+  # Runs in parallel with publish-cli (each has its own production approval).
+  # Release-note edits are done afterwards by annotate-gui, never here, so the
+  # two publishes never race on the shared release body.
   publish-gui:
-    # Depend on create-release so the two jobs never edit the same release body
-    # concurrently (avoids a lost-update race on the shared release notes).
-    needs: [setup, create-release]
+    needs: setup
     name: Publish GUI Package
     runs-on: ubuntu-latest
     environment: production
@@ -763,6 +764,22 @@ jobs:
             exit 1
           fi
 
+  annotate-gui:
+    needs: [setup, create-release, publish-gui]
+    name: Annotate Release with GUI NPX Info
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # create-release has to finish first: both edit the same release body.
+    if: >-
+      always() &&
+      needs.publish-gui.result == 'success' &&
+      needs.create-release.result != 'failure' &&
+      needs.create-release.result != 'cancelled'
+    env:
+      PKG_NAME: tingly-box-gui
+      PKG_TYPE: gui
+    steps:
       - name: Append GUI NPX info to release notes
         env:
           VERSION: ${{ needs.setup.outputs.npx_version }}
