@@ -8,7 +8,7 @@ import type { ImageProfile } from './imageProfileTypes';
 const svgMarkup = (body: string, w: number, h: number) =>
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${body}</svg>`;
 
-const portrait = (bg: string, skin: string, hair: string, coat: string, glasses = false) => svgMarkup(
+export const portrait = (bg: string, skin: string, hair: string, coat: string, glasses = false) => svgMarkup(
     `<rect width="300" height="400" fill="${bg}"/>`
     + `<path d="M40 400 C50 300 100 270 150 270 C200 270 250 300 260 400 Z" fill="${coat}"/>`
     + `<rect x="132" y="225" width="36" height="50" fill="${skin}"/>`
@@ -20,7 +20,7 @@ const portrait = (bg: string, skin: string, hair: string, coat: string, glasses 
     300, 400,
 );
 
-const cat = (bg: string) => svgMarkup(
+export const cat = (bg: string) => svgMarkup(
     `<rect width="300" height="400" fill="${bg}"/>`
     + `<ellipse cx="150" cy="300" rx="95" ry="80" fill="#E08A3C"/>`
     + `<ellipse cx="150" cy="320" rx="45" ry="50" fill="#FBF3E8"/>`
@@ -31,7 +31,7 @@ const cat = (bg: string) => svgMarkup(
     300, 400,
 );
 
-const swatch = (colors: string[], shape: 'film' | 'wash' | 'poly') => {
+export const swatch = (colors: string[], shape: 'film' | 'wash' | 'poly') => {
     const [a, b, c, d] = colors;
     if (shape === 'film') {
         return svgMarkup(
@@ -61,9 +61,11 @@ const swatch = (colors: string[], shape: 'film' | 'wash' | 'poly') => {
     );
 };
 
+export const svgDataUrl = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+
 const mockRef = (name: string, svg: string, width: number, height: number): ReferenceImage => ({
     file: new File([svg], `${name}.svg`, { type: 'image/svg+xml' }),
-    previewUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+    previewUrl: svgDataUrl(svg),
     source: 'upload',
     width,
     height,

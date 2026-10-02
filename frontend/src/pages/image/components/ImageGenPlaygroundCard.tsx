@@ -12,6 +12,8 @@ import {
     IconButton,
     InputAdornment,
     InputLabel,
+    ListItemText,
+    Menu,
     MenuItem,
     Select,
     Stack,
@@ -25,7 +27,9 @@ import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { CopyIconButton } from '@/components/CopyIconButton';
-import { AutoAwesome, Close, DeleteOutline, Description, Edit, OpenInFull } from '@/components/icons';
+import { AutoAwesome, Close, DeleteOutline, Description, Edit, OpenInFull, tablerMui } from '@/components/icons';
+import { IconTextPlus } from '@tabler/icons-react';
+import { fetchBlob } from '@tingly/vision';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { fontMono } from '@/theme/fonts';
 import { api } from '@/services/api';
@@ -47,6 +51,12 @@ import { newPromptId, type ImageProfile, type ProfilePrompt } from '../profiles/
 import ProfilePromptTabs from '../profiles/ProfilePromptTabs';
 import { deriveLabel } from '../profiles/promptLabel';
 import { dropProfileSession } from './useImageGenRuns';
+import AssetPickerDialog from '../library/AssetPickerDialog';
+import { useSnippets } from '../library/assetStore';
+import type { ImageAsset } from '../library/assetTypes';
+import type { ReferenceImage } from './ImageGenReferenceImages';
+
+const TextPlus = tablerMui(IconTextPlus);
 import type {
     GenerationRun,
     ImportedImage,
@@ -535,6 +545,45 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         navigate(`/image/profile/${created.id}`, { state: { rename: true } });
     };
 
+    // Library: picking kept images as references, and inserting snippets.
+    const [libraryPickerOpen, setLibraryPickerOpen] = useState(false);
+    const handlePickFromLibrary = async (assets: ImageAsset[]) => {
+        setLibraryPickerOpen(false);
+        const refs = await Promise.all(assets.map(async (asset): Promise<ReferenceImage> => {
+            const blob = await fetchBlob(asset.src);
+            return {
+                file: new File([blob], asset.name, { type: blob.type || 'image/png' }),
+                // The asset's own src, so the row (and a profile) points at the
+                // library image rather than a copy of it.
+                previewUrl: asset.src,
+                source: 'upload',
+                width: asset.width,
+                height: asset.height,
+            };
+        }));
+        setReferenceImages((current) => [...current, ...refs].slice(0, MAX_EDIT_REFERENCE_IMAGES));
+    };
+    const snippets = useSnippets();
+    const promptInputRef = useRef<HTMLTextAreaElement>(null);
+    const [snippetAnchor, setSnippetAnchor] = useState<HTMLElement | null>(null);
+    const insertSnippet = (text: string) => {
+        setSnippetAnchor(null);
+        const input = promptInputRef.current;
+        const start = input?.selectionStart ?? prompt.length;
+        const end = input?.selectionEnd ?? prompt.length;
+        const before = prompt.slice(0, start);
+        // Joined like a clause, not glued to the previous word.
+        const joiner = before && !/[\s，。,.；;：:]$/.test(before) ? '，' : '';
+        const next = `${before}${joiner}${text}${prompt.slice(end)}`;
+        setPrompt(next);
+        requestAnimationFrame(() => {
+            if (!input) return;
+            input.focus();
+            const caret = before.length + joiner.length + text.length;
+            input.setSelectionRange(caret, caret);
+        });
+    };
+
     const noModels = models.length === 0;
     // On lg the playground is a full-height workbench (the page gives it the
     // viewport): both panels fill the grid row, so they stay aligned without a
@@ -660,6 +709,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             promptFileInputRef={promptFileInputRef}
                             onOpenReference={handleOpenReference}
                             onEditSketch={handleOpenSketch}
+                            onPickFromLibrary={() => setLibraryPickerOpen(true)}
                             onEditMask={setMaskTarget}
                             onRemoveReference={handleRemoveReferenceImage}
                             onReorder={handleReorderReference}
@@ -705,6 +755,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         )}
 
                         <TextField
+                            inputRef={promptInputRef}
                             multiline
                             minRows={3}
                             fullWidth
@@ -743,6 +794,15 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                     iconSize={16}
                                                 />
                                             )}
+                                            <Tooltip title={t('imageLibrary.insertSnippet', { defaultValue: 'Insert a snippet' })}>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={(event) => setSnippetAnchor(event.currentTarget)}
+                                                    aria-label={t('imageLibrary.insertSnippet', { defaultValue: 'Insert a snippet' })}
+                                                >
+                                                    <TextPlus sx={{ fontSize: 16 }} />
+                                                </IconButton>
+                                            </Tooltip>
                                             <Tooltip title={t('playground.openPromptFile', { defaultValue: 'Open a text file as the prompt' })}>
                                                 <IconButton
                                                     size="small"
@@ -910,6 +970,33 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     />
                 </Box>
             </UnifiedCard>
+            <AssetPickerDialog
+                open={libraryPickerOpen}
+                remaining={MAX_EDIT_REFERENCE_IMAGES - referenceImages.length}
+                onClose={() => setLibraryPickerOpen(false)}
+                onPick={(assets) => { void handlePickFromLibrary(assets); }}
+            />
+            <Menu
+                anchorEl={snippetAnchor}
+                open={Boolean(snippetAnchor)}
+                onClose={() => setSnippetAnchor(null)}
+                slotProps={{ paper: { sx: { maxWidth: 360 } } }}
+            >
+                {snippets.map((snippet) => (
+                    <MenuItem key={snippet.id} onClick={() => insertSnippet(snippet.text)}>
+                        <ListItemText
+                            primary={snippet.name}
+                            secondary={snippet.text}
+                            slotProps={{ secondary: { noWrap: true, sx: { fontSize: 12 } } }}
+                        />
+                    </MenuItem>
+                ))}
+                <MenuItem onClick={() => { setSnippetAnchor(null); navigate('/image/library?tab=snippets'); }} sx={{ fontSize: 13, color: 'primary.main', borderTop: snippets.length ? 1 : 0, borderColor: 'divider' }}>
+                    {snippets.length
+                        ? t('imageLibrary.manageSnippets', { defaultValue: 'Manage snippets…' })
+                        : t('imageLibrary.noSnippets', { defaultValue: 'No snippets yet — add some in the library' })}
+                </MenuItem>
+            </Menu>
             <ImageGenLightbox
                 selectedImage={selectedImage}
                 onClose={() => setSelectedImage(null)}
