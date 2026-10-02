@@ -116,7 +116,9 @@ add-on in any order:
 - **With a release**: dispatch `release.yml` with `build_gui=true`.
 - **Later, onto an existing release**: Actions → "GUI Build" → Run workflow with
   `release_tag=<existing tag>`. It builds all platforms and attaches them
-  (replacing same-named assets) plus `checksums-gui.txt`. No CLI build or harness.
+  (replacing same-named assets) plus `checksums-gui.txt`, then dispatches `npm.yml`
+  for the GUI package only (`publish_gui=true`, waits for `production` approval).
+  No CLI build or harness.
 - **npm**: `npm.yml` with `publish_gui=true` downloads the GUI zip from the release.
 
 Assets: `tingly-box-gui-macos-arm64.zip`, `tingly-box-gui-windows-amd64.zip`,

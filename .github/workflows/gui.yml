@@ -21,7 +21,8 @@ name: GUI Build
 # Run by release.yml (workflow_call, which attaches the packages itself), or
 # dispatch it by hand with an existing release tag: it builds the GUI on its own
 # and attaches the packages to that release. Meant as a later add-on, in any
-# order relative to the npm publish; fix up by hand if something is off.
+# order relative to the npm publish; fix up by hand if something is off. After
+# attaching it dispatches the GUI-only npm publish (pending approval).
 
 on:
   workflow_call:
@@ -189,6 +190,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
     steps:
       - name: Download GUI packages
         uses: actions/download-artifact@v4
@@ -211,3 +213,17 @@ jobs:
         run: |
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
             *.zip *.deb *.rpm checksums-gui.txt
+
+      # Same as release.yml's trigger-npm-publish, for the GUI package only.
+      # Publishes nothing by itself: npm.yml waits at the `production`
+      # environment approval before `npm publish`.
+      - name: Dispatch GUI npm publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          if [[ "${TAG#v}" == *-* ]]; then NPM_TAG=rc; else NPM_TAG=latest; fi
+          gh workflow run npm.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG" \
+            -f tag="$TAG" -f npm_tag="$NPM_TAG" \
+            -f publish_cli=false -f publish_gui=true -f build_docker=false
+          echo "Dispatched npm.yml for $TAG (gui only, dist-tag $NPM_TAG); approve the production environment to publish." >> "$GITHUB_STEP_SUMMARY"
