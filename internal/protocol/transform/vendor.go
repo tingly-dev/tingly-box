@@ -36,7 +36,7 @@ func (t *VendorTransform) Apply(ctx *TransformContext) error {
 	case *openai.ChatCompletionNewParams:
 		ctx.Request = t.applyChat(ctx, req, providerURL)
 	case *responses.ResponseNewParams:
-		ctx.Request = t.applyResponses(ctx, req)
+		ctx.Request = t.applyResponses(ctx, req, providerURL)
 	case *anthropic.MessageNewParams:
 		ctx.Request = t.applyAnthropicV1(ctx, req, providerURL)
 	case *anthropic.BetaMessageNewParams:
@@ -60,11 +60,12 @@ func (t *VendorTransform) applyChat(ctx *TransformContext, req *openai.ChatCompl
 	return ops.ApplyProviderTransforms(req, providerURL, string(req.Model), config)
 }
 
-func (t *VendorTransform) applyResponses(ctx *TransformContext, req *responses.ResponseNewParams) *responses.ResponseNewParams {
+func (t *VendorTransform) applyResponses(ctx *TransformContext, req *responses.ResponseNewParams, providerURL string) *responses.ResponseNewParams {
 	if req == nil || req.Model == "" {
 		return req
 	}
-	// MENTION: no need to do transform here, the codex client will handle this
+	req = ops.ApplyResponsesProviderTransforms(req, providerURL)
+	// MENTION: no Codex-specific transform here, the codex client will handle it
 	//if t.providerURL(ctx) == protocol.CodexAPIBase {
 	//	return ops.ApplyCodexResponsesTransform(req, ctx.OriginalRequest)
 	//}
