@@ -1,7 +1,7 @@
 # Desktop GUI packaging
 
 What the Wails GUI (`gui/wails3`) ships as, per platform, and why. Built by
-`.github/workflows/gui.yml`, its own pipeline: `release.yml` (`build_gui`) can call
+`.github/workflows/release-gui.yml`, its own pipeline: `release.yml` (`build_gui`) can call
 it, or dispatch it alone with an existing release tag to attach the packages
 later. Publishing `tingly-box-gui` to npm (`npm.yml`, `publish_gui`) is a
 separate step; the three can run in any order.

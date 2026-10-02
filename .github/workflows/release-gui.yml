@@ -1,4 +1,4 @@
-name: GUI Build
+name: Release GUI
 
 # Unsigned Wails3 desktop GUI packages, one per platform the release and the
 # tingly-box-gui npm package distribute:

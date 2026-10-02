@@ -1,4 +1,4 @@
-name: Github Release
+name: Release
 
 on:
   push:
@@ -12,7 +12,7 @@ on:
         type: string
         default: ''
       build_gui:
-        description: 'Also build the desktop GUI and attach it to this release (it can also be added to an existing release later by running the "GUI Build" workflow)'
+        description: 'Also build the desktop GUI and attach it to this release (it can also be added to an existing release later by running the "Release GUI" workflow)'
         required: false
         type: boolean
         default: false
@@ -294,12 +294,12 @@ jobs:
 
   # Unsigned desktop packages (macOS arm64, Windows amd64, Linux amd64
   # deb/rpm); the macOS asset name is the contract tingly-box-gui's npm shim
-  # downloads by. Optional and independent of the CLI: gui.yml can also be run
+  # downloads by. Optional and independent of the CLI: release-gui.yml can also be run
   # alone (attach_to_release) against an existing release.
   build-gui:
     needs: setup
     if: needs.setup.outputs.build_gui == 'true'
-    uses: ./.github/workflows/gui.yml
+    uses: ./.github/workflows/release-gui.yml
     with:
       release_tag: ${{ needs.setup.outputs.release_tag }}
 

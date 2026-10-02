@@ -114,7 +114,7 @@ The GUI is packaged separately from the CLI release and the npm publish, as an
 add-on in any order:
 
 - **With a release**: dispatch `release.yml` with `build_gui=true`.
-- **Later, onto an existing release**: Actions → "GUI Build" → Run workflow with
+- **Later, onto an existing release**: Actions → "Release GUI" → Run workflow with
   `release_tag=<existing tag>`. It builds all platforms and attaches them
   (replacing same-named assets) plus `checksums-gui.txt`, then dispatches `npm.yml`
   for the GUI package only (`publish_gui=true`, waits for `production` approval).

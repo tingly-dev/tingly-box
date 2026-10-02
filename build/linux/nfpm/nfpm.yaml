@@ -1,5 +1,5 @@
 # Linux package for the desktop GUI (deb / rpm), built by
-# `task linux:package:gui` and the GUI workflow (.github/workflows/gui.yml).
+# `task linux:package:gui` and the GUI workflow (.github/workflows/release-gui.yml).
 # See https://nfpm.goreleaser.com for the format.
 #
 # The package is tingly-box-gui and installs the binary as
