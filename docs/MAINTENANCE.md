@@ -120,8 +120,9 @@ add-on in any order:
   for the GUI package only (`publish_gui=true`, waits for `production` approval).
   No CLI build or harness.
 - **npm, on its own**: `npm.yml` with `publish_gui=true`, `publish_cli=false`,
-  `build_docker=false` publishes only `tingly-box-gui` (it downloads the GUI zip
-  from the release); CLI/Docker are untouched.
+  `build_docker=false` publishes only `tingly-box-gui` (it builds the per-platform
+  packages `@tingly-dev/tingly-box-gui-{darwin-arm64,win32-x64}` from the GUI zips
+  on the release, then the shim); CLI/Docker are untouched.
 
 Assets: `tingly-box-gui-macos-arm64.zip`, `tingly-box-gui-windows-amd64.zip`,
 `tingly-box-gui-linux-amd64.deb`, `tingly-box-gui-linux-amd64.rpm`.

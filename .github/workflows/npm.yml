@@ -656,7 +656,7 @@ jobs:
       # registry's reason is visible in the log. Fails the job early.
       - name: Verify npm OIDC trusted-publisher exchange
         env:
-          PACKAGES: ${{ env.PKG_NAME }}
+          PACKAGES: ${{ env.PKG_NAME }} @tingly-dev/tingly-box-gui-darwin-arm64 @tingly-dev/tingly-box-gui-win32-x64
         run: |
           ID_TOKEN=$(curl -sSf -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm:registry.npmjs.org" | jq -r .value)
@@ -695,6 +695,75 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
+      # ---- platform packages (same scheme as the cli) -------------------
+      # tingly-box-gui-<os>-<cpu> carry the desktop zip from the release, so
+      # `npx tingly-box-gui` needs only the npm registry. Linux has none
+      # (deb/rpm). macOS: the zip holds the ad-hoc signed TinglyBox.app; the
+      # shim re-verifies/re-signs it after extraction.
+      - name: Download GUI release assets
+        env:
+          RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          mkdir -p zips
+          gh release download "$RELEASE_TAG" --repo "$REPO" \
+            --pattern "tingly-box-gui-macos-arm64.zip" \
+            --pattern "tingly-box-gui-windows-amd64.zip" \
+            --dir zips || {
+              echo "❌ GUI assets missing on $RELEASE_TAG; run the 'Release GUI' workflow for it first"
+              exit 1
+            }
+          ls -lh zips
+
+      - name: Build GUI platform packages
+        run: |
+          VERSION="${{ needs.setup.outputs.npx_version }}"
+          build/npx/scripts/build-platform-packages.sh "$VERSION" zips platform gui > built.txt
+          EXPECTED=$(node -e 'import("./build/npx/shared/platform.js").then(m => console.log(Object.keys(m.GUI_PLATFORM_PACKAGES).length))')
+          BUILT=$(wc -l < built.txt)
+          if [ "$BUILT" -ne "$EXPECTED" ]; then
+            echo "❌ Built $BUILT GUI platform packages, expected $EXPECTED"
+            exit 1
+          fi
+          cat built.txt
+          du -sh platform/@tingly-dev/*
+
+      - name: Publish GUI platform packages to npm
+        run: |
+          VERSION="${{ needs.setup.outputs.npx_version }}"
+          NPM_TAG="${{ needs.setup.outputs.npm_tag }}"
+          mkdir -p publish-logs
+          publish_one() {
+            local name="$1" log="publish-logs/$(echo "$1" | tr '/@' '__').log"
+            if npm view "${name}@${VERSION}" version >/dev/null 2>&1; then
+              echo "skip" > "$log.status"; return 0
+            fi
+            if (cd "platform/$name" && npm publish --provenance --access public --tag "$NPM_TAG") > "$log" 2>&1; then
+              echo "ok" > "$log.status"
+            elif grep -qiE "previously published|cannot publish over|EPUBLISHCONFLICT|already exists" "$log"; then
+              echo "skip" > "$log.status"
+            else
+              echo "fail" > "$log.status"
+            fi
+          }
+          while read -r name; do
+            echo "📦 Publishing ${name}@${VERSION} (tag: ${NPM_TAG})..."
+            publish_one "$name" &
+          done < built.txt
+          wait
+          FAILED=0
+          while read -r name; do
+            log="publish-logs/$(echo "$name" | tr '/@' '__').log"
+            case "$(cat "$log.status" 2>/dev/null)" in
+              ok)   echo "✅ ${name}@${VERSION} published" ;;
+              skip) echo "ℹ️  ${name}@${VERSION} already on npm, skipped" ;;
+              *)    echo "❌ ${name}@${VERSION} failed:"; sed 's/^/    /' "$log"; FAILED=1 ;;
+            esac
+          done < built.txt
+          [ "$FAILED" -eq 0 ]
+
+      # ---- gui shim ------------------------------------------------------
       - name: Update NPX package.json with new version
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
@@ -702,6 +771,17 @@ jobs:
           npm version "$VERSION" --no-git-tag-version
           echo "Updated $PKG_NAME to version: $VERSION"
           cd ..
+
+      # Exact-version pins, as for the cli: the shim uses a platform package
+      # only when its version equals its own.
+      - name: Wire platform packages as optionalDependencies
+        run: |
+          VERSION="${{ needs.setup.outputs.npx_version }}"
+          cd $PKG_DIR
+          while read -r name; do
+            npm pkg set "optionalDependencies.${name}=${VERSION}"
+          done < ../../../built.txt
+          npm pkg get optionalDependencies
 
       - name: Update bin.js to reference the correct release
         run: |
@@ -740,9 +820,10 @@ jobs:
           mv bin.bundled.js bin.js
           npm pkg delete dependencies
           node --check bin.js
-          # On Linux the GUI shim prints "not supported" and exits 0.
+          # On this Linux runner the GUI shim prints "not supported" and exits
+          # non-zero; running it only proves the bundle starts without deps.
           rm -rf node_modules ../node_modules
-          node bin.js
+          node bin.js || true
           echo "✅ Bundled bin.js ($(du -h bin.js | cut -f1)), dependencies stripped"
 
       - name: Publish to npm

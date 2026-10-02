@@ -29,6 +29,15 @@ export const PLATFORM_PACKAGES = {
 	"win32-x64": { name: "@tingly-dev/tingly-box-win32-x64", zip: "tingly-box-windows-amd64.zip" },
 };
 
+// Desktop GUI packages, same scheme (`tingly-box-gui` pins them as
+// optionalDependencies). Only the platforms the GUI ships a zip for: Linux is
+// deb/rpm (system GTK4/WebKitGTK), so it has no npm package.
+// zip: tingly-box-gui-<os>-<arch>.zip from release-gui.yml.
+export const GUI_PLATFORM_PACKAGES = {
+	"darwin-arm64": { name: "@tingly-dev/tingly-box-gui-darwin-arm64", zip: "tingly-box-gui-macos-arm64.zip" },
+	"win32-x64": { name: "@tingly-dev/tingly-box-gui-win32-x64", zip: "tingly-box-gui-windows-amd64.zip" },
+};
+
 export function platformPackageName() {
 	const entry = PLATFORM_PACKAGES[`${process.platform}-${process.arch}`];
 	return entry ? entry.name : null;
@@ -40,8 +49,8 @@ export function platformPackageName() {
 // npx's cache, or a dev checkout's node_modules. Returns
 // { name, version, zipPath } or null when not installed / incomplete.
 // Never throws — the caller treats null as "use the download path".
-export function findPlatformPackage(fromUrl) {
-	const entry = PLATFORM_PACKAGES[`${process.platform}-${process.arch}`];
+export function findPlatformPackage(fromUrl, packages = PLATFORM_PACKAGES) {
+	const entry = packages[`${process.platform}-${process.arch}`];
 	if (!entry) return null;
 	try {
 		// Distinct identifier from the `require` the esbuild banner defines.

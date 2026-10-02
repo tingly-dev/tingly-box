@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
-import { execFileSync } from "child_process";
+import { execFileSync, spawn } from "child_process";
 import { chmodSync, existsSync, mkdirSync } from "fs";
+import { createRequire } from "module";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { cacheDir } from "../shared/cachedir.js";
 import { cleanupRetiredInstallDirs, cleanupStaleBinaryCaches } from "../shared/cleanup.js";
-import { downloadAndExtractZip } from "../shared/download.js";
+import { downloadAndExtractZip, extractZipFile } from "../shared/download.js";
+import { findPlatformPackage, GUI_PLATFORM_PACKAGES } from "../shared/platform.js";
 import { parseTransportVersion } from "../shared/transport.js";
 
 // Configuration for binary downloads
@@ -17,6 +19,24 @@ const BASE_URL = "https://github.com/tingly-dev/tingly-box/releases/download";
 const BINARY_RELEASE_BRANCH = "latest";
 
 const { version: VERSION, remainingArgs } = parseTransportVersion();
+
+// This shim's own npm version; the platform package must carry the same one.
+const OWN_VERSION = createRequire(import.meta.url)("./package.json").version;
+
+// Same scheme as the cli shim: prefer the @tingly-dev/tingly-box-gui-<os>-<cpu>
+// package npm installed next to this one (registry only, no GitHub), but only
+// at exactly this version; otherwise download the baked release tag.
+function resolveSource() {
+	if (VERSION !== "latest") return { kind: "download", tag: VERSION };
+	const local = findPlatformPackage(import.meta.url, GUI_PLATFORM_PACKAGES);
+	if (local && local.version === OWN_VERSION) {
+		return { kind: "package", tag: `v${local.version}`, local };
+	}
+	if (local) {
+		console.warn(`⚠️  ${local.name}@${local.version} does not match tingly-box-gui@${OWN_VERSION}, downloading the release instead`);
+	}
+	return { kind: "download", tag: BINARY_RELEASE_BRANCH };
+}
 
 async function getPlatformArchAndBinary() {
 	const platform = process.platform;
@@ -68,10 +88,10 @@ async function getPlatformArchAndBinary() {
 				"  sudo dnf install ./tingly-box-gui-linux-amd64.rpm   (Fedora 40+)",
 			],
 		};
-	} else if (platform === "win32") {
+	} else if (platform === "win32" && process.arch !== "x64") {
 		unsupported = {
-			name: "Windows",
-			status: [`Download tingly-box-gui-windows-amd64.zip from ${releasesUrl}`],
+			name: "Windows on " + process.arch,
+			status: ["The desktop app is built for x64 Windows only"],
 		};
 	} else if (platform === "darwin" && process.arch !== "arm64") {
 		// Only an Apple Silicon build of the desktop app is published.
@@ -90,22 +110,20 @@ async function getPlatformArchAndBinary() {
 		process.exit(1);
 	}
 
-	// For macOS, continue with app download and launch
+	// macOS (arm64) and Windows (x64) continue: install, then launch.
 	const platformInfo = await getPlatformArchAndBinary();
-	const { platformDir, archDir, binaryName, appName } = platformInfo;
+	const { platformDir, archDir, binaryName, suffix, appName } = platformInfo;
 
-	// For the NPX package, we always use the configured branch or the specified version
-	const branchName = VERSION === "latest" ? BINARY_RELEASE_BRANCH : VERSION;
+	const source = resolveSource();
+	// Cache dir is keyed by the release tag, whichever way the app arrives.
+	const branchName = source.tag;
 
-	// Build ZIP download URL
 	const zipFileName = `${binaryName}-${platformDir}-${archDir}.zip`;
 	const downloadUrl = `${BASE_URL}/${branchName}/${zipFileName}`;
 
-	// Use branch name for caching
 	const cacheRoot = join(cacheDir(), "tingly-box-gui");
 	const tinglyBinDir = join(cacheRoot, branchName, "bin");
 
-	// Create the binary directory
 	try {
 		if (!existsSync(tinglyBinDir)) {
 			mkdirSync(tinglyBinDir, { recursive: true });
@@ -115,38 +133,70 @@ async function getPlatformArchAndBinary() {
 		process.exit(1);
 	}
 
-	// The app bundle path
-	const appPath = join(tinglyBinDir, appName);
+	// macOS: the .app bundle. Windows: the bare exe.
+	const isMac = platform === "darwin";
+	const appPath = isMac ? join(tinglyBinDir, appName) : join(tinglyBinDir, `tingly-box${suffix}`);
 
-	// If app doesn't exist, download and extract ZIP
 	if (!existsSync(appPath)) {
-		await downloadAndExtractZip(downloadUrl, tinglyBinDir);
-
-		// Make sure the binary inside the .app bundle is executable
-		const appBinaryPath = join(appPath, "Contents", "MacOS", "tingly-box");
-		if (existsSync(appBinaryPath)) {
-			chmodSync(appBinaryPath, 0o755);
-			console.log(`✅ Set executable permission on ${appBinaryPath}`);
+		if (source.kind === "package") {
+			console.log(`📦 Installing the app from ${source.local.name}@${source.local.version}...`);
+			await extractZipFile(source.local.zipPath, tinglyBinDir);
+		} else {
+			await downloadAndExtractZip(downloadUrl, tinglyBinDir);
+		}
+		if (!existsSync(appPath)) {
+			console.error(`❌ The package did not contain ${appPath}`);
+			process.exit(1);
 		}
 
-		console.log(`✅ Downloaded and extracted to ${appPath}`);
+		if (isMac) {
+			// Make sure the binary inside the .app bundle is executable
+			const appBinaryPath = join(appPath, "Contents", "MacOS", "tingly-box");
+			if (existsSync(appBinaryPath)) {
+				chmodSync(appBinaryPath, 0o755);
+			}
+		}
+		console.log(`✅ Installed to ${appPath}`);
 	}
 
 	// The app for this tag is in place — old tag dirs are now safe to GC.
 	cleanupStaleBinaryCaches(cacheRoot, branchName);
 
+	if (!isMac) {
+		// Windows: start the exe detached so the shell prompt returns.
+		console.log(`🚀 Launching ${appPath}...`);
+		try {
+			const child = spawn(appPath, [], { detached: true, stdio: "ignore" });
+			child.on("error", (e) => {
+				console.error(`\n❌ Failed to launch ${appPath}: ${e.message}`);
+				console.error(`   Clear the cache and retry: rmdir /s /q "${cacheRoot}"`);
+				process.exit(1);
+			});
+			child.unref();
+		} catch (e) {
+			console.error(`\n❌ Failed to launch ${appPath}: ${e.message}`);
+			process.exit(1);
+		}
+		return;
+	}
+
 	console.log(`🔍 Launching app: ${appPath}`);
 
-	// Sign the app (macOS requires ad-hoc signing for downloaded apps)
+	// macOS: the app is only ad-hoc signed (no Developer ID). Extraction can
+	// invalidate the bundle seal, so verify and re-sign ad hoc only when
+	// needed. Neither npm nor this shim sets the quarantine flag, so
+	// Gatekeeper never prompts on this path.
 	try {
-		console.log(`🔐 Signing app with ad-hoc signature...`);
-		execFileSync("codesign", ["--force", "--deep", "--sign", "-", appPath], {
-			stdio: "inherit"
-		});
-		console.log(`✅ App signed successfully`);
-	} catch (signError) {
-		console.error(`⚠️  Warning: Failed to sign app: ${signError.message}`);
-		console.error(`    Continuing anyway...`);
+		execFileSync("codesign", ["--verify", "--deep", appPath], { stdio: "ignore" });
+	} catch {
+		try {
+			console.log(`🔐 Signing app with ad-hoc signature...`);
+			execFileSync("codesign", ["--force", "--deep", "--sign", "-", appPath], { stdio: "inherit" });
+			console.log(`✅ App signed successfully`);
+		} catch (signError) {
+			console.error(`⚠️  Warning: Failed to sign app: ${signError.message}`);
+			console.error(`    Continuing anyway...`);
+		}
 	}
 
 	// Launch the app using `open` command

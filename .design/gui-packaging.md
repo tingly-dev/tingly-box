@@ -17,6 +17,28 @@ all of those, and it is the full product (the GUI is the same gateway with a
 window and a tray). A GUI build is only worth its CI time and support
 surface where the desktop audience is.
 
+## npm: per-platform packages
+
+`tingly-box-gui` follows the CLI's scheme (`npm.md` F): the shim pins
+`@tingly-dev/tingly-box-gui-darwin-arm64` and `@tingly-dev/tingly-box-gui-win32-x64`
+as exact-version `optionalDependencies`; each carries the release zip
+(`shared/platform.js` `GUI_PLATFORM_PACKAGES`, built by
+`build-platform-packages.sh … gui`). Linux has none (deb/rpm, see below). The
+shim extracts the zip into its versioned cache and launches from there; the
+GitHub download is the fallback (`--no-optional`, mirror lag, version
+mismatch, `--transport-version`).
+
+- **macOS**: the app is ad-hoc signed in CI. Extraction can break the bundle
+  seal, so the shim runs `codesign --verify` and re-signs ad hoc only if that
+  fails. npm and the shim never set the quarantine flag, so Gatekeeper does
+  not prompt on this path (a browser download still needs "Open Anyway").
+- **Windows**: the shim extracts `tingly-box.exe` and starts it detached.
+  Unsigned: SmartScreen may still warn on first run.
+- The packages are published by `npm.yml`'s `publish-gui` job, which needs
+  the GUI zips already on the release. Each new package name needs a Trusted
+  Publisher (repo `tingly-dev/tingly-box`, workflow `npm.yml`, environment
+  `production`) on npmjs.com before its first publish.
+
 ## Linux
 
 **deb + rpm, not AppImage or a bare binary.** Wails v3 links GTK4 and
