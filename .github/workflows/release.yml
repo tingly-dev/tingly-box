@@ -12,7 +12,7 @@ on:
         type: string
         default: ''
       build_gui:
-        description: 'Build GUI version'
+        description: 'Also build the desktop GUI and attach it to this release (to add the GUI to an existing release later without re-running this one, run the "GUI Build" workflow with attach_to_release)'
         required: false
         type: boolean
         default: false
@@ -294,7 +294,8 @@ jobs:
 
   # Unsigned desktop packages (macOS arm64, Windows amd64, Linux amd64
   # deb/rpm); the macOS asset name is the contract tingly-box-gui's npm shim
-  # downloads by.
+  # downloads by. Optional and independent of the CLI: gui.yml can also be run
+  # alone (attach_to_release) against an existing release.
   build-gui:
     needs: setup
     if: needs.setup.outputs.build_gui == 'true'
