@@ -203,7 +203,7 @@ jobs:
         working-directory: ./gui
         run: |
           ls -la
-          sha256sum *.zip *.deb *.rpm > checksums-gui.txt
+          sha256sum -- *.zip *.deb *.rpm > checksums-gui.txt
 
       - name: Upload to release
         env:
@@ -211,7 +211,7 @@ jobs:
           TAG: ${{ inputs.release_tag }}
         working-directory: ./gui
         run: |
-          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber -- \
             *.zip *.deb *.rpm checksums-gui.txt
 
       # Same as release.yml's trigger-npm-publish, for the GUI package only.
