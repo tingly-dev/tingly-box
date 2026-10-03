@@ -7,7 +7,7 @@ instead of re-implementing provider rules inline.
 
 ## Normalization rules
 
-**The normalization table lives in [`.design/stream-usage-tracking.md`](../../../.design/stream-usage-tracking.md) §2**, together with the per-field containment rules, the cross-provider invariants, and the gpt-5.6 cache-write background (§12). It is deliberately not duplicated here — this file previously carried a second copy that went stale the moment cache writes landed.
+**The normalization table lives in [`.design/usage-tracking.md`](../../../.design/usage-tracking.md) §2**, together with the per-field containment rules, the cross-provider invariants, and the gpt-5.6 cache-write background (§12). It is deliberately not duplicated here — this file previously carried a second copy that went stale the moment cache writes landed.
 
 The one-line version, for orientation:
 

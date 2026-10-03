@@ -49,7 +49,8 @@ Keep: `ai`, `imbot`, `agentboot`, `gui/wails3`. Weak: `swagger` (sole consumer `
 
 ### 1.5 Stale docs / leftovers
 
-- `internal/otel/README.md` and `.design/otel.md` say `pkg/otel`.
+- At the initial audit, `internal/otel/README.md` and `.design/otel.md` said `pkg/otel`.
+  The design and package README titles are now corrected to `internal/otel`.
 - `guardrails_runtime_adapter.go` unexported wrappers kept "so pre-move call sites compile unchanged"; `webui_handler.go` `WebHandler` extraction left half-done.
 - `server.go` comment references nonexistent `module/visionproxy`.
 
@@ -125,7 +126,8 @@ Not started, roughly in order of payoff and risk. Numbers are from `main` after 
 4. **Remaining helper adoption**: 11 multi-key error bodies and ~33 bespoke `ShouldBindJSON` sites; root handlers (`log_handler`, `load_balance_handler`, `token_handler`, …) could become modules.
 5. **Protocol/client dedupe**: Claude Code impersonation logic split across `protocol/ops`, `protocol/transform`, `client/claude_*`; near-clone round-trippers in `client`; `protocolserver/transform` has two importers.
 6. **Session persistence** lives in four stores (`afk/session`, `agentboot/history`, `remote/session`, DB remote tables); needs a field-level diff before merging anything.
-7. **Observability / docs hygiene**: `internal/otel/README.md` and `.design/otel.md` still say `pkg/otel`.
+7. **Observability / docs hygiene (titles corrected)**: `.design/otel.md` and
+   `internal/otel/README.md` now name `internal/otel`; keep live code maps aligned with future moves.
 
 Open questions:
 

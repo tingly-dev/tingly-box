@@ -187,7 +187,7 @@ into user-owned files on disk:
 Under this policy those fields **should be `localhost`** (they're client URLs;
 happy eyeballs covers the v4/v6 question).
 
-`internal/config/migration_localhost.go`'s `migrate20260517` rewrites
+`internal/config/migration.go`'s `migrate20260517` rewrites
 them once. Sniffing rule: host must be `127.0.0.1` **and** the path begins with
 `/tingly/` (Claude Code) **or** the entry sits under the `tingly-box` provider
 key (Codex / OpenCode). User-authored non-tingly URLs (e.g.

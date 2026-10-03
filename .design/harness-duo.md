@@ -187,7 +187,7 @@ Division of labor (deliberate, don't collapse it):
 
 | Layer | Owns |
 |---|---|
-| `internal/routing/smart_routing` unit tests | per-op predicate semantics |
+| `internal/routing/smartrouting` unit tests | per-op predicate semantics |
 | `harness lb` / `lb_scenario_test` | temporal dynamics: breaker, failover, affinity TTL (fake clock, fake upstreams) |
 | `protocoltest/failover.go` (go test only) | mid-request failover through the REAL gateway dispatch loop — pre-content 429/500 retry, mid-stream commit, cross-style re-transform — against real-HTTP failing mocks |
 | `harness routing` (this) | config → extraction → stage order → dispatch → explanation, over real HTTP across two processes |

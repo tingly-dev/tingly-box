@@ -36,7 +36,7 @@ provider-quota reaches `openapi.json` (`internal/server/module/providerquota/rou
 sdk/python/
   pyproject.toml             # no required deps; `quota` extra pulls in pydantic
   codegen_header.txt         # banner for the one generated file
-  scripts/extract_quota_schema.py
+  sdk/python/scripts/extract_quota_schema.py
   tingly/
     server.py                # Server — the one provider contract
     default.py               # tingly.openai_chat / ... / serve — the same methods on a default Server
@@ -194,7 +194,7 @@ Generating types here doesn't contradict "invent nothing": that rule is
 about protocols the SDK doesn't own; quota is tb's own, already-specified
 API, where a hand-rolled parse would be the invented shape.
 
-- Generation is scoped: `scripts/extract_quota_schema.py` pulls just the
+- Generation is scoped: `sdk/python/scripts/extract_quota_schema.py` pulls just the
   provider-quota paths and their schema closure (10 schemas), not the
   whole spec. The output is not committed.
 - Quota uses `/api/v1/*`, which checks the **`UserToken`**, a different

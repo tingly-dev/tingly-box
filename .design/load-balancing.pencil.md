@@ -1,9 +1,11 @@
-# Load balancing — the whole subsystem (pencil)
+# Load Balancing — subsystem map (pencil)
 
 One page for everything LB: the selection pipeline, the tactic engine, the three
 runtime state stores and their feedback loops, and the diagnostic surfaces.
 Deep dives live in `tier-routing.md` (tier/breaker/affinity semantics) and
-`failover.pencil.md` (per-request retry); this page is the map that connects them.
+`request-failover.pencil.md` (per-request retry); this page is the map that connects them. Session pin timelines are in
+[`session-affinity.pencil.md`](./session-affinity.pencil.md). This overview owns
+the package/state map; detailed algorithms remain in their topic documents.
 
 Legend: `│`/`▼` = control flow · `┈┈►` = state read · `━━►` = state write ·
 `⚠ Gn` = known gap (see bottom).
@@ -125,7 +127,7 @@ Selection is stateless; all memory lives in three stores fed by dispatch outcome
      written by postProcess (①) · read by AffinityStage (3) · validity delegated to
      the breaker walk, so a pin never outlives what the strategy would pick.
 
-  Failover (failover.pencil.md) closes the loop: a retryable attempt records ✗ for
+  Failover (request-failover.pencil.md) closes the loop: a retryable attempt records ✗ for
   THAT candidate, re-selects (tier walk or LoadBalancer.SelectService), and retries —
   so the next request's selection already sees the updated breaker/health state.
 ```
@@ -167,16 +169,16 @@ Selection is stateless; all memory lives in three stores fed by dispatch outcome
 
 | Piece | Where |
 | --- | --- |
-| Facade + probe pin + debug headers | `internal/server/routing/simple.go` |
-| Pipeline engine + validation + re-pin | `internal/server/routing/selector.go` |
-| Stages 1–4 | `internal/server/routing/stage_{health,affinity,smart_routing,load_balancer}.go` |
-| Tactic engine + health degrade | `internal/server/load_balance.go` |
+| Facade + probe pin + debug headers | `internal/routing/simple.go` |
+| Pipeline engine + validation + re-pin | `internal/routing/selector.go` |
+| Stages 1–4 | `internal/routing/stage_{health,affinity,smart_routing,load_balancer}.go` |
+| Tactic engine + health degrade | `internal/protocolserver/load_balance.go` |
 | Tactics + IsAffinityEligible | `internal/typ/tactics.go` |
 | Breaker + store (+ stale reclaim) | `internal/loadbalance/breaker.go` |
 | Health monitor / filter | `internal/loadbalance/health_monitor.go`, `internal/routing/health_filter.go` |
 | Service stats | `internal/loadbalance/load_balancing.go` |
-| Affinity store | `internal/server/affinity/affinity.go` |
-| Failover loop + gate | `internal/server/failover_dispatch.go` |
-| Smart-routing evaluator | `internal/routing/smart_routing/` (README there) |
+| Affinity store | `internal/protocolserver/affinity.go` |
+| Failover loop + gate | `internal/protocolserver/failover_dispatch.go` |
+| Smart-routing evaluator | `internal/routing/smartrouting/` (README there) |
 | Admin REST | `internal/server/load_balance_handler.go` |
 | Simulator / scenario harness | `internal/server/load_balance_simulator.go`, `lb_scenario_test.go`, `cli/harness lb` |

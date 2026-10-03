@@ -1,5 +1,7 @@
 # Probe Panel Redesign (pencil)
 
+Scope: panel interaction and state resolution. Production diagnostic contracts are in [probe.md](./probe.md); Bench wireframes remain separate in [bench.pencil.md](./bench.pencil.md).
+
 Wireframes for `.sdlc/docs/probe-panel-redesign-20260820.spec.md`.
 
 Legend: `▤` = toggle group · `( )` = disabled w/ tooltip · `▸` = collapsed section ·

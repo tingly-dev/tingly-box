@@ -1,4 +1,4 @@
-# OTel 可观测性设计 — pkg/otel
+# OTel 可观测性设计 — internal/otel
 
 > 遥测只有一个出口：可选的 OTLP 端点，metrics 和 traces 共用。
 > 每请求的持久化数据（usage 记录、请求录制）在源头写入，永远不从聚合指标反推。

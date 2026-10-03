@@ -18,7 +18,7 @@ import (
 // Native Claude Code identity (claude_code_version flag): rebuilds the
 // x-anthropic-billing-header block and metadata.user_id the way the CLI
 // renders them, keeping the per-session fields a real client attached. The
-// legacy path is untouched. See .design/claude-code.md Part B.
+// legacy path is untouched. See .design/claude-code-oauth-compat.md.
 
 // ClaudeCodeVersionExtraKey carries the flag in TransformContext.Extra.
 const ClaudeCodeVersionExtraKey = "claude_code_version"

@@ -5,7 +5,7 @@
 // distinct concern from the process/protocol lifecycle Runner and
 // PersistentSession own: a Pool only ever calls the public
 // PersistentSession interface (Status/Close), never anything about how the
-// underlying process runs. See .design/claude-code.md §5.3.
+// underlying process runs. See .design/claude-code-session.md §5.3.
 package pool
 
 import (

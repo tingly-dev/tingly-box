@@ -43,7 +43,7 @@ type BotSetting struct {
 
 	// PersistentSession opts @cc into a long-lived Claude Code process kept
 	// warm across chat turns instead of one process per message. Nil/false
-	// is the default — see .design/claude-code.md.
+	// is the default — see .design/claude-code-session.md.
 	PersistentSession *bool `json:"persistent_session,omitempty"`
 
 	CreatedAt string `json:"created_at,omitempty"`

@@ -83,7 +83,7 @@ func (a *Agent) Execute(ctx context.Context, prompt string, opts agentboot.Execu
 
 // Open starts a long-lived, multi-turn [agentboot.PersistentSession] instead
 // of a one-shot [agentboot.ExecutionHandle]. See [agentboot.Runner.Open] and
-// .design/claude-code.md.
+// .design/claude-code-session.md.
 func (a *Agent) Open(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error) {
 	return a.runner.Open(ctx, prompt, opts)
 }

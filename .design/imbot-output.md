@@ -1,14 +1,19 @@
 # ImBot 输出预估 — Predicted Per-Platform Chat Output, and the Noise Problem
 
-> 目的：在做任何改动之前，先把"Remote 通过 ImBot 实际发到各平台聊天窗口里的东西长什么样"钉死成可核对的事实（附代码依据），再评估要不要优化。本文是预估 + 现状分析，**不包含代码改动**——是否优化、优化到什么程度，等待决策后再开新 PR。
->
-> 关联文档：`.design/bot-arch.md`（资源/通道/consumer 三层模型）、`.design/ux-principles.md`（判断标准，尤其是 #6 合理默认值、#9 降低视觉噪声）、`.design/imbot-sync.md`。
->
-> **状态**：§7 第 1、2 条已实现并提交（去重复确认消息 / `[RESULT]` 纳入 quiet mode）。§6 表格在实现第 5 条（补齐 `Restate`）时发现两处记录错误，已在下方标注更正——**结论变化较大，先读 §6 表格和 §4 第 4 条再看别处**：Lark 其实已经有 `Restate`（继承自 Feishu，之前 `grep` 漏判）；Discord / Slack 的问题比文档原先说的更严重——不是"按钮不会消失"，而是**按钮从来没渲染过**，且因为能力声明（`SupportsInteraction()`）谎报支持交互，连文字兜底说明也没触发，权限确认/多选题在这两个平台上目前实际是**用户看不出怎么回复**。
+> 范围：Remote 经 ImBot 发送的消息、平台能力差异及降噪决定。
+> 状态：重复权限确认已去除、`[RESULT]` 已纳入 quiet mode、Discord/Slack
+> 错误按钮能力声明已移除，文字降级已恢复。真正按钮与 Restate 支持仍待实现。
+> 配套图独立见 [`imbot-output.pencil.md`](./imbot-output.pencil.md)；
+> 资源授权见 `bot-capability-access-control.md`，生命周期见 `imbot-sync.md`。
 
-## 1. 一句话结论
+## 1. 当前结论
 
-Remote 目前给用户的"每一轮对话"天然拆成 **3–4 条以上的独立消息**，其中至少两条（进度横幅 + Task-done 卡片）是无论内容多简单都固定发送的"结构性消息"；权限确认在**所有平台**上都会重复发送两次（**已修复**，见下方"状态"）；6/10 个平台完全不支持编辑/撤下已发的消息，导致按钮消息永久留在聊天记录里失效但仍可点；其中 Discord / Slack 更严重——按钮从来没有渲染过，权限确认目前在这两个平台上是用户看不出怎么回复的功能性 bug，不只是噪声问题。这些不是某个平台的个别问题，而是当前架构的固定产出——值得作为一个整体优化项来看，而不是零散修 bug。
+Processing 与 Task-done 仍是独立结构性消息；工具输出已有聚合，长任务仍可能刷屏。
+权限确认不再额外重复发送，quiet mode 可以抑制 `[RESULT]`。Telegram、Feishu、Lark
+支持原地改写提示；Discord/Slack 目前不渲染按钮，也不支持 Restate，但会像 DingTalk
+一样提供文字回复说明。缺少编辑能力不等于存在可误点的残留按钮。
+
+§3–§4 保留修复前的推演与问题排序，用于解释 §7 的决定；当前能力以 §6 为准。
 
 ## 2. 两条产出消息的路径
 
@@ -21,7 +26,7 @@ Remote 里能往 IM 发消息的代码只有两条源头，二者共用同一个
 
 两条路径都不做跨消息合并，也都不知道对方的存在——同一个 chat 里同时开着 notify 绑定和 `@cc` 时，两条路径会各自往同一个聊天窗口发消息，互不去重。
 
-## 3. 实测推演：一次典型 `@cc` 任务长什么样
+## 3. 修复前推演：一次典型 `@cc` 任务长什么样（历史）
 
 以"改一个文件、跑一次工具调用、给出一句话结论"这种最简单的任务为例，按代码逐条还原实际会发送的消息（每一条都是**独立的物理消息**，除非标注"原地编辑"）：
 
@@ -54,7 +59,7 @@ Remote 里能往 IM 发消息的代码只有两条源头，二者共用同一个
 
 **结果：一个 0 次权限确认、0 个额外工具调用之外的最简单任务，最少也是 4 条消息**（Processing → 回复 → [RESULT] → Task done）；真实的多步编码任务轻松做到 8–15+ 条，且第 1 条和第 6 条把同样的"分隔线 + agent 图标 + 项目路径"footer 在几秒内重复打印了两遍。
 
-## 4. 噪声来源排名（按影响面从大到小）
+## 4. 修复前问题排序（历史，解决状态见 §7）
 
 1. **结构性消息是固定成本，与任务内容无关**：Processing 横幅 + [RESULT] 统计块 + Task-done 卡片，三条消息不随任务简单/复杂而增减，简单任务里占比反而最高。
 2. **`[RESULT]` 调试风格输出**：`[SYSTEM]` `[RESULT]` `[SUBAGENT]` `[UNKNOWN]` 这类方括号标签是给人 debug 用的格式，直接进了终端用户的聊天窗口；且这条消息不受 quiet mode 控制，用户关不掉。
@@ -77,22 +82,22 @@ Remote 里能往 IM 发消息的代码只有两条源头，二者共用同一个
 
 ## 6. 分平台能力矩阵与预估体验
 
-`按钮实际渲染` 列是这次更正新加的：`SupportsInteraction()` 只反映 `core/platforms.go` 的**声明**，不代表平台代码真的把 `opts.Actions` 画成了按钮——Discord/Slack 就是声明与实现对不上的两个反例。判定方法：`grep -rn "opts\.Actions\|\.Actions\b" imbot/platform/<name>/*.go`（排除 `_test.go`）。
+`SupportsInteraction()` 来自 `core/platforms.go` 的能力声明，按钮渲染还需平台实现。Discord/Slack 的错误声明已删除（`ae04e93`），当前返回 false 并走文字降级；真正按钮与回调仍未实现。判定方法：`grep -rn "opts\.Actions\|\.Actions\b" imbot/platform/<name>/*.go`（排除 `_test.go`）。
 
 | Platform | 声明支持交互 `SupportsInteraction()` | 按钮实际渲染 | 编辑/撤下 `MessageRestater` | TextLimit | 预估体验 |
 |---|---|---|---|---|---|
 | Telegram | ✅ inlineKeyboards | ✅ | ✅ 原生编辑 | 4096 | 相对最好：权限卡片会原地收起；但 Processing / 工具聚合 / [RESULT] / Task-done 仍然是几条独立消息，长任务照样刷屏 |
 | Feishu | ✅ interactiveCards | ✅ | ✅ 卡片可 patch | 40000 | 和 Telegram 一样，权限卡片体验最好；其余消息仍不合并 |
 | Lark | ✅ interactiveCards | ✅（继承自 Feishu，`lark.Bot` 内嵌 `*feishu.Bot`） | ✅ **继承自 Feishu**（上一版文档写错，见 §4 第 4 条更正） | 40000 | 和 Feishu 体验一致，`lark.go` 本身只覆盖 `PlatformInfo`/`GetWebhookURL`，其余方法（含 `Restate`）全部走方法提升 |
-| Discord | ✅ components（**声明与实现不符**） | ❌ **从未渲染**（`sendText` 不读 `opts.Actions`，无 `Components` 字段） | ❌ | 2000 | ⚠️ **功能性 bug**：权限确认/多选题发出后是纯文字，无按钮也无文字兜底说明（因为 `SupportsInteraction()` 误判为 true，跳过了兜底文案），用户不知道怎么回复 |
-| Slack | ✅ blockKit（**声明与实现不符**） | ❌ **从未渲染**（同 Discord，无 Block Kit 组装） | ❌ | 40000 | 同 Discord：权限/多选题今天等同"发了个用户回不了的提示" |
+| Discord | ❌ 声明已修正 | ❌ 未实现 components | ❌ | 2000 | 编号/文字回复说明已恢复；仍无按钮及原地编辑，长消息会拆条 |
+| Slack | ❌ 声明已修正 | ❌ 未实现 Block Kit | ❌ | 40000 | 与 Discord 一样文字降级；不再属于“没有回复说明”的状态 |
 | DingTalk | ❌ 无按钮 feature（声明正确） | ❌（符合声明） | ❌ | 4000 | 权限/问答正确退化成编号文字列表，要求手动回复数字；限额低 |
 | Weixin | ❌（默认能力表，`Features: []`，声明正确） | ❌（符合声明） | ❌ | 默认（未声明，走保守默认） | 已被 `SuppressVerbose` 强制静音，是体验最差但也是唯一被"主动治理"过的平台；权限仍是文字列表；`context_token` 耦合使 notify 类主动消息更脆弱（回复不在同一上下文里会直接失败） |
 | WeCom | ❌（`Features: ["streaming"]`，声明正确） | ❌（符合声明） | ❌ | 4000 | 能力和 Weixin 接近，但**没有**拿到 `SuppressVerbose`——目前会把完整的 verbose 消息流（含文字降级的权限请求）怼过去，预计是体验最差的平台 |
 | WhatsApp | ❌（声明正确） | ❌（符合声明） | ❌ | 4096 | 同 DingTalk：按钮全部退化成文字编号列表，但至少可用 |
 | Tingly（内部测试） | ✅ 全部 | ✅ | ✅ | 65536 | 仅供测试，不面向真实用户 |
 
-## 7. 值得讨论的优化方向（未实现，供决策）
+## 7. 优化决定与剩余工作（逐项标注实施状态）
 
 按"改动成本 vs. 收益"粗排，不代表最终优先级：
 

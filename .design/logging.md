@@ -98,9 +98,9 @@ context 关联,让 upstream 结果落进同一条时间线。代理凭证永远�
 
 | 系统 | 位置 | 记录什么 | 展示在哪 |
 |---|---|---|---|
-| A. logrus 日志(`pkg/obs.MultiLogger`) | `internal/obs/multi_logger.go` | text/json/memory,按来源分桶 | **Logs 页面** ← 本次重做 |
-| B. 请求录制(`ProtocolRecorder`) | `internal/server/protocol_recording.go` | 原始→转换后的请求/响应、流式 chunk | Prompt recording 页面;按 scenario opt-in |
-| C. 用量统计(`UsageTracker`) | `internal/server/tracking.go` | tokens、provider、model、延迟 | Dashboard / DB |
+| A. logrus 日志(`internal/obs.MultiLogger`) | `internal/obs/multi_logger.go` | text/json/memory,按来源分桶 | **Logs 页面** ← 本次重做 |
+| B. 请求录制(`ProtocolRecorder`) | `internal/recording/recorder.go` | 原始→转换后的请求/响应、流式 chunk | Prompt recording 页面;按 scenario opt-in |
+| C. 用量统计(`UsageTracker`) | `internal/protocolserver/usage_tracking.go` | tokens、provider、model、延迟 | Dashboard / DB |
 
 本次重做修的是 (A)。(A) 的 `request_id` 现在和 (B) 的 `RequestID` 对齐了,为以后
 收敛到单一数据源留了余地。
@@ -109,8 +109,8 @@ context 关联,让 upstream 结果落进同一条时间线。代理凭证永远�
 
 - `GetSystemLogStats` 还在读未过滤的数据(`ReadJSONLogs`);应该和
   `GetSystemLogs` 的来源过滤对齐。
-- `GET /api/v1/requests` 和 `GET /api/v1/requests/:id` 的 `openapi.json` 还没
-  重新生成;前端用的是占位 client。
+- `GET /api/v1/requests` 和 `GET /api/v1/requests/:id` 已进入 `openapi.json`
+  （spec 路径为 `/requests` 与 `/requests/{id}`）；此项不再是待办。契约变更通过 codegen 更新。
 
 ---
 
@@ -320,7 +320,7 @@ OpenAI 原生 chat/responses 的错误 chunk 根本没有外层 `"type":"error"`
 | `FailAttemptSetup` | `internal/protocolserver/failover_dispatch.go:64` | 硬编码 500 | attempt 建立阶段失败（failover 会重试下一档） |
 | `SendStreamingError` / `SendForwardingError` | `internal/protocol/stream/anthropic_helper.go:84,97` | `ClassifyUpstreamFailure` | 流式请求建立/转发失败（尚未开始吐 SSE 帧） |
 | 三处 "Failed to forward request" | `openai_embeddings.go` / `openai_image.go` / `openai_image_edit.go` | `ClassifyUpstreamFailure` | embeddings / 图片生成 / 图片编辑的直接转发失败 |
-| `failEmptyAssembly` | `internal/protocol/stream/openai_responses_to_anthropic_assembly.go` | `ClassifyUpstreamFailure` | 上游流没有产出任何内容块 |
+| `failEmptyAssembly` | `internal/protocol/stream/openai_responses_to_anthropic_converter.go` | `ClassifyUpstreamFailure` | 上游流没有产出任何内容块 |
 | ~9 处 mid-stream SSE error 帧 | `google_to_any.go` / `openai_to_anthropic{,_beta}.go` / `anthropic_passthrough.go` / `openai_chat_to_responses.go` / `openai_passthrough.go`（2 处，OpenAI 原生 error chunk 形状，不套 `BuildErrorEvent`） | 无状态码（流已开始） | SSE 已经开始吐帧之后，upstream 流中途失败 |
 
 其中 Anthropic 形状(`{"type":"error","error":{...}}`)的站点统一通过

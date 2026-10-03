@@ -4,7 +4,7 @@
 > 描述 Image Playground 的草图能力:在画布上画一张简图、摆一个人偶,作为参考
 > 图像走 edit 链路生成。
 > 关联文档:`ux-principles.md`(判断标准)、`mannequin-standard.md`(人偶的画法基准)、
-> `imageedit.md`(edit 网关链路)、
+> `image-edit.md`(edit 网关链路)、
 > `image-slice.md`(同一 Playground 的后置切分)。
 
 ---
@@ -34,7 +34,7 @@ Playground 已经支持上传/拖拽/粘贴参考图,但有一类很常见的起
   会把这种组合直接堵死。
 
 这个判断后来推进了一步:Playground 原有的 Generate / Edit 模式切换也被拆掉了
-(见 `imageedit.md` §6),参考图区永远存在、可选,端点按参考图数量推导。草图
+(见 `image-edit.md` §6),参考图区永远存在、可选,端点按参考图数量推导。草图
 入口因此不再需要先切模式。参考图的三种来源 **Browse / Paste / Sketch** 作为平
 级动作并排呈现:空状态是虚线框里的三个文字按钮,已有图时是缩略图后面的三个
 同样大小的方块(拖拽没有按钮,虚线框本身就是投放目标)。第一版把 Sketch 做成

@@ -4,8 +4,9 @@ A **dual provider** is a single `Provider` record that exposes two base URLs —
 one for the OpenAI-compatible protocol and one for the Anthropic-compatible
 protocol — under the same API credential.  The dispatcher routes each inbound
 request to whichever URL matches the client's protocol natively, eliminating
-protocol translation overhead for providers that support both natively (e.g.
-Vertex AI, Bedrock, many inference platforms).
+protocol translation overhead for providers that support both natively (e.g. API-key inference platforms and ZCode coding plans).
+Bedrock/Vertex multi-field credential adapters are a separate path, described
+in [`third-party-credentials.md`](./third-party-credentials.md).
 
 Dual mode is always active (graduated from experimental in May 2026).
 
@@ -19,7 +20,7 @@ Provider {
     APIStyle:         "openai"                              // primary style (openai by convention)
     APIBaseOpenAI:    "https://api.example.com/openai/v1"  // dual: OpenAI-side URL
     APIBaseAnthropic: "https://api.example.com/anthropic"  // dual: Anthropic-side URL
-    AuthType:         "api_key"                             // dual requires api_key
+    AuthType:         "api_key"                             // manual dual provider; ZCode OAuth is an exception
     Token:            "..."
 }
 ```
@@ -33,7 +34,7 @@ directly.  By convention, `APIBase` is set to the OpenAI URL.
 
 | Constraint | Reason |
 |---|---|
-| `AuthType` must be `api_key` | OAuth tokens are issuer-specific; the token's scope is tied to one protocol endpoint |
+| Manual creation requires `api_key`; ZCode/ZCodeCN OAuth is an issuer-specific exception | Their OAuth flow resolves a static API key accepted on both endpoints. `ai.IssuerSupportsDual` admits only those issuers; editing an existing dual-capable OAuth provider preserves its URLs. Other OAuth issuers remain single-endpoint. |
 | `APIStyle` must not be `google` | Google auth is per-project, not per-endpoint |
 | Template **optional** | A template pre-fills both URLs; custom endpoints supply the second URL manually (see Add flow). |
 
@@ -41,8 +42,8 @@ directly.  By convention, `APIBase` is set to the OpenAI URL.
 
 ## Dispatch (`resolveProviderForClient`)
 
-`internal/server/dual.go` — called at the top of every inbound handler before
-any protocol translation.
+`ai/provider.go::ResolveStyle` / `ResolveEndpoint` — used while resolving
+each serving attempt before protocol translation (see `protocol-stage-pipeline.md`).
 
 ```
 resolveProviderForClient(p, clientStyle):
@@ -221,13 +222,14 @@ of two single-protocol payloads, one per protocol.
 Always includes `api_base_openai` and `api_base_anthropic`.  Sending empty
 strings clears the fields on the backend, enabling the downgrade path.
 
-### `internal/server/provider_handler.go`
+### `internal/server/module/provider/handler.go`
 
 `CreateProvider`: validates that dual URLs (`api_base_openai` /
 `api_base_anthropic`) are only supplied for `api_key` auth and non-Google style.
 
-`UpdateProvider`: applies `api_base_openai` / `api_base_anthropic` unconditionally
-(no flag gate since dual is stable).
+`UpdateProvider`: applies the supplied dual URL fields, then validates the merged
+provider. API-key providers and existing dual-capable ZCode OAuth providers may
+retain dual URLs; Google style remains excluded. There is no experimental flag gate.
 
 ---
 
@@ -237,10 +239,10 @@ strings clears the fields on the backend, enabling the downgrade path.
 |---|---|
 | `ai/provider.go` | `Provider` type; `IsDual()`, `ResolveEndpoint()`, `HasDualURL()` |
 | `ai/provider_test.go` | Unit tests for `ResolveEndpoint` and `IsDual` |
-| `internal/server/dual.go` | `resolveProviderForClient` — dispatch-time endpoint resolution |
-| `internal/server/provider_handler.go` | `CreateProvider` / `UpdateProvider` — dual field validation and persistence |
+| `ai/provider.go` | `ResolveStyle` / `ResolveEndpoint` — dispatch-time endpoint resolution |
+| `internal/server/module/provider/handler.go` | `CreateProvider` / `UpdateProvider` — dual field validation and persistence |
 | `frontend/src/components/ProviderFormDialog.tsx` | Add + edit form; dual toggle, protocol lock, upgrade/downgrade logic |
-| `frontend/src/components/providerFormDialog/DualToggle.tsx` | Dual checkbox with tooltip |
-| `frontend/src/components/providerFormDialog/ProtocolSelector.tsx` | Protocol checkboxes; respects `dualLocked` (covers both OAuth and edit-mode lock) |
+| `frontend/src/components/ProviderFormDialog.tsx` | Dual checkbox with tooltip |
+| `frontend/src/components/provider-form-dialog/ProtocolSlot.tsx` | Protocol checkboxes; respects `dualLocked` (covers both OAuth and edit-mode lock) |
 | `frontend/src/pages/CredentialPage.tsx` | `buildAddProviderPayload` (split vs dual), `buildEditProviderPayload` |
 | `frontend/src/i18n/locales/en.ts` | `providerDialog.dual.*` strings |

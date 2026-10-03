@@ -34,7 +34,7 @@ type Agent interface {
 // every Agent provides. Not every Agent implementation supports this —
 // [AgentService.Open] type-asserts against it and reports an error for
 // agents that don't. claude.Agent is the only implementation as of
-// .design/claude-code.md's P1/P2.
+// .design/claude-code-session.md's P1/P2.
 type PersistentAgent interface {
 	Agent
 	Open(ctx context.Context, prompt string, opts ExecutionOptions) (PersistentSession, error)

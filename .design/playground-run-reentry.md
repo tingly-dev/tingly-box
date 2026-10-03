@@ -4,7 +4,7 @@
 > 描述 Image Playground 里"产出之后还能回到输入"的三件事:请求重入、
 > 素材常驻、prompt 一键复制。
 > 关联文档:`ux-principles.md`(§10 完成 ≠ 锁死、§11 交出下一步的物件)、
-> `sketch-canvas.md`、`image-slice.md`、`imageedit.md`。
+> `sketch-canvas.md`、`image-slice.md`、`image-edit.md`。
 
 ---
 

@@ -16,7 +16,10 @@ Remote 子系统（IM bot 远程控制）的状态持久化方案。记录现状
 
 ---
 
-## 1. 现状盘点
+## 1. 迁移前盘点（历史基线）
+
+本节及 §2 是 SQLite / JSONL 迁移前的问题记录。P0–P3 的已落地项与剩余工作
+以 §7 为准；当前访问控制资源模型另见 `bot-capability-access-control.md`。
 
 Remote 的状态散落在四种载体上，只有 bot 设置进了主库：
 
@@ -395,8 +398,8 @@ CLI 的 `remote run`（`internal/command/remote.go` 的 standalone 路径，单�
 
 ## 8. 待决策事项
 
-1. **范围**：只做 P0+P1，还是一路做到 P3？
+1. **范围（已决定）**：P0/P1 已完成，并已实施 §7 标注的 P2/P3 项；剩余项逐项跟踪，不再重复决定整个迁移范围。
 2. **SmartGuide 历史进不进库**：单 chat 的 anthropic message 数组可能到 MB 级。
    倾向进 `remote_agent_state` + retention；另一选择是留文件但只修 sanitize。
-3. **迁移策略**：静默自动迁移，还是保留旧文件只读回退窗口 + 显式提示？
-4. **`pkg/jsonstore` 是否直接废弃**：全迁完就只剩零调用方。
+3. **迁移策略（基础迁移已落地）**：P1 使用一次性 importer，旧文件重命名 `.migrated`；后续是否移除兼容读取与提示按实际支持范围再决定。
+4. **`pkg/jsonstore`（历史项）**：当前目录已不存在，不能再列成待删除包；迁移前整文件存储的问题保留在 §1/§2。

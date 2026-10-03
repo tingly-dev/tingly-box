@@ -163,10 +163,10 @@ JSON 请求/响应,二者都会把它打死。所以:
 | Codex 出图流解析(generation 与 Responses edit 共用) | `internal/client/codex_client.go` `parseImageGenerationStream` |
 | RoundTripper images 特例 + path 重写 | `internal/client/codex_round_tripper.go` |
 | 接口成员 + OpenAI 兼容实现 | `internal/client/openai.go` |
-| Kimi / vmodel 的 not-supported 存根 | `internal/client/kimi_client.go`、`vmodel/client/openai.go` |
+| Kimi not-supported 存根 / vmodel 调度 | `internal/client/kimi_client.go`；vmodel 已走标准 SDK + HTTP，见 `vmodel-transport.md`，不再有 vmodel/client 存根 |
 | 入站 handler(multipart + JSON 解析、校验) | `internal/protocolserver/openai_image_edit.go` |
 | 持久化共用核心(`persistImages`) | `internal/protocolserver/openai_image.go` |
-| 转发器 | `internal/protocolserver/forwarding/openai.go` |
+| 转发器 | `internal/forwarding/openai.go` |
 | 路由注册 | `internal/protocolserver/routes.go` |
 | 启动横幅 endpoint 打印 | `internal/server/server_lifecycle.go` |
 

@@ -23,7 +23,7 @@ interfaces, registration discipline, how to add a model).
 These live outside the `vmodel-*` namespace but intersect with it:
 
 - [`test-infrastructure.md`](./test-infrastructure.md) — how the test packages consume vmodel primitives.
-- [`stream-usage-tracking.md`](./stream-usage-tracking.md) — usage emission exercised by the stream-test mocks.
+- [`usage-tracking.md`](./usage-tracking.md) — usage emission exercised by the stream-test mocks.
 
 > Adding a new vmodel design doc? Name it `vmodel-<topic>.md`, drop a one-line
 > summary in the table above, and link back here from any code that references it.

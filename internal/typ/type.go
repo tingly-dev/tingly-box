@@ -290,7 +290,7 @@ type RuleFlags struct {
 
 	// ClaudeCodeVersion selects the Claude Code release the Claude OAuth chain
 	// impersonates. Empty follows the default (ClaudeCodeVersionLatest);
-	// "2.1.86" keeps the legacy emulation. See .design/claude-code.md Part B.
+	// "2.1.86" keeps the legacy emulation. See .design/claude-code-oauth-compat.md.
 	ClaudeCodeVersion string `json:"claude_code_version,omitempty" yaml:"claude_code_version,omitempty"`
 }
 

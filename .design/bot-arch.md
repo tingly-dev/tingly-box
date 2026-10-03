@@ -1,5 +1,11 @@
 # Bot Architecture — resource, channel, consumers (+ naming)
 
+> Reading boundary: resource/channel wiring and the original consumer vocabulary.
+> The current Capability, DirectChat, Group and Actor authorization contract is
+> [bot-capability-access-control.md](./bot-capability-access-control.md). Its resource
+> model supersedes the old combined-chat/mount policy here; general HTTP interaction
+> state is tracked in [bot-interaction-api.md](./bot-interaction-api.md).
+
 The design record for the bot subsystem after the capability-decoupling work:
 the three-layer model, the wiring diagrams, the mount semantics, and the
 naming decisions (including known debts and the agreed target vocabulary).

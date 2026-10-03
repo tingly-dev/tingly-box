@@ -637,8 +637,8 @@ func ruleFlagCases() []flagCase {
 		// ── claude_code_version ──────────────────────────────────────────────
 		// On the real Claude OAuth path: unset follows the default (latest
 		// native client); "2.1.86" keeps the legacy emulation; "2.1.280"
-		// re-signs the request as the native client (.design/claude-code.md
-		// Part B).
+		// re-signs the request as the native client (.design/claude-code-oauth-compat.md
+		// §B0–§B8).
 		{key: "claude_code_version", run: func(t flagTB, env *TestEnv) {
 			s := flagScenario()
 			env.virtual.RegisterScenario(s)

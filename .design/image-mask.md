@@ -3,7 +3,7 @@
 > 适用对象:tingly-box 前端贡献者(含一处可选的网关改动)。
 > 描述 Image Playground 的 mask 能力:在参考图上涂出"允许模型改动的区域",
 > 走 `/images/edits` 的 `mask` 字段做局部重绘(inpainting)。
-> 关联文档:`ux-principles.md`(判断标准)、`imageedit.md`(edit 网关链路)、
+> 关联文档:`ux-principles.md`(判断标准)、`image-edit.md`(edit 网关链路)、
 > `sketch-canvas.md`(同一面板的画布输入)、`image-slice.md`(同一面板的后置切分)。
 >
 > **状态:前端已实现(方案 A);Codex 走 Responses 的那条(方案 D)按实验性实现,
@@ -101,7 +101,7 @@ hosted `image_generation` 工具带一个 `input_image_mask`**(SDK 里确有其�
 `InputImageMask`。所以"Codex 能不能做局部重绘"这个问题没有关闭,它变成了一个
 可以做实验的具体问题,而不是一个协议事实。
 
-挡在前面的未知只有一个:`imageedit.md` §1 断言"Responses surface 无法给该 tool 挂
+挡在前面的未知只有一个:`image-edit.md` §1 断言"Responses surface 无法给该 tool 挂
 reference image",这正是当初要为 edit 另开 endpoint 的理由。但公开 Responses API
 的官方改图姿势恰恰是"消息里放 `input_image` + 工具 `action: edit`",所以这条断言
 要么是 ChatGPT backend 的特殊限制,要么是当时的一个未验证假设。**它是这条路上唯一
@@ -124,7 +124,7 @@ reference image",这正是当初要为 edit 另开 endpoint 的理由。但公�
 再补一条把未知收窄的证据:**codex 自己大量往 `/codex/responses` 发 `input_image`
 内容项**(用户贴图、`view_image` 工具输出、动态工具的图片返回,见
 `codex-rs/protocol/src/models.rs` 的 `ContentItem::InputImage` 与它的十几处构造点)。
-所以"这个 endpoint 收不到图片"在协议层面已经不成立;`imageedit.md` §1 那句断言
+所以"这个 endpoint 收不到图片"在协议层面已经不成立;`image-edit.md` §1 那句断言
 即便当初观察属实,也只可能是**hosted tool 与 input_image 的组合**没打通,而不是
 整个 Responses 面收不到参考图。实验因此从"能不能挂图"收窄成"hosted tool 认不认
 `action: edit` + `input_image_mask`"。
@@ -151,7 +151,7 @@ reference image",这正是当初要为 edit 另开 endpoint 的理由。但公�
 | **D. Codex 走 Responses + `input_image_mask`** | Codex 订阅 | 后端较大:`ImagesEdit` 在 mask 存在时分流到 Responses、把参考图作为 `input_image` 挂进消息、填 `InputImageMask`、复用已有的 `parseImageGenerationStream` | **实验 E1/E2 通过** | 实验说了算,不提前投入 |
 
 A/B/C 三条互不依赖,可以一次做完;D 是独立的后续,它落地后 C 的报错只在 D 也失败时
-才触发。**不做的**:按 provider 能力在前端隐藏 mask 入口(违反 `imageedit.md` §6 的
+才触发。**不做的**:按 provider 能力在前端隐藏 mask 入口(违反 `image-edit.md` §6 的
 "provider 能力是网关的事"),以及把带 mask 的请求静默降级成整图 edit。
 
 ### 2.5 实验(D 的前置)
@@ -162,7 +162,7 @@ A/B/C 三条互不依赖,可以一次做完;D 是独立的后续,它落地后 C 
 
 | 步 | 问题 | 请求 | 通过判据 | 不通过的含义 |
 |----|------|------|----------|--------------|
-| **E1** | hosted tool 能不能拿消息里的参考图改图(先不管 mask) | `/codex/responses`:消息含 `input_image` + "把 X 换成 Y",tool `image_generation` 带 `action: edit` | 回来的 `image_generation_call` 结果明显基于那张参考图,而不是凭空新生成 | `imageedit.md` §1 的断言成立 → **D 死**,C 是终局 |
+| **E1** | hosted tool 能不能拿消息里的参考图改图(先不管 mask) | `/codex/responses`:消息含 `input_image` + "把 X 换成 Y",tool `image_generation` 带 `action: edit` | 回来的 `image_generation_call` 结果明显基于那张参考图,而不是凭空新生成 | `image-edit.md` §1 的断言成立 → **D 死**,C 是终局 |
 | **E2** | 它认不认 `input_image_mask` | E1 的请求 + `input_image_mask.image_url`(base64 PNG) | 只有涂过的区域变,其余像素基本不动 | 后端忽略 mask → D 退化成"另一种整图 edit",不如原生 edits,**不值得做** |
 | **E3** | 值不值得切 | 同一 prompt/图,D 与原生 edits 对照 | 边缘、保真、耗时可接受 | 质量明显更差 → 保留原生 edits 做无 mask 路径,D 只在有 mask 时启用 |
 
@@ -258,12 +258,12 @@ mask 的尺寸约束来自 image 本身,差一个像素就是 400。标题栏把
 ### 3.9 历史卡片把 mask 记进元信息行
 
 run 上记一个 `maskUsed: boolean`,元信息行写 `images/edits · mask`,source 缩略图
-叠加当时的 mask 预览。理由与 `imageedit.md` §6 把端点写出来完全一样:看着结果就
+叠加当时的 mask 预览。理由与 `image-edit.md` §6 把端点写出来完全一样:看着结果就
 知道该调哪个接口、多传哪个字段(原则 11)。
 
 ### 3.10 provider 不支持时不静默降级
 
-前端**不做任何 provider 判断**(沿用 `imageedit.md` §6)。但网关侧现在的行为是
+前端**不做任何 provider 判断**(沿用 `image-edit.md` §6)。但网关侧现在的行为是
 `CodexClient` 把 mask 丢掉、只打一行 debug log——用户涂了一块,拿回来的是整张
 重画,而且没有任何地方告诉他为什么。Codex 原生协议确认没有 mask 字段(§2.1),
 所以这里没有"接上去"的选项,只有"说清楚"。这与"不允许把 edit 静默降级成
@@ -320,9 +320,9 @@ generation"是同一条原则:**带 mask 的请求落到 Codex 原生端点上�
 
 | 文件 | 改动 | 量级 |
 |------|------|------|
-| `frontend/src/utils/maskCanvas.ts` | **新增**:笔画 → alpha PNG 合成、反转、尺寸校验、预览着色。纯逻辑,带单测 | 新文件 |
+| `frontend/packages/vision/src/maskCanvas.ts` | **新增**:笔画 → alpha PNG 合成、反转、尺寸校验、预览着色。纯逻辑,带单测 | 新文件 |
 | `frontend/src/pages/image/components/MaskEditorDialog.tsx` | **新增**:单层 canvas + 工具栏 + undo + 导出 | 新文件 |
-| `frontend/src/utils/sketchCanvas.ts` | 只读复用,**不改** | 0 |
+| `frontend/packages/vision/src/sketchCanvas.ts` | 只读复用,**不改** | 0 |
 | `ImageGenPlaygroundCard.tsx` | `ReferenceImage.mask` 字段;首图缩略图一个按钮 + 角标;`runGeneration` 里 `mask: request.sources[0]?.mask?.file`;run 元信息一行;placeholder 分支 | ~60 行 |
 
 不碰:端点推导、SketchCanvasDialog、ImageSliceDialog、`playgroundSession` 的既有形状
@@ -421,7 +421,7 @@ E2(带 mask,默认路由即可):Playground 里涂一块再 Generate,或 JSON 里
 `"mask":"data:image/png;base64,..."`。判据是**只有涂过的区域变**。
 
 三种结果对应三条路:两步都过 → 去掉实验标记、收敛默认、合并;E2 不过(mask 被
-忽略)→ 退回原生,只留下那条明确报错;E1 不过 → `imageedit.md` §1 的断言成立,
+忽略)→ 退回原生,只留下那条明确报错;E1 不过 → `image-edit.md` §1 的断言成立,
 写回 §2.2 结案,只剩原生端点的明确报错值得保留。
 
 链路在日志里:`[Codex] Using Responses image_generation tool for image edit
@@ -429,7 +429,7 @@ E2(带 mask,默认路由即可):Playground 里涂一块再 Generate,或 JSON 里
 
 ### 8.4 仍未做
 
-- 前端不按 provider 隐藏 mask 入口(沿用 `imageedit.md` §6:能力是网关的事)。
+- 前端不按 provider 隐藏 mask 入口(沿用 `image-edit.md` §6:能力是网关的事)。
 - 失败信息仍是通用的请求错误通知,没有"这个 provider 不支持 mask"的专门措辞。
 - ~~lightbox 里看不到 mask~~:已做,见 §9.2 最后一条。
 - §7 的羽化 / 自动分割 / outpainting 全部未动。
@@ -439,7 +439,7 @@ E2(带 mask,默认路由即可):Playground 里涂一块再 Generate,或 JSON 里
 ## 9. 各出图 vendor 的核对:mask 与多张图(n)
 
 mask 落地后逐个 vendor 过了一遍"要不要跟着改"。分发点是
-`OpenAIClientInterface.ImagesEdit / ImagesGenerate`(`imageedit.md` §2)。下表按官方
+`OpenAIClientInterface.ImagesEdit / ImagesGenerate`(`image-edit.md` §2)。下表按官方
 文档核对(2026-09-23),来源见 §9.5;标 ? 的是文档没写清、未证实。
 
 | vendor | `/images/edits` | mask | n | 对我们的含义 |
@@ -487,7 +487,7 @@ Codex 的三条出图面都是一次一张:Responses 的 `image_generation` 工�
   一起丢掉;整次请求的超时在后面几波还没跑完时触发,同样保留已完成的。只有全部
   失败才是错误。部分失败在网关打一行 warn,列出每一次的原因。
 
-为什么在网关而不是前端扇出:能力差异是网关的事(`imageedit.md` §6),Playground
+为什么在网关而不是前端扇出:能力差异是网关的事(`image-edit.md` §6),Playground
 以外的调用方也拿到正确的 n 张;而前端拆成 n 个请求,在 OpenAI 这类上游会让参考图的
 输入 token 被计 n 次。代价是结果一次性回来——逐张出现留给 images 流式(§9.3)。
 

@@ -16,7 +16,7 @@ recovers them when they break.
   holding the access/refresh tokens, `ExpiresAt`, `Issuer`, a per-credential
   `UserID`, an optional `DeviceID` (Kimi), and an `ExtraFields` bag (e.g. Codex
   `id_token`, ChatGPT `account_id`). Persisted in `ProviderRecord`
-  (`internal/data/db/provider_store.go`). `UserID` is the issuer's account id
+  (`internal/db/provider_store.go`). `UserID` is the issuer's account id
   when the login learned one (`token.Metadata["account_id"]`, from the token
   response or the issuer's `AfterToken` hook) and a random uuid only as the
   fallback (`oauthUserIDFromToken`). It feeds `metadata.user_id.account_uuid`

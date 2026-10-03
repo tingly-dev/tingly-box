@@ -16,8 +16,8 @@ Primary frontend files:
 Primary backend files:
 
 - `internal/server/module/usage/`
-- `internal/data/db/usage_record.go`
-- `internal/data/db/usage_daily.go`
+- `internal/db/usage_record.go`
+- `internal/db/usage_daily.go`
 
 ## Product surfaces and routes
 
@@ -107,7 +107,7 @@ The critical invariant is:
 cache_write_tokens ⊂ total_input_tokens
 ```
 
-Cache writes are already included in Input. They must never become an addend in a total, a fourth chart stack, or a fourth donut slice. Doing so double counts the same tokens. See `.design/stream-usage-tracking.md` for protocol normalization and billing details.
+Cache writes are already included in Input. They must never become an addend in a total, a fourth chart stack, or a fourth donut slice. Doing so double counts the same tokens. See `.design/usage-tracking.md` for protocol normalization and billing details.
 
 Cache writes appear only as attribution:
 

@@ -201,7 +201,7 @@ func (s *AgentService) ExecuteSession(ctx context.Context, sessionID string, pro
 // turn. Pass an empty agentType to use the default agent.
 //
 // Returns an error if the resolved agent does not implement
-// [PersistentAgent] (i.e. does not support Open) — see .design/claude-code.md.
+// [PersistentAgent] (i.e. does not support Open) — see .design/claude-code-session.md.
 func (s *AgentService) Open(ctx context.Context, agentType AgentType, projectPath string, prompt string, opts ExecutionOptions) (PersistentSession, error) {
 	agent, err := s.resolveAgent(agentType)
 	if err != nil {

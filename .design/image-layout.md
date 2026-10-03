@@ -3,7 +3,7 @@
 > 适用对象:tingly-box 前端贡献者。
 > 描述生图从 Agent 下的一个 scenario 页,拆成 activity bar 上独立的 **Image**
 > 入口的决定与接线。
-> 关联文档:`ux-principles.md`(判断标准)、`imageedit.md`(网关链路)、
+> 关联文档:`ux-principles.md`(判断标准)、`image-edit.md`(网关链路)、
 > `sketch-canvas.md` / `image-mask.md` / `image-slice.md` /
 > `playground-run-reentry.md`(Playground 内的各项能力)。
 

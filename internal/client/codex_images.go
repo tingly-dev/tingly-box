@@ -39,7 +39,7 @@ import (
 // (ImageEditRequest / ImageResponse), codex-rs/codex-api/src/endpoint/images.rs
 // (the images/edits POST), and codex-rs/ext/image-generation/src/{tool,backend}.rs
 // (gpt-image-2 default model, auto defaults, 5-image cap, the
-// x-codex-image-turn-id request header). See .design/imageedit.md.
+// x-codex-image-turn-id request header). See .design/image-edit.md.
 //
 // Image generation continues to ride the Responses API image_generation tool
 // (codex_client.go); editing got its own endpoint because attaching reference

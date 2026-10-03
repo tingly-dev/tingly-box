@@ -226,8 +226,8 @@ models exist); apply response adds `catalogWritten`.
 | Backend | `internal/server/module/configapply/{types,handler,routes}.go` | request/response shapes, apply + preview handlers, routes |
 | Backend | `ai/agent/codex.go` | `CodexParams.{Prefs,WriteCatalog}`, `Apply()` |
 | Backend | `internal/agent/rule_bridge.go` | CLI path (defaults + `WriteCatalog: true`) |
-| Frontend | `frontend/src/components/CodexQuickConfig.tsx` | field catalog + bilingual text + `writeCatalog` Files section |
-| Frontend | `frontend/src/components/CodexConfigModal.tsx` | Quick/Manual tabs, debounced preview, Step 3 catalog, apply alerts |
+| Frontend | `frontend/src/pages/scenario/components/CodexQuickConfig.tsx` | field catalog + bilingual text + `writeCatalog` Files section |
+| Frontend | `frontend/src/pages/scenario/components/CodexConfigModal.tsx` | Quick/Manual tabs, debounced preview, Step 3 catalog, apply alerts |
 | Frontend | `frontend/src/pages/scenario/UseCodexPage.tsx` | page-level apply wiring |
 | Frontend | `frontend/src/services/api.ts` | `applyCodexConfig`, `getCodexConfigPreview` |
 

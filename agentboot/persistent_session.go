@@ -26,7 +26,7 @@ var (
 // PersistentSession is a long-lived, multi-turn counterpart to
 // [ExecutionHandle]: one underlying agent process stays alive across
 // multiple Send calls instead of exiting after a single turn. See
-// .design/claude-code.md for the design this implements.
+// .design/claude-code-session.md for the design this implements.
 //
 // Lifecycle:
 //  1. [Runner.Open] starts the process, submits its prompt as the first

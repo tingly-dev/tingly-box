@@ -114,10 +114,14 @@ func RuleFlagRegistry() []FlagSpec { … }
 
 ---
 
-## 4. 当前已注册 flag（14 个）
+## 4. 当前已注册 flag（18 个）
+
+以 `internal/typ/flag_registry.go::RuleFlagRegistry` 为权威清单；新增项同步本表和
+[`rule-flag-testing.md`](./rule-flag-testing.md) 的覆盖矩阵。
 
 | Key | Type | 类别 | Shared | 继承 | 作用 | 注入点 |
 |-----|------|------|--------|------|------|--------|
+| `extra_headers` | headers (map) | request | — | — | 追加出站 HTTP headers，仅 API-key provider 生效。允许显式覆盖 Authorization 等默认头；只校验结构与大小写重名，没有 denylist。provider/model 级尚属提案，见 `provider-flags.md`。 | `ruleFlagTransport`，Type 2；`typ.ValidateExtraHeaders` |
 | `custom_user_agent` | string | request | **yes** | override | 覆盖出站 User-Agent header。registry 通过 `Suggestions`（`typ.DefaultUserAgents()`）透出几个常见 CLI/agent 的 UA 预设供快选。特殊值 `none`（`typ.UserAgentNone`）= 完全去掉 User-Agent header。| `ruleFlagTransport` + `applyRuleFlags(c, flags)` → `typ.WithRuleFlags(ctx, flags)`（Type 2）|
 | `openai_endpoint_override` | enum (`auto`/`chat`/`responses`) | request | — | — | 强制单条 rule 的 OpenAI 出口走 Chat 或 Responses；与 provider 声明的 `OpenAIEndpointMode` 冲突时 provider 赢（见 `.design/openai-endpoint-routing.md`）| `ParseEndpointOverride` → `ResolveOpenAIEndpoint`（Type 4：路由层决策）|
 | `use_max_completion_tokens` | bool | request | — | — | 把 `max_tokens` 字段名重写为 `max_completion_tokens`（OpenAI o1/o3/gpt-5 系列必需） | `transform.OpenAIMaxTokensRewriteTransform` → `ops.ApplyMaxCompletionTokensRewrite`（Type 1b-post）|
@@ -131,9 +135,10 @@ func RuleFlagRegistry() []FlagSpec { … }
 | `cursor_compat` | bool | app | — | — | Cursor IDE 内容归一化 + usage 抑制（同 `skip_usage`，仅 Chat 客户端）| `transform.OpenAICursorCompatTransform` → `ops.ApplyCursorCompatContentNormalization`（Type 1b-pre）|
 | `cursor_compat_auto` | bool | app | — | — | 通过请求头识别 Cursor，自动折叠进 `cursor_compat` | `ResolveRuleFlags(c, rule)` 在解析 flag 时合并 |
 | `claude_code_compat` | bool | app | **yes** | or | 归一化 Claude Code 的会话中段 `role == "system"` 消息。Claude Code 在 messages 中写入 system role（非标准扩展，对应 Anthropic `mid-conversation-system` beta）；三方 Anthropic-compatible provider 拒绝该 role。**位置感知**：把每条 system 消息**就地并入相邻 user turn**，方向由左右邻居唯一决定（不是自由选择）——前邻是 user 则**向后并**入它；前邻是 assistant/开头则**向前并**入下一条 user；两侧都不是 user 才独立成一个 user turn。决策需先知道 next 的角色，故实现用 pending 缓冲，到下一条非 system 消息（或数组末尾）才落位。这样既保住位置、又避免产生连续 user 消息（严格 provider 同样会以 "roles must alternate" 拒绝）。**不做 hoist**：messages 里的 system 按 beta 契约必是中段消息（不能是 `messages[0]`），全局 system prompt 已在顶层 `system` 字段；hoist 会把"截至第 N 轮"的指令重排为全局、并击穿 prompt cache。**built-in CC rule 默认开**（`init.go::ccRule` + `newCCProfileRules` 种子 / `migrate20260610` 存量），可在 Plugins 卡片按 rule 关闭以保真原生 Anthropic。| `transform.ClaudeCodeCompatTransform` → `ops.ApplyClaudeCodeCompatRoleRewrite`（Type 1b-pre，仅 Anthropic 入站形态）|
-| `clean_header` | bool | app | — | — | 剥离 system messages 中的 x-anthropic-billing-header 块。Claude Code 注入该 header 仅供自家计费，绝不能泄漏给三方 provider。**rule-only**（已从 scenario plugin 移除 —— 不再有 `ScenarioFlags.CleanHeader` / OR 注入）。**built-in CC rule 默认开**（`init.go::ccRule` + `newCCProfileRules` 种子 / `migrate20260610` 存量），可按 rule 关闭以保真原生 Anthropic。**Claude OAuth provider 自动抑制**：OAuth 订阅走原生 Anthropic，其计费后端要消费这个 header，故 `ResolveRuleFlagsWithScenario` 在解析末尾对 `provider.IsClaudeCodeProvider()` 命中的请求清掉该 flag。claude_desktop 仍靠 `autoSetCleanHeaderFlag` 在协议转换时自动启用（claude_desktop 未做 rule 级默认）。| `CleanHeaderTransform`（Type 1b-pre，server-domain Transform）|
-
----
+| `clean_header` | bool | app | — | — | 剥离 system messages 中的 x-anthropic-billing-header 块，并归一化日期字符串里的地理隐写标记（相似 apostrophe / 日期分隔符）。Claude Code 注入该 header 仅供自家计费，绝不能泄漏给三方 provider。**rule-only**（已从 scenario plugin 移除 —— 不再有 `ScenarioFlags.CleanHeader` / OR 注入）。**built-in CC rule 默认开**（`init.go::ccRule` + `newCCProfileRules` 种子 / `migrate20260610` 存量），可按 rule 关闭以保真原生 Anthropic。**Claude OAuth provider 自动抑制**：OAuth 订阅走原生 Anthropic，其计费后端要消费这个 header，故 `ResolveRuleFlagsWithScenario` 在解析末尾对 `provider.IsClaudeCodeProvider()` 命中的请求清掉该 flag。claude_desktop 仍靠 `autoSetCleanHeaderFlag` 在协议转换时自动启用（claude_desktop 未做 rule 级默认）。| `CleanHeaderTransform`（Type 1b-pre，server-domain Transform）|
+| `claude_org_id` | string | request_anthropic | — | — | Claude OAuth 的组织归属：空 = 不发组织头，`auto` = 登录时记录的 organization_id，UUID = 显式组织。 | Claude client 构造期 option，读 resolved RuleFlags |
+| `claude_code_version` | enum | request_anthropic | **yes** | override | Claude OAuth wire profile：空/Default 跟随最新支持版本，当前 2.1.280；2.1.86 是显式 Legacy。仅适用于 Claude OAuth，旁路 client 的默认行为见 `claude-code-oauth-compat.md` §B0.1。 | `ResolveRuleFlagsWithScenario` → `ClaudeCodeVersionTransform` + client header/beta/cch 层 |
+| `context_1m` | bool | request_anthropic | — | — | 对支持模型追加 `context-1m-2025-08-07` beta；不改出站模型名，客户端自身请求 1M 仍被尊重。 | Anthropic SDK Betas / per-call options |
 
 ## 5. 五种 flag 注入手法
 

@@ -19,7 +19,7 @@ import (
 )
 
 // Expectations are live captures of the official binary (interactive
-// persona; -p drops redact-thinking). See .design/claude-code.md Part B.
+// persona; -p drops redact-thinking). See .design/claude-code-oauth-compat.md.
 
 func TestComposeClaudeCodeBetas_Sonnet46OAuthCapture(t *testing.T) {
 	got := composeClaudeCodeBetas(claudeBetaSignals{

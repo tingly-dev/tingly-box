@@ -139,7 +139,7 @@ var ErrSessionEventsClosedMidTurn = errors.New("agentboot: persistent session ev
 // reason as an error instead of a Result. Callers should treat this the
 // same as any other execution failure and remove the session from
 // whatever registry (e.g. an [github.com/tingly-dev/tingly-box/agentboot/pool.Pool])
-// tracks it — see .design/claude-code.md §5.3/§5.4.
+// tracks it — see .design/claude-code-session.md §5.3/§5.4.
 //
 // ctx bounds the turn: unlike a one-shot [ExecutionHandle], a
 // [PersistentSession]'s process is deliberately detached from any single

@@ -1,8 +1,9 @@
 # Provider Extensions & Provider/Model/Rule Flags
 
-> 状态：**分两个 PR 交付**（api_key-only 发布范围）：
+> 状态：**rule 级已实现；provider/model 级为未实施提案**（api_key-only 发布范围）：
 > PR1 — rule 级 `extra_headers`（含前端，已实现）；
-> PR2 — provider & model 级改造（Extensions 容器、db 列、provider API 与前端）。
+> PR2 — **待实施**：provider & model 级改造（Extensions 容器、db 列、provider API 与前端）。
+> 下文三级合并、provider API/UI 与 extensions schema 均描述目标状态，不能作为当前接口使用。
 > 适用对象：tingly-box 后端 / 前端贡献者。
 > 相关文档：`.design/rule-flags.md`（rule/scenario 级 flag 机制，本设计大量复用其模式）、
 > `.design/user-agent.md`（vendor pin 不可污染的边界，本设计必须尊重）、
@@ -327,7 +328,7 @@ vendor pin 与 UA 链在更内层（更靠近 wire）后写后胜（§5.2）；�
 | `no_key_required` 的自建端点 | 属 api_key 语义路径，生效 |
 | OAuth / vendor 特种链（Claude Code、Codex、Kimi、Gemini、Antigravity） | **不释放**：无配置入口 + 校验拒绝 + transport no-op。rule 级 headers 命中此类 provider 时同样被 transport 守卫拦下（对用户的语义即"该 flag 仅对 API-key provider 生效"，写进 rule 级 flag 的 Description） |
 | aws_sigv4 / azure_key / gcp_sa | **不释放**（SigV4 对参与签名的 header 敏感，注入未签名 header 可能直接 403；放开需单独验证） |
-| vmodel | no-op（无出站 HTTP）。UI 不展示入口 |
+| vmodel | no-op（auth type 不在 api_key 发布范围）。实际已经 SDK + 私有 HTTP transport 调度，见 `vmodel-transport.md`；不能再用“无 HTTP”作为理由。UI 不展示入口 |
 | builtin providers | 沿用既有规则：builtin 不可 mutate（只许 toggle Enabled），flags 同样锁定 |
 
 ---
@@ -472,7 +473,7 @@ switch/case。实现落点：
 
 5. internal/client
    ├─ provider_headers_transport.go：providerHeadersTransport
-   │   （含 IsAPIKey 守卫 + denylist 二道防御）
+   │   （含 IsAPIKey 守卫；校验仅查结构，不设 denylist，见 §5.3）
    └─ 挂载策略同 rule 级 ruleFlagTransport：pass-through 构造器显式挂载，vendor 链不挂
 
 6. protocol dispatch

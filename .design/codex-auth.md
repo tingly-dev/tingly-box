@@ -142,11 +142,11 @@ replaces the `OPENAI_API_KEY` Step 2 with a note (the token lives in
 
 | Layer | File | Role |
 |---|---|---|
-| Backend | `internal/config/apply_config.go` | `CodexAuthHybrid`; `bearerToken` threaded through `mergeCodexConfig` / `ApplyCodexConfigWithContextWindows` / `RenderCodexConfigTOML`; provider stanza gets `experimental_bearer_token` + `requires_openai_auth`; `ApplyCodexAuth` materialize-or-skip |
+| Backend | `internal/config/apply_config_codex.go` | `CodexAuthHybrid`; `bearerToken` threaded through `mergeCodexConfig` / `ApplyCodexConfigWithContextWindows` / `RenderCodexConfigTOML`; provider stanza gets `experimental_bearer_token` + `requires_openai_auth`; `ApplyCodexAuth` materialize-or-skip |
 | Backend | `internal/server/module/configapply/{handler,types}.go` | `authMode="hybrid"` branch; optional `oauthProviderUuid`; preview embeds bearer token, omits `authJson` |
 | Frontend | `frontend/src/pages/scenario/components/CodexConfigModal.tsx` | routing radio + keep-login checkbox → derived `authMode`; hybrid preview + Manual-tab note |
 | Frontend | `frontend/src/services/api.ts` | `applyCodexConfig` / `getCodexConfigPreview` accept `'hybrid'` |
-| Tests | `internal/config/apply_config_hybrid_test.go` | bearer token present in hybrid / absent in gateway; hybrid auth materialize-or-skip; no `OPENAI_API_KEY` leak |
+| Tests | `internal/config/apply_config_codex_test.go` | bearer token present in hybrid / absent in gateway; hybrid auth materialize-or-skip; no `OPENAI_API_KEY` leak |
 
 ## 7. Config schema reference
 

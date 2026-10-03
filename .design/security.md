@@ -71,7 +71,7 @@ We deliberately do **not** silently rotate at startup:
   than a one-shot silent rewrite the operator never sees.
 
 Rotation is already wired server-side in
-`internal/server/webui_auth.go` (`ResetUserToken`, `ResetModelToken`);
+`internal/server/server_webui_api.go` (`ResetUserToken`, `ResetModelToken`);
 both routes require an authenticated session, so a legacy-default
 holder can rotate from inside the Web UI without any out-of-band trust
 bootstrap.
@@ -105,5 +105,5 @@ to make that clearer is a follow-up.
 | `internal/constant/constant.go`            | Holds `DefaultUserToken` / `DefaultModelToken` — detection-only, not fallback.        |
 | `internal/config/util.go`           | `GenerateUserToken`, `GenerateModelToken`, `GenerateSecureToken`, `IsDefaultToken`.   |
 | `internal/config/config.go`         | `NewConfig` bootstrap and `CreateDefaultConfig`. Both refuse legacy defaults.         |
-| `internal/server/webui_auth.go`            | `GetUserToken` (exposes `is_default`), `ResetUserToken`, `ResetModelToken`.           |
+| `internal/server/server_webui_api.go`            | `GetUserToken` (exposes `is_default`), `ResetUserToken`, `ResetModelToken`.           |
 | `internal/servertest/server_test.go`      | Distinguishes real vs test tokens via the legacy default string.                      |

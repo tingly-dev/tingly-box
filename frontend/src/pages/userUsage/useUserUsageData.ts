@@ -104,7 +104,7 @@ export function useUserUsageData(range: TimeRange) {
                 request_count: stat?.request_count || 0,
                 // total_tokens is derived via the shared helper, not read from
                 // the API's total_tokens field (input+output only, excludes
-                // cache — see .design/stream-usage-tracking.md).
+                // cache — see .design/usage-tracking.md).
                 total_tokens: getTotalTokens(stat ?? {}),
                 total_input_tokens: stat?.total_input_tokens || 0,
                 total_output_tokens: stat?.total_output_tokens || 0,

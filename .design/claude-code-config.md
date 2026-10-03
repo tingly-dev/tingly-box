@@ -441,7 +441,7 @@ explanations, etc.).
    write this env").
 
 2. **Frontend structure** — add an entry to `FIELD_STRUCT` in
-   `frontend/src/components/ClaudeCodeQuickConfig.tsx` with the env name,
+   `frontend/src/pages/scenario/components/ClaudeCodeQuickConfig.tsx` with the env name,
    group (`model` / `limits` / `switches`), kind (`model` / `int` / `bool`),
    and optional `unit`.
 

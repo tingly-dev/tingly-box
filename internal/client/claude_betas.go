@@ -11,7 +11,7 @@ import (
 )
 
 // anthropic-beta composition for the native Claude Code profile, mirroring
-// the CLI (.design/claude-code.md Part B): a model-dependent baseline, flags derived
+// the CLI (.design/claude-code-oauth-compat.md): a model-dependent baseline, flags derived
 // from the body, and an allowlisted replay of the inbound client's flags.
 // Anything else the client sends is dropped.
 

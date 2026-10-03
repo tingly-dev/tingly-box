@@ -1,6 +1,6 @@
-# Agent 页重设计（讨论稿）
+# Agent 页重设计 — 模板、配置状态与实施边界
 
-> 状态：**讨论稿，未实施**。是 `ui-redesign.md` 的展开：导航层面的改动都比较轻，真正最麻烦的是每一个 Agent 页（`/agent/*`）。
+> 状态：**A–D 已落地，E 部分撤回，Profile 合并暂缓**。当前行为以进度表为准，后文保留原始设计供决策追溯。是 `ui-redesign.md` 的展开：导航层面的改动都比较轻，真正最麻烦的是每一个 Agent 页（`/agent/*`）。
 > 证据来自 mock 模式截图（1440 宽，Claude Code 的 Unified / Separate、Auto Config 弹窗、Profile、Codex、Xcode、Claude Desktop）和代码走读（2026-09-30）。原则引用见 `ux-principles.md`（P1–P12）。
 
 ---

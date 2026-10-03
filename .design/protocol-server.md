@@ -30,7 +30,8 @@ internal/protocolserver/
 ├── failover_dispatch / load_balance（选路引擎）
 ├── guardrails_runtime* / recording_transform / usage_tracking / tracking_context
 ├── routes.go             # RegisterRoutes(...) ← 原 UseAIEndpoints
-└── 子包整体迁入: recording/ transform/ servertool/
+└── 子包整体迁入（最初）: recording/ transform/ servertool/
+    （recording 后续提升到 top-level `internal/recording`，当前不再是本包子目录）
     （advisortool/ 已并入 servertool/，见 advisor_provider.go；2026-09。
     toolengine/ 与 forwarding/ 原是本目录子包，2026-09 提升为 top-level
     `internal/toolengine` / `internal/forwarding`，见下方"遗留/后续"）
@@ -105,6 +106,10 @@ handler 类型 — **拆分对外部 API 零破坏**。
 测试文件随对应源文件走；`protocoltest` / `servertest` 走 `*Server` 门面，不受影响。
 
 ## 遗留 / 后续
+
+当前管理面已在后续重构中将 Guardrails 提到 `internal/server/module/guardrails`，
+统一模块装配见 `backend-organization.md` §3。下述旧 handler / adapter 名称记录
+本轮拆分时的边界，不表示这些迁移遗留仍未清理。
 
 - `load_balance_handler.go`（`LoadBalancerAPI`，管理面 HTTP 包装）与 `guardrails_handler.go`
   留在 server 侧（管理面），只消费 protocolserver 暴露的接口。

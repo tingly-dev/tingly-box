@@ -1,8 +1,10 @@
 # ImBot 输出铅笔画 — ASCII mockups of the predicted message flow
 
-> 配套文档：`.design/imbot-output.md`（文字版分析 + 代码依据）。这份文档只做一件事——把那份分析里描述的消息序列画成文本框线图，方便直接"看"出来现在会是什么样子，而不是靠脑补。**不是真实截图**，是按代码逐条还原的示意；气泡文案、按钮文案都和实际发送的字符串一致（见 `imbot-output.md` 引用的代码行）。
->
-> **更正（写在实现阶段发现，晚于本文档初版）**：下面"画 A"和"画 B"的平台归类有两处错——① Lark 实际上和 Feishu 用的是同一套 `Restate` 实现（`lark.Bot` 内嵌 `*feishu.Bot`，方法自动继承），应该归进画 A，不是画 B；② Discord / Slack 的问题比"画 B"画的更严重——**按钮从来没有渲染过**（不是"渲染了但用完还留着"），而且因为能力声明谎报支持交互，连画 D 那种文字兜底说明都不会出现，用户看着一段无法回复的纯文字。下面各画的文案保留原状（仍然真实反映"按钮长什么样"这个局部细节），但平台分类以 `.design/imbot-output.md` §6 更正后的表格为准，不要按这里的画法对号入座。
+> 配套正文：[`imbot-output.md`](./imbot-output.md)。本文件独立维护消息序列图，
+> 平台能力与解决状态以正文 §6 / §7 为准。这些是代码推演，**不是实际截图**。
+> A–C 保留初版序列供比较，重复确认和 quiet 下 `[RESULT]` 已修复，不代表当前条数。
+> B 的按钮从未在 Discord/Slack 上实现，属于被纠正的假设；两平台当前走 D 的文字降级。
+> Telegram / Feishu / Lark 支持 Restate，后两者共享实现。文末 reply-to 图另描述回复归属。
 
 ## 场景设定
 
@@ -10,7 +12,7 @@
 
 - 用户发：`@cc 把 foo.go 里的错误处理改一下`
 - 这一轮触发了 1 次权限确认（`Edit` 工具）+ 1 次工具调用
-- 用户点了"允许"
+- 支持按钮的平台点“允许”；文字降级平台回复说明中的选项
 
 ## 图例
 
@@ -90,9 +92,10 @@ Feishu 的权限卡片部分和这个几乎一样（都实现了 `Restate`），
 
 ---
 
-## 平台原型 B：Discord（🔴 按钮从未渲染——比"残留"更差，见上方更正）
+## 平台原型 B：被纠正的按钮残留假设（历史图）
 
-Slack、Lark 的行为和这里完全一样（都有按钮能力，但 `imbot.MessageRestater` 都没实现），只是气泡换成各自的 UI 皮肤——文字内容和"按钮残留"的问题是一模一样的，所以同样只画一份。
+下图保留原始假设，不代表 Discord/Slack 的已实现 UI：两者从未渲染这些按钮，
+能力声明修正后已有文字回复说明，当前序列参考 D。Lark 属于 C，不属于此图。
 
 ```
 ┌───────────────────────────────────────────┐
@@ -181,7 +184,7 @@ Slack、Lark 的行为和这里完全一样（都有按钮能力，但 `imbot.Me
 
 ---
 
-## 平台原型 D：DingTalk（🔴 无按钮能力，权限确认退化成文字）
+## 平台原型 D：文字降级（DingTalk / Discord / Slack 等，当前交互形式）
 
 Weixin、WeCom、WhatsApp 是同一个类别——`SupportsInteraction()` 全部为 `false`，权限/多选题一律走"编号列表 + 文字回复"这条路，画一份就够代表这四个平台。Weixin 目前额外被 `SuppressVerbose` 强制关掉了详细过程（见下方备注），所以它的真实序列会比这张图更短。
 
@@ -225,8 +228,8 @@ Weixin、WeCom、WhatsApp 是同一个类别——`SupportsInteraction()` 全部
 | 画 A（Telegram） | Telegram | 气泡 + inline 按钮 | 原地改写，按钮消失 |
 | 画 A（同序列，UI 皮肤不同） | Feishu | 见画 C（卡片皮肤） | 卡片 patch，按钮消失 |
 | 画 A（**更正：和 Feishu 同一套实现**） | Lark | 同画 C——`lark.Bot` 内嵌 `*feishu.Bot`，`Restate` 是继承来的方法，不是单独实现的 | 卡片 patch，按钮消失；上一版文档把它错归进"画 B / 未接 Restate"，已更正 |
-| 画 B（**更正：比图上画的更差**） | Discord / Slack | 声明了按钮能力（`components`/`blockKit`），但 `SendMessage` 代码从未把 `opts.Actions` 渲染出来——**下面画里的按钮实际上不会出现**，且因为能力声明误判为"支持交互"，连画 D 那种文字兜底说明也不会追加 | 用户看到一段无法判断如何回复的纯文字，不是"按钮残留"，是"回复方式本身缺失"；等会话超时走默认策略 |
-| 画 D（DingTalk） | DingTalk / WeCom / WhatsApp | 纯文字编号列表，要求手打回复 | 没有按钮残留问题，但每次都要打字；这是能力声明和实现一致的正确降级 |
+| 画 B（历史假设，当前无对应平台） | — | Discord/Slack 从未实现图中的按钮；旧能力误报也已修复 | 当前行为参考 D，不能据此图推断按钮残留 |
+| 画 D（文字降级） | DingTalk / Discord / Slack / WeCom / WhatsApp | 文字回复说明与编号列表；无需按钮 | 手动输入，没有按钮残留；Discord/Slack 的兜底已恢复 |
 | 画 D（更短） | Weixin | 同 DingTalk 的文字降级，**且已被 `SuppressVerbose` 强制静音**，实际只会看到①②③⑦，中间的工具聚合/详细过程不会发 | 四条消息里最"干净"的一档，是唯一被专门治理过的平台 |
 
 ---
@@ -262,12 +265,12 @@ Weixin、WeCom、WhatsApp 是同一个类别——`SupportsInteraction()` 全部
 
 ---
 
-## 问题点速查（对应画里的 ⚠️ 编号）
+## 问题点速查（历史图编号；当前状态见正文 §7）
 
 1. **⚠️1 重复确认**：`✅ Allow · for tool: \`Edit\`` 这条消息和"权限卡片被改写成✅ Approved"是两处完全独立的代码（`prompt_reply.go` 的 `send(...)` 和 `imprompter.go` 的 `editPromptToResult`），**所有平台都会重复发**，包括体验最好的 Telegram/Feishu。
 2. **⚠️2 调试风格的 `[RESULT]` 块**：`[SYSTEM]` `[RESULT]` 这种方括号标签是给人调试用的格式，直接进了聊天窗口；且这条消息**不受 quiet 模式过滤**，关了 verbose 也照样发。
 3. **⚠️3 按钮永久残留**：这张图画的是"按钮发出后是死的，但长得像还能点"，对 DingTalk / Weixin / WeCom / WhatsApp 不适用（它们根本不渲染按钮，见 ⚠️4）；真正符合"按钮渲染了、用完却没收回去"这个描述的，实际平台里一个都没有——Telegram/Feishu/Lark 会原地改写收回按钮，Discord/Slack 干脆从不渲染按钮（不是"残留"，是"缺失"，见文档开头的更正和 imbot-output.md §4 第 5 条）。这张画留作"如果一个平台只实现了按钮渲染、没实现 Restate，会是什么样"的通用示意。
-4. **⚠️4 文字降级**：DingTalk / Weixin / WeCom / WhatsApp 没有按钮能力，权限确认和多选题一律退化成"编号列表 + 手打回复"，比按钮更占屏幕、也更麻烦。
+4. **⚠️4 文字降级**：DingTalk / Discord / Slack / Weixin / WeCom / WhatsApp 没有按钮能力，权限确认和多选题一律退化成"编号列表 + 手打回复"，比按钮更占屏幕、也更麻烦。
 
 详细代码依据见 `.design/imbot-output.md` 对应章节。
 

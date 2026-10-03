@@ -12,7 +12,7 @@ import (
 
 // cch: the billing header's request-body hash. ops emits the placeholder
 // "cch=00000;" and this middleware patches it on the wire, like the official
-// binary's native layer (.design/claude-code.md §B3.3.4):
+// binary's native layer (.design/claude-code-oauth-compat.md §B3.3.4):
 //
 //	preimage = wire JSON with top-level "model" set to "" and "max_tokens" removed
 //	cch      = xxHash64(preimage, claudeCodeCCHSeed) & 0xFFFFF, 5 lowercase hex

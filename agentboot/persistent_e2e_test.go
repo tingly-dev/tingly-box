@@ -19,7 +19,7 @@ import (
 // TestE2E_ClaudePersistentSession drives a real, unmocked `claude` CLI
 // process through two turns on the same PersistentSession — the same real
 // process (Runner.Open, claude.Agent.Open) that the empirical experiment in
-// .design/claude-code.md §3.1 verified by hand with a throwaway script, now
+// .design/claude-code-session.md §3.1 verified by hand with a throwaway script, now
 // as a permanent, repeatable check against the actual production code path.
 //
 // It asserts what the fake-process-backed
@@ -60,7 +60,7 @@ func TestE2E_ClaudePersistentSession(t *testing.T) {
 
 	// Same process, same stdin — no new claude invocation. If this second
 	// Send silently degraded to a fresh process (the context-lifetime bug
-	// .design/claude-code.md §5.2 documents), the model would have no
+	// .design/claude-code-session.md §5.2 documents), the model would have no
 	// memory of turn 1 and would not be able to answer this correctly.
 	require.NoError(t, session.Send(ctx, "What was the single word I just asked you to reply with? Reply with just that word."))
 

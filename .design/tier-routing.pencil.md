@@ -2,6 +2,11 @@
 
 Visual companion to `tier-routing.md`. Shows the runtime flow of tier-based service routing and its two complementary failover levels: **cross-request** (tier tactic + circuit breaker) and **in-request** (the passive `firstChunkGate` + stream priming). The in-request path is a **layered hand-off**: the producer emits chunks normally, a passive gate buffers them, and the orchestrator owns the retry decision.
 
+Scope: tier selection, breaker feedback/recovery and how these connect to
+request-level retry. The detailed per-candidate transformation sequence lives
+in [`request-failover.pencil.md`](./request-failover.pencil.md); strict TTL and
+partition pin timelines live in [`session-affinity.pencil.md`](./session-affinity.pencil.md).
+
 Contents:
 
 - Two complementary failover levels (map)
@@ -368,7 +373,7 @@ rule.GetActiveServices()
 
 - The gate is **passive**: it makes no protocol or status decisions. The producer signals the first real chunk; the orchestrator decides retry. Each layer owns one concern, so a gate bug cannot pick the wrong tier and an orchestrator bug cannot corrupt bytes.
 - Single-service requests (`len(activeServices) ≤ 1`) bypass the gate entirely — the common case stays on the original `c.Writer`.
-- **(v3)** Transform happens **per attempt**: each retry clones a pristine request and re-shapes it for the candidate's API style and model; single-service requests skip the clone. (Lifted from the original transform-once design — see `.design/failover.pencil.md`.)
+- **(v3)** Transform happens **per attempt**: each retry clones a pristine request and re-shapes it for the candidate's API style and model; single-service requests skip the clone. (Lifted from the original transform-once design — see `.design/request-failover.pencil.md`.)
 - **(v3)** Failover **spans API styles**: `selectFallbackService` uses no style filter (`requireAPIStyle = ""`), so a tier can fail over from Anthropic to OpenAI to Google within one rule.
 - Once `committed`, the connection is on the wire; `Discard()` and `CommitIfBuffered()` both become no-ops.
 - `Status() == 0` (untouched writer) ⇒ non-retryable — matches a client disconnect / no-write completion.

@@ -47,7 +47,7 @@ func ConvertResponsesToOpenAIChat(rs *responses.Response, responseModel string) 
 
 	// The canonical wire type owns the Chat usage shape; only total_tokens is
 	// overridden with the value the upstream Responses API actually reported
-	// (per .design/stream-usage-tracking.md §"wire usage map" — cover one key,
+	// (per .design/usage-tracking.md §"wire usage map" — cover one key,
 	// do not fork the constructor). Falls back to the computed value when the
 	// upstream did not report one.
 	usage := usageconv.ToChatUsageWire(usageconv.FromOpenAIResponses(rs.Usage))

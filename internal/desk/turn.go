@@ -123,7 +123,7 @@ func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt st
 
 // runPersistentTurn drives one turn through a long-lived Claude Code process
 // kept in s.pool, mirroring remoteagent.ClaudeCodeExecutor's own
-// runPersistentTurn (.design/claude-code.md §5.3) — same pool package, same
+// runPersistentTurn (.design/claude-code-session.md §5.3) — same pool package, same
 // Open-or-Acquire-then-Send shape, same fallback contract.
 //
 // handled=false means nothing was sent to any process yet (Open or the

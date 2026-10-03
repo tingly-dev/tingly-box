@@ -7,13 +7,14 @@ benchmark" — that `internal/servertest`, `internal/protocoltest`, future
 `*test` packages, and outside Go projects all build on, including a reusable
 *preset check-logic* layer.
 
-Status: **design-first.** This doc defines the architecture and a foundation
-package; the foundation implementation (Phase 1) and consumer migrations
-(Phases 2–3) land under separate approvals.
+Status: **implemented, Phases 1–3 complete.** `vmodel/benchmark` owns the
+shared foundation; protocoltest and servertest consume it (§Migration phases).
+The Motivation comparison records the pre-migration baseline, not three current
+independent transport implementations.
 
 ## Motivation
 
-Three separate mock-provider implementations exist today, with
+Before this migration, three separate mock-provider implementations existed, with
 overlapping-but-inconsistent capabilities:
 
 | | `vmodel/virtualserver.Service` (prod) | `protocoltest.VirtualServer` | `servertest.MockProviderServer` |

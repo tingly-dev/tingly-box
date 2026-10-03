@@ -519,7 +519,7 @@ func TestChatUsage_RoundTripsCacheWrite(t *testing.T) {
 }
 
 // TestAnthropicAndOpenAI_NormalizeToSameShape is the cross-provider contract
-// from .design/stream-usage-tracking.md §2.1: OpenAI subtracts, Anthropic adds,
+// from .design/usage-tracking.md §2.1: OpenAI subtracts, Anthropic adds,
 // and both land on InputTokens = uncached + written.
 func TestAnthropicAndOpenAI_NormalizeToSameShape(t *testing.T) {
 	// 200 uncached + 50 written + 800 read, 500 output.

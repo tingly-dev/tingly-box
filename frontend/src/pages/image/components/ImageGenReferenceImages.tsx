@@ -7,7 +7,7 @@ import type { ReferenceMask } from './ImageGenPlayground.types';
 import type { SketchLayers } from './SketchCanvasDialog';
 
 // Matches the Codex-native imagegen tool's reference-image cap (see
-// .design/imageedit.md) — the common denominator across providers behind
+// .design/image-edit.md) — the common denominator across providers behind
 // this scenario.
 export const MAX_EDIT_REFERENCE_IMAGES = 5;
 

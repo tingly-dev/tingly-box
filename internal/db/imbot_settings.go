@@ -34,7 +34,7 @@ type ImBotSettingsRecord struct {
 	// PersistentSession opts @cc into a long-lived Claude Code process kept
 	// warm across chat turns (agentboot.PersistentSession / agentboot/pool)
 	// instead of spawning a fresh process per message. Nil/false is the
-	// default — see .design/claude-code.md for the rollout rationale.
+	// default — see .design/claude-code-session.md for the rollout rationale.
 	PersistentSession *bool `gorm:"column:persistent_session"`
 
 	// Scenarios is a JSON-encoded list of scenario bindings declaring

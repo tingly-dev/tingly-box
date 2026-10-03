@@ -1,8 +1,14 @@
-# Affinity Flow Design
+# Session Affinity (pencil)
 
 ## Overview
 
-Session affinity pins a client session to the service it first landed on. This document describes the complete flow of how affinity works in tingly-box, including the strict TTL behavior.
+Session affinity pins a client session to the service it first landed on. This document describes the complete flow of how affinity works in tingly-box, including strict TTL, tier eligibility and smart-routing partition scope.
+
+Scope: this file owns pin lookup/replacement timelines. The subsystem map is
+[`load-balancing.pencil.md`](./load-balancing.pencil.md); tier/breaker semantics
+are in [`tier-routing.md`](./tier-routing.md) and
+[`tier-routing.pencil.md`](./tier-routing.pencil.md). All pencil files remain
+independent visual companions.
 
 ## Configuration
 
@@ -16,6 +22,9 @@ When affinity is enabled:
 
 ## Complete Request Flow
 
+In the timelines below, `partitionKey = AffinitySessionKey(sessionID, matchedSmartRuleIndex)`
+is computed after Smart. The same key is used for store lookup and replacement.
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         REQUEST FLOW (完整版)                                │
@@ -24,12 +33,12 @@ When affinity is enabled:
 Request 1 at T=0 (第一次请求, 无锁)
 ─────────────────────────────────────┘
 
-1. SELECTOR.SELECT(ctx)
+1. SELECTOR.SELECT(ctx): Health → Smart narrows the content partition
    │
    ▼
 2. AffinityStage.Evaluate()
    │
-   ├── store.Get(ruleUUID, sessionID) → nil (无锁)
+   ├── store.Get(ruleUUID, partitionKey) → nil (无锁)
    │
    ▼
 3. → 返回 nil, false (pass through)
@@ -66,12 +75,12 @@ Request 1 at T=0 (第一次请求, 无锁)
 Request 2 at T=1800 (TTL 内, 有锁)
 ─────────────────────────────────────┘
 
-1. SELECTOR.SELECT(ctx)
+1. SELECTOR.SELECT(ctx): Health → Smart narrows the content partition
    │
    ▼
 2. AffinityStage.Evaluate()
    │
-   ├── store.Get(ruleUUID, sessionID) → entry (ExpiresAt: T=3600)
+   ├── store.Get(ruleUUID, partitionKey) → entry (ExpiresAt: T=3600)
    │
    ├── ⭐ 检查: time.Now().After(entry.ExpiresAt)?
    │   └── T=1800 > T=3600? → NO (未过期)
@@ -100,12 +109,12 @@ Request 2 at T=1800 (TTL 内, 有锁)
 Request 3 at T=3601 (TTL 过期后, 有锁但过期)
 ─────────────────────────────────────┘
 
-1. SELECTOR.SELECT(ctx)
+1. SELECTOR.SELECT(ctx): Health → Smart narrows the content partition
    │
    ▼
 2. AffinityStage.Evaluate()
    │
-   ├── store.Get(ruleUUID, sessionID) → entry (ExpiresAt: T=3600)
+   ├── store.Get(ruleUUID, partitionKey) → entry (ExpiresAt: T=3600)
    │
    ├── ⭐ 检查: time.Now().After(entry.ExpiresAt)?
    │   └── T=3601 > T=3600? → YES (已过期!)
@@ -193,6 +202,19 @@ return // Don't re-lock, don't refresh TTL
 
 **Why**: Ensures affinity respects tier priority and health, not just time.
 
+### 4. Smart-routing partition scope
+
+Health filters first, then Smart narrows candidates to the matching content
+partition (or the base pool when no smart rule matches). Only then may Affinity
+honor a pin. Store keys are `(ruleUUID, AffinitySessionKey(sessionID, index))`:
+index -1 uses the bare session ID; a matched index uses `sessionID + "#sr" + index`.
+One conversation may therefore keep separate pins for main and subagent traffic.
+Both lookup and postProcess use this key. Pins must also belong to the current
+candidate set; a live TTL alone cannot override content routing.
+
+Editing the smart-rule list can renumber partitions. These in-memory pins
+self-heal within one TTL; the partition identity is not a persistent rule UUID.
+
 ## AffinityEntry Structure
 
 ```go
@@ -207,20 +229,21 @@ ExpiresAt time.Time // When the lock expires (strict TTL)
 ## Pipeline Integration
 
 ```
-Pipeline: Health → Affinity → Smart → LoadBalancer
+Pipeline: Health → Smart → Affinity → LoadBalancer
 
 AffinityStage.Evaluate():
     1. Check if affinity enabled (rule.Flags.SessionAffinity > 0)
     2. Check if session exists (!SessionID.IsEmpty())
-    3. Get affinity entry (store.Get)
+    3. Get pin in the matched smart partition (AffinitySessionKey; -1 = base pool)
     4. ⭐ Check if expired (time.Now().After(entry.ExpiresAt))
-    5. ⭐ Check if still eligible (typ.IsAffinityEligible)
-    6. Return Result(service, "affinity") or pass through
+    5. Check the pin belongs to the current candidate set
+    6. ⭐ Check tier/breaker eligibility (typ.IsAffinityEligible)
+    7. Return Result(service, "affinity") or pass through
 
 postProcess():
     1. Check if result.Source == "affinity" → skip (don't refresh TTL)
     2. Get TTL (GetEffectiveAffinity)
-    3. Set new lock (affinityStore.Set)
+    3. Set new lock using the same partition key (affinityStore.Set)
 ```
 
 ## Time-Based Scenarios
@@ -258,15 +281,17 @@ Inactive services never make tiers look "available":
 
 ## Files
 
-- `internal/server/routing/stage_affinity.go` - AffinityStage with strict TTL
-- `internal/server/routing/selector.go` - postProcess with no-refresh logic
+- `internal/routing/stage_affinity.go` - AffinityStage with strict TTL
+- `internal/routing/selector.go` - postProcess with no-refresh logic
 - `internal/typ/tactics.go` - IsAffinityEligible (tier-scoped affinity)
-- `internal/server/routing/stage_affinity_test.go` - Tests including strict TTL
+- `internal/routing/stage_affinity_test.go` - Tests including strict TTL
 
 ## Testing
 
-See `internal/server/routing/stage_affinity_test.go`:
+See `internal/routing/stage_affinity_test.go`:
 
 - `TestAffinity_StrictTTL_Expired` - Expired lock is dropped
 - `TestAffinity_StrictTTL_NotExpired` - Valid lock is honored
 - `TestAffinity_TierScope_*` - Tier-scoped affinity scenarios
+- `internal/routing/selector_test.go`: `TestSelect_ContentRoutingBeatsCrossPartitionPin` and
+  `TestSelect_ProcessorRunsForPinnedSession` - Content partitioning precedes pin reuse

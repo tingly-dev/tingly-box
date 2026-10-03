@@ -28,7 +28,7 @@ type consumer struct {
 	// sessionPool is shared across every bot this process runs — it caps
 	// resident Claude Code processes process-wide, not per bot. May be nil
 	// (standalone/test use), which disables persistent sessions regardless
-	// of any bot's setting. See .design/claude-code.md.
+	// of any bot's setting. See .design/claude-code-session.md.
 	sessionPool *pool.Pool
 	tbClient    tbclient.TBClient
 	store       bot2.SettingsStore

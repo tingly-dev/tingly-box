@@ -1,12 +1,15 @@
 # Bot Capability Access Control — Bot、Direct Chat、Group 与 Actor
 
-> Status: **spec** · Date: 2026-08-01
+> Status: **core model implemented; contract and remaining acceptance criteria below**
+> Initial design: 2026-08-01 · implementation checked: 2026-10-03
 >
 > Scope: Bot 能力、个人会话、群组与群内参与者的最终领域模型、授权模型、
 > 持久化结构、运行链路、控制面 API 与前端信息架构。
 >
-> This is a **target-state design**. It deliberately does not describe legacy
-> compatibility, staged migration, dual-write, or transitional schemas.
+> The resource/authorization core exists in `remote/access/` and
+> `internal/db/bot_access_store.go`; this does not assert that every UX and
+> platform acceptance criterion in §20 is complete. This document owns the
+> final model; migration history is separate in `remote-storage.md`.
 
 本文延续 `.design/bot-arch.md` 的「Bot 是连接资源」结论，但将其中面向产品的
 `Consumer` 正式收敛为 **Capability**，并重新定义会话访问控制。

@@ -1,6 +1,6 @@
 # Model List 获取 / 缓存 / 兜底 设计
 
-> 适用对象：改 `internal/server/module/provider/handler.go`（`GetProviderModelsByUUID` / `UpdateProviderModelsByUUID`）、`internal/config/config.go`（`FetchAndSaveProviderModels`）、`internal/catalog/model_list.go`、`internal/data/db/provider_model.go`、`internal/catalog/provider_catalog.go` 的贡献者。
+> 适用对象：改 `internal/server/module/provider/handler.go`（`GetProviderModelsByUUID` / `UpdateProviderModelsByUUID`）、`internal/config/config.go`（`FetchAndSaveProviderModels`）、`internal/catalog/model_list.go`、`internal/db/provider_model.go`、`internal/catalog/provider_catalog.go` 的贡献者。
 > 本文档描述「前端请求某 provider 的模型列表 → gateway 返回」的取数、缓存与兜底最终设计。
 
 ---
@@ -31,7 +31,7 @@
 | 刷新端点（写路径） | `UpdateProviderModelsByUUID` — `handler.go` |
 | 排序（serving 边界唯一真源） | `SortProviderModels` — `config.go` |
 | 缓存 manager（TTL=1h） | `ModelListManager` / `ModelCacheTTL` — `internal/catalog/model_list.go:14` |
-| 存储后端（SQLite/GORM） | `ModelStore` — `internal/data/db/provider_model.go`（PK 仅 `provider_uuid`） |
+| 存储后端（SQLite/GORM） | `ModelStore` — `internal/db/provider_model.go`（PK 仅 `provider_uuid`） |
 | 内嵌模板兜底 | `ProviderCatalogManager.GetEmbeddedModelsForProvider` — `internal/catalog/provider_catalog.go` |
 | 响应里的来源标记 | `ModelCacheSource*` — `internal/server/module/provider/types.go` |
 

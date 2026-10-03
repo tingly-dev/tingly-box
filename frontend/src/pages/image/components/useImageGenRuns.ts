@@ -115,7 +115,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) =
         // The endpoint is a consequence of the inputs, not a mode the user
         // picks: references present → edits, none → generations. Which
         // providers can serve either is the gateway's concern, not this
-        // panel's (see .design/imageedit.md).
+        // panel's (see .design/image-edit.md).
         const endpoint: Endpoint = request.sources.length > 0 ? 'edits' : 'generations';
         const pendingRun: GenerationRun = {
             id: runId,

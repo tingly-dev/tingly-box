@@ -194,7 +194,7 @@ func (c *responsesToChatConverter) processEvent(evt *responses.ResponseStreamEve
 		// rather than falling through to the post-loop usage=0 fallback.
 		c.usage = protocolusage.FromOpenAIResponses(evt.Response.Usage)
 		// Override total_tokens with the value the upstream Responses stream
-		// actually reported (per .design/stream-usage-tracking.md — cover one
+		// actually reported (per .design/usage-tracking.md — cover one
 		// key, do not fork the constructor), falling back to the computed
 		// input+cacheRead+output when the upstream did not report one.
 		if evt.Response.Usage.TotalTokens != 0 {

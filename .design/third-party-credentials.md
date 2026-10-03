@@ -23,7 +23,7 @@ streaming, and error shapes are unchanged.
 
 Reserved and left untouched (worked as-is): `ai.AuthType{AWSSigV4,AzureKey,GCPVertex}`,
 `ai.CredentialBundle`, `Provider.Credential`, `IsMultiFieldCredential()`
-(`ai/provider.go`); DB persistence (`internal/data/db/provider_store.go`, incl.
+(`ai/provider.go`); DB persistence (`internal/db/provider_store.go`, incl.
 `UpdateCredentialBundle`); store test at `provider_store_test.go:650-699`.
 
 The gap was everything above the store: `GetAccessToken()` returned `""` for the
@@ -189,7 +189,7 @@ verified against AWS/Google/Anthropic/Microsoft docs (Jul 2026): Bedrock
   stays **pure remote** (save moved into `fetchFromHTTP`, pre-merge) so a stale
   cache can never shadow a newer binary's embedded fixes; the refresh endpoint
   serves the merged `GetAllTemplates()` view.
-- Covered in `internal/catalog/provider_template_test.go` (cloud resolution,
+- Covered in `internal/catalog/provider_catalog_test.go` (cloud resolution,
   Vertex disambiguation, embedded-only merge).
 
 ## 10. Cross-cutting

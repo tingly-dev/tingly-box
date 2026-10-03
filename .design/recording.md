@@ -1,8 +1,8 @@
 # Recording 梳理:意图、现状与整合方向
 
 > 适用对象:tingly-box 后端 / 前端贡献者。
-> 状态:**梳理文档(as-is 盘点 + to-be 方向)**。本文档只梳理、不改行为;
-> 分阶段落地见 §6。obs 包内部的 pipeline 化重构规划见
+> 状态:**Phase 1、1.5、2 已落地；Phase 3 wire / Phase 4 EventTap 待实施**。
+> 当前点位开放范围见 §3.5，历史问题与交付记录见 §3 / §6。obs 包内部的 pipeline 化重构规划见
 > `internal/obs/PLANNING.md`(Phase 2),本文与其互补:PLANNING 管
 > "record 怎么被采集与导出",本文管 "record 由谁启用、在哪些层出现、
 > 与 rule flag 体系怎么融合"。
@@ -35,7 +35,10 @@ client 层独立 RoundTripper 三者并存),导致了当前零碎的局面。统
 
 ---
 
-## 2. 现状全景(as-is)
+## 2. 迁移前盘点（历史基线）
+
+本节保留 Phase 1 之前的路径与已删除机制，不是当前代码地图。当前启用和点位
+以 §3.5 / §6 为准；已删除 `RecordRoundTripper`、`SetRecordSink`、全局 CLI 开关。
 
 ### 2.1 三个互相独立的开关来源
 
@@ -293,7 +296,7 @@ Phase 1 与 Phase 2 互不依赖,可并行;Phase 3 依赖 Phase 2(recorder 的
 ## 7. 与现有文档的关系
 
 - `.design/rule-flags.md`:§12 的 scenario-only 表里 `recording_v2` 在
-  Phase 2 后升级为 shared flag,需同步更新该表与 §4 主表。
+  Phase 2 已升级为 shared flag，§12 共享表与 §4 主表已同步；后续点位开放仍需同步。
 - `internal/obs/PLANNING.md`:record 采集/导出侧的权威规划;本文的
   Phase 4 即与其合流点。两文档口径一致:record 实体总是构建,裁剪在
   出口。

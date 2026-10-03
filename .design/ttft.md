@@ -1,6 +1,6 @@
 # TTFT（Time To First Token）记录
 
-> 适用对象：改 `internal/protocol/loop.go`（`MarkFirstToken` / `CommitFirstChunk`）、`internal/protocol/stream/`（各协议的 content gate）、`internal/server/module/mcp/generic_stream_interceptor.go`（MCP 流式拦截器）、或 `internal/server/usage_tracking.go`（TTFT 消费侧）的人。
+> 适用对象：改 `internal/protocol/loop.go`（`MarkFirstToken` / `CommitFirstChunk`）、`internal/protocol/stream/`（各协议的 content gate）、`internal/toolengine/generic_stream_interceptor.go`（MCP 流式拦截器）、或 `internal/protocolserver/usage_tracking.go`（TTFT 消费侧）的人。
 >
 > 这份文档只讲一件事：**TTFT 必须在「第一个内容 token」被记录，而不是「第一个字节」。**
 

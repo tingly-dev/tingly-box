@@ -69,7 +69,7 @@ provider。这是系统里 service 的统一建模,前端的选择器
 }
 ```
 
-约定 key:`internal/config/flag.go` 的 `VisionProxyServiceKey`。
+约定 key:`internal/constant/constant.go` 的 `ExtensionVisionProxyService`。
 
 ### 3.2 Rule 级 —— RuleFlags typed 字段
 
@@ -112,48 +112,24 @@ const (
 
 ## 4. 执行流程
 
-### 4.1 单一入口
+### 4.1 单一入口与优先级
 
-不论 rule 级还是 scenario 级,都从同一个 helper 进:
-
-```go
-// internal/server/vision_proxy.go
-func (s *Server) applyVisionProxy(c *gin.Context, scenarioType typ.RuleScenario, rule *typ.Rule, typedRequest any) {
-    svc := s.resolveVisionService(scenarioType, rule)  // rule 先,scenario 后
-    if svc == nil { return }
-    _ = s.visionProxyProcessor.Process(&smartrouting.ProcessorContext{
-        Ctx:      c.Request.Context(),
-        Request:  typedRequest,
-        Services: []*loadbalance.Service{svc},
-    })
-}
-```
-
-优先级集中在 `resolveVisionService` 一个纯函数里,可单测、可读。**只
-Process 一次**——既不需要"两个 helper 串联 + lock 互斥",也不存在
-"图描述两次"的窗口。
-
+`internal/vision/visionproxy/service.go` 的 `Service.Apply` 是统一入口，
++`Service.Resolve` 选择有效 `{provider, model}`：可用 rule 值优先，随后 scenario
++Extensions；均未配置则跳过。构造函数 `NewServiceFromPool` 绑定共享 client pool。
++每请求最多处理一次，配置解析与处理器分离，测试见 service / vision_proxy 测试。
++
 ### 4.2 钩子位置
 
-每个入站 handler(`openai_chat.go` / `openai_responses.go` /
-`anthropic.go` 统管 v1 + beta)在 `determineRuleWithScenario` 之后、
-`SelectService` 之前调用:
-
-```go
-rule, err = s.determineRuleWithScenario(c, scenarioType, modelName)
-// ...
-s.applyVisionProxy(c, scenarioType, rule, typedRequest)
-provider, _, err = s.routingSelector.SelectService(c, scenarioType, rule, typedRequest)
-```
-
-放在 `SelectService` 之前是为了让下游接到的就是已经"图→文"完成的请求。
-
+`internal/protocolserver/protocol_handler.go::applyVisionProxy` 在 rule 已确定、
++`SelectService` 之前委托 `VisionProxyService.Apply`，让选路与下游看到图转文后的请求。
++root server 在启动时构造服务并经 Deps 注入，兼容门面也只委托同一服务。
++
 ### 4.3 处理器细节
 
-`VisionProxyProcessor`(`internal/server/processor/vision_proxy.go`)在
-`server.go` 启动时构造一次,被 `Server.visionProxyProcessor` 持有,这
-里直接调用——不走 smart routing 注册表(后者已删,§7)。
-
+`VisionProxyProcessor` 位于 `internal/vision/visionproxy/vision_proxy.go`，
++由 `visionproxy.Service` 持有，不经过 smart-routing op 注册表（清退历史见 §7）。
++
 处理器原地改写请求里的 image block:
 - 最新一条消息里的 image → 调上游 vision 模型描述
 - 历史消息里的 image → 打 `imageHistoricalText` marker(**不调** vision)
@@ -174,7 +150,7 @@ Anthropic 两种形态还会**下钻 `OfToolResult.Content`** 处理工具返回
 ### 5.1 Scenario 级:场景 plugin 行
 
 落点:`frontend/src/components/PluginFeatures.tsx`,由
-`ProviderConfigCard` 在各 `Use*Page` 场景页面渲染。
+`ProviderConfigCard` 在共用 `AgentPage` 模板下的场景页面渲染。
 
 不在通用 `PLUGIN_FEATURES` 的 On/Off 列表里(那会产生"开关 + 独立
 模型按钮"的割裂);用专用 `renderVisionProxyButton`:
@@ -361,16 +337,16 @@ rule 内其他 op AND 组合形成"带条件的 vision proxy",但实际业务里
 
 | 功能 | 文件 |
 |------|------|
-| 处理器实现(图描述、改写) | `internal/server/processor/vision_proxy.go` |
-| 处理器接口 / `ProcessorContext` | `internal/routing/smart_routing/processor.go` |
-| **统一入口 helper**(`applyVisionProxy` + `resolveVisionService`) | `internal/server/vision_proxy.go` |
+| 处理器实现(图描述、改写) | `internal/vision/visionproxy/vision_proxy.go` |
+| 处理器接口 / `ProcessorContext` | `internal/routing/smartrouting/processor.go` |
+| **统一入口**(`Service.Apply` / `Service.Resolve`) | `internal/vision/visionproxy/service.go` |
 | `RuleFlags` + `VisionProxyService` | `internal/typ/type.go` |
 | Flag registry + `FlagTypeServiceRef` 常量 | `internal/typ/flag_registry.go` |
 | `ScenarioFlags` / `ScenarioConfig` | `internal/typ/type.go` |
 | 场景配置 Get/Set | `internal/config/config.go` |
 | 场景配置 API | `internal/server/module/scenario/{routes,handler,types}.go` |
-| `VisionProxyServiceKey` 常量(Extensions key) | `internal/config/flag.go` |
-| 入站 handler(钩子点) | `internal/server/{openai_chat,openai_responses,anthropic}.go` |
+| `ExtensionVisionProxyService` 常量(Extensions key) | `internal/constant/constant.go` |
+| 入站 handler(钩子点) | `internal/protocolserver/protocol_handler.go` 及各协议入口 |
 | Scenario 级 UI | `frontend/src/components/PluginFeatures.tsx` |
 | Rule 级 UI | `frontend/src/components/rule-card/FlagCatalogDialog.tsx` |
 | `RuleFlags` ↔ wire 转换 | `frontend/src/components/rule-card/{utils.ts,useRuleCardHooks.ts}` |
@@ -383,7 +359,7 @@ rule 内其他 op AND 组合形成"带条件的 vision proxy",但实际业务里
 
 | 层 | 用例 |
 |----|------|
-| `resolveVisionService` 优先级 | rule + scenario 都配 → rule;只 scenario → scenario;只 rule → rule;都不配 → nil;rule 配但 model 空 → 回退 scenario;nil rule + scenario → scenario |
+| `Service.Resolve` 优先级 | rule + scenario 都配 → rule;只 scenario → scenario;只 rule → rule;都不配 → nil;rule 配但 model 空 → 回退 scenario;nil rule + scenario → scenario |
 | `applyVisionProxy` 行为 | rule 配 + 有图 → 用 rule service 描述;scenario 配 + 有图 → 用 scenario service;都没配 + 有图 → 图保留(no-op);profile 场景(`claude_code:p1`)配的 service 能找到(独立于 base) |
 | 单次 Process 不变量 | 两者都配时 Process 也只调一次(用 rule 的 service) |
 | `parseScenarioVisionService` | nil/缺键/结构错/缺 provider/缺 model/空串 → nil;provider+model 齐备 → active service |

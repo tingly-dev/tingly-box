@@ -2,7 +2,7 @@
 
 > 适用对象:tingly-box 后端贡献者。
 > 描述 `/images/edits` 在"不说 OpenAI multipart 协议"的 vendor 上怎么落地。
-> 关联文档:`imageedit.md`(edit 网关链路与 Codex)、`image-mask.md` §9(各 vendor
+> 关联文档:`image-edit.md`(edit 网关链路与 Codex)、`image-mask.md` §9(各 vendor
 > 的 mask / n 核对与来源)。
 
 ---

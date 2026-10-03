@@ -26,7 +26,7 @@ import (
 // server, across every bot. MaxSessions counts top-level entry agents only
 // — each one may spawn subagents of its own, so 10 resident entry sessions
 // is already a conservative retention budget, not a hard resource count.
-// Not yet exposed as a setting — see .design/claude-code.md §5.3/P3
+// Not yet exposed as a setting — see .design/claude-code-session.md §5.3/P3
 // (observability should land before this becomes tunable).
 var sessionPoolConfig = pool.Config{
 	MaxSessions: 10,

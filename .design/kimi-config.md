@@ -287,9 +287,9 @@ All constants and endpoint URLs were verified against
 |---|---|---|
 | OAuth config | `ai/oauth/provider.go` | `IssuerKimiCode` provider registration |
 | OAuth hook | `ai/oauth/hook.go` | `KimiHook`, `KimiDeviceName`, `KimiDeviceModel`, `KimiOsVersion` |
-| OAuth helper | `internal/server/module/oauth/kimi.go` | `WithKimiDeviceID` — injects `X-Msh-Device-Id` into token requests |
+| OAuth helper | `ai/oauth/options.go` | `WithKimiDeviceID` — injects `X-Msh-Device-Id` into token requests |
 | Auth handler | `internal/server/module/oauth/handler.go` | device ID generation, `pollForDeviceCodeToken`, `createProviderFromToken` |
-| Background refresh | `internal/server/background/oauth_refresher.go` | reattaches device ID on token refresh |
+| Background refresh | `internal/worker/tokenrefresh/refresher.go` | reattaches device ID on token refresh |
 | Round tripper | `internal/client/kimi_round_tripper.go` | inference headers + body normalization |
 | Quota fetcher | `ai/quota/fetcher/kimi_code.go` | `/usages` read; bearer token only, no `X-Msh-*` (§5.5) |
-| Round tripper test | `internal/client/kimi_round_tripper_test.go` | normalization unit tests |
+| Round tripper test | `internal/client/kimi_client_test.go` | device ID / round-tripper construction tests (not a claim of full normalization coverage) |

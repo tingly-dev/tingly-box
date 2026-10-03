@@ -148,7 +148,8 @@ func openaiChatSSEWriter(c *gin.Context) func(interface{}) error  // data: <json
 func responsesSSEWriter(c *gin.Context) func(interface{}) error   // event: <type>\ndata: <json>\n\n（冒号后有空格）
 ```
 
-> **注意**：Anthropic 和 Responses 的 SSE 格式不同（冒号后是否有空格）。混用会导致客户端解析失败，已有测试覆盖。
+> **兼容约定**：当前 writer 保留上述序列化形式，wire/golden 测试应保持一致。
+> SSE 标准允许字段冒号后带一个空格；两种写法并非不同的 SSE 协议，不能将空格差异本身描述为标准解析失败的原因。
 
 ---
 

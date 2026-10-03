@@ -19,7 +19,7 @@ import (
 
 // twoTurnPersistentFactory scripts a single fake claude process that answers
 // len(replies) sequential turns on the same stdin without exiting between
-// them — the multi-turn behavior .design/claude-code.md §3.1 confirmed
+// them — the multi-turn behavior .design/claude-code-session.md §3.1 confirmed
 // against the real CLI. Unlike fixture.Script (one process, one Result,
 // exits), this stays alive so a persistent-session test can assert only one
 // process was ever spawned across multiple chat messages.

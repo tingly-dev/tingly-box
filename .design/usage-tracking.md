@@ -1,6 +1,6 @@
 # Usage & Token Tracking
 
-> 适用对象：tingly-box 后端贡献者，特别是改 `ai/protocol.go`（canonical type）、`internal/protocol/usage/`（normalization）、`internal/protocol/token/`（streaming counter）、`internal/protocol/stream/` + `internal/protocol/nonstream/`（converter）、`internal/protocol/assembler/`、`internal/server/usage_tracking.go` + `recording_hooks.go`、`internal/data/db/usage_record.go`、`internal/server/module/usage/`（API），或在 `vmodel/` 内增 mock 的人。
+> 适用对象：tingly-box 后端贡献者，特别是改 `ai/protocol.go`（canonical type）、`internal/protocol/usage/`（normalization）、`internal/protocol/token/`（streaming counter）、`internal/protocol/stream/` + `internal/protocol/nonstream/`（converter）、`internal/protocol/assembler/`、`internal/protocolserver/usage_tracking.go` + `recording_hooks.go`、`internal/db/usage_record.go`、`internal/server/module/usage/`（API），或在 `vmodel/` 内增 mock 的人。
 >
 > 这份文档覆盖**整条 usage 通路**，不只 stream。原始 PR #1063（stream drain 修复）的 rationale 保留在 §8 历史。
 
@@ -326,7 +326,7 @@ OpenAI→Anthropic converter 的终态收口在 `emitTerminalEvents()`：从 cou
   - `ReasoningTokens > 0 → anthropic.Usage.OutputTokensDetails.ThinkingTokens`（Anthropic 自己的字段，不是"无对应字段"）
 - `Finish(model, in, out) → *anthropic.Message`：有 `SetUsage*` 数据就用它，否则回退入参
 
-### 4.2 `streamRecorder`（`internal/server/recording_hooks.go`）
+### 4.2 `streamRecorder`（`internal/protocolserver/recording_transform.go`）
 
 ```go
 type streamRecorder struct {
@@ -345,7 +345,7 @@ func (sr *streamRecorder) Finish(model string, usage *protocol.TokenUsage)
 
 ---
 
-## 5. 计费 / observability 层：`internal/server/usage_tracking.go`
+## 5. 计费 / observability 层：`internal/protocolserver/usage_tracking.go`
 
 两个入口：
 

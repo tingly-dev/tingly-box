@@ -140,7 +140,7 @@ const compactNumberFormatter = new Intl.NumberFormat('en-US', {
 export const formatNumber = (n: number): string => compactNumberFormatter.format(n);
 
 // The backend's total_tokens field is deliberately input+output only (cache
-// is billed separately — see .design/stream-usage-tracking.md), so any
+// is billed separately — see .design/usage-tracking.md), so any
 // surface displaying a true grand total must derive it from the three raw
 // fields instead of trusting total_tokens.
 export const getTotalTokens = (stat: {

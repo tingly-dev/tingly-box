@@ -1,6 +1,6 @@
 # OpenAI Endpoint Routing 设计
 
-> 适用对象：tingly-box 后端贡献者，特别是改 `internal/server/endpoint_resolution.go` 或 provider/template 类型时。
+> 适用对象：tingly-box 后端贡献者，特别是改 `internal/protocolserver/protocol_endpoint.go` 或 provider/template 类型时。
 > 本文档描述「客户端发请求 → gateway 选 OpenAI 上游 endpoint」的最终设计。
 
 ---

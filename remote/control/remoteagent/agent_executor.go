@@ -62,7 +62,7 @@ type ExecutorDependencies struct {
 	// into persistent sessions (BotSetting.PersistentSession). Nil disables
 	// the feature entirely regardless of the bot setting — the standalone
 	// CLI path (internal/command/remote.go) does not construct one.
-	// See .design/claude-code.md.
+	// See .design/claude-code-session.md.
 	SessionPool                *pool.Pool
 	IMPrompter                 *imchannel.IMPrompter
 	FileStore                  *FileStore

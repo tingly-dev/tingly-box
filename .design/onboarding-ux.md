@@ -1,7 +1,11 @@
 # Onboarding UX — guidance for first-time users
 
-Three friction points new users hit, and the smallest changes that remove them.
-All three follow the UX-First principles (see `ux-principles.md`): embed education
+Four friction points new users hit, and the changes that remove them.
+This cross-surface document owns discoverability and first-run education. Detailed
+provider setup lives in [`connect-ai-flow.md`](./connect-ai-flow.md), routing
+semantics in [`tier-routing.md`](./tier-routing.md), and authorization in
+[`team.md`](./team.md). Keep those contracts there rather than duplicating them here.
+All four follow the UX-First principles (see `ux-principles.md`): embed education
 in the product (#8), hand over the next-step artifact (#11), and prefer smart
 defaults over toggles (#6).
 

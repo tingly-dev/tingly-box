@@ -3,7 +3,7 @@
 > 适用对象:tingly-box 前端贡献者。
 > 描述 Image Playground 的后置切分能力:把一张网格图切成单张 PNG 打包下载、
 > 按顺序连成 GIF、并清掉模型画上去的"假透明"背景。
-> 关联文档:`ux-principles.md`(判断标准)、`imageedit.md`(imagegen/edit 网关链路)。
+> 关联文档:`ux-principles.md`(判断标准)、`image-edit.md`(imagegen/edit 网关链路)。
 
 ---
 

@@ -1,5 +1,7 @@
 # Tier-Based Service Routing
 
+图示职责分开维护：[全局 LB 地图](./load-balancing.pencil.md)、[tier / breaker 图](./tier-routing.pencil.md)、[请求内 failover](./request-failover.pencil.md)、[会话亲和时间线](./session-affinity.pencil.md)。正文维护语义，四篇 pencil 各自保持独立。
+
 Status: shipped (v1) on branch `claude/priority-service-routing-dIQfX`. Tracking commits: `a362ca3`, `5221109`. UX redesign on PR #1096 (`claude/dreamy-hawking-DQaYY`). Oscillation hardening (recovery hysteresis, PromotionHold, rule-scoped breaker) on branch `bugfix/tier` — commits `58508a25` (hysteresis), `9fe19215` (PromotionHold), `483aec74` (rule-scoped breaker); see "Recovery" below.
 
 ## Why
@@ -208,9 +210,9 @@ The "user moves a service card to a different tier" event has to cross five laye
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-The single transformation point that turns the JSON payload into live runtime behaviour is `Tactic.Instantiate()` at `internal/server/load_balance.go`. Every dispatch path — Anthropic v1/Beta, OpenAI Chat/Responses/Embeddings/Images, Google, smart routing matches — funnels through `LoadBalancer.SelectService`, so the tactic switch is enforced uniformly with no per-protocol changes required.
+The single transformation point that turns the JSON payload into live runtime behaviour is `Tactic.Instantiate()` at `internal/protocolserver/load_balance.go`. Every dispatch path — Anthropic v1/Beta, OpenAI Chat/Responses/Embeddings/Images, Google, smart routing matches — funnels through `LoadBalancer.SelectService`, so the tactic switch is enforced uniformly with no per-protocol changes required.
 
-This is pinned down by `TestTierRouting_EndToEnd` in `internal/server/priority_routing_e2e_test.go`, which:
+This is pinned down by `TestTierRouting_EndToEnd` in `internal/protocolserver/load_balance_tier_e2e_test.go`, which:
 
 1. Unmarshals a Rule JSON with `lb_tactic.type = "tier"`,
 2. Asserts `LBTactic.Params` is a `*TierParams` after decode,
@@ -308,7 +310,7 @@ On a decline the pipeline falls through to the strategy, which re-selects a curr
 
 ### Verifying shapes end-to-end
 
-`internal/server/lb_scenario_test.go` is the scenario harness that drives the **full** path (selection → failover dispatch) against programmable fake upstreams over a request sequence, with a deterministic breaker clock (`loadbalance.SetClockForTest`). It covers each shape above plus the original sticky-affinity regression (trip → open → drop pin → recover → re-pin), and the `harness lb` CLI tier shares the same engine. The CLI now self-checks via an optional `expect` block (all 13 built-in examples verify themselves), and coverage includes: half-open probe recovery, all-tiers-tripped degrade-to-T0, inactive-service exclusion, within-tier load sharing, and multi-session independent affinity. Prefer extending it (rather than stage-level units alone) when changing routing/affinity/breaker behavior.
+`internal/server/load_balance_test.go` is the scenario harness that drives the **full** path (selection → failover dispatch) against programmable fake upstreams over a request sequence, with a deterministic breaker clock (`loadbalance.SetClockForTest`). It covers each shape above plus the original sticky-affinity regression (trip → open → drop pin → recover → re-pin), and the `harness lb` CLI tier shares the same engine. The CLI now self-checks via an optional `expect` block (all 13 built-in examples verify themselves), and coverage includes: half-open probe recovery, all-tiers-tripped degrade-to-T0, inactive-service exclusion, within-tier load sharing, and multi-session independent affinity. Prefer extending it (rather than stage-level units alone) when changing routing/affinity/breaker behavior.
 
 ## Value
 
@@ -342,7 +344,7 @@ Status: shipped in the follow-up branch `claude/priority-routing-retry-followup`
 
 v1 only handled cross-request failover: a request that failed returned the error to the client, and the *next* request used the fallback. v2 fixes that for the common pre-stream-failure case so the same request falls over silently.
 
-**Where the wiring lives:** `internal/server/failover_dispatch.go`.
+**Where the wiring lives:** `internal/protocolserver/failover_dispatch.go`.
 
 **How it works** — a layered hand-off, not a smart shim. Each layer owns one concern so a bug in one can't corrupt the whole pipeline:
 
@@ -375,7 +377,7 @@ Two pieces work together to make streaming retryable without losing incremental 
 
 ## Heterogeneous (cross-style) failover (v3 — landed)
 
-Status: shipped on branch `claude/inspiring-gates-40pw9v`. Diagram: `.design/failover.pencil.md`.
+Status: shipped on branch `claude/inspiring-gates-40pw9v`. Diagram: `.design/request-failover.pencil.md`.
 
 v2's pre-stream failover was pinned to one API style because the request body was transformed **once**, before the retry loop, and reused as-is. v3 lifts the transform **into** the loop so each attempt re-shapes the request for the candidate it is about to call — enabling failover across heterogeneous providers (Anthropic ↔ OpenAI ↔ Google) and models within one rule.
 
@@ -383,12 +385,12 @@ What changed:
 
 - **One-time prologue vs per-attempt pipeline.** Each protocol entrypoint splits into a provider-independent prologue (parse, rule, vision proxy, context-1m, initial `SelectService`, session, recorder, a pristine-request snapshot) and a provider-dependent per-attempt pipeline (plan — dual endpoint, target/endpoint resolution, rule flags, output limits — then guardrails, **transform**, dispatch; see `.design/protocol-stage-pipeline.md`). The failover loop drives the per-attempt pipeline.
 - **No style filter.** `selectFallbackService` is called with `requireAPIStyle = ""`, so the candidate pool spans all styles; tier/breaker ordering is unchanged.
-- **Pristine request per attempt.** Guardrails and transform mutate the request in place, so each attempt clones a fresh request from the snapshot template (`internal/server/request_clone.go`); single-service requests reuse the original with no clone.
+- **Pristine request per attempt.** Guardrails and transform mutate the request in place, so each attempt clones a fresh request from the snapshot template (`internal/protocolserver/protocol_clone.go`); single-service requests reuse the original with no clone.
 - **Setup errors advance.** In-attempt setup failures (target resolution, transform) route through `failAttemptSetup`, which buffers a retryable 500 so the loop tries the next candidate instead of terminating on one misconfigured provider.
 
 Wired into: `AnthropicMessagesV1` / `AnthropicMessagesV1Beta`, `OpenAIChatCompletion`, `ResponsesCreate` (each split into a prologue + `run*Attempt` helper). The shared `dispatchWithPriorityFailover` loop and `firstChunkGate` are unchanged.
 
-Verified by: cross-style e2e tests in `internal/protocoltest/failover_test.go` (Anthropic→OpenAI, OpenAI→Anthropic, streaming, and setup-error-advance, each asserting the fallback received the re-transformed wire format), `internal/server/failover_crossstyle_test.go` (pool spans styles), and clone round-trip tests in `internal/server/request_clone_test.go`.
+Verified by: cross-style e2e tests in `internal/protocoltest/failover_test.go` (Anthropic→OpenAI, OpenAI→Anthropic, streaming, and setup-error-advance, each asserting the fallback received the re-transformed wire format), `internal/protocolserver/failover_crossstyle_test.go` (pool spans styles), and clone round-trip tests in `internal/protocolserver/protocol_clone_test.go`.
 
 ## Future work
 
@@ -408,7 +410,7 @@ Backend
 - `internal/loadbalance/breaker_test.go`
 - `internal/typ/tactics.go` — `TierParams`, `TierTactic` (+ non-claiming `PreviewService`), `PickBreakerAvailable` (the shared two-phase breaker walk), `groupServicesByTier`, `IsAffinityEligible` (rule-scoped, PromotionHold-aware).
 - `internal/typ/priority_tactic_test.go`
-- `internal/server/failover_dispatch.go` — failover loop owns the (rule-scoped) breaker accounting per attempt (`RecordServiceSuccess`/`RecordServiceFailure`).
+- `internal/protocolserver/failover_dispatch.go` — failover loop owns the (rule-scoped) breaker accounting per attempt (`RecordServiceSuccess`/`RecordServiceFailure`).
 
 Frontend
 - `frontend/src/components/RoutingGraphTypes.ts` — `ConfigProvider.tier`, `ConfigRecord.lbTactic`.

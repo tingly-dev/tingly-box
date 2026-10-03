@@ -13,14 +13,14 @@ import (
 // Open starts the agent process and returns a [PersistentSession]: unlike
 // Execute, the process stays alive after the first turn's terminal result,
 // ready for further Send calls, until Close is called or the process exits
-// unexpectedly. See .design/claude-code.md for the motivating design.
+// unexpectedly. See .design/claude-code-session.md for the motivating design.
 //
 // prompt is the session's first turn — Open both starts the process and
 // submits this prompt, exactly like Execute does for a one-shot run.
 //
 // Open only supports [OutputFormatStreamJSON]: that is the one wire format
 // whose multi-turn behavior over a single stdin has been verified (see
-// .design/claude-code.md §3.1).
+// .design/claude-code-session.md §3.1).
 func (r *Runner) Open(ctx context.Context, prompt string, opts ExecutionOptions) (PersistentSession, error) {
 	r.mu.RLock()
 	defaultFormat := r.defaultFormat

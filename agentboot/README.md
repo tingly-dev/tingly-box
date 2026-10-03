@@ -47,7 +47,7 @@ treat this as the change-review checklist, not an aspiration.
   it is a real, supported extension point, not incidental exposure.
 - **Persistent sessions** — `AgentService.Open` (returns a `PersistentSession`
   via the optional `PersistentAgent` capability interface — see
-  `.design/claude-code.md`), `RunTurnWithPrompter`, `TurnCompleteEvent`,
+  `.design/claude-code-session.md`), `RunTurnWithPrompter`, `TurnCompleteEvent`,
   `SessionStateEvent` + its `SessionState*` constants, and the `pool` package
   (`pool.New`, `pool.Config`) for capacity/idle-managed multi-turn sessions.
 

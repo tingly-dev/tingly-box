@@ -2,7 +2,7 @@
 
 > For contributors adding or debugging `@cc`/`@tb` chat behavior: slash
 > commands, pairing, permission prompts, streaming replies, or (as of
-> `.design/claude-code.md`'s P2) persistent Claude Code sessions.
+> `.design/claude-code-session.md`'s P2) persistent Claude Code sessions.
 >
 > Different from [`harness-agent-testing.md`](./harness-agent-testing.md)
 > (real agent CLI → real gateway, developer-machine runbook, pre-PR) and
@@ -20,7 +20,7 @@ verify the process/protocol machinery in isolation, with test-controlled
 contexts that don't model real request lifetimes. They **cannot** catch a
 bug where that machinery behaves correctly under a single long-lived test
 `ctx` but breaks once wired into a real per-message request handler whose
-`ctx` is canceled between messages — see `.design/claude-code.md` §5.2 for
+`ctx` is canceled between messages — see `.design/claude-code-session.md` §5.2 for
 exactly that bug, found by this harness on the first persistent-session test
 written against it, three layers above where the bug actually lived.
 

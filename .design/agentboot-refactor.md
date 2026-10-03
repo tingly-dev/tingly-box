@@ -445,7 +445,7 @@ in-process MCP servers, rewind/task controls, and dynamic model/permission
 mutation. None is required by the current remote-control product path.
 
 > 2026-09-17: that last sentence is being revisited — see
-> `.design/claude-code.md` for a proposal to add an opt-in persistent
+> `.design/claude-code-session.md` for a proposal to add an opt-in persistent
 > stream session on top of this same `Runner`/`ExecutionHandle` foundation,
 > now that the product path includes latency-sensitive high-frequency chat
 > turns. The one-shot model documented above stays the default.

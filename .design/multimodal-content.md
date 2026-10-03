@@ -91,7 +91,7 @@ this extension — `chatcompletion_toolmessage_patch_test.go` (in the fork) lock
 ## 4. Harness coverage (vmodel-driven)
 
 The canonical image fixture — a 256×256 red PNG plus the "what color?" prompt and
-the tool-channel turn script — lives in `internal/protocol/vision` (the
+the tool-channel turn script — lives in `internal/vision/visionproxy` (the
 `thinking`-package pattern) so every consumer sends the exact same shapes:
 the probe subsystem's `vision` axis, the content-shape harness cases below,
 and future vision health checks.

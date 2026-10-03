@@ -1,6 +1,7 @@
 # Bot Interaction Interface — auth + open two-kind API (notify / interactive)
 
-> Status: **spec** · Date: 2026-07-25
+> Status: **general bot API implemented; legacy hook HTTP-auth migration pending**
+> Initial design: 2026-07-25 · implementation checked: 2026-10-03
 > Builds on: [`.design/bot-arch.md`](bot-arch.md) (resource → channel → consumers),
 > [`.design/security.md`](security.md) (random default tokens, no silent fallback).
 > Scope: the *inbound* HTTP surface that lets external callers drive a bot's
@@ -8,17 +9,33 @@
 > **behind authentication**, and generalize it beyond Claude Code hooks so it
 > can serve future custom interactions.
 
-## 1. Problem
+## Current implementation and remaining boundary
+
+- `internal/server/module/notify/bot_routes.go` mounts the general notify,
+  interact and wait routes on the authenticated V1 group.
+- Request bodies now address `access.TargetRef` (`direct_chat` / `group`), not
+  a caller-supplied external `chat_id`; resource permission decisions belong to
+  [`bot-capability-access-control.md`](./bot-capability-access-control.md).
+- `internal/server/module/notify/routes.go` still mounts the legacy hook
+  `/tingly/:scenario/notify` and `/wait/:request_id` directly on the engine,
+  without HTTP auth middleware. Downstream resource authorization is a separate
+  boundary and does not authenticate the HTTP caller. PR 2 below remains pending.
+- The following problem analysis and snippets record the initial baseline.
+  Current wiring lives in `server_modules.go` and the module route methods.
+  §3 retains the original external-chat API examples; use `BotNotifyRequest` /
+  `BotInteractRequest` in `bot_routes.go` and generated OpenAPI for current bodies.
+
+## 1. Original problem
 
 `bot-arch.md` decoupled the bot into **resource → channel → consumers** and
 unlocked the notify-only bot. The HTTP front end for that channel,
 `POST /tingly/:scenario/notify` + `GET /tingly/:scenario/wait/:id`
-([`internal/server/module/notify`](../../internal/server/module/notify)), is
-the only public path to a bot's surface today. It has **two gaps**:
+([`internal/server/module/notify`](../internal/server/module/notify)), is
+which was the only public path before the general API landed. The initial audit found **two gaps**:
 
 1. **No authentication.** The route group is registered directly on the engine
    with no auth middleware
-   ([`routes.go:6`](../../internal/server/module/notify/routes.go#L6)):
+   ([`routes.go:6`](../internal/server/module/notify/routes.go)):
    ```go
    ccGroup := engine.Group("/tingly/:scenario")
    ccGroup.POST("/notify", handler.Notify)     // open
@@ -32,26 +49,25 @@ the only public path to a bot's surface today. It has **two gaps**:
 
 2. **Hard-wired to one consumer.** The HTTP body is a free-form `map[string]any`
    parsed *by the scenario plugin* (`claudecode.New`), which classifies events
-   by `hook_event_name`. There is no general "send a notification" / "ask a
-   question" entrypoint. Custom integrations (a CI pipeline wanting to notify
-   "build failed", an on-call tool wanting a yes/no confirm) have no clean path
-   — they must impersonate a Claude Code hook payload, which is brittle and
-   undocumented.
+   by `hook_event_name`. At the original audit there was no general "send a notification" / "ask a
+   question" entrypoint; the authenticated bot API now provides both. At that time, custom integrations (a CI build notifier or an on-call
+   confirmation) had to impersonate Claude Code hook payloads. The general API
+   removes that requirement; legacy hooks still have their own handler.
 
 **Route-family mismatch.** The open `/tingly/:scenario/notify` sits under
 `/tingly/*`, which everywhere else means *AI-gateway traffic*
 (`POST /chat/completions`, `/messages`, …) gated by `ModelAuthMiddleware`
-([`server_routes.go:51`](../../internal/server/server_routes.go#L51)). But
+([`server_routes.go:51`](../internal/server/server_routes.go)). But
 bot interaction is a *control-plane* action — drive the operator's own bot —
 identical in trust level to `imbot`/`provider`/`usage` management, which live
 under `/api/v1/*` behind `UserAuthMiddleware`
-([`server_routes.go:146`](../../internal/server/server_routes.go#L146)). A
+([`server_routes.go:146`](../internal/server/server_routes.go)). A
 control-plane action parked on the gateway prefix is the layer collision
 `bot-arch.md` §9 warns against ("one word, one layer"). The general API
 belongs under `/api/v1/`.
 
 The user's framing maps directly onto the existing domain model
-([`remote/interaction/types.go`](../../remote/interaction/types.go)):
+([`remote/interaction/types.go`](../remote/interaction/types.go)):
 
 | User's term            | Domain type                | Channel method        | HTTP shape today          |
 |------------------------|----------------------------|-----------------------|---------------------------|
@@ -88,7 +104,7 @@ rather than a Claude-Code-only hook shim.
   not repliers.
 - Changing the model: resource/channel/consumer is untouched.
 
-## 3. Design
+## 3. Original API design (historical request examples)
 
 ### 3.1 One token model, reused — do not invent a third
 
@@ -104,7 +120,7 @@ A third, "notify token" is **tempting but wrong**: it multiplies rotation
 surfaces and forces operators to mint/distribute yet another secret before any
 integration works. Instead, **bot interaction auth reuses `UserToken`** via the
 existing `UserAuthMiddleware`
-([`middleware/auth.go:251`](../../internal/server/middleware/auth.go#L251)).
+([`middleware/auth.go:251`](../internal/middleware/auth.go)).
 
 Rationale:
 
@@ -127,7 +143,7 @@ Per the "eliminate mode pickers" UX principle, the kind is in the route, not
 the body. The general API lives under `/api/v1/bots/{bot}/...` — the same
 control-plane family as `imbot`/`provider`/`usage`, reusing the existing
 `apiV1` group that already applies `getUserAuthMiddleware`
-([`server_control.go:154`](../../internal/server/server_control.go#L154)):
+([`server_control.go:154`](../internal/server/server_control.go)):
 
 ```
 POST   /api/v1/bots/{bot}/notify        one-way push           → 200
@@ -137,7 +153,7 @@ GET    /api/v1/bots/{bot}/chats         discover chat_id       → 200
 ```
 
 `{bot}` is the bot UUID (the `channel.Registry` key — see
-[`runtime_default.go:47`](../../remote/scenario/runtime_default.go#L47)).
+[`runtime_default.go:47`](../remote/scenario/runtime_default.go)).
 A bot is a connection resource; addressing it directly matches the resource
 model and avoids the indirect "scenario → binding → bot" resolution that the
 Claude Code hook path still needs.
@@ -153,7 +169,7 @@ Why `/api/v1/bots/*` and not under `/tingly/`:
   name collision `bot-arch.md` §9 just spent effort splitting.
 - `/api/v1/` is where every other "drive the operator's own system" endpoint
   already lives (`imbot.RegisterRoutes(apiV1, …)`,
-  [`server_control.go:191`](../../internal/server/server_control.go#L191)).
+  [`server_control.go:191`](../internal/server/server_control.go)).
   Following that convention is the lowest-surprise choice — a new control-plane
   endpoint does not invent a new route family.
 
@@ -194,12 +210,12 @@ obtainable from whichever surface the operator happens to be on.
 
 Both are thin handlers over the **same** `channel.Channel` the notify consumer
 already uses. No new runtime; `DefaultRuntime.Notify` / `.Ask`
-([`runtime_default.go:67`](../../remote/scenario/runtime_default.go#L67)) are
+([`runtime_default.go:67`](../remote/scenario/runtime_default.go)) are
 exactly the two operations we need. The new module calls the registry's channel
 directly, so it does not even need the runtime — but reusing the runtime keeps
 audit (`RuntimeAuditSink`) consistent. **Decision: call the channel directly
 from the handler**, and emit audit through the same `audit.Logger` already wired
-in [`server_control.go:139`](../../internal/server/server_control.go#L139).
+in [`server_control.go:139`](../internal/server/server_control.go).
 This keeps the handler self-contained and avoids coupling the open API to the
 scenario runtime's event-parsing assumptions.
 
@@ -250,7 +266,7 @@ GET /api/v1/bots/{bot}/interact/{request_id}?timeout=45s
 ```
 
 Response status mapping is **identical** to today's `/wait` endpoint
-([`handler.go:118`](../../internal/server/module/notify/handler.go#L118)):
+([`handler.go:118`](../internal/server/module/notify/handler.go)):
 `200 answered/cancelled`, `410 timeout`, `504 pending`, `404 expired`. This is
 not a new contract — it reuses `interaction.Registry[Result]` and its
 `Await/Resolve/Cancel` lifecycle verbatim.
@@ -264,7 +280,7 @@ merging the *HTTP verbs* would reintroduce a mode picker.
 
 The control-plane `apiV1` group already exists and already applies
 `getUserAuthMiddleware`
-([`server_control.go:154-155`](../../internal/server/server_control.go#L154)).
+([`server_control.go:154-155`](../internal/server/server_control.go)).
 We register the new module onto it the same way `imbot`, `usage`, and `oauth`
 do — no new group, no new middleware application:
 
@@ -325,10 +341,10 @@ modes behind one entrypoint — exactly the picker we're avoiding.
 
 ## 5. Migration / sequencing
 
-1. **PR 1 (this spec):** `/api/v1/bots/*` general API, registered on the
+1. **PR 1 (implemented):** `/api/v1/bots/*` general API, registered on the
    existing `apiV1` group (inheriting `getUserAuthMiddleware`). Claude Code
    path untouched → zero behavior change for existing users.
-2. **PR 2:** gate `/tingly/:scenario/*` behind `getUserAuthMiddleware()`; update
+2. **PR 2 (pending):** gate `/tingly/:scenario/*` behind `getUserAuthMiddleware()`; update
    the Claude Code hook helper to send the token. Document the requirement.
 
 No third step is committed. A scoped per-bot token for third-party integrations
@@ -336,7 +352,7 @@ is **not** pre-built; if it is ever needed it arrives as its own proposal, and
 the handler is already auth-mechanism-agnostic (auth comes from the group, not
 the handler).
 
-## 6. Open questions (need a decision before build)
+## 6. Follow-up questions (legacy hook migration)
 
 - **Q1 — `/tingly/:scenario` auth in the same PR or a follow-up (PR 2)?**
   Bundling is more secure sooner but couples server + hook-client changes and

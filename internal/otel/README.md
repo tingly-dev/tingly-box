@@ -1,4 +1,4 @@
-# pkg/otel - OpenTelemetry Metrics & Traces for Tingly-Box
+# internal/otel - OpenTelemetry Metrics & Traces for Tingly-Box
 
 Package otel wires OpenTelemetry metrics and traces for LLM requests.
 

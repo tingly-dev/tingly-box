@@ -89,6 +89,7 @@ or the chosen **endpoint**.
 
 | Flag (registry key) | Route (src→tgt) | Flag value | Asserted effect | Site |
 |---------------------|-----------------|------------|-----------------|------|
+| `extra_headers` | openai_chat→openai_chat | custom header map | configured header reaches the API-key upstream | upstream header |
 | `custom_user_agent` | openai_chat→openai_chat *(stream)* | `"HarnessFlagUA/9.9"` | `User-Agent` header overridden | upstream header |
 | `use_max_completion_tokens` | openai_chat→openai_chat | `true` | `max_tokens` rewritten to `max_completion_tokens` | upstream body |
 | `use_max_tokens` | openai_chat→openai_chat | `true` | `max_completion_tokens` rewritten to `max_tokens` | upstream body |
@@ -102,6 +103,15 @@ or the chosen **endpoint**.
 | `openai_endpoint_override` | openai_chat→openai_responses *(provider mode=both)* | `"responses"` | forwarded to `/v1/responses` | endpoint hits |
 | `session_affinity` | one rule, **two** upstreams | `3600` + `X-Tingly-Session-ID` | all N requests pin to the first-chosen upstream | upstream hits |
 | `vision_proxy_service` | openai_chat→openai_chat + describer | `{describer, vision-model}` | image block described + replaced; describer called; text spliced upstream | upstream body + describer hits |
+| `recording` | gateway request with per-rule recording | request-point selection | selected request points recorded; paused response points stay disabled | recording sink |
+| `claude_org_id` | real Claude OAuth client path | unset / auto / UUID | no org header / login organization / explicit organization | upstream header |
+| `claude_code_version` | real Claude OAuth client path | default / 2.1.86 / 2.1.280 | selected identity, beta and billing profile applied | upstream wire |
+| `context_1m` | Anthropic path, including `[1m]` routing | true | context beta injected; routing suffix normalized | upstream header + routing |
+
+The matrix summarizes `internal/protocoltest/flags.go`; all 18 registry keys
+are represented. Cross-protocol/streaming combinations are separately exercised
+by `flag_paths.go` (see `harness-matrix.md`), not all by the single-route fixtures
+above. Completeness of the key list does not prove every protocol combination.
 
 Notes on the two non-trivial fixtures:
 

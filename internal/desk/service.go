@@ -115,7 +115,7 @@ type Config struct {
 	// Pool, if set, drives turns through a long-lived Claude Code process
 	// per session instead of spawning one per message — the same
 	// agentboot/pool mechanism @cc's ClaudeCodeExecutor uses for its
-	// persistent_session setting (.design/claude-code.md §5.3). A setup
+	// persistent_session setting (.design/claude-code-session.md §5.3). A setup
 	// failure always falls back to a one-shot turn, so this is safe to
 	// enable unconditionally; nil keeps every turn one-shot, unchanged
 	// from before this existed.
@@ -726,7 +726,7 @@ func (s *Service) Archive(id string) (*session.Session, error) {
 		}
 		// A resident persistent process must not survive archiving: it
 		// would keep the on-disk Claude session file open, corrupting any
-		// later resume attempt (the exact bug .design/claude-code.md §5.4
+		// later resume attempt (the exact bug .design/claude-code-session.md §5.4
 		// documents fixing for @cc's own bot-stop/setting-off paths).
 		s.evictPersistent(id)
 		// Close removes the session from the manager's live index (it stays

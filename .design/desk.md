@@ -71,7 +71,7 @@ from the same sanctioned pieces every remote-host entry point uses:
   (`SetRunning`/`SetCompleted`/`SetFailed`) for free.
 - `agentboot/pool.Pool` + `AgentService.Open` (persistent turns) — the
   same resident-process mechanism `@cc`'s `persistent_session` setting uses
-  (`.design/claude-code.md` §5.3); see §3.1.
+  (`.design/claude-code-session.md` §5.3); see §3.1.
 - `tbclient.TBClient` — the same gateway/profile routing (`GetClaudeCodeEnv`
   for the main scenario, `GetClaudeCodeSettingsPathForProfile` for a
   profile's `--settings`) `@cc` uses; see `.design/remote-cc-profile.md`.
@@ -126,7 +126,7 @@ is keyed by session id, not by folder.
 ### 3.1 Persistent turns
 
 `turn.go`'s `runPersistentTurn` mirrors `ClaudeCodeExecutor.runPersistentTurn`
-(`.design/claude-code.md` §5.3), with its own `pool.Pool` instance (10
+(`.design/claude-code-session.md` §5.3), with its own `pool.Pool` instance (10
 sessions, 10 min idle — the same config as imbot's) keyed by session id,
 which is already globally unique:
 
@@ -150,7 +150,7 @@ which is already globally unique:
 
 - **Server stop.** `Server.Stop` calls `Service.Shutdown`: it cancels
   in-flight turns and shuts the pool down, so no `claude` process outlives
-  the server holding its session file open (`.design/claude-code.md` §5.4).
+  the server holding its session file open (`.design/claude-code-session.md` §5.4).
 - **Restart recovery.** `NewService` marks web sessions still `running` or
   `pending` in the store as completed-and-resumable, with a system note in
   the transcript. No turn can be in flight in a process that just started,

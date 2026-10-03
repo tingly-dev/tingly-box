@@ -14,7 +14,7 @@ import (
 
 // Native Claude Code profile (claude_code_version flag): overlays on the
 // legacy client headers with what the official binary sends. See
-// .design/claude-code.md Part B.
+// .design/claude-code-oauth-compat.md.
 
 const (
 	nativeStainlessRuntimeVersion = "v26.3.0" // Bun's Node-compat version
