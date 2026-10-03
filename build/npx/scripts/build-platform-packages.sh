@@ -49,8 +49,13 @@ while IFS='|' read -r key name zip; do
 	fi
 	binary="tingly-box"
 	[ "$os" = "win32" ] && binary="tingly-box.exe"
-	# gui on macOS ships the app bundle, not a bare binary.
-	[ "$KIND" = gui ] && [ "$os" = darwin ] && binary="TinglyBox.app/Contents/MacOS/tingly-box"
+	# gui binaries carry their own name (never `tingly-box`, the CLI's); on
+	# macOS the zip holds the app bundle, not a bare binary.
+	if [ "$KIND" = gui ]; then
+		binary="tingly-box-gui"
+		[ "$os" = "win32" ] && binary="tingly-box-gui.exe"
+		[ "$os" = darwin ] && binary="TinglyBox.app/Contents/MacOS/tingly-box-gui"
+	fi
 	# Sanity: the zip must hold the binary at its top level (what the shim extracts).
 	unzip -l "$zip_path" | awk '{print $NF}' | grep -qx "$binary" \
 		|| { echo "$zip does not contain $binary at its top level" >&2; exit 1; }

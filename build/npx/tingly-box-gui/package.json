@@ -1,14 +1,15 @@
 {
   "name": "tingly-box-gui",
   "version": "1.6.1",
-  "description": "High-performance AI gateway CLI - connect to multiple AI providers through a single API",
+  "description": "Tingly Box desktop app (GUI) - launch with npx tingly-box-gui. For the CLI use the tingly-box package.",
   "keywords": [
     "ai",
     "gateway",
     "openai",
     "anthropic",
     "claude",
-    "cli",
+    "gui",
+    "desktop",
     "tingly"
   ],
   "homepage": "https://github.com/tingly-dev/tingly-box",
@@ -25,8 +26,7 @@
     "access": "public"
   },
   "bin": {
-    "tingly-box": "bin.js",
-    "tb": "bin.js"
+    "tingly-box-gui": "bin.js"
   },
   "type": "module"
 }

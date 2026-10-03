@@ -4,7 +4,7 @@ name: Release GUI
 # tingly-box-gui npm package distribute:
 #
 #   tingly-box-gui-macos-arm64.zip    TinglyBox.app (Apple Silicon)
-#   tingly-box-gui-windows-amd64.zip  tingly-box.exe
+#   tingly-box-gui-windows-amd64.zip  tingly-box-gui.exe
 #   tingly-box-gui-linux-amd64.deb    Ubuntu 24.04+ / Debian 13+
 #   tingly-box-gui-linux-amd64.rpm    Fedora 40+
 #
@@ -135,7 +135,7 @@ jobs:
           set -euo pipefail
           task darwin:package ARCH=${{ matrix.arch }} VERSION="${{ steps.ver.outputs.version }}"
           codesign --verify --deep --strict --verbose=2 bin/TinglyBox.app
-          file bin/TinglyBox.app/Contents/MacOS/tingly-box | tee /dev/stderr | grep -q "Mach-O 64-bit executable arm64"
+          file bin/TinglyBox.app/Contents/MacOS/tingly-box-gui | tee /dev/stderr | grep -q "Mach-O 64-bit executable arm64"
           mkdir -p dist
           # --norsrc --noextattr: without them ditto stores extended attributes
           # as "._*" entries, which unzip and the npm shim's unzipper write
@@ -149,7 +149,7 @@ jobs:
         run: |
           task windows:build PRODUCTION=true ARCH=${{ matrix.arch }} VERSION="${{ steps.ver.outputs.version }}"
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Compress-Archive -Path bin/tingly-box.exe -DestinationPath dist/tingly-box-gui-windows-${{ matrix.arch }}.zip
+          Compress-Archive -Path bin/tingly-box-gui.exe -DestinationPath dist/tingly-box-gui-windows-${{ matrix.arch }}.zip
           Get-ChildItem dist
 
       - name: Package (Linux)

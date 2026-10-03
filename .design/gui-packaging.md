@@ -9,7 +9,7 @@ separate step; the three can run in any order.
 | Platform | Asset | How users get it |
 |---|---|---|
 | macOS Apple Silicon | `tingly-box-gui-macos-arm64.zip` (`TinglyBox.app`, ad-hoc signed) | `npx tingly-box-gui`, or the zip |
-| Windows x64 | `tingly-box-gui-windows-amd64.zip` (`tingly-box.exe`) | the zip |
+| Windows x64 | `tingly-box-gui-windows-amd64.zip` (`tingly-box-gui.exe`) | the zip |
 | Linux x64 | `tingly-box-gui-linux-amd64.deb` / `.rpm` | `apt install ./…deb` / `dnf install ./…rpm` |
 
 Not built: Intel macOS, Linux arm64, Windows arm64. The CLI still ships
@@ -32,12 +32,25 @@ mismatch, `--transport-version`).
   seal, so the shim runs `codesign --verify` and re-signs ad hoc only if that
   fails. npm and the shim never set the quarantine flag, so Gatekeeper does
   not prompt on this path (a browser download still needs "Open Anyway").
-- **Windows**: the shim extracts `tingly-box.exe` and starts it detached.
+- **Windows**: the shim extracts `tingly-box-gui.exe` and starts it detached.
   Unsigned: SmartScreen may still warn on first run.
 - The packages are published by `npm.yml`'s `publish-gui` job, which needs
-  the GUI zips already on the release. Each new package name needs a Trusted
+  the GUI zips already on the release. A platform package that does not exist on npm yet is skipped (warning, not
+  published, not pinned; that platform falls back to the release download), so a
+  missing package never fails the run. Each new package name needs a Trusted
   Publisher (repo `tingly-dev/tingly-box`, workflow `npm.yml`, environment
   `production`) on npmjs.com before its first publish.
+
+## Naming
+
+Every GUI artifact carries `tingly-box-gui`, never the CLI's `tingly-box`:
+the Wails `BIN_NAME` (`Taskfile.wails.yml`) is `tingly-box-gui`, so the macOS
+`Contents/MacOS/tingly-box-gui` (and `CFBundleExecutable`), the Windows
+`tingly-box-gui.exe`, the Linux `bin/tingly-box-gui` and the npm package's bin
+all match. The npm package `tingly-box-gui` exposes only a `tingly-box-gui`
+bin: when it also exposed `tingly-box`/`tb` it collided with the CLI package's
+bins (the EEXIST described in `npm.md` F). The shim only ever downloads
+`tingly-box-gui-<os>-<arch>.zip`; the platform packages carry those same zips.
 
 ## Linux
 

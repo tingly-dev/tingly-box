@@ -135,7 +135,7 @@ async function getPlatformArchAndBinary() {
 
 	// macOS: the .app bundle. Windows: the bare exe.
 	const isMac = platform === "darwin";
-	const appPath = isMac ? join(tinglyBinDir, appName) : join(tinglyBinDir, `tingly-box${suffix}`);
+	const appPath = isMac ? join(tinglyBinDir, appName) : join(tinglyBinDir, `tingly-box-gui${suffix}`);
 
 	if (!existsSync(appPath)) {
 		if (source.kind === "package") {
@@ -151,7 +151,7 @@ async function getPlatformArchAndBinary() {
 
 		if (isMac) {
 			// Make sure the binary inside the .app bundle is executable
-			const appBinaryPath = join(appPath, "Contents", "MacOS", "tingly-box");
+			const appBinaryPath = join(appPath, "Contents", "MacOS", "tingly-box-gui");
 			if (existsSync(appBinaryPath)) {
 				chmodSync(appBinaryPath, 0o755);
 			}

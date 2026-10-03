@@ -651,12 +651,29 @@ jobs:
           npm --version
           node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); if (a<11||(a===11&&(b<5||(b===5&&c<1)))) { console.error("npm >= 11.5.1 required for OIDC trusted publishing"); process.exit(1) }' "$(npm --version)"
 
+      # A platform package that has never been published cannot be checked or
+      # published through OIDC (its Trusted Publisher cannot exist yet). Skip
+      # it instead of failing: it is neither published nor pinned, and the
+      # shim falls back to the GitHub release download on that platform.
+      - name: Find GUI platform packages that exist on npm
+        run: |
+          : > gui-existing.txt
+          for name in $(node -e 'import("./build/npx/shared/platform.js").then(m => { for (const p of Object.values(m.GUI_PLATFORM_PACKAGES)) console.log(p.name) })'); do
+            if npm view "$name" name >/dev/null 2>&1; then
+              echo "$name" >> gui-existing.txt
+            else
+              echo "::warning::$name does not exist on npm yet; skipping it (publish its first version by hand, see .design/gui-packaging.md)"
+            fi
+          done
+          echo "GUI_PLATFORM_PKGS=$(tr '\n' ' ' < gui-existing.txt)" >> "$GITHUB_ENV"
+          echo "Existing: $(cat gui-existing.txt | tr '\n' ' ')"
+
       # npm silently falls back to token auth (and then fails with E404) when
       # the OIDC exchange is rejected; do the same exchange here first so the
       # registry's reason is visible in the log. Fails the job early.
       - name: Verify npm OIDC trusted-publisher exchange
         env:
-          PACKAGES: ${{ env.PKG_NAME }} @tingly-dev/tingly-box-gui-darwin-arm64 @tingly-dev/tingly-box-gui-win32-x64
+          PACKAGES: ${{ env.PKG_NAME }} ${{ env.GUI_PLATFORM_PKGS }}
         run: |
           ID_TOKEN=$(curl -sSf -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm:registry.npmjs.org" | jq -r .value)
@@ -726,8 +743,11 @@ jobs:
             echo "❌ Built $BUILT GUI platform packages, expected $EXPECTED"
             exit 1
           fi
+          # Only the packages that already exist on npm are published and pinned.
+          grep -Fxf gui-existing.txt built.txt > built-publish.txt || true
+          mv built-publish.txt built.txt
+          echo "Publishing $(wc -l < built.txt) of $BUILT GUI platform packages:"
           cat built.txt
-          du -sh platform/@tingly-dev/*
 
       - name: Publish GUI platform packages to npm
         run: |

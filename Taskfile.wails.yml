@@ -16,7 +16,7 @@ includes:
 
 vars:
   APP_NAME: "TinglyBox"
-  BIN_NAME: "tingly-box"
+  BIN_NAME: "tingly-box-gui"
   # Wails GUI package — the per-OS Taskfiles build this, not the repo root.
   WAILS_PACKAGE_PATH: ./gui/wails3
   PACKAGE_PATH: ./gui/wails3

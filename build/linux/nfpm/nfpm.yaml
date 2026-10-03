@@ -27,7 +27,7 @@ homepage: "https://github.com/tingly-dev/tingly-box"
 license: "MPL-2.0"
 
 contents:
-  - src: "./bin/tingly-box"
+  - src: "./bin/tingly-box-gui"
     dst: "/usr/bin/tingly-box-gui"
     file_info:
       mode: 0755
