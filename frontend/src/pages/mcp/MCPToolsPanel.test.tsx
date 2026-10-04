@@ -37,11 +37,34 @@ describe('MCP capability controls', () => {
         render(<MCPToolsPanel sources={[source]} enabled saveSource={mocks.save} />);
         expect(await screen.findByText('remote / echo')).toBeInTheDocument();
         expect(screen.getByText('failed: Connection refused')).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('checkbox', { name: 'MCP clients' }));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Use as an ordinary tool' }));
         await waitFor(() =>
             expect(mocks.save).toHaveBeenCalledWith({
                 id: 'remote',
                 tool_policies: { other: { enabled: false }, echo: { usage: { client: false, gateway: true } } },
+            })
+        );
+    });
+    it('keeps server-only tools out of the ordinary list and adds them without changing gateway usage', async () => {
+        mocks.catalog.mockResolvedValue({
+            success: true,
+            sources: [
+                {
+                    source_id: 'remote',
+                    state: 'connected',
+                    tools: [{ ...tool, usage: { client: false, gateway: true } }],
+                },
+            ],
+        });
+        render(<MCPToolsPanel sources={[source]} enabled saveSource={mocks.save} />);
+        expect(await screen.findByText('No tools are assigned to this section. Enable the corresponding usage in Tool sources.')).toBeInTheDocument();
+        expect(screen.queryByText('remote / echo')).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Choose tools' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Add tool' }));
+        await waitFor(() =>
+            expect(mocks.save).toHaveBeenCalledWith({
+                id: 'remote',
+                tool_policies: { other: { enabled: false }, echo: { usage: { client: true, gateway: true } } },
             })
         );
     });
