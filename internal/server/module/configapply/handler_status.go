@@ -27,15 +27,13 @@ const (
 // token and the six model slots. ANTHROPIC_BASE_URL is only checked for
 // pointing at this gateway's Claude Code endpoint — its host legitimately
 // differs by how the UI was reached (localhost vs 127.0.0.1 vs a proxy).
-var claudeRoutedKeys = []string{
-	"ANTHROPIC_AUTH_TOKEN",
-	"ANTHROPIC_MODEL",
-	"ANTHROPIC_DEFAULT_HAIKU_MODEL",
-	"ANTHROPIC_DEFAULT_SONNET_MODEL",
-	"ANTHROPIC_DEFAULT_OPUS_MODEL",
-	"ANTHROPIC_DEFAULT_FABLE_MODEL",
-	"CLAUDE_CODE_SUBAGENT_MODEL",
-}
+var claudeRoutedKeys = append([]string{"ANTHROPIC_AUTH_TOKEN"}, func() []string {
+	var keys []string
+	for _, t := range config.CCSlotTiers() {
+		keys = append(keys, t.EnvKey)
+	}
+	return keys
+}()...)
 
 const claudeCodeEndpointSuffix = "/tingly/claude_code"
 

@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	aiagent "github.com/tingly-dev/tingly-box/ai/agent"
+	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
 )
 
 // BuildClaudeCodeModelConfig constructs the model configuration for Claude Code.
@@ -12,19 +13,19 @@ import (
 func BuildClaudeCodeModelConfig(unified bool) aiagent.ClaudeCodeModelConfig {
 	if unified {
 		return aiagent.ClaudeCodeModelConfig{
-			Default: "cc",
+			Default: serverconfig.CCTierUnified,
 			// All other fields will use Default
 		}
 	}
 
 	// Separate mode - different models for different purposes
 	return aiagent.ClaudeCodeModelConfig{
-		Default:  "default",
-		Haiku:    "haiku",
-		Opus:     "opus",
-		Fable:    "fable",
-		Sonnet:   "sonnet",
-		SubAgent: "subagent",
+		Default:  serverconfig.CCTierDefault,
+		Haiku:    serverconfig.CCTierHaiku,
+		Opus:     serverconfig.CCTierOpus,
+		Fable:    serverconfig.CCTierFable,
+		Sonnet:   serverconfig.CCTierSonnet,
+		SubAgent: serverconfig.CCTierSubagent,
 	}
 }
 

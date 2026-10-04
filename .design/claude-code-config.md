@@ -239,6 +239,15 @@ not runtime discovery.
 | `builtin:claude_code:subagent` | `subagent` | `CLAUDE_CODE_SUBAGENT_MODEL` |
 | `builtin:claude_code:fable` | `fable` | `ANTHROPIC_DEFAULT_FABLE_MODEL` |
 
+**One table.** Tiers are declared once, in `CCTiers` (`internal/config/cc_tiers.go`):
+name, rule UUID (+ legacy UUID and prefixed legacy request model), env slot, whether it
+is a Claude Code `--model` alias, and its seed/profile descriptions. The rule seeds,
+profile rules, UUID sets, legacy alias tables, `GenerateCCEnv`, prefs defaults, the
+tbclient env, the drift-check keys, the TUI quickstart list and the rule-owned
+profile keys are all derived from it, so adding a tier is one entry (plus the typed
+`ClaudeCodePrefs` field, the frontend form field and the `ai/agent` struct, which are
+not generated). `TestCCTiers_DerivedViewsAreConsistent` guards the derivations.
+
 The `fable` tier was added after separate mode shipped. A migration
 (`backfillFableRuleOnce`, once per config) seeds `builtin:claude_code:fable` for
 existing configs, copying the opus rule's services, flags, load-balancing tactic

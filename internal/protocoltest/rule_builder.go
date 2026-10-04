@@ -56,7 +56,7 @@ func tierFailoverTactic() typ.Tactic {
 func BuiltinRuleRef(at AgentType) (uuid, requestModel string, err error) {
 	switch at {
 	case AgentTypeClaudeCode:
-		return serverconfig.RuleUUIDCC, "cc", nil
+		return serverconfig.RuleUUIDCC, serverconfig.CCTierUnified, nil
 	case AgentTypeCodex:
 		return serverconfig.RuleUUIDCodex, "tingly-codex", nil
 	case AgentTypeOpenCode:

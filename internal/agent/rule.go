@@ -4,21 +4,14 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // ClaudeCodeRequestModels defines all request models for Claude Code scenario
 // When applying claude-code agent, all these rules should be updated for convenience
-var ClaudeCodeRequestModels = []string{
-	"cc", // General model (for unified mode)
-	"haiku",
-	"sonnet",
-	"opus",
-	"default",
-	"subagent",
-	"fable",
-}
+var ClaudeCodeRequestModels = serverconfig.CCRequestModels()
 
 // OpenCodeRequestModels defines all request models for OpenCode scenario
 var OpenCodeRequestModels = []string{

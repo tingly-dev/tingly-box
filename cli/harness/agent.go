@@ -15,6 +15,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	internalagent "github.com/tingly-dev/tingly-box/internal/agent"
+	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/protocoltest"
 )
 
@@ -475,7 +476,7 @@ func executeAgentCommand(agentType protocoltest.AgentType, prompt string) (*Agen
 
 // executeClaudeTest executes claude CLI backed by an ephemeral gateway + virtual server.
 func executeClaudeTest(prompt string) (*AgentTestResult, error) {
-	const model = "cc"
+	const model = serverconfig.CCTierUnified
 
 	env, err := protocoltest.NewAgentTestEnv(protocoltest.AgentTypeClaudeCode)
 	if err != nil {

@@ -86,11 +86,11 @@ func TestResolveClaudeCodeModels_UnifiedDefault(t *testing.T) {
 	client := NewTBClient(&serverconfig.Config{})
 	models := client.resolveClaudeCodeModels()
 
-	assert.Equal(t, "cc", models.def)
-	assert.Equal(t, "cc", models.haiku)
-	assert.Equal(t, "cc", models.sonnet)
-	assert.Equal(t, "cc", models.opus)
-	assert.Equal(t, "cc", models.subagent)
+	assert.Equal(t, "cc", models["ANTHROPIC_MODEL"])
+	assert.Equal(t, "cc", models["ANTHROPIC_DEFAULT_HAIKU_MODEL"])
+	assert.Equal(t, "cc", models["ANTHROPIC_DEFAULT_SONNET_MODEL"])
+	assert.Equal(t, "cc", models["ANTHROPIC_DEFAULT_OPUS_MODEL"])
+	assert.Equal(t, "cc", models["CLAUDE_CODE_SUBAGENT_MODEL"])
 }
 
 func TestResolveClaudeCodeModels_UnifiedFromRule(t *testing.T) {
@@ -100,9 +100,9 @@ func TestResolveClaudeCodeModels_UnifiedFromRule(t *testing.T) {
 	client := NewTBClient(cfg)
 	models := client.resolveClaudeCodeModels()
 
-	assert.Equal(t, "cc", models.def)
-	assert.Equal(t, "cc", models.opus)
-	assert.Equal(t, "cc", models.subagent)
+	assert.Equal(t, "cc", models["ANTHROPIC_MODEL"])
+	assert.Equal(t, "cc", models["ANTHROPIC_DEFAULT_OPUS_MODEL"])
+	assert.Equal(t, "cc", models["CLAUDE_CODE_SUBAGENT_MODEL"])
 }
 
 func TestResolveClaudeCodeModels_UnifiedCustomRequestModel(t *testing.T) {
@@ -112,11 +112,11 @@ func TestResolveClaudeCodeModels_UnifiedCustomRequestModel(t *testing.T) {
 	client := NewTBClient(cfg)
 	models := client.resolveClaudeCodeModels()
 
-	assert.Equal(t, "team/coder[1m]", models.def)
-	assert.Equal(t, "team/coder[1m]", models.haiku)
-	assert.Equal(t, "team/coder[1m]", models.sonnet)
-	assert.Equal(t, "team/coder[1m]", models.opus)
-	assert.Equal(t, "team/coder[1m]", models.subagent)
+	assert.Equal(t, "team/coder[1m]", models["ANTHROPIC_MODEL"])
+	assert.Equal(t, "team/coder[1m]", models["ANTHROPIC_DEFAULT_HAIKU_MODEL"])
+	assert.Equal(t, "team/coder[1m]", models["ANTHROPIC_DEFAULT_SONNET_MODEL"])
+	assert.Equal(t, "team/coder[1m]", models["ANTHROPIC_DEFAULT_OPUS_MODEL"])
+	assert.Equal(t, "team/coder[1m]", models["CLAUDE_CODE_SUBAGENT_MODEL"])
 }
 
 func TestResolveClaudeCodeModels_Separate(t *testing.T) {
@@ -133,11 +133,11 @@ func TestResolveClaudeCodeModels_Separate(t *testing.T) {
 	client := NewTBClient(cfg)
 	models := client.resolveClaudeCodeModels()
 
-	assert.Equal(t, "default", models.def)
-	assert.Equal(t, "vendor/fast", models.haiku)
-	assert.Equal(t, "sonnet", models.sonnet)
-	assert.Equal(t, "vendor/smart", models.opus)
-	assert.Equal(t, "subagent", models.subagent)
+	assert.Equal(t, "default", models["ANTHROPIC_MODEL"])
+	assert.Equal(t, "vendor/fast", models["ANTHROPIC_DEFAULT_HAIKU_MODEL"])
+	assert.Equal(t, "sonnet", models["ANTHROPIC_DEFAULT_SONNET_MODEL"])
+	assert.Equal(t, "vendor/smart", models["ANTHROPIC_DEFAULT_OPUS_MODEL"])
+	assert.Equal(t, "subagent", models["CLAUDE_CODE_SUBAGENT_MODEL"])
 }
 
 func TestResolveClaudeCodeModels_SeparateMissingTierFallsBack(t *testing.T) {
@@ -150,11 +150,11 @@ func TestResolveClaudeCodeModels_SeparateMissingTierFallsBack(t *testing.T) {
 	client := NewTBClient(cfg)
 	models := client.resolveClaudeCodeModels()
 
-	assert.Equal(t, "vendor/default", models.def)
-	assert.Equal(t, "haiku", models.haiku)
-	assert.Equal(t, "sonnet", models.sonnet)
-	assert.Equal(t, "opus", models.opus)
-	assert.Equal(t, "subagent", models.subagent)
+	assert.Equal(t, "vendor/default", models["ANTHROPIC_MODEL"])
+	assert.Equal(t, "haiku", models["ANTHROPIC_DEFAULT_HAIKU_MODEL"])
+	assert.Equal(t, "sonnet", models["ANTHROPIC_DEFAULT_SONNET_MODEL"])
+	assert.Equal(t, "opus", models["ANTHROPIC_DEFAULT_OPUS_MODEL"])
+	assert.Equal(t, "subagent", models["CLAUDE_CODE_SUBAGENT_MODEL"])
 }
 
 func TestResolveClaudeCodeModels_ModernUUIDWinsOverLegacy(t *testing.T) {
@@ -167,7 +167,7 @@ func TestResolveClaudeCodeModels_ModernUUIDWinsOverLegacy(t *testing.T) {
 	client := NewTBClient(cfg)
 	models := client.resolveClaudeCodeModels()
 
-	assert.Equal(t, "modern/model", models.def)
+	assert.Equal(t, "modern/model", models["ANTHROPIC_MODEL"])
 }
 
 func TestResolveClaudeCodeModels_Context1MSuffix(t *testing.T) {
@@ -177,13 +177,13 @@ func TestResolveClaudeCodeModels_Context1MSuffix(t *testing.T) {
 	client := NewTBClient(cfg)
 
 	models := client.resolveClaudeCodeModels()
-	assert.Equal(t, "cc[1m]", models.def)
+	assert.Equal(t, "cc[1m]", models["ANTHROPIC_MODEL"])
 
 	suffixed := ccRule("builtin:claude_code:cc", "team/coder[1m]")
 	suffixed.Flags.Context1M = true
 	cfg2 := &serverconfig.Config{Rules: []typ.Rule{suffixed}}
 	models2 := NewTBClient(cfg2).resolveClaudeCodeModels()
-	assert.Equal(t, "team/coder[1m]", models2.def)
+	assert.Equal(t, "team/coder[1m]", models2["ANTHROPIC_MODEL"])
 }
 
 func TestResolveClaudeCodeModels_InactiveRuleIgnored(t *testing.T) {
@@ -193,7 +193,7 @@ func TestResolveClaudeCodeModels_InactiveRuleIgnored(t *testing.T) {
 	client := NewTBClient(cfg)
 
 	models := client.resolveClaudeCodeModels()
-	assert.Equal(t, "cc", models.def)
+	assert.Equal(t, "cc", models["ANTHROPIC_MODEL"])
 }
 
 func TestGetClaudeCodeEnv_RoutesThroughGateway(t *testing.T) {
@@ -304,5 +304,5 @@ func TestResolveClaudeCodeModels_FableFollowsDefaultWithoutActiveRule(t *testing
 		Rules:     []typ.Rule{ccRule("builtin:claude_code:default", "default")},
 	}
 	models := NewTBClient(cfg).resolveClaudeCodeModels()
-	assert.Equal(t, "default", models.fable)
+	assert.Equal(t, "default", models["ANTHROPIC_DEFAULT_FABLE_MODEL"])
 }

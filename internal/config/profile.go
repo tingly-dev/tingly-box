@@ -113,19 +113,13 @@ func newCCProfileRules(profiledScenario typ.RuleScenario, unified bool) []typ.Ru
 		}
 	}
 
-	if unified {
-		return []typ.Rule{
-			newRule("cc", "Claude Code profile - unified mode"),
+	var rules []typ.Rule
+	for _, t := range CCTiers {
+		if (t.EnvKey == "") == unified {
+			rules = append(rules, newRule(t.Name, t.ProfileDescription))
 		}
 	}
-	return []typ.Rule{
-		newRule("default", "Claude Code profile - default model"),
-		newRule("haiku", "Claude Code profile - haiku model"),
-		newRule("sonnet", "Claude Code profile - sonnet model"),
-		newRule("opus", "Claude Code profile - opus model"),
-		newRule("subagent", "Claude Code profile - subagent model"),
-		newRule("fable", "Claude Code profile - fable model"),
-	}
+	return rules
 }
 
 // CreateProfile adds a new profile to a base scenario. Returns the created ProfileMeta.

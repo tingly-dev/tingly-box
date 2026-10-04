@@ -43,13 +43,12 @@ func init() {
 			},
 			Active: true,
 		},
-		ccRule(RuleUUIDCC, "cc", "Default proxy rule for Claude Code", true),
-		ccRule(RuleUUIDCCHaiku, "haiku", "Claude Code - Haiku mode The model to use for haiku , or background functionality", false),
-		ccRule(RuleUUIDCCSonnet, "sonnet", "Claude Code - Sonnet model - model to use for sonnet , or for opusplan when Plan Mode is not active.", false),
-		ccRule(RuleUUIDCCOpus, "opus", "Claude Code - Opus model - to use for opus , or for opusplan when Plan Mode is active.", false),
-		ccRule(RuleUUIDCCDefault, "default", "Claude Code - Default model - for general task", false),
-		ccRule(RuleUUIDCCSubagent, "subagent", "Claude Code - Subagent model - model to use for subagents", false),
-		ccRule(RuleUUIDCCFable, "fable", "Claude Code - Fable model - model to use for the fable alias", false),
+	}
+	// Claude Code tiers: the unified rule is active, the separate-mode tiers are not.
+	for _, t := range CCTiers {
+		DefaultRules = append(DefaultRules, ccBuiltinRule(t))
+	}
+	DefaultRules = append(DefaultRules, []typ.Rule{
 		{
 			UUID:          RuleUUIDOpenCode,
 			Scenario:      typ.ScenarioOpenCode,
@@ -67,7 +66,7 @@ func init() {
 		cdRule("builtin:claude_desktop:claude-opus-4-6", "claude-opus-4-6", "Claude Desktop - Opus 4.6 model for complex tasks"),
 		cdRule("builtin:claude_desktop:claude-opus-4-7", "claude-opus-4-7", "Claude Desktop - Opus 4.7 model for advanced reasoning"),
 		cdRule("builtin:claude_desktop:claude-haiku-4-5", "claude-haiku-4-5", "Claude Desktop - Haiku 4.5 model for fast responses"),
-	}
+	}...)
 }
 
 // cdRule builds a built-in Claude Desktop rule with the shared defaults: an empty

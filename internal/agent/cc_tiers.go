@@ -8,16 +8,26 @@ import (
 )
 
 // ClaudeCodeTierAliases are the --model aliases Claude Code maps to a tier
-// env var. The default tier ("", no --model) is ANTHROPIC_MODEL.
-var ClaudeCodeTierAliases = []string{"opus", "sonnet", "haiku", "fable"}
+// env var (opus, sonnet, haiku, fable). The default tier ("", no --model) is
+// ANTHROPIC_MODEL.
+var ClaudeCodeTierAliases = func() []string {
+	var out []string
+	for _, t := range serverconfig.CCSlotTiers() {
+		if t.Alias {
+			out = append(out, t.Name)
+		}
+	}
+	return out
+}()
 
-var claudeCodeTierEnvKeys = map[string]string{
-	"":       "ANTHROPIC_MODEL",
-	"opus":   "ANTHROPIC_DEFAULT_OPUS_MODEL",
-	"sonnet": "ANTHROPIC_DEFAULT_SONNET_MODEL",
-	"haiku":  "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-	"fable":  "ANTHROPIC_DEFAULT_FABLE_MODEL",
-}
+// claudeCodeTierEnvKeys maps an alias ("" for the default tier) to its env slot.
+var claudeCodeTierEnvKeys = func() map[string]string {
+	m := map[string]string{"": serverconfig.CCTierByName(serverconfig.CCTierDefault).EnvKey}
+	for _, alias := range ClaudeCodeTierAliases {
+		m[alias] = serverconfig.CCTierByName(alias).EnvKey
+	}
+	return m
+}()
 
 // ClaudeCodeTier is one model Claude Code can be asked for: the alias passed
 // as --model ("" for the default) and the gateway model id it requests.

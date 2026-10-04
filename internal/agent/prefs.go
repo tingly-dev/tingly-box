@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
 	"maps"
 	"strings"
 )
@@ -178,6 +179,18 @@ func appendNoProxy(current string, hosts ...string) string {
 	return current
 }
 
+// WithModelSlots returns the prefs with the model slot env vars (ANTHROPIC_MODEL,
+// ANTHROPIC_DEFAULT_*_MODEL, CLAUDE_CODE_SUBAGENT_MODEL) overlaid from slots,
+// keyed by env name.
+func (p ClaudeCodePrefs) WithModelSlots(slots map[string]string) (ClaudeCodePrefs, error) {
+	values, err := p.Values()
+	if err != nil {
+		return p, err
+	}
+	maps.Copy(values, slots)
+	return ClaudeCodePrefsFromEnv(values)
+}
+
 // DefaultClaudeCodePrefs returns tb's canonical defaults for the given
 // mode. Used by the CLI harness directly and as the seed value for the
 // GUI quick-config form when no user customization exists yet.
@@ -191,21 +204,14 @@ func DefaultClaudeCodePrefs(unified bool) ClaudeCodePrefs {
 		DisableErrorReporting:                "1",
 		ClaudeCodeDisableNonessentialTraffic: "1",
 	}
-	if unified {
-		p.AnthropicModel = "cc"
-		p.AnthropicDefaultHaikuModel = "cc"
-		p.AnthropicDefaultSonnetModel = "cc"
-		p.AnthropicDefaultOpusModel = "cc"
-		p.AnthropicDefaultFableModel = "cc"
-		p.ClaudeCodeSubagentModel = "cc"
-	} else {
-		p.AnthropicModel = "default"
-		p.AnthropicDefaultHaikuModel = "haiku"
-		p.AnthropicDefaultSonnetModel = "sonnet"
-		p.AnthropicDefaultOpusModel = "opus"
-		p.AnthropicDefaultFableModel = "fable"
-		p.ClaudeCodeSubagentModel = "subagent"
+	slots := map[string]string{}
+	for _, t := range serverconfig.CCSlotTiers() {
+		slots[t.EnvKey] = t.Name
+		if unified {
+			slots[t.EnvKey] = serverconfig.CCTierUnified
+		}
 	}
+	p, _ = p.WithModelSlots(slots) // typed keys only: cannot fail
 	return p
 }
 

@@ -789,18 +789,19 @@ func (c *Config) hasRequestModel(scenario typ.RuleScenario, requestModel string)
 // separate-mode users get a routable fable alias. A user's own rule already
 // answering to that name is left alone rather than shadowed.
 func (c *Config) backfillFableRule() bool {
+	fable := CCTierByName(CCTierFable)
 	opus := c.findRuleByUUID(RuleUUIDCCOpus)
-	if opus == nil || c.findRuleByUUID(RuleUUIDCCFable) != nil {
+	if opus == nil || c.findRuleByUUID(fable.RuleUUID) != nil {
 		return false
 	}
-	name := "fable"
+	name := fable.Name
 	if legacyCCRequestModels[TrimContext1M(opus.RequestModel)] != "" {
-		name = "tingly/cc-fable"
+		name = fable.LegacyModel
 	}
 	if c.hasRequestModel(typ.ScenarioClaudeCode, name) {
 		return false
 	}
-	rule, ok := c.seedBuiltinRuleIfMissing(RuleUUIDCCFable, opus.Services)
+	rule, ok := c.seedBuiltinRuleIfMissing(fable.RuleUUID, opus.Services)
 	if !ok {
 		return false
 	}

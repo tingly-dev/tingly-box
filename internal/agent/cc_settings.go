@@ -114,25 +114,24 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 		return ruleModel(legacyFallback, serverconfig.BuiltinRuleUUID(typ.ScenarioClaudeCode, tier), legacyUUID)
 	}
 
+	defaultKey := serverconfig.CCTierByName(serverconfig.CCTierDefault).EnvKey
 	if unified {
-		model := tierModel("cc", serverconfig.RuleUUIDBuiltinCC, "cc")
-		env["ANTHROPIC_MODEL"] = model
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = model
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = model
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = model
-		env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = model
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = model
+		unifiedTier := serverconfig.CCTierByName(serverconfig.CCTierUnified)
+		model := tierModel(unifiedTier.Name, unifiedTier.LegacyUUID, unifiedTier.Name)
+		for _, t := range serverconfig.CCSlotTiers() {
+			env[t.EnvKey] = model
+		}
 	} else {
-		env["ANTHROPIC_MODEL"] = tierModel("default", serverconfig.RuleUUIDBuiltinCCDefault, "default")
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = tierModel("haiku", serverconfig.RuleUUIDBuiltinCCHaiku, "haiku")
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = tierModel("opus", serverconfig.RuleUUIDBuiltinCCOpus, "opus")
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = tierModel("sonnet", serverconfig.RuleUUIDBuiltinCCSonnet, "sonnet")
-		// The fable tier arrived after separate mode shipped, so a profile or
-		// install may have no active fable rule (never seeded, or switched off);
-		// the bare tier name is not routable, so the alias follows the default
-		// tier instead.
-		env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = ruleModel(env["ANTHROPIC_MODEL"], serverconfig.BuiltinRuleUUID(typ.RuleScenario(scenarioPath), "fable"))
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = tierModel("subagent", serverconfig.RuleUUIDBuiltinCCSubagent, "subagent")
+		for _, t := range serverconfig.CCSlotTiers() {
+			if t.FollowsDefault {
+				// A tier that arrived after separate mode shipped may have no
+				// active rule (never seeded, or switched off); the bare tier name
+				// is not routable, so the slot follows the default tier instead.
+				env[t.EnvKey] = ruleModel(env[defaultKey], serverconfig.BuiltinRuleUUID(typ.RuleScenario(scenarioPath), t.Name))
+				continue
+			}
+			env[t.EnvKey] = tierModel(t.Name, t.LegacyUUID, t.Name)
+		}
 	}
 
 	maps.Copy(env, CCTierDisplayEnv(env))
@@ -230,14 +229,13 @@ type CCProfileSettingsResolution struct {
 // could make a rule edit appear to have no effect.
 //
 // The /model picker labels are derived from the slots, so the rules own them too.
-var ccProfileRuleOwnedEnvKeys = slices.Concat([]string{
-	"ANTHROPIC_MODEL",
-	"ANTHROPIC_DEFAULT_HAIKU_MODEL",
-	"ANTHROPIC_DEFAULT_SONNET_MODEL",
-	"ANTHROPIC_DEFAULT_OPUS_MODEL",
-	"ANTHROPIC_DEFAULT_FABLE_MODEL",
-	"CLAUDE_CODE_SUBAGENT_MODEL",
-}, ccDisplayEnvKeys())
+var ccProfileRuleOwnedEnvKeys = slices.Concat(func() []string {
+	var keys []string
+	for _, t := range serverconfig.CCSlotTiers() {
+		keys = append(keys, t.EnvKey)
+	}
+	return keys
+}(), ccDisplayEnvKeys())
 
 func isCCProfileRuleOwnedEnvKey(key string) bool {
 	return slices.Contains(ccProfileRuleOwnedEnvKeys, key)
