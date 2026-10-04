@@ -36,9 +36,7 @@ import {
     Extension as IconExtension,
     Code as IconCode,
     TestPipe as IconTestPipe,
-    tablerMui,
 } from '@/components/icons';
-import { IconLibraryPhoto as TablerLibraryPhoto } from '@tabler/icons-react';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { useImageProfiles } from '@/pages/image/profiles/imageProfileStore';
@@ -47,8 +45,6 @@ import { orderTeams, teamPath } from '@/utils/team';
 import { isFullEdition } from '@/utils/edition';
 import type { ActivityItem, NavItem, NavItemBase } from './types';
 import { useBotPlatformSummary } from './useBotPlatformSummary';
-
-const IconLibraryPhoto = tablerMui(TablerLibraryPhoto);
 
 // The usage charts' URLs, one per time range (/dashboard/today, /dashboard/7d, …).
 const DASHBOARD_RANGE_PATH = /^\/dashboard\/(today|yesterday|3d|7d|30d|90d)$/;
@@ -261,9 +257,6 @@ export function useActivityItems(): ActivityItem[] {
                     })),
                     { path: '/image/profile/new', label: t('imageProfile.new', { defaultValue: 'New profile' }), icon: <IconPlus sx={{ fontSize: 20 }} /> },
                     { type: 'divider' },
-                    // What is kept, across profiles — separate from the
-                    // profiles that use it.
-                    { path: '/image/library', label: t('imageLibrary.title', { defaultValue: 'Library' }), icon: <IconLibraryPhoto sx={{ fontSize: 20 }} /> },
                     { path: '/image/api', label: t('layout.nav.useImageGen', { defaultValue: 'Image API' }), icon: <IconPlug sx={{ fontSize: 20 }} /> },
                 ],
             }] as ActivityItem[] : []),

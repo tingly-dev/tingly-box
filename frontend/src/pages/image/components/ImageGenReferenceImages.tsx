@@ -1,13 +1,10 @@
 import { useRef } from 'react';
 import { Box, Button, ButtonBase, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { IconLibraryPhoto } from '@tabler/icons-react';
-import { Brush, Close, ContentPaste, Create, FileUpload, ZoomIn, tablerMui } from '@/components/icons';
+import { Brush, Close, ContentPaste, Create, FileUpload, ZoomIn } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
 import type { ReferenceMask } from './ImageGenPlayground.types';
 import type { SketchLayers } from './SketchCanvasDialog';
-
-const LibraryPhoto = tablerMui(IconLibraryPhoto);
 
 // Matches the Codex-native imagegen tool's reference-image cap (see
 // .design/imageedit.md) — the common denominator across providers behind
@@ -244,8 +241,6 @@ interface ReferenceImagesRowProps {
     promptFileInputRef: React.RefObject<HTMLInputElement | null>;
     onOpenReference: (index: number) => void;
     onEditSketch: (index: number | null) => void;
-    // Opens the library to pick kept images as references.
-    onPickFromLibrary?: () => void;
     onEditMask: (index: number) => void;
     onRemoveReference: (index: number) => void;
     onReorder: (from: number, to: number) => void;
@@ -269,7 +264,6 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
     promptFileInputRef,
     onOpenReference,
     onEditSketch,
-    onPickFromLibrary,
     onEditMask,
     onRemoveReference,
     onReorder,
@@ -308,12 +302,6 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
             icon: <Create fontSize="small" />,
             onClick: () => onEditSketch(null),
         },
-        ...(onPickFromLibrary ? [{
-            key: 'library',
-            label: t('imageLibrary.title', { defaultValue: 'Library' }),
-            icon: <LibraryPhoto fontSize="small" />,
-            onClick: onPickFromLibrary,
-        }] : []),
     ];
     return (
         <Box>
@@ -393,9 +381,7 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
                                     onClick={(event) => { event.stopPropagation(); source.onClick?.(); }}
                                     aria-label={source.label}
                                     sx={{
-                                        // Four ways in take the room three did,
-                                        // so the strip stays one row.
-                                        width: referenceSources.length > 3 ? 40 : 56,
+                                        width: 56,
                                         height: 56,
                                         borderRadius: 1,
                                         color: 'text.secondary',
