@@ -6,23 +6,14 @@ import (
 	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
 )
 
-// ccDisplayTiers are the pinned model slots whose /model picker entry Claude
-// Code lets us label: alias -> (model env key, label).
-var ccDisplayTiers = []struct {
-	alias, modelKey, label string
-}{
-	{"opus", "ANTHROPIC_DEFAULT_OPUS_MODEL", "Opus"},
-	{"sonnet", "ANTHROPIC_DEFAULT_SONNET_MODEL", "Sonnet"},
-	{"haiku", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "Haiku"},
-	{"fable", "ANTHROPIC_DEFAULT_FABLE_MODEL", "Fable"},
-}
-
 // ccDisplayEnvKeys lists the *_NAME / *_DESCRIPTION env keys derived from the
-// model slots, so callers can treat them as rule-owned alongside the slots.
+// pinned model slots, so callers can treat them as rule-owned alongside the
+// slots. The slots are the tier aliases in cc_tiers.go.
 func ccDisplayEnvKeys() []string {
-	keys := make([]string, 0, 2*len(ccDisplayTiers))
-	for _, t := range ccDisplayTiers {
-		keys = append(keys, t.modelKey+"_NAME", t.modelKey+"_DESCRIPTION")
+	keys := make([]string, 0, 2*len(ClaudeCodeTierAliases))
+	for _, alias := range ClaudeCodeTierAliases {
+		slot := claudeCodeTierEnvKeys[alias]
+		keys = append(keys, slot+"_NAME", slot+"_DESCRIPTION")
 	}
 	return keys
 }
@@ -35,13 +26,14 @@ func ccDisplayEnvKeys() []string {
 // "[1m]" marker is dropped (Claude Code shows context size separately).
 func CCTierDisplayEnv(env map[string]string) map[string]string {
 	out := map[string]string{}
-	for _, t := range ccDisplayTiers {
-		model := strings.TrimSuffix(strings.TrimSpace(env[t.modelKey]), serverconfig.Context1MSuffix)
+	for _, alias := range ClaudeCodeTierAliases {
+		slot := claudeCodeTierEnvKeys[alias]
+		model := strings.TrimSuffix(strings.TrimSpace(env[slot]), serverconfig.Context1MSuffix)
 		if model == "" {
 			continue
 		}
-		out[t.modelKey+"_NAME"] = t.label + " · " + model
-		out[t.modelKey+"_DESCRIPTION"] = "Routed by Tingly Box rule " + model
+		out[slot+"_NAME"] = strings.ToUpper(alias[:1]) + alias[1:] + " · " + model
+		out[slot+"_DESCRIPTION"] = "Routed by Tingly Box rule " + model
 	}
 	return out
 }

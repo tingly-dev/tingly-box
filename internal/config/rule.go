@@ -342,21 +342,16 @@ func (c *Config) MatchRuleByModelAndScenario(requestModel string, scenario typ.R
 	// rules list it, and a stale client config may still send a suffix the
 	// rule no longer has. Normalize both sides before comparing.
 	if base := scenario.Base(); base == typ.ScenarioClaudeCode || base == typ.ScenarioClaudeDesktop {
-		want := TrimContext1M(requestModel)
-		for _, rule := range c.Rules {
-			if TrimContext1M(rule.RequestModel) == want && rule.GetScenario() == scenario {
-				return &rule
-			}
+		// Claude Code built-ins additionally answer to both the short and the
+		// legacy "tingly/cc-*" spelling (older settings files, other machines
+		// and CI still send the prefixed names).
+		normalize := TrimContext1M
+		if base == typ.ScenarioClaudeCode {
+			normalize = canonicalCCRequestModel
 		}
-	}
-
-	// Claude Code built-ins keep answering to their pre-simplification
-	// "tingly/cc-*" spelling (and the reverse): older settings files, other
-	// machines and CI still send the prefixed names.
-	if scenario.Base() == typ.ScenarioClaudeCode {
-		want := canonicalCCRequestModel(requestModel)
+		want := normalize(requestModel)
 		for _, rule := range c.Rules {
-			if canonicalCCRequestModel(rule.RequestModel) == want && rule.GetScenario() == scenario {
+			if normalize(rule.RequestModel) == want && rule.GetScenario() == scenario {
 				return &rule
 			}
 		}

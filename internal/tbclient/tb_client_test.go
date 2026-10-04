@@ -301,8 +301,8 @@ func TestGetScenarioEndpointPath(t *testing.T) {
 func TestResolveClaudeCodeModels_FableFollowsDefaultWithoutActiveRule(t *testing.T) {
 	cfg := &serverconfig.Config{
 		Scenarios: []typ.ScenarioConfig{ccSeparateFlag()},
-		Rules:     []typ.Rule{ccRule("builtin:claude_code:default", "tingly/cc-default")},
+		Rules:     []typ.Rule{ccRule("builtin:claude_code:default", "default")},
 	}
 	models := NewTBClient(cfg).resolveClaudeCodeModels()
-	assert.Equal(t, "tingly/cc-default", models.fable)
+	assert.Equal(t, "default", models.fable)
 }

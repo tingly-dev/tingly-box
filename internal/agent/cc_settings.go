@@ -228,20 +228,16 @@ type CCProfileSettingsResolution struct {
 // Profile model slots are derived from the profile's Model Rules. Treating
 // them as ordinary env overrides would create a second source of truth and
 // could make a rule edit appear to have no effect.
-var ccProfileRuleOwnedEnvKeys = []string{
+//
+// The /model picker labels are derived from the slots, so the rules own them too.
+var ccProfileRuleOwnedEnvKeys = slices.Concat([]string{
 	"ANTHROPIC_MODEL",
 	"ANTHROPIC_DEFAULT_HAIKU_MODEL",
 	"ANTHROPIC_DEFAULT_SONNET_MODEL",
 	"ANTHROPIC_DEFAULT_OPUS_MODEL",
 	"ANTHROPIC_DEFAULT_FABLE_MODEL",
 	"CLAUDE_CODE_SUBAGENT_MODEL",
-}
-
-func init() {
-	// The picker labels are derived from the model slots, so they are owned by
-	// the rules too.
-	ccProfileRuleOwnedEnvKeys = append(ccProfileRuleOwnedEnvKeys, ccDisplayEnvKeys()...)
-}
+}, ccDisplayEnvKeys())
 
 func isCCProfileRuleOwnedEnvKey(key string) bool {
 	return slices.Contains(ccProfileRuleOwnedEnvKeys, key)
