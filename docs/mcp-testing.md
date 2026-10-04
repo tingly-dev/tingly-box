@@ -14,7 +14,9 @@ and downstream transport require the MCP scenario flag to be enabled.
 source allow lists, tool policies and explicit client grants used at execution.
 `origin: builtin/external` is independent of these usages and of stdio/HTTP/SSE.
 One external source can supply both ordinary tools and Server Tools; built-in
-sources can do the same. Advisor is the special in-process branch and expands
+sources can do the same. Advisor requires model conversation context and is
+restricted to Server Tools even when legacy client usage is configured. It is
+not offered as an ordinary tool or standalone tool test. It is the special in-process branch and expands
 into its configured consultation provider/model and return to the model loop.
 Failed intended sources remain visible with no fabricated reachable tools.
 The display projection omits connection credentials, environment values, command
@@ -157,4 +159,6 @@ The routing exposure harness adds 14 HTTP/SSE cases covering client-only,
 server-only, dual, neither, revoked grant, disabled tool and source allow-list
 exclusion. It compares the graph against a real authenticated SDK connection
 and tools/list, then proves blocked calls never reach the real upstream handler.
+An additional Advisor case verifies a legacy dual-use configuration exposes it
+only in the model loop, with no callable tools in the ordinary SDK client.
 Run `go test ./internal/protocoltest -run TestMCPRoutingExposure` for this subset.

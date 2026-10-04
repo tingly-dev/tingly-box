@@ -1705,6 +1705,7 @@ export default {
       "ordinaryTools": "常规工具",
       "serverTools": "Server Tools",
       "ordinaryUsage": "用于常规工具",
+      "advisorTestHint": "顾问工具需要模型会话上下文。请在 MCP 路由中配置专用处理链，并通过模型请求验证。",
       "serverUsage": "用于 Server Tool",
       "ordinaryHint": "常规工具由 MCP 客户端调用，共享连接配置在「工具来源」中管理。",
       "serverHint": "Server Tools 由网关为模型请求执行。这里的工具测试验证单次执行；模型续轮通过 harness 验证。",

@@ -1711,6 +1711,7 @@ export default {
       "ordinaryTools": "Ordinary tools",
       "serverTools": "Server Tools",
       "ordinaryUsage": "Use as an ordinary tool",
+      "advisorTestHint": "Advisor requires model conversation context. Configure its special processing chain in MCP routes, then verify it with a model request.",
       "serverUsage": "Use as a Server Tool",
       "ordinaryHint": "Ordinary tools are called by MCP clients. Manage shared connections in Tool sources.",
       "serverHint": "Server Tools are executed by the gateway for model requests. Tool tests below execute the tool only; model continuation is verified by the harness.",

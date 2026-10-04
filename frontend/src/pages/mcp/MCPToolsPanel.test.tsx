@@ -57,7 +57,11 @@ describe('MCP capability controls', () => {
             ],
         });
         render(<MCPToolsPanel sources={[source]} enabled saveSource={mocks.save} />);
-        expect(await screen.findByText('No tools are assigned to this section. Enable the corresponding usage in Tool sources.')).toBeInTheDocument();
+        expect(
+            await screen.findByText(
+                'No tools are assigned to this section. Enable the corresponding usage in Tool sources.'
+            )
+        ).toBeInTheDocument();
         expect(screen.queryByText('remote / echo')).toBeNull();
         fireEvent.click(screen.getByRole('button', { name: 'Choose tools' }));
         fireEvent.click(await screen.findByRole('button', { name: 'Add tool' }));
@@ -67,6 +71,30 @@ describe('MCP capability controls', () => {
                 tool_policies: { other: { enabled: false }, echo: { usage: { client: true, gateway: true } } },
             })
         );
+    });
+    it('requires a model request for Advisor instead of exposing an unusable standalone test', async () => {
+        mocks.catalog.mockResolvedValue({
+            success: true,
+            sources: [
+                {
+                    source_id: 'advisor',
+                    state: 'connected',
+                    tools: [
+                        {
+                            ...tool,
+                            source_id: 'advisor',
+                            name: 'advisor',
+                            implementation: 'virtual',
+                            usage: { client: false, gateway: true },
+                        },
+                    ],
+                },
+            ],
+        });
+        render(<MCPToolsPanel sources={[]} enabled usage="gateway" saveSource={mocks.save} />);
+        expect(await screen.findByRole('button', { name: 'Test tool' })).toBeDisabled();
+        expect(screen.getByText(/Advisor requires model conversation context/)).toBeInTheDocument();
+        expect(mocks.call).not.toHaveBeenCalled();
     });
     it('rejects invalid JSON arguments and shows structured tool errors without losing content', async () => {
         mocks.call.mockResolvedValue({

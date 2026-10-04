@@ -102,3 +102,17 @@ func routeToolNames(sources []RouteSource) []string {
 	}
 	return names
 }
+
+func TestRoutingAdvisorCannotGrantOrdinaryClientExecution(t *testing.T) {
+	cfg := &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{{ID: "advisor", Transport: "advisor", Advisor: &typ.AdvisorConfig{ProviderUUID: "provider", Model: "model"}, Usage: &typ.MCPToolUsage{Client: true, Gateway: true}, ToolPolicies: map[string]typ.MCPToolPolicy{"advisor": {Usage: &typ.MCPToolUsage{Client: true, Gateway: true}}}}}, ClientProfilesConfigured: true, ClientProfiles: []typ.MCPClientProfile{{ID: "reader", Sources: []string{"*"}, Tools: []string{"*"}}}}
+	rt := NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })
+	defer rt.Close()
+	rt.VirtualRegistry().Register(coretool.VirtualTool{Name: "advisor", Visibility: typ.ToolVisibilityServer, InputSchema: map[string]any{"type": "object"}})
+	snapshot := rt.Routing(context.Background())
+	require.Empty(t, snapshot.Clients[0].Sources)
+	actual, err := rt.ListClientSourceToolsForMCP(context.Background())
+	require.NoError(t, err)
+	require.Empty(t, actual)
+	require.Len(t, snapshot.ServerTools, 1)
+	require.Len(t, rt.ListServerToolsForInjection(context.Background()), 1)
+}
