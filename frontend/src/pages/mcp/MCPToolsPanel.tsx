@@ -26,11 +26,13 @@ export default function MCPToolsPanel({
     saveSource,
     usage = 'client',
     onConfigureSource,
+    onRelationships,
     showIntro = true,
     scopeOnly = false,
 }: {
     usage?: 'client' | 'gateway';
     onConfigureSource?: (id: string) => void;
+    onRelationships?: (id: string) => void;
     showIntro?: boolean;
     scopeOnly?: boolean;
     sources: MCPSourceConfig[];
@@ -285,6 +287,15 @@ export default function MCPToolsPanel({
                                                     : 'Configure this connection',
                                         }
                                     )}
+                                </Button>
+                            )}
+                            {onRelationships && (
+                                <Button
+                                    size="small"
+                                    sx={{ alignSelf: 'flex-start' }}
+                                    onClick={() => onRelationships(tool.source_id)}
+                                >
+                                    {t('mcp.relationships.view', { defaultValue: 'View usage relationships' })}
                                 </Button>
                             )}
                             <Box component="details">

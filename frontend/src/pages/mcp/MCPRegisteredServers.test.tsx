@@ -27,7 +27,9 @@ vi.mock('./AdvisorSettings', () => ({ default: () => null }));
 vi.mock('./AgentInstallCard', () => ({
     default: ({ clientId }: { clientId: string }) => <div>Setup command for {clientId}</div>,
 }));
-vi.mock('./MCPRoutingPanel', () => ({ default: () => <div>Routing panel</div> }));
+vi.mock('./MCPRoutingPanel', () => ({
+    default: ({ focusSource }: { focusSource?: string }) => <div>Routing panel {focusSource}</div>,
+}));
 vi.mock('./MCPToolsPanel', () => ({
     default: ({ usage }: { usage: string }) => <div>Capabilities panel: {usage}</div>,
 }));
@@ -70,11 +72,12 @@ const config = {
     client_profiles: [{ id: 'reader', name: 'Codex work', enabled: true, sources: ['remote'], tools: ['*'] }],
 };
 beforeEach(() => {
+    HTMLElement.prototype.scrollIntoView = vi.fn();
     vi.clearAllMocks();
-    mocks.get.mockResolvedValue({ success: true, enabled: false, config });
+    mocks.get.mockResolvedValue({ success: true, enabled: true, config });
     mocks.routing.mockResolvedValue({
         success: true,
-        enabled: false,
+        enabled: true,
         routing: {
             sources: [routeSource],
             clients: [
@@ -103,8 +106,19 @@ describe('MCP secondary layouts', () => {
         expect(await screen.findByText('Codex work · Gateway model')).toBeInTheDocument();
         expect(screen.queryByRole('tab')).toBeNull();
         expect(screen.queryByText('Routing panel')).toBeNull();
-        fireEvent.click(screen.getByRole('button', { name: /View call relationships/ }));
-        expect(await screen.findByText('Routing panel')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /Usage relationships/ }));
+        expect(await screen.findByText(/Routing panel/)).toBeInTheDocument();
+    });
+    it('opens the specific connection relationship directly from its overview destination', async () => {
+        open();
+        fireEvent.click(await screen.findByRole('button', { name: 'Remote docs: View usage relationships' }));
+        expect(await screen.findByText('Routing panel remote')).toBeInTheDocument();
+        expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    it('reopens a focused usage relationship bookmark without opening the source editor', async () => {
+        open('/mcp?relationship=remote');
+        expect(await screen.findByText('Routing panel remote')).toBeInTheDocument();
+        expect(screen.queryByRole('dialog')).toBeNull();
     });
     it('uses the overview for shared connections and navigates to separate Tool and Server Tool pages', async () => {
         open();

@@ -32,6 +32,7 @@ export default function MCPSourceWorkspace({
     onDelete,
     onRefresh,
     usageScope,
+    onRelationships,
 }: {
     source: MCPSourceConfig;
     route?: MCPRouteSource;
@@ -41,6 +42,7 @@ export default function MCPSourceWorkspace({
     onDelete: () => Promise<void>;
     onRefresh: () => Promise<void>;
     usageScope?: 'client' | 'gateway';
+    onRelationships?: (id: string) => void;
 }) {
     const { t } = useTranslation();
     const label = (key: string, fallback: string) => t(`mcp.workspace.${key}`, { defaultValue: fallback });
@@ -119,6 +121,11 @@ export default function MCPSourceWorkspace({
                         </Button>
                     </Alert>
                 )
+            )}
+            {onRelationships && (
+                <Button sx={{ alignSelf: 'flex-start' }} onClick={() => onRelationships(source.id!)}>
+                    {t('mcp.relationships.view', { defaultValue: 'View usage relationships' })}
+                </Button>
             )}
             <Accordion
                 expanded={configure}

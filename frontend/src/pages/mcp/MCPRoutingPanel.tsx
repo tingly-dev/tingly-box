@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     Alert,
@@ -8,17 +8,16 @@ import {
     Chip,
     CircularProgress,
     Divider,
-    Drawer,
-    IconButton,
     Stack,
+    MenuItem,
+    TextField,
     Typography,
 } from '@mui/material';
-import { Close, Hub, Psychology, Security, Server, Settings, Terminal } from '@/components/icons';
+import { Hub, Psychology, Security, Server, Settings, Terminal } from '@/components/icons';
 import { ArrowNode } from '@/components/nodes/ArrowNode';
 import { graphRowStyles, StyledBotGraphNode } from '@/components/nodes/styles';
-import { api } from '@/services/api';
-import AgentInstallCard from './AgentInstallCard';
-import type { MCPClientRoute, MCPRouteSource, MCPRoutingSnapshot, MCPSourceConfig } from './types';
+import MCPSourceRelationships from './MCPSourceRelationships';
+import type { MCPClientProfile, MCPRouteSource, MCPRoutingSnapshot, MCPSourceConfig } from './types';
 
 function RouteNode({
     title,
@@ -95,72 +94,33 @@ export default function MCPRoutingPanel({
     onEditSource,
     onClient,
     onTools,
-    revision,
+    routing,
+    enabled,
+    loading,
+    error,
+    onRefresh,
+    sources,
+    profiles,
+    focusSource,
+    onFocusSource,
 }: {
     onEditSource: (id: string) => void;
     onClient: (id?: string, edit?: boolean) => void;
-    onTools: (kind: 'client' | 'gateway') => void;
-    revision: MCPSourceConfig[];
+    onTools: (kind: 'client' | 'gateway', sourceId?: string) => void;
+    routing: MCPRoutingSnapshot | null;
+    enabled: boolean;
+    loading: boolean;
+    error?: string;
+    onRefresh: () => void;
+    sources: MCPSourceConfig[];
+    profiles: MCPClientProfile[];
+    focusSource?: string;
+    onFocusSource: (id?: string) => void;
 }) {
     const { t } = useTranslation();
     const label = (key: string, fallback: string) => t(`mcp.routing.${key}`, { defaultValue: fallback });
-    const [routing, setRouting] = useState<MCPRoutingSnapshot | null>(null);
-    const [enabled, setEnabled] = useState(false);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
     const [expanded, setExpanded] = useState(false);
-    const [selected, setSelected] = useState<{
-        source?: MCPRouteSource;
-        client?: MCPClientRoute;
-        server?: boolean;
-    } | null>(null);
-    const [probe, setProbe] = useState<{ id: string; success: boolean; tools: string[]; error?: string } | null>(null);
-    const [probing, setProbing] = useState('');
-    const generation = useRef(0);
-    const load = useCallback(async () => {
-        const current = ++generation.current;
-        setLoading(true);
-        setSelected(null);
-        setError('');
-        setProbe(null);
-        try {
-            const result = await api.getMCPRouting();
-            if (current !== generation.current) return;
-            if (!result.success) throw new Error(result.error || 'Could not load MCP routes');
-            setRouting(result.routing);
-            setEnabled(result.enabled);
-        } catch (e) {
-            if (current === generation.current) setError(e instanceof Error ? e.message : String(e));
-        } finally {
-            if (current === generation.current) setLoading(false);
-        }
-    }, []);
-    useEffect(() => {
-        let active = true;
-        // Schedule discovery after the effect; cleanup also invalidates an
-        // in-flight response so old grants cannot repaint a refreshed graph.
-        void Promise.resolve().then(() => {
-            if (active) void load();
-        });
-        return () => {
-            active = false;
-            generation.current++;
-        };
-        // revision is the saved source configuration and explicitly invalidates discovery.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [load, revision]);
-    const checkClient = async (id: string) => {
-        setProbing(id);
-        setProbe(null);
-        try {
-            const result = await api.probeMCPClient(id, {});
-            setProbe({ id, success: result.success, tools: result.tools || [], error: result.error });
-        } catch (e) {
-            setProbe({ id, success: false, tools: [], error: e instanceof Error ? e.message : String(e) });
-        } finally {
-            setProbing('');
-        }
-    };
+    const focused = routing?.sources.find((source) => source.id === focusSource);
     const sourceNode = (source: MCPRouteSource) => {
         const failed = source.state !== 'connected';
         const state = label(source.state, source.state);
@@ -174,7 +134,7 @@ export default function MCPRoutingPanel({
                 icon={source.processing === 'advisor' ? <Psychology fontSize="small" /> : <Server fontSize="small" />}
                 active={enabled && !failed}
                 warn={source.state === 'error' || source.state === 'unconfigured'}
-                onClick={() => setSelected({ source })}
+                onClick={() => onFocusSource(source.id)}
             />
         );
     };
@@ -204,21 +164,37 @@ export default function MCPRoutingPanel({
     );
     const regular = routing?.clients || [];
     const serverSources = routing?.server_tools || [];
-    const specialSources = serverSources.filter((source) => source.processing === 'advisor');
-    const title = selected?.source?.name || selected?.client?.name || label('serverTools', 'Server Tools');
+    const specialSources = serverSources
+        .filter((source) => source.processing === 'advisor')
+        .map((source) => routing?.sources.find((item) => item.id === source.id) || source);
     return (
         <Stack spacing={2.5}>
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
                     {label(
                         'hint',
-                        'Follow each entry through the gateway to its tool sources. Click a node to configure it.'
+                        'Inspect effective tool access or focus a connection to review its consumers and blocked tools.'
                     )}
                 </Typography>
-                <Button disabled={loading} onClick={() => void load()}>
-                    {label('refresh', 'Refresh routes')}
+                <Button disabled={loading} onClick={onRefresh}>
+                    {label('refresh', 'Refresh relationships')}
                 </Button>
             </Stack>
+            <TextField
+                select
+                size="small"
+                label={t('mcp.relationships.focus', { defaultValue: 'Inspect a connection' })}
+                value={focusSource && routing?.sources.some((source) => source.id === focusSource) ? focusSource : ''}
+                onChange={(event) => onFocusSource(event.target.value || undefined)}
+                sx={{ maxWidth: 360 }}
+            >
+                <MenuItem value="">{t('mcp.relationships.all', { defaultValue: 'All usage relationships' })}</MenuItem>
+                {(routing?.sources || []).map((source) => (
+                    <MenuItem key={source.id} value={source.id}>
+                        {source.name}
+                    </MenuItem>
+                ))}
+            </TextField>
             {error && <Alert severity="error">{error}</Alert>}
             {loading && (
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
@@ -226,7 +202,27 @@ export default function MCPRoutingPanel({
                     <Typography variant="body2">{label('discovering', 'Discovering effective routes…')}</Typography>
                 </Stack>
             )}
-            {routing && !loading && (
+            {focusSource && routing && !loading && !focused && (
+                <Alert severity="info">
+                    {t('mcp.relationships.missing', {
+                        defaultValue:
+                            'This connection no longer exists. Select another connection or view all relationships.',
+                    })}
+                </Alert>
+            )}
+            {focused && routing && !loading && !error && (
+                <MCPSourceRelationships
+                    source={focused}
+                    snapshot={routing}
+                    config={sources.find((source) => source.id === focused.id)}
+                    profiles={profiles}
+                    enabled={enabled}
+                    onEditSource={onEditSource}
+                    onClient={onClient}
+                    onTools={onTools}
+                />
+            )}
+            {routing && !loading && !error && !focusSource && (
                 <>
                     <Box component="section" aria-label={label('ordinaryTools', 'Ordinary tools')}>
                         <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
@@ -285,16 +281,8 @@ export default function MCPRoutingPanel({
                                             {!client.enabled && (
                                                 <Chip size="small" label={label('disabled', 'Disabled')} />
                                             )}
-                                            <Button onClick={() => setSelected({ client })}>
-                                                {label('install', 'Connection instructions')}
-                                            </Button>
-                                            <Button
-                                                disabled={!enabled || !client.enabled || !!probing}
-                                                onClick={() => void checkClient(client.id)}
-                                            >
-                                                {probing === client.id
-                                                    ? label('checking', 'Checking…')
-                                                    : label('checkClient', 'Check client route')}
+                                            <Button onClick={() => onClient(client.id, true)}>
+                                                {label('configureGrants', 'Configure client grants')}
                                             </Button>
                                         </Stack>
                                     </Stack>
@@ -306,7 +294,7 @@ export default function MCPRoutingPanel({
                                                 tag={label('client', 'Client')}
                                                 icon={<Terminal fontSize="small" />}
                                                 active={enabled && client.enabled}
-                                                onClick={() => setSelected({ client })}
+                                                onClick={() => onClient(client.id, true)}
                                             />
                                             <Arrow />
                                             <RouteNode
@@ -319,17 +307,6 @@ export default function MCPRoutingPanel({
                                             <Arrow />
                                             {branches(client.sources)}
                                         </>
-                                    )}
-                                    {probe?.id === client.id && (
-                                        <Alert
-                                            severity={probe.success ? 'success' : 'error'}
-                                            sx={{ mb: 1 }}
-                                            data-testid="mcp-route-probe"
-                                        >
-                                            {probe.success
-                                                ? `${label('probePassed', 'Initialize and tools/list passed through the actual gateway endpoint.')} ${probe.tools.length} ${label('toolCount', 'tools')}`
-                                                : probe.error}
-                                        </Alert>
                                     )}
                                     <Divider sx={{ my: 1 }} />
                                     <Typography variant="caption" color="text.secondary">
@@ -375,7 +352,7 @@ export default function MCPRoutingPanel({
                                         tag={label('model', 'Model')}
                                         icon={<Hub fontSize="small" />}
                                         active={enabled}
-                                        onClick={() => setSelected({ server: true })}
+                                        onClick={() => onTools('gateway')}
                                     />
                                     <Arrow />
                                     <RouteNode
@@ -443,7 +420,7 @@ export default function MCPRoutingPanel({
                                                                     !source.advisor?.model ||
                                                                     !source.advisor?.provider_name
                                                                 }
-                                                                onClick={() => onEditSource(source.id)}
+                                                                onClick={() => onTools('gateway', source.id)}
                                                             />
                                                             <Arrow />
                                                             <Typography
@@ -475,92 +452,6 @@ export default function MCPRoutingPanel({
                     </Box>
                 </>
             )}
-            <Drawer
-                anchor="right"
-                open={!!selected}
-                onClose={() => setSelected(null)}
-                slotProps={{ paper: { sx: { width: { xs: '100%', sm: 520 }, p: 3 } } }}
-            >
-                <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6">{title}</Typography>
-                    <IconButton aria-label={label('close', 'Close details')} onClick={() => setSelected(null)}>
-                        <Close />
-                    </IconButton>
-                </Stack>
-                {selected?.source && (
-                    <Stack spacing={2}>
-                        <Stack direction="row" spacing={1}>
-                            <Chip size="small" label={label(selected.source.origin, selected.source.origin)} />
-                            <Chip size="small" label={selected.source.transport} />
-                            <Chip size="small" label={label(selected.source.state, selected.source.state)} />
-                        </Stack>
-                        <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
-                            {selected.source.address}
-                        </Typography>
-                        {selected.source.error && <Alert severity="error">{selected.source.error}</Alert>}
-                        <Typography variant="body2">
-                            {label('effectiveTools', 'Tools available on this path')}
-                        </Typography>
-                        {selected.source.tools.length === 0 && (
-                            <Typography color="text.secondary">
-                                {label('noDiscoveredTools', 'No available tools were discovered for this path.')}
-                            </Typography>
-                        )}
-                        {selected.source.tools.map((tool) => (
-                            <Box key={tool.normalized_name}>
-                                <Typography variant="subtitle2">{tool.name}</Typography>
-                                <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-                                    {tool.normalized_name}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    {tool.description}
-                                </Typography>
-                            </Box>
-                        ))}
-                        <Button
-                            variant="contained"
-                            onClick={() => {
-                                onEditSource(selected.source!.id);
-                                setSelected(null);
-                            }}
-                        >
-                            {label('configureSource', 'Configure tool source')}
-                        </Button>
-                    </Stack>
-                )}
-                {selected?.client && (
-                    <Stack spacing={2}>
-                        <Typography variant="body2" color="text.secondary">
-                            {label(
-                                'ordinaryHint',
-                                'The client calls the tool through MCP; results return to the client.'
-                            )}
-                        </Typography>
-                        <AgentInstallCard clientId={selected.client.id} />
-                        <Button onClick={() => onClient(selected.client!.id, true)}>
-                            {label('configureGrants', 'Configure client grants')}
-                        </Button>
-                    </Stack>
-                )}
-                {selected?.server && (
-                    <Stack spacing={2}>
-                        <Typography variant="body2">
-                            {label(
-                                'serverHint',
-                                'The gateway executes model tool calls, supplies their results and continues the model response.'
-                            )}
-                        </Typography>
-                        {['provide', 'dispatch', 'execute', 'continue'].map((step, i) => (
-                            <Typography key={step}>
-                                {i + 1}. {label(step, step)}
-                            </Typography>
-                        ))}
-                        <Button onClick={() => onTools('gateway')}>
-                            {label('manageServer', 'Manage Server Tools')}
-                        </Button>
-                    </Stack>
-                )}
-            </Drawer>
         </Stack>
     );
 }

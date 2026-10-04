@@ -80,6 +80,8 @@ export default function MCPRegisteredServers() {
     const [customSourceId, setCustomSourceId] = useState(false);
     const [connectionError, setConnectionError] = useState('');
     const [showRoutes, setShowRoutes] = useState(false);
+    const relationshipsRef = useRef<HTMLDivElement>(null);
+    const focusSource = search.get('relationship') || undefined;
     const routeGeneration = useRef(0);
     const linked = useRef('');
     const sources = useMemo(() => config.sources || [], [config.sources]);
@@ -107,7 +109,10 @@ export default function MCPRegisteredServers() {
             setEnabled(response.enabled);
             setRouteError('');
         } catch (e) {
-            if (generation === routeGeneration.current) setRouteError(e instanceof Error ? e.message : String(e));
+            if (generation === routeGeneration.current) {
+                setRouting(null);
+                setRouteError(e instanceof Error ? e.message : String(e));
+            }
         } finally {
             if (generation === routeGeneration.current) setChecking(false);
         }
@@ -181,12 +186,23 @@ export default function MCPRegisteredServers() {
             else if (profile) setSheet({ kind: 'client', id: profile, edit: search.has('profile') });
             else if (grantSource) setSheet({ kind: 'clients', grantSource });
             else setSheet(null);
-            if (section === 'routes' || location.pathname === '/mcp/routes') setShowRoutes(true);
+            if (section === 'routes' || location.pathname === '/mcp/routes' || search.has('relationship'))
+                setShowRoutes(true);
         });
         return () => {
             active = false;
         };
     }, [loading, location.pathname, location.search, search, navigate]);
+    useEffect(() => {
+        if (!overview || !showRoutes || !focusSource) return;
+        const frame = requestAnimationFrame(() => relationshipsRef.current?.scrollIntoView({ block: 'start' }));
+        return () => cancelAnimationFrame(frame);
+    }, [overview, showRoutes, focusSource]);
+    const openRelationships = (id?: string) => {
+        setSheet(null);
+        setShowRoutes(true);
+        navigate(id ? `/mcp?relationship=${encodeURIComponent(id)}` : '/mcp?section=routes');
+    };
     const run = async (action: () => Promise<void>) => {
         setBusy(true);
         try {
@@ -449,6 +465,7 @@ export default function MCPRegisteredServers() {
                                         routing?.clients
                                             .filter(
                                                 (client) =>
+                                                    enabled &&
                                                     client.enabled &&
                                                     client.sources.some((s) => s.id === source.id && s.tools.length > 0)
                                             )
@@ -457,7 +474,7 @@ export default function MCPRegisteredServers() {
                                                     ? label('defaultClient', 'Default client connection')
                                                     : client.name
                                             ) || [];
-                                    if (serverSources.some((s) => s.id === source.id && s.tools.length > 0))
+                                    if (enabled && serverSources.some((s) => s.id === source.id && s.tools.length > 0))
                                         destinations.push(label('gatewayModel', 'Gateway model'));
                                     const failed = source.enabled !== false && route && route.state !== 'connected';
                                     return (
@@ -511,7 +528,16 @@ export default function MCPRegisteredServers() {
                                                     sx={{ alignItems: 'center', color: 'text.secondary', minWidth: 0 }}
                                                 >
                                                     <ArrowForward fontSize="small" />
-                                                    <Typography variant="body2">
+                                                    <Button
+                                                        aria-label={`${sourceName(source)}: ${t('mcp.relationships.view', { defaultValue: 'View usage relationships' })}`}
+                                                        onClick={() => openRelationships(source.id!)}
+                                                        sx={{
+                                                            textAlign: 'left',
+                                                            justifyContent: 'flex-start',
+                                                            color: 'text.secondary',
+                                                            p: 0.5,
+                                                        }}
+                                                    >
                                                         {destinations.length
                                                             ? destinations.join(' · ')
                                                             : source.enabled === false
@@ -525,7 +551,7 @@ export default function MCPRegisteredServers() {
                                                                       'chooseDestination',
                                                                       'Choose a client or Server Tools in settings'
                                                                   )}
-                                                    </Typography>
+                                                    </Button>
                                                 </Stack>
                                                 <Stack
                                                     direction="row"
@@ -615,6 +641,7 @@ export default function MCPRegisteredServers() {
                             </Box>
                         </Box>
                         <Accordion
+                            ref={relationshipsRef}
                             expanded={showRoutes}
                             onChange={(_, value) => setShowRoutes(value)}
                             disableGutters
@@ -629,12 +656,12 @@ export default function MCPRegisteredServers() {
                             <AccordionSummary expandIcon={<ExpandMore />}>
                                 <Box>
                                     <Typography variant="body2" style={{ fontWeight: 600 }}>
-                                        {label('showRelationships', 'View call relationships')}
+                                        {label('showRelationships', 'Usage relationships')}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary">
                                         {label(
                                             'relationshipsHint',
-                                            'See how clients, the gateway and tool services connect when you need to inspect a route.'
+                                            'Inspect who can use a connection, why a tool is unavailable and who a change affects.'
                                         )}
                                     </Typography>
                                 </Box>
@@ -642,7 +669,15 @@ export default function MCPRegisteredServers() {
                             <AccordionDetails>
                                 {showRoutes && (
                                     <MCPRoutingPanel
-                                        revision={sources}
+                                        sources={sources}
+                                        profiles={clients}
+                                        routing={routing}
+                                        enabled={enabled}
+                                        loading={checking}
+                                        error={routeError}
+                                        onRefresh={() => void run(reload)}
+                                        focusSource={focusSource}
+                                        onFocusSource={openRelationships}
                                         onEditSource={(id) => setSheet({ kind: 'source', id })}
                                         onClient={(id, edit) =>
                                             navigate(
@@ -651,7 +686,13 @@ export default function MCPRegisteredServers() {
                                                     : '/mcp/tools'
                                             )
                                         }
-                                        onTools={(usage) => navigate(toolsPath(usage))}
+                                        onTools={(usage, sourceId) =>
+                                            navigate(
+                                                sourceId
+                                                    ? `${toolsPath(usage)}?source=${encodeURIComponent(sourceId)}`
+                                                    : toolsPath(usage)
+                                            )
+                                        }
                                     />
                                 )}
                             </AccordionDetails>
@@ -717,6 +758,7 @@ export default function MCPRegisteredServers() {
                             showIntro={false}
                             scopeOnly
                             onConfigureSource={(id) => setSheet({ kind: 'source', id })}
+                            onRelationships={openRelationships}
                         />
                     </Box>
                 )}
@@ -752,6 +794,7 @@ export default function MCPRegisteredServers() {
                                 route={sourceRoute(selectedSource.id!)}
                                 enabled={enabled}
                                 saveSource={saveSource}
+                                onRelationships={openRelationships}
                                 onRefresh={async () => {
                                     const response = await api.reconnectMCPSource(selectedSource.id!);
                                     await refreshRoutes();
