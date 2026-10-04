@@ -247,7 +247,7 @@ export default function MCPSourceWorkspace({
                                 <Typography variant="caption" color="warning.main">
                                     {label(
                                         'sharedToolOff',
-                                        'This tool is disabled in the shared connection. Enable it from the connections overview.'
+                                        'This tool is disabled in the shared connection. Enable it from the MCP page.'
                                     )}
                                 </Typography>
                             )}

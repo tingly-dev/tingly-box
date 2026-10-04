@@ -1693,9 +1693,9 @@ export default {
     "workspace": {
       "configureAdvisor": "配置顾问模型",
       "sharedConnectionEnabled": "启用共享连接（影响 Tool 和 Server Tool）",
-      "sharedToolOff": "此工具已在共享连接中停用，请在接入总览的连接配置中启用。",
-      "overviewNav": "接入总览",
-      "overviewTitle": "MCP 接入总览",
+      "sharedToolOff": "此工具已在共享连接中停用，请在 MCP 页面的连接配置中启用。",
+      "overviewNav": "MCP",
+      "overviewTitle": "MCP",
       "overviewHint": "统一管理内置和外置工具连接，查看它们供哪些客户端或网关使用。",
       "overviewToolHint": "客户端通过 MCP 调用这些工具。在 Tool 中配置权限并获取接入命令。",
       "openToolPage": "进入 Tool",

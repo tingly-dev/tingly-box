@@ -333,7 +333,7 @@ export default function MCPRegisteredServers() {
                     <Box>
                         <Typography component="h1" variant="h5" style={{ fontWeight: 700 }}>
                             {overview
-                                ? label('overviewTitle', 'MCP connections overview')
+                                ? label('overviewTitle', 'MCP')
                                 : usageScope === 'client'
                                   ? 'Tool'
                                   : 'Server Tool'}

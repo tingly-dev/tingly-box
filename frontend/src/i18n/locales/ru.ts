@@ -1722,9 +1722,9 @@ export default {
     "workspace": {
       "configureAdvisor": "Настроить модель Advisor",
       "sharedConnectionEnabled": "Включить общее подключение (для Tool и Server Tool)",
-      "sharedToolOff": "Инструмент отключён в общем подключении. Включите его в обзоре подключений.",
-      "overviewNav": "Обзор подключений",
-      "overviewTitle": "Обзор подключений MCP",
+      "sharedToolOff": "Инструмент отключён в общем подключении. Включите его на странице MCP.",
+      "overviewNav": "MCP",
+      "overviewTitle": "MCP",
       "overviewHint": "Управляйте общими подключениями и смотрите, какие клиенты или модели шлюза используют инструменты.",
       "overviewToolHint": "Клиенты вызывают эти инструменты через MCP. Откройте Tool для настройки доступа и команд подключения.",
       "openToolPage": "Открыть Tool",

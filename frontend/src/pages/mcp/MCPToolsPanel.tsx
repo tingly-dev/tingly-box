@@ -211,7 +211,7 @@ export default function MCPToolsPanel({
                                 <Typography variant="caption" color="warning.main">
                                     {t('mcp.workspace.sharedToolOff', {
                                         defaultValue:
-                                            'This tool is disabled in the shared connection. Enable it from the connections overview.',
+                                            'This tool is disabled in the shared connection. Enable it from the MCP page.',
                                     })}
                                 </Typography>
                             )}

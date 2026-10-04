@@ -286,7 +286,7 @@ export function useActivityItems(): ActivityItem[] {
                 label: t('layout.tools', { defaultValue: 'Tools' }),
                 defaultPath: '/mcp',
                 children: [
-                    { path: '/mcp', label: t('mcp.workspace.overviewNav', { defaultValue: 'Connections overview' }), icon: <SettingsApplications sx={{ fontSize: 20 }} />, match: (path: string) => ['/mcp', '/mcp/routes', '/mcp/sources'].includes(path) },
+                    { path: '/mcp', label: t('mcp.workspace.overviewNav', { defaultValue: 'MCP' }), icon: <SettingsApplications sx={{ fontSize: 20 }} />, match: (path: string) => ['/mcp', '/mcp/routes', '/mcp/sources'].includes(path) },
                     { path: '/mcp/tools', label: 'Tool', icon: <IconTerminal sx={{ fontSize: 20 }} />, match: (path: string) => ['/mcp/tools', '/mcp/clients', '/mcp/local-mode'].includes(path) },
                     { path: '/mcp/server-tools', label: 'Server Tool', icon: <IconServer sx={{ fontSize: 20 }} />, match: (path: string) => ['/mcp/server-tools', '/tools/servertool'].includes(path) },
                 ],

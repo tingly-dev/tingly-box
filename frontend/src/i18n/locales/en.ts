@@ -1699,9 +1699,9 @@ export default {
     "workspace": {
       "configureAdvisor": "Configure Advisor model",
       "sharedConnectionEnabled": "Enable shared connection (affects Tool and Server Tool)",
-      "sharedToolOff": "This tool is disabled in the shared connection. Enable it from the connections overview.",
-      "overviewNav": "Connections overview",
-      "overviewTitle": "MCP connections overview",
+      "sharedToolOff": "This tool is disabled in the shared connection. Enable it from the MCP page.",
+      "overviewNav": "MCP",
+      "overviewTitle": "MCP",
       "overviewHint": "Manage shared tool connections and see which clients or gateway models use them.",
       "overviewToolHint": "Clients call these tools through MCP. Open Tool to manage access and get setup commands.",
       "openToolPage": "Open Tool",
