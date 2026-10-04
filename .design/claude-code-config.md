@@ -91,6 +91,26 @@ Consequences:
 | **Frontend speaks the same JSON** | The TS interface uses env names as keys (`prefs.ANTHROPIC_DEFAULT_SONNET_MODEL`). What the form edits is exactly what gets POST'd is exactly what lands in settings.json. |
 | **1M suffix is just text** | `[1m]` is a substring of the model ID. The UI toggles append/strip; the backend never special-cases it. The gateway handles the suffix at routing time. |
 
+### 3.0 `/model` picker labels and what we deliberately do not set
+
+`ToEnv` (and `GenerateCCEnv` for profiles) derives
+`ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU,FABLE}_MODEL_NAME` / `_DESCRIPTION`
+from the slot values via `CCTierDisplayEnv`: `Opus · tingly/cc-opus` and
+`Routed by Tingly Box rule tingly/cc-opus`. The label carries the concrete rule
+name only; the upstream provider is not written into the user's settings file
+(the gateway's `/v1/models` also withholds it). An explicit value (typed field
+or `Extra`) wins over the derived one, and the `[1m]` marker is dropped.
+
+Researched and intentionally **not** done (Claude Code 2.1.289 docs):
+
+- `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY`: Claude Code keeps a discovered
+  entry only when its `id` contains `claude` or `anthropic`. Our rule names
+  (`tingly/cc*`) fail that filter, so enabling it would add a startup request
+  and list nothing for the built-in rules. Revisit only if rule names change.
+- `ANTHROPIC_DEFAULT_*_MODEL_SUPPORTED_CAPABILITIES`: documented as effective
+  only on the Bedrock/Vertex/Foundry/Mantle provider configurations, and a
+  no-op behind an `ANTHROPIC_BASE_URL` gateway, which is how we connect.
+
 ### 3.1 `defaultMode` lives under `permissions`, not top-level
 
 `defaultMode` isn't part of the `ClaudeCodePrefs`/`env` wire-shape trick above
@@ -340,8 +360,9 @@ compact grouped search exposes the remaining overridable runtime fields without
 showing inherited values as editable noise. The card-scoped save action is
 labeled **Save**, while generated files remain a rebuildable runtime artifact.
 
-The five model env keys (`ANTHROPIC_MODEL`, the Haiku/Sonnet/Opus slots, and
-`CLAUDE_CODE_SUBAGENT_MODEL`) are deliberately excluded from Profile Overrides.
+The model env keys (`ANTHROPIC_MODEL`, the Haiku/Sonnet/Opus/Fable slots,
+`CLAUDE_CODE_SUBAGENT_MODEL`, and the `*_MODEL_NAME` / `*_MODEL_DESCRIPTION`
+picker labels derived from them) are deliberately excluded from Profile Overrides.
 They are derived artifacts owned by the profile's **Model Rules** below the
 card. Allowing both surfaces to write them creates two sources of truth and can
 make a rule edit appear ineffective. The backend therefore ignores legacy
