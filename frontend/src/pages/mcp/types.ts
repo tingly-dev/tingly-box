@@ -7,6 +7,9 @@ export type MCPCatalogTool = components['schemas']['CatalogTool'];
 export type MCPSourceStatus = components['schemas']['SourceStatus'];
 export type MCPClientProfile = components['schemas']['MCPClientProfile'];
 export type MCPToolUsage = components['schemas']['MCPToolUsage'];
+export type MCPRouteSource = components['schemas']['RouteSource'];
+export type MCPClientRoute = components['schemas']['ClientRoute'];
+export type MCPRoutingSnapshot = components['schemas']['RoutingSnapshot'];
 
 export const BUILTIN_WEBTOOLS_ID = 'webtools' as const;
 export const BUILTIN_ADVISOR_ID = 'advisor' as const;
@@ -149,6 +152,7 @@ export const formValueToSource = (form: MCPSourceFormValue): MCPSourceConfig => 
         // Handle builtin command marker
         if (form.command === 'builtin') {
             // Convert builtin marker to actual tingly-box command
+            source.origin = 'builtin';
             source.command = 'tingly-box';
             source.args = ['mcp-builtin'];
         } else {

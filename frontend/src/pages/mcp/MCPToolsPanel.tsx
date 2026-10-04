@@ -17,13 +17,16 @@ import {
     Typography,
 } from '@mui/material';
 import { api } from '@/services/api';
+import { sourceToFormValue } from './types';
 import type { MCPCatalogTool, MCPSourceConfig, MCPSourceStatus } from './types';
 
 export default function MCPToolsPanel({
     sources,
     enabled,
     saveSource,
+    usage = 'client',
 }: {
+    usage?: 'client' | 'gateway';
     sources: MCPSourceConfig[];
     enabled: boolean;
     saveSource: (patch: MCPSourceConfig) => Promise<void>;
@@ -33,6 +36,7 @@ export default function MCPToolsPanel({
     const [catalog, setCatalog] = useState<MCPSourceStatus[]>([]);
     const [busy, setBusy] = useState(true);
     const [error, setError] = useState('');
+    const [choosing, setChoosing] = useState(false);
     const [testing, setTesting] = useState<MCPCatalogTool | null>(null);
     const [args, setArgs] = useState('{}');
     const [result, setResult] = useState<unknown>(null);
@@ -103,20 +107,44 @@ export default function MCPToolsPanel({
             source?.enabled === false || (allowed.length > 0 && !allowed.includes('*') && !allowed.includes(tool.name))
         );
     };
-    const tools = catalog.flatMap((s) => s.tools || []);
+    const tools = catalog
+        .flatMap((s) => s.tools || [])
+        .filter((tool) => (usage === 'client' ? tool.usage.client : tool.usage.gateway));
     return (
         <Stack spacing={2}>
-            <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+            <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 1 }}>
                 <Typography color="text.secondary">
-                    {label('toolsHint', 'Discover schemas, choose usage and test tools through the gateway runtime.')}
+                    {usage === 'client'
+                        ? label(
+                              'ordinaryHint',
+                              'Ordinary tools are called by MCP clients. Manage shared connections in Tool sources.'
+                          )
+                        : label(
+                              'serverHint',
+                              'Server Tools are executed by the gateway for model requests. Tool tests below execute the tool only; model continuation is verified by the harness.'
+                          )}
                 </Typography>
+                <Button disabled={busy} onClick={() => setChoosing(true)}>
+                    {label('chooseTools', 'Choose tools')}
+                </Button>
                 <Button disabled={busy} onClick={() => void refresh()}>
                     {label(busy ? 'discovering' : 'discover', busy ? 'Discovering…' : 'Discover tools')}
                 </Button>
             </Stack>
             {error && <Alert severity="error">{error}</Alert>}
             {catalog
-                .filter((s) => s.state !== 'connected')
+                .filter((status) => {
+                    const source = sources.find((item) => item.id === status.source_id);
+                    if (status.state === 'connected') return false;
+                    if (!source) return Boolean(status.error);
+                    return (
+                        source.enabled !== false &&
+                        (sourceToFormValue(source).usage[usage] ||
+                            Object.values(source.tool_policies || {}).some(
+                                (policy) => policy.enabled !== false && policy.usage?.[usage]
+                            ))
+                    );
+                })
                 .map((s) => (
                     <Alert key={s.source_id} severity={s.error ? 'error' : 'info'}>
                         {s.source_id}: {s.error || s.state}
@@ -124,7 +152,10 @@ export default function MCPToolsPanel({
                 ))}
             {!busy && tools.length === 0 && (
                 <Typography>
-                    {label('noTools', 'No tools discovered. Check server configuration and connection status.')}
+                    {label(
+                        'noAssignedTools',
+                        'No tools are assigned to this section. Enable the corresponding usage in Tool sources.'
+                    )}
                 </Typography>
             )}
             {tools.map((tool) => (
@@ -160,29 +191,19 @@ export default function MCPToolsPanel({
                                     control={
                                         <Checkbox
                                             disabled={busy}
-                                            checked={tool.usage.client}
+                                            checked={usage === 'client' ? tool.usage.client : tool.usage.gateway}
                                             onChange={(e) =>
                                                 void policy(tool, {
-                                                    usage: { ...tool.usage, client: e.target.checked },
+                                                    usage: { ...tool.usage, [usage]: e.target.checked },
                                                 })
                                             }
                                         />
                                     }
-                                    label={label('clientUsage', 'MCP clients')}
-                                />
-                                <FormControlLabel
-                                    control={
-                                        <Checkbox
-                                            disabled={busy}
-                                            checked={tool.usage.gateway}
-                                            onChange={(e) =>
-                                                void policy(tool, {
-                                                    usage: { ...tool.usage, gateway: e.target.checked },
-                                                })
-                                            }
-                                        />
+                                    label={
+                                        usage === 'client'
+                                            ? label('ordinaryUsage', 'Use as an ordinary tool')
+                                            : label('serverUsage', 'Use as a Server Tool')
                                     }
-                                    label={label('gatewayUsage', 'Gateway model calls')}
                                 />
                                 <Button
                                     disabled={busy || !tool.enabled || !enabled}
@@ -215,6 +236,46 @@ export default function MCPToolsPanel({
                     </CardContent>
                 </Card>
             ))}
+            <Dialog open={choosing} onClose={() => !busy && setChoosing(false)} maxWidth="md" fullWidth>
+                <DialogTitle>
+                    {usage === 'client'
+                        ? label('chooseOrdinary', 'Choose ordinary tools')
+                        : label('chooseServer', 'Choose Server Tools')}
+                </DialogTitle>
+                <DialogContent dividers>
+                    <Typography color="text.secondary" sx={{ mb: 2 }}>
+                        {label(
+                            'chooseToolsHint',
+                            'Add a tool to this usage without changing its other usage. Built-in and external sources share the same tool catalog.'
+                        )}
+                    </Typography>
+                    {catalog
+                        .flatMap((source) => source.tools || [])
+                        .filter((tool) => !tool.usage[usage] && !restricted(tool))
+                        .map((tool) => (
+                            <Stack
+                                key={tool.normalized_name}
+                                direction="row"
+                                sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}
+                            >
+                                <Typography>
+                                    {tool.source_id} / {tool.name}
+                                </Typography>
+                                <Button
+                                    disabled={busy}
+                                    onClick={() => void policy(tool, { usage: { ...tool.usage, [usage]: true } })}
+                                >
+                                    {label('addTool', 'Add tool')}
+                                </Button>
+                            </Stack>
+                        ))}
+                </DialogContent>
+                <DialogActions>
+                    <Button disabled={busy} onClick={() => setChoosing(false)}>
+                        {label('close', 'Close')}
+                    </Button>
+                </DialogActions>
+            </Dialog>
             <Dialog open={!!testing} onClose={() => !busy && setTesting(null)} maxWidth="md" fullWidth>
                 <DialogTitle>
                     {testing?.source_id} / {testing?.name}

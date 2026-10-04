@@ -26,6 +26,7 @@ import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 import MCPSourceEditor from './MCPSourceEditor';
 import AdvisorSettings from './AdvisorSettings';
 import MCPToolsPanel from './MCPToolsPanel';
+import MCPRoutingPanel from './MCPRoutingPanel';
 import MCPClientsPanel from './MCPClientsPanel';
 import {
     defaultMCPSourceFormValue,
@@ -45,13 +46,17 @@ export default function MCPRegisteredServers() {
     const [search] = useSearchParams();
     const location = useLocation();
     const navigate = useNavigate();
-    const tab = ['servers', 'tools', 'clients'].includes(search.get('tab') || '')
+    const tab = ['routes', 'servers', 'tools', 'server-tools', 'clients'].includes(search.get('tab') || '')
         ? search.get('tab')!
-        : location.pathname === '/mcp/tools'
-          ? 'tools'
-          : location.pathname === '/mcp/clients'
-            ? 'clients'
-            : 'servers';
+        : location.pathname === '/mcp/routes'
+          ? 'routes'
+          : location.pathname === '/mcp/server-tools'
+            ? 'server-tools'
+            : location.pathname === '/mcp/tools'
+              ? 'tools'
+              : location.pathname === '/mcp/clients'
+                ? 'clients'
+                : 'servers';
     const [config, setConfig] = useState<MCPRuntimeConfig>({});
     const [enabled, setEnabled] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -162,8 +167,10 @@ export default function MCPRegisteredServers() {
                     onChange={(_, value) => navigate(value === 'servers' ? '/mcp/sources' : `/mcp/${value}`)}
                     variant="scrollable"
                 >
-                    <Tab value="servers" label={label('servers', 'Servers')} />
-                    <Tab value="tools" label={label('capabilities', 'Capabilities')} />
+                    <Tab value="routes" label={label('routes', 'Routing overview')} />
+                    <Tab value="tools" label={label('ordinaryTools', 'Ordinary tools')} />
+                    <Tab value="server-tools" label={label('serverTools', 'Server Tools')} />
+                    <Tab value="servers" label={label('sources', 'Tool sources')} />
                     <Tab value="clients" label={label('clients', 'Client access')} />
                 </Tabs>
                 {tab === 'servers' && (
@@ -326,7 +333,30 @@ export default function MCPRegisteredServers() {
                         </Stack>
                     </Stack>
                 )}
-                {tab === 'tools' && <MCPToolsPanel sources={sources} enabled={enabled} saveSource={saveSource} />}
+                {tab === 'routes' && (
+                    <MCPRoutingPanel
+                        revision={sources}
+                        onEditSource={(id) => {
+                            const source = sources.find((item) => item.id === id);
+                            if (source) edit(source);
+                        }}
+                        onClient={(id, editing) =>
+                            navigate(
+                                `/mcp/clients${id ? `?${editing ? 'profile' : 'install'}=${encodeURIComponent(id)}` : ''}`
+                            )
+                        }
+                        onTools={(kind) => navigate(kind === 'client' ? '/mcp/tools' : '/mcp/server-tools')}
+                    />
+                )}
+                {(tab === 'tools' || tab === 'server-tools') && (
+                    <MCPToolsPanel
+                        key={tab}
+                        usage={tab === 'tools' ? 'client' : 'gateway'}
+                        sources={sources}
+                        enabled={enabled}
+                        saveSource={saveSource}
+                    />
+                )}
                 {tab === 'clients' && <MCPClientsPanel config={config} onSaved={acceptConfig} />}
             </Stack>
             <Dialog open={editing !== undefined} onClose={() => !busy && setEditing(undefined)} maxWidth="md" fullWidth>
