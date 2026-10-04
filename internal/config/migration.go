@@ -772,23 +772,27 @@ func backfillFableRuleOnce(c *Config) bool {
 }
 
 // backfillFableRule seeds the Claude Code fable rule for configs that predate
-// the tier, mirroring the opus rule's services, flags, load-balancing tactic
-// and active state, so separate-mode users get a routable fable alias. A user's
-// own rule already answering to that name is left alone rather than shadowed.
+// the tier, mirroring the opus rule's services, flags, load-balancing tactic,
+// active state and naming style (short or legacy "tingly/cc-*"), so
+// separate-mode users get a routable fable alias. A user's own rule already
+// answering to that name is left alone rather than shadowed.
 func (c *Config) backfillFableRule() bool {
 	opus := c.findRuleByUUID(RuleUUIDCCOpus)
 	if opus == nil || c.findRuleByUUID(RuleUUIDCCFable) != nil {
+		return false
+	}
+	name := "fable"
+	if legacyCCRequestModels[TrimContext1M(opus.RequestModel)] != "" {
+		name = legacyCCRequestModelFor("fable")
+	}
+	if c.hasRequestModel(typ.ScenarioClaudeCode, name) {
 		return false
 	}
 	fable, ok := defaultRuleByUUID(RuleUUIDCCFable)
 	if !ok {
 		return false
 	}
-	for i := range c.Rules {
-		if c.Rules[i].Scenario == typ.ScenarioClaudeCode && c.Rules[i].RequestModel == fable.RequestModel {
-			return false
-		}
-	}
+	fable.RequestModel = name
 	fable.Services = cloneServices(opus.Services)
 	fable.Active = opus.Active
 	fable.Flags = opus.Flags
@@ -796,4 +800,16 @@ func (c *Config) backfillFableRule() bool {
 	c.Rules = append(c.Rules, fable)
 	logrus.Info("Added Claude Code fable built-in rule")
 	return true
+}
+
+// hasRequestModel reports whether a rule in the scenario already answers to
+// the Claude Code request model, in either spelling.
+func (c *Config) hasRequestModel(scenario typ.RuleScenario, requestModel string) bool {
+	want := canonicalCCRequestModel(requestModel)
+	for i := range c.Rules {
+		if c.Rules[i].Scenario == scenario && canonicalCCRequestModel(c.Rules[i].RequestModel) == want {
+			return true
+		}
+	}
+	return false
 }

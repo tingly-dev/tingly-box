@@ -11,13 +11,13 @@ import (
 // ClaudeCodeRequestModels defines all request models for Claude Code scenario
 // When applying claude-code agent, all these rules should be updated for convenience
 var ClaudeCodeRequestModels = []string{
-	"tingly/cc", // General model (for unified mode)
-	"tingly/cc-haiku",
-	"tingly/cc-sonnet",
-	"tingly/cc-opus",
-	"tingly/cc-default",
-	"tingly/cc-subagent",
-	"tingly/cc-fable",
+	"cc", // General model (for unified mode)
+	"haiku",
+	"sonnet",
+	"opus",
+	"default",
+	"subagent",
+	"fable",
 }
 
 // OpenCodeRequestModels defines all request models for OpenCode scenario
@@ -40,7 +40,7 @@ var DshRequestModels = []string{
 }
 
 // createOrUpdateClaudeCodeRules creates or updates all Claude Code rules.
-// For convenience, all tingly/cc-* rules are updated with the same provider + model.
+// For convenience, all Claude Code built-in rules are updated with the same provider + model.
 func (aa *AgentApply) createOrUpdateClaudeCodeRules(providerUUID, model string) (int, int, error) {
 	return aa.createOrUpdateRulesForScenario(typ.ScenarioClaudeCode, "Claude Code", ClaudeCodeRequestModels, providerUUID, model)
 }

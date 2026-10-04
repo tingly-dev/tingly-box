@@ -275,6 +275,16 @@ func (c *Config) GetRuleByRequestModelAndScenario(requestModel string, scenario 
 			return &rule
 		}
 	}
+	// Claude Code built-ins answer to both the short and the legacy prefixed
+	// spelling, so applying "opus" updates an older install's "tingly/cc-opus".
+	if scenario.Base() == typ.ScenarioClaudeCode {
+		want := canonicalCCRequestModel(requestModel)
+		for _, rule := range c.Rules {
+			if rule.GetScenario() == scenario && canonicalCCRequestModel(rule.RequestModel) == want {
+				return &rule
+			}
+		}
+	}
 	return nil
 }
 
@@ -335,6 +345,18 @@ func (c *Config) MatchRuleByModelAndScenario(requestModel string, scenario typ.R
 		want := TrimContext1M(requestModel)
 		for _, rule := range c.Rules {
 			if TrimContext1M(rule.RequestModel) == want && rule.GetScenario() == scenario {
+				return &rule
+			}
+		}
+	}
+
+	// Claude Code built-ins keep answering to their pre-simplification
+	// "tingly/cc-*" spelling (and the reverse): older settings files, other
+	// machines and CI still send the prefixed names.
+	if scenario.Base() == typ.ScenarioClaudeCode {
+		want := canonicalCCRequestModel(requestModel)
+		for _, rule := range c.Rules {
+			if canonicalCCRequestModel(rule.RequestModel) == want && rule.GetScenario() == scenario {
 				return &rule
 			}
 		}

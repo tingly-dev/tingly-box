@@ -95,8 +95,8 @@ Consequences:
 
 `ToEnv` (and `GenerateCCEnv` for profiles) derives
 `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU,FABLE}_MODEL_NAME` / `_DESCRIPTION`
-from the slot values via `CCTierDisplayEnv`: `Opus · tingly/cc-opus` and
-`Routed by Tingly Box rule tingly/cc-opus`. The label carries the concrete rule
+from the slot values via `CCTierDisplayEnv`: `Opus · opus` and
+`Routed by Tingly Box rule opus`. The label carries the concrete rule
 name only; the upstream provider is not written into the user's settings file
 (the gateway's `/v1/models` also withholds it). An explicit value (typed field
 or `Extra`) wins over the derived one, and the `[1m]` marker is dropped.
@@ -105,7 +105,7 @@ Researched and intentionally **not** done (Claude Code 2.1.289 docs):
 
 - `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY`: Claude Code keeps a discovered
   entry only when its `id` contains `claude` or `anthropic`. Our rule names
-  (`tingly/cc*`) fail that filter, so enabling it would add a startup request
+  (`cc`, `opus`, … and the legacy `tingly/cc*`) fail that filter, so enabling it would add a startup request
   and list nothing for the built-in rules. Revisit only if rule names change.
 - `ANTHROPIC_DEFAULT_*_MODEL_SUPPORTED_CAPABILITIES`: documented as effective
   only on the Bedrock/Vertex/Foundry/Mantle provider configurations, and a
@@ -231,13 +231,13 @@ not runtime discovery.
 
 | Rule UUID | Initial `request_model` | Maps to env slot |
 |---|---|---|
-| `builtin:claude_code:cc` | `tingly/cc` | (unified mode — all 6 slots) |
-| `builtin:claude_code:default` | `tingly/cc-default` | `ANTHROPIC_MODEL` |
-| `builtin:claude_code:haiku` | `tingly/cc-haiku` | `ANTHROPIC_DEFAULT_HAIKU_MODEL` |
-| `builtin:claude_code:sonnet` | `tingly/cc-sonnet` | `ANTHROPIC_DEFAULT_SONNET_MODEL` |
-| `builtin:claude_code:opus` | `tingly/cc-opus` | `ANTHROPIC_DEFAULT_OPUS_MODEL` |
-| `builtin:claude_code:subagent` | `tingly/cc-subagent` | `CLAUDE_CODE_SUBAGENT_MODEL` |
-| `builtin:claude_code:fable` | `tingly/cc-fable` | `ANTHROPIC_DEFAULT_FABLE_MODEL` |
+| `builtin:claude_code:cc` | `cc` | (unified mode — all 6 slots) |
+| `builtin:claude_code:default` | `default` | `ANTHROPIC_MODEL` |
+| `builtin:claude_code:haiku` | `haiku` | `ANTHROPIC_DEFAULT_HAIKU_MODEL` |
+| `builtin:claude_code:sonnet` | `sonnet` | `ANTHROPIC_DEFAULT_SONNET_MODEL` |
+| `builtin:claude_code:opus` | `opus` | `ANTHROPIC_DEFAULT_OPUS_MODEL` |
+| `builtin:claude_code:subagent` | `subagent` | `CLAUDE_CODE_SUBAGENT_MODEL` |
+| `builtin:claude_code:fable` | `fable` | `ANTHROPIC_DEFAULT_FABLE_MODEL` |
 
 The `fable` tier was added after separate mode shipped. A migration
 (`backfillFableRuleOnce`, once per config) seeds `builtin:claude_code:fable` for
@@ -249,6 +249,20 @@ quick config point the fable alias at the default tier instead of the
 unroutable bare tier name. Claude Code also treats
 `ANTHROPIC_DEFAULT_FABLE_MODEL` as the model ID it recognizes as Fable for
 automatic model fallback.
+
+**Naming.** Built-in rules are seeded with short names (`cc`, `default`, `haiku`,
+`sonnet`, `opus`, `subagent`, `fable`) — the same names profile rules use — on new
+installs. Installs created before the simplification keep the prefixed
+`tingly/cc`, `tingly/cc-opus`, … they were seeded with; nothing is renamed. The
+two spellings are one name for this fixed group only
+(`legacyCCRequestModels`, `internal/config/builtin_rules.go`): request routing
+(`MatchRuleByModelAndScenario`) and "apply" (`GetRuleByRequestModelAndScenario`)
+fall back to the other spelling after an exact match, and before the wildcard,
+for the `claude_code` scenario and its profiles. An exact match always wins, so a
+user's own rule named `opus` is never shadowed. The alias is deliberately not a
+generic `tingly/` prefix strip. The fable backfill follows the install's existing
+style (`tingly/cc-fable` next to a prefixed opus rule) and skips if a rule already
+answers to that name. Code fallbacks (rule missing/inactive) use the short names.
 
 Users can edit each rule's `request_model` from the rules table on the
 page. The Quick Config seeds its form values from whatever is currently
@@ -279,7 +293,7 @@ mode".
 ### 5.3 UUID-suffix lookup (modal side)
 
 `derivePrefsFromRules` in `ClaudeCodeQuickConfig.tsx` uses the UUIDs as
-keys. It does not depend on array order or canonical `tingly/cc*` names:
+keys. It does not depend on array order or canonical built-in names:
 
 ```ts
 const modelForVariant = (variant, fallback) => {
@@ -307,11 +321,11 @@ sends in API requests**:
 
 ```
 backend rule:                          frontend env:
-  builtin:claude_code:haiku                     ANTHROPIC_DEFAULT_HAIKU_MODEL=tingly/cc-haiku
-    request_model = "tingly/cc-haiku"  →
+  builtin:claude_code:haiku                     ANTHROPIC_DEFAULT_HAIKU_MODEL=haiku
+    request_model = "haiku"  →
     services      = [haiku-3-5]
                                        Claude Code sends:
-                                         { model: "tingly/cc-haiku", ... }
+                                         { model: "haiku", ... }
 
                                        tb receives, looks up by
                                        (scenario, request_model) →
@@ -347,7 +361,7 @@ URL — without forcing the form to surface concepts ("rule", "service",
 
 The profile system at `/agent/claude_code/profile/:profileId` uses the
 scenario string `claude_code:<profileId>` and its **own** set of rules
-(short names like `default`/`haiku` instead of `tingly/cc-*`). The profile page
+(the same short names as the main scenario's built-ins: `default`/`haiku`/…). The profile page
 shows a dedicated **Profile Overrides** card between its identity/Quick Start
 card and Model Rules. It renders only selected or persisted differences, not
 the main Auto Config form. The env is resolved by `ResolveCCProfileSettings`

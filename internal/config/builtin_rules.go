@@ -151,3 +151,40 @@ var claudeCodeSeparateRuleUUIDs = map[string]bool{
 	RuleUUIDBuiltinCCOpus:     true,
 	RuleUUIDBuiltinCCSubagent: true,
 }
+
+// legacyCCRequestModels maps the prefixed request models older installs seeded
+// for the Claude Code built-in rules to the short names new installs use (the
+// same names profile rules have always had). The two spellings are treated as
+// one name when a request or an "apply" is matched to a rule, so a config
+// written for either keeps working against the other. Only this fixed group
+// is aliased: it is deliberately not a generic "tingly/" prefix strip.
+var legacyCCRequestModels = map[string]string{
+	"tingly/cc":          "cc",
+	"tingly/cc-default":  "default",
+	"tingly/cc-haiku":    "haiku",
+	"tingly/cc-sonnet":   "sonnet",
+	"tingly/cc-opus":     "opus",
+	"tingly/cc-subagent": "subagent",
+	"tingly/cc-fable":    "fable",
+}
+
+// canonicalCCRequestModel returns the short spelling of a Claude Code built-in
+// request model, dropping the [1m] marker; other names are returned trimmed.
+func canonicalCCRequestModel(model string) string {
+	model = TrimContext1M(model)
+	if short, ok := legacyCCRequestModels[model]; ok {
+		return short
+	}
+	return model
+}
+
+// legacyCCRequestModelFor returns the prefixed spelling of a short built-in
+// name ("" when the name is not one of the aliased group).
+func legacyCCRequestModelFor(short string) string {
+	for legacy, s := range legacyCCRequestModels {
+		if s == short {
+			return legacy
+		}
+	}
+	return ""
+}

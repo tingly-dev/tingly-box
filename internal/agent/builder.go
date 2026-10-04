@@ -12,19 +12,19 @@ import (
 func BuildClaudeCodeModelConfig(unified bool) aiagent.ClaudeCodeModelConfig {
 	if unified {
 		return aiagent.ClaudeCodeModelConfig{
-			Default: "tingly/cc",
+			Default: "cc",
 			// All other fields will use Default
 		}
 	}
 
 	// Separate mode - different models for different purposes
 	return aiagent.ClaudeCodeModelConfig{
-		Default:  "tingly/cc-default",
-		Haiku:    "tingly/cc-haiku",
-		Opus:     "tingly/cc-opus",
-		Fable:    "tingly/cc-fable",
-		Sonnet:   "tingly/cc-sonnet",
-		SubAgent: "tingly/cc-subagent",
+		Default:  "default",
+		Haiku:    "haiku",
+		Opus:     "opus",
+		Fable:    "fable",
+		Sonnet:   "sonnet",
+		SubAgent: "subagent",
 	}
 }
 

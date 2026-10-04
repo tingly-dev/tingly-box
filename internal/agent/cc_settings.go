@@ -115,7 +115,7 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 	}
 
 	if unified {
-		model := tierModel("cc", serverconfig.RuleUUIDBuiltinCC, "tingly/cc")
+		model := tierModel("cc", serverconfig.RuleUUIDBuiltinCC, "cc")
 		env["ANTHROPIC_MODEL"] = model
 		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = model
 		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = model
@@ -123,16 +123,16 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 		env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = model
 		env["CLAUDE_CODE_SUBAGENT_MODEL"] = model
 	} else {
-		env["ANTHROPIC_MODEL"] = tierModel("default", serverconfig.RuleUUIDBuiltinCCDefault, "tingly/cc-default")
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = tierModel("haiku", serverconfig.RuleUUIDBuiltinCCHaiku, "tingly/cc-haiku")
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = tierModel("opus", serverconfig.RuleUUIDBuiltinCCOpus, "tingly/cc-opus")
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = tierModel("sonnet", serverconfig.RuleUUIDBuiltinCCSonnet, "tingly/cc-sonnet")
+		env["ANTHROPIC_MODEL"] = tierModel("default", serverconfig.RuleUUIDBuiltinCCDefault, "default")
+		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = tierModel("haiku", serverconfig.RuleUUIDBuiltinCCHaiku, "haiku")
+		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = tierModel("opus", serverconfig.RuleUUIDBuiltinCCOpus, "opus")
+		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = tierModel("sonnet", serverconfig.RuleUUIDBuiltinCCSonnet, "sonnet")
 		// The fable tier arrived after separate mode shipped, so a profile or
 		// install may have no active fable rule (never seeded, or switched off);
 		// the bare tier name is not routable, so the alias follows the default
 		// tier instead.
 		env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = ruleModel(env["ANTHROPIC_MODEL"], serverconfig.BuiltinRuleUUID(typ.RuleScenario(scenarioPath), "fable"))
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = tierModel("subagent", serverconfig.RuleUUIDBuiltinCCSubagent, "tingly/cc-subagent")
+		env["CLAUDE_CODE_SUBAGENT_MODEL"] = tierModel("subagent", serverconfig.RuleUUIDBuiltinCCSubagent, "subagent")
 	}
 
 	maps.Copy(env, CCTierDisplayEnv(env))

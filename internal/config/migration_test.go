@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/ai"
@@ -934,7 +935,7 @@ func TestBackfillFableRuleOnce_SeedsFromOpus(t *testing.T) {
 	flags := typ.RuleFlags{Context1M: true}
 	c := &Config{
 		Rules: []typ.Rule{
-			{UUID: RuleUUIDCCOpus, Scenario: typ.ScenarioClaudeCode, Active: true, Flags: flags, Services: []*loadbalance.Service{svc("p1")}},
+			{UUID: RuleUUIDCCOpus, Scenario: typ.ScenarioClaudeCode, RequestModel: "opus", Active: true, Flags: flags, Services: []*loadbalance.Service{svc("p1")}},
 		},
 	}
 
@@ -949,7 +950,7 @@ func TestBackfillFableRuleOnce_SeedsFromOpus(t *testing.T) {
 	if !fable.Active || len(fable.Services) != 1 || fable.Services[0].Provider != "p1" || !fable.Flags.Context1M {
 		t.Errorf("fable should mirror opus active state, services and flags, got %+v", fable)
 	}
-	if fable.RequestModel != "tingly/cc-fable" {
+	if fable.RequestModel != "fable" {
 		t.Errorf("fable request model = %q", fable.RequestModel)
 	}
 
@@ -969,10 +970,21 @@ func TestBackfillFableRuleOnce_NoFableWithoutSeparateRules(t *testing.T) {
 	}
 }
 
-func TestBackfillFableRuleOnce_DoesNotShadowUserRule(t *testing.T) {
+func TestBackfillFableRuleOnce_FableFollowsLegacyNamingStyle(t *testing.T) {
 	c := &Config{Rules: []typ.Rule{
 		{UUID: RuleUUIDCCOpus, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-opus", Active: true},
-		{UUID: "user-fable", Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-fable", Active: true},
+	}}
+	backfillFableRuleOnce(c)
+	fable := c.findRuleByUUID(RuleUUIDCCFable)
+	if fable == nil || fable.RequestModel != "tingly/cc-fable" {
+		t.Fatalf("fable = %+v, want tingly/cc-fable next to a legacy-named opus rule", fable)
+	}
+}
+
+func TestBackfillFableRuleOnce_FableDoesNotShadowUserRule(t *testing.T) {
+	c := &Config{Rules: []typ.Rule{
+		{UUID: RuleUUIDCCOpus, Scenario: typ.ScenarioClaudeCode, RequestModel: "opus", Active: true},
+		{UUID: "user-fable", Scenario: typ.ScenarioClaudeCode, RequestModel: "fable", Active: true},
 	}}
 	backfillFableRuleOnce(c)
 	if c.findRuleByUUID(RuleUUIDCCFable) != nil {
@@ -980,23 +992,47 @@ func TestBackfillFableRuleOnce_DoesNotShadowUserRule(t *testing.T) {
 	}
 }
 
-func TestBackfillFableRuleOnce_DoesNotResurrectDeletedRule(t *testing.T) {
+func TestMatchRuleByModelAndScenario_ClaudeCodeLegacyNameAliases(t *testing.T) {
 	c := &Config{Rules: []typ.Rule{
-		{UUID: RuleUUIDCCOpus, Scenario: typ.ScenarioClaudeCode, Active: true},
+		{UUID: "legacy-opus", Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-opus", Active: true},
+		{UUID: "short-cc", Scenario: typ.ScenarioClaudeCode, RequestModel: "cc", Active: true},
+		{UUID: "other-opus", Scenario: typ.ScenarioOpenAI, RequestModel: "opus", Active: true},
 	}}
-	backfillFableRuleOnce(c)
-	if c.findRuleByUUID(RuleUUIDCCFable) == nil {
-		t.Fatal("first run must seed the fable rule")
+	cases := []struct{ model, wantUUID string }{
+		{"tingly/cc-opus", "legacy-opus"}, // exact
+		{"opus", "legacy-opus"},           // new spelling reaches a legacy rule
+		{"opus[1m]", "legacy-opus"},       // with the context marker
+		{"cc", "short-cc"},                // exact
+		{"tingly/cc", "short-cc"},         // legacy spelling reaches a new rule
+		{"tingly/cc[1m]", "short-cc"},     // with the context marker
 	}
-	kept := c.Rules[:0]
-	for _, r := range c.Rules {
-		if r.UUID != RuleUUIDCCFable {
-			kept = append(kept, r)
+	for _, tc := range cases {
+		got := c.MatchRuleByModelAndScenario(tc.model, typ.ScenarioClaudeCode)
+		if got == nil || got.UUID != tc.wantUUID {
+			t.Errorf("Match(%q) = %+v, want %s", tc.model, got, tc.wantUUID)
+		}
+		if tc.model == "tingly/cc-opus" || tc.model == "cc" {
+			continue
+		}
+		if r := c.GetRuleByRequestModelAndScenario(strings.TrimSuffix(tc.model, "[1m]"), typ.ScenarioClaudeCode); r == nil || r.UUID != tc.wantUUID {
+			t.Errorf("GetRuleByRequestModelAndScenario(%q) = %+v, want %s", tc.model, r, tc.wantUUID)
 		}
 	}
-	c.Rules = kept
-	backfillFableRuleOnce(c)
-	if c.findRuleByUUID(RuleUUIDCCFable) != nil {
-		t.Error("a deleted fable rule must not come back")
+	// Scoped to Claude Code: other scenarios and unrelated names do not alias.
+	if r := c.MatchRuleByModelAndScenario("tingly/opus", typ.ScenarioClaudeCode); r != nil {
+		t.Errorf("tingly/opus must not alias: %+v", r)
+	}
+	if r := c.MatchRuleByModelAndScenario("tingly/cc-opus", typ.ScenarioOpenAI); r != nil {
+		t.Errorf("legacy name must not alias outside Claude Code: %+v", r)
+	}
+}
+
+func TestMatchRuleByModelAndScenario_ExactBeatsAlias(t *testing.T) {
+	c := &Config{Rules: []typ.Rule{
+		{UUID: "legacy", Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-opus", Active: true},
+		{UUID: "user-opus", Scenario: typ.ScenarioClaudeCode, RequestModel: "opus", Active: true},
+	}}
+	if r := c.MatchRuleByModelAndScenario("opus", typ.ScenarioClaudeCode); r == nil || r.UUID != "user-opus" {
+		t.Errorf("exact match must win over the alias, got %+v", r)
 	}
 }

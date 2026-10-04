@@ -174,9 +174,9 @@ func TestGenerateCCEnv_MainScenario_ResolvesLegacyBuiltins(t *testing.T) {
 	if got := env["ANTHROPIC_DEFAULT_HAIKU_MODEL"]; got != "vendor/fast" {
 		t.Errorf("haiku model = %q, want %q", got, "vendor/fast")
 	}
-	// Missing rules keep the canonical tingly/* fallbacks.
-	if got := env["ANTHROPIC_MODEL"]; got != "tingly/cc-default" {
-		t.Errorf("default model = %q, want %q", got, "tingly/cc-default")
+	// Missing rules keep the canonical short fallbacks.
+	if got := env["ANTHROPIC_MODEL"]; got != "default" {
+		t.Errorf("default model = %q, want %q", got, "default")
 	}
 }
 

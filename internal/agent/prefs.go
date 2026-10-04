@@ -192,19 +192,19 @@ func DefaultClaudeCodePrefs(unified bool) ClaudeCodePrefs {
 		ClaudeCodeDisableNonessentialTraffic: "1",
 	}
 	if unified {
-		p.AnthropicModel = "tingly/cc"
-		p.AnthropicDefaultHaikuModel = "tingly/cc"
-		p.AnthropicDefaultSonnetModel = "tingly/cc"
-		p.AnthropicDefaultOpusModel = "tingly/cc"
-		p.AnthropicDefaultFableModel = "tingly/cc"
-		p.ClaudeCodeSubagentModel = "tingly/cc"
+		p.AnthropicModel = "cc"
+		p.AnthropicDefaultHaikuModel = "cc"
+		p.AnthropicDefaultSonnetModel = "cc"
+		p.AnthropicDefaultOpusModel = "cc"
+		p.AnthropicDefaultFableModel = "cc"
+		p.ClaudeCodeSubagentModel = "cc"
 	} else {
-		p.AnthropicModel = "tingly/cc-default"
-		p.AnthropicDefaultHaikuModel = "tingly/cc-haiku"
-		p.AnthropicDefaultSonnetModel = "tingly/cc-sonnet"
-		p.AnthropicDefaultOpusModel = "tingly/cc-opus"
-		p.AnthropicDefaultFableModel = "tingly/cc-fable"
-		p.ClaudeCodeSubagentModel = "tingly/cc-subagent"
+		p.AnthropicModel = "default"
+		p.AnthropicDefaultHaikuModel = "haiku"
+		p.AnthropicDefaultSonnetModel = "sonnet"
+		p.AnthropicDefaultOpusModel = "opus"
+		p.AnthropicDefaultFableModel = "fable"
+		p.ClaudeCodeSubagentModel = "subagent"
 	}
 	return p
 }

@@ -122,7 +122,7 @@ looked up by canonical UUID:
   `builtin:claude_code:p1:haiku`, falling back to the seeded short tier
   name (`haiku`) when the rule is missing/inactive;
 - main scenario: the legacy `built-in-cc-*` constants, falling back to the
-  canonical `tingly/cc-*` names (same scheme as
+  canonical short names (`cc`, `opus`, …; installs seeded earlier keep `tingly/cc-*`, which still routes) (same scheme as
   `tbclient.resolveClaudeCodeModels`).
 
 Before normalization this was impossible for profiles — the env hardcoded

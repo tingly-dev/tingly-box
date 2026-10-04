@@ -56,7 +56,7 @@ func (e ErrUnsupportedAgentType) Error() string {
 func (uc *AgentUseCase) RoutingKey(agentType agent.AgentType) (requestModel string, scenario typ.RuleScenario, err error) {
 	switch agentType {
 	case agent.AgentTypeClaudeCode:
-		return "tingly/cc", typ.ScenarioClaudeCode, nil
+		return "cc", typ.ScenarioClaudeCode, nil
 	case agent.AgentTypeOpenCode:
 		return "tingly-opencode", typ.ScenarioOpenCode, nil
 	case agent.AgentTypeCodex:

@@ -475,7 +475,7 @@ func executeAgentCommand(agentType protocoltest.AgentType, prompt string) (*Agen
 
 // executeClaudeTest executes claude CLI backed by an ephemeral gateway + virtual server.
 func executeClaudeTest(prompt string) (*AgentTestResult, error) {
-	const model = "tingly/cc"
+	const model = "cc"
 
 	env, err := protocoltest.NewAgentTestEnv(protocoltest.AgentTypeClaudeCode)
 	if err != nil {
