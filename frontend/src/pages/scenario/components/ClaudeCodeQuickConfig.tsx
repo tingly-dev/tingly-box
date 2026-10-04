@@ -156,38 +156,38 @@ const FIELDS_TEXT_ZH: FieldTextMap = {
     ANTHROPIC_MODEL: {
         label: '默认模型',
         purpose: '未指定具体场景时使用的兜底模型',
-        tooltip: 'Claude Code 在没有专门路由时回退到这个模型。tb 通常映射到 tingly/cc 或 tingly/cc-default。',
-        placeholder: 'tingly/cc',
+        tooltip: 'Claude Code 在没有专门路由时回退到这个模型。tb 通常映射到 cc 或 default。',
+        placeholder: 'cc',
     },
     ANTHROPIC_DEFAULT_HAIKU_MODEL: {
         label: 'Haiku 槽位',
         purpose: '轻量调用（如生成 commit message、文件摘要）使用的模型',
-        tooltip: 'Claude Code 内部对一些便宜的辅助调用走 haiku 槽位。tb 把它路由到 tingly/cc-haiku。',
-        placeholder: 'tingly/cc-haiku',
+        tooltip: 'Claude Code 内部对一些便宜的辅助调用走 haiku 槽位。tb 把它路由到 haiku。',
+        placeholder: 'haiku',
     },
     ANTHROPIC_DEFAULT_SONNET_MODEL: {
         label: 'Sonnet 槽位',
         purpose: '主力槽位 — 大部分对话和代码生成走这里',
         tooltip: 'Claude Code 的默认主力。除非显式选其他模型，正常会话都用 sonnet 槽位。',
-        placeholder: 'tingly/cc-sonnet',
+        placeholder: 'sonnet',
     },
     ANTHROPIC_DEFAULT_OPUS_MODEL: {
         label: 'Opus 槽位',
         purpose: '复杂推理（如 plan 模式、深度分析）使用的模型',
         tooltip: '相对昂贵但更强的推理模型。Claude Code 在显式调用 opus 时使用。',
-        placeholder: 'tingly/cc-opus',
+        placeholder: 'opus',
     },
     ANTHROPIC_DEFAULT_FABLE_MODEL: {
         label: 'Fable 槽位',
         purpose: '选择 fable 别名时使用的模型',
-        tooltip: 'Claude Code 的 fable 别名对应的模型。tb 把它路由到 tingly/cc-fable。',
-        placeholder: 'tingly/cc-fable',
+        tooltip: 'Claude Code 的 fable 别名对应的模型。tb 把它路由到 fable。',
+        placeholder: 'fable',
     },
     CLAUDE_CODE_SUBAGENT_MODEL: {
         label: '子 Agent 模型',
         purpose: '通过 Task 工具派生的子 Agent 使用的模型',
         tooltip: '子 Agent 用于并发研究、独立子任务。可以单独指定一个更便宜或更强的模型。',
-        placeholder: 'tingly/cc-subagent',
+        placeholder: 'subagent',
     },
     API_TIMEOUT_MS: {
         label: 'API 请求超时',
@@ -320,38 +320,38 @@ const FIELDS_TEXT_EN: FieldTextMap = {
     ANTHROPIC_MODEL: {
         label: 'Default model',
         purpose: 'Fallback model used when no specific slot applies',
-        tooltip: 'What Claude Code reaches for when no specialized routing matches. tb typically maps this to tingly/cc or tingly/cc-default.',
-        placeholder: 'tingly/cc',
+        tooltip: 'What Claude Code reaches for when no specialized routing matches. tb typically maps this to cc or default.',
+        placeholder: 'cc',
     },
     ANTHROPIC_DEFAULT_HAIKU_MODEL: {
         label: 'Haiku slot',
         purpose: 'Lightweight tasks like commit messages and summaries',
-        tooltip: 'Claude Code routes cheap auxiliary calls to the haiku slot. tb points it at tingly/cc-haiku.',
-        placeholder: 'tingly/cc-haiku',
+        tooltip: 'Claude Code routes cheap auxiliary calls to the haiku slot. tb points it at haiku.',
+        placeholder: 'haiku',
     },
     ANTHROPIC_DEFAULT_SONNET_MODEL: {
         label: 'Sonnet slot',
         purpose: 'Workhorse slot — most chat and code generation lands here',
         tooltip: "Claude Code's default. Unless you pick another model explicitly, normal sessions use the sonnet slot.",
-        placeholder: 'tingly/cc-sonnet',
+        placeholder: 'sonnet',
     },
     ANTHROPIC_DEFAULT_OPUS_MODEL: {
         label: 'Opus slot',
         purpose: 'Heavier reasoning (plan mode, deep analysis)',
         tooltip: 'More expensive but stronger model. Claude Code uses it when opus is explicitly requested.',
-        placeholder: 'tingly/cc-opus',
+        placeholder: 'opus',
     },
     ANTHROPIC_DEFAULT_FABLE_MODEL: {
         label: 'Fable slot',
         purpose: 'Model used when the fable alias is selected',
-        tooltip: 'The model behind the fable alias in Claude Code. tb points it at tingly/cc-fable.',
-        placeholder: 'tingly/cc-fable',
+        tooltip: 'The model behind the fable alias in Claude Code. tb points it at fable.',
+        placeholder: 'fable',
     },
     CLAUDE_CODE_SUBAGENT_MODEL: {
         label: 'Sub-agent model',
         purpose: 'Model used by sub-agents spawned via the Task tool',
         tooltip: 'Sub-agents handle parallel research and independent subtasks. You can give them a cheaper or stronger model.',
-        placeholder: 'tingly/cc-subagent',
+        placeholder: 'subagent',
     },
     API_TIMEOUT_MS: {
         label: 'API request timeout',
@@ -484,38 +484,38 @@ const FIELDS_TEXT_RU: FieldTextMap = {
     ANTHROPIC_MODEL: {
         label: 'Модель по умолчанию',
         purpose: 'Запасная модель, когда ни один специальный слот не подходит',
-        tooltip: 'К ней Claude Code обращается, если специализированная маршрутизация не сработала. В tb это обычно tingly/cc или tingly/cc-default.',
-        placeholder: 'tingly/cc',
+        tooltip: 'К ней Claude Code обращается, если специализированная маршрутизация не сработала. В tb это обычно cc или default.',
+        placeholder: 'cc',
     },
     ANTHROPIC_DEFAULT_HAIKU_MODEL: {
         label: 'Слот Haiku',
         purpose: 'Лёгкие задачи: сообщения коммитов, краткие сводки',
-        tooltip: 'Claude Code направляет дешёвые вспомогательные вызовы в слот haiku. tb указывает на tingly/cc-haiku.',
-        placeholder: 'tingly/cc-haiku',
+        tooltip: 'Claude Code направляет дешёвые вспомогательные вызовы в слот haiku. tb указывает на haiku.',
+        placeholder: 'haiku',
     },
     ANTHROPIC_DEFAULT_SONNET_MODEL: {
         label: 'Слот Sonnet',
         purpose: 'Основной слот — сюда идёт большая часть диалога и генерации кода',
         tooltip: 'Значение Claude Code по умолчанию. Если явно не выбрана другая модель, обычные сессии используют слот sonnet.',
-        placeholder: 'tingly/cc-sonnet',
+        placeholder: 'sonnet',
     },
     ANTHROPIC_DEFAULT_OPUS_MODEL: {
         label: 'Слот Opus',
         purpose: 'Сложные рассуждения (режим планирования, глубокий анализ)',
         tooltip: 'Более дорогая, но более сильная модель. Claude Code использует её, когда opus запрошен явно.',
-        placeholder: 'tingly/cc-opus',
+        placeholder: 'opus',
     },
     ANTHROPIC_DEFAULT_FABLE_MODEL: {
         label: 'Слот Fable',
         purpose: 'Модель, используемая при выборе псевдонима fable',
-        tooltip: 'Модель, стоящая за псевдонимом fable в Claude Code. tb указывает на tingly/cc-fable.',
-        placeholder: 'tingly/cc-fable',
+        tooltip: 'Модель, стоящая за псевдонимом fable в Claude Code. tb указывает на fable.',
+        placeholder: 'fable',
     },
     CLAUDE_CODE_SUBAGENT_MODEL: {
         label: 'Модель субагента',
         purpose: 'Модель для субагентов, запускаемых инструментом Task',
         tooltip: 'Субагенты ведут параллельные исследования и независимые подзадачи. Им можно назначить более дешёвую или более сильную модель.',
-        placeholder: 'tingly/cc-subagent',
+        placeholder: 'subagent',
     },
     API_TIMEOUT_MS: {
         label: 'Таймаут API-запроса',
@@ -866,7 +866,7 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
 
 
     const isUnified = mode !== 'separate';
-    const defaultModel = isUnified ? 'tingly/cc' : 'tingly/cc-default';
+    const defaultModel = isUnified ? 'cc' : 'default';
 
     // The fable tier arrived after separate mode shipped, so its rule may be
     // missing or switched off; the bare name is not routable, so the slot
@@ -882,11 +882,11 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
 
     return {
         ANTHROPIC_MODEL: apply1MSuffix(modelForVariant('default', defaultModel), 'default'),
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: apply1MSuffix(modelForVariant('haiku', isUnified ? defaultModel : 'tingly/cc-haiku'), 'haiku'),
-        ANTHROPIC_DEFAULT_SONNET_MODEL: apply1MSuffix(modelForVariant('sonnet', isUnified ? defaultModel : 'tingly/cc-sonnet'), 'sonnet'),
-        ANTHROPIC_DEFAULT_OPUS_MODEL: apply1MSuffix(modelForVariant('opus', isUnified ? defaultModel : 'tingly/cc-opus'), 'opus'),
-        ANTHROPIC_DEFAULT_FABLE_MODEL: apply1MSuffix(modelForVariant(fableVariant, isUnified ? defaultModel : fableVariant === 'fable' ? 'tingly/cc-fable' : 'tingly/cc-default'), fableVariant),
-        CLAUDE_CODE_SUBAGENT_MODEL: apply1MSuffix(modelForVariant('subagent', isUnified ? defaultModel : 'tingly/cc-subagent'), 'subagent'),
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: apply1MSuffix(modelForVariant('haiku', isUnified ? defaultModel : 'haiku'), 'haiku'),
+        ANTHROPIC_DEFAULT_SONNET_MODEL: apply1MSuffix(modelForVariant('sonnet', isUnified ? defaultModel : 'sonnet'), 'sonnet'),
+        ANTHROPIC_DEFAULT_OPUS_MODEL: apply1MSuffix(modelForVariant('opus', isUnified ? defaultModel : 'opus'), 'opus'),
+        ANTHROPIC_DEFAULT_FABLE_MODEL: apply1MSuffix(modelForVariant(fableVariant, isUnified ? defaultModel : fableVariant === 'fable' ? 'fable' : 'default'), fableVariant),
+        CLAUDE_CODE_SUBAGENT_MODEL: apply1MSuffix(modelForVariant('subagent', isUnified ? defaultModel : 'subagent'), 'subagent'),
 
         API_TIMEOUT_MS: '3000000',
         CLAUDE_CODE_MAX_OUTPUT_TOKENS: '32000',
