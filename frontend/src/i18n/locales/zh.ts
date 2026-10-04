@@ -2773,12 +2773,7 @@ export default {
     "prompts": "提示词",
     "promptN": "提示词 {{n}}",
     "addPrompt": "新建提示词",
-    "renamePrompt": "提示词名称",
-    "renameHint": "双击重命名",
-    "removePrompt": "移除 {{name}}",
-    "saved": "已保存",
-    "promptRemoved": "已移除「{{name}}」",
-    "undo": "撤销"
+    "removePrompt": "移除 {{name}}"
   },
   "desk": {
     "noBackgroundTasks": "暂无后台任务",

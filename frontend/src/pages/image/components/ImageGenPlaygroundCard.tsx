@@ -8,7 +8,6 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
-    Fade,
     FormControl,
     IconButton,
     InputAdornment,
@@ -374,10 +373,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const handleReuseRun = useCallback(async (run: GenerationRun) => {
         try {
             const sources = await runSourcesToReferences(run);
-            // On a profile, a run made from one of its saved prompts goes back
-            // to that prompt's tab rather than overwriting whichever is open.
-            const saved = profilePrompts.find((item) => item.text.trim() === run.prompt.trim());
-            if (saved) setActivePromptId(saved.id);
             setPrompt(run.prompt);
             setSelectedModel(run.model);
             setSize(run.size);
@@ -405,7 +400,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         } catch {
             showNotification(t('playground.reuse.failed', { defaultValue: 'Could not load this request' }), 'error');
         }
-    }, [models, profilePrompts, runSourcesToReferences, setReferenceImages, showNotification, t]);
+    }, [models, runSourcesToReferences, setReferenceImages, showNotification, t]);
 
     // Opens one of a run's source images in the same lightbox its outputs use.
     const handleOpenRunSource = useCallback((run: GenerationRun, index: number) => {
@@ -475,21 +470,8 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             ? current.map((item) => (item.id === activePromptId ? { ...item, text: prompt } : item))
             : current));
     }, [activePromptId, profileId, prompt]);
-    // A quiet "Saved" next to the title after each change — autosave the user
-    // can see happen, instead of a standing sentence explaining it.
-    const [savedFlash, setSavedFlash] = useState(false);
-    const profileRef = useRef(profile);
-    profileRef.current = profile;
     useEffect(() => {
-        const stored = profileRef.current;
-        if (!profileId || !stored) return undefined;
-        // Nothing differs from what the profile already holds (the page just
-        // opened): no write, no "Saved".
-        if (stored.refs === referenceImages && stored.prompts === profilePrompts
-            && stored.activePromptId === activePromptId && stored.model === selectedModel
-            && stored.size === size && stored.quality === quality && stored.count === count) {
-            return undefined;
-        }
+        if (!profileId) return;
         updateImageProfile(profileId, {
             refs: referenceImages,
             prompts: profilePrompts,
@@ -499,9 +481,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             quality,
             count,
         });
-        setSavedFlash(true);
-        const timer = window.setTimeout(() => setSavedFlash(false), 1500);
-        return () => window.clearTimeout(timer);
     }, [activePromptId, count, profileId, profilePrompts, quality, referenceImages, selectedModel, size]);
 
     const selectPrompt = (id: string) => {
@@ -514,34 +493,17 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         setActivePromptId(id);
         setPrompt('');
     };
-    // Removing is one click, so it is undoable right where it happened
-    // (no confirm dialog, no toast to chase).
-    const [removedPrompt, setRemovedPrompt] = useState<{ item: ProfilePrompt; index: number } | null>(null);
-    useEffect(() => {
-        if (!removedPrompt) return undefined;
-        const timer = window.setTimeout(() => setRemovedPrompt(null), 8000);
-        return () => window.clearTimeout(timer);
-    }, [removedPrompt]);
     const removePrompt = (id: string) => {
         const index = profilePrompts.findIndex((item) => item.id === id);
         if (index === -1 || profilePrompts.length < 2) return;
         const remaining = profilePrompts.filter((item) => item.id !== id);
         setProfilePrompts(remaining);
-        setRemovedPrompt({ item: profilePrompts[index], index });
         if (id === activePromptId) {
             // The neighbour takes its place, as closing a tab would.
             const next = remaining[Math.min(index, remaining.length - 1)];
             setActivePromptId(next.id);
             setPrompt(next.text);
         }
-    };
-    const undoRemovePrompt = () => {
-        if (!removedPrompt) return;
-        const { item, index } = removedPrompt;
-        setProfilePrompts((current) => [...current.slice(0, index), item, ...current.slice(index)]);
-        setActivePromptId(item.id);
-        setPrompt(item.text);
-        setRemovedPrompt(null);
     };
 
     const location = useLocation();
@@ -610,11 +572,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     <Edit sx={{ fontSize: 18 }} />
                                 </IconButton>
                             </Tooltip>
-                            <Fade in={savedFlash} timeout={{ enter: 150, exit: 600 }}>
-                                <Typography component="span" role="status" sx={{ fontSize: 12, fontWeight: 400, color: 'text.secondary', ml: 0.5 }}>
-                                    {t('imageProfile.saved', { defaultValue: 'Saved' })}
-                                </Typography>
-                            </Fade>
                         </Stack>
                     )
                 ) : t('playground.imageTitle', { defaultValue: 'Image Playground' })}
@@ -742,12 +699,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 activeId={activePromptId}
                                 onSelect={selectPrompt}
                                 onAdd={addPrompt}
-                                onRename={(id, name) => setProfilePrompts((current) => current.map((item) => (item.id === id ? { ...item, name } : item)))}
                                 onRemove={removePrompt}
-                                removed={removedPrompt ? {
-                                    label: removedPrompt.item.name || deriveLabel(removedPrompt.item.text) || t('imageProfile.promptN', { defaultValue: 'Prompt {{n}}', n: removedPrompt.index + 1 }),
-                                    onUndo: undoRemovePrompt,
-                                } : null}
                             />
                         )}
 

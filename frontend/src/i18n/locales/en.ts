@@ -2775,12 +2775,7 @@ export default {
     "prompts": "Prompts",
     "promptN": "Prompt {{n}}",
     "addPrompt": "New prompt",
-    "renamePrompt": "Prompt name",
-    "renameHint": "Double-click to rename",
-    "removePrompt": "Remove {{name}}",
-    "saved": "Saved",
-    "promptRemoved": "Removed “{{name}}”",
-    "undo": "Undo"
+    "removePrompt": "Remove {{name}}"
   },
   "desk": {
     "noBackgroundTasks": "No background tasks",

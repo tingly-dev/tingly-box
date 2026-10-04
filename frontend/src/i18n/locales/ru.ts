@@ -2836,12 +2836,7 @@ export default {
     "prompts": "Промпты",
     "promptN": "Промпт {{n}}",
     "addPrompt": "Новый промпт",
-    "renamePrompt": "Название промпта",
-    "renameHint": "Двойной щелчок — переименовать",
-    "removePrompt": "Удалить {{name}}",
-    "saved": "Сохранено",
-    "promptRemoved": "Удалён «{{name}}»",
-    "undo": "Отменить"
+    "removePrompt": "Удалить {{name}}"
   },
   "desk": {
     "noBackgroundTasks": "Нет фоновых задач",
