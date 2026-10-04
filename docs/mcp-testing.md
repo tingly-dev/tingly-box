@@ -1,12 +1,22 @@
 # MCP Gateway Testing Guide
 
-The MCP center has five pages: `/mcp/routes` shows effective routes,
-`/mcp/tools` manages ordinary tools exposed to clients, `/mcp/server-tools`
-manages tools executed in the gateway's model tool loop, `/mcp/sources` manages
-upstream connections, and `/mcp/clients` manages downstream profiles.
-The legacy `/tools/servertool` page redirects to `/mcp/server-tools`. Sources can use stdio, Streamable HTTP or SSE. Configuration and
-connection checks remain available when MCP execution is disabled; tool calls
-and downstream transport require the MCP scenario flag to be enabled.
+The MCP workspace has one entry: `/mcp`. Connected tools show their actual
+client and gateway destinations. Connect a source by name and URL (or a local
+command), select per-tool ordinary/Server Tools usage in its panel, choose a
+client by name, save its grants and copy its setup command in the same panel.
+The route graph is an optional, collapsed diagnostic view in this workspace.
+Ordinary tools and Server Tools remain distinct execution paths, not separate
+page destinations. Advanced identifiers and transport credentials stay editable
+behind connection settings; existing identifiers remain stable.
+
+Existing `/mcp/routes`, `/mcp/tools`, `/mcp/server-tools`, `/mcp/sources` and
+`/mcp/clients` bookmarks still open the workspace with their corresponding
+context. `?install=reader`, `?profile=reader` and `?source=remote` open their
+specific panels. Closing a panel returns to `/mcp` without reopening the old
+bookmark. The legacy `/tools/servertool` link remains supported. Sources can
+use stdio, Streamable HTTP or SSE. Configuration and connection checks remain
+available when MCP execution is disabled; tool calls and downstream transport
+require the MCP scenario flag to be enabled.
 
 ## Route graph and actual client diagnostics
 
@@ -33,9 +43,9 @@ or disabled grants cannot reach the upstream. A successful tool transport can
 still return `result.isError: true`; inspect both fields.
 This probe does not run model continuation. The harness verifies that separately.
 
-Click an entry for installation instructions, the client gateway node for its
-grants, a source for its status and editor, or the server execution node for the
-separate Server Tools page. “Choose tools” adds one usage while preserving the
+Expand “View calling relationships” to inspect the effective route graph.
+Its client, source and gateway actions open the corresponding workspace panels;
+client grants and installation commands share one panel. “Choose tools” adds one usage while preserving the
 other. Execution-disabled routes remain configurable but cannot be probed.
 
 ## Configure a source without replacing existing sources

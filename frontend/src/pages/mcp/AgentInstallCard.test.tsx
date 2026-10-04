@@ -11,8 +11,7 @@ beforeEach(async () => {
 
 describe('MCP client installation', () => {
     it('uses the selected profile endpoint and the supported Codex token option', async () => {
-        render(<AgentInstallCard clientId="codex-dev" />);
-        fireEvent.click(screen.getByRole('button', { name: 'Codex' }));
+        render(<AgentInstallCard clientId="codex-dev" defaultRuntime="codex" />);
         await waitFor(() =>
             expect(screen.getByText(/codex mcp add tb --url/)).toHaveTextContent(
                 'codex mcp add tb --url "http://localhost:12580/api/v1/mcp/codex-dev" --bearer-token-env-var TINGLY_MCP_TOKEN'

@@ -1,95 +1,174 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
+    Accordion,
+    AccordionDetails,
+    AccordionSummary,
     Alert,
+    Box,
     Button,
     Card,
-    CardContent,
-    Checkbox,
     Chip,
+    CircularProgress,
     Dialog,
     DialogActions,
     DialogContent,
     DialogTitle,
-    FormControlLabel,
+    Divider,
+    Drawer,
+    IconButton,
     Stack,
-    Tab,
-    Tabs,
     TextField,
     Typography,
 } from '@mui/material';
+import { Add, ArrowForward, Close, ExpandMore, Psychology, Refresh, Server, Terminal } from '@/components/icons';
 import { PageLayout } from '@/components/PageLayout';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
 import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 import MCPSourceEditor from './MCPSourceEditor';
-import AdvisorSettings from './AdvisorSettings';
+import MCPSourceWorkspace from './MCPSourceWorkspace';
+import MCPClientWorkspace from './MCPClientWorkspace';
 import MCPToolsPanel from './MCPToolsPanel';
 import MCPRoutingPanel from './MCPRoutingPanel';
-import MCPClientsPanel from './MCPClientsPanel';
+import { nextMCPId } from './workspaceState';
 import {
     defaultMCPSourceFormValue,
     formValueToSource,
-    sourceToFormValue,
+    type MCPClientProfile,
     type MCPConfigResponse,
+    type MCPRouteSource,
+    type MCPRoutingSnapshot,
     type MCPRuntimeConfig,
     type MCPSourceConfig,
-    type MCPSourceStatus,
 } from './types';
+
+type Sheet =
+    | { kind: 'source'; id: string }
+    | { kind: 'client'; id?: string; grantSource?: string; edit?: boolean }
+    | { kind: 'clients'; grantSource?: string }
+    | { kind: 'tools'; usage: 'client' | 'gateway' }
+    | null;
 
 export default function MCPRegisteredServers() {
     const { t } = useTranslation();
-    const label = (key: string, fallback: string) => t(`mcp.center.${key}`, { defaultValue: fallback });
+    const label = (key: string, fallback: string) => t(`mcp.workspace.${key}`, { defaultValue: fallback });
     const notify = useNotify();
     const flags = useFeatureFlags();
-    const [search] = useSearchParams();
     const location = useLocation();
+    const [search] = useSearchParams();
     const navigate = useNavigate();
-    const tab = ['routes', 'servers', 'tools', 'server-tools', 'clients'].includes(search.get('tab') || '')
-        ? search.get('tab')!
-        : location.pathname === '/mcp/routes'
-          ? 'routes'
-          : location.pathname === '/mcp/server-tools'
-            ? 'server-tools'
-            : location.pathname === '/mcp/tools'
-              ? 'tools'
-              : location.pathname === '/mcp/clients'
-                ? 'clients'
-                : 'servers';
     const [config, setConfig] = useState<MCPRuntimeConfig>({});
+    const [routing, setRouting] = useState<MCPRoutingSnapshot | null>(null);
     const [enabled, setEnabled] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [checking, setChecking] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
-    const [statuses, setStatuses] = useState<MCPSourceStatus[]>([]);
-    const [editing, setEditing] = useState<MCPSourceConfig | null | undefined>(undefined);
+    const [routeError, setRouteError] = useState('');
+    const [sheet, setSheet] = useState<Sheet>(null);
+    const [adding, setAdding] = useState(false);
     const [form, setForm] = useState(defaultMCPSourceFormValue);
-    const acceptConfig = (response: MCPConfigResponse) => {
+    const [customSourceId, setCustomSourceId] = useState(false);
+    const [connectionError, setConnectionError] = useState('');
+    const [showRoutes, setShowRoutes] = useState(false);
+    const routeGeneration = useRef(0);
+    const linked = useRef('');
+    const sources = useMemo(() => config.sources || [], [config.sources]);
+    const profiles = useMemo(() => config.client_profiles || [], [config.client_profiles]);
+    const legacy = !config.client_profiles_configured && profiles.length === 0;
+    const clients: MCPClientProfile[] = legacy
+        ? [
+              {
+                  id: 'tb',
+                  name: label('defaultClient', 'Default client connection'),
+                  enabled: true,
+                  sources: ['*'],
+                  tools: ['*'],
+              },
+          ]
+        : profiles;
+    const refreshRoutes = useCallback(async () => {
+        const generation = ++routeGeneration.current;
+        setChecking(true);
+        try {
+            const response = await api.getMCPRouting();
+            if (generation !== routeGeneration.current) return;
+            if (!response.success) throw new Error(response.error || 'Could not check tool connections');
+            setRouting(response.routing);
+            setEnabled(response.enabled);
+            setRouteError('');
+        } catch (e) {
+            if (generation === routeGeneration.current) setRouteError(e instanceof Error ? e.message : String(e));
+        } finally {
+            if (generation === routeGeneration.current) setChecking(false);
+        }
+    }, []);
+    const acceptConfig = async (response: MCPConfigResponse) => {
         if (!response?.success || !response.config)
-            throw new Error(response?.error || 'Failed to save MCP configuration');
+            throw new Error(response?.error || 'Could not save MCP configuration');
         setConfig(response.config);
+        setRouting(null);
         setEnabled(response.enabled);
-        setStatuses([]);
+        await refreshRoutes();
     };
-    const load = useCallback(
-        () =>
-            api
-                .getMCPConfig()
-                .then((response: MCPConfigResponse) => {
-                    if (!response?.success || !response.config)
-                        throw new Error(response?.error || 'Failed to load MCP configuration');
-                    setConfig(response.config);
-                    setEnabled(response.enabled);
-                    setStatuses([]);
-                })
-                .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-                .finally(() => setLoading(false)),
-        []
-    );
+    const reload = async () => {
+        const response = await api.getMCPConfig();
+        await acceptConfig(response);
+    };
     useEffect(() => {
-        void load();
-    }, [load]);
+        let active = true;
+        void api
+            .getMCPConfig()
+            .then((response: MCPConfigResponse) => {
+                if (!active) return;
+                if (!response?.success || !response.config)
+                    throw new Error(response?.error || 'Could not load MCP configuration');
+                setConfig(response.config);
+                setEnabled(response.enabled);
+                setLoading(false);
+                void refreshRoutes();
+            })
+            .catch((e) => {
+                if (active) {
+                    setError(e instanceof Error ? e.message : String(e));
+                    setLoading(false);
+                }
+            });
+        return () => {
+            active = false;
+            routeGeneration.current++;
+        };
+    }, [refreshRoutes]);
+    // Existing bookmarks open the appropriate work surface in this page. They
+    // no longer create five competing destinations in the sidebar or tabs.
+    useEffect(() => {
+        if (loading) return;
+        const key = location.pathname + location.search;
+        if (linked.current === key) return;
+        let active = true;
+        // Resolve saved-link intent after configuration arrives, with cleanup for
+        // navigation/unmount and React Strict Mode's repeated effect setup.
+        void Promise.resolve().then(() => {
+            if (!active || linked.current === key) return;
+            linked.current = key;
+            const section = search.get('section') || search.get('tab');
+            const profile = search.get('profile') || search.get('install');
+            const source = search.get('source');
+            if (source) setSheet({ kind: 'source', id: source });
+            else if (profile) setSheet({ kind: 'client', id: profile, edit: search.has('profile') });
+            else if (section === 'clients' || location.pathname === '/mcp/clients') setSheet({ kind: 'clients' });
+            else if (section === 'tools' || location.pathname === '/mcp/tools')
+                setSheet({ kind: 'tools', usage: 'client' });
+            else if (section === 'server-tools' || location.pathname === '/mcp/server-tools')
+                setSheet({ kind: 'tools', usage: 'gateway' });
+            else if (section === 'routes' || location.pathname === '/mcp/routes') setShowRoutes(true);
+        });
+        return () => {
+            active = false;
+        };
+    }, [loading, location.pathname, location.search, search]);
     const run = async (action: () => Promise<void>) => {
         setBusy(true);
         try {
@@ -100,41 +179,163 @@ export default function MCPRegisteredServers() {
             setBusy(false);
         }
     };
-    const sources = config.sources || [];
     const saveSource = async (patch: MCPSourceConfig) => {
-        const exists = sources.some((s) => s.id === patch.id);
-        acceptConfig(await (exists ? api.patchMCPSource(patch.id!, patch) : api.createMCPSource(patch)));
+        await acceptConfig(
+            await (sources.some((s) => s.id === patch.id)
+                ? api.patchMCPSource(patch.id!, patch)
+                : api.createMCPSource(patch))
+        );
     };
-    const edit = (source: MCPSourceConfig | null) => {
-        setEditing(source);
-        setForm(sourceToFormValue(source || undefined));
+    const closeSheet = () => {
+        setSheet(null);
+        const next = new URLSearchParams(search);
+        ['section', 'tab', 'profile', 'install', 'source'].forEach((key) => next.delete(key));
+        navigate({ pathname: '/mcp', search: next.toString() ? `?${next}` : '' }, { replace: true });
     };
-    const check = (id: string, reconnect: boolean) =>
-        run(async () => {
-            const response = await (reconnect ? api.reconnectMCPSource(id) : api.checkMCPSource(id));
-            if (response.status)
-                setStatuses((previous) => [...previous.filter((s) => s.source_id !== id), response.status]);
-            if (!response.success) throw new Error(response.error || 'Connection failed');
+    const beginConnection = () => {
+        setForm({
+            ...defaultMCPSourceFormValue(),
+            id: nextMCPId(
+                '',
+                sources.map((s) => s.id!),
+                'tool-service'
+            ),
+            transport: 'http',
         });
+        setCustomSourceId(false);
+        setConnectionError('');
+        setAdding(true);
+    };
+    const sourceName = (source: MCPSourceConfig) => source.name || source.id || '';
+    const sourceRoute = (id: string) => routing?.sources.find((source) => source.id === id);
+    const countTools = (id: string) =>
+        routing?.clients
+            .find((client) => client.id === id)
+            ?.sources.reduce((sum, source) => sum + source.tools.length, 0) || 0;
+    const clientSources = (id: string) =>
+        routing?.clients
+            .find((client) => client.id === id)
+            ?.sources.filter((source) => source.tools.length > 0)
+            .map((source) => source.name) || [];
+    const stateLabel = (source: MCPSourceConfig, route?: MCPRouteSource) =>
+        source.enabled === false
+            ? label('off', 'Off')
+            : !route
+              ? label('checking', 'Checking…')
+              : route.state === 'connected'
+                ? label('connected', 'Connected')
+                : label('needsAttention', 'Needs attention');
+    const activeSources = sources.filter((source) => source.enabled !== false);
+    const readySources = routing?.sources.filter((source) => source.state === 'connected').length || 0;
+    const serverSources = routing?.server_tools || [];
+    const serverCount = serverSources.reduce((sum, source) => sum + source.tools.length, 0);
+    const selectedSource = sheet?.kind === 'source' ? sources.find((source) => source.id === sheet.id) : undefined;
+    const selectedClient =
+        sheet?.kind === 'client' && sheet.id ? clients.find((client) => client.id === sheet.id) : undefined;
+    const title =
+        sheet?.kind === 'source'
+            ? selectedSource
+                ? sourceName(selectedSource)
+                : label('missingConnection', 'Connection no longer exists')
+            : sheet?.kind === 'client'
+              ? selectedClient?.name || label('connectClient', 'Connect a client')
+              : sheet?.kind === 'clients'
+                ? label('chooseClient', 'Choose a client')
+                : sheet?.kind === 'tools' && sheet.usage === 'gateway'
+                  ? label('serverTools', 'Server Tools')
+                  : label('ordinaryTools', 'Ordinary tools');
+    const clientCards = (grantSource?: string) => (
+        <Stack spacing={1.25}>
+            {clients.map((client) => (
+                <Box key={client.id} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
+                    <Stack
+                        direction="row"
+                        sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}
+                    >
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                            <Terminal fontSize="small" />
+                            <Typography style={{ fontWeight: 600 }}>{client.name || client.id}</Typography>
+                            {client.enabled === false && <Chip size="small" label={label('off', 'Off')} />}
+                        </Stack>
+                        <Button
+                            onClick={() =>
+                                setSheet({ kind: 'client', id: client.id, grantSource, edit: !!grantSource })
+                            }
+                        >
+                            {label(
+                                grantSource ? 'selectThisClient' : 'configureClient',
+                                grantSource ? 'Choose this client' : 'Access & setup'
+                            )}
+                        </Button>
+                    </Stack>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+                        {routing
+                            ? `${countTools(client.id)} ${label('ordinaryToolCount', 'ordinary tools assigned')}`
+                            : label('checking', 'Checking…')}
+                        {clientSources(client.id).length > 0 ? ` · ${clientSources(client.id).join('、')}` : ''}
+                    </Typography>
+                </Box>
+            ))}
+            {clients.length === 0 && (
+                <Typography variant="body2" color="text.secondary">
+                    {label('noClients', 'No client connections yet. Select tools and get a connection command.')}
+                </Typography>
+            )}
+            <Button
+                startIcon={<Add />}
+                sx={{ alignSelf: 'flex-start' }}
+                onClick={() => setSheet({ kind: 'client', grantSource })}
+            >
+                {label('connectClient', 'Connect a client')}
+            </Button>
+        </Stack>
+    );
     return (
         <PageLayout loading={loading}>
-            <Stack spacing={2.5}>
-                <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                    <Typography variant="h5">{label('title', 'MCP center')}</Typography>
-                    <Button
-                        disabled={busy}
-                        onClick={() => {
-                            setLoading(true);
-                            setError('');
-                            void load();
-                        }}
-                    >
-                        {label('reload', 'Reload')}
-                    </Button>
+            <Stack spacing={3}>
+                <Stack
+                    direction="row"
+                    sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}
+                >
+                    <Box>
+                        <Typography component="h1" variant="h5" style={{ fontWeight: 700 }}>
+                            {label('title', 'MCP tools')}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            {label(
+                                'subtitle',
+                                'Connect your tools here, then decide who uses them. Keep connections, access and setup in one place.'
+                            )}
+                        </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={1}>
+                        <IconButton
+                            aria-label={label('refresh', 'Refresh connections')}
+                            disabled={busy || checking}
+                            onClick={() => void run(reload)}
+                        >
+                            <Refresh />
+                        </IconButton>
+                        <Button startIcon={<Add />} variant="contained" disabled={busy} onClick={beginConnection}>
+                            {label('connectTools', 'Connect tools')}
+                        </Button>
+                    </Stack>
                 </Stack>
-                {error && (
-                    <Alert severity="error" onClose={() => setError('')}>
-                        {error}
+                {error && <Alert severity="error">{error}</Alert>}
+                {routeError && (
+                    <Alert
+                        severity="warning"
+                        action={
+                            <Button disabled={checking} onClick={() => void refreshRoutes()}>
+                                {label('retry', 'Retry connection')}
+                            </Button>
+                        }
+                    >
+                        {label(
+                            'statusUnavailable',
+                            'Connection status could not be refreshed. Saved settings remain available.'
+                        )}{' '}
+                        {routeError}
                     </Alert>
                 )}
                 {!enabled && (
@@ -148,264 +349,481 @@ export default function MCPRegisteredServers() {
                                         const response = await api.setScenarioFlag('_global', 'mcp', true);
                                         if (!response?.success) throw new Error(response?.error || 'Enable failed');
                                         await flags.refresh();
-                                        await load();
+                                        await reload();
                                     })
                                 }
                             >
-                                {label('enableExecution', 'Enable execution')}
+                                {label('enableMCP', 'Enable MCP')}
                             </Button>
                         }
                     >
                         {label(
-                            'disabledHint',
-                            'MCP execution is disabled. You can configure servers and inspect capabilities here.'
+                            'executionOff',
+                            'MCP execution is off. Your configuration is saved; enable execution in the workspace to use it.'
                         )}
                     </Alert>
                 )}
-                <Tabs
-                    value={tab}
-                    onChange={(_, value) => navigate(value === 'servers' ? '/mcp/sources' : `/mcp/${value}`)}
-                    variant="scrollable"
+                <Box
+                    sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
+                        gap: 2,
+                        px: 2.5,
+                        py: 2,
+                        bgcolor: 'action.hover',
+                        borderRadius: 2,
+                    }}
                 >
-                    <Tab value="routes" label={label('routes', 'Routing overview')} />
-                    <Tab value="tools" label={label('ordinaryTools', 'Ordinary tools')} />
-                    <Tab value="server-tools" label={label('serverTools', 'Server Tools')} />
-                    <Tab value="servers" label={label('sources', 'Tool sources')} />
-                    <Tab value="clients" label={label('clients', 'Client access')} />
-                </Tabs>
-                {tab === 'servers' && (
-                    <Stack spacing={2}>
-                        <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                            <Typography color="text.secondary">
+                    {[
+                        [
+                            '1',
+                            label('stepConnect', 'Connect a tool service'),
+                            label('stepConnectHint', 'Use built-in tools or add a service URL / local command.'),
+                        ],
+                        [
+                            '2',
+                            label('stepChoose', 'Choose who uses it'),
+                            label(
+                                'stepChooseHint',
+                                'Allow clients to call ordinary tools, or let the gateway run Server Tools.'
+                            ),
+                        ],
+                        [
+                            '3',
+                            label('stepUse', 'Get the setup command'),
+                            label('stepUseHint', 'Copy a client command below. The gateway runs Server Tools itself.'),
+                        ],
+                    ].map(([number, heading, hint]) => (
+                        <Stack key={number} direction="row" spacing={1.5}>
+                            <Typography sx={{ color: 'primary.main', fontWeight: 700, fontSize: 20, lineHeight: 1.5 }}>
+                                {number}
+                            </Typography>
+                            <Box>
+                                <Typography variant="body2" style={{ fontWeight: 600 }}>
+                                    {heading}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    {hint}
+                                </Typography>
+                            </Box>
+                        </Stack>
+                    ))}
+                </Box>
+                <Box component="section" aria-label={label('connections', 'Connected tools')}>
+                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                        <Typography variant="h6" style={{ fontWeight: 600 }}>
+                            {label('connections', 'Connected tools')}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                            {checking
+                                ? label('checking', 'Checking…')
+                                : `${readySources} / ${activeSources.length} ${label('connectionsReady', 'enabled connections ready')}`}
+                        </Typography>
+                    </Stack>
+                    {sources.length === 0 && (
+                        <Card variant="outlined" sx={{ p: 3 }}>
+                            <Typography style={{ fontWeight: 600 }}>
+                                {label('emptyConnections', 'Start with your first tool connection')}
+                            </Typography>
+                            <Typography color="text.secondary" variant="body2" sx={{ mt: 0.5, mb: 2 }}>
                                 {label(
-                                    'serversHint',
-                                    'Connect servers once, then choose where their tools can be used.'
+                                    'emptyConnectionsHint',
+                                    'Paste a tool service URL or enter a local command. We will discover its tools for you.'
                                 )}
                             </Typography>
-                            <Button variant="contained" disabled={busy} onClick={() => edit(null)}>
-                                {label('addServer', 'Add server')}
+                            <Button variant="contained" startIcon={<Add />} onClick={beginConnection}>
+                                {label('connectTools', 'Connect tools')}
                             </Button>
-                        </Stack>
+                        </Card>
+                    )}
+                    <Stack spacing={1.25}>
                         {sources.map((source) => {
-                            const status = statuses.find((s) => s.source_id === source.id);
-                            const usage = source.usage || {
-                                client: source.visibility !== 'server' && source.transport !== 'advisor',
-                                gateway: source.visibility === 'server' || source.transport === 'advisor',
-                            };
+                            const route = sourceRoute(source.id!);
+                            const destinations =
+                                routing?.clients
+                                    .filter(
+                                        (client) =>
+                                            client.enabled &&
+                                            client.sources.some((s) => s.id === source.id && s.tools.length > 0)
+                                    )
+                                    .map((client) =>
+                                        client.legacy
+                                            ? label('defaultClient', 'Default client connection')
+                                            : client.name
+                                    ) || [];
+                            if (serverSources.some((s) => s.id === source.id && s.tools.length > 0))
+                                destinations.push(label('gatewayModel', 'Gateway model'));
+                            const failed = source.enabled !== false && route && route.state !== 'connected';
                             return (
-                                <Card variant="outlined" key={source.id}>
-                                    <CardContent>
-                                        <Stack spacing={1}>
-                                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                                                <Typography variant="h6" sx={{ flex: 1 }}>
-                                                    {source.name || source.id}
+                                <Card
+                                    component="article"
+                                    aria-label={source.name || source.id}
+                                    variant="outlined"
+                                    key={source.id}
+                                    sx={{ px: 2.25, py: 1.75, borderColor: failed ? 'warning.light' : 'divider' }}
+                                >
+                                    <Box
+                                        sx={{
+                                            display: 'grid',
+                                            gridTemplateColumns: {
+                                                xs: '1fr',
+                                                md: 'minmax(180px, 1.1fr) minmax(180px, 1.4fr) auto',
+                                            },
+                                            alignItems: 'center',
+                                            gap: 2,
+                                        }}
+                                    >
+                                        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                                            {route?.processing === 'advisor' || source.advisor ? (
+                                                <Psychology sx={{ color: 'text.secondary' }} />
+                                            ) : (
+                                                <Server sx={{ color: 'text.secondary' }} />
+                                            )}
+                                            <Box>
+                                                <Typography style={{ fontWeight: 600 }}>
+                                                    {sourceName(source)}
                                                 </Typography>
-                                                <Chip size="small" label={source.transport || 'stdio'} />
-                                                <Chip
-                                                    size="small"
-                                                    label={label(
-                                                        status?.state ||
-                                                            (source.enabled === false ? 'disabled' : 'unchecked'),
-                                                        status?.state ||
-                                                            (source.enabled === false ? 'disabled' : 'unchecked')
-                                                    )}
-                                                    color={status?.state === 'error' ? 'error' : 'default'}
-                                                />
-                                            </Stack>
-                                            <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
-                                                {source.endpoint ||
-                                                    [source.command, ...(source.args || [])]
-                                                        .filter(Boolean)
-                                                        .join(' ') ||
-                                                    source.id}
-                                            </Typography>
-                                            {status?.error && <Alert severity="error">{status.error}</Alert>}
-                                            <Stack direction="row" sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-                                                <FormControlLabel
-                                                    control={
-                                                        <Checkbox
-                                                            disabled={busy}
-                                                            checked={source.enabled !== false}
-                                                            onChange={(e) =>
-                                                                void run(() =>
-                                                                    saveSource({
-                                                                        id: source.id,
-                                                                        enabled: e.target.checked,
-                                                                    })
-                                                                )
-                                                            }
-                                                        />
-                                                    }
-                                                    label={label('enabled', 'Enabled')}
-                                                />
-                                                <FormControlLabel
-                                                    control={
-                                                        <Checkbox
-                                                            disabled={
-                                                                busy ||
-                                                                source.transport === 'advisor' ||
-                                                                !!source.advisor
-                                                            }
-                                                            checked={
-                                                                usage.client &&
-                                                                source.transport !== 'advisor' &&
-                                                                !source.advisor
-                                                            }
-                                                            onChange={(e) =>
-                                                                void run(() =>
-                                                                    saveSource({
-                                                                        id: source.id,
-                                                                        usage: { ...usage, client: e.target.checked },
-                                                                    })
-                                                                )
-                                                            }
-                                                        />
-                                                    }
-                                                    label={label('clientUsage', 'MCP clients')}
-                                                />
-                                                <FormControlLabel
-                                                    control={
-                                                        <Checkbox
-                                                            disabled={busy}
-                                                            checked={usage.gateway}
-                                                            onChange={(e) =>
-                                                                void run(() =>
-                                                                    saveSource({
-                                                                        id: source.id,
-                                                                        usage: { ...usage, gateway: e.target.checked },
-                                                                    })
-                                                                )
-                                                            }
-                                                        />
-                                                    }
-                                                    label={label('gatewayUsage', 'Gateway model calls')}
-                                                />
-                                                <Button disabled={busy} onClick={() => edit(source)}>
-                                                    {label('edit', 'Edit')}
-                                                </Button>
-                                                <Button
-                                                    disabled={busy || source.enabled === false}
-                                                    onClick={() => void check(source.id!, false)}
-                                                >
-                                                    {label('check', 'Test connection')}
-                                                </Button>
-                                                <Button
-                                                    disabled={busy || source.enabled === false}
-                                                    onClick={() => void check(source.id!, true)}
-                                                >
-                                                    {label('reconnect', 'Reconnect')}
-                                                </Button>
-                                                {!['advisor', 'webtools'].includes(source.id!) && (
-                                                    <Button
-                                                        color="error"
-                                                        disabled={busy}
-                                                        onClick={() =>
-                                                            void run(async () =>
-                                                                acceptConfig(await api.deleteMCPSource(source.id!))
-                                                            )
-                                                        }
-                                                    >
-                                                        {label('delete', 'Delete')}
-                                                    </Button>
-                                                )}
-                                            </Stack>
+                                                <Typography variant="caption" color="text.secondary">
+                                                    {source.origin === 'builtin' ||
+                                                    (['advisor', 'webtools'].includes(source.id!) &&
+                                                        source.origin !== 'external')
+                                                        ? label('builtin', 'Built-in')
+                                                        : label('external', 'External')}
+                                                    {route?.state === 'connected'
+                                                        ? ` · ${route.tools.length} ${label('toolCount', 'tools')}`
+                                                        : ''}
+                                                </Typography>
+                                            </Box>
                                         </Stack>
-                                    </CardContent>
+                                        <Stack
+                                            direction="row"
+                                            spacing={1}
+                                            sx={{ alignItems: 'center', color: 'text.secondary', minWidth: 0 }}
+                                        >
+                                            <ArrowForward fontSize="small" />
+                                            <Typography variant="body2">
+                                                {destinations.length
+                                                    ? destinations.join(' · ')
+                                                    : source.enabled === false
+                                                      ? label('connectionOffShort', 'Connection disabled')
+                                                      : failed
+                                                        ? label('fixBeforeUse', 'Fix the connection to use its tools')
+                                                        : label(
+                                                              'chooseDestination',
+                                                              'Choose a client or Server Tools in settings'
+                                                          )}
+                                            </Typography>
+                                        </Stack>
+                                        <Stack
+                                            direction="row"
+                                            spacing={1}
+                                            sx={{ alignItems: 'center', justifyContent: 'flex-end' }}
+                                        >
+                                            <Chip
+                                                size="small"
+                                                variant="outlined"
+                                                color={failed ? 'warning' : 'default'}
+                                                label={stateLabel(source, route)}
+                                            />
+                                            <Button onClick={() => setSheet({ kind: 'source', id: source.id! })}>
+                                                {label(
+                                                    failed ? 'fixConnection' : 'manageTools',
+                                                    failed ? 'Fix connection' : 'Configure tools'
+                                                )}
+                                            </Button>
+                                        </Stack>
+                                    </Box>
                                 </Card>
                             );
                         })}
-                        <Stack direction="row" spacing={2}>
-                            <TextField
-                                size="small"
-                                type="number"
-                                label={label('timeout', 'Call timeout (seconds)')}
-                                sx={{ width: 240, flexShrink: 0 }}
-                                value={config.request_timeout || 30}
-                                slotProps={{ htmlInput: { min: 1, max: 600 } }}
-                                onChange={(e) =>
-                                    setConfig((previous) => ({ ...previous, request_timeout: Number(e.target.value) }))
-                                }
-                            />
-                            <Button
-                                disabled={busy}
-                                onClick={() =>
-                                    void run(async () =>
-                                        acceptConfig(
-                                            await api.setMCPConfig({ request_timeout: config.request_timeout })
-                                        )
-                                    )
-                                }
-                            >
-                                {label('saveTimeout', 'Save timeout')}
-                            </Button>
-                        </Stack>
                     </Stack>
-                )}
-                {tab === 'routes' && (
-                    <MCPRoutingPanel
-                        revision={sources}
-                        onEditSource={(id) => {
-                            const source = sources.find((item) => item.id === id);
-                            if (source) edit(source);
-                        }}
-                        onClient={(id, editing) =>
-                            navigate(
-                                `/mcp/clients${id ? `?${editing ? 'profile' : 'install'}=${encodeURIComponent(id)}` : ''}`
-                            )
-                        }
-                        onTools={(kind) => navigate(kind === 'client' ? '/mcp/tools' : '/mcp/server-tools')}
-                    />
-                )}
-                {(tab === 'tools' || tab === 'server-tools') && (
-                    <MCPToolsPanel
-                        key={tab}
-                        usage={tab === 'tools' ? 'client' : 'gateway'}
-                        sources={sources}
-                        enabled={enabled}
-                        saveSource={saveSource}
-                    />
-                )}
-                {tab === 'clients' && <MCPClientsPanel config={config} onSaved={acceptConfig} />}
-            </Stack>
-            <Dialog open={editing !== undefined} onClose={() => !busy && setEditing(undefined)} maxWidth="md" fullWidth>
-                <DialogTitle>
-                    {label(editing ? 'editServer' : 'addServer', editing ? 'Edit server' : 'Add server')}
-                </DialogTitle>
-                <DialogContent dividers>
-                    {editing?.id === 'advisor' ? (
-                        <AdvisorSettings
-                            advisorSource={editing}
-                            onSave={async (patch) => {
-                                await run(async () => {
-                                    await saveSource(patch);
-                                    setEditing(undefined);
-                                });
-                            }}
+                </Box>
+                <Box component="section" aria-label={label('whoUses', 'Who uses these tools?')}>
+                    <Typography variant="h6" style={{ fontWeight: 600 }} sx={{ mb: 1.5 }}>
+                        {label('whoUses', 'Who uses these tools?')}
+                    </Typography>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1.35fr 1fr' }, gap: 2 }}>
+                        <Card variant="outlined" sx={{ p: 2.5 }}>
+                            <Typography variant="subtitle1" style={{ fontWeight: 600 }}>
+                                {label('ordinaryTools', 'Ordinary tools')}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
+                                {label(
+                                    'ordinaryHint',
+                                    'Your client calls these tools through MCP and continues its own conversation. Choose access and get its setup command here.'
+                                )}
+                            </Typography>
+                            {clientCards()}
+                        </Card>
+                        <Card variant="outlined" sx={{ p: 2.5, display: 'flex', flexDirection: 'column' }}>
+                            <Typography variant="subtitle1" style={{ fontWeight: 600 }}>
+                                {label('serverTools', 'Server Tools')}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                {label(
+                                    'serverHint',
+                                    'The gateway executes these tools during model requests, returns their results and continues the model response. No client setup command is needed.'
+                                )}
+                            </Typography>
+                            <Stack spacing={1.5} sx={{ my: 2, flex: 1 }}>
+                                <Typography style={{ fontWeight: 600 }}>
+                                    {routing
+                                        ? `${serverCount} ${label('serverToolsAssigned', 'Server Tools assigned')}`
+                                        : label('checking', 'Checking…')}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    {serverSources
+                                        .filter((s) => s.tools.length > 0)
+                                        .map((s) => s.name)
+                                        .join(' · ') ||
+                                        label(
+                                            'noServerTools',
+                                            'Choose Server Tools in a connection’s settings when needed.'
+                                        )}
+                                </Typography>
+                            </Stack>
+                            <Button
+                                variant="outlined"
+                                sx={{ alignSelf: 'flex-start' }}
+                                onClick={() => setSheet({ kind: 'tools', usage: 'gateway' })}
+                            >
+                                {label('manageServerTools', 'Configure Server Tools')}
+                            </Button>
+                        </Card>
+                    </Box>
+                </Box>
+                <Accordion
+                    expanded={showRoutes}
+                    onChange={(_, value) => setShowRoutes(value)}
+                    disableGutters
+                    elevation={0}
+                    sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1.5,
+                        '&:before': { display: 'none' },
+                    }}
+                >
+                    <AccordionSummary expandIcon={<ExpandMore />}>
+                        <Box>
+                            <Typography variant="body2" style={{ fontWeight: 600 }}>
+                                {label('showRelationships', 'View call relationships')}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                {label(
+                                    'relationshipsHint',
+                                    'See how clients, the gateway and tool services connect when you need to inspect a route.'
+                                )}
+                            </Typography>
+                        </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                        {showRoutes && (
+                            <MCPRoutingPanel
+                                revision={sources}
+                                onEditSource={(id) => setSheet({ kind: 'source', id })}
+                                onClient={(id, edit) =>
+                                    setSheet(id ? { kind: 'client', id, edit } : { kind: 'clients' })
+                                }
+                                onTools={(usage) => setSheet({ kind: 'tools', usage })}
+                            />
+                        )}
+                    </AccordionDetails>
+                </Accordion>
+                <Box component="details">
+                    <Typography component="summary" variant="caption" color="text.secondary" sx={{ cursor: 'pointer' }}>
+                        {label('workspaceAdvanced', 'Advanced runtime settings')}
+                    </Typography>
+                    <Stack direction="row" spacing={1.5} sx={{ mt: 1.5, alignItems: 'center' }}>
+                        <TextField
+                            size="small"
+                            type="number"
+                            label={t('mcp.center.timeout', { defaultValue: 'Call timeout (seconds)' })}
+                            value={config.request_timeout || 30}
+                            slotProps={{ htmlInput: { min: 1, max: 600 } }}
+                            onChange={(e) => setConfig({ ...config, request_timeout: Number(e.target.value) })}
                         />
-                    ) : (
-                        <MCPSourceEditor value={form} onChange={setForm} lockId={!!editing} />
-                    )}
-                </DialogContent>
-                <DialogActions>
-                    <Button disabled={busy} onClick={() => setEditing(undefined)}>
-                        {label('cancel', 'Cancel')}
-                    </Button>
-                    {editing?.id !== 'advisor' && (
                         <Button
-                            disabled={busy || !form.id.trim()}
+                            disabled={busy}
                             onClick={() =>
-                                void run(async () => {
-                                    const source = formValueToSource(form);
-                                    if (!editing && sources.some((s) => s.id === source.id))
-                                        throw new Error(label('duplicateId', 'A server with this ID already exists.'));
-                                    await saveSource(source);
-                                    setEditing(undefined);
-                                })
+                                void run(async () =>
+                                    acceptConfig(await api.setMCPConfig({ request_timeout: config.request_timeout }))
+                                )
                             }
                         >
-                            {label('save', 'Save')}
+                            {label('saveRuntime', 'Save runtime settings')}
                         </Button>
+                    </Stack>
+                </Box>
+            </Stack>
+            <Drawer
+                anchor="right"
+                open={!!sheet}
+                onClose={closeSheet}
+                slotProps={{
+                    paper: {
+                        role: 'dialog',
+                        'aria-label': title,
+                        sx: { width: { xs: '100%', sm: 680 }, maxWidth: '100%' },
+                    },
+                }}
+            >
+                <Stack sx={{ p: 3 }} spacing={2.5}>
+                    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                        <Typography variant="h5" style={{ fontWeight: 600 }}>
+                            {title}
+                        </Typography>
+                        <IconButton aria-label={label('close', 'Close workspace panel')} onClick={closeSheet}>
+                            <Close />
+                        </IconButton>
+                    </Stack>
+                    <Divider />
+                    {sheet?.kind === 'source' &&
+                        (selectedSource ? (
+                            <MCPSourceWorkspace
+                                key={selectedSource.id}
+                                source={selectedSource}
+                                route={sourceRoute(selectedSource.id!)}
+                                enabled={enabled}
+                                saveSource={saveSource}
+                                onRefresh={async () => {
+                                    const response = await api.reconnectMCPSource(selectedSource.id!);
+                                    await refreshRoutes();
+                                    if (!response.success) throw new Error(response.error || 'Connection check failed');
+                                }}
+                                onConnectClient={() => setSheet({ kind: 'clients', grantSource: selectedSource.id })}
+                                onDelete={async () => {
+                                    await acceptConfig(await api.deleteMCPSource(selectedSource.id!));
+                                    closeSheet();
+                                }}
+                            />
+                        ) : (
+                            <Alert severity="info">{label('missingConnection', 'Connection no longer exists')}</Alert>
+                        ))}
+                    {sheet?.kind === 'client' &&
+                        (!sheet.id || selectedClient ? (
+                            <MCPClientWorkspace
+                                key={sheet.id || `new-${sheet.grantSource || ''}`}
+                                profile={selectedClient}
+                                legacy={legacy && sheet.id === 'tb'}
+                                config={config}
+                                routing={routing}
+                                enabled={enabled}
+                                grantSource={sheet.grantSource}
+                                editing={sheet.edit}
+                                onSave={async (profile) => {
+                                    if (!sheet.id && profiles.some((p) => p.id === profile.id))
+                                        throw new Error(label('duplicateId', 'This identifier is already in use.'));
+                                    await acceptConfig(await api.saveMCPClientProfile(profile));
+                                    setSheet({ kind: 'client', id: profile.id });
+                                }}
+                                onDelete={async () => {
+                                    await acceptConfig(await api.deleteMCPClientProfile(sheet.id!));
+                                    closeSheet();
+                                }}
+                            />
+                        ) : (
+                            <Alert severity="info">
+                                {label('missingClient', 'Client connection no longer exists')}
+                            </Alert>
+                        ))}
+                    {sheet?.kind === 'clients' && (
+                        <Stack spacing={2}>
+                            {sheet.grantSource && (
+                                <Alert severity="info">
+                                    {label(
+                                        'grantConnectionHint',
+                                        'Choose a client below, then review and save its access to this connection.'
+                                    )}
+                                </Alert>
+                            )}
+                            {clientCards(sheet.grantSource)}
+                        </Stack>
                     )}
+                    {sheet?.kind === 'tools' && (
+                        <MCPToolsPanel
+                            usage={sheet.usage}
+                            sources={sources}
+                            enabled={enabled}
+                            saveSource={saveSource}
+                            onConfigureSource={(id) => setSheet({ kind: 'source', id })}
+                        />
+                    )}
+                </Stack>
+            </Drawer>
+            <Dialog open={adding} onClose={() => !busy && setAdding(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>{label('connectTools', 'Connect tools')}</DialogTitle>
+                <DialogContent dividers>
+                    <Stack spacing={2.5}>
+                        <Typography variant="body2" color="text.secondary">
+                            {label(
+                                'connectDialogHint',
+                                'Enter a name and the service URL or local command. After connecting, choose how its tools will be used.'
+                            )}
+                        </Typography>
+                        {connectionError && <Alert severity="error">{connectionError}</Alert>}
+                        <TextField
+                            label={label('connectionName', 'Connection name')}
+                            value={form.name}
+                            required
+                            onChange={(e) =>
+                                setForm({
+                                    ...form,
+                                    name: e.target.value,
+                                    id: customSourceId
+                                        ? form.id
+                                        : nextMCPId(
+                                              e.target.value,
+                                              sources.map((s) => s.id!),
+                                              'tool-service'
+                                          ),
+                                })
+                            }
+                            placeholder={label('connectionNamePlaceholder', 'For example: Company knowledge base')}
+                        />
+                        <MCPSourceEditor
+                            compact
+                            hideUsage
+                            hideEnabled
+                            hideTools
+                            value={form}
+                            onChange={(next) => {
+                                if (next.id !== form.id) setCustomSourceId(true);
+                                setForm(next);
+                            }}
+                        />
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button disabled={busy} onClick={() => setAdding(false)}>
+                        {label('cancel', 'Cancel')}
+                    </Button>
+                    <Button
+                        variant="contained"
+                        disabled={
+                            busy ||
+                            !form.name.trim() ||
+                            !form.id.trim() ||
+                            (form.transport === 'stdio' ? !form.command.trim() : !form.endpoint.trim())
+                        }
+                        onClick={() =>
+                            void run(async () => {
+                                setConnectionError('');
+                                try {
+                                    if (sources.some((s) => s.id === form.id))
+                                        throw new Error(label('duplicateId', 'This identifier is already in use.'));
+                                    await saveSource(formValueToSource(form));
+                                    setAdding(false);
+                                    setSheet({ kind: 'source', id: form.id.trim() });
+                                } catch (e) {
+                                    setConnectionError(e instanceof Error ? e.message : String(e));
+                                    throw e;
+                                }
+                            })
+                        }
+                    >
+                        {busy ? <CircularProgress size={18} /> : label('connectAndChoose', 'Connect and choose tools')}
+                    </Button>
                 </DialogActions>
             </Dialog>
         </PageLayout>

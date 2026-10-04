@@ -25,8 +25,10 @@ export default function MCPToolsPanel({
     enabled,
     saveSource,
     usage = 'client',
+    onConfigureSource,
 }: {
     usage?: 'client' | 'gateway';
+    onConfigureSource?: (id: string) => void;
     sources: MCPSourceConfig[];
     enabled: boolean;
     saveSource: (patch: MCPSourceConfig) => Promise<void>;
@@ -121,7 +123,7 @@ export default function MCPToolsPanel({
                           )
                         : label(
                               'serverHint',
-                              'Server Tools are executed by the gateway for model requests. Tool tests below execute the tool only; model continuation is verified by the harness.'
+                              'The gateway executes these tools during model requests and returns their results to the model to continue its answer.'
                           )}
                 </Typography>
                 <Button disabled={busy} onClick={() => setChoosing(true)}>
@@ -163,7 +165,8 @@ export default function MCPToolsPanel({
                     <CardContent>
                         <Stack spacing={1}>
                             <Typography variant="subtitle1">
-                                {tool.source_id} / {tool.name}
+                                {sources.find((source) => source.id === tool.source_id)?.name || tool.source_id} /{' '}
+                                {tool.name}
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
                                 {tool.description}
@@ -229,6 +232,17 @@ export default function MCPToolsPanel({
                                     )}
                                 </Typography>
                             )}
+                            {onConfigureSource && (
+                                <Button
+                                    size="small"
+                                    sx={{ alignSelf: 'flex-start' }}
+                                    onClick={() => onConfigureSource(tool.source_id)}
+                                >
+                                    {t('mcp.workspace.configureConnection', {
+                                        defaultValue: 'Configure this connection',
+                                    })}
+                                </Button>
+                            )}
                             <Box component="details">
                                 <Box component="summary" sx={{ cursor: 'pointer' }}>
                                     {label('schema', 'Parameters and output schema')}
@@ -281,7 +295,8 @@ export default function MCPToolsPanel({
                                 sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}
                             >
                                 <Typography>
-                                    {tool.source_id} / {tool.name}
+                                    {sources.find((source) => source.id === tool.source_id)?.name || tool.source_id} /{' '}
+                                    {tool.name}
                                 </Typography>
                                 <Button
                                     disabled={busy}

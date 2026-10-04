@@ -284,13 +284,9 @@ export function useActivityItems(): ActivityItem[] {
                 key: 'tools' as const,
                 icon: <IconTools sx={{ fontSize: 22 }} />,
                 label: t('layout.tools', { defaultValue: 'Tools' }),
-                defaultPath: '/mcp/routes',
+                defaultPath: '/mcp',
                 children: [
-                    { path: '/mcp/routes', label: t('mcp.center.routes', { defaultValue: 'MCP routes' }), icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
-                    { path: '/mcp/tools', label: t('mcp.center.ordinaryTools', { defaultValue: 'Ordinary tools' }), icon: <IconServer sx={{ fontSize: 20 }} /> },
-                    { path: '/mcp/server-tools', label: t('mcp.center.serverTools', { defaultValue: 'Server Tools' }), icon: <IconServer sx={{ fontSize: 20 }} /> },
-                    { path: '/mcp/sources', label: t('mcp.center.sources', { defaultValue: 'Tool sources' }), icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
-                    { path: '/mcp/clients', label: t('mcp.center.clients', { defaultValue: 'Client access' }), icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
+                    { path: '/mcp', label: t('mcp.workspace.title', { defaultValue: 'MCP tools' }), icon: <SettingsApplications sx={{ fontSize: 20 }} />, match: (path: string) => path.startsWith('/mcp') || path === '/tools/servertool' },
                 ],
             }] as ActivityItem[],
             ...(enableGuardrails ? [{
