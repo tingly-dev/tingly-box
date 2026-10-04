@@ -54,6 +54,7 @@ type ClaudeCodePrefs struct {
 	AnthropicDefaultHaikuModel  string `json:"ANTHROPIC_DEFAULT_HAIKU_MODEL,omitempty"`
 	AnthropicDefaultSonnetModel string `json:"ANTHROPIC_DEFAULT_SONNET_MODEL,omitempty"`
 	AnthropicDefaultOpusModel   string `json:"ANTHROPIC_DEFAULT_OPUS_MODEL,omitempty"`
+	AnthropicDefaultFableModel  string `json:"ANTHROPIC_DEFAULT_FABLE_MODEL,omitempty"`
 	ClaudeCodeSubagentModel     string `json:"CLAUDE_CODE_SUBAGENT_MODEL,omitempty"`
 
 	// Limits — kept as strings so empty = omit (avoids the "0 means unset"
@@ -186,12 +187,14 @@ func DefaultClaudeCodePrefs(unified bool) ClaudeCodePrefs {
 		p.AnthropicDefaultHaikuModel = "tingly/cc"
 		p.AnthropicDefaultSonnetModel = "tingly/cc"
 		p.AnthropicDefaultOpusModel = "tingly/cc"
+		p.AnthropicDefaultFableModel = "tingly/cc"
 		p.ClaudeCodeSubagentModel = "tingly/cc"
 	} else {
 		p.AnthropicModel = "tingly/cc-default"
 		p.AnthropicDefaultHaikuModel = "tingly/cc-haiku"
 		p.AnthropicDefaultSonnetModel = "tingly/cc-sonnet"
 		p.AnthropicDefaultOpusModel = "tingly/cc-opus"
+		p.AnthropicDefaultFableModel = "tingly/cc-fable"
 		p.ClaudeCodeSubagentModel = "tingly/cc-subagent"
 	}
 	return p

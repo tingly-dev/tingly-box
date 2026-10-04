@@ -77,6 +77,7 @@ func (c *TBClientImpl) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
 	prefs.AnthropicDefaultSonnetModel = models.sonnet
 	prefs.AnthropicDefaultOpusModel = models.opus
 	prefs.ClaudeCodeSubagentModel = models.subagent
+	prefs.AnthropicDefaultFableModel = models.fable
 
 	envMap, err := prefs.ToEnv(baseURL, apiKey)
 	if err != nil {
@@ -168,7 +169,7 @@ func (c *TBClientImpl) GetDataDir() string {
 
 // claudeCodeModels holds the request-model name for each Claude Code model tier.
 type claudeCodeModels struct {
-	def, haiku, sonnet, opus, subagent string
+	def, haiku, sonnet, opus, subagent, fable string
 }
 
 // resolveClaudeCodeModels resolves the per-tier request models the same way the
@@ -204,6 +205,7 @@ func (c *TBClientImpl) resolveClaudeCodeModels() claudeCodeModels {
 			sonnet:   ruleModel("builtin:claude_code:sonnet", "built-in-cc-sonnet", "tingly/cc-sonnet"),
 			opus:     ruleModel("builtin:claude_code:opus", "built-in-cc-opus", "tingly/cc-opus"),
 			subagent: ruleModel("builtin:claude_code:subagent", "built-in-cc-subagent", "tingly/cc-subagent"),
+			fable:    ruleModel("builtin:claude_code:fable", "", "tingly/cc-fable"),
 		}
 	}
 
@@ -214,6 +216,7 @@ func (c *TBClientImpl) resolveClaudeCodeModels() claudeCodeModels {
 		sonnet:   unified,
 		opus:     unified,
 		subagent: unified,
+		fable:    unified,
 	}
 }
 

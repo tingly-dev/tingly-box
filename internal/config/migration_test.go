@@ -683,6 +683,7 @@ func TestNewCCProfileRules_CanonicalUUIDs(t *testing.T) {
 		"sonnet":   "builtin:claude_code:p3:sonnet",
 		"opus":     "builtin:claude_code:p3:opus",
 		"subagent": "builtin:claude_code:p3:subagent",
+		"fable":    "builtin:claude_code:p3:fable",
 	}
 	if len(separate) != len(wantSeparate) {
 		t.Fatalf("separate mode rule count = %d, want %d", len(separate), len(wantSeparate))
@@ -926,5 +927,39 @@ func TestDeleteProviderCascade_CompactsTiers(t *testing.T) {
 			tiers = append(tiers, s.Tier)
 		}
 		t.Fatalf("post-cascade tiers = %v, want [0, 1]", tiers)
+	}
+}
+
+func TestEnsureCurrentBuiltinRules_SeedsFableFromOpus(t *testing.T) {
+	c := &Config{
+		Rules: []typ.Rule{
+			{UUID: RuleUUIDCCOpus, Scenario: typ.ScenarioClaudeCode, Active: true, Services: []*loadbalance.Service{svc("p1")}},
+		},
+	}
+
+	ensureCurrentBuiltinRules(c)
+
+	fable := c.findRuleByUUID(RuleUUIDCCFable)
+	if fable == nil {
+		t.Fatal("expected fable rule to be seeded")
+	}
+	if !fable.Active || len(fable.Services) != 1 || fable.Services[0].Provider != "p1" {
+		t.Errorf("fable should mirror opus active state and services, got %+v", fable)
+	}
+	if fable.RequestModel != "tingly/cc-fable" {
+		t.Errorf("fable request model = %q", fable.RequestModel)
+	}
+
+	ensureCurrentBuiltinRules(c)
+	if n := countRules(c, RuleUUIDCCFable); n != 1 {
+		t.Errorf("fable rule duplicated: count = %d", n)
+	}
+}
+
+func TestEnsureCurrentBuiltinRules_NoFableWithoutSeparateRules(t *testing.T) {
+	c := &Config{Rules: []typ.Rule{{UUID: RuleUUIDCC, Scenario: typ.ScenarioClaudeCode, Active: true}}}
+	ensureCurrentBuiltinRules(c)
+	if c.findRuleByUUID(RuleUUIDCCFable) != nil {
+		t.Error("fable must not be seeded for configs without the separate-mode rules")
 	}
 }

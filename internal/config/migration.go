@@ -547,6 +547,19 @@ func ensureCurrentBuiltinRules(c *Config) bool {
 		logrus.Info("Added Claude Desktop haiku-4-5 built-in rule")
 	}
 
+	// Claude Code gained a fable tier after separate mode shipped: backfill its
+	// rule for existing configs, mirroring the opus rule's services and
+	// active state so separate-mode users get a routable fable alias.
+	if opus := c.findRuleByUUID(RuleUUIDCCOpus); opus != nil {
+		if newRule, ok := c.seedBuiltinRuleIfMissing(RuleUUIDCCFable, opus.Services); ok {
+			if r := c.findRuleByUUID(newRule.UUID); r != nil {
+				r.Active = opus.Active
+			}
+			needsSave = true
+			logrus.Info("Added Claude Code fable built-in rule")
+		}
+	}
+
 	if needsSave {
 		logrus.Info("Migration current-builtin-rules completed: ensured current built-in rules")
 	}

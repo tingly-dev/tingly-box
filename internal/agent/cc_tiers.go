@@ -9,13 +9,14 @@ import (
 
 // ClaudeCodeTierAliases are the --model aliases Claude Code maps to a tier
 // env var. The default tier ("", no --model) is ANTHROPIC_MODEL.
-var ClaudeCodeTierAliases = []string{"opus", "sonnet", "haiku"}
+var ClaudeCodeTierAliases = []string{"opus", "sonnet", "haiku", "fable"}
 
 var claudeCodeTierEnvKeys = map[string]string{
 	"":       "ANTHROPIC_MODEL",
 	"opus":   "ANTHROPIC_DEFAULT_OPUS_MODEL",
 	"sonnet": "ANTHROPIC_DEFAULT_SONNET_MODEL",
 	"haiku":  "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+	"fable":  "ANTHROPIC_DEFAULT_FABLE_MODEL",
 }
 
 // ClaudeCodeTier is one model Claude Code can be asked for: the alias passed

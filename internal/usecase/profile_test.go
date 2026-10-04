@@ -81,8 +81,8 @@ func TestProfileUseCase_GetByIDOrName(t *testing.T) {
 			if result.Scenario != typ.ProfiledScenarioName(typ.ScenarioClaudeCode, profile.ID) {
 				t.Errorf("scenario = %q", result.Scenario)
 			}
-			if len(result.Rules) != 5 {
-				t.Fatalf("rules = %d, want 5", len(result.Rules))
+			if len(result.Rules) != 6 {
+				t.Fatalf("rules = %d, want 6", len(result.Rules))
 			}
 			// Assert the full ordering is non-decreasing by RequestModel, not
 			// just Rules[0]. "default" sorts first lexicographically anyway, so

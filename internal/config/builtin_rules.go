@@ -61,6 +61,7 @@ const (
 	RuleUUIDCCSonnet   = "builtin:claude_code:sonnet"
 	RuleUUIDCCOpus     = "builtin:claude_code:opus"
 	RuleUUIDCCSubagent = "builtin:claude_code:subagent"
+	RuleUUIDCCFable    = "builtin:claude_code:fable"
 
 	// Claude Desktop built-in rules (locked, using builtin: prefix)
 	RuleUUIDBuiltinClaudeDesktopSonnet46 = "builtin:claude_desktop:claude-sonnet-4-6"
@@ -129,6 +130,7 @@ var ccProfileTiers = map[string]bool{
 	"sonnet":   true,
 	"opus":     true,
 	"subagent": true,
+	"fable":    true,
 }
 
 var claudeCodeUnifiedRuleUUIDs = map[string]bool{
@@ -142,6 +144,7 @@ var claudeCodeSeparateRuleUUIDs = map[string]bool{
 	RuleUUIDCCSonnet:          true,
 	RuleUUIDCCOpus:            true,
 	RuleUUIDCCSubagent:        true,
+	RuleUUIDCCFable:           true,
 	RuleUUIDBuiltinCCDefault:  true,
 	RuleUUIDBuiltinCCHaiku:    true,
 	RuleUUIDBuiltinCCSonnet:   true,
