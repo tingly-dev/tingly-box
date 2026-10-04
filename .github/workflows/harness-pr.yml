@@ -24,6 +24,8 @@ on:
       - 'internal/loadbalance/**'
       - 'internal/forwarding/**'
       - 'internal/toolengine/**'
+      - 'internal/mcp/**'
+      - 'internal/tool/**'
       - 'internal/guardrails/**'
       - 'internal/server/*.go'        # top-level handlers only, not module/ (management APIs)
       - 'vmodel/**'

@@ -48,7 +48,7 @@ const DASHBOARD_RANGE_PATH = /^\/dashboard\/(today|yesterday|3d|7d|30d|90d)$/;
 
 export function useActivityItems(): ActivityItem[] {
     const { t } = useTranslation();
-    const { skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableDesk } = useFeatureFlags();
+    const { skillUser, skillIde, enableGuardrails, enableBench, enableDesk } = useFeatureFlags();
     const { profiles } = useProfileContext();
     const { teams } = useTeamContext();
     const botSummary = useBotPlatformSummary();
@@ -280,16 +280,17 @@ export function useActivityItems(): ActivityItem[] {
                 defaultPath: promptMenuItems.find((item): item is NavItemBase => !('type' in item))?.path,
                 children: promptMenuItems,
             }] as ActivityItem[] : []),
-            ...(enableMCP ? [{
+            ...[{
                 key: 'tools' as const,
                 icon: <IconTools sx={{ fontSize: 22 }} />,
                 label: t('layout.tools', { defaultValue: 'Tools' }),
                 defaultPath: '/mcp/sources',
                 children: [
                     { path: '/mcp/sources', label: 'MCP', icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
-                    { path: '/tools/servertool', label: t('layout.servertool', { defaultValue: 'Servertool' }), icon: <IconServer sx={{ fontSize: 20 }} /> },
+                    { path: '/mcp/tools', label: t('mcp.center.capabilities', { defaultValue: 'Capabilities' }), icon: <IconServer sx={{ fontSize: 20 }} /> },
+                    { path: '/mcp/clients', label: t('mcp.center.clients', { defaultValue: 'Client access' }), icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
                 ],
-            }] as ActivityItem[] : []),
+            }] as ActivityItem[],
             ...(enableGuardrails ? [{
                 key: 'guardrails',
                 icon: <IconShield sx={{ fontSize: 22 }} />,
@@ -353,5 +354,5 @@ export function useActivityItems(): ActivityItem[] {
         ];
 
         return items;
-    }, [t, promptMenuItems, enableGuardrails, enableMCP, enableBench, enableDesk, profiles, teams, botSummary, hiddenScenarios]);
+    }, [t, promptMenuItems, enableGuardrails, enableBench, enableDesk, profiles, teams, botSummary, hiddenScenarios]);
 }

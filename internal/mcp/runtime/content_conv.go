@@ -41,6 +41,12 @@ func contentBlocksToTools(sdkTools []*mcp.Tool) []mcpTool {
 				}
 			}
 		}
+		if t.OutputSchema != nil {
+			tool.OutputSchema, _ = json.Marshal(t.OutputSchema)
+		}
+		if t.Annotations != nil {
+			tool.Annotations, _ = json.Marshal(t.Annotations)
+		}
 		// Also check for input_schema (older spec version).
 		// SDK uses inputSchema, so this covers the common case.
 		tools = append(tools, tool)
