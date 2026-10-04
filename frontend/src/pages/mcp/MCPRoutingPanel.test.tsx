@@ -133,7 +133,7 @@ describe('effective MCP usage relationships', () => {
         const changed = { ...snapshot, clients: [{ ...snapshot.clients[0], sources: [] }] };
         render(renderPanel(changed, { focusSource: 'docs', ...extra }));
         expect(screen.getAllByText(message).length).toBeGreaterThan(0);
-        const ordinary = screen.getByRole('region', { name: 'Tool' });
+        const ordinary = screen.getByRole('region', { name: 'MCP' });
         expect(within(ordinary).queryByText('1 available tools')).toBeNull();
     });
     it('retains a failed saved association while refusing to confirm any tool or gateway count', () => {

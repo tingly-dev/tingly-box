@@ -149,9 +149,9 @@ export default function MCPSourceRelationships({
                     'Shows the current effective configuration, not call history. Solid nodes have available tools; dashed nodes have no confirmed tools.'
                 )}
             </Typography>
-            <Box component="section" aria-label="Tool">
+            <Box component="section" aria-label="MCP">
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-                    Tool · {label('whoCanUse', 'Who can use it?')}
+                    MCP · {label('whoCanUse', 'Who can use it?')}
                 </Typography>
                 <Stack spacing={1.25}>
                     {snapshot.clients.map((client) => {
@@ -321,7 +321,7 @@ export default function MCPSourceRelationships({
                             >
                                 <Box>
                                     <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                                        Tool
+                                        MCP
                                     </Typography>
                                     {snapshot.clients.map((client) => (
                                         <Box key={client.id} sx={{ mt: 0.75 }}>
