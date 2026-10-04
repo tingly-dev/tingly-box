@@ -1,7 +1,7 @@
 # 图像素材库（Image Library）
 
-> 状态：**前端原型，存储未接入**。素材存在模块内存里（`frontend/src/pages/image/library/assetStore.ts`），
-> 用 mock 数据预置；刷新页面就会丢失。目标是把素材库落在图像输出目录上（见 §5）。
+> 状态：**前端实现，后端存储未接入**。素材和片段存在浏览器 IndexedDB 里（`frontend/src/pages/image/library/assetStore.ts`
+> → `imageWorkspaceDb.ts`），刷新不丢。示例素材只在 mock 模式出现。目标是把素材库落在图像输出目录上（见 §7）。
 
 ## 1. 为什么需要
 

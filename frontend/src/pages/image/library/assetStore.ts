@@ -1,52 +1,51 @@
-import { useSyncExternalStore } from 'react';
 import type { ImageAsset, PromptSnippet } from './assetTypes';
-import { mockAssets, mockSnippets } from './mockAssets';
+import { USE_MOCK, createWorkspaceCollection } from '../imageWorkspaceDb';
 
-// PROTOTYPE store: module memory for the tab's lifetime. A page-free module —
+// The library, kept in the browser (imageWorkspaceDb.ts). A page-free module —
 // the profile store and the playground both import it.
-let assets: ImageAsset[] = mockAssets;
-let snippets: PromptSnippet[] = mockSnippets;
-const listeners = new Set<() => void>();
-const emit = () => listeners.forEach((listener) => listener());
-const subscribe = (listener: () => void) => {
-    listeners.add(listener);
-    return () => { listeners.delete(listener); };
-};
+const assetStore = createWorkspaceCollection<ImageAsset>(
+    'assets',
+    USE_MOCK ? () => import('./mockAssets').then((module) => module.mockAssets) : null,
+);
+const snippetStore = createWorkspaceCollection<PromptSnippet>(
+    'snippets',
+    USE_MOCK ? () => import('./mockAssets').then((module) => module.mockSnippets) : null,
+);
 const newId = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 
-export const useAssets = (): ImageAsset[] => useSyncExternalStore(subscribe, () => assets, () => assets);
-export const useSnippets = (): PromptSnippet[] => useSyncExternalStore(subscribe, () => snippets, () => snippets);
+export const useAssets = assetStore.useItems;
+export const useSnippets = snippetStore.useItems;
+export const useLibraryReady = (): boolean => {
+    // Both hooks every render — `a() && b()` would skip one and break hook order.
+    const assetsReady = assetStore.useReady();
+    const snippetsReady = snippetStore.useReady();
+    return assetsReady && snippetsReady;
+};
 
 // Keeping the same picture twice is a no-op, not a duplicate.
 export const keepImage = (fields: Omit<ImageAsset, 'id' | 'createdAt'>): ImageAsset => {
-    const existing = assets.find((asset) => asset.src === fields.src);
+    const existing = assetStore.get().find((asset) => asset.src === fields.src);
     if (existing) return existing;
     const asset: ImageAsset = { ...fields, id: newId('img'), createdAt: Date.now() };
-    assets = [asset, ...assets];
-    emit();
+    assetStore.set([asset, ...assetStore.get()]);
     return asset;
 };
 
 export const renameAsset = (id: string, name: string) => {
-    assets = assets.map((asset) => (asset.id === id ? { ...asset, name } : asset));
-    emit();
+    assetStore.set(assetStore.get().map((asset) => (asset.id === id ? { ...asset, name } : asset)));
 };
 
 export const removeAsset = (id: string) => {
-    assets = assets.filter((asset) => asset.id !== id);
-    emit();
+    assetStore.set(assetStore.get().filter((asset) => asset.id !== id));
 };
 
 export const saveSnippet = (fields: { id?: string; name: string; text: string }) => {
-    if (fields.id) {
-        snippets = snippets.map((item) => (item.id === fields.id ? { ...item, name: fields.name, text: fields.text } : item));
-    } else {
-        snippets = [{ id: newId('snip'), name: fields.name, text: fields.text, createdAt: Date.now() }, ...snippets];
-    }
-    emit();
+    const snippets = snippetStore.get();
+    snippetStore.set(fields.id
+        ? snippets.map((item) => (item.id === fields.id ? { ...item, name: fields.name, text: fields.text } : item))
+        : [{ id: newId('snip'), name: fields.name, text: fields.text, createdAt: Date.now() }, ...snippets]);
 };
 
 export const removeSnippet = (id: string) => {
-    snippets = snippets.filter((item) => item.id !== id);
-    emit();
+    snippetStore.set(snippetStore.get().filter((item) => item.id !== id));
 };

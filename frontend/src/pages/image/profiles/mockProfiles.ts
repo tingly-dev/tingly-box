@@ -74,7 +74,7 @@ const mockRef = (name: string, svg: string, width: number, height: number): Refe
 const DAY = 24 * 60 * 60 * 1000;
 const now = Date.now();
 
-// PROTOTYPE seed data — what a user with a few profiles would see.
+// Mock-mode seed (`pnpm dev:mock` only) — what a user with a few profiles would see.
 export const mockProfiles = (): ImageProfile[] => [
     {
         id: 'linxia-film',

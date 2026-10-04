@@ -1,7 +1,8 @@
 # 图像配置方案（Image Profile）
 
-> 状态：**前端原型，存储未接入**。Profile 存在模块内存里（`frontend/src/pages/image/profiles/imageProfileStore.ts`），
-> 用 mock 数据预置了三个；刷新页面就会丢失。生成本身走的是现有链路，没有改动。
+> 状态：**前端实现，后端存储未接入**。Profile 存在浏览器 IndexedDB 里（`frontend/src/pages/image/profiles/imageProfileStore.ts`
+> → `imageWorkspaceDb.ts`），刷新不丢，但换浏览器 / 换机器看不到。新用户从空列表开始；
+> 三个示例 Profile 只在 mock 模式（`pnpm dev:mock`）出现，且不落盘、不进生产包。生成本身走的是现有链路，没有改动。
 
 ## 1. 是什么
 
@@ -46,7 +47,8 @@
 
 ## 4. 接入时要补的
 
-- 后端存储和 API（swagger + `task codegen`），替换 `imageProfileStore.ts`。参考图需要落盘。
+- 后端存储和 API（swagger + `task codegen`），替换 `imageWorkspaceDb.ts` 这一层。参考图需要落盘。
+  已经存在浏览器里的 Profile 要迁移上去，不能让用户重做。
 
 ## 5. 命名
 

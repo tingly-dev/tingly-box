@@ -1,25 +1,18 @@
-import { useSyncExternalStore } from 'react';
 import type { ImageProfile } from './imageProfileTypes';
-import { mockProfiles } from './mockProfiles';
+import { USE_MOCK, createWorkspaceCollection } from '../imageWorkspaceDb';
 
-// PROTOTYPE store: module memory, shared by the sidebar and the profile pages
-// for the lifetime of the tab. A page-free module on purpose — the sidebar
-// imports it, and must not pull a page into the eager bundle
-// (frontend/CLAUDE.md).
-let profiles: ImageProfile[] = mockProfiles();
-const listeners = new Set<() => void>();
+// Profiles, shared by the sidebar and the profile pages, kept in the browser
+// (imageWorkspaceDb.ts). A page-free module on purpose — the sidebar imports
+// it, and must not pull a page into the eager bundle (frontend/CLAUDE.md).
+const store = createWorkspaceCollection<ImageProfile>(
+    'profiles',
+    USE_MOCK ? () => import('./mockProfiles').then((module) => module.mockProfiles()) : null,
+);
 
-const emit = () => listeners.forEach((listener) => listener());
+export const useImageProfiles = store.useItems;
+export const useImageProfilesReady = store.useReady;
 
-const subscribe = (listener: () => void) => {
-    listeners.add(listener);
-    return () => { listeners.delete(listener); };
-};
-
-export const useImageProfiles = (): ImageProfile[] =>
-    useSyncExternalStore(subscribe, () => profiles, () => profiles);
-
-export const getImageProfile = (id: string) => profiles.find((profile) => profile.id === id);
+export const getImageProfile = (id: string) => store.get().find((profile) => profile.id === id);
 
 export const createImageProfile = (fields: Omit<ImageProfile, 'id' | 'updatedAt'>): ImageProfile => {
     const profile: ImageProfile = {
@@ -27,17 +20,14 @@ export const createImageProfile = (fields: Omit<ImageProfile, 'id' | 'updatedAt'
         id: Math.random().toString(36).slice(2, 10),
         updatedAt: Date.now(),
     };
-    profiles = [...profiles, profile];
-    emit();
+    store.set([...store.get(), profile]);
     return profile;
 };
 
 export const updateImageProfile = (id: string, patch: Partial<Omit<ImageProfile, 'id'>>) => {
-    profiles = profiles.map((profile) => (profile.id === id ? { ...profile, ...patch, updatedAt: Date.now() } : profile));
-    emit();
+    store.set(store.get().map((profile) => (profile.id === id ? { ...profile, ...patch, updatedAt: Date.now() } : profile)));
 };
 
 export const removeImageProfile = (id: string) => {
-    profiles = profiles.filter((profile) => profile.id !== id);
-    emit();
+    store.set(store.get().filter((profile) => profile.id !== id));
 };

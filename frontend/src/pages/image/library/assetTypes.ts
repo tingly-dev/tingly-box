@@ -3,8 +3,9 @@
 // using an image copies it into the request or profile, and nothing tracks
 // where it went. See .design/image-library.md.
 //
-// PROTOTYPE: kept in memory (assetStore.ts); the intended home is the image
-// output directory on disk, so the library and the folder are one thing.
+// Kept in the browser for now (assetStore.ts → imageWorkspaceDb.ts); the
+// intended home is the image output directory on disk, so the library and the
+// folder are one thing.
 
 export interface ImageAsset {
     id: string;

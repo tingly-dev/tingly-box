@@ -16,7 +16,8 @@ export interface ProfilePrompt {
 // already in place.
 // See .design/image-profile.md.
 //
-// PROTOTYPE: profiles live in memory (imageProfileStore.ts); no backend yet.
+// Kept in the browser for now (imageProfileStore.ts → imageWorkspaceDb.ts);
+// no backend yet.
 export interface ImageProfile {
     id: string;
     name: string;

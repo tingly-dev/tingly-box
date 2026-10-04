@@ -4,7 +4,7 @@ import { cat, mockProfiles, portrait, svgDataUrl, swatch } from '../profiles/moc
 const DAY = 24 * 60 * 60 * 1000;
 const now = Date.now();
 
-// PROTOTYPE seed: a few kept results and the mock profiles' references.
+// Mock-mode seed (`pnpm dev:mock` only): a few kept results and the mock profiles' references.
 const profileRefs: ImageAsset[] = mockProfiles().flatMap((profile, p) => profile.refs.map((ref, i) => ({
     id: `seed-ref-${p}-${i}`,
     src: ref.previewUrl,

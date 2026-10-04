@@ -24,7 +24,7 @@ import { api } from '@/services/api';
 import { fontMono } from '@/theme/fonts';
 import { downloadImage } from '@/utils/download';
 import type { ImageAsset, PromptSnippet } from './library/assetTypes';
-import { removeAsset, removeSnippet, renameAsset, saveSnippet, useAssets, useSnippets } from './library/assetStore';
+import { removeAsset, removeSnippet, renameAsset, saveSnippet, useAssets, useLibraryReady, useSnippets } from './library/assetStore';
 
 type Tab = 'images' | 'snippets';
 
@@ -38,6 +38,7 @@ const ImageLibraryPage: React.FC = () => {
     const tab: Tab = params.get('tab') === 'snippets' ? 'snippets' : 'images';
     const assets = useAssets();
     const snippets = useSnippets();
+    const ready = useLibraryReady();
     const [openAsset, setOpenAsset] = useState<ImageAsset | null>(null);
     const [confirmingDelete, setConfirmingDelete] = useState(false);
     // Renamed in place in the dialog title, the same way a profile's title is.
@@ -111,7 +112,7 @@ const ImageLibraryPage: React.FC = () => {
                 </Stack>
 
                 {tab === 'images' && (
-                    assets.length === 0 ? (
+                    !ready ? null : assets.length === 0 ? (
                         <Typography sx={{ color: 'text.secondary', fontSize: 14, py: 6, textAlign: 'center' }}>
                             {t('imageLibrary.emptyImages', { defaultValue: 'Nothing kept yet. Open any image in the Playground and choose “Keep in library”.' })}
                         </Typography>
@@ -153,7 +154,7 @@ const ImageLibraryPage: React.FC = () => {
                                 </Tooltip>
                             </Stack>
                         ))}
-                        {snippets.length === 0 && (
+                        {ready && snippets.length === 0 && (
                             <Typography sx={{ color: 'text.secondary', fontSize: 14, py: 6, textAlign: 'center' }}>
                                 {t('imageLibrary.emptySnippets', { defaultValue: 'Snippets are pieces of prompt you reuse — a look, a lens, a palette. Insert one from the prompt field.' })}
                             </Typography>

@@ -5,7 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useRuleManagement } from '@/pages/scenario/hooks/useRuleManagement';
 import { useNotify } from '@/hooks/useNotify';
 import ImageGenPlaygroundCard from './components/ImageGenPlaygroundCard';
-import { createImageProfile, useImageProfiles } from './profiles/imageProfileStore';
+import { createImageProfile, useImageProfiles, useImageProfilesReady } from './profiles/imageProfileStore';
 
 const scenario = 'imagegen';
 const WORKBENCH_MIN_HEIGHT = 600;
@@ -18,6 +18,7 @@ const ImageProfilePage: React.FC = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const profiles = useImageProfiles();
+    const ready = useImageProfilesReady();
     const profile = profiles.find((item) => item.id === profileId);
     const { rules, loadingRule, loadRules } = useRuleManagement();
     const { notify } = useNotify();
@@ -54,7 +55,8 @@ const ImageProfilePage: React.FC = () => {
         [notify],
     );
 
-    if (profileId === 'new') return null;
+    // Still reading stored profiles (a reload lands here): not "gone" yet.
+    if (profileId === 'new' || (!profile && !ready)) return null;
 
     if (!profile) {
         return (
