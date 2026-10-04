@@ -771,6 +771,18 @@ func backfillFableRuleOnce(c *Config) bool {
 	return true // the marker itself changed the config
 }
 
+// hasRequestModel reports whether a rule in the scenario already answers to
+// the Claude Code request model, in either spelling.
+func (c *Config) hasRequestModel(scenario typ.RuleScenario, requestModel string) bool {
+	want := canonicalCCRequestModel(requestModel)
+	for i := range c.Rules {
+		if c.Rules[i].Scenario == scenario && canonicalCCRequestModel(c.Rules[i].RequestModel) == want {
+			return true
+		}
+	}
+	return false
+}
+
 // backfillFableRule seeds the Claude Code fable rule for configs that predate
 // the tier, mirroring the opus rule's services, flags, load-balancing tactic,
 // active state and naming style (short or legacy "tingly/cc-*"), so
@@ -783,33 +795,21 @@ func (c *Config) backfillFableRule() bool {
 	}
 	name := "fable"
 	if legacyCCRequestModels[TrimContext1M(opus.RequestModel)] != "" {
-		name = legacyCCRequestModelFor("fable")
+		name = "tingly/cc-fable"
 	}
 	if c.hasRequestModel(typ.ScenarioClaudeCode, name) {
 		return false
 	}
-	fable, ok := defaultRuleByUUID(RuleUUIDCCFable)
+	rule, ok := c.seedBuiltinRuleIfMissing(RuleUUIDCCFable, opus.Services)
 	if !ok {
 		return false
 	}
-	fable.RequestModel = name
-	fable.Services = cloneServices(opus.Services)
-	fable.Active = opus.Active
-	fable.Flags = opus.Flags
-	fable.LBTactic = opus.LBTactic
-	c.Rules = append(c.Rules, fable)
+	// seedBuiltinRuleIfMissing appended a copy; customize the stored one.
+	stored := c.findRuleByUUID(rule.UUID)
+	stored.Active = opus.Active
+	stored.Flags = opus.Flags
+	stored.LBTactic = opus.LBTactic
+	stored.RequestModel = name
 	logrus.Info("Added Claude Code fable built-in rule")
 	return true
-}
-
-// hasRequestModel reports whether a rule in the scenario already answers to
-// the Claude Code request model, in either spelling.
-func (c *Config) hasRequestModel(scenario typ.RuleScenario, requestModel string) bool {
-	want := canonicalCCRequestModel(requestModel)
-	for i := range c.Rules {
-		if c.Rules[i].Scenario == scenario && canonicalCCRequestModel(c.Rules[i].RequestModel) == want {
-			return true
-		}
-	}
-	return false
 }

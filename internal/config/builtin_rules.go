@@ -177,14 +177,3 @@ func canonicalCCRequestModel(model string) string {
 	}
 	return model
 }
-
-// legacyCCRequestModelFor returns the prefixed spelling of a short built-in
-// name ("" when the name is not one of the aliased group).
-func legacyCCRequestModelFor(short string) string {
-	for legacy, s := range legacyCCRequestModels {
-		if s == short {
-			return legacy
-		}
-	}
-	return ""
-}

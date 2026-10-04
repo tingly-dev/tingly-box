@@ -351,7 +351,7 @@ func (c *Config) MatchRuleByModelAndScenario(requestModel string, scenario typ.R
 		}
 		want := normalize(requestModel)
 		for _, rule := range c.Rules {
-			if normalize(rule.RequestModel) == want && rule.GetScenario() == scenario {
+			if rule.GetScenario() == scenario && normalize(rule.RequestModel) == want {
 				return &rule
 			}
 		}
