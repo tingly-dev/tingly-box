@@ -67,12 +67,13 @@ type ClaudeCodePrefs struct {
 	McpToolTimeout            string `json:"MCP_TOOL_TIMEOUT,omitempty"`
 	MaxMcpOutputTokens        string `json:"MAX_MCP_OUTPUT_TOKENS,omitempty"`
 
-	// Subagent concurrency — how many Task-tool subagents Claude Code runs at
-	// once and how it handles ones that run long or stall.
-	ClaudeCodeMaxActiveTasks           string `json:"CLAUDE_CODE_MAX_ACTIVE_TASKS,omitempty"`
-	ClaudeCodeMaxLongRunningTaskTimeMs string `json:"CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS,omitempty"`
-	ClaudeAutoBackgroundTasks          string `json:"CLAUDE_AUTO_BACKGROUND_TASKS,omitempty"`
-	ClaudeAsyncAgentStallTimeoutMs     string `json:"CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS,omitempty"`
+	// Subagent concurrency — how many subagents Claude Code runs at once and
+	// how it handles long-running or stalled background work. Names verified
+	// against the Claude Code 2.1.289 binary.
+	ClaudeCodeMaxConcurrentSubagents  string `json:"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS,omitempty"`
+	ClaudeCodeAutoBackgroundTimeoutMs string `json:"CLAUDE_CODE_AUTO_BACKGROUND_TIMEOUT_MS,omitempty"`
+	ClaudeAutoBackgroundTasks         string `json:"CLAUDE_AUTO_BACKGROUND_TASKS,omitempty"`
+	ClaudeAsyncAgentStallTimeoutMs    string `json:"CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS,omitempty"`
 
 	// Auto-compact settings — control context window compaction
 	ClaudeCodeAutoCompactWindow  string `json:"CLAUDE_CODE_AUTO_COMPACT_WINDOW,omitempty"`
@@ -122,6 +123,12 @@ func ClaudeCodePrefsFromEnv(env map[string]string) (ClaudeCodePrefs, error) {
 	var prefs ClaudeCodePrefs
 	if err := json.Unmarshal(b, &prefs); err != nil {
 		return ClaudeCodePrefs{}, err
+	}
+	// CLAUDE_CODE_MAX_ACTIVE_TASKS was written by earlier versions but Claude
+	// Code never read it; its concurrency cap is CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS.
+	// Carry a stored value over so the setting the user made takes effect.
+	if prefs.ClaudeCodeMaxConcurrentSubagents == "" {
+		prefs.ClaudeCodeMaxConcurrentSubagents = env["CLAUDE_CODE_MAX_ACTIVE_TASKS"]
 	}
 	return prefs, nil
 }

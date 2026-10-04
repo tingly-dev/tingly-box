@@ -224,8 +224,8 @@ func TestProfileClaudeConfigLifecycle(t *testing.T) {
 
 	updateBody, err := json.Marshal(ProfileClaudeConfigRequest{
 		Preferences: &agent.ClaudeCodePrefs{
-			ClaudeCodeMaxOutputTokens: "64000",
-			ClaudeCodeMaxActiveTasks:  "4",
+			ClaudeCodeMaxOutputTokens:        "64000",
+			ClaudeCodeMaxConcurrentSubagents: "4",
 		},
 		DefaultMode: "plan",
 	})
@@ -238,7 +238,7 @@ func TestProfileClaudeConfigLifecycle(t *testing.T) {
 	router.ServeHTTP(updateResult, updateReq)
 	assert.Equal(t, http.StatusOK, updateResult.Code, updateResult.Body.String())
 	assert.Contains(t, updateResult.Body.String(), `"CLAUDE_CODE_MAX_OUTPUT_TOKENS":"64000"`)
-	assert.Contains(t, updateResult.Body.String(), `"CLAUDE_CODE_MAX_ACTIVE_TASKS":"4"`)
+	assert.Contains(t, updateResult.Body.String(), `"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS":"4"`)
 	assert.Contains(t, updateResult.Body.String(), `"defaultMode":"plan"`)
 	assert.Contains(t, updateResult.Body.String(), `"hasOverrides":true`)
 	assert.Contains(t, updateResult.Body.String(), `"settingsExists":true`)
@@ -262,7 +262,7 @@ func TestProfileClaudeConfigLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, "64000", generatedSettings.Env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"])
-	assert.Equal(t, "4", generatedSettings.Env["CLAUDE_CODE_MAX_ACTIVE_TASKS"])
+	assert.Equal(t, "4", generatedSettings.Env["CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"])
 	assert.Equal(t, "plan", generatedSettings.DefaultMode, "legacy top-level defaultMode should still be mirrored on disk")
 	assert.Equal(t, "plan", generatedSettings.Permissions.DefaultMode, "the file Claude Code actually reads must carry permissions.defaultMode")
 
@@ -271,14 +271,14 @@ func TestProfileClaudeConfigLifecycle(t *testing.T) {
 		t.Fatalf("profile override was not persisted: %#v", stored)
 	}
 	assert.Equal(t, "64000", stored.ClaudeCode.Env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"])
-	assert.Equal(t, "4", stored.ClaudeCode.Env["CLAUDE_CODE_MAX_ACTIVE_TASKS"])
+	assert.Equal(t, "4", stored.ClaudeCode.Env["CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"])
 	assert.Equal(t, "plan", stored.ClaudeCode.DefaultMode)
 
 	getResult := httptest.NewRecorder()
 	router.ServeHTTP(getResult, httptest.NewRequest(http.MethodGet, endpoint, nil))
 	assert.Equal(t, http.StatusOK, getResult.Code, getResult.Body.String())
 	assert.Contains(t, getResult.Body.String(), `"hasOverrides":true`)
-	assert.Contains(t, getResult.Body.String(), `"CLAUDE_CODE_MAX_ACTIVE_TASKS":"4"`)
+	assert.Contains(t, getResult.Body.String(), `"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS":"4"`)
 	assert.Contains(t, getResult.Body.String(), `"defaultMode":"plan"`)
 
 	deleteResult := httptest.NewRecorder()

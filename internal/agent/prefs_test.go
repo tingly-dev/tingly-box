@@ -98,8 +98,8 @@ func TestClaudeCodePrefs_ToEnv_FullForm(t *testing.T) {
 		McpTimeout:                           "6",
 		McpToolTimeout:                       "7",
 		MaxMcpOutputTokens:                   "8",
-		ClaudeCodeMaxActiveTasks:             "9",
-		ClaudeCodeMaxLongRunningTaskTimeMs:   "10",
+		ClaudeCodeMaxConcurrentSubagents:     "9",
+		ClaudeCodeAutoBackgroundTimeoutMs:    "10",
 		ClaudeAutoBackgroundTasks:            "1",
 		ClaudeAsyncAgentStallTimeoutMs:       "11",
 		DisableTelemetry:                     "1",
@@ -130,8 +130,8 @@ func TestClaudeCodePrefs_ToEnv_FullForm(t *testing.T) {
 		"MCP_TIMEOUT",
 		"MCP_TOOL_TIMEOUT",
 		"MAX_MCP_OUTPUT_TOKENS",
-		"CLAUDE_CODE_MAX_ACTIVE_TASKS",
-		"CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS",
+		"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS",
+		"CLAUDE_CODE_AUTO_BACKGROUND_TIMEOUT_MS",
 		"CLAUDE_AUTO_BACKGROUND_TASKS",
 		"CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS",
 		"DISABLE_TELEMETRY",
@@ -251,8 +251,8 @@ func TestClaudeCodePrefs_JSONRoundTripPreservesFields(t *testing.T) {
 		McpTimeout:                           "6",
 		McpToolTimeout:                       "7",
 		MaxMcpOutputTokens:                   "8",
-		ClaudeCodeMaxActiveTasks:             "9",
-		ClaudeCodeMaxLongRunningTaskTimeMs:   "10",
+		ClaudeCodeMaxConcurrentSubagents:     "9",
+		ClaudeCodeAutoBackgroundTimeoutMs:    "10",
 		ClaudeAutoBackgroundTasks:            "1",
 		ClaudeAsyncAgentStallTimeoutMs:       "11",
 		DisableTelemetry:                     "1",
@@ -396,4 +396,23 @@ func diffKeys(env map[string]string, wantKeys []string) []string {
 		}
 	}
 	return extra
+}
+
+func TestClaudeCodePrefsFromEnv_CarriesOverLegacyMaxActiveTasks(t *testing.T) {
+	// Earlier versions wrote a name Claude Code never read; the stored value is
+	// kept under the real concurrency variable.
+	p, err := ClaudeCodePrefsFromEnv(map[string]string{"CLAUDE_CODE_MAX_ACTIVE_TASKS": "4"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.ClaudeCodeMaxConcurrentSubagents != "4" {
+		t.Errorf("concurrency = %q, want 4", p.ClaudeCodeMaxConcurrentSubagents)
+	}
+	p, _ = ClaudeCodePrefsFromEnv(map[string]string{
+		"CLAUDE_CODE_MAX_ACTIVE_TASKS":         "4",
+		"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "8",
+	})
+	if p.ClaudeCodeMaxConcurrentSubagents != "8" {
+		t.Errorf("explicit value must win, got %q", p.ClaudeCodeMaxConcurrentSubagents)
+	}
 }

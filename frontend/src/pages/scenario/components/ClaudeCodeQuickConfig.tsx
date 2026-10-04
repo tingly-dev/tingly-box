@@ -40,8 +40,8 @@ export interface ClaudeCodePrefs {
     MCP_TOOL_TIMEOUT?: string;
     MAX_MCP_OUTPUT_TOKENS?: string;
 
-    CLAUDE_CODE_MAX_ACTIVE_TASKS?: string;
-    CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS?: string;
+    CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS?: string;
+    CLAUDE_CODE_AUTO_BACKGROUND_TIMEOUT_MS?: string;
     CLAUDE_AUTO_BACKGROUND_TASKS?: string;
     CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS?: string;
 
@@ -117,8 +117,8 @@ export const CLAUDE_CODE_FIELD_STRUCT: FieldStruct[] = [
     { envName: 'MCP_TOOL_TIMEOUT', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
     { envName: 'MAX_MCP_OUTPUT_TOKENS', group: 'limits', kind: 'int', unit: 'tokens', advanced: true },
     // Subagent concurrency (commonly adjusted - the Task-tool parallelism knob)
-    { envName: 'CLAUDE_CODE_MAX_ACTIVE_TASKS', group: 'limits', kind: 'int', unit: 'tasks', advanced: false },
-    { envName: 'CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
+    { envName: 'CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS', group: 'limits', kind: 'int', unit: 'subagents', advanced: false },
+    { envName: 'CLAUDE_CODE_AUTO_BACKGROUND_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
     { envName: 'CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
     { envName: 'CLAUDE_AUTO_BACKGROUND_TASKS', group: 'switches', kind: 'bool', advanced: true },
     // Auto-compact (commonly adjusted - not advanced)
@@ -229,17 +229,16 @@ const FIELDS_TEXT_ZH: FieldTextMap = {
         tooltip: '官方默认 8192。超过会被截断。',
         placeholder: '8192',
     },
-    CLAUDE_CODE_MAX_ACTIVE_TASKS: {
+    CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS: {
         label: '子 Agent 并发数',
-        purpose: '通过 Task 工具同时运行的子 Agent 数量上限',
-        tooltip: '官方默认 1（不并发）。超出上限的任务会被放到后台排队。调高可以让多个子 Agent 同时跑长任务。',
-        placeholder: '1',
+        purpose: '同时运行的子 Agent 数量上限',
+        tooltip: '官方默认 20。达到上限后，新的子 Agent 会被拒绝并提示稍后再试。调低可以限制并发和用量。',
+        placeholder: '20',
     },
-    CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS: {
-        label: '子 Agent 转后台阈值',
-        purpose: '单个长任务运行多久后被自动放入后台',
-        tooltip: '官方默认 120000（2 分钟）。超过这个时长的子 Agent 会被自动转入后台运行，释放并发名额。',
-        placeholder: '120000',
+    CLAUDE_CODE_AUTO_BACKGROUND_TIMEOUT_MS: {
+        label: '自动转后台等待上限',
+        purpose: '前台长命令最多等待多久',
+        tooltip: '单位毫秒，不低于 2000。仅在自动后台化生效时起作用；留空表示不额外限制。',
     },
     CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS: {
         label: '子 Agent 卡死超时',
@@ -388,17 +387,16 @@ const FIELDS_TEXT_EN: FieldTextMap = {
         tooltip: 'Anthropic default is 8192. Anything larger is truncated.',
         placeholder: '8192',
     },
-    CLAUDE_CODE_MAX_ACTIVE_TASKS: {
+    CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS: {
         label: 'Subagent concurrency',
-        purpose: 'Max number of Task-tool subagents running at once',
-        tooltip: 'Anthropic default is 1 (no concurrency). Tasks beyond the limit are parked in the background until a slot frees up. Raise this to let multiple subagents run long tasks in parallel.',
-        placeholder: '1',
+        purpose: 'Max number of subagents running at once',
+        tooltip: 'Claude Code defaults to 20. Beyond the limit new subagents are refused with a retry-later message. Lower it to cap parallelism and spend.',
+        placeholder: '20',
     },
-    CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS: {
-        label: 'Subagent backgrounding threshold',
-        purpose: 'How long a single subagent task runs before it is parked in the background',
-        tooltip: 'Anthropic default is 120000 (2 min). A subagent past this duration is automatically moved to the background, freeing its concurrency slot.',
-        placeholder: '120000',
+    CLAUDE_CODE_AUTO_BACKGROUND_TIMEOUT_MS: {
+        label: 'Auto-background wait cap',
+        purpose: 'How long a foreground command may run before it is handled in the background',
+        tooltip: 'Milliseconds, minimum 2000. Only applies where auto-backgrounding is active; leave empty for no extra cap.',
     },
     CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS: {
         label: 'Subagent stall timeout',
@@ -547,17 +545,16 @@ const FIELDS_TEXT_RU: FieldTextMap = {
         tooltip: 'Значение Anthropic по умолчанию — 8192. Всё сверх этого обрезается.',
         placeholder: '8192',
     },
-    CLAUDE_CODE_MAX_ACTIVE_TASKS: {
-        label: 'Параллелизм субагентов',
-        purpose: 'Максимум одновременно работающих субагентов инструмента Task',
-        tooltip: 'Значение Anthropic по умолчанию — 1 (без параллелизма). Задачи сверх лимита ждут в фоне. Увеличьте, чтобы несколько субагентов выполняли длинные задачи одновременно.',
-        placeholder: '1',
+    CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS: {
+        label: 'Параллельность субагентов',
+        purpose: 'Максимум одновременно работающих субагентов',
+        tooltip: 'По умолчанию в Claude Code — 20. Сверх лимита новые субагенты отклоняются. Уменьшите, чтобы ограничить параллелизм и расходы.',
+        placeholder: '20',
     },
-    CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS: {
-        label: 'Порог ухода субагента в фон',
-        purpose: 'Через сколько времени одна долгая задача субагента уходит в фон',
-        tooltip: 'Значение Anthropic по умолчанию — 120000 (2 мин). Субагент, превысивший это время, автоматически переводится в фон, освобождая слот параллелизма.',
-        placeholder: '120000',
+    CLAUDE_CODE_AUTO_BACKGROUND_TIMEOUT_MS: {
+        label: 'Лимит ожидания до фона',
+        purpose: 'Сколько команда может выполняться на переднем плане',
+        tooltip: 'Миллисекунды, минимум 2000. Действует только при включённом авто-переводе в фон; пусто — без дополнительного лимита.',
     },
     CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS: {
         label: 'Таймаут зависания субагента',
