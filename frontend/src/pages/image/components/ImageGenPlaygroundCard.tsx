@@ -699,6 +699,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 activeId={activePromptId}
                                 onSelect={selectPrompt}
                                 onAdd={addPrompt}
+                                onRename={(id, name) => setProfilePrompts((current) => current.map((item) => (item.id === id ? { ...item, name } : item)))}
                                 onRemove={removePrompt}
                             />
                         )}

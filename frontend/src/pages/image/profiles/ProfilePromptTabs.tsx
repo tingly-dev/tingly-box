@@ -1,4 +1,5 @@
-import { Box, ButtonBase, IconButton, Stack, Tooltip } from '@mui/material';
+import { useState } from 'react';
+import { Box, ButtonBase, IconButton, InputBase, Stack, Tooltip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Add, Close } from '@/components/icons';
 import type { ProfilePrompt } from './imageProfileTypes';
@@ -9,16 +10,24 @@ interface Props {
     activeId: string;
     onSelect: (id: string) => void;
     onAdd: () => void;
+    onRename: (id: string, name: string) => void;
     onRemove: (id: string) => void;
 }
 
 // A profile's prompts as a row of small tabs over the one prompt field —
 // switching swaps what the field holds, nothing more. Text-weight, not
 // chips: it is a header for the field below, not a second control panel.
-// Tabs are labelled by their prompt's opening words, so naming is never a
-// step the user has to take.
-const ProfilePromptTabs: React.FC<Props> = ({ prompts, activeId, onSelect, onAdd, onRemove }) => {
+// A prompt nobody named is labelled by its opening words; double-click names it.
+const ProfilePromptTabs: React.FC<Props> = ({ prompts, activeId, onSelect, onAdd, onRename, onRemove }) => {
     const { t } = useTranslation();
+    const [renamingId, setRenamingId] = useState<string | null>(null);
+    const [draft, setDraft] = useState('');
+
+    // Clearing the name hands it back to the automatic label.
+    const commit = () => {
+        if (renamingId) onRename(renamingId, draft.trim());
+        setRenamingId(null);
+    };
     const labelOf = (item: ProfilePrompt, index: number) => item.name
         || deriveLabel(item.text)
         || t('imageProfile.promptN', { defaultValue: 'Prompt {{n}}', n: index + 1 });
@@ -32,6 +41,31 @@ const ProfilePromptTabs: React.FC<Props> = ({ prompts, activeId, onSelect, onAdd
         >
             {prompts.map((item, index) => {
                 const active = item.id === activeId;
+                if (renamingId === item.id) {
+                    return (
+                        <InputBase
+                            key={item.id}
+                            autoFocus
+                            value={draft}
+                            onChange={(event) => setDraft(event.target.value)}
+                            onBlur={commit}
+                            onFocus={(event) => event.target.select()}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter') commit();
+                                if (event.key === 'Escape') setRenamingId(null);
+                            }}
+                            inputProps={{ 'aria-label': t('imageProfile.renamePrompt', { defaultValue: 'Prompt name' }) }}
+                            sx={{
+                                fontSize: 13,
+                                px: 1,
+                                height: 28,
+                                width: 120,
+                                borderBottom: 2,
+                                borderColor: 'primary.main',
+                            }}
+                        />
+                    );
+                }
                 return (
                     <Box
                         key={item.id}
@@ -43,22 +77,28 @@ const ProfilePromptTabs: React.FC<Props> = ({ prompts, activeId, onSelect, onAdd
                             '&:hover .prompt-remove': { opacity: 1 },
                         }}
                     >
-                        <ButtonBase
-                            role="tab"
-                            aria-selected={active}
-                            onClick={() => onSelect(item.id)}
-                            sx={{
-                                px: 1,
-                                height: 28,
-                                fontSize: 13,
-                                fontWeight: active ? 600 : 400,
-                                color: active ? 'text.primary' : 'text.secondary',
-                                borderRadius: 0.5,
-                                '&:hover': { color: 'text.primary' },
-                            }}
-                        >
-                            {labelOf(item, index)}
-                        </ButtonBase>
+                        {/* describeChild: the hint describes the tab; without it the
+                            Tooltip replaces the tab's accessible name with "Double-click
+                            to rename". */}
+                        <Tooltip describeChild title={active ? t('imageProfile.renameHint', { defaultValue: 'Double-click to rename' }) : ''} enterDelay={600}>
+                            <ButtonBase
+                                role="tab"
+                                aria-selected={active}
+                                onClick={() => onSelect(item.id)}
+                                onDoubleClick={() => { setDraft(labelOf(item, index)); setRenamingId(item.id); }}
+                                sx={{
+                                    px: 1,
+                                    height: 28,
+                                    fontSize: 13,
+                                    fontWeight: active ? 600 : 400,
+                                    color: active ? 'text.primary' : 'text.secondary',
+                                    borderRadius: 0.5,
+                                    '&:hover': { color: 'text.primary' },
+                                }}
+                            >
+                                {labelOf(item, index)}
+                            </ButtonBase>
+                        </Tooltip>
                         {active && prompts.length > 1 && (
                             <IconButton
                                 className="prompt-remove"

@@ -2773,7 +2773,9 @@ export default {
     "prompts": "提示词",
     "promptN": "提示词 {{n}}",
     "addPrompt": "新建提示词",
-    "removePrompt": "移除 {{name}}"
+    "removePrompt": "移除 {{name}}",
+    "renamePrompt": "提示词名称",
+    "renameHint": "双击重命名"
   },
   "desk": {
     "noBackgroundTasks": "暂无后台任务",
