@@ -1691,6 +1691,7 @@ const mockMainClaudeCodePreferences: Record<string, string> = {
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'tingly/cc',
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'tingly/cc',
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'tingly/cc',
+    ANTHROPIC_DEFAULT_FABLE_MODEL: 'tingly/cc',
     CLAUDE_CODE_SUBAGENT_MODEL: 'tingly/cc',
     CLAUDE_CODE_MAX_OUTPUT_TOKENS: '32000',
     API_TIMEOUT_MS: '3000000',
@@ -1712,6 +1713,7 @@ const mockProfileClaudeConfigData = (profileId: string) => {
         ANTHROPIC_DEFAULT_HAIKU_MODEL: profile?.unified ? model : 'haiku',
         ANTHROPIC_DEFAULT_SONNET_MODEL: profile?.unified ? model : 'sonnet',
         ANTHROPIC_DEFAULT_OPUS_MODEL: profile?.unified ? model : 'opus',
+        ANTHROPIC_DEFAULT_FABLE_MODEL: profile?.unified ? model : 'fable',
         CLAUDE_CODE_SUBAGENT_MODEL: profile?.unified ? model : 'subagent',
     }
     const stored = mockProfileClaudeConfigs[profileId]

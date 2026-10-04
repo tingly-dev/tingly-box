@@ -8,6 +8,7 @@ const unified = {
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'tingly/cc',
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'tingly/cc',
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'tingly/cc',
+    ANTHROPIC_DEFAULT_FABLE_MODEL: 'tingly/cc',
     CLAUDE_CODE_SUBAGENT_MODEL: 'tingly/cc',
 };
 
@@ -16,6 +17,7 @@ const separate = {
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'tingly/cc-haiku',
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'tingly/cc-sonnet',
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'tingly/cc-opus',
+    ANTHROPIC_DEFAULT_FABLE_MODEL: 'tingly/cc-fable',
     CLAUDE_CODE_SUBAGENT_MODEL: 'tingly/cc-subagent',
 };
 

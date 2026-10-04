@@ -12,6 +12,7 @@ export const mockClaudeCodeModels: Record<string, { unified: boolean; tiers: Moc
             { alias: 'opus', model: 'tingly/cc-opus', provider_name: 'Zhipu', provider_model: 'glm-4.6' },
             { alias: 'sonnet', model: 'tingly/cc-sonnet', provider_name: 'DeepSeek', provider_model: 'deepseek-chat' },
             { alias: 'haiku', model: 'tingly/cc-haiku', provider_name: 'DeepSeek', provider_model: 'deepseek-chat' },
+            { alias: 'fable', model: 'tingly/cc-fable', provider_name: 'Zhipu', provider_model: 'glm-4.6' },
         ],
     },
 }
