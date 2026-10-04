@@ -224,10 +224,10 @@ export default function MCPRoutingPanel({
             )}
             {routing && !loading && !error && !focusSource && (
                 <>
-                    <Box component="section" aria-label={label('ordinaryTools', 'Ordinary tools')}>
+                    <Box component="section" aria-label={label('ordinaryTools', 'MCP clients')}>
                         <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                             <Box>
-                                <Typography variant="h6">{label('ordinaryTools', 'Ordinary tools')}</Typography>
+                                <Typography variant="h6">{label('ordinaryTools', 'MCP clients')}</Typography>
                                 <Typography variant="body2" color="text.secondary">
                                     {label(
                                         'ordinaryHint',
@@ -236,7 +236,7 @@ export default function MCPRoutingPanel({
                                 </Typography>
                             </Box>
                             <Button onClick={() => onTools('client')}>
-                                {label('manageOrdinary', 'Manage ordinary tools')}
+                                {label('manageOrdinary', 'Manage MCP publication')}
                             </Button>
                         </Stack>
                         {regular.length === 0 && (

@@ -19,7 +19,7 @@ const stateText: Record<RelationshipState, string> = {
     disconnected: 'Connection is not established; availability cannot be confirmed',
     toolOff: 'Disabled by the shared tool policy',
     allowListOff: 'Source allow list does not include this tool',
-    ordinaryOff: 'Ordinary tool usage is off',
+    ordinaryOff: 'MCP publication is off',
     gatewayOff: 'Server Tool usage is off',
     clientOff: 'Client is disabled',
     sourceNotGranted: 'Connection is not granted to this client',
@@ -369,7 +369,7 @@ export default function MCPSourceRelationships({
                 <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, mt: 1 }}>
                     {source.processing !== 'advisor' && (
                         <Button onClick={() => onTools('client', source.id)}>
-                            {label('configureOrdinary', 'Configure Tool usage')}
+                            {label('configureOrdinary', 'Configure MCP publication')}
                         </Button>
                     )}
                     <Button onClick={() => onTools('gateway', source.id)}>
@@ -394,7 +394,7 @@ export default function MCPSourceRelationships({
                           )
                         : label(
                               'sharedImpact',
-                              'Connection settings, its enable switch and global tool policies affect both paths. Purpose settings in Tool and Server Tool affect only that group.'
+                              'Connection settings and global tool policies in Tool affect both paths. MCP publication and Server Tool execution are controlled independently.'
                           )}
                 </Typography>
                 <Typography variant="body2" sx={{ mt: 1 }}>

@@ -33,6 +33,8 @@ export default function MCPSourceWorkspace({
     onRefresh,
     usageScope,
     onRelationships,
+    onConfigureConnection,
+    onConfigureAdvisor,
 }: {
     source: MCPSourceConfig;
     route?: MCPRouteSource;
@@ -43,6 +45,8 @@ export default function MCPSourceWorkspace({
     onRefresh: () => Promise<void>;
     usageScope?: 'client' | 'gateway';
     onRelationships?: (id: string) => void;
+    onConfigureConnection?: () => void;
+    onConfigureAdvisor?: () => void;
 }) {
     const { t } = useTranslation();
     const label = (key: string, fallback: string) => t(`mcp.workspace.${key}`, { defaultValue: fallback });
@@ -53,6 +57,7 @@ export default function MCPSourceWorkspace({
     const [argumentsText, setArgumentsText] = useState('{}');
     const [testResult, setTestResult] = useState<unknown>(null);
     const advisor = source.transport === 'advisor' || !!source.advisor;
+    const assetsOnly = !usageScope;
     const [configure, setConfigure] = useState(advisor || (source.enabled !== false && route?.state !== 'connected'));
     const [confirmDelete, setConfirmDelete] = useState(false);
     const run = async (action: () => Promise<void>) => {
@@ -85,24 +90,22 @@ export default function MCPSourceWorkspace({
                         : usageScope === 'gateway'
                           ? 'serverSourceHint'
                           : 'sourceWorkspaceHint',
-                    'Configure this connection and choose how each tool is used, without leaving this workspace.'
+                    'Manage the connection, tool definitions and global switches here. MCP publication and Server Tool execution are configured separately.'
                 )}
             </Typography>
             {error && <Alert severity="error">{error}</Alert>}
-            <FormControlLabel
-                control={
-                    <Switch
-                        disabled={busy}
-                        checked={source.enabled !== false}
-                        onChange={(e) => void run(() => saveSource({ id: source.id, enabled: e.target.checked }))}
-                    />
-                }
-                label={
-                    usageScope
-                        ? label('sharedConnectionEnabled', 'Enable shared connection (affects Tool and Server Tool)')
-                        : label('connectionEnabled', 'Enable this tool connection')
-                }
-            />
+            {assetsOnly && (
+                <FormControlLabel
+                    control={
+                        <Switch
+                            disabled={busy}
+                            checked={source.enabled !== false}
+                            onChange={(e) => void run(() => saveSource({ id: source.id, enabled: e.target.checked }))}
+                        />
+                    }
+                    label={label('sharedAssetEnabled', 'Enable shared connection (affects MCP and Server Tool)')}
+                />
+            )}
             {source.enabled === false ? (
                 <Alert severity="info">
                     {label('connectionOff', 'This connection is off. Enable it to discover and use its tools.')}
@@ -122,56 +125,68 @@ export default function MCPSourceWorkspace({
                     </Alert>
                 )
             )}
-            {onRelationships && (
+            {!assetsOnly && onRelationships && (
                 <Button sx={{ alignSelf: 'flex-start' }} onClick={() => onRelationships(source.id!)}>
                     {t('mcp.relationships.view', { defaultValue: 'View usage relationships' })}
                 </Button>
             )}
-            <Accordion
-                expanded={configure}
-                onChange={(_, value) => setConfigure(value)}
-                disableGutters
-                elevation={0}
-                sx={{ border: '1px solid', borderColor: 'divider', '&:before': { display: 'none' } }}
-            >
-                <AccordionSummary expandIcon={<ExpandMore />}>
-                    <Typography style={{ fontWeight: 600 }}>
-                        {advisor
-                            ? label('consultationSetup', 'Consultation model')
-                            : label('connectionSettings', 'Connection settings')}
-                    </Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                    {advisor ? (
-                        <AdvisorSettings
-                            advisorSource={source}
-                            onSave={(patch) => run(() => saveSource(patch))}
-                            expanded
-                        />
-                    ) : (
-                        <Stack spacing={2}>
-                            <TextField
-                                label={label('connectionName', 'Connection name')}
-                                value={form.name}
-                                onChange={(e) => setForm({ ...form, name: e.target.value })}
+            {onConfigureConnection && (
+                <Button sx={{ alignSelf: 'flex-start' }} onClick={onConfigureConnection}>
+                    {label('configureInTool', 'Configure connection in Tool')}
+                </Button>
+            )}
+            {assetsOnly && advisor && onConfigureAdvisor && (
+                <Button sx={{ alignSelf: 'flex-start' }} onClick={onConfigureAdvisor}>
+                    {label('configureAdvisor', 'Configure Advisor model')}
+                </Button>
+            )}
+            {((assetsOnly && !advisor) || (usageScope === 'gateway' && advisor)) && (
+                <Accordion
+                    expanded={configure}
+                    onChange={(_, value) => setConfigure(value)}
+                    disableGutters
+                    elevation={0}
+                    sx={{ border: '1px solid', borderColor: 'divider', '&:before': { display: 'none' } }}
+                >
+                    <AccordionSummary expandIcon={<ExpandMore />}>
+                        <Typography style={{ fontWeight: 600 }}>
+                            {advisor
+                                ? label('consultationSetup', 'Consultation model')
+                                : label('connectionSettings', 'Connection settings')}
+                        </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                        {advisor ? (
+                            <AdvisorSettings
+                                advisorSource={source}
+                                onSave={(patch) => run(() => saveSource(patch))}
+                                expanded
                             />
-                            <MCPSourceEditor value={form} onChange={setForm} lockId compact hideUsage hideEnabled />
-                            <Button
-                                variant="contained"
-                                disabled={busy}
-                                onClick={() =>
-                                    void run(async () => {
-                                        await saveSource(connectionPatch(form));
-                                        setConfigure(false);
-                                    })
-                                }
-                            >
-                                {label('saveConnection', 'Save connection')}
-                            </Button>
-                        </Stack>
-                    )}
-                </AccordionDetails>
-            </Accordion>
+                        ) : (
+                            <Stack spacing={2}>
+                                <TextField
+                                    label={label('connectionName', 'Connection name')}
+                                    value={form.name}
+                                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                />
+                                <MCPSourceEditor value={form} onChange={setForm} lockId compact hideUsage hideEnabled />
+                                <Button
+                                    variant="contained"
+                                    disabled={busy}
+                                    onClick={() =>
+                                        void run(async () => {
+                                            await saveSource(connectionPatch(form));
+                                            setConfigure(false);
+                                        })
+                                    }
+                                >
+                                    {label('saveConnection', 'Save connection')}
+                                </Button>
+                            </Stack>
+                        )}
+                    </AccordionDetails>
+                </Accordion>
+            )}
             <Box>
                 <Typography variant="h6">
                     {usageScope
@@ -179,13 +194,13 @@ export default function MCPSourceWorkspace({
                               usageScope === 'client' ? 'clientToolSection' : 'serverToolSection',
                               usageScope === 'client' ? 'Tools available to clients' : 'Tools available to the gateway'
                           )
-                        : label('chooseUsage', 'How should these tools be used?')}
+                        : label('assetToolSection', 'Tool catalog')}
                 </Typography>
-                {!usageScope && (
+                {assetsOnly && (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                         {label(
-                            'usageExplanation',
-                            'Ordinary tools are called by your client. Server Tools are executed by the gateway during a model request. A standard tool can be used in both paths.'
+                            'assetToolHint',
+                            'Manage tool definitions, parameters and global enablement here. Publish through MCP or enable model execution from their respective pages.'
                         )}
                     </Typography>
                 )}
@@ -194,7 +209,7 @@ export default function MCPSourceWorkspace({
                 <Alert severity="info">
                     {label(
                         'advisorContext',
-                        'Advisor needs the model conversation. It is only a Server Tool; configure its consultation model above and verify it with a model request.'
+                        'Advisor needs the model conversation. It is only a Server Tool; configure its consultation model in Server Tool and verify it with a model request.'
                     )}
                 </Alert>
             )}
@@ -218,17 +233,19 @@ export default function MCPSourceWorkspace({
                                 sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}
                             >
                                 <Typography style={{ fontWeight: 600 }}>{tool.name}</Typography>
-                                <Button
-                                    size="small"
-                                    disabled={busy || !enabled || !tool.enabled || advisor}
-                                    onClick={() => {
-                                        setTesting(testing?.normalized_name === tool.normalized_name ? null : tool);
-                                        setArgumentsText('{}');
-                                        setTestResult(null);
-                                    }}
-                                >
-                                    {label('testTool', 'Test tool')}
-                                </Button>
+                                {assetsOnly && (
+                                    <Button
+                                        size="small"
+                                        disabled={busy || !enabled || !tool.enabled || advisor}
+                                        onClick={() => {
+                                            setTesting(testing?.normalized_name === tool.normalized_name ? null : tool);
+                                            setArgumentsText('{}');
+                                            setTestResult(null);
+                                        }}
+                                    >
+                                        {label('testTool', 'Test tool')}
+                                    </Button>
+                                )}
                             </Stack>
                             {tool.description && (
                                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -247,7 +264,7 @@ export default function MCPSourceWorkspace({
                                 <Typography variant="caption" color="warning.main">
                                     {label(
                                         'sharedToolOff',
-                                        'This tool is disabled in the shared connection. Enable it from the MCP page.'
+                                        'This tool is disabled in the shared connection. Enable it from the Tool page.'
                                     )}
                                 </Typography>
                             )}
@@ -264,7 +281,7 @@ export default function MCPSourceWorkspace({
                                         label={label('toolEnabled', 'Enabled')}
                                     />
                                 )}
-                                {usageScope !== 'gateway' && (
+                                {usageScope === 'client' && (
                                     <FormControlLabel
                                         control={
                                             <Checkbox
@@ -277,10 +294,10 @@ export default function MCPSourceWorkspace({
                                                 }
                                             />
                                         }
-                                        label={label('ordinaryTools', 'Ordinary tools')}
+                                        label={label('publishUsage', 'Expose through MCP')}
                                     />
                                 )}
-                                {usageScope !== 'client' && (
+                                {usageScope === 'gateway' && (
                                     <FormControlLabel
                                         control={
                                             <Checkbox
@@ -370,11 +387,13 @@ export default function MCPSourceWorkspace({
             </Stack>
             {!advisor && usageScope !== 'gateway' && (
                 <Button variant="outlined" disabled={busy} onClick={onConnectClient}>
-                    {label('useInClient', 'Choose a client to use these tools')}
+                    {assetsOnly
+                        ? label('publishInMCP', 'Publish through MCP')
+                        : label('useInClient', 'Choose a client to use these tools')}
                 </Button>
             )}
             <Divider />
-            {!(source.origin === 'builtin' || ['advisor', 'webtools'].includes(source.id!)) && (
+            {assetsOnly && !(source.origin === 'builtin' || ['advisor', 'webtools'].includes(source.id!)) && (
                 <Stack spacing={1}>
                     {confirmDelete && (
                         <Alert severity="warning">

@@ -31,7 +31,9 @@ vi.mock('./MCPRoutingPanel', () => ({
     default: ({ focusSource }: { focusSource?: string }) => <div>Routing panel {focusSource}</div>,
 }));
 vi.mock('./MCPToolsPanel', () => ({
-    default: ({ usage }: { usage: string }) => <div>Capabilities panel: {usage}</div>,
+    default: ({ usage, assetsOnly }: { usage: string; assetsOnly?: boolean }) => (
+        <div>Capabilities panel: {assetsOnly ? 'assets' : usage}</div>
+    ),
 }));
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({ t: (_: string, options: { defaultValue: string }) => options.defaultValue }),
@@ -101,71 +103,44 @@ const open = (url = '/mcp') =>
         </MemoryRouter>
     );
 describe('MCP secondary layouts', () => {
-    it('shows sources and actual destinations together, with advanced routing hidden until requested', async () => {
+    it('keeps client access and publication in MCP, with the relationship graph expandable', async () => {
         open();
-        expect(await screen.findByText('Codex work · Gateway model')).toBeInTheDocument();
+        expect(await screen.findByText('Codex work')).toBeInTheDocument();
+        expect(screen.getByText('Capabilities panel: client')).toBeInTheDocument();
+        expect(screen.queryByRole('region', { name: 'Connected tools' })).toBeNull();
         expect(screen.queryByRole('tab')).toBeNull();
-        expect(screen.queryByText('Routing panel')).toBeNull();
+        expect(screen.queryByText(/Routing panel/)).toBeNull();
         fireEvent.click(screen.getByRole('button', { name: /Usage relationships/ }));
         expect(await screen.findByText(/Routing panel/)).toBeInTheDocument();
-    });
-    it('opens the specific connection relationship directly from its overview destination', async () => {
-        open();
-        fireEvent.click(await screen.findByRole('button', { name: 'Remote docs: View usage relationships' }));
-        expect(await screen.findByText('Routing panel remote')).toBeInTheDocument();
-        expect(screen.queryByRole('dialog')).toBeNull();
     });
     it('reopens a focused usage relationship bookmark without opening the source editor', async () => {
         open('/mcp?relationship=remote');
         expect(await screen.findByText('Routing panel remote')).toBeInTheDocument();
         expect(screen.queryByRole('dialog')).toBeNull();
     });
-    it('uses the overview for shared connections and navigates to separate Tool and Server Tool pages', async () => {
+    it('moves shared connections and all tool assets into Tool and leaves client access in MCP', async () => {
         open();
-        await screen.findByText('Codex work · Gateway model');
-        expect(screen.queryByRole('button', { name: 'Access & setup' })).toBeNull();
-        expect(screen.queryByText(/Capabilities panel/)).toBeNull();
-        fireEvent.click(screen.getByRole('button', { name: 'Open Tool' }));
+        await screen.findByText('Codex work');
+        fireEvent.click(screen.getByRole('button', { name: 'Manage tool connections' }));
         expect(await screen.findByRole('heading', { name: 'Tool', level: 1 })).toBeInTheDocument();
-        expect(screen.getByText('Capabilities panel: client')).toBeInTheDocument();
-        expect(screen.queryByText('Capabilities panel: gateway')).toBeNull();
-        expect(screen.getByRole('button', { name: 'Access & setup' })).toBeInTheDocument();
-        expect(screen.queryByRole('region', { name: 'Connected tools' })).toBeNull();
-        fireEvent.click(screen.getByRole('button', { name: 'Manage connections' }));
-        fireEvent.click(await screen.findByRole('button', { name: 'Open Server Tool' }));
-        expect(await screen.findByRole('heading', { name: 'Server Tool', level: 1 })).toBeInTheDocument();
-        expect(screen.getByText('Capabilities panel: gateway')).toBeInTheDocument();
-        expect(screen.queryByText('Capabilities panel: client')).toBeNull();
+        expect(screen.getByText('Capabilities panel: assets')).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Connected tools' })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Access & setup' })).toBeNull();
-        expect(screen.queryByRole('region', { name: 'Connected tools' })).toBeNull();
+        expect(screen.queryByText('Codex work')).toBeNull();
+        expect(screen.queryByRole('button', { name: /Usage relationships/ })).toBeNull();
     });
-    it('connects directly from Server Tool without granting ordinary tool usage', async () => {
-        mocks.create.mockImplementation(async (s) => ({
-            success: true,
-            enabled: false,
-            config: { ...config, sources: [...config.sources, s] },
-        }));
+    it('routes new connection onboarding from Server Tool to Tool', async () => {
         open('/mcp/server-tools');
         await screen.findByText('Capabilities panel: gateway');
-        fireEvent.click(screen.getByRole('button', { name: 'Connect tools' }));
-        const dialog = screen.getByRole('dialog');
-        fireEvent.change(within(dialog).getByLabelText(/Connection name/), { target: { value: 'Server notes' } });
-        fireEvent.change(within(dialog).getByLabelText('Endpoint URL'), {
-            target: { value: 'https://notes.test/mcp' },
-        });
-        fireEvent.click(within(dialog).getByRole('button', { name: 'Connect and choose tools' }));
-        await waitFor(() =>
-            expect(mocks.create).toHaveBeenCalledWith(
-                expect.objectContaining({ id: 'server-notes', usage: { client: false, gateway: true } })
-            )
-        );
-        expect(await screen.findByRole('heading', { name: 'Server notes' })).toBeInTheDocument();
-        expect(screen.queryByRole('checkbox', { name: 'Ordinary tools' })).toBeNull();
-        expect(screen.queryByRole('button', { name: 'Choose a client to use these tools' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Connect tools' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Access & setup' })).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Manage tool connections' }));
+        expect(await screen.findByRole('heading', { name: 'Tool', level: 1 })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Connect tools' })).toBeInTheDocument();
     });
     it('keeps failed connection edits open and preserves credentials without restoring stale policies', async () => {
         mocks.patch.mockRejectedValue(new Error('Save failed'));
-        open();
+        open('/mcp/tools');
         fireEvent.click(await screen.findByRole('button', { name: 'Configure tools' }));
         fireEvent.click(screen.getByRole('button', { name: 'Connection settings' }));
         const endpoint = screen.getByLabelText('Endpoint URL');
@@ -183,31 +158,33 @@ describe('MCP secondary layouts', () => {
         expect(mocks.patch.mock.calls[0][1]).not.toHaveProperty('tool_policies');
         expect(mocks.patch.mock.calls[0][1]).not.toHaveProperty('usage');
     });
-    it('connects from a name and URL, generates a stable ID, and opens the tool assignment panel', async () => {
+    it('connects from a name and URL, generates a stable ID, and opens an unpublished tool asset', async () => {
         mocks.create.mockImplementation(async (s) => ({
             success: true,
             enabled: false,
             config: { ...config, sources: [...config.sources, s] },
         }));
-        open();
+        open('/mcp/tools');
         fireEvent.click(await screen.findByRole('button', { name: 'Connect tools' }));
         const dialog = screen.getByRole('dialog');
         expect(within(dialog).queryByRole('checkbox', { name: 'MCP clients' })).toBeNull();
         fireEvent.change(within(dialog).getByLabelText(/Connection name/), { target: { value: 'Team docs' } });
         fireEvent.change(within(dialog).getByLabelText('Endpoint URL'), { target: { value: 'https://team.test/mcp' } });
-        fireEvent.click(within(dialog).getByRole('button', { name: 'Connect and choose tools' }));
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Connect and inspect tools' }));
         await waitFor(() =>
             expect(mocks.create).toHaveBeenCalledWith(
                 expect.objectContaining({
                     id: 'team-docs',
                     name: 'Team docs',
                     endpoint: 'https://team.test/mcp',
-                    usage: { client: true, gateway: false },
+                    usage: { client: false, gateway: false },
                 })
             )
         );
         expect(await screen.findByRole('heading', { name: 'Team docs' })).toBeInTheDocument();
-        expect(screen.getByText('How should these tools be used?')).toBeInTheDocument();
+        expect(within(screen.getByRole('dialog')).getByText('Tool catalog')).toBeInTheDocument();
+        expect(screen.queryByRole('checkbox', { name: 'Expose through MCP' })).toBeNull();
+        expect(screen.queryByRole('checkbox', { name: 'Server Tools' })).toBeNull();
     });
     it('keeps client grants and setup together and saves an explicit empty grant without exposing other tools', async () => {
         mocks.saveClient.mockImplementation(async (profile) => ({
@@ -215,7 +192,7 @@ describe('MCP secondary layouts', () => {
             enabled: false,
             config: { ...config, client_profiles: [profile] },
         }));
-        open('/mcp/tools');
+        open('/mcp');
         await screen.findByText('Codex work');
         fireEvent.click(await screen.findByRole('button', { name: 'Access & setup' }));
         expect(await screen.findByText('Setup command for reader')).toBeInTheDocument();
@@ -227,7 +204,7 @@ describe('MCP secondary layouts', () => {
         );
     });
     it.each([
-        ['/mcp/tools', 'client'],
+        ['/mcp/tools', 'assets'],
         ['/mcp/server-tools', 'gateway'],
     ])('renders the corresponding tool page without a modal for %s', async (url, usage) => {
         open(url);
@@ -241,6 +218,42 @@ describe('MCP secondary layouts', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Close workspace panel' }));
         await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
         expect(screen.queryByRole('heading', { name: 'Choose client' })).toBeNull();
-        expect(screen.getByRole('heading', { name: 'Tool', level: 1 })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'MCP', level: 1 })).toBeInTheDocument();
+    });
+    it.each(['/mcp/tools?install=reader', '/mcp/server-tools?profile=reader'])(
+        'keeps client bookmarks in MCP: %s',
+        async (url) => {
+            open(url);
+            expect(await screen.findByText('Setup command for reader')).toBeInTheDocument();
+            fireEvent.click(screen.getByRole('button', { name: 'Close workspace panel' }));
+            await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+            expect(screen.getByRole('heading', { name: 'MCP', level: 1 })).toBeInTheDocument();
+        }
+    );
+    it.each(['/mcp?source=remote', '/mcp/sources?source=remote'])(
+        'keeps connection bookmarks in Tool: %s',
+        async (url) => {
+            open(url);
+            expect(await screen.findByRole('dialog')).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Connection settings' })).toBeInTheDocument();
+            fireEvent.click(screen.getByRole('button', { name: 'Close workspace panel' }));
+            await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+            expect(screen.getByRole('heading', { name: 'Tool', level: 1 })).toBeInTheDocument();
+        }
+    );
+    it('opens a publication bookmark without shared asset controls', async () => {
+        open('/mcp?publish=remote');
+        expect(await screen.findByRole('checkbox', { name: 'Expose through MCP' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Connection settings' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Remove connection' })).toBeNull();
+        expect(screen.queryByRole('checkbox', { name: 'Server Tools' })).toBeNull();
+    });
+    it('reports zero available tools when MCP execution is off without discarding saved grants', async () => {
+        const snapshot = await mocks.routing();
+        mocks.routing.mockResolvedValue({ ...snapshot, enabled: false });
+        open();
+        expect(await screen.findByText('0 tools available through MCP · Remote docs')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Access & setup' })).toBeInTheDocument();
+        expect(mocks.saveClient).not.toHaveBeenCalled();
     });
 });

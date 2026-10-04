@@ -70,7 +70,7 @@ beforeEach(() => vi.clearAllMocks());
 describe('effective MCP usage relationships', () => {
     it('keeps the two paths separate and takes configuration actions to their own surfaces', () => {
         render(renderPanel());
-        const ordinary = screen.getByRole('region', { name: 'Ordinary tools' });
+        const ordinary = screen.getByRole('region', { name: 'MCP clients' });
         const server = screen.getByRole('region', { name: 'Server Tools' });
         expect(within(ordinary).queryByRole('button', { name: /^Advisor:/ })).toBeNull();
         fireEvent.click(within(ordinary).getByRole('button', { name: /^Tingly MCP gateway:/ }));
@@ -99,7 +99,7 @@ describe('effective MCP usage relationships', () => {
         expect(within(focused).getByRole('region', { name: 'Who does a change affect?' })).toHaveTextContent(
             'Clients associated by saved grants: Reader'
         );
-        fireEvent.click(within(focused).getByRole('button', { name: 'Configure Tool usage' }));
+        fireEvent.click(within(focused).getByRole('button', { name: 'Configure MCP publication' }));
         expect(mocks.tools).toHaveBeenCalledWith('client', 'docs');
         fireEvent.click(within(focused).getByRole('button', { name: 'Configure Server Tool usage' }));
         expect(mocks.tools).toHaveBeenCalledWith('gateway', 'docs');
@@ -198,7 +198,7 @@ describe('effective MCP usage relationships', () => {
             renderPanel({ ...snapshot, sources: [configured], server_tools: [configured] }, { focusSource: 'advisor' })
         );
         expect(screen.getByText('Advisor requires gateway model context')).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: 'Configure Tool usage' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Configure MCP publication' })).toBeNull();
         fireEvent.click(screen.getByRole('button', { name: /Consultation provider consult-model/ }));
         expect(mocks.tools).toHaveBeenCalledWith('gateway', 'advisor');
         expect(screen.getByRole('region', { name: 'Who does a change affect?' })).toHaveTextContent('None');
@@ -206,7 +206,7 @@ describe('effective MCP usage relationships', () => {
     it('shows a missing bookmarked connection explicitly and keeps refresh available', () => {
         render(renderPanel(snapshot, { focusSource: 'deleted' }));
         expect(screen.getByRole('alert')).toHaveTextContent('This connection no longer exists');
-        expect(screen.queryByRole('region', { name: 'Ordinary tools' })).toBeNull();
+        expect(screen.queryByRole('region', { name: 'MCP clients' })).toBeNull();
         fireEvent.click(screen.getByRole('button', { name: 'Refresh relationships' }));
         expect(mocks.refresh).toHaveBeenCalledTimes(1);
     });

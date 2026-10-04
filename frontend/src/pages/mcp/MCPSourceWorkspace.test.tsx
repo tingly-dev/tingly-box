@@ -60,10 +60,10 @@ describe('source tool usage boundaries', () => {
             const row = within(screen.getByRole('group', { name: 'read' }));
             expect(row.queryByRole('checkbox', { name: 'Enabled' })).toBeNull();
             expect(
-                row.queryByRole('checkbox', { name: scope === 'client' ? 'Server Tools' : 'Ordinary tools' })
+                row.queryByRole('checkbox', { name: scope === 'client' ? 'Server Tools' : 'Expose through MCP' })
             ).toBeNull();
             fireEvent.click(
-                row.getByRole('checkbox', { name: scope === 'client' ? 'Ordinary tools' : 'Server Tools' })
+                row.getByRole('checkbox', { name: scope === 'client' ? 'Expose through MCP' : 'Server Tools' })
             );
             await waitFor(() =>
                 expect(save).toHaveBeenCalledWith({
@@ -76,35 +76,59 @@ describe('source tool usage boundaries', () => {
             );
         }
     );
-    it('revokes one usage without overwriting the other usage or unrelated tool policies', async () => {
+    it('edits global tool enablement in Tool without overwriting either purpose or unrelated policies', async () => {
         save.mockResolvedValue(undefined);
-        open();
-        fireEvent.click(
-            within(screen.getByRole('group', { name: 'read' })).getByRole('checkbox', { name: 'Ordinary tools' })
-        );
+        open({
+            ...source,
+            tool_policies: { ...source.tool_policies, read: { enabled: true, usage: { client: true, gateway: true } } },
+        });
+        const row = within(screen.getByRole('group', { name: 'read' }));
+        expect(row.queryByRole('checkbox', { name: 'Expose through MCP' })).toBeNull();
+        expect(row.queryByRole('checkbox', { name: 'Server Tools' })).toBeNull();
+        fireEvent.click(row.getByRole('checkbox', { name: 'Enabled' }));
         await waitFor(() =>
             expect(save).toHaveBeenCalledWith({
                 id: 'docs',
                 tool_policies: {
                     other: { enabled: false },
-                    read: { enabled: true, usage: { client: false, gateway: true } },
+                    read: { enabled: false, usage: { client: true, gateway: true } },
                 },
             })
         );
+        expect(screen.getByRole('button', { name: 'Connection settings' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Remove connection' })).toBeInTheDocument();
     });
-    it('requires model context for Advisor and keeps it out of ordinary tools and standalone tests', () => {
-        open({ ...source, id: 'advisor', transport: 'advisor' }, { ...route, id: 'advisor' });
+    it.each(['client', 'gateway'] as const)(
+        'does not expose connection, global enablement or deletion in %s',
+        (scope) => {
+            open(source, route, true, scope);
+            expect(screen.queryByRole('button', { name: 'Connection settings' })).toBeNull();
+            expect(screen.queryByRole('button', { name: 'Remove connection' })).toBeNull();
+            expect(
+                screen.queryByRole('switch', { name: 'Enable shared connection (affects MCP and Server Tool)' })
+            ).toBeNull();
+            expect(screen.queryByRole('button', { name: 'Test tool' })).toBeNull();
+        }
+    );
+    it('keeps Advisor model settings in Server Tool and blocks a standalone asset test', () => {
+        const advisor = { ...source, id: 'advisor', transport: 'advisor' as const };
+        const view = open(advisor, { ...route, id: 'advisor' });
         const row = within(screen.getByRole('group', { name: 'read' }));
-        expect(row.getByRole('checkbox', { name: 'Ordinary tools' })).toBeDisabled();
-        expect(row.getByRole('checkbox', { name: 'Ordinary tools' })).not.toBeChecked();
+        expect(row.queryByRole('checkbox', { name: 'Expose through MCP' })).toBeNull();
+        expect(row.queryByRole('checkbox', { name: 'Server Tools' })).toBeNull();
         expect(row.getByRole('button', { name: 'Test tool' })).toBeDisabled();
-        expect(row.getByRole('checkbox', { name: 'Server Tools' })).not.toBeDisabled();
+        expect(screen.queryByText('Consultation model settings')).toBeNull();
+        view.unmount();
+        open(advisor, { ...route, id: 'advisor' }, true, 'gateway');
+        expect(screen.getByText('Consultation model settings')).toBeInTheDocument();
+        expect(screen.getByRole('checkbox', { name: 'Server Tools' })).not.toBeDisabled();
+        expect(screen.queryByRole('button', { name: 'Test tool' })).toBeNull();
     });
     it('keeps usage configuration available while execution is off and reports a rejected change', async () => {
         save.mockRejectedValue(new Error('Permission update failed'));
-        open(source, route, false);
+        open(source, route, false, 'gateway');
         const row = within(screen.getByRole('group', { name: 'read' }));
-        expect(row.getByRole('button', { name: 'Test tool' })).toBeDisabled();
+        expect(row.queryByRole('button', { name: 'Test tool' })).toBeNull();
         fireEvent.click(row.getByRole('checkbox', { name: 'Server Tools' }));
         expect(await screen.findByText('Permission update failed')).toBeInTheDocument();
         expect(row.getByRole('checkbox', { name: 'Server Tools' })).toBeChecked();

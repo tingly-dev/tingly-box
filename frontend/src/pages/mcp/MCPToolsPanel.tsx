@@ -29,12 +29,16 @@ export default function MCPToolsPanel({
     onRelationships,
     showIntro = true,
     scopeOnly = false,
+    assetsOnly = false,
+    showTesting = !scopeOnly,
 }: {
     usage?: 'client' | 'gateway';
     onConfigureSource?: (id: string) => void;
     onRelationships?: (id: string) => void;
     showIntro?: boolean;
     scopeOnly?: boolean;
+    assetsOnly?: boolean;
+    showTesting?: boolean;
     sources: MCPSourceConfig[];
     enabled: boolean;
     saveSource: (patch: MCPSourceConfig) => Promise<void>;
@@ -130,7 +134,7 @@ export default function MCPToolsPanel({
     };
     const tools = catalog
         .flatMap((s) => s.tools || [])
-        .filter((tool) => (usage === 'client' ? tool.usage.client : tool.usage.gateway));
+        .filter((tool) => assetsOnly || (usage === 'client' ? tool.usage.client : tool.usage.gateway));
     return (
         <Stack spacing={2}>
             <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 1 }}>
@@ -139,7 +143,7 @@ export default function MCPToolsPanel({
                         {usage === 'client'
                             ? label(
                                   'ordinaryHint',
-                                  'Ordinary tools are called by MCP clients. Manage shared connections in Tool sources.'
+                                  'Publish tools for MCP clients here. Manage shared tool connections in Tool.'
                               )
                             : label(
                                   'serverHint',
@@ -147,11 +151,13 @@ export default function MCPToolsPanel({
                               )}
                     </Typography>
                 )}
-                <Button disabled={busy} onClick={() => setChoosing(true)}>
-                    {usage === 'client'
-                        ? label('chooseOrdinary', 'Choose ordinary tools')
-                        : label('chooseServer', 'Choose Server Tools')}
-                </Button>
+                {!assetsOnly && (
+                    <Button disabled={busy} onClick={() => setChoosing(true)}>
+                        {usage === 'client'
+                            ? label('chooseOrdinary', 'Choose tools to publish')
+                            : label('chooseServer', 'Choose Server Tools')}
+                    </Button>
+                )}
                 <Button disabled={busy} onClick={() => void refresh()}>
                     {label(busy ? 'discovering' : 'discover', busy ? 'Discovering…' : 'Discover tools')}
                 </Button>
@@ -161,6 +167,7 @@ export default function MCPToolsPanel({
                 .filter((status) => {
                     const source = sources.find((item) => item.id === status.source_id);
                     if (status.state === 'connected') return false;
+                    if (assetsOnly) return Boolean(source);
                     if (!source) return Boolean(status.error);
                     return (
                         source.enabled !== false &&
@@ -178,8 +185,10 @@ export default function MCPToolsPanel({
             {!busy && tools.length === 0 && (
                 <Typography>
                     {label(
-                        'noAssignedTools',
-                        'No tools are assigned to this section. Enable the corresponding usage in Tool sources.'
+                        assetsOnly ? 'noCatalogTools' : 'noAssignedTools',
+                        assetsOnly
+                            ? 'No tools discovered yet. Connect a source or check its connection.'
+                            : 'No tools are assigned to this section. Choose tools to enable them for this purpose.'
                     )}
                 </Typography>
             )}
@@ -211,7 +220,7 @@ export default function MCPToolsPanel({
                                 <Typography variant="caption" color="warning.main">
                                     {t('mcp.workspace.sharedToolOff', {
                                         defaultValue:
-                                            'This tool is disabled in the shared connection. Enable it from the MCP page.',
+                                            'This tool is disabled in the shared connection. Enable it from the Tool page.',
                                     })}
                                 </Typography>
                             )}
@@ -228,45 +237,49 @@ export default function MCPToolsPanel({
                                         label={label('enabled', 'Enabled')}
                                     />
                                 )}
-                                <FormControlLabel
-                                    control={
-                                        <Checkbox
-                                            disabled={busy || restricted(tool)}
-                                            checked={usage === 'client' ? tool.usage.client : tool.usage.gateway}
-                                            onChange={(e) =>
-                                                void policy(tool, {
-                                                    usage: { ...tool.usage, [usage]: e.target.checked },
-                                                })
-                                            }
-                                        />
-                                    }
-                                    label={
-                                        usage === 'client'
-                                            ? label('ordinaryUsage', 'Use as an ordinary tool')
-                                            : label('serverUsage', 'Use as a Server Tool')
-                                    }
-                                />
-                                <Button
-                                    disabled={
-                                        busy ||
-                                        !tool.enabled ||
-                                        !enabled ||
-                                        (tool.source_id === 'advisor' && tool.implementation === 'virtual')
-                                    }
-                                    onClick={() => {
-                                        setTesting(tool);
-                                        setArgs('{}');
-                                        setResult(null);
-                                    }}
-                                >
-                                    {label('testTool', 'Test tool')}
-                                </Button>
+                                {!assetsOnly && (
+                                    <FormControlLabel
+                                        control={
+                                            <Checkbox
+                                                disabled={busy || restricted(tool)}
+                                                checked={usage === 'client' ? tool.usage.client : tool.usage.gateway}
+                                                onChange={(e) =>
+                                                    void policy(tool, {
+                                                        usage: { ...tool.usage, [usage]: e.target.checked },
+                                                    })
+                                                }
+                                            />
+                                        }
+                                        label={
+                                            usage === 'client'
+                                                ? label('ordinaryUsage', 'Expose through MCP')
+                                                : label('serverUsage', 'Use as a Server Tool')
+                                        }
+                                    />
+                                )}
+                                {showTesting && (
+                                    <Button
+                                        disabled={
+                                            busy ||
+                                            !tool.enabled ||
+                                            !enabled ||
+                                            (tool.source_id === 'advisor' && tool.implementation === 'virtual')
+                                        }
+                                        onClick={() => {
+                                            setTesting(tool);
+                                            setArgs('{}');
+                                            setResult(null);
+                                        }}
+                                    >
+                                        {label('testTool', 'Test tool')}
+                                    </Button>
+                                )}
                             </Stack>
                             {tool.source_id === 'advisor' && tool.implementation === 'virtual' && (
                                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                                     {label(
                                         'advisorTestHint',
-                                        'Advisor requires model conversation context. Configure its special processing chain in MCP routes, then verify it with a model request.'
+                                        'Advisor requires model conversation context. Configure its consultation model in Server Tool, then verify it with a model request.'
                                     )}
                                 </Typography>
                             )}
@@ -279,12 +292,20 @@ export default function MCPToolsPanel({
                                     {t(
                                         tool.source_id === 'advisor' && tool.implementation === 'virtual'
                                             ? 'mcp.workspace.configureAdvisor'
-                                            : 'mcp.workspace.configureConnection',
+                                            : assetsOnly
+                                              ? 'mcp.workspace.configureConnection'
+                                              : usage === 'client'
+                                                ? 'mcp.workspace.configurePublication'
+                                                : 'mcp.workspace.configureExecution',
                                         {
                                             defaultValue:
                                                 tool.source_id === 'advisor' && tool.implementation === 'virtual'
                                                     ? 'Configure Advisor model'
-                                                    : 'Configure this connection',
+                                                    : assetsOnly
+                                                      ? 'Configure this connection'
+                                                      : usage === 'client'
+                                                        ? 'Configure MCP publication'
+                                                        : 'Configure execution usage',
                                         }
                                     )}
                                 </Button>
@@ -321,7 +342,7 @@ export default function MCPToolsPanel({
             <Dialog open={choosing} onClose={() => !busy && setChoosing(false)} maxWidth="md" fullWidth>
                 <DialogTitle>
                     {usage === 'client'
-                        ? label('chooseOrdinary', 'Choose ordinary tools')
+                        ? label('chooseOrdinary', 'Choose tools to publish')
                         : label('chooseServer', 'Choose Server Tools')}
                 </DialogTitle>
                 <DialogContent dividers>
@@ -345,6 +366,8 @@ export default function MCPToolsPanel({
                         )
                         .map((tool) => (
                             <Stack
+                                component="article"
+                                aria-label={`${sources.find((source) => source.id === tool.source_id)?.name || tool.source_id} / ${tool.name}`}
                                 key={tool.normalized_name}
                                 direction="row"
                                 sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}

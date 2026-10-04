@@ -95,13 +95,16 @@ export default function MCPClientWorkspace({
         }
     };
     const clientRoute = routing?.clients.find((client) => client.id === profile?.id);
-    const toolCount = clientRoute?.sources.reduce((total, source) => total + source.tools.length, 0) || 0;
+    const toolCount =
+        enabled && clientRoute?.enabled
+            ? clientRoute.sources.reduce((total, source) => total + source.tools.length, 0)
+            : 0;
     return (
         <Stack spacing={2.5}>
             <Typography color="text.secondary">
                 {label(
                     'clientWorkspaceHint',
-                    'Choose the ordinary tools this client can use, then copy its connection command. Server Tools are managed separately by the gateway.'
+                    'Choose which MCP-published tools this client can use, then copy its connection command. Model execution is configured in Server Tool.'
                 )}
             </Typography>
             {error && <Alert severity="error">{error}</Alert>}
@@ -119,7 +122,7 @@ export default function MCPClientWorkspace({
                         </Typography>
                         {profile && (
                             <Typography variant="caption" color="text.secondary">
-                                {toolCount} {label('ordinaryToolCount', 'ordinary tools assigned')}
+                                {toolCount} {label('ordinaryToolCount', 'tools available through MCP')}
                             </Typography>
                         )}
                     </Box>
@@ -198,7 +201,7 @@ export default function MCPClientWorkspace({
                                                     <Typography variant="caption" color="text.secondary">
                                                         {source.enabled === false
                                                             ? label('connectionOffShort', 'Connection disabled')
-                                                            : `${count} ${label('ordinaryToolCount', 'ordinary tools assigned')}`}
+                                                            : `${count} ${label('ordinaryToolCount', 'tools available through MCP')}`}
                                                     </Typography>
                                                 </Box>
                                             }
@@ -215,7 +218,10 @@ export default function MCPClientWorkspace({
                                     onChange={(e) => setDraft({ ...draft, tools: e.target.checked ? ['*'] : [] })}
                                 />
                             }
-                            label={label('allSelectedTools', 'Allow all ordinary tools from the selected connections')}
+                            label={label(
+                                'allSelectedTools',
+                                'Allow all MCP-published tools from the selected connections'
+                            )}
                         />
                         {!allTools && (
                             <Autocomplete
@@ -316,11 +322,11 @@ export default function MCPClientWorkspace({
                             )}
                         </Alert>
                     )}
-                    {clientRoute && toolCount === 0 && (
+                    {enabled && clientRoute?.enabled && toolCount === 0 && (
                         <Alert severity="info">
                             {label(
                                 'noClientTools',
-                                'No tools are available to this client. Select connections above and ensure their ordinary tools are enabled.'
+                                'No tools are available to this client. Select connections above and ensure their tools are published through MCP.'
                             )}
                         </Alert>
                     )}
