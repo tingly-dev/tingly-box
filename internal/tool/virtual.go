@@ -27,6 +27,22 @@ type VirtualTool struct {
 type VirtualToolRegistry struct {
 	mu    sync.RWMutex
 	tools map[string]VirtualTool
+	owner func(string) bool
+}
+
+// SetOwnershipResolver lets the execution adapters recognize gateway-owned
+// remote tools without pretending they are in-process virtual implementations.
+func (r *VirtualToolRegistry) SetOwnershipResolver(owner func(string) bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.owner = owner
+}
+
+func (r *VirtualToolRegistry) OwnsNormalized(name string) bool {
+	r.mu.RLock()
+	owner := r.owner
+	r.mu.RUnlock()
+	return owner != nil && owner(name)
 }
 
 func NewVirtualToolRegistry() *VirtualToolRegistry {

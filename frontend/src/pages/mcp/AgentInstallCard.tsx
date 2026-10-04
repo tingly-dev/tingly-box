@@ -11,10 +11,9 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Alert, Box, Chip, Typography } from '@mui/material';
-import {
-    Terminal as TerminalIcon,
-} from '@/components/icons';
+import { Terminal as TerminalIcon } from '@/components/icons';
 import { CopyIconButton } from '@/components/CopyIconButton';
 import { getApiBaseUrl } from '@/utils/protocol';
 import { fontMono, fontSizes } from '@/theme/fonts';
@@ -54,6 +53,7 @@ const RuntimeSelector: React.FC<RuntimeSelectorProps> = ({ options, value, onCha
                 <Box
                     key={key}
                     component="button"
+                    aria-pressed={active}
                     onClick={() => onChange(key)}
                     sx={{
                         px: 1.5,
@@ -171,6 +171,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ filename, runtimeLabel, command }
 export interface AgentInstallCardProps {
     /** Overrides the default runtime options (commands/filenames) */
     runtimeOptions?: RuntimeOptions;
+    clientId?: string;
     /** Section number badge shown to the left of the heading (default: "01") */
     sectionNumber?: string;
     /** Heading text (default: "Add to agents") */
@@ -186,8 +187,8 @@ export interface AgentInstallCardProps {
 // bound — which is why the endpoint is built from the resolved API base URL
 // (buildDefaultRuntimeOptions) rather than hardcoded, so it stays correct
 // when the server isn't on the default port.
-const buildDefaultRuntimeOptions = (baseUrl: string): RuntimeOptions => {
-    const endpoint = `${baseUrl}/api/v1/mcp/tb`;
+const buildDefaultRuntimeOptions = (baseUrl: string, clientId: string): RuntimeOptions => {
+    const endpoint = `${baseUrl}/api/v1/mcp/${encodeURIComponent(clientId)}`;
     return {
         claude: {
             label: 'Claude Code',
@@ -197,12 +198,12 @@ const buildDefaultRuntimeOptions = (baseUrl: string): RuntimeOptions => {
         codex: {
             label: 'Codex',
             filename: 'register-tb.sh',
-            command: `codex mcp add tb -- http ${endpoint} \\\n  --header "Authorization: Bearer $(cat ~/.tingly-box/config.json | jq -r '.user_token')"`,
+            command: `codex mcp add tb --url "${endpoint}" --bearer-token-env-var TINGLY_MCP_TOKEN`,
         },
         opencode: {
             label: 'OpenCode',
             filename: '~/.config/opencode/opencode.json',
-            command: `"mcp": {\n  "${endpoint}": {\n    "type": "remote",\n    "url": "${endpoint}",\n    "oauth": false,\n    "headers": {\n      "Authorization": "Bearer {MY_API_KEY}"\n    }\n  }\n}`,
+            command: `"mcp": {\n  "${endpoint}": {\n    "type": "remote",\n    "url": "${endpoint}",\n    "oauth": false,\n    "headers": {\n      "Authorization": "Bearer {env:MY_API_KEY}"\n    }\n  }\n}`,
         },
     };
 };
@@ -214,11 +215,13 @@ const DEFAULT_BASE_URL = 'http://localhost:12580';
 
 export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
     runtimeOptions,
+    clientId = 'tb',
     sectionNumber = '01',
-    heading = 'Add to agents',
-    subtitle = 'Register the gateway with your coding agent. Run once per machine.',
+    heading,
+    subtitle,
     footer,
 }) => {
+    const { t } = useTranslation();
     const [runtime, setRuntime] = useState<AgentRuntime>('claude');
     const [baseUrl, setBaseUrl] = useState(DEFAULT_BASE_URL);
 
@@ -227,7 +230,7 @@ export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
         // override means the caller already resolved its own base URL.
         if (runtimeOptions) return;
         let isMounted = true;
-        getApiBaseUrl().then(url => {
+        getApiBaseUrl().then((url) => {
             if (isMounted) setBaseUrl(url);
         });
         return () => {
@@ -235,7 +238,7 @@ export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
         };
     }, [runtimeOptions]);
 
-    const resolvedOptions = runtimeOptions ?? buildDefaultRuntimeOptions(baseUrl);
+    const resolvedOptions = runtimeOptions ?? buildDefaultRuntimeOptions(baseUrl, clientId);
     const config = resolvedOptions[runtime];
 
     return (
@@ -259,12 +262,15 @@ export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
                 </Typography>
                 <Box>
                     <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
-                        {heading}
+                        {heading ?? t('mcp.center.installHeading')}
                     </Typography>
-                    <Typography variant="body2" sx={{
-                        color: "text.secondary"
-                    }}>
-                        {subtitle}
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: 'text.secondary',
+                        }}
+                    >
+                        {subtitle ?? t('mcp.center.installSubtitle')}
                     </Typography>
                 </Box>
             </Box>
@@ -309,35 +315,35 @@ export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
                     {/* Title + caption */}
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
-                            Pick your runtime
+                            {t('mcp.center.pickRuntime')}
                         </Typography>
                         <Typography
                             variant="caption"
                             sx={{
-                                color: "text.secondary",
-                                lineHeight: 1.4
-                            }}>
-                            The token is read from your local config — no copy/paste required.
+                                color: 'text.secondary',
+                                lineHeight: 1.4,
+                            }}
+                        >
+                            {t(
+                                runtime === 'codex'
+                                    ? 'mcp.center.codexTokenHint'
+                                    : runtime === 'opencode'
+                                      ? 'mcp.center.openCodeTokenHint'
+                                      : 'mcp.center.localTokenHint'
+                            )}
                         </Typography>
                     </Box>
 
                     {/* Runtime pills */}
-                    <RuntimeSelector
-                        options={resolvedOptions}
-                        value={runtime}
-                        onChange={setRuntime}
-                    />
+                    <RuntimeSelector options={resolvedOptions} value={runtime} onChange={setRuntime} />
                 </Box>
 
                 {/* Code block */}
                 <Box sx={{ p: 2 }}>
-                    <CodeBlock
-                        filename={config.filename}
-                        runtimeLabel={config.label}
-                        command={config.command}
-                    />
+                    <CodeBlock filename={config.filename} runtimeLabel={config.label} command={config.command} />
                 </Box>
 
+                {runtime === 'codex' && <Alert severity="info">{t('mcp.center.codexSetup')}</Alert>}
                 {/* OpenCode extra note */}
                 {runtime === 'opencode' && (
                     <Alert
@@ -350,8 +356,8 @@ export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
                             '& .MuiAlert-message': { fontSize: fontSizes.md },
                         }}
                     >
-                        Set <code>MY_API_KEY</code> to your token. Run{' '}
-                        <code>{'cat ~/.tingly-box/config.json | jq -r \'.user_token\''}</code> to get it.
+                        {t('mcp.center.openCodeSetup')}{' '}
+                        <code>{"cat ~/.tingly-box/config.json | jq -r '.user_token'"}</code>
                     </Alert>
                 )}
 

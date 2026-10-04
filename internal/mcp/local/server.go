@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sirupsen/logrus"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
 // MCPServer provides an MCP server that exposes tools from configured MCP sources.
@@ -24,15 +25,17 @@ type MCPServer struct {
 
 // MCPTool represents a tool exposed by the MCP server.
 type MCPTool struct {
-	Name        string
-	Description string
-	InputSchema map[string]any
+	Name         string
+	Description  string
+	InputSchema  map[string]any
+	OutputSchema json.RawMessage
+	Annotations  json.RawMessage
 }
 
 // MCPConnectionHandler handles MCP tool listing and execution.
 type MCPConnectionHandler interface {
 	ListTools(ctx context.Context) ([]MCPTool, error)
-	CallTool(ctx context.Context, name string, arguments map[string]any) (string, error)
+	CallTool(ctx context.Context, name string, arguments map[string]any) (coretool.ToolResult, error)
 }
 
 // NewMCPServer creates a new MCP server instance.
@@ -72,19 +75,21 @@ func (s *MCPServer) Start() error {
 
 	for _, tool := range filteredTools {
 		mcpTool := mcp.Tool{
-			Name:        tool.Name,
-			Description: tool.Description,
+			Name:            tool.Name,
+			Description:     tool.Description,
+			RawOutputSchema: tool.OutputSchema,
 		}
 		if tool.InputSchema != nil {
 			schemaBytes, err := json.Marshal(tool.InputSchema)
-			if err == nil {
-				var inputSchema mcp.ToolInputSchema
-				if err := json.Unmarshal(schemaBytes, &inputSchema); err == nil {
-					mcpTool.InputSchema = inputSchema
-				}
+			if err != nil {
+				return err
 			}
+			mcpTool.RawInputSchema = schemaBytes
 		}
 
+		if len(tool.Annotations) > 0 {
+			_ = json.Unmarshal(tool.Annotations, &mcpTool.Annotations)
+		}
 		// Capture tool name for handler closure
 		toolName := tool.Name
 		toolHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -108,14 +113,15 @@ func (s *MCPServer) Start() error {
 				}, nil
 			}
 
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{
-					mcp.TextContent{
-						Type: "text",
-						Text: result,
-					},
-				},
-			}, nil
+			raw, err := json.Marshal(result)
+			if err != nil {
+				return nil, err
+			}
+			var wire mcp.CallToolResult
+			if err := json.Unmarshal(raw, &wire); err != nil {
+				return nil, err
+			}
+			return &wire, nil
 		}
 
 		mcpServer.AddTools(server.ServerTool{
@@ -178,7 +184,7 @@ func (s *MCPServer) Stop() error {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	_ = cancel // cancel to release resources, timeout will trigger shutdown
+	defer cancel()
 
 	err := s.httpServer.Shutdown(ctx)
 	s.httpServer = nil

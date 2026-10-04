@@ -1,0 +1,72 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import MCPToolsPanel from './MCPToolsPanel';
+import type { MCPSourceConfig } from './types';
+
+const mocks = vi.hoisted(() => ({ catalog: vi.fn(), call: vi.fn(), save: vi.fn() }));
+vi.mock('@/services/api', () => ({ api: { getMCPCatalog: mocks.catalog, callMCPTool: mocks.call } }));
+vi.mock('react-i18next', () => ({
+    useTranslation: () => ({ t: (_: string, options: { defaultValue: string }) => options.defaultValue }),
+}));
+const source: MCPSourceConfig = { id: 'remote', tool_policies: { other: { enabled: false } } };
+const tool = {
+    source_id: 'remote',
+    name: 'echo',
+    normalized_name: 'tingly_box_mcp__remote__echo',
+    enabled: true,
+    usage: { client: true, gateway: true },
+    input_schema: { type: 'object', required: ['q'] },
+    output_schema: { type: 'object' },
+    annotations: { readOnlyHint: true },
+};
+
+beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.catalog.mockResolvedValue({
+        success: true,
+        sources: [
+            { source_id: 'remote', state: 'connected', tools: [tool] },
+            { source_id: 'failed', state: 'error', error: 'Connection refused', tools: [] },
+        ],
+    });
+    mocks.save.mockResolvedValue(undefined);
+});
+
+describe('MCP capability controls', () => {
+    it('keeps available tools visible when another server fails and preserves tool policies on edit', async () => {
+        render(<MCPToolsPanel sources={[source]} enabled saveSource={mocks.save} />);
+        expect(await screen.findByText('remote / echo')).toBeInTheDocument();
+        expect(screen.getByText('failed: Connection refused')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('checkbox', { name: 'MCP clients' }));
+        await waitFor(() =>
+            expect(mocks.save).toHaveBeenCalledWith({
+                id: 'remote',
+                tool_policies: { other: { enabled: false }, echo: { usage: { client: false, gateway: true } } },
+            })
+        );
+    });
+    it('rejects invalid JSON arguments and shows structured tool errors without losing content', async () => {
+        mocks.call.mockResolvedValue({
+            success: true,
+            result: {
+                isError: true,
+                structuredContent: { retained: true },
+                content: [{ type: 'image', data: 'AQID', mimeType: 'image/png' }],
+            },
+        });
+        render(<MCPToolsPanel sources={[source]} enabled saveSource={mocks.save} />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Test tool' }));
+        const input = screen.getByLabelText('Arguments (JSON)');
+        fireEvent.change(input, { target: { value: '[]' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+        expect(await screen.findAllByText('Arguments must be a JSON object.')).toHaveLength(2);
+        expect(mocks.call).not.toHaveBeenCalled();
+        fireEvent.change(input, { target: { value: '{"q":"test"}' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+        const result = await screen.findByTestId('mcp-test-result');
+        expect(result).toHaveTextContent('structuredContent');
+        expect(result).toHaveTextContent('isError');
+        expect(result).toHaveTextContent('AQID');
+        expect(mocks.call).toHaveBeenCalledWith({ source_id: 'remote', tool_name: 'echo', arguments: { q: 'test' } });
+    });
+});

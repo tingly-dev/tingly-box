@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sirupsen/logrus"
 
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -23,6 +25,7 @@ type sourceSession struct {
 	session  *mcp.ClientSession
 	cmd      *exec.Cmd // set for stdio transport only
 	mu       sync.RWMutex
+	cancel   context.CancelFunc
 }
 
 // getCmd returns the stdio subprocess handle, or nil for other transports.
@@ -37,45 +40,68 @@ func (ss *sourceSession) getCmd() *exec.Cmd {
 }
 
 // listTools returns the list of tools from the SDK session.
-// The caller holds ss.mu.
+// The method takes ss.mu.
 func (ss *sourceSession) listTools(ctx context.Context) ([]mcpTool, error) {
 	ss.mu.RLock()
 	defer ss.mu.RUnlock()
 	if ss.session == nil {
 		return nil, &sessionError{sourceID: ss.sourceID, msg: "session not connected"}
 	}
-	result, err := ss.session.ListTools(ctx, nil)
-	if err != nil {
-		return nil, &sessionError{sourceID: ss.sourceID, msg: "list tools: " + err.Error()}
+	var tools []mcpTool
+	params := &mcp.ListToolsParams{}
+	for {
+		result, err := ss.session.ListTools(ctx, params)
+		if err != nil {
+			return nil, &sessionError{sourceID: ss.sourceID, msg: "list tools: " + err.Error()}
+		}
+		tools = append(tools, contentBlocksToTools(result.Tools)...)
+		if result.NextCursor == "" {
+			break
+		}
+		params.Cursor = result.NextCursor
 	}
-	return contentBlocksToTools(result.Tools), nil
+	return tools, nil
 }
 
 // callTool executes a tool call via the SDK session.
-// The caller holds ss.mu.
-func (ss *sourceSession) callTool(ctx context.Context, name string, arguments map[string]any) (string, error) {
+// The method takes ss.mu.
+func (ss *sourceSession) callTool(ctx context.Context, name string, arguments map[string]any) (coretool.ToolResult, error) {
 	ss.mu.RLock()
 	defer ss.mu.RUnlock()
 	if ss.session == nil {
-		return "", &sessionError{sourceID: ss.sourceID, msg: "session not connected"}
+		return coretool.ToolResult{}, &sessionError{sourceID: ss.sourceID, msg: "session not connected"}
 	}
 	result, err := ss.session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      name,
 		Arguments: arguments,
 	})
 	if err != nil {
-		return "", &sessionError{sourceID: ss.sourceID, msg: "call tool " + name + ": " + err.Error()}
+		return coretool.ToolResult{}, &sessionError{sourceID: ss.sourceID, msg: "call tool " + name + ": " + err.Error()}
 	}
-	raw, err := contentBlocksToResult(result.Content)
+	raw, err := json.Marshal(result)
 	if err != nil {
-		return "", &sessionError{sourceID: ss.sourceID, msg: "marshal tool result: " + err.Error()}
+		return coretool.ToolResult{}, &sessionError{sourceID: ss.sourceID, msg: "marshal tool result: " + err.Error()}
 	}
-	return string(raw), nil
+	var out coretool.ToolResult
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return coretool.ToolResult{}, err
+	}
+	return out, nil
 }
 
 // close closes the SDK session and client.
 // The caller holds ss.mu.
+func (ss *sourceSession) connected() bool {
+	ss.mu.RLock()
+	defer ss.mu.RUnlock()
+	return ss.session != nil
+}
+
 func (ss *sourceSession) close() {
+	if ss.cancel != nil {
+		ss.cancel()
+		ss.cancel = nil
+	}
 	if ss.session != nil {
 		_ = ss.session.Close()
 		ss.session = nil
@@ -87,6 +113,7 @@ func (ss *sourceSession) close() {
 type sessionCache struct {
 	mu       sync.RWMutex
 	sessions map[string]*sourceSession
+	locks    sync.Map
 }
 
 func newSessionCache() *sessionCache {
@@ -96,6 +123,10 @@ func newSessionCache() *sessionCache {
 // getOrCreate returns the session for the given source, creating one if needed.
 // It returns (session, cleanupFunc, error).
 func (sc *sessionCache) getOrCreate(ctx context.Context, source typ.MCPSourceConfig, timeout time.Duration) (*sourceSession, func(), error) {
+	lockValue, _ := sc.locks.LoadOrStore(source.ID, &sync.Mutex{})
+	sourceLock := lockValue.(*sync.Mutex)
+	sourceLock.Lock()
+	defer sourceLock.Unlock()
 	// Fast path: read-locked lookup.
 	sc.mu.RLock()
 	ss := sc.sessions[source.ID]
@@ -111,7 +142,6 @@ func (sc *sessionCache) getOrCreate(ctx context.Context, source typ.MCPSourceCon
 
 	// Slow path: write-locked creation with double-check.
 	sc.mu.Lock()
-	defer sc.mu.Unlock()
 	ss = sc.sessions[source.ID]
 	if ss == nil {
 		ss = &sourceSession{sourceID: source.ID}
@@ -122,10 +152,12 @@ func (sc *sessionCache) getOrCreate(ctx context.Context, source typ.MCPSourceCon
 		connected := ss.session != nil
 		ss.mu.RUnlock()
 		if connected {
+			sc.mu.Unlock()
 			return ss, func() {}, nil
 		}
 	}
 
+	sc.mu.Unlock()
 	// Build transport and connect.
 	transport := strings.TrimSpace(source.Transport)
 	if transport == "" {
@@ -183,14 +215,24 @@ func (sc *sessionCache) getOrCreate(ctx context.Context, source typ.MCPSourceCon
 	// The SDK binds the JSON-RPC connection lifetime to the context passed to
 	// Connect. Do not pass a request-scoped or timeout context here, or long-lived
 	// transports such as SSE will be closed as soon as Connect returns.
-	sessionCtx := context.WithoutCancel(ctx)
+	connectCtx, connectCancel := context.WithTimeout(ctx, timeout)
+	defer connectCancel()
+	sessionCtx, sessionCancel := context.WithCancel(context.WithoutCancel(ctx))
+	stopCancel := context.AfterFunc(connectCtx, sessionCancel)
 	session, connErr := client.Connect(sessionCtx, t, nil)
+	detached := stopCancel()
+	if connErr == nil && !detached {
+		_ = session.Close()
+		connErr = connectCtx.Err()
+	}
 	if connErr != nil {
+		sessionCancel()
 		// Transport was started but session failed. The SDK's session.Close handles cleanup.
 		return nil, nil, &sessionError{sourceID: source.ID, msg: "connect: " + connErr.Error()}
 	}
 
 	ss.mu.Lock()
+	ss.cancel = sessionCancel
 	ss.client = client
 	ss.session = session
 	ss.cmd = stdioCmd
@@ -343,4 +385,16 @@ type sessionError struct {
 
 func (e *sessionError) Error() string {
 	return e.msg
+}
+
+func (sc *sessionCache) remove(id string) {
+	sc.mu.Lock()
+	ss := sc.sessions[id]
+	delete(sc.sessions, id)
+	sc.mu.Unlock()
+	if ss != nil {
+		ss.mu.Lock()
+		ss.close()
+		ss.mu.Unlock()
+	}
 }

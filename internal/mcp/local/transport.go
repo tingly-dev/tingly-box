@@ -1,6 +1,8 @@
 package local
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -44,6 +46,9 @@ func (t *TransportHandler) isMCPEnabled() bool {
 
 // GetServer returns the MCPServer for a client, creating it if needed.
 func (t *TransportHandler) GetServer(clientName string) (*MCPServer, error) {
+	if t.runtime == nil || !t.runtime.ClientExists(clientName) {
+		return nil, fmt.Errorf("unknown MCP client profile: %s", clientName)
+	}
 	t.serversMu.RLock()
 	server, exists := t.servers[clientName]
 	t.serversMu.RUnlock()
@@ -82,17 +87,7 @@ func (t *TransportHandler) GetServer(clientName string) (*MCPServer, error) {
 		return server, nil
 	}
 
-	// Build adapter with source filtering based on client name
-	// If clientName matches a configured source ID, expose only that source's tools
-	// Special clientName "all" exposes all sources; unknown names also get all sources
-	var adapter MCPConnectionHandler
-	if t.runtime != nil {
-		var allowedSources []string
-		if clientName != "all" && t.isKnownSource(clientName) {
-			allowedSources = []string{clientName}
-		}
-		adapter = NewMCPRuntimeAdapter(t.runtime, allowedSources...)
-	}
+	var adapter MCPConnectionHandler = NewMCPRuntimeAdapterForClient(t.runtime, clientName)
 
 	server = NewMCPServer(clientName, adapter, t.registry)
 	t.servers[clientName] = server
@@ -135,7 +130,7 @@ func (t *TransportHandler) HandleMCP(c *gin.Context) {
 	server, err := t.GetServer(clientName)
 	if err != nil {
 		logrus.Errorf("mcp local: failed to get server for client %s: %v", clientName, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create MCP server"})
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -189,4 +184,13 @@ func (t *TransportHandler) StopAll() {
 		server.Stop()
 		delete(t.servers, name)
 	}
+}
+
+func (t *TransportHandler) ReconnectClient(ctx context.Context, name string) error {
+	t.RemoveServer(name)
+	server, err := t.GetServer(name)
+	if err != nil {
+		return err
+	}
+	return server.Start()
 }
