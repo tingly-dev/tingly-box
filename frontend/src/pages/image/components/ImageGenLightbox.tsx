@@ -11,11 +11,18 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Brush, Close, ContentCopy, Create, Download, Edit, GridView, RestartAlt } from '@/components/icons';
+import { Brush, Check, Close, ContentCopy, Create, Download, Edit, GridView, RestartAlt, tablerMui } from '@/components/icons';
+import { IconBookmarkPlus } from '@tabler/icons-react';
 import { fullBleedDialogPaperSx, overlayPlateSx } from './ImageGenPlayground.chrome';
 import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
 import type { LightboxFrame } from './useImageGenLightbox';
 import type { ReferenceImage } from './ImageGenReferenceImages';
+import { keepImage, useAssets } from '../library/assetStore';
+import { deriveLabel } from '../profiles/promptLabel';
+
+// Kept shows as a check: Tabler's filled bookmark loses its fill through
+// tablerMui and would render as nothing.
+const BookmarkPlus = tablerMui(IconBookmarkPlus);
 
 // Shared by the lightbox's overlay buttons — restyling the bar should be one edit.
 const overlayIconSx = {
@@ -67,6 +74,13 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
     onUseAsReference,
 }) => {
     const { t } = useTranslation();
+    // "Keep" moves a result from history (clearable) into the library (kept).
+    const assets = useAssets();
+    const keepable = selectedImage?.kind === 'output' || selectedImage?.kind === 'import';
+    const kept = Boolean(selectedImage && assets.some((asset) => asset.src === selectedImage.src));
+    const keepLabel = kept
+        ? t('imageLibrary.kept', { defaultValue: 'In the library' })
+        : t('imageLibrary.keep', { defaultValue: 'Keep in library' });
     // On by default — a mask was painted to be seen — and remembered while
     // the lightbox stays mounted, so walking the filmstrip does not reset it.
     const [showMask, setShowMask] = useState(true);
@@ -284,6 +298,25 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                             >
                                 <RestartAlt fontSize="small" />
                             </IconButton>
+                        </Tooltip>
+                    )}
+                    {keepable && selectedImage && (
+                        <Tooltip title={keepLabel}>
+                            <span>
+                                <IconButton
+                                    onClick={() => keepImage({
+                                        src: selectedImage.src,
+                                        name: selectedImage.label ?? `${deriveLabel(selectedImage.prompt, 12) || 'image'}-${selectedImage.index + 1}.png`,
+                                        origin: 'generated',
+                                    })}
+                                    disabled={kept}
+                                    aria-label={keepLabel}
+                                    aria-pressed={kept}
+                                    sx={{ ...overlayIconSx, '&.Mui-disabled': { color: 'common.white' } }}
+                                >
+                                    {kept ? <Check fontSize="small" /> : <BookmarkPlus fontSize="small" />}
+                                </IconButton>
+                            </span>
                         </Tooltip>
                     )}
                     <Tooltip title={t('playground.slice.action', { defaultValue: 'Split into tiles' })}>
