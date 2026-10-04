@@ -31,6 +31,7 @@ export default function MCPSourceWorkspace({
     onConnectClient,
     onDelete,
     onRefresh,
+    usageScope,
 }: {
     source: MCPSourceConfig;
     route?: MCPRouteSource;
@@ -39,6 +40,7 @@ export default function MCPSourceWorkspace({
     onConnectClient: () => void;
     onDelete: () => Promise<void>;
     onRefresh: () => Promise<void>;
+    usageScope?: 'client' | 'gateway';
 }) {
     const { t } = useTranslation();
     const label = (key: string, fallback: string) => t(`mcp.workspace.${key}`, { defaultValue: fallback });
@@ -49,7 +51,7 @@ export default function MCPSourceWorkspace({
     const [argumentsText, setArgumentsText] = useState('{}');
     const [testResult, setTestResult] = useState<unknown>(null);
     const advisor = source.transport === 'advisor' || !!source.advisor;
-    const [configure, setConfigure] = useState(source.enabled !== false && route?.state !== 'connected');
+    const [configure, setConfigure] = useState(advisor || (source.enabled !== false && route?.state !== 'connected'));
     const [confirmDelete, setConfirmDelete] = useState(false);
     const run = async (action: () => Promise<void>) => {
         setBusy(true);
@@ -76,7 +78,11 @@ export default function MCPSourceWorkspace({
         <Stack spacing={2.5}>
             <Typography color="text.secondary">
                 {label(
-                    'sourceWorkspaceHint',
+                    usageScope === 'client'
+                        ? 'clientSourceHint'
+                        : usageScope === 'gateway'
+                          ? 'serverSourceHint'
+                          : 'sourceWorkspaceHint',
                     'Configure this connection and choose how each tool is used, without leaving this workspace.'
                 )}
             </Typography>
@@ -89,7 +95,11 @@ export default function MCPSourceWorkspace({
                         onChange={(e) => void run(() => saveSource({ id: source.id, enabled: e.target.checked }))}
                     />
                 }
-                label={label('connectionEnabled', 'Enable this tool connection')}
+                label={
+                    usageScope
+                        ? label('sharedConnectionEnabled', 'Enable shared connection (affects Tool and Server Tool)')
+                        : label('connectionEnabled', 'Enable this tool connection')
+                }
             />
             {source.enabled === false ? (
                 <Alert severity="info">
@@ -156,13 +166,22 @@ export default function MCPSourceWorkspace({
                 </AccordionDetails>
             </Accordion>
             <Box>
-                <Typography variant="h6">{label('chooseUsage', 'How should these tools be used?')}</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    {label(
-                        'usageExplanation',
-                        'Ordinary tools are called by your client. Server Tools are executed by the gateway during a model request. A standard tool can be used in both paths.'
-                    )}
+                <Typography variant="h6">
+                    {usageScope
+                        ? label(
+                              usageScope === 'client' ? 'clientToolSection' : 'serverToolSection',
+                              usageScope === 'client' ? 'Tools available to clients' : 'Tools available to the gateway'
+                          )
+                        : label('chooseUsage', 'How should these tools be used?')}
                 </Typography>
+                {!usageScope && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                        {label(
+                            'usageExplanation',
+                            'Ordinary tools are called by your client. Server Tools are executed by the gateway during a model request. A standard tool can be used in both paths.'
+                        )}
+                    </Typography>
+                )}
             </Box>
             {advisor && (
                 <Alert severity="info">
@@ -217,45 +236,59 @@ export default function MCPSourceWorkspace({
                                     )}
                                 </Typography>
                             )}
+                            {usageScope && !tool.enabled && !restricted && (
+                                <Typography variant="caption" color="warning.main">
+                                    {label(
+                                        'sharedToolOff',
+                                        'This tool is disabled in the shared connection. Enable it from the connections overview.'
+                                    )}
+                                </Typography>
+                            )}
                             <Stack direction="row" sx={{ flexWrap: 'wrap', mt: 0.5 }}>
-                                <FormControlLabel
-                                    control={
-                                        <Checkbox
-                                            disabled={busy || restricted || source.enabled === false}
-                                            checked={tool.enabled}
-                                            onChange={(e) => void updateTool(tool, { enabled: e.target.checked })}
-                                        />
-                                    }
-                                    label={label('toolEnabled', 'Enabled')}
-                                />
-                                <FormControlLabel
-                                    control={
-                                        <Checkbox
-                                            disabled={busy || restricted || advisor}
-                                            checked={tool.usage.client && !advisor}
-                                            onChange={(e) =>
-                                                void updateTool(tool, {
-                                                    usage: { ...tool.usage, client: e.target.checked },
-                                                })
-                                            }
-                                        />
-                                    }
-                                    label={label('ordinaryTools', 'Ordinary tools')}
-                                />
-                                <FormControlLabel
-                                    control={
-                                        <Checkbox
-                                            disabled={busy || restricted}
-                                            checked={tool.usage.gateway}
-                                            onChange={(e) =>
-                                                void updateTool(tool, {
-                                                    usage: { ...tool.usage, gateway: e.target.checked },
-                                                })
-                                            }
-                                        />
-                                    }
-                                    label={label('serverTools', 'Server Tools')}
-                                />
+                                {!usageScope && (
+                                    <FormControlLabel
+                                        control={
+                                            <Checkbox
+                                                disabled={busy || restricted || source.enabled === false}
+                                                checked={tool.enabled}
+                                                onChange={(e) => void updateTool(tool, { enabled: e.target.checked })}
+                                            />
+                                        }
+                                        label={label('toolEnabled', 'Enabled')}
+                                    />
+                                )}
+                                {usageScope !== 'gateway' && (
+                                    <FormControlLabel
+                                        control={
+                                            <Checkbox
+                                                disabled={busy || restricted || advisor}
+                                                checked={tool.usage.client && !advisor}
+                                                onChange={(e) =>
+                                                    void updateTool(tool, {
+                                                        usage: { ...tool.usage, client: e.target.checked },
+                                                    })
+                                                }
+                                            />
+                                        }
+                                        label={label('ordinaryTools', 'Ordinary tools')}
+                                    />
+                                )}
+                                {usageScope !== 'client' && (
+                                    <FormControlLabel
+                                        control={
+                                            <Checkbox
+                                                disabled={busy || restricted}
+                                                checked={tool.usage.gateway}
+                                                onChange={(e) =>
+                                                    void updateTool(tool, {
+                                                        usage: { ...tool.usage, gateway: e.target.checked },
+                                                    })
+                                                }
+                                            />
+                                        }
+                                        label={label('serverTools', 'Server Tools')}
+                                    />
+                                )}
                             </Stack>
                             {testing?.normalized_name === tool.normalized_name && (
                                 <Stack spacing={1.5} sx={{ mt: 1 }}>
@@ -328,7 +361,7 @@ export default function MCPSourceWorkspace({
                     );
                 })}
             </Stack>
-            {!advisor && (
+            {!advisor && usageScope !== 'gateway' && (
                 <Button variant="outlined" disabled={busy} onClick={onConnectClient}>
                     {label('useInClient', 'Choose a client to use these tools')}
                 </Button>

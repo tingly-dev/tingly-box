@@ -35,10 +35,11 @@ const route: MCPRouteSource = {
         },
     ],
 };
-const open = (s = source, r = route, enabled = true) =>
+const open = (s = source, r = route, enabled = true, usageScope?: 'client' | 'gateway') =>
     render(
         <MCPSourceWorkspace
             source={s}
+            usageScope={usageScope}
             route={r}
             enabled={enabled}
             saveSource={save}
@@ -51,6 +52,30 @@ beforeEach(() => {
     save.mockReset();
 });
 describe('source tool usage boundaries', () => {
+    it.each(['client', 'gateway'] as const)(
+        'exposes only the current %s purpose while preserving the other purpose',
+        async (scope) => {
+            save.mockResolvedValue(undefined);
+            open(source, route, true, scope);
+            const row = within(screen.getByRole('group', { name: 'read' }));
+            expect(row.queryByRole('checkbox', { name: 'Enabled' })).toBeNull();
+            expect(
+                row.queryByRole('checkbox', { name: scope === 'client' ? 'Server Tools' : 'Ordinary tools' })
+            ).toBeNull();
+            fireEvent.click(
+                row.getByRole('checkbox', { name: scope === 'client' ? 'Ordinary tools' : 'Server Tools' })
+            );
+            await waitFor(() =>
+                expect(save).toHaveBeenCalledWith({
+                    id: 'docs',
+                    tool_policies: {
+                        other: { enabled: false },
+                        read: { enabled: true, usage: { client: scope !== 'client', gateway: scope !== 'gateway' } },
+                    },
+                })
+            );
+        }
+    );
     it('revokes one usage without overwriting the other usage or unrelated tool policies', async () => {
         save.mockResolvedValue(undefined);
         open();

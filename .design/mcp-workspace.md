@@ -1,56 +1,60 @@
-# MCP: one workspace, continuous setup
+# MCP: overview and two separate tool layouts
 
-The previous five destinations mirrored runtime entities. They required users
-to understand the relationship between sources, tool policies, client profiles
-and gateway execution before completing their first connection.
+The navigation has three secondary entries: connections overview, Tool and
+Server Tool. The overview describes shared connections and their actual use;
+the two tool pages retain separate work surfaces for their execution purposes.
 
-The workspace answers three questions in order:
+## Responsibilities
 
-1. What tools have I connected? Source cards use names as their primary label,
-   show health and tool counts, and point to their actual client/model destinations.
-2. Who uses them? Ordinary tools are called by downstream clients; Server Tools
-   run inside the gateway model loop. These are separate scopes on the same page.
-3. How do I start using them? Choosing client access and obtaining its executable
-   installation command happen in the same panel, followed by the real SDK probe.
+- Overview (`/mcp`): connect and repair built-in/external services, show health
+  and actual client/gateway destinations, and inspect the effective route graph.
+  Scope summary cards link to the tool pages; client access editors and full tool
+  inventories are not rendered in this overview.
+- Tool (`/mcp/tools`): tools called by MCP clients, client permission review,
+  executable installation commands and real SDK verification.
+- Server Tool (`/mcp/server-tools`): tools executed during model requests by the
+  gateway, plus Advisor consultation model configuration. No client access editor
+  or installation commands are rendered here.
 
-## Continuous actions
+## Shared connection, independent purpose
 
-The navigation rail opens `/mcp` directly and has no secondary MCP page menu.
-Connect tools opens name and remote address/local command fields. IDs are generated
-and credentials remain available in advanced settings. Saving opens that source's
-tools, with independent ordinary and Server Tools checkboxes. Choosing a client
-preselects the source in an unsaved permission review. Nothing is granted until
-the user saves. The resulting command and verification stay in that panel.
+Store each connection once. Origin (built-in/external), transport and execution
+purpose remain independent dimensions. An ordinary tool can be used in both paths.
+The tool pages and their source panels expose only the current purpose control;
+changing one preserves the other. Shared connection enablement explicitly says
+it affects both pages. Global per-tool enablement stays in the overview source
+panel. Removing a shared connection explains that both tool groups are affected.
+Adding a source directly from Server Tool defaults to gateway-only usage.
 
-The relationship graph remains accessible below the primary work surface as a
-collapsed diagnostic. Its existing actions open source/client/tool panels in place.
-Legacy page paths and install/profile/source bookmarks remain compatible; closing
-their panels returns to the workspace. Existing IDs never change, preserving
-saved endpoints and installed client commands.
+Advisor requires model conversation context. It remains excluded from Tool and
+from client grants. In Server Tool, Configure Advisor model opens its dedicated
+consultation settings directly; standalone testing remains disabled. Model
+continuation must be verified separately from saved-client SDK discovery.
 
-## Separate axes and truthful state
+## Navigation and state
 
-Built-in/external indicates connection origin. Ordinary/Server Tools indicates
-execution purpose. A regular tool can use both paths through one shared connection.
-Advisor depends on conversation context, exposes only the Server Tools path and
-shows its actual consultation provider/model configuration. Standalone tool tests
-are disabled for Advisor. Tool tests run through the existing authenticated runtime;
-saved-client probes initialize and discover tools through the actual MCP endpoint.
+Overview graph actions and summary links open the appropriate secondary page.
+Connection-to-client assignment opens Tool with a named, unsaved grant review.
+The user saves before any client grant takes effect. Commands and the real probe
+remain in that client panel. Closing a panel stays on its current page.
 
-Connection edits omit usage, enabled state and per-tool policy fields to avoid
-overwriting changes made in the usage surface. Client wildcard source revocation
-materializes grants before removing one source and preserves individual tool grants.
-New clients start with no source access; explicit empty grants never fall back to
-legacy shared access. Saving the first explicit client explains the legacy endpoint
-transition before the save. Failed connections remain alongside working ones with
-a repair action. Execution-disabled clients keep editable configuration and disable
-runtime verification. Loading or stale routing is presented as pending, not success.
+Legacy source/route links open the overview; client links open Tool; old section
+queries select the corresponding page. Existing identifiers stay fixed so saved
+commands remain valid. Navigation exposes the selected page with aria-current.
+Persistent tool catalogs refresh when saved source settings change; generation
+checks ignore late discovery results. Connection edits preserve usage, global
+limits and policies by omitting those unrelated fields.
 
-## Review evidence
+New client access starts empty. Explicit empty grants do not revert to legacy
+shared access. Wildcard source revocation preserves other grants. Failed sources
+remain alongside healthy ones, and disabled execution retains configuration while
+preventing runtime verification.
 
-Keep all draft, failure and final screenshots with stage manifests and SHA-256
-checksums. The browser harness exercises real HTTP connect/discover/call, grant
-review/save/revoke, empty access, disabled client/runtime, Advisor context, failed
-connection repair, old bookmarks and responsive panels. It restores isolated demo
-fixtures after each run. The protocol/model-loop matrix remains a separate check;
-an SDK discovery result does not imply model continuation succeeded.
+## Verification and artifacts
+
+Verify the actual three-entry layout and selected navigation, page-specific
+inventories and controls, source changes that preserve the other purpose, catalog
+refresh after a source-panel edit, real SDK grants/calls/revocation, Advisor context,
+failed/disabled/empty states, legacy links and mobile navigation. Keep all screenshot
+stages, including failed captures, with checksums. Archive this round separately;
+previous review packages and previews remain available as historical evidence.

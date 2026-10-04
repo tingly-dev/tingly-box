@@ -97,7 +97,7 @@ const open = (url = '/mcp') =>
             <MCPRegisteredServers />
         </MemoryRouter>
     );
-describe('single MCP workspace', () => {
+describe('MCP secondary layouts', () => {
     it('shows sources and actual destinations together, with advanced routing hidden until requested', async () => {
         open();
         expect(await screen.findByText('Codex work · Gateway model')).toBeInTheDocument();
@@ -105,6 +105,49 @@ describe('single MCP workspace', () => {
         expect(screen.queryByText('Routing panel')).toBeNull();
         fireEvent.click(screen.getByRole('button', { name: /View call relationships/ }));
         expect(await screen.findByText('Routing panel')).toBeInTheDocument();
+    });
+    it('uses the overview for shared connections and navigates to separate Tool and Server Tool pages', async () => {
+        open();
+        await screen.findByText('Codex work · Gateway model');
+        expect(screen.queryByRole('button', { name: 'Access & setup' })).toBeNull();
+        expect(screen.queryByText(/Capabilities panel/)).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Open Tool' }));
+        expect(await screen.findByRole('heading', { name: 'Tool', level: 1 })).toBeInTheDocument();
+        expect(screen.getByText('Capabilities panel: client')).toBeInTheDocument();
+        expect(screen.queryByText('Capabilities panel: gateway')).toBeNull();
+        expect(screen.getByRole('button', { name: 'Access & setup' })).toBeInTheDocument();
+        expect(screen.queryByRole('region', { name: 'Connected tools' })).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Manage connections' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Open Server Tool' }));
+        expect(await screen.findByRole('heading', { name: 'Server Tool', level: 1 })).toBeInTheDocument();
+        expect(screen.getByText('Capabilities panel: gateway')).toBeInTheDocument();
+        expect(screen.queryByText('Capabilities panel: client')).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Access & setup' })).toBeNull();
+        expect(screen.queryByRole('region', { name: 'Connected tools' })).toBeNull();
+    });
+    it('connects directly from Server Tool without granting ordinary tool usage', async () => {
+        mocks.create.mockImplementation(async (s) => ({
+            success: true,
+            enabled: false,
+            config: { ...config, sources: [...config.sources, s] },
+        }));
+        open('/mcp/server-tools');
+        await screen.findByText('Capabilities panel: gateway');
+        fireEvent.click(screen.getByRole('button', { name: 'Connect tools' }));
+        const dialog = screen.getByRole('dialog');
+        fireEvent.change(within(dialog).getByLabelText(/Connection name/), { target: { value: 'Server notes' } });
+        fireEvent.change(within(dialog).getByLabelText('Endpoint URL'), {
+            target: { value: 'https://notes.test/mcp' },
+        });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Connect and choose tools' }));
+        await waitFor(() =>
+            expect(mocks.create).toHaveBeenCalledWith(
+                expect.objectContaining({ id: 'server-notes', usage: { client: false, gateway: true } })
+            )
+        );
+        expect(await screen.findByRole('heading', { name: 'Server notes' })).toBeInTheDocument();
+        expect(screen.queryByRole('checkbox', { name: 'Ordinary tools' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Choose a client to use these tools' })).toBeNull();
     });
     it('keeps failed connection edits open and preserves credentials without restoring stale policies', async () => {
         mocks.patch.mockRejectedValue(new Error('Save failed'));
@@ -158,7 +201,7 @@ describe('single MCP workspace', () => {
             enabled: false,
             config: { ...config, client_profiles: [profile] },
         }));
-        open();
+        open('/mcp/tools');
         await screen.findByText('Codex work');
         fireEvent.click(await screen.findByRole('button', { name: 'Access & setup' }));
         expect(await screen.findByText('Setup command for reader')).toBeInTheDocument();
@@ -172,9 +215,10 @@ describe('single MCP workspace', () => {
     it.each([
         ['/mcp/tools', 'client'],
         ['/mcp/server-tools', 'gateway'],
-    ])('opens the matching in-place tool panel for legacy link %s', async (url, usage) => {
+    ])('renders the corresponding tool page without a modal for %s', async (url, usage) => {
         open(url);
         expect(await screen.findByText(`Capabilities panel: ${usage}`)).toBeInTheDocument();
+        expect(screen.queryByRole('dialog')).toBeNull();
         expect(screen.queryByRole('tab')).toBeNull();
     });
     it('opens the client panel from an existing install bookmark', async () => {
@@ -183,5 +227,6 @@ describe('single MCP workspace', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Close workspace panel' }));
         await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
         expect(screen.queryByRole('heading', { name: 'Choose client' })).toBeNull();
+        expect(screen.getByRole('heading', { name: 'Tool', level: 1 })).toBeInTheDocument();
     });
 });

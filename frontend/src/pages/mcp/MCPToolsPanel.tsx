@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     Alert,
@@ -26,9 +26,13 @@ export default function MCPToolsPanel({
     saveSource,
     usage = 'client',
     onConfigureSource,
+    showIntro = true,
+    scopeOnly = false,
 }: {
     usage?: 'client' | 'gateway';
     onConfigureSource?: (id: string) => void;
+    showIntro?: boolean;
+    scopeOnly?: boolean;
     sources: MCPSourceConfig[];
     enabled: boolean;
     saveSource: (patch: MCPSourceConfig) => Promise<void>;
@@ -42,21 +46,34 @@ export default function MCPToolsPanel({
     const [testing, setTesting] = useState<MCPCatalogTool | null>(null);
     const [args, setArgs] = useState('{}');
     const [result, setResult] = useState<unknown>(null);
-    const discover = useCallback(
-        () =>
-            api
-                .getMCPCatalog()
-                .then((response) => {
-                    if (!response?.success) throw new Error(response?.error || 'Discovery failed');
-                    setCatalog(response.sources || []);
-                })
-                .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-                .finally(() => setBusy(false)),
-        []
-    );
+    const discoveryGeneration = useRef(0);
+    const discover = useCallback(async () => {
+        const generation = ++discoveryGeneration.current;
+        try {
+            const response = await api.getMCPCatalog();
+            if (generation !== discoveryGeneration.current) return;
+            if (!response?.success) throw new Error(response?.error || 'Discovery failed');
+            setCatalog(response.sources || []);
+            setError('');
+        } catch (e) {
+            if (generation === discoveryGeneration.current) setError(e instanceof Error ? e.message : String(e));
+        } finally {
+            if (generation === discoveryGeneration.current) setBusy(false);
+        }
+    }, []);
     useEffect(() => {
-        void discover();
-    }, [discover]);
+        let active = true;
+        void Promise.resolve().then(() => {
+            if (active) void discover();
+        });
+        return () => {
+            active = false;
+            discoveryGeneration.current++;
+        };
+        // Saved source snapshots invalidate the server catalog even though
+        // discovery reads the applied configuration through the API.
+        // oxlint-disable-next-line react/exhaustive-effect-dependencies
+    }, [sources, discover]);
     const refresh = async () => {
         setBusy(true);
         setError('');
@@ -115,19 +132,23 @@ export default function MCPToolsPanel({
     return (
         <Stack spacing={2}>
             <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 1 }}>
-                <Typography color="text.secondary">
-                    {usage === 'client'
-                        ? label(
-                              'ordinaryHint',
-                              'Ordinary tools are called by MCP clients. Manage shared connections in Tool sources.'
-                          )
-                        : label(
-                              'serverHint',
-                              'The gateway executes these tools during model requests and returns their results to the model to continue its answer.'
-                          )}
-                </Typography>
+                {showIntro && (
+                    <Typography color="text.secondary">
+                        {usage === 'client'
+                            ? label(
+                                  'ordinaryHint',
+                                  'Ordinary tools are called by MCP clients. Manage shared connections in Tool sources.'
+                              )
+                            : label(
+                                  'serverHint',
+                                  'The gateway executes these tools during model requests and returns their results to the model to continue its answer.'
+                              )}
+                    </Typography>
+                )}
                 <Button disabled={busy} onClick={() => setChoosing(true)}>
-                    {label('chooseTools', 'Choose tools')}
+                    {usage === 'client'
+                        ? label('chooseOrdinary', 'Choose ordinary tools')
+                        : label('chooseServer', 'Choose Server Tools')}
                 </Button>
                 <Button disabled={busy} onClick={() => void refresh()}>
                     {label(busy ? 'discovering' : 'discover', busy ? 'Discovering…' : 'Discover tools')}
@@ -161,7 +182,12 @@ export default function MCPToolsPanel({
                 </Typography>
             )}
             {tools.map((tool) => (
-                <Card variant="outlined" key={tool.normalized_name}>
+                <Card
+                    variant="outlined"
+                    component="article"
+                    aria-label={`${sources.find((source) => source.id === tool.source_id)?.name || tool.source_id} / ${tool.name}`}
+                    key={tool.normalized_name}
+                >
                     <CardContent>
                         <Stack spacing={1}>
                             <Typography variant="subtitle1">
@@ -179,21 +205,31 @@ export default function MCPToolsPanel({
                                     )}
                                 </Typography>
                             )}
+                            {scopeOnly && !tool.enabled && !restricted(tool) && (
+                                <Typography variant="caption" color="warning.main">
+                                    {t('mcp.workspace.sharedToolOff', {
+                                        defaultValue:
+                                            'This tool is disabled in the shared connection. Enable it from the connections overview.',
+                                    })}
+                                </Typography>
+                            )}
                             <Stack direction="row" sx={{ flexWrap: 'wrap' }}>
+                                {!scopeOnly && (
+                                    <FormControlLabel
+                                        control={
+                                            <Checkbox
+                                                disabled={busy || restricted(tool)}
+                                                checked={tool.enabled}
+                                                onChange={(e) => void policy(tool, { enabled: e.target.checked })}
+                                            />
+                                        }
+                                        label={label('enabled', 'Enabled')}
+                                    />
+                                )}
                                 <FormControlLabel
                                     control={
                                         <Checkbox
                                             disabled={busy || restricted(tool)}
-                                            checked={tool.enabled}
-                                            onChange={(e) => void policy(tool, { enabled: e.target.checked })}
-                                        />
-                                    }
-                                    label={label('enabled', 'Enabled')}
-                                />
-                                <FormControlLabel
-                                    control={
-                                        <Checkbox
-                                            disabled={busy}
                                             checked={usage === 'client' ? tool.usage.client : tool.usage.gateway}
                                             onChange={(e) =>
                                                 void policy(tool, {
@@ -238,9 +274,17 @@ export default function MCPToolsPanel({
                                     sx={{ alignSelf: 'flex-start' }}
                                     onClick={() => onConfigureSource(tool.source_id)}
                                 >
-                                    {t('mcp.workspace.configureConnection', {
-                                        defaultValue: 'Configure this connection',
-                                    })}
+                                    {t(
+                                        tool.source_id === 'advisor' && tool.implementation === 'virtual'
+                                            ? 'mcp.workspace.configureAdvisor'
+                                            : 'mcp.workspace.configureConnection',
+                                        {
+                                            defaultValue:
+                                                tool.source_id === 'advisor' && tool.implementation === 'virtual'
+                                                    ? 'Configure Advisor model'
+                                                    : 'Configure this connection',
+                                        }
+                                    )}
                                 </Button>
                             )}
                             <Box component="details">
