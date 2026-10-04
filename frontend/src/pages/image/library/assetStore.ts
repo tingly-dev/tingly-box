@@ -27,6 +27,11 @@ export const keepImage = (fields: Omit<ImageAsset, 'id' | 'createdAt'>): ImageAs
     return asset;
 };
 
+export const renameAsset = (id: string, name: string) => {
+    assets = assets.map((asset) => (asset.id === id ? { ...asset, name } : asset));
+    emit();
+};
+
 export const removeAsset = (id: string) => {
     assets = assets.filter((asset) => asset.id !== id);
     emit();

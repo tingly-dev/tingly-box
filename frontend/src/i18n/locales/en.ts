@@ -2803,7 +2803,9 @@ export default {
     "noSnippets": "No snippets yet — add some in the library",
     "keep": "Keep in library",
     "kept": "In the library",
-    "deleteHint": "Deletes the image and its file. Profiles that already use it keep their copy."
+    "deleteHint": "Deletes the image and its file. Profiles that already use it keep their copy.",
+    "rename": "Rename",
+    "imageName": "Image name"
   },
   "desk": {
     "noBackgroundTasks": "No background tasks",

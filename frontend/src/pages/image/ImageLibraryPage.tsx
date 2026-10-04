@@ -24,7 +24,7 @@ import { api } from '@/services/api';
 import { fontMono } from '@/theme/fonts';
 import { downloadImage } from '@/utils/download';
 import type { ImageAsset, PromptSnippet } from './library/assetTypes';
-import { removeAsset, removeSnippet, saveSnippet, useAssets, useSnippets } from './library/assetStore';
+import { removeAsset, removeSnippet, renameAsset, saveSnippet, useAssets, useSnippets } from './library/assetStore';
 
 type Tab = 'images' | 'snippets';
 
@@ -40,6 +40,16 @@ const ImageLibraryPage: React.FC = () => {
     const snippets = useSnippets();
     const [openAsset, setOpenAsset] = useState<ImageAsset | null>(null);
     const [confirmingDelete, setConfirmingDelete] = useState(false);
+    // Renamed in place in the dialog title, the same way a profile's title is.
+    const [renaming, setRenaming] = useState(false);
+    const [nameDraft, setNameDraft] = useState('');
+    const commitRename = () => {
+        setRenaming(false);
+        const name = nameDraft.trim();
+        if (!openAsset || !name || name === openAsset.name) return;
+        renameAsset(openAsset.id, name);
+        setOpenAsset({ ...openAsset, name });
+    };
     const [snippetDraft, setSnippetDraft] = useState<Partial<PromptSnippet> | null>(null);
 
     // Where the library lives on disk — the same folder generated images
@@ -110,7 +120,7 @@ const ImageLibraryPage: React.FC = () => {
                             {assets.map((asset) => (
                                 <ButtonBase
                                     key={asset.id}
-                                    onClick={() => { setConfirmingDelete(false); setOpenAsset(asset); }}
+                                    onClick={() => { setConfirmingDelete(false); setRenaming(false); setOpenAsset(asset); }}
                                     sx={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', textAlign: 'left', borderRadius: 1.5 }}
                                 >
                                     <Box sx={{ aspectRatio: '1 / 1', borderRadius: 1.5, overflow: 'hidden', bgcolor: 'action.hover' }}>
@@ -156,7 +166,36 @@ const ImageLibraryPage: React.FC = () => {
                 {openAsset && (
                     <>
                         <DialogTitle sx={{ display: 'flex', alignItems: 'center', pr: 1, fontSize: '1.05rem' }}>
-                            <Box component="span" sx={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{openAsset.name}</Box>
+                            {renaming ? (
+                                <TextField
+                                    autoFocus
+                                    size="small"
+                                    value={nameDraft}
+                                    onChange={(event) => setNameDraft(event.target.value)}
+                                    onBlur={commitRename}
+                                    onFocus={(event) => event.target.select()}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter') commitRename();
+                                        // Escape cancels the rename, not the dialog.
+                                        if (event.key === 'Escape') { event.stopPropagation(); setRenaming(false); }
+                                    }}
+                                    slotProps={{ htmlInput: { 'aria-label': t('imageLibrary.imageName', { defaultValue: 'Image name' }) } }}
+                                    sx={{ flex: 1, mr: 1 }}
+                                />
+                            ) : (
+                                <Stack direction="row" spacing={0.5} sx={{ flex: 1, minWidth: 0, alignItems: 'center' }}>
+                                    <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{openAsset.name}</Box>
+                                    <Tooltip title={t('imageLibrary.rename', { defaultValue: 'Rename' })}>
+                                        <IconButton
+                                            size="small"
+                                            onClick={() => { setNameDraft(openAsset.name); setRenaming(true); }}
+                                            aria-label={t('imageLibrary.rename', { defaultValue: 'Rename' })}
+                                        >
+                                            <Edit sx={{ fontSize: 18 }} />
+                                        </IconButton>
+                                    </Tooltip>
+                                </Stack>
+                            )}
                             <IconButton onClick={() => setOpenAsset(null)} aria-label={t('common.close', { defaultValue: 'Close' })}>
                                 <Close />
                             </IconButton>

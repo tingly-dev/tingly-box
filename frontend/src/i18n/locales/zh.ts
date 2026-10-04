@@ -2801,7 +2801,9 @@ export default {
     "noSnippets": "还没有片段，去素材库添加",
     "keep": "留下到素材库",
     "kept": "已在素材库",
-    "deleteHint": "会删除这张图片和它的文件。已经用在方案里的图不受影响。"
+    "deleteHint": "会删除这张图片和它的文件。已经用在方案里的图不受影响。",
+    "rename": "重命名",
+    "imageName": "图片名称"
   },
   "desk": {
     "noBackgroundTasks": "暂无后台任务",
