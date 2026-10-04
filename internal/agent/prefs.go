@@ -137,6 +137,13 @@ func (p ClaudeCodePrefs) ToEnv(baseURL, apiKey string) (map[string]string, error
 	if err != nil {
 		return nil, err
 	}
+	// Label the pinned slots in Claude Code's /model picker; an explicit value
+	// (typed field or Extra) wins over the derived one.
+	for key, value := range CCTierDisplayEnv(env) {
+		if _, set := env[key]; !set {
+			env[key] = value
+		}
+	}
 	env["ANTHROPIC_BASE_URL"] = strings.TrimRight(baseURL, "/") + "/tingly/claude_code"
 	env["ANTHROPIC_AUTH_TOKEN"] = apiKey
 

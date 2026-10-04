@@ -135,6 +135,8 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 		env["CLAUDE_CODE_SUBAGENT_MODEL"] = tierModel("subagent", serverconfig.RuleUUIDBuiltinCCSubagent, "tingly/cc-subagent")
 	}
 
+	maps.Copy(env, CCTierDisplayEnv(env))
+
 	// Mirror the frontend quick-config: when any resolved model rule has the
 	// 1M context flag, adjust the auto-compact window to match so Claude Code
 	// doesn't compact prematurely.
@@ -233,6 +235,12 @@ var ccProfileRuleOwnedEnvKeys = []string{
 	"ANTHROPIC_DEFAULT_OPUS_MODEL",
 	"ANTHROPIC_DEFAULT_FABLE_MODEL",
 	"CLAUDE_CODE_SUBAGENT_MODEL",
+}
+
+func init() {
+	// The picker labels are derived from the model slots, so they are owned by
+	// the rules too.
+	ccProfileRuleOwnedEnvKeys = append(ccProfileRuleOwnedEnvKeys, ccDisplayEnvKeys()...)
 }
 
 func isCCProfileRuleOwnedEnvKey(key string) bool {

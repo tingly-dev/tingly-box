@@ -122,6 +122,13 @@ func TestClaudeCodePrefs_ToEnv_FullForm(t *testing.T) {
 		"ANTHROPIC_DEFAULT_SONNET_MODEL",
 		"ANTHROPIC_DEFAULT_OPUS_MODEL",
 		"CLAUDE_CODE_SUBAGENT_MODEL",
+		// derived /model picker labels for the three pinned slots set above
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION",
 		"API_TIMEOUT_MS",
 		"CLAUDE_CODE_MAX_OUTPUT_TOKENS",
 		"MAX_THINKING_TOKENS",
@@ -304,22 +311,30 @@ func TestDefaultClaudeCodePrefs_Unified(t *testing.T) {
 		t.Fatalf("ToEnv: %v", err)
 	}
 	want := map[string]string{
-		"ANTHROPIC_MODEL":                          "tingly/cc",
-		"ANTHROPIC_DEFAULT_HAIKU_MODEL":            "tingly/cc",
-		"ANTHROPIC_DEFAULT_SONNET_MODEL":           "tingly/cc",
-		"ANTHROPIC_DEFAULT_OPUS_MODEL":             "tingly/cc",
-		"ANTHROPIC_DEFAULT_FABLE_MODEL":            "tingly/cc",
-		"CLAUDE_CODE_SUBAGENT_MODEL":               "tingly/cc",
-		"API_TIMEOUT_MS":                           "3000000",
-		"CLAUDE_CODE_MAX_OUTPUT_TOKENS":            "32000",
-		"CLAUDE_CODE_AUTO_COMPACT_WINDOW":          "200000",
-		"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE":          "80",
-		"DISABLE_TELEMETRY":                        "1",
-		"DISABLE_ERROR_REPORTING":                  "1",
-		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-		"ANTHROPIC_BASE_URL":                       "http://localhost:12580/tingly/claude_code",
-		"ANTHROPIC_AUTH_TOKEN":                     "test-token",
-		"NO_PROXY":                                 "localhost,127.0.0.1,::1",
+		"ANTHROPIC_MODEL":                            "tingly/cc",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL":              "tingly/cc",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL":             "tingly/cc",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL":               "tingly/cc",
+		"ANTHROPIC_DEFAULT_FABLE_MODEL":              "tingly/cc",
+		"CLAUDE_CODE_SUBAGENT_MODEL":                 "tingly/cc",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":         "Haiku · tingly/cc",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION":  "Routed by Tingly Box rule tingly/cc",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME":        "Sonnet · tingly/cc",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION": "Routed by Tingly Box rule tingly/cc",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":          "Opus · tingly/cc",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION":   "Routed by Tingly Box rule tingly/cc",
+		"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":         "Fable · tingly/cc",
+		"ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION":  "Routed by Tingly Box rule tingly/cc",
+		"API_TIMEOUT_MS":                             "3000000",
+		"CLAUDE_CODE_MAX_OUTPUT_TOKENS":              "32000",
+		"CLAUDE_CODE_AUTO_COMPACT_WINDOW":            "200000",
+		"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE":            "80",
+		"DISABLE_TELEMETRY":                          "1",
+		"DISABLE_ERROR_REPORTING":                    "1",
+		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC":   "1",
+		"ANTHROPIC_BASE_URL":                         "http://localhost:12580/tingly/claude_code",
+		"ANTHROPIC_AUTH_TOKEN":                       "test-token",
+		"NO_PROXY":                                   "localhost,127.0.0.1,::1",
 	}
 	assertEnvMapsEqual(t, want, env)
 }
@@ -329,22 +344,30 @@ func TestDefaultClaudeCodePrefs_Unified(t *testing.T) {
 func TestDefaultClaudeCodePrefs_Separate(t *testing.T) {
 	env, _ := DefaultClaudeCodePrefs(false).ToEnv("http://localhost:12580", "test-token")
 	want := map[string]string{
-		"ANTHROPIC_MODEL":                          "tingly/cc-default",
-		"ANTHROPIC_DEFAULT_HAIKU_MODEL":            "tingly/cc-haiku",
-		"ANTHROPIC_DEFAULT_SONNET_MODEL":           "tingly/cc-sonnet",
-		"ANTHROPIC_DEFAULT_OPUS_MODEL":             "tingly/cc-opus",
-		"ANTHROPIC_DEFAULT_FABLE_MODEL":            "tingly/cc-fable",
-		"CLAUDE_CODE_SUBAGENT_MODEL":               "tingly/cc-subagent",
-		"API_TIMEOUT_MS":                           "3000000",
-		"CLAUDE_CODE_MAX_OUTPUT_TOKENS":            "32000",
-		"CLAUDE_CODE_AUTO_COMPACT_WINDOW":          "200000",
-		"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE":          "80",
-		"DISABLE_TELEMETRY":                        "1",
-		"DISABLE_ERROR_REPORTING":                  "1",
-		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-		"ANTHROPIC_BASE_URL":                       "http://localhost:12580/tingly/claude_code",
-		"ANTHROPIC_AUTH_TOKEN":                     "test-token",
-		"NO_PROXY":                                 "localhost,127.0.0.1,::1",
+		"ANTHROPIC_MODEL":                            "tingly/cc-default",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL":              "tingly/cc-haiku",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL":             "tingly/cc-sonnet",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL":               "tingly/cc-opus",
+		"ANTHROPIC_DEFAULT_FABLE_MODEL":              "tingly/cc-fable",
+		"CLAUDE_CODE_SUBAGENT_MODEL":                 "tingly/cc-subagent",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":         "Haiku · tingly/cc-haiku",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION":  "Routed by Tingly Box rule tingly/cc-haiku",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME":        "Sonnet · tingly/cc-sonnet",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION": "Routed by Tingly Box rule tingly/cc-sonnet",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":          "Opus · tingly/cc-opus",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION":   "Routed by Tingly Box rule tingly/cc-opus",
+		"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":         "Fable · tingly/cc-fable",
+		"ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION":  "Routed by Tingly Box rule tingly/cc-fable",
+		"API_TIMEOUT_MS":                             "3000000",
+		"CLAUDE_CODE_MAX_OUTPUT_TOKENS":              "32000",
+		"CLAUDE_CODE_AUTO_COMPACT_WINDOW":            "200000",
+		"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE":            "80",
+		"DISABLE_TELEMETRY":                          "1",
+		"DISABLE_ERROR_REPORTING":                    "1",
+		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC":   "1",
+		"ANTHROPIC_BASE_URL":                         "http://localhost:12580/tingly/claude_code",
+		"ANTHROPIC_AUTH_TOKEN":                       "test-token",
+		"NO_PROXY":                                   "localhost,127.0.0.1,::1",
 	}
 	assertEnvMapsEqual(t, want, env)
 }
@@ -416,5 +439,22 @@ func TestClaudeCodePrefsFromEnv_CarriesOverLegacyMaxActiveTasks(t *testing.T) {
 	})
 	if p.ClaudeCodeMaxConcurrentSubagents != "8" {
 		t.Errorf("explicit value must win, got %q", p.ClaudeCodeMaxConcurrentSubagents)
+	}
+}
+
+func TestClaudeCodePrefs_ToEnv_ExplicitDisplayWins(t *testing.T) {
+	p := ClaudeCodePrefs{
+		AnthropicDefaultOpusModel: "tingly/cc-opus[1m]",
+		Extra:                     map[string]string{"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "My Opus"},
+	}
+	env, err := p.ToEnv("http://localhost", "tok")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustEq(t, env, "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME", "My Opus")
+	// the [1m] marker is not part of the label
+	mustEq(t, env, "ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION", "Routed by Tingly Box rule tingly/cc-opus")
+	if _, ok := env["ANTHROPIC_DEFAULT_SONNET_MODEL_NAME"]; ok {
+		t.Error("unset slot must not get a label")
 	}
 }

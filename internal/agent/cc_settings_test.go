@@ -697,3 +697,22 @@ func TestGenerateCCEnv_ProfileWithoutFableRuleFollowsDefault(t *testing.T) {
 		t.Errorf("profile fable = %q, want the default tier", got)
 	}
 }
+
+func TestGenerateCCEnv_PickerLabelsFollowRules(t *testing.T) {
+	cfg := &serverconfig.Config{Rules: []typ.Rule{
+		{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "my-fast", Active: true},
+		{UUID: "builtin:claude_code:p1:fable", Scenario: "claude_code:p1", RequestModel: "my-fable", Active: true},
+	}}
+	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code:p1", false, true)
+	if got := env["ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME"]; got != "Haiku · my-fast" {
+		t.Errorf("haiku label = %q", got)
+	}
+	if got := env["ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION"]; got != "Routed by Tingly Box rule my-fable" {
+		t.Errorf("fable description = %q", got)
+	}
+	for _, key := range ccDisplayEnvKeys() {
+		if !isCCProfileRuleOwnedEnvKey(key) {
+			t.Errorf("%s must be rule-owned so profile overrides cannot diverge from the slot", key)
+		}
+	}
+}
