@@ -241,8 +241,16 @@ export default function MCPRegisteredServers() {
                                                 <FormControlLabel
                                                     control={
                                                         <Checkbox
-                                                            disabled={busy}
-                                                            checked={usage.client}
+                                                            disabled={
+                                                                busy ||
+                                                                source.transport === 'advisor' ||
+                                                                !!source.advisor
+                                                            }
+                                                            checked={
+                                                                usage.client &&
+                                                                source.transport !== 'advisor' &&
+                                                                !source.advisor
+                                                            }
                                                             onChange={(e) =>
                                                                 void run(() =>
                                                                     saveSource({

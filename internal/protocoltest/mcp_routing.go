@@ -23,6 +23,7 @@ func routingMCPHarnessCases() []serverToolCase {
 			}})
 		}
 	}
+	cases = append(cases, serverToolCase{test: "TestMCPRoutingExposure", scenario: "mcp_routing_exposure", source: protocol.APIType("mcp"), target: protocol.APIType("mcp"), sub: "advisor_context_required", run: routingMCPAdvisorCase})
 	return cases
 }
 
@@ -129,4 +130,52 @@ func (a routingAuth) RoundTrip(req *http.Request) (*http.Response, error) {
 	copy := req.Clone(req.Context())
 	copy.Header.Set("Authorization", "Bearer "+a.token)
 	return http.DefaultTransport.RoundTrip(copy)
+}
+
+// Even a legacy dual-use setting cannot expose the context-dependent Advisor
+// through a generic client endpoint. Its model-loop route remains available.
+func routingMCPAdvisorCase(t flagTB) ([]string, string) {
+	cfg := &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{{ID: "advisor", Enabled: typ.BoolPtr(true), Transport: "advisor", Advisor: &typ.AdvisorConfig{ProviderUUID: "consultation", Model: "review-model"}, Usage: &typ.MCPToolUsage{Client: true, Gateway: true}}, {ID: "webtools", Enabled: typ.BoolPtr(false), Command: "tingly-box", Transport: "stdio"}}, ClientProfilesConfigured: true, ClientProfiles: []typ.MCPClientProfile{{ID: "reader", Sources: []string{"*"}, Tools: []string{"*"}}}}
+	env := newCaseEnv(t, NewTestEnvOptionWithMCPConfig(cfg))
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	token := env.appConfig.GetGlobalConfig().GetUserToken()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, env.GatewayURL()+"/api/v1/mcp/routing", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	response, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return []string{err.Error()}, ""
+	}
+	defer response.Body.Close()
+	var body struct {
+		Routing mcpruntime.RoutingSnapshot `json:"routing"`
+	}
+	if err = json.NewDecoder(response.Body).Decode(&body); err != nil {
+		return []string{err.Error()}, ""
+	}
+	var failures []string
+	if len(body.Routing.Clients) != 1 || len(body.Routing.Clients[0].Sources) != 0 {
+		failures = append(failures, "Advisor appeared in ordinary client route")
+	}
+	if len(body.Routing.ServerTools) != 1 || len(body.Routing.ServerTools[0].Tools) != 1 {
+		failures = append(failures, "Advisor model-loop route missing")
+	}
+	client := sdkmcp.NewClient(&sdkmcp.Implementation{Name: "context-check", Version: "1"}, nil)
+	session, err := client.Connect(ctx, &sdkmcp.StreamableClientTransport{Endpoint: env.GatewayURL() + "/api/v1/mcp/reader", HTTPClient: &http.Client{Transport: routingAuth{token: token}}}, nil)
+	if err != nil {
+		return append(failures, err.Error()), ""
+	}
+	defer session.Close()
+	tools, err := session.ListTools(ctx, nil)
+	if err != nil {
+		return append(failures, err.Error()), ""
+	}
+	if len(tools.Tools) != 0 {
+		failures = append(failures, "Advisor exposed through SDK tools/list")
+	}
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "tingly_box_mcp__builtin__advisor", Arguments: map[string]any{}})
+	if err == nil && (result == nil || !result.IsError) {
+		failures = append(failures, "context-free Advisor call falsely succeeded")
+	}
+	return failures, "Advisor available only to model loop; generic client has zero exposed tools"
 }

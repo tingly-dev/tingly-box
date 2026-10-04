@@ -206,7 +206,12 @@ export default function MCPToolsPanel({
                                     }
                                 />
                                 <Button
-                                    disabled={busy || !tool.enabled || !enabled}
+                                    disabled={
+                                        busy ||
+                                        !tool.enabled ||
+                                        !enabled ||
+                                        (tool.source_id === 'advisor' && tool.implementation === 'virtual')
+                                    }
                                     onClick={() => {
                                         setTesting(tool);
                                         setArgs('{}');
@@ -216,6 +221,14 @@ export default function MCPToolsPanel({
                                     {label('testTool', 'Test tool')}
                                 </Button>
                             </Stack>
+                            {tool.source_id === 'advisor' && tool.implementation === 'virtual' && (
+                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                    {label(
+                                        'advisorTestHint',
+                                        'Advisor requires model conversation context. Configure its special processing chain in MCP routes, then verify it with a model request.'
+                                    )}
+                                </Typography>
+                            )}
                             <Box component="details">
                                 <Box component="summary" sx={{ cursor: 'pointer' }}>
                                     {label('schema', 'Parameters and output schema')}
@@ -251,7 +264,16 @@ export default function MCPToolsPanel({
                     </Typography>
                     {catalog
                         .flatMap((source) => source.tools || [])
-                        .filter((tool) => !tool.usage[usage] && !restricted(tool))
+                        .filter(
+                            (tool) =>
+                                !tool.usage[usage] &&
+                                !restricted(tool) &&
+                                !(
+                                    usage === 'client' &&
+                                    tool.source_id === 'advisor' &&
+                                    tool.implementation === 'virtual'
+                                )
+                        )
                         .map((tool) => (
                             <Stack
                                 key={tool.normalized_name}
