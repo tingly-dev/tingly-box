@@ -3,6 +3,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProviderQuotaOf } from '@/contexts/ProviderQuotaContext';
 import { useTheme } from '@mui/material/styles';
+import { getStatusColor } from '@/theme/status';
 import { formatNumber } from '../dashboard/chartStyles';
 import { QuotaRing, formatQuotaDuration as formatDuration, quotaRingColor, quotaRingSpinSx } from '../credential/QuotaRing';
 import {
@@ -58,7 +59,7 @@ export const ServiceNodeQuota: React.FC<{ providerUuid: string }> = ({ providerU
                 );
             })}
             {failed && (
-                <Box sx={{ mt: 0.5, color: 'error.main' }}>{t('rule.service.quota.refreshFailed')}</Box>
+                <Box sx={{ mt: 0.5, color: getStatusColor(theme, 'error') }}>{t('rule.service.quota.refreshFailed')}</Box>
             )}
             <Box sx={{ mt: 0.5, opacity: 0.7 }}>
                 {refreshing

@@ -1,37 +1,34 @@
 import { getContrastRatio, type Theme } from '@mui/material/styles';
 
-// One place that answers "what colour is success / error / warning here?".
-// Status colours used to be hand-written at each call site (#10b981, #22c55e,
-// #059669, #34D399 for "success"; #ef4444, #dc2626, #f87171 for "error"), so
-// they disagreed with each other and ignored themes that define their own
-// (claude's olive green, for one). Everything now reads the active palette.
+// Status colours are deliberately NOT read from the theme palette.
+//
+// They used to be hand-written at each call site (#10b981, #22c55e, #059669,
+// #34D399 for "success"), so they disagreed with each other. Reading them from
+// the palette fixed that but made them theme-dependent, and a muted theme
+// colour (claude's olive green / brick red) is a poor traffic light: on a
+// 12px quota ring it reads as muddy and loses its "ok / warning / stop"
+// signal. So status is its own fixed set, shared by every theme:
+//   fill    - rings, bars, chips, dots (white text sits on it in chips)
+//   ink     - the same hue as text/icon on a light surface (>=3:1 on white)
+//   inkDark - the same hue as text/icon on a dark surface
+const STATUS = {
+  success: { fill: '#10b981', ink: '#059669', inkDark: '#34d399' },
+  info: { fill: '#3b82f6', ink: '#2563eb', inkDark: '#60a5fa' },
+  warning: { fill: '#f59e0b', ink: '#d97706', inkDark: '#fbbf24' },
+  error: { fill: '#ef4444', ink: '#dc2626', inkDark: '#f87171' },
+  critical: { fill: '#991b1b', ink: '#991b1b', inkDark: '#ef4444' }, // worse than error: panic / fatal
+} as const;
 
 export type StatusTone =
-  | 'success'
-  | 'info'
-  | 'warning'
-  | 'error'
-  | 'critical' // worse than error: panic / fatal
+  | keyof typeof STATUS
   | 'neutral' // known but unremarkable
   | 'muted'; // debug / unknown / disabled
 
+/** Fill colour for a status tone (ring, bar, chip, dot). Same in every theme. */
 export const getStatusColor = (theme: Theme, tone: StatusTone): string => {
-  switch (tone) {
-    case 'success':
-      return theme.palette.success.main;
-    case 'info':
-      return theme.palette.info.main;
-    case 'warning':
-      return theme.palette.warning.main;
-    case 'error':
-      return theme.palette.error.main;
-    case 'critical':
-      return theme.palette.error.dark;
-    case 'neutral':
-      return theme.palette.text.secondary;
-    case 'muted':
-      return theme.palette.text.disabled;
-  }
+  if (tone === 'neutral') return theme.palette.text.secondary;
+  if (tone === 'muted') return theme.palette.text.disabled;
+  return STATUS[tone].fill;
 };
 
 /** Traffic-light tone for a remaining share (quota bars, rings). */
@@ -71,14 +68,17 @@ export const logLevelTone = (level: string): StatusTone => {
 export type AccentTone = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error';
 
 /**
- * A palette tone as a *foreground on a card* (icon, tint source): the tone's
- * `main` when it is legible on `background.paper` (WCAG 3:1 for graphics),
- * otherwise the nearest variant that is. Palettes pick `main` for fills, so
- * some are too pale or too deep to read as an icon — claude's secondary
- * (#B0AEA5) on white, or a mid-green success on a dark card.
+ * A tone as a *foreground on a card* (icon, tint source). Status tones use the
+ * fixed status set (ink on light surfaces, inkDark on dark ones). primary and
+ * secondary are the theme's own accents, so they follow the palette: `main`
+ * when it is legible on `background.paper` (WCAG 3:1 for graphics), otherwise
+ * the nearest variant that is (claude's pale secondary #B0AEA5 on white).
  */
 export const getReadableAccent = (theme: Theme, tone: AccentTone): string => {
   const { palette } = theme;
+  if (tone !== 'primary' && tone !== 'secondary') {
+    return palette.mode === 'dark' ? STATUS[tone].inkDark : STATUS[tone].ink;
+  }
   const bg = palette.background.paper;
   const c = palette[tone];
   const ratio = (color: string) => getContrastRatio(color, bg);

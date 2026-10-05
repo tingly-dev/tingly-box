@@ -12,6 +12,7 @@ import {
     tightestWindow,
 } from '@/types/quota';
 import { useTheme } from '@mui/material/styles';
+import { getStatusColor } from '@/theme/status';
 import { formatNumber } from '../dashboard/chartStyles';
 import { QuotaRing, formatQuotaDuration, quotaRingColor, quotaRingSpinSx } from './QuotaRing';
 import { QuotaRawResponseDialog } from './QuotaRawResponseDialog';
@@ -215,7 +216,7 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
                     <TooltipRow label={cost.label || t('providerTable.quota.cost')} value={costText} />
                 )}
                 {described.length === 0 && (
-                    <Typography variant="caption" sx={{ color: lastError ? 'error.main' : 'text.secondary' }}>
+                    <Typography variant="caption" sx={{ color: lastError ? getStatusColor(theme, 'error') : 'text.secondary' }}>
                         {lastError
                             ? t('providerTable.quota.readFailed')
                             : quota ? t('providerTable.quota.noLimits') : t('providerTable.quota.none')}
@@ -373,9 +374,10 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
  * a dot only says "there is one here" — green while any is left, muted once all are spent.
  */
 function ResourceDot({ size, muted }: { size: number; muted?: boolean }) {
+    const theme = useTheme();
     return (
         <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: size, height: size, flexShrink: 0 }}>
-            <Box component="span" sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: muted ? 'text.disabled' : 'success.main' }} />
+            <Box component="span" sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: muted ? 'text.disabled' : getStatusColor(theme, 'success') }} />
         </Box>
     );
 }
