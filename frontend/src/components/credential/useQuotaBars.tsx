@@ -3,11 +3,27 @@ import { Box, Typography } from '@mui/material';
 import type { ProviderQuota, QuotaWindow } from '@/types/quota';
 import { quotaToWindows } from '@/types/quota';
 
-interface ResourceItem {
+export interface ResourceEntry {
+  key: string;
+  label: string;
+  window: QuotaWindow;
+}
+
+export interface ResourceItem {
   key: string;
   window: QuotaWindow;
+  /** "3/4" for vouchers (available / total), otherwise the number of entries. */
   countLabel: string;
+  /** Share still available, for a ring; only vouchers have one. */
+  remaining?: number;
+  /** The individual entries of the group, for the detailed hover. */
+  entries: ResourceEntry[];
   tooltipContent: React.ReactNode;
+}
+
+/** A voucher is a one-shot credit (Codex reset credits): a count, not a share. */
+function isVoucher(window: QuotaWindow | undefined): boolean {
+  return !!window && window.unit === 'credits' && window.limit === 1;
 }
 
 /**
@@ -35,6 +51,10 @@ export function useQuotaBars(quota: ProviderQuota | undefined): {
 
     return Array.from(groups.entries()).map(([group, items]) => {
       const total = items.length;
+      const entries: ResourceEntry[] = items.flatMap((bd: any) =>
+        bd.windows?.[0] ? [{ key: bd.key, label: bd.label || bd.key, window: bd.windows[0] as QuotaWindow }] : []);
+      const voucher = entries.length > 0 && entries.every(e => isVoucher(e.window));
+      const available = voucher ? entries.filter(e => e.window.used < e.window.limit).length : 0;
       const label = group
         .split('_')
         .map(w => w.charAt(0).toUpperCase() + w.slice(1))
@@ -65,7 +85,9 @@ export function useQuotaBars(quota: ProviderQuota | undefined): {
           used_percent: 0,
           unit: 'percent' as const,
         } as QuotaWindow,
-        countLabel: `${total}`,
+        countLabel: voucher ? `${available}/${total}` : `${total}`,
+        remaining: voucher ? available / total * 100 : undefined,
+        entries,
         tooltipContent,
       };
     });

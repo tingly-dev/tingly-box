@@ -1379,6 +1379,46 @@ const mockQuotas: Record<string, any> = {
                     allowed: true, limit_reached: false,
                 }],
             },
+            {
+                key: 'credit_1',
+                label: 'Reset Credit',
+                group: 'resource',
+                windows: [{
+                    type: 'balance', used: 0, limit: 1, used_percent: 0,
+                    unit: 'credits', label: 'available',
+                    description: 'Granted 2026-09-01 · Expire 2026-11-01',
+                }],
+            },
+            {
+                key: 'credit_2',
+                label: 'Reset Credit',
+                group: 'resource',
+                windows: [{
+                    type: 'balance', used: 0, limit: 1, used_percent: 0,
+                    unit: 'credits', label: 'available',
+                    description: 'Granted 2026-09-02 · Expire 2026-11-02',
+                }],
+            },
+            {
+                key: 'credit_3',
+                label: 'Reset Credit',
+                group: 'resource',
+                windows: [{
+                    type: 'balance', used: 0, limit: 1, used_percent: 0,
+                    unit: 'credits', label: 'available',
+                    description: 'Granted 2026-09-03 · Expire 2026-11-03',
+                }],
+            },
+            {
+                key: 'credit_4',
+                label: 'Reset Credit',
+                group: 'resource',
+                windows: [{
+                    type: 'balance', used: 1, limit: 1, used_percent: 100,
+                    unit: 'credits', label: 'used',
+                    description: 'Granted 2026-09-04 · Expire 2026-11-04',
+                }],
+            },
         ],
         account: {
             id: 'acct_mock_codex',
