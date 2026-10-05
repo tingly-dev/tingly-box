@@ -560,8 +560,8 @@ steps:
     usage: {input: 1200, output: 40}
 ```
 
-One script is one program with one cursor, whichever protocol a request arrives
-on. Check it end to end with `go run ./cli/harness script read-edit.yaml`.
+Each protocol runs its own copy of the program (its own cursor), so calls on one
+wire never consume steps of the other. Check it end to end with `go run ./cli/harness script read-edit.yaml`.
 Schema, loading rules and phasing: `.design/vmodel-script.md`.
 
 ## Benchmarking (`benchmark/`)

@@ -295,11 +295,12 @@ func TestScript_StopReasonOnToolStep(t *testing.T) {
 	assert.Contains(t, string(body), `"stop_reason":"max_tokens"`)
 }
 
-// One script, one cursor: the Anthropic and OpenAI renderings advance the same
-// program, so a client may switch protocols mid-flow.
-func TestScript_OneCursorAcrossProtocols(t *testing.T) {
+// Each protocol runs its own copy of a script: a request on one wire never
+// consumes a step of the other, so a test's expectations do not depend on stray
+// calls (a probe, a second client) on the other protocol.
+func TestScript_ProtocolsHaveIndependentCursors(t *testing.T) {
 	_, dir, baseURL := newScriptService(t)
-	writeScript(t, dir, "flow.yaml", "steps:\n  - say: first\n  - say: second\n  - say: third")
+	writeScript(t, dir, "flow.yaml", "steps:\n  - say: first\n  - say: second")
 	ask := func(path string, body map[string]any) string {
 		body["model"] = "flow"
 		body["messages"] = []map[string]string{{"role": "user", "content": "hi"}}
@@ -308,8 +309,9 @@ func TestScript_OneCursorAcrossProtocols(t *testing.T) {
 		return string(out)
 	}
 	assert.Contains(t, ask("/v1/messages?beta=true", map[string]any{"max_tokens": 16}), "first")
+	assert.Contains(t, ask("/v1/chat/completions", map[string]any{}), "first", "OpenAI starts its own run")
+	assert.Contains(t, ask("/v1/messages?beta=true", map[string]any{"max_tokens": 16}), "second")
 	assert.Contains(t, ask("/v1/chat/completions", map[string]any{}), "second")
-	assert.Contains(t, ask("/v1/messages?beta=true", map[string]any{"max_tokens": 16}), "third")
 }
 
 // stop_reason is protocol-neutral: Anthropic's words, mapped for OpenAI.

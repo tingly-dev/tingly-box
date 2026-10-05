@@ -21,7 +21,8 @@ const ScriptDirName = "vmodels"
 // scriptStore keeps the registries in step with a directory of script files
 // (see vmodel.ParseScript and .design/vmodel-script.md). Every script becomes
 // one model, registered under its id in BOTH protocol registries so the same
-// script answers /messages and /chat/completions, advancing one shared cursor.
+// script answers /messages and /chat/completions, each protocol running its own
+// independent copy of the program.
 //
 // Refresh is the only entry point and is cheap when nothing changed (a
 // directory read plus a stat per file), so callers invoke it on every request
@@ -153,11 +154,11 @@ func (s *scriptStore) register(file string, cfg *vmodel.SequenceConfig) error {
 	if s.files[file].id != cfg.ID && (s.anth.Has(cfg.ID) || s.oai.Has(cfg.ID)) {
 		return fmt.Errorf("id %q collides with a built-in model; pick another id", cfg.ID)
 	}
-	// One engine, so one cursor, behind both protocols. Set replaces in one
-	// locked step, so a concurrent request never finds the id missing.
-	seq := vmodel.NewSequence(*cfg)
-	s.anth.Set(anthropicvm.NewSequenceModelFrom(cfg, seq))
-	s.oai.Set(openaivm.NewSequenceModelFrom(cfg, seq))
+	// Each registry gets its own model and so its own cursor: a request on one
+	// wire must never consume a step of the other. Set replaces in one locked
+	// step, so a concurrent request never finds the id missing.
+	s.anth.Set(anthropicvm.NewSequenceModel(cfg))
+	s.oai.Set(openaivm.NewSequenceModel(cfg))
 	return nil
 }
 

@@ -65,9 +65,13 @@ no multiple tool calls per step, no request capture. See *Phases*.
 
 `<config-dir>/vmodels/*.yaml|yml` — each file becomes one model, registered
 under its id in **both** protocol registries (so the same file answers
-`/messages` and `/chat/completions`/`/responses`) behind **one shared engine**,
-so there is one cursor: the schedule belongs to the virtual upstream, not to
-the wire format, and a client may switch protocols mid-flow.
+`/messages` and `/chat/completions`/`/responses`), and **each protocol runs its
+own independent copy of the program** — its own cursor. This is deliberate: a
+request on one wire (a probe, a second client, a stray `chat()` call) must never
+consume a step of the other, or a test's outcome would depend on call order it
+cannot see. Within one protocol the cursor is still shared by every client of
+that model (per-conversation cursors are deferred); rewriting the file is the
+reset.
 
 **Which protocol to use.** The gateway converts between protocols, so scripts
 need only one: the docs, `harness script` (default `claude`) and the Python
