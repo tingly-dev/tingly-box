@@ -37,6 +37,8 @@ import ModelCard from './ModelCard';
 import RecentModelsSection from './RecentModelsSection';
 import NewModelsSection from './NewModelsSection';
 import { fontMono } from '@/theme/fonts';
+import { useTheme } from '@mui/material/styles';
+import { getStatusColor } from '@/theme/status';
 
 // Convert ProviderModelData.quota (the generated, wire-shaped ProviderUsage —
 // its windows carry a bare `kind?: string`) to the app's narrower
@@ -96,6 +98,7 @@ export function ModelsPanel({
     const { recentModels } = useRecentModels();
     const { newModels, clearNewModels } = useNewModels();
     const { getDescription } = useModelDescriptions();
+    const theme = useTheme();
 
     // Quota refresh state
     const [isRefreshingQuota, setIsRefreshingQuota] = useState(false);
@@ -521,7 +524,7 @@ export function ModelsPanel({
                                 <QuotaBarItem key={key} window={window} />
                             ))}
                             {resourceItems.map(item => (
-                                <QuotaBarItem key={item.key} window={item.window} percentLabel={item.countLabel} barColor="#22c55e" tooltipContent={item.tooltipContent} />
+                                <QuotaBarItem key={item.key} window={item.window} percentLabel={item.countLabel} barColor={getStatusColor(theme, 'success')} tooltipContent={item.tooltipContent} />
                             ))}
                             {!hasQuotaBars && (
                                 <Typography variant="caption" color="text.disabled" sx={{ whiteSpace: 'nowrap' }}>

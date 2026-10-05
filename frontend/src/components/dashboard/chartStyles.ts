@@ -23,14 +23,9 @@ export const getThemeChartStyles = (theme: Theme) => {
     };
 };
 
-// Quota bar colors based on remaining percentage
-export const QUOTA_COLORS = {
-    success: '#10b981',  // emerald-500 - > 50% remaining
-    warning: '#f59e0b',  // amber-500 - 20-50% remaining
-    error: '#ef4444',    // red-500 - <= 20% remaining
-    secondary: '#94a3b8', // slate-400 - secondary quota
-    background: '#f1f5f9', // slate-100 - background bar
-};
+// Quota bar colours: status tones come from theme/status (quotaTone/getStatusColor);
+// the unfilled track and "secondary" quota follow the palette too.
+export const getQuotaTrackColor = (theme: Theme) => theme.palette.action.hover;
 
 // Common grid style - very subtle (deprecated, use theme)
 export const gridStyle = {

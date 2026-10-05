@@ -24,6 +24,8 @@ import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useTableSort } from '@/hooks/useTableSort';
 import { formatTimestamp } from '@/utils/datetime';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { alpha, useTheme } from '@mui/material/styles';
+import { getStatusColor, logLevelTone, httpStatusTone } from '@/theme/status';
 
 export interface SystemLogEntry {
     time: string;
@@ -91,27 +93,9 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
         setSelectedLevels(next);
     };
 
-    const getLevelColor = (level: string): string => {
-        switch (level.toLowerCase()) {
-            case 'panic':   return '#991b1b';
-            case 'fatal':   return '#dc2626';
-            case 'error':   return '#ef4444';
-            case 'warning':
-            case 'warn':    return '#f59e0b';
-            case 'info':    return '#3b82f6';
-            case 'debug':   return '#6b7280';
-            default:        return '#10b981';
-        }
-    };
-
-    const getStatusCodeColor = (statusCode?: number): string => {
-        if (!statusCode) return '#6b7280';
-        if (statusCode >= 200 && statusCode < 300) return '#10b981';
-        if (statusCode >= 300 && statusCode < 400) return '#3b82f6';
-        if (statusCode >= 400 && statusCode < 500) return '#f59e0b';
-        if (statusCode >= 500) return '#ef4444';
-        return '#6b7280';
-    };
+    const theme = useTheme();
+    const getLevelColor = (level: string): string => getStatusColor(theme, logLevelTone(level));
+    const getStatusCodeColor = (statusCode?: number): string => getStatusColor(theme, httpStatusTone(statusCode));
 
     // Client-side filter by level
     useEffect(() => {
@@ -265,7 +249,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                     '&:hover': {
                                         backgroundColor: active
                                             ? getLevelColor(level)
-                                            : `${getLevelColor(level)}22`,
+                                            : alpha(getLevelColor(level), 0.13),
                                         borderColor: getLevelColor(level),
                                         color: active ? 'white' : getLevelColor(level),
                                     },

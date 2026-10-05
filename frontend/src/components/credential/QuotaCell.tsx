@@ -11,7 +11,8 @@ import {
     quotaToWindows,
     tightestWindow,
 } from '@/types/quota';
-import { QUOTA_COLORS, formatNumber } from '../dashboard/chartStyles';
+import { useTheme } from '@mui/material/styles';
+import { formatNumber } from '../dashboard/chartStyles';
 import { QuotaRing, formatQuotaDuration, quotaRingColor, quotaRingSpinSx } from './QuotaRing';
 import { QuotaRawResponseDialog } from './QuotaRawResponseDialog';
 import { useQuotaBars } from './useQuotaBars';
@@ -89,6 +90,7 @@ interface CellLine {
  */
 export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
     const { t } = useTranslation();
+    const theme = useTheme();
     const [rawOpen, setRawOpen] = useState(false);
     const { resourceItems } = useQuotaBars(quota);
     const windows = quotaToWindows(quota);
@@ -213,7 +215,7 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
                     <TooltipRow label={cost.label || t('providerTable.quota.cost')} value={costText} />
                 )}
                 {described.length === 0 && (
-                    <Typography variant="caption" sx={{ color: lastError ? QUOTA_COLORS.error : 'text.secondary' }}>
+                    <Typography variant="caption" sx={{ color: lastError ? 'error.main' : 'text.secondary' }}>
                         {lastError
                             ? t('providerTable.quota.readFailed')
                             : quota ? t('providerTable.quota.noLimits') : t('providerTable.quota.none')}
@@ -272,7 +274,7 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
                                 <Box component="span" sx={{ display: 'inline-flex', ...(refreshing && quotaRingSpinSx) }}>
                                     {/* While refreshing, a fixed quarter arc spins like a loader — the
                                         real arc can be empty (used up), and an empty ring shows no motion. */}
-                                    <QuotaRing remaining={refreshing ? 25 : remaining} color={quotaRingColor(remaining)} size={14} />
+                                    <QuotaRing remaining={refreshing ? 25 : remaining} color={quotaRingColor(theme, remaining)} size={14} />
                                 </Box>
                             ) : (
                                 // Keeps ringless lines aligned with the ringed ones above/below.
@@ -312,7 +314,7 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
     } else if (refreshing) {
         figure = (
             <Box component="span" sx={{ display: 'inline-flex', ...quotaRingSpinSx }}>
-                <QuotaRing remaining={25} color={QUOTA_COLORS.secondary} size={14} />
+                <QuotaRing remaining={25} color={theme.palette.text.disabled} size={14} />
             </Box>
         );
     } else {
@@ -373,7 +375,7 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
 function ResourceDot({ size, muted }: { size: number; muted?: boolean }) {
     return (
         <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: size, height: size, flexShrink: 0 }}>
-            <Box component="span" sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: muted ? 'text.disabled' : QUOTA_COLORS.success }} />
+            <Box component="span" sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: muted ? 'text.disabled' : 'success.main' }} />
         </Box>
     );
 }
@@ -430,12 +432,13 @@ function TooltipRow({ remaining, dot, dotMuted, label, value, detail, indent }: 
     value: ReactNode;
     detail?: ReactNode;
 }) {
+    const theme = useTheme();
     return (
         <Box sx={{ display: 'grid', gridTemplateColumns: '12px 1fr auto', columnGap: 1, alignItems: 'center', pl: indent ? 2.5 : 0 }}>
             <Box sx={{ display: 'inline-flex' }}>
                 {dot
                     ? <ResourceDot size={12} muted={dotMuted} />
-                    : remaining != null && <QuotaRing remaining={remaining} color={quotaRingColor(remaining)} size={12} />}
+                    : remaining != null && <QuotaRing remaining={remaining} color={quotaRingColor(theme, remaining)} size={12} />}
             </Box>
             <Typography variant="caption" sx={{ color: 'text.secondary', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {label}

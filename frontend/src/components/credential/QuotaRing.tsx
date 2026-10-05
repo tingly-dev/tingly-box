@@ -1,9 +1,10 @@
 import React from 'react';
-import { QUOTA_COLORS } from '../dashboard/chartStyles';
+import type { Theme } from '@mui/material/styles';
+import { getStatusColor, quotaTone } from '@/theme/status';
 
 /** Traffic-light color for a remaining share, shared by every quota ring. */
-export function quotaRingColor(remaining: number): string {
-    return remaining <= 20 ? QUOTA_COLORS.error : remaining <= 50 ? QUOTA_COLORS.warning : QUOTA_COLORS.success;
+export function quotaRingColor(theme: Theme, remaining: number): string {
+    return getStatusColor(theme, quotaTone(remaining));
 }
 
 /** "5m" / "3h 12m" / "2d 4h" — used for "updated … ago" and "resets in …". */

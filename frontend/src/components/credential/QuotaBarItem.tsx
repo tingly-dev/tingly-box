@@ -2,7 +2,9 @@ import React from 'react';
 import { Box, Stack, Tooltip, Typography, tooltipClasses } from '@mui/material';
 import type { QuotaWindow } from '@/types/quota';
 import { formatQuotaRemaining, formatQuotaUsage, isCountable, quotaRemainingPercent } from '@/types/quota';
-import { QUOTA_COLORS, formatNumber } from '../dashboard/chartStyles';
+import { useTheme } from '@mui/material/styles';
+import { formatNumber, getQuotaTrackColor } from '../dashboard/chartStyles';
+import { getStatusColor, quotaTone } from '@/theme/status';
 
 interface QuotaBarItemProps {
   window: QuotaWindow;
@@ -34,11 +36,8 @@ interface QuotaBarItemProps {
  * Shows: Label + Bar + Percent, with details in tooltip.
  */
 export function QuotaBarItem({ window, showDetails = false, percentLabel, barColor: forcedBarColor, tooltipContent: customTooltip }: QuotaBarItemProps) {
-  const getColor = (percent: number) => {
-    if (percent <= 20) return QUOTA_COLORS.error;
-    if (percent <= 50) return QUOTA_COLORS.warning;
-    return QUOTA_COLORS.success;
-  };
+  const theme = useTheme();
+  const getColor = (percent: number) => getStatusColor(theme, quotaTone(percent));
 
   // A window with no usage figure gets no bar and no percentage. It still has
   // something to say — a balance, this month's spend, an add-on whose usage
@@ -162,7 +161,7 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
           <Box
             sx={{
               height: '100%',
-              bgcolor: QUOTA_COLORS.background,
+              bgcolor: getQuotaTrackColor(theme),
               borderRadius: 1,
               position: 'relative',
               overflow: 'hidden',
