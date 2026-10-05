@@ -1,6 +1,6 @@
 import {Add, Search, Stream} from '@/components/icons';
 import type {SessionInfo} from '@/services/deskApi';
-import {Box, CircularProgress, IconButton, InputBase, List, ListItemButton, Tooltip, Typography} from '@mui/material';
+import {Box, CircularProgress, IconButton, InputBase, List, ListItemButton, Tooltip, Typography, Tabs, Tab} from '@mui/material';
 import {useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {folderName, groupSessionsByFolder, isBusyStatus, sessionTitle} from './deskUtils';
@@ -58,14 +58,17 @@ const rowSx = {
 const DeskSidebar = ({sessions, selectedId, onSelect, onNew, unseen}: DeskSidebarProps) => {
     const {t} = useTranslation();
     const [query, setQuery] = useState('');
+    const selectedClosed = sessions.find((session) => session.id === selectedId)?.status === 'closed';
+    const filterKey = `${selectedId}:${selectedClosed}`;
+    const [filter, setFilter] = useState({key: filterKey, archived: selectedClosed});
+    const archived = filter.key === filterKey ? filter.archived : selectedClosed;
 
     const groups = useMemo(() => {
         const q = query.trim().toLowerCase();
-        const visible = q
-            ? sessions.filter((s) => sessionTitle(s).toLowerCase().includes(q) || s.project.toLowerCase().includes(q))
-            : sessions;
+        const visible = sessions.filter((s) => (s.status === 'closed') === archived
+            && (!q || sessionTitle(s).toLowerCase().includes(q) || s.project.toLowerCase().includes(q)));
         return groupSessionsByFolder(visible);
-    }, [sessions, query]);
+    }, [sessions, query, archived]);
 
     return (
         <Box sx={{display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0}}>
@@ -78,12 +81,17 @@ const DeskSidebar = ({sessions, selectedId, onSelect, onNew, unseen}: DeskSideba
                     <Search sx={{fontSize: 16, color: 'text.secondary'}}/>
                     <InputBase
                         fullWidth
+                        inputProps={{'aria-label': t('desk.search', {defaultValue: 'Search'})}}
                         placeholder={t('desk.search', {defaultValue: 'Search'})}
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         sx={{fontSize: '0.875rem'}}
                     />
                 </Box>
+                <Tabs value={archived ? 1 : 0} onChange={(_event, value: number) => setFilter({key: filterKey, archived: value === 1})} variant="fullWidth" aria-label={t('desk.sessionFilter', {defaultValue: 'Session filter'})} sx={{minHeight: 36, '& .MuiTab-root': {minHeight: 36, py: 0.75}}}>
+                    <Tab label={t('desk.activeSessions', {defaultValue: 'Active'})}/>
+                    <Tab label={t('desk.archivedSessions', {defaultValue: 'Archived'})}/>
+                </Tabs>
             </Box>
 
             <Box sx={{flex: 1, minHeight: 0, overflowY: 'auto', px: 1, pb: 1}}>
@@ -104,6 +112,7 @@ const DeskSidebar = ({sessions, selectedId, onSelect, onNew, unseen}: DeskSideba
                             </Tooltip>
                             <Tooltip title={t('desk.newInFolder', {defaultValue: 'New session in this folder'})}>
                                 <IconButton
+                                    aria-label={t('desk.newInFolder', {defaultValue: 'New session in this folder'})}
                                     className="desk-folder-add"
                                     size="small"
                                     onClick={() => onNew(g.path)}
@@ -117,9 +126,11 @@ const DeskSidebar = ({sessions, selectedId, onSelect, onNew, unseen}: DeskSideba
                             {g.sessions.map((s) => (
                                 <ListItemButton
                                     key={s.id}
+                                    title={sessionTitle(s)}
+                                    aria-current={s.id === selectedId ? 'page' : undefined}
                                     selected={s.id === selectedId}
                                     onClick={() => onSelect(s.id)}
-                                    sx={{...rowSx, py: 0.5, opacity: s.status === 'closed' ? 0.55 : 1}}
+                                    sx={{...rowSx, py: 0.5, opacity: 1}}
                                 >
                                     <Typography variant="body2" noWrap sx={{flex: 1, color: 'inherit', fontSize: fontSizes.md, fontWeight: unseen.has(s.id) ? 600 : undefined}}>
                                         {sessionTitle(s)}

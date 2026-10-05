@@ -437,6 +437,9 @@ of tool:
   queued one puts it back into the input; Stop puts them all back (changing
   course, as in the terminal); after a failed turn they're held with "Send
   now". Drafts and queues are per session and survive switching sessions.
+  Accepted sends clear only the unchanged submitted text: writing the next
+  message during a slow send keeps that new draft. A synchronous submission
+  guard prevents repeated Enter events from submitting twice.
 - **Title bar actions**: expand all tool calls (remembered in
   `localStorage`, each row still toggles on its own) and "Continue in
   terminal" (§3.5), which copies the command and keeps it on screen with its
@@ -447,6 +450,61 @@ of tool:
 Mock mode (`src/mocks/deskHandlers.ts`) serves every state above (a turn
 waiting on approval, finished, failed, archived) and simulates turns, so the
 page can be previewed and screenshotted without a backend.
+
+### 5.1 Local daily use: refresh and draft recovery
+
+- Refreshes are scheduled after the preceding request settles, rather than
+  overlapping on an interval. The selected transcript and session refresh
+  every 1.5 s while active and every 5 s while idle; the list refreshes every
+  5 s. Idle refresh matters after an initial failure, a server restart or
+  terminal handoff. Returning to the tab or going online refreshes immediately.
+- Read requests time out after 15 s and are aborted on poll disposal.
+  Background read failures keep the last loaded data and show one inline
+  Retry action. Successful reads clear their own failure; no toast is emitted
+  on every failed poll. Mutation failures still notify the user and keep input.
+- A transcript is tagged with its session id. Switching sessions immediately
+  hides the previous transcript, and request generations discard old responses,
+  including switching away and back to the same id. Session row generations
+  prevent an older list response from rolling back a fresher row or setting.
+  The session view remounts on selection so tool panels and confirmations
+  cannot carry over into another session. Unknown session links show an
+  explicit unavailable state instead of silently opening a new-task form.
+- Unsent session drafts and new-task forms live in tab-scoped `sessionStorage`
+  (`useDeskDrafts`). New-task forms remember prompt, folder, profile, model and
+  permissions together, separately for each folder entry point. Acceptance
+  clears only the matching saved prompt, even if navigation unmounted the form.
+  Shared tab stores keep late acceptance callbacks connected to newer mounted
+  drafts and in-flight queues, without overwriting subsequent edits.
+  Corrupt, blocked or full storage falls back to memory. Queues also persist
+  in tab-scoped storage (`useDeskQueues`), including text in flight. Only an
+  accepted prefix is removed. Restored queues are held for explicit review and
+  sending: a reload cannot prove whether the previous POST was accepted.
+  Failed turns/sends, interrupt and terminal handoff hold automatic delivery.
+- Mutation acceptance releases the input independently of background reads.
+  Accepted sends immediately mark the session pending, so the next draft joins
+  its queue until refreshed state arrives. Manual reads also have the 15 s
+  deadline. Profile/model/permission edits serialize across the three controls
+  and temporarily disable sending while their launch settings are being saved.
+- Approvals show the full tool input, preserve question drafts and serialize
+  responses. Accepted responses stay disabled while waiting for the transcript;
+  failed responses retain the answer and permit retry. Polling never autofocuses
+  a new question. An explicit Review action scrolls only the conversation.
+- Conversation scrolling follows live output and delayed Markdown layout only
+  while already at the bottom. Back to latest and new activity affordances keep
+  older messages readable. The Desk surface fits the dynamic viewport, with
+  independent transcript scrolling, bounded queues and a compact mobile menu.
+  Mobile Enter adds a line; Ctrl/Cmd+Enter or the Send button sends.
+- The sidebar separates active and archived sessions while retaining search.
+  Archive confirms that the current turn/tasks stop, guards duplicate requests,
+  and keeps history and unsent text accessible for copying or taking back.
+- Desk's conversation, task and setup strings are defined in English, Chinese
+  and Russian, including plural tool counts and the feature-enabling notice.
+
+Regression coverage: Composer, new-task forms, draft storage, polling lifecycle
+and the Desk page's selection/reconnect/error flows have frontend tests. These
+exercise actual React state and deferred read/send promises, alongside the
+existing transcript and attention unit tests. Real Claude Code/gateway execution
+still needs a configured local installation to validate end to end.
 
 Nav: one row ("Desk") alongside "Remote Control" and "IM Notify"
 under the existing "Remote" rail icon in `layout/useActivityItems.tsx` — a
@@ -477,9 +535,10 @@ new purpose on the same product pillar, not a new top-level domain.
   reintroduce from history if wanted later.
 - No live streaming transport (SSE/WS) — the frontend polls
   (`DeskPage.tsx`'s `SESSIONS_POLL_MS`/`MESSAGES_POLL_MS`), fast
-  only while a turn is actually running.
+  while the selected session has a turn or background tasks running.
 - Tests: `internal/desk`'s race-checked service suite (fake agent and
   sessions), `persistent_e2e_test.go` (the real `claude.Agent` driver and
   pool with a fake process in place of the binary), and a route test for
   the flag gate. Nothing yet runs the real `claude` binary, and there are no
-  frontend tests.
+  real-CLI frontend integration tests. Frontend recovery and interaction
+  coverage is described in §5.1.

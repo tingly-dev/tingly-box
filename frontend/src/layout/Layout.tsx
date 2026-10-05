@@ -68,6 +68,7 @@ const LayoutInner = ({ children }: LayoutProps) => {
     // Layout for auth/context, but the VS Code-like nav would overwhelm its
     // small window and duplicate the hub's own status row.
     const isHubPage = location.pathname === '/hub';
+    const isDeskPage = location.pathname === '/desk';
 
     const isActive = (path: string) => location.pathname === path;
     const isChildActive = (children?: ActivityItem['children']) =>
@@ -258,7 +259,7 @@ const LayoutInner = ({ children }: LayoutProps) => {
     );
 
     return (
-        <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', position: 'relative', zIndex: Z_INDEX.main }}>
+        <Box sx={{ display: 'flex', height: isDeskPage ? '100dvh' : '100vh', overflow: 'hidden', position: 'relative', zIndex: Z_INDEX.main }}>
             {visibilityTip}
             {!isHubPage && <FloatingStatusIndicators />}
 
@@ -294,12 +295,12 @@ const LayoutInner = ({ children }: LayoutProps) => {
             {/* Main content */}
             <Box
                 component="main"
-                sx={{ flexGrow: 1, height: '100vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden', position: 'relative', zIndex: 1 }}
+                sx={{ flexGrow: 1, height: isDeskPage ? '100dvh' : '100vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden', position: 'relative', zIndex: 1 }}
             >
                 {/* The hub panel is full-bleed: no mobile toolbar exists on
                     /hub (nav is hidden above), so mobileContentSx's xs
                     padding-top would just be 72px of dead space. */}
-                <Box sx={isHubPage ? { flex: 1, minHeight: 0, overflow: 'hidden' } : mobileContentSx}>
+                <Box sx={isHubPage ? { flex: 1, minHeight: 0, overflow: 'hidden' } : isDeskPage ? {...mobileContentSx, minHeight: 0, overflow: 'hidden', px: {xs: 0.5, md: 3}, pb: {xs: 0.5, md: 3}, pt: {xs: 7.5, md: 3}} : mobileContentSx}>
                     {/* The closable star request shows on agent pages only
                         (Team pages, also under /agent/team, belong to the
                         Team rail item). See GitHubStarBanner. */}

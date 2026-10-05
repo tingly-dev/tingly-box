@@ -1,12 +1,12 @@
 import type {RecentFolder} from '@/services/deskApi';
 import {Box, Chip, Stack, Typography} from '@mui/material';
-import {useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import Composer from './Composer';
 import FolderPicker from './FolderPicker';
 import ModelSelect from './ModelSelect';
 import PermissionModeSelect from './PermissionModeSelect';
 import ProfileSelect from './ProfileSelect';
+import {useDeskDrafts} from './useDeskDrafts';
 
 interface NewSessionViewProps {
     initialFolder?: string;
@@ -22,20 +22,21 @@ const NewSessionView = ({initialFolder, recentFolders, permissionModes, onCreate
     const {t} = useTranslation();
     // null until the user picks or types a folder; until then it follows the
     // requested folder, else the one used last (which may load after mount).
-    const [picked, setPicked] = useState<string | null>(null);
-    const folder = picked ?? initialFolder ?? recentFolders[0]?.path ?? '';
-    const [permissionMode, setPermissionMode] = useState('');
-    const [profile, setProfile] = useState('');
+    const [form, setForm] = useDeskDrafts(`desk.newDraft:${initialFolder ?? ''}`);
+    const update = (field: string, value: string) => setForm((prev) => ({...prev, [field]: value}));
+    const setPicked = (value: string) => update('folder', value);
+    const folder = form.folder ?? initialFolder ?? recentFolders[0]?.path ?? '';
+    const permissionMode = form.permissionMode ?? '';
+    const profile = form.profile ?? '';
     // A tier belongs to the profile it was picked under.
-    const [model, setModel] = useState('');
+    const model = form.model ?? '';
     const pickProfile = (p: string) => {
-        setProfile(p);
-        setModel('');
+        setForm((prev) => ({...prev, profile: p, model: ''}));
     };
 
     return (
-        <Box sx={{height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', px: 2}}>
-            <Box sx={{width: '100%', maxWidth: 720, mb: '10vh'}}>
+        <Box sx={{height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', px: 2}}>
+            <Box sx={{width: '100%', maxWidth: 720, mx: 'auto', mt: 'auto', mb: 'auto', py: {xs: 2, md: 5}, flexShrink: 0}}>
                 <Typography variant="h5" sx={{textAlign: 'center', mb: 3, fontWeight: 500}}>
                     {t('desk.newSessionHeading', {defaultValue: 'What should the agent work on?'})}
                 </Typography>
@@ -44,13 +45,16 @@ const NewSessionView = ({initialFolder, recentFolders, permissionModes, onCreate
                     minRows={3}
                     placeholder={t('desk.promptPlaceholder', {defaultValue: 'Describe a task…'})}
                     canSubmit={folder.trim() !== ''}
+                    text={form.prompt ?? ''}
+                    onTextChange={(text) => update('prompt', text)}
+                    onAccepted={(submitted) => setForm((previous) => previous.prompt === submitted ? {...previous, prompt: ''} : previous)}
                     onSubmit={(prompt) => onCreate(folder.trim(), prompt, permissionMode, profile, model)}
                     context={(
                         <>
                             <FolderPicker value={folder} onChange={setPicked} recentFolders={recentFolders}/>
                             <ProfileSelect value={profile} onChange={pickProfile}/>
-                            <ModelSelect profile={profile} value={model} onChange={setModel}/>
-                            <PermissionModeSelect value={permissionMode} permissionModes={permissionModes} onChange={setPermissionMode}/>
+                            <ModelSelect profile={profile} value={model} onChange={(value) => update('model', value)}/>
+                            <PermissionModeSelect value={permissionMode} permissionModes={permissionModes} onChange={(value) => update('permissionMode', value)}/>
                         </>
                     )}
                 />

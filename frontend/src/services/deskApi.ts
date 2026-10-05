@@ -48,21 +48,21 @@ export const listPermissionModes = (): Promise<string[]> =>
     call((client, headers) => client.GET('/api/v1/desk/permission-modes', {headers}))
         .then((r) => r.modes);
 
-export const listSessions = (active?: boolean): Promise<SessionInfo[]> =>
+export const listSessions = (active?: boolean, signal?: AbortSignal): Promise<SessionInfo[]> =>
     call((client, headers) => client.GET('/api/v1/desk/sessions', {
-        headers,
+        headers, signal,
         params: {query: active ? {active} : {}},
     })).then((r) => r.sessions);
 
-export const getSession = (sessionId: string): Promise<SessionInfo> =>
+export const getSession = (sessionId: string, signal?: AbortSignal): Promise<SessionInfo> =>
     call((client, headers) => client.GET('/api/v1/desk/sessions/{session_id}', {
-        headers,
+        headers, signal,
         params: {path: {session_id: sessionId}},
     }));
 
-export const getMessages = (sessionId: string): Promise<MessageInfo[]> =>
+export const getMessages = (sessionId: string, signal?: AbortSignal): Promise<MessageInfo[]> =>
     call((client, headers) => client.GET('/api/v1/desk/sessions/{session_id}/messages', {
-        headers,
+        headers, signal,
         params: {path: {session_id: sessionId}},
     })).then((r) => r.messages);
 

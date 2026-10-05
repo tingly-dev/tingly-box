@@ -11,6 +11,7 @@ interface ModelSelectProps {
     profile: string;
     // The chosen tier alias ('' is the profile's default model).
     value: string;
+    disabled?: boolean;
     onChange: (model: string) => void;
 }
 
@@ -19,6 +20,8 @@ const chipSx = {
     borderRadius: 1.5,
     border: 1,
     borderColor: 'divider',
+    maxWidth: '100%',
+    minWidth: 0,
     color: 'text.secondary',
 };
 
@@ -31,7 +34,7 @@ const concrete = (tier: ModelTier) => tier.provider_model || tier.model;
 // pick one (passed to Claude Code as --model); a unified profile has one
 // model for every tier, so the chip shows it without a menu — changing it
 // means editing the profile's rules, which would affect every client.
-const ModelSelect = ({profile, value, onChange}: ModelSelectProps) => {
+const ModelSelect = ({profile, value, onChange, disabled}: ModelSelectProps) => {
     const {t} = useTranslation();
     const [choice, setChoice] = useState<{profile: string; data: ModelChoice} | null>(null);
 
@@ -64,7 +67,7 @@ const ModelSelect = ({profile, value, onChange}: ModelSelectProps) => {
             >
                 <Stack direction="row" spacing={0.5} sx={{...chipSx, alignItems: 'center', py: 0.25}} aria-label={t('desk.model', {defaultValue: 'Model'})}>
                     <Psychology sx={{fontSize: 14}}/>
-                    <Typography variant="caption" sx={{color: 'inherit'}}>{concrete(only)}</Typography>
+                    <Typography variant="caption" noWrap sx={{color: 'inherit', minWidth: 0}}>{concrete(only)}</Typography>
                 </Stack>
             </Tooltip>
         );
@@ -73,6 +76,7 @@ const ModelSelect = ({profile, value, onChange}: ModelSelectProps) => {
     const selected = data.tiers.find((x) => x.alias === value) ?? data.tiers[0];
     return (
         <Select
+            disabled={disabled}
             size="small"
             variant="standard"
             disableUnderline
@@ -83,12 +87,12 @@ const ModelSelect = ({profile, value, onChange}: ModelSelectProps) => {
             renderValue={() => (
                 <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
                     <Psychology sx={{fontSize: 14}}/>
-                    <Typography variant="caption" sx={{color: 'inherit'}}>
+                    <Typography variant="caption" noWrap sx={{color: 'inherit', minWidth: 0}}>
                         {tierLabel(selected.alias)} · {concrete(selected)}
                     </Typography>
                 </Stack>
             )}
-            sx={{...chipSx, '& .MuiSelect-select': {py: 0.25, display: 'flex', alignItems: 'center'}}}
+            sx={{...chipSx, '& .MuiSelect-select': {py: {xs: 0.75, md: 0.25}, minHeight: {xs: '24px !important', md: 'initial'}, display: 'flex', alignItems: 'center'}}}
         >
             {data.tiers.map((tier) => (
                 <MenuItem key={tier.alias} value={tier.alias}>

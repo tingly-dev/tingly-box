@@ -6,13 +6,14 @@ import { fontMono } from '@/theme/fonts';
 
 interface ProfileSelectProps {
     value: string;
+    disabled?: boolean;
     onChange: (profile: string) => void;
 }
 
 // ProfileSelect picks the Claude Code profile a session runs with: which
 // upstream models its requests route to. Empty is the main Claude Code
 // routing. Hidden when no profile exists, since there is nothing to choose.
-const ProfileSelect = ({value, onChange}: ProfileSelectProps) => {
+const ProfileSelect = ({value, onChange, disabled}: ProfileSelectProps) => {
     const {t} = useTranslation();
     const profiles = useProfileContext().getProfiles('claude_code');
     const defaultLabel = t('desk.profileDefault', {defaultValue: 'Default routing'});
@@ -25,16 +26,18 @@ const ProfileSelect = ({value, onChange}: ProfileSelectProps) => {
 
     return (
         <Select
+            disabled={disabled}
             size="small"
             variant="standard"
             disableUnderline
             displayEmpty
+            inputProps={{'aria-label': t('desk.profile', {defaultValue: 'Routing profile'})}}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             renderValue={(v) => (
                 <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
                     <Route sx={{fontSize: 14}}/>
-                    <Typography variant="caption" sx={{color: 'inherit'}}>{v ? label(v) : defaultLabel}</Typography>
+                    <Typography variant="caption" noWrap sx={{color: 'inherit', minWidth: 0}}>{v ? label(v) : defaultLabel}</Typography>
                 </Stack>
             )}
             sx={{
@@ -42,8 +45,10 @@ const ProfileSelect = ({value, onChange}: ProfileSelectProps) => {
                 borderRadius: 1.5,
                 border: 1,
                 borderColor: 'divider',
+                maxWidth: '100%',
+                minWidth: 0,
                 color: 'text.secondary',
-                '& .MuiSelect-select': {py: 0.25, display: 'flex', alignItems: 'center'},
+                '& .MuiSelect-select': {py: {xs: 0.75, md: 0.25}, minHeight: {xs: '24px !important', md: 'initial'}, display: 'flex', alignItems: 'center'},
             }}
         >
             <MenuItem value="">{defaultLabel}</MenuItem>
