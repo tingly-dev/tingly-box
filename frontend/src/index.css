@@ -4,14 +4,52 @@
   box-sizing: border-box;
 }
 
+html {
+  /* No rubber-band / scroll chaining at the page edge — reads as a document otherwise. */
+  overscroll-behavior: none;
+  /* Native form controls and scrollbars follow the OS light/dark preference. */
+  color-scheme: light dark;
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica", "Arial", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, "Roboto", "Helvetica", "Arial", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Slim, theme-neutral scrollbars: a translucent thumb works on every palette. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(128, 128, 128, 0.4) transparent;
+}
+
 code {
-  font-family: "Fira Code", "Cascadia Code", Consolas, Menlo, Monaco, "Courier New", monospace;
+  font-family: "Fira Code", "Cascadia Code", ui-monospace, "SF Mono", Consolas, Menlo, Monaco, "Courier New", monospace;
+}
+
+/* Images and icons are UI, not documents: no ghost-drag. */
+img,
+svg {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+/* Interactive chrome isn't prose: clicking a button/tab/menu row must not
+   select its label (and double-click must not highlight it). Content areas,
+   tables, code and inputs stay selectable. */
+button,
+[role="button"],
+[role="tab"],
+[role="menuitem"],
+[role="option"],
+.MuiButtonBase-root,
+.MuiChip-root,
+.MuiListItemButton-root,
+.MuiTab-root,
+.MuiMenuItem-root,
+.MuiInputLabel-root {
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 #root {
