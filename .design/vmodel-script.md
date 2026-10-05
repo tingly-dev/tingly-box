@@ -107,7 +107,7 @@ Drives each script through the in-process gateway (built-in rule → vmodel
 provider → the agent's wire format) with **one request per step**, then checks
 each response against what its step declares: error steps by HTTP status, tool
 steps by tool name and text, plain steps by text, `midstream` steps by the
-stream *not* completing (`protocoltest.StreamShapeForAgent`). Expectations are
+stream *not* reaching its terminal event (`message_stop` / `response.completed`). Expectations are
 resolved by the same `vmodel.Sequence` the server runs, so defaults, tool ids
 and `repeat` cannot drift between the check and the engine.
 
@@ -123,16 +123,47 @@ agent CLI (`harness agent … --script`) is deferred.
 ## Phases
 
 1. **PR1 — engine, YAML, directory serving, harness** *(this change)*.
-2. **PR2 — Python `tingly.vmodel`.** A chain builder that compiles to this
-   schema plus a `Testbed` that launches a real tb with a throwaway config dir,
-   drops scripts into `vmodels/`, and hands back ready base URLs — so no tb-side
-   API is needed. An *attach* mode writes into an already-running tb's config
-   dir.
+2. **PR2 — Python `tingly.vmodel`** *(see below)*.
 3. **Deferred until there is a consumer:** `when:` request matching and
    per-conversation cursors (needed once several clients share one script),
    a management API / CLI / UI (remote or non-file registration), request
    capture for asserting on client behaviour, recording → script, a webhook
    step, `think` blocks and multiple tool calls per step.
+
+## Python: `tingly.vmodel` (PR2)
+
+Python has no way to push a script to tb — and needs none: the script
+directory *is* the push channel. `tingly.vmodel` is two small, stdlib-only
+pieces, and a script written with it is the same file a human would write:
+
+- **`Script`** — a chain builder (`.say()` `.tool()` `.error()` `.cut()`) that
+  emits the schema above as **JSON, which is valid YAML**, so no YAML library is
+  needed on the Python side and tb's strict parser remains the only authority
+  on what a script means. It adds no semantics: anything expressible in Python
+  is expressible in a hand-written file, and the e2e test feeds tb every step
+  kind Python can write.
+- **`Testbed`** — the part that makes it usable without setup. `Testbed(*scripts)`
+  finds a tb binary (`$TINGLY_TB_BIN` / `tingly-box` / `tb`), starts it with a
+  throwaway `--config-dir` on a free port, reads the model token tb generated,
+  writes the scripts into `vmodels/`, and exposes ready base URLs
+  (`anthropic_base`, `openai_base`) and one-line `messages()` / `chat()` calls.
+  `Testbed.attach(*scripts)` instead writes into an already-running tb's config
+  dir and removes only what it added. Scripts are written atomically (temp file
+  + rename, dot-prefixed so tb ignores the temp), and `add()` confirms tb loaded
+  the file — on failure it raises `ScriptError` carrying tb's own message, taken
+  from the `404 Model not found (script load errors: …)` that PR1 added for
+  exactly this.
+
+It targets the direct `/virtual/{anthropic,openai}` endpoints, which need no
+provider or rule — the model token is the only credential. Driving a script
+through the `/tingly/<scenario>` pipeline (provider + rule) is what
+`harness script` covers; real agents are pointed at `anthropic_base`.
+
+Limits, by design: attach mode needs filesystem access to the config dir (a
+remote tb needs the deferred management API), and each protocol keeps its own
+cursor, so a script used over both protocols advances independently on each.
+Usage on a step is advertised on **streamed** responses only (existing vmodel
+behaviour), so assert on it with `stream: true`.
 
 ## Files
 
@@ -143,3 +174,4 @@ agent CLI (`harness agent … --script`) is deferred.
 - `vmodel/virtualserver/scripts.go` — the directory store; `service.go` `SetScriptDir`; `handler.go` refresh hooks.
 - `internal/server/server.go` — wires `<config-dir>/vmodels`.
 - `cli/harness/script.go`, `testdata/scripts/` — the harness command and shipped scripts.
+- `sdk/python/tingly/vmodel.py` — `Script`, `Testbed`, `ScriptError`; `examples/vmodel_flow.py` (the demo), `tests/test_vmodel.py` (unit), `tests/test_vmodel_e2e.py` (real tb).

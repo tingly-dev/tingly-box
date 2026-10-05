@@ -126,7 +126,18 @@ tasks:
         BIN_DIR="$(mktemp -d)"
         trap 'rm -rf "$BIN_DIR"' EXIT
         go build -o "$BIN_DIR/tb" ./cli/tingly-box
-        cd sdk/python && TINGLY_TB_BIN="$BIN_DIR/tb" python3 -m unittest discover tests -p test_e2e_tb.py -v
+        cd sdk/python && TINGLY_TB_BIN="$BIN_DIR/tb" python3 -m unittest discover tests -p 'test_*e2e*.py' -v
+
+  demo:vmodel:
+    desc: Run the scripted-vmodel demo — a real tb plus a Python-written script, played by a tiny agent
+    cmds:
+      - |
+        # Builds tb into a temp dir and runs sdk/python/examples/vmodel_flow.py
+        # against it (see .design/vmodel-script.md). Stdlib only.
+        BIN_DIR="$(mktemp -d)"
+        trap 'rm -rf "$BIN_DIR"' EXIT
+        go build -o "$BIN_DIR/tb" ./cli/tingly-box
+        cd sdk/python && TINGLY_TB_BIN="$BIN_DIR/tb" python3 examples/vmodel_flow.py
 
   go:build:
     env:
