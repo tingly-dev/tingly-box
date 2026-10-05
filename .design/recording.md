@@ -1,7 +1,7 @@
 # Recording（录制）：重做规划
 
 > 适用对象：tingly-box 后端 / 前端贡献者。
-> 状态：**规划已定稿待确认；R1（接入）待实施**。
+> 状态：**规划已确认；R1（接入）待实施**。
 > 本文取代旧版 recording 梳理（Phase 0–2，见 git 历史）。旧版沉淀下来、仍然成立的结论
 > 在 §6 列出；旧实现（`ProtocolRecorder` + `TransformRecorder`）按 §5 的阶段退场。
 
@@ -57,6 +57,27 @@ Trace（一次入站请求）
   语义只是从"SDK 快照"变成"wire 字节"。
 - **Body 存原文**：合法 JSON 以 `json.RawMessage` 内嵌，否则（SSE、二进制、截断）存字符串并标
   `encoding`。流式响应存 SSE 原文，不做组装——组装是查看端的事。
+### 3.1 四个点位 × 流式 / 非流式
+
+录制的对象只有这四种（与 rule `recording` 的选项一致），不录协议转换的中间过程：
+
+| 点位 | 是什么 | 采集位置 | 非流式 | 流式 |
+|------|--------|----------|--------|------|
+| `client_request` 入站 | 客户端发来的原始请求 | 入站中间件 / handler 交给 `Enable` 的 `bs` | JSON body | 同左——请求侧没有流，只是 body 里 `stream: true` |
+| `upstream_request` 出站 | 经过转换、发给 provider 的请求（debug 用） | `wireRecordTransport` | JSON body + 真实 header | 同左（Google 是 URL 上的 `:streamGenerateContent?alt=sse`） |
+| `upstream_response` 出站返回 | provider 返回的原始响应 | `wireRecordTransport`，tee response body | 整个 JSON body，读完即收尾 | SSE 原文，随 SDK 读取逐段 tee；EOF 收尾为完整，提前 `Close`（客户端断开、failover 放弃）收尾并标 `incomplete` |
+| `final_response` 回到客户端 | 网关写回客户端的响应 | 入站中间件包装 `ResponseWriter` | 整个 JSON body | SSE 原文（含 keep-alive 注释），按 `Write` 顺序 tee；连接中断标 `incomplete` |
+
+流式相关的统一规则：
+
+1. **流不流式看响应，不看请求。** 以响应 `Content-Type: text/event-stream` 判定 `stream: true`。
+   请求了流式但在首字节前失败（上游 4xx / 5xx、网关报错）时，响应是普通 JSON 错误，按非流式记。
+2. **SSE 存原文，不组装。** 不在热路径上把事件拼回一条 message——旧设计 D4 的质量问题正出在
+   组装 / 合成上。原文无损，拆事件、拼消息、展示 delta 都放到查看端（R3）。
+3. **时间点分开记。** 每个响应记 `ttfb`（首字节）与 `duration`（收尾），流式下两者差异就是生成耗时。
+4. **收尾时机。** Trace 在入站中间件 `c.Next()` 返回后 Emit；此时仍未收尾的上游流（理论上
+   handler 返回前都已读完或关闭）按 `incomplete` 落盘，不阻塞 Emit。
+
 - **大小上限**：单个 body 默认上限（暂定 4 MiB），超出截断并标 `truncated`，保证录制不会把
   一次大请求放大成内存问题。
 - **脱敏在采集时做**：`Authorization`、`x-api-key`、`api-key`、`Cookie`、`Set-Cookie`、
@@ -146,13 +167,20 @@ wire base 目前有两种形态，挂载点有限且集中在 `internal/client`�
 
 ---
 
-## 7. 待确认的决策
+## 7. 决策记录
 
-- **Q1 采集位置**：边界 wire 采集（本文）取代 transform 链内快照。代价是看不到"转换中间态"
-  （preBase 之后、Base 之前那一刻的形态）；收益是协议迁移与录制完全解耦、录到的是事实。
-  调试中间态属于 harness / 单测的职责，不由线上录制承担。**建议采纳。**
-- **Q2 R1 期间新旧并存**：R1 新旧两套同时写（各自目录），R2 再删旧。另一种做法是 R1 直接关掉旧
-  emit——更干净，但 R1 期间 `client_request` 之外的旧行为会短暂缺失。**建议并存**，R1 风险最低。
-- **Q3 落盘格式**：新 schema（v4，含 `exchanges`）写到 `<configDir>/record/traces/<scenario>/<date>/<session>.jsonl.gz`，
-  复用 `obs` 的 BatchProcessor 与 gzip member 追加；CAS 导出器暂不跟进新 schema（R4 视需要）。
-- **Q4 body 上限默认值**：暂定 4 MiB / body，后续进 R4 的配置项。
+已定：
+
+- **采集范围**：只录 §3.1 的四个点位（入站、出站、出站返回、回到客户端），不录转换中间过程；
+  流式 / 非流式按 §3.1 的规则统一处理。
+- **采集位置**：边界 wire 采集取代 transform 链内快照。
+- **R1 新旧并存**：R1 新旧两套各写各的目录，R2 补齐 `final_response` 后一次性删除旧接线。
+- **R1 范围**：`client_request` + `upstream_request` + `upstream_response`；`final_response` 放 R2。
+
+待定（R1 实施时定，倾向写在前面）：
+
+- **落盘**：新 schema（含 `exchanges`）写到
+  `<configDir>/record/traces/<scenario>/<date>/<session>.jsonl.gz`，沿用 gzip member 追加。
+  `obs.BatchProcessor` 目前绑定 `*obs.Record`，倾向把它泛型化（`BatchProcessor[T]`）复用批处理，
+  而不是再写一份队列；CAS 导出器暂不跟进新 schema。
+- **body 上限默认值**：4 MiB / body，R4 再做成配置项。

@@ -121,7 +121,7 @@
 | [usage-analytics.md](./usage-analytics.md) | Usage Analytics | 设计说明；局部实施状态见正文 |
 | [ttft.md](./ttft.md) | TTFT（Time To First Token）记录 | 设计说明；局部实施状态见正文 |
 | [logging.md](./logging.md) | 日志系统：架构与上游错误分类 | 设计说明；局部实施状态见正文 |
-| [recording.md](./recording.md) | Recording 重做规划：边界 wire 采集、Trace / Exchange 模型、R1–R4 分阶段 | 规划待确认；R1 接入待实施 |
+| [recording.md](./recording.md) | Recording 重做规划：边界 wire 采集、Trace / Exchange 模型、R1–R4 分阶段 | 规划已确认；R1 接入待实施 |
 | [otel.md](./otel.md) | OTel 可观测性设计 — internal/otel | 设计说明；局部实施状态见正文 |
 | [probe.md](./probe.md) | Probe Subsystem | 设计说明；局部实施状态见正文 |
 | [bench.md](./bench.md) | Bench — 高度可定制的端到端测试台 | 设计说明；局部实施状态见正文 |
