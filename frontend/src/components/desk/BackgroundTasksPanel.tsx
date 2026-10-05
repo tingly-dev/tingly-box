@@ -7,6 +7,7 @@ import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import type {BackgroundTask} from './deskUtils';
 import {formatTokens, timeAgo} from './deskUtils';
+import {getReadableAccent} from '@/theme/status';
 import { fontMono, fontSizes } from '@/theme/fonts';
 
 interface BackgroundTasksPanelProps {
@@ -146,9 +147,9 @@ const TaskRow = ({sessionId, task, open, onToggle, onChanged, onReveal}: {
     const icon = running
         ? <CircularProgress size={14}/>
         : task.status === 'completed'
-            ? <CheckCircle sx={{fontSize: 16, color: 'success.main'}}/>
+            ? <CheckCircle sx={{fontSize: 16, color: (theme) => getReadableAccent(theme, 'success')}}/>
             : task.status === 'failed'
-                ? <Cancel sx={{fontSize: 16, color: 'error.main'}}/>
+                ? <Cancel sx={{fontSize: 16, color: (theme) => getReadableAccent(theme, 'error')}}/>
                 : <Block sx={{fontSize: 16, color: 'text.secondary'}}/>;
 
     return (
@@ -159,14 +160,14 @@ const TaskRow = ({sessionId, task, open, onToggle, onChanged, onReveal}: {
                 role="button"
                 aria-expanded={open}
                 onClick={onToggle}
-                sx={{alignItems: 'center', minWidth: 0, px: 1.5, py: 1, cursor: 'pointer', '&:hover': {bgcolor: 'action.hover'}}}
+                sx={{alignItems: 'center', minWidth: 0, px: 1.5, py: 1, cursor: 'default', '&:hover': {bgcolor: 'action.hover'}}}
             >
                 {isAgent ? <Robot sx={{fontSize: 16, color: 'text.secondary'}}/> : <Terminal sx={{fontSize: 16, color: 'text.secondary'}}/>}
                 <Box sx={{flex: 1, minWidth: 0}}>
                     <Typography variant="body2" noWrap sx={{color: 'text.primary', fontWeight: 500}}>
                         {task.description || task.input?.description || task.taskId}
                     </Typography>
-                    <Typography variant="caption" noWrap component="div" sx={{color: task.status === 'failed' ? 'error.main' : 'text.secondary'}}>
+                    <Typography variant="caption" noWrap component="div" sx={{color: (theme) => task.status === 'failed' ? getReadableAccent(theme, 'error') : theme.palette.text.secondary}}>
                         {[state, elapsed !== undefined ? formatDuration(elapsed) : ''].filter(Boolean).join(' · ')}
                     </Typography>
                 </Box>

@@ -135,6 +135,12 @@ there is no new backend project entity or endpoint. The configuration menu's
 empty profile means **Default configuration profile**, using the existing
 main Claude Code configuration.
 
+Desk uses the shared `fontMono` and `fontSizes` tokens for directory paths
+and small labels. Status indicators use the fixed `getStatusColor` set;
+status text and icons use `getReadableAccent` for the current light/dark
+surface. Custom expandable rows follow the native cursor convention from
+the shared theme, while directory inputs remain selectable.
+
 Concurrency: several sessions may run in the same folder at once, the same
 way several local `claude --session-id <id>` processes can — `Service.runs`
 is keyed by session id, not by folder.

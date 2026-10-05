@@ -4,6 +4,7 @@ import {Box, Button, CircularProgress, IconButton, InputBase, List, ListItemButt
 import {useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {folderName, groupSessionsByFolder, isBusyStatus, sessionTitle} from './deskUtils';
+import {getStatusColor} from '@/theme/status';
 import { fontSizes } from '@/theme/fonts';
 
 interface DeskSidebarProps {
@@ -27,7 +28,7 @@ const StatusMark = ({session, unseen}: {session: SessionInfo; unseen: boolean}) 
     const {t} = useTranslation();
     if (session.awaiting_input) {
         return (
-            <Box component="span" sx={{px: 0.75, borderRadius: 1, fontSize: fontSizes.micro, fontWeight: 600, lineHeight: 1.6, bgcolor: 'warning.main', color: 'warning.contrastText'}}>
+            <Box component="span" sx={{px: 0.75, borderRadius: 1, fontSize: fontSizes.micro, fontWeight: 600, lineHeight: 1.6, bgcolor: (theme) => getStatusColor(theme, 'warning'), color: (theme) => theme.palette.getContrastText(getStatusColor(theme, 'warning'))}}>
                 {t('desk.waitingMark', {defaultValue: 'waiting'})}
             </Box>
         );
@@ -45,7 +46,7 @@ const StatusMark = ({session, unseen}: {session: SessionInfo; unseen: boolean}) 
             </Tooltip>
         );
     }
-    if (session.status === 'failed') return <Box sx={{width: 7, height: 7, borderRadius: '50%', bgcolor: 'error.main'}}/>;
+    if (session.status === 'failed') return <Box sx={{width: 7, height: 7, borderRadius: '50%', bgcolor: (theme) => getStatusColor(theme, 'error')}}/>;
     if (unseen) return <Box sx={{width: 7, height: 7, borderRadius: '50%', bgcolor: 'primary.main'}}/>;
     return null;
 };
@@ -142,7 +143,7 @@ const DeskSidebar = ({sessions, selectedId, onSelect, onNew, unseen, projects = 
                         </Box>
                         <List dense disablePadding>
                             {g.sessions.length === 0 && <ListItemButton onClick={() => onNew(g.path)} sx={{...rowSx, py: 0.75}}>
-                                <Add sx={{fontSize: 16}}/><Typography variant="body2" sx={{fontSize: '0.8125rem'}}>{t('desk.firstProjectTask', {defaultValue: 'Create first task'})}</Typography>
+                                <Add sx={{fontSize: 16}}/><Typography variant="body2" sx={{fontSize: fontSizes.md}}>{t('desk.firstProjectTask', {defaultValue: 'Create first task'})}</Typography>
                             </ListItemButton>}
                             {g.sessions.map((s) => (
                                 <ListItemButton

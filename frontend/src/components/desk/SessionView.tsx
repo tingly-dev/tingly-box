@@ -15,6 +15,7 @@ import ProfileSelect from './ProfileSelect';
 import StatusLine from './StatusLine';
 import Transcript from './Transcript';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import {getReadableAccent} from '@/theme/status';
 import {useTranscriptScroll} from './useTranscriptScroll';
 import type {DeskQueue} from './useDeskQueues';
 
@@ -154,7 +155,7 @@ const SessionView = ({
                 )}
                 <Typography variant="subtitle1" noWrap sx={{fontWeight: 600, minWidth: 0, flex: {xs: 1, md: 'initial'}, color: 'text.primary'}}>{sessionTitle(session)}</Typography>
                 <Box sx={{display: {xs: 'none', md: 'block'}}}><FolderChip path={session.project}/></Box>
-                {session.status === 'failed' && <Chip size="small" color="error" variant="outlined" label={t('desk.statusFailed', {defaultValue: 'failed'})}/>}
+                {session.status === 'failed' && <Chip size="small" color="error" variant="outlined" label={t('desk.statusFailed', {defaultValue: 'failed'})} sx={{color: (theme) => getReadableAccent(theme, 'error'), borderColor: (theme) => getReadableAccent(theme, 'error')}}/>}
                 {isClosed && <Chip size="small" variant="outlined" label={t('desk.statusArchived', {defaultValue: 'archived'})}/>}
                 <Box sx={{flex: 1, display: {xs: 'none', md: 'block'}}}/>
                 {/* Always there, so it can be found before it is needed; while

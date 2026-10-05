@@ -1,4 +1,5 @@
 import {Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, TextField} from '@mui/material';
+import {fontMono} from '@/theme/fonts';
 import {useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {isAbsoluteProjectPath, normalizeProjectPath} from './useDeskProjects';
@@ -35,7 +36,7 @@ const AddProjectDialog = ({onClose, onAdd}: AddProjectDialogProps) => {
                         helperText={invalid ? t('desk.projectPathAbsolute', {defaultValue: 'Enter a full absolute path, such as /home/me/projects/app.'})
                             : error ? t('desk.projectSaveFailed', {defaultValue: 'Could not save the project in this browser. Please try again.'})
                                 : t('desk.projectStorageHint', {defaultValue: 'Saved in this browser. The directory is checked when you start a task.'})}
-                        slotProps={{htmlInput: {style: {fontFamily: 'monospace'}}}}
+                        slotProps={{htmlInput: {style: {fontFamily: fontMono}}}}
                     />
                 </DialogContent>
                 <DialogActions sx={{px: 3, pb: 2}}>

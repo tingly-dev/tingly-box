@@ -1,5 +1,7 @@
 import * as deskApi from '@/services/deskApi';
 import type {MessageInfo, QuotaSegment, SessionStatus} from '@/services/deskApi';
+import {getReadableAccent} from '@/theme/status';
+import {useTheme, type Theme} from '@mui/material/styles';
 import {Box, Tooltip, Typography} from '@mui/material';
 import type {ReactNode} from 'react';
 import {useEffect, useMemo, useState} from 'react';
@@ -23,9 +25,9 @@ const resetsIn = (iso: string | undefined, now = Date.now()): string | undefined
     return `${Math.round(h / 24)}d`;
 };
 
-const quotaColor = (q: QuotaSegment): string | undefined => {
-    if (q.limit_reached || q.used_percent >= 90) return 'error.main';
-    if (q.used_percent >= 80) return 'warning.main';
+const quotaColor = (theme: Theme, q: QuotaSegment): string | undefined => {
+    if (q.limit_reached || q.used_percent >= 90) return getReadableAccent(theme, 'error');
+    if (q.used_percent >= 80) return getReadableAccent(theme, 'warning');
     return undefined;
 };
 
@@ -55,6 +57,7 @@ interface StatusLineProps {
 // quota come from the session status endpoint, refreshed as each turn ends.
 const StatusLine = ({sessionId, profile, model: tier, messages}: StatusLineProps) => {
     const {t} = useTranslation();
+    const theme = useTheme();
     const usage = useMemo(() => sessionUsage(messages), [messages]);
     const turns = useMemo(() => messages.filter((m) => m.kind === 'usage').length, [messages]);
     const [status, setStatus] = useState<SessionStatus>();
@@ -84,7 +87,7 @@ const StatusLine = ({sessionId, profile, model: tier, messages}: StatusLineProps
         if (win) {
             const pct = Math.round((ctx / win) * 100);
             segments.push(
-                <Segment key="ctx" color={pct >= 80 ? 'warning.main' : undefined}
+                <Segment key="ctx" color={pct >= 80 ? getReadableAccent(theme, 'warning') : undefined}
                     tip={t('desk.statusContext', {defaultValue: 'Context: {{used}} of {{window}} tokens', used: formatTokens(ctx), window: formatTokens(win)})}>
                     {contextBar(pct)} {pct}%
                 </Segment>,
@@ -102,7 +105,7 @@ const StatusLine = ({sessionId, profile, model: tier, messages}: StatusLineProps
     for (const q of quotas) {
         const reset = resetsIn(q.resets_at);
         segments.push(
-            <Segment key={`q-${q.type}`} color={quotaColor(q)}
+            <Segment key={`q-${q.type}`} color={quotaColor(theme, q)}
                 tip={[`${q.type} ${t('desk.statusQuota', {defaultValue: 'quota'})}`, reset && t('desk.statusResets', {defaultValue: 'resets in {{reset}}', reset})].filter(Boolean).join(' · ')}>
                 {q.type} {q.text}
             </Segment>,
@@ -114,7 +117,7 @@ const StatusLine = ({sessionId, profile, model: tier, messages}: StatusLineProps
     }
     if (quotas.some((q) => q.limit_reached)) {
         segments.push(
-            <Segment key="exhausted" color="error.main">
+            <Segment key="exhausted" color={getReadableAccent(theme, 'error')}>
                 {t('desk.statusExhausted', {defaultValue: 'quota exhausted — pick another profile above'})}
             </Segment>,
         );

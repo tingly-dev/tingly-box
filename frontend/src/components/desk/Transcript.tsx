@@ -7,6 +7,7 @@ import {useTranslation} from 'react-i18next';
 import type {ActivityStep, TaskState, TranscriptBlock} from './deskUtils';
 import {agentReport, formatTokens, toolSummary} from './deskUtils';
 import Markdown from './Markdown';
+import {getReadableAccent} from '@/theme/status';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import {useDeskStorage} from './useDeskStorage';
 
@@ -62,7 +63,7 @@ const TaskTag = ({task}: {task: TaskState}) => {
             color={task.status === 'failed' ? 'error' : 'default'}
             icon={task.status === 'running' ? <CircularProgress size={10} sx={{ml: '6px !important'}}/> : undefined}
             label={`${t('desk.background', {defaultValue: 'background'})} · ${statusLabel(t, task.status)}`}
-            sx={{height: 20, flexShrink: 0, '& .MuiChip-label': {px: 0.75, fontSize: fontSizes.xs}}}
+            sx={{height: 20, flexShrink: 0, color: (theme) => task.status === 'failed' ? getReadableAccent(theme, 'error') : undefined, borderColor: (theme) => task.status === 'failed' ? getReadableAccent(theme, 'error') : undefined, '& .MuiChip-label': {px: 0.75, fontSize: fontSizes.xs}}}
         />
     );
 };
@@ -79,7 +80,7 @@ const StepDetail = ({step}: {step: ActivityStep}) => {
     return (
         <Box>
             <Stack direction="row" spacing={1} sx={{alignItems: 'baseline', minWidth: 0}}>
-                <Typography variant="body2" sx={{fontWeight: 600, flexShrink: 0, color: step.isError ? 'error.main' : 'text.primary'}}>
+                <Typography variant="body2" sx={{fontWeight: 600, flexShrink: 0, color: (theme) => step.isError ? getReadableAccent(theme, 'error') : theme.palette.text.primary}}>
                     {step.name || 'Result'}
                 </Typography>
                 {summary && (
@@ -126,7 +127,7 @@ const ActivityRow = ({steps, live, expandAll}: {steps: ActivityStep[]; live: boo
                 role="button"
                 onClick={() => setOpen((v) => !v)}
                 sx={{
-                    display: 'inline-flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', userSelect: 'none',
+                    display: 'inline-flex', alignItems: 'center', gap: 0.5, cursor: 'default', userSelect: 'none',
                     color: 'text.secondary', '&:hover': {color: 'text.primary'},
                 }}
             >
@@ -135,7 +136,7 @@ const ActivityRow = ({steps, live, expandAll}: {steps: ActivityStep[]; live: boo
                 {/* A failing command is routine inside an agent's run (a red
                     test it goes on to fix), so only the count is marked. */}
                 {failed > 0 && (
-                    <Typography variant="body2" sx={{color: 'error.main'}}>
+                    <Typography variant="body2" sx={{color: (theme) => getReadableAccent(theme, 'error')}}>
                         · {t('desk.failedCount', {defaultValue: '{{count}} failed', count: failed})}
                     </Typography>
                 )}
@@ -280,7 +281,7 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond}: Bl
                     );
                 case 'error':
                     return (
-                        <Stack key={i} direction="row" spacing={0.75} sx={{alignItems: 'flex-start', color: 'error.main'}}>
+                        <Stack key={i} direction="row" spacing={0.75} sx={{alignItems: 'flex-start', color: (theme) => getReadableAccent(theme, 'error')}}>
                             <ErrorOutline sx={{fontSize: 18, mt: 0.25}}/>
                             <Typography variant="body2" sx={{color: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{b.message.content}</Typography>
                         </Stack>
@@ -334,9 +335,9 @@ const AgentCard = ({block, turnLive, expandAll, onRespond}: {
 
     const statusIcon = {
         running: <CircularProgress size={14}/>,
-        completed: <CheckCircle sx={{fontSize: 16, color: 'success.main'}}/>,
+        completed: <CheckCircle sx={{fontSize: 16, color: (theme) => getReadableAccent(theme, 'success')}}/>,
         stopped: <Block sx={{fontSize: 16, color: 'text.secondary'}}/>,
-        failed: <Cancel sx={{fontSize: 16, color: 'error.main'}}/>,
+        failed: <Cancel sx={{fontSize: 16, color: (theme) => getReadableAccent(theme, 'error')}}/>,
     }[status];
 
     return (
@@ -345,7 +346,7 @@ const AgentCard = ({block, turnLive, expandAll, onRespond}: {
                 role="button"
                 aria-expanded={open}
                 onClick={() => setToggled({under: expandAll, open: !open})}
-                sx={{px: 1.5, py: 1, cursor: 'pointer', userSelect: 'none', '&:hover': {bgcolor: 'action.hover'}}}
+                sx={{px: 1.5, py: 1, cursor: 'default', userSelect: 'none', '&:hover': {bgcolor: 'action.hover'}}}
             >
                 <Stack direction="row" spacing={1} sx={{alignItems: 'center', minWidth: 0}}>
                     <Robot sx={{fontSize: 18, color: 'text.secondary', flexShrink: 0}}/>

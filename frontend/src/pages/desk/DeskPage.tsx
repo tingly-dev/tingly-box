@@ -8,6 +8,7 @@ import {useDeskDrafts} from '@/components/desk/useDeskDrafts';
 import {useDeskQueues} from '@/components/desk/useDeskQueues';
 import {useDeskPoll} from '@/components/desk/useDeskPoll';
 import {useDeskProjects} from '@/components/desk/useDeskProjects';
+import {fontSizes} from '@/theme/fonts';
 import {useNotify} from '@/hooks/useNotify';
 import * as deskApi from '@/services/deskApi';
 import type {MessageInfo, RecentFolder, SessionInfo} from '@/services/deskApi';
@@ -416,7 +417,7 @@ const DeskPage = () => {
                             </Button>
                         )}>
                             {t('desk.refreshFailed', {defaultValue: 'Could not refresh Desk. Your last loaded data and drafts are kept. Reconnecting automatically.'})}
-                            <Box component="span" sx={{display: 'block', fontSize: '0.8rem'}}>{refreshError}</Box>
+                            <Box component="span" sx={{display: 'block', fontSize: fontSizes.md}}>{refreshError}</Box>
                         </Alert>
                     )}
                     <Box sx={{flex: 1, minHeight: 0}}>
