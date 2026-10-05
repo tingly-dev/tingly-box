@@ -1,6 +1,7 @@
 package statusline
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -757,4 +758,36 @@ func TestQuotaForStatusLineSkipsTinglyBoxUpstream(t *testing.T) {
 	assert.Empty(t, formatQuotaInline(quotaForStatusLine(relayed)))
 	assert.Equal(t, " | Quota: 70% left", formatQuotaInline(quotaForStatusLine(direct)))
 	assert.Empty(t, formatQuotaInline(quotaForStatusLine(nil)))
+}
+
+type fakeQuotaMgr struct{ usage *quota.ProviderUsage }
+
+func (f fakeQuotaMgr) GetQuota(context.Context, string) (*quota.ProviderUsage, error) {
+	return f.usage, nil
+}
+
+// The handler paths (terminal line and status JSON) must drop a relayed
+// tingly-box quota but keep a direct provider's.
+func TestHandlerQuotaBlacklistsTinglyBoxUpstream(t *testing.T) {
+	windows := []*quota.UsageWindow{{Type: quota.WindowTypeSession, Used: 30, Limit: 100, Unit: quota.UsageUnitPercent}}
+	mapping := &tbModelMappingResult{providerUUID: "p1"}
+
+	for _, tc := range []struct {
+		name      string
+		pt        quota.ProviderType
+		wantInlne string
+		wantJSON  bool
+	}{
+		{"tingly-box upstream", quota.ProviderTypeTinglyBox, "", false},
+		{"direct provider", quota.ProviderTypeAnthropic, " | Quota: 70% left", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := &Handler{quotaMgr: fakeQuotaMgr{&quota.ProviderUsage{ProviderType: tc.pt, Windows: windows}}}
+			assert.Equal(t, tc.wantInlne, h.buildQuotaInline(mapping))
+
+			resp := &CombinedStatusData{}
+			h.populateQuotaData(resp, "p1")
+			assert.Equal(t, tc.wantJSON, resp.TBQuotaAvailable)
+		})
+	}
 }
