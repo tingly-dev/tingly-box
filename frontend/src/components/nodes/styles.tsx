@@ -1,18 +1,19 @@
 import { Box } from '@mui/material';
 import { alpha, keyframes, styled, type Theme } from '@mui/material/styles';
 import { fontSizes } from '@/theme/fonts';
+import { routeGraphColors } from '@/theme/routeGraph';
 
-export const routeGraphActive = '#4F6F9F';
-export const routeGraphActiveBg = '#F7F9FC';
+export const routeGraphActive = routeGraphColors.active;
+export const routeGraphActiveBg = routeGraphColors.activeBg;
 
 export const getRouteGraphActiveColor = (theme: Theme) =>
-    theme.palette.mode === 'dark' ? '#D4E3FF' : routeGraphActive;
+    theme.palette.mode === 'dark' ? routeGraphColors.activeDark : routeGraphActive;
 
 export const getRouteGraphControlFill = (theme: Theme) =>
-    theme.palette.mode === 'dark' ? '#4F6F9F' : routeGraphActive;
+    theme.palette.mode === 'dark' ? routeGraphColors.controlFillDark : routeGraphActive;
 
 export const getRouteGraphControlFillHover = (theme: Theme) =>
-    theme.palette.mode === 'dark' ? '#5F82BA' : routeGraphActive;
+    theme.palette.mode === 'dark' ? routeGraphColors.controlFillHoverDark : routeGraphActive;
 
 export const getRouteGraphActiveBg = (theme: Theme) =>
     theme.palette.mode === 'dark' ? alpha(routeGraphActive, 0.18) : routeGraphActiveBg;

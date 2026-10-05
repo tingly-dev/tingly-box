@@ -3,6 +3,7 @@ import { displayVersion } from '@/utils/version';
 import React, { type ReactNode } from 'react';
 import { useVersion } from '@/contexts/VersionContext';
 import { FiberManualRecord, Check, Refresh, UpgradeOutlined } from '@/components/icons';
+import { elevation } from '@/theme/elevation';
 
 interface VersionDisplayProps {
     /**
@@ -200,7 +201,7 @@ const IndicatorBadge: React.FC<{ color: IndicatorBadgeColor; children: ReactNode
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            boxShadow: elevation.raised,
             flexShrink: 0,
             transition: 'transform 0.2s ease',
         }}

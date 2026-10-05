@@ -1,10 +1,11 @@
 import { alpha, type Theme } from '@mui/material/styles';
+import { routeGraphColors } from '@/theme/routeGraph';
 
-const routeActive = '#4F6F9F';
-const routeActiveBg = '#F7F9FC';
+const routeActive = routeGraphColors.active;
+const routeActiveBg = routeGraphColors.activeBg;
 
 export const getModelCardActiveColor = (theme: Theme) =>
-    theme.palette.mode === 'dark' ? '#8EA7CF' : routeActive;
+    theme.palette.mode === 'dark' ? routeGraphColors.modelCardActiveDark : routeActive;
 
 export const modelCardTransition =
     'border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease';

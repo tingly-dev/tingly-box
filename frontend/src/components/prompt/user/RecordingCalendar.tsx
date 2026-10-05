@@ -7,6 +7,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { useState } from 'react';
 import { createContext, useContext } from 'react';
 import { EMPTY_SX } from '@/constants/defaults';
+import { activityScale, activityEmpty } from '@/theme/dataviz';
 
 interface RecordingCalendarProps {
     currentDate: Date;
@@ -56,10 +57,10 @@ const CustomDay = (props: PickerDayProps) => {
         if (inRange) return '#e0f2fe'; // Light blue for range
         switch (level) {
             case 0: return 'transparent';
-            case 1: return '#dcfce7';
-            case 2: return '#86efac';
-            case 3: return '#22c55e';
-            case 4: return '#15803d';
+            case 1: return activityScale[0];
+            case 2: return activityScale[1];
+            case 3: return activityScale[2];
+            case 4: return activityScale[3];
             default: return 'transparent';
         }
     };
@@ -257,11 +258,11 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
                                 Less
                             </Typography>
                             {[
-                                { color: '#f3f4f6', label: '0' },
-                                { color: '#dcfce7', label: '1-2' },
-                                { color: '#86efac', label: '3-4' },
-                                { color: '#22c55e', label: '5-6' },
-                                { color: '#15803d', label: '7+' },
+                                { color: activityEmpty, label: '0' },
+                                { color: activityScale[0], label: '1-2' },
+                                { color: activityScale[1], label: '3-4' },
+                                { color: activityScale[2], label: '5-6' },
+                                { color: activityScale[3], label: '7+' },
                             ].map((item) => (
                                 <Tooltip key={item.label} title={item.label}>
                                     <Box

@@ -38,6 +38,7 @@ import { getFlagValue, setFlagValue, flagDefault, enumInactive, isFlagActive, no
 import { makeCategoryMeta, type CategoryMeta } from './catalogGrouping';
 import HeadersEditor from '@/components/flags/HeadersEditor';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { alpha } from '@mui/material/styles';
 
 export interface FlagCatalogDialogProps {
     open: boolean;
@@ -336,7 +337,7 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                                             : 'divider',
                                                     borderRadius: 1,
                                                     backgroundColor: enabled ? 'action.hover' : 'transparent',
-                                                    boxShadow: pulsing ? '0 0 0 3px rgba(25,118,210,0.18)' : 'none',
+                                                    boxShadow: (theme) => pulsing ? `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}` : 'none',
                                                     transition: 'box-shadow 0.2s, border-color 0.2s',
                                                 }}
                                             >

@@ -8,6 +8,7 @@
  */
 
 import type { SxProps, Theme } from '@mui/material/styles';
+import { elevation } from '@/theme/elevation';
 
 // ============================================================================
 // ToggleButtonGroup Styles (Multi-Choice Selection)
@@ -77,7 +78,7 @@ export const switchBaseStyle: SxProps<Theme> = {
         borderColor: 'divider',
     },
     '& .MuiSwitch-thumb': {
-        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+        boxShadow: elevation.raised,
     },
     '& .MuiSwitch-switchBase': {
         '&.Mui-checked': {

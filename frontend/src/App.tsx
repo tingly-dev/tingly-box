@@ -16,6 +16,7 @@ import { ProfileProvider } from './contexts/ProfileContext';
 import { TeamProvider } from './contexts/TeamContext';
 import { appRoutes } from './routes/appRoutes';
 import createAppTheme from './theme';
+import { elevation } from '@/theme/elevation';
 
 
 // Route-switch fallback: Layout/nav chrome is already on screen (it renders
@@ -44,7 +45,7 @@ const AppDialogs = () => {
                     paper: {
                         sx: {
                             borderRadius: 2,
-                            boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+                            boxShadow: elevation.overlay,
                         }
                     }
                 }}

@@ -42,6 +42,7 @@ import {
 } from './timeRange';
 import { makeCategoryMeta, type CategoryMeta } from './catalogGrouping';
 import { fontSizes } from '@/theme/fonts';
+import { alpha } from '@mui/material/styles';
 
 interface PositionMeta {
     value: SmartOp['position'];
@@ -509,7 +510,7 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                                                             borderRadius: 1,
                                                             border: '1px solid',
                                                             borderColor: pulseOpUuid === op.uuid ? 'primary.main' : valid ? 'divider' : 'warning.light',
-                                                            boxShadow: pulseOpUuid === op.uuid ? '0 0 0 3px rgba(25,118,210,0.18)' : 'none',
+                                                            boxShadow: (theme) => pulseOpUuid === op.uuid ? `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}` : 'none',
                                                             transition: 'box-shadow 0.2s, border-color 0.2s',
                                                         }}
                                                     >

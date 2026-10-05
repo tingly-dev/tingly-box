@@ -11,6 +11,7 @@ import {
     Typography,
 } from '@mui/material';
 import { ErrorOutline as ErrorOutlineIcon } from '@/components/icons';
+import { elevation } from '@/theme/elevation';
 
 interface AuthContextType {
     token: string | null;
@@ -55,7 +56,7 @@ const AuthPromptDialog: React.FC<{
                 paper: {
                     sx: {
                         borderRadius: 2,
-                        boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+                        boxShadow: elevation.overlay,
                     }
                 }
             }}

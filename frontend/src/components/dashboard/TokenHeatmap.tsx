@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { formatNumber } from './chartStyles';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
 import { fontSizes } from '@/theme/fonts';
+import { heatmapScale } from '@/theme/dataviz';
+import { elevation } from '@/theme/elevation';
 
 // BCP-47 tags for date formatting, keyed by the languages the UI ships.
 const HEATMAP_LOCALES: Record<AppLanguage, string> = {
@@ -16,13 +18,7 @@ const HEATMAP_LOCALES: Record<AppLanguage, string> = {
 // Level 0 (no activity) is rendered with a theme-aware neutral (see emptyCellBg)
 // so it reads as an empty slot instead of a near-white green — and stays visible
 // in dark mode. The value here is only a fallback.
-const HEATMAP_COLORS = [
-    '#ebedf0',  // Level 0: No activity (neutral, GitHub-style)
-    '#9be9a8',  // Level 1: Low
-    '#40c463',  // Level 2: Medium
-    '#30a14e',  // Level 3: High
-    '#216e39',  // Level 4: Very high
-];
+const HEATMAP_COLORS = heatmapScale; // level 0 (none) .. 4 (very high)
 
 // Theme-aware background for the "no activity" cells / legend swatch.
 const emptyCellBg = (theme: { palette: { mode: string } }) =>
@@ -335,7 +331,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                                     py: 1.5,
                                                     bgcolor: 'grey.900',
                                                     borderRadius: 1.5,
-                                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+                                                    boxShadow: elevation.popover,
                                                     border: '1px solid',
                                                     borderColor: 'grey.700',
                                                     minWidth: 200,

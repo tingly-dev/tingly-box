@@ -1,36 +1,15 @@
 import type { Theme } from '@mui/material/styles';
 import { fontSizes } from '@/theme/fonts';
+import { lightPalette } from '@/theme/palettes/light';
 
 // Token color palette with semantic meaning
 // These colors should be used with theme palette in components
 // This file is kept for backward compatibility and constants
 
-export const TOKEN_COLORS = {
-    input: {
-        main: '#3B82F6',   // Blue 500
-        light: '#60A5FA',  // Blue 400
-        dark: '#2563EB',   // Blue 600
-        gradient: 'rgba(59, 130, 246, 0.8)',
-        gradientStart: 'rgba(59, 130, 246, 0.9)',
-        gradientEnd: 'rgba(59, 130, 246, 0.6)',
-    },
-    cache: {
-        main: '#94a3b8',   // Slate 400 - visible gray
-        light: '#cbd5e1',  // Slate 300
-        dark: '#64748b',   // Slate 500
-        gradient: 'rgba(148, 163, 184, 0.7)',
-        gradientStart: 'rgba(148, 163, 184, 0.8)',
-        gradientEnd: 'rgba(148, 163, 184, 0.6)',
-    },
-    output: {
-        main: '#10B981',  // Emerald 500
-        light: '#34D399',  // Emerald 400
-        dark: '#059669',   // Emerald 600
-        gradient: 'rgba(16, 185, 129, 0.8)',
-        gradientStart: 'rgba(16, 185, 129, 0.9)',
-        gradientEnd: 'rgba(16, 185, 129, 0.6)',
-    },
-};
+export const TOKEN_COLORS = lightPalette.dashboard.token;
+
+// Fallback when the active theme has no dashboard tokens: the light palette's own.
+const LIGHT_DASHBOARD_COLORS = lightPalette.dashboard;
 
 // Get theme-aware chart styles
 export const getThemeChartStyles = (theme: Theme) => {
@@ -39,32 +18,9 @@ export const getThemeChartStyles = (theme: Theme) => {
 
     return {
         token: dashboardColors.token || TOKEN_COLORS,
-        chart: dashboardColors.chart || {
-            grid: '#f1f5f9',
-            axis: '#e2e8f0',
-            tooltipBg: '#ffffff',
-            tooltipBorder: '#e2e8f0',
-        },
-        statCard: dashboardColors.statCard || {
-            boxShadow: 'none',
-            emptyIconBg: 'rgba(100, 116, 139, 0.1)',
-        },
+        chart: dashboardColors.chart || LIGHT_DASHBOARD_COLORS.chart,
+        statCard: dashboardColors.statCard || LIGHT_DASHBOARD_COLORS.statCard,
     };
-};
-
-// Default dashboard colors (light theme)
-const LIGHT_DASHBOARD_COLORS = {
-    token: TOKEN_COLORS,
-    chart: {
-        grid: '#f1f5f9',
-        axis: '#e2e8f0',
-        tooltipBg: '#ffffff',
-        tooltipBorder: '#e2e8f0',
-    },
-    statCard: {
-        boxShadow: 'none',
-        emptyIconBg: 'rgba(100, 116, 139, 0.1)',
-    },
 };
 
 // Quota bar colors based on remaining percentage

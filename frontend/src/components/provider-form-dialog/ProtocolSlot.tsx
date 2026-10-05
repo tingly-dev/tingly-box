@@ -2,6 +2,7 @@ import {OpenAI, Anthropic} from '../BrandIcons';
 import {Box, Checkbox, InputBase, Link, Stack, Tooltip, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { alpha } from '@mui/material/styles';
 
 export interface ProtocolSlotData {
     url: string;
@@ -180,7 +181,7 @@ const ProtocolSlot: React.FC<ProtocolSlotProps> = ({
                             '&:hover': {borderColor: 'text.disabled'},
                             '&:focus-within': {
                                 borderColor: 'primary.main',
-                                boxShadow: '0 0 0 1px rgba(25,118,210,0.12)',
+                                boxShadow: (theme) => `0 0 0 1px ${alpha(theme.palette.primary.main, 0.12)}`,
                             },
                         }}
                     />

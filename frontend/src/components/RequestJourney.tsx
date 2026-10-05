@@ -2,6 +2,7 @@ import { Box, Chip, Collapse, Stack, Typography } from '@mui/material';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { ModelRequestEvent } from '@/components/AILogViewer';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { alpha } from '@mui/material/styles';
 
 // RequestJourney is the single answer to "how did this request go".
 //
@@ -201,11 +202,11 @@ const KindBadge = ({ kind, tone }: { kind: JourneyRow['kind']; tone: RowTone }) 
             textTransform: 'uppercase',
             borderRadius: 0.5,
             color: tone === 'error' ? 'error.main' : kind === 'stage' ? 'primary.main' : 'text.disabled',
-            backgroundColor: tone === 'error'
-                ? 'rgba(211,47,47,0.10)'
+            backgroundColor: (theme) => tone === 'error'
+                ? alpha(theme.palette.error.main, 0.1)
                 : kind === 'stage'
-                    ? 'rgba(25,118,210,0.10)'
-                    : 'action.hover',
+                    ? alpha(theme.palette.primary.main, 0.1)
+                    : theme.palette.action.hover,
             '& .MuiChip-label': { px: 0 },
         }}
     />
