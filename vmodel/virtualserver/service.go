@@ -19,6 +19,7 @@ type Service struct {
 	openaiReg    *openaivm.Registry
 	decisionReg  *decisionvm.Registry
 	handler      *Handler
+	scripts      *scriptStore
 }
 
 // NewService creates a fully initialized Service with default models registered
@@ -39,6 +40,16 @@ func NewService() *Service {
 		decisionReg:  d,
 		handler:      NewHandler(a, o, d),
 	}
+}
+
+// SetScriptDir makes the service serve every script file (*.yaml / *.yml) in
+// dir as a virtual model, picking up added, edited and removed files on the
+// next request — see scripts.go and .design/vmodel-script.md. Production wires
+// it to <config-dir>/vmodels.
+func (s *Service) SetScriptDir(dir string) {
+	s.scripts = newScriptStore(dir, s.anthropicReg, s.openaiReg)
+	s.handler.scripts = s.scripts
+	s.scripts.Refresh()
 }
 
 // GetAnthropicRegistry returns the Anthropic-protocol model registry.

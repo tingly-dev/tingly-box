@@ -38,6 +38,7 @@ type ResponsesRequest struct {
 
 // Responses handles POST /virtual/openai/v1/responses (OpenAI Responses API).
 func (h *Handler) Responses(c *gin.Context) {
+	h.refreshScripts()
 	var req ResponsesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{
@@ -57,7 +58,7 @@ func (h *Handler) Responses(c *gin.Context) {
 	vm := h.openaiReg.Get(req.Model)
 	if vm == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{
-			"message": fmt.Sprintf("Model not found: %s", req.Model),
+			"message": h.notFoundMessage(req.Model),
 			"type":    "invalid_request_error",
 		}})
 		return

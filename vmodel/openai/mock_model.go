@@ -97,9 +97,14 @@ func (m *MockModel) HandleOpenAIChat(_ *protocol.OpenAIChatCompletionRequest) (V
 func (m *MockModel) toolResponse() VModelResponse {
 	tc := m.cfg.ToolCall
 	argsJSON, _ := json.Marshal(tc.Arguments)
+	id := tc.ID
+	if id == "" {
+		id = "toolu_virtual"
+	}
 	return VModelResponse{
+		Content: m.cfg.Content,
 		ToolCalls: []VToolCall{{
-			ID:        "toolu_virtual",
+			ID:        id,
 			Name:      tc.Name,
 			Arguments: string(argsJSON),
 		}},

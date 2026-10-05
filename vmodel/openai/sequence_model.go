@@ -79,12 +79,15 @@ func NewStatusSequence(id, name string, statuses ...int) *SequenceModel {
 func (m *SequenceModel) Snapshot() VirtualModel {
 	step := m.seq.Next()
 	return NewMockModel(&MockModelConfig{
-		ID:          m.ID,
-		Name:        m.Name,
-		Description: m.Description,
-		Content:     step.Content,
-		Delay:       m.Delay,
-		Error:       step.Error,
+		ID:           m.ID,
+		Name:         m.Name,
+		Description:  m.Description,
+		Content:      step.Content,
+		ToolCall:     step.Tool,
+		FinishReason: step.StopReason,
+		Usage:        step.Usage,
+		Delay:        m.Delay,
+		Error:        step.Error,
 	})
 }
 
