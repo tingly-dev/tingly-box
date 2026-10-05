@@ -1,306 +1,158 @@
-# Recording 梳理:意图、现状与整合方向
+# Recording（录制）：重做规划
 
-> 适用对象:tingly-box 后端 / 前端贡献者。
-> 状态:**Phase 1、1.5、2 已落地；Phase 3 wire / Phase 4 EventTap 待实施**。
-> 当前点位开放范围见 §3.5，历史问题与交付记录见 §3 / §6。obs 包内部的 pipeline 化重构规划见
-> `internal/obs/PLANNING.md`(Phase 2),本文与其互补:PLANNING 管
-> "record 怎么被采集与导出",本文管 "record 由谁启用、在哪些层出现、
-> 与 rule flag 体系怎么融合"。
+> 适用对象：tingly-box 后端 / 前端贡献者。
+> 状态：**规划已定稿待确认；R1（接入）待实施**。
+> 本文取代旧版 recording 梳理（Phase 0–2，见 git 历史）。旧版沉淀下来、仍然成立的结论
+> 在 §6 列出；旧实现（`ProtocolRecorder` + `TransformRecorder`）按 §5 的阶段退场。
 
 ---
 
-## 1. 意图(统一口径)
+## 1. 为什么重做
 
-历史上 recording 的意图一直比较混乱(全局 CLI 开关、scenario 开关、
-client 层独立 RoundTripper 三者并存),导致了当前零碎的局面。统一后的
-意图只有三句话:
+协议层迁到 Protocol Stage 管线之后（`.design/protocol-stage-pipeline.md`），旧录制已基本失效。
+问题不在某一处 bug，而在设计本身——**采集点长在协议代码里**：
 
-1. **Record 实体长期存在并沿请求链传播,只是不一定启用。**
-   每个请求都可以有一个 record 实体(recorder),从 handler 入口创建,
-   经 transform chain 传播到 client transport;"是否启用/录多深"是它
-   身上的状态,不是"是否存在"的条件。这与 obs PLANNING Phase 2 的
-   "hot path 总是构建完整 record,裁剪放在 exporter 出口" 是同一思想。
+| # | 问题 | 可验证的表现 |
+|---|------|-------------|
+| D1 | 录制依附协议路径。`recording.FromGin` / `recorder.*` 散落在 `internal/protocolserver` 约 50 处调用（transform 链两端、passthrough、dispatch、cross、两个 Stage adapter、error_response、MCP helper）。每次协议迁移都要逐条路径重新接线，漏接就静默丢记录 | FP3：Responses 客户端 → Anthropic / Chat provider 时 rule 级录制不出记录（`protocol-stage-pipeline.md` 偏差 8） |
+| D2 | 录到的不是真实请求。StagePre / StagePost 是对 SDK 参数对象 `json.Marshal` 的快照：没有 wire header、没有 SDK 序列化时补的字段，也看不到 vendor round-tripper（Claude OAuth、Codex、Gemini envelope、Kimi …）的改写 | 记录里 `headers` 恒为空 map |
+| D3 | 一次请求只有一个 "transformed" 槽。Stage 路径每轮 provider 调用（server tool 循环）各跑一次 StagePost，failover 每个 attempt 也会重写——多轮、多 attempt 只剩最后一次 | 带 MCP 工具循环的请求只能看到最后一轮 |
+| D4 | 响应侧做不出来。`final_response` 靠 assembler / 合成兜底，质量不达标已暂停；`upstream_response` 没有生产者 | 当前 UI 只放开两个 request 点位 |
+| D5 | 生命周期分散。`RecordResponse` / `RecordError` 由各 handler 分支自己调，漏调即丢；还要处理 nil-safe、release 等样板 | 每条新路径都要重复这套样板 |
+| D6 | 没有查看面。落盘的 gzip JSONL 没有任何 API / UI 读取；Prompt 页的 `listUserRecordings` 仍是占位 | 用户开了录制也看不到结果 |
 
-2. **启用来源走 flag 体系:scenario 可以启用,rule flag 也可以启用。**
-   这正是 rule flag 系统的既有设计(shared flag + 继承,参照
-   `thinking_effort` / `skip_usage`,见 `.design/rule-flags.md` §12)。
-   recording 满足 rule flag 的全部定义特征——局部、可选、可叠加、
-   per-rule 语义成立("只录打到某条 rule 的流量"是最典型的 debug 诉求)。
-
-3. **Client 层不做判定,只负责用最终的 transport 录制出站请求。**
-   到了 client 层,"是否需要录 request"已经在上游(flag 解析)决定;
-   而且只要 record 启用,出站 wire 请求总是要录的——所以 client 层
-   反而简单:在**最贴近 wire 的 transport** 上无条件录制(recorder
-   在 ctx 里就录),不再有自己的 mode 判定逻辑。
+D1–D5 的共同根因：**录制试图在协议内部"理解"请求**。而录制真正需要的东西只存在于两条边界上——
+客户端进来的 HTTP、发往 provider 的 HTTP。协议内部怎么变，边界上的字节都是事实。
 
 ---
 
-## 2. 迁移前盘点（历史基线）
+## 2. 新设计的三条原则
 
-本节保留 Phase 1 之前的路径与已删除机制，不是当前代码地图。当前启用和点位
-以 §3.5 / §6 为准；已删除 `RecordRoundTripper`、`SetRecordSink`、全局 CLI 开关。
+1. **只在边界录，录 wire 字节。** 入站边界（gin 中间件）与出站边界（最贴近 wire 的
+   `http.RoundTripper`）各一个采集点。协议代码**不知道录制存在**——Stage / Bridge / Transform /
+   failover 的任何迁移都不需要碰录制。
+2. **一次入站请求 = 一条 Trace；每次出站 HTTP 往返 = 一个 Exchange。** 多轮工具循环、failover、
+   并发 fan-out 都自然表现为多个 Exchange，不存在"槽被覆盖"。
+3. **启用判定一次，生命周期一处。** 是否录、录哪些点位仍走 flag 体系（rule `recording` 覆盖
+   scenario `recording_v2`，`typ.EffectiveRecording`，不变）；Trace 的创建与落盘只发生在中间件，
+   handler 只做一件事：在 rule 解析完成后 `Enable`。
 
-### 2.1 三个互相独立的开关来源
+---
 
-| 来源 | 粒度 | 位置 | 状态 |
-|------|------|------|------|
-| ~~CLI `--record-mode` / `--record-dir`~~ | 全局 | — | **已移除(Phase 1)**:启用与否是 flag 关注点,不是 CLI 参数。落盘目录固定为 `<configDir>/record`(`StartServerOptions.RecordDir` 内部解析,无用户 flag) |
-| `ScenarioFlags.RecordingV2` | scenario | `internal/typ/type.go`(json `recording_v2`) | 生效,scenario-only,**不在 `RuleFlagRegistry()`** |
-| rule 级 | 单条 rule | — | **不存在** |
-
-`Server.GetScenarioRecordMode(scenario)`(`server_options.go`)现在只读
-scenario 的 `recording_v2`,不再有全局 fallback。
-
-### 2.2 两套录制机制
-
-**A. Chain 级(v2,现役)** — `recording.ProtocolRecorder` +
-`TransformRecorder`(StagePre / StagePost):
+## 3. 数据模型
 
 ```
-handler 入口 (EnsureProtocolRecorder, 读 GetScenarioRecordMode)
-  │  recorder 存 gin ctx;sink 按 scenario 懒建 (scenarioRecordSinks)
-  ▼
-chain: StagePre 录原始请求 → … → Vendor → StagePost 录最终(SDK 形态)请求
-      (装配见 protocol-stage-pipeline.md;Stage 路径上 StagePost 每轮 provider 调用录一次)
-  ▼
-流式 hooks / RecordResponse / RecordError → sink.Emit
+Trace（一次入站请求）
+├─ meta        id（= access-log request id）、ts、scenario、rule uuid、session、duration、error、points
+├─ inbound
+│   ├─ request    method / url / headers / body        ← client_request
+│   └─ response   status / headers / body 或 SSE 原文 ← final_response
+└─ exchanges[]（按发起顺序）
+    ├─ seq、provider（name / uuid / api style）、started_at、ttfb、duration、error
+    ├─ request    method / url / headers / body        ← upstream_request
+    └─ response   status / headers / body 或 SSE 原文 ← upstream_response
 ```
 
-- 四个入口(Anthropic V1 / Beta、OpenAI Chat / Responses)都在 handler 入口
-  `EnsureProtocolRecorder`,chain 经 `recording.FromGin` 取 recorder,入站协议
-  不再影响是否录制。
-- mode 语义:`request` = 只录 transformed request;`request_response`
-  再加最终响应;`staged_request_response` 再加原始(客户端)请求。
-
-**B. Client 级(legacy,已死)** — `client.RecordRoundTripper`
-(`internal/client/record_roundtripper.go`),见 §3。
-
-### 2.3 Client transport 链的层次(通用链)
-
-```
-[RecordRoundTripper]   ← 仅 SetRecordSink 后挂载;最外层
-  loggingRoundTripper  ← wrapWithLogging(仅日志)
-    ruleFlagTransport  ← wrapWithRuleFlags(header 改写:UA / extra_headers)
-      base (wire)      ← transport pool / vendor round-tripper
-```
-
-vendor 链(Claude OAuth / Codex / Kimi / Gemini / Antigravity)自建
-transport,不挂 `ruleFlagTransport`(不变式,见 rule-flags.md §8),
-也同样可能被 `SetRecordSink` 包上 `RecordRoundTripper`(advisor 路径)。
-
-### 2.4 Sink 生命周期
-
-- `scenarioRecordSinks map[RuleScenario]*obs.Sink`:root `*Server` 持有,
-  按 scenario 懒建(`GetOrCreateScenarioSink`),chain 级录制用它。
-- `ClientPool.recordSink`:生产路径 `server.clientPool =
-  client.NewClientPool()` **从不设置 sink**(`WithRecordSink` 只有测试
-  在用;`server.recordSink` 字段声明后无人读写)。
-- 唯一在运行时给 client 塞 sink 的是 advisor 路径:
-  `servertool/hook.go::applyHooks` 把 scenario sink 放进 ctx →
-  `mcp/runtime/advisor_call.go` 对 advisor wrapper client 调
-  `SetRecordSink(sink)`。
+- **四个点位与模型一一对应**，现有 `typ.RecordingPoint` 值域、存量配置、前端多选控件全部沿用，
+  语义只是从"SDK 快照"变成"wire 字节"。
+- **Body 存原文**：合法 JSON 以 `json.RawMessage` 内嵌，否则（SSE、二进制、截断）存字符串并标
+  `encoding`。流式响应存 SSE 原文，不做组装——组装是查看端的事。
+- **大小上限**：单个 body 默认上限（暂定 4 MiB），超出截断并标 `truncated`，保证录制不会把
+  一次大请求放大成内存问题。
+- **脱敏在采集时做**：`Authorization`、`x-api-key`、`api-key`、`Cookie`、`Set-Cookie`、
+  `x-goog-api-key` 等凭据 header 只保留前后几位。录制文件不应成为凭据泄露面。
 
 ---
 
-## 3. 问题清单(逐条,可验证)
-
-**P1 — `recording_v2` 游离在 flag registry 之外。**
-scenario-only、无 FlagSpec、前端 `RecordingV2Control.tsx` 硬编码
-(rule-flags.md §13 已把"scenario flag registry 化"列为未做项)。
-
-**P2 — rule 级 recording 不存在。** 意图 §1.2 要求的"rule flag 可以
-启用"没有对应实现。
-
-**P3 — `RecordRoundTripper` 的录制路径是死代码。✅ 已清除(Phase 1)。**
-原论证链:
-1. `obs.NewSink` 只接受三种 v2 mode(`request` / `request_response` /
-   `staged_request_response`),其余返回 nil(`sink.go`);
-2. `RecordRoundTripper.RoundTrip` 开头对这三种 mode **直接透传**
-   (early return,意图是"v2 由 chain 级负责,client 层不重复录");
-3. 挂载只发生在 sink 非空时(`SetRecordSink` → `applyRecordMode`);
-4. 生产 pool 无 sink(§2.4),唯一挂载点是 advisor wrapper——挂上即
-   early-return。
-   ⇒ 该文件 ~450 行的录制 / SSE 重组逻辑全部不可达。
-Phase 1 已删除:`record_roundtripper.go` 整个文件、各 client 的
-`recordSink` 字段 / `SetRecordSink` / `applyRecordMode`(含接口方法与
-vmodel no-op 实现)、pool 的 sink 字段与 builder、advisor_call.go 中
-两处对 `SetRecordSink` 的死调用。
-
-**P4 — advisor 防递归 header 缺失(真 bug)。✅ 已修复(Phase 1.5)。**
-原状:`X-Tingly-Advisor-Depth: 1` 的唯一设置点在 `RecordRoundTripper.
-RoundTrip` 的 early-return **之后**——即从未真正发出;服务端却靠这个
-header 跳过 MCP tool 注入 / 标记 loopback(`protocol_transform.go`、
-`transform_mcp_tool_injection.go`)。
-修复方式:advisor 调用侧(`mcp/runtime/advisor_call.go`)在 SDK 调用前
-`client.WithAdvisorLoopback(ctx)` 标记 ctx;通用 pass-through 链挂载只读
-的 `advisorLoopbackTransport`(`internal/client/advisor_loopback.go`,
-挂载点:`NewOpenAIClient` 与 `anthropicTransport`)按标记盖 header。
-vendor 链不挂——它们固定指向真实 vendor 端点,不可能 loopback。
-同批清理了从未生效的 advisor sink 注入:`WithAdvisorRecordSink` /
-`GetAdvisorRecordSink`(tool/context.go)、`HookDeps.GetScenarioSink`
-及其注入点(servertool/hook.go)与实现(mcp_tool_error.go)全部删除;
-advisor 调用的录制将来随统一录制路径(Phase 3)回归。
-
-**P5 — 录制覆盖不对称。✅ 已修复(Phase 2):** OpenAI Chat / Responses
-handler 接上 recorder(prologue 按 effective mode 创建、存 gin ctx,
-下游经 `recording.FromGin` 自取,不走签名);OpenAI→OpenAI 纯透传路径(`nonstreamOpenAIChat` /
-`streamOpenAIChat`)此前从不触碰 recorder(emit 永不发生),已补上
-成功/失败两侧的 emit(流式透传无 chunk tap,final 由 writer 状态合成,
-请求侧点位不受影响)。
-
-**P6 — 即使 P3 修活,挂载位置也录不到真实出站请求。**
-`RecordRoundTripper` 挂在**最外层**(§2.3),看到的是
-`ruleFlagTransport` / vendor round-tripper 改写 header **之前**的请求;
-chain 级 StagePost 录的则是 SDK 参数形态(拿不到 wire header)。
-"真正发出去的请求"目前没有任何一层能完整录到——这正是意图 §1.3
-"用最终的 transport 录制"要解决的。
-
-**P7 — `ScenarioContextKey` 定义在死文件里。✅ 已解决(Phase 1):**
-迁至 `internal/client/context.go`,引用方
-(`routes_middleware.go`、`servertool/hook.go`)不变。
-
----
-
-## 3.5 采集点位模型(Phase 2 定稿)
-
-录制配置从"三档模式枚举"改为**沿链路采集点的多选集合**(逗号分隔存储,
-先例 `block_tools`),值域 `typ.RecordingPoint`:
-
-| 点位 | 中文 | 采集内容 | 现状 |
-|------|------|----------|------|
-| `client_request` | 入站请求 | client 发来的原始请求(transform 前) | ✅ handler 入口 + StagePre |
-| `upstream_request` | 出站请求 | 发往 provider 的最终请求(transform 后) | ✅ StagePost |
-| `upstream_response` | 服务返回 | provider 的原始响应(wire 级) | ❌ 值域内、**UI 不放开**(无采集实现,Phase 3 wire recorder 落地时开放——不上死开关) |
-| `final_response` | 最终返回 | 返回给 client 的响应 | ⏸ **暂停**:采集质量不达标(流式靠组装/合成兜底),emit 与 UI 选项均已注释(recorder.go / flag_registry.go / RecordingV2Control),响应路径重做(Phase 4 EventTap)后恢复。值域与内部采集(SetAssembledResponse)保留;存量选了该点位的配置只落 request 点位,行为有测试钉死 |
-
-> **当前支持面 = 两个 request 点位。** 响应侧(服务返回 + 最终返回)整体
-> 暂停,待 Phase 3(wire)/ Phase 4(EventTap)分别恢复;暂停以注释形式
-> 保留代码位置,恢复时取消注释即可。
-
-> **命名:`final_response` 而非 `client_response`。** `client_request` 里
-> "client" 是来源(客户端发出的请求);若照抄成 `client_response`,"client"
-> 就变成了目的地(发给客户端的响应)——同一前缀在请求/响应两侧含义相反,
-> 读起来像是"客户端产生的响应"。`upstream_response` 不受影响,因为
-> "upstream 的响应"本来就是来源性描述。改用 `final_response` 对齐已经在
-> 用的 `obs.Record.FinalResponse` / json key `final_response`,也对齐这里
-> 一直沿用的"最终返回"人话说法。
-
-- **旧值兼容**:`request` → 出站;`request_response` → 出站+最终;
-  `staged_request_response` → 入站+出站+最终。`typ.ParseRecordingMode`
-  统一归一化(去重、按管线序排序、未知 token 丢弃),存量配置零迁移;
-  写入口(rule/scenario)用 `IsValidRecordingMode` 严格校验拒绝未知 token,
-  并存归一化形态,配置随触碰逐步收敛到点集形式。
-- **继承**:`RuleFlags.Recording`(registry key `recording`,新类型
-  `multi_enum`,Shared/override)覆盖 scenario 级 `recording_v2` 默认,
-  与 `thinking_effort` 同模式;解析点 `typ.EffectiveRecording(rule, scenario)`
-  (handler prologue)与 `resolveRuleFlagsWithScenario`(ctx 传播)。
-- **过滤位置**:recorder 构造时归一化 mode,`emit()` 按 `Has(point)` 挑
-  字段;chain 的 StagePre/StagePost 分别按 `client_request` /
-  `upstream_request` 挂载(`recorder.Wants`,nil-safe)。obs 层不再校验
-  三档枚举,sink 只认"非空即启用"——mode 语义完全归 typ。
-- **sink 归属**:仍按 scenario 建目录/缓存(`GetOrCreateScenarioSink`
-  改为接收请求的 effective mode,rule 开、scenario 关也能建 sink);
-  录多深由 recorder 按请求过滤,sink 自身 mode 仅剩创建信息。
-- 行为护栏:`protocoltest` 的 flag 套件新增 `recording` 用例(rule 级
-  flag 单独启用 → gzip JSONL 落盘 → 断言 slim record 恰好带所选点位;
-  测试侧经既有导出面 `GetOrCreateScenarioSink` + `obs.Sink.ForceFlush`
-  冲刷,不为测试新增生产 API)。
-
-## 4. 目标架构(to-be)
+## 4. 采集与生命周期
 
 ```
-                     启用判定(一次,handler 入口)
-   scenario flag (recording_v2, 场景默认) ──┐
-   rule flag (recording, override 继承) ────┤→ resolveRuleFlagsWithScenario
-   CLI --record-mode (全局兜底,去留待定) ──┘        │
-                                                     ▼
-              record 实体(per-request recorder)创建/禁用
-                     │ 挂 gin ctx + request ctx,全链传播
-                     ▼
-   transform chain: StagePre(原始) … StagePost(transformed)   ← 现有
-                     ▼
-   client: 最终 wire transport 无条件录制出站请求(+响应流)   ← 新增
-                     │  recorder 在 ctx 就录;无 mode 判定
-                     ▼
-              sink(per-scenario)/ ModeFilterExporter 出口裁剪  ← obs Phase 2
+gin: contextMiddleware → recordingMiddleware ─────────────────────────────┐
+                              │ 创建 Trace（未启用），放入 request ctx     │
+                              │ 包装 ResponseWriter（未启用时零拷贝透传）   │
+                              ▼                                            │
+handler 前段：解析 rule / scenario → EffectiveRecording                    │
+              → recording.FromContext(ctx).Enable(mode, scenario, rule, body)
+                              ▼                                            │
+协议管线（Stage / 旧整链 / passthrough / failover …）——对录制无感知        │
+                              ▼                                            │
+client：…vendor / ruleFlag / logging round-tripper…                       │
+          → wireRecordTransport（只读）→ wire base                         │
+             Trace 已启用 ⇒ 追加 Exchange：录 request；tee response body，  │
+             读到 EOF / Close 时收尾                                        │
+                              ▼                                            │
+recordingMiddleware 在 c.Next() 返回后：Trace 已启用 ⇒ 收尾并 Emit ◄────────┘
+                              ▼
+                     sink（per-scenario，批量异步落盘）
 ```
 
-要点:
+### 4.1 出站：`wireRecordTransport`
 
-1. **Flag 建模**:`RuleFlags.Recording`(enum:`""` / `request` /
-   `request_response` / `staged_request_response`),`Shared: true`,
-   `InheritanceMode: "override"`(rule 显式设置 > scenario `recording_v2`
-   默认 > 全局 CLI 兜底)。走 rule-flags.md §10 的标准操作手册,前端
-   零 UI 代码(registry-driven)。类别可新增 `FlagCategoryObservability`。
-   注入类型上它是 **Type 2 变体**:handler 入口读解析后的 flags 决定
-   recorder 创建与 mode——不改请求体,故不进 transform slot。
+挂在 **wire base 之上、所有改写型 round-tripper 之内**，看到的就是真正发出去的请求。
+wire base 目前有两种形态，挂载点有限且集中在 `internal/client`：
 
-2. **Record 实体传播**:recorder(或 obs Phase 2 的 `RecordCtx`)由
-   handler 创建后,除 gin ctx 外同时进入 `c.Request.Context()`
-   (SDK 调用共享该 ctx),client transport 用 ctx 取用——与
-   `typ.GetRuleFlags` 同一手法。"存在但未启用"时为 nil / disabled,
-   零成本。
+| wire base | 装配点 |
+|-----------|--------|
+| `TransportPool.GetTransport(...)`（`*http.Transport`） | `openai.go` `NewOpenAIClient`、`anthropic.go` `anthropicTransport`、`opencode_client.go` `openCodeTransport`、`google.go`（非 OAuth） |
+| `SessionBoundTransport` | `http.go` `createSessionBoundTransport`（Claude OAuth、Codex、Kimi、Gemini、Antigravity、xAI、Google OAuth 共用） |
 
-3. **Client 层收敛**:新的 `recordTransport` 直接包在 **wire transport**
-   上(`ruleFlagTransport` / vendor round-tripper **之内**,所有 header
-   改写之后),从 ctx 取 recorder,有则录出站 wire 请求与响应流。
-   只读不写,因此 vendor 链也可以挂——不违反"vendor 链不挂
-   `ruleFlagTransport`"的不变式(那条不变式挡的是**改写**)。
-   `RecordRoundTripper` 整体删除;advisor-depth header 移到确定执行的
-   位置(advisor client 构造处或独立小 transport),修复 P4。
+- 只读不改写，所以 vendor 链也可以挂（`rule-flags.md` §8 的不变式约束的是改写型 transport）。
+- Trace 未启用时只有一次 ctx 取值 + 布尔判断，没有任何拷贝。
+- 不走这两种 base 的 client（Bedrock 等走自带 SDK transport 的）在 R1 列为覆盖缺口，逐个确认。
+- 已知偏差：Go `http.Transport` 自己补的 header（`Accept-Encoding: gzip`、`Content-Length`）
+  在外层看不到；透明解压后的响应体是解压后的明文——对"看请求内容"无影响，记录在案即可。
 
-4. **覆盖补齐**:OpenAI Chat / Responses handler 接上 recorder(P5)。
+### 4.2 入站：`recordingMiddleware`
 
-5. **Mode 语义收敛**:recorder 总是尽量收集(client 请求 / transformed
-   请求 / wire 请求 / 响应),录多少由出口裁剪(obs Phase 2 的
-   `ModeFilterExporter`)。wire 请求进入 record 模型后,`staged` 语义
-   自然升级为"原始 + transformed + wire + 响应"。
+只挂在四个模型入口（Anthropic V1 / Beta、OpenAI Chat / Responses）的路由组上。
 
----
+- 请求 body：handler 本来就读出了 `bs`，`Enable` 时直接交给 Trace，中间件不额外缓冲。
+- 响应：包装 `gin.ResponseWriter`，每次 `Write` 只判断 Trace 是否启用，启用才 tee（带上限）。
+  SSE 原样落下，状态码 / header 取写出时的真实值——这正是旧 `final_response` 做不到的。
+- 收尾与 Emit 只在这里发生一次，覆盖所有成功 / 失败 / panic 恢复后的分支。
 
-## 5. 开放问题(已拍板项标注)
+### 4.3 与 failover / 内部调用的关系
 
-- ~~CLI `--record-mode` 的去留~~ **已拍板(Phase 1)**:废弃,启用完全
-  归 flag 体系;落盘目录固定 `<configDir>/record`。
-- ~~Sink 归属~~ **已拍板(Phase 2)**:rule 级启用仍写 scenario sink,
-  落盘按 scenario 组织;录多深由 recorder 按请求过滤。
-- ~~`recording_v2` 字段名~~ **已拍板(Phase 2)**:scenario 级保持
-  `recording_v2` json key(兼容存量),rule 级用 `recording`;两级的值
-  统一为点位集合(旧枚举解析层兼容)。
-- **响应流录制在 client 层还是 chain 层**(仍开放):chain 级已有流式
-  hooks,client 层再录 wire 响应会重复;倾向 client 层只录 wire
-  **请求**(即 `upstream_request` 补 header / `upstream_response` 新增),
-  最终返回仍归 chain 级 hooks,直到 obs Phase 2 的 EventTap 统一。
-- **OpenAI 纯透传流式的 `final_response` 质量**(新):该路径无 chunk
-  tap,final 由 writer 状态合成(仅 status/headers);补 tap 归入
-  Phase 4(EventTap)。
+- failover 的每个 attempt 是独立的 Exchange，`provider` 字段区分；不再需要 `SetActiveService`。
+- advisor / MCP 等网关内部发起的模型调用如果复用同一 request ctx，会自然作为 Exchange 出现；
+  loopback 回到本网关的调用会产生自己的 Trace——两者用 `X-Tingly-Advisor-Depth` 关联（R4）。
 
 ---
 
-## 6. 分阶段落地(防止一次改动过大)
+## 5. 分阶段落地
 
-| 阶段 | 内容 | 涉及 | 风险 |
-|------|------|------|------|
-| **Phase 0 ✅** | 本梳理文档 | `.design/recording.md` | 无 |
-| **Phase 1 清障 ✅(收窄范围)** | 已做:删 `RecordRoundTripper` 死代码与全部 `SetRecordSink` 机制;`ScenarioContextKey` 迁出(P7);删 `ClientPool.recordSink` / `server.recordSink` / `server.recordMode` / `WithRecordMode` / `WithRecording`;去除 CLI `--record-mode` / `--record-dir`(目录固定默认)。**刻意未动**:advisor/MCP 侧接线(`WithAdvisorRecordSink`、`HookDeps.GetScenarioSink`)与 P4 header 修复——单独小步处理 | `internal/client`、`internal/server`、`internal/command`、`gui/wails3`、`vmodel` | 低(删死代码,行为不变) |
-| **Phase 1.5 advisor 小步 ✅** | 修 P4(advisor ctx 标记 + 通用链只读 header transport,附单测);清 `WithAdvisorRecordSink` / `GetScenarioSink` 死数据注入 | `internal/client`、`mcp/runtime`、`servertool` | 低 |
-| **Phase 2 flag 融入 ✅(含点位模型重构)** | 采集点位多选模型(§3.5);`RuleFlags.Recording` 进 registry(multi_enum,Shared/override);继承 + 四个 handler 接线 + OpenAI 透传路径补 emit(修 P5);写入口校验/归一化;前端 multi_enum 控件 + `RecordingV2Control` 多选化 + codegen;flag 行为套件补 `recording` 用例 | `typ`、`obs`、`server`、`protocolserver`、`protocoltest`、frontend | 中 |
-| **Phase 3 wire 录制** | 新 `recordTransport` 挂 wire transport(含 vendor 链);recorder 经 request ctx 传播;record 模型加 wire 请求字段(修 P6) | `internal/client`、`obs` | 中 |
-| **Phase 4 obs 汇合** | 与 `internal/obs/PLANNING.md` Phase 2 合流(RecordCtx / EventTap / ModeFilterExporter);scenario 前端控件 registry 化 | `obs`、`transform`、frontend | 按其自身计划 |
+| 阶段 | 内容 | 完成标准 |
+|------|------|----------|
+| **R1 接入** | `internal/recording` 新增 Trace / Exchange 实体与 ctx 传播（`WithTrace` / `FromContext`）；`wireRecordTransport` 挂到 §4.1 全部装配点；`recordingMiddleware` 挂四个入口；四个 handler 前段 `Enable`；新 schema 落盘（沿用 `obs` 批处理与 gzip，独立子目录，见 §7 Q3）。点位先录 `client_request` / `upstream_request` / `upstream_response`。旧 recorder 保持原样并存 | 单测覆盖 transport / middleware / 截断 / 脱敏；`protocoltest` 新增 recording 用例跑满 source × target × 流式矩阵（FP3 一并消失），断言每个组合都有 Trace、Exchange 数与 provider 调用数一致 |
+| **R2 收口** | `final_response` 由中间件 tee 产出并在 UI 放开 `upstream_response` / `final_response`；删除旧 recorder 全部接线（`ProtocolRecorder`、`TransformRecorder`、`AttachRecorderHooks`、`recording.FromGin` 及 handler 里的 `Record*` 调用、`obs.Record` 旧字段）；更新 `protocol-stage-pipeline.md`（"Vendor 之后只有录制"一条随之改为"Vendor 是最后一步"） | `internal/protocolserver` 里 `recording` 引用只剩 handler 前段的一行 `Enable` |
+| **R3 查看** | 后端 list / get API（按 scenario、日期、session、rule、provider、错误筛选，分页）+ codegen；前端录制查看页：Trace 列表 → 详情（入站 / 各 Exchange 时间线、请求 / 响应 / SSE 事件分栏、diff 入站与出站）。按 UX 原则"为下一步动作露出产物"：开启录制的 rule / scenario 处直接链到它的录制 | 用户开启录制后无需碰文件系统即可看到结果 |
+| **R4 治理** | 保留期与磁盘配额（按天 / 按大小清理）；条件录制（仅错误、采样）；导出（cURL 重放、HAR）；advisor / loopback 关联；脱敏规则可配置 | 长期开启录制不会撑爆磁盘 |
 
-Phase 1 与 Phase 2 互不依赖,可并行;Phase 3 依赖 Phase 2(recorder 的
-启用判定先统一)。每阶段独立 vet / test 绿。
+每个阶段独立 vet / test 绿；R2 依赖 R1，R3 可在 R1 之后与 R2 并行（先读 R1 的 schema）。
 
 ---
 
-## 7. 与现有文档的关系
+## 6. 从旧设计继承的结论
 
-- `.design/rule-flags.md`:§12 的 scenario-only 表里 `recording_v2` 在
-  Phase 2 已升级为 shared flag，§12 共享表与 §4 主表已同步；后续点位开放仍需同步。
-- `internal/obs/PLANNING.md`:record 采集/导出侧的权威规划;本文的
-  Phase 4 即与其合流点。两文档口径一致:record 实体总是构建,裁剪在
-  出口。
-- `.design/user-agent.md` / rule-flags.md §8:vendor 链不变式只约束
-  **改写型** transport;只读的 recordTransport 挂 vendor 链不在禁区,
-  但新增时仍须逐链核对(Gemini 清空 header 的链要确认挂载点在清空
-  之后)。
+- 启用走 flag 体系：rule `recording`（multi_enum，Shared / override）覆盖 scenario `recording_v2`；
+  写入口严格校验、存归一化形态；旧枚举值（`request` / `request_response` /
+  `staged_request_response`）解析层兼容。`internal/typ/recording.go` 不动。
+- 落盘根目录固定 `<configDir>/record`，没有 CLI 开关。
+- request id 与 access log 共用（`constant.CtxKeyRequestID`），录制与日志可互相定位。
+- advisor 防递归 header 由 `client.WithAdvisorLoopback` + `advisorLoopbackTransport` 负责，
+  与录制无关（旧版 P4 已修）。
+- 点位命名用 `final_response` 而不是 `client_response`：`client_request` 的 "client" 是来源，
+  照抄到响应侧会变成目的地，读起来像"客户端产生的响应"。
+
+---
+
+## 7. 待确认的决策
+
+- **Q1 采集位置**：边界 wire 采集（本文）取代 transform 链内快照。代价是看不到"转换中间态"
+  （preBase 之后、Base 之前那一刻的形态）；收益是协议迁移与录制完全解耦、录到的是事实。
+  调试中间态属于 harness / 单测的职责，不由线上录制承担。**建议采纳。**
+- **Q2 R1 期间新旧并存**：R1 新旧两套同时写（各自目录），R2 再删旧。另一种做法是 R1 直接关掉旧
+  emit——更干净，但 R1 期间 `client_request` 之外的旧行为会短暂缺失。**建议并存**，R1 风险最低。
+- **Q3 落盘格式**：新 schema（v4，含 `exchanges`）写到 `<configDir>/record/traces/<scenario>/<date>/<session>.jsonl.gz`，
+  复用 `obs` 的 BatchProcessor 与 gzip member 追加；CAS 导出器暂不跟进新 schema（R4 视需要）。
+- **Q4 body 上限默认值**：暂定 4 MiB / body，后续进 R4 的配置项。
