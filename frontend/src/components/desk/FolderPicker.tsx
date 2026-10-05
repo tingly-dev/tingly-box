@@ -2,6 +2,7 @@ import {FolderOpen} from '@/components/icons';
 import type {RecentFolder} from '@/services/deskApi';
 import {Autocomplete, Box, InputAdornment, TextField, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
+import { fontMono } from '@/theme/fonts';
 
 interface FolderPickerProps {
     value: string;
@@ -30,7 +31,7 @@ const FolderPicker = ({value, onChange, recentFolders}: FolderPickerProps) => {
                     <Box component="li" {...props} key={option}>
                         <Box>
                             <Typography variant="body2">{folder ? folder.name : option}</Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{fontFamily: 'monospace'}}>{option}</Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{fontFamily: fontMono}}>{option}</Typography>
                         </Box>
                     </Box>
                 );
@@ -51,7 +52,7 @@ const FolderPicker = ({value, onChange, recentFolders}: FolderPickerProps) => {
                                 </InputAdornment>
                             ),
                         },
-                        htmlInput: {...params.slotProps.htmlInput, style: {fontFamily: 'monospace', fontSize: '0.8rem'}},
+                        htmlInput: {...params.slotProps.htmlInput, style: {fontFamily: fontMono, fontSize: '0.8rem'}},
                     }}
                 />
             )}

@@ -6,6 +6,7 @@ import './prismLanguages';
 import type { Language } from 'prism-react-renderer';
 import { EMPTY_STYLE } from '@/constants/defaults';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
+import { fontMono } from '@/theme/fonts';
 
 export interface CodeBlockProps {
     code: string;
@@ -126,7 +127,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
                         {filename && (
                             <Typography
                                 variant="body2"
-                                sx={{ fontFamily: 'monospace', color: 'grey.300', fontSize: '0.75rem' }}
+                                sx={{ fontFamily: fontMono, color: 'grey.300', fontSize: '0.75rem' }}
                             >
                                 {filename}
                             </Typography>
@@ -134,7 +135,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
                         {language && !filename && (
                             <Typography
                                 variant="body2"
-                                sx={{ fontFamily: 'monospace', color: 'grey.400', fontSize: '0.75rem' }}
+                                sx={{ fontFamily: fontMono, color: 'grey.400', fontSize: '0.75rem' }}
                             >
                                 {language}
                             </Typography>
@@ -177,7 +178,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
                                 ...style,
                                 margin: 0,
                                 padding: '1rem 1.5rem',
-                                fontFamily: 'Monaco, Menlo, "Ubuntu Mono", "Consolas", source-code-pro, monospace',
+                                fontFamily: fontMono,
                                 fontSize: '0.75rem',
                                 lineHeight: 1.5,
                                 minWidth: '100%',

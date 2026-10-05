@@ -18,6 +18,7 @@ import { useEffect, useState } from 'react';
 import {type Provider } from '../types/provider';
 import ProviderExportButton from '@/components/ProviderExportButton';
 import { CopyIconButton } from '@/components/CopyIconButton';
+import { fontMono } from '@/theme/fonts';
 
 interface OAuthEditFormData {
     name: string;
@@ -352,7 +353,7 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit, onNotification }
                                     slotProps={{
                                         input: {
                                             sx: {
-                                                fontFamily: 'monospace',
+                                                fontFamily: fontMono,
                                                 '&.Mui-disabled': {
                                                     color: 'text.primary',
                                                 },

@@ -16,6 +16,7 @@ import type { AgentApplyResult } from './AgentSetupCard';
 import Context1MChangeBanner from './Context1MChangeBanner';
 import { api } from '@/services/api';
 import { restoreAppliedClaudeCodePrefs } from './claudeCodePrefsState';
+import { fontMono } from '@/theme/fonts';
 
 // Raw statusline script URLs in the tingly-box repo — the installers must
 // download from the same source the JSON tab links below (they used to point
@@ -515,7 +516,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                         <Box sx={{ mt: 0.5 }}>
                                             <Typography variant="caption" sx={{ fontWeight: 600 }}>{modalText.createdLabel}:</Typography>
                                             {applyResult.createdFiles!.map(f => (
-                                                <Typography key={f} variant="caption" sx={{ display: 'block', fontFamily: 'monospace', pl: 1 }}>{f}</Typography>
+                                                <Typography key={f} variant="caption" sx={{ display: 'block', fontFamily: fontMono, pl: 1 }}>{f}</Typography>
                                             ))}
                                         </Box>
                                     )}
@@ -523,7 +524,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                         <Box sx={{ mt: 0.5 }}>
                                             <Typography variant="caption" sx={{ fontWeight: 600 }}>{modalText.updatedLabel}:</Typography>
                                             {applyResult.updatedFiles!.map(f => (
-                                                <Typography key={f} variant="caption" sx={{ display: 'block', fontFamily: 'monospace', pl: 1 }}>{f}</Typography>
+                                                <Typography key={f} variant="caption" sx={{ display: 'block', fontFamily: fontMono, pl: 1 }}>{f}</Typography>
                                             ))}
                                         </Box>
                                     )}
@@ -531,7 +532,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                         <Box sx={{ mt: 0.5 }}>
                                             <Typography variant="caption" sx={{ fontWeight: 600 }}>{modalText.backupLabel}:</Typography>
                                             {applyResult.backupPaths!.map(f => (
-                                                <Typography key={f} variant="caption" sx={{ display: 'block', fontFamily: 'monospace', pl: 1, color: 'text.secondary' }}>{f}</Typography>
+                                                <Typography key={f} variant="caption" sx={{ display: 'block', fontFamily: fontMono, pl: 1, color: 'text.secondary' }}>{f}</Typography>
                                             ))}
                                         </Box>
                                     )}

@@ -19,6 +19,7 @@
 
 import React from 'react';
 import { Box, Switch, Typography } from '@mui/material';
+import { fontMono } from '@/theme/fonts';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -111,7 +112,7 @@ const Tag: React.FC<{ label: string }> = ({ label }) => (
             borderRadius: '4px',
             fontSize: '0.65rem',
             fontWeight: 500,
-            fontFamily: 'monospace',
+            fontFamily: fontMono,
             lineHeight: 1,
             flexShrink: 0,
         }}

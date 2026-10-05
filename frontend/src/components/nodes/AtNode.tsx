@@ -1,6 +1,7 @@
 import { Box, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { getRouteGraphActiveColor, graphNodeHoverStyles, NODE_LAYER_STYLES } from './styles';
+import { fontMono } from '@/theme/fonts';
 
 type AtType = 'tb' | 'cc';
 
@@ -42,7 +43,7 @@ const AtNode: React.FC<AtNodeProps> = ({ type, onClick }) => {
             <Typography
                 sx={{
                     ...NODE_LAYER_STYLES.typography,
-                    fontFamily: 'monospace',
+                    fontFamily: fontMono,
                     color: 'text.secondary',
                 }}
             >

@@ -7,6 +7,7 @@ import {useTranslation} from 'react-i18next';
 import type {ActivityStep, TaskState, TranscriptBlock} from './deskUtils';
 import {agentReport, formatTokens, toolSummary} from './deskUtils';
 import Markdown from './Markdown';
+import { fontMono } from '@/theme/fonts';
 
 interface TranscriptProps {
     blocks: TranscriptBlock[];
@@ -17,7 +18,7 @@ interface TranscriptProps {
     onRespond: (requestId: string, approved: boolean, answer: string) => Promise<void>;
 }
 
-const mono = {fontFamily: 'monospace', fontSize: '0.8rem'};
+const mono = {fontFamily: fontMono, fontSize: '0.8rem'};
 
 // The theme's body variants default to the secondary text color, which suits
 // metadata. The conversation itself is the subject of this page, so it uses

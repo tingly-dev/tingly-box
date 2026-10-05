@@ -15,6 +15,7 @@ import {
     CircularProgress,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { fontMono } from '@/theme/fonts';
 
 export interface SharingKey {
     token_id: string;
@@ -180,7 +181,7 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                                 cursor: 'default'
                                             }}>
                                             <IconUser sx={{ fontSize: 13, opacity: 0.4, flexShrink: 0 }} />
-                                            <Typography variant="caption" noWrap sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                                            <Typography variant="caption" noWrap sx={{ fontFamily: fontMono, color: 'text.secondary' }}>
                                                 {key.user_id.slice(0, 8)}…
                                             </Typography>
                                         </Stack>
@@ -202,7 +203,7 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                         <Typography
                                             variant="caption"
                                             sx={{
-                                                fontFamily: 'monospace',
+                                                fontFamily: fontMono,
                                                 flex: 1,
                                                 overflow: 'hidden',
                                                 textOverflow: 'ellipsis',

@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import {useEffect, useState} from 'react';
 import api from "@/services/api.ts";
+import { fontMono } from '@/theme/fonts';
 
 // Type for timer (browser vs Node.js)
 type TimerId = ReturnType<typeof setTimeout>;
@@ -315,7 +316,7 @@ const OAuthAuthorizationDialog = ({
                                     role="region"
                                     aria-label="User code for device authorization"
                                 >
-                                    <Typography variant="h4" sx={{fontFamily: 'monospace', letterSpacing: 2}} aria-label={`User code is ${authData.user_code || '------'}`}>
+                                    <Typography variant="h4" sx={{fontFamily: fontMono, letterSpacing: 2}} aria-label={`User code is ${authData.user_code || '------'}`}>
                                         {authData.user_code || '------'}
                                     </Typography>
                                     {authData.user_code && (

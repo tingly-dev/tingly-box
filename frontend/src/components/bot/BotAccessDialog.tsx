@@ -11,6 +11,7 @@ import {useCallback, useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import PairingCodePanel from './PairingCodePanel';
 import type {RemoteAccess} from './useRemoteAccess';
+import { fontMono } from '@/theme/fonts';
 
 interface Props {
     open: boolean;
@@ -40,7 +41,7 @@ const rowSx = {p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1.5} as 
 const rowHeader = (title: ReactNode, id: string) => (
     <Box sx={{minWidth: 0}}>
         <Typography sx={{fontWeight: 600}}>{title}</Typography>
-        <Typography variant="caption" sx={{fontFamily: 'monospace', color: 'text.primary', overflowWrap: 'anywhere'}}>{id}</Typography>
+        <Typography variant="caption" sx={{fontFamily: fontMono, color: 'text.primary', overflowWrap: 'anywhere'}}>{id}</Typography>
     </Box>
 );
 
@@ -289,7 +290,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                 ) : (
                     <Box>
                         <Typography variant="body2" color="text.secondary">{t('botAccess.botUuid', {defaultValue: 'Bot UUID'})}</Typography>
-                        <Typography component="code" sx={{fontFamily: 'monospace', wordBreak: 'break-all'}}>{bot?.uuid}</Typography>
+                        <Typography component="code" sx={{fontFamily: fontMono, wordBreak: 'break-all'}}>{bot?.uuid}</Typography>
                         {bot && <PairingCodePanel bot={bot}/>}
                     </Box>
                 )}

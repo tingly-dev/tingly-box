@@ -25,6 +25,7 @@ import { EntryGuideDialog } from '@/components/tier/EntryGuideDialog';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { removeSyncedItem, setSyncedItem } from '@/services/uiPrefs';
 import { timeAgo } from '@/utils/timeAgo';
+import { fontMono } from '@/theme/fonts';
 
 export interface AgentApplyResult {
     success: boolean;
@@ -562,7 +563,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                                 <Tooltip title={copied ? t('agentSetup.install.copied') : t('agentSetup.install.copy')}>
                                                     <IconButton size="small" onClick={handleCopy} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 16 }} /></IconButton>
                                                 </Tooltip>
-                                                <Typography variant="body2" onClick={handleCopy} sx={{ fontFamily: 'monospace', flex: 1, color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installCommand}>{installCommand}</Typography>
+                                                <Typography variant="body2" onClick={handleCopy} sx={{ fontFamily: fontMono, flex: 1, color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installCommand}>{installCommand}</Typography>
                                             </Box>
                                         </Box>
                                         {installMirrorCommand && (
@@ -577,7 +578,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                                     <Tooltip title={copiedMirror ? t('agentSetup.install.copied') : t('agentSetup.install.copy')}>
                                                         <IconButton size="small" onClick={handleCopyMirror} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 16 }} /></IconButton>
                                                     </Tooltip>
-                                                    <Typography variant="body2" onClick={handleCopyMirror} sx={{ fontFamily: 'monospace', flex: 1, color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installMirrorCommand}>{installMirrorCommand}</Typography>
+                                                    <Typography variant="body2" onClick={handleCopyMirror} sx={{ fontFamily: fontMono, flex: 1, color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installMirrorCommand}>{installMirrorCommand}</Typography>
                                                 </Box>
                                             </Box>
                                         )}
@@ -650,7 +651,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                             fontWeight: 600
                                         }}>{applySuccessLabel}</Typography>
                                         {applyResult.files?.map(f => (
-                                            <Typography key={f} variant="body2" sx={{ display: 'block', fontFamily: 'monospace', color: 'text.secondary' }}>{f}</Typography>
+                                            <Typography key={f} variant="body2" sx={{ display: 'block', fontFamily: fontMono, color: 'text.secondary' }}>{f}</Typography>
                                         ))}
                                     </Box>
                                 ) : (

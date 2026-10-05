@@ -33,6 +33,7 @@ import { useNotify } from '@/hooks/useNotify';
 import { blurActiveElement } from '@/utils/dom';
 import CredentialEditorDialog, { type CredentialEditorState } from './CredentialEditorDialog';
 import ProviderImportDialog, { type ImportableProvider } from './ProviderImportDialog';
+import { fontMono } from '@/theme/fonts';
 
 type ProtectedCredential = {
     id: string;
@@ -443,12 +444,12 @@ const GuardrailsCredentialsPage = () => {
                                                 <Chip size="small" label={credential.type.replace('_', ' ')} variant="outlined" />
                                             </TableCell>
                                             <TableCell>
-                                                <Typography variant="caption" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                                                <Typography variant="caption" sx={{ fontFamily: fontMono, wordBreak: 'break-all' }}>
                                                     {credential.alias_token}
                                                 </Typography>
                                             </TableCell>
                                             <TableCell>
-                                                <Typography variant="caption" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                                                <Typography variant="caption" sx={{ fontFamily: fontMono, wordBreak: 'break-all' }}>
                                                     {credential.secret_mask}
                                                 </Typography>
                                             </TableCell>

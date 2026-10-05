@@ -20,6 +20,7 @@ import api from "@/services/api.ts";
 import {getOAuthRedirectPath} from "@/utils/protocol";
 import {FALLBACK_OAUTH_PROVIDERS, type OAuthProvider} from './oauth/fallbackProviders';
 import OAuthAuthorizationDialog, {type OAuthAuthorizationData} from './oauth/OAuthAuthorizationDialog';
+import { fontMono } from '@/theme/fonts';
 
 interface OAuthDialogProps {
     open: boolean;
@@ -378,7 +379,7 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
                                                         p: 1,
                                                         bgcolor: 'background.paper',
                                                         borderRadius: 1,
-                                                        fontFamily: 'monospace',
+                                                        fontFamily: fontMono,
                                                         fontSize: '0.8rem',
                                                         overflowX: 'auto',
                                                     }}

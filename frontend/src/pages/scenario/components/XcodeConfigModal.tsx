@@ -4,6 +4,7 @@ import xcodeImage from '@/assets/images/xcode.png';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 import { CopyUrlKeyButtons } from './config/CopyUrlKeyButtons';
 import { InstructionSteps } from './config/InstructionSteps';
+import { fontMono } from '@/theme/fonts';
 
 interface XcodeConfigModalProps {
     open: boolean;
@@ -51,13 +52,13 @@ const XcodeConfigModal: React.FC<XcodeConfigModalProps> = ({
                         ]}
                         values={
                             <>
-                                <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
+                                <Typography variant="subtitle2" sx={{ fontFamily: fontMono }}>
                                     URL: <strong>{baseUrl}/tingly/xcode</strong>
                                 </Typography>
-                                <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
+                                <Typography variant="subtitle2" sx={{ fontFamily: fontMono }}>
                                     API Key: <strong>{token.slice(0, 16)}...</strong>
                                 </Typography>
-                                <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
+                                <Typography variant="subtitle2" sx={{ fontFamily: fontMono }}>
                                     Description: <strong>Tingly Box</strong>
                                 </Typography>
                             </>

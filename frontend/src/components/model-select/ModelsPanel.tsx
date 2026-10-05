@@ -36,6 +36,7 @@ import CustomModelCard from './CustomModelCard';
 import ModelCard from './ModelCard';
 import RecentModelsSection from './RecentModelsSection';
 import NewModelsSection from './NewModelsSection';
+import { fontMono } from '@/theme/fonts';
 
 // Convert ProviderModelData.quota (the generated, wire-shaped ProviderUsage —
 // its windows carry a bare `kind?: string`) to the app's narrower
@@ -321,7 +322,7 @@ export function ModelsPanel({
                                 variant="outlined"
                                 onClick={() => handleSearchChange(provider.uuid, term)}
                                 onDelete={() => forgetSearch(term)}
-                                sx={{ fontFamily: 'monospace', maxWidth: 220 }}
+                                sx={{ fontFamily: fontMono, maxWidth: 220 }}
                             />
                         ))}
                     </Stack>

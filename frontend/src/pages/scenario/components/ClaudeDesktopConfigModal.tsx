@@ -20,6 +20,7 @@ import { scrollToModelsCard } from './AgentSetupCard';
 import Context1MChangeBanner from './Context1MChangeBanner';
 import { CopyUrlKeyButtons } from './config/CopyUrlKeyButtons';
 import api from '@/services/api';
+import { fontMono } from '@/theme/fonts';
 
 interface ClaudeDesktopConfigModalProps {
     open: boolean;
@@ -127,7 +128,7 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                             Launch the app, then enable developer mode:
                         </Typography>
                         <Box sx={{ bgcolor: 'background.default', p: 1.5, borderRadius: 1 }}>
-                            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                            <Typography variant="body2" sx={{ fontFamily: fontMono, fontSize: '0.8rem' }}>
                                 Help → Troubleshooting → Enable Developer Mode
                             </Typography>
                         </Box>
@@ -139,7 +140,7 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                             Step 2: Configure Third-Party Inference
                         </Typography>
                         <Box sx={{ bgcolor: 'background.default', p: 1.5, borderRadius: 1, mb: 1.5 }}>
-                            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                            <Typography variant="body2" sx={{ fontFamily: fontMono, fontSize: '0.8rem' }}>
                                 Developer → Configure third-party inference
                             </Typography>
                         </Box>
@@ -147,11 +148,11 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                             <Typography variant="subtitle2"><strong>Connection:</strong></Typography>
                             <Typography variant="subtitle2">Gateway</Typography>
                             <Typography variant="subtitle2"><strong>Base URL:</strong></Typography>
-                            <Typography variant="subtitle2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                            <Typography variant="subtitle2" sx={{ fontFamily: fontMono, wordBreak: 'break-all' }}>
                                 {baseUrl}/tingly/claude_desktop
                             </Typography>
                             <Typography variant="subtitle2"><strong>API key:</strong></Typography>
-                            <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
+                            <Typography variant="subtitle2" sx={{ fontFamily: fontMono }}>
                                 {token.slice(0, 16)}…
                             </Typography>
                         </Box>
@@ -216,7 +217,7 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                                 borderRadius: 1,
                                 p: 1.5,
                                 mb: 2,
-                                fontFamily: 'monospace',
+                                fontFamily: fontMono,
                                 fontSize: '0.78rem',
                                 lineHeight: 1.6,
                                 whiteSpace: 'pre',
@@ -239,7 +240,7 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                                     direction="row"
                                     spacing={1}
                                     sx={{ alignItems: 'center', bgcolor: 'background.default', borderRadius: 1, px: 1.5, py: 0.5 }}>
-                                    <Typography sx={{ fontFamily: 'monospace', fontSize: '0.82rem', flex: 2, minWidth: 0 }}>
+                                    <Typography sx={{ fontFamily: fontMono, fontSize: '0.82rem', flex: 2, minWidth: 0 }}>
                                         {rule.request_model}
                                     </Typography>
                                     <TextField

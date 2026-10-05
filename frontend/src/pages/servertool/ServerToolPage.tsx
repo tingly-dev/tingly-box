@@ -25,6 +25,7 @@ import {
     type MCPConfigResponse,
     type MCPSourceConfig,
 } from '../mcp/types';
+import { fontMono } from '@/theme/fonts';
 
 // ─── Advisor ToolCard ─────────────────────────────────────────────────────────
 
@@ -96,7 +97,7 @@ const AdvisorCard: React.FC<AdvisorCardProps> = ({ advisorSource, onSave, expand
                 <Button size="small" variant="outlined" onClick={() => setModelDialogOpen(true)}>
                     Choose Model
                 </Button>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'text.secondary' }}>
+                <Typography variant="body2" sx={{ fontFamily: fontMono, fontSize: '0.8rem', color: 'text.secondary' }}>
                     {selectedProvider
                         ? `${selectedProvider.name} (${selectedProvider.api_style}) / ${model || '(no model)'}`
                         : '(no provider selected)'}
@@ -207,7 +208,7 @@ const ServerToolPage = () => {
                 {/* Section header */}
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
                     <Typography
-                        sx={{ fontFamily: 'monospace', fontSize: '0.85rem', fontWeight: 700, color: 'text.primary', opacity: 0.35, mt: 0.35, flexShrink: 0, userSelect: 'none', letterSpacing: '0.05em' }}
+                        sx={{ fontFamily: fontMono, fontSize: '0.85rem', fontWeight: 700, color: 'text.primary', opacity: 0.35, mt: 0.35, flexShrink: 0, userSelect: 'none', letterSpacing: '0.05em' }}
                     >
                         01
                     </Typography>

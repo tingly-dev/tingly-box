@@ -30,6 +30,7 @@ import PairingCodePanel from './PairingCodePanel';
 import {useRemoteAccess} from './useRemoteAccess';
 import {useState} from 'react';
 import {useTranslation} from 'react-i18next';
+import { fontMono } from '@/theme/fonts';
 
 interface RemoteAgentBotCardProps {
     bot: BotSettings;
@@ -202,10 +203,10 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 1, px: 2, pb: expanded ? 0 : 1.25, mt: -0.5}}>
                     {!expanded && (
                         <Typography variant="caption" noWrap sx={{minWidth: 0, color: 'text.secondary'}}>
-                            <Box component="span" sx={{fontFamily: 'monospace'}}>@tb</Box>{' '}
+                            <Box component="span" sx={{fontFamily: fontMono}}>@tb</Box>{' '}
                             {bot.smartguide_model || '—'}
                             {'  ·  '}
-                            <Box component="span" sx={{fontFamily: 'monospace'}}>@cc</Box>{' '}
+                            <Box component="span" sx={{fontFamily: fontMono}}>@cc</Box>{' '}
                             {ccProfileId
                                 ? (ccProfileName || ccProfileId)
                                 : t('remoteAgent.ccProfile.default', {defaultValue: 'Default'})}

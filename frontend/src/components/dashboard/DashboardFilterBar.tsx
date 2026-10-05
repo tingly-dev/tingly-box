@@ -21,6 +21,7 @@ import { shortenUserId } from '@/hooks/useDashboardData';
 import { useTeamContext } from '@/contexts/TeamContext';
 import { groupByTeam } from '@/utils/team';
 import { useMemo } from 'react';
+import { fontMono } from '@/theme/fonts';
 
 // Owner label is rendered through t() so a live language switch updates it;
 // sharing-key labels carry their own display name instead.
@@ -185,7 +186,7 @@ export default function DashboardFilterBar({
                                             variant="caption"
                                             sx={{
                                                 color: "text.secondary",
-                                                fontFamily: 'monospace',
+                                                fontFamily: fontMono,
                                                 flexShrink: 0
                                             }}>
                                             {shortenUserId(identity.userId)}

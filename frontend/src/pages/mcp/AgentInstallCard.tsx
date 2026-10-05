@@ -17,6 +17,7 @@ import {
 } from '@/components/icons';
 import { CopyIconButton } from '@/components/CopyIconButton';
 import { getApiBaseUrl } from '@/utils/protocol';
+import { fontMono } from '@/theme/fonts';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -116,7 +117,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ filename, runtimeLabel, command }
                     sx={{
                         flex: 1,
                         fontSize: '0.72rem',
-                        fontFamily: 'monospace',
+                        fontFamily: fontMono,
                         color: 'rgb(125, 133, 144)',
                     }}
                 >
@@ -151,7 +152,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ filename, runtimeLabel, command }
                     m: 0,
                     px: 2,
                     py: 1.75,
-                    fontFamily: 'monospace',
+                    fontFamily: fontMono,
                     fontSize: '0.78rem',
                     lineHeight: 1.7,
                     whiteSpace: 'pre-wrap',
@@ -243,7 +244,7 @@ export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
             <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 2.5 }}>
                 <Typography
                     sx={{
-                        fontFamily: 'monospace',
+                        fontFamily: fontMono,
                         fontSize: '0.85rem',
                         fontWeight: 700,
                         color: 'text.primary',

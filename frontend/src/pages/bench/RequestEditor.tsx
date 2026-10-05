@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Button, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { RawRequest } from './benchState';
+import { fontMono } from '@/theme/fonts';
 
 // RequestEditor: what the client sends. Protocol and Content (which body,
 // Message vs a whole-body preset) are chosen in Compose now, not here
@@ -66,7 +67,7 @@ export const RequestEditor: React.FC<{
                 onChange={(e) => onRawChange({ ...raw, body: e.target.value })}
                 error={!!error}
                 helperText={error ? t('bench.rawInvalid', { error, defaultValue: 'Not valid JSON: {{error}}' }) : undefined}
-                slotProps={{ htmlInput: { sx: { fontFamily: 'monospace', fontSize: '0.74rem', lineHeight: 1.5 }, spellCheck: false } }}
+                slotProps={{ htmlInput: { sx: { fontFamily: fontMono, fontSize: '0.74rem', lineHeight: 1.5 }, spellCheck: false } }}
             />
             <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.4 }}>
                 {t('bench.rawHint', { defaultValue: "Exactly what a client speaking this protocol would send. The probe fills in the model (and max_tokens for Anthropic); Stream still applies; tools, images and thinking are yours to set here — the Tool / Vision / Thinking knobs above only shape Content: Message." })}

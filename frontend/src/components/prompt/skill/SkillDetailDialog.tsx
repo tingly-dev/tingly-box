@@ -24,6 +24,7 @@ import { type Skill, type SkillLocation } from '@/types/prompt';
 import { getIdeSourceLabel } from '@/constants/ideSources';
 import { api } from '@/services/api';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
+import { fontMono } from '@/theme/fonts';
 
 interface SkillDetailDialogProps {
     open: boolean;
@@ -247,7 +248,7 @@ const SkillDetailDialog = ({ open, skill, location, onClose }: SkillDetailDialog
                                     sx={{
                                         p: 3,
                                         bgcolor: 'background.default',
-                                        fontFamily: 'monospace',
+                                        fontFamily: fontMono,
                                         fontSize: '0.875rem',
                                         whiteSpace: 'pre-wrap',
                                         wordBreak: 'break-word',

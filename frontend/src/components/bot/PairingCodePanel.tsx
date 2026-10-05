@@ -18,6 +18,7 @@ import { api } from '@/services/api';
 import { notify } from '@/utils/notify';
 import { isPairingRequired } from '@/types/bot';
 import type { BotSettings } from '@/types/bot';
+import { fontMono } from '@/theme/fonts';
 
 // formatRemaining returns null once expired so the caller can render a localized label.
 const formatRemaining = (expiresAt: string): string | null => {
@@ -140,7 +141,7 @@ const PairingCodePanel: React.FC<Props> = ({ bot, revealByDefault = false }) => 
                         variant="caption"
                         aria-label={revealed ? 'pairing code' : 'hidden pairing code'}
                         sx={{
-                            fontFamily: 'monospace',
+                            fontFamily: fontMono,
                             fontSize: '0.85rem',
                             letterSpacing: revealed ? 0.5 : 2,
                             backgroundColor: 'action.hover',

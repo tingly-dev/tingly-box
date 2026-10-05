@@ -37,6 +37,7 @@ import ModelSelectDialog from '@/components/ModelSelectDialog';
 import { getFlagValue, setFlagValue, flagDefault, enumInactive, isFlagActive, normalizeEnumForStorage, headersValue, multiEnumValues, toggleMultiEnumValue, flagToBool, flagToInt, flagToString, flagToServiceRef } from './flagHelpers';
 import { makeCategoryMeta, type CategoryMeta } from './catalogGrouping';
 import HeadersEditor from '@/components/flags/HeadersEditor';
+import { fontMono } from '@/theme/fonts';
 
 export interface FlagCatalogDialogProps {
     open: boolean;
@@ -400,7 +401,7 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                                                             label={s.value}
                                                                             title={s.label}
                                                                             size="small"
-                                                                            sx={{ fontFamily: 'monospace' }}
+                                                                            sx={{ fontFamily: fontMono }}
                                                                             variant={selected ? 'filled' : 'outlined'}
                                                                             color={selected ? 'primary' : 'default'}
                                                                             onClick={() => handleStringChange(spec.key, s.value)}

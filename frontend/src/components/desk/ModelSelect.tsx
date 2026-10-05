@@ -4,6 +4,7 @@ import type {ClaudeCodeModels as ModelChoice, ClaudeCodeModelTier as ModelTier} 
 import {Box, MenuItem, Select, Stack, Tooltip, Typography} from '@mui/material';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
+import { fontMono } from '@/theme/fonts';
 
 interface ModelSelectProps {
     // The profile whose tiers are offered ('' is the main routing).
@@ -93,7 +94,7 @@ const ModelSelect = ({profile, value, onChange}: ModelSelectProps) => {
                 <MenuItem key={tier.alias} value={tier.alias}>
                     <Box>
                         <Typography variant="body2" sx={{color: 'text.primary'}}>{tierLabel(tier.alias)}</Typography>
-                        <Typography variant="caption" sx={{color: 'text.secondary', fontFamily: 'monospace'}}>{route(tier)}</Typography>
+                        <Typography variant="caption" sx={{color: 'text.secondary', fontFamily: fontMono}}>{route(tier)}</Typography>
                     </Box>
                 </MenuItem>
             ))}

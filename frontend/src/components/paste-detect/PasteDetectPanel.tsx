@@ -20,6 +20,7 @@ import { VpnKey as VpnKeyIcon } from '@/components/icons';
 import {extractOnboardingCandidates, type OnboardingTokenCandidate} from '@/services/onboardingExtract';
 import type {EnhancedProviderFormData} from '@/components/ProviderFormDialog';
 import {emptyForm} from '@/hooks/useProviderDialog';
+import { fontMono } from '@/theme/fonts';
 
 // Shell-agnostic core of the "Paste & detect" experience: a paste textarea, a
 // Detect button backed by the backend regex extractor, and the URLs/tokens
@@ -102,7 +103,7 @@ const PasteDetectPanel: React.FC<PasteDetectPanelProps> = ({onPick, onManualFill
                 placeholder={PLACEHOLDER}
                 spellCheck={false}
                 slotProps={{
-                    htmlInput: {style: {fontFamily: 'monospace', fontSize: 13}}
+                    htmlInput: {style: {fontFamily: fontMono, fontSize: 13}}
                 }}
             />
             <Stack direction="row" spacing={1.5} sx={{mt: 1.5}}>
@@ -181,7 +182,7 @@ const PasteDetectPanel: React.FC<PasteDetectPanelProps> = ({onPick, onManualFill
                                                         primary={
                                                             <Typography
                                                                 variant="body2"
-                                                                sx={{fontFamily: 'monospace', wordBreak: 'break-all'}}
+                                                                sx={{fontFamily: fontMono, wordBreak: 'break-all'}}
                                                             >
                                                                 {u}
                                                             </Typography>
@@ -228,7 +229,7 @@ const PasteDetectPanel: React.FC<PasteDetectPanelProps> = ({onPick, onManualFill
                                                         primary={
                                                             <Typography
                                                                 variant="body2"
-                                                                sx={{fontFamily: 'monospace', wordBreak: 'break-all'}}
+                                                                sx={{fontFamily: fontMono, wordBreak: 'break-all'}}
                                                             >
                                                                 {tok.value}
                                                             </Typography>

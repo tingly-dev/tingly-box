@@ -15,6 +15,7 @@ import {
 import Popover from '@mui/material/Popover';
 import {useCallback, useState} from 'react';
 import {useTranslation} from 'react-i18next';
+import { fontMono } from '@/theme/fonts';
 
 // BotChatsButton surfaces the chat ids a bot can reach, so an operator can
 // copy the channel-native chat_id that POST /api/v1/bots/:bot/{notify,interact}
@@ -137,7 +138,7 @@ const BotChatsButton: React.FC<BotChatsButtonProps> = ({botUUID, platform, pairi
                                             variant="caption"
                                             component="span"
                                             sx={{
-                                                fontFamily: 'monospace',
+                                                fontFamily: fontMono,
                                                 overflow: 'hidden',
                                                 textOverflow: 'ellipsis',
                                                 whiteSpace: 'nowrap',

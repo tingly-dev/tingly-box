@@ -23,6 +23,7 @@ import { Refresh as RefreshIcon } from '@/components/icons';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useTableSort } from '@/hooks/useTableSort';
 import { formatTimestamp } from '@/utils/datetime';
+import { fontMono } from '@/theme/fonts';
 
 export interface SystemLogEntry {
     time: string;
@@ -405,14 +406,14 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                                 <Box sx={{ p: 1, backgroundColor: 'error.dark', borderRadius: 1 }}>
                                                                     <Typography
                                                                         variant="body2"
-                                                                        sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'error.contrastText', fontWeight: 'bold', wordBreak: 'break-all' }}
+                                                                        sx={{ fontFamily: fontMono, fontSize: '0.75rem', color: 'error.contrastText', fontWeight: 'bold', wordBreak: 'break-all' }}
                                                                     >
                                                                         ERROR: {typeof log.fields.error === 'object' && log.fields.error !== null ? JSON.stringify(log.fields.error) : String(log.fields.error)}
                                                                     </Typography>
                                                                     {log.fields.error_type && (
                                                                         <Typography
                                                                             variant="caption"
-                                                                            sx={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'error.contrastText', opacity: 0.8 }}
+                                                                            sx={{ fontFamily: fontMono, fontSize: '0.7rem', color: 'error.contrastText', opacity: 0.8 }}
                                                                         >
                                                                             Type: {typeof log.fields.error_type === 'object' && log.fields.error_type !== null ? JSON.stringify(log.fields.error_type) : String(log.fields.error_type)}
                                                                         </Typography>
@@ -423,7 +424,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                                 .filter(([key]) => key !== 'error' && key !== 'error_type')
                                                                 .map(([key, value]) => (
                                                                     <Box key={key}>
-                                                                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                                                                        <Typography variant="body2" sx={{ fontFamily: fontMono, fontSize: '0.75rem' }}>
                                                                             <strong>{key}:</strong> {typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}
                                                                         </Typography>
                                                                     </Box>

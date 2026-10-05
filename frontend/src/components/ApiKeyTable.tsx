@@ -44,6 +44,7 @@ import {useDeleteConfirm} from "@/hooks/useDeleteConfirm";
 import {useRowOverflowMenu} from "@/hooks/useRowOverflowMenu";
 import api from "../services/api";
 import type {Provider} from "../types/provider";
+import { fontMono } from '@/theme/fonts';
 
 interface ApiKeyTableProps {
     providers: Provider[];
@@ -262,7 +263,7 @@ const ApiKeyTable = ({
                                                 <Typography variant="caption" sx={{display: 'block', color: 'inherit', fontWeight: 600}}>
                                                     {provider.name}
                                                 </Typography>
-                                                <Typography variant="caption" sx={{display: 'block', color: 'inherit', fontFamily: 'monospace', opacity: 0.8}}>
+                                                <Typography variant="caption" sx={{display: 'block', color: 'inherit', fontFamily: fontMono, opacity: 0.8}}>
                                                     UUID: {provider.uuid}
                                                 </Typography>
                                             </Box>
@@ -323,7 +324,7 @@ const ApiKeyTable = ({
                                         variant="body2"
                                         sx={{
                                             maxWidth: 150,
-                                            fontFamily: "monospace",
+                                            fontFamily: fontMono,
                                             wordBreak: "break-all",
                                         }}
                                     >
@@ -350,7 +351,7 @@ const ApiKeyTable = ({
                                         <Typography
                                             variant="body2"
                                             sx={{
-                                                fontFamily: "monospace",
+                                                fontFamily: fontMono,
                                                 wordBreak: "break-all",
                                                 flex: 1,
                                                 minWidth: 0,
@@ -532,7 +533,7 @@ const ApiKeyTable = ({
                                     p: 2,
                                     bgcolor: "action.hover",
                                     borderRadius: 1,
-                                    fontFamily: "monospace",
+                                    fontFamily: fontMono,
                                     wordBreak: "break-all",
                                     border: "1px solid",
                                     borderColor: "divider",

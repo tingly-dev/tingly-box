@@ -18,6 +18,7 @@ import {
     IconButton,
 } from '@mui/material';
 import { useState } from 'react';
+import { fontMono } from '@/theme/fonts';
 
 export interface ImportResultItem {
     uuid: string;
@@ -172,7 +173,7 @@ export const ImportModal = ({
                             value={base64Data}
                             onChange={(e) => setBase64Data(e.target.value)}
                             disabled={loading}
-                            sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
+                            sx={{ fontFamily: fontMono, fontSize: '0.85rem' }}
                         />
                     </TabPanel>
 
@@ -193,7 +194,7 @@ export const ImportModal = ({
                             value={jsonlData}
                             onChange={(e) => setJsonlData(e.target.value)}
                             disabled={loading}
-                            sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
+                            sx={{ fontFamily: fontMono, fontSize: '0.85rem' }}
                         />
                     </TabPanel>
 

@@ -14,6 +14,7 @@ import PermissionModeSelect from './PermissionModeSelect';
 import ProfileSelect from './ProfileSelect';
 import StatusLine from './StatusLine';
 import Transcript from './Transcript';
+import { fontMono } from '@/theme/fonts';
 
 interface SessionViewProps {
     session: SessionInfo;
@@ -242,7 +243,7 @@ const SessionView = ({
                                 <Box
                                     component="code"
                                     sx={{
-                                        flex: 1, minWidth: 0, overflowX: 'auto', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: '0.8rem',
+                                        flex: 1, minWidth: 0, overflowX: 'auto', whiteSpace: 'nowrap', fontFamily: fontMono, fontSize: '0.8rem',
                                         px: 1, py: 0.5, borderRadius: 1, bgcolor: 'action.hover', color: 'text.primary',
                                     }}
                                 >

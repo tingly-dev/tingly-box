@@ -1,6 +1,7 @@
 import { Box } from '@mui/material';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { type SkillLocation } from '@/types/prompt';
+import { fontMono } from '@/theme/fonts';
 
 interface DeleteSkillLocationDialogProps {
     location: SkillLocation | null;
@@ -28,7 +29,7 @@ const DeleteSkillLocationDialog = ({
                             sx={{
                                 display: 'block',
                                 mt: 1,
-                                fontFamily: 'monospace',
+                                fontFamily: fontMono,
                                 overflowWrap: 'anywhere',
                             }}
                         >

@@ -38,6 +38,7 @@ import TemplatePage from './components/TemplatePage.tsx';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 import ClaudeCodeProfileOverrides, { type ClaudeCodeProfileSettingsArtifact } from './components/ClaudeCodeProfileOverrides';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { fontMono } from '@/theme/fonts';
 
 const BASE_SCENARIO = 'claude_code';
 
@@ -282,7 +283,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                                             <Typography
                                                 variant="subtitle2"
                                                 onClick={() => copyToClipboard(settingsArtifact.settingsPath, 'settings-file')}
-                                                sx={{ ...copyableTextStyle, fontFamily: 'monospace', fontSize: '0.78rem' }}
+                                                sx={{ ...copyableTextStyle, fontFamily: fontMono, fontSize: '0.78rem' }}
                                             >
                                                 {settingsArtifact.settingsPath}
                                             </Typography>

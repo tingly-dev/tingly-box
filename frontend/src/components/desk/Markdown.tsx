@@ -3,6 +3,7 @@ import XMarkdown, {type ComponentProps} from '@ant-design/x-markdown';
 import {Box} from '@mui/material';
 import type {ReactNode} from 'react';
 import {Children, isValidElement} from 'react';
+import { fontMono } from '@/theme/fonts';
 
 // Plain text of a rendered node tree: a fenced block's code reaches the code
 // component as parsed children, but CodeBlock highlights a string.
@@ -21,7 +22,7 @@ const Code = ({block, lang, children}: ComponentProps) => {
     return (
         <Box
             component="code"
-            sx={{fontFamily: 'monospace', fontSize: '0.85em', px: 0.5, py: 0.125, borderRadius: 0.5, bgcolor: 'action.hover'}}
+            sx={{fontFamily: fontMono, fontSize: '0.85em', px: 0.5, py: 0.125, borderRadius: 0.5, bgcolor: 'action.hover'}}
         >
             {children}
         </Box>

@@ -42,6 +42,7 @@ import React, {useCallback, useState} from "react";
 import {useDeleteConfirm} from "@/hooks/useDeleteConfirm";
 import {useRowOverflowMenu} from "@/hooks/useRowOverflowMenu";
 import type {Provider} from "../types/provider";
+import { fontMono } from '@/theme/fonts';
 
 interface OAuthTableProps {
     providers: Provider[];
@@ -280,7 +281,7 @@ const OAuthTable = ({
                                                         <Typography variant="caption" sx={{display: 'block', color: 'inherit', fontWeight: 600}}>
                                                             {provider.name}
                                                         </Typography>
-                                                        <Typography variant="caption" sx={{display: 'block', color: 'inherit', fontFamily: 'monospace', opacity: 0.8}}>
+                                                        <Typography variant="caption" sx={{display: 'block', color: 'inherit', fontFamily: fontMono, opacity: 0.8}}>
                                                             UUID: {provider.uuid}
                                                         </Typography>
                                                     </Box>

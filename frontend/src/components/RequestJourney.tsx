@@ -1,6 +1,7 @@
 import { Box, Chip, Collapse, Stack, Typography } from '@mui/material';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { ModelRequestEvent } from '@/components/AILogViewer';
+import { fontMono } from '@/theme/fonts';
 
 // RequestJourney is the single answer to "how did this request go".
 //
@@ -218,7 +219,7 @@ const RoutingRules = ({ rules, matched }: { rules: RoutingRule[]; matched: numbe
             <Box key={rule.rule_index}>
                 <Typography
                     sx={{
-                        fontFamily: 'monospace',
+                        fontFamily: fontMono,
                         fontSize: '0.68rem',
                         color: matched === rule.rule_index ? 'success.main' : 'text.disabled',
                     }}
@@ -228,7 +229,7 @@ const RoutingRules = ({ rules, matched }: { rules: RoutingRule[]; matched: numbe
                 {rule.ops?.map((op, i) => (
                     <Typography
                         key={i}
-                        sx={{ fontFamily: 'monospace', fontSize: '0.68rem', color: 'text.disabled', pl: 2 }}
+                        sx={{ fontFamily: fontMono, fontSize: '0.68rem', color: 'text.disabled', pl: 2 }}
                     >
                         {op.position}.{op.operation} — {op.reason}
                     </Typography>
@@ -300,7 +301,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                         <Box {...cell}>
                             <Typography
                                 sx={{
-                                    fontFamily: 'monospace',
+                                    fontFamily: fontMono,
                                     fontSize: '0.73rem',
                                     fontWeight: 500,
                                     color: row.kind === 'stage' ? 'text.primary' : 'text.secondary',
@@ -315,7 +316,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                         <Box {...cell} sx={{ ...cellSx, minWidth: 0 }}>
                             <Typography
                                 sx={{
-                                    fontFamily: 'monospace',
+                                    fontFamily: fontMono,
                                     fontSize: '0.72rem',
                                     color: toneColor(row.tone),
                                     whiteSpace: 'nowrap',
@@ -330,7 +331,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                             {row.result && (
                                 <Typography
                                     sx={{
-                                        fontFamily: 'monospace',
+                                        fontFamily: fontMono,
                                         fontSize: '0.72rem',
                                         color: row.tone === 'error' ? 'error.main' : 'text.secondary',
                                         whiteSpace: 'nowrap',
@@ -342,7 +343,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                         </Box>
                         <Box {...cell}>
                             <Typography
-                                sx={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'text.disabled', textAlign: 'right' }}
+                                sx={{ fontFamily: fontMono, fontSize: '0.7rem', color: 'text.disabled', textAlign: 'right' }}
                             >
                                 {row.durationMs != null ? formatDuration(row.durationMs) : ''}
                             </Typography>
@@ -357,7 +358,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                                     {row.payload.map(([k, v]) => (
                                         <Typography
                                             key={k}
-                                            sx={{ fontFamily: 'monospace', fontSize: '0.68rem', color: 'text.disabled', wordBreak: 'break-all' }}
+                                            sx={{ fontFamily: fontMono, fontSize: '0.68rem', color: 'text.disabled', wordBreak: 'break-all' }}
                                         >
                                             {k}={v}
                                         </Typography>

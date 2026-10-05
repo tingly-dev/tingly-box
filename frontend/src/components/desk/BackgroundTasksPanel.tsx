@@ -7,6 +7,7 @@ import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import type {BackgroundTask} from './deskUtils';
 import {formatTokens, timeAgo} from './deskUtils';
+import { fontMono } from '@/theme/fonts';
 
 interface BackgroundTasksPanelProps {
     sessionId: string;
@@ -17,7 +18,7 @@ interface BackgroundTasksPanelProps {
     onReveal: (callId: string) => void;
 }
 
-const mono = {fontFamily: 'monospace', fontSize: '0.75rem'};
+const mono = {fontFamily: fontMono, fontSize: '0.75rem'};
 const OUTPUT_TAIL = 16 * 1024;
 const OUTPUT_REFRESH_MS = 2000;
 

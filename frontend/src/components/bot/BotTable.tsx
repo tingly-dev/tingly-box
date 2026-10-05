@@ -21,6 +21,7 @@ import {
 } from '@mui/material';
 import {useCallback, useState} from 'react';
 import {useTranslation} from 'react-i18next';
+import { fontMono } from '@/theme/fonts';
 
 // BotTable is the RESOURCE table for connected bots — the table counterpart
 // of ApiKeyTable, replacing the former BotCard. Every bot, across every
@@ -185,7 +186,7 @@ const BotTable: React.FC<BotTableProps> = ({
                                                     variant="caption"
                                                     component="span"
                                                     sx={{
-                                                        fontFamily: 'monospace',
+                                                        fontFamily: fontMono,
                                                         color: 'text.secondary',
                                                         overflow: 'hidden',
                                                         textOverflow: 'ellipsis',
@@ -292,7 +293,7 @@ const BotTable: React.FC<BotTableProps> = ({
                                 </Stack>
                             </Stack>
                             <Stack direction="row" spacing={0.5} sx={{alignItems: 'center', mt: 1.25, minWidth: 0}}>
-                                <Typography variant="caption" noWrap sx={{fontFamily: 'monospace', color: 'text.secondary', flex: 1}}>{bot.uuid}</Typography>
+                                <Typography variant="caption" noWrap sx={{fontFamily: fontMono, color: 'text.secondary', flex: 1}}>{bot.uuid}</Typography>
                                 <IconButton size="small" onClick={() => handleCopyUuid(bot.uuid!)} disabled={!bot.uuid}><CopyIcon fontSize="inherit"/></IconButton>
                             </Stack>
                             <Stack direction="row" spacing={0.75} sx={{mt: 1, flexWrap: 'wrap'}}>

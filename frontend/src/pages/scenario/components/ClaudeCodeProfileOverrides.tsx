@@ -38,6 +38,7 @@ import {
     type FieldStruct,
     type PrefsKey,
 } from './ClaudeCodeQuickConfig';
+import { fontMono } from '@/theme/fonts';
 
 type OverrideKey = PrefsKey | 'defaultMode';
 
@@ -336,7 +337,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                             <MenuItem key={mode} value={mode}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, width: '100%' }}>
                                     <Typography variant="body2">{modeText[mode].label}</Typography>
-                                    <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>{mode}</Typography>
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontFamily: fontMono }}>{mode}</Typography>
                                 </Box>
                             </MenuItem>
                         ))}
@@ -370,7 +371,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                         endAdornment: field.unit
                             ? <InputAdornment position="end"><Typography variant="caption" color="text.disabled">{field.unit}</Typography></InputAdornment>
                             : undefined,
-                        sx: { fontFamily: field.kind === 'model' ? 'monospace' : undefined, fontSize: '0.85rem' },
+                        sx: { fontFamily: field.kind === 'model' ? fontMono : undefined, fontSize: '0.85rem' },
                     },
                 }}
             />

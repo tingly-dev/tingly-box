@@ -12,6 +12,7 @@ import XMarkdown from '@ant-design/x-markdown';
 import { type Skill, type SkillLocation } from '@/types/prompt';
 import { formatFileSize, getTwoLevelDisplayName } from '@/components/prompt/skill/skillGrouping';
 import SkillColumnShell from './SkillColumnShell';
+import { fontMono } from '@/theme/fonts';
 
 interface SkillDetailColumnProps {
     selectedSkill: Skill | null;
@@ -197,7 +198,7 @@ const SkillDetailColumn = ({
                         <Box
                             sx={{
                                 p: 2,
-                                fontFamily: 'monospace',
+                                fontFamily: fontMono,
                                 fontSize: '0.875rem',
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-word',

@@ -12,6 +12,7 @@ import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
+import { fontMono } from '@/theme/fonts';
 
 // CodexPrefs mirrors the Go struct in internal/config (CodexPrefs).
 // Keys are the literal Codex config.toml keys so the object round-trips
@@ -231,7 +232,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                         py: 0.25,
                         borderRadius: 0.75,
                         bgcolor: 'action.hover',
-                        fontFamily: 'monospace',
+                        fontFamily: fontMono,
                         fontSize: '0.72rem',
                         color: 'text.secondary',
                         whiteSpace: 'nowrap',
@@ -263,7 +264,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                             }}>{unsetLabel}</Typography>
                         </MenuItem>
                         {field.enumValues!.map((v) => (
-                            <MenuItem key={v} value={v} sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{v}</MenuItem>
+                            <MenuItem key={v} value={v} sx={{ fontFamily: fontMono, fontSize: '0.85rem' }}>{v}</MenuItem>
                         ))}
                     </Select>
                 )}
@@ -343,7 +344,7 @@ const CodexQuickConfig: React.FC<CodexQuickConfigProps> = ({ prefs, setPrefs, wr
                             component="span"
                             sx={{
                                 px: 0.75, py: 0.25, borderRadius: 0.75,
-                                bgcolor: 'action.hover', fontFamily: 'monospace',
+                                bgcolor: 'action.hover', fontFamily: fontMono,
                                 fontSize: '0.72rem', color: 'text.secondary', whiteSpace: 'nowrap',
                             }}
                         >

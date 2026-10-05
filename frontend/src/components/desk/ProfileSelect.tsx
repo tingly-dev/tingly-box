@@ -2,6 +2,7 @@ import {Route} from '@/components/icons';
 import {useProfileContext} from '@/contexts/ProfileContext';
 import {MenuItem, Select, Stack, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
+import { fontMono } from '@/theme/fonts';
 
 interface ProfileSelectProps {
     value: string;
@@ -49,7 +50,7 @@ const ProfileSelect = ({value, onChange}: ProfileSelectProps) => {
             {profiles.map((p) => (
                 <MenuItem key={p.id} value={p.id}>
                     {p.name}
-                    <Typography component="span" variant="caption" sx={{ml: 1, color: 'text.secondary', fontFamily: 'monospace'}}>{p.id}</Typography>
+                    <Typography component="span" variant="caption" sx={{ml: 1, color: 'text.secondary', fontFamily: fontMono}}>{p.id}</Typography>
                 </MenuItem>
             ))}
         </Select>

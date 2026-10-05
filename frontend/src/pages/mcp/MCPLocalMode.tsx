@@ -17,6 +17,7 @@ import { CopyIconButton } from '@/components/CopyIconButton';
 import { useEffect, useState } from 'react';
 import { useNotify } from '@/hooks/useNotify';
 import { getApiBaseUrl } from '@/utils/protocol';
+import { fontMono } from '@/theme/fonts';
 
 const MCPLocalMode = () => {
     const notify = useNotify();
@@ -95,7 +96,7 @@ const MCPLocalMode = () => {
                                 sx={{
                                     p: 2,
                                     bgcolor: 'background.paper',
-                                    fontFamily: 'monospace',
+                                    fontFamily: fontMono,
                                     fontSize: '0.875rem',
                                     wordBreak: 'break-all',
                                 }}
@@ -144,7 +145,7 @@ const MCPLocalMode = () => {
                                 <Typography
                                     component="pre"
                                     sx={{
-                                        fontFamily: 'monospace',
+                                        fontFamily: fontMono,
                                         fontSize: '0.875rem',
                                         margin: 0,
                                         pr: 4,
@@ -192,7 +193,7 @@ const MCPLocalMode = () => {
                                 <Typography
                                     component="pre"
                                     sx={{
-                                        fontFamily: 'monospace',
+                                        fontFamily: fontMono,
                                         fontSize: '0.875rem',
                                         margin: 0,
                                         pr: 4,

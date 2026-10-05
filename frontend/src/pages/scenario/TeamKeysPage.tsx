@@ -12,6 +12,7 @@ import { useNotify } from '@/hooks/useNotify';
 import { useSharingKeyActions } from '@/hooks/useSharingKeyActions';
 import { api } from '@/services/api';
 import { groupByTeam, teamPath } from '@/utils/team';
+import { fontMono } from '@/theme/fonts';
 
 /**
  * Every Sharing Key on this instance, grouped by the Team it belongs to.
@@ -77,7 +78,7 @@ const TeamKeysPage = () => {
                                         <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
                                             {team.name}
                                         </Typography>
-                                        <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                                        <Typography variant="caption" sx={{ fontFamily: fontMono, color: 'text.secondary' }}>
                                             {team.slug}
                                         </Typography>
                                         <Chip label={teamKeys.length} size="small" color="primary" variant="outlined" sx={{ height: 20, minWidth: 20, fontSize: '0.7rem' }} />

@@ -5,6 +5,7 @@ import type {ReactNode} from 'react';
 import {useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {cacheHitPct, formatTokens, sessionUsage} from './deskUtils';
+import { fontMono } from '@/theme/fonts';
 
 // The same 8-cell bar the terminal status line draws for context use.
 const contextBar = (pct: number): string => {
@@ -125,7 +126,7 @@ const StatusLine = ({sessionId, profile, model: tier, messages}: StatusLineProps
             component="div"
             variant="caption"
             sx={{
-                mt: 0.75, px: 1.5, color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.72rem',
+                mt: 0.75, px: 1.5, color: 'text.secondary', fontFamily: fontMono, fontSize: '0.72rem',
                 display: 'flex', flexWrap: 'wrap', columnGap: 1, rowGap: 0.25,
                 '& > *:not(:last-child)::after': {content: '"|"', ml: 1, color: 'text.disabled'},
             }}

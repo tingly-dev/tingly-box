@@ -2,6 +2,7 @@ import { Box, Typography } from '@mui/material';
 import type { AggregatedStat } from '@/components/dashboard';
 import { formatDateTime } from './userUsageModel';
 import type { UserUsageRow, ViewMode } from './userUsageModel';
+import { fontMono } from '@/theme/fonts';
 
 // Identity line for the detail card's header bar. Single baseline row (name +
 // id/provider + joined) so the header stays at the shared 72px minHeight and
@@ -34,7 +35,7 @@ export default function RosterDetailHeader({
                 <Typography
                     variant="body2"
                     noWrap
-                    sx={{ color: 'text.secondary', fontFamily: viewMode === 'account' ? 'monospace' : undefined }}
+                    sx={{ color: 'text.secondary', fontFamily: viewMode === 'account' ? fontMono : undefined }}
                 >
                     {viewMode === 'account' ? selectedUser!.user_id : (selectedModel!.provider_name || '—')}
                 </Typography>

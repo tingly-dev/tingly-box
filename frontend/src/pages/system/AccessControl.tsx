@@ -28,6 +28,7 @@ import { PageLayout } from '@/components/PageLayout.tsx';
 import UnifiedCard from '@/components/UnifiedCard.tsx';
 import CardGrid from "@/components/CardGrid.tsx";
 import ConfirmDialog from '@/components/ConfirmDialog.tsx';
+import { fontMono } from '@/theme/fonts';
 
 interface TokenInfo {
     token: string;
@@ -60,7 +61,7 @@ const MaskedTokenRow = ({
             p: 2,
             bgcolor: 'action.hover',
             borderRadius: 1,
-            fontFamily: 'monospace',
+            fontFamily: fontMono,
             fontSize: '0.875rem',
             display: 'flex',
             alignItems: 'center',
@@ -71,7 +72,7 @@ const MaskedTokenRow = ({
         <Typography
             variant="body2"
             sx={{
-                fontFamily: 'monospace',
+                fontFamily: fontMono,
                 wordBreak: 'break-all',
                 flex: 1,
             }}
@@ -129,7 +130,7 @@ const TokenResetSuccessAlert = ({
                 p: 1,
                 bgcolor: 'action.hover',
                 borderRadius: 1,
-                fontFamily: 'monospace',
+                fontFamily: fontMono,
                 fontSize: '0.875rem',
                 display: 'flex',
                 alignItems: 'center',
@@ -140,7 +141,7 @@ const TokenResetSuccessAlert = ({
             <Typography
                 variant="body2"
                 sx={{
-                    fontFamily: 'monospace',
+                    fontFamily: fontMono,
                     wordBreak: 'break-all',
                     flex: 1,
                 }}

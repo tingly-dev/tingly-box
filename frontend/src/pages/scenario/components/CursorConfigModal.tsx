@@ -3,6 +3,7 @@ import React from 'react';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 import { CopyUrlKeyButtons } from './config/CopyUrlKeyButtons';
 import { InstructionSteps } from './config/InstructionSteps';
+import { fontMono } from '@/theme/fonts';
 
 interface CursorConfigModalProps {
     open: boolean;
@@ -80,10 +81,10 @@ const CursorConfigModal: React.FC<CursorConfigModalProps> = ({
                         ]}
                         values={
                             <>
-                                <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
+                                <Typography variant="subtitle2" sx={{ fontFamily: fontMono }}>
                                     Base URL: <strong>{baseUrl}/tingly/cursor</strong>
                                 </Typography>
-                                <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
+                                <Typography variant="subtitle2" sx={{ fontFamily: fontMono }}>
                                     API Key: <strong>{token.slice(0, 16)}...</strong>
                                 </Typography>
                             </>

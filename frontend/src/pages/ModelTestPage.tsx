@@ -19,6 +19,7 @@ import api from '../services/api';
 import { ApiStyleBadge } from '@/components/ApiStyleBadge';
 import { ProbeDialog } from '@/components/probe/ProbeDialog';
 import type { Provider } from '../types/provider';
+import { fontMono } from '@/theme/fonts';
 
 interface ModelCardProps {
     model: string;
@@ -80,7 +81,7 @@ const ModelCard = ({ model, provider, isTesting, onTest, onViewResult, hasResult
                     <Typography
                         variant="body2"
                         sx={{
-                            fontFamily: 'monospace',
+                            fontFamily: fontMono,
                             wordBreak: 'break-all',
                             fontWeight: 500,
                         }}

@@ -14,6 +14,7 @@ import type { AggregatedStat, MetricRow, RosterAxisState, UsageMetricLabels, Sha
 import RosterDetailHeader from './RosterDetailHeader';
 import { usageTableCardSx } from './RosterTable';
 import type { UserUsageRow, ViewMode } from './userUsageModel';
+import { fontMono } from '@/theme/fonts';
 
 type ActiveAxis =
     | RosterAxisState<UserUsageRow, AggregatedStat>
@@ -129,7 +130,7 @@ export default function RosterDetailSection({
                                                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                                     {accountDisplayName(account.user_id || account.key)}
                                                 </Typography>
-                                                <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
+                                                <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: fontMono }}>
                                                     {account.user_id || account.key}
                                                 </Typography>
                                             </>
