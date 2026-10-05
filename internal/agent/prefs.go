@@ -180,16 +180,35 @@ func appendNoProxy(current string, hosts ...string) string {
 	return current
 }
 
-// WithModelSlots returns the prefs with the model slot env vars (ANTHROPIC_MODEL,
-// ANTHROPIC_DEFAULT_*_MODEL, CLAUDE_CODE_SUBAGENT_MODEL) overlaid from slots,
-// keyed by env name.
-func (p ClaudeCodePrefs) WithModelSlots(slots map[string]string) (ClaudeCodePrefs, error) {
-	values, err := p.Values()
-	if err != nil {
-		return p, err
+// modelSlot returns the field holding the model slot env var, or nil for any
+// other key. TestModelSlotsAreTypedFields keeps it in step with CCTiers.
+func (p *ClaudeCodePrefs) modelSlot(envKey string) *string {
+	switch envKey {
+	case "ANTHROPIC_MODEL":
+		return &p.AnthropicModel
+	case "ANTHROPIC_DEFAULT_HAIKU_MODEL":
+		return &p.AnthropicDefaultHaikuModel
+	case "ANTHROPIC_DEFAULT_SONNET_MODEL":
+		return &p.AnthropicDefaultSonnetModel
+	case "ANTHROPIC_DEFAULT_OPUS_MODEL":
+		return &p.AnthropicDefaultOpusModel
+	case "ANTHROPIC_DEFAULT_FABLE_MODEL":
+		return &p.AnthropicDefaultFableModel
+	case "CLAUDE_CODE_SUBAGENT_MODEL":
+		return &p.ClaudeCodeSubagentModel
 	}
-	maps.Copy(values, slots)
-	return ClaudeCodePrefsFromEnv(values)
+	return nil
+}
+
+// WithModelSlots returns the prefs with the model slot env vars overlaid from
+// slots, keyed by env name; keys that are not model slots are ignored.
+func (p ClaudeCodePrefs) WithModelSlots(slots map[string]string) ClaudeCodePrefs {
+	for envKey, model := range slots {
+		if field := p.modelSlot(envKey); field != nil {
+			*field = model
+		}
+	}
+	return p
 }
 
 // DefaultClaudeCodePrefs returns tb's canonical defaults for the given
@@ -207,13 +226,13 @@ func DefaultClaudeCodePrefs(unified bool) ClaudeCodePrefs {
 	}
 	slots := map[string]string{}
 	for _, t := range serverconfig.CCSlotTiers() {
-		slots[t.EnvKey] = t.Name
+		name := t.Name
 		if unified {
-			slots[t.EnvKey] = serverconfig.CCTierUnified
+			name = serverconfig.CCTierUnified
 		}
+		slots[t.EnvKey] = name
 	}
-	p, _ = p.WithModelSlots(slots) // typed keys only: cannot fail
-	return p
+	return p.WithModelSlots(slots)
 }
 
 // legacyCCEnvKeys maps env names earlier versions wrote but Claude Code never

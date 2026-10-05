@@ -70,10 +70,7 @@ func (c *TBClientImpl) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
 	baseURL := fmt.Sprintf("http://%s:%d", host, port)
 	apiKey := c.config.GetModelToken()
 
-	prefs, err := tbagent.DefaultClaudeCodePrefs(false).WithModelSlots(c.resolveClaudeCodeModels())
-	if err != nil {
-		return nil, fmt.Errorf("resolve claude code models: %w", err)
-	}
+	prefs := tbagent.DefaultClaudeCodePrefs(false).WithModelSlots(c.resolveClaudeCodeModels())
 
 	envMap, err := prefs.ToEnv(baseURL, apiKey)
 	if err != nil {

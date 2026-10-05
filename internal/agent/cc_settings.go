@@ -107,17 +107,16 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 	// with the short tier name as fallback, main-scenario rules by the modern
 	// built-in UUID (legacy UUID as a compat fallback) with canonical tingly/*
 	// name as the final fallback.
-	tierModel := func(tier, legacyUUID, legacyFallback string) string {
+	tierModel := func(t serverconfig.CCTier) string {
 		if isProfile {
-			return ruleModel(tier, serverconfig.BuiltinRuleUUID(typ.RuleScenario(scenarioPath), tier))
+			return ruleModel(t.Name, serverconfig.BuiltinRuleUUID(typ.RuleScenario(scenarioPath), t.Name))
 		}
-		return ruleModel(legacyFallback, serverconfig.BuiltinRuleUUID(typ.ScenarioClaudeCode, tier), legacyUUID)
+		return ruleModel(t.Name, serverconfig.BuiltinRuleUUID(typ.ScenarioClaudeCode, t.Name), t.LegacyUUID)
 	}
 
 	defaultKey := serverconfig.CCTierByName(serverconfig.CCTierDefault).EnvKey
 	if unified {
-		unifiedTier := serverconfig.CCTierByName(serverconfig.CCTierUnified)
-		model := tierModel(unifiedTier.Name, unifiedTier.LegacyUUID, unifiedTier.Name)
+		model := tierModel(serverconfig.CCTierByName(serverconfig.CCTierUnified))
 		for _, t := range serverconfig.CCSlotTiers() {
 			env[t.EnvKey] = model
 		}
@@ -130,7 +129,7 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 				env[t.EnvKey] = ruleModel(env[defaultKey], serverconfig.BuiltinRuleUUID(typ.RuleScenario(scenarioPath), t.Name))
 				continue
 			}
-			env[t.EnvKey] = tierModel(t.Name, t.LegacyUUID, t.Name)
+			env[t.EnvKey] = tierModel(t)
 		}
 	}
 
@@ -229,13 +228,7 @@ type CCProfileSettingsResolution struct {
 // could make a rule edit appear to have no effect.
 //
 // The /model picker labels are derived from the slots, so the rules own them too.
-var ccProfileRuleOwnedEnvKeys = slices.Concat(func() []string {
-	var keys []string
-	for _, t := range serverconfig.CCSlotTiers() {
-		keys = append(keys, t.EnvKey)
-	}
-	return keys
-}(), ccDisplayEnvKeys())
+var ccProfileRuleOwnedEnvKeys = slices.Concat(serverconfig.CCSlotEnvKeys(), ccDisplayEnvKeys())
 
 func isCCProfileRuleOwnedEnvKey(key string) bool {
 	return slices.Contains(ccProfileRuleOwnedEnvKeys, key)

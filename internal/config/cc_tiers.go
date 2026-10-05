@@ -24,7 +24,10 @@ type CCTier struct {
 	RuleUUID    string // modern "builtin:claude_code:<tier>" UUID
 	LegacyUUID  string // pre-"builtin:" UUID, "" when the tier never had one
 	LegacyModel string // prefixed request model older installs seeded
-	EnvKey      string // env slot the tier fills; "" for the unified tier, which fills every slot
+	EnvKey      string // env slot the tier fills; empty for the unified tier
+	// Unified marks the single tier used in unified mode: one rule that fills
+	// every env slot. The other tiers are separate-mode tiers with their own slot.
+	Unified bool
 	// Alias is true for tiers Claude Code addresses by a --model alias
 	// (opus/sonnet/haiku/fable); the others are the default and subagent slots.
 	Alias bool
@@ -32,74 +35,86 @@ type CCTier struct {
 	// may be missing or switched off; the slot then follows the default tier.
 	FollowsDefault bool
 
-	Description        string // seeded rule description
-	ProfileDescription string // description of the profile's rule
+	Description string // seeded rule description
 }
 
 // Label is the tier's name in listings ("unified" for the unified tier).
 func (t CCTier) Label() string {
-	if t.Name == CCTierUnified {
+	if t.Unified {
 		return "unified"
 	}
 	return t.Name
+}
+
+// ProfileDescription is the description of the tier's rule in a profile.
+func (t CCTier) ProfileDescription() string {
+	if t.Unified {
+		return "Claude Code profile - unified mode"
+	}
+	return "Claude Code profile - " + t.Name + " model"
 }
 
 // CCTiers lists the tiers in seeding order: the unified tier, then the
 // separate-mode tiers (default first, since FollowsDefault tiers fall back to it).
 var CCTiers = []CCTier{
 	{
-		Name: CCTierUnified, RuleUUID: RuleUUIDCC, LegacyUUID: RuleUUIDBuiltinCC, LegacyModel: "tingly/cc",
-		Description:        "Default proxy rule for Claude Code",
-		ProfileDescription: "Claude Code profile - unified mode",
+		Name: CCTierUnified, RuleUUID: RuleUUIDCC, LegacyUUID: RuleUUIDBuiltinCC, LegacyModel: "tingly/cc", Unified: true,
+		Description: "Default proxy rule for Claude Code",
 	},
 	{
 		Name: CCTierDefault, RuleUUID: RuleUUIDCCDefault, LegacyUUID: RuleUUIDBuiltinCCDefault, LegacyModel: "tingly/cc-default",
-		EnvKey:             "ANTHROPIC_MODEL",
-		Description:        "Claude Code - Default model - for general task",
-		ProfileDescription: "Claude Code profile - default model",
+		EnvKey:      "ANTHROPIC_MODEL",
+		Description: "Claude Code - Default model - for general task",
 	},
 	{
 		Name: CCTierOpus, RuleUUID: RuleUUIDCCOpus, LegacyUUID: RuleUUIDBuiltinCCOpus, LegacyModel: "tingly/cc-opus",
 		EnvKey: "ANTHROPIC_DEFAULT_OPUS_MODEL", Alias: true,
-		Description:        "Claude Code - Opus model - to use for opus , or for opusplan when Plan Mode is active.",
-		ProfileDescription: "Claude Code profile - opus model",
+		Description: "Claude Code - Opus model - to use for opus , or for opusplan when Plan Mode is active.",
 	},
 	{
 		Name: CCTierSonnet, RuleUUID: RuleUUIDCCSonnet, LegacyUUID: RuleUUIDBuiltinCCSonnet, LegacyModel: "tingly/cc-sonnet",
 		EnvKey: "ANTHROPIC_DEFAULT_SONNET_MODEL", Alias: true,
-		Description:        "Claude Code - Sonnet model - model to use for sonnet , or for opusplan when Plan Mode is not active.",
-		ProfileDescription: "Claude Code profile - sonnet model",
+		Description: "Claude Code - Sonnet model - model to use for sonnet , or for opusplan when Plan Mode is not active.",
 	},
 	{
 		Name: CCTierHaiku, RuleUUID: RuleUUIDCCHaiku, LegacyUUID: RuleUUIDBuiltinCCHaiku, LegacyModel: "tingly/cc-haiku",
 		EnvKey: "ANTHROPIC_DEFAULT_HAIKU_MODEL", Alias: true,
-		Description:        "Claude Code - Haiku mode The model to use for haiku , or background functionality",
-		ProfileDescription: "Claude Code profile - haiku model",
+		Description: "Claude Code - Haiku mode The model to use for haiku , or background functionality",
 	},
 	{
 		Name: CCTierFable, RuleUUID: RuleUUIDCCFable, LegacyModel: "tingly/cc-fable",
 		EnvKey: "ANTHROPIC_DEFAULT_FABLE_MODEL", Alias: true, FollowsDefault: true,
-		Description:        "Claude Code - Fable model - model to use for the fable alias",
-		ProfileDescription: "Claude Code profile - fable model",
+		Description: "Claude Code - Fable model - model to use for the fable alias",
 	},
 	{
 		Name: CCTierSubagent, RuleUUID: RuleUUIDCCSubagent, LegacyUUID: RuleUUIDBuiltinCCSubagent, LegacyModel: "tingly/cc-subagent",
-		EnvKey:             "CLAUDE_CODE_SUBAGENT_MODEL",
-		Description:        "Claude Code - Subagent model - model to use for subagents",
-		ProfileDescription: "Claude Code profile - subagent model",
+		EnvKey:      "CLAUDE_CODE_SUBAGENT_MODEL",
+		Description: "Claude Code - Subagent model - model to use for subagents",
 	},
 }
 
-// CCSlotTiers returns the tiers that fill an env slot (everything except the
-// unified tier), in CCTiers order.
-func CCSlotTiers() []CCTier {
+// ccSlotTiers is CCSlotTiers' result, built once.
+var ccSlotTiers = func() []CCTier {
 	out := make([]CCTier, 0, len(CCTiers)-1)
 	for _, t := range CCTiers {
-		if t.EnvKey != "" {
+		if !t.Unified {
 			out = append(out, t)
 		}
 	}
 	return out
+}()
+
+// CCSlotTiers returns the tiers that fill an env slot (everything except the
+// unified tier), in CCTiers order. The slice is shared: do not modify it.
+func CCSlotTiers() []CCTier { return ccSlotTiers }
+
+// CCSlotEnvKeys returns the env var of every slot tier, in CCTiers order.
+func CCSlotEnvKeys() []string {
+	keys := make([]string, len(ccSlotTiers))
+	for i, t := range ccSlotTiers {
+		keys[i] = t.EnvKey
+	}
+	return keys
 }
 
 // CCTierByName returns the tier with the given name (the zero CCTier if none).
@@ -123,36 +138,23 @@ func CCRequestModels() []string {
 
 // ccBuiltinRule builds the seeded rule of a tier in the main scenario.
 func ccBuiltinRule(t CCTier) typ.Rule {
-	return ccRule(t.RuleUUID, t.Name, t.Description, t.Name == CCTierUnified)
+	return ccRule(t.RuleUUID, t.Name, t.Description, t.Unified)
 }
 
-// ccRuleUUIDs returns every UUID a tier's rule has gone by (modern, legacy).
-func ccRuleUUIDs(t CCTier) []string {
-	if t.LegacyUUID == "" {
-		return []string{t.RuleUUID}
+// ccTierForRuleUUID returns the tier a built-in Claude Code rule UUID (modern
+// or legacy) belongs to.
+func ccTierForRuleUUID(uuid string) (CCTier, bool) {
+	for _, t := range CCTiers {
+		if uuid == t.RuleUUID || (t.LegacyUUID != "" && uuid == t.LegacyUUID) {
+			return t, true
+		}
 	}
-	return []string{t.RuleUUID, t.LegacyUUID}
+	return CCTier{}, false
 }
 
 // Lookup tables derived from CCTiers. They are package-level initializers (not
 // init() functions) so they exist before DefaultRules and any other init uses them.
 var (
-	// ccProfileTiers is the set of request models a system-seeded Claude Code
-	// profile rule routes on. Profile rules with any other request model are
-	// user-customized and keep whatever UUID they have.
-	ccProfileTiers = func() map[string]bool {
-		m := map[string]bool{}
-		for _, t := range CCTiers {
-			m[t.Name] = true
-		}
-		return m
-	}()
-
-	// claudeCodeUnifiedRuleUUIDs / claudeCodeSeparateRuleUUIDs hold every UUID
-	// (modern and legacy) of the unified rule and of the separate-mode rules.
-	claudeCodeUnifiedRuleUUIDs  = ccRuleUUIDSet(true)
-	claudeCodeSeparateRuleUUIDs = ccRuleUUIDSet(false)
-
 	// legacyCCRuleUUIDs maps the legacy Claude Code built-in UUIDs to their
 	// modern counterparts. Used by normalizeBuiltinRuleIdentity to rename live
 	// configs and by defaultRuleByUUID to keep older migrations (written against
@@ -184,19 +186,6 @@ var (
 		return m
 	}()
 )
-
-func ccRuleUUIDSet(unified bool) map[string]bool {
-	m := map[string]bool{}
-	for _, t := range CCTiers {
-		if (t.EnvKey == "") != unified {
-			continue
-		}
-		for _, uuid := range ccRuleUUIDs(t) {
-			m[uuid] = true
-		}
-	}
-	return m
-}
 
 // canonicalCCRequestModel returns the short spelling of a Claude Code built-in
 // request model, dropping the [1m] marker; other names are returned trimmed.

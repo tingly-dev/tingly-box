@@ -115,8 +115,8 @@ func newCCProfileRules(profiledScenario typ.RuleScenario, unified bool) []typ.Ru
 
 	var rules []typ.Rule
 	for _, t := range CCTiers {
-		if (t.EnvKey == "") == unified {
-			rules = append(rules, newRule(t.Name, t.ProfileDescription))
+		if t.Unified == unified {
+			rules = append(rules, newRule(t.Name, t.ProfileDescription()))
 		}
 	}
 	return rules

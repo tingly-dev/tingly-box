@@ -456,20 +456,19 @@ func hasMultipleServiceTiers(services []*loadbalance.Service) bool {
 
 func legacyRuleScenario(uuid string) (typ.RuleScenario, bool) {
 	scenarioMap := map[string]typ.RuleScenario{
-		RuleUUIDTingly:            typ.ScenarioOpenAI,
-		RuleUUIDBuiltinOpenAI:     typ.ScenarioOpenAI,
-		RuleUUIDBuiltinAnthropic:  typ.ScenarioAnthropic,
-		RuleUUIDBuiltinCodex:      typ.ScenarioCodex,
-		RuleUUIDBuiltinCC:         typ.ScenarioClaudeCode,
-		RuleUUIDClaudeCode:        typ.ScenarioClaudeCode,
-		RuleUUIDBuiltinCCHaiku:    typ.ScenarioClaudeCode,
-		RuleUUIDBuiltinCCSonnet:   typ.ScenarioClaudeCode,
-		RuleUUIDBuiltinCCOpus:     typ.ScenarioClaudeCode,
-		RuleUUIDBuiltinCCDefault:  typ.ScenarioClaudeCode,
-		RuleUUIDBuiltinCCSubagent: typ.ScenarioClaudeCode,
+		RuleUUIDTingly:           typ.ScenarioOpenAI,
+		RuleUUIDBuiltinOpenAI:    typ.ScenarioOpenAI,
+		RuleUUIDBuiltinAnthropic: typ.ScenarioAnthropic,
+		RuleUUIDBuiltinCodex:     typ.ScenarioCodex,
+		RuleUUIDClaudeCode:       typ.ScenarioClaudeCode,
 	}
-	scenario, ok := scenarioMap[uuid]
-	return scenario, ok
+	if scenario, ok := scenarioMap[uuid]; ok {
+		return scenario, true
+	}
+	if t, ok := ccTierForRuleUUID(uuid); ok && uuid == t.LegacyUUID {
+		return typ.ScenarioClaudeCode, true
+	}
+	return "", false
 }
 
 // normalizeBuiltinRuleIdentity keeps built-in rule UUIDs on the canonical
@@ -516,7 +515,7 @@ func canonicalRuleUUID(rule *typ.Rule) (string, bool) {
 		return canonical, ok
 	}
 	tier := TrimContext1M(rule.RequestModel)
-	if !ccProfileTiers[tier] {
+	if CCTierByName(tier).Name == "" {
 		return "", false
 	}
 	return BuiltinRuleUUID(rule.Scenario, tier), true
@@ -602,7 +601,7 @@ func normalizeClaudeCodeProfileUnifiedModel(c *Config) bool {
 
 		// Migrate "*" to "cc" for unified mode.
 		if rule.RequestModel == "*" {
-			rule.RequestModel = "cc"
+			rule.RequestModel = CCTierUnified
 			needsSave = true
 		}
 	}
@@ -774,12 +773,13 @@ func (c *Config) hasRequestModel(scenario typ.RuleScenario, requestModel string)
 // backfillFableRuleOnce runs backfillFableRule once per config, so a fable
 // rule the user later deletes is not resurrected on every boot.
 func backfillFableRuleOnce(c *Config) bool {
-	if c.hasMigrationCompleted("20261004") {
+	const marker = "20261004"
+	if c.hasMigrationCompleted(marker) {
 		return false
 	}
 	c.backfillFableRule()
-	c.markMigrationCompleted("20261004")
-	return true
+	c.markMigrationCompleted(marker)
+	return true // the marker itself changed the config
 }
 
 // backfillFableRule seeds the Claude Code fable rule for configs that predate
@@ -789,7 +789,7 @@ func backfillFableRuleOnce(c *Config) bool {
 // answering to that name is left alone rather than shadowed.
 func (c *Config) backfillFableRule() bool {
 	fable := CCTierByName(CCTierFable)
-	opus := c.findRuleByUUID(RuleUUIDCCOpus)
+	opus := c.findRuleByUUID(CCTierByName(CCTierOpus).RuleUUID)
 	if opus == nil || c.findRuleByUUID(fable.RuleUUID) != nil {
 		return false
 	}

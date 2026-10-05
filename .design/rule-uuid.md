@@ -90,7 +90,7 @@ just `BuiltinRuleUUID` applied to the profiled scenario name, so
 `builtin:claude_code:haiku` (main) and `builtin:claude_code:p1:haiku`
 (profile) come from the same rule.
 
-`ccProfileTiers` (migration.go) is the set of system-seeded tier names;
+`CCTiers` (cc_tiers.go) is the table of system-seeded tier names;
 `newCCProfileRules` (config.go) assigns canonical UUIDs at creation time
 via `BuiltinRuleUUID(profiledScenario, requestModel)`.
 
