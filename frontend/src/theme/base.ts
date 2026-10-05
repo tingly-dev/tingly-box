@@ -13,7 +13,7 @@ export const baseTypography = (textPrimary: string, textSecondary: string, textD
   subtitle2: { fontSize: '0.75rem', lineHeight: 1.5, fontWeight: 500, color: textSecondary },
   body1: { fontSize: '0.875rem', lineHeight: 1.6, color: textSecondary },
   body2: { fontSize: '0.8rem', lineHeight: 1.55, color: textSecondary },
-  caption: { fontSize: '0.6875rem', lineHeight: 1.45, color: textDisabled },
+  caption: { fontSize: '0.65rem', lineHeight: 1.45, color: textDisabled },
   button: { fontSize: '0.8rem', fontWeight: 600, textTransform: 'none' },
   overline: { fontSize: '0.65rem', lineHeight: 1.5, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: textSecondary },
 });
