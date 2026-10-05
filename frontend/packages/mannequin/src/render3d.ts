@@ -8,103 +8,97 @@
 // 2D context: the sketch surface stays a plain canvas (strokes, export and the
 // mock backend never learn that WebGL exists), and one context serves every
 // thumbnail in the pose library — browsers cap live WebGL contexts at about a
-// dozen, and the library alone has thirty-six tiles.
+// dozen, and the library alone has forty-four tiles.
 import {
-    AmbientLight,
+    BackSide,
+    BufferAttribute,
     BufferGeometry,
-    CylinderGeometry,
     DirectionalLight,
     Group,
-    LatheGeometry,
+    HemisphereLight,
     Mesh,
+    MeshBasicMaterial,
     MeshStandardMaterial,
     PerspectiveCamera,
-    Quaternion,
     Scene,
-    SphereGeometry,
     Vector2,
     Vector3,
     WebGLRenderer,
 } from 'three';
-import { figureSolids, toneFor } from './body';
+import { figureSurface, toneFor } from './body';
 import { projectionOf, projectPoint } from './camera';
 import { figureUnit, type PoseFigure } from './skeleton';
 
-// The projection is in canvas pixels with y down; three's is y up. Nothing
-// else differs, so the mapping is one sign.
-const toScene = (p: { x: number; y: number; z?: number }): Vector3 => new Vector3(p.x, -p.y, p.z ?? 0);
-const UP = new Vector3(0, 1, 0);
 
-// One fixed studio light: key up-left-front, a fill from the right, and enough
-// ambient that the far side of a limb is still a limb.
+// A figure-drawing studio: a strong key high on the left and in front, a cool
+// sky / warm floor fill so the shadow side is still modelled, and a rim from
+// behind that separates the silhouette from the paper. The terminator — where
+// light turns to shadow — is what shows a form's roundness; flat ambient
+// light hides it, which is half of why the old manikin read as plastic.
 const buildLights = (scene: Scene): void => {
-    const key = new DirectionalLight(0xffffff, 2.2);
-    key.position.set(-1, 1.4, 1.6);
-    const fill = new DirectionalLight(0xffffff, 0.7);
-    fill.position.set(1.2, 0.3, 0.8);
-    scene.add(key, fill, new AmbientLight(0xffffff, 0.55));
+    const key = new DirectionalLight(0xffffff, 2.4);
+    key.position.set(-1.1, 1.5, 1.4);
+    const rim = new DirectionalLight(0xffffff, 1.1);
+    rim.position.set(1.4, 0.6, -1.2);
+    scene.add(key, rim, new HemisphereLight(0xf2f5fa, 0x7d746c, 0.9));
 };
 
-// Shapes that never change are built once at unit size and scaled per mesh.
-// Cylinders can't be — a taper is not a scale of another taper — so those are
-// built per draw and disposed with it.
-const unitSphere = new SphereGeometry(1, 32, 24);
-const lathes = new Map<string, LatheGeometry>();
-const latheFor = (profile: readonly (readonly [number, number])[]): LatheGeometry => {
-    const key = profile.map(([h, w]) => `${h}:${w}`).join(',');
-    let geometry = lathes.get(key);
-    if (!geometry) {
-        geometry = new LatheGeometry(profile.map(([h, w]) => new Vector2(Math.max(w, 0.002), h)), 48);
-        lathes.set(key, geometry);
-    }
-    return geometry;
-};
 const materials = new Map<string, MeshStandardMaterial>();
 const materialFor = (hex: string): MeshStandardMaterial => {
     let material = materials.get(hex);
     if (!material) {
-        material = new MeshStandardMaterial({ color: hex, roughness: 0.62, metalness: 0 });
+        material = new MeshStandardMaterial({ color: hex, roughness: 0.55, metalness: 0 });
         materials.set(hex, material);
     }
     return material;
 };
 
-const meshesFor = (figure: PoseFigure, hex: string): { group: Group; disposable: BufferGeometry[] } => {
-    const group = new Group();
-    const material = materialFor(hex);
-    const disposable: BufferGeometry[] = [];
-    const place = (geometry: BufferGeometry, position: Vector3, axis?: Vector3, scale?: Vector3): void => {
-        const mesh = new Mesh(geometry, material);
-        mesh.position.copy(position);
-        if (axis) mesh.quaternion.copy(new Quaternion().setFromUnitVectors(UP, axis));
-        if (scale) mesh.scale.copy(scale);
-        group.add(mesh);
-    };
-    for (const solid of figureSolids(figure)) {
-        if (solid.kind === 'sphere') {
-            const scale = solid.scale
-                ? new Vector3(solid.scale.x, solid.scale.y, solid.scale.z ?? solid.scale.x)
-                : new Vector3(solid.radius, solid.radius, solid.radius);
-            place(unitSphere, toScene(solid.center), solid.axis ? toScene(solid.axis).normalize() : undefined, scale);
-        } else if (solid.kind === 'capsule') {
-            const from = toScene(solid.from);
-            const to = toScene(solid.to);
-            const bone = to.clone().sub(from);
-            const length = bone.length();
-            if (length < 1e-6) continue;
-            const geometry = new CylinderGeometry(solid.toRadius, solid.fromRadius, length, 28, 1, false);
-            disposable.push(geometry);
-            place(geometry, from.clone().addScaledVector(bone, 0.5), bone.normalize());
-        } else {
-            place(
-                latheFor(solid.profile),
-                toScene(solid.base),
-                toScene(solid.axis).normalize(),
-                new Vector3(solid.unit, solid.unit, solid.unit * solid.depth),
+// The outline is an inverted hull: every surface drawn a second time, pushed
+// out along its normals, back faces only, in ink. It gives the silhouette and
+// every overlap (an arm across the body, a knee in front of a thigh) the line
+// a figure drawing would — and lines are what an image model reads first.
+const INK = '#3d4249';
+const outlines = new Map<number, MeshBasicMaterial>();
+const outlineFor = (thickness: number): MeshBasicMaterial => {
+    const key = Math.round(thickness * 100) / 100;
+    let material = outlines.get(key);
+    if (!material) {
+        // Pushed back in depth so it shows at the silhouette and where one
+        // form passes in front of another, but not through the shallow
+        // concavities of the surface itself (collarbones, the small of the
+        // back), where an un-offset hull pokes through as stray marks.
+        material = new MeshBasicMaterial({ color: INK, side: BackSide, polygonOffset: true, polygonOffsetFactor: 6, polygonOffsetUnits: 16 });
+        material.onBeforeCompile = (shader) => {
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <begin_vertex>',
+                `vec3 transformed = position + normalize(normal) * ${key.toFixed(2)};`,
             );
-        }
+        };
+        material.customProgramCacheKey = () => `outline-${key}`;
+        outlines.set(key, material);
     }
-    return { group, disposable };
+    return material;
+};
+
+const meshesFor = (figure: PoseFigure, hex: string): { group: Group; disposable: BufferGeometry[] } => {
+    const { positions, index } = figureSurface(figure);
+    // Into three's y-up space: one sign, as everywhere else.
+    const flipped = new Float32Array(positions.length);
+    for (let i = 0; i < positions.length; i += 3) {
+        flipped[i] = positions[i];
+        flipped[i + 1] = -positions[i + 1];
+        flipped[i + 2] = positions[i + 2];
+    }
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', new BufferAttribute(flipped, 3));
+    geometry.setIndex(new BufferAttribute(index, 1));
+    geometry.computeVertexNormals();
+    const group = new Group();
+    group.add(
+        new Mesh(geometry, materialFor(hex)),
+        new Mesh(geometry, outlineFor(Math.max(figureUnit(figure) * 0.0024, 0.6))),
+    );
+    return { group, disposable: [geometry] };
 };
 
 // The camera `projectionOf` describes: a pinhole at the figure's anchor, one
@@ -147,34 +141,24 @@ const rendererFor = (width: number, height: number): WebGLRenderer | null => {
 // silhouettes. Ugly, honest, and only ever seen where there is no GPU.
 const drawFlat = (ctx: CanvasRenderingContext2D, figure: PoseFigure, hex: string): void => {
     const projection = projectionOf(figure);
+    const { positions, index } = figureSurface(figure);
+    const xs = new Float32Array(positions.length / 3);
+    const ys = new Float32Array(positions.length / 3);
+    for (let i = 0; i < xs.length; i += 1) {
+        const p = projectPoint({ x: positions[i * 3], y: positions[i * 3 + 1], z: positions[i * 3 + 2] }, projection);
+        xs[i] = p.x; ys[i] = p.y;
+    }
     ctx.save();
     ctx.fillStyle = hex;
-    ctx.strokeStyle = '#5b6066';
-    ctx.lineWidth = Math.max(figureUnit(figure) * 0.006, 1);
-    ctx.lineJoin = 'round';
-    for (const solid of figureSolids(figure)) {
-        ctx.beginPath();
-        if (solid.kind === 'sphere') {
-            const c = projectPoint(solid.center, projection);
-            const r = (solid.scale ? Math.max(solid.scale.x, solid.scale.y) : solid.radius) * c.scale;
-            ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
-        } else {
-            const [a, b, ra, rb] = solid.kind === 'capsule'
-                ? [projectPoint(solid.from, projection), projectPoint(solid.to, projection), solid.fromRadius, solid.toRadius]
-                : (() => {
-                    const top = solid.profile[solid.profile.length - 1][0] * solid.unit;
-                    const widest = Math.max(...solid.profile.map(([, w]) => w)) * solid.unit;
-                    const end = { x: solid.base.x + solid.axis.x * top, y: solid.base.y + solid.axis.y * top, z: (solid.base.z ?? 0) + (solid.axis.z ?? 0) * top };
-                    return [projectPoint(solid.base, projection), projectPoint(end, projection), widest, widest] as const;
-                })();
-            const angle = Math.atan2(b.y - a.y, b.x - a.x);
-            ctx.arc(a.x, a.y, ra * a.scale, angle + Math.PI / 2, angle - Math.PI / 2);
-            ctx.arc(b.x, b.y, rb * b.scale, angle - Math.PI / 2, angle + Math.PI / 2);
-            ctx.closePath();
-        }
-        ctx.fill();
-        ctx.stroke();
+    ctx.beginPath();
+    for (let t = 0; t < index.length; t += 3) {
+        const a = index[t], b = index[t + 1], c = index[t + 2];
+        ctx.moveTo(xs[a], ys[a]);
+        ctx.lineTo(xs[b], ys[b]);
+        ctx.lineTo(xs[c], ys[c]);
+        ctx.closePath();
     }
+    ctx.fill('nonzero');
     ctx.restore();
 };
 

@@ -64,8 +64,6 @@ export interface PoseSpec {
 
 const ORIGIN: Vec3 = { x: 0, y: 0, z: 0 };
 
-// How far the neck leans out of the torso's axis, toward the body's front.
-const NECK_FORWARD = 7;
 
 // Down is 0, so a spec reads the way a person describes a limb: "hanging" is 0.
 // The second number swings the same bone out of the screen plane, which is
@@ -137,10 +135,13 @@ export const buildPose = (spec: PoseSpec, bones: BoneTable = BONE): PresetPoints
     // The neck is a cylinder that angles forward, not a vertical peg — one of
     // the few things the art-school construction is explicit about. Applied
     // here rather than in every pose spec, so it costs no preset a line.
+    // (The rotation is about head × front, so a *positive* angle tips the
+    // head toward the front. It was once negated — a back-tilt nobody could
+    // see on a ball for a head, and a face staring at the sky on a real one.)
     raw.head = add3(neck, rotateAxis(
         sub3(raw.head, neck),
         norm3(cross3(sub3(raw.head, neck), bodyForwardOf(raw))),
-        rad(-NECK_FORWARD),
+        rad(bones.neckForward),
     ));
     // The head's turn is applied last: it rotates the skull about the torso's
     // axis without moving anything else, which is what "looking over your

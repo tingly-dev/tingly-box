@@ -5,7 +5,7 @@ import { projectFigure, projectionOf, projectPoint, unprojectPoint } from './cam
 import { BONE, JOINT_KEYS, JOINT_PARENT, SUBTREES, figureUnit, type JointKey, type PoseFigure } from './skeleton';
 import { constrainFigure } from './rig';
 import { figureCenter, figureVisualBounds, translateFigure } from './transform';
-import { figureSolids } from './body';
+import { figureSurface } from './body';
 import { add3, cross3, dist3, dot3, len3, mul3, norm3, rotateAxis, sub3, zOf, type Vec3 } from './vec3';
 import type { Point, Size } from './types';
 
@@ -250,31 +250,39 @@ export const hitTestJoint = (
 // True when the point is on the mannequin's silhouette, which is what "grab
 // the body and move it" means. Tested against the same solids the renderer
 // draws, projected the same way, so what you can grab cannot drift from what
-// you can see. A block is tested as the capsule along its axis at its widest,
-// which errs a hair generous — the right way for a grab to err.
+// you can see: the skinned surface, triangle by triangle.
 export const hitTestBody = (figure: PoseFigure, point: Point, tolerance = 0): boolean => {
     const projection = projectionOf(figure);
-    const at = (p: Vec3) => projectPoint(p, projection);
-    for (const solid of figureSolids(figure)) {
-        if (solid.kind === 'sphere') {
-            const c = at(solid.center);
-            const radius = (solid.scale ? Math.max(solid.scale.x, solid.scale.y) : solid.radius) * c.scale;
-            if (Math.hypot(point.x - c.x, point.y - c.y) <= radius + tolerance) return true;
-            continue;
+    const { positions, index } = figureSurface(figure);
+    const count = positions.length / 3;
+    const xs = new Float32Array(count);
+    const ys = new Float32Array(count);
+    for (let i = 0; i < count; i += 1) {
+        const p = projectPoint({ x: positions[i * 3], y: positions[i * 3 + 1], z: positions[i * 3 + 2] }, projection);
+        xs[i] = p.x; ys[i] = p.y;
+    }
+    const px = point.x, py = point.y;
+    const tol2 = tolerance * tolerance;
+    for (let t = 0; t < index.length; t += 3) {
+        const a = index[t], b = index[t + 1], c = index[t + 2];
+        const minX = Math.min(xs[a], xs[b], xs[c]) - tolerance;
+        const maxX = Math.max(xs[a], xs[b], xs[c]) + tolerance;
+        if (px < minX || px > maxX) continue;
+        const minY = Math.min(ys[a], ys[b], ys[c]) - tolerance;
+        const maxY = Math.max(ys[a], ys[b], ys[c]) + tolerance;
+        if (py < minY || py > maxY) continue;
+        const d1 = (px - xs[b]) * (ys[a] - ys[b]) - (xs[a] - xs[b]) * (py - ys[b]);
+        const d2 = (px - xs[c]) * (ys[b] - ys[c]) - (xs[b] - xs[c]) * (py - ys[c]);
+        const d3 = (px - xs[a]) * (ys[c] - ys[a]) - (xs[c] - xs[a]) * (py - ys[a]);
+        const neg = d1 < 0 || d2 < 0 || d3 < 0;
+        const pos = d1 > 0 || d2 > 0 || d3 > 0;
+        if (!(neg && pos)) return true;
+        if (tolerance > 0) {
+            for (const v of [a, b, c]) {
+                const dx = px - xs[v], dy = py - ys[v];
+                if (dx * dx + dy * dy <= tol2) return true;
+            }
         }
-        const [from, to, fromRadius, toRadius] = solid.kind === 'capsule'
-            ? [at(solid.from), at(solid.to), solid.fromRadius, solid.toRadius]
-            : (() => {
-                const top = solid.profile[solid.profile.length - 1][0] * solid.unit;
-                const widest = Math.max(...solid.profile.map(([, w]) => w)) * solid.unit;
-                return [at(solid.base), at(add3(solid.base, mul3(solid.axis, top))), widest, widest] as const;
-            })();
-        const segment: Segment = {
-            from, to,
-            fromRadius: fromRadius * from.scale,
-            toRadius: toRadius * to.scale,
-        };
-        if (insideSegment(point, segment, tolerance)) return true;
     }
     return false;
 };

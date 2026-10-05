@@ -16,7 +16,7 @@ export type PosePresetKey =
 
 // How far a body laid on the floor is swung round from dead side-on (see
 // `PoseSpec.body`).
-const TURN_ON_FLOOR = 28;
+const TURN_ON_FLOOR = 45;
 
 const POSE_SPECS: Record<PosePresetKey, PoseSpec> = {
     standing: {
@@ -156,13 +156,13 @@ const POSE_SPECS: Record<PosePresetKey, PoseSpec> = {
     // Both legs folded to one side, propped on the arm on the other.
     sideSit: {
         lean: 14, shoulderTilt: -8, headTilt: -10,
-        arms: { l: [[-22, 4], [-16, 8]], r: [[18, 34], [-8, 58]] },
+        arms: { l: [[-30, 4], [-24, 8]], r: [[18, 34], [-8, 58]] },
         legs: { l: [[30, 74], [96, -38]], r: [[44, 70], [104, -30]] },
     },
     // The side-sit with the free hand behind the head.
     sideSitHandHead: {
         lean: 12, shoulderTilt: -6, headTilt: -8,
-        arms: { l: [[-22, 4], [-16, 8]], r: [[146, -18], [-118, -40]] },
+        arms: { l: [[-30, 4], [-24, 8]], r: [[146, -18], [-118, -40]] },
         legs: { l: [[30, 74], [96, -38]], r: [[44, 70], [104, -30]] },
     },
     // Sitting back on one hand, one knee drawn up with the forearm resting

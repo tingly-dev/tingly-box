@@ -17,8 +17,7 @@ import {
     createFigure,
     distanceToSegment,
     figureBounds,
-    figureSolids,
-    manikinFor,
+    figureSurface,
     constrainFigure,
     figureUnit,
     HANDLE_KEYS,
@@ -74,10 +73,11 @@ describe('createFigure', () => {
         expect(bounds.height).toBeLessThan(1024 * 0.76);
         expect(bounds.x + bounds.width / 2).toBeCloseTo(512, 0);
         expect(bounds.y + bounds.height / 2).toBeCloseTo(512, 0);
-        // Dead-on it is the authored 70% plus the toes, which stick out past
-        // the heel and are part of what you can see and grab.
+        // Dead-on, the joints span a little under the authored 70%: it is
+        // measured crown-joint to heel over the stubs as well, and the crown
+        // joint is the middle of the skull, not its top.
         const front = figureBounds(createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front)).height;
-        expect(front).toBeGreaterThan(1024 * 0.7);
+        expect(front).toBeGreaterThan(1024 * 0.66);
         expect(front).toBeLessThan(1024 * 0.72);
     });
 
@@ -453,26 +453,56 @@ describe('handles you can actually grab', () => {
     });
 });
 
-describe('figureSolids', () => {
+// How thick a limb is, read off the skinned surface: the widest the mesh
+// gets around the bone, in a thin slab across its middle.
+const girthAt = (figure: PoseFigure, from: JointKey, to: JointKey) => {
+    const { positions } = figureSurface(figure);
+    const a = figure.joints[from], b = figure.joints[to];
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: ((a.z ?? 0) + (b.z ?? 0)) / 2 };
+    const length = bone3(figure, from, to);
+    const axis = { x: (b.x - a.x) / length, y: (b.y - a.y) / length, z: ((b.z ?? 0) - (a.z ?? 0)) / length };
+    let widest = 0;
+    for (let i = 0; i < positions.length; i += 3) {
+        const d = { x: positions[i] - mid.x, y: positions[i + 1] - mid.y, z: positions[i + 2] - mid.z };
+        const along = d.x * axis.x + d.y * axis.y + d.z * axis.z;
+        if (Math.abs(along) > length * 0.04) continue;
+        const radial = Math.hypot(d.x - axis.x * along, d.y - axis.y * along, d.z - axis.z * along);
+        // Near this bone only: the other thigh is close by.
+        if (radial < length * 0.3) widest = Math.max(widest, radial);
+    }
+    return widest;
+};
+
+describe('the skinned surface', () => {
     // The only description of the body. The renderer draws it, the hit test
-    // projects it, so one list is what keeps grab and sight from drifting.
-    it('is two blocks, a waist, a head, and the limbs, sized off the body', () => {
+    // projects it, so one geometry is what keeps grab and sight from drifting.
+    it('wraps the bones it is skinned on', () => {
         const figure = createFigure('standing', DIMS);
-        const solids = figureSolids(figure);
-        expect(solids.filter((s) => s.kind === 'block')).toHaveLength(2);
-        const thigh = solids.find((s) => s.kind === 'capsule' && s.from === figure.joints.hipL);
-        expect(thigh && thigh.kind === 'capsule' ? thigh.fromRadius : 0)
-            .toBeCloseTo(manikinFor(figure).thigh * figureUnit(figure), 6);
+        const girth = girthAt(figure, 'hipL', 'kneeL');
+        // A thigh, not a stick and not a barrel.
+        expect(girth).toBeGreaterThan(figureUnit(figure) * 0.04);
+        expect(girth).toBeLessThan(figureUnit(figure) * 0.09);
     });
 
-    it('scales every radius with the figure', () => {
+    it('scales with the figure', () => {
         const base = createFigure('standing', DIMS);
         const big = scaleFigure(base, 2);
-        const radii = (f: PoseFigure) => figureSolids(f)
-            .map((s) => (s.kind === 'sphere' ? s.radius : s.kind === 'capsule' ? s.fromRadius : s.unit));
-        const a = radii(base);
-        const b = radii(big);
-        for (let i = 0; i < a.length; i += 1) expect(b[i]).toBeCloseTo(a[i] * 2, 6);
+        expect(girthAt(big, 'hipL', 'kneeL')).toBeCloseTo(girthAt(base, 'hipL', 'kneeL') * 2, 1);
+    });
+
+    it('follows a swung limb', () => {
+        const figure = createFigure('tPose', DIMS, undefined, 0, VIEW_PRESETS.front);
+        const raised = createFigure('armsUp', DIMS, undefined, 0, VIEW_PRESETS.front);
+        // The hand is wherever the wrist went, not where the model was built.
+        const handNear = (f: PoseFigure) => {
+            const { positions } = figureSurface(f);
+            const w = f.joints.wristR;
+            let best = Infinity;
+            for (let i = 0; i < positions.length; i += 3) best = Math.min(best, Math.hypot(positions[i] - w.x, positions[i + 1] - w.y, positions[i + 2] - (w.z ?? 0)));
+            return best;
+        };
+        expect(handNear(figure)).toBeLessThan(figureUnit(figure) * 0.03);
+        expect(handNear(raised)).toBeLessThan(figureUnit(raised) * 0.03);
     });
 
     it('is what the body hit test sees', () => {
@@ -483,6 +513,18 @@ describe('figureSolids', () => {
         expect(hitTestBody(figure, { x: (at.hipL.x + at.kneeL.x) / 2, y: (at.hipL.y + at.kneeL.y) / 2 })).toBe(true);
         // Well out beside the waist: paper.
         expect(hitTestBody(figure, { x: at.neck.x + figureUnit(figure) * 0.3, y: (at.neck.y + at.hip.y) / 2 })).toBe(false);
+    });
+
+    it('measures about eight heads, crown to heel', () => {
+        const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
+        const { positions } = figureSurface(figure);
+        let top = Infinity, bottom = -Infinity;
+        for (let i = 1; i < positions.length; i += 3) { top = Math.min(top, positions[i]); bottom = Math.max(bottom, positions[i]); }
+        const heads = (bottom - top) / (HEAD_LENGTH_RATIO * figureUnit(figure));
+        // MakeHuman's "ideal proportions": between the seven and a half heads
+        // of a real adult and the eight of the drawing canon.
+        expect(heads).toBeGreaterThan(7.2);
+        expect(heads).toBeLessThan(8.2);
     });
 });
 
@@ -744,13 +786,8 @@ describe('figure scale is the body, not the bounding box', () => {
         // Girth is within a few percent, not identical: what is left of the
         // difference is perspective, which is a thing about the camera rather
         // than about the body.
-        // Measured on the solid itself: the thigh capsule's radius at the hip,
-        // which is what "girth" is once the body is a list of solids.
-        const thighGirth = (f: PoseFigure) => {
-            const thigh = figureSolids(f).find((solid) => solid.kind === 'capsule'
-                && solid.from === f.joints.hipL && solid.to === f.joints.kneeL);
-            return thigh && thigh.kind === 'capsule' ? thigh.fromRadius : 0;
-        };
+        // Measured on the surface itself, around the middle of the thigh.
+        const thighGirth = (f: PoseFigure) => girthAt(f, 'hipL', 'kneeL');
         const ratio = thighGirth(lying) / thighGirth(standing);
         expect(Number.isFinite(ratio)).toBe(true);
         expect(ratio).toBeGreaterThan(0.9);

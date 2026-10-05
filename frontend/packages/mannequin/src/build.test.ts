@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
     applyPreset,
+    BONES,
     createFigure,
     figureBuild,
-    figureSolids,
+    figureSurface,
     figureUnit,
     FIGURE_BUILDS,
     JOINT_KEYS,
@@ -39,45 +40,38 @@ describe('two builds, one library', () => {
         }
     });
 
-    it('differs at the girdles and nowhere else', () => {
+    it('gives the two builds their own proportions at the same size', () => {
         const female = createFigure('tPose', DIMS, undefined, 0, VIEW_PRESETS.front, 'female');
         const male = createFigure('tPose', DIMS, undefined, 0, VIEW_PRESETS.front, 'male');
         // Same person-size, so swapping build never resizes anyone.
         expect(figureUnit(female)).toBeCloseTo(figureUnit(male), 6);
-        // Male: shoulders clearly wider than hips. Female: the two lines close
-        // to equal, shoulders narrower and hips wider than his.
-        expect(span(male, 'shoulderL', 'shoulderR') / span(male, 'hipL', 'hipR')).toBeGreaterThan(1.5);
-        expect(span(female, 'shoulderL', 'shoulderR') / span(female, 'hipL', 'hipR')).toBeLessThan(1.35);
+        // His shoulder line is well outside his hips; hers sits much closer.
+        // Measured on the joints the model was rigged on.
+        const ratio = (f: PoseFigure) => span(f, 'shoulderL', 'shoulderR') / span(f, 'hipL', 'hipR');
+        expect(ratio(male)).toBeGreaterThan(ratio(female) * 1.15);
         expect(span(female, 'shoulderL', 'shoulderR')).toBeLessThan(span(male, 'shoulderL', 'shoulderR'));
-        expect(span(female, 'hipL', 'hipR')).toBeGreaterThan(span(male, 'hipL', 'hipR'));
-        for (const [a, b] of [['shoulderL', 'elbowL'], ['elbowL', 'wristL'], ['hipL', 'kneeL'], ['kneeL', 'ankleL'], ['hip', 'neck']] as const) {
-            expect(dist3(female.joints[a], female.joints[b])).toBeCloseTo(dist3(male.joints[a], male.joints[b]), 6);
-        }
     });
 
-    it('gives the female build a bust and glutes and the male build neither', () => {
-        const count = (build: 'female' | 'male') => figureSolids(createFigure('standing', DIMS, undefined, 0, undefined, build))
-            .filter((solid) => solid.kind === 'sphere').length;
-        expect(count('female') - count('male')).toBe(4);
-    });
-
-    it('puts the bust on the front of the chest, whichever way the body lies', () => {
-        for (const pose of ['standing', 'bowing', 'allFours', 'lying'] as const) {
-            const figure = createFigure(pose, DIMS, undefined, 0, undefined, 'female');
-            const male = figureSolids(createFigure(pose, DIMS, undefined, 0, undefined, 'male'));
-            // Spheres in list order: waist, head, then the bust pair.
-            const extra = figureSolids(figure).filter((solid) => solid.kind === 'sphere').slice(2, 4);
-            expect(male.length).toBeGreaterThan(0);
-            const J = figure.joints;
-            const chest = { x: (J.neck.x + J.hip.x) / 2, y: (J.neck.y + J.hip.y) / 2, z: (J.neck.z + J.hip.z) / 2 };
-            const across = norm3(sub3(J.shoulderR, J.shoulderL));
-            const up = norm3(sub3(J.neck, J.hip));
-            const front = norm3({ x: up.y * across.z - up.z * across.y, y: up.z * across.x - up.x * across.z, z: up.x * across.y - up.y * across.x });
-            for (const solid of extra) {
-                if (solid.kind !== 'sphere') continue;
-                expect(dot3(sub3(solid.center, chest), front), pose).toBeGreaterThan(0);
+    it('builds the female surface wider at the hips than at the waist, by more than the male', () => {
+        // Read off the mesh: hip width over waist width, at the same heights
+        // up the spine.
+        const widthAt = (f: PoseFigure, rise: number) => {
+            const { positions } = figureSurface(f);
+            const y = f.joints.hip.y - rise * figureUnit(f);
+            let lo = Infinity, hi = -Infinity;
+            for (let i = 0; i < positions.length; i += 3) {
+                if (Math.abs(positions[i + 1] - y) > figureUnit(f) * 0.006) continue;
+                // The torso only: arms hang beside it.
+                if (Math.abs(positions[i] - f.joints.hip.x) > figureUnit(f) * 0.16) continue;
+                lo = Math.min(lo, positions[i]); hi = Math.max(hi, positions[i]);
             }
-        }
+            return hi - lo;
+        };
+        const curve = (build: 'female' | 'male') => {
+            const f = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front, build);
+            return widthAt(f, -0.03) / widthAt(f, 0.12);
+        };
+        expect(curve('female')).toBeGreaterThan(curve('male') * 1.1);
     });
 
     it('lays face-down poses with the chest to the floor and supine ones with it to the sky', () => {
@@ -108,7 +102,7 @@ describe('two builds, one library', () => {
 });
 
 describe('changing build', () => {
-    it('keeps the pose, the size and the place, and changes only the girdles', () => {
+    it('keeps the pose, the size and the place, and takes the new build\'s bones', () => {
         const before = swingJoint(createFigure('kneeUp', DIMS, undefined, 0, undefined, 'female'), 'wristR', { x: 700, y: 300 });
         const after = setFigureBuild(before, 'male');
         expect(figureBuild(after)).toBe('male');
@@ -118,8 +112,10 @@ describe('changing build', () => {
         for (const key of ['elbowL', 'wristL', 'elbowR', 'wristR', 'kneeL', 'ankleL', 'kneeR', 'ankleR', 'neck', 'head'] as const) {
             expect(dot3(directionOf(after, key), directionOf(before, key)), key).toBeGreaterThan(0.999);
         }
+        const u = figureUnit(after);
+        expect(dist3(after.joints.kneeL, after.joints.hipL) / u).toBeCloseTo(BONES.male.thigh, 3);
+        expect(dist3(after.joints.elbowR, after.joints.shoulderR) / u).toBeCloseTo(BONES.male.upperArm, 3);
         expect(span(after, 'shoulderL', 'shoulderR')).toBeGreaterThan(span(before, 'shoulderL', 'shoulderR'));
-        expect(span(after, 'hipL', 'hipR')).toBeLessThan(span(before, 'hipL', 'hipR'));
     });
 
     it('round-trips back to the same figure', () => {

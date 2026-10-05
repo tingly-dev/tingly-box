@@ -1,5 +1,6 @@
-import { projectFigure } from './camera';
-import { HEAD_RADIUS_RATIO, JOINT_KEYS, figureUnit, type JointKey, type PoseFigure, type Rect } from './skeleton';
+import { projectFigure, projectionOf, projectPoint } from './camera';
+import { figureSurface } from './body';
+import { JOINT_KEYS, figureUnit, type JointKey, type PoseFigure, type Rect } from './skeleton';
 import { zOf, type Vec3 } from './vec3';
 import type { Point, Size } from './types';
 
@@ -31,21 +32,29 @@ export const centerFigureAt = (figure: PoseFigure, point: Point): PoseFigure => 
     return translateFigure(figure, point.x - center.x, point.y - center.y);
 };
 
-const figurePadding = (figure: PoseFigure): number =>
-    Math.max(figureUnit(figure) * HEAD_RADIUS_RATIO, 1);
-
-// The head sticks out past the crown joint and every bone is a thick capsule,
-// so the visual box is fatter than the joint box. Used for hit-testing the
-// body and for placing the grips.
+// The box around what is drawn: the projected surface itself, so fingers
+// above a raised arm or toes past a heel are inside it. Used for fitting
+// thumbnails, hit-testing the body and placing the grips — all of which mean
+// "the figure you can see", not its joints.
+const visualBounds = new WeakMap<PoseFigure, Rect>();
 export const figureVisualBounds = (figure: PoseFigure): Rect => {
-    const bounds = figureBounds(figure);
-    const pad = figurePadding(figure);
-    return {
-        x: bounds.x - pad,
-        y: bounds.y - pad,
-        width: bounds.width + pad * 2,
-        height: bounds.height + pad * 2,
-    };
+    const cached = visualBounds.get(figure);
+    if (cached) return cached;
+    const projection = projectionOf(figure);
+    const { positions } = figureSurface(figure);
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (let i = 0; i < positions.length; i += 3) {
+        const p = projectPoint({ x: positions[i], y: positions[i + 1], z: positions[i + 2] }, projection);
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+    }
+    // A little air for the ink line and the grips on the corners.
+    const pad = Math.max(figureUnit(figure) * 0.012, 1);
+    const rect = { x: minX - pad, y: minY - pad, width: maxX - minX + pad * 2, height: maxY - minY + pad * 2 };
+    visualBounds.set(figure, rect);
+    return rect;
 };
 
 // Scaled and centred to sit inside `box` with a margin. The thumbnail grid

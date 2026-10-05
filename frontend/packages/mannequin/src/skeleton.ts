@@ -1,5 +1,6 @@
 // The joints, what hangs off what, and the one skeleton every pose is built
 // from. Pure data and a few derivations; nothing here knows about a canvas.
+import { MODEL } from './model/makehuman';
 import { add3, cross3, dist3, dot3, len3, mul3, norm3, sub3, type Vec3 } from './vec3';
 
 export type JointKey =
@@ -60,9 +61,6 @@ export interface PoseFigure {
 
 export interface Rect { x: number; y: number; width: number; height: number }
 
-// The head's long radius: also the padding that keeps the visual box (and
-// the grips on its corners) clear of the silhouette.
-export const HEAD_RADIUS_RATIO = 0.07;
 
 // Every thickness in the manikin is a fraction of "how big is this person",
 // and that number must NOT be the bounding box: a lying figure has the same
@@ -78,9 +76,8 @@ export const figureTurn = (figure: PoseFigure): FigureTurn => figure.turn ?? { y
 
 // What a new figure is built as when nothing says otherwise.
 export const DEFAULT_BUILD: FigureBuild = 'female';
-// What a figure saved before builds existed is. Not the default for new
-// figures: it is the build whose skeleton is *bone for bone* the one those
-// sketches were posed on, so reopening one changes nothing but the solids.
+// What a figure saved before builds existed is. Its joints are kept exactly
+// as saved; the skin stretches along each bone to meet them.
 export const LEGACY_BUILD: FigureBuild = 'male';
 export const figureBuild = (figure: PoseFigure): FigureBuild => figure.build ?? LEGACY_BUILD;
 
@@ -120,14 +117,16 @@ export const subtreeOf = (key: JointKey): JointKey[] => JOINT_KEYS.filter((candi
 export const SUBTREES = Object.fromEntries(JOINT_KEYS.map((key) => [key, subtreeOf(key)])) as Record<JointKey, JointKey[]>;
 
 
-// One skeleton per build, in arbitrary units — the result is normalised.
+// One skeleton per build, read off the white model itself (`model/`), in the
+// same units the poses are built in: the torso is 0.36, everything else is
+// whatever the model's own proportions make it. Taking the skeleton from the
+// mesh — rather than authoring a table and fitting a body to it — is what
+// lets the skin follow the joints without stretching: the bones the poses are
+// built from are the bones the mesh was rigged on.
 //
-// Only the girdles differ. Torso, head and limb lengths are shared on purpose:
-// `figureUnit` is measured off the torso, every pose is normalised by the same
-// crown-to-heel height, and so a pose swapped onto the other build lands at
-// the same size in the same place. The canon backs this up — Loomis draws
-// both at eight heads; what tells them apart at a glance is the shoulder line
-// against the hip line, not the height.
+// `figureUnit` is measured off the torso and every pose is normalised by the
+// same crown-to-heel height, so a pose swapped onto the other build lands at
+// the same size in the same place.
 export interface BoneTable {
     torso: number; head: number;
     shoulderSpan: number; shoulderDrop: number;
@@ -135,29 +134,38 @@ export interface BoneTable {
     hipSpan: number; hipDrop: number;
     thigh: number; shin: number;
     face: number;
+    // How far the neck leans forward of the spine, in degrees. Read off the
+    // model, because the head is rigged on *its* neck: a pose that stands the
+    // neck straighter than the mesh's tips every face up at the sky.
+    neckForward: number;
 }
 
-const SHARED_BONES = {
-    torso: 0.36, head: 0.11,
-    upperArm: 0.155, foreArm: 0.145,
-    thigh: 0.235, shin: 0.225,
+type RestJoints = Record<string, readonly number[]>;
+const gap = (j: RestJoints, a: string, b: string) => Math.hypot(j[a][0] - j[b][0], j[a][1] - j[b][1], j[a][2] - j[b][2]);
+const bonesOf = (j: RestJoints): BoneTable => ({
+    torso: 0.36,
+    head: gap(j, 'head', 'neck'),
+    shoulderSpan: j.shoulderR[0] - j.neck[0],
+    shoulderDrop: j.shoulderR[1] - j.neck[1],
+    upperArm: gap(j, 'elbowR', 'shoulderR'),
+    foreArm: gap(j, 'wristR', 'elbowR'),
+    hipSpan: j.hipR[0] - j.hip[0],
+    hipDrop: j.hipR[1] - j.hip[1],
+    thigh: gap(j, 'kneeR', 'hipR'),
+    shin: gap(j, 'ankleR', 'kneeR'),
     // Far enough in front of the skull that the handle clears the head's.
     face: 0.075,
-} as const;
+    neckForward: (Math.atan2(j.head[2] - j.neck[2], j.neck[1] - j.head[1])
+        - Math.atan2(j.neck[2] - j.hip[2], j.hip[1] - j.neck[1])) * 180 / Math.PI,
+});
 
 export const BONES: Record<FigureBuild, BoneTable> = {
-    // Wide enough that the shoulder joint sits *on* the deltoid corner and the
-    // hip joint on the pelvis's lower corner. Tucked inside the body instead,
-    // a limb reads as hanging off a shelf, and every raised arm cuts a notch.
-    // Shoulders about two heads, hips about one and a half.
-    male: { ...SHARED_BONES, shoulderSpan: 0.115, shoulderDrop: 0.035, hipSpan: 0.070, hipDrop: 0.022 },
-    // Shoulders narrower and a touch lower, hips wider and set a touch lower:
-    // the two lines come close to equal width, which is the female silhouette.
-    female: { ...SHARED_BONES, shoulderSpan: 0.101, shoulderDrop: 0.038, hipSpan: 0.079, hipDrop: 0.026 },
+    female: bonesOf(MODEL.builds.female.joints),
+    male: bonesOf(MODEL.builds.male.joints),
 };
 
-// The male table, which is also every sketch saved before builds existed.
-// Kept for code that only needs a shared length (face, torso, limbs).
+// The table the shared lengths (face, torso) are read from where the build
+// does not matter.
 export const BONE: BoneTable = BONES[LEGACY_BUILD];
 
 
