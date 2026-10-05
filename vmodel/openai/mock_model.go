@@ -108,7 +108,7 @@ func (m *MockModel) toolResponse() VModelResponse {
 			Name:      tc.Name,
 			Arguments: string(argsJSON),
 		}},
-		FinishReason: "tool_calls",
+		FinishReason: m.cfg.FinishReason, // defaulted to tool_calls by NewMockModel
 	}
 }
 

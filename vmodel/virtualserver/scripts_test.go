@@ -208,13 +208,11 @@ func TestScript_DirectoryLifecycle(t *testing.T) {
 	_, body = chat("live")
 	assert.Contains(t, body, "v3-first", "an edit restarts the program")
 
-	// Broken edit: the last good version keeps serving; the problem is
-	// reported on a miss for any other model.
+	// Broken edit: what is served always matches what is on disk, so the
+	// model goes away and the reason is reported on the miss.
 	time.Sleep(10 * time.Millisecond)
 	writeScript(t, dir, "live.yaml", "steps:\n  - sya: oops")
-	code, _ = chat("live")
-	assert.Equal(t, 200, code, "last good version keeps serving")
-	code, body = chat("nope")
+	code, body = chat("live")
 	assert.Equal(t, 404, code)
 	assert.Contains(t, body, "live.yaml")
 	assert.Contains(t, body, `unknown step field \"sya\"`)
@@ -247,4 +245,52 @@ func TestScript_DoesNotShadowBuiltinsOrEachOther(t *testing.T) {
 	assert.Contains(t, string(body), "from-a", "first file (by name) owns the id")
 	_, body = postJSON(t, baseURL+"/v1/chat/completions", map[string]any{"model": "missing"})
 	assert.Contains(t, string(body), "already used by a.yaml")
+}
+
+// A file that lost an id race is retried once the holder goes away, and two
+// files can swap ids in one change.
+func TestScript_FailedFilesAreRetried(t *testing.T) {
+	_, dir, baseURL := newScriptService(t)
+	say := func(model string) string {
+		_, body := postJSON(t, baseURL+"/v1/chat/completions", map[string]any{
+			"model": model, "messages": []map[string]string{{"role": "user", "content": "hi"}}})
+		return string(body)
+	}
+
+	writeScript(t, dir, "a.yaml", "id: x\nsteps:\n  - say: from-a")
+	writeScript(t, dir, "b.yaml", "id: x\nsteps:\n  - say: from-b")
+	assert.Contains(t, say("x"), "from-a")
+	require.NoError(t, os.Remove(filepath.Join(dir, "a.yaml")))
+	assert.Contains(t, say("x"), "from-b", "b.yaml is retried once a.yaml releases the id")
+
+	time.Sleep(10 * time.Millisecond)
+	writeScript(t, dir, "a.yaml", "id: p\nsteps:\n  - say: a-is-p")
+	writeScript(t, dir, "b.yaml", "id: q\nsteps:\n  - say: b-is-q")
+	assert.Contains(t, say("p"), "a-is-p")
+	time.Sleep(10 * time.Millisecond)
+	writeScript(t, dir, "a.yaml", "id: q\nsteps:\n  - say: a-is-q")
+	writeScript(t, dir, "b.yaml", "id: p\nsteps:\n  - say: b-is-p")
+	assert.Contains(t, say("q"), "a-is-q", "ids swapped between two files in one change")
+	assert.Contains(t, say("p"), "b-is-p")
+}
+
+// RefreshScripts lets non-HTTP readers (the management UI listing) see files
+// dropped since the last request.
+func TestScript_RefreshScriptsForDirectRegistryReaders(t *testing.T) {
+	svc, dir, _ := newScriptService(t)
+	assert.False(t, svc.GetAnthropicRegistry().Has("fresh"))
+	writeScript(t, dir, "fresh.yaml", "steps:\n  - say: hi")
+	svc.RefreshScripts()
+	assert.True(t, svc.GetAnthropicRegistry().Has("fresh"))
+	assert.True(t, svc.GetOpenAIRegistry().Has("fresh"))
+}
+
+// A scripted stop_reason reaches the wire on tool steps too (it is the
+// protocol's own word: Anthropic here).
+func TestScript_StopReasonOnToolStep(t *testing.T) {
+	_, dir, baseURL := newScriptService(t)
+	writeScript(t, dir, "trunc.yaml", "steps:\n  - tool: {name: Read}\n    stop_reason: max_tokens")
+	_, body := postJSON(t, baseURL+"/v1/messages?beta=true", map[string]any{
+		"model": "trunc", "max_tokens": 16, "messages": []map[string]string{{"role": "user", "content": "hi"}}})
+	assert.Contains(t, string(body), `"stop_reason":"max_tokens"`)
 }

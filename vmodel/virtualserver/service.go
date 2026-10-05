@@ -52,6 +52,15 @@ func (s *Service) SetScriptDir(dir string) {
 	s.scripts.Refresh()
 }
 
+// RefreshScripts syncs script-backed models with their directory. The HTTP
+// handlers do this themselves; call it before reading a registry directly
+// (e.g. to list models in a management UI). No-op without a script dir.
+func (s *Service) RefreshScripts() {
+	if s.scripts != nil {
+		s.scripts.Refresh()
+	}
+}
+
 // GetAnthropicRegistry returns the Anthropic-protocol model registry.
 func (s *Service) GetAnthropicRegistry() *anthropicvm.Registry { return s.anthropicReg }
 

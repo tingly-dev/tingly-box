@@ -94,6 +94,9 @@ func (s SequenceStep) validate() error {
 		}
 	}
 	if s.Status == 0 || s.Status == 200 {
+		if s.ErrorMessage != "" || s.ErrorType != "" {
+			return errors.New("error_message/error_type only apply to an error step (set status: 4xx/5xx)")
+		}
 		return nil
 	}
 	if s.Status < 400 || s.Status > 599 {

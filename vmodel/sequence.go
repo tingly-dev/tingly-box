@@ -269,12 +269,12 @@ func NewSequence(cfg SequenceConfig) *Sequence {
 		onExhaust:      cfg.OnExhaust,
 		exhausted:      exhaustedStep(),
 	}
-	for idx, step := range cfg.Steps {
+	for _, step := range cfg.Steps {
 		repeat := step.Repeat
 		if repeat <= 0 {
 			repeat = 1
 		}
-		resolved := s.resolve(idx, step)
+		resolved := s.resolve(step)
 		for i := 0; i < repeat; i++ {
 			s.flat = append(s.flat, resolved)
 		}
@@ -290,16 +290,33 @@ func NewSequence(cfg SequenceConfig) *Sequence {
 // Behaviour past the end of the program is governed by OnExhaust.
 func (s *Sequence) Next() ResolvedStep {
 	n := s.cursor.Add(1) - 1
-	if n >= uint64(len(s.flat)) {
-		switch s.onExhaust {
-		case ExhaustClamp:
-			return s.flat[len(s.flat)-1]
-		case ExhaustFail:
-			return s.exhausted
-		}
-		// ExhaustLoop (default): fall through to modulo wrap-around.
+	var r ResolvedStep
+	switch {
+	case n < uint64(len(s.flat)):
+		r = s.flat[n]
+	case s.onExhaust == ExhaustClamp:
+		r = s.flat[len(s.flat)-1]
+	case s.onExhaust == ExhaustFail:
+		return s.exhausted
+	default: // ExhaustLoop: wrap around
+		r = s.flat[n%uint64(len(s.flat))]
 	}
-	return s.flat[int(n%uint64(len(s.flat)))]
+	if r.Tool != nil && r.Tool.ID == "" {
+		// A tool call without an explicit id gets one unique to this served
+		// request, so repeat:, looping and clamped programs never replay the
+		// same tool_use id into an agent's transcript.
+		tool := *r.Tool
+		tool.ID = fmt.Sprintf("toolu_%s_%d", s.idOrDefault(), n+1)
+		r.Tool = &tool
+	}
+	return r
+}
+
+func (s *Sequence) idOrDefault() string {
+	if s.id == "" {
+		return "vmodel"
+	}
+	return s.id
 }
 
 // exhaustedStep is the terminal error served once an ExhaustFail program is
@@ -319,17 +336,11 @@ func exhaustedStep() ResolvedStep {
 // Len reports the number of (post-expansion) steps in the program.
 func (s *Sequence) Len() int { return len(s.flat) }
 
-func (s *Sequence) resolve(idx int, step SequenceStep) ResolvedStep {
+func (s *Sequence) resolve(step SequenceStep) ResolvedStep {
 	if step.Status == 0 || step.Status == 200 {
 		r := ResolvedStep{Content: step.Content, StopReason: step.StopReason, Usage: step.Usage}
 		if step.Tool != nil {
-			// Each scripted tool call gets its own id so a multi-step agent
-			// loop never replays the same tool_use id back to the client.
-			tool := *step.Tool
-			if tool.ID == "" {
-				tool.ID = fmt.Sprintf("toolu_%s_%d", s.id, idx+1)
-			}
-			r.Tool = &tool
+			r.Tool = step.Tool // id assigned per served request, in Next
 		} else if r.Content == "" {
 			// Bare success steps fall back to default text. A tool step with
 			// no text is deliberate: it is just the tool call.

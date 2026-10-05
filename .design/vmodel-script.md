@@ -42,8 +42,8 @@ One step = one request's outcome:
 | --- | --- |
 | `status` | `200`/omitted → success; `400–599` → pre-content error envelope (type/message derived from the status). A bare number is shorthand for this. |
 | `say` | Response text. Empty on a plain success falls back to `default_content`, then a module default. Empty on a `tool` step means *no* lead-in text. |
-| `tool` | `{name, arguments, id?}` — one tool call. The id defaults to `toolu_<script>_<step>` so a multi-step loop never repeats an id. |
-| `stop_reason` | Override (defaults: `end_turn` / `tool_use` on Anthropic, `stop` / `tool_calls` on OpenAI). |
+| `tool` | `{name, arguments, id?}` — one tool call. Without an `id`, each *served request* gets a unique `toolu_<script>_<n>` (so `repeat:`, loops and clamping never repeat one); an explicit `id` is used as written. |
+| `stop_reason` | Override, in the **protocol's own words** (defaults: `end_turn` / `tool_use` on Anthropic, `stop` / `tool_calls` on OpenAI). One script serves both protocols, so a value that is only valid on one wire (`end_turn`, `max_tokens` vs `length`) is sent as written to both — leave it unset unless you target one protocol. |
 | `usage` | `{input, output, cache_read, cache_write, reasoning}` advertised on the stream. |
 | `midstream` | `{mode: close\|event\|eof, after_events: N}` — a success whose stream is cut. Not combinable with an error `status`. |
 | `repeat` | Serve the step N consecutive times. |
@@ -75,9 +75,12 @@ mtime + size) — one `ReadDir` and a few `stat`s when nothing changed. So:
 - **write a file, call the model** — no restart, no registration step;
 - an **edited** file is re-registered with a fresh cursor (the program restarts);
 - a **deleted** file unregisters its model;
-- a file that **fails to parse** keeps serving its last good version; the error
-  is logged and appended to the `404 Model not found` message for any miss, so
-  a broken script explains itself instead of just vanishing;
+- a file that **fails to parse** (or loses an id race) serves nothing — what is
+  served always matches what is on disk — and the reason is logged and appended
+  to the `404 Model not found` message, so a broken script explains itself.
+  Failed files are retried on every directory change (a freed id, a swap);
+- readers that bypass the HTTP handlers (the management UI's model listing)
+  call `Service.RefreshScripts()` first;
 - a script **never shadows** a built-in model, and the first file (by name)
   owns a duplicated id.
 
