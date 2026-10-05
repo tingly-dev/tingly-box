@@ -16,7 +16,7 @@ interface ProfileSelectProps {
 const ProfileSelect = ({value, onChange, disabled}: ProfileSelectProps) => {
     const {t} = useTranslation();
     const profiles = useProfileContext().getProfiles('claude_code');
-    const defaultLabel = t('desk.profileDefault', {defaultValue: 'Default routing'});
+    const defaultLabel = t('desk.profileDefault', {defaultValue: 'Default configuration profile'});
     if (profiles.length === 0 && !value) return null;
 
     const label = (id: string) => {
@@ -31,7 +31,7 @@ const ProfileSelect = ({value, onChange, disabled}: ProfileSelectProps) => {
             variant="standard"
             disableUnderline
             displayEmpty
-            inputProps={{'aria-label': t('desk.profile', {defaultValue: 'Routing profile'})}}
+            inputProps={{'aria-label': t('desk.profile', {defaultValue: 'Configuration profile'})}}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             renderValue={(v) => (

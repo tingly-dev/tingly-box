@@ -24,7 +24,7 @@ const FolderPicker = ({value, onChange, recentFolders}: FolderPickerProps) => {
             options={recentFolders.map((f) => f.path)}
             inputValue={value}
             onInputChange={(_e, newValue) => onChange(newValue)}
-            sx={{flex: 1, minWidth: 240}}
+            sx={{flex: 1, minWidth: 0}}
             renderOption={(props, option) => {
                 const folder = recentFolders.find((f) => f.path === option);
                 return (
@@ -39,13 +39,13 @@ const FolderPicker = ({value, onChange, recentFolders}: FolderPickerProps) => {
             renderInput={(params) => (
                 <TextField
                     {...params}
-                    variant="standard"
+                    label={t('desk.projectDirectory', {defaultValue: 'Project directory'})}
+                    variant="outlined"
                     placeholder={t('desk.folderPlaceholder', {defaultValue: '/path/to/project'})}
                     slotProps={{
                         ...params.slotProps,
                         input: {
                             ...params.slotProps.input,
-                            disableUnderline: true,
                             startAdornment: (
                                 <InputAdornment position="start">
                                     <FolderOpen sx={{fontSize: 16}}/>

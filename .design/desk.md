@@ -119,6 +119,22 @@ One package, no sub-packages, built directly on the pieces above:
 There is deliberately no server-side directory browser (no `fs/dirs`-style
 endpoint) and no git diff/status endpoint in this first landing — see §6.
 
+### Browser project shortcuts
+
+Desk's **Add project** action saves an existing absolute directory path in
+this browser's local storage, independently of task creation. The sidebar
+shows saved projects even before their first task. Adding a project opens
+the task form with its directory selected; it does not create a directory
+or launch an agent. Removing an empty project shortcut only removes that
+browser entry. Other browsers do not share these shortcuts.
+
+The task form exposes the directory above the prompt and combines saved
+projects with directories returned by the existing recent-folders API.
+The existing task-start API remains responsible for filesystem validation;
+there is no new backend project entity or endpoint. The configuration menu's
+empty profile means **Default configuration profile**, using the existing
+main Claude Code configuration.
+
 Concurrency: several sessions may run in the same folder at once, the same
 way several local `claude --session-id <id>` processes can — `Service.runs`
 is keyed by session id, not by folder.

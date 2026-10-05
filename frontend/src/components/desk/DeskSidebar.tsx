@@ -1,6 +1,6 @@
-import {Add, Search, Stream} from '@/components/icons';
+import {Add, FolderOpen, Search, Stream, Close} from '@/components/icons';
 import type {SessionInfo} from '@/services/deskApi';
-import {Box, CircularProgress, IconButton, InputBase, List, ListItemButton, Tooltip, Typography, Tabs, Tab} from '@mui/material';
+import {Box, Button, CircularProgress, IconButton, InputBase, List, ListItemButton, Tooltip, Typography, Tabs, Tab} from '@mui/material';
 import {useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {folderName, groupSessionsByFolder, isBusyStatus, sessionTitle} from './deskUtils';
@@ -14,6 +14,10 @@ interface DeskSidebarProps {
     onNew: (folder?: string) => void;
     // Sessions whose turn ended while the user was elsewhere.
     unseen: Set<string>;
+    projects?: string[];
+    selectedProject?: string;
+    onAddProject?: () => void;
+    onRemoveProject?: (path: string) => void;
 }
 
 // StatusMark says only what needs attention, most urgent first: a turn
@@ -55,7 +59,9 @@ const rowSx = {
     '&.Mui-selected': {fontWeight: 500},
 } as const;
 
-const DeskSidebar = ({sessions, selectedId, onSelect, onNew, unseen}: DeskSidebarProps) => {
+const EMPTY_PROJECTS: string[] = [];
+
+const DeskSidebar = ({sessions, selectedId, onSelect, onNew, unseen, projects = EMPTY_PROJECTS, selectedProject, onAddProject, onRemoveProject}: DeskSidebarProps) => {
     const {t} = useTranslation();
     const [query, setQuery] = useState('');
     const selectedClosed = sessions.find((session) => session.id === selectedId)?.status === 'closed';
@@ -67,8 +73,14 @@ const DeskSidebar = ({sessions, selectedId, onSelect, onNew, unseen}: DeskSideba
         const q = query.trim().toLowerCase();
         const visible = sessions.filter((s) => (s.status === 'closed') === archived
             && (!q || sessionTitle(s).toLowerCase().includes(q) || s.project.toLowerCase().includes(q)));
-        return groupSessionsByFolder(visible);
-    }, [sessions, query, archived]);
+        const groups = groupSessionsByFolder(visible);
+        if (archived) return groups;
+        const byPath = new Map(groups.map((g) => [g.path, g]));
+        for (const path of projects) {
+            if (!byPath.has(path) && (!q || path.toLowerCase().includes(q))) byPath.set(path, {path, sessions: []});
+        }
+        return [...projects.filter((path) => byPath.has(path)).map((path) => byPath.get(path)!), ...groups.filter((g) => !projects.includes(g.path))];
+    }, [sessions, query, archived, projects]);
 
     return (
         <Box sx={{display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0}}>
@@ -77,6 +89,9 @@ const DeskSidebar = ({sessions, selectedId, onSelect, onNew, unseen}: DeskSideba
                     <Add sx={{fontSize: 18}}/>
                     <Typography variant="body2" sx={{color: 'inherit'}}>{t('desk.newSession', {defaultValue: 'New session'})}</Typography>
                 </ListItemButton>
+                {onAddProject && <Button fullWidth size="small" startIcon={<FolderOpen/>} onClick={onAddProject} sx={{justifyContent: 'flex-start', px: 1.5, mt: 0.5}}>
+                    {t('desk.addProject', {defaultValue: 'Add project'})}
+                </Button>}
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.5, mt: 0.5, borderRadius: 1.5, bgcolor: 'action.hover'}}>
                     <Search sx={{fontSize: 16, color: 'text.secondary'}}/>
                     <InputBase
@@ -103,13 +118,16 @@ const DeskSidebar = ({sessions, selectedId, onSelect, onNew, unseen}: DeskSideba
                     </Typography>
                 )}
                 {groups.map((g) => (
-                    <Box key={g.path} sx={{mt: 1.5}}>
+                    <Box key={g.path} sx={{mt: 1.5, borderRadius: 1.5, bgcolor: selectedId === null && selectedProject === g.path ? 'action.selected' : undefined}}>
                         <Box sx={{display: 'flex', alignItems: 'center', px: 1.5, mb: 0.25, '&:hover .desk-folder-add': {opacity: 1}}}>
                             <Tooltip title={g.path} placement="right">
                                 <Typography variant="body2" noWrap sx={{flex: 1, fontWeight: 600, fontSize: fontSizes.sm, color: 'text.secondary'}}>
                                     {folderName(g.path)}
                                 </Typography>
                             </Tooltip>
+                            {g.sessions.length === 0 && onRemoveProject && <Tooltip title={t('desk.removeProjectShortcut', {defaultValue: 'Remove project shortcut'})}>
+                                <IconButton size="small" aria-label={t('desk.removeProjectShortcut', {defaultValue: 'Remove project shortcut'})} onClick={() => onRemoveProject(g.path)} sx={{p: 0.25}}><Close sx={{fontSize: 16}}/></IconButton>
+                            </Tooltip>}
                             <Tooltip title={t('desk.newInFolder', {defaultValue: 'New session in this folder'})}>
                                 <IconButton
                                     aria-label={t('desk.newInFolder', {defaultValue: 'New session in this folder'})}
@@ -123,6 +141,9 @@ const DeskSidebar = ({sessions, selectedId, onSelect, onNew, unseen}: DeskSideba
                             </Tooltip>
                         </Box>
                         <List dense disablePadding>
+                            {g.sessions.length === 0 && <ListItemButton onClick={() => onNew(g.path)} sx={{...rowSx, py: 0.75}}>
+                                <Add sx={{fontSize: 16}}/><Typography variant="body2" sx={{fontSize: '0.8125rem'}}>{t('desk.firstProjectTask', {defaultValue: 'Create first task'})}</Typography>
+                            </ListItemButton>}
                             {g.sessions.map((s) => (
                                 <ListItemButton
                                     key={s.id}

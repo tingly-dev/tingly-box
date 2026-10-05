@@ -2855,7 +2855,7 @@ export default {
     "newSessionHeading": "What should the agent work on?",
     "promptPlaceholder": "Describe a task…",
     "permissionInherit": "Default permissions",
-    "profileDefault": "Default routing",
+    "profileDefault": "Default configuration profile",
     "statusFailed": "failed",
     "statusArchived": "archived",
     "backgroundTasks": "Background tasks",
@@ -2916,7 +2916,7 @@ export default {
     "updateFailed": "Failed to update permission mode",
     "sendingQueue": "Sending queued messages…",
     "queuePaused": "Unsent messages — automatic sending paused",
-    "profile": "Routing profile",
+    "profile": "Configuration profile",
     "permissions": "Permissions",
     "conversation": "Conversation",
     "responseRetry": "Response was not accepted. Your answer is kept; try again.",
@@ -2937,6 +2937,16 @@ export default {
     "refreshTimeout": "The server took too long to respond.",
     "retry": "Retry",
     "refreshFailed": "Could not refresh Desk. Your last loaded data and drafts are kept. Reconnecting automatically.",
-    "sessionUnavailable": "This session is unavailable. Retry refreshing or start a new session."
+    "sessionUnavailable": "This session is unavailable. Retry refreshing or start a new session.",
+    "addProject": "Add project",
+    "addProjectDescription": "Enter an existing project directory on the machine running tingly-box. Tasks will run in this directory.",
+    "projectDirectory": "Project directory",
+    "projectPathExample": "/path/to/project or C:\\projects\\app",
+    "projectPathAbsolute": "Enter a full absolute path, such as /home/me/projects/app.",
+    "projectSaveFailed": "Could not save the project in this browser. Please try again.",
+    "projectStorageHint": "Saved in this browser. The directory is checked when you start a task.",
+    "removeProjectShortcut": "Remove project shortcut",
+    "firstProjectTask": "Create first task",
+    "taskDirectoryHint": "Choose a project directory, then describe the task below."
   }
 };

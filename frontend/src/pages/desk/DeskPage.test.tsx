@@ -15,12 +15,12 @@ vi.mock('react-i18next', () => ({useTranslation: () => ({t})}));
 vi.mock('@/hooks/useNotify', () => ({useNotify: () => ({error: notifyError})}));
 vi.mock('@/components/desk/useDeskAttention', () => ({requestNotifications: vi.fn(), useDeskAttention: () => new Set()}));
 vi.mock('@/services/deskApi', () => ({
-    listSessions: vi.fn(), listRecentFolders: vi.fn(), listPermissionModes: vi.fn(), getMessages: vi.fn(), getSession: vi.fn(), sendMessage: vi.fn(), interrupt: vi.fn(), archive: vi.fn(),
+    listSessions: vi.fn(), listRecentFolders: vi.fn(), listPermissionModes: vi.fn(), getMessages: vi.fn(), getSession: vi.fn(), sendMessage: vi.fn(), interrupt: vi.fn(), archive: vi.fn(), createSession: vi.fn(),
 }));
-vi.mock('@/components/desk/DeskSidebar', () => ({default: ({onSelect}: {onSelect: (id: string) => void}) => (
-    <div><button onClick={() => onSelect('a')}>Session A</button><button onClick={() => onSelect('b')}>Session B</button></div>
+vi.mock('@/components/desk/DeskSidebar', () => ({default: ({onSelect, onAddProject}: {onSelect: (id: string) => void; onAddProject: () => void}) => (
+    <div><button onClick={() => onSelect('a')}>Session A</button><button onClick={() => onSelect('b')}>Session B</button><button onClick={onAddProject}>Add a project</button></div>
 )}));
-vi.mock('@/components/desk/NewSessionView', () => ({default: () => <div>New task form</div>}));
+vi.mock('@/components/desk/NewSessionView', () => ({default: ({initialFolder}: {initialFolder?: string}) => <div>New task form<span>{initialFolder}</span></div>}));
 vi.mock('@/components/desk/SessionView', () => ({default: ({session, messages, queued, draft, onSend, onSendQueuedNow, onUnqueue, onInterrupt}: ComponentProps<typeof SessionView>) => (
     <div><span>Viewing {session.id}: {session.status}</span>{messages.map((m, i) => <p key={i}>{m.content}</p>)}
         <p>Draft: {draft}</p>{queued.map((text, i) => <button key={i} onClick={() => onUnqueue(i)}>{text}</button>)}
@@ -51,9 +51,21 @@ beforeEach(() => {
     vi.mocked(api.sendMessage).mockResolvedValue(undefined);
     vi.mocked(api.interrupt).mockResolvedValue(undefined);
 });
-afterEach(() => { cleanup(); sessionStorage.clear(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); sessionStorage.clear(); localStorage.clear(); vi.useRealTimers(); });
 
 describe('Desk local workflow', () => {
+    it('adds a project without starting a task and closes its dialog with the chosen directory visible', async () => {
+        open();
+        await settle();
+        fireEvent.click(screen.getByRole('button', {name: 'Add a project'}));
+        fireEvent.change(screen.getByLabelText('Project directory'), {target: {value: '/projects/new app/'}});
+        await act(async () => fireEvent.click(screen.getByRole('button', {name: 'Add project'})));
+        expect(screen.getByText('/projects/new app')).toBeInTheDocument();
+        expect(screen.queryByRole('dialog', {name: 'Add project'})).not.toBeInTheDocument();
+        expect(JSON.parse(localStorage.getItem('desk.projectDirectories:v1')!)).toEqual({'/projects/new app': true});
+        expect(api.createSession).not.toHaveBeenCalled();
+    });
+
     it('never displays another session’s transcript while the new one loads', async () => {
         open();
         await settle();

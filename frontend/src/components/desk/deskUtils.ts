@@ -4,7 +4,7 @@ export type SessionStatus = SessionInfo['status'];
 
 export const isBusyStatus = (status: string): boolean => status === 'running' || status === 'pending';
 
-export const folderName = (path: string): string => path.split('/').filter(Boolean).pop() || path;
+export const folderName = (path: string): string => path.split(path.startsWith('/') ? '/' : /[\\/]/).filter(Boolean).pop() || path;
 
 // A session's title is the prompt that started it, the way a chat is named
 // by its first message.

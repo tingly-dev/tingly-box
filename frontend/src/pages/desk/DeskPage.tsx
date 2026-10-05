@@ -1,11 +1,13 @@
 import DeskSidebar from '@/components/desk/DeskSidebar';
+import AddProjectDialog from '@/components/desk/AddProjectDialog';
 import NewSessionView from '@/components/desk/NewSessionView';
 import SessionView from '@/components/desk/SessionView';
-import {isBusyStatus} from '@/components/desk/deskUtils';
+import {folderName, isBusyStatus} from '@/components/desk/deskUtils';
 import {requestNotifications, useDeskAttention} from '@/components/desk/useDeskAttention';
 import {useDeskDrafts} from '@/components/desk/useDeskDrafts';
 import {useDeskQueues} from '@/components/desk/useDeskQueues';
 import {useDeskPoll} from '@/components/desk/useDeskPoll';
+import {useDeskProjects} from '@/components/desk/useDeskProjects';
 import {useNotify} from '@/hooks/useNotify';
 import * as deskApi from '@/services/deskApi';
 import type {MessageInfo, RecentFolder, SessionInfo} from '@/services/deskApi';
@@ -35,6 +37,18 @@ const DeskPage = () => {
     const [sessions, setSessions] = useState<SessionInfo[]>([]);
     const [recentFolders, setRecentFolders] = useState<RecentFolder[]>([]);
     const [permissionModes, setPermissionModes] = useState<string[]>([]);
+    const {projects, addProject, removeProject} = useDeskProjects();
+    const [addingProject, setAddingProject] = useState(false);
+    const [pendingProject, setPendingProject] = useState<string | null>(null);
+    // Keep the modal over the previous form until the router commits the
+    // selected directory, so fast typing reaches the new project's draft.
+    useLayoutEffect(() => {
+        if (pendingProject && !selectedId && searchParams.has('new') && searchParams.get('folder') === pendingProject) {
+            setAddingProject(false);
+            setPendingProject(null);
+        }
+    }, [pendingProject, selectedId, searchParams]);
+    const projectFolders = [...projects.filter((path) => !recentFolders.some((f) => f.path === path)).map((path) => ({path, name: folderName(path), last_used_at: ''})), ...recentFolders];
     const [transcript, setTranscript] = useState<{id: string; messages: MessageInfo[]} | null>(null);
     const messages = transcript?.id === selectedId ? transcript.messages : [];
     const [sessionsError, setSessionsError] = useState<string | null>(null);
@@ -385,7 +399,12 @@ const DeskPage = () => {
         >
             {showList && (
                 <Box sx={{width: isNarrow ? '100%' : 280, flexShrink: 0, borderRight: isNarrow ? 0 : 1, borderColor: 'divider', bgcolor: 'background.default'}}>
-                    <DeskSidebar sessions={sessions} selectedId={selectedId} unseen={unseen} onSelect={openSession} onNew={openNew}/>
+                    <DeskSidebar sessions={sessions} selectedId={selectedId} unseen={unseen} onSelect={openSession} onNew={openNew}
+                        projects={projects} selectedProject={searchParams.get('folder') ?? undefined} onAddProject={() => setAddingProject(true)}
+                        onRemoveProject={(path) => {
+                            if (!removeProject(path)) notify.error(t('desk.projectSaveFailed', {defaultValue: 'Could not save the project in this browser. Please try again.'}));
+                            else if (searchParams.get('folder') === path) setSearchParams({});
+                        }}/>
                 </Box>
             )}
             {showMain && (
@@ -438,14 +457,22 @@ const DeskPage = () => {
                                 // Remount per folder so a folder group's "+" resets the form.
                                 key={searchParams.get('folder') ?? ''}
                                 initialFolder={searchParams.get('folder') ?? undefined}
-                                recentFolders={recentFolders}
+                                recentFolders={projectFolders}
                                 permissionModes={permissionModes}
                                 onCreate={handleCreate}
+                                onAddProject={() => setAddingProject(true)}
+                                onBack={isNarrow ? backToList : undefined}
                             />
                         )}
                     </Box>
                 </Box>
             )}
+            {addingProject && <AddProjectDialog onClose={() => {setAddingProject(false); setPendingProject(null);}} onAdd={(path) => {
+                if (!addProject(path)) return false;
+                setPendingProject(path);
+                openNew(path);
+                return true;
+            }}/>}
         </Box>
     );
 };
