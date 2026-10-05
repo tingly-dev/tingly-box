@@ -350,14 +350,14 @@ func TestDefaultClaudeCodePrefs_Separate(t *testing.T) {
 		"ANTHROPIC_DEFAULT_OPUS_MODEL":               "opus",
 		"ANTHROPIC_DEFAULT_FABLE_MODEL":              "fable",
 		"CLAUDE_CODE_SUBAGENT_MODEL":                 "subagent",
-		"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":         "Haiku · haiku",
-		"ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION":  "Routed by Tingly Box rule haiku",
-		"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME":        "Sonnet · sonnet",
-		"ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION": "Routed by Tingly Box rule sonnet",
-		"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":          "Opus · opus",
-		"ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION":   "Routed by Tingly Box rule opus",
-		"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":         "Fable · fable",
-		"ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION":  "Routed by Tingly Box rule fable",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":         "Haiku · Tingly Box",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION":  "Routed by Tingly Box",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME":        "Sonnet · Tingly Box",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION": "Routed by Tingly Box",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":          "Opus · Tingly Box",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION":   "Routed by Tingly Box",
+		"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":         "Fable · Tingly Box",
+		"ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION":  "Routed by Tingly Box",
 		"API_TIMEOUT_MS":                             "3000000",
 		"CLAUDE_CODE_MAX_OUTPUT_TOKENS":              "32000",
 		"CLAUDE_CODE_AUTO_COMPACT_WINDOW":            "200000",
@@ -423,6 +423,23 @@ func diffKeys(env map[string]string, wantKeys []string) []string {
 	return extra
 }
 
+func TestClaudeCodePrefs_ToEnv_ExplicitDisplayWins(t *testing.T) {
+	p := ClaudeCodePrefs{
+		AnthropicDefaultOpusModel: "opus[1m]",
+		Extra:                     map[string]string{"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "My Opus"},
+	}
+	env, err := p.ToEnv("http://localhost", "tok")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustEq(t, env, "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME", "My Opus")
+	// the [1m] marker is not part of the label
+	mustEq(t, env, "ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION", "Routed by Tingly Box")
+	if _, ok := env["ANTHROPIC_DEFAULT_SONNET_MODEL_NAME"]; ok {
+		t.Error("unset slot must not get a label")
+	}
+}
+
 func TestClaudeCodePrefsFromEnv_CarriesOverLegacyMaxActiveTasks(t *testing.T) {
 	// Earlier versions wrote a name Claude Code never read; the stored value is
 	// kept under the real concurrency variable.
@@ -442,19 +459,15 @@ func TestClaudeCodePrefsFromEnv_CarriesOverLegacyMaxActiveTasks(t *testing.T) {
 	}
 }
 
-func TestClaudeCodePrefs_ToEnv_ExplicitDisplayWins(t *testing.T) {
-	p := ClaudeCodePrefs{
-		AnthropicDefaultOpusModel: "opus[1m]",
-		Extra:                     map[string]string{"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "My Opus"},
+func TestCCTierDisplayEnv_NoRedundantLabel(t *testing.T) {
+	env := CCTierDisplayEnv(map[string]string{
+		"ANTHROPIC_DEFAULT_OPUS_MODEL":   "opus",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL": "tingly/cc-sonnet",
+	})
+	if got := env["ANTHROPIC_DEFAULT_OPUS_MODEL_NAME"]; got != "Opus · Tingly Box" {
+		t.Errorf("opus label = %q, want no repeated 'opus'", got)
 	}
-	env, err := p.ToEnv("http://localhost", "tok")
-	if err != nil {
-		t.Fatal(err)
-	}
-	mustEq(t, env, "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME", "My Opus")
-	// the [1m] marker is not part of the label
-	mustEq(t, env, "ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION", "Routed by Tingly Box rule opus")
-	if _, ok := env["ANTHROPIC_DEFAULT_SONNET_MODEL_NAME"]; ok {
-		t.Error("unset slot must not get a label")
+	if got := env["ANTHROPIC_DEFAULT_SONNET_MODEL_NAME"]; got != "Sonnet · tingly/cc-sonnet" {
+		t.Errorf("sonnet label = %q", got)
 	}
 }

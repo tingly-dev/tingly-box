@@ -759,18 +759,6 @@ func defaultBuiltinRuleFlagsOnce(c *Config) bool {
 	return true
 }
 
-// backfillFableRuleOnce runs backfillFableRule once per config, so a fable
-// rule the user later deletes is not resurrected on every boot.
-func backfillFableRuleOnce(c *Config) bool {
-	const marker = "20261004"
-	if c.hasMigrationCompleted(marker) {
-		return false
-	}
-	c.backfillFableRule()
-	c.markMigrationCompleted(marker)
-	return true // the marker itself changed the config
-}
-
 // hasRequestModel reports whether a rule in the scenario already answers to
 // the Claude Code request model, in either spelling.
 func (c *Config) hasRequestModel(scenario typ.RuleScenario, requestModel string) bool {
@@ -781,6 +769,17 @@ func (c *Config) hasRequestModel(scenario typ.RuleScenario, requestModel string)
 		}
 	}
 	return false
+}
+
+// backfillFableRuleOnce runs backfillFableRule once per config, so a fable
+// rule the user later deletes is not resurrected on every boot.
+func backfillFableRuleOnce(c *Config) bool {
+	if c.hasMigrationCompleted("20261004") {
+		return false
+	}
+	c.backfillFableRule()
+	c.markMigrationCompleted("20261004")
+	return true
 }
 
 // backfillFableRule seeds the Claude Code fable rule for configs that predate

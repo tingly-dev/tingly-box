@@ -885,7 +885,7 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
         ANTHROPIC_DEFAULT_HAIKU_MODEL: apply1MSuffix(modelForVariant('haiku', isUnified ? defaultModel : 'haiku'), 'haiku'),
         ANTHROPIC_DEFAULT_SONNET_MODEL: apply1MSuffix(modelForVariant('sonnet', isUnified ? defaultModel : 'sonnet'), 'sonnet'),
         ANTHROPIC_DEFAULT_OPUS_MODEL: apply1MSuffix(modelForVariant('opus', isUnified ? defaultModel : 'opus'), 'opus'),
-        ANTHROPIC_DEFAULT_FABLE_MODEL: apply1MSuffix(modelForVariant(fableVariant, isUnified ? defaultModel : fableVariant === 'fable' ? 'fable' : 'default'), fableVariant),
+        ANTHROPIC_DEFAULT_FABLE_MODEL: apply1MSuffix(modelForVariant(fableVariant, isUnified ? defaultModel : fableVariant), fableVariant),
         CLAUDE_CODE_SUBAGENT_MODEL: apply1MSuffix(modelForVariant('subagent', isUnified ? defaultModel : 'subagent'), 'subagent'),
 
         API_TIMEOUT_MS: '3000000',

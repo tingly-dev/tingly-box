@@ -32,7 +32,14 @@ func CCTierDisplayEnv(env map[string]string) map[string]string {
 		if model == "" {
 			continue
 		}
-		out[slot+"_NAME"] = strings.ToUpper(alias[:1]) + alias[1:] + " · " + model
+		label := strings.ToUpper(alias[:1]) + alias[1:]
+		if model == alias {
+			// New installs name the rule after the alias; repeating it adds nothing.
+			out[slot+"_NAME"] = label + " · Tingly Box"
+			out[slot+"_DESCRIPTION"] = "Routed by Tingly Box"
+			continue
+		}
+		out[slot+"_NAME"] = label + " · " + model
 		out[slot+"_DESCRIPTION"] = "Routed by Tingly Box rule " + model
 	}
 	return out

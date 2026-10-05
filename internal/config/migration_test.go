@@ -931,32 +931,27 @@ func TestDeleteProviderCascade_CompactsTiers(t *testing.T) {
 	}
 }
 
-func TestBackfillFableRuleOnce_SeedsFromOpus(t *testing.T) {
-	flags := typ.RuleFlags{Context1M: true}
+func TestBackfillFableRuleOnce_SeedsFableFromOpus(t *testing.T) {
 	c := &Config{
 		Rules: []typ.Rule{
-			{UUID: RuleUUIDCCOpus, Scenario: typ.ScenarioClaudeCode, RequestModel: "opus", Active: true, Flags: flags, Services: []*loadbalance.Service{svc("p1")}},
+			{UUID: RuleUUIDCCOpus, Scenario: typ.ScenarioClaudeCode, RequestModel: "opus", Active: true, Services: []*loadbalance.Service{svc("p1")}},
 		},
 	}
 
-	if !backfillFableRuleOnce(c) {
-		t.Fatal("first run must report a change (the marker)")
-	}
+	backfillFableRuleOnce(c)
 
 	fable := c.findRuleByUUID(RuleUUIDCCFable)
 	if fable == nil {
 		t.Fatal("expected fable rule to be seeded")
 	}
-	if !fable.Active || len(fable.Services) != 1 || fable.Services[0].Provider != "p1" || !fable.Flags.Context1M {
-		t.Errorf("fable should mirror opus active state, services and flags, got %+v", fable)
+	if !fable.Active || len(fable.Services) != 1 || fable.Services[0].Provider != "p1" {
+		t.Errorf("fable should mirror opus active state and services, got %+v", fable)
 	}
 	if fable.RequestModel != "fable" {
 		t.Errorf("fable request model = %q", fable.RequestModel)
 	}
 
-	if backfillFableRuleOnce(c) {
-		t.Error("second run must be a no-op")
-	}
+	backfillFableRuleOnce(c)
 	if n := countRules(c, RuleUUIDCCFable); n != 1 {
 		t.Errorf("fable rule duplicated: count = %d", n)
 	}
@@ -1034,5 +1029,54 @@ func TestMatchRuleByModelAndScenario_ExactBeatsAlias(t *testing.T) {
 	}}
 	if r := c.MatchRuleByModelAndScenario("opus", typ.ScenarioClaudeCode); r == nil || r.UUID != "user-opus" {
 		t.Errorf("exact match must win over the alias, got %+v", r)
+	}
+}
+
+func TestBackfillFableRuleOnce_DoesNotResurrectDeletedRule(t *testing.T) {
+	c := &Config{Rules: []typ.Rule{
+		{UUID: RuleUUIDCCOpus, Scenario: typ.ScenarioClaudeCode, RequestModel: "opus", Active: true},
+	}}
+	backfillFableRuleOnce(c)
+	if c.findRuleByUUID(RuleUUIDCCFable) == nil {
+		t.Fatal("first run must seed the fable rule")
+	}
+	// the user deletes it; later boots must leave it deleted
+	kept := c.Rules[:0]
+	for _, r := range c.Rules {
+		if r.UUID != RuleUUIDCCFable {
+			kept = append(kept, r)
+		}
+	}
+	c.Rules = kept
+	backfillFableRuleOnce(c)
+	if c.findRuleByUUID(RuleUUIDCCFable) != nil {
+		t.Error("a deleted fable rule must not come back")
+	}
+}
+
+func TestClaudeCodeRuleNamesAreUniqueAcrossSpellings(t *testing.T) {
+	c := &Config{Rules: []typ.Rule{
+		{UUID: "legacy-opus", Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-opus", Active: true},
+	}}
+	// "opus" and "tingly/cc-opus" are one name in the Claude Code scenario
+	if !c.IsRequestModelInScenario("opus", typ.ScenarioClaudeCode) {
+		t.Error("IsRequestModelInScenario must see the legacy spelling")
+	}
+	if got := c.GetUUIDByRequestModelAndScenario("opus", typ.ScenarioClaudeCode); got != "legacy-opus" {
+		t.Errorf("GetUUIDByRequestModelAndScenario(opus) = %q", got)
+	}
+	// other scenarios compare exactly
+	if c.IsRequestModelInScenario("opus", typ.ScenarioOpenAI) {
+		t.Error("alias must not leak into other scenarios")
+	}
+}
+
+func TestMatchRuleByModelAndScenario_AliasPrefersActiveRule(t *testing.T) {
+	c := &Config{Rules: []typ.Rule{
+		{UUID: "off", Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-opus", Active: false},
+		{UUID: "on", Scenario: typ.ScenarioClaudeCode, RequestModel: "opus[1m]", Active: true},
+	}}
+	if r := c.MatchRuleByModelAndScenario("opus", typ.ScenarioClaudeCode); r == nil || r.UUID != "on" {
+		t.Errorf("alias pass must prefer the active rule, got %+v", r)
 	}
 }

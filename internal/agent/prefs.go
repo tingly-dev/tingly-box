@@ -2,9 +2,10 @@ package agent
 
 import (
 	"encoding/json"
-	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
 	"maps"
 	"strings"
+
+	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
 )
 
 const DefaultClaudeCodeDefaultMode = "acceptEdits"

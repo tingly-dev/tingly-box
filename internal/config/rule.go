@@ -94,7 +94,7 @@ func (c *Config) AddRule(rule typ.Rule) error {
 
 	// Guard name unique within same scenario
 	for _, rc := range c.Rules {
-		if rc.RequestModel == rule.RequestModel && rc.Scenario == rule.Scenario {
+		if rc.Scenario == rule.Scenario && sameRequestModel(rule.Scenario, rc.RequestModel, rule.RequestModel) {
 			if rc.UUID != rule.UUID {
 				return fmt.Errorf("rule with Name %s already exists in same scenario", rule.RequestModel)
 			}
@@ -152,7 +152,7 @@ func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
 
 	// Guard name unique
 	for _, rc := range c.Rules {
-		if rc.RequestModel == rule.RequestModel && rc.GetScenario() == rule.Scenario {
+		if rc.GetScenario() == rule.Scenario && sameRequestModel(rule.Scenario, rc.RequestModel, rule.RequestModel) {
 			if rc.UUID != rule.UUID {
 				return fmt.Errorf("rule with Name %s already exists in same scenario", rule.RequestModel)
 			}
@@ -278,9 +278,8 @@ func (c *Config) GetRuleByRequestModelAndScenario(requestModel string, scenario 
 	// Claude Code built-ins answer to both the short and the legacy prefixed
 	// spelling, so applying "opus" updates an older install's "tingly/cc-opus".
 	if scenario.Base() == typ.ScenarioClaudeCode {
-		want := canonicalCCRequestModel(requestModel)
 		for _, rule := range c.Rules {
-			if rule.GetScenario() == scenario && canonicalCCRequestModel(rule.RequestModel) == want {
+			if rule.GetScenario() == scenario && sameRequestModel(scenario, rule.RequestModel, requestModel) {
 				return &rule
 			}
 		}
@@ -294,7 +293,7 @@ func (c *Config) GetUUIDByRequestModelAndScenario(requestModel string, scenario 
 	defer c.mu.RUnlock()
 
 	for _, rule := range c.Rules {
-		if rule.RequestModel == requestModel && rule.GetScenario() == scenario {
+		if rule.GetScenario() == scenario && sameRequestModel(scenario, rule.RequestModel, requestModel) {
 			return rule.UUID
 		}
 	}
@@ -307,7 +306,7 @@ func (c *Config) IsRequestModelInScenario(modelName string, scenario typ.RuleSce
 	defer c.mu.RUnlock()
 
 	for _, rc := range c.Rules {
-		if rc.RequestModel == modelName && rc.GetScenario() == scenario {
+		if rc.GetScenario() == scenario && sameRequestModel(scenario, rc.RequestModel, modelName) {
 			return true
 		}
 	}
@@ -350,10 +349,21 @@ func (c *Config) MatchRuleByModelAndScenario(requestModel string, scenario typ.R
 			normalize = canonicalCCRequestModel
 		}
 		want := normalize(requestModel)
+		var inactive *typ.Rule // returned only when no active rule matches
 		for _, rule := range c.Rules {
-			if rule.GetScenario() == scenario && normalize(rule.RequestModel) == want {
+			if rule.GetScenario() != scenario || normalize(rule.RequestModel) != want {
+				continue
+			}
+			if rule.Active {
 				return &rule
 			}
+			if inactive == nil {
+				r := rule
+				inactive = &r
+			}
+		}
+		if inactive != nil {
+			return inactive
 		}
 	}
 
@@ -680,4 +690,15 @@ func validateAndNormalizeRuleRecording(rule *typ.Rule) error {
 	}
 	rule.Flags.Recording = string(typ.ParseRecordingMode(rule.Flags.Recording))
 	return nil
+}
+
+// sameRequestModel reports whether two request model names of a rule scenario
+// are the same name. Claude Code built-ins also match across the short and the
+// legacy "tingly/cc-*" spelling (and ignore the [1m] marker), so the two can
+// not coexist as separate rules; every other name compares exactly.
+func sameRequestModel(scenario typ.RuleScenario, a, b string) bool {
+	if a == b {
+		return true
+	}
+	return scenario.Base() == typ.ScenarioClaudeCode && canonicalCCRequestModel(a) == canonicalCCRequestModel(b)
 }
