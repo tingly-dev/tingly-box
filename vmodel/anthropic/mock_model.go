@@ -105,14 +105,23 @@ func (m *MockModel) staticResponse() VModelResponse {
 
 func (m *MockModel) toolResponse() VModelResponse {
 	tc := m.cfg.ToolCall
-	displayText := vmodel.ToolCallDisplayContent(tc.Arguments)
+	// Lead-in text: an explicit Content wins (scripted "say"), otherwise the
+	// legacy display text derived from the tool arguments.
+	text := m.cfg.Content
+	if text == "" {
+		text = vmodel.ToolCallDisplayContent(tc.Arguments)
+	}
 	inputJSON, _ := json.Marshal(tc.Arguments)
+	id := tc.ID
+	if id == "" {
+		id = "toolu_virtual"
+	}
 
 	return VModelResponse{
 		Content: []sdk.BetaContentBlockParamUnion{
-			{OfText: &sdk.BetaTextBlockParam{Text: displayText}},
+			{OfText: &sdk.BetaTextBlockParam{Text: text}},
 			{OfToolUse: &sdk.BetaToolUseBlockParam{
-				ID:    "toolu_virtual",
+				ID:    id,
 				Name:  tc.Name,
 				Input: json.RawMessage(inputJSON),
 			}},

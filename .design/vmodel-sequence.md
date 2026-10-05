@@ -1,5 +1,10 @@
 # Virtual sequence models
 
+> The sequence engine was later generalised from status-only steps to full
+> scripted outcomes (text, tool calls, usage, mid-stream cuts) with YAML
+> loading — see [`vmodel-script.md`](./vmodel-script.md). Status-only programs
+> described below remain valid.
+
 ## Problem
 
 The `vmodel` package already ships always-fail error models

@@ -78,11 +78,20 @@ func NewStatusSequence(id, name string, statuses ...int) *SequenceModel {
 // request. This is the single point at which the cursor advances.
 func (m *SequenceModel) Snapshot() VirtualModel {
 	step := m.seq.Next()
+	// Anthropic's word for "finished answering" is end_turn; MockModel's
+	// generic default ("stop") is not an Anthropic stop_reason, and agent
+	// clients key their loop on it.
+	if step.StopReason == "" && step.Tool == nil {
+		step.StopReason = "end_turn"
+	}
 	return NewMockModel(&MockModelConfig{
 		ID:          m.ID,
 		Name:        m.Name,
 		Description: m.Description,
 		Content:     step.Content,
+		ToolCall:    step.Tool,
+		StopReason:  step.StopReason,
+		Usage:       step.Usage,
 		Delay:       m.Delay,
 		Error:       step.Error,
 	})
