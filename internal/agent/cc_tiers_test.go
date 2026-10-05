@@ -23,3 +23,13 @@ func TestClaudeCodeTiersFromEnv(t *testing.T) {
 		t.Fatalf("separate env = %+v, want %v (a tier missing from the env is left out)", separate, want)
 	}
 }
+
+func TestClaudeCodeTiersFromEnv_Fable(t *testing.T) {
+	got := ClaudeCodeTiersFromEnv(map[string]string{
+		"ANTHROPIC_MODEL": "tingly/cc-default", "ANTHROPIC_DEFAULT_FABLE_MODEL": "tingly/cc-fable",
+	})
+	want := []ClaudeCodeTier{{Alias: "", Model: "tingly/cc-default"}, {Alias: "fable", Model: "tingly/cc-fable"}}
+	if got.Unified || !slices.Equal(got.Tiers, want) {
+		t.Fatalf("env = %+v, want %v", got, want)
+	}
+}

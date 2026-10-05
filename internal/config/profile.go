@@ -124,6 +124,7 @@ func newCCProfileRules(profiledScenario typ.RuleScenario, unified bool) []typ.Ru
 		newRule("sonnet", "Claude Code profile - sonnet model"),
 		newRule("opus", "Claude Code profile - opus model"),
 		newRule("subagent", "Claude Code profile - subagent model"),
+		newRule("fable", "Claude Code profile - fable model"),
 	}
 }
 

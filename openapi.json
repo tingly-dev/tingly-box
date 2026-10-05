@@ -9892,6 +9892,10 @@
       "ClaudeCodePrefs": {
         "type": "object",
         "properties": {
+          "ANTHROPIC_DEFAULT_FABLE_MODEL": {
+            "type": "string",
+            "description": "Field ANTHROPIC_DEFAULT_FABLE_MODEL"
+          },
           "ANTHROPIC_DEFAULT_HAIKU_MODEL": {
             "type": "string",
             "description": "Field ANTHROPIC_DEFAULT_HAIKU_MODEL"

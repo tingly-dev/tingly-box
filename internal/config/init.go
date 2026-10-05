@@ -49,6 +49,7 @@ func init() {
 		ccRule(RuleUUIDCCOpus, "tingly/cc-opus", "Claude Code - Opus model - to use for opus , or for opusplan when Plan Mode is active.", false),
 		ccRule(RuleUUIDCCDefault, "tingly/cc-default", "Claude Code - Default model - for general task", false),
 		ccRule(RuleUUIDCCSubagent, "tingly/cc-subagent", "Claude Code - Subagent model - model to use for subagents", false),
+		ccRule(RuleUUIDCCFable, "tingly/cc-fable", "Claude Code - Fable model - model to use for the fable alias", false),
 		{
 			UUID:          RuleUUIDOpenCode,
 			Scenario:      typ.ScenarioOpenCode,

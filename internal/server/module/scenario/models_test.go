@@ -66,10 +66,10 @@ func TestGetClaudeCodeModels(t *testing.T) {
 	}
 
 	code, sep := getModels(t, h, "/scenario/claude_code/models?profile="+separate.ID)
-	if code != http.StatusOK || sep.Unified || len(sep.Tiers) != 4 {
-		t.Fatalf("separate profile: %d %+v, want 4 separate tiers", code, sep)
+	if code != http.StatusOK || sep.Unified || len(sep.Tiers) != 5 {
+		t.Fatalf("separate profile: %d %+v, want 5 separate tiers", code, sep)
 	}
-	for i, alias := range []string{"", "opus", "sonnet", "haiku"} {
+	for i, alias := range []string{"", "opus", "sonnet", "haiku", "fable"} {
 		if sep.Tiers[i].Alias != alias || sep.Tiers[i].Model == "" {
 			t.Fatalf("tier %d = %+v, want alias %q with a model", i, sep.Tiers[i], alias)
 		}

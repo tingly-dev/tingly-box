@@ -49,6 +49,9 @@ type ClaudeCodeModelConfig struct {
 	// Opus is the model for Opus requests (optional, uses Default if empty)
 	Opus string
 
+	// Fable is the model for Fable requests (optional, uses Default if empty)
+	Fable string
+
 	// Sonnet is the model for Sonnet requests (optional, uses Default if empty)
 	Sonnet string
 
@@ -75,6 +78,7 @@ func (p *ClaudeCodeParams) BuildEnv() map[string]string {
 	env["ANTHROPIC_MODEL"] = defaultModel
 	env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = cmp.Or(p.ModelConfig.Haiku, defaultModel)
 	env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = cmp.Or(p.ModelConfig.Opus, defaultModel)
+	env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = cmp.Or(p.ModelConfig.Fable, defaultModel)
 	env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = cmp.Or(p.ModelConfig.Sonnet, defaultModel)
 	env["CLAUDE_CODE_SUBAGENT_MODEL"] = cmp.Or(p.ModelConfig.SubAgent, defaultModel)
 

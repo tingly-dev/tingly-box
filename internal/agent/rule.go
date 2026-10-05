@@ -17,6 +17,7 @@ var ClaudeCodeRequestModels = []string{
 	"tingly/cc-opus",
 	"tingly/cc-default",
 	"tingly/cc-subagent",
+	"tingly/cc-fable",
 }
 
 // OpenCodeRequestModels defines all request models for OpenCode scenario

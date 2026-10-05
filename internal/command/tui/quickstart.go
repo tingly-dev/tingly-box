@@ -537,6 +537,7 @@ func qsRules(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 		{serverconfig.RuleUUIDCCOpus, "Claude Code · opus"},
 		{serverconfig.RuleUUIDCCSonnet, "Claude Code · sonnet"},
 		{serverconfig.RuleUUIDCCSubagent, "Claude Code · subagent"},
+		{serverconfig.RuleUUIDCCFable, "Claude Code · fable"},
 		{serverconfig.RuleUUIDOpenCode, "OpenCode scenario"},
 	}
 

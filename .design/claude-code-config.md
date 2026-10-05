@@ -211,12 +211,24 @@ not runtime discovery.
 
 | Rule UUID | Initial `request_model` | Maps to env slot |
 |---|---|---|
-| `builtin:claude_code:cc` | `tingly/cc` | (unified mode — all 5 slots) |
+| `builtin:claude_code:cc` | `tingly/cc` | (unified mode — all 6 slots) |
 | `builtin:claude_code:default` | `tingly/cc-default` | `ANTHROPIC_MODEL` |
 | `builtin:claude_code:haiku` | `tingly/cc-haiku` | `ANTHROPIC_DEFAULT_HAIKU_MODEL` |
 | `builtin:claude_code:sonnet` | `tingly/cc-sonnet` | `ANTHROPIC_DEFAULT_SONNET_MODEL` |
 | `builtin:claude_code:opus` | `tingly/cc-opus` | `ANTHROPIC_DEFAULT_OPUS_MODEL` |
 | `builtin:claude_code:subagent` | `tingly/cc-subagent` | `CLAUDE_CODE_SUBAGENT_MODEL` |
+| `builtin:claude_code:fable` | `tingly/cc-fable` | `ANTHROPIC_DEFAULT_FABLE_MODEL` |
+
+The `fable` tier was added after separate mode shipped. A migration
+(`backfillFableRuleOnce`, once per config) seeds `builtin:claude_code:fable` for
+existing configs, copying the opus rule's services, flags, load-balancing tactic
+and active state (only when the opus rule exists, and never over a rule that
+already answers to that name). With no active fable rule — a profile created
+earlier, or the rule switched off — `GenerateCCEnv`, the tbclient env and the
+quick config point the fable alias at the default tier instead of the
+unroutable bare tier name. Claude Code also treats
+`ANTHROPIC_DEFAULT_FABLE_MODEL` as the model ID it recognizes as Fable for
+automatic model fallback.
 
 Users can edit each rule's `request_model` from the rules table on the
 page. The Quick Config seeds its form values from whatever is currently

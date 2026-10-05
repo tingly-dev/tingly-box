@@ -22,6 +22,7 @@ func BuildClaudeCodeModelConfig(unified bool) aiagent.ClaudeCodeModelConfig {
 		Default:  "tingly/cc-default",
 		Haiku:    "tingly/cc-haiku",
 		Opus:     "tingly/cc-opus",
+		Fable:    "tingly/cc-fable",
 		Sonnet:   "tingly/cc-sonnet",
 		SubAgent: "tingly/cc-subagent",
 	}
