@@ -68,12 +68,16 @@ class VModelThroughTB(unittest.TestCase):
         self.assertEqual(done["stop_reason"], "end_turn")
         self.assertEqual(done["content"][0]["text"], "Done.")
 
-    def test_the_same_script_answers_openai_chat_with_its_own_cursor(self):
+    def test_one_script_one_cursor_across_both_protocols(self):
         model = self.fresh(FLOW)
-        first = self.tb.chat(model, "go")["choices"][0]
-        self.assertEqual(first["finish_reason"], "tool_calls")
-        self.assertEqual(first["message"]["content"], "Let me look.")
-        self.assertEqual(first["message"]["tool_calls"][0]["function"]["name"], "Read")
+        first = self.tb.messages(model, "go")                 # step 1: Read, over Anthropic
+        self.assertEqual(first["content"][1]["name"], "Read")
+        second = self.tb.chat(model, "(tool result)")["choices"][0]  # step 2: Edit, over OpenAI
+        self.assertEqual(second["finish_reason"], "tool_calls")
+        self.assertEqual(second["message"]["tool_calls"][0]["function"]["name"], "Edit")
+        with self.assertRaises(TinglyError) as ctx:           # step 3: the 529, over Anthropic again
+            self.tb.messages(model, "(tool result)")
+        self.assertEqual(ctx.exception.status, 529)
 
     def test_mid_stream_cuts_are_visible_on_the_wire(self):
         model = self.fresh(FLAKY)
@@ -148,7 +152,7 @@ class VModelThroughTB(unittest.TestCase):
         everything = (vmodel.Script("everything", on_exhaust="clamp", description="all kinds",
                                     default_content="dflt")
                       .say("a", usage={"input": 1, "output": 2, "cache_read": 3, "cache_write": 4, "reasoning": 5},
-                           stop_reason="end_turn")
+                           stop_reason="max_tokens")
                       .tool("T", {"k": "v"}, tool_id="my-id")
                       .error(503, message="down", error_type="overloaded_error")
                       .cut("close", after=1, say="x")
