@@ -117,17 +117,19 @@ func (m *MockModel) toolResponse() VModelResponse {
 		id = "toolu_virtual"
 	}
 
-	return VModelResponse{
-		Content: []sdk.BetaContentBlockParamUnion{
-			{OfText: &sdk.BetaTextBlockParam{Text: text}},
-			{OfToolUse: &sdk.BetaToolUseBlockParam{
-				ID:    id,
-				Name:  tc.Name,
-				Input: json.RawMessage(inputJSON),
-			}},
-		},
-		StopReason: "tool_use",
+	var blocks []sdk.BetaContentBlockParamUnion
+	// A real Anthropic response never carries an empty text block, and
+	// clients that read block.text choke on one — so a bare tool call is just
+	// the tool_use block.
+	if text != "" {
+		blocks = append(blocks, sdk.BetaContentBlockParamUnion{OfText: &sdk.BetaTextBlockParam{Text: text}})
 	}
+	blocks = append(blocks, sdk.BetaContentBlockParamUnion{OfToolUse: &sdk.BetaToolUseBlockParam{
+		ID:    id,
+		Name:  tc.Name,
+		Input: json.RawMessage(inputJSON),
+	}})
+	return VModelResponse{Content: blocks, StopReason: "tool_use"}
 }
 
 // HandleAnthropicStream streams fixed content using configured chunks with simulated delay.
