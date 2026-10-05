@@ -160,8 +160,8 @@ through the `/tingly/<scenario>` pipeline (provider + rule) is what
 `harness script` covers; real agents are pointed at `anthropic_base`.
 
 Limits, by design: attach mode needs filesystem access to the config dir (a
-remote tb needs the deferred management API), and each protocol keeps its own
-cursor, so a script used over both protocols advances independently on each.
+remote tb needs the deferred management API). `stop_reason=` takes the
+neutral vocabulary (`end_turn`, `tool_use`, `max_tokens`, `stop_sequence`).
 Usage on a step is advertised on **streamed** responses only (existing vmodel
 behaviour), so assert on it with `stream: true`.
 

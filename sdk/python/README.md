@@ -58,8 +58,10 @@ with vmodel.Testbed(flow) as tb:          # starts a throwaway tb, writes the sc
 runs the whole thing with a small agent loop. Step kinds: `.say()`, `.tool()`,
 `.error(status)`, `.cut(mode)` (a stream that dies part-way), each taking
 `usage=`, `stop_reason=`, `repeat=`; `Script(..., on_exhaust="clamp")` decides
-what happens after the last step. The same script also answers the OpenAI
-protocol (each protocol keeps its own place in the program).
+what happens after the last step. `stop_reason=` takes `end_turn`, `tool_use`,
+`max_tokens` or `stop_sequence` (mapped for OpenAI). The same script also
+answers the OpenAI protocol (`tb.chat()`) and shares one place in the program
+with the Anthropic side — a client can switch protocols mid-flow.
 
 - **Needs a tb binary**: `TINGLY_TB_BIN`, `tb_bin=...`, or `tingly-box` on
   `PATH` (`go build -o tb ./cli/tingly-box` builds one).
