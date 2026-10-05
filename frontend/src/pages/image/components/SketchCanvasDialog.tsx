@@ -43,8 +43,12 @@ import {
     createFigure,
     drawFigureHandles,
     figureBounds,
+    DEFAULT_BUILD,
+    FIGURE_BUILDS,
+    figureBuild,
     figureTurn,
     flipFigure,
+    setFigureBuild,
     isTurnHandleHit,
     setFigureTurn,
     turnFigure,
@@ -61,6 +65,7 @@ import {
     swingJoint,
     transformFigures,
     translateFigure,
+    type FigureBuild,
     type JointKey,
     type PoseFigure,
     type PosePresetKey,
@@ -364,11 +369,25 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         // tone rather than "the next one": after a delete, counting the list
         // hands out a shade another figure already wears, which is the exact
         // collision the shade exists to prevent.
-        const figure = createFigure('standing', dims, placeNewFigure(figures, dims), leastUsedShade(figures));
+        // Built like the figure in hand (or the last one down): a second
+        // figure in a scene is more often another of the same than not, and
+        // switching it is one click away on the toolbar — no question asked
+        // before the figure lands (principle 6).
+        const like = selectedFigure ?? figures[figures.length - 1];
+        const build = like ? figureBuild(like) : DEFAULT_BUILD;
+        const figure = createFigure('standing', dims, placeNewFigure(figures, dims), leastUsedShade(figures), undefined, build);
         setFigures((current) => [...current, figure]);
         setSelectedId(figure.id);
         setTool('pose');
-    }, [dims, figures, snapshot]);
+    }, [dims, figures, selectedFigure, snapshot]);
+
+    // Who the figure is, not what it is doing: the pose, the size, the place
+    // and the view all stay, only the girdles and the solids change.
+    const handleBuild = useCallback((build: FigureBuild) => {
+        if (!selectedFigure || figureBuild(selectedFigure) === build) return;
+        snapshot();
+        updateFigure(selectedFigure.id, (figure) => setFigureBuild(figure, build));
+    }, [selectedFigure, snapshot, updateFigure]);
 
     const handleRemoveFigure = useCallback(() => {
         if (!selectedFigure) return;
@@ -720,6 +739,23 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                                 </Tooltip>
                                 {selectedFigure ? (
                                     <>
+                                        {/* The build is a property of this figure, shown as
+                                            the word for what it is rather than an icon: two
+                                            figures in one scene can differ. */}
+                                        <ToggleButtonGroup
+                                            value={figureBuild(selectedFigure)}
+                                            exclusive
+                                            size="small"
+                                            onChange={(_, next: FigureBuild | null) => { if (next) handleBuild(next); }}
+                                            aria-label={t('playground.sketch.pose.build.label', { defaultValue: 'Build' })}
+                                            sx={{ '& .MuiToggleButton-root': { py: 0.1, px: 1, textTransform: 'none' } }}
+                                        >
+                                            {FIGURE_BUILDS.map((build) => (
+                                                <ToggleButton key={build} value={build}>
+                                                    {t(`playground.sketch.pose.build.${build}`, { defaultValue: build === 'female' ? 'Female' : 'Male' })}
+                                                </ToggleButton>
+                                            ))}
+                                        </ToggleButtonGroup>
                                         <Button
                                             size="small"
                                             variant="outlined"
@@ -946,6 +982,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
             <PoseLibraryPopover
                 anchorEl={libraryAnchor}
                 turn={selectedFigure ? figureTurn(selectedFigure) : { yaw: 0, pitch: 0 }}
+                build={selectedFigure ? figureBuild(selectedFigure) : DEFAULT_BUILD}
                 onClose={() => setLibraryAnchor(null)}
                 onPick={handlePreset}
             />

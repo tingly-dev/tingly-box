@@ -18,7 +18,7 @@ import {
     distanceToSegment,
     figureBounds,
     figureSolids,
-    MANIKIN,
+    manikinFor,
     constrainFigure,
     figureUnit,
     HANDLE_KEYS,
@@ -445,7 +445,11 @@ describe('handles you can actually grab', () => {
         const ambiguous = rows.filter((row) => row.worst < PICK).length;
         const unpickable = rows.filter((row) => row.worst < PICK / 2).length;
         expect(ambiguous / rows.length).toBeLessThan(0.3);
-        expect(unpickable).toBeLessThan(12);
+        // A rate, not a count, so growing the library does not loosen or
+        // tighten it: the old bound was 12 of 216 rows. Most of what is left
+        // is a body on the floor seen from eye level, where the near shoulder
+        // genuinely sits on the neck — one turn of the view ring away.
+        expect(unpickable / rows.length).toBeLessThan(12 / 216);
     });
 });
 
@@ -458,7 +462,7 @@ describe('figureSolids', () => {
         expect(solids.filter((s) => s.kind === 'block')).toHaveLength(2);
         const thigh = solids.find((s) => s.kind === 'capsule' && s.from === figure.joints.hipL);
         expect(thigh && thigh.kind === 'capsule' ? thigh.fromRadius : 0)
-            .toBeCloseTo(MANIKIN.thigh * figureUnit(figure), 6);
+            .toBeCloseTo(manikinFor(figure).thigh * figureUnit(figure), 6);
     });
 
     it('scales every radius with the figure', () => {
@@ -695,7 +699,7 @@ describe('the pose library', () => {
         // Bowing is no longer on the list: it used to fold sideways across the
         // screen because that was the only fold a flat figure had. It now
         // folds forward, out of the picture, which is what bowing is.
-        const horizontal = new Set(['lying', 'lyingSide', 'prone', 'pushUp']);
+        const horizontal = new Set(['lying', 'lyingSide', 'sideElbow', 'prone', 'proneOnElbows', 'pushUp', 'allFours']);
         for (const pose of everyPose) {
             const figure = createFigure(pose, DIMS, undefined, 0, { yaw: 0, pitch: 0 });
             const rise = figure.joints.hip.y - figure.joints.neck.y;

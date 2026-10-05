@@ -1,5 +1,6 @@
 // The pose library: every preset as bone angles, and how they are grouped.
 // Data only — add a pose here and nothing else needs to change.
+import { BONES, FIGURE_BUILDS, type FigureBuild } from '../skeleton';
 import { buildPose, type PoseSpec, type PresetPoints } from './spec';
 
 export type PosePresetKey =
@@ -7,10 +8,15 @@ export type PosePresetKey =
     | 'walking' | 'running' | 'jumping' | 'kicking' | 'reaching' | 'bowing'
     | 'throwing' | 'dancing' | 'climbing'
     | 'sitting' | 'sittingFloor' | 'crossLegged' | 'kneeling' | 'crouching' | 'hugKnees' | 'reclining'
-    | 'lying' | 'lyingSide' | 'prone' | 'pushUp'
+    | 'seiza' | 'kneelLeanBack' | 'sideSit' | 'sideSitHandHead' | 'kneeUp' | 'allFours'
+    | 'lying' | 'lyingSide' | 'sideElbow' | 'prone' | 'proneOnElbows' | 'pushUp'
     | 'wave' | 'pointing' | 'thinking' | 'leaning' | 'shrug' | 'armsOpen' | 'lookingBack'
     | 'salute' | 'presenting';
 
+
+// How far a body laid on the floor is swung round from dead side-on (see
+// `PoseSpec.body`).
+const TURN_ON_FLOOR = 28;
 
 const POSE_SPECS: Record<PosePresetKey, PoseSpec> = {
     standing: {
@@ -128,25 +134,97 @@ const POSE_SPECS: Record<PosePresetKey, PoseSpec> = {
         legs: { l: [[26, 52], [-18, -10]], r: [[44, 26], [34, 10]] },
     },
 
+    // --- on the floor ---------------------------------------------------------
+    //
+    // The figure-drawing staples: sitting on the heels, the side-sit, one knee
+    // up, all fours. Every one of them folds a leg past what a flat angle can
+    // show, which is why they were missing before the third dimension was.
+
+    // Kneeling, sitting back on the heels, knees a little apart, hands
+    // resting between them.
+    seiza: {
+        bend: 6, headNod: 4,
+        arms: { l: [[-6, 26], [10, 46]], r: [[6, 26], [-10, 46]] },
+        legs: { l: [[-10, 82], [-6, -84]], r: [[10, 82], [6, -84]] },
+    },
+    // The same kneel with the weight back on the hands, chest open, chin up.
+    kneelLeanBack: {
+        bend: -22, twist: 10, headNod: -18, headTurn: 14,
+        arms: { l: [[-20, -46], [-14, -40]], r: [[20, -46], [14, -40]] },
+        legs: { l: [[-12, 80], [-6, -84]], r: [[12, 80], [6, -84]] },
+    },
+    // Both legs folded to one side, propped on the arm on the other.
+    sideSit: {
+        lean: 14, shoulderTilt: -8, headTilt: -10,
+        arms: { l: [[-22, 4], [-16, 8]], r: [[18, 34], [-8, 58]] },
+        legs: { l: [[30, 74], [96, -38]], r: [[44, 70], [104, -30]] },
+    },
+    // The side-sit with the free hand behind the head.
+    sideSitHandHead: {
+        lean: 12, shoulderTilt: -6, headTilt: -8,
+        arms: { l: [[-22, 4], [-16, 8]], r: [[146, -18], [-118, -40]] },
+        legs: { l: [[30, 74], [96, -38]], r: [[44, 70], [104, -30]] },
+    },
+    // Sitting back on one hand, one knee drawn up with the forearm resting
+    // across it, the other leg folded flat.
+    kneeUp: {
+        lean: -6, bend: -12, headTilt: 6,
+        arms: { l: [[-24, -36], [-18, -40]], r: [[14, 52], [56, 52]] },
+        legs: { l: [[-14, 78], [-10, 72]], r: [[170, 58], [6, -10]] },
+    },
+    // Hands and knees. Written upright with the floor in front, then laid
+    // face-down (see `body`): arms and thighs reach for the floor, shins lie
+    // on it, and the head lifts to look along it.
+    allFours: {
+        bend: 10, headNod: -46,
+        arms: { l: [[-4, 86], [-4, 86]], r: [[4, 86], [4, 86]] },
+        legs: { l: [[-4, 86], [-3, 2]], r: [[4, 86], [3, 2]] },
+        body: { spin: -90, tip: -90, turn: TURN_ON_FLOOR },
+    },
+
+    // Flat on the back. Laid down with `body` rather than leaned over in the
+    // screen plane: leaned, the chest stays to the camera, which is lying on
+    // one's side seen from above — and the view menu already has "above".
     lying: {
-        lean: 88,
-        arms: { l: [[86, 10], [88, 12]], r: [[94, 10], [96, 12]] },
-        legs: { l: [[94, 6], [92, 4]], r: [[84, 6], [82, 4]] },
+        headNod: -6,
+        arms: { l: [[-14, 4], [-10, 6]], r: [[14, 4], [10, 6]] },
+        legs: { l: [[-4, 0], [-3, -4]], r: [[4, 0], [3, -4]] },
+        body: { spin: 90, tip: -90, turn: TURN_ON_FLOOR },
     },
     lyingSide: {
         lean: 86, headTilt: 8,
         arms: { l: [[80, -30], [70, -46]], r: [[96, 30], [84, 46]] },
         legs: { l: [[92, -24], [74, -34]], r: [[88, 22], [70, 30]] },
     },
-    prone: {
-        lean: 86, bend: -12, headTilt: -12, headNod: -12,
-        arms: { l: [[70, -40], [26, -30]], r: [[110, -40], [154, -30]] },
-        legs: { l: [[92, -10], [96, -40]], r: [[86, -10], [82, -40]] },
+    // On one side, the chest raised on the lower forearm, the top arm resting
+    // along the body.
+    sideElbow: {
+        lean: 66, headTilt: -34,
+        arms: { l: [[74, 30], [76, 40]], r: [[-14, 20], [-88, 16]] },
+        legs: { l: [[76, 34], [98, 4]], r: [[88, 2], [94, -6]] },
     },
+    // Face-down, the head turned to rest on folded forearms.
+    prone: {
+        headTurn: 58, headNod: -8,
+        arms: { l: [[-128, 44], [84, 8]], r: [[128, 44], [-84, 8]] },
+        legs: { l: [[-4, 0], [-3, -8]], r: [[4, 0], [3, -8]] },
+        body: { spin: -90, tip: -90, turn: TURN_ON_FLOOR },
+    },
+    // Face-down on the forearms, chin on the hands, lower legs in the air.
+    // Written like `allFours`: upright, floor in front, then laid down.
+    proneOnElbows: {
+        bend: -16, headNod: -36,
+        arms: { l: [[-176, 66], [164, -30]], r: [[176, 66], [-164, -30]] },
+        legs: { l: [[-3, 4], [6, -74]], r: [[3, 4], [-6, -70]] },
+        body: { spin: -90, tip: -90, turn: TURN_ON_FLOOR },
+    },
+    // A plank on straight arms: the body one line from heel to crown, tilted
+    // just enough that hands and toes reach the same floor.
     pushUp: {
-        lean: 76, bend: -6,
-        arms: { l: [[-10, -70], [-8, -72]], r: [[10, -70], [8, -72]] },
-        legs: { l: [[92, -8], [90, -8]], r: [[88, -8], [86, -8]] },
+        bend: -20, headNod: 4,
+        arms: { l: [[-8, 88], [-8, 88]], r: [[8, 88], [8, 88]] },
+        legs: { l: [[-3, 20], [-3, 20]], r: [[3, 20], [3, 20]] },
+        body: { spin: -90, tip: -90, turn: TURN_ON_FLOOR },
     },
 
     wave: {
@@ -196,9 +274,14 @@ const POSE_SPECS: Record<PosePresetKey, PoseSpec> = {
     },
 };
 
-export const POSE_PRESETS: Record<PosePresetKey, PresetPoints> = Object.fromEntries(
-    (Object.keys(POSE_SPECS) as PosePresetKey[]).map((key) => [key, buildPose(POSE_SPECS[key])]),
-) as Record<PosePresetKey, PresetPoints>;
+// One library, built once per build. The specs are angles, so "seiza" on the
+// female skeleton and "seiza" on the male one are the same pose on different
+// girdles — nobody has to author, or keep in step, a second list.
+export const POSE_PRESETS: Record<FigureBuild, Record<PosePresetKey, PresetPoints>> = Object.fromEntries(
+    FIGURE_BUILDS.map((build) => [build, Object.fromEntries(
+        (Object.keys(POSE_SPECS) as PosePresetKey[]).map((key) => [key, buildPose(POSE_SPECS[key], BONES[build])]),
+    )]),
+) as Record<FigureBuild, Record<PosePresetKey, PresetPoints>>;
 
 // Grouped the way someone looks for a pose — by what the body is doing, not by
 // how the data was authored.
@@ -206,6 +289,7 @@ export const POSE_LIBRARY: readonly { group: string; poses: readonly PosePresetK
     { group: 'standing', poses: ['standing', 'contrapposto', 'handsOnHips', 'armsCrossed', 'tPose', 'armsUp', 'armsBehind'] },
     { group: 'motion', poses: ['walking', 'running', 'jumping', 'kicking', 'reaching', 'bowing', 'throwing', 'dancing', 'climbing'] },
     { group: 'seated', poses: ['sitting', 'sittingFloor', 'crossLegged', 'kneeling', 'crouching', 'hugKnees', 'reclining'] },
-    { group: 'lying', poses: ['lying', 'lyingSide', 'prone', 'pushUp'] },
+    { group: 'floor', poses: ['seiza', 'kneelLeanBack', 'sideSit', 'sideSitHandHead', 'kneeUp', 'allFours'] },
+    { group: 'lying', poses: ['lying', 'lyingSide', 'sideElbow', 'prone', 'proneOnElbows', 'pushUp'] },
     { group: 'gesture', poses: ['wave', 'pointing', 'thinking', 'leaning', 'shrug', 'armsOpen', 'lookingBack', 'salute', 'presenting'] },
 ];

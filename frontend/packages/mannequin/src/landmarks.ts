@@ -387,6 +387,7 @@ export const figureFromLandmarks = (
         id: options.reference.id,
         joints,
         shade: options.reference.shade,
+        build: options.reference.build,
         turn,
     };
     // Our body, our size, where the figure already was: importing a pose

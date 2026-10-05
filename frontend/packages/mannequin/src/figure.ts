@@ -1,6 +1,6 @@
 // Making figures: from a preset, from a saved sketch, or by swapping the pose
 // of one that exists. The one place the library, the rig and the view meet.
-import { JOINT_KEYS, figureTurn, figureUnit, derivedFace, type FigureTurn, type JointKey, type PoseFigure } from './skeleton';
+import { DEFAULT_BUILD, JOINT_KEYS, figureBuild, figureTurn, figureUnit, derivedFace, type FigureBuild, type FigureTurn, type JointKey, type PoseFigure } from './skeleton';
 import { constrainFigure } from './rig';
 import { DEFAULT_VIEW, setFigureTurn } from './view';
 import { centerFigureAt, figureCenter, fitFigureInto, mapJoints, scaleFigure } from './transform';
@@ -35,12 +35,13 @@ export const createFigure = (
     center?: Point,
     shade = 0,
     view: FigureTurn = DEFAULT_VIEW,
+    build: FigureBuild = DEFAULT_BUILD,
 ): PoseFigure => {
     const height = Math.min(dims.height * FIGURE_HEIGHT_RATIO, dims.width / FIGURE_ASPECT);
     const width = height * FIGURE_ASPECT;
     const cx = center?.x ?? dims.width / 2;
     const cy = center?.y ?? dims.height / 2;
-    const points = POSE_PRESETS[preset];
+    const points = POSE_PRESETS[build][preset];
     const joints = {} as Record<JointKey, Vec3>;
     for (const key of JOINT_KEYS) {
         const [nx, ny, nz] = points[key];
@@ -52,7 +53,7 @@ export const createFigure = (
     // wrong. Legalising here means the library cannot drift out of what the
     // model allows, and a new preset cannot be authored impossible.
     const figure = constrainFigure(
-        setFigureTurn({ id: `figure-${Date.now()}-${figureCounter}`, joints, shade }, view),
+        setFigureTurn({ id: `figure-${Date.now()}-${figureCounter}`, joints, shade, build }, view),
     );
     // Centre on the joints, not on the nominal unit box: no preset fills the
     // box exactly (a crown sits below its top edge, a seated figure leans to
@@ -64,11 +65,11 @@ export const createFigure = (
 
 
 // Swaps the pose while keeping the figure where it is, roughly how big it is,
-// and which way it is being looked at: re-entry (principle 10) applies inside
+// which way it is being looked at, and who it is: re-entry (principle 10) applies inside
 // the dialog too, and the camera is not part of the pose (principle 4) — it
 // would be a nasty surprise for picking "sitting" to also spin the model round.
 export const applyPreset = (figure: PoseFigure, preset: PosePresetKey, dims: Size): PoseFigure => {
-    const fresh = createFigure(preset, dims, figureCenter(figure), figure.shade, figureTurn(figure));
+    const fresh = createFigure(preset, dims, figureCenter(figure), figure.shade, figureTurn(figure), figureBuild(figure));
     // Matched on `figureUnit`, the body, not on the bounding box: box height
     // changes with the pose (a crouch is shorter than a stand), so matching
     // boxes would resize the person every time the pose changed.
@@ -84,7 +85,7 @@ export const applyPreset = (figure: PoseFigure, preset: PosePresetKey, dims: Siz
 // as one person in thirty poses.
 export const fitFigureIntoTile = (figure: PoseFigure, box: Size, pad = 0): PoseFigure => {
     const fitted = fitFigureInto(figure, box, pad);
-    const cap = figureUnit(fitFigureInto(createFigure('standing', box, undefined, 0, figureTurn(figure)), box, pad));
+    const cap = figureUnit(fitFigureInto(createFigure('standing', box, undefined, 0, figureTurn(figure), figureBuild(figure)), box, pad));
     const unit = figureUnit(fitted);
     if (unit <= cap) return fitted;
     const center = figureCenter(fitted);

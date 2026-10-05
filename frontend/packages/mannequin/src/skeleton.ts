@@ -35,6 +35,14 @@ export const JOINT_KEYS: readonly JointKey[] = [
 // lets the toolbar show the angle as a number instead of an alias.
 export interface FigureTurn { yaw: number; pitch: number }
 
+// Who the mannequin is built as. Two builds, one pose library: a pose is a set
+// of bone *angles* (`poses/spec.ts`), so the same "sitting on heels" is built
+// on either skeleton and means the same thing on both. What differs is where
+// the shoulders and hips sit (`BONES`) and how the solids hung on them are
+// shaped (`MANIKINS` in `body.ts`) — never which poses exist.
+export type FigureBuild = 'female' | 'male';
+export const FIGURE_BUILDS: readonly FigureBuild[] = ['female', 'male'];
+
 export interface PoseFigure {
     id: string;
     joints: Record<JointKey, Vec3>;
@@ -45,6 +53,9 @@ export interface PoseFigure {
     shade?: number;
     // Optional for the same reason: a sketch saved flat opens facing front.
     turn?: FigureTurn;
+    // Optional too: a sketch saved before builds existed opens as the build
+    // its skeleton already is (see `LEGACY_BUILD`).
+    build?: FigureBuild;
 }
 
 export interface Rect { x: number; y: number; width: number; height: number }
@@ -64,6 +75,14 @@ export const TORSO_HEIGHT_RATIO = 0.36;
 
 
 export const figureTurn = (figure: PoseFigure): FigureTurn => figure.turn ?? { yaw: 0, pitch: 0 };
+
+// What a new figure is built as when nothing says otherwise.
+export const DEFAULT_BUILD: FigureBuild = 'female';
+// What a figure saved before builds existed is. Not the default for new
+// figures: it is the build whose skeleton is *bone for bone* the one those
+// sketches were posed on, so reopening one changes nothing but the solids.
+export const LEGACY_BUILD: FigureBuild = 'male';
+export const figureBuild = (figure: PoseFigure): FigureBuild => figure.build ?? LEGACY_BUILD;
 
 export const figureUnit = (figure: PoseFigure): number => {
     // hip → neck, the bone itself, in three dimensions. The hip *line's*
@@ -101,19 +120,45 @@ export const subtreeOf = (key: JointKey): JointKey[] => JOINT_KEYS.filter((candi
 export const SUBTREES = Object.fromEntries(JOINT_KEYS.map((key) => [key, subtreeOf(key)])) as Record<JointKey, JointKey[]>;
 
 
-// One skeleton for every pose, in arbitrary units — the result is normalised.
-export const BONE = {
+// One skeleton per build, in arbitrary units — the result is normalised.
+//
+// Only the girdles differ. Torso, head and limb lengths are shared on purpose:
+// `figureUnit` is measured off the torso, every pose is normalised by the same
+// crown-to-heel height, and so a pose swapped onto the other build lands at
+// the same size in the same place. The canon backs this up — Loomis draws
+// both at eight heads; what tells them apart at a glance is the shoulder line
+// against the hip line, not the height.
+export interface BoneTable {
+    torso: number; head: number;
+    shoulderSpan: number; shoulderDrop: number;
+    upperArm: number; foreArm: number;
+    hipSpan: number; hipDrop: number;
+    thigh: number; shin: number;
+    face: number;
+}
+
+const SHARED_BONES = {
     torso: 0.36, head: 0.11,
-    // Wide enough that the shoulder joint sits *on* the deltoid corner and the
-    // hip joint on the pelvis's lower corner. Tucked inside the body instead,
-    // a limb reads as hanging off a shelf, and every raised arm cuts a notch.
-    shoulderSpan: 0.115, shoulderDrop: 0.035,
     upperArm: 0.155, foreArm: 0.145,
-    hipSpan: 0.070, hipDrop: 0.022,
     thigh: 0.235, shin: 0.225,
     // Far enough in front of the skull that the handle clears the head's.
     face: 0.075,
 } as const;
+
+export const BONES: Record<FigureBuild, BoneTable> = {
+    // Wide enough that the shoulder joint sits *on* the deltoid corner and the
+    // hip joint on the pelvis's lower corner. Tucked inside the body instead,
+    // a limb reads as hanging off a shelf, and every raised arm cuts a notch.
+    // Shoulders about two heads, hips about one and a half.
+    male: { ...SHARED_BONES, shoulderSpan: 0.115, shoulderDrop: 0.035, hipSpan: 0.070, hipDrop: 0.022 },
+    // Shoulders narrower and a touch lower, hips wider and set a touch lower:
+    // the two lines come close to equal width, which is the female silhouette.
+    female: { ...SHARED_BONES, shoulderSpan: 0.101, shoulderDrop: 0.038, hipSpan: 0.079, hipDrop: 0.026 },
+};
+
+// The male table, which is also every sketch saved before builds existed.
+// Kept for code that only needs a shared length (face, torso, limbs).
+export const BONE: BoneTable = BONES[LEGACY_BUILD];
 
 
 // Which way the body faces: across the shoulders, crossed with the spine.

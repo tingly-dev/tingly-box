@@ -1,6 +1,6 @@
 // How a pose is written, and how a written pose becomes joints. The specs
 // themselves live in `library.ts`; this is the grammar.
-import { BONE, JOINT_KEYS, TORSO_HEIGHT_RATIO, bodyForwardOf, derivedFace, type JointKey } from '../skeleton';
+import { BONE, JOINT_KEYS, TORSO_HEIGHT_RATIO, bodyForwardOf, derivedFace, type BoneTable, type JointKey } from '../skeleton';
 import { add3, cross3, norm3, rad, rotateAxis, sub3, zOf, type Vec3 } from '../vec3';
 
 export type PresetPoints = Record<JointKey, readonly [number, number, number]>;
@@ -36,15 +36,29 @@ const angleOfBone = (angle: Angle): readonly [number, number] => (
 
 export interface PoseSpec {
     lean?: number;          // torso, from upright, in the plane of the screen
-    bend?: number;          // torso, out of it: + folds the body toward the viewer
+    bend?: number;          // torso, out of it: + folds the body forward, toward its front
     twist?: number;         // shoulders against hips, about the body's own axis
     headTilt?: number;      // head, relative to the torso, in the screen plane
     headTurn?: number;      // head, about the body's vertical axis
-    headNod?: number;       // head, out of the screen plane
+    headNod?: number;       // head, out of the screen plane: + drops the chin
     shoulderTilt?: number;
     hipTilt?: number;
     arms: { l: readonly [Angle, Angle]; r: readonly [Angle, Angle] };
     legs: { l: readonly [Angle, Angle]; r: readonly [Angle, Angle] };
+    // The whole body, turned rigidly once it is built: `spin` about the
+    // vertical axis, then `tip` over in the screen plane. What it is for is
+    // the one thing `lean` cannot say — which way the *front* faces once the
+    // body is down. `lean` rotates in the screen plane, so a leaned body keeps
+    // its chest to the camera: right for lying on one's side, wrong for lying
+    // face-down or for being on all fours, where the chest faces the floor.
+    // Such a pose is written standing up with "the floor" in front of it
+    // (+depth), which is far easier to picture, and then laid down.
+    //
+    // `turn` then swings the laid-down body round on the floor, about the
+    // vertical. Dead side-on, a body on the floor hides every left joint
+    // behind its right one; turned a little, it reads in three-quarters from
+    // the default camera and stays grabbable from the front.
+    body?: { spin?: number; tip?: number; turn?: number };
 }
 
 
@@ -74,23 +88,30 @@ const turned = (offset: Vec3, degrees: number): Vec3 =>
     rotateAxis(offset, { x: 0, y: 0, z: 1 }, rad(degrees));
 
 
-export const buildPose = (spec: PoseSpec): PresetPoints => {
+// Built on whichever skeleton it is given: the spec is angles only, so one
+// library serves every build (see `FigureBuild`).
+export const buildPose = (spec: PoseSpec, bones: BoneTable = BONE): PresetPoints => {
     const hip = { ...ORIGIN };
     // The torso leans in the screen plane and bends out of it. Both are folded
     // into one direction so the neck cannot drift off the torso bone.
-    const spine = along([(spec.lean ?? 0) + 180, -(spec.bend ?? 0)], BONE.torso);
+    // `bend` and `headNod` go *with* the depth sign, not against it: a bone
+    // pointing up with +depth leans toward the body's front. Both were once
+    // negated here, which quietly turned every forward fold in the library —
+    // the bow, the crouch, the run's lean — into a back-bend of the same size.
+    // From the front the two look identical; from the side they are opposites.
+    const spine = along([(spec.lean ?? 0) + 180, spec.bend ?? 0], bones.torso);
     const neck = add3(hip, spine);
     // The torso's own axis, which the twist and the head's turn rotate about.
     const axis = norm3(spine);
     const head = add3(neck, along(
-        [(spec.lean ?? 0) + (spec.headTilt ?? 0) + 180, -(spec.bend ?? 0) - (spec.headNod ?? 0)],
-        BONE.head,
+        [(spec.lean ?? 0) + (spec.headTilt ?? 0) + 180, (spec.bend ?? 0) + (spec.headNod ?? 0)],
+        bones.head,
     ));
 
     const shoulderAngle = (spec.lean ?? 0) + (spec.shoulderTilt ?? 0);
     const twist = rad(spec.twist ?? 0);
     const shoulderStub = (side: number) => rotateAxis(
-        turned({ x: side * BONE.shoulderSpan, y: BONE.shoulderDrop, z: 0 }, shoulderAngle),
+        turned({ x: side * bones.shoulderSpan, y: bones.shoulderDrop, z: 0 }, shoulderAngle),
         axis,
         twist,
     );
@@ -98,20 +119,20 @@ export const buildPose = (spec: PoseSpec): PresetPoints => {
     const shoulderR = add3(neck, shoulderStub(1));
 
     const hipAngle = (spec.lean ?? 0) + (spec.hipTilt ?? 0);
-    const hipL = add3(hip, turned({ x: -BONE.hipSpan, y: BONE.hipDrop, z: 0 }, hipAngle));
-    const hipR = add3(hip, turned({ x: BONE.hipSpan, y: BONE.hipDrop, z: 0 }, hipAngle));
+    const hipL = add3(hip, turned({ x: -bones.hipSpan, y: bones.hipDrop, z: 0 }, hipAngle));
+    const hipR = add3(hip, turned({ x: bones.hipSpan, y: bones.hipDrop, z: 0 }, hipAngle));
 
-    const elbowL = add3(shoulderL, along(spec.arms.l[0], BONE.upperArm));
-    const elbowR = add3(shoulderR, along(spec.arms.r[0], BONE.upperArm));
-    const kneeL = add3(hipL, along(spec.legs.l[0], BONE.thigh));
-    const kneeR = add3(hipR, along(spec.legs.r[0], BONE.thigh));
+    const elbowL = add3(shoulderL, along(spec.arms.l[0], bones.upperArm));
+    const elbowR = add3(shoulderR, along(spec.arms.r[0], bones.upperArm));
+    const kneeL = add3(hipL, along(spec.legs.l[0], bones.thigh));
+    const kneeR = add3(hipR, along(spec.legs.r[0], bones.thigh));
 
     const raw = {
         hip, neck, head, shoulderL, shoulderR, hipL, hipR, elbowL, elbowR, kneeL, kneeR,
-        wristL: add3(elbowL, along(spec.arms.l[1], BONE.foreArm)),
-        wristR: add3(elbowR, along(spec.arms.r[1], BONE.foreArm)),
-        ankleL: add3(kneeL, along(spec.legs.l[1], BONE.shin)),
-        ankleR: add3(kneeR, along(spec.legs.r[1], BONE.shin)),
+        wristL: add3(elbowL, along(spec.arms.l[1], bones.foreArm)),
+        wristR: add3(elbowR, along(spec.arms.r[1], bones.foreArm)),
+        ankleL: add3(kneeL, along(spec.legs.l[1], bones.shin)),
+        ankleR: add3(kneeR, along(spec.legs.r[1], bones.shin)),
     } as Record<JointKey, Vec3>;
     // The neck is a cylinder that angles forward, not a vertical peg — one of
     // the few things the art-school construction is explicit about. Applied
@@ -130,7 +151,20 @@ export const buildPose = (spec: PoseSpec): PresetPoints => {
     // The face is derived, never declared — which is what let it be added
     // without touching a single one of the thirty-six pose specs. `headTurn`
     // still turns the skull; the face follows it.
-    raw.face = derivedFace(raw, BONE.torso / TORSO_HEIGHT_RATIO);
+    raw.face = derivedFace(raw, bones.torso / TORSO_HEIGHT_RATIO);
+    if (spec.body) {
+        const spin = rad(spec.body.spin ?? 0);
+        const tip = rad(spec.body.tip ?? 0);
+        const swing = rad(spec.body.turn ?? 0);
+        const vertical = { x: 0, y: 1, z: 0 };
+        for (const key of JOINT_KEYS) {
+            raw[key] = rotateAxis(rotateAxis(rotateAxis(raw[key], vertical, spin), { x: 0, y: 0, z: 1 }, tip), vertical, swing);
+        }
+    }
+    // One scale for every build too, not each build's own crown-to-heel: the
+    // builds share a torso, and dividing by the same number is what keeps
+    // `figureUnit` identical when a figure changes build.
+    const POSE_SCALE = poseScaleOf(BONE);
 
     // Into the unit box, at one scale shared by every pose — deliberately not
     // "stretch each pose to fill the box". Same bones, same body: a crouching
@@ -159,4 +193,4 @@ export const buildPose = (spec: PoseSpec): PresetPoints => {
 
 // The height an upright figure occupies in raw units: crown to heel with the
 // legs straight. Every pose is divided by this one number.
-const POSE_SCALE = BONE.torso + BONE.head + BONE.hipDrop + BONE.thigh + BONE.shin;
+const poseScaleOf = (bones: BoneTable): number => bones.torso + bones.head + bones.hipDrop + bones.thigh + bones.shin;

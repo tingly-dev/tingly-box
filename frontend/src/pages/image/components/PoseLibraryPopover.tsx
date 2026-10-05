@@ -5,6 +5,7 @@ import {
     createFigure,
     fitFigureIntoTile,
     POSE_LIBRARY,
+    type FigureBuild,
     type FigureTurn,
     type PosePresetKey,
     drawFigure,
@@ -22,7 +23,9 @@ const THUMB = { width: 46, height: 64, scale: 2 };
 // a fixed elevation: the grid's whole value is that what you pick is what you
 // get, and a pose seen from the front and the same pose seen from above are
 // not the same picture.
-const PoseThumbnail: React.FC<{ pose: PosePresetKey; turn: FigureTurn }> = ({ pose, turn }) => {
+// ...and on the figure's own build: one library for both, but a tile shows
+// the pose on the body it is about to be applied to.
+const PoseThumbnail: React.FC<{ pose: PosePresetKey; turn: FigureTurn; build: FigureBuild }> = ({ pose, turn, build }) => {
     const paint = useCallback((canvas: HTMLCanvasElement | null) => {
         if (!canvas) return;
         const width = THUMB.width * THUMB.scale;
@@ -36,8 +39,8 @@ const PoseThumbnail: React.FC<{ pose: PosePresetKey; turn: FigureTurn }> = ({ po
         // arms out or lying down, a pose is much wider than a standing one and
         // would be cropped at exactly the poses that need to be recognisable.
         const box = { width, height };
-        drawFigure(ctx, fitFigureIntoTile(createFigure(pose, box, undefined, 0, turn), box, width * 0.08));
-    }, [pose, turn]);
+        drawFigure(ctx, fitFigureIntoTile(createFigure(pose, box, undefined, 0, turn, build), box, width * 0.08));
+    }, [build, pose, turn]);
 
     return (
         <Box
@@ -53,11 +56,12 @@ const PoseThumbnail: React.FC<{ pose: PosePresetKey; turn: FigureTurn }> = ({ po
 interface PoseLibraryPopoverProps {
     anchorEl: HTMLElement | null;
     turn: FigureTurn;
+    build: FigureBuild;
     onClose: () => void;
     onPick: (pose: PosePresetKey) => void;
 }
 
-const PoseLibraryPopover: React.FC<PoseLibraryPopoverProps> = ({ anchorEl, turn, onClose, onPick }) => {
+const PoseLibraryPopover: React.FC<PoseLibraryPopoverProps> = ({ anchorEl, turn, build, onClose, onPick }) => {
     const { t } = useTranslation();
 
     return (
@@ -95,7 +99,7 @@ const PoseLibraryPopover: React.FC<PoseLibraryPopoverProps> = ({ anchorEl, turn,
                                                 '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
                                             }}
                                         >
-                                            <PoseThumbnail pose={pose} turn={turn} />
+                                            <PoseThumbnail pose={pose} turn={turn} build={build} />
                                         </ButtonBase>
                                     </Tooltip>
                                 );
