@@ -7,7 +7,6 @@ import {
     Alert,
     Box,
     Button,
-    Checkbox,
     CircularProgress,
     Divider,
     FormControlLabel,
@@ -17,7 +16,9 @@ import {
     Typography,
 } from '@mui/material';
 import { ExpandMore } from '@/components/icons';
-import { api } from '@/services/api';
+import MCPToolCard from './MCPToolCard';
+import MCPToolTestDialog from './MCPToolTestDialog';
+import { toolPolicyPatch, type MCPToolPatch } from './toolPresentation';
 import AdvisorSettings from './AdvisorSettings';
 import MCPSourceEditor from './MCPSourceEditor';
 import { connectionPatch } from './workspaceState';
@@ -54,8 +55,6 @@ export default function MCPSourceWorkspace({
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [testing, setTesting] = useState<MCPCatalogTool | null>(null);
-    const [argumentsText, setArgumentsText] = useState('{}');
-    const [testResult, setTestResult] = useState<unknown>(null);
     const advisor = source.transport === 'advisor' || !!source.advisor;
     const assetsOnly = !usageScope;
     const [configure, setConfigure] = useState(advisor || (source.enabled !== false && route?.state !== 'connected'));
@@ -71,16 +70,8 @@ export default function MCPSourceWorkspace({
             setBusy(false);
         }
     };
-    const updateTool = (tool: MCPCatalogTool, patch: { enabled?: boolean; usage?: MCPCatalogTool['usage'] }) =>
-        run(async () => {
-            await saveSource({
-                id: source.id,
-                tool_policies: {
-                    ...source.tool_policies,
-                    [tool.name]: { ...source.tool_policies?.[tool.name], ...patch },
-                },
-            });
-        });
+    const updateTool = (tool: MCPCatalogTool, patch: MCPToolPatch) =>
+        run(() => saveSource(toolPolicyPatch(source, tool, patch)));
     return (
         <Stack spacing={2.5}>
             <Typography color="text.secondary">
@@ -157,11 +148,7 @@ export default function MCPSourceWorkspace({
                     </AccordionSummary>
                     <AccordionDetails>
                         {advisor ? (
-                            <AdvisorSettings
-                                advisorSource={source}
-                                onSave={(patch) => run(() => saveSource(patch))}
-                                expanded
-                            />
+                            <AdvisorSettings advisorSource={source} onSave={(patch) => run(() => saveSource(patch))} />
                         ) : (
                             <Stack spacing={2}>
                                 <TextField
@@ -218,173 +205,33 @@ export default function MCPSourceWorkspace({
                 <Alert severity="info">{label('emptyDiscovery', 'The connection returned no tools.')}</Alert>
             )}
             <Stack spacing={1.5}>
-                {(route?.tools || []).map((tool) => {
-                    const allowed = source.tools || [];
-                    const restricted = allowed.length > 0 && !allowed.includes('*') && !allowed.includes(tool.name);
-                    return (
-                        <Box
-                            key={tool.normalized_name}
-                            role="group"
-                            aria-label={tool.name}
-                            sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}
-                        >
-                            <Stack
-                                direction="row"
-                                sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}
-                            >
-                                <Typography style={{ fontWeight: 600 }}>{tool.name}</Typography>
-                                {assetsOnly && (
-                                    <Button
-                                        size="small"
-                                        disabled={busy || !enabled || !tool.enabled || advisor}
-                                        onClick={() => {
-                                            setTesting(testing?.normalized_name === tool.normalized_name ? null : tool);
-                                            setArgumentsText('{}');
-                                            setTestResult(null);
-                                        }}
-                                    >
-                                        {label('testTool', 'Test tool')}
-                                    </Button>
-                                )}
-                            </Stack>
-                            {tool.description && (
-                                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                                    {tool.description}
-                                </Typography>
-                            )}
-                            {restricted && (
-                                <Typography variant="caption" color="warning.main">
-                                    {label(
-                                        'restrictedTool',
-                                        'Excluded by the connection allow list. Adjust it in connection settings.'
-                                    )}
-                                </Typography>
-                            )}
-                            {usageScope && !tool.enabled && !restricted && (
-                                <Typography variant="caption" color="warning.main">
-                                    {label(
-                                        'sharedToolOff',
-                                        'This tool is disabled in the shared connection. Enable it from the Tool page.'
-                                    )}
-                                </Typography>
-                            )}
-                            <Stack direction="row" sx={{ flexWrap: 'wrap', mt: 0.5 }}>
-                                {!usageScope && (
-                                    <FormControlLabel
-                                        control={
-                                            <Checkbox
-                                                disabled={busy || restricted || source.enabled === false}
-                                                checked={tool.enabled}
-                                                onChange={(e) => void updateTool(tool, { enabled: e.target.checked })}
-                                            />
-                                        }
-                                        label={label('toolEnabled', 'Enabled')}
-                                    />
-                                )}
-                                {usageScope === 'client' && (
-                                    <FormControlLabel
-                                        control={
-                                            <Checkbox
-                                                disabled={busy || restricted || advisor}
-                                                checked={tool.usage.client && !advisor}
-                                                onChange={(e) =>
-                                                    void updateTool(tool, {
-                                                        usage: { ...tool.usage, client: e.target.checked },
-                                                    })
-                                                }
-                                            />
-                                        }
-                                        label={label('publishUsage', 'Expose through MCP')}
-                                    />
-                                )}
-                                {usageScope === 'gateway' && (
-                                    <FormControlLabel
-                                        control={
-                                            <Checkbox
-                                                disabled={busy || restricted}
-                                                checked={tool.usage.gateway}
-                                                onChange={(e) =>
-                                                    void updateTool(tool, {
-                                                        usage: { ...tool.usage, gateway: e.target.checked },
-                                                    })
-                                                }
-                                            />
-                                        }
-                                        label={label('serverTools', 'Server Tools')}
-                                    />
-                                )}
-                            </Stack>
-                            {testing?.normalized_name === tool.normalized_name && (
-                                <Stack spacing={1.5} sx={{ mt: 1 }}>
-                                    <TextField
-                                        multiline
-                                        minRows={2}
-                                        label={label('argumentsJSON', 'Arguments (JSON)')}
-                                        value={argumentsText}
-                                        onChange={(e) => setArgumentsText(e.target.value)}
-                                    />
-                                    <Button
-                                        disabled={busy || !enabled || !tool.enabled}
-                                        onClick={() =>
-                                            void run(async () => {
-                                                const args: unknown = JSON.parse(argumentsText);
-                                                if (!args || typeof args !== 'object' || Array.isArray(args))
-                                                    throw new Error(
-                                                        label('objectArgs', 'Arguments must be a JSON object.')
-                                                    );
-                                                setTestResult(null);
-                                                const response = await api.callMCPTool({
-                                                    source_id: source.id!,
-                                                    tool_name: tool.name,
-                                                    arguments: args as Record<string, unknown>,
-                                                });
-                                                setTestResult(response);
-                                                if (!response.success)
-                                                    throw new Error(response.error || 'Tool test failed');
-                                            })
-                                        }
-                                    >
-                                        {label('runTest', 'Run test')}
-                                    </Button>
-                                    {testResult !== null && (
-                                        <Box
-                                            component="pre"
-                                            data-testid="mcp-workspace-tool-result"
-                                            sx={{
-                                                m: 0,
-                                                whiteSpace: 'pre-wrap',
-                                                overflowWrap: 'anywhere',
-                                                fontSize: 12,
-                                            }}
-                                        >
-                                            {JSON.stringify(testResult, null, 2)}
-                                        </Box>
-                                    )}
-                                </Stack>
-                            )}
-                            <Box component="details" sx={{ mt: 1 }}>
-                                <Typography component="summary" variant="caption" sx={{ cursor: 'pointer' }}>
-                                    {label('toolParameters', 'Tool parameters')}
-                                </Typography>
-                                <Box
-                                    component="pre"
-                                    sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: 12 }}
-                                >
-                                    {JSON.stringify(
-                                        {
-                                            input: tool.input_schema,
-                                            output: tool.output_schema,
-                                            annotations: tool.annotations,
-                                        },
-                                        null,
-                                        2
-                                    )}
-                                </Box>
-                            </Box>
-                        </Box>
-                    );
-                })}
+                {(route?.tools || []).map((tool) => (
+                    <MCPToolCard
+                        key={tool.normalized_name}
+                        tool={tool}
+                        source={source}
+                        mode={usageScope || 'asset'}
+                        inWorkspace
+                        enabled={enabled}
+                        busy={busy}
+                        onChange={(patch) => void updateTool(tool, patch)}
+                        onTest={() => setTesting(tool)}
+                    />
+                ))}
             </Stack>
+            {testing && (
+                <MCPToolTestDialog
+                    key={testing.normalized_name}
+                    tool={
+                        route?.tools.find((tool) => tool.normalized_name === testing.normalized_name) || {
+                            ...testing,
+                            enabled: false,
+                        }
+                    }
+                    enabled={enabled}
+                    onClose={() => setTesting(null)}
+                />
+            )}
             {!advisor && usageScope !== 'gateway' && (
                 <Button variant="outlined" disabled={busy} onClick={onConnectClient}>
                     {assetsOnly

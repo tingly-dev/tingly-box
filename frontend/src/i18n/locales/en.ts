@@ -1701,6 +1701,7 @@ export default {
       "external": "External"
     },
     "workspace": {
+      "noAdditionalTools": "No other available tools to add.",
       "assetToolSection": "Tool catalog",
       "assetToolHint": "Manage tool definitions, parameters and global enablement here. Publish through MCP or enable model execution from their respective pages.",
       "publishedTools": "Tools published through MCP",

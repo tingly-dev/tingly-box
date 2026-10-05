@@ -1695,6 +1695,7 @@ export default {
       "external": "外置"
     },
     "workspace": {
+      "noAdditionalTools": "没有其他可用工具可加入。",
       "assetToolSection": "工具清单",
       "assetToolHint": "管理工具定义、参数和全局开关。对外发布在 MCP 配置，模型执行用途在 Server Tool 配置。",
       "publishedTools": "对外提供的工具",
