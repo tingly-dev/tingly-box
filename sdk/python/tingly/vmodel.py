@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -128,16 +129,36 @@ class Script:
         return _write_text(config_dir, self.id, self.dumps())
 
     def remove(self, config_dir: str) -> None:
-        try:
-            os.remove(os.path.join(config_dir, SCRIPT_DIR, self.id + ".yaml"))
-        except FileNotFoundError:
-            pass
+        _unlink(_script_path(config_dir, self.id))
+
+
+def _script_path(config_dir: str, name: str) -> str:
+    return os.path.join(config_dir, SCRIPT_DIR, name + ".yaml")
+
+
+def _unlink(path: str) -> None:
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass
+
+
+def _declared_id(text: str) -> str | None:
+    """The `id:` a hand-written script declares, or None (tb then uses the file
+    name). Reads a JSON document or a top-level YAML `id:` line — enough to
+    know the model name without a YAML parser."""
+    try:
+        doc = json.loads(text)
+        return doc.get("id") if isinstance(doc, dict) else None
+    except ValueError:
+        match = re.search(r"(?m)^id:\s*['\"]?([A-Za-z0-9._-]+)", text)
+        return match.group(1) if match else None
 
 
 def _write_text(config_dir: str, name: str, text: str) -> str:
-    directory = os.path.join(config_dir, SCRIPT_DIR)
+    path = _script_path(config_dir, name)
+    directory = os.path.dirname(path)
     os.makedirs(directory, exist_ok=True)
-    path = os.path.join(directory, name + ".yaml")
     tmp = os.path.join(directory, f".{name}.tmp")  # dot-prefixed: tb ignores it
     with open(tmp, "w", encoding="utf-8") as f:
         f.write(text)
@@ -171,7 +192,7 @@ class Testbed:
         self._tb_bin = tb_bin
         self._keep = keep
         self._startup_timeout = startup_timeout
-        self._added: list["Script | str"] = []  # what add() put on disk; removed on exit when attached
+        self._written: list[str] = []  # script files this Testbed wrote; removed on exit when attached
         self._proc: subprocess.Popen | None = None
         self._log = None
         self._owns_config_dir = False
@@ -221,9 +242,9 @@ class Testbed:
 
     def stop(self) -> None:
         if self._attached:
-            for script in self._added:
-                self._unload(script)
-        self._added.clear()
+            for path in self._written:
+                _unlink(path)
+        self._written.clear()
         if self._proc is not None:
             self._proc.terminate()
             try:
@@ -277,29 +298,33 @@ class Testbed:
 
     def add(self, script: "Script | str") -> str:
         """Load a script (a `Script`, or the path of a `.yaml` file) into tb and
-        return its model name. Raises `ScriptError` with tb's own message if tb
-        rejects it. Adding the same id again replaces it and restarts its
-        program."""
+        return its model name (a file's `id:`, else its file name). Raises
+        `ScriptError` with tb's own message if tb rejects it. Adding the same id
+        again replaces it and restarts its program. Attached to a running tb it
+        never overwrites a script file it did not write itself."""
         if isinstance(script, Script):
-            script.write(self.config_dir)
-            model = script.id
+            name, text, model = script.id, script.dumps(), script.id
         else:
-            model = os.path.splitext(os.path.basename(script))[0]
             with open(script, encoding="utf-8") as f:
-                _write_text(self.config_dir, model, f.read())
-        self._added.append(script)
+                text = f.read()
+            name = os.path.splitext(os.path.basename(script))[0]
+            model = _declared_id(text) or name
+        path = _script_path(self.config_dir, name)
+        if self._attached and os.path.exists(path) and path not in self._written:
+            raise ScriptError(f"{path} already exists and was not written by this Testbed; use another id")
+        _write_text(self.config_dir, name, text)
+        if path not in self._written:
+            self._written.append(path)
         self._await_loaded(model)
         return model
 
     def remove(self, script: "Script | str") -> None:
-        self._unload(script)
-
-    def _unload(self, script: "Script | str") -> None:
+        """Take a script back out of tb."""
         name = script.id if isinstance(script, Script) else os.path.splitext(os.path.basename(script))[0]
-        try:
-            os.remove(os.path.join(self.config_dir, SCRIPT_DIR, name + ".yaml"))
-        except FileNotFoundError:
-            pass
+        path = _script_path(self.config_dir, name)
+        _unlink(path)
+        if path in self._written:
+            self._written.remove(path)
 
     def _await_loaded(self, model: str) -> None:
         # tb re-reads the directory on every vmodel request, so one listing is

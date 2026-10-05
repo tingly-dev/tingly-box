@@ -64,7 +64,11 @@ class _FakeTB(BaseHTTPRequestHandler):
 
     def do_GET(self):
         directory = os.path.join(self.conf_dir, "vmodels")
-        ids = [n[:-5] for n in sorted(os.listdir(directory)) if n.endswith(".yaml") and n[:-5] not in self.hidden] if os.path.isdir(directory) else []
+        ids = []
+        for n in sorted(os.listdir(directory)) if os.path.isdir(directory) else []:
+            if n.endswith(".yaml") and n[:-5] not in self.hidden:
+                with open(os.path.join(directory, n)) as f:
+                    ids.append(vmodel._declared_id(f.read()) or n[:-5])
         self._send(200, {"data": [{"id": i} for i in ids]})
 
     def do_POST(self):
@@ -119,6 +123,33 @@ class AttachTest(unittest.TestCase):
         tb.stop()  # attached: removes what add() wrote
         self.assertFalse(os.path.exists(os.path.join(self.conf, "vmodels", "early.yaml")))
         vmodel.Testbed().stop()  # never started
+
+    def test_attach_never_overwrites_or_deletes_a_file_it_did_not_write(self):
+        os.makedirs(os.path.join(self.conf, "vmodels"))
+        mine = os.path.join(self.conf, "vmodels", "flow.yaml")
+        with open(mine, "w") as f:
+            f.write("steps: [200]\n")
+        with vmodel.Testbed.attach(config_dir=self.conf, base_url=self.url) as tb:
+            with self.assertRaises(vmodel.ScriptError) as ctx:
+                tb.add(vmodel.Script("flow").say("hi"))
+            self.assertIn("not written by this Testbed", str(ctx.exception))
+        self.assertTrue(os.path.exists(mine), "the user's own file survives")
+        with open(mine) as f:
+            self.assertEqual(f.read(), "steps: [200]\n")
+
+    def test_add_path_uses_the_ids_the_file_declares(self):
+        src = os.path.join(tempfile.mkdtemp(prefix="tingly-src-"), "by-file-name.yaml")
+        with open(src, "w") as f:
+            f.write("id: declared-id\nsteps:\n  - say: hi\n")
+        with vmodel.Testbed.attach(config_dir=self.conf, base_url=self.url) as tb:
+            self.assertEqual(tb.add(src), "declared-id")
+
+    def test_declared_id_reads_json_and_yaml(self):
+        self.assertEqual(vmodel._declared_id('{"id": "j-1", "steps": []}'), "j-1")
+        self.assertEqual(vmodel._declared_id("steps: []\nid: y.2\n"), "y.2")
+        self.assertEqual(vmodel._declared_id('id: "quoted"\nsteps: []'), "quoted")
+        self.assertIsNone(vmodel._declared_id("steps: [200]"))
+        self.assertIsNone(vmodel._declared_id("steps:\n  - say: id: not top level"))
 
     def test_attach_without_a_model_token_explains_itself(self):
         os.remove(os.path.join(self.conf, "config.json"))
