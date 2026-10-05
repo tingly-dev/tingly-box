@@ -78,10 +78,64 @@ Trace（一次入站请求）
 4. **收尾时机。** Trace 在入站中间件 `c.Next()` 返回后 Emit；此时仍未收尾的上游流（理论上
    handler 返回前都已读完或关闭）按 `incomplete` 落盘，不阻塞 Emit。
 
-- **大小上限**：单个 body 默认上限（暂定 4 MiB），超出截断并标 `truncated`，保证录制不会把
-  一次大请求放大成内存问题。
+- **大小上限只做安全阀**：请求 body 本来就整份在内存里（SDK 已序列化），录制只是多持有一份引用
+  / 拷贝，不按小上限截断——长程任务的请求动辄数 MB，截断就等于没录。上限（暂定 32 MiB / body）
+  只防异常，超出截断并标 `truncated`。体积问题由 §3.2 的去重解决，而不是靠截断。
 - **脱敏在采集时做**：`Authorization`、`x-api-key`、`api-key`、`Cookie`、`Set-Cookie`、
   `x-goog-api-key` 等凭据 header 只保留前后几位。录制文件不应成为凭据泄露面。
+
+### 3.2 长程任务的成本：按元素去重
+
+**问题。** 长程 agent 任务里，每一轮请求都带着完整历史：第 n 轮的请求 ≈ 第 n−1 轮的请求 + 上一轮
+回答 + 新的工具结果。每轮整份录下来，一个会话的录制体积是 **O(n²)**——上下文涨到 400 KB、跑
+200 轮，单个点位就要录约 40 MB，而其中 95% 以上是重复的。`client_request` 与 `upstream_request`
+在同协议路径上几乎逐字相同，开两个点位又再翻一倍。
+
+**做法：请求 body 按"顶层数组的元素"切块，内容寻址，会话内只存一次。**
+
+```
+请求 body（wire JSON）
+{ "model": "...", "system": [...], "tools": [t1 … t40], "messages": [m1 … m200], "stream": true }
+          │ 顶层数组 → 逐元素；其它顶层值 → 超过阈值整体切出；小值留在骨架里
+          ▼
+骨架（每条 Trace 都存，与轮数无关，<1 KB）           块（分区内首次出现才存）
+{ "model": "...", "system": ⟨S1⟩,                      元素块  m200 → 本轮新消息原文
+  "tools": ⟨T40⟩, "messages": ⟨M200⟩,                  链节点  M200 = {prev: M199, elem: m200}
+  "stream": true }                                     （M1…M199、T1…T40 上一轮已存在，不再写）
+```
+
+数组不在骨架里逐个列引用（那样骨架本身随轮数线性增长，整个会话仍是 O(n²)），而是编码成
+**前缀链**：第 k 个链节点 = {前一个节点, 第 k 个元素}，骨架只引用最后一个节点。
+
+1. **切分规则与协议无关**：只看 JSON 结构——顶层数组逐元素切，不认 `messages` / `input` /
+   `contents` 这些字段名。Anthropic、Chat、Responses、Gemini 的历史都在顶层数组里，自然命中；
+   以后新协议无需改录制（与原则 1 一致）。
+2. **哈希原始字节**：从 wire 字节切出每个元素的原文（`json.RawMessage`，不反序列化成 map 再编码），
+   sha256 取键。还原时沿链回溯、把原文拼回骨架，得到语义等价的 JSON（元素间空白不保留，元素内逐字节一致）。
+3. **前缀链让每轮成本只与"变化量"有关**：追加 k 条消息 = 写 k 个新元素块 + k 个链节点；
+   第 i 个元素被改（例如 prompt cache 断点后移改了上一条消息）= 从 i 起的节点重写，通常 2–3 个；
+   上下文压缩 / 改写历史 = 一次性重写整条链，之后照常增量。
+4. **去重范围 = 一个落盘分区（scenario / 日期 / 会话）**，所有点位共享同一个块空间：
+   - 同一会话的第 n 轮只新增本轮变化的元素与对应链节点；
+   - `client_request` 与 `upstream_request` 里没被转换改动的元素互相去重，多开一个点位的边际
+     成本只剩"真正被改过的部分"；
+   - `tools` 这种每轮重复、动辄几十 KB 的数组只存一次；反复出现的图片 base64 同理。
+   - 分区就是保留期的删除单位：删目录即可，没有跨分区引用，不需要引用计数 / GC。
+5. **块和记录写在同一个文件里**：分区文件是 gzip member 追加的 JSONL，一行要么是块
+   `{"k":"blob","h":"…","d":<原文>}`，要么是记录 `{"k":"trace",…骨架…}`；块总在第一次引用它的
+   记录之前写出。一个分区一个文件，不产生海量小文件（旧 CAS 导出器"一块一个文件、全局 blobs
+   目录、无回收"的问题不再出现）。读端顺序扫描一遍即可还原；R3 需要随机访问时再加旁路索引。
+6. **热路径不做任何解析**：请求处理中只持有 body 字节；切块、哈希、去重全在异步导出 worker 里做。
+   导出队列满时丢弃整条 Trace 并计数（录制永远不反压业务请求）。
+7. **响应不切块**：上游返回 / 回到客户端的响应每轮都是新内容（SSE 原文），整体存，只走 gzip。
+   它们会在下一轮请求里以 assistant 消息的形态再次出现，但编码不同，不尝试跨形态去重。
+8. **去重索引**：导出 worker 为每个打开的分区维护已写块的哈希集合（LRU 管理打开的分区）。
+   进程重启后首次写入某个已有分区时，集合为空，已有的块会再写一次——代价是每会话每次重启最多
+   重复一份上下文，换来不必在启动时扫描历史文件。
+
+**量级估算**（上下文终值 400 KB、200 轮、开 `client_request` + `upstream_request`）：
+不去重约 80 MB（gzip 前）；去重后 ≈ 上下文终值 400 KB + 200 轮 × 两个点位 × （骨架 <1 KB +
+被改动的 1–2 条消息）≈ 1–2 MB，再经 gzip。轮数再翻十倍，增长也只是线性的。
 
 ---
 
@@ -144,7 +198,7 @@ wire base 目前有两种形态，挂载点有限且集中在 `internal/client`�
 
 | 阶段 | 内容 | 完成标准 |
 |------|------|----------|
-| **R1 接入** | `internal/recording` 新增 Trace / Exchange 实体与 ctx 传播（`WithTrace` / `FromContext`）；`wireRecordTransport` 挂到 §4.1 全部装配点；`recordingMiddleware` 挂四个入口；四个 handler 前段 `Enable`；新 schema 落盘（沿用 `obs` 批处理与 gzip，独立子目录，见 §7 Q3）。点位先录 `client_request` / `upstream_request` / `upstream_response`。旧 recorder 保持原样并存 | 单测覆盖 transport / middleware / 截断 / 脱敏；`protocoltest` 新增 recording 用例跑满 source × target × 流式矩阵（FP3 一并消失），断言每个组合都有 Trace、Exchange 数与 provider 调用数一致 |
+| **R1 接入** | `internal/recording` 新增 Trace / Exchange 实体与 ctx 传播（`WithTrace` / `FromContext`）；`wireRecordTransport` 挂到 §4.1 全部装配点；`recordingMiddleware` 挂四个入口；四个 handler 前段 `Enable`；新 schema 落盘，**从第一天起就用 §3.2 的去重格式**（落盘格式是 R3 查看端读取的契约，不先写整份再迁移）。点位先录 `client_request` / `upstream_request` / `upstream_response`。旧 recorder 保持原样并存 | 单测覆盖 transport / middleware / 截断 / 脱敏 / 切块去重与还原（还原结果与原 body 语义等价）；`protocoltest` 新增 recording 用例跑满 source × target × 流式矩阵（FP3 一并消失），断言每个组合都有 Trace、Exchange 数与 provider 调用数一致 |
 | **R2 收口** | `final_response` 由中间件 tee 产出并在 UI 放开 `upstream_response` / `final_response`；删除旧 recorder 全部接线（`ProtocolRecorder`、`TransformRecorder`、`AttachRecorderHooks`、`recording.FromGin` 及 handler 里的 `Record*` 调用、`obs.Record` 旧字段）；更新 `protocol-stage-pipeline.md`（"Vendor 之后只有录制"一条随之改为"Vendor 是最后一步"） | `internal/protocolserver` 里 `recording` 引用只剩 handler 前段的一行 `Enable` |
 | **R3 查看** | 后端 list / get API（按 scenario、日期、session、rule、provider、错误筛选，分页）+ codegen；前端录制查看页：Trace 列表 → 详情（入站 / 各 Exchange 时间线、请求 / 响应 / SSE 事件分栏、diff 入站与出站）。按 UX 原则"为下一步动作露出产物"：开启录制的 rule / scenario 处直接链到它的录制 | 用户开启录制后无需碰文件系统即可看到结果 |
 | **R4 治理** | 保留期与磁盘配额（按天 / 按大小清理）；条件录制（仅错误、采样）；导出（cURL 重放、HAR）；advisor / loopback 关联；脱敏规则可配置 | 长期开启录制不会撑爆磁盘 |
@@ -176,11 +230,14 @@ wire base 目前有两种形态，挂载点有限且集中在 `internal/client`�
 - **采集位置**：边界 wire 采集取代 transform 链内快照。
 - **R1 新旧并存**：R1 新旧两套各写各的目录，R2 补齐 `final_response` 后一次性删除旧接线。
 - **R1 范围**：`client_request` + `upstream_request` + `upstream_response`；`final_response` 放 R2。
+- **长程任务的体积**：请求 body 按顶层数组元素内容寻址去重、数组编码为前缀链（§3.2），R1 起即生效。
 
 待定（R1 实施时定，倾向写在前面）：
 
-- **落盘**：新 schema（含 `exchanges`）写到
-  `<configDir>/record/traces/<scenario>/<date>/<session>.jsonl.gz`，沿用 gzip member 追加。
-  `obs.BatchProcessor` 目前绑定 `*obs.Record`，倾向把它泛型化（`BatchProcessor[T]`）复用批处理，
-  而不是再写一份队列；CAS 导出器暂不跟进新 schema。
-- **body 上限默认值**：4 MiB / body，R4 再做成配置项。
+- **落盘**：分区文件 `<configDir>/record/traces/<scenario>/<date>/<session>.jsonl.gz`，
+  块与记录同文件（§3.2）。`obs.BatchProcessor` 目前绑定 `*obs.Record`，倾向泛型化
+  （`BatchProcessor[T]`）复用批处理，而不是再写一份队列；旧 CAS 导出器不跟进，R2 随旧 recorder 删除。
+- **去重范围**：按分区（会话 × 天）而非全局。全局去重能多省跨会话共享的 system / tools，
+  但需要引用计数或标记清除才能做保留期；按分区删目录即可。若 R4 观测到跨会话重复占大头，再考虑
+  只对 `tools` / `system` 这类块做全局层。
+- **body 安全上限**：32 MiB / body，R4 再做成配置项。
