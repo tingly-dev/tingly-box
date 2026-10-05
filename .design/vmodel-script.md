@@ -42,17 +42,17 @@ One step = one request's outcome:
 | --- | --- |
 | `status` | `200`/omitted → success; `400–599` → pre-content error envelope (type/message derived from the status). A bare number is shorthand for this. |
 | `say` | Response text. Empty on a plain success falls back to `default_content`, then a module default. Empty on a `tool` step means *no* lead-in text. |
-| `tool` | `{name, arguments, id?}` — one tool call. Without an `id`, each *served request* gets a unique `toolu_<script>_<n>` (so `repeat:`, loops and clamping never repeat one); an explicit `id` is used as written. |
+| `tool` | `{name, arguments, id?}` — one tool call. Without an `id`, each *served request* gets a unique `toolu_<script>_<n>` (so `repeat:`, loops and clamping never repeat one); an explicit `id` is used as written (1–64 of `A-Za-z0-9_-`, the shape real APIs accept; generated ids are sanitised and truncated to it). `arguments` omitted means `{}`. A tool step with no `say` has no text block — exactly what the script says. |
 | `stop_reason` | Override, in a **protocol-neutral vocabulary** (Anthropic's words): `end_turn`, `tool_use`, `max_tokens`, `stop_sequence`. OpenAI renders them as `stop`, `tool_calls`, `length`, `stop`. Anything else is rejected. Defaults: `end_turn` (`tool_use` on a tool step). |
-| `usage` | `{input, output, cache_read, cache_write, reasoning}` advertised on the stream. |
+| `usage` | `{input, output, cache_read, cache_write, reasoning}` advertised on the stream of `/messages` and `/chat/completions`. The direct `/responses` endpoint estimates usage from the text and ignores `usage` / `stop_reason` (its own pre-existing rendering). |
 | `midstream` | `{mode: close\|event\|eof, after_events: N}` — a success whose stream is cut. Not combinable with an error `status`. |
 | `repeat` | Serve the step N consecutive times. |
 | `error_message`, `error_type` | Override the error envelope of an error step. |
 
 Top level: `id`, `name`, `description`, `delay`, `default_content`, `on_exhaust`, `steps`.
 
-**Parsing is strict.** Unknown fields (`sya:`, `args:` for `arguments:`),
-out-of-range statuses, error steps carrying a body, unknown modes and
+**Parsing is strict**, at every nesting level (`usage:`, `midstream:`, `tool:` included). Unknown fields (`sya:`, `args:` for `arguments:`, `input_tokens:`),
+out-of-range statuses, error steps carrying a body, unknown modes, `stop_reason: tool_use` without a tool and
 duplicate ids fail with a step-numbered message (`vmodel.ParseScript`). A typo
 must never silently become a default step.
 

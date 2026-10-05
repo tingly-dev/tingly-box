@@ -1,12 +1,16 @@
 package virtualserver
 
 import (
+	"errors"
 	"fmt"
+	"hash/fnv"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -57,7 +61,10 @@ func (s *scriptStore) Refresh() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	entries, _ := os.ReadDir(s.dir) // a missing dir is just "no scripts"
+	entries, err := os.ReadDir(s.dir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return // transient failure: keep what is loaded rather than drop every model
+	}
 	current := map[string]string{}
 	var names []string
 	for _, e := range entries {
@@ -72,7 +79,7 @@ func (s *scriptStore) Refresh() {
 		if err != nil {
 			continue
 		}
-		current[name] = fmt.Sprintf("%d-%d", info.ModTime().UnixNano(), info.Size())
+		current[name] = fileSignature(filepath.Join(s.dir, name), info)
 		names = append(names, name)
 	}
 	sort.Strings(names)
@@ -168,6 +175,23 @@ func (s *scriptStore) unregister(id string) {
 	}
 	s.anth.Unregister(id)
 	s.oai.Unregister(id)
+}
+
+// fileSignature identifies a file's content cheaply: modtime and size. File
+// systems stamp mtime coarsely (milliseconds), so a same-size rewrite right
+// after the last one can carry an identical mtime; for a file modified in the
+// last couple of seconds the content hash is included too, so a quick
+// edit-and-call is never served stale.
+func fileSignature(path string, info fs.FileInfo) string {
+	sig := fmt.Sprintf("%d-%d", info.ModTime().UnixNano(), info.Size())
+	if time.Since(info.ModTime()) < 2*time.Second {
+		if data, err := os.ReadFile(path); err == nil {
+			h := fnv.New64a()
+			h.Write(data)
+			sig += fmt.Sprintf("-%x", h.Sum64())
+		}
+	}
+	return sig
 }
 
 // Problems returns the current load errors, "file: reason", sorted. Used to

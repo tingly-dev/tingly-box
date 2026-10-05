@@ -87,15 +87,16 @@ func (m *SequenceModel) Snapshot() VirtualModel {
 		step.StopReason = "end_turn"
 	}
 	return NewMockModel(&MockModelConfig{
-		ID:          m.ID,
-		Name:        m.Name,
-		Description: m.Description,
-		Content:     step.Content,
-		ToolCall:    step.Tool,
-		StopReason:  step.StopReason,
-		Usage:       step.Usage,
-		Delay:       m.Delay,
-		Error:       step.Error,
+		ID:           m.ID,
+		Name:         m.Name,
+		Description:  m.Description,
+		Content:      step.Content,
+		ToolCall:     step.Tool,
+		ScriptedText: true,
+		StopReason:   step.StopReason,
+		Usage:        step.Usage,
+		Delay:        m.Delay,
+		Error:        step.Error,
 	})
 }
 

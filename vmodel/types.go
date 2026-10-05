@@ -2,6 +2,8 @@ package vmodel
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -46,26 +48,27 @@ type ToolCallConfig struct {
 	Arguments map[string]interface{} `json:"arguments" yaml:"arguments"`
 }
 
-var toolCallKeys = map[string]bool{"id": true, "name": true, "arguments": true}
-
-// UnmarshalYAML rejects unknown keys (e.g. `args:` for `arguments:`) so a
-// scripted tool call never silently loses its arguments to a typo.
-func (t *ToolCallConfig) UnmarshalYAML(node *yaml.Node) error {
+// decodeStrict decodes the mapping node into dst (a pointer to a type that has
+// no UnmarshalYAML, so no recursion) after rejecting any key not in allowed.
+// It is what makes a script fail loudly on a typo (`args:` for `arguments:`,
+// `input_tokens:` for `input:`) at every nesting level — yaml.v3's
+// KnownFields only reaches the outermost struct.
+func decodeStrict(node *yaml.Node, what string, allowed []string, dst any) error {
 	if node.Kind != yaml.MappingNode {
-		return fmt.Errorf("line %d: tool must be a mapping with name and arguments", node.Line)
+		return fmt.Errorf("line %d: %s must be a mapping", node.Line, what)
 	}
 	for i := 0; i+1 < len(node.Content); i += 2 {
-		if k := node.Content[i]; !toolCallKeys[k.Value] {
-			return fmt.Errorf("line %d: unknown tool field %q (want id, name, arguments)", k.Line, k.Value)
+		if k := node.Content[i]; !slices.Contains(allowed, k.Value) {
+			return fmt.Errorf("line %d: unknown %s field %q (want %s)", k.Line, what, k.Value, strings.Join(allowed, ", "))
 		}
 	}
+	return node.Decode(dst)
+}
+
+// UnmarshalYAML is strict about keys; see decodeStrict.
+func (t *ToolCallConfig) UnmarshalYAML(node *yaml.Node) error {
 	type plain ToolCallConfig
-	var p plain
-	if err := node.Decode(&p); err != nil {
-		return err
-	}
-	*t = ToolCallConfig(p)
-	return nil
+	return decodeStrict(node, "tool", []string{"id", "name", "arguments"}, (*plain)(t))
 }
 
 // ToolCallDisplayContent extracts display text from tool call arguments.

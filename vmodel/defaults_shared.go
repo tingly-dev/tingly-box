@@ -1,6 +1,10 @@
 package vmodel
 
-import "time"
+import (
+	"time"
+
+	"gopkg.in/yaml.v3"
+)
 
 // MockUsage carries deterministic token-usage values that a mock model
 // emits over its streaming wire format. All fields are optional; a zero
@@ -16,6 +20,13 @@ type MockUsage struct {
 	// premium-rate write cost under two wire names.
 	CacheWriteTokens int64 `json:"cache_write,omitempty" yaml:"cache_write,omitempty"`
 	ReasoningTokens  int64 `json:"reasoning,omitempty" yaml:"reasoning,omitempty"` // OpenAI completion_tokens_details.reasoning_tokens
+}
+
+// UnmarshalYAML is strict about keys (input, output, cache_read, cache_write,
+// reasoning); see decodeStrict.
+func (u *MockUsage) UnmarshalYAML(node *yaml.Node) error {
+	type plain MockUsage
+	return decodeStrict(node, "usage", []string{"input", "output", "cache_read", "cache_write", "reasoning"}, (*plain)(u))
 }
 
 // SharedMockSpec describes a built-in mock that is identical across

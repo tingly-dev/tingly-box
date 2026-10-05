@@ -2,6 +2,7 @@ package vmodel
 
 import (
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -82,13 +83,16 @@ func (m *MidStreamSpec) injection() (*ErrorInjection, error) {
 	return inj, nil
 }
 
-// sequenceStepKeys are the mapping keys a YAML step may use. Unknown keys are
-// rejected so a typo (`tools:`, `stauts:`) fails loudly instead of silently
-// producing a default step.
-var sequenceStepKeys = map[string]bool{
-	"status": true, "say": true, "tool": true, "stop_reason": true,
-	"usage": true, "midstream": true, "error_message": true,
-	"error_type": true, "repeat": true,
+// sequenceStepKeys are the mapping keys a YAML step may use.
+var sequenceStepKeys = []string{
+	"status", "say", "tool", "stop_reason", "usage", "midstream",
+	"error_message", "error_type", "repeat",
+}
+
+// UnmarshalYAML: strict about keys; see decodeStrict.
+func (m *MidStreamSpec) UnmarshalYAML(node *yaml.Node) error {
+	type plain MidStreamSpec
+	return decodeStrict(node, "midstream", []string{"mode", "after_events"}, (*plain)(m))
 }
 
 // UnmarshalYAML accepts a bare status number (`- 429`) or a mapping.
@@ -101,17 +105,9 @@ func (s *SequenceStep) UnmarshalYAML(node *yaml.Node) error {
 		*s = SequenceStep{Status: status}
 		return nil
 	}
-	if node.Kind != yaml.MappingNode {
-		return fmt.Errorf("line %d: a step must be a status number or a mapping", node.Line)
-	}
-	for i := 0; i+1 < len(node.Content); i += 2 {
-		if k := node.Content[i]; !sequenceStepKeys[k.Value] {
-			return fmt.Errorf("line %d: unknown step field %q", k.Line, k.Value)
-		}
-	}
 	type plain SequenceStep // drops this method, avoiding recursion
 	var p plain
-	if err := node.Decode(&p); err != nil {
+	if err := decodeStrict(node, "step", sequenceStepKeys, &p); err != nil {
 		return err
 	}
 	*s = SequenceStep(p)
@@ -306,17 +302,31 @@ func (s *Sequence) Next() ResolvedStep {
 		// request, so repeat:, looping and clamped programs never replay the
 		// same tool_use id into an agent's transcript.
 		tool := *r.Tool
-		tool.ID = fmt.Sprintf("toolu_%s_%d", s.idOrDefault(), n+1)
+		tool.ID = toolID(s.id, n+1)
 		r.Tool = &tool
 	}
 	return r
 }
 
-func (s *Sequence) idOrDefault() string {
-	if s.id == "" {
-		return "vmodel"
+// toolID builds a tool_use id of the shape real APIs accept (A-Za-z0-9_-, at
+// most 64 characters) from a script id and the served-request number. Long or
+// unusual script ids are sanitised and truncated; uniqueness comes from n.
+func toolID(script string, n uint64) string {
+	var b strings.Builder
+	for _, r := range script {
+		if b.Len() >= 40 {
+			break
+		}
+		if r < 128 && (r == '-' || r == '_' || (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')) {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
 	}
-	return s.id
+	if b.Len() == 0 {
+		b.WriteString("vmodel")
+	}
+	return fmt.Sprintf("toolu_%s_%d", b.String(), n)
 }
 
 // exhaustedStep is the terminal error served once an ExhaustFail program is
@@ -340,7 +350,13 @@ func (s *Sequence) resolve(step SequenceStep) ResolvedStep {
 	if step.Status == 0 || step.Status == 200 {
 		r := ResolvedStep{Content: step.Content, StopReason: step.StopReason, Usage: step.Usage}
 		if step.Tool != nil {
-			r.Tool = step.Tool // id assigned per served request, in Next
+			// The id is assigned per served request, in Next. A tool call with
+			// no arguments carries {} (never null: clients read input as an object).
+			tool := *step.Tool
+			if tool.Arguments == nil {
+				tool.Arguments = map[string]interface{}{}
+			}
+			r.Tool = &tool
 		} else if r.Content == "" {
 			// Bare success steps fall back to default text. A tool step with
 			// no text is deliberate: it is just the tool call.
