@@ -42,8 +42,17 @@ var (
 	_ Snapshotter  = (*SequenceModel)(nil)
 )
 
-// NewSequenceModel constructs an Anthropic-protocol sequence model from cfg.
+// NewSequenceModel constructs an Anthropic-protocol sequence model from cfg, with
+// its own cursor.
 func NewSequenceModel(cfg *vmodel.SequenceConfig) *SequenceModel {
+	return NewSequenceModelFrom(cfg, vmodel.NewSequence(*cfg))
+}
+
+// NewSequenceModelFrom is NewSequenceModel over an existing engine. Passing the
+// same Sequence to the Anthropic and OpenAI wrappers gives one script a single
+// cursor across both protocols — the schedule belongs to the (virtual)
+// upstream, not to the wire format a client happens to speak.
+func NewSequenceModelFrom(cfg *vmodel.SequenceConfig, seq *vmodel.Sequence) *SequenceModel {
 	description := cfg.Description
 	if description == "" {
 		description = vmodel.DefaultMockDescription
@@ -56,7 +65,7 @@ func NewSequenceModel(cfg *vmodel.SequenceConfig) *SequenceModel {
 			Type:        vmodel.VirtualModelTypeSequence,
 			Delay:       cfg.Delay,
 		},
-		seq: vmodel.NewSequence(*cfg),
+		seq: seq,
 	}
 }
 

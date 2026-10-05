@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -25,6 +26,11 @@ import (
 //	  - 529                    # bare number == {status: 529}
 //	  - say: "Done."
 //	    usage: {input: 1200, output: 40, cache_read: 1000}
+
+// StopReasons is the protocol-neutral stop_reason vocabulary a script may use —
+// Anthropic's words; the OpenAI renderer maps them (end_turn→stop,
+// tool_use→tool_calls, max_tokens→length).
+var StopReasons = []string{"end_turn", "tool_use", "max_tokens", "stop_sequence"}
 
 var scriptIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
@@ -84,6 +90,9 @@ func (s SequenceStep) validate() error {
 	}
 	if s.Tool != nil && strings.TrimSpace(s.Tool.Name) == "" {
 		return errors.New("tool needs a name")
+	}
+	if s.StopReason != "" && !slices.Contains(StopReasons, s.StopReason) {
+		return fmt.Errorf("unknown stop_reason %q (want one of %s)", s.StopReason, strings.Join(StopReasons, ", "))
 	}
 	if s.MidStream != nil {
 		if _, err := s.MidStream.injection(); err != nil {
