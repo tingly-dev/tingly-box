@@ -9932,6 +9932,10 @@
             "type": "string",
             "description": "Field CLAUDE_AUTO_BACKGROUND_TASKS"
           },
+          "CLAUDE_CODE_AUTO_BACKGROUND_TIMEOUT_MS": {
+            "type": "string",
+            "description": "Field CLAUDE_CODE_AUTO_BACKGROUND_TIMEOUT_MS"
+          },
           "CLAUDE_CODE_AUTO_COMPACT_WINDOW": {
             "type": "string",
             "description": "Field CLAUDE_CODE_AUTO_COMPACT_WINDOW"
@@ -9940,13 +9944,9 @@
             "type": "string",
             "description": "Field CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"
           },
-          "CLAUDE_CODE_MAX_ACTIVE_TASKS": {
+          "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": {
             "type": "string",
-            "description": "Field CLAUDE_CODE_MAX_ACTIVE_TASKS"
-          },
-          "CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS": {
-            "type": "string",
-            "description": "Field CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS"
+            "description": "Field CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"
           },
           "CLAUDE_CODE_MAX_OUTPUT_TOKENS": {
             "type": "string",

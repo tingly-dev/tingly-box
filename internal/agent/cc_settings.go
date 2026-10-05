@@ -273,6 +273,8 @@ func ResolveCCProfileSettings(cfg *serverconfig.Config, baseURL, apiKey, scenari
 		maps.Copy(baseEnv, defaultValues)
 	}
 
+	baseEnv = upgradeLegacyCCEnv(baseEnv)
+
 	generated := GenerateCCEnv(cfg, baseURL, apiKey, scenarioPath, profile.Unified, true)
 	maps.Copy(baseEnv, generated)
 	basePreferences, err := ClaudeCodePrefsFromEnv(baseEnv)
@@ -282,13 +284,16 @@ func ResolveCCProfileSettings(cfg *serverconfig.Config, baseURL, apiKey, scenari
 
 	effectiveEnv := maps.Clone(baseEnv)
 	if profile.ClaudeCode != nil {
-		for key, value := range profile.ClaudeCode.Env {
+		for key, value := range upgradeLegacyCCEnv(profile.ClaudeCode.Env) {
 			if isCCProfileRuleOwnedEnvKey(key) {
 				continue
 			}
 			effectiveEnv[key] = value
 		}
 		for _, key := range profile.ClaudeCode.UnsetEnv {
+			if current, legacy := legacyCCEnvKeys[key]; legacy {
+				key = current // the stored unset predates the rename
+			}
 			if isCCProfileRuleOwnedEnvKey(key) {
 				continue
 			}

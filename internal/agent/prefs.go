@@ -116,6 +116,7 @@ func (p ClaudeCodePrefs) Values() (map[string]string, error) {
 // ClaudeCodePrefsFromEnv selects the typed preference keys from an env map.
 // Unknown and server-owned keys are ignored.
 func ClaudeCodePrefsFromEnv(env map[string]string) (ClaudeCodePrefs, error) {
+	env = upgradeLegacyCCEnv(env)
 	b, err := json.Marshal(env)
 	if err != nil {
 		return ClaudeCodePrefs{}, err
@@ -123,12 +124,6 @@ func ClaudeCodePrefsFromEnv(env map[string]string) (ClaudeCodePrefs, error) {
 	var prefs ClaudeCodePrefs
 	if err := json.Unmarshal(b, &prefs); err != nil {
 		return ClaudeCodePrefs{}, err
-	}
-	// CLAUDE_CODE_MAX_ACTIVE_TASKS was written by earlier versions but Claude
-	// Code never read it; its concurrency cap is CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS.
-	// Carry a stored value over so the setting the user made takes effect.
-	if prefs.ClaudeCodeMaxConcurrentSubagents == "" {
-		prefs.ClaudeCodeMaxConcurrentSubagents = env["CLAUDE_CODE_MAX_ACTIVE_TASKS"]
 	}
 	return prefs, nil
 }
@@ -202,4 +197,51 @@ func DefaultClaudeCodePrefs(unified bool) ClaudeCodePrefs {
 		p.ClaudeCodeSubagentModel = "tingly/cc-subagent"
 	}
 	return p
+}
+
+// legacyCCEnvKeys maps env names earlier versions wrote but Claude Code never
+// read to the variable that actually does the job. CLAUDE_CODE_MAX_ACTIVE_TASKS
+// capped subagent concurrency; its real name is CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS.
+var legacyCCEnvKeys = map[string]string{
+	"CLAUDE_CODE_MAX_ACTIVE_TASKS": "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS",
+}
+
+// deadCCEnvKeys were written by earlier versions but have no counterpart in
+// Claude Code, so they never took effect and are dropped rather than carried.
+var deadCCEnvKeys = []string{"CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS"}
+
+// upgradeLegacyCCEnv returns env with a stored legacy value moved onto the
+// real variable (an explicit value there wins) and the dead keys dropped. The
+// input is never modified; it is returned as is, without a copy, when it holds
+// no legacy key (the common case).
+func upgradeLegacyCCEnv(env map[string]string) map[string]string {
+	legacy := false
+	for old := range legacyCCEnvKeys {
+		if _, ok := env[old]; ok {
+			legacy = true
+		}
+	}
+	for _, key := range deadCCEnvKeys {
+		if _, ok := env[key]; ok {
+			legacy = true
+		}
+	}
+	if !legacy {
+		return env
+	}
+	out := maps.Clone(env)
+	for old, current := range legacyCCEnvKeys {
+		v, ok := out[old]
+		if !ok {
+			continue
+		}
+		if _, has := out[current]; !has {
+			out[current] = v
+		}
+		delete(out, old)
+	}
+	for _, key := range deadCCEnvKeys {
+		delete(out, key)
+	}
+	return out
 }
