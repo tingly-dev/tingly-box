@@ -65,6 +65,7 @@ func TestParseScript_Errors(t *testing.T) {
 		{"bad exhaust", "on_exhaust: nope\nsteps: [200]", "unknown on_exhaust"},
 		{"bad id", "id: has space\nsteps: [200]", "invalid id"},
 		{"non-numeric bare step", "steps: [hello]", "bare step must be an HTTP status"},
+		{"stop_reason from the wrong vocabulary", "steps:\n  - say: x\n    stop_reason: length", `unknown stop_reason "length"`},
 		{"negative repeat", "steps:\n  - repeat: -1", "repeat"},
 		{"error fields on a success step", "steps:\n  - say: ok\n    error_message: boom", "only apply to an error step"},
 	}

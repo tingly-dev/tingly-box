@@ -294,3 +294,38 @@ func TestScript_StopReasonOnToolStep(t *testing.T) {
 		"model": "trunc", "max_tokens": 16, "messages": []map[string]string{{"role": "user", "content": "hi"}}})
 	assert.Contains(t, string(body), `"stop_reason":"max_tokens"`)
 }
+
+// One script, one cursor: the Anthropic and OpenAI renderings advance the same
+// program, so a client may switch protocols mid-flow.
+func TestScript_OneCursorAcrossProtocols(t *testing.T) {
+	_, dir, baseURL := newScriptService(t)
+	writeScript(t, dir, "flow.yaml", "steps:\n  - say: first\n  - say: second\n  - say: third")
+	ask := func(path string, body map[string]any) string {
+		body["model"] = "flow"
+		body["messages"] = []map[string]string{{"role": "user", "content": "hi"}}
+		code, out := postJSON(t, baseURL+path, body)
+		require.Equal(t, 200, code, string(out))
+		return string(out)
+	}
+	assert.Contains(t, ask("/v1/messages?beta=true", map[string]any{"max_tokens": 16}), "first")
+	assert.Contains(t, ask("/v1/chat/completions", map[string]any{}), "second")
+	assert.Contains(t, ask("/v1/messages?beta=true", map[string]any{"max_tokens": 16}), "third")
+}
+
+// stop_reason is protocol-neutral: Anthropic's words, mapped for OpenAI.
+func TestScript_StopReasonIsMappedPerProtocol(t *testing.T) {
+	_, dir, baseURL := newScriptService(t)
+	for _, c := range []struct{ file, stop, openai string }{
+		{"len", "max_tokens", "length"},
+		{"tool", "tool_use", "tool_calls"},
+		{"end", "end_turn", "stop"},
+	} {
+		writeScript(t, dir, c.file+".yaml", "steps:\n  - say: x\n    stop_reason: "+c.stop)
+		_, body := postJSON(t, baseURL+"/v1/chat/completions", map[string]any{
+			"model": c.file, "messages": []map[string]string{{"role": "user", "content": "hi"}}})
+		assert.Contains(t, string(body), `"finish_reason":"`+c.openai+`"`, c.stop)
+		_, body = postJSON(t, baseURL+"/v1/messages?beta=true", map[string]any{
+			"model": c.file, "max_tokens": 16, "messages": []map[string]string{{"role": "user", "content": "hi"}}})
+		assert.Contains(t, string(body), `"stop_reason":"`+c.stop+`"`, c.stop)
+	}
+}

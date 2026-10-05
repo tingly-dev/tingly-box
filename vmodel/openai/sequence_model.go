@@ -42,8 +42,17 @@ var (
 	_ Snapshotter  = (*SequenceModel)(nil)
 )
 
-// NewSequenceModel constructs an OpenAI-protocol sequence model from cfg.
+// NewSequenceModel constructs an OpenAI-protocol sequence model from cfg, with
+// its own cursor.
 func NewSequenceModel(cfg *vmodel.SequenceConfig) *SequenceModel {
+	return NewSequenceModelFrom(cfg, vmodel.NewSequence(*cfg))
+}
+
+// NewSequenceModelFrom is NewSequenceModel over an existing engine. Passing the
+// same Sequence to the Anthropic and OpenAI wrappers gives one script a single
+// cursor across both protocols — the schedule belongs to the (virtual)
+// upstream, not to the wire format a client happens to speak.
+func NewSequenceModelFrom(cfg *vmodel.SequenceConfig, seq *vmodel.Sequence) *SequenceModel {
 	description := cfg.Description
 	if description == "" {
 		description = vmodel.DefaultMockDescription
@@ -56,7 +65,7 @@ func NewSequenceModel(cfg *vmodel.SequenceConfig) *SequenceModel {
 			Type:        vmodel.VirtualModelTypeSequence,
 			Delay:       cfg.Delay,
 		},
-		seq: vmodel.NewSequence(*cfg),
+		seq: seq,
 	}
 }
 
@@ -84,7 +93,7 @@ func (m *SequenceModel) Snapshot() VirtualModel {
 		Description:  m.Description,
 		Content:      step.Content,
 		ToolCall:     step.Tool,
-		FinishReason: step.StopReason,
+		FinishReason: finishReason(step.StopReason),
 		Usage:        step.Usage,
 		Delay:        m.Delay,
 		Error:        step.Error,
@@ -101,4 +110,19 @@ func (m *SequenceModel) HandleOpenAIChat(req *protocol.OpenAIChatCompletionReque
 // HandleOpenAIChatStream mirrors HandleOpenAIChat for the streaming path.
 func (m *SequenceModel) HandleOpenAIChatStream(ctx context.Context, req *protocol.OpenAIChatCompletionRequest, emit func(any)) error {
 	return m.Snapshot().HandleOpenAIChatStream(ctx, req, emit)
+}
+
+// finishReason renders the script's protocol-neutral stop reason (Anthropic's
+// vocabulary, see vmodel.StopReasons) as an OpenAI finish_reason. Empty stays
+// empty so NewMockModel applies its own default ("stop" / "tool_calls").
+func finishReason(stop string) string {
+	switch stop {
+	case "end_turn", "stop_sequence":
+		return "stop"
+	case "tool_use":
+		return "tool_calls"
+	case "max_tokens":
+		return "length"
+	}
+	return stop
 }

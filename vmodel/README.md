@@ -560,7 +560,8 @@ steps:
     usage: {input: 1200, output: 40}
 ```
 
-Check one end to end with `go run ./cli/harness script read-edit.yaml`.
+One script is one program with one cursor, whichever protocol a request arrives
+on. Check it end to end with `go run ./cli/harness script read-edit.yaml`.
 Schema, loading rules and phasing: `.design/vmodel-script.md`.
 
 ## Benchmarking (`benchmark/`)

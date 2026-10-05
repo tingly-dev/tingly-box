@@ -43,7 +43,7 @@ One step = one request's outcome:
 | `status` | `200`/omitted → success; `400–599` → pre-content error envelope (type/message derived from the status). A bare number is shorthand for this. |
 | `say` | Response text. Empty on a plain success falls back to `default_content`, then a module default. Empty on a `tool` step means *no* lead-in text. |
 | `tool` | `{name, arguments, id?}` — one tool call. Without an `id`, each *served request* gets a unique `toolu_<script>_<n>` (so `repeat:`, loops and clamping never repeat one); an explicit `id` is used as written. |
-| `stop_reason` | Override, in the **protocol's own words** (defaults: `end_turn` / `tool_use` on Anthropic, `stop` / `tool_calls` on OpenAI). One script serves both protocols, so a value that is only valid on one wire (`end_turn`, `max_tokens` vs `length`) is sent as written to both — leave it unset unless you target one protocol. |
+| `stop_reason` | Override, in a **protocol-neutral vocabulary** (Anthropic's words): `end_turn`, `tool_use`, `max_tokens`, `stop_sequence`. OpenAI renders them as `stop`, `tool_calls`, `length`, `stop`. Anything else is rejected. Defaults: `end_turn` (`tool_use` on a tool step). |
 | `usage` | `{input, output, cache_read, cache_write, reasoning}` advertised on the stream. |
 | `midstream` | `{mode: close\|event\|eof, after_events: N}` — a success whose stream is cut. Not combinable with an error `status`. |
 | `repeat` | Serve the step N consecutive times. |
@@ -65,8 +65,15 @@ no multiple tool calls per step, no request capture. See *Phases*.
 
 `<config-dir>/vmodels/*.yaml|yml` — each file becomes one model, registered
 under its id in **both** protocol registries (so the same file answers
-`/messages` and `/chat/completions`/`/responses`; each registry has its own
-cursor).
+`/messages` and `/chat/completions`/`/responses`) behind **one shared engine**,
+so there is one cursor: the schedule belongs to the virtual upstream, not to
+the wire format, and a client may switch protocols mid-flow.
+
+**Which protocol to use.** The gateway converts between protocols, so scripts
+need only one: the docs, `harness script` (default `claude`) and the Python
+`Testbed` lead with the Anthropic side, and anything else rides on conversion.
+The direct `/virtual/openai/*` endpoints stay, since they bypass conversion and
+give an independent native-OpenAI reference when diagnosing a conversion bug.
 
 There is no watcher and no API. `virtualserver.scriptStore.Refresh` runs at the
 top of every vmodel entrypoint and compares a directory signature (names +
