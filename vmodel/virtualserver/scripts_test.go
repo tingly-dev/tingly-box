@@ -110,6 +110,7 @@ func TestScript_AnthropicAgentLoop(t *testing.T) {
 		}
 	}
 	assert.Equal(t, "Edit", tool2.Name)
+	assert.Len(t, m2.Content, 1, "a tool step with no say is just the tool_use block, never an empty text block")
 	assert.NotEqual(t, tool1.ID, tool2.ID, "tool ids must differ between steps")
 
 	m3 := step("(tool result)")
