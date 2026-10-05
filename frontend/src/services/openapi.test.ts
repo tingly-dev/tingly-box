@@ -38,4 +38,17 @@ describe('control API response handling', () => {
 
         expect(result).toEqual(body);
     });
+
+    it.each([
+        [{ error: { message: 'folder does not exist', type: 'invalid_request' } }, 'folder does not exist'],
+        [{ error: { code: 503 }, message: 'Service unavailable' }, 'Service unavailable'],
+        [{ error: { code: 503 } }, 'Request failed'],
+        [{ error: 503, message: { detail: 'Unavailable' } }, 'Request failed'],
+    ])('extracts readable errors from structured HTTP failures', async (body, message) => {
+        vi.stubGlobal('fetch', vi.fn(async () => Response.json(body, { status: 503 })));
+
+        const result = await controlApi((client, headers) => client.GET('/api/v1/config', { headers }));
+
+        expect(result).toEqual({ success: false, error: message });
+    });
 });

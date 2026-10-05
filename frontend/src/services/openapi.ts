@@ -41,8 +41,13 @@ export const errorMessage = (error: unknown): string => {
         return error.message;
     }
     if (typeof error === 'object' && error !== null) {
-        const value = error as { error?: string; message?: string };
-        return value.error || value.message || 'Request failed';
+        const value = error as { error?: unknown; message?: unknown };
+        if (typeof value.error === 'string' && value.error) return value.error;
+        if (value.error && typeof value.error === 'object') {
+            const nested = (value.error as { message?: unknown }).message;
+            if (typeof nested === 'string' && nested) return nested;
+        }
+        return typeof value.message === 'string' && value.message ? value.message : 'Request failed';
     }
     if (typeof error === 'string' && error) {
         return error;
