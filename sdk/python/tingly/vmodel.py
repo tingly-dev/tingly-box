@@ -171,6 +171,7 @@ class Testbed:
         self._tb_bin = tb_bin
         self._keep = keep
         self._startup_timeout = startup_timeout
+        self._added: list["Script | str"] = []  # what add() put on disk; removed on exit when attached
         self._proc: subprocess.Popen | None = None
         self._log = None
         self._owns_config_dir = False
@@ -204,7 +205,6 @@ class Testbed:
         self.stop()
 
     def start(self) -> "Testbed":
-        self._added: list[Script | str] = []
         try:
             if self._attached:
                 self.token = _read_config(self.config_dir).get("model_token", "")
@@ -220,8 +220,10 @@ class Testbed:
         return self
 
     def stop(self) -> None:
-        for script in getattr(self, "_added", []) if self._attached else []:
-            self._unload(script)
+        if self._attached:
+            for script in self._added:
+                self._unload(script)
+        self._added.clear()
         if self._proc is not None:
             self._proc.terminate()
             try:

@@ -112,6 +112,14 @@ class AttachTest(unittest.TestCase):
                 tb.add(vmodel.Script("x").say("hi"))
         self.assertIn("script load errors: x.yaml: boom", str(ctx.exception))
 
+    def test_add_before_start_is_allowed_and_stop_before_start_is_safe(self):
+        tb = vmodel.Testbed.attach(config_dir=self.conf, base_url=self.url)
+        tb.token = "tok-123"
+        tb.add(vmodel.Script("early").say("hi"))
+        tb.stop()  # attached: removes what add() wrote
+        self.assertFalse(os.path.exists(os.path.join(self.conf, "vmodels", "early.yaml")))
+        vmodel.Testbed().stop()  # never started
+
     def test_attach_without_a_model_token_explains_itself(self):
         os.remove(os.path.join(self.conf, "config.json"))
         with self.assertRaises(RuntimeError) as ctx:

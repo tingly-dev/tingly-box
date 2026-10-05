@@ -117,6 +117,15 @@ class VModelThroughTB(unittest.TestCase):
         self.assertIn("status 302", str(ctx.exception))
         self.tb.remove(vmodel.Script("broken"))
 
+    def test_re_adding_a_broken_script_is_an_error_not_a_stale_success(self):
+        self.tb.add(vmodel.Script("edited").say("good"))
+        with self.assertRaises(vmodel.ScriptError):
+            self.tb.add(vmodel.Script("edited").error(302))
+        with self.assertRaises(TinglyError) as ctx:  # tb serves what is on disk: nothing
+            self.tb.chat("edited", "x")
+        self.assertEqual(ctx.exception.status, 404)
+        self.tb.remove(vmodel.Script("edited"))
+
     def test_a_hand_written_yaml_file_loads_like_a_python_script(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "by-hand.yaml")
