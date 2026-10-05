@@ -132,6 +132,7 @@ func serverToolCases() []serverToolCase {
 	add(pairCases("TestGuardrailsBlocksServerTool", "guardrails_blocks_server_tool", crossPairs(anthropicSources, guardrailsMCPTargets), bothStreamModes, guardrailsBlocksServerToolCase)...)
 	add(pairCases("TestGuardrailsBlocksClientToolAfterServerRound", "guardrails_blocks_client_tool", crossPairs(anthropicSources, guardrailsMCPTargets), bothStreamModes, guardrailsBlocksClientToolAfterServerRoundCase)...)
 	add(pairCases("TestGuardrailsCredentialAliasClientTool", "credential_alias_client_tool", crossPairs(anthropicSources, guardrailsTargets), bothStreamModes, credentialAliasClientToolCase)...)
+	add(remoteMCPHarnessCases()...)
 	return cases
 }
 

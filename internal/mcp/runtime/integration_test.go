@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -211,16 +210,14 @@ func TestRuntime_EndToEndToolCall(t *testing.T) {
 			t.Fatal("Expected non-empty result from websearch")
 		}
 
-		// Verify result contains expected content
-		// Result should be JSON with search results
-		if !strings.Contains(result.FirstText(), "content") {
-			t.Errorf("Expected result to contain 'content', got: %s", result.FirstText())
+		// The MCP envelope is retained in ToolResult, separate from text content.
+		raw, err := json.Marshal(result)
+		if err != nil {
+			t.Fatal(err)
 		}
-
-		// Parse the JSON response to verify structure
 		var response map[string]interface{}
-		if err := json.Unmarshal([]byte(result.FirstText()), &response); err != nil {
-			t.Fatalf("Failed to parse result JSON: %v", err)
+		if err := json.Unmarshal(raw, &response); err != nil {
+			t.Fatal(err)
 		}
 
 		content, ok := response["content"]
@@ -283,16 +280,14 @@ func TestRuntime_EndToEndToolCall(t *testing.T) {
 			t.Fatal("Expected non-empty result from webfetch")
 		}
 
-		// Verify result contains expected content
-		// Result should be JSON with fetched content
-		if !strings.Contains(result.FirstText(), "content") {
-			t.Errorf("Expected result to contain 'content', got: %s", result.FirstText())
+		// The MCP envelope is retained in ToolResult, separate from text content.
+		raw, err := json.Marshal(result)
+		if err != nil {
+			t.Fatal(err)
 		}
-
-		// Parse the JSON response to verify structure
 		var response map[string]interface{}
-		if err := json.Unmarshal([]byte(result.FirstText()), &response); err != nil {
-			t.Fatalf("Failed to parse result JSON: %v", err)
+		if err := json.Unmarshal(raw, &response); err != nil {
+			t.Fatal(err)
 		}
 
 		content, ok := response["content"]

@@ -486,27 +486,31 @@ const (
 
 // MCPRuntimeConfig contains global MCP runtime configuration.
 type MCPRuntimeConfig struct {
-	Mode                  MCPMode           `json:"mode,omitempty"` // deprecated: kept only for backward compatibility
-	Sources               []MCPSourceConfig `json:"sources,omitempty"`
-	RequestTimeout        int               `json:"request_timeout,omitempty"`          // seconds, default: 30
-	StripDisabledMCPTools bool              `json:"strip_disabled_mcp_tools,omitempty"` // dangerous: strip disabled MCP declarations/tool_calls
+	Mode                     MCPMode            `json:"mode,omitempty"` // deprecated: kept only for backward compatibility
+	Sources                  []MCPSourceConfig  `json:"sources,omitempty"`
+	ClientProfiles           []MCPClientProfile `json:"client_profiles,omitempty"`
+	ClientProfilesConfigured bool               `json:"client_profiles_configured,omitempty"`
+	RequestTimeout           int                `json:"request_timeout,omitempty"`          // seconds, default: 30
+	StripDisabledMCPTools    bool               `json:"strip_disabled_mcp_tools,omitempty"` // dangerous: strip disabled MCP declarations/tool_calls
 }
 
 // MCPSourceConfig defines one MCP source connection.
 type MCPSourceConfig struct {
-	ID         string            `json:"id,omitempty"`         // unique source id for normalized tool names
-	Name       string            `json:"name,omitempty"`       // client name (unique, no spaces/hyphens)
-	Enabled    *bool             `json:"enabled,omitempty"`    // nil means enabled (backward-compatible default)
-	Transport  string            `json:"transport,omitempty"`  // "http", "stdio", or "sse"
-	Endpoint   string            `json:"endpoint,omitempty"`   // endpoint URL for HTTP/SSE transport
-	Headers    map[string]string `json:"headers,omitempty"`    // static headers for MCP calls
-	Tools      []string          `json:"tools,omitempty"`      // allow list, empty means all
-	Command    string            `json:"command,omitempty"`    // command for stdio transport
-	Args       []string          `json:"args,omitempty"`       // args for stdio command
-	Cwd        string            `json:"cwd,omitempty"`        // working directory for stdio command
-	Env        map[string]string `json:"env,omitempty"`        // extra env vars for stdio command
-	ProxyURL   string            `json:"proxy_url,omitempty"`  // HTTP proxy URL for outgoing requests
-	Visibility ToolVisibility    `json:"visibility,omitempty"` // "client" or "server"
+	ID           string                   `json:"id,omitempty"`         // unique source id for normalized tool names
+	Name         string                   `json:"name,omitempty"`       // client name (unique, no spaces/hyphens)
+	Enabled      *bool                    `json:"enabled,omitempty"`    // nil means enabled (backward-compatible default)
+	Transport    string                   `json:"transport,omitempty"`  // "http", "stdio", or "sse"
+	Endpoint     string                   `json:"endpoint,omitempty"`   // endpoint URL for HTTP/SSE transport
+	Headers      map[string]string        `json:"headers,omitempty"`    // static headers for MCP calls
+	Tools        []string                 `json:"tools,omitempty"`      // allow list, empty means all
+	Command      string                   `json:"command,omitempty"`    // command for stdio transport
+	Args         []string                 `json:"args,omitempty"`       // args for stdio command
+	Cwd          string                   `json:"cwd,omitempty"`        // working directory for stdio command
+	Env          map[string]string        `json:"env,omitempty"`        // extra env vars for stdio command
+	ProxyURL     string                   `json:"proxy_url,omitempty"`  // HTTP proxy URL for outgoing requests
+	Visibility   ToolVisibility           `json:"visibility,omitempty"` // "client" or "server"
+	Usage        *MCPToolUsage            `json:"usage,omitempty"`      // independent client and gateway exposure
+	ToolPolicies map[string]MCPToolPolicy `json:"tool_policies,omitempty"`
 
 	// Local mode specific fields
 	ConnectionType      MCPConnectionType `json:"connection_type,omitempty"`       // stdio/http/sse

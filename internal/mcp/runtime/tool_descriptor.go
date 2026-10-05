@@ -59,11 +59,11 @@ func VirtualToolDescriptor(sourceID string, tool coretool.VirtualTool) typ.ToolD
 }
 
 func IsServerVisibleSource(source typ.MCPSourceConfig) bool {
-	return SourceVisibility(source) == typ.ToolVisibilityServer
+	return SourceUsage(source).Gateway
 }
 
 func IsClientVisibleSource(source typ.MCPSourceConfig) bool {
-	return SourceVisibility(source) == typ.ToolVisibilityClient
+	return SourceUsage(source).Client
 }
 
 func IsServerVisibleVirtualTool(tool coretool.VirtualTool) bool {

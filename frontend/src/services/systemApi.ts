@@ -193,4 +193,14 @@ export const systemApi = {
             body: config,
         }));
     },
+    createMCPSource: (body: components['schemas']['MCPSourceConfig']) => controlApi((client,headers) => client.POST('/api/v1/mcp/sources',{headers,body})),
+    patchMCPSource: (id: string, body: components['schemas']['MCPSourceConfig']) => controlApi((client,headers) => client.PATCH('/api/v1/mcp/sources/{source_id}',{headers,params:{path:{source_id:id}},body})),
+    deleteMCPSource: (id: string) => controlApi((client,headers) => client.DELETE('/api/v1/mcp/sources/{source_id}',{headers,params:{path:{source_id:id}}})),
+    getMCPCatalog: () => controlApi((client,headers) => client.GET('/api/v1/mcp/catalog',{headers})),
+    checkMCPSource: (id: string) => controlApi((client,headers) => client.POST('/api/v1/mcp/sources/{source_id}/check',{headers,params:{path:{source_id:id}}})),
+    reconnectMCPSource: (id: string) => controlApi((client,headers) => client.POST('/api/v1/mcp/sources/{source_id}/reconnect',{headers,params:{path:{source_id:id}}})),
+    callMCPTool: (body: components['schemas']['MCPToolCallRequest']) => controlApi((client,headers) => client.POST('/api/v1/mcp/tools/call',{headers,body})),
+    saveMCPClientProfile: (body: components['schemas']['MCPClientProfile']) => controlApi((client,headers) => client.PUT('/api/v1/mcp/client-profiles/{profile_id}',{headers,params:{path:{profile_id:body.id}},body})),
+    deleteMCPClientProfile: (id: string) => controlApi((client,headers) => client.DELETE('/api/v1/mcp/client-profiles/{profile_id}',{headers,params:{path:{profile_id:id}}})),
+
 };

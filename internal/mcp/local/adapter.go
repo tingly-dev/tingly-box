@@ -6,14 +6,15 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
 // MCPRuntimeAdapter adapts runtime.Runtime to local.MCPConnectionHandler interface.
 // It aggregates tools from configured MCP sources and executes them.
 type MCPRuntimeAdapter struct {
 	runtime        *runtime.Runtime
+	clientID       string
 	allowedSources []string // empty means allow all sources
 }
 
@@ -51,7 +52,13 @@ func (a *MCPRuntimeAdapter) ListTools(ctx context.Context) ([]MCPTool, error) {
 		}
 		for _, t := range srcTools {
 			// Create normalized tool name for calling
-			normalizedName := runtime.NormalizeToolName(sourceID, t.Name)
+			normalizedName := t.NormalizedName
+			if normalizedName == "" {
+				normalizedName = runtime.NormalizeToolName(sourceID, t.Name)
+			}
+			if a.clientID != "" && !a.runtime.ClientAllows(a.clientID, sourceID, normalizedName) {
+				continue
+			}
 
 			inputSchema := make(map[string]any)
 			if len(t.InputSchema) > 0 {
@@ -59,9 +66,11 @@ func (a *MCPRuntimeAdapter) ListTools(ctx context.Context) ([]MCPTool, error) {
 			}
 
 			tools = append(tools, MCPTool{
-				Name:        normalizedName,
-				Description: t.Description,
-				InputSchema: inputSchema,
+				Name:         normalizedName,
+				Description:  t.Description,
+				InputSchema:  inputSchema,
+				OutputSchema: t.OutputSchema,
+				Annotations:  t.Annotations,
 			})
 		}
 	}
@@ -70,37 +79,43 @@ func (a *MCPRuntimeAdapter) ListTools(ctx context.Context) ([]MCPTool, error) {
 }
 
 // CallTool executes a tool by name.
-func (a *MCPRuntimeAdapter) CallTool(ctx context.Context, name string, arguments map[string]any) (string, error) {
+func (a *MCPRuntimeAdapter) CallTool(ctx context.Context, name string, arguments map[string]any) (coretool.ToolResult, error) {
 	if a.runtime == nil {
-		return "", fmt.Errorf("runtime not initialized")
+		return coretool.ToolResult{}, fmt.Errorf("runtime not initialized")
 	}
-
-	// Verify this is a normalized name
 	sourceID, toolName, ok := runtime.ParseNormalizedToolName(name)
 	if !ok {
-		return "", fmt.Errorf("invalid normalized tool name: %s", name)
+		return coretool.ToolResult{}, fmt.Errorf("invalid normalized tool name: %s", name)
 	}
-
-	if !a.isSourceAllowed(sourceID) {
-		return "", fmt.Errorf("source %s is not allowed for this client", sourceID)
+	if sourceID == "builtin" && toolName == "advisor" {
+		sourceID = "advisor"
 	}
-
-	// Log for debugging
-	logrus.Debugf("mcp local: CallTool source=%s tool=%s", sourceID, toolName)
-
-	// Marshal arguments to JSON
+	if !a.isSourceAllowed(sourceID) || (a.clientID != "" && !a.runtime.ClientAllows(a.clientID, sourceID, name)) {
+		return coretool.ToolResult{}, fmt.Errorf("tool is not allowed for this client")
+	}
+	status, err := a.runtime.DiscoverSource(ctx, sourceID)
+	if err != nil {
+		return coretool.ToolResult{}, err
+	}
+	allowed := false
+	for _, tool := range status.Tools {
+		if tool.NormalizedName == name && tool.Enabled && tool.Usage.Client {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return coretool.ToolResult{}, fmt.Errorf("tool is no longer available to clients")
+	}
 	argsJSON, err := json.Marshal(arguments)
 	if err != nil {
-		return "", fmt.Errorf("marshal arguments: %w", err)
+		return coretool.ToolResult{}, err
 	}
+	return a.runtime.CallTool(ctx, name, string(argsJSON))
+}
 
-	// Call via mcpruntime with normalized name
-	result, err := a.runtime.CallTool(ctx, name, string(argsJSON))
-	if err != nil {
-		return "", fmt.Errorf("call tool %s: %w", name, err)
-	}
-
-	return result.FirstText(), nil
+func NewMCPRuntimeAdapterForClient(rt *runtime.Runtime, clientID string) *MCPRuntimeAdapter {
+	return &MCPRuntimeAdapter{runtime: rt, clientID: clientID}
 }
 
 // BuildNormalizedToolName creates a normalized tool name from source ID and tool name.

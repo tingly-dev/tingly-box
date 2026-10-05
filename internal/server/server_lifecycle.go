@@ -399,3 +399,10 @@ func (s *Server) undoCodexImportOnStop() error {
 		codeximport.ImportStateAutoUndoOnStopKey(): false,
 	})
 }
+
+// CloseMCPRuntime releases external sessions and subprocesses for embedded servers.
+func (s *Server) CloseMCPRuntime() {
+	if s.mcpRuntime != nil {
+		s.mcpRuntime.Close()
+	}
+}

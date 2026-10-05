@@ -51,9 +51,15 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 		maps.Copy(preservedEnv, existingWebtools.Env)
 	}
 
-	// Ensure SERPER_API_KEY is always present (use ${SERPER_API_KEY} to reference system env)
-	if _, exists := preservedEnv["SERPER_API_KEY"]; !exists {
-		preservedEnv["SERPER_API_KEY"] = "${SERPER_API_KEY}"
+	// Search can inherit an available process key, but fetch needs no search key.
+	// Remove the legacy default reference when it has no value; otherwise strict
+	// source validation would block fetch and unrelated configuration saves.
+	if value, exists := preservedEnv["SERPER_API_KEY"]; !exists || isSelfRef(value, "SERPER_API_KEY") {
+		if os.Getenv("SERPER_API_KEY") != "" {
+			preservedEnv["SERPER_API_KEY"] = "${SERPER_API_KEY}"
+		} else {
+			delete(preservedEnv, "SERPER_API_KEY")
+		}
 	}
 
 	// Create webtools configuration
@@ -81,6 +87,13 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 		Visibility: visibility,
 		Tools:      tools,
 		Env:        preservedEnv, // Preserve user's environment variables
+	}
+	if existingWebtools != nil {
+		if existingWebtools.Name != "" {
+			builtinWebtools.Name = existingWebtools.Name
+		}
+		builtinWebtools.Usage = existingWebtools.Usage
+		builtinWebtools.ToolPolicies = maps.Clone(existingWebtools.ToolPolicies)
 	}
 
 	// Update or append webtools configuration
@@ -126,6 +139,13 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 		Tools:      advisorTools,
 		Env:        advisorEnv,
 		Advisor:    advisorCfg,
+	}
+	if existingAdvisor != nil {
+		if existingAdvisor.Name != "" {
+			builtinAdvisor.Name = existingAdvisor.Name
+		}
+		builtinAdvisor.Usage = existingAdvisor.Usage
+		builtinAdvisor.ToolPolicies = maps.Clone(existingAdvisor.ToolPolicies)
 	}
 
 	// Update or append advisor configuration

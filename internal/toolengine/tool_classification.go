@@ -18,6 +18,12 @@ func IsVirtualTool(normalizedName string, registry *coretool.VirtualToolRegistry
 	if registry == nil {
 		return false
 	}
+	if registry.OwnsNormalized(normalizedName) {
+		return true
+	}
+	if sourceID != "builtin" {
+		return false
+	}
 	_, ok = registry.Get(toolName)
 	return ok
 }

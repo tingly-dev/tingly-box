@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
 // TransportType represents the type of transport for a tool source.
@@ -36,9 +39,11 @@ type ConnectionStatus struct {
 
 // ToolDefinition represents a tool's metadata and schema.
 type ToolDefinition struct {
-	Name        string          `json:"name"`
-	Description string          `json:"description,omitempty"`
-	InputSchema json.RawMessage `json:"input_schema,omitempty"`
+	Name         string          `json:"name"`
+	Description  string          `json:"description,omitempty"`
+	InputSchema  json.RawMessage `json:"input_schema,omitempty"`
+	OutputSchema json.RawMessage `json:"output_schema,omitempty"`
+	Annotations  json.RawMessage `json:"annotations,omitempty"`
 }
 
 // ToolSource is the unified interface for all MCP tool sources.
@@ -54,7 +59,7 @@ type ToolSource interface {
 
 	// Tool operations
 	ListTools(ctx context.Context) ([]ToolDefinition, error)
-	CallTool(ctx context.Context, toolName string, arguments string) (string, error)
+	CallTool(ctx context.Context, toolName string, arguments string) (coretool.ToolResult, error)
 
 	// Health monitoring (for persistent connections)
 	HealthCheck(ctx context.Context) error
@@ -69,6 +74,7 @@ type ToolSource interface {
 
 // BaseToolSource provides common functionality for all tool source implementations.
 type BaseToolSource struct {
+	retired   atomic.Bool
 	sourceID  string
 	transport TransportType
 	state     ConnectionState
@@ -118,6 +124,9 @@ func (b *BaseToolSource) setState(state ConnectionState, err error) {
 	defer b.mu.Unlock()
 	b.state = state
 	b.status.State = state
+	if state == StateConnected {
+		b.status.LastError = nil
+	}
 	if err != nil {
 		b.status.LastError = err
 	}
@@ -193,3 +202,7 @@ type ToolExecutionError struct {
 func (e *ToolExecutionError) Error() string {
 	return e.ToolName + ": " + e.Message
 }
+
+// Retire prevents an old source reference from reconnecting after replacement.
+func (b *BaseToolSource) Retire()         { b.retired.Store(true) }
+func (b *BaseToolSource) IsRetired() bool { return b.retired.Load() }
