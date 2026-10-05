@@ -32,6 +32,7 @@ func (h *Handler) ListAvailableModels(c *gin.Context) {
 		return
 	}
 
+	h.service.RefreshScripts() // script files dropped since the last request
 	entries := make([]AvailableModelEntry, 0)
 	for _, m := range h.service.GetAnthropicRegistry().ListModels() {
 		entries = append(entries, AvailableModelEntry{ID: m.ID, Protocol: "anthropic"})

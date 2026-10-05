@@ -24,11 +24,11 @@ const ScriptDirName = "vmodels"
 // script answers /messages and /chat/completions.
 //
 // Refresh is the only entry point and is cheap when nothing changed (a
-// directory read plus a stat per file), so the handler calls it on every
-// request instead of running a watcher: write a file, call the model, done.
-// A file whose content changed is re-registered with a fresh cursor; a file
-// that disappeared unregisters its model; a file that no longer parses keeps
-// serving its last good version and the error is surfaced in the 404/log.
+// directory read plus a stat per file), so callers invoke it on every request
+// instead of running a watcher: write a file, call the model, done. A file
+// whose content changed is re-registered with a fresh cursor; a file that
+// disappeared, or no longer parses, unregisters its model and the reason is
+// kept in Problems so a miss can explain itself.
 type scriptStore struct {
 	dir  string
 	anth *anthropicvm.Registry
@@ -36,13 +36,14 @@ type scriptStore struct {
 
 	mu     sync.Mutex
 	files  map[string]scriptFile // by file name
-	errors map[string]string     // by file name; current load errors
+	errors map[string]string     // by file name; files that failed to load
 	sig    string                // directory signature at the last scan
 }
 
 type scriptFile struct {
-	sig string // modtime+size at registration
-	id  string // model id registered from this file ("" if none)
+	sig    string // modtime+size when last loaded
+	id     string // model id registered from this file ("" if it failed)
+	failed bool
 }
 
 func newScriptStore(dir string, a *anthropicvm.Registry, o *openaivm.Registry) *scriptStore {
@@ -92,62 +93,70 @@ func (s *scriptStore) Refresh() {
 			delete(s.errors, name)
 		}
 	}
-	// New or changed files → (re)load.
-	for _, name := range names {
-		if f, ok := s.files[name]; ok && f.sig == current[name] {
-			continue
-		}
-		s.load(name, current[name])
-	}
-}
-
-func (s *scriptStore) load(name, sig string) {
-	path := filepath.Join(s.dir, name)
-	data, err := os.ReadFile(path)
-	if err == nil {
-		var cfg vmodel.SequenceConfig
-		cfg, err = vmodel.ParseScript(data, strings.TrimSuffix(name, filepath.Ext(name)))
-		if err == nil {
-			err = s.register(name, &cfg)
-			if err == nil {
-				s.files[name] = scriptFile{sig: sig, id: cfg.ID}
-				delete(s.errors, name)
-				logrus.Infof("vmodel script %s loaded as model %q", name, cfg.ID)
-				return
+	// New or changed files → (re)load. A file that failed is retried on every
+	// directory change, since the cause (an id held by a now-deleted file) may
+	// be gone; a second pass lets two files swap ids.
+	for pass := 0; pass < 2; pass++ {
+		loaded := false
+		for _, name := range names {
+			if f, ok := s.files[name]; ok && f.sig == current[name] && !f.failed {
+				continue
 			}
+			if pass == 1 && !s.files[name].failed {
+				continue
+			}
+			loaded = s.load(name, current[name]) || loaded
+		}
+		if !loaded {
+			break
 		}
 	}
-	// Keep any previous good version of this file serving; just remember
-	// the signature so a broken file is not re-parsed on every request.
-	prev := s.files[name]
-	s.files[name] = scriptFile{sig: sig, id: prev.id}
-	s.errors[name] = err.Error()
-	logrus.Warnf("vmodel script %s ignored: %v", name, err)
 }
 
-// register installs cfg in both registries, replacing this store's own earlier
-// registration of the same id but never a built-in model.
+// load (re)registers one file and reports whether it succeeded.
+func (s *scriptStore) load(name, sig string) bool {
+	prev := s.files[name].id
+	data, err := os.ReadFile(filepath.Join(s.dir, name))
+	var cfg vmodel.SequenceConfig
+	if err == nil {
+		cfg, err = vmodel.ParseScript(data, strings.TrimSuffix(name, filepath.Ext(name)))
+	}
+	if err == nil {
+		err = s.register(name, &cfg)
+	}
+	if err != nil {
+		// A file that does not load serves nothing: its old model goes too,
+		// so what is served always matches what is on disk.
+		s.unregister(prev)
+		s.files[name] = scriptFile{sig: sig, failed: true}
+		s.errors[name] = err.Error()
+		logrus.Warnf("vmodel script %s ignored: %v", name, err)
+		return false
+	}
+	if prev != cfg.ID {
+		s.unregister(prev)
+	}
+	s.files[name] = scriptFile{sig: sig, id: cfg.ID}
+	delete(s.errors, name)
+	logrus.Infof("vmodel script %s loaded as model %q", name, cfg.ID)
+	return true
+}
+
+// register installs cfg in both registries, replacing this file's own earlier
+// model of the same id but never a built-in model or another file's.
 func (s *scriptStore) register(file string, cfg *vmodel.SequenceConfig) error {
 	for other, f := range s.files {
-		if other != file && f.id == cfg.ID {
+		if other != file && !f.failed && f.id == cfg.ID {
 			return fmt.Errorf("id %q is already used by %s", cfg.ID, other)
 		}
 	}
-	owned := s.files[file].id == cfg.ID
-	if !owned && (s.anth.Has(cfg.ID) || s.oai.Has(cfg.ID)) {
+	if s.files[file].id != cfg.ID && (s.anth.Has(cfg.ID) || s.oai.Has(cfg.ID)) {
 		return fmt.Errorf("id %q collides with a built-in model; pick another id", cfg.ID)
 	}
-	if prev := s.files[file].id; prev != "" {
-		s.unregister(prev) // id changed or content replaced: start fresh
-	}
-	// Each registry gets its own model (and so its own cursor).
-	if err := s.anth.Register(anthropicvm.NewSequenceModel(cfg)); err != nil {
-		return err
-	}
-	if err := s.oai.Register(openaivm.NewSequenceModel(cfg)); err != nil {
-		s.anth.Unregister(cfg.ID)
-		return err
-	}
+	// Each registry gets its own model (and so its own cursor). Set replaces
+	// in one locked step, so a concurrent request never finds the id missing.
+	s.anth.Set(anthropicvm.NewSequenceModel(cfg))
+	s.oai.Set(openaivm.NewSequenceModel(cfg))
 	return nil
 }
 

@@ -66,6 +66,7 @@ func TestParseScript_Errors(t *testing.T) {
 		{"bad id", "id: has space\nsteps: [200]", "invalid id"},
 		{"non-numeric bare step", "steps: [hello]", "bare step must be an HTTP status"},
 		{"negative repeat", "steps:\n  - repeat: -1", "repeat"},
+		{"error fields on a success step", "steps:\n  - say: ok\n    error_message: boom", "only apply to an error step"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -114,4 +115,23 @@ func TestSequence_BareSuccessUsesDefaultContent(t *testing.T) {
 	assert.Equal(t, "dflt", seq.Next().Content)
 	seq = NewSequence(SequenceConfig{ID: "x", Steps: Steps(200)})
 	assert.Equal(t, FallbackSequenceContent, seq.Next().Content)
+}
+
+func TestSequence_ToolIDsAreUniquePerServedRequest(t *testing.T) {
+	// repeat, loop and clamp must never hand the same tool_use id twice.
+	cfg, err := ParseScript([]byte("steps:\n  - tool: {name: Read}\n    repeat: 2\n  - tool: {name: Edit, id: fixed}\n"), "s")
+	require.NoError(t, err)
+	seq := NewSequence(cfg)
+	seen := map[string]bool{}
+	for i := 0; i < 9; i++ { // three full loops
+		step := seq.Next()
+		id := step.Tool.ID
+		if step.Tool.Name == "Edit" {
+			assert.Equal(t, "fixed", id, "an explicit id is kept")
+			continue
+		}
+		assert.False(t, seen[id], "tool id %q served twice", id)
+		seen[id] = true
+	}
+	assert.Len(t, seen, 6)
 }

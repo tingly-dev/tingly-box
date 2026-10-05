@@ -32,6 +32,15 @@ func (r *GenericRegistry[T]) Register(vm T) error {
 	return nil
 }
 
+// Set registers vm under its ID, replacing any model already there. Unlike
+// Register-after-Unregister it is a single locked step, so a concurrent Get
+// never sees the ID missing.
+func (r *GenericRegistry[T]) Set(vm T) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.models[vm.GetID()] = vm
+}
+
 // Unregister removes a virtual model by ID. No-op if not present.
 func (r *GenericRegistry[T]) Unregister(id string) {
 	r.mu.Lock()

@@ -129,7 +129,7 @@ func (m *MockModel) toolResponse() VModelResponse {
 		Name:  tc.Name,
 		Input: json.RawMessage(inputJSON),
 	}})
-	return VModelResponse{Content: blocks, StopReason: "tool_use"}
+	return VModelResponse{Content: blocks, StopReason: sdk.BetaStopReason(m.cfg.StopReason)}
 }
 
 // HandleAnthropicStream streams fixed content using configured chunks with simulated delay.
