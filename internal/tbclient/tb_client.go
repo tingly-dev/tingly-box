@@ -199,13 +199,16 @@ func (c *TBClientImpl) resolveClaudeCodeModels() claudeCodeModels {
 	}
 
 	if sc := c.config.GetScenarioConfig(typ.ScenarioClaudeCode); sc != nil && sc.GetDefaultFlags().Separate {
+		def := ruleModel("builtin:claude_code:default", "built-in-cc-default", "tingly/cc-default")
 		return claudeCodeModels{
-			def:      ruleModel("builtin:claude_code:default", "built-in-cc-default", "tingly/cc-default"),
+			def:      def,
 			haiku:    ruleModel("builtin:claude_code:haiku", "built-in-cc-haiku", "tingly/cc-haiku"),
 			sonnet:   ruleModel("builtin:claude_code:sonnet", "built-in-cc-sonnet", "tingly/cc-sonnet"),
 			opus:     ruleModel("builtin:claude_code:opus", "built-in-cc-opus", "tingly/cc-opus"),
 			subagent: ruleModel("builtin:claude_code:subagent", "built-in-cc-subagent", "tingly/cc-subagent"),
-			fable:    ruleModel("builtin:claude_code:fable", "", "tingly/cc-fable"),
+			// No active fable rule (never seeded, or switched off): the bare tier
+			// name is not routable, so the alias follows the default tier.
+			fable: ruleModel(serverconfig.RuleUUIDCCFable, "", def),
 		}
 	}
 

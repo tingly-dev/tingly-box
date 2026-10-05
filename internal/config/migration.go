@@ -56,6 +56,7 @@ var migrationSteps = []migrationStep{
 	{"normalize-builtin-rule-identity", kindBaseline, "", normalizeBuiltinRuleIdentity},
 	{"agent-scenario-to-custom", kindBaseline, "", migrateAgentScenarioToCustom},
 	{"ensure-current-builtin-rules", kindBaseline, "", ensureCurrentBuiltinRules},
+	{"20261004-claude-code-fable-rule", kindOnce, "2026-10-04", backfillFableRuleOnce},
 	{"20260712-drop-unsupported-smart-routing", kindDated, "2026-07-12", migrate20260712},
 	{"20260606-xcode-skip-usage", kindOnce, "2026-06-06", defaultXcodeSkipUsageOnce},
 	{"20260610-builtin-rule-flags", kindOnce, "2026-06-10", defaultBuiltinRuleFlagsOnce},
@@ -547,19 +548,6 @@ func ensureCurrentBuiltinRules(c *Config) bool {
 		logrus.Info("Added Claude Desktop haiku-4-5 built-in rule")
 	}
 
-	// Claude Code gained a fable tier after separate mode shipped: backfill its
-	// rule for existing configs, mirroring the opus rule's services and
-	// active state so separate-mode users get a routable fable alias.
-	if opus := c.findRuleByUUID(RuleUUIDCCOpus); opus != nil {
-		if newRule, ok := c.seedBuiltinRuleIfMissing(RuleUUIDCCFable, opus.Services); ok {
-			if r := c.findRuleByUUID(newRule.UUID); r != nil {
-				r.Active = opus.Active
-			}
-			needsSave = true
-			logrus.Info("Added Claude Code fable built-in rule")
-		}
-	}
-
 	if needsSave {
 		logrus.Info("Migration current-builtin-rules completed: ensured current built-in rules")
 	}
@@ -768,5 +756,44 @@ func defaultBuiltinRuleFlagsOnce(c *Config) bool {
 	}
 	// Same reasoning as defaultXcodeSkipUsageOnce: the marker append alone
 	// needs persisting even when no rule flag actually changed.
+	return true
+}
+
+// backfillFableRuleOnce runs backfillFableRule once per config, so a fable
+// rule the user later deletes is not resurrected on every boot.
+func backfillFableRuleOnce(c *Config) bool {
+	const marker = "20261004"
+	if c.hasMigrationCompleted(marker) {
+		return false
+	}
+	c.backfillFableRule()
+	c.markMigrationCompleted(marker)
+	return true // the marker itself changed the config
+}
+
+// backfillFableRule seeds the Claude Code fable rule for configs that predate
+// the tier, mirroring the opus rule's services, flags, load-balancing tactic
+// and active state, so separate-mode users get a routable fable alias. A user's
+// own rule already answering to that name is left alone rather than shadowed.
+func (c *Config) backfillFableRule() bool {
+	opus := c.findRuleByUUID(RuleUUIDCCOpus)
+	if opus == nil || c.findRuleByUUID(RuleUUIDCCFable) != nil {
+		return false
+	}
+	fable, ok := defaultRuleByUUID(RuleUUIDCCFable)
+	if !ok {
+		return false
+	}
+	for i := range c.Rules {
+		if c.Rules[i].Scenario == typ.ScenarioClaudeCode && c.Rules[i].RequestModel == fable.RequestModel {
+			return false
+		}
+	}
+	fable.Services = cloneServices(opus.Services)
+	fable.Active = opus.Active
+	fable.Flags = opus.Flags
+	fable.LBTactic = opus.LBTactic
+	c.Rules = append(c.Rules, fable)
+	logrus.Info("Added Claude Code fable built-in rule")
 	return true
 }

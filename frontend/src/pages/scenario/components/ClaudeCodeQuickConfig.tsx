@@ -871,6 +871,12 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
     const isUnified = mode !== 'separate';
     const defaultModel = isUnified ? 'tingly/cc' : 'tingly/cc-default';
 
+    // The fable tier arrived after separate mode shipped, so its rule may be
+    // missing or switched off; the bare name is not routable, so the slot
+    // follows the default tier (mirrors the backend's GenerateCCEnv).
+    const fableRule = rules.find((r: any) => r?.uuid === 'builtin:claude_code:fable');
+    const fableVariant = isUnified || (fableRule && fableRule.active !== false) ? 'fable' : 'default';
+
     // Apply 1M suffix to models if their corresponding rule has context1m enabled
     const apply1MSuffix = (model: string, variant: string): string => {
         const variantContext1M = getContext1MStateForVariant(variant);
@@ -882,7 +888,7 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
         ANTHROPIC_DEFAULT_HAIKU_MODEL: apply1MSuffix(modelForVariant('haiku', isUnified ? defaultModel : 'tingly/cc-haiku'), 'haiku'),
         ANTHROPIC_DEFAULT_SONNET_MODEL: apply1MSuffix(modelForVariant('sonnet', isUnified ? defaultModel : 'tingly/cc-sonnet'), 'sonnet'),
         ANTHROPIC_DEFAULT_OPUS_MODEL: apply1MSuffix(modelForVariant('opus', isUnified ? defaultModel : 'tingly/cc-opus'), 'opus'),
-        ANTHROPIC_DEFAULT_FABLE_MODEL: apply1MSuffix(modelForVariant('fable', isUnified ? defaultModel : 'tingly/cc-fable'), 'fable'),
+        ANTHROPIC_DEFAULT_FABLE_MODEL: apply1MSuffix(modelForVariant(fableVariant, isUnified ? defaultModel : fableVariant === 'fable' ? 'tingly/cc-fable' : 'tingly/cc-default'), fableVariant),
         CLAUDE_CODE_SUBAGENT_MODEL: apply1MSuffix(modelForVariant('subagent', isUnified ? defaultModel : 'tingly/cc-subagent'), 'subagent'),
 
         API_TIMEOUT_MS: '3000000',

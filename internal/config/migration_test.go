@@ -930,36 +930,73 @@ func TestDeleteProviderCascade_CompactsTiers(t *testing.T) {
 	}
 }
 
-func TestEnsureCurrentBuiltinRules_SeedsFableFromOpus(t *testing.T) {
+func TestBackfillFableRuleOnce_SeedsFromOpus(t *testing.T) {
+	flags := typ.RuleFlags{Context1M: true}
 	c := &Config{
 		Rules: []typ.Rule{
-			{UUID: RuleUUIDCCOpus, Scenario: typ.ScenarioClaudeCode, Active: true, Services: []*loadbalance.Service{svc("p1")}},
+			{UUID: RuleUUIDCCOpus, Scenario: typ.ScenarioClaudeCode, Active: true, Flags: flags, Services: []*loadbalance.Service{svc("p1")}},
 		},
 	}
 
-	ensureCurrentBuiltinRules(c)
+	if !backfillFableRuleOnce(c) {
+		t.Fatal("first run must report a change (the marker)")
+	}
 
 	fable := c.findRuleByUUID(RuleUUIDCCFable)
 	if fable == nil {
 		t.Fatal("expected fable rule to be seeded")
 	}
-	if !fable.Active || len(fable.Services) != 1 || fable.Services[0].Provider != "p1" {
-		t.Errorf("fable should mirror opus active state and services, got %+v", fable)
+	if !fable.Active || len(fable.Services) != 1 || fable.Services[0].Provider != "p1" || !fable.Flags.Context1M {
+		t.Errorf("fable should mirror opus active state, services and flags, got %+v", fable)
 	}
 	if fable.RequestModel != "tingly/cc-fable" {
 		t.Errorf("fable request model = %q", fable.RequestModel)
 	}
 
-	ensureCurrentBuiltinRules(c)
+	if backfillFableRuleOnce(c) {
+		t.Error("second run must be a no-op")
+	}
 	if n := countRules(c, RuleUUIDCCFable); n != 1 {
 		t.Errorf("fable rule duplicated: count = %d", n)
 	}
 }
 
-func TestEnsureCurrentBuiltinRules_NoFableWithoutSeparateRules(t *testing.T) {
+func TestBackfillFableRuleOnce_NoFableWithoutSeparateRules(t *testing.T) {
 	c := &Config{Rules: []typ.Rule{{UUID: RuleUUIDCC, Scenario: typ.ScenarioClaudeCode, Active: true}}}
-	ensureCurrentBuiltinRules(c)
+	backfillFableRuleOnce(c)
 	if c.findRuleByUUID(RuleUUIDCCFable) != nil {
 		t.Error("fable must not be seeded for configs without the separate-mode rules")
+	}
+}
+
+func TestBackfillFableRuleOnce_DoesNotShadowUserRule(t *testing.T) {
+	c := &Config{Rules: []typ.Rule{
+		{UUID: RuleUUIDCCOpus, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-opus", Active: true},
+		{UUID: "user-fable", Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-fable", Active: true},
+	}}
+	backfillFableRuleOnce(c)
+	if c.findRuleByUUID(RuleUUIDCCFable) != nil {
+		t.Error("fable must not be seeded when a rule already answers to that name")
+	}
+}
+
+func TestBackfillFableRuleOnce_DoesNotResurrectDeletedRule(t *testing.T) {
+	c := &Config{Rules: []typ.Rule{
+		{UUID: RuleUUIDCCOpus, Scenario: typ.ScenarioClaudeCode, Active: true},
+	}}
+	backfillFableRuleOnce(c)
+	if c.findRuleByUUID(RuleUUIDCCFable) == nil {
+		t.Fatal("first run must seed the fable rule")
+	}
+	kept := c.Rules[:0]
+	for _, r := range c.Rules {
+		if r.UUID != RuleUUIDCCFable {
+			kept = append(kept, r)
+		}
+	}
+	c.Rules = kept
+	backfillFableRuleOnce(c)
+	if c.findRuleByUUID(RuleUUIDCCFable) != nil {
+		t.Error("a deleted fable rule must not come back")
 	}
 }

@@ -127,12 +127,11 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = tierModel("haiku", serverconfig.RuleUUIDBuiltinCCHaiku, "tingly/cc-haiku")
 		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = tierModel("opus", serverconfig.RuleUUIDBuiltinCCOpus, "tingly/cc-opus")
 		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = tierModel("sonnet", serverconfig.RuleUUIDBuiltinCCSonnet, "tingly/cc-sonnet")
-		env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = tierModel("fable", serverconfig.RuleUUIDCCFable, "tingly/cc-fable")
-		// Profiles created before the fable tier have no fable rule; the bare
-		// tier name is not routable, so route the alias like the default tier.
-		if isProfile && (cfg == nil || cfg.GetRuleByUUID(serverconfig.BuiltinRuleUUID(typ.RuleScenario(scenarioPath), "fable")) == nil) {
-			env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = env["ANTHROPIC_MODEL"]
-		}
+		// The fable tier arrived after separate mode shipped, so a profile or
+		// install may have no active fable rule (never seeded, or switched off);
+		// the bare tier name is not routable, so the alias follows the default
+		// tier instead.
+		env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = ruleModel(env["ANTHROPIC_MODEL"], serverconfig.BuiltinRuleUUID(typ.RuleScenario(scenarioPath), "fable"))
 		env["CLAUDE_CODE_SUBAGENT_MODEL"] = tierModel("subagent", serverconfig.RuleUUIDBuiltinCCSubagent, "tingly/cc-subagent")
 	}
 

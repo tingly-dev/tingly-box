@@ -100,3 +100,24 @@ test('separate mode resolves each custom request model by its tier rule UUID', (
     assert.equal(prefs.ANTHROPIC_DEFAULT_OPUS_MODEL, 'routes/deep');
     assert.equal(prefs.CLAUDE_CODE_SUBAGENT_MODEL, 'routes/agent');
 });
+
+test('separate mode points fable at the default tier when its rule is missing or off', () => {
+    const base = [
+        { uuid: 'builtin:claude_code:default', request_model: 'routes/default' },
+        { uuid: 'builtin:claude_code:opus', request_model: 'routes/deep' },
+    ];
+    const missing = derivePrefsFromRules({ mode: 'separate', rules: base });
+    assert.equal(missing.ANTHROPIC_DEFAULT_FABLE_MODEL, 'routes/default');
+
+    const inactive = derivePrefsFromRules({
+        mode: 'separate',
+        rules: [...base, { uuid: 'builtin:claude_code:fable', request_model: 'routes/fable', active: false }],
+    });
+    assert.equal(inactive.ANTHROPIC_DEFAULT_FABLE_MODEL, 'routes/default');
+
+    const active = derivePrefsFromRules({
+        mode: 'separate',
+        rules: [...base, { uuid: 'builtin:claude_code:fable', request_model: 'routes/fable', active: true }],
+    });
+    assert.equal(active.ANTHROPIC_DEFAULT_FABLE_MODEL, 'routes/fable');
+});
