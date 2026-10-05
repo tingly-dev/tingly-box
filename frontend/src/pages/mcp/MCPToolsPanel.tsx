@@ -1,389 +1,268 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     Alert,
     Box,
     Button,
-    Card,
-    CardContent,
-    Checkbox,
+    Chip,
+    CircularProgress,
     Dialog,
     DialogActions,
     DialogContent,
     DialogTitle,
-    FormControlLabel,
     Stack,
-    TextField,
     Typography,
 } from '@mui/material';
-import { api } from '@/services/api';
-import { sourceToFormValue } from './types';
-import type { MCPCatalogTool, MCPSourceConfig, MCPSourceStatus } from './types';
+import MCPToolCard from './MCPToolCard';
+import MCPToolTestDialog from './MCPToolTestDialog';
+import {
+    isAdvisorTool,
+    isToolRestricted,
+    toolPolicyPatch,
+    type MCPToolMode,
+    type MCPToolPatch,
+} from './toolPresentation';
+import { sourceToFormValue, type MCPCatalogTool, type MCPRouteSource, type MCPSourceConfig } from './types';
 
+// The catalog and routing diagram share one applied snapshot from the workspace.
 export default function MCPToolsPanel({
     sources,
+    routes,
+    loading,
     enabled,
     saveSource,
-    usage = 'client',
+    mode,
     onConfigureSource,
     onRelationships,
-    showIntro = true,
-    scopeOnly = false,
-    assetsOnly = false,
-    showTesting = !scopeOnly,
 }: {
-    usage?: 'client' | 'gateway';
-    onConfigureSource?: (id: string) => void;
-    onRelationships?: (id: string) => void;
-    showIntro?: boolean;
-    scopeOnly?: boolean;
-    assetsOnly?: boolean;
-    showTesting?: boolean;
     sources: MCPSourceConfig[];
+    routes: MCPRouteSource[];
+    loading: boolean;
     enabled: boolean;
     saveSource: (patch: MCPSourceConfig) => Promise<void>;
+    mode: MCPToolMode;
+    onConfigureSource?: (id: string) => void;
+    onRelationships?: (id: string) => void;
 }) {
     const { t } = useTranslation();
     const label = (key: string, fallback: string) => t(`mcp.center.${key}`, { defaultValue: fallback });
-    const [catalog, setCatalog] = useState<MCPSourceStatus[]>([]);
-    const [busy, setBusy] = useState(true);
+    const workspace = (key: string, fallback: string) => t(`mcp.workspace.${key}`, { defaultValue: fallback });
+    const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [choosing, setChoosing] = useState(false);
     const [testing, setTesting] = useState<MCPCatalogTool | null>(null);
-    const [args, setArgs] = useState('{}');
-    const [result, setResult] = useState<unknown>(null);
-    const discoveryGeneration = useRef(0);
-    const discover = useCallback(async () => {
-        const generation = ++discoveryGeneration.current;
-        try {
-            const response = await api.getMCPCatalog();
-            if (generation !== discoveryGeneration.current) return;
-            if (!response?.success) throw new Error(response?.error || 'Discovery failed');
-            setCatalog(response.sources || []);
-            setError('');
-        } catch (e) {
-            if (generation === discoveryGeneration.current) setError(e instanceof Error ? e.message : String(e));
-        } finally {
-            if (generation === discoveryGeneration.current) setBusy(false);
-        }
-    }, []);
-    useEffect(() => {
-        let active = true;
-        void Promise.resolve().then(() => {
-            if (active) void discover();
-        });
-        return () => {
-            active = false;
-            discoveryGeneration.current++;
-        };
-        // Saved source snapshots invalidate the server catalog even though
-        // discovery reads the applied configuration through the API.
-        // oxlint-disable-next-line react/exhaustive-effect-dependencies
-    }, [sources, discover]);
-    const refresh = async () => {
-        setBusy(true);
-        setError('');
-        await discover();
-    };
-    const policy = async (tool: MCPCatalogTool, patch: { enabled?: boolean; usage?: MCPCatalogTool['usage'] }) => {
-        setBusy(true);
-        setError('');
-        try {
-            const source = sources.find((s) => s.id === tool.source_id)!;
-            await saveSource({
-                id: source.id,
-                tool_policies: {
-                    ...source.tool_policies,
-                    [tool.name]: { ...source.tool_policies?.[tool.name], ...patch },
-                },
-            });
-            await refresh();
-        } catch (e) {
-            setError(e instanceof Error ? e.message : String(e));
-        } finally {
-            setBusy(false);
-        }
-    };
-    const test = async () => {
-        setBusy(true);
-        setError('');
-        setResult(null);
-        try {
-            const argumentsValue: unknown = JSON.parse(args);
-            if (!argumentsValue || typeof argumentsValue !== 'object' || Array.isArray(argumentsValue))
-                throw new Error(label('objectArgs', 'Arguments must be a JSON object.'));
-            const response = await api.callMCPTool({
-                source_id: testing!.source_id,
-                tool_name: testing!.name,
-                arguments: argumentsValue as Record<string, unknown>,
-            });
-            setResult(response);
-            if (!response?.success) throw new Error(response?.error || 'Tool execution failed');
-        } catch (e) {
-            setError(e instanceof Error ? e.message : String(e));
-        } finally {
-            setBusy(false);
-        }
-    };
-    const restricted = (tool: MCPCatalogTool) => {
+    const asset = mode === 'asset';
+    const policy = async (tool: MCPCatalogTool, patch: MCPToolPatch) => {
         const source = sources.find((s) => s.id === tool.source_id);
-        const allowed = source?.tools || [];
-        return (
-            source?.enabled === false || (allowed.length > 0 && !allowed.includes('*') && !allowed.includes(tool.name))
-        );
+        if (!source) return;
+        setBusy(true);
+        setError('');
+        try {
+            await saveSource(toolPolicyPatch(source, tool, patch));
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setBusy(false);
+        }
     };
-    const tools = catalog
-        .flatMap((s) => s.tools || [])
-        .filter((tool) => assetsOnly || (usage === 'client' ? tool.usage.client : tool.usage.gateway));
+    const groups = sources
+        .map((source) => {
+            const route = routes.find((r) => r.id === source.id);
+            const tools = (route?.tools || []).filter(
+                (tool) => asset || ((mode !== 'client' || !isAdvisorTool(tool, source)) && tool.usage[mode])
+            );
+            const assigned =
+                !asset &&
+                (sourceToFormValue(source).usage[mode] ||
+                    Object.values(source.tool_policies || {}).some((p) => p.usage?.[mode]));
+            return { source, route, tools, assigned };
+        })
+        .filter(
+            ({ tools, assigned, route }) => asset || tools.length > 0 || (assigned && route?.state !== 'connected')
+        );
+    const candidates = routes
+        .flatMap((r) => r.tools)
+        .filter(
+            (tool) =>
+                !asset &&
+                !tool.usage[mode] &&
+                !isToolRestricted(
+                    tool,
+                    sources.find((s) => s.id === tool.source_id)
+                ) &&
+                !(
+                    mode === 'client' &&
+                    isAdvisorTool(
+                        tool,
+                        sources.find((s) => s.id === tool.source_id)
+                    )
+                )
+        );
+    const chooserTitle =
+        mode === 'client'
+            ? label('chooseOrdinary', 'Choose tools to publish')
+            : label('chooseServer', 'Choose Server Tools');
     return (
         <Stack spacing={2}>
-            <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 1 }}>
-                {showIntro && (
-                    <Typography color="text.secondary">
-                        {usage === 'client'
-                            ? label(
-                                  'ordinaryHint',
-                                  'Publish tools for MCP clients here. Manage shared tool connections in Tool.'
-                              )
-                            : label(
-                                  'serverHint',
-                                  'The gateway executes these tools during model requests and returns their results to the model to continue its answer.'
-                              )}
-                    </Typography>
-                )}
-                {!assetsOnly && (
-                    <Button disabled={busy} onClick={() => setChoosing(true)}>
-                        {usage === 'client'
-                            ? label('chooseOrdinary', 'Choose tools to publish')
-                            : label('chooseServer', 'Choose Server Tools')}
-                    </Button>
-                )}
-                <Button disabled={busy} onClick={() => void refresh()}>
-                    {label(busy ? 'discovering' : 'discover', busy ? 'Discovering…' : 'Discover tools')}
+            {!asset && (
+                <Button sx={{ alignSelf: 'flex-start' }} disabled={busy || loading} onClick={() => setChoosing(true)}>
+                    {chooserTitle}
                 </Button>
-            </Stack>
+            )}
             {error && <Alert severity="error">{error}</Alert>}
-            {catalog
-                .filter((status) => {
-                    const source = sources.find((item) => item.id === status.source_id);
-                    if (status.state === 'connected') return false;
-                    if (assetsOnly) return Boolean(source);
-                    if (!source) return Boolean(status.error);
-                    return (
-                        source.enabled !== false &&
-                        (sourceToFormValue(source).usage[usage] ||
-                            Object.values(source.tool_policies || {}).some(
-                                (policy) => policy.enabled !== false && policy.usage?.[usage]
-                            ))
-                    );
-                })
-                .map((s) => (
-                    <Alert key={s.source_id} severity={s.error ? 'error' : 'info'}>
-                        {s.source_id}: {s.error || s.state}
-                    </Alert>
-                ))}
-            {!busy && tools.length === 0 && (
-                <Typography>
-                    {label(
-                        assetsOnly ? 'noCatalogTools' : 'noAssignedTools',
-                        assetsOnly
-                            ? 'No tools discovered yet. Connect a source or check its connection.'
-                            : 'No tools are assigned to this section. Choose tools to enable them for this purpose.'
-                    )}
+            {loading && <CircularProgress size={20} />}
+            {!loading && groups.length === 0 && (
+                <Typography color="text.secondary">
+                    {asset
+                        ? workspace(
+                              'emptyConnectionsHint',
+                              'Paste a tool service URL or enter a local command. We will discover its tools for you.'
+                          )
+                        : label(
+                              'noAssignedTools',
+                              'No tools are assigned to this section. Choose tools to enable them for this purpose.'
+                          )}
                 </Typography>
             )}
-            {tools.map((tool) => (
-                <Card
-                    variant="outlined"
-                    component="article"
-                    aria-label={`${sources.find((source) => source.id === tool.source_id)?.name || tool.source_id} / ${tool.name}`}
-                    key={tool.normalized_name}
-                >
-                    <CardContent>
-                        <Stack spacing={1}>
-                            <Typography variant="subtitle1">
-                                {sources.find((source) => source.id === tool.source_id)?.name || tool.source_id} /{' '}
-                                {tool.name}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                {tool.description}
-                            </Typography>
-                            {restricted(tool) && (
-                                <Typography variant="caption" color="text.secondary">
-                                    {label(
-                                        'sourceRestriction',
-                                        'This tool is excluded by the server allow list. Edit the server to allow it.'
-                                    )}
+            {groups.map(({ source, route, tools }) => {
+                const advisor = source.transport === 'advisor' || !!source.advisor;
+                const failed = route?.state === 'error' || route?.state === 'unconfigured';
+                return (
+                    <Box
+                        component="article"
+                        aria-label={source.name || source.id}
+                        key={source.id}
+                        sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 2 }}
+                    >
+                        <Stack
+                            direction="row"
+                            sx={{
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                gap: 1,
+                                flexWrap: 'wrap',
+                                mb: 1.5,
+                            }}
+                        >
+                            <Stack direction="row" sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                                    {source.name || source.id}
                                 </Typography>
-                            )}
-                            {scopeOnly && !tool.enabled && !restricted(tool) && (
-                                <Typography variant="caption" color="warning.main">
-                                    {t('mcp.workspace.sharedToolOff', {
-                                        defaultValue:
-                                            'This tool is disabled in the shared connection. Enable it from the Tool page.',
-                                    })}
-                                </Typography>
-                            )}
-                            <Stack direction="row" sx={{ flexWrap: 'wrap' }}>
-                                {!scopeOnly && (
-                                    <FormControlLabel
-                                        control={
-                                            <Checkbox
-                                                disabled={busy || restricted(tool)}
-                                                checked={tool.enabled}
-                                                onChange={(e) => void policy(tool, { enabled: e.target.checked })}
-                                            />
-                                        }
-                                        label={label('enabled', 'Enabled')}
-                                    />
+                                {asset && (
+                                    <Typography variant="caption" color="text.secondary">
+                                        {t(`mcp.relationships.${route?.origin || source.origin || 'external'}`, {
+                                            defaultValue: route?.origin || source.origin || 'external',
+                                        })}
+                                    </Typography>
                                 )}
-                                {!assetsOnly && (
-                                    <FormControlLabel
-                                        control={
-                                            <Checkbox
-                                                disabled={busy || restricted(tool)}
-                                                checked={usage === 'client' ? tool.usage.client : tool.usage.gateway}
-                                                onChange={(e) =>
-                                                    void policy(tool, {
-                                                        usage: { ...tool.usage, [usage]: e.target.checked },
-                                                    })
-                                                }
-                                            />
-                                        }
+                                {asset && (
+                                    <Chip
+                                        size="small"
+                                        variant="outlined"
                                         label={
-                                            usage === 'client'
-                                                ? label('ordinaryUsage', 'Expose through MCP')
-                                                : label('serverUsage', 'Use as a Server Tool')
+                                            source.enabled === false
+                                                ? workspace('off', 'Off')
+                                                : !route || loading
+                                                  ? workspace('checking', 'Checking…')
+                                                  : route.state === 'connected'
+                                                    ? workspace('connected', 'Connected')
+                                                    : workspace('needsAttention', 'Needs attention')
                                         }
                                     />
                                 )}
-                                {showTesting && (
-                                    <Button
-                                        disabled={
-                                            busy ||
-                                            !tool.enabled ||
-                                            !enabled ||
-                                            (tool.source_id === 'advisor' && tool.implementation === 'virtual')
-                                        }
-                                        onClick={() => {
-                                            setTesting(tool);
-                                            setArgs('{}');
-                                            setResult(null);
-                                        }}
-                                    >
-                                        {label('testTool', 'Test tool')}
+                            </Stack>
+                            <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }}>
+                                {onConfigureSource && (
+                                    <Button size="small" onClick={() => onConfigureSource(source.id!)}>
+                                        {asset && failed
+                                            ? workspace('fixConnection', 'Fix connection')
+                                            : advisor && !asset
+                                              ? workspace('configureAdvisor', 'Configure Advisor model')
+                                              : asset
+                                                ? workspace('configureConnection', 'Configure this connection')
+                                                : mode === 'client'
+                                                  ? workspace('configurePublication', 'Configure MCP publication')
+                                                  : workspace('configureExecution', 'Configure execution usage')}
+                                    </Button>
+                                )}
+                                {onRelationships && (
+                                    <Button size="small" onClick={() => onRelationships(source.id!)}>
+                                        {t('mcp.relationships.view', { defaultValue: 'View usage relationships' })}
                                     </Button>
                                 )}
                             </Stack>
-                            {tool.source_id === 'advisor' && tool.implementation === 'virtual' && (
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                                    {label(
-                                        'advisorTestHint',
-                                        'Advisor requires model conversation context. Configure its consultation model in Server Tool, then verify it with a model request.'
-                                    )}
-                                </Typography>
-                            )}
-                            {onConfigureSource && (
-                                <Button
-                                    size="small"
-                                    sx={{ alignSelf: 'flex-start' }}
-                                    onClick={() => onConfigureSource(tool.source_id)}
-                                >
-                                    {t(
-                                        tool.source_id === 'advisor' && tool.implementation === 'virtual'
-                                            ? 'mcp.workspace.configureAdvisor'
-                                            : assetsOnly
-                                              ? 'mcp.workspace.configureConnection'
-                                              : usage === 'client'
-                                                ? 'mcp.workspace.configurePublication'
-                                                : 'mcp.workspace.configureExecution',
-                                        {
-                                            defaultValue:
-                                                tool.source_id === 'advisor' && tool.implementation === 'virtual'
-                                                    ? 'Configure Advisor model'
-                                                    : assetsOnly
-                                                      ? 'Configure this connection'
-                                                      : usage === 'client'
-                                                        ? 'Configure MCP publication'
-                                                        : 'Configure execution usage',
-                                        }
-                                    )}
-                                </Button>
-                            )}
-                            {onRelationships && (
-                                <Button
-                                    size="small"
-                                    sx={{ alignSelf: 'flex-start' }}
-                                    onClick={() => onRelationships(tool.source_id)}
-                                >
-                                    {t('mcp.relationships.view', { defaultValue: 'View usage relationships' })}
-                                </Button>
-                            )}
-                            <Box component="details">
-                                <Box component="summary" sx={{ cursor: 'pointer' }}>
-                                    {label('schema', 'Parameters and output schema')}
-                                </Box>
-                                <Box component="pre" sx={{ whiteSpace: 'pre-wrap', fontSize: 12 }}>
-                                    {JSON.stringify(
-                                        {
-                                            input: tool.input_schema,
-                                            output: tool.output_schema,
-                                            annotations: tool.annotations,
-                                        },
-                                        null,
-                                        2
-                                    )}
-                                </Box>
-                            </Box>
                         </Stack>
-                    </CardContent>
-                </Card>
-            ))}
-            <Dialog open={choosing} onClose={() => !busy && setChoosing(false)} maxWidth="md" fullWidth>
-                <DialogTitle>
-                    {usage === 'client'
-                        ? label('chooseOrdinary', 'Choose tools to publish')
-                        : label('chooseServer', 'Choose Server Tools')}
-                </DialogTitle>
-                <DialogContent dividers>
-                    <Typography color="text.secondary" sx={{ mb: 2 }}>
-                        {label(
-                            'chooseToolsHint',
-                            'Add a tool to this usage without changing its other usage. Built-in and external sources share the same tool catalog.'
+                        {route && route.state !== 'connected' && (!asset || !!route.error) && (
+                            <Alert severity={failed ? 'warning' : 'info'} sx={{ mb: 1 }}>
+                                {route.error ||
+                                    (source.enabled === false
+                                        ? workspace(
+                                              'connectionOff',
+                                              'This connection is off. Enable it to discover and use its tools.'
+                                          )
+                                        : workspace(
+                                              'connectionPending',
+                                              'This connection needs to be checked or configured.'
+                                          ))}
+                            </Alert>
                         )}
-                    </Typography>
-                    {catalog
-                        .flatMap((source) => source.tools || [])
-                        .filter(
-                            (tool) =>
-                                !tool.usage[usage] &&
-                                !restricted(tool) &&
-                                !(
-                                    usage === 'client' &&
-                                    tool.source_id === 'advisor' &&
-                                    tool.implementation === 'virtual'
-                                )
-                        )
-                        .map((tool) => (
-                            <Stack
-                                component="article"
-                                aria-label={`${sources.find((source) => source.id === tool.source_id)?.name || tool.source_id} / ${tool.name}`}
-                                key={tool.normalized_name}
-                                direction="row"
-                                sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}
-                            >
-                                <Typography>
-                                    {sources.find((source) => source.id === tool.source_id)?.name || tool.source_id} /{' '}
-                                    {tool.name}
+                        {advisor && (
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                                {workspace(
+                                    'advisorContext',
+                                    'Advisor needs the model conversation. It is only a Server Tool; configure its consultation model in Server Tool and verify it with a model request.'
+                                )}
+                            </Typography>
+                        )}
+                        <Stack spacing={1}>
+                            {tools.map((tool) => (
+                                <MCPToolCard
+                                    key={tool.normalized_name}
+                                    tool={tool}
+                                    source={source}
+                                    mode={mode}
+                                    enabled={enabled}
+                                    busy={busy || loading}
+                                    onChange={(patch) => void policy(tool, patch)}
+                                    onTest={() => setTesting(tool)}
+                                />
+                            ))}
+                            {!loading && route?.state === 'connected' && tools.length === 0 && (
+                                <Typography variant="body2" color="text.secondary">
+                                    {workspace('emptyDiscovery', 'The connection returned no tools.')}
                                 </Typography>
-                                <Button
-                                    disabled={busy}
-                                    onClick={() => void policy(tool, { usage: { ...tool.usage, [usage]: true } })}
-                                >
-                                    {label('addTool', 'Add tool')}
-                                </Button>
-                            </Stack>
-                        ))}
+                            )}
+                        </Stack>
+                    </Box>
+                );
+            })}
+            <Dialog open={choosing} onClose={() => !busy && setChoosing(false)} maxWidth="md" fullWidth>
+                <DialogTitle>{chooserTitle}</DialogTitle>
+                <DialogContent dividers>
+                    {candidates.length === 0 && (
+                        <Typography>{workspace('noAdditionalTools', 'No other available tools to add.')}</Typography>
+                    )}
+                    {candidates.map((tool) => (
+                        <Stack
+                            component="article"
+                            aria-label={`${sources.find((s) => s.id === tool.source_id)?.name || tool.source_id} / ${tool.name}`}
+                            key={tool.normalized_name}
+                            direction="row"
+                            sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1, mb: 1 }}
+                        >
+                            <Typography>
+                                {sources.find((s) => s.id === tool.source_id)?.name || tool.source_id} / {tool.name}
+                            </Typography>
+                            <Button
+                                disabled={busy || loading}
+                                onClick={() => {
+                                    if (mode !== 'asset') void policy(tool, { usage: { ...tool.usage, [mode]: true } });
+                                }}
+                            >
+                                {label('addTool', 'Add tool')}
+                            </Button>
+                        </Stack>
+                    ))}
                 </DialogContent>
                 <DialogActions>
                     <Button disabled={busy} onClick={() => setChoosing(false)}>
@@ -391,44 +270,21 @@ export default function MCPToolsPanel({
                     </Button>
                 </DialogActions>
             </Dialog>
-            <Dialog open={!!testing} onClose={() => !busy && setTesting(null)} maxWidth="md" fullWidth>
-                <DialogTitle>
-                    {testing?.source_id} / {testing?.name}
-                </DialogTitle>
-                <DialogContent dividers>
-                    <Stack spacing={2}>
-                        {error && <Alert severity="error">{error}</Alert>}
-                        <Typography>{testing?.description}</Typography>
-                        <Box component="pre" sx={{ whiteSpace: 'pre-wrap', fontSize: 12 }}>
-                            {JSON.stringify(testing?.input_schema, null, 2)}
-                        </Box>
-                        <TextField
-                            multiline
-                            minRows={5}
-                            label={label('jsonArgs', 'Arguments (JSON)')}
-                            value={args}
-                            onChange={(e) => setArgs(e.target.value)}
-                        />
-                        {result !== null && (
-                            <Box
-                                component="pre"
-                                data-testid="mcp-test-result"
-                                sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
-                            >
-                                {JSON.stringify(result, null, 2)}
-                            </Box>
-                        )}
-                    </Stack>
-                </DialogContent>
-                <DialogActions>
-                    <Button disabled={busy} onClick={() => setTesting(null)}>
-                        {label('close', 'Close')}
-                    </Button>
-                    <Button disabled={busy} onClick={() => void test()}>
-                        {label('run', 'Run')}
-                    </Button>
-                </DialogActions>
-            </Dialog>
+            {testing && (
+                <MCPToolTestDialog
+                    key={testing.normalized_name}
+                    tool={
+                        routes
+                            .flatMap((r) => r.tools)
+                            .find((tool) => tool.normalized_name === testing.normalized_name) || {
+                            ...testing,
+                            enabled: false,
+                        }
+                    }
+                    enabled={enabled}
+                    onClose={() => setTesting(null)}
+                />
+            )}
         </Stack>
     );
 }
