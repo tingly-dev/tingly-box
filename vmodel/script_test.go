@@ -66,6 +66,10 @@ func TestParseScript_Errors(t *testing.T) {
 		{"bad id", "id: has space\nsteps: [200]", "invalid id"},
 		{"non-numeric bare step", "steps: [hello]", "bare step must be an HTTP status"},
 		{"stop_reason from the wrong vocabulary", "steps:\n  - say: x\n    stop_reason: length", `unknown stop_reason "length"`},
+		{"usage typo", "steps:\n  - say: x\n    usage: {input_tokens: 5}", `unknown usage field "input_tokens"`},
+		{"midstream typo", "steps:\n  - midstream: {mode: close, after: 3}", `unknown midstream field "after"`},
+		{"tool_use without a tool", "steps:\n  - say: x\n    stop_reason: tool_use", "needs a tool"},
+		{"tool id with a dot", "steps:\n  - tool: {name: Read, id: a.b}", "tool id"},
 		{"negative repeat", "steps:\n  - repeat: -1", "repeat"},
 		{"error fields on a success step", "steps:\n  - say: ok\n    error_message: boom", "only apply to an error step"},
 	}
@@ -135,4 +139,20 @@ func TestSequence_ToolIDsAreUniquePerServedRequest(t *testing.T) {
 		seen[id] = true
 	}
 	assert.Len(t, seen, 6)
+}
+
+func TestToolID_IsAWellFormedAPIId(t *testing.T) {
+	for _, script := range []string{"v1.2", "has space", "ünï", strings.Repeat("long", 40), ""} {
+		id := toolID(script, 12345)
+		assert.Regexp(t, `^toolu_[A-Za-z0-9_-]+_12345$`, id, script)
+		assert.LessOrEqual(t, len(id), 64, script)
+	}
+}
+
+func TestSequence_ToolWithoutArgumentsCarriesAnEmptyObject(t *testing.T) {
+	cfg, err := ParseScript([]byte("steps:\n  - tool: {name: Done}"), "s")
+	require.NoError(t, err)
+	args := NewSequence(cfg).Next().Tool.Arguments
+	assert.NotNil(t, args)
+	assert.Empty(t, args)
 }

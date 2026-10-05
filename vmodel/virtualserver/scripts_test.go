@@ -322,7 +322,11 @@ func TestScript_StopReasonIsMappedPerProtocol(t *testing.T) {
 		{"tool", "tool_use", "tool_calls"},
 		{"end", "end_turn", "stop"},
 	} {
-		writeScript(t, dir, c.file+".yaml", "steps:\n  - say: x\n    stop_reason: "+c.stop)
+		step := "say: x"
+		if c.stop == "tool_use" {
+			step = "tool: {name: T}"
+		}
+		writeScript(t, dir, c.file+".yaml", "steps:\n  - "+step+"\n    stop_reason: "+c.stop)
 		_, body := postJSON(t, baseURL+"/v1/chat/completions", map[string]any{
 			"model": c.file, "messages": []map[string]string{{"role": "user", "content": "hi"}}})
 		assert.Contains(t, string(body), `"finish_reason":"`+c.openai+`"`, c.stop)
@@ -330,4 +334,41 @@ func TestScript_StopReasonIsMappedPerProtocol(t *testing.T) {
 			"model": c.file, "max_tokens": 16, "messages": []map[string]string{{"role": "user", "content": "hi"}}})
 		assert.Contains(t, string(body), `"stop_reason":"`+c.stop+`"`, c.stop)
 	}
+}
+
+// A tool step carries exactly the author's text: no say means no text block,
+// even when the arguments look like a question (streaming and not alike).
+func TestScript_ToolStepTextIsExactlyWhatTheScriptSays(t *testing.T) {
+	_, dir, baseURL := newScriptService(t)
+	writeScript(t, dir, "ask.yaml", "steps:\n  - tool: {name: AskUserQuestion, arguments: {question: \"Proceed?\"}}\n    repeat: 2")
+	for _, stream := range []bool{false, true} {
+		_, body := postJSON(t, baseURL+"/v1/messages?beta=true", map[string]any{
+			"model": "ask", "max_tokens": 16, "stream": stream,
+			"messages": []map[string]string{{"role": "user", "content": "hi"}}})
+		assert.NotContains(t, string(body), "Proceed?\"}],", "stream=%v: no derived text block", stream)
+		assert.NotContains(t, string(body), `"type":"text"`, "stream=%v", stream)
+		assert.Contains(t, string(body), "AskUserQuestion")
+	}
+}
+
+// A same-size rewrite straight after the previous one must still be noticed
+// (file systems stamp mtime coarsely), and a transient unreadable directory
+// must not unload everything.
+func TestScript_QuickSameSizeRewriteIsNoticed(t *testing.T) {
+	_, dir, baseURL := newScriptService(t)
+	for _, status := range []string{"529", "503", "502", "504"} {
+		writeScript(t, dir, "q.yaml", "steps: ["+status+"]")
+		code, _ := postJSON(t, baseURL+"/v1/chat/completions", map[string]any{
+			"model": "q", "messages": []map[string]string{{"role": "user", "content": "hi"}}})
+		assert.Equal(t, atoiT(t, status), code)
+	}
+}
+
+func atoiT(t *testing.T, s string) int {
+	t.Helper()
+	n := 0
+	for _, c := range s {
+		n = n*10 + int(c-'0')
+	}
+	return n
 }

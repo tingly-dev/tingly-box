@@ -32,6 +32,9 @@ import (
 // tool_use→tool_calls, max_tokens→length).
 var StopReasons = []string{"end_turn", "tool_use", "max_tokens", "stop_sequence"}
 
+// toolIDPattern is the id shape real APIs accept for a tool_use.
+var toolIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
 var scriptIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 // ParseScript decodes and validates one script. fallbackID (typically the file
@@ -88,8 +91,16 @@ func (s SequenceStep) validate() error {
 	if s.Repeat < 0 {
 		return errors.New("repeat must not be negative")
 	}
-	if s.Tool != nil && strings.TrimSpace(s.Tool.Name) == "" {
-		return errors.New("tool needs a name")
+	if s.Tool != nil {
+		if strings.TrimSpace(s.Tool.Name) == "" {
+			return errors.New("tool needs a name")
+		}
+		if s.Tool.ID != "" && !toolIDPattern.MatchString(s.Tool.ID) {
+			return fmt.Errorf("tool id %q: use 1-64 characters of A-Z a-z 0-9 _ -", s.Tool.ID)
+		}
+	}
+	if s.StopReason == "tool_use" && s.Tool == nil {
+		return errors.New("stop_reason tool_use needs a tool")
 	}
 	if s.StopReason != "" && !slices.Contains(StopReasons, s.StopReason) {
 		return fmt.Errorf("unknown stop_reason %q (want one of %s)", s.StopReason, strings.Join(StopReasons, ", "))
