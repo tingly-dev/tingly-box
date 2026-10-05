@@ -209,7 +209,7 @@ export const appRoutes = (
             <Route path="/mcp/tools" element={<MCPRegisteredServers />} />
             <Route path="/mcp/clients" element={<MCPRegisteredServers />} />
             <Route path="/mcp/local-mode" element={<Navigate to="/mcp/clients" replace />} />
-            <Route path="/mcp" element={<Navigate to="/mcp/routes" replace />} />
+            <Route path="/mcp" element={<MCPRegisteredServers />} />
             {/* Tools */}
             <Route path="/tools/servertool" element={<Navigate to="/mcp/server-tools" replace />} />
             {/* Catch-all redirect for unknown routes (also covers legacy /zen/* links) */}

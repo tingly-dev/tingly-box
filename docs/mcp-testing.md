@@ -1,12 +1,28 @@
 # MCP Gateway Testing Guide
 
-The MCP center has five pages: `/mcp/routes` shows effective routes,
-`/mcp/tools` manages ordinary tools exposed to clients, `/mcp/server-tools`
-manages tools executed in the gateway's model tool loop, `/mcp/sources` manages
-upstream connections, and `/mcp/clients` manages downstream profiles.
-The legacy `/tools/servertool` page redirects to `/mcp/server-tools`. Sources can use stdio, Streamable HTTP or SSE. Configuration and
-connection checks remain available when MCP execution is disabled; tool calls
-and downstream transport require the MCP scenario flag to be enabled.
+The MCP navigation has three secondary pages:
+
+- `/mcp`: shared connections overview, source health, actual destinations and the
+  optional effective route graph. Add or repair built-in/external connections here.
+- `/mcp/tools`: ordinary tools called by downstream clients, client grants,
+  installation commands and real saved-client probes.
+- `/mcp/server-tools`: tools executed in the gateway model loop, including
+  Advisor's dedicated consultation provider/model configuration.
+
+The two tool pages expose only their own usage controls. Changing an ordinary
+usage does not change gateway usage, and vice versa. Shared connection enablement
+is explicitly labeled as affecting both pages; global per-tool enablement remains
+in the overview connection panel. Persistent tool catalogs refresh when saved
+source configuration changes, and stale discovery responses cannot restore old
+availability. Adding a source from Server Tool defaults to gateway-only usage.
+
+Existing `/mcp/routes` and `/mcp/sources` links open the overview, while
+`/mcp/clients` opens Tool. Install/profile bookmarks open client panels in Tool;
+source bookmarks open the matching connection panel. Closing a panel stays in its
+current secondary page. Old section/tab links select their corresponding page.
+`/tools/servertool` remains compatible. Connections are stored once and support
+stdio, Streamable HTTP and SSE. Configuration remains available when MCP execution
+is disabled; runtime calls and downstream transport require the MCP scenario flag.
 
 ## Route graph and actual client diagnostics
 
@@ -33,9 +49,10 @@ or disabled grants cannot reach the upstream. A successful tool transport can
 still return `result.isError: true`; inspect both fields.
 This probe does not run model continuation. The harness verifies that separately.
 
-Click an entry for installation instructions, the client gateway node for its
-grants, a source for its status and editor, or the server execution node for the
-separate Server Tools page. “Choose tools” adds one usage while preserving the
+Expand “View calling relationships” to inspect the effective route graph.
+Its client/gateway actions select Tool/Server Tool; source actions open the
+shared connection panel. Client grants and installation commands share one panel
+inside Tool. “Choose tools” adds one usage while preserving the
 other. Execution-disabled routes remain configurable but cannot be probed.
 
 ## Configure a source without replacing existing sources

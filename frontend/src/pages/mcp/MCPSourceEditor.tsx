@@ -1,4 +1,7 @@
 import {
+    Accordion,
+    AccordionDetails,
+    AccordionSummary,
     Box,
     Button,
     Checkbox,
@@ -10,7 +13,7 @@ import {
     ToggleButtonGroup,
     Typography,
 } from '@mui/material';
-import { Add, DeleteOutline } from '@/components/icons';
+import { Add, DeleteOutline, ExpandMore } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
 import type { MCPKVPair, MCPSourceFormValue } from './types';
 
@@ -20,10 +23,21 @@ interface MCPSourceEditorProps {
     onChange: (next: MCPSourceFormValue) => void;
     lockId?: boolean;
     hideTools?: boolean;
+    compact?: boolean;
+    hideUsage?: boolean;
+    hideEnabled?: boolean;
     onUseExample?: () => void;
 }
 
-export default function MCPSourceEditor({ value, onChange, lockId = false, hideTools = false }: MCPSourceEditorProps) {
+export default function MCPSourceEditor({
+    value,
+    onChange,
+    lockId = false,
+    hideTools = false,
+    compact = false,
+    hideUsage = false,
+    hideEnabled = false,
+}: MCPSourceEditorProps) {
     const { t } = useTranslation();
     const label = (key: string, fallback: string) => t(`mcp.center.${key}`, { defaultValue: fallback });
     const set = (patch: Partial<MCPSourceFormValue>) => onChange({ ...value, ...patch });
@@ -76,24 +90,32 @@ export default function MCPSourceEditor({ value, onChange, lockId = false, hideT
     );
     return (
         <Stack spacing={2.5}>
-            <TextField
-                label={label('sourceId', 'Server ID')}
-                value={value.id}
-                disabled={lockId}
-                onChange={(e) => set({ id: e.target.value })}
-                helperText={label(
-                    'idHint',
-                    'Use letters, numbers, underscores or hyphens. This ID remains stable after creation.'
-                )}
-            />
+            {!compact && (
+                <>
+                    <TextField
+                        label={label('sourceId', 'Server ID')}
+                        value={value.id}
+                        disabled={lockId}
+                        onChange={(e) => set({ id: e.target.value })}
+                        helperText={label(
+                            'idHint',
+                            'Use letters, numbers, underscores or hyphens. This ID remains stable after creation.'
+                        )}
+                    />
+                </>
+            )}
             <ToggleButtonGroup
                 exclusive
                 fullWidth
                 value={value.transport}
                 onChange={(_, transport) => transport && set({ transport })}
             >
-                <ToggleButton value="stdio">STDIO</ToggleButton>
-                <ToggleButton value="http">Streamable HTTP</ToggleButton>
+                <ToggleButton value="http">
+                    {compact ? t('mcp.workspace.remoteService', { defaultValue: 'Remote service' }) : 'Streamable HTTP'}
+                </ToggleButton>
+                <ToggleButton value="stdio">
+                    {compact ? t('mcp.workspace.localCommand', { defaultValue: 'Local command' }) : 'STDIO'}
+                </ToggleButton>
                 <ToggleButton value="sse">SSE</ToggleButton>
             </ToggleButtonGroup>
             {value.transport === 'stdio' ? (
@@ -130,11 +152,6 @@ export default function MCPSourceEditor({ value, onChange, lockId = false, hideT
                             {label('addArgument', 'Add argument')}
                         </Button>
                     </Stack>
-                    <TextField
-                        label={label('cwd', 'Working directory')}
-                        value={value.cwd}
-                        onChange={(e) => set({ cwd: e.target.value })}
-                    />
                 </Stack>
             ) : (
                 <Stack spacing={2}>
@@ -144,71 +161,121 @@ export default function MCPSourceEditor({ value, onChange, lockId = false, hideT
                         onChange={(e) => set({ endpoint: e.target.value })}
                         placeholder="https://example.com/mcp"
                     />
-                    {pairs('headers', label('headers', 'Authentication headers'))}
+                    {!compact && pairs('headers', label('headers', 'Authentication headers'))}
                 </Stack>
             )}
-            {pairs('env', label('env', 'Environment variables'))}
-            <TextField
-                label={label('envPassthrough', 'Inherit environment variables')}
-                value={value.envPassthrough.join(' ')}
-                onChange={(e) => set({ envPassthrough: e.target.value.split(/\s+/).filter(Boolean) })}
-                helperText={label('envHint', 'Space-separated names; referenced variables must exist on the server.')}
-            />
-            <Box>
-                <FormControlLabel
-                    control={
-                        <Checkbox
-                            checked={value.useGlobalProxy}
-                            onChange={(e) => set({ useGlobalProxy: e.target.checked })}
+            <Accordion
+                defaultExpanded={!compact}
+                disableGutters
+                elevation={0}
+                sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, '&:before': { display: 'none' } }}
+            >
+                <AccordionSummary expandIcon={<ExpandMore />}>
+                    <Typography variant="body2">
+                        {t('mcp.workspace.connectionAdvanced', {
+                            defaultValue: 'Authentication and advanced connection settings',
+                        })}
+                    </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                    <Stack spacing={2}>
+                        {compact && (
+                            <>
+                                <TextField
+                                    label={label('sourceId', 'Server ID')}
+                                    value={value.id}
+                                    disabled={lockId}
+                                    onChange={(e) => set({ id: e.target.value })}
+                                    helperText={label(
+                                        'idHint',
+                                        'Use letters, numbers, underscores or hyphens. This ID remains stable after creation.'
+                                    )}
+                                />
+                            </>
+                        )}
+                        {compact &&
+                            value.transport !== 'stdio' &&
+                            pairs('headers', label('headers', 'Authentication headers'))}
+                        {value.transport === 'stdio' && (
+                            <>
+                                <TextField
+                                    label={label('cwd', 'Working directory')}
+                                    value={value.cwd}
+                                    onChange={(e) => set({ cwd: e.target.value })}
+                                />
+                            </>
+                        )}
+                        {pairs('env', label('env', 'Environment variables'))}
+                        <TextField
+                            label={label('envPassthrough', 'Inherit environment variables')}
+                            value={value.envPassthrough.join(' ')}
+                            onChange={(e) => set({ envPassthrough: e.target.value.split(/\s+/).filter(Boolean) })}
+                            helperText={label(
+                                'envHint',
+                                'Space-separated names; referenced variables must exist on the server.'
+                            )}
                         />
-                    }
-                    label={label('globalProxy', 'Use global proxy')}
-                />
-                {!value.useGlobalProxy && (
-                    <TextField
-                        fullWidth
-                        label={label('proxy', 'Proxy URL')}
-                        value={value.proxyUrl}
-                        onChange={(e) => set({ proxyUrl: e.target.value })}
+                        <Box>
+                            <FormControlLabel
+                                control={
+                                    <Checkbox
+                                        checked={value.useGlobalProxy}
+                                        onChange={(e) => set({ useGlobalProxy: e.target.checked })}
+                                    />
+                                }
+                                label={label('globalProxy', 'Use global proxy')}
+                            />
+                            {!value.useGlobalProxy && (
+                                <TextField
+                                    fullWidth
+                                    label={label('proxy', 'Proxy URL')}
+                                    value={value.proxyUrl}
+                                    onChange={(e) => set({ proxyUrl: e.target.value })}
+                                />
+                            )}
+                        </Box>
+                    </Stack>
+                </AccordionDetails>
+            </Accordion>
+            {!hideUsage && (
+                <Stack>
+                    <Typography variant="subtitle2">{label('usage', 'Where can these tools be used?')}</Typography>
+                    <FormControlLabel
+                        control={
+                            <Checkbox
+                                checked={value.usage.client}
+                                onChange={(e) => set({ usage: { ...value.usage, client: e.target.checked } })}
+                            />
+                        }
+                        label={label('clientUsage', 'MCP clients')}
                     />
-                )}
-            </Box>
-            <Stack>
-                <Typography variant="subtitle2">{label('usage', 'Where can these tools be used?')}</Typography>
-                <FormControlLabel
-                    control={
-                        <Checkbox
-                            checked={value.usage.client}
-                            onChange={(e) => set({ usage: { ...value.usage, client: e.target.checked } })}
-                        />
-                    }
-                    label={label('clientUsage', 'MCP clients')}
-                />
-                <FormControlLabel
-                    control={
-                        <Checkbox
-                            checked={value.usage.gateway}
-                            onChange={(e) => set({ usage: { ...value.usage, gateway: e.target.checked } })}
-                        />
-                    }
-                    label={label('gatewayUsage', 'Gateway model calls')}
-                />
-            </Stack>
+                    <FormControlLabel
+                        control={
+                            <Checkbox
+                                checked={value.usage.gateway}
+                                onChange={(e) => set({ usage: { ...value.usage, gateway: e.target.checked } })}
+                            />
+                        }
+                        label={label('gatewayUsage', 'Gateway model calls')}
+                    />
+                </Stack>
+            )}
             {!hideTools && (
                 <TextField
                     label={label('allowlist', 'Allowed tools')}
                     value={value.tools.join(' ')}
                     onChange={(e) => set({ tools: e.target.value.split(/\s+/).filter(Boolean) })}
-                    helperText={label(
-                        'allowlistHint',
-                        'Use * for all tools. Fine-tune individual tools in the Capabilities tab.'
-                    )}
+                    helperText={t('mcp.workspace.allowlistHint', {
+                        defaultValue: 'Use * to discover all tools. Choose individual tool usages after connecting.',
+                    })}
                 />
             )}
-            <FormControlLabel
-                control={<Checkbox checked={value.enabled} onChange={(e) => set({ enabled: e.target.checked })} />}
-                label={label('enabled', 'Enabled')}
-            />
+            {!hideEnabled && (
+                <FormControlLabel
+                    control={<Checkbox checked={value.enabled} onChange={(e) => set({ enabled: e.target.checked })} />}
+                    label={label('enabled', 'Enabled')}
+                />
+            )}
         </Stack>
     );
 }
