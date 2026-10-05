@@ -139,6 +139,14 @@ class VModelThroughTB(unittest.TestCase):
             self.tb.chat("by-hand", "x")
         self.assertEqual(ctx.exception.status, 429)
 
+    def test_a_file_declaring_its_own_id_is_served_under_that_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "named-by-file.yaml")
+            with open(path, "w") as f:
+                f.write("id: declared-in-file\nsteps:\n  - say: declared\n")
+            self.assertEqual(self.tb.add(path), "declared-in-file")
+        self.assertEqual(self.tb.chat("declared-in-file", "x")["choices"][0]["message"]["content"], "declared")
+
     def test_attach_serves_scripts_from_an_already_running_tb(self):
         script = vmodel.Script("attached").say("from attach")
         with vmodel.Testbed.attach(script, config_dir=self.tb.config_dir, base_url=self.tb.base_url) as other:
