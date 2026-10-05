@@ -36,6 +36,9 @@ func validateConfig(cfg *typ.MCPRuntimeConfig) error {
 	seen := map[string]bool{}
 	for i := range cfg.Sources {
 		s := &cfg.Sources[i]
+		if s.Origin != "" && s.Origin != "builtin" && s.Origin != "external" {
+			return invalid("unsupported source origin: %s", s.Origin)
+		}
 		if !validID.MatchString(s.ID) || strings.Contains(s.ID, "__") || s.ID == "builtin" {
 			return invalid("invalid source ID: %s", s.ID)
 		}
@@ -165,6 +168,12 @@ func (h *Handler) CreateSource(c *gin.Context) {
 	if err := c.ShouldBindJSON(&source); err != nil {
 		c.JSON(400, MCPRuntimeConfigResponse{Error: err.Error()})
 		return
+	}
+	if source.Origin == "" {
+		source.Origin = "external"
+		if source.Transport == "advisor" {
+			source.Origin = "builtin"
+		}
 	}
 	h.mutate(c, func(cfg *typ.MCPRuntimeConfig) error {
 		for _, s := range cfg.Sources {

@@ -496,6 +496,7 @@ type MCPRuntimeConfig struct {
 
 // MCPSourceConfig defines one MCP source connection.
 type MCPSourceConfig struct {
+	Origin       string                   `json:"origin,omitempty"`     // builtin or external; omitted preserves legacy detection
 	ID           string                   `json:"id,omitempty"`         // unique source id for normalized tool names
 	Name         string                   `json:"name,omitempty"`       // client name (unique, no spaces/hyphens)
 	Enabled      *bool                    `json:"enabled,omitempty"`    // nil means enabled (backward-compatible default)

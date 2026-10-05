@@ -1,10 +1,42 @@
 # MCP Gateway Testing Guide
 
-The MCP center has three pages: `/mcp/sources` manages upstream connections,
-`/mcp/tools` discovers and tests tools, and `/mcp/clients` manages downstream
-profiles. Sources can use stdio, Streamable HTTP or SSE. Configuration and
+The MCP center has five pages: `/mcp/routes` shows effective routes,
+`/mcp/tools` manages ordinary tools exposed to clients, `/mcp/server-tools`
+manages tools executed in the gateway's model tool loop, `/mcp/sources` manages
+upstream connections, and `/mcp/clients` manages downstream profiles.
+The legacy `/tools/servertool` page redirects to `/mcp/server-tools`. Sources can use stdio, Streamable HTTP or SSE. Configuration and
 connection checks remain available when MCP execution is disabled; tool calls
 and downstream transport require the MCP scenario flag to be enabled.
+
+## Route graph and actual client diagnostics
+
+`GET /api/v1/mcp/routing` derives its client and server branches from the same
+source allow lists, tool policies and explicit client grants used at execution.
+`origin: builtin/external` is independent of these usages and of stdio/HTTP/SSE.
+One external source can supply both ordinary tools and Server Tools; built-in
+sources can do the same. Advisor requires model conversation context and is
+restricted to Server Tools even when legacy client usage is configured. It is
+not offered as an ordinary tool or standalone tool test. It is the special in-process branch and expands
+into its configured consultation provider/model and return to the model loop.
+Failed intended sources remain visible with no fabricated reachable tools.
+The display projection omits connection credentials, environment values, command
+arguments, URL user information and query strings, and raw transport diagnostics.
+Source configuration and full tool test results remain in the authenticated
+management API. Discovery indicates tool availability, not a successful model call.
+
+`POST /api/v1/mcp/client-profiles/reader/probe` with `{}` checks initialize and
+paginated tools/list through the actual authenticated local MCP HTTP endpoint.
+It uses the configured server port and saved user authentication, never a caller
+supplied Host or target URL. Sending a normalized `tool_name` and `arguments`
+additionally executes that tool only when it is listed for this client. Revoked
+or disabled grants cannot reach the upstream. A successful tool transport can
+still return `result.isError: true`; inspect both fields.
+This probe does not run model continuation. The harness verifies that separately.
+
+Click an entry for installation instructions, the client gateway node for its
+grants, a source for its status and editor, or the server execution node for the
+separate Server Tools page. “Choose tools” adds one usage while preserving the
+other. Execution-disabled routes remain configurable but cannot be probed.
 
 ## Configure a source without replacing existing sources
 
@@ -122,3 +154,11 @@ SDK interoperability and live grant revocation. Frontend tests cover form
 round trips, partial discovery failure, tool tests, routes and failed-save
 retention. Generate OpenAPI through the CLI before `pnpm gen:api`; do not edit
 generated schemas manually.
+
+The routing exposure harness adds 14 HTTP/SSE cases covering client-only,
+server-only, dual, neither, revoked grant, disabled tool and source allow-list
+exclusion. It compares the graph against a real authenticated SDK connection
+and tools/list, then proves blocked calls never reach the real upstream handler.
+An additional Advisor case verifies a legacy dual-use configuration exposes it
+only in the model loop, with no callable tools in the ordinary SDK client.
+Run `go test ./internal/protocoltest -run TestMCPRoutingExposure` for this subset.
