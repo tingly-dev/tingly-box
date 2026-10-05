@@ -14,6 +14,8 @@ export interface ResourceItem {
   window: QuotaWindow;
   /** "3/4" for vouchers (available / total), otherwise the number of entries. */
   countLabel: string;
+  /** Vouchers only: none left, so the marker should not read as healthy. */
+  exhausted?: boolean;
   /** The individual entries of the group, for the detailed hover. */
   entries: ResourceEntry[];
   tooltipContent: React.ReactNode;
@@ -84,6 +86,7 @@ export function useQuotaBars(quota: ProviderQuota | undefined): {
           unit: 'percent' as const,
         } as QuotaWindow,
         countLabel: voucher ? `${available}/${total}` : `${total}`,
+        exhausted: voucher && available === 0,
         entries,
         tooltipContent,
       };

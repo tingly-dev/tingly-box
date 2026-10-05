@@ -65,6 +65,8 @@ interface CellLine {
     /** Remaining share, for the ring; only allowance and wallet have one. */
     remaining?: number;
     text: string;
+    /** Resource only: nothing left, shown as a muted dot. */
+    exhausted?: boolean;
 }
 
 /**
@@ -120,6 +122,7 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
         .map(r => ({
             item: { key: `resource:${r.key}`, label: r.window.label ?? r.key, window: r.window },
             kind: 'resource' as const,
+            exhausted: r.exhausted,
             text: r.countLabel,
         }));
     const lines = [...primary, ...resources.slice(0, Math.max(0, MAX_LINES - primary.length))];
@@ -181,7 +184,7 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
                 })}
                 {resourceItems.map(item => (
                     <Box key={item.key} sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        <TooltipRow dot label={item.window.label ?? item.key} value={item.countLabel} />
+                        <TooltipRow dot dotMuted={item.exhausted} label={item.window.label ?? item.key} value={item.countLabel} />
                         {item.entries.map(({ key, label, window }) => {
                             const voucher = window.unit === 'credits' && window.limit === 1;
                             const resetsAt = window.resets_at ? new Date(window.resets_at).getTime() : NaN;
@@ -263,7 +266,7 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
                     return (
                         <Box key={line.item.key} sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
                             {line.kind === 'resource' ? (
-                                <ResourceDot size={14} />
+                                <ResourceDot size={14} muted={line.exhausted} />
                             ) : remaining != null ? (
                                 <Box component="span" sx={{ display: 'inline-flex', ...(refreshing && quotaRingSpinSx) }}>
                                     {/* While refreshing, a fixed quarter arc spins like a loader — the
@@ -364,12 +367,12 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
 /**
  * Marks a resource (credits, per-model entries) in the ring's slot. These are
  * counts of things, not shares of a cap, so a ring would imply a proportion —
- * a dot only says "there is one here".
+ * a dot only says "there is one here" — green while any is left, muted once all are spent.
  */
-function ResourceDot({ size }: { size: number }) {
+function ResourceDot({ size, muted }: { size: number; muted?: boolean }) {
     return (
         <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: size, height: size, flexShrink: 0 }}>
-            <Box component="span" sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'text.disabled' }} />
+            <Box component="span" sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: muted ? 'text.disabled' : QUOTA_COLORS.success }} />
         </Box>
     );
 }
@@ -415,10 +418,11 @@ function TooltipAction({ icon, label, disabled, onClick }: {
  * its full name, and the figure right-aligned so a column of figures lines up;
  * the reset time sits underneath in the secondary color.
  */
-function TooltipRow({ remaining, dot, label, value, detail, indent }: {
+function TooltipRow({ remaining, dot, dotMuted, label, value, detail, indent }: {
     remaining?: number;
     /** A dot instead of a ring: the row is an item or a group, not a share of a cap. */
     dot?: boolean;
+    dotMuted?: boolean;
     /** A child entry of the group row above: shifted right, no ring slot of its own. */
     indent?: boolean;
     label: ReactNode;
@@ -429,7 +433,7 @@ function TooltipRow({ remaining, dot, label, value, detail, indent }: {
         <Box sx={{ display: 'grid', gridTemplateColumns: '12px 1fr auto', columnGap: 1, alignItems: 'center', pl: indent ? 2.5 : 0 }}>
             <Box sx={{ display: 'inline-flex' }}>
                 {dot
-                    ? <ResourceDot size={12} />
+                    ? <ResourceDot size={12} muted={dotMuted} />
                     : remaining != null && <QuotaRing remaining={remaining} color={quotaRingColor(remaining)} size={12} />}
             </Box>
             <Typography variant="caption" sx={{ color: 'text.secondary', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
