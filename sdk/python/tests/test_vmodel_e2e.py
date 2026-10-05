@@ -68,16 +68,14 @@ class VModelThroughTB(unittest.TestCase):
         self.assertEqual(done["stop_reason"], "end_turn")
         self.assertEqual(done["content"][0]["text"], "Done.")
 
-    def test_one_script_one_cursor_across_both_protocols(self):
+    def test_each_protocol_runs_its_own_copy_of_the_script(self):
         model = self.fresh(FLOW)
-        first = self.tb.messages(model, "go")                 # step 1: Read, over Anthropic
-        self.assertEqual(first["content"][1]["name"], "Read")
-        second = self.tb.chat(model, "(tool result)")["choices"][0]  # step 2: Edit, over OpenAI
-        self.assertEqual(second["finish_reason"], "tool_calls")
-        self.assertEqual(second["message"]["tool_calls"][0]["function"]["name"], "Edit")
-        with self.assertRaises(TinglyError) as ctx:           # step 3: the 529, over Anthropic again
-            self.tb.messages(model, "(tool result)")
-        self.assertEqual(ctx.exception.status, 529)
+        self.assertEqual(self.tb.messages(model, "go")["content"][1]["name"], "Read")      # Anthropic: step 1
+        first = self.tb.chat(model, "go")["choices"][0]                                     # OpenAI: its own step 1
+        self.assertEqual(first["message"]["tool_calls"][0]["function"]["name"], "Read")
+        self.assertEqual(first["finish_reason"], "tool_calls")
+        edit = [b for b in self.tb.messages(model, "next")["content"] if b["type"] == "tool_use"][0]
+        self.assertEqual(edit["name"], "Edit", "the OpenAI call did not consume an Anthropic step")
 
     def test_mid_stream_cuts_are_visible_on_the_wire(self):
         model = self.fresh(FLAKY)
