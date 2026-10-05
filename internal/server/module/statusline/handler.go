@@ -34,6 +34,22 @@ type Handler struct {
 	quotaMgr     QuotaManager // quota manager for fetching quota
 }
 
+// statusLineQuotaBlacklist lists upstream provider types whose quota stays out
+// of the status line. A tingly-box upstream relays its whole quota as one blob
+// (every window of every provider behind it), far too much for one line.
+var statusLineQuotaBlacklist = map[quota.ProviderType]bool{
+	quota.ProviderTypeTinglyBox: true,
+}
+
+// quotaForStatusLine returns the usage to show, or nil if the upstream is
+// blacklisted. Only the status line filters; Desk still shows relayed quota.
+func quotaForStatusLine(usage *quota.ProviderUsage) *quota.ProviderUsage {
+	if usage == nil || statusLineQuotaBlacklist[usage.ProviderType] {
+		return nil
+	}
+	return usage
+}
+
 // QuotaManager defines the quota manager interface
 type QuotaManager interface {
 	GetQuota(ctx context.Context, providerUUID string) (*quota.ProviderUsage, error)
@@ -387,6 +403,10 @@ func (h *Handler) populateQuotaData(resp *CombinedStatusData, providerUUID strin
 		return
 	}
 
+	if usage = quotaForStatusLine(usage); usage == nil {
+		return
+	}
+
 	// The tightest window is the one the next request will hit.
 	window := usage.Tightest()
 	if window == nil {
@@ -420,7 +440,7 @@ func (h *Handler) buildQuotaInline(mapping *tbModelMappingResult) string {
 		return ""
 	}
 
-	return formatQuotaInline(usage)
+	return formatQuotaInline(quotaForStatusLine(usage))
 }
 
 func formatQuotaInline(usage *quota.ProviderUsage) string {

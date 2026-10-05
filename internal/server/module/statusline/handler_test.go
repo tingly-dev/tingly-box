@@ -748,3 +748,13 @@ func TestLocationPartsWorktreeBranchWins(t *testing.T) {
 func TestShortenPathWindows(t *testing.T) {
 	assert.Equal(t, "~/.../b/repo", shortenPath(`C:\a\b\repo`))
 }
+
+func TestQuotaForStatusLineSkipsTinglyBoxUpstream(t *testing.T) {
+	windows := []*quota.UsageWindow{{Type: quota.WindowTypeSession, Used: 30, Limit: 100, Unit: quota.UsageUnitPercent}}
+	relayed := &quota.ProviderUsage{ProviderType: quota.ProviderTypeTinglyBox, Windows: windows}
+	direct := &quota.ProviderUsage{ProviderType: quota.ProviderTypeAnthropic, Windows: windows}
+
+	assert.Empty(t, formatQuotaInline(quotaForStatusLine(relayed)))
+	assert.Equal(t, " | Quota: 70% left", formatQuotaInline(quotaForStatusLine(direct)))
+	assert.Empty(t, formatQuotaInline(quotaForStatusLine(nil)))
+}
