@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MCPToolsPanel from './MCPToolsPanel';
 import type { MCPSourceConfig } from './types';
@@ -33,11 +33,48 @@ beforeEach(() => {
 });
 
 describe('MCP capability controls', () => {
+    it('refreshes a persistent page after shared configuration changes and ignores stale discovery', async () => {
+        let finishOldDiscovery!: (response: unknown) => void;
+        const stale = new Promise((resolve) => {
+            finishOldDiscovery = resolve;
+        });
+        const view = render(<MCPToolsPanel sources={[source]} enabled scopeOnly saveSource={mocks.save} />);
+        expect(await screen.findByText('remote / echo')).toBeInTheDocument();
+        expect(screen.queryByRole('checkbox', { name: 'Enabled' })).toBeNull();
+        mocks.catalog.mockReturnValueOnce(stale);
+        view.rerender(
+            <MCPToolsPanel sources={[{ ...source, name: 'Updated' }]} enabled scopeOnly saveSource={mocks.save} />
+        );
+        await waitFor(() => expect(mocks.catalog).toHaveBeenCalledTimes(2));
+        mocks.catalog.mockResolvedValueOnce({
+            success: true,
+            sources: [
+                {
+                    source_id: 'remote',
+                    state: 'connected',
+                    tools: [{ ...tool, usage: { client: false, gateway: true } }],
+                },
+            ],
+        });
+        view.rerender(
+            <MCPToolsPanel sources={[{ ...source, name: 'Current' }]} enabled scopeOnly saveSource={mocks.save} />
+        );
+        await waitFor(() => expect(screen.queryByText('Current / echo')).toBeNull());
+        await waitFor(() => expect(mocks.catalog).toHaveBeenCalledTimes(3));
+        await act(async () => {
+            finishOldDiscovery({
+                success: true,
+                sources: [{ source_id: 'remote', state: 'connected', tools: [tool] }],
+            });
+            await stale;
+        });
+        expect(screen.queryByText('Current / echo')).toBeNull();
+    });
     it('keeps available tools visible when another server fails and preserves tool policies on edit', async () => {
         render(<MCPToolsPanel sources={[source]} enabled saveSource={mocks.save} />);
         expect(await screen.findByText('remote / echo')).toBeInTheDocument();
         expect(screen.getByText('failed: Connection refused')).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Use as an ordinary tool' }));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Expose through MCP' }));
         await waitFor(() =>
             expect(mocks.save).toHaveBeenCalledWith({
                 id: 'remote',
@@ -59,11 +96,11 @@ describe('MCP capability controls', () => {
         render(<MCPToolsPanel sources={[source]} enabled saveSource={mocks.save} />);
         expect(
             await screen.findByText(
-                'No tools are assigned to this section. Enable the corresponding usage in Tool sources.'
+                'No tools are assigned to this section. Choose tools to enable them for this purpose.'
             )
         ).toBeInTheDocument();
         expect(screen.queryByText('remote / echo')).toBeNull();
-        fireEvent.click(screen.getByRole('button', { name: 'Choose tools' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Choose tools to publish' }));
         fireEvent.click(await screen.findByRole('button', { name: 'Add tool' }));
         await waitFor(() =>
             expect(mocks.save).toHaveBeenCalledWith({
@@ -119,5 +156,37 @@ describe('MCP capability controls', () => {
         expect(result).toHaveTextContent('isError');
         expect(result).toHaveTextContent('AQID');
         expect(mocks.call).toHaveBeenCalledWith({ source_id: 'remote', tool_name: 'echo', arguments: { q: 'test' } });
+    });
+    it('shows unpublished assets in Tool and changes global enablement without changing publication', async () => {
+        mocks.catalog.mockResolvedValue({
+            success: true,
+            sources: [
+                {
+                    source_id: 'remote',
+                    state: 'connected',
+                    tools: [{ ...tool, usage: { client: false, gateway: false } }],
+                },
+            ],
+        });
+        render(<MCPToolsPanel sources={[source]} enabled assetsOnly saveSource={mocks.save} />);
+        expect(await screen.findByText('remote / echo')).toBeInTheDocument();
+        expect(screen.queryByRole('checkbox', { name: 'Expose through MCP' })).toBeNull();
+        expect(screen.queryByRole('checkbox', { name: 'Use as a Server Tool' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Choose tools to publish' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Test tool' })).toBeEnabled();
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Enabled' }));
+        await waitFor(() =>
+            expect(mocks.save).toHaveBeenCalledWith({
+                id: 'remote',
+                tool_policies: { other: { enabled: false }, echo: { enabled: false } },
+            })
+        );
+    });
+    it.each(['client', 'gateway'] as const)('limits %s catalog controls to that purpose', async (usage) => {
+        render(<MCPToolsPanel sources={[source]} enabled scopeOnly usage={usage} saveSource={mocks.save} />);
+        expect(await screen.findByText('remote / echo')).toBeInTheDocument();
+        expect(screen.queryByRole('checkbox', { name: 'Enabled' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Test tool' })).toBeNull();
+        expect(screen.getAllByRole('checkbox')).toHaveLength(1);
     });
 });

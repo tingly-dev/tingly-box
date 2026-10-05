@@ -307,13 +307,11 @@ export function useActivityItems(): ActivityItem[] {
                 key: 'tools' as const,
                 icon: <IconTools sx={{ fontSize: 22 }} />,
                 label: t('layout.tools', { defaultValue: 'Tools' }),
-                defaultPath: '/mcp/routes',
+                defaultPath: '/mcp',
                 children: [
-                    { path: '/mcp/routes', label: t('mcp.center.routes', { defaultValue: 'MCP routes' }), icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
-                    { path: '/mcp/tools', label: t('mcp.center.ordinaryTools', { defaultValue: 'Ordinary tools' }), icon: <IconServer sx={{ fontSize: 20 }} /> },
-                    { path: '/mcp/server-tools', label: t('mcp.center.serverTools', { defaultValue: 'Server Tools' }), icon: <IconServer sx={{ fontSize: 20 }} /> },
-                    { path: '/mcp/sources', label: t('mcp.center.sources', { defaultValue: 'Tool sources' }), icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
-                    { path: '/mcp/clients', label: t('mcp.center.clients', { defaultValue: 'Client access' }), icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
+                    { path: '/mcp', label: t('mcp.workspace.overviewNav', { defaultValue: 'MCP' }), icon: <SettingsApplications sx={{ fontSize: 20 }} />, match: (path: string) => ['/mcp', '/mcp/routes', '/mcp/clients', '/mcp/local-mode'].includes(path) },
+                    { path: '/mcp/tools', label: 'Tool', icon: <IconTerminal sx={{ fontSize: 20 }} />, match: (path: string) => ['/mcp/tools', '/mcp/sources'].includes(path) },
+                    { path: '/mcp/server-tools', label: 'Server Tool', icon: <IconServer sx={{ fontSize: 20 }} />, match: (path: string) => ['/mcp/server-tools', '/tools/servertool'].includes(path) },
                 ],
             }] as ActivityItem[],
             ...(enableGuardrails ? [{
