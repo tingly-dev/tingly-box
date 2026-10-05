@@ -21,6 +21,7 @@ import {
     StyledSmartNodePrimary,
     StyledSmartNodeWrapper,
 } from './styles.tsx';
+import { fontSizes } from '@/theme/fonts';
 
 export interface SmartNodeProps {
     smartRouting: SmartRouting;
@@ -93,7 +94,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                fontSize: '0.6rem',
+                                fontSize: fontSizes.micro,
                                 fontWeight: 700,
                                 flexShrink: 0,
                                 lineHeight: 1,
@@ -105,7 +106,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
 
                     <Typography
                         sx={{
-                            fontSize: '0.7rem',
+                            fontSize: fontSizes.xs,
                             fontWeight: 700,
                             color: 'text.secondary',
                             flexGrow: 1,
@@ -176,7 +177,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                     >
                         <Typography
                             sx={{
-                                fontSize: '0.7rem',
+                                fontSize: fontSizes.xs,
                                 color: 'text.disabled',
                                 fontStyle: 'italic',
                                 textAlign: 'center',
@@ -220,7 +221,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                         component="span"
                                         sx={{
                                             ...NODE_LAYER_STYLES.typography,
-                                            fontSize: '0.75rem',
+                                            fontSize: fontSizes.sm,
                                             fontWeight: 500,
                                             color: 'text.secondary',
                                             width: '100%',
@@ -235,7 +236,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                         component="span"
                                         sx={{
                                             ...NODE_LAYER_STYLES.typography,
-                                            fontSize: '0.75rem',
+                                            fontSize: fontSizes.sm,
                                             fontWeight: 400,
                                             color: 'text.secondary',
                                             flexShrink: 0,
@@ -250,7 +251,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                             component="span"
                                             sx={{
                                                 ...NODE_LAYER_STYLES.typography,
-                                                fontSize: '0.75rem',
+                                                fontSize: fontSizes.sm,
                                                 fontWeight: 400,
                                                 color: 'text.secondary',
                                                 overflow: 'hidden',

@@ -9,3 +9,16 @@ export const fontSans =
 // Modern coding fonts first, then broad OS fallbacks.
 export const fontMono =
   '"Fira Code", "Cascadia Code", ui-monospace, "SF Mono", Consolas, Menlo, Monaco, "Courier New", monospace';
+
+// Small-text size scale. Dozens of call sites used to hand-pick values between
+// 0.6rem and 0.86rem (0.62, 0.68, 0.72, 0.76, 0.78, 0.8125, 0.82 ...), so the
+// same "small label" came out at a different size on every page. Use these
+// instead of a literal; values are the nearest step of the old spread, so no
+// call site moves by more than ~0.5px.
+export const fontSizes = {
+  micro: '0.65rem', // 10.4px — badges, kbd hints, dense chips
+  xs: '0.7rem', //   11.2px — secondary meta
+  sm: '0.75rem', //  12px   — captions, helper text
+  md: '0.8rem', //   12.8px — compact body (matches theme body2)
+  lg: '0.85rem', //  13.6px — compact emphasis
+} as const;

@@ -12,7 +12,7 @@ import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import type { ProbeResult, ProbeProtocol, ProbeTargetType } from '@/types/probe';
 import { CopyIconButton } from '@/components/CopyIconButton';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 // ResultSections: the probe result vocabulary shared by the probe dialog and
 // the Bench page — one-glance verdict (StatusBar), the request's path
@@ -103,7 +103,7 @@ export const JourneyRow = memo(({ label, value, muted }: { label: string; value:
     const theme = useTheme();
     return (
         <Box sx={{ display: 'flex', alignItems: 'baseline', py: 0.75, borderBottom: `1px solid ${theme.palette.divider}` }}>
-            <Typography sx={{ width: 92, flexShrink: 0, color: 'text.secondary', fontSize: '0.78rem' }}>
+            <Typography sx={{ width: 92, flexShrink: 0, color: 'text.secondary', fontSize: fontSizes.md }}>
                 {label}
             </Typography>
             <Box
@@ -111,7 +111,7 @@ export const JourneyRow = memo(({ label, value, muted }: { label: string; value:
                     flex: 1,
                     minWidth: 0,
                     fontFamily: fontMono,
-                    fontSize: '0.78rem',
+                    fontSize: fontSizes.md,
                     color: muted ? 'text.disabled' : 'text.primary',
                     wordBreak: 'break-all',
                 }}
@@ -279,7 +279,7 @@ export const StatusBar = memo(({ result }: { result: ProbeResult }) => {
                     variant="body2"
                     sx={{
                         fontFamily: fontMono,
-                        fontSize: '0.85rem',
+                        fontSize: fontSizes.lg,
                         mt: 1,
                         color: 'text.primary',
                         wordBreak: 'break-word',

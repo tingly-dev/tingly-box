@@ -59,7 +59,7 @@ import {
     type MatteSpec,
     type TileRect,
 } from '@tingly/vision';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 // Rows, columns, frame duration and loop count are all numbers you nudge
 // while watching the result, so each is a stepper with a typable field rather
@@ -961,12 +961,12 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                     size="small"
                                     disabled={isFullCrop(crop)}
                                     onClick={() => setCrop(FULL_CROP)}
-                                    sx={{ minWidth: 0, px: 0.75, py: 0, fontSize: '0.72rem' }}
+                                    sx={{ minWidth: 0, px: 0.75, py: 0, fontSize: fontSizes.xs }}
                                 >
                                     {t('playground.slice.frameReset', { defaultValue: 'Whole image' })}
                                 </Button>
                             </Stack>
-                            <Typography variant="body2" sx={{ fontFamily: fontMono, fontSize: '0.78rem' }}>
+                            <Typography variant="body2" sx={{ fontFamily: fontMono, fontSize: fontSizes.md }}>
                                 {t('playground.slice.frameValue', {
                                     defaultValue: '{{width}}×{{height}} px at {{x}},{{y}}',
                                     width: Math.round(crop.width * naturalWidth),

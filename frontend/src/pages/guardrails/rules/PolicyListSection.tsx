@@ -3,6 +3,7 @@ import { DeleteOutline } from '@/components/icons';
 import EmptyState from '@/components/EmptyState';
 import { getEffectivePolicyState, buildPolicySummary } from './policyPresentation';
 import type { DisplayPolicy, PolicyGroup } from './types';
+import { fontSizes } from '@/theme/fonts';
 
 type PolicyListSectionProps = {
     title: string;
@@ -115,7 +116,7 @@ const PolicyListSection = ({
                                                 size="small"
                                                 label="Built-in"
                                                 variant="outlined"
-                                                sx={{ height: 20, fontSize: '0.7rem', '& .MuiChip-label': { px: 0.5 } }}
+                                                sx={{ height: 20, fontSize: fontSizes.xs, '& .MuiChip-label': { px: 0.5 } }}
                                             />
                                         )}
                                         {effectiveState.inheritedDisabled && (

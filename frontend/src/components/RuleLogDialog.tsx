@@ -10,6 +10,7 @@ import {
 import { Close as CloseIcon } from '@/components/icons';
 import LogExplorer from '@/components/LogExplorer';
 import { useTranslation } from 'react-i18next';
+import { fontSizes } from '@/theme/fonts';
 
 interface ScenarioLogDialogProps {
     open: boolean;
@@ -34,7 +35,7 @@ const ScenarioLogDialog = ({ open, onClose, scenario }: ScenarioLogDialogProps) 
                         alignItems: "center"
                     }}>
                         <Typography variant="h6">{t('templateActions.troubleshoot')}</Typography>
-                        <Chip label={scenario} size="small" variant="outlined" sx={{ fontSize: '0.72rem', height: 22 }} />
+                        <Chip label={scenario} size="small" variant="outlined" sx={{ fontSize: fontSizes.xs, height: 22 }} />
                     </Stack>
                     <IconButton size="small" onClick={onClose}>
                         <CloseIcon />

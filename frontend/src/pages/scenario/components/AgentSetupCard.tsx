@@ -25,7 +25,7 @@ import { EntryGuideDialog } from '@/components/tier/EntryGuideDialog';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { removeSyncedItem, setSyncedItem } from '@/services/uiPrefs';
 import { timeAgo } from '@/utils/timeAgo';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 export interface AgentApplyResult {
     success: boolean;
@@ -104,7 +104,7 @@ const StepIndicator: React.FC<{ step: number; done: boolean; active: boolean }> 
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             bgcolor: active ? 'primary.main' : 'action.disabledBackground',
             color: active ? 'primary.contrastText' : 'text.disabled',
-            fontSize: '0.7rem', fontWeight: 700,
+            fontSize: fontSizes.xs, fontWeight: 700,
         }}>
             {step}
         </Box>
@@ -333,7 +333,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         label={progressLabel}
                         size="small"
                         color={progressColor as any}
-                        sx={{ height: 20, fontSize: '0.75rem' }}
+                        sx={{ height: 20, fontSize: fontSizes.sm }}
                     />
                     {collapsed && !allDone && (
                         <Typography
@@ -356,7 +356,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         size="small"
                         variant="text"
                         onClick={handleReset}
-                        sx={{ py: 0, textTransform: 'none', color: 'text.secondary', minWidth: 0, fontSize: '0.75rem' }}
+                        sx={{ py: 0, textTransform: 'none', color: 'text.secondary', minWidth: 0, fontSize: fontSizes.sm }}
                     >
                         {t('agentSetup.resetProgress')}
                     </Button>

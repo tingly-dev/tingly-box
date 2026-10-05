@@ -12,7 +12,7 @@ import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 // CodexPrefs mirrors the Go struct in internal/config (CodexPrefs).
 // Keys are the literal Codex config.toml keys so the object round-trips
@@ -233,7 +233,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                         borderRadius: 0.75,
                         bgcolor: 'action.hover',
                         fontFamily: fontMono,
-                        fontSize: '0.72rem',
+                        fontSize: fontSizes.xs,
                         color: 'text.secondary',
                         whiteSpace: 'nowrap',
                     }}
@@ -256,7 +256,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                         value={value}
                         displayEmpty
                         onChange={(e) => setValue(e.target.value)}
-                        sx={{ minWidth: 160, fontSize: '0.85rem' }}
+                        sx={{ minWidth: 160, fontSize: fontSizes.lg }}
                     >
                         <MenuItem value={UNSET}>
                             <Typography variant="body2" sx={{
@@ -264,7 +264,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                             }}>{unsetLabel}</Typography>
                         </MenuItem>
                         {field.enumValues!.map((v) => (
-                            <MenuItem key={v} value={v} sx={{ fontFamily: fontMono, fontSize: '0.85rem' }}>{v}</MenuItem>
+                            <MenuItem key={v} value={v} sx={{ fontFamily: fontMono, fontSize: fontSizes.lg }}>{v}</MenuItem>
                         ))}
                     </Select>
                 )}
@@ -345,7 +345,7 @@ const CodexQuickConfig: React.FC<CodexQuickConfigProps> = ({ prefs, setPrefs, wr
                             sx={{
                                 px: 0.75, py: 0.25, borderRadius: 0.75,
                                 bgcolor: 'action.hover', fontFamily: fontMono,
-                                fontSize: '0.72rem', color: 'text.secondary', whiteSpace: 'nowrap',
+                                fontSize: fontSizes.xs, color: 'text.secondary', whiteSpace: 'nowrap',
                             }}
                         >
                             ~/.codex/tingly-model-catalog.json

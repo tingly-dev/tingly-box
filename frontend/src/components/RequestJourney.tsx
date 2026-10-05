@@ -1,7 +1,7 @@
 import { Box, Chip, Collapse, Stack, Typography } from '@mui/material';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { ModelRequestEvent } from '@/components/AILogViewer';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 // RequestJourney is the single answer to "how did this request go".
 //
@@ -195,7 +195,7 @@ const KindBadge = ({ kind, tone }: { kind: JourneyRow['kind']; tone: RowTone }) 
         sx={{
             width: 58,
             height: 17,
-            fontSize: '0.58rem',
+            fontSize: fontSizes.micro,
             fontWeight: 700,
             letterSpacing: '0.04em',
             textTransform: 'uppercase',
@@ -220,7 +220,7 @@ const RoutingRules = ({ rules, matched }: { rules: RoutingRule[]; matched: numbe
                 <Typography
                     sx={{
                         fontFamily: fontMono,
-                        fontSize: '0.68rem',
+                        fontSize: fontSizes.xs,
                         color: matched === rule.rule_index ? 'success.main' : 'text.disabled',
                     }}
                 >
@@ -229,7 +229,7 @@ const RoutingRules = ({ rules, matched }: { rules: RoutingRule[]; matched: numbe
                 {rule.ops?.map((op, i) => (
                     <Typography
                         key={i}
-                        sx={{ fontFamily: fontMono, fontSize: '0.68rem', color: 'text.disabled', pl: 2 }}
+                        sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'text.disabled', pl: 2 }}
                     >
                         {op.position}.{op.operation} — {op.reason}
                     </Typography>
@@ -302,7 +302,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                             <Typography
                                 sx={{
                                     fontFamily: fontMono,
-                                    fontSize: '0.73rem',
+                                    fontSize: fontSizes.sm,
                                     fontWeight: 500,
                                     color: row.kind === 'stage' ? 'text.primary' : 'text.secondary',
                                     whiteSpace: 'nowrap',
@@ -317,7 +317,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                             <Typography
                                 sx={{
                                     fontFamily: fontMono,
-                                    fontSize: '0.72rem',
+                                    fontSize: fontSizes.xs,
                                     color: toneColor(row.tone),
                                     whiteSpace: 'nowrap',
                                     overflow: 'hidden',
@@ -332,7 +332,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                                 <Typography
                                     sx={{
                                         fontFamily: fontMono,
-                                        fontSize: '0.72rem',
+                                        fontSize: fontSizes.xs,
                                         color: row.tone === 'error' ? 'error.main' : 'text.secondary',
                                         whiteSpace: 'nowrap',
                                     }}
@@ -343,7 +343,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                         </Box>
                         <Box {...cell}>
                             <Typography
-                                sx={{ fontFamily: fontMono, fontSize: '0.7rem', color: 'text.disabled', textAlign: 'right' }}
+                                sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'text.disabled', textAlign: 'right' }}
                             >
                                 {row.durationMs != null ? formatDuration(row.durationMs) : ''}
                             </Typography>
@@ -358,7 +358,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                                     {row.payload.map(([k, v]) => (
                                         <Typography
                                             key={k}
-                                            sx={{ fontFamily: fontMono, fontSize: '0.68rem', color: 'text.disabled', wordBreak: 'break-all' }}
+                                            sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'text.disabled', wordBreak: 'break-all' }}
                                         >
                                             {k}={v}
                                         </Typography>

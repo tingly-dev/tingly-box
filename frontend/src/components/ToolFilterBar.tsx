@@ -19,6 +19,7 @@
 
 import React from 'react';
 import { Box } from '@mui/material';
+import { fontSizes } from '@/theme/fonts';
 
 export type ToolFilter = 'all' | 'active' | 'off';
 
@@ -64,7 +65,7 @@ export const ToolFilterBar: React.FC<ToolFilterBarProps> = ({
                     cursor: 'pointer',
                     bgcolor: 'transparent',
                     color: 'rgb(107, 114, 128)',
-                    fontSize: '0.8125rem',
+                    fontSize: fontSizes.md,
                     fontWeight: 600,
                     lineHeight: 1,
                     transition: 'color 0.15s',
@@ -104,7 +105,7 @@ export const ToolFilterBar: React.FC<ToolFilterBarProps> = ({
                             cursor: 'pointer',
                             bgcolor: selected ? 'rgb(255, 255, 255)' : 'transparent',
                             color: selected ? 'rgb(13, 17, 23)' : 'rgb(107, 114, 128)',
-                            fontSize: '0.8125rem',
+                            fontSize: fontSizes.md,
                             fontWeight: 600,
                             lineHeight: 1,
                             boxShadow: selected ? 'rgba(0, 0, 0, 0.06) 0px 1px 2px 0px' : 'none',

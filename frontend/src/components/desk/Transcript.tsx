@@ -7,7 +7,7 @@ import {useTranslation} from 'react-i18next';
 import type {ActivityStep, TaskState, TranscriptBlock} from './deskUtils';
 import {agentReport, formatTokens, toolSummary} from './deskUtils';
 import Markdown from './Markdown';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 interface TranscriptProps {
     blocks: TranscriptBlock[];
@@ -18,7 +18,7 @@ interface TranscriptProps {
     onRespond: (requestId: string, approved: boolean, answer: string) => Promise<void>;
 }
 
-const mono = {fontFamily: fontMono, fontSize: '0.8rem'};
+const mono = {fontFamily: fontMono, fontSize: fontSizes.md};
 
 // The theme's body variants default to the secondary text color, which suits
 // metadata. The conversation itself is the subject of this page, so it uses
@@ -61,7 +61,7 @@ const TaskTag = ({task}: {task: TaskState}) => {
             color={task.status === 'failed' ? 'error' : 'default'}
             icon={task.status === 'running' ? <CircularProgress size={10} sx={{ml: '6px !important'}}/> : undefined}
             label={`${t('desk.background', {defaultValue: 'background'})} · ${statusLabel(t, task.status)}`}
-            sx={{height: 20, flexShrink: 0, '& .MuiChip-label': {px: 0.75, fontSize: '0.7rem'}}}
+            sx={{height: 20, flexShrink: 0, '& .MuiChip-label': {px: 0.75, fontSize: fontSizes.xs}}}
         />
     );
 };
@@ -330,7 +330,7 @@ const AgentCard = ({block, turnLive, expandAll, onRespond}: {
                         </Typography>
                     )}
                     {task?.background && (
-                        <Chip size="small" variant="outlined" label={t('desk.background', {defaultValue: 'background'})} sx={{height: 18, '& .MuiChip-label': {px: 0.75, fontSize: '0.7rem'}}}/>
+                        <Chip size="small" variant="outlined" label={t('desk.background', {defaultValue: 'background'})} sx={{height: 18, '& .MuiChip-label': {px: 0.75, fontSize: fontSizes.xs}}}/>
                     )}
                     <Box sx={{flex: 1}}/>
                     <Stack direction="row" spacing={0.5} sx={{alignItems: 'center', flexShrink: 0}} title={statusLabel(t, status)}>

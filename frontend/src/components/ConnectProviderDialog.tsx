@@ -21,6 +21,7 @@ import {useInRouterContext, useNavigate} from 'react-router-dom';
 import {type UniqueProvider, useProviderCatalogs, useCloudProviders, searchProviders} from '../services/serviceProviders';
 import ProviderIcon from './ProviderIcon';
 import {FALLBACK_OAUTH_PROVIDERS, type OAuthProvider} from './oauth/fallbackProviders';
+import { fontSizes } from '@/theme/fonts';
 
 // What the picker emits when a card is chosen. The parent routes each kind to
 // the matching existing dialog (API-key form, OAuth flow, or a blank custom
@@ -184,7 +185,7 @@ const ProviderCard: React.FC<{
                             sx={(theme) => ({
                                 flexShrink: 0,
                                 mt: '1px',
-                                fontSize: '0.6rem', fontWeight: 600, lineHeight: 1,
+                                fontSize: fontSizes.micro, fontWeight: 600, lineHeight: 1,
                                 color: theme.palette[badge.tone].main,
                                 px: 0.5, py: 0.25,
                                 borderRadius: 0.5,
@@ -201,7 +202,7 @@ const ProviderCard: React.FC<{
                             color: "text.disabled",
                             display: 'block',
                             mt: 0.25,
-                            fontSize: '0.68rem',
+                            fontSize: fontSizes.xs,
                             letterSpacing: '0.01em'
                         }}>
                         {meta}

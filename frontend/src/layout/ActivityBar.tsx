@@ -25,6 +25,7 @@ import type { ActivityItem } from './types';
 import { PreferencesMenu } from './PreferencesMenu';
 import { CoachMark } from '@/components/CoachMark';
 import { useOneTimeTip } from '@/hooks/useOneTimeTip';
+import { fontSizes } from '@/theme/fonts';
 
 // Power-ups moved off the /agent page into the user menu's submenu; a
 // one-time callout on the user button says where they went.
@@ -211,7 +212,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
                                 <IconAlertCircle sx={{ fontSize: 22 }} />
                             </ListItemIcon>
-                            <Typography variant="caption" sx={{ color: 'inherit', textAlign: 'center', lineHeight: 1.1, fontSize: '0.65rem' }}>
+                            <Typography variant="caption" sx={{ color: 'inherit', textAlign: 'center', lineHeight: 1.1, fontSize: fontSizes.micro }}>
                                 {t('layout.activityBar.offline')}
                             </Typography>
                         </ListItemButton>

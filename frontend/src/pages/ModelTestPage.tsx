@@ -19,7 +19,7 @@ import api from '../services/api';
 import { ApiStyleBadge } from '@/components/ApiStyleBadge';
 import { ProbeDialog } from '@/components/probe/ProbeDialog';
 import type { Provider } from '../types/provider';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 interface ModelCardProps {
     model: string;
@@ -100,7 +100,7 @@ const ModelCard = ({ model, provider, isTesting, onTest, onViewResult, hasResult
                         sx={{
                             textTransform: 'none',
                             borderRadius: 1.5,
-                            fontSize: '0.75rem',
+                            fontSize: fontSizes.sm,
                         }}
                     >
                         {isTesting ? 'Testing...' : 'Test'}

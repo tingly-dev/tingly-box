@@ -22,6 +22,7 @@ import { formatRuleFlags, parseRuleFlags } from '@/components/rule-card/utils';
 import { flagDefault, isFlagActive, setFlagValue } from '@/components/rule-card/flagHelpers';
 import { formatModelNameWithContext1M } from '@/components/rule-card/modelNameUtils';
 import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
+import { fontSizes } from '@/theme/fonts';
 
 // Module-level cache so we only fetch the flag catalog once per session.
 // `undefined` = never fetched; `[]` = fetched but empty (don't re-fetch).
@@ -324,7 +325,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                             setCatalogFocusKey(undefined);
                             setCatalogOpen(true);
                         }}
-                        sx={{ minWidth: 0, px: 1, py: 0.25, fontSize: '0.75rem', fontWeight: 500, color: 'text.secondary', textTransform: 'none' }}
+                        sx={{ minWidth: 0, px: 1, py: 0.25, fontSize: fontSizes.sm, fontWeight: 500, color: 'text.secondary', textTransform: 'none' }}
                     >
                         Plugins
                     </Button>

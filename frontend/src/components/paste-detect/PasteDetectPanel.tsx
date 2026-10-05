@@ -20,7 +20,7 @@ import { VpnKey as VpnKeyIcon } from '@/components/icons';
 import {extractOnboardingCandidates, type OnboardingTokenCandidate} from '@/services/onboardingExtract';
 import type {EnhancedProviderFormData} from '@/components/ProviderFormDialog';
 import {emptyForm} from '@/hooks/useProviderDialog';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 // Shell-agnostic core of the "Paste & detect" experience: a paste textarea, a
 // Detect button backed by the backend regex extractor, and the URLs/tokens
@@ -161,7 +161,7 @@ const PasteDetectPanel: React.FC<PasteDetectPanelProps> = ({onPick, onManualFill
                                         }}>
                                             {t('onboarding.paste.urlsTitle', {defaultValue: 'Detected URLs'})}
                                         </Typography>
-                                        <Chip label={urls!.length} size="small" sx={{height: 18, fontSize: '0.65rem'}}/>
+                                        <Chip label={urls!.length} size="small" sx={{height: 18, fontSize: fontSizes.micro}}/>
                                     </Stack>
                                     {urls!.length === 0 ? (
                                         <Typography variant="caption" sx={{
@@ -208,7 +208,7 @@ const PasteDetectPanel: React.FC<PasteDetectPanelProps> = ({onPick, onManualFill
                                         }}>
                                             {t('onboarding.paste.tokensTitle', {defaultValue: 'Detected tokens'})}
                                         </Typography>
-                                        <Chip label={tokens!.length} size="small" sx={{height: 18, fontSize: '0.65rem'}}/>
+                                        <Chip label={tokens!.length} size="small" sx={{height: 18, fontSize: fontSizes.micro}}/>
                                     </Stack>
                                     {tokens!.length === 0 ? (
                                         <Typography variant="caption" sx={{

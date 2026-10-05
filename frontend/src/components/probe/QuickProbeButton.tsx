@@ -12,7 +12,7 @@ import type { ProbeResult } from '@/types/probe';
 import { formatLatency, runProbe } from './runProbe';
 import { ProbeDialog } from './ProbeDialog';
 import { DEFAULT_AXES } from './probeConfig';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 interface QuickProbeButtonProps {
     ruleUuid: string;
@@ -100,7 +100,7 @@ export const QuickProbeButton: React.FC<QuickProbeButtonProps> = ({ ruleUuid, ru
                             )}
                             <Typography
                                 sx={{
-                                    fontSize: '0.72rem',
+                                    fontSize: fontSizes.xs,
                                     fontWeight: 600,
                                     lineHeight: 1,
                                     color: pillColor,

@@ -4,6 +4,7 @@ import { Box, Typography, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { getThemeChartStyles } from '../chartStyles';
 import type { LegendItemProps, ChartDataPoint } from './types';
+import { fontSizes } from '@/theme/fonts';
 
 export function LegendItem({ label, color, visible, onToggle }: LegendItemProps) {
     return (
@@ -39,7 +40,7 @@ export function LegendItem({ label, color, visible, onToggle }: LegendItemProps)
             <Typography
                 variant="caption"
                 sx={{
-                    fontSize: '0.8rem',
+                    fontSize: fontSizes.md,
                     color: 'text.secondary',
                     fontWeight: 500,
                 }}

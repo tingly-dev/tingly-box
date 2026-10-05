@@ -1,4 +1,5 @@
 import type { Theme } from '@mui/material/styles';
+import { fontSizes } from '@/theme/fonts';
 
 // Token color palette with semantic meaning
 // These colors should be used with theme palette in components
@@ -112,7 +113,7 @@ export const tooltipTextStyles = {
     },
     caption: {
         color: '#64748b',
-        fontSize: '0.75rem',
+        fontSize: fontSizes.sm,
     },
     divider: '1px solid #e2e8f0',
 };

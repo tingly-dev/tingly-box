@@ -25,6 +25,7 @@ import { UsageMetricValueCells } from '@/components/dashboard';
 import type { AggregatedStat, MetricRow, RosterAxisState } from '@/components/dashboard';
 import { formatDateTime, getModelKey, getProviderKey } from './userUsageModel';
 import type { UserUsageRow, ViewMode, PrimaryColumn } from './userUsageModel';
+import { fontSizes } from '@/theme/fonts';
 
 // Shared card anatomy for the roster table and the detail card below it.
 export const usageTableCardSx = {
@@ -139,7 +140,7 @@ export default function RosterTable({
                             '& .MuiToggleButton-root': {
                                 px: 1.5,
                                 py: 0.25,
-                                fontSize: '0.78rem',
+                                fontSize: fontSizes.md,
                                 textTransform: 'none',
                             },
                         }}
@@ -184,7 +185,7 @@ export default function RosterTable({
                                 backgroundColor: alpha(theme.palette.background.paper, 0.8),
                                 '& .MuiTableCell-root': {
                                     fontWeight: 600,
-                                    fontSize: '0.75rem',
+                                    fontSize: fontSizes.sm,
                                     textTransform: 'uppercase',
                                     letterSpacing: '0.05em',
                                     color: 'text.secondary',

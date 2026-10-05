@@ -6,7 +6,7 @@ import { CopyIconButton } from '@/components/CopyIconButton';
 import { useNotify } from '@/hooks/useNotify.ts';
 import { api } from '@/services/api.ts';
 import { host } from '@/host';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 /**
  * Whether the shortcut section has anything useful to show. Wails GUI users
@@ -119,7 +119,7 @@ export const ShortcutCard = () => {
                             >
                                 <Typography
                                     variant="body2"
-                                    sx={{ fontFamily: fontMono, fontSize: '0.8rem', pr: 5, wordBreak: 'break-all' }}
+                                    sx={{ fontFamily: fontMono, fontSize: fontSizes.md, pr: 5, wordBreak: 'break-all' }}
                                 >
                                     $ {shortcutStatus.scriptPath}
                                 </Typography>

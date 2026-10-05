@@ -13,6 +13,7 @@ import type {BotSettings} from '@/types/bot';
 import {useMemo} from 'react';
 import {useTranslation} from 'react-i18next';
 import {PLATFORM_BRAND_ICONS, platformDisplayName} from '@/constants/platformGuides';
+import { fontSizes } from '@/theme/fonts';
 
 interface ImBotNodeProps {
     imbot: BotSettings;
@@ -65,7 +66,7 @@ const ImBotNode: React.FC<ImBotNodeProps> = ({imbot, active = true, onClick, var
     const BrandIcon = PLATFORM_BRAND_ICONS[imbot.platform || ''];
     const labelSx = {
         ...NODE_LAYER_STYLES.typography,
-        fontSize: '0.75rem',
+        fontSize: fontSizes.sm,
         color: active ? 'text.primary' : 'text.disabled',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -83,7 +84,7 @@ const ImBotNode: React.FC<ImBotNodeProps> = ({imbot, active = true, onClick, var
                     {imbot.uuid && (
                         <>
                             <br/>
-                            <Box component="span" sx={{fontSize: '0.7rem'}}>
+                            <Box component="span" sx={{fontSize: fontSizes.xs}}>
                                 {t('nodes.imBotUUID', {defaultValue: 'Bot UUID'})}: {imbot.uuid}
                             </Box>
                         </>

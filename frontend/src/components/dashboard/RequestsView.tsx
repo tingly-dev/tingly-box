@@ -22,7 +22,7 @@ import {
 import { WaveSine as StreamIcon } from '@/components/icons';
 import { TOKEN_COLORS, formatNumber, hasCacheWrites } from './chartStyles';
 import api from '@/services/api';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -119,7 +119,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                 <ToggleButtonGroup
                     value={statusFilter} exclusive size="small"
                     onChange={(_, v) => v && onStatusFilterChange(v)}
-                    sx={{ '& .MuiToggleButton-root': { px: 1.5, py: 0.375, fontSize: '0.75rem', textTransform: 'none' } }}
+                    sx={{ '& .MuiToggleButton-root': { px: 1.5, py: 0.375, fontSize: fontSizes.sm, textTransform: 'none' } }}
                 >
                     <ToggleButton value="all">{t('dashboard.requestsView.all', { defaultValue: 'All' })}</ToggleButton>
                     <ToggleButton value="success">{t('dashboard.requestsView.success', { defaultValue: 'Success' })}</ToggleButton>
@@ -135,7 +135,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                 )}
                 <Table stickyHeader size="small" sx={{ tableLayout: 'auto' }}>
                     <TableHead>
-                        <TableRow sx={{ '& .MuiTableCell-root': { fontWeight: 600, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary', py: 1, borderBottom: '1px solid', borderColor: 'divider', backgroundColor: 'background.paper', whiteSpace: 'nowrap' } }}>
+                        <TableRow sx={{ '& .MuiTableCell-root': { fontWeight: 600, fontSize: fontSizes.xs, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary', py: 1, borderBottom: '1px solid', borderColor: 'divider', backgroundColor: 'background.paper', whiteSpace: 'nowrap' } }}>
                             <TableCell>{t('dashboard.requestsView.colTime', { defaultValue: 'Time' })}</TableCell>
                             <TableCell>{t('dashboard.requestsView.colModel', { defaultValue: 'Model' })}</TableCell>
                             <TableCell>{t('dashboard.requestsView.colScenario', { defaultValue: 'Scenario' })}</TableCell>
@@ -168,7 +168,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                                 {/* Time */}
                                 <TableCell>
                                     <Tooltip title={new Date(r.timestamp).toLocaleString()} placement="right">
-                                        <Typography sx={{ fontFamily: fontMono, fontSize: '0.72rem', color: 'text.secondary', cursor: 'default' }}>
+                                        <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'text.secondary', cursor: 'default' }}>
                                             {fmtTime(r.timestamp)}
                                         </Typography>
                                     </Tooltip>
@@ -176,11 +176,11 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
 
                                 {/* Model */}
                                 <TableCell>
-                                    <Typography sx={{ fontSize: '0.65rem', color: 'text.disabled', lineHeight: 1.2 }}>
+                                    <Typography sx={{ fontSize: fontSizes.micro, color: 'text.disabled', lineHeight: 1.2 }}>
                                         {r.provider_name || '-'}
                                     </Typography>
                                     <Tooltip title={r.model} placement="top">
-                                        <Typography sx={{ fontSize: '0.78rem', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.4 }}>
+                                        <Typography sx={{ fontSize: fontSizes.md, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.4 }}>
                                             {r.model || '-'}
                                         </Typography>
                                     </Tooltip>
@@ -188,7 +188,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
 
                                 {/* Scenario */}
                                 <TableCell>
-                                    <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                                    <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>
                                         {r.scenario || '-'}
                                     </Typography>
                                 </TableCell>
@@ -202,11 +202,11 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                                         const ratio = total > 0 ? (cacheTokens / total) * 100 : 0;
                                         return (
                                             <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 0.5, lineHeight: 1.2, whiteSpace: 'nowrap' }}>
-                                                <Typography sx={{ fontFamily: fontMono, fontSize: '0.75rem', color: cacheTokens > 0 ? 'text.primary' : 'text.disabled' }}>
+                                                <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: cacheTokens > 0 ? 'text.primary' : 'text.disabled' }}>
                                                     {cacheTokens > 0 ? fmtTokens(cacheTokens) : '-'}
                                                 </Typography>
                                                 {cacheTokens > 0 && total > 0 && (
-                                                    <Typography sx={{ fontFamily: fontMono, fontSize: '0.65rem', color: 'text.secondary' }}>
+                                                    <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: 'text.secondary' }}>
                                                         | {ratio.toFixed(1)}%
                                                     </Typography>
                                                 )}
@@ -217,18 +217,18 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
 
                                 {showCacheWrite && (
                                     <TableCell align="right">
-                                        <Typography sx={{ fontFamily: fontMono, fontSize: '0.75rem', color: (r.cache_write_tokens || 0) > 0 ? 'text.primary' : 'text.disabled' }}>
+                                        <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: (r.cache_write_tokens || 0) > 0 ? 'text.primary' : 'text.disabled' }}>
                                             {(r.cache_write_tokens || 0) > 0 ? fmtTokens(r.cache_write_tokens || 0) : '-'}
                                         </Typography>
                                     </TableCell>
                                 )}
                                 <TableCell align="right">
-                                    <Typography sx={{ fontFamily: fontMono, fontSize: '0.75rem', color: TOKEN_COLORS.input.main }}>
+                                    <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: TOKEN_COLORS.input.main }}>
                                         {fmtTokens(r.input_tokens)}
                                     </Typography>
                                 </TableCell>
                                 <TableCell align="right">
-                                    <Typography sx={{ fontFamily: fontMono, fontSize: '0.75rem', color: TOKEN_COLORS.output.main }}>
+                                    <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: TOKEN_COLORS.output.main }}>
                                         {fmtTokens(r.output_tokens)}
                                     </Typography>
                                 </TableCell>
@@ -236,21 +236,21 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                                 {/* Reasoning (thinking) tokens — a subset of output, absent/zero shown as
                                     "-" rather than 0 (Anthropic doesn't always report it separately). */}
                                 <TableCell align="right">
-                                    <Typography sx={{ fontFamily: fontMono, fontSize: '0.75rem', color: (r.reasoning_tokens || 0) > 0 ? 'text.primary' : 'text.disabled' }}>
+                                    <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: (r.reasoning_tokens || 0) > 0 ? 'text.primary' : 'text.disabled' }}>
                                         {(r.reasoning_tokens || 0) > 0 ? fmtTokens(r.reasoning_tokens || 0) : '-'}
                                     </Typography>
                                 </TableCell>
 
                                 {/* Latency */}
                                 <TableCell align="right">
-                                    <Typography sx={{ fontFamily: fontMono, fontSize: '0.75rem', color: r.latency_ms > 0 ? getLatencyColor(r.latency_ms, theme) : 'text.disabled' }}>
+                                    <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: r.latency_ms > 0 ? getLatencyColor(r.latency_ms, theme) : 'text.disabled' }}>
                                         {r.latency_ms > 0 ? fmtLatency(r.latency_ms) : '-'}
                                     </Typography>
                                 </TableCell>
 
                                 {/* TTFT */}
                                 <TableCell align="right">
-                                    <Typography sx={{ fontFamily: fontMono, fontSize: '0.75rem', color: (r.ttft_ms ?? 0) > 0 ? getLatencyColor(r.ttft_ms!, theme) : 'text.disabled' }}>
+                                    <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: (r.ttft_ms ?? 0) > 0 ? getLatencyColor(r.ttft_ms!, theme) : 'text.disabled' }}>
                                         {(r.ttft_ms ?? 0) > 0 ? fmtLatency(r.ttft_ms!) : '-'}
                                     </Typography>
                                 </TableCell>
@@ -258,7 +258,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                                 {/* Per-request output TPS after TTFT */}
                                 <TableCell align="right">
                                     <Tooltip title={getTPSFormula(r, t)} placement="top">
-                                        <Typography sx={{ fontFamily: fontMono, fontSize: '0.75rem', color: getTokensPerSecond(r) > 0 ? 'text.primary' : 'text.disabled', cursor: getTokensPerSecond(r) > 0 ? 'help' : 'default' }}>
+                                        <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: getTokensPerSecond(r) > 0 ? 'text.primary' : 'text.disabled', cursor: getTokensPerSecond(r) > 0 ? 'help' : 'default' }}>
                                             {getTokensPerSecond(r) > 0 ? getTokensPerSecond(r).toFixed(1) : '-'}
                                         </Typography>
                                     </Tooltip>
@@ -267,10 +267,10 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                                 {/* Status */}
                                 <TableCell align="center">
                                     {r.status === 'success' ? (
-                                        <Chip label={t('dashboard.requestsView.ok', { defaultValue: 'OK' })} size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700, backgroundColor: SUCCESS_COLOR, color: '#fff', '& .MuiChip-label': { px: 0.75 } }} />
+                                        <Chip label={t('dashboard.requestsView.ok', { defaultValue: 'OK' })} size="small" sx={{ height: 18, fontSize: fontSizes.micro, fontWeight: 700, backgroundColor: SUCCESS_COLOR, color: '#fff', '& .MuiChip-label': { px: 0.75 } }} />
                                     ) : (
                                         <Tooltip title={r.error_code || r.status} placement="top">
-                                            <Chip label={t('dashboard.requestsView.err', { defaultValue: 'ERR' })} size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700, backgroundColor: ERROR_COLOR, color: '#fff', '& .MuiChip-label': { px: 0.75 } }} />
+                                            <Chip label={t('dashboard.requestsView.err', { defaultValue: 'ERR' })} size="small" sx={{ height: 18, fontSize: fontSizes.micro, fontWeight: 700, backgroundColor: ERROR_COLOR, color: '#fff', '& .MuiChip-label': { px: 0.75 } }} />
                                         </Tooltip>
                                     )}
                                 </TableCell>
@@ -298,7 +298,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                 page={page}
                 onPageChange={(_, p) => onPageChange(p)}
                 onRowsPerPageChange={e => onRowsPerPageChange(parseInt(e.target.value, 10))}
-                sx={{ borderTop: '1px solid', borderColor: 'divider', '& .MuiTablePagination-toolbar': { minHeight: 48 }, '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': { fontSize: '0.75rem' } }}
+                sx={{ borderTop: '1px solid', borderColor: 'divider', '& .MuiTablePagination-toolbar': { minHeight: 48 }, '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': { fontSize: fontSizes.sm } }}
             />
         </Paper>
     );

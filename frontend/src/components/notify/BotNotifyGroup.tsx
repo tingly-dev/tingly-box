@@ -3,7 +3,7 @@ import {api} from '@/services/api';
 import {notify} from '@/utils/notify';
 import {capabilityEnabled, isPairingRequired} from '@/types/bot';
 import type {BotGroupDetail, BotSettings, DirectChatDetail, NotifyTarget} from '@/types/bot';
-import {fontMono} from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 import NotifyTestDialog from '@/components/notify/NotifyTestDialog';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import {CHAT_CAPABILITIES} from '@/components/notify/chatCapabilities';
@@ -98,7 +98,7 @@ const ProbeResultLine: React.FC<{result: ChatProbeResult; onDismiss: () => void}
                 </Tooltip>
             </Box>
             <Collapse in={showRaw}>
-                <Box sx={{mt: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1, fontFamily: fontMono, fontSize: '0.75rem', whiteSpace: 'pre-wrap', wordBreak: 'break-all'}}>
+                <Box sx={{mt: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1, fontFamily: fontMono, fontSize: fontSizes.sm, whiteSpace: 'pre-wrap', wordBreak: 'break-all'}}>
                     {JSON.stringify(result.raw ?? result, null, 2)}
                 </Box>
             </Collapse>

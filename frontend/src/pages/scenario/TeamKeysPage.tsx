@@ -12,7 +12,7 @@ import { useNotify } from '@/hooks/useNotify';
 import { useSharingKeyActions } from '@/hooks/useSharingKeyActions';
 import { api } from '@/services/api';
 import { groupByTeam, teamPath } from '@/utils/team';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 /**
  * Every Sharing Key on this instance, grouped by the Team it belongs to.
@@ -81,9 +81,9 @@ const TeamKeysPage = () => {
                                         <Typography variant="caption" sx={{ fontFamily: fontMono, color: 'text.secondary' }}>
                                             {team.slug}
                                         </Typography>
-                                        <Chip label={teamKeys.length} size="small" color="primary" variant="outlined" sx={{ height: 20, minWidth: 20, fontSize: '0.7rem' }} />
+                                        <Chip label={teamKeys.length} size="small" color="primary" variant="outlined" sx={{ height: 20, minWidth: 20, fontSize: fontSizes.xs }} />
                                         {!team.enabled && (
-                                            <Chip label={t('teams.inactive')} size="small" color="warning" variant="outlined" sx={{ height: 20, fontSize: '0.7rem' }} />
+                                            <Chip label={t('teams.inactive')} size="small" color="warning" variant="outlined" sx={{ height: 20, fontSize: fontSizes.xs }} />
                                         )}
                                         <Box sx={{ flex: 1 }} />
                                         <Button component={Link} to={teamPath(team)} size="small">

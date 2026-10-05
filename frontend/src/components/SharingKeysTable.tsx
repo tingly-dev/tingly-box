@@ -15,7 +15,7 @@ import {
     CircularProgress,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 export interface SharingKey {
     token_id: string;
@@ -85,7 +85,7 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                             bgcolor: 'action.hover',
                             '& th': {
                                 fontWeight: 700,
-                                fontSize: '0.75rem',
+                                fontSize: fontSizes.sm,
                                 textTransform: 'uppercase',
                                 letterSpacing: '0.05em',
                                 color: 'text.secondary',

@@ -26,6 +26,7 @@ import { type SkillLocation, type DiscoveryResult } from '@/types/prompt';
 import { getIdeSourceLabel } from '@/constants/ideSources';
 import { api } from '@/services/api';
 import DialogHeader from '@/components/DialogHeader';
+import { fontSizes } from '@/theme/fonts';
 
 interface AutoDiscoveryDialogProps {
     open: boolean;
@@ -301,7 +302,7 @@ const AutoDiscoveryDialog = ({ open, onClose, onImport }: AutoDiscoveryDialogPro
                                                     size="small"
                                                     label={getIdeSourceLabel(location.ide_source)}
                                                     variant="outlined"
-                                                    sx={{ height: 24, fontSize: '0.75rem' }}
+                                                    sx={{ height: 24, fontSize: fontSizes.sm }}
                                                 />
                                                 <Box sx={{ minWidth: 0, flex: 1 }}>
                                                     <Typography

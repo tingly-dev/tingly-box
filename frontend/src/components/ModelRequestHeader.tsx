@@ -21,7 +21,7 @@ import {
 } from '@/components/icons';
 import { isWildcardModelName } from '@/components/rule-card/utils';
 import { notify } from '@/utils/notify';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 import type {OpenAIEndpointSelection} from '@/hooks/useResponsesToggle';
 
 // Styled components - compact for graph use
@@ -42,7 +42,7 @@ const strategyButtonSx = {
     px: 1,
     borderRadius: 1.5,
     borderColor: 'divider',
-    fontSize: '0.75rem',
+    fontSize: fontSizes.sm,
     fontWeight: 600,
     textTransform: 'none' as const,
     whiteSpace: 'nowrap' as const,
@@ -236,7 +236,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                         {isWildcard ? (
                             <Chip
                                 label={
-                                    <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem' }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 600, fontSize: fontSizes.md }}>
                                         {modelName}
                                     </Typography>
                                 }

@@ -23,7 +23,7 @@ import { Refresh as RefreshIcon } from '@/components/icons';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useTableSort } from '@/hooks/useTableSort';
 import { formatTimestamp } from '@/utils/datetime';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 export interface SystemLogEntry {
     time: string;
@@ -241,7 +241,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                         onClick={() => setSelectedLevels(new Set())}
                         sx={{
                             fontWeight: 600,
-                            fontSize: '0.7rem',
+                            fontSize: fontSizes.xs,
                             height: 24,
                         }}
                     />
@@ -260,7 +260,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                     border: active ? `1px solid ${getLevelColor(level)}` : '1px solid',
                                     borderColor: active ? getLevelColor(level) : 'divider',
                                     fontWeight: 'bold',
-                                    fontSize: '0.7rem',
+                                    fontSize: fontSizes.xs,
                                     height: 24,
                                     '&:hover': {
                                         backgroundColor: active
@@ -359,7 +359,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                 )}
                                             </IconButton>
                                         </TableCell>
-                                        <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                                        <TableCell sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>
                                             {formatTimestamp(log.time)}
                                         </TableCell>
                                         <TableCell>
@@ -369,7 +369,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                 sx={{
                                                     backgroundColor: getLevelColor(log.level),
                                                     color: 'white',
-                                                    fontSize: '0.7rem',
+                                                    fontSize: fontSizes.xs,
                                                     height: 20,
                                                     fontWeight: 'bold',
                                                 }}
@@ -383,16 +383,16 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                     sx={{
                                                         backgroundColor: getStatusCodeColor(log.fields.status as number),
                                                         color: 'white',
-                                                        fontSize: '0.7rem',
+                                                        fontSize: fontSizes.xs,
                                                         height: 20,
                                                         fontWeight: 'bold',
                                                     }}
                                                 />
                                             ) : (
-                                                <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>-</Typography>
+                                                <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>-</Typography>
                                             )}
                                         </TableCell>
-                                        <TableCell sx={{ fontSize: '0.8rem' }}>
+                                        <TableCell sx={{ fontSize: fontSizes.md }}>
                                             {log.message}
                                         </TableCell>
                                     </TableRow>
@@ -406,14 +406,14 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                                 <Box sx={{ p: 1, backgroundColor: 'error.dark', borderRadius: 1 }}>
                                                                     <Typography
                                                                         variant="body2"
-                                                                        sx={{ fontFamily: fontMono, fontSize: '0.75rem', color: 'error.contrastText', fontWeight: 'bold', wordBreak: 'break-all' }}
+                                                                        sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: 'error.contrastText', fontWeight: 'bold', wordBreak: 'break-all' }}
                                                                     >
                                                                         ERROR: {typeof log.fields.error === 'object' && log.fields.error !== null ? JSON.stringify(log.fields.error) : String(log.fields.error)}
                                                                     </Typography>
                                                                     {log.fields.error_type && (
                                                                         <Typography
                                                                             variant="caption"
-                                                                            sx={{ fontFamily: fontMono, fontSize: '0.7rem', color: 'error.contrastText', opacity: 0.8 }}
+                                                                            sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'error.contrastText', opacity: 0.8 }}
                                                                         >
                                                                             Type: {typeof log.fields.error_type === 'object' && log.fields.error_type !== null ? JSON.stringify(log.fields.error_type) : String(log.fields.error_type)}
                                                                         </Typography>
@@ -424,7 +424,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                                 .filter(([key]) => key !== 'error' && key !== 'error_type')
                                                                 .map(([key, value]) => (
                                                                     <Box key={key}>
-                                                                        <Typography variant="body2" sx={{ fontFamily: fontMono, fontSize: '0.75rem' }}>
+                                                                        <Typography variant="body2" sx={{ fontFamily: fontMono, fontSize: fontSizes.sm }}>
                                                                             <strong>{key}:</strong> {typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}
                                                                         </Typography>
                                                                     </Box>

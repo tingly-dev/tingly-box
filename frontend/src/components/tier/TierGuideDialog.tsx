@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { TIER_GUIDE_STEPS, type GuideStep } from './diagrams';
 import { StaticGraphViewer } from './StaticGraphViewer';
 import { GuideLanguageToggle } from './GuideLanguageToggle';
+import { fontSizes } from '@/theme/fonts';
 
 export interface TierGuideDialogProps {
     open: boolean;
@@ -250,7 +251,7 @@ export const TierGuideDialog: React.FC<TierGuideDialogProps> = ({
                                 px: 1.5,
                                 py: 0.5,
                                 borderRadius: 1,
-                                fontSize: '0.75rem',
+                                fontSize: fontSizes.sm,
                                 opacity: 0.8,
                             }}>
                                 💡 {t('rule.tier.guide.hoverHint', { defaultValue: 'Hover over a node in the diagram to see its actions' })}

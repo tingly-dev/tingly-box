@@ -12,6 +12,7 @@ import {
 } from '@/components/nodes/styles';
 import type { FlagSpec, RuleFlags, VisionProxyServiceRef } from '@/components/RoutingGraphTypes';
 import { getFlagValue, headersValue, isFlagActive } from './flagHelpers';
+import { fontSizes } from '@/theme/fonts';
 
 const CARD_STYLES = {
     width: MODEL_NODE_STYLES.width,
@@ -95,7 +96,7 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                     mb: 0.75
                 }}>
                 <ExtensionIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.72rem', color: 'text.secondary', flexGrow: 1, lineHeight: 1 }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, fontSize: fontSizes.xs, color: 'text.secondary', flexGrow: 1, lineHeight: 1 }}>
                     Plugins{enabled.length > 0 ? ` (${enabled.length})` : ''}
                 </Typography>
                 {/* Visual affordance only — the whole card is clickable. */}
@@ -112,7 +113,7 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                         alignItems: 'center',
                         justifyContent: 'center',
                         color: 'text.disabled',
-                        fontSize: '0.72rem',
+                        fontSize: fontSizes.xs,
                         lineHeight: 1.25,
                         textAlign: 'center',
                         px: 1,
@@ -187,7 +188,7 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                                             component="span"
                                             sx={{
                                                 ...NODE_LAYER_STYLES.typography,
-                                                fontSize: '0.75rem',
+                                                fontSize: fontSizes.sm,
                                                 fontWeight: 500,
                                                 color: 'text.secondary',
                                                 minWidth: 0,
@@ -204,7 +205,7 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                                                 component="span"
                                                 sx={{
                                                     ...NODE_LAYER_STYLES.typography,
-                                                    fontSize: '0.75rem',
+                                                    fontSize: fontSizes.sm,
                                                     fontWeight: 400,
                                                     color: 'text.secondary',
                                                     overflow: 'hidden',
@@ -223,7 +224,7 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                                                 onClick={(e) => { e.stopPropagation(); onRemoveFlag(spec.key); }}
                                                 sx={{ p: 0, ml: 'auto', flexShrink: 0, color: 'text.disabled', '&:hover': { color: 'error.main' } }}
                                             >
-                                                <CloseIcon sx={{ fontSize: '0.7rem' }} />
+                                                <CloseIcon sx={{ fontSize: fontSizes.xs }} />
                                             </IconButton>
                                         )}
                                     </Box>

@@ -21,7 +21,7 @@ import { shortenUserId } from '@/hooks/useDashboardData';
 import { useTeamContext } from '@/contexts/TeamContext';
 import { groupByTeam } from '@/utils/team';
 import { useMemo } from 'react';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 // Owner label is rendered through t() so a live language switch updates it;
 // sharing-key labels carry their own display name instead.
@@ -33,7 +33,7 @@ const identityLabel = (t: (key: string, options?: Record<string, unknown>) => st
 // Shared by the provider and sharing-key pickers so both group the same way.
 const GROUP_SUBHEADER_SX = {
     fontWeight: 600,
-    fontSize: '0.7rem',
+    fontSize: fontSizes.xs,
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
     lineHeight: '28px',

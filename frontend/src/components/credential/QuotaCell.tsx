@@ -15,6 +15,7 @@ import { QUOTA_COLORS, formatNumber } from '../dashboard/chartStyles';
 import { QuotaRing, formatQuotaDuration, quotaRingColor, quotaRingSpinSx } from './QuotaRing';
 import { QuotaRawResponseDialog } from './QuotaRawResponseDialog';
 import { useQuotaBars } from './useQuotaBars';
+import { fontSizes } from '@/theme/fonts';
 
 // Older than this, the figure is dimmed: the cache is refreshed in the
 // background, so a stale snapshot means the refresher could not reach upstream.
@@ -398,7 +399,7 @@ function TooltipAction({ icon, label, disabled, onClick }: {
                 minWidth: 0,
                 px: 0.75,
                 py: 0.25,
-                fontSize: '0.65rem',
+                fontSize: fontSizes.micro,
                 fontWeight: 500,
                 lineHeight: 1.4,
                 color: 'text.secondary',
@@ -443,7 +444,7 @@ function TooltipRow({ remaining, dot, dotMuted, label, value, detail, indent }: 
                 {value}
             </Typography>
             {detail && (
-                <Typography variant="caption" sx={{ gridColumn: '2 / 4', color: 'text.disabled', fontSize: '0.68rem', lineHeight: 1.3 }}>
+                <Typography variant="caption" sx={{ gridColumn: '2 / 4', color: 'text.disabled', fontSize: fontSizes.xs, lineHeight: 1.3 }}>
                     {detail}
                 </Typography>
             )}

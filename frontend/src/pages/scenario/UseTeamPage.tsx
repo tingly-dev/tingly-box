@@ -22,6 +22,7 @@ import {ScenarioPageModalProvider} from '@/pages/scenario/context/ScenarioPageCo
 import {api} from '@/services/api';
 import {useNotify} from '@/hooks/useNotify';
 import {useTeamContext} from '@/contexts/TeamContext';
+import { fontSizes } from '@/theme/fonts';
 
 const UseTeamPageContent: React.FC = () => {
     const {t} = useTranslation();
@@ -202,7 +203,7 @@ const UseTeamPageContent: React.FC = () => {
                                         gap: 0.5,
                                         '& .MuiFormControlLabel-label': {
                                             color: 'text.secondary',
-                                            fontSize: '0.8125rem',
+                                            fontSize: fontSizes.md,
                                         },
                                     }}
                                 />

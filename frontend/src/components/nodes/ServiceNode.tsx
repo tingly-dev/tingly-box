@@ -28,6 +28,7 @@ import ServiceNodeContent from './ServiceNodeContent.tsx';
 import ServiceNodeQuota from './ServiceNodeQuota.tsx';
 import NodeTooltip from './NodeTooltip.tsx';
 import { useAddModelSpotlight } from './ActionAddNode.tsx';
+import { fontSizes } from '@/theme/fonts';
 
 const ServiceNodeWrapper = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'forceShowActions',
@@ -52,7 +53,7 @@ const TierDisk = styled(Box, {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '0.75rem',
+    fontSize: fontSizes.sm,
     fontWeight: 700,
     lineHeight: 1,
     userSelect: 'none',
@@ -357,11 +358,11 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                             <Box sx={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: '2px', lineHeight: 0 }}>
                                 {hasDualApiStyle ? (
                                     <>
-                                        <ApiStyleBadge apiStyle="openai" minimal sx={{ fontSize: '0.72rem', width: 20, height: 20 }} />
-                                        <ApiStyleBadge apiStyle="anthropic" minimal sx={{ fontSize: '0.72rem', width: 20, height: 20 }} />
+                                        <ApiStyleBadge apiStyle="openai" minimal sx={{ fontSize: fontSizes.xs, width: 20, height: 20 }} />
+                                        <ApiStyleBadge apiStyle="anthropic" minimal sx={{ fontSize: fontSizes.xs, width: 20, height: 20 }} />
                                     </>
                                 ) : (
-                                    <ApiStyleBadge apiStyle={apiStyle} minimal sx={{ fontSize: '0.72rem', width: 20, height: 20 }} />
+                                    <ApiStyleBadge apiStyle={apiStyle} minimal sx={{ fontSize: fontSizes.xs, width: 20, height: 20 }} />
                                 )}
                             </Box>
                         </Box>

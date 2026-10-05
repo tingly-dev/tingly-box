@@ -29,6 +29,7 @@ import { api } from '@/services/api';
 import { useBotPlatformSummary } from './useBotPlatformSummary';
 import { SCENARIOS, useHiddenScenarios } from '@/pages/scenario/scenarioRegistry';
 import { Z_INDEX } from '../constants/zIndex';
+import { fontSizes } from '@/theme/fonts';
 
 interface PowerUp {
     key: string;
@@ -252,7 +253,7 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
                                                 label={p.stage === 'exp'
                                                     ? t('scenarioOverview.powerUps.experimental')
                                                     : t('scenarioOverview.powerUps.beta')}
-                                                sx={{ height: 18, fontSize: '0.6875rem' }}
+                                                sx={{ height: 18, fontSize: fontSizes.xs }}
                                             />
                                         </Tooltip>
                                     )}

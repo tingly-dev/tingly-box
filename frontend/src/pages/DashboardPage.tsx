@@ -22,6 +22,7 @@ import PageHeader from '@/components/PageHeader';
 import { useTranslation } from 'react-i18next';
 import { useDashboardData, TIME_RANGE_CONFIG } from '@/hooks/useDashboardData';
 import type { TimeRange } from '@/hooks/useDashboardData';
+import { fontSizes } from '@/theme/fonts';
 
 const DashboardSkeleton = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -255,7 +256,7 @@ export default function DashboardPage() {
                                 '& .MuiToggleButton-root': {
                                     px: 1.75,
                                     py: 0.375,
-                                    fontSize: '0.78rem',
+                                    fontSize: fontSizes.md,
                                     textTransform: 'none',
                                 },
                             }}

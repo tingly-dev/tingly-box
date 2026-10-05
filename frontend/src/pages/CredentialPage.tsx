@@ -27,11 +27,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { useNotify } from '@/hooks/useNotify';
+import { fontSizes } from '@/theme/fonts';
 
 const SectionTitle = ({ label, count }: { label: string; count: number }) => (
     <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.5 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>{label}</Typography>
-        <Chip label={count} size="small" color="primary" variant="outlined" sx={{ height: 20, minWidth: 20, fontSize: '0.7rem' }}/>
+        <Chip label={count} size="small" color="primary" variant="outlined" sx={{ height: 20, minWidth: 20, fontSize: fontSizes.xs }}/>
     </Stack>
 );
 

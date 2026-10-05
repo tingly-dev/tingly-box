@@ -14,6 +14,7 @@ import {
 import { type SkillLocation } from '@/types/prompt';
 import { getIdeSourceLabel } from '@/constants/ideSources';
 import SkillColumnShell from './SkillColumnShell';
+import { fontSizes } from '@/theme/fonts';
 
 interface SkillLocationsColumnProps {
     locations: SkillLocation[];
@@ -103,7 +104,7 @@ const SkillLocationsColumn = ({
                                     label={getIdeSourceLabel(location.ide_source)}
                                     size="small"
                                     variant="outlined"
-                                    sx={{ alignSelf: 'flex-start', height: 20, fontSize: '0.7rem' }}
+                                    sx={{ alignSelf: 'flex-start', height: 20, fontSize: fontSizes.xs }}
                                 />
                             </Box>
                             <Stack direction="row" spacing={0.25} sx={{

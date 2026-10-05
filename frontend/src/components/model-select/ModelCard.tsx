@@ -10,6 +10,7 @@ import { useModelTestProbe } from '../probe/useModelTestProbe';
 import { ControlBar } from './ControlBar';
 import { ModelCopyButton } from './ModelCopyButton';
 import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
+import { fontSizes } from '@/theme/fonts';
 
 interface ModelCardProps {
     model: string;
@@ -119,7 +120,7 @@ export default function ModelCard({
                                 variant="body2"
                                 sx={{
                                     fontWeight: 500,
-                                    fontSize: '0.8rem',
+                                    fontSize: fontSizes.md,
                                     lineHeight: 1.2,
                                     display: '-webkit-box',
                                     WebkitLineClamp: 3,
@@ -138,7 +139,7 @@ export default function ModelCard({
                             <Typography
                                 variant="caption"
                                 sx={{
-                                    fontSize: '0.65rem',
+                                    fontSize: fontSizes.micro,
                                     lineHeight: 1.1,
                                     color: 'text.secondary',
                                     textAlign: 'center',
@@ -174,7 +175,7 @@ export default function ModelCard({
                             left: 4,
                             bgcolor: 'success.main',
                             color: 'white',
-                            fontSize: '0.6rem',
+                            fontSize: fontSizes.micro,
                             px: 0.5,
                             py: 0.2,
                             borderRadius: 1,

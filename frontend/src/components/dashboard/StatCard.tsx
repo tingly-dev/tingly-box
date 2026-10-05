@@ -1,5 +1,6 @@
 import { Box, Paper, Typography, alpha, useTheme } from '@mui/material';
 import type { ReactNode } from 'react';
+import { fontSizes } from '@/theme/fonts';
 
 interface StatCardProps {
     title: string;
@@ -98,7 +99,7 @@ export default function StatCard({ title, value, subtitle, icon, color = 'primar
                         sx={{
                             fontWeight: 600,
                             color: 'text.secondary',
-                            fontSize: '0.8125rem',
+                            fontSize: fontSizes.md,
                             lineHeight: 1.35,
                             display: '-webkit-box',
                             WebkitLineClamp: 2,
@@ -155,7 +156,7 @@ export default function StatCard({ title, value, subtitle, icon, color = 'primar
                         variant="caption"
                         sx={{
                             color: 'text.secondary',
-                            fontSize: '0.75rem',
+                            fontSize: fontSizes.sm,
                             whiteSpace: 'pre-line',
                             lineHeight: 1.3,
                         }}

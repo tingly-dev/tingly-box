@@ -19,7 +19,7 @@
 
 import React from 'react';
 import { Box, Switch, Typography } from '@mui/material';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -86,7 +86,7 @@ const Badge: React.FC<{ label: string; color: BadgeColor }> = ({ label, color })
                 borderRadius: '6px',
                 border: '1px solid',
                 borderColor: s.color,
-                fontSize: '0.625rem',
+                fontSize: fontSizes.micro,
                 fontWeight: 600,
                 letterSpacing: '-0.05px',
                 lineHeight: 1,
@@ -110,7 +110,7 @@ const Tag: React.FC<{ label: string }> = ({ label }) => (
             bgcolor: 'action.selected',
             color: 'rgb(75, 85, 99)',
             borderRadius: '4px',
-            fontSize: '0.65rem',
+            fontSize: fontSizes.micro,
             fontWeight: 500,
             fontFamily: fontMono,
             lineHeight: 1,

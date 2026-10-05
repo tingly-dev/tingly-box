@@ -3,7 +3,7 @@ import { bareVersion, displayVersion } from '@/utils/version';
 import { host } from '@/host';
 import { Box, Button, Dialog, DialogActions, DialogContent, Divider, Stack, ToggleButton, ToggleButtonGroup, Typography, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVersion } from '@/contexts/VersionContext';
@@ -308,7 +308,7 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
                                     sx={{
                                         fontFamily: fontMono,
                                         color: 'text.secondary',
-                                        fontSize: '0.8125rem',
+                                        fontSize: fontSizes.md,
                                         mt: 0.5,
                                         pr: 5,
                                     }}

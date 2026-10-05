@@ -11,6 +11,7 @@ import { ControlBar } from './ControlBar';
 import { ModelCopyButton } from './ModelCopyButton';
 import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { fontSizes } from '@/theme/fonts';
 
 interface CustomModelCardProps {
     model: string;
@@ -118,7 +119,7 @@ export default function CustomModelCard({
                                 variant="body2"
                                 sx={{
                                     fontWeight: 500,
-                                    fontSize: '0.8rem',
+                                    fontSize: fontSizes.md,
                                     lineHeight: 1.2,
                                     display: '-webkit-box',
                                     WebkitLineClamp: 3,

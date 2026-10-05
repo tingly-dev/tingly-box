@@ -11,7 +11,7 @@ import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 // DshPrefs mirrors the Go struct in internal/config (DshPrefs). Keys
 // are the literal settings.yaml provider-stanza keys so the object
@@ -216,7 +216,7 @@ const DshQuickConfig: React.FC<DshQuickConfigProps> = ({ prefs, setPrefs }) => {
                                     borderRadius: 0.75,
                                     bgcolor: 'action.hover',
                                     fontFamily: fontMono,
-                                    fontSize: '0.72rem',
+                                    fontSize: fontSizes.xs,
                                     color: 'text.secondary',
                                     whiteSpace: 'nowrap',
                                 }}
@@ -229,10 +229,10 @@ const DshQuickConfig: React.FC<DshQuickConfigProps> = ({ prefs, setPrefs }) => {
                                 size="small"
                                 value={protocolValue}
                                 onChange={(e) => setProtocolValue(e.target.value)}
-                                sx={{ minWidth: 220, fontSize: '0.85rem' }}
+                                sx={{ minWidth: 220, fontSize: fontSizes.lg }}
                             >
                                 {PROTOCOL_VALUES.map((v) => (
-                                    <MenuItem key={v} value={v} sx={{ fontSize: '0.85rem' }}>{protocolValueLabel[v]}</MenuItem>
+                                    <MenuItem key={v} value={v} sx={{ fontSize: fontSizes.lg }}>{protocolValueLabel[v]}</MenuItem>
                                 ))}
                             </Select>
                         </Box>
@@ -262,7 +262,7 @@ const DshQuickConfig: React.FC<DshQuickConfigProps> = ({ prefs, setPrefs }) => {
                                     borderRadius: 0.75,
                                     bgcolor: 'action.hover',
                                     fontFamily: fontMono,
-                                    fontSize: '0.72rem',
+                                    fontSize: fontSizes.xs,
                                     color: 'text.secondary',
                                     whiteSpace: 'nowrap',
                                 }}
@@ -276,13 +276,13 @@ const DshQuickConfig: React.FC<DshQuickConfigProps> = ({ prefs, setPrefs }) => {
                                 value={value}
                                 displayEmpty
                                 onChange={(e) => setValue(e.target.value)}
-                                sx={{ minWidth: 220, fontSize: '0.85rem' }}
+                                sx={{ minWidth: 220, fontSize: fontSizes.lg }}
                             >
                                 <MenuItem value={UNSET}>
                                     <Typography variant="body2" sx={{ color: 'text.disabled' }}>{uiText.unsetLabel}</Typography>
                                 </MenuItem>
                                 {DEFAULT_INPUT_VALUES.map((v) => (
-                                    <MenuItem key={v} value={v} sx={{ fontSize: '0.85rem' }}>{valueLabel[v]}</MenuItem>
+                                    <MenuItem key={v} value={v} sx={{ fontSize: fontSizes.lg }}>{valueLabel[v]}</MenuItem>
                                 ))}
                             </Select>
                         </Box>

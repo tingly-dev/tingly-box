@@ -2,6 +2,7 @@ import type { ChipProps, SxProps } from '@mui/material';
 import { Chip } from '@mui/material';
 import { LocationOn as LocationOnIcon } from '@/components/icons';
 import { EMPTY_SX } from '@/constants/defaults';
+import { fontSizes } from '@/theme/fonts';
 
 interface RegionBadgeProps {
   region: 'cn' | 'global' | 'self-hosted';
@@ -34,11 +35,11 @@ const getRegionColor = (region: 'cn' | 'global' | 'self-hosted'): { bg: string; 
 const sizeStyles: Record<'small' | 'medium', { height: number; fontSize: string }> = {
   small: {
     height: 18,
-    fontSize: '0.65rem',
+    fontSize: fontSizes.micro,
   },
   medium: {
     height: 22,
-    fontSize: '0.7rem',
+    fontSize: fontSizes.xs,
   },
 };
 

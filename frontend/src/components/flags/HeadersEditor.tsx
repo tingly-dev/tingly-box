@@ -1,7 +1,7 @@
 import { Add as AddIcon, Delete as DeleteIcon } from '@/components/icons';
 import { Box, Button, IconButton, Stack, TextField, Typography } from '@mui/material';
 import React, { useMemo, useState } from 'react';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 // RFC 7230 header-name token characters.
 const TOKEN_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
@@ -84,7 +84,7 @@ export const HeadersEditor: React.FC<HeadersEditorProps> = ({ value, onChange, d
                         error={!!errors[i]}
                         helperText={errors[i]}
                         onChange={(e) => emit(rows.map((r) => r.id === row.id ? { ...r, name: e.target.value } : r))}
-                        sx={{ flex: '0 0 40%', '& input': { fontFamily: fontMono, fontSize: '0.8rem' } }}
+                        sx={{ flex: '0 0 40%', '& input': { fontFamily: fontMono, fontSize: fontSizes.md } }}
                     />
                     <TextField
                         size="small"
@@ -92,7 +92,7 @@ export const HeadersEditor: React.FC<HeadersEditorProps> = ({ value, onChange, d
                         value={row.value}
                         disabled={disabled}
                         onChange={(e) => emit(rows.map((r) => r.id === row.id ? { ...r, value: e.target.value } : r))}
-                        sx={{ flexGrow: 1, '& input': { fontFamily: fontMono, fontSize: '0.8rem' } }}
+                        sx={{ flexGrow: 1, '& input': { fontFamily: fontMono, fontSize: fontSizes.md } }}
                     />
                     <IconButton
                         size="small"

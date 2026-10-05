@@ -1,7 +1,7 @@
 import {OpenAI, Anthropic} from '../BrandIcons';
 import {Box, Checkbox, InputBase, Link, Stack, Tooltip, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 export interface ProtocolSlotData {
     url: string;
@@ -170,7 +170,7 @@ const ProtocolSlot: React.FC<ProtocolSlotProps> = ({
                             mt: 1.25,
                             px: 1.5,
                             py: 0.75,
-                            fontSize: '0.8rem',
+                            fontSize: fontSizes.md,
                             fontFamily: fontMono,
                             color: 'primary.main',
                             bgcolor: 'background.default',

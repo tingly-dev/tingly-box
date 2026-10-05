@@ -33,7 +33,7 @@ import { RequestEditor } from './RequestEditor';
 import { PayloadPanel } from './PayloadPanel';
 import { RunHistory } from './RunHistory';
 import { MESSAGE_ID, matchTemplateId, templatesForProtocol } from './contentOptions';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 // BenchPage — the customizable end-to-end test workbench
 // (.design/bench.md). Three columns answer the user's three questions:
@@ -76,7 +76,7 @@ const Panel: React.FC<{
         }}
     >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.75, py: 1, borderBottom: '1px solid', borderColor: 'divider', flexShrink: 0 }}>
-            <Typography variant="overline" sx={{ fontSize: '0.62rem', color: 'text.secondary', lineHeight: 1 }}>{title}</Typography>
+            <Typography variant="overline" sx={{ fontSize: fontSizes.micro, color: 'text.secondary', lineHeight: 1 }}>{title}</Typography>
             <Typography variant="caption" sx={{ color: 'text.disabled' }}>{question}</Typography>
             <Box sx={{ flex: 1 }} />
             {action}
@@ -289,7 +289,7 @@ const BenchPage: React.FC = () => {
                 actions={
                     <Button variant="contained" startIcon={<RunIcon />} onClick={run} disabled={!request || running} sx={{ minWidth: 120 }} title={t('bench.runHint', { defaultValue: '⌘ / Ctrl + Enter' })}>
                         {running ? t('bench.running', { defaultValue: 'Running…' }) : t('bench.run', { defaultValue: 'Run' })}
-                        <Box component="kbd" sx={{ ml: 1, fontFamily: fontMono, fontSize: '0.65rem', opacity: 0.75, border: '1px solid', borderColor: 'rgba(255,255,255,.4)', borderRadius: 0.5, px: 0.5 }}>⌘↵</Box>
+                        <Box component="kbd" sx={{ ml: 1, fontFamily: fontMono, fontSize: fontSizes.micro, opacity: 0.75, border: '1px solid', borderColor: 'rgba(255,255,255,.4)', borderRadius: 0.5, px: 0.5 }}>⌘↵</Box>
                     </Button>
                 }
             />
@@ -373,7 +373,7 @@ const BenchPage: React.FC = () => {
                             />
                             <Box sx={{ pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.25 }}>
-                                    <Typography variant="overline" sx={{ fontSize: '0.62rem', color: 'text.secondary', lineHeight: 1 }}>
+                                    <Typography variant="overline" sx={{ fontSize: fontSizes.micro, color: 'text.secondary', lineHeight: 1 }}>
                                         {t('bench.result', { defaultValue: 'Result' })}
                                     </Typography>
                                     <Typography variant="caption" sx={{ color: 'text.disabled' }}>

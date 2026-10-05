@@ -4,6 +4,7 @@ import {Box, CircularProgress, IconButton, InputBase, List, ListItemButton, Tool
 import {useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {folderName, groupSessionsByFolder, isBusyStatus, sessionTitle} from './deskUtils';
+import { fontSizes } from '@/theme/fonts';
 
 interface DeskSidebarProps {
     sessions: SessionInfo[];
@@ -22,7 +23,7 @@ const StatusMark = ({session, unseen}: {session: SessionInfo; unseen: boolean}) 
     const {t} = useTranslation();
     if (session.awaiting_input) {
         return (
-            <Box component="span" sx={{px: 0.75, borderRadius: 1, fontSize: '0.65rem', fontWeight: 600, lineHeight: 1.6, bgcolor: 'warning.main', color: 'warning.contrastText'}}>
+            <Box component="span" sx={{px: 0.75, borderRadius: 1, fontSize: fontSizes.micro, fontWeight: 600, lineHeight: 1.6, bgcolor: 'warning.main', color: 'warning.contrastText'}}>
                 {t('desk.waitingMark', {defaultValue: 'waiting'})}
             </Box>
         );
@@ -34,7 +35,7 @@ const StatusMark = ({session, unseen}: {session: SessionInfo; unseen: boolean}) 
     if (bg > 0) {
         return (
             <Tooltip title={t('desk.backgroundRunning', {defaultValue: '{{count}} background task(s) running', count: bg})}>
-                <Box component="span" sx={{display: 'inline-flex', alignItems: 'center', gap: 0.25, color: 'text.secondary', fontSize: '0.7rem'}}>
+                <Box component="span" sx={{display: 'inline-flex', alignItems: 'center', gap: 0.25, color: 'text.secondary', fontSize: fontSizes.xs}}>
                     <Stream sx={{fontSize: 13}}/>{bg}
                 </Box>
             </Tooltip>
@@ -97,7 +98,7 @@ const DeskSidebar = ({sessions, selectedId, onSelect, onNew, unseen}: DeskSideba
                     <Box key={g.path} sx={{mt: 1.5}}>
                         <Box sx={{display: 'flex', alignItems: 'center', px: 1.5, mb: 0.25, '&:hover .desk-folder-add': {opacity: 1}}}>
                             <Tooltip title={g.path} placement="right">
-                                <Typography variant="body2" noWrap sx={{flex: 1, fontWeight: 600, fontSize: '0.75rem', color: 'text.secondary'}}>
+                                <Typography variant="body2" noWrap sx={{flex: 1, fontWeight: 600, fontSize: fontSizes.sm, color: 'text.secondary'}}>
                                     {folderName(g.path)}
                                 </Typography>
                             </Tooltip>
@@ -120,7 +121,7 @@ const DeskSidebar = ({sessions, selectedId, onSelect, onNew, unseen}: DeskSideba
                                     onClick={() => onSelect(s.id)}
                                     sx={{...rowSx, py: 0.5, opacity: s.status === 'closed' ? 0.55 : 1}}
                                 >
-                                    <Typography variant="body2" noWrap sx={{flex: 1, color: 'inherit', fontSize: '0.8125rem', fontWeight: unseen.has(s.id) ? 600 : undefined}}>
+                                    <Typography variant="body2" noWrap sx={{flex: 1, color: 'inherit', fontSize: fontSizes.md, fontWeight: unseen.has(s.id) ? 600 : undefined}}>
                                         {sessionTitle(s)}
                                     </Typography>
                                     <StatusMark session={s} unseen={unseen.has(s.id)}/>

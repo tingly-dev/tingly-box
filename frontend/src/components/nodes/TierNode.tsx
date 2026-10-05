@@ -3,6 +3,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import NodeTooltip from './NodeTooltip.tsx';
 import { getRouteGraphBorderColor, PROVIDER_NODE_STYLES } from './styles.tsx';
+import { fontSizes } from '@/theme/fonts';
 
 export interface TierNodeProps {
     priority: number;
@@ -86,7 +87,7 @@ export const TierNode: React.FC<TierNodeProps> = ({
             >
                 <Typography
                     sx={{
-                        fontSize: '0.8rem',
+                        fontSize: fontSizes.md,
                         fontWeight: 600,
                         color: 'text.secondary',
                         lineHeight: 1.15,

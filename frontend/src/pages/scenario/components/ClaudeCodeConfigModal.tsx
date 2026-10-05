@@ -16,7 +16,7 @@ import type { AgentApplyResult } from './AgentSetupCard';
 import Context1MChangeBanner from './Context1MChangeBanner';
 import { api } from '@/services/api';
 import { restoreAppliedClaudeCodePrefs } from './claudeCodePrefsState';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 // Raw statusline script URLs in the tingly-box repo — the installers must
 // download from the same source the JSON tab links below (they used to point
@@ -511,7 +511,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                 {applyResult.success ? modalText.applySuccess : modalText.applyFailure}
                             </AlertTitle>
                             {applyResult.success ? (
-                                <Box sx={{ fontSize: '0.8rem' }}>
+                                <Box sx={{ fontSize: fontSizes.md }}>
                                     {(applyResult.createdFiles?.length ?? 0) > 0 && (
                                         <Box sx={{ mt: 0.5 }}>
                                             <Typography variant="caption" sx={{ fontWeight: 600 }}>{modalText.createdLabel}:</Typography>

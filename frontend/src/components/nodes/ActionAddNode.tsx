@@ -11,6 +11,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import NodeTooltip from './NodeTooltip';
 import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyles, nodeSpotlightSx, SMALL_NODE_STYLES } from './styles';
+import { fontSizes } from '@/theme/fonts';
 
 const { node } = { node: SMALL_NODE_STYLES };
 
@@ -102,7 +103,7 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
                     sx={{
                         color: "text.secondary",
                         textAlign: "center",
-                        fontSize: '0.6rem',
+                        fontSize: fontSizes.micro,
                         lineHeight: 1.1
                     }}>
                     {t('rule.nodes.addModel', { defaultValue: 'Add model' })}

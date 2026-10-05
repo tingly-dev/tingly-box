@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import type { BotSettings } from '@/types/bot';
 import { ccProfileIdFromDefaultAgent } from '@/types/bot';
 import type { ProfileInfo } from '@/contexts/ProfileContext';
+import { fontSizes } from '@/theme/fonts';
 
 interface CCProfileDialogProps {
     open: boolean;
@@ -122,7 +123,7 @@ const CCProfileDialog: React.FC<CCProfileDialogProps> = ({
                                     : t('remoteAgent.ccProfile.separate', { defaultValue: 'separate' })}
                                 size="small"
                                 variant="outlined"
-                                sx={{ height: 20, fontSize: '0.65rem' }}
+                                sx={{ height: 20, fontSize: fontSizes.micro }}
                             />
                         </ListItemButton>
                     ))}

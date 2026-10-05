@@ -38,7 +38,7 @@ import {
     type FieldStruct,
     type PrefsKey,
 } from './ClaudeCodeQuickConfig';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 type OverrideKey = PrefsKey | 'defaultMode';
 
@@ -371,7 +371,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                         endAdornment: field.unit
                             ? <InputAdornment position="end"><Typography variant="caption" color="text.disabled">{field.unit}</Typography></InputAdornment>
                             : undefined,
-                        sx: { fontFamily: field.kind === 'model' ? fontMono : undefined, fontSize: '0.85rem' },
+                        sx: { fontFamily: field.kind === 'model' ? fontMono : undefined, fontSize: fontSizes.lg },
                     },
                 }}
             />

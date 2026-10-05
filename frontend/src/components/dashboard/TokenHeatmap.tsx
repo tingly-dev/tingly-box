@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatNumber } from './chartStyles';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
+import { fontSizes } from '@/theme/fonts';
 
 // BCP-47 tags for date formatting, keyed by the languages the UI ships.
 const HEATMAP_LOCALES: Record<AppLanguage, string> = {
@@ -131,8 +132,8 @@ const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 // One inline stat in the footer strip: bold value followed by a muted label.
 const StatInline = ({ value, label }: { value: string; label: string }) => (
     <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, whiteSpace: 'nowrap' }}>
-        <Typography sx={{ fontSize: '0.78rem', fontWeight: 700 }}>{value}</Typography>
-        <Typography sx={{ fontSize: '0.71rem', color: 'text.secondary' }}>{label}</Typography>
+        <Typography sx={{ fontSize: fontSizes.md, fontWeight: 700 }}>{value}</Typography>
+        <Typography sx={{ fontSize: fontSizes.xs, color: 'text.secondary' }}>{label}</Typography>
     </Box>
 );
 
@@ -465,7 +466,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
 
                     {/* Legend */}
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                        <Typography sx={{ fontSize: '0.625rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'text.secondary' }}>
+                        <Typography sx={{ fontSize: fontSizes.micro, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'text.secondary' }}>
                             {t('dashboard.heatmap.less', { defaultValue: 'Less' })}
                         </Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.375 }}>
@@ -482,7 +483,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                 />
                             ))}
                         </Box>
-                        <Typography sx={{ fontSize: '0.625rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'text.secondary' }}>
+                        <Typography sx={{ fontSize: fontSizes.micro, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'text.secondary' }}>
                             {t('dashboard.heatmap.more', { defaultValue: 'More' })}
                         </Typography>
                     </Box>

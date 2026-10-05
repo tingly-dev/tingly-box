@@ -14,6 +14,7 @@ import {
 import { getTotalTokens, getCacheHitRate, hasCacheWrites } from './chartStyles';
 import { UsageMetricHeaderCells, UsageMetricValueCells } from './UsageMetricCells';
 import type { UsageMetricKey, UsageMetricLabels } from './usageMetricColumns';
+import { fontSizes } from '@/theme/fonts';
 
 export type SortField = 'name' | UsageMetricKey;
 export type SortDirection = 'asc' | 'desc';
@@ -243,7 +244,7 @@ export function RosterBreakdownTable<D extends MetricRow>({
                             backgroundColor: alpha(theme.palette.background.paper, 0.8),
                             '& .MuiTableCell-root': {
                                 fontWeight: 600,
-                                fontSize: '0.75rem',
+                                fontSize: fontSizes.sm,
                                 textTransform: 'uppercase',
                                 letterSpacing: '0.05em',
                                 color: 'text.secondary',

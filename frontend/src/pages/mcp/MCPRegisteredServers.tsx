@@ -40,7 +40,7 @@ import {
     type MCPSourceConfig,
     type MCPSourceFormValue,
 } from './types';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -112,7 +112,7 @@ const SecretInput: React.FC<SecretInputProps> = ({ value, onChange, onBlur, plac
                             </IconButton>
                         </InputAdornment>
                     ),
-                    sx: { fontFamily: fontMono, fontSize: '0.8rem' },
+                    sx: { fontFamily: fontMono, fontSize: fontSizes.md },
                 }
             }}
         />
@@ -394,7 +394,7 @@ const MCPRegisteredServers = () => {
                 <Box>
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 2.5 }}>
                         <Typography
-                            sx={{ fontFamily: fontMono, fontSize: '0.85rem', fontWeight: 700, color: 'text.primary', opacity: 0.35, mt: 0.35, flexShrink: 0, userSelect: 'none', letterSpacing: '0.05em' }}
+                            sx={{ fontFamily: fontMono, fontSize: fontSizes.lg, fontWeight: 700, color: 'text.primary', opacity: 0.35, mt: 0.35, flexShrink: 0, userSelect: 'none', letterSpacing: '0.05em' }}
                         >
                             02
                         </Typography>

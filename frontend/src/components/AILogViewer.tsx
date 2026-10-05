@@ -23,7 +23,7 @@ import RequestJourney, { type TraceDetail } from '@/components/RequestJourney';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useTableSort } from '@/hooks/useTableSort';
 import { formatTimestamp } from '@/utils/datetime';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 export interface ModelRequestSummary {
     request_id: string;
@@ -229,7 +229,7 @@ const AILogViewer = ({ getRequests, getRequestDetail, getTrace, initialScenario 
                             variant={scenario === initialScenario ? 'filled' : 'outlined'}
                             onClick={() => setScenario(prev => prev === initialScenario ? '' : initialScenario)}
                             onDelete={scenario === initialScenario ? () => setScenario('') : undefined}
-                            sx={{ fontFamily: fontMono, fontSize: '0.72rem' }}
+                            sx={{ fontFamily: fontMono, fontSize: fontSizes.xs }}
                         />
                     )}
                 </Stack>
@@ -337,7 +337,7 @@ const AILogViewer = ({ getRequests, getRequestDetail, getTrace, initialScenario 
                                                         {expanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
                                                     </IconButton>
                                                 </TableCell>
-                                                <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                                                <TableCell sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>
                                                     <Stack direction="row" spacing={0.5} sx={{
                                                         alignItems: "center"
                                                     }}>
@@ -345,22 +345,22 @@ const AILogViewer = ({ getRequests, getRequestDetail, getTrace, initialScenario 
                                                         <span>{formatTimestamp(req.time)}</span>
                                                     </Stack>
                                                 </TableCell>
-                                                <TableCell sx={{ fontSize: '0.75rem' }}>
+                                                <TableCell sx={{ fontSize: fontSizes.sm }}>
                                                     {req.scenario ? (
-                                                        <Chip size="small" label={req.scenario} sx={{ fontSize: '0.65rem', height: 20 }} />
+                                                        <Chip size="small" label={req.scenario} sx={{ fontSize: fontSizes.micro, height: 20 }} />
                                                     ) : (
                                                         '-'
                                                     )}
                                                 </TableCell>
-                                                <TableCell sx={{ fontSize: '0.75rem', fontFamily: fontMono }}>
+                                                <TableCell sx={{ fontSize: fontSizes.sm, fontFamily: fontMono }}>
                                                     {req.request_model || '-'}
                                                     {req.routed_model && req.routed_model !== req.request_model && (
-                                                        <Typography component="span" sx={{ fontFamily: fontMono, fontSize: '0.72rem', color: 'text.secondary' }}>
+                                                        <Typography component="span" sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'text.secondary' }}>
                                                             {' → '}{req.routed_model}
                                                         </Typography>
                                                     )}
                                                 </TableCell>
-                                                <TableCell sx={{ fontSize: '0.75rem', fontFamily: fontMono }}>
+                                                <TableCell sx={{ fontSize: fontSizes.sm, fontFamily: fontMono }}>
                                                     {req.provider || '-'}
                                                 </TableCell>
                                                 <TableCell>
@@ -369,13 +369,13 @@ const AILogViewer = ({ getRequests, getRequestDetail, getTrace, initialScenario 
                                                             size="small"
                                                             label={req.status}
                                                             color={statusColor(req.status)}
-                                                            sx={{ fontSize: '0.65rem', height: 20, fontWeight: 'bold' }}
+                                                            sx={{ fontSize: fontSizes.micro, height: 20, fontWeight: 'bold' }}
                                                         />
                                                     ) : (
                                                         '-'
                                                     )}
                                                 </TableCell>
-                                                <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                                                <TableCell sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>
                                                     {req.latency_ms != null ? `${req.latency_ms} ms` : '-'}
                                                 </TableCell>
                                             </TableRow>
@@ -401,11 +401,11 @@ const AILogViewer = ({ getRequests, getRequestDetail, getTrace, initialScenario 
                                                             >
                                                                 {/* Correlation ids live at the bottom: needed when filing a
                                                                     bug or grepping server logs, never when reading the journey. */}
-                                                                <Typography sx={{ fontFamily: fontMono, fontSize: '0.65rem', color: 'text.disabled' }}>
+                                                                <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: 'text.disabled' }}>
                                                                     request {req.request_id}
                                                                 </Typography>
                                                                 {detail?.trace_id && (
-                                                                    <Typography sx={{ fontFamily: fontMono, fontSize: '0.65rem', color: 'text.disabled' }}>
+                                                                    <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: 'text.disabled' }}>
                                                                         trace {detail.trace_id}
                                                                     </Typography>
                                                                 )}

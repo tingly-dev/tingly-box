@@ -20,7 +20,7 @@ import { scrollToModelsCard } from './AgentSetupCard';
 import Context1MChangeBanner from './Context1MChangeBanner';
 import { CopyUrlKeyButtons } from './config/CopyUrlKeyButtons';
 import api from '@/services/api';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 interface ClaudeDesktopConfigModalProps {
     open: boolean;
@@ -128,7 +128,7 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                             Launch the app, then enable developer mode:
                         </Typography>
                         <Box sx={{ bgcolor: 'background.default', p: 1.5, borderRadius: 1 }}>
-                            <Typography variant="body2" sx={{ fontFamily: fontMono, fontSize: '0.8rem' }}>
+                            <Typography variant="body2" sx={{ fontFamily: fontMono, fontSize: fontSizes.md }}>
                                 Help → Troubleshooting → Enable Developer Mode
                             </Typography>
                         </Box>
@@ -140,7 +140,7 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                             Step 2: Configure Third-Party Inference
                         </Typography>
                         <Box sx={{ bgcolor: 'background.default', p: 1.5, borderRadius: 1, mb: 1.5 }}>
-                            <Typography variant="body2" sx={{ fontFamily: fontMono, fontSize: '0.8rem' }}>
+                            <Typography variant="body2" sx={{ fontFamily: fontMono, fontSize: fontSizes.md }}>
                                 Developer → Configure third-party inference
                             </Typography>
                         </Box>
@@ -218,7 +218,7 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                                 p: 1.5,
                                 mb: 2,
                                 fontFamily: fontMono,
-                                fontSize: '0.78rem',
+                                fontSize: fontSizes.md,
                                 lineHeight: 1.6,
                                 whiteSpace: 'pre',
                                 overflowX: 'auto',
@@ -240,7 +240,7 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                                     direction="row"
                                     spacing={1}
                                     sx={{ alignItems: 'center', bgcolor: 'background.default', borderRadius: 1, px: 1.5, py: 0.5 }}>
-                                    <Typography sx={{ fontFamily: fontMono, fontSize: '0.82rem', flex: 2, minWidth: 0 }}>
+                                    <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.md, flex: 2, minWidth: 0 }}>
                                         {rule.request_model}
                                     </Typography>
                                     <TextField
@@ -253,7 +253,7 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                                         onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                                         disabled={savingUuid === rule.uuid}
                                         sx={{ flex: 1 }}
-                                        slotProps={{ htmlInput: { style: { fontSize: '0.82rem' }, 'aria-label': `Label for ${rule.request_model}` } }}
+                                        slotProps={{ htmlInput: { style: { fontSize: fontSizes.md }, 'aria-label': `Label for ${rule.request_model}` } }}
                                     />
                                     {savingUuid === rule.uuid && <CircularProgress size={14} />}
                                 </Stack>

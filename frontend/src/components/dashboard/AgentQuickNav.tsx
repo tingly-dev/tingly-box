@@ -2,6 +2,7 @@ import { Box, Card, CardContent, Typography, Tooltip, Divider } from '@mui/mater
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { SCENARIOS, useHiddenScenarios } from '@/pages/scenario/scenarioRegistry';
+import { fontSizes } from '@/theme/fonts';
 
 const QUICK_NAV_ICON_SIZE = 20;
 
@@ -27,10 +28,10 @@ const AgentQuickNav: React.FC = () => {
             <CardContent sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
                 {/* Header */}
                 <Box sx={{ mb: 1.5 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.8rem' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: fontSizes.md }}>
                         {t('dashboard.agentNav.title', { defaultValue: 'Quick Start' })}
                     </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: fontSizes.xs }}>
                         {t('dashboard.agentNav.description', { defaultValue: 'Jump to agent' })}
                     </Typography>
                 </Box>
@@ -95,7 +96,7 @@ const AgentQuickNav: React.FC = () => {
                                     variant="caption"
                                     sx={{
                                         fontWeight: 500,
-                                        fontSize: '0.75rem',
+                                        fontSize: fontSizes.sm,
                                         color: 'text.primary',
                                         flex: 1,
                                         lineHeight: 1.3,

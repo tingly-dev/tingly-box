@@ -2,6 +2,7 @@ import {Visibility, VisibilityOff} from '@/components/icons';
 import {Box, Checkbox, FormControlLabel, IconButton, InputAdornment, TextField} from '@mui/material';
 import React, {useState} from 'react';
 import {useTranslation} from 'react-i18next';
+import { fontSizes } from '@/theme/fonts';
 
 interface ApiKeyFieldProps {
     mode: 'add' | 'edit';
@@ -85,7 +86,7 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
                     <FormControlLabel
                         sx={{
                             mr: 0,
-                            '& .MuiFormControlLabel-label': {fontSize: '0.75rem', color: 'text.secondary'},
+                            '& .MuiFormControlLabel-label': {fontSize: fontSizes.sm, color: 'text.secondary'},
                         }}
                         control={
                             <Checkbox

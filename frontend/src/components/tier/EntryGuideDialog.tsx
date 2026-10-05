@@ -21,6 +21,7 @@ import { ROUTING_GUIDE_STEPS } from './diagrams';
 import { StaticGraphViewer } from './StaticGraphViewer';
 import { GuideToolbarPreview } from './GuideToolbarPreview';
 import { GuideLanguageToggle } from './GuideLanguageToggle';
+import { fontSizes } from '@/theme/fonts';
 
 export interface EntryGuideDialogProps {
     open: boolean;
@@ -271,7 +272,7 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                                 px: 1.5,
                                 py: 0.5,
                                 borderRadius: 1,
-                                fontSize: '0.75rem',
+                                fontSize: fontSizes.sm,
                                 opacity: 0.8,
                             }}>
                                 💡 {t('rule.routing.guide.hoverHint', { defaultValue: 'Hover over a node in the diagram to see its actions' })}

@@ -31,6 +31,7 @@ import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
 import { formatTimestamp } from '@/utils/datetime';
+import { fontSizes } from '@/theme/fonts';
 
 type GuardrailsHistoryEntry = {
     time: string;
@@ -315,7 +316,7 @@ const GuardrailsHistoryPage = () => {
                                                                 {expandedRows.has(index) ? <KeyboardArrowUp /> : <KeyboardArrowDown />}
                                                             </IconButton>
                                                         </TableCell>
-                                                        <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                                                        <TableCell sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>
                                                             {formatTimestamp(entry.time)}
                                                         </TableCell>
                                                         <TableCell>
@@ -327,14 +328,14 @@ const GuardrailsHistoryPage = () => {
                                                                 sx={{ height: 22, textTransform: 'capitalize' }}
                                                             />
                                                         </TableCell>
-                                                        <TableCell sx={{ fontSize: '0.8rem' }}>{entry.phase || '-'}</TableCell>
-                                                        <TableCell sx={{ fontSize: '0.8rem' }}>{entry.scenario || '-'}</TableCell>
-                                                        <TableCell sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>{inputLabel}</TableCell>
-                                                        <TableCell sx={{ fontSize: '0.8rem' }}>
+                                                        <TableCell sx={{ fontSize: fontSizes.md }}>{entry.phase || '-'}</TableCell>
+                                                        <TableCell sx={{ fontSize: fontSizes.md }}>{entry.scenario || '-'}</TableCell>
+                                                        <TableCell sx={{ fontSize: fontSizes.md, color: 'text.secondary' }}>{inputLabel}</TableCell>
+                                                        <TableCell sx={{ fontSize: fontSizes.md }}>
                                                             <Typography
                                                                 variant="body2"
                                                                 sx={{
-                                                                    fontSize: '0.8rem',
+                                                                    fontSize: fontSizes.md,
                                                                     display: '-webkit-box',
                                                                     WebkitLineClamp: 1,
                                                                     WebkitBoxOrient: 'vertical',

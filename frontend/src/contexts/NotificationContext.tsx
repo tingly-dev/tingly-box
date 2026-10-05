@@ -15,6 +15,7 @@ import {
   getNotifyItems,
   subscribeNotify,
 } from '@/utils/notify';
+import { fontSizes } from '@/theme/fonts';
 
 const EXIT_TRANSITION_MS = 200;
 
@@ -128,7 +129,7 @@ function NotificationToast({ item }: { item: NotifyItem }) {
                 color="inherit"
                 underline="always"
                 onClick={() => setExpanded((v) => !v)}
-                sx={{ fontSize: '0.75rem', mt: 0.5, display: 'block', opacity: 0.85 }}
+                sx={{ fontSize: fontSizes.sm, mt: 0.5, display: 'block', opacity: 0.85 }}
               >
                 {expanded ? 'Show less' : 'Show more'}
               </Link>

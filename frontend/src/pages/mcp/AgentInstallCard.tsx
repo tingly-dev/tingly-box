@@ -17,7 +17,7 @@ import {
 } from '@/components/icons';
 import { CopyIconButton } from '@/components/CopyIconButton';
 import { getApiBaseUrl } from '@/utils/protocol';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,7 +58,7 @@ const RuntimeSelector: React.FC<RuntimeSelectorProps> = ({ options, value, onCha
                     sx={{
                         px: 1.5,
                         height: 28,
-                        fontSize: '0.75rem',
+                        fontSize: fontSizes.sm,
                         fontWeight: 600,
                         fontFamily: 'inherit',
                         cursor: 'pointer',
@@ -116,7 +116,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ filename, runtimeLabel, command }
                 <Typography
                     sx={{
                         flex: 1,
-                        fontSize: '0.72rem',
+                        fontSize: fontSizes.xs,
                         fontFamily: fontMono,
                         color: 'rgb(125, 133, 144)',
                     }}
@@ -128,7 +128,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ filename, runtimeLabel, command }
                     size="small"
                     sx={{
                         height: 18,
-                        fontSize: '0.65rem',
+                        fontSize: fontSizes.micro,
                         fontWeight: 600,
                         bgcolor: 'rgb(31, 37, 48)',
                         color: 'rgb(154, 161, 172)',
@@ -153,7 +153,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ filename, runtimeLabel, command }
                     px: 2,
                     py: 1.75,
                     fontFamily: fontMono,
-                    fontSize: '0.78rem',
+                    fontSize: fontSizes.md,
                     lineHeight: 1.7,
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-all',
@@ -245,7 +245,7 @@ export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
                 <Typography
                     sx={{
                         fontFamily: fontMono,
-                        fontSize: '0.85rem',
+                        fontSize: fontSizes.lg,
                         fontWeight: 700,
                         color: 'text.primary',
                         mt: 0.35,
@@ -347,7 +347,7 @@ export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
                             borderTop: '1px solid',
                             borderColor: 'divider',
                             mx: 0,
-                            '& .MuiAlert-message': { fontSize: '0.8rem' },
+                            '& .MuiAlert-message': { fontSize: fontSizes.md },
                         }}
                     >
                         Set <code>MY_API_KEY</code> to your token. Run{' '}

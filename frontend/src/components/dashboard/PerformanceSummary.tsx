@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Box, CircularProgress, Paper, Typography } from '@mui/material';
 import api from '@/services/api';
+import { fontSizes } from '@/theme/fonts';
 
 interface MetricPercentiles {
     sample_count: number;
@@ -97,8 +98,8 @@ export default function PerformanceSummary({ queryParams }: { queryParams: Perfo
                 <Box />
                 {metrics.map(({ key, title, metric }) => (
                     <Box key={key} sx={{ minWidth: 0 }}>
-                        <Typography sx={{ fontWeight: 600, fontSize: '0.76rem' }}>{title}</Typography>
-                        <Typography sx={{ color: 'text.disabled', fontSize: '0.6rem', mt: 0.2 }}>
+                        <Typography sx={{ fontWeight: 600, fontSize: fontSizes.sm }}>{title}</Typography>
+                        <Typography sx={{ color: 'text.disabled', fontSize: fontSizes.micro, mt: 0.2 }}>
                             {t('dashboard.performance.sampleCount', { n: metric?.sample_count.toLocaleString() ?? 0 })}
                         </Typography>
                     </Box>
@@ -107,11 +108,11 @@ export default function PerformanceSummary({ queryParams }: { queryParams: Perfo
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', '& > * + *': { borderTop: '1px solid', borderColor: 'divider' } }}>
                 {PERCENTILES.map(({ key, label }) => (
                     <Box key={key} sx={{ px: 2.25, py: 1.25, minWidth: 0, flex: 1, display: 'grid', gridTemplateColumns: '52px repeat(3, minmax(0, 1fr))', alignItems: 'center', columnGap: 1 }}>
-                        <Typography sx={{ color: 'text.secondary', fontSize: '0.68rem', fontWeight: 600 }}>{label}</Typography>
+                        <Typography sx={{ color: 'text.secondary', fontSize: fontSizes.xs, fontWeight: 600 }}>{label}</Typography>
                         {metrics.map((metric) => {
                             const value = formatMetricValue(metric.metric, metric.kind, key);
                             return (
-                                <Typography key={metric.key} sx={{ color: value === '—' ? 'text.disabled' : 'text.primary', fontWeight: 650, fontSize: '0.86rem', whiteSpace: 'nowrap' }}>
+                                <Typography key={metric.key} sx={{ color: value === '—' ? 'text.disabled' : 'text.primary', fontWeight: 650, fontSize: fontSizes.lg, whiteSpace: 'nowrap' }}>
                                     {value}
                                 </Typography>
                             );

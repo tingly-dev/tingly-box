@@ -3,6 +3,7 @@ import { Box, Typography, Tooltip, ToggleButton, ToggleButtonGroup, Slider } fro
 import { useTranslation } from 'react-i18next';
 import { toggleButtonGroupStyle } from '@/styles/toggleStyles';
 import type { ProbeThinking, ProbeProtocol } from '@/types/probe';
+import { fontSizes } from '@/theme/fonts';
 
 // AxisPrimitives: the instrument-panel vocabulary shared by the probe dialog's
 // control rail and the Bench page's compose column — one axis logic, two
@@ -60,7 +61,7 @@ export const AxisGroup: React.FC<{ label: React.ReactNode; children: React.React
     <Box>
         <Typography
             variant="overline"
-            sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '0.6rem', color: 'text.secondary', mb: 0.5, '&::after': { content: '""', flex: 1, height: '1px', bgcolor: 'divider' } }}
+            sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: fontSizes.micro, color: 'text.secondary', mb: 0.5, '&::after': { content: '""', flex: 1, height: '1px', bgcolor: 'divider' } }}
         >
             {label}
         </Typography>
@@ -145,7 +146,7 @@ export const ThinkingSlider: React.FC<{ value: ProbeThinking; onChange: (v: Prob
                 }))}
                 onChange={(_, v) => onChange(THINKING_LADDER[v as number])}
                 sx={{
-                    '& .MuiSlider-markLabel': { fontSize: '0.7rem' },
+                    '& .MuiSlider-markLabel': { fontSize: fontSizes.xs },
                     '& .MuiSlider-markLabel[data-index="0"]': { transform: 'translateX(0%)' },
                     [`& .MuiSlider-markLabel[data-index="${THINKING_LADDER.length - 1}"]`]: { transform: 'translateX(-100%)' },
                 }}

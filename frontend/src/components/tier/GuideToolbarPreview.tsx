@@ -7,6 +7,7 @@ import {
     BugReport as TroubleshootIcon,
     Key as KeyIcon,
 } from '@/components/icons';
+import { fontSizes } from '@/theme/fonts';
 
 export type GuideToolbarButton = 'connectAI' | 'newRule';
 
@@ -51,7 +52,7 @@ export const GuideToolbarPreview: React.FC<GuideToolbarPreviewProps> = ({ highli
                 bottom: 'calc(100% + 5px)',
                 left: '50%',
                 transform: 'translateX(-50%)',
-                fontSize: '0.6rem',
+                fontSize: fontSizes.micro,
                 fontWeight: 700,
                 letterSpacing: '0.02em',
                 color: 'primary.contrastText',

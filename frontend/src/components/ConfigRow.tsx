@@ -1,5 +1,6 @@
 import {Box, Stack, Typography} from '@mui/material';
 import React, {type ReactNode} from 'react';
+import { fontSizes } from '@/theme/fonts';
 
 // ============================================================================
 // Types
@@ -39,7 +40,7 @@ const TabButton: React.FC<{
         sx={{
             px: 1.5,
             py: 0.5,
-            fontSize: '0.8125rem',
+            fontSize: fontSizes.md,
             // Keep fontWeight fixed so the label's rendered width never
             // changes on selection — toggling font-weight here shifts every
             // tab/separator to its right. Fake the bold via text-shadow

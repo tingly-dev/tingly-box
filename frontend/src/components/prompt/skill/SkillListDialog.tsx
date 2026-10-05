@@ -25,6 +25,7 @@ import { useState, useEffect } from 'react';
 import { type SkillLocation, type Skill, type ScanResult } from '@/types/prompt';
 import { getIdeSourceLabel } from '@/constants/ideSources';
 import { api } from '@/services/api';
+import { fontSizes } from '@/theme/fonts';
 
 interface SkillListDialogProps {
     open: boolean;
@@ -124,7 +125,7 @@ const SkillListDialog = ({ open, location, onClose, onSkillClick }: SkillListDia
                             size="small"
                             label={sourceLabel}
                             variant="outlined"
-                            sx={{ height: 24, fontSize: '0.75rem' }}
+                            sx={{ height: 24, fontSize: fontSizes.sm }}
                         />
                         <Box>
                             <Typography variant="h6">{location.name}</Typography>

@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Button, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { RawRequest } from './benchState';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 // RequestEditor: what the client sends. Protocol and Content (which body,
 // Message vs a whole-body preset) are chosen in Compose now, not here
@@ -38,7 +38,7 @@ export const RequestEditor: React.FC<{
                     value={message}
                     onChange={(e) => onMessageChange(e.target.value)}
                     placeholder={messagePlaceholder}
-                    slotProps={{ htmlInput: { sx: { fontSize: '0.82rem' } }, inputLabel: { shrink: true } }}
+                    slotProps={{ htmlInput: { sx: { fontSize: fontSizes.md } }, inputLabel: { shrink: true } }}
                 />
                 <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.4 }}>
                     {t('bench.presetHint', { defaultValue: "One message, shaped by the Tool / Vision / Thinking knobs — it's the probe itself, materialized. To send anything else — multi-turn, images, tool results, provider-specific fields — pick a different Content above." })}
@@ -53,7 +53,7 @@ export const RequestEditor: React.FC<{
                 <Box sx={{ flex: 1 }} />
                 {seedBody && (
                     <Tooltip title={t('bench.startFromPresetHint', { defaultValue: "What the probe's own request would send right now." })}>
-                        <Button size="small" variant="outlined" onClick={() => onRawChange({ ...raw, body: seedBody })} sx={{ fontSize: '0.72rem' }}>
+                        <Button size="small" variant="outlined" onClick={() => onRawChange({ ...raw, body: seedBody })} sx={{ fontSize: fontSizes.xs }}>
                             {t('bench.startFromPreset', { defaultValue: 'Copy the preset request' })}
                         </Button>
                     </Tooltip>
@@ -67,7 +67,7 @@ export const RequestEditor: React.FC<{
                 onChange={(e) => onRawChange({ ...raw, body: e.target.value })}
                 error={!!error}
                 helperText={error ? t('bench.rawInvalid', { error, defaultValue: 'Not valid JSON: {{error}}' }) : undefined}
-                slotProps={{ htmlInput: { sx: { fontFamily: fontMono, fontSize: '0.74rem', lineHeight: 1.5 }, spellCheck: false } }}
+                slotProps={{ htmlInput: { sx: { fontFamily: fontMono, fontSize: fontSizes.sm, lineHeight: 1.5 }, spellCheck: false } }}
             />
             <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.4 }}>
                 {t('bench.rawHint', { defaultValue: "Exactly what a client speaking this protocol would send. The probe fills in the model (and max_tokens for Anthropic); Stream still applies; tools, images and thinking are yours to set here — the Tool / Vision / Thinking knobs above only shape Content: Message." })}

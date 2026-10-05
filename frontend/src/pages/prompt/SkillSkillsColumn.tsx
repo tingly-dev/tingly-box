@@ -28,6 +28,7 @@ import {
     groupSkillsIntelligently,
 } from '@/components/prompt/skill/skillGrouping';
 import SkillColumnShell from './SkillColumnShell';
+import { fontSizes } from '@/theme/fonts';
 
 interface SkillListItemProps {
     skill: Skill;
@@ -243,7 +244,7 @@ const SkillSkillsColumn = ({
                                                     <MuiChip
                                                         label={group.skills.length}
                                                         size="small"
-                                                        sx={{ height: 18, fontSize: '0.65rem' }}
+                                                        sx={{ height: 18, fontSize: fontSizes.micro }}
                                                     />
                                                 </Box>
                                             </ListItemButton>

@@ -3,7 +3,7 @@ import { Box, Chip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { formatLatency } from '@/components/probe/runProbe';
 import type { RunRecord } from './benchState';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 // RunHistory: this session's runs as chips. Clicking one shows that result
 // AND restores the configuration that produced it — comparing two
@@ -19,7 +19,7 @@ export const RunHistory: React.FC<{
     if (runs.length === 0) return null;
     return (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, overflowX: 'auto', py: 0.25 }}>
-            <Typography variant="overline" sx={{ fontSize: '0.6rem', color: 'text.disabled', mr: 0.5, whiteSpace: 'nowrap' }}>
+            <Typography variant="overline" sx={{ fontSize: fontSizes.micro, color: 'text.disabled', mr: 0.5, whiteSpace: 'nowrap' }}>
                 {t('bench.runs', { defaultValue: 'Runs' })}
             </Typography>
             {runs.map((run) => {
@@ -35,7 +35,7 @@ export const RunHistory: React.FC<{
                         onClick={() => onSelect(run)}
                         icon={<Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: ok ? 'success.main' : 'error.main', ml: '6px !important' }} />}
                         label={`${head} · ${run.label}`}
-                        sx={{ fontFamily: fontMono, fontSize: '0.7rem', flexShrink: 0 }}
+                        sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, flexShrink: 0 }}
                     />
                 );
             })}

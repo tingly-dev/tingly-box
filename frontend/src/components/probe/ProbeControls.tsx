@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { ProbeProtocol } from '@/types/probe';
 import type { ProbeAxes } from './probeConfig';
 import { Axis, AxisGroup, ExclusiveToggle, ThinkingSlider, PROTOCOL_META } from './AxisPrimitives';
+import { fontSizes } from '@/theme/fonts';
 
 // ProbeControls renders the control rail: orthogonal axes stacked vertically,
 // one label + control pair per row. Groups fill the rail width and every
@@ -188,7 +189,7 @@ export const ProbeControls: React.FC<ProbeControlsProps> = ({
                                     multiline
                                     maxRows={4}
                                     slotProps={{
-                                        htmlInput: { sx: { fontSize: '0.78rem' } },
+                                        htmlInput: { sx: { fontSize: fontSizes.md } },
                                         input: { sx: { py: 0.65 } },
                                     }}
                                     sx={{ width: '100%' }}

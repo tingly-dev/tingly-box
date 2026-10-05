@@ -1,5 +1,6 @@
 import { Box } from '@mui/material';
 import { alpha, keyframes, styled, type Theme } from '@mui/material/styles';
+import { fontSizes } from '@/theme/fonts';
 
 export const routeGraphActive = '#4F6F9F';
 export const routeGraphActiveBg = '#F7F9FC';
@@ -299,13 +300,13 @@ export const NODE_LAYER_STYLES = {
         px: 0.5,
         gap: 0.5,
     } as const,
-    typography: { fontWeight: 600, fontSize: '0.8rem', lineHeight: 1.15 } as const,
+    typography: { fontWeight: 600, fontSize: fontSizes.md, lineHeight: 1.15 } as const,
     toggleButton: {
         height: 24,
         minWidth: 0,
         padding: '0 8px',
         gap: 0.5,
-        fontSize: '0.75rem',
+        fontSize: fontSizes.sm,
         fontWeight: 600,
         textTransform: 'none' as const,
         border: '1px solid',

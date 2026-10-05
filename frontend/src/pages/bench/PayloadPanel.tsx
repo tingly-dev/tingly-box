@@ -6,7 +6,7 @@ import type { ProbeCurlResult } from '@/components/probe/runProbe';
 import { CopyBlock } from '@/components/probe/ResultSections';
 import { CopyIconButton } from '@/components/CopyIconButton';
 import type { ProbeRequest } from '@/types/probe';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 // PayloadPanel: "what actually goes out" — the request as POST
 // /api/v2/probe/curl renders it, from the same builders the run uses. The
@@ -57,7 +57,7 @@ export const PayloadPanel: React.FC<{
 
     if (!request) {
         return buildError ? (
-            <Alert severity="error" variant="outlined" sx={{ py: 0.25, fontSize: '0.78rem' }}>
+            <Alert severity="error" variant="outlined" sx={{ py: 0.25, fontSize: fontSizes.md }}>
                 <strong>{t('bench.buildFailed', { defaultValue: 'Could not build the request' })}</strong> — {buildError}
             </Alert>
         ) : (
@@ -71,18 +71,18 @@ export const PayloadPanel: React.FC<{
         <Stack spacing={1.5}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <ToggleButtonGroup size="small" exclusive value={tab} onChange={(_, v) => v && setTab(v)}>
-                    <ToggleButton value="request" sx={{ px: 1.5, py: 0.25, fontSize: '0.72rem' }}>{t('bench.request', { defaultValue: 'Request' })}</ToggleButton>
-                    <ToggleButton value="curl" sx={{ px: 1.5, py: 0.25, fontSize: '0.72rem' }}>{t('probe.curl')}</ToggleButton>
+                    <ToggleButton value="request" sx={{ px: 1.5, py: 0.25, fontSize: fontSizes.xs }}>{t('bench.request', { defaultValue: 'Request' })}</ToggleButton>
+                    <ToggleButton value="curl" sx={{ px: 1.5, py: 0.25, fontSize: fontSizes.xs }}>{t('probe.curl')}</ToggleButton>
                 </ToggleButtonGroup>
                 <Box sx={{ flex: 1 }} />
-                <Typography variant="caption" sx={{ color: loading ? 'primary.main' : 'text.disabled', fontSize: '0.62rem' }}>
+                <Typography variant="caption" sx={{ color: loading ? 'primary.main' : 'text.disabled', fontSize: fontSizes.micro }}>
                     {loading ? t('bench.rebuilding', { defaultValue: 'Rebuilding… (500 ms debounce)' }) : t('bench.builtFrom', { defaultValue: 'Built from POST /api/v2/probe/curl — the same builders the run uses.' })}
                 </Typography>
             </Box>
             {loading && !data && <LinearProgress sx={{ height: 3, borderRadius: 2 }} />}
 
             {curl && !curl.success && (
-                <Alert severity="error" variant="outlined" sx={{ py: 0.25, fontSize: '0.78rem' }}>
+                <Alert severity="error" variant="outlined" sx={{ py: 0.25, fontSize: fontSizes.md }}>
                     <strong>{t('bench.buildFailed', { defaultValue: 'Could not build the request' })}</strong>
                     {curl.error?.message ? ` — ${curl.error.message}` : ''}
                 </Alert>
@@ -90,15 +90,15 @@ export const PayloadPanel: React.FC<{
 
             {data && tab === 'request' && (
                 <Box sx={{ opacity: loading ? 0.6 : 1, transition: 'opacity .1s' }}>
-                    <Box sx={{ fontFamily: fontMono, fontSize: '0.78rem', display: 'flex', gap: 1, alignItems: 'baseline', wordBreak: 'break-all' }}>
+                    <Box sx={{ fontFamily: fontMono, fontSize: fontSizes.md, display: 'flex', gap: 1, alignItems: 'baseline', wordBreak: 'break-all' }}>
                         <Box component="span" sx={{ color: 'success.main', fontWeight: 600, whiteSpace: 'nowrap' }}>{data.method}</Box>
                         <span>{data.url}</span>
                     </Box>
 
-                    <Typography variant="overline" sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '0.6rem', mt: 1.5, '&::after': { content: '""', flex: 1, height: '1px', bgcolor: 'divider' } }}>
+                    <Typography variant="overline" sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: fontSizes.micro, mt: 1.5, '&::after': { content: '""', flex: 1, height: '1px', bgcolor: 'divider' } }}>
                         {t('bench.headers', { defaultValue: 'Headers' })}
                     </Typography>
-                    <Box sx={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) 24px', gap: '2px 12px', fontFamily: fontMono, fontSize: '0.72rem', alignItems: 'center' }}>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) 24px', gap: '2px 12px', fontFamily: fontMono, fontSize: fontSizes.xs, alignItems: 'center' }}>
                         {headerRows.map(([name, value]) => {
                             const edited = overriddenHeader(name);
                             return (
@@ -127,31 +127,31 @@ export const PayloadPanel: React.FC<{
                     </Box>
                     {newHeader ? (
                         <Box sx={{ display: 'flex', gap: 1, mt: 1, alignItems: 'center' }}>
-                            <TextField size="small" placeholder={t('bench.headerName', { defaultValue: 'Name' })} value={newHeader.name} onChange={(e) => setNewHeader({ ...newHeader, name: e.target.value })} slotProps={{ htmlInput: { sx: { fontSize: '0.72rem', py: 0.5, fontFamily: fontMono } } }} sx={{ width: 160 }} />
-                            <TextField size="small" placeholder={t('bench.headerValue', { defaultValue: 'Value' })} value={newHeader.value} onChange={(e) => setNewHeader({ ...newHeader, value: e.target.value })} slotProps={{ htmlInput: { sx: { fontSize: '0.72rem', py: 0.5, fontFamily: fontMono } } }} sx={{ flex: 1 }} />
+                            <TextField size="small" placeholder={t('bench.headerName', { defaultValue: 'Name' })} value={newHeader.name} onChange={(e) => setNewHeader({ ...newHeader, name: e.target.value })} slotProps={{ htmlInput: { sx: { fontSize: fontSizes.xs, py: 0.5, fontFamily: fontMono } } }} sx={{ width: 160 }} />
+                            <TextField size="small" placeholder={t('bench.headerValue', { defaultValue: 'Value' })} value={newHeader.value} onChange={(e) => setNewHeader({ ...newHeader, value: e.target.value })} slotProps={{ htmlInput: { sx: { fontSize: fontSizes.xs, py: 0.5, fontFamily: fontMono } } }} sx={{ flex: 1 }} />
                             <Button size="small" variant="contained" disabled={!newHeader.name.trim() || !newHeader.value} onClick={() => { setHeader(newHeader.name.trim(), newHeader.value); setNewHeader(null); }}>
                                 {t('bench.applyBody', { defaultValue: 'Apply' })}
                             </Button>
                             <Button size="small" onClick={() => setNewHeader(null)}>{t('bench.cancelEdit', { defaultValue: 'Cancel' })}</Button>
                         </Box>
                     ) : (
-                        <Button size="small" sx={{ mt: 0.5, fontSize: '0.7rem', minWidth: 0 }} onClick={() => setNewHeader({ name: '', value: '' })}>
+                        <Button size="small" sx={{ mt: 0.5, fontSize: fontSizes.xs, minWidth: 0 }} onClick={() => setNewHeader({ name: '', value: '' })}>
                             {t('bench.addHeader', { defaultValue: '+ Header' })}
                         </Button>
                     )}
 
-                    <Typography variant="overline" sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '0.6rem', mt: 1.5, '&::after': { content: '""', flex: 1, height: '1px', bgcolor: 'divider' } }}>
+                    <Typography variant="overline" sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: fontSizes.micro, mt: 1.5, '&::after': { content: '""', flex: 1, height: '1px', bgcolor: 'divider' } }}>
                         {t('bench.body', { defaultValue: 'Body' })}
                         {!rawMode && (
                             <Tooltip title={t('bench.editBodyHint', { defaultValue: 'Take this body into the request editor as a raw request and change anything.' })}>
-                                <Button size="small" onClick={() => onEditBody(pretty)} sx={{ minWidth: 0, fontSize: '0.65rem', py: 0, ml: 'auto' }}>
+                                <Button size="small" onClick={() => onEditBody(pretty)} sx={{ minWidth: 0, fontSize: fontSizes.micro, py: 0, ml: 'auto' }}>
                                     {t('bench.editBody', { defaultValue: 'Edit' })}
                                 </Button>
                             </Tooltip>
                         )}
                     </Typography>
                     <Box sx={{ position: 'relative' }}>
-                        <Box component="pre" sx={{ m: 0, p: 1.5, pr: 5, bgcolor: 'background.default', borderRadius: 1.5, fontFamily: fontMono, fontSize: '0.72rem', lineHeight: 1.5, overflow: 'auto', maxHeight: '60vh', color: 'text.primary' }}>
+                        <Box component="pre" sx={{ m: 0, p: 1.5, pr: 5, bgcolor: 'background.default', borderRadius: 1.5, fontFamily: fontMono, fontSize: fontSizes.xs, lineHeight: 1.5, overflow: 'auto', maxHeight: '60vh', color: 'text.primary' }}>
                             {pretty}
                         </Box>
                         <CopyIconButton value={pretty} label={t('probe.copy')} copiedLabel={t('probe.copied')} sx={{ position: 'absolute', top: 4, right: 4 }} />

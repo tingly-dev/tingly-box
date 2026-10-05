@@ -11,7 +11,7 @@ import {
 } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 interface ApiKeyModalProps {
     open: boolean;
@@ -52,7 +52,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                             bgcolor: 'grey.100',
                             borderRadius: 1,
                             fontFamily: fontMono,
-                            fontSize: '0.85rem',
+                            fontSize: fontSizes.lg,
                             wordBreak: 'break-all',
                             border: '1px solid',
                             borderColor: 'grey.300',

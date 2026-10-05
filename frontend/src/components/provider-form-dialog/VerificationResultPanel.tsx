@@ -2,6 +2,7 @@ import {Check, Close} from '@/components/icons';
 import {Box, Button, IconButton, Stack, Typography, alpha} from '@mui/material';
 import React from 'react';
 import type {VerificationResult} from './probe';
+import { fontSizes } from '@/theme/fonts';
 
 interface VerificationResultPanelProps {
     result: VerificationResult;
@@ -100,7 +101,7 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
                                     </Typography>
                                 </Box>
                             )}
-                            <Typography variant="body2" sx={{fontSize: '0.8rem', flex: 1}}>
+                            <Typography variant="body2" sx={{fontSize: fontSizes.md, flex: 1}}>
                                 {label}
                             </Typography>
                         </Stack>

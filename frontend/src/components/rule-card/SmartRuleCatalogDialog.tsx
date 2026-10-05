@@ -41,6 +41,7 @@ import {
     timezoneOptions,
 } from './timeRange';
 import { makeCategoryMeta, type CategoryMeta } from './catalogGrouping';
+import { fontSizes } from '@/theme/fonts';
 
 interface PositionMeta {
     value: SmartOp['position'];
@@ -434,7 +435,7 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                                         label={count}
                                         color={invalidByCategory[cat] ? 'warning' : 'primary'}
                                         variant="filled"
-                                        sx={{ height: 18, fontSize: '0.65rem' }}
+                                        sx={{ height: 18, fontSize: fontSizes.micro }}
                                     />
                                 )}
                             </Box>

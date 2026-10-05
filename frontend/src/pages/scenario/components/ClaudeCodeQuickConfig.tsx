@@ -19,7 +19,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
 import { has1M, with1M } from '@/components/rule-card/modelNameUtils';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 // ClaudeCodePrefs mirrors the Go struct in internal/agent/prefs.go.
 // Keys are the literal Claude Code env var names so the object can be
@@ -94,7 +94,7 @@ export const CLAUDE_CONFIG_KEY_SX = {
     borderRadius: 0.75,
     bgcolor: 'action.hover',
     fontFamily: fontMono,
-    fontSize: '0.72rem',
+    fontSize: fontSizes.xs,
     lineHeight: 1.5,
     color: 'text.secondary',
     whiteSpace: 'nowrap',
@@ -1012,7 +1012,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, oneMTooltip, prefs, se
                                     color: "text.disabled"
                                 }}>{field.unit}</Typography></InputAdornment>
                                     : undefined,
-                                sx: { fontFamily: field.kind === 'model' ? fontMono : undefined, fontSize: '0.85rem' },
+                                sx: { fontFamily: field.kind === 'model' ? fontMono : undefined, fontSize: fontSizes.lg },
                             }
                         }}
                     />

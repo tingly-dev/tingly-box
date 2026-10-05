@@ -42,7 +42,7 @@ import React, {useCallback, useState} from "react";
 import {useDeleteConfirm} from "@/hooks/useDeleteConfirm";
 import {useRowOverflowMenu} from "@/hooks/useRowOverflowMenu";
 import type {Provider} from "../types/provider";
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 interface OAuthTableProps {
     providers: Provider[];
@@ -402,7 +402,7 @@ const OAuthTable = ({
                                                 startIcon={<ListAlt/>}
                                                 onClick={() => handleModelListClick(provider.uuid)}
                                                 sx={{
-                                                    fontSize: "0.75rem",
+                                                    fontSize: fontSizes.sm,
                                                     minWidth: "auto",
                                                     px: {xs: 0.75, xl: 1},
                                                     '& .MuiButton-startIcon': {display: {xs: 'none', xl: 'inherit'}},

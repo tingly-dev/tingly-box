@@ -1,6 +1,7 @@
 import { Box, Typography, Card, CardContent } from '@mui/material';
 import { ChevronRight } from '@/components/icons';
 import type { Recording, RecordingType } from '@/types/prompt';
+import { fontSizes } from '@/theme/fonts';
 
 const RECORDING_TYPE_LABELS: Record<RecordingType, string> = {
   'code-review': 'Code Review',
@@ -100,7 +101,7 @@ const RecordingTimeline: React.FC<RecordingTimelineProps> = ({
                       borderRadius: 0.5,
                       backgroundColor: 'primary.100',
                       color: 'primary.dark',
-                      fontSize: '0.65rem',
+                      fontSize: fontSizes.micro,
                       fontWeight: 500,
                     }}
                   >
@@ -110,7 +111,7 @@ const RecordingTimeline: React.FC<RecordingTimelineProps> = ({
                     variant="caption"
                     sx={{
                       color: "text.secondary",
-                      fontSize: '0.7rem'
+                      fontSize: fontSizes.xs
                     }}>
                     {recording.user.name}
                   </Typography>

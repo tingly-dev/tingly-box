@@ -20,6 +20,7 @@ import {
     UsageMetricValueCells,
 } from './UsageMetricCells';
 import { getUsageMetricColumns } from './usageMetricColumns';
+import { fontSizes } from '@/theme/fonts';
 
 export interface AggregatedStat {
     key: string;
@@ -109,7 +110,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                 backgroundColor: alpha(theme.palette.background.paper, 0.8),
                                 '& .MuiTableCell-root': {
                                     fontWeight: 600,
-                                    fontSize: '0.75rem',
+                                    fontSize: fontSizes.sm,
                                     textTransform: 'uppercase',
                                     letterSpacing: '0.05em',
                                     color: 'text.secondary',

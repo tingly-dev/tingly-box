@@ -37,7 +37,7 @@ import ModelSelectDialog from '@/components/ModelSelectDialog';
 import { getFlagValue, setFlagValue, flagDefault, enumInactive, isFlagActive, normalizeEnumForStorage, headersValue, multiEnumValues, toggleMultiEnumValue, flagToBool, flagToInt, flagToString, flagToServiceRef } from './flagHelpers';
 import { makeCategoryMeta, type CategoryMeta } from './catalogGrouping';
 import HeadersEditor from '@/components/flags/HeadersEditor';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 export interface FlagCatalogDialogProps {
     open: boolean;
@@ -303,7 +303,7 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                             label={activeCount > 0 ? `${activeCount}/${specs.length}` : `${specs.length}`}
                                             color={activeCount > 0 ? 'primary' : 'default'}
                                             variant={activeCount > 0 ? 'filled' : 'outlined'}
-                                            sx={{ height: 18, fontSize: '0.65rem' }}
+                                            sx={{ height: 18, fontSize: fontSizes.micro }}
                                         />
                                     </Box>
                                 );
@@ -353,7 +353,7 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                                             <Chip
                                                                 size="small"
                                                                 label={spec.key}
-                                                                sx={{ height: 16, fontSize: '0.6rem' }}
+                                                                sx={{ height: 16, fontSize: fontSizes.micro }}
                                                                 variant="outlined"
                                                             />
                                                         </Stack>

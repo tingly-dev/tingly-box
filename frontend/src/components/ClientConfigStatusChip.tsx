@@ -6,7 +6,7 @@
 import { CheckCircle, WarningAmber, InfoOutlined } from '@/components/icons';
 import { Box, Button, Stack, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 import type { ClientConfigStatus } from '@/hooks/useClientConfigStatus';
 
 interface Props {
@@ -54,7 +54,7 @@ export const ClientConfigStatusChip: React.FC<Props> = ({ status, onApply }) => 
                     </Typography>
                 </Stack>
             </Tooltip>
-            <Button size="small" onClick={onApply} sx={{ minWidth: 0, px: 1, py: 0, fontSize: '0.75rem', textTransform: 'none' }}>
+            <Button size="small" onClick={onApply} sx={{ minWidth: 0, px: 1, py: 0, fontSize: fontSizes.sm, textTransform: 'none' }}>
                 {outdated ? t('clientConfigStatus.reapply') : t('clientConfigStatus.apply')}
             </Button>
         </Stack>

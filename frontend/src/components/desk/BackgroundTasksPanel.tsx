@@ -7,7 +7,7 @@ import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import type {BackgroundTask} from './deskUtils';
 import {formatTokens, timeAgo} from './deskUtils';
-import { fontMono } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 interface BackgroundTasksPanelProps {
     sessionId: string;
@@ -18,7 +18,7 @@ interface BackgroundTasksPanelProps {
     onReveal: (callId: string) => void;
 }
 
-const mono = {fontFamily: fontMono, fontSize: '0.75rem'};
+const mono = {fontFamily: fontMono, fontSize: fontSizes.sm};
 const OUTPUT_TAIL = 16 * 1024;
 const OUTPUT_REFRESH_MS = 2000;
 
@@ -81,7 +81,7 @@ const GroupHeader = ({label, count}: {label: string; count: number}) => (
     <Typography
         variant="caption"
         component="div"
-        sx={{px: 1.5, pt: 1.25, pb: 0.5, color: 'text.secondary', fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase', fontSize: '0.68rem'}}
+        sx={{px: 1.5, pt: 1.25, pb: 0.5, color: 'text.secondary', fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase', fontSize: fontSizes.xs}}
     >
         {label} · {count}
     </Typography>
