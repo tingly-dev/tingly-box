@@ -96,12 +96,11 @@ func (c *Config) setClaudeCodeModeRulesActiveLocked(unifiedActive, separateActiv
 		if !rule.GetScenario().Is(typ.ScenarioClaudeCode) {
 			continue
 		}
-		if claudeCodeUnifiedRuleUUIDs[rule.UUID] {
-			rule.Active = unifiedActive
-			continue
-		}
-		if claudeCodeSeparateRuleUUIDs[rule.UUID] {
+		if tier, ok := ccTierForRuleUUID(rule.UUID); ok {
 			rule.Active = separateActive
+			if tier.Unified {
+				rule.Active = unifiedActive
+			}
 		}
 	}
 }

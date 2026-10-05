@@ -174,9 +174,9 @@ func TestGenerateCCEnv_MainScenario_ResolvesLegacyBuiltins(t *testing.T) {
 	if got := env["ANTHROPIC_DEFAULT_HAIKU_MODEL"]; got != "vendor/fast" {
 		t.Errorf("haiku model = %q, want %q", got, "vendor/fast")
 	}
-	// Missing rules keep the canonical tingly/* fallbacks.
-	if got := env["ANTHROPIC_MODEL"]; got != "tingly/cc-default" {
-		t.Errorf("default model = %q, want %q", got, "tingly/cc-default")
+	// Missing rules keep the canonical short fallbacks.
+	if got := env["ANTHROPIC_MODEL"]; got != "default" {
+		t.Errorf("default model = %q, want %q", got, "default")
 	}
 }
 
@@ -695,5 +695,24 @@ func TestGenerateCCEnv_ProfileWithoutFableRuleFollowsDefault(t *testing.T) {
 	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code:p1", false, true)
 	if got := env["ANTHROPIC_DEFAULT_FABLE_MODEL"]; got != "default" {
 		t.Errorf("profile fable = %q, want the default tier", got)
+	}
+}
+
+func TestGenerateCCEnv_PickerLabelsFollowRules(t *testing.T) {
+	cfg := &serverconfig.Config{Rules: []typ.Rule{
+		{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "my-fast", Active: true},
+		{UUID: "builtin:claude_code:p1:fable", Scenario: "claude_code:p1", RequestModel: "my-fable", Active: true},
+	}}
+	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code:p1", false, true)
+	if got := env["ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME"]; got != "Haiku · my-fast" {
+		t.Errorf("haiku label = %q", got)
+	}
+	if got := env["ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION"]; got != "Routed by Tingly Box rule my-fable" {
+		t.Errorf("fable description = %q", got)
+	}
+	for _, key := range ccDisplayEnvKeys() {
+		if !isCCProfileRuleOwnedEnvKey(key) {
+			t.Errorf("%s must be rule-owned so profile overrides cannot diverge from the slot", key)
+		}
 	}
 }

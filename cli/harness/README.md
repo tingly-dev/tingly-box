@@ -613,7 +613,7 @@ pipeline (rule API → extraction → smart stage → affinity → LB → conver
 
 | agent      | API style          | gateway endpoint                  | built-in rule UUID  | RequestModel       |
 |------------|--------------------|-----------------------------------|---------------------|--------------------|
-| `claude`   | `anthropic`        | `/tingly/claude_code/v1/messages` | `builtin:claude_code:cc`   | `tingly/cc`        |
+| `claude`   | `anthropic`        | `/tingly/claude_code/v1/messages` | `builtin:claude_code:cc`   | `cc`        |
 | `codex`    | `openai` (Responses)| `/tingly/codex/v1/responses`      | `builtin:codex:default`    | `tingly-codex`     |
 | `opencode` | `anthropic`        | `/tingly/opencode/v1/messages`    | `builtin:opencode:default` | `tingly-opencode`  |
 

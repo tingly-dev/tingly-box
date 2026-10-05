@@ -73,7 +73,7 @@ func (p *ClaudeCodeParams) BuildEnv() map[string]string {
 	}
 
 	// Model configuration
-	defaultModel := cmp.Or(p.ModelConfig.Default, "tingly/cc")
+	defaultModel := cmp.Or(p.ModelConfig.Default, "cc")
 
 	env["ANTHROPIC_MODEL"] = defaultModel
 	env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = cmp.Or(p.ModelConfig.Haiku, defaultModel)

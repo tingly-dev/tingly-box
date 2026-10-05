@@ -35,7 +35,7 @@ type RuleCmdKong struct {
 // partial or interactive form; use `tingly-box tui` for interactive setup.
 type RuleAddCmdKong struct {
 	Scenario     string `kong:"flag,name='scenario',help='Rule scenario (e.g. openai, anthropic, claude_code)'"`
-	RequestModel string `kong:"flag,name='request-model',help='Request model (e.g. gpt-4o, tingly/cc)'"`
+	RequestModel string `kong:"flag,name='request-model',help='Request model (e.g. gpt-4o, cc)'"`
 	Provider     string `kong:"flag,name='provider',help='Provider UUID or name'"`
 	Model        string `kong:"flag,name='model',help='Model name on the provider'"`
 }

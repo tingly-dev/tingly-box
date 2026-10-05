@@ -21,7 +21,7 @@ type RealAgentTestResult struct {
 	APIStyle     string
 	Prompt       string
 	Model        string // upstream model name (entry.Model in real mode, builtin RequestModel in mock mode)
-	RequestModel string // gateway-facing rule RequestModel (tingly/cc, tingly-codex, tingly-opencode)
+	RequestModel string // gateway-facing rule RequestModel (cc, tingly-codex, tingly-opencode)
 	BaseURL      string // upstream base URL (real mode); empty for mock mode
 	Success      bool
 	TimedOut     bool // true if the agent CLI was killed by the per-entry timeout

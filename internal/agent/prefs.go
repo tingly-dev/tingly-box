@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"maps"
 	"strings"
+
+	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
 )
 
 const DefaultClaudeCodeDefaultMode = "acceptEdits"
@@ -137,6 +139,13 @@ func (p ClaudeCodePrefs) ToEnv(baseURL, apiKey string) (map[string]string, error
 	if err != nil {
 		return nil, err
 	}
+	// Label the pinned slots in Claude Code's /model picker; an explicit value
+	// (typed field or Extra) wins over the derived one.
+	for key, value := range CCTierDisplayEnv(env) {
+		if _, set := env[key]; !set {
+			env[key] = value
+		}
+	}
 	env["ANTHROPIC_BASE_URL"] = strings.TrimRight(baseURL, "/") + "/tingly/claude_code"
 	env["ANTHROPIC_AUTH_TOKEN"] = apiKey
 
@@ -171,6 +180,37 @@ func appendNoProxy(current string, hosts ...string) string {
 	return current
 }
 
+// modelSlot returns the field holding the model slot env var, or nil for any
+// other key. TestModelSlotsAreTypedFields keeps it in step with CCTiers.
+func (p *ClaudeCodePrefs) modelSlot(envKey string) *string {
+	switch envKey {
+	case "ANTHROPIC_MODEL":
+		return &p.AnthropicModel
+	case "ANTHROPIC_DEFAULT_HAIKU_MODEL":
+		return &p.AnthropicDefaultHaikuModel
+	case "ANTHROPIC_DEFAULT_SONNET_MODEL":
+		return &p.AnthropicDefaultSonnetModel
+	case "ANTHROPIC_DEFAULT_OPUS_MODEL":
+		return &p.AnthropicDefaultOpusModel
+	case "ANTHROPIC_DEFAULT_FABLE_MODEL":
+		return &p.AnthropicDefaultFableModel
+	case "CLAUDE_CODE_SUBAGENT_MODEL":
+		return &p.ClaudeCodeSubagentModel
+	}
+	return nil
+}
+
+// WithModelSlots returns the prefs with the model slot env vars overlaid from
+// slots, keyed by env name; keys that are not model slots are ignored.
+func (p ClaudeCodePrefs) WithModelSlots(slots map[string]string) ClaudeCodePrefs {
+	for envKey, model := range slots {
+		if field := p.modelSlot(envKey); field != nil {
+			*field = model
+		}
+	}
+	return p
+}
+
 // DefaultClaudeCodePrefs returns tb's canonical defaults for the given
 // mode. Used by the CLI harness directly and as the seed value for the
 // GUI quick-config form when no user customization exists yet.
@@ -184,22 +224,15 @@ func DefaultClaudeCodePrefs(unified bool) ClaudeCodePrefs {
 		DisableErrorReporting:                "1",
 		ClaudeCodeDisableNonessentialTraffic: "1",
 	}
-	if unified {
-		p.AnthropicModel = "tingly/cc"
-		p.AnthropicDefaultHaikuModel = "tingly/cc"
-		p.AnthropicDefaultSonnetModel = "tingly/cc"
-		p.AnthropicDefaultOpusModel = "tingly/cc"
-		p.AnthropicDefaultFableModel = "tingly/cc"
-		p.ClaudeCodeSubagentModel = "tingly/cc"
-	} else {
-		p.AnthropicModel = "tingly/cc-default"
-		p.AnthropicDefaultHaikuModel = "tingly/cc-haiku"
-		p.AnthropicDefaultSonnetModel = "tingly/cc-sonnet"
-		p.AnthropicDefaultOpusModel = "tingly/cc-opus"
-		p.AnthropicDefaultFableModel = "tingly/cc-fable"
-		p.ClaudeCodeSubagentModel = "tingly/cc-subagent"
+	slots := map[string]string{}
+	for _, t := range serverconfig.CCSlotTiers() {
+		name := t.Name
+		if unified {
+			name = serverconfig.CCTierUnified
+		}
+		slots[t.EnvKey] = name
 	}
-	return p
+	return p.WithModelSlots(slots)
 }
 
 // legacyCCEnvKeys maps env names earlier versions wrote but Claude Code never

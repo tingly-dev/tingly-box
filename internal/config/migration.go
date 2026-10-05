@@ -456,20 +456,19 @@ func hasMultipleServiceTiers(services []*loadbalance.Service) bool {
 
 func legacyRuleScenario(uuid string) (typ.RuleScenario, bool) {
 	scenarioMap := map[string]typ.RuleScenario{
-		RuleUUIDTingly:            typ.ScenarioOpenAI,
-		RuleUUIDBuiltinOpenAI:     typ.ScenarioOpenAI,
-		RuleUUIDBuiltinAnthropic:  typ.ScenarioAnthropic,
-		RuleUUIDBuiltinCodex:      typ.ScenarioCodex,
-		RuleUUIDBuiltinCC:         typ.ScenarioClaudeCode,
-		RuleUUIDClaudeCode:        typ.ScenarioClaudeCode,
-		RuleUUIDBuiltinCCHaiku:    typ.ScenarioClaudeCode,
-		RuleUUIDBuiltinCCSonnet:   typ.ScenarioClaudeCode,
-		RuleUUIDBuiltinCCOpus:     typ.ScenarioClaudeCode,
-		RuleUUIDBuiltinCCDefault:  typ.ScenarioClaudeCode,
-		RuleUUIDBuiltinCCSubagent: typ.ScenarioClaudeCode,
+		RuleUUIDTingly:           typ.ScenarioOpenAI,
+		RuleUUIDBuiltinOpenAI:    typ.ScenarioOpenAI,
+		RuleUUIDBuiltinAnthropic: typ.ScenarioAnthropic,
+		RuleUUIDBuiltinCodex:     typ.ScenarioCodex,
+		RuleUUIDClaudeCode:       typ.ScenarioClaudeCode,
 	}
-	scenario, ok := scenarioMap[uuid]
-	return scenario, ok
+	if scenario, ok := scenarioMap[uuid]; ok {
+		return scenario, true
+	}
+	if t, ok := ccTierForRuleUUID(uuid); ok && uuid == t.LegacyUUID {
+		return typ.ScenarioClaudeCode, true
+	}
+	return "", false
 }
 
 // normalizeBuiltinRuleIdentity keeps built-in rule UUIDs on the canonical
@@ -516,7 +515,7 @@ func canonicalRuleUUID(rule *typ.Rule) (string, bool) {
 		return canonical, ok
 	}
 	tier := TrimContext1M(rule.RequestModel)
-	if !ccProfileTiers[tier] {
+	if CCTierByName(tier).Name == "" {
 		return "", false
 	}
 	return BuiltinRuleUUID(rule.Scenario, tier), true
@@ -602,7 +601,7 @@ func normalizeClaudeCodeProfileUnifiedModel(c *Config) bool {
 
 		// Migrate "*" to "cc" for unified mode.
 		if rule.RequestModel == "*" {
-			rule.RequestModel = "cc"
+			rule.RequestModel = CCTierUnified
 			needsSave = true
 		}
 	}
@@ -759,6 +758,18 @@ func defaultBuiltinRuleFlagsOnce(c *Config) bool {
 	return true
 }
 
+// hasRequestModel reports whether a rule in the scenario already answers to
+// the Claude Code request model, in either spelling.
+func (c *Config) hasRequestModel(scenario typ.RuleScenario, requestModel string) bool {
+	want := canonicalCCRequestModel(requestModel)
+	for i := range c.Rules {
+		if c.Rules[i].Scenario == scenario && canonicalCCRequestModel(c.Rules[i].RequestModel) == want {
+			return true
+		}
+	}
+	return false
+}
+
 // backfillFableRuleOnce runs backfillFableRule once per config, so a fable
 // rule the user later deletes is not resurrected on every boot.
 func backfillFableRuleOnce(c *Config) bool {
@@ -772,28 +783,33 @@ func backfillFableRuleOnce(c *Config) bool {
 }
 
 // backfillFableRule seeds the Claude Code fable rule for configs that predate
-// the tier, mirroring the opus rule's services, flags, load-balancing tactic
-// and active state, so separate-mode users get a routable fable alias. A user's
-// own rule already answering to that name is left alone rather than shadowed.
+// the tier, mirroring the opus rule's services, flags, load-balancing tactic,
+// active state and naming style (short or legacy "tingly/cc-*"), so
+// separate-mode users get a routable fable alias. A user's own rule already
+// answering to that name is left alone rather than shadowed.
 func (c *Config) backfillFableRule() bool {
-	opus := c.findRuleByUUID(RuleUUIDCCOpus)
-	if opus == nil || c.findRuleByUUID(RuleUUIDCCFable) != nil {
+	fable := CCTierByName(CCTierFable)
+	opus := c.findRuleByUUID(CCTierByName(CCTierOpus).RuleUUID)
+	if opus == nil || c.findRuleByUUID(fable.RuleUUID) != nil {
 		return false
 	}
-	fable, ok := defaultRuleByUUID(RuleUUIDCCFable)
+	name := fable.Name
+	if legacyCCRequestModels[TrimContext1M(opus.RequestModel)] != "" {
+		name = fable.LegacyModel
+	}
+	if c.hasRequestModel(typ.ScenarioClaudeCode, name) {
+		return false
+	}
+	rule, ok := c.seedBuiltinRuleIfMissing(fable.RuleUUID, opus.Services)
 	if !ok {
 		return false
 	}
-	for i := range c.Rules {
-		if c.Rules[i].Scenario == typ.ScenarioClaudeCode && c.Rules[i].RequestModel == fable.RequestModel {
-			return false
-		}
-	}
-	fable.Services = cloneServices(opus.Services)
-	fable.Active = opus.Active
-	fable.Flags = opus.Flags
-	fable.LBTactic = opus.LBTactic
-	c.Rules = append(c.Rules, fable)
+	// seedBuiltinRuleIfMissing appended a copy; customize the stored one.
+	stored := c.findRuleByUUID(rule.UUID)
+	stored.Active = opus.Active
+	stored.Flags = opus.Flags
+	stored.LBTactic = opus.LBTactic
+	stored.RequestModel = name
 	logrus.Info("Added Claude Code fable built-in rule")
 	return true
 }

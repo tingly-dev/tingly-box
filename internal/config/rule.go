@@ -93,8 +93,9 @@ func (c *Config) AddRule(rule typ.Rule) error {
 	normalizeRuleServiceTiers(&rule)
 
 	// Guard name unique within same scenario
+	sameName := requestModelMatcher(rule.Scenario, rule.RequestModel)
 	for _, rc := range c.Rules {
-		if rc.RequestModel == rule.RequestModel && rc.Scenario == rule.Scenario {
+		if rc.Scenario == rule.Scenario && sameName(rc.RequestModel) {
 			if rc.UUID != rule.UUID {
 				return fmt.Errorf("rule with Name %s already exists in same scenario", rule.RequestModel)
 			}
@@ -151,8 +152,9 @@ func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
 	}
 
 	// Guard name unique
+	sameName := requestModelMatcher(rule.Scenario, rule.RequestModel)
 	for _, rc := range c.Rules {
-		if rc.RequestModel == rule.RequestModel && rc.GetScenario() == rule.Scenario {
+		if rc.GetScenario() == rule.Scenario && sameName(rc.RequestModel) {
 			if rc.UUID != rule.UUID {
 				return fmt.Errorf("rule with Name %s already exists in same scenario", rule.RequestModel)
 			}
@@ -275,6 +277,16 @@ func (c *Config) GetRuleByRequestModelAndScenario(requestModel string, scenario 
 			return &rule
 		}
 	}
+	// Claude Code built-ins answer to both the short and the legacy prefixed
+	// spelling, so applying "opus" updates an older install's "tingly/cc-opus".
+	if scenario.Base() == typ.ScenarioClaudeCode {
+		sameName := requestModelMatcher(scenario, requestModel)
+		for _, rule := range c.Rules {
+			if rule.GetScenario() == scenario && sameName(rule.RequestModel) {
+				return &rule
+			}
+		}
+	}
 	return nil
 }
 
@@ -283,8 +295,9 @@ func (c *Config) GetUUIDByRequestModelAndScenario(requestModel string, scenario 
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	sameName := requestModelMatcher(scenario, requestModel)
 	for _, rule := range c.Rules {
-		if rule.RequestModel == requestModel && rule.GetScenario() == scenario {
+		if rule.GetScenario() == scenario && sameName(rule.RequestModel) {
 			return rule.UUID
 		}
 	}
@@ -296,8 +309,9 @@ func (c *Config) IsRequestModelInScenario(modelName string, scenario typ.RuleSce
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	sameName := requestModelMatcher(scenario, modelName)
 	for _, rc := range c.Rules {
-		if rc.RequestModel == modelName && rc.GetScenario() == scenario {
+		if rc.GetScenario() == scenario && sameName(rc.RequestModel) {
 			return true
 		}
 	}
@@ -332,11 +346,29 @@ func (c *Config) MatchRuleByModelAndScenario(requestModel string, scenario typ.R
 	// rules list it, and a stale client config may still send a suffix the
 	// rule no longer has. Normalize both sides before comparing.
 	if base := scenario.Base(); base == typ.ScenarioClaudeCode || base == typ.ScenarioClaudeDesktop {
-		want := TrimContext1M(requestModel)
+		// Claude Code built-ins additionally answer to both the short and the
+		// legacy "tingly/cc-*" spelling (older settings files, other machines
+		// and CI still send the prefixed names).
+		wantBare := TrimContext1M(requestModel)
+		sameName := func(name string) bool { return TrimContext1M(name) == wantBare }
+		if base == typ.ScenarioClaudeCode {
+			sameName = requestModelMatcher(scenario, requestModel)
+		}
+		var inactive *typ.Rule // returned only when no active rule matches
 		for _, rule := range c.Rules {
-			if TrimContext1M(rule.RequestModel) == want && rule.GetScenario() == scenario {
+			if rule.GetScenario() != scenario || !sameName(rule.RequestModel) {
+				continue
+			}
+			if rule.Active {
 				return &rule
 			}
+			if inactive == nil {
+				r := rule
+				inactive = &r
+			}
+		}
+		if inactive != nil {
+			return inactive
 		}
 	}
 
@@ -663,4 +695,17 @@ func validateAndNormalizeRuleRecording(rule *typ.Rule) error {
 	}
 	rule.Flags.Recording = string(typ.ParseRecordingMode(rule.Flags.Recording))
 	return nil
+}
+
+// requestModelMatcher returns a predicate telling whether a rule's request
+// model is the same name as want in the scenario. Claude Code built-ins also
+// match across the short and the legacy "tingly/cc-*" spelling (and ignore the
+// [1m] marker), so the two can not coexist as separate rules; every other name
+// compares exactly. The canonical form of want is computed once, not per rule.
+func requestModelMatcher(scenario typ.RuleScenario, want string) func(name string) bool {
+	if scenario.Base() != typ.ScenarioClaudeCode {
+		return func(name string) bool { return name == want }
+	}
+	canonical := canonicalCCRequestModel(want)
+	return func(name string) bool { return name == want || canonicalCCRequestModel(name) == canonical }
 }

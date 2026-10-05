@@ -44,7 +44,7 @@ func TestAgentUseCase_RoutingKey(t *testing.T) {
 		{
 			name:             "claude code",
 			agentType:        agent.AgentTypeClaudeCode,
-			wantRequestModel: "tingly/cc",
+			wantRequestModel: "cc",
 			wantScenario:     typ.ScenarioClaudeCode,
 		},
 		{
@@ -101,8 +101,8 @@ func TestAgentUseCase_ResolveRouting(t *testing.T) {
 		if res.RuleFound {
 			t.Error("expected RuleFound=false with no rule configured")
 		}
-		if res.RequestModel != "tingly/cc" {
-			t.Errorf("RequestModel = %q, want %q", res.RequestModel, "tingly/cc")
+		if res.RequestModel != "cc" {
+			t.Errorf("RequestModel = %q, want %q", res.RequestModel, "cc")
 		}
 	})
 
@@ -118,7 +118,7 @@ func TestAgentUseCase_ResolveRouting(t *testing.T) {
 		ruleUC := NewRuleUseCase(cfg)
 		if _, err := ruleUC.Create(CreateRuleRequest{
 			Scenario:     typ.ScenarioClaudeCode,
-			RequestModel: "tingly/cc",
+			RequestModel: "cc",
 			Services: []*loadbalance.Service{
 				{Provider: provider.UUID, Model: "claude-sonnet", Weight: 1, Active: true},
 			},
@@ -239,8 +239,8 @@ func TestAgentUseCase_Show(t *testing.T) {
 		if res.Info.Type != agent.AgentTypeClaudeCode {
 			t.Errorf("Info.Type = %q, want %q", res.Info.Type, agent.AgentTypeClaudeCode)
 		}
-		if res.Routing.RequestModel != "tingly/cc" {
-			t.Errorf("Routing.RequestModel = %q, want %q", res.Routing.RequestModel, "tingly/cc")
+		if res.Routing.RequestModel != "cc" {
+			t.Errorf("Routing.RequestModel = %q, want %q", res.Routing.RequestModel, "cc")
 		}
 	})
 

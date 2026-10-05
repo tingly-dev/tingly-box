@@ -70,22 +70,6 @@ const (
 	RuleUUIDBuiltinClaudeDesktopHaiku45  = "builtin:claude_desktop:claude-haiku-4-5"
 )
 
-// legacyCCRuleUUIDs maps the legacy Claude Code built-in UUIDs to their modern
-// counterparts. Used by normalizeBuiltinRuleIdentity to rename live configs and by
-// defaultRuleByUUID to keep older migrations (written against the legacy
-// names) able to pull templates from the modern DefaultRules.
-//
-// Retirement of individual entries (or the table as a whole) follows the
-// policy in .design/config-migration.md — do not delete entries ad hoc.
-var legacyCCRuleUUIDs = map[string]string{
-	RuleUUIDBuiltinCC:         RuleUUIDCC,
-	RuleUUIDBuiltinCCDefault:  RuleUUIDCCDefault,
-	RuleUUIDBuiltinCCHaiku:    RuleUUIDCCHaiku,
-	RuleUUIDBuiltinCCSonnet:   RuleUUIDCCSonnet,
-	RuleUUIDBuiltinCCOpus:     RuleUUIDCCOpus,
-	RuleUUIDBuiltinCCSubagent: RuleUUIDCCSubagent,
-}
-
 // legacySimpleRuleUUIDs maps the remaining legacy built-in UUIDs (all
 // non-CC single-rule scenarios) to their modern "builtin:<scenario>:<model>"
 // counterparts. Used by normalizeBuiltinRuleIdentity and defaultRuleByUUID.
@@ -117,37 +101,4 @@ var legacySimpleRuleUUIDs = map[string]string{
 // "builtin:claude_code:p1:haiku".
 func BuiltinRuleUUID(scenario typ.RuleScenario, model string) string {
 	return "builtin:" + string(scenario) + ":" + model
-}
-
-// ccProfileTiers is the set of request models a system-seeded Claude Code
-// profile rule routes on (unified "cc", or the five separate-mode tiers).
-// Profile rules with any other request model are user-customized and keep
-// whatever UUID they have.
-var ccProfileTiers = map[string]bool{
-	"cc":       true,
-	"default":  true,
-	"haiku":    true,
-	"sonnet":   true,
-	"opus":     true,
-	"subagent": true,
-	"fable":    true,
-}
-
-var claudeCodeUnifiedRuleUUIDs = map[string]bool{
-	RuleUUIDCC:        true,
-	RuleUUIDBuiltinCC: true,
-}
-
-var claudeCodeSeparateRuleUUIDs = map[string]bool{
-	RuleUUIDCCDefault:         true,
-	RuleUUIDCCHaiku:           true,
-	RuleUUIDCCSonnet:          true,
-	RuleUUIDCCOpus:            true,
-	RuleUUIDCCSubagent:        true,
-	RuleUUIDCCFable:           true,
-	RuleUUIDBuiltinCCDefault:  true,
-	RuleUUIDBuiltinCCHaiku:    true,
-	RuleUUIDBuiltinCCSonnet:   true,
-	RuleUUIDBuiltinCCOpus:     true,
-	RuleUUIDBuiltinCCSubagent: true,
 }

@@ -70,14 +70,7 @@ func (c *TBClientImpl) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
 	baseURL := fmt.Sprintf("http://%s:%d", host, port)
 	apiKey := c.config.GetModelToken()
 
-	models := c.resolveClaudeCodeModels()
-	prefs := tbagent.DefaultClaudeCodePrefs(false)
-	prefs.AnthropicModel = models.def
-	prefs.AnthropicDefaultHaikuModel = models.haiku
-	prefs.AnthropicDefaultSonnetModel = models.sonnet
-	prefs.AnthropicDefaultOpusModel = models.opus
-	prefs.ClaudeCodeSubagentModel = models.subagent
-	prefs.AnthropicDefaultFableModel = models.fable
+	prefs := tbagent.DefaultClaudeCodePrefs(false).WithModelSlots(c.resolveClaudeCodeModels())
 
 	envMap, err := prefs.ToEnv(baseURL, apiKey)
 	if err != nil {
@@ -167,14 +160,10 @@ func (c *TBClientImpl) GetDataDir() string {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-// claudeCodeModels holds the request-model name for each Claude Code model tier.
-type claudeCodeModels struct {
-	def, haiku, sonnet, opus, subagent, fable string
-}
-
-// resolveClaudeCodeModels resolves the per-tier request models the same way the
-// frontend's derivePrefsFromRules does.
-func (c *TBClientImpl) resolveClaudeCodeModels() claudeCodeModels {
+// resolveClaudeCodeModels resolves the request model of every Claude Code model
+// slot, keyed by env var name, the same way the frontend's derivePrefsFromRules
+// does.
+func (c *TBClientImpl) resolveClaudeCodeModels() map[string]string {
 	byUUID := map[string]string{}
 	for _, rule := range c.config.GetRequestConfigs() {
 		if rule.GetScenario() != typ.ScenarioClaudeCode || !rule.Active {
@@ -188,39 +177,37 @@ func (c *TBClientImpl) resolveClaudeCodeModels() claudeCodeModels {
 		}
 	}
 
-	ruleModel := func(uuid, legacyUUID, fallback string) string {
-		if m, ok := byUUID[uuid]; ok {
-			return m
-		}
-		if m, ok := byUUID[legacyUUID]; ok {
-			return m
+	ruleModel := func(t serverconfig.CCTier, fallback string) string {
+		for _, uuid := range []string{t.RuleUUID, t.LegacyUUID} {
+			if m, ok := byUUID[uuid]; ok {
+				return m
+			}
 		}
 		return fallback
 	}
 
+	slots := map[string]string{}
 	if sc := c.config.GetScenarioConfig(typ.ScenarioClaudeCode); sc != nil && sc.GetDefaultFlags().Separate {
-		def := ruleModel("builtin:claude_code:default", "built-in-cc-default", "tingly/cc-default")
-		return claudeCodeModels{
-			def:      def,
-			haiku:    ruleModel("builtin:claude_code:haiku", "built-in-cc-haiku", "tingly/cc-haiku"),
-			sonnet:   ruleModel("builtin:claude_code:sonnet", "built-in-cc-sonnet", "tingly/cc-sonnet"),
-			opus:     ruleModel("builtin:claude_code:opus", "built-in-cc-opus", "tingly/cc-opus"),
-			subagent: ruleModel("builtin:claude_code:subagent", "built-in-cc-subagent", "tingly/cc-subagent"),
-			// No active fable rule (never seeded, or switched off): the bare tier
-			// name is not routable, so the alias follows the default tier.
-			fable: ruleModel(serverconfig.RuleUUIDCCFable, "", def),
+		defaultTier := serverconfig.CCTierByName(serverconfig.CCTierDefault)
+		defaultModel := ruleModel(defaultTier, defaultTier.Name)
+		for _, t := range serverconfig.CCSlotTiers() {
+			fallback := t.Name
+			if t.FollowsDefault {
+				// No active rule (never seeded, or switched off): the bare tier
+				// name is not routable, so the slot follows the default tier.
+				fallback = defaultModel
+			}
+			slots[t.EnvKey] = ruleModel(t, fallback)
 		}
+		return slots
 	}
 
-	unified := ruleModel("builtin:claude_code:cc", "built-in-cc", "tingly/cc")
-	return claudeCodeModels{
-		def:      unified,
-		haiku:    unified,
-		sonnet:   unified,
-		opus:     unified,
-		subagent: unified,
-		fable:    unified,
+	unifiedTier := serverconfig.CCTierByName(serverconfig.CCTierUnified)
+	unified := ruleModel(unifiedTier, unifiedTier.Name)
+	for _, t := range serverconfig.CCSlotTiers() {
+		slots[t.EnvKey] = unified
 	}
+	return slots
 }
 
 // findFirstRuleForScenario finds the first active rule for the given scenario.

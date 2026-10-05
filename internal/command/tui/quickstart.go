@@ -525,21 +525,18 @@ func qsRules(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 		return s, StepCancel, fmt.Errorf("global config not available")
 	}
 
-	defs := []struct {
+	type ruleDef struct {
 		uuid string
 		desc string
-	}{
+	}
+	defs := []ruleDef{
 		{serverconfig.RuleUUIDOpenAI, "OpenAI scenario"},
 		{serverconfig.RuleUIDAnthropic, "Anthropic scenario"},
-		{serverconfig.RuleUUIDCC, "Claude Code · unified"},
-		{serverconfig.RuleUUIDCCDefault, "Claude Code · default"},
-		{serverconfig.RuleUUIDCCHaiku, "Claude Code · haiku"},
-		{serverconfig.RuleUUIDCCOpus, "Claude Code · opus"},
-		{serverconfig.RuleUUIDCCSonnet, "Claude Code · sonnet"},
-		{serverconfig.RuleUUIDCCSubagent, "Claude Code · subagent"},
-		{serverconfig.RuleUUIDCCFable, "Claude Code · fable"},
-		{serverconfig.RuleUUIDOpenCode, "OpenCode scenario"},
 	}
+	for _, t := range serverconfig.CCTiers {
+		defs = append(defs, ruleDef{t.RuleUUID, "Claude Code · " + t.Label()})
+	}
+	defs = append(defs, ruleDef{serverconfig.RuleUUIDOpenCode, "OpenCode scenario"})
 
 	type rv struct{ uuid, desc string }
 	var items []MultiSelectItem[rv]

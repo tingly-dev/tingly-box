@@ -90,7 +90,7 @@ result, err := agent.DefaultRegistry.Get(agent.AgentTypeClaudeCode).Apply(&agent
     BaseURL:  "http://localhost:12580/tingly/claude_code",
     APIKey:   "your-token",
     ModelConfig: agent.ClaudeCodeModelConfig{
-        Default: "tingly/cc",  // All slots use this model
+        Default: "cc",  // All slots use this model
     },
 })
 
@@ -99,11 +99,11 @@ result, err := agent.DefaultRegistry.Get(agent.AgentTypeClaudeCode).Apply(&agent
     BaseURL:  "http://localhost:12580/tingly/claude_code",
     APIKey:   "your-token",
     ModelConfig: agent.ClaudeCodeModelConfig{
-        Default:  "tingly/cc-default",
-        Haiku:    "tingly/cc-haiku",
-        Opus:     "tingly/cc-opus",
-        Sonnet:   "tingly/cc-sonnet",
-        SubAgent: "tingly/cc-subagent",
+        Default:  "default",
+        Haiku:    "haiku",
+        Opus:     "opus",
+        Sonnet:   "sonnet",
+        SubAgent: "subagent",
     },
 })
 
@@ -112,7 +112,7 @@ result, err := agent.DefaultRegistry.Get(agent.AgentTypeClaudeCode).Apply(&agent
     BaseURL:  "http://localhost:12580/tingly/claude_code",
     APIKey:   "your-token",
     ModelConfig: agent.ClaudeCodeModelConfig{
-        Default: "tingly/cc",
+        Default: "cc",
     },
     ExtraEnv: map[string]string{
         "CUSTOM_VAR": "value",
@@ -231,8 +231,8 @@ type CodexParams struct {
 
 ```go
 // ai/agent had hardcoded knowledge
-env["ANTHROPIC_MODEL"] = "tingly/cc"  // Hardcoded!
-env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "tingly/cc-haiku"  // Hardcoded!
+env["ANTHROPIC_MODEL"] = "cc"  // Hardcoded!
+env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "haiku"  // Hardcoded!
 ```
 
 ### After (Pure Writer)

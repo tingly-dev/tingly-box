@@ -4,31 +4,31 @@ import { derivePrefsFromRules } from '../src/pages/scenario/components/ClaudeCod
 import { restoreAppliedClaudeCodePrefs } from '../src/pages/scenario/components/claudeCodePrefsState';
 
 const unified = {
-    ANTHROPIC_MODEL: 'tingly/cc',
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'tingly/cc',
-    ANTHROPIC_DEFAULT_SONNET_MODEL: 'tingly/cc',
-    ANTHROPIC_DEFAULT_OPUS_MODEL: 'tingly/cc',
-    ANTHROPIC_DEFAULT_FABLE_MODEL: 'tingly/cc',
-    CLAUDE_CODE_SUBAGENT_MODEL: 'tingly/cc',
+    ANTHROPIC_MODEL: 'cc',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'cc',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'cc',
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'cc',
+    ANTHROPIC_DEFAULT_FABLE_MODEL: 'cc',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'cc',
 };
 
 const separate = {
-    ANTHROPIC_MODEL: 'tingly/cc-default',
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'tingly/cc-haiku',
-    ANTHROPIC_DEFAULT_SONNET_MODEL: 'tingly/cc-sonnet',
-    ANTHROPIC_DEFAULT_OPUS_MODEL: 'tingly/cc-opus',
-    ANTHROPIC_DEFAULT_FABLE_MODEL: 'tingly/cc-fable',
-    CLAUDE_CODE_SUBAGENT_MODEL: 'tingly/cc-subagent',
+    ANTHROPIC_MODEL: 'default',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'haiku',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'sonnet',
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'opus',
+    ANTHROPIC_DEFAULT_FABLE_MODEL: 'fable',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'subagent',
 };
 
 test('fills missing model slots from the current unified rules', () => {
     const restored = restoreAppliedClaudeCodePrefs({
         generated: unified,
-        applied: { ANTHROPIC_MODEL: 'tingly/cc', CLAUDE_CODE_MAX_OUTPUT_TOKENS: '64000' },
+        applied: { ANTHROPIC_MODEL: 'cc', CLAUDE_CODE_MAX_OUTPUT_TOKENS: '64000' },
     });
 
-    assert.equal(restored.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'tingly/cc');
-    assert.equal(restored.ANTHROPIC_DEFAULT_OPUS_MODEL, 'tingly/cc');
+    assert.equal(restored.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'cc');
+    assert.equal(restored.ANTHROPIC_DEFAULT_OPUS_MODEL, 'cc');
     assert.equal(restored.CLAUDE_CODE_MAX_OUTPUT_TOKENS, '64000');
 });
 
@@ -38,7 +38,7 @@ test('current rule-derived slots replace stale applied model strings', () => {
         applied: { ...unified, ANTHROPIC_DEFAULT_HAIKU_MODEL: 'custom/fast' },
     });
 
-    assert.equal(restored.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'tingly/cc');
+    assert.equal(restored.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'cc');
 });
 
 test('regenerates every model slot after switching modes and retains other prefs', () => {
@@ -60,8 +60,8 @@ test('separate mode keeps each UUID-derived slot distinct', () => {
         applied: unified,
     });
 
-    assert.equal(restored.ANTHROPIC_MODEL, 'tingly/cc-default');
-    assert.equal(restored.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'tingly/cc-haiku');
+    assert.equal(restored.ANTHROPIC_MODEL, 'default');
+    assert.equal(restored.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'haiku');
 });
 
 test('unified mode resolves the cc rule by UUID instead of array order or canonical name', () => {
