@@ -217,3 +217,61 @@ func (c *execCmd) Run() error {
 	// For this test, we're just demonstrating the concept
 	return nil
 }
+
+// A server that died without cleaning up (crash, kill -9) leaves its port and
+// version files behind. The next TryLock owns the lock now, so it must drop
+// them: a launch that fails before rewriting them must not advertise a stale
+// port or version to CLI readers.
+func TestFileLock_TryLockDropsStaleRuntimeFiles(t *testing.T) {
+	configDir := t.TempDir()
+
+	if err := NewPortFile(configDir).Write(23456); err != nil {
+		t.Fatalf("seed stale port file: %v", err)
+	}
+	if err := NewVersionFile(configDir).Write("v0.0.1"); err != nil {
+		t.Fatalf("seed stale version file: %v", err)
+	}
+
+	fl := NewFileLock(configDir)
+	if err := fl.TryLock(); err != nil {
+		t.Fatalf("TryLock failed: %v", err)
+	}
+	defer fl.Unlock()
+
+	for _, name := range []string{portFileName, versionFileName} {
+		if _, err := os.Stat(filepath.Join(configDir, name)); !os.IsNotExist(err) {
+			t.Errorf("stale %s survived TryLock (stat err: %v)", name, err)
+		}
+	}
+
+	// The holder publishes its own values afterwards, as a starting server does.
+	if err := fl.WritePort(31337); err != nil {
+		t.Fatalf("WritePort failed: %v", err)
+	}
+	if got, err := fl.ReadPort(); err != nil || got != 31337 {
+		t.Errorf("ReadPort = %d, %v; want 31337", got, err)
+	}
+}
+
+// Losing the race must not touch the winner's files: they describe a live
+// server, and only the lock holder may clear runtime files.
+func TestFileLock_FailedTryLockKeepsRunningServersFiles(t *testing.T) {
+	configDir := t.TempDir()
+
+	holder := NewFileLock(configDir)
+	if err := holder.TryLock(); err != nil {
+		t.Fatalf("holder TryLock failed: %v", err)
+	}
+	defer holder.Unlock()
+	if err := holder.WritePort(23456); err != nil {
+		t.Fatalf("WritePort failed: %v", err)
+	}
+
+	if err := NewFileLock(configDir).TryLock(); err == nil {
+		t.Fatal("second TryLock should have failed while the holder is alive")
+	}
+
+	if got, err := holder.ReadPort(); err != nil || got != 23456 {
+		t.Errorf("running server's port file was disturbed: ReadPort = %d, %v; want 23456", got, err)
+	}
+}
