@@ -118,15 +118,24 @@ const POSE_SPECS: Record<PosePresetKey, PoseSpec> = {
         arms: { l: [[-14, 6], [-8, 10]], r: [[14, 6], [8, 10]] },
         legs: { l: [[4, -10], [6, -92]], r: [[10, 70], [6, 4]] },
     },
+    // A deep squat: thighs folded forward to horizontal and a little apart,
+    // shins folded back under them so the hips drop to the heels, the chest leaning
+    // over the knees with the forearms resting on them. Folded with `bend`
+    // (toward the front), never `lean` — `lean` tips the body sideways across
+    // the picture, which is what this pose used to do.
     crouching: {
-        lean: -14, bend: 12,
-        arms: { l: [[-18, 40], [18, 58]], r: [[18, 40], [-18, 58]] },
-        legs: { l: [[-18, 58], [-8, -4]], r: [[18, 54], [8, -8]] },
+        bend: 40, headNod: -16,
+        arms: { l: [[-10, 16], [8, 52]], r: [[10, 16], [-8, 52]] },
+        legs: { l: [[-40, 78], [-8, -50]], r: [[40, 78], [8, -50]] },
     },
+    // Sitting on the floor with the knees drawn up to the chest, arms wrapped
+    // round the shins, chin dropped toward the knees.
     hugKnees: {
-        lean: -8, bend: 10, headNod: 4,
-        arms: { l: [[-14, 48], [44, 46]], r: [[14, 48], [-44, 46]] },
-        legs: { l: [[-10, 72], [-6, -30]], r: [[10, 70], [6, -32]] },
+        // Upright, a touch back: hip flexion is thigh against torso, so a
+        // chest leaning forward would spend the lift the knees need.
+        bend: -6, headNod: 16,
+        arms: { l: [[-6, 34], [52, 26]], r: [[6, 48], [-52, 46]] },
+        legs: { l: [[-176, 42], [-4, -22]], r: [[176, 42], [4, -22]] },
     },
     reclining: {
         lean: 26, bend: -8, hipTilt: -8, headTilt: -8,

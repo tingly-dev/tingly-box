@@ -14,6 +14,7 @@ import {
     BufferAttribute,
     BufferGeometry,
     DirectionalLight,
+    Fog,
     Group,
     HemisphereLight,
     Mesh,
@@ -28,7 +29,7 @@ import {
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
-import { figureLineEdges, figureSurface, toneFor } from './body';
+import { figureLineEdges, figureSurface, figureTint, toneFor } from './body';
 import { projectionOf, projectPoint } from './camera';
 import { figureUnit, type PoseFigure } from './skeleton';
 
@@ -50,7 +51,7 @@ const materials = new Map<string, MeshStandardMaterial>();
 const materialFor = (hex: string): MeshStandardMaterial => {
     let material = materials.get(hex);
     if (!material) {
-        material = new MeshStandardMaterial({ color: hex, roughness: 0.55, metalness: 0 });
+        material = new MeshStandardMaterial({ color: hex, roughness: 0.55, metalness: 0, vertexColors: true });
         materials.set(hex, material);
     }
     return material;
@@ -94,6 +95,7 @@ const lineMaterialFor = (width: number, size: Vector2): LineMaterial => {
     let material = lineMaterials.get(key);
     if (!material) {
         material = new LineMaterial({ color: INK, linewidth: key, transparent: true, opacity: 0.75 });
+        material.fog = true;
         lineMaterials.set(key, material);
     }
     material.resolution.copy(size);
@@ -132,6 +134,7 @@ const meshesFor = (figure: PoseFigure, hex: string, size: Vector2): { group: Gro
     const geometry = new BufferGeometry();
     geometry.setAttribute('position', new BufferAttribute(flipped, 3));
     geometry.setIndex(new BufferAttribute(index, 1));
+    geometry.setAttribute('color', new BufferAttribute(figureTint(), 3));
     geometry.computeVertexNormals();
     const lines = linesFor(figure, geometry, size);
     const group = new Group();
@@ -160,6 +163,19 @@ const cameraFor = (figure: PoseFigure, width: number, height: number): Perspecti
     camera.setViewOffset(fullWidth, fullHeight, fullWidth / 2 - anchor.x, fullHeight / 2 - anchor.y, width, height);
     camera.updateProjectionMatrix();
     return camera;
+};
+
+// Aerial perspective: the nearest of the body at full strength, receding
+// toward the paper with distance from the camera. Set per figure, from its
+// own camera and size, so a small figure fades exactly as much as a big one
+// and the fade says "behind" rather than "far away in the scene". Kept to
+// about a quarter at the back of the body: enough to separate the far arm
+// from the near one, not so much that the far side is lost.
+const PAPER = 0xffffff;
+const depthFogFor = (figure: PoseFigure): Fog => {
+    const { distance } = projectionOf(figure);
+    const u = figureUnit(figure);
+    return new Fog(PAPER, distance - u * 0.3, distance + u * 2.4);
 };
 
 let shared: WebGLRenderer | null | undefined;
@@ -219,6 +235,7 @@ export const drawFigure = (
     }
     const scene = new Scene();
     buildLights(scene);
+    scene.fog = depthFogFor(figure);
     const { group, disposable } = meshesFor(figure, hex, new Vector2(width, height));
     scene.add(group);
     renderer.render(scene, cameraFor(figure, width, height));
