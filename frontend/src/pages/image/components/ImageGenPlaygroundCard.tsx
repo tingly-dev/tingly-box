@@ -537,6 +537,17 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         }
     };
 
+    // Stable identities, so the memoised tab row is not re-rendered by every
+    // keystroke in the prompt field.
+    const tabHandlers = useRef({ selectPrompt, addPrompt, removePrompt });
+    tabHandlers.current = { selectPrompt, addPrompt, removePrompt };
+    const tabActions = useMemo(() => ({
+        select: (id: string) => tabHandlers.current.selectPrompt(id),
+        add: () => tabHandlers.current.addPrompt(),
+        remove: (id: string) => tabHandlers.current.removePrompt(id),
+        rename: (id: string, name: string) => setProfilePrompts((current) => current.map((item) => (item.id === id ? { ...item, name } : item))),
+    }), []);
+
     const location = useLocation();
     const [renaming, setRenaming] = useState(Boolean((location.state as { rename?: boolean } | null)?.rename));
     const [nameDraft, setNameDraft] = useState(profile?.name ?? '');
@@ -768,10 +779,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             <ProfilePromptTabs
                                 prompts={profilePrompts}
                                 activeId={activePromptId}
-                                onSelect={selectPrompt}
-                                onAdd={addPrompt}
-                                onRename={(id, name) => setProfilePrompts((current) => current.map((item) => (item.id === id ? { ...item, name } : item)))}
-                                onRemove={removePrompt}
+                                onSelect={tabActions.select}
+                                onAdd={tabActions.add}
+                                onRename={tabActions.rename}
+                                onRemove={tabActions.remove}
                             />
                         )}
 

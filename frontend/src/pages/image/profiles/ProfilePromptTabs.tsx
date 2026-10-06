@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Box, ButtonBase, IconButton, InputBase, Stack, Tooltip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Add, Close } from '@/components/icons';
@@ -121,4 +121,4 @@ const ProfilePromptTabs: React.FC<Props> = ({ prompts, activeId, onSelect, onAdd
     );
 };
 
-export default ProfilePromptTabs;
+export default memo(ProfilePromptTabs);
