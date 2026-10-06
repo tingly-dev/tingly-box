@@ -95,8 +95,9 @@ sibling: structured, non-streaming, native-protocol-passthrough), not a
 private shortcut:
 
 1. `IsValidRuleScenario` + `ScenarioSupportsTransport(scenario, TransportDecision)`.
-2. Size-limited body read; validate `model` + `questions` exist as objects
-   (internals stay opaque for forward compatibility).
+2. Size-limited body read; validate only `model` (needed for routing).
+   Everything else stays opaque so Jev fields and other vendors' schemas
+   (see §9) pass through for the upstream to validate.
 3. `determineRuleWithScenario` → routing stage pipeline (health → smart
    routing → affinity → tactic) via `selectService`.
 4. `SetTrackingContext` + session-ID resolution (usage records, request
@@ -231,3 +232,23 @@ string filters and the section registry stays protocol-agnostic.
 - **Decision probe.** The provider form's Verify button probes chat
   endpoints; a decision-endpoint probe (a cheap well-formed request) would
   close the loop on "is this fork URL actually alive?"
+
+## 9. OpenAI Decisions API (limited preview, announced 2026-09-29)
+
+OpenAI announced a Decisions API at DevDay: a Luna-backed endpoint that picks
+one answer from options the caller defines (text/image context, ~150 ms).
+As of early October 2026 there is **no public request/response schema, SDK
+method, or pricing**; `POST /v1/decisions` returns 403 for ordinary keys
+(feature-gated). Third-party write-ups only guess at the shape.
+
+Consequences for this design:
+
+- It fits the **fork endpoint** path (§2): an `openai`-style provider sets
+  `api_base_decision` (e.g. `https://api.openai.com/v1`; the gateway appends
+  `/decisions`). No new style, client, or scenario is needed.
+- Because the schema is unpublished, the gateway must not hard-code Jev's
+  `questions` shape; only `model` is validated (§3). Pinned by
+  `TestValidateDecisionBody_OpaqueSchema` and the `api.openai.com/v1` case in
+  `TestDecisionEndpointURL`.
+- Revisit once OpenAI publishes the schema: auth shape, usage field names,
+  the mock endpoint in the harness (§5), and the probe (§8).

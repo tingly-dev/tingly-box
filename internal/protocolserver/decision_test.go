@@ -31,16 +31,24 @@ func TestValidateDecisionBody(t *testing.T) {
 
 func TestValidateDecisionBody_Rejections(t *testing.T) {
 	cases := map[string]string{
-		"not json":          `[{`,
-		"missing model":     `{"questions": {"q1": {"type": "score"}}}`,
-		"blank model":       `{"model": "  ", "questions": {"q1": {"type": "score"}}}`,
-		"missing questions": `{"model": "jev-small"}`,
-		"empty questions":   `{"model": "jev-small", "questions": {}}`,
+		"not json":      `[{`,
+		"missing model": `{"questions": {"q1": {"type": "score"}}}`,
+		"blank model":   `{"model": "  ", "questions": {"q1": {"type": "score"}}}`,
 	}
 	for name, raw := range cases {
 		if _, err := validateDecisionBody([]byte(raw)); err == nil {
 			t.Errorf("%s: expected rejection, got none", name)
 		}
+	}
+}
+
+// The gateway only needs model; a non-Jev schema (OpenAI's Decisions API is
+// unpublished) must pass through for the upstream to judge.
+func TestValidateDecisionBody_OpaqueSchema(t *testing.T) {
+	raw := `{"model":"gpt-6-luna","context":"hi","options":["a","b"]}`
+	model, err := validateDecisionBody([]byte(raw))
+	if err != nil || model != "gpt-6-luna" {
+		t.Fatalf("got (%q, %v), want passthrough", model, err)
 	}
 }
 
