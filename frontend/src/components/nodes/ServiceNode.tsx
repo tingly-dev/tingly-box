@@ -338,7 +338,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                             protocol tag(s) (right) so the provider name never runs under
                             them; two tags need more room than one. Symmetric, so the
                             name stays centred. */}
-                        <Box sx={{ ...NODE_LAYER_STYLES.bottomLayer, position: 'relative', px: hasDualApiStyle ? '46px' : '28px' }}>
+                        <Box sx={{ ...NODE_LAYER_STYLES.bottomLayer, flex: 1, position: 'relative', px: hasDualApiStyle ? '46px' : '28px' }}>
                             {/* Quota (left) mirrors the api style tag (right); a missing
                                 or disabled provider shows its warning instead. */}
                             {!providerWarning && (
