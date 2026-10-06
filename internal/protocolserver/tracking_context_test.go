@@ -317,3 +317,12 @@ func TestSetGetCacheHit(t *testing.T) {
 	assert.True(t, exists)
 	assert.False(t, cacheHit)
 }
+
+// TestCalculateTPS_ShortDecodeWindow tests that windows under the minimum
+// decode window are treated as unmeasurable (burst delivery, not decode speed).
+func TestCalculateTPS_ShortDecodeWindow(t *testing.T) {
+	c := &gin.Context{}
+	c.Set(ContextKeyFirstTokenTime, time.Now().Add(-100*time.Millisecond))
+
+	assert.Equal(t, 0.0, CalculateTPS(c, 100, true))
+}
