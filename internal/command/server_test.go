@@ -129,13 +129,19 @@ func TestServerPortConfiguration(t *testing.T) {
 			t.Errorf("Expected configured port %d when server is not running, got %d", configPort, got)
 		}
 
-		// Server running (lock held): the port file wins.
+		// Server running (lock held): the port file wins. A real server takes
+		// the lock first and only then writes its port file — TryLock drops
+		// runtime files left by a dead predecessor, so the stale one above
+		// must not survive it and is rewritten the way a starting server does.
 		fileLock := lock.NewFileLock(tempDir)
 		if err := fileLock.TryLock(); err != nil {
 			t.Fatalf("Failed to acquire lock: %v", err)
 		}
 		defer fileLock.Unlock()
 
+		if err := portFile.Write(23456); err != nil {
+			t.Fatalf("Failed to write port file: %v", err)
+		}
 		if got := appManager.GetRuntimeServerPort(); got != 23456 {
 			t.Errorf("Expected runtime port 23456, got %d", got)
 		}
