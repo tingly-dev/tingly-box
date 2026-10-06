@@ -10,11 +10,14 @@ export type ViewPresetKey = 'front' | 'threeQuarter' | 'side' | 'back' | 'above'
 
 export const VIEW_PRESETS: Record<ViewPresetKey, FigureTurn> = {
     front: { yaw: 0, pitch: 0 },
-    threeQuarter: { yaw: 35, pitch: 8 },
-    side: { yaw: 82, pitch: 4 },
+    // Negative pitch is the camera *above* the figure looking down (the
+    // figure's top tips toward the lens). These were once the other way up,
+    // so "above" looked from below — invisible on a doll, obvious on a body.
+    threeQuarter: { yaw: 35, pitch: -8 },
+    side: { yaw: 82, pitch: -4 },
     back: { yaw: 180, pitch: 0 },
-    above: { yaw: 28, pitch: 34 },
-    below: { yaw: 28, pitch: -30 },
+    above: { yaw: 28, pitch: -34 },
+    below: { yaw: 28, pitch: 30 },
 };
 
 export const VIEW_PRESET_KEYS: readonly ViewPresetKey[] = [
@@ -26,7 +29,7 @@ export const VIEW_PRESET_KEYS: readonly ViewPresetKey[] = [
 // every limb foreshortened to nothing, no overlap, no volume. A gentle
 // three-quarter is what an artist reaches for and what shows, at a glance,
 // that this figure can be turned.
-export const DEFAULT_VIEW: FigureTurn = { yaw: 22, pitch: 6 };
+export const DEFAULT_VIEW: FigureTurn = { yaw: 22, pitch: -6 };
 
 
 // --- turning the figure ------------------------------------------------------

@@ -1,8 +1,9 @@
-// The manikin, drawn. A real 3D render of the solids `figureSolids` lists —
-// occlusion, foreshortening and light all come out right because they are
-// computed, not faked. The camera is the one `projectionOf` describes, to the
-// pixel, so the blue handles drawn on top from `projectFigure` sit exactly on
-// the joints they move.
+// The manikin, drawn as a figure-drawing line sheet: white, unshaded forms,
+// a bold ink silhouette, finer ink wherever one form turns away or passes in
+// front of another, and light construction lines (the joint seams and the
+// Loomis head lines) on the near side. The camera is the one `projectionOf`
+// describes, to the pixel, so the blue handles drawn on top from
+// `projectFigure` sit exactly on the joints they move.
 //
 // Everything is drawn into one shared WebGL canvas and copied onto the caller's
 // 2D context: the sketch surface stays a plain canvas (strokes, export and the
@@ -10,19 +11,21 @@
 // thumbnail in the pose library — browsers cap live WebGL contexts at about a
 // dozen, and the library alone has forty-four tiles.
 import {
-    BackSide,
     BufferAttribute,
     BufferGeometry,
-    DirectionalLight,
-    Group,
-    HemisphereLight,
+    Color,
+    DepthTexture,
     Mesh,
     MeshBasicMaterial,
-    MeshStandardMaterial,
+    MeshNormalMaterial,
+    NearestFilter,
+    OrthographicCamera,
     PerspectiveCamera,
+    PlaneGeometry,
     Scene,
+    ShaderMaterial,
     Vector2,
-    Vector3,
+    WebGLRenderTarget,
     WebGLRenderer,
 } from 'three';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
@@ -32,108 +35,42 @@ import { figureLineEdges, figureSurface, toneFor } from './body';
 import { projectionOf, projectPoint } from './camera';
 import { figureUnit, type PoseFigure } from './skeleton';
 
+const INK = '#26292e';
+const inkColour = new Color(INK);
+const CONSTRUCTION = '#9aa0a8';
 
-// A figure-drawing studio: a strong key high on the left and in front, a cool
-// sky / warm floor fill so the shadow side is still modelled, and a rim from
-// behind that separates the silhouette from the paper. The terminator — where
-// light turns to shadow — is what shows a form's roundness; flat ambient
-// light hides it, which is half of why the old manikin read as plastic.
-const buildLights = (scene: Scene): void => {
-    const key = new DirectionalLight(0xffffff, 2.4);
-    key.position.set(-1.1, 1.5, 1.4);
-    const rim = new DirectionalLight(0xffffff, 1.1);
-    rim.position.set(1.4, 0.6, -1.2);
-    scene.add(key, rim, new HemisphereLight(0xf2f5fa, 0x7d746c, 0.9));
-};
-
-// The body is drawn see-through, like a figure drawn on tracing paper: thin
-// in the middle of each form and solid toward its edges (a Fresnel falloff),
-// so it still reads as a lit, round volume, while the limb behind the torso,
-// the far leg, the hand behind the back all show through it. Where forms
-// overlap the layers add up and darken, which is exactly the "this is in
-// front of that" a pose reference needs. Drawn without depth testing so
-// every layer shows; the depth pre-pass below keeps the lines honest.
-const XRAY = { centre: 0.3, edge: 0.94 };
-const materials = new Map<string, MeshStandardMaterial>();
-const materialFor = (hex: string): MeshStandardMaterial => {
-    let material = materials.get(hex);
+// The fill: flat, the paper's own white (or the figure's tone). A line sheet
+// carries form by its lines, and shading would only muddy what the image
+// model reads first.
+const fills = new Map<string, MeshBasicMaterial>();
+const fillFor = (hex: string): MeshBasicMaterial => {
+    let material = fills.get(hex);
     if (!material) {
-        material = new MeshStandardMaterial({
-            color: hex, roughness: 0.55, metalness: 0,
-            transparent: true, depthTest: false, depthWrite: false,
-        });
-        material.onBeforeCompile = (shader) => {
-            shader.fragmentShader = shader.fragmentShader.replace(
-                '#include <opaque_fragment>',
-                `#include <opaque_fragment>
-                float facing = abs(dot(normalize(normal), normalize(vViewPosition)));
-                gl_FragColor.a *= mix(${XRAY.edge.toFixed(2)}, ${XRAY.centre.toFixed(2)}, pow(facing, 1.4));`,
-            );
-        };
-        material.customProgramCacheKey = () => 'xray-body';
-        materials.set(hex, material);
+        material = new MeshBasicMaterial({ color: hex });
+        fills.set(hex, material);
     }
     return material;
 };
 
-// Depth only: the nearest surface, so the ink can tell what is in front.
-const depthOnly = new MeshBasicMaterial({ colorWrite: false });
-
-// The outline is an inverted hull: every surface drawn a second time, pushed
-// out along its normals, back faces only, in ink. It gives the silhouette and
-// every overlap (an arm across the body, a knee in front of a thigh) the line
-// a figure drawing would — and lines are what an image model reads first.
-const INK = '#3d4249';
-const outlines = new Map<number, MeshBasicMaterial>();
-const outlineFor = (thickness: number): MeshBasicMaterial => {
-    const key = Math.round(thickness * 100) / 100;
-    let material = outlines.get(key);
-    if (!material) {
-        // Pushed back in depth so it shows at the silhouette and where one
-        // form passes in front of another, but not through the shallow
-        // concavities of the surface itself (collarbones, the small of the
-        // back), where an un-offset hull pokes through as stray marks.
-        material = new MeshBasicMaterial({ color: INK, side: BackSide, polygonOffset: true, polygonOffsetFactor: 6, polygonOffsetUnits: 16 });
-        material.onBeforeCompile = (shader) => {
-            shader.vertexShader = shader.vertexShader.replace(
-                '#include <begin_vertex>',
-                `vec3 transformed = position + normalize(normal) * ${key.toFixed(2)};`,
-            );
-        };
-        material.customProgramCacheKey = () => `outline-${key}`;
-        outlines.set(key, material);
-    }
-    return material;
-};
-
-// The construction lines: the seams at the joints of a jointed mannequin and
-// the centre and eye lines of a Loomis head — the lines a figure drawing of a
-// mannequin has, and the ones the reference sheets this is drawn after show.
-// Screen-space thick lines so they hold their weight at any size, nudged off
-// the surface along its normal so the skin does not swallow them.
-// Each line is drawn twice, as in a construction drawing: solid where it is
-// on the near side of the body, and faint where it runs round behind — so a
-// ring reads as a ring, all the way round, through the see-through skin.
-const lineMaterials = new Map<string, LineMaterial>();
-const lineMaterialFor = (width: number, size: Vector2, hidden: boolean): LineMaterial => {
-    const key = `${Math.round(width * 10) / 10}:${hidden}`;
+// The construction lines: thin, light, and only where they are on the near
+// side of the body — the reference sheets never show a seam through a form.
+const lineMaterials = new Map<number, LineMaterial>();
+const lineMaterialFor = (width: number, size: Vector2): LineMaterial => {
+    const key = Math.round(width * 10) / 10;
     let material = lineMaterials.get(key);
     if (!material) {
-        material = new LineMaterial({
-            color: INK, linewidth: Math.round(width * 10) / 10, transparent: true,
-            opacity: hidden ? 0.22 : 0.8, depthTest: !hidden, depthWrite: false,
-        });
+        material = new LineMaterial({ color: CONSTRUCTION, linewidth: key, transparent: true, opacity: 0.9 });
         lineMaterials.set(key, material);
     }
     material.resolution.copy(size);
     return material;
 };
 
-const linesFor = (figure: PoseFigure, geometry: BufferGeometry, size: Vector2): { visible: LineSegments2; hidden: LineSegments2; geometry: LineSegmentsGeometry } => {
+const constructionLines = (figure: PoseFigure, geometry: BufferGeometry, size: Vector2, sample: number): { mesh: LineSegments2; geometry: LineSegmentsGeometry } => {
     const { a, b, t } = figureLineEdges(figure);
     const position = geometry.getAttribute('position');
     const normal = geometry.getAttribute('normal');
-    const lift = figureUnit(figure) * 0.0035;
+    const lift = figureUnit(figure) * 0.003;
     const points = new Float32Array(a.length * 3);
     for (let k = 0; k < a.length; k += 1) {
         const f = t[k] / 255;
@@ -145,15 +82,11 @@ const linesFor = (figure: PoseFigure, geometry: BufferGeometry, size: Vector2): 
     }
     const lines = new LineSegmentsGeometry();
     lines.setPositions(points);
-    const width = Math.max(1, Math.min(2.2, figureUnit(figure) * 0.0028));
-    return {
-        visible: new LineSegments2(lines, lineMaterialFor(width, size, false)),
-        hidden: new LineSegments2(lines, lineMaterialFor(width * 0.8, size, true)),
-        geometry: lines,
-    };
+    const width = Math.max(0.8, Math.min(1.6, figureUnit(figure) * 0.0019)) * sample;
+    return { mesh: new LineSegments2(lines, lineMaterialFor(width, size)), geometry: lines };
 };
 
-const meshesFor = (figure: PoseFigure, hex: string, size: Vector2): { group: Group; disposable: { dispose(): void }[] } => {
+const surfaceGeometry = (figure: PoseFigure): BufferGeometry => {
     const { positions, index } = figureSurface(figure);
     // Into three's y-up space: one sign, as everywhere else.
     const flipped = new Float32Array(positions.length);
@@ -166,23 +99,105 @@ const meshesFor = (figure: PoseFigure, hex: string, size: Vector2): { group: Gro
     geometry.setAttribute('position', new BufferAttribute(flipped, 3));
     geometry.setIndex(new BufferAttribute(index, 1));
     geometry.computeVertexNormals();
-    const lines = linesFor(figure, geometry, size);
-    // In order: the nearest surface's depth; the see-through body over
-    // everything; the hidden halves of the lines; the silhouette ink and
-    // the near halves of the lines, both tested against that depth.
-    const passes: [Mesh | LineSegments2, number][] = [
-        [new Mesh(geometry, depthOnly), 0],
-        [new Mesh(geometry, materialFor(hex)), 1],
-        [lines.hidden, 2],
-        [new Mesh(geometry, outlineFor(Math.max(figureUnit(figure) * 0.0024, 0.6))), 3],
-        [lines.visible, 4],
-    ];
-    const group = new Group();
-    for (const [object, order] of passes) {
-        object.renderOrder = order;
-        group.add(object);
+    return geometry;
+};
+
+// --- the ink -----------------------------------------------------------------
+//
+// Lines come from the picture, not the mesh: the body is drawn once into a
+// buffer of view-space normals and depth, and a full-screen pass inks every
+// pixel where that buffer jumps. Three jumps, three kinds of line:
+//
+// - coverage (body / paper) — the silhouette, sampled wider, so it is bold;
+// - depth — one form in front of another (an arm across the chest, a thigh
+//   over a calf), the overlap lines a figure drawing is made of;
+// - normal — a surface turning sharply away (the fold of a bent knee, the
+//   underside of the bust and the glutes), the finest line.
+//
+// Line weight is set in pixels from the figure's size, so a thumbnail and a
+// full canvas read as the same drawing.
+const INK_SHADER = {
+    vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
+    `,
+    fragmentShader: /* glsl */ `
+        uniform sampler2D tNormal;
+        uniform sampler2D tDepth;
+        uniform vec2 texel;
+        uniform float near;
+        uniform float far;
+        uniform float inner;
+        uniform float outer;
+        uniform vec3 ink;
+        varying vec2 vUv;
+
+        float linear(float d) { return (near * far) / (far - d * (far - near)); }
+
+        void main() {
+            vec4 centre = texture2D(tNormal, vUv);
+            float zc = linear(texture2D(tDepth, vUv).x);
+            vec3 nc = centre.xyz * 2.0 - 1.0;
+            float line = 0.0;
+            // Silhouette: any change of coverage within the outer radius.
+            for (int i = 0; i < 8; i++) {
+                float a = float(i) * 0.785398;
+                vec2 o = vec2(cos(a), sin(a)) * outer * texel;
+                float cover = texture2D(tNormal, vUv + o).a;
+                line = max(line, abs(cover - centre.a));
+            }
+            if (centre.a > 0.5) {
+                for (int i = 0; i < 4; i++) {
+                    float a = float(i) * 1.570796;
+                    vec2 o = vec2(cos(a), sin(a)) * inner * texel;
+                    vec4 s = texture2D(tNormal, vUv + o);
+                    if (s.a < 0.5) continue;
+                    float zs = linear(texture2D(tDepth, vUv + o).x);
+                    // Depth: relative, so the threshold means the same near and far.
+                    float dz = abs(zs - zc) / zc;
+                    line = max(line, smoothstep(0.004, 0.014, dz));
+                    // Normal: a crease or a turn away.
+                    vec3 ns = s.xyz * 2.0 - 1.0;
+                    line = max(line, smoothstep(0.12, 0.32, 1.0 - dot(nc, ns)) * 0.8);
+                }
+            }
+            if (line < 0.02) discard;
+            gl_FragColor = vec4(ink, line);
+        }
+    `,
+};
+
+const inkMaterial = new ShaderMaterial({
+    uniforms: {
+        tNormal: { value: null },
+        tDepth: { value: null },
+        texel: { value: new Vector2() },
+        near: { value: 1 },
+        far: { value: 10 },
+        inner: { value: 1 },
+        outer: { value: 1.5 },
+        ink: { value: null },
+    },
+    vertexShader: INK_SHADER.vertexShader,
+    fragmentShader: INK_SHADER.fragmentShader,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+});
+const inkScene = new Scene();
+const inkQuad = new Mesh(new PlaneGeometry(2, 2), inkMaterial);
+inkScene.add(inkQuad);
+const inkCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const normals = new MeshNormalMaterial();
+
+let target: WebGLRenderTarget | null = null;
+const targetFor = (width: number, height: number): WebGLRenderTarget => {
+    if (!target || target.width !== width || target.height !== height) {
+        target?.dispose();
+        target = new WebGLRenderTarget(width, height, { minFilter: NearestFilter, magFilter: NearestFilter });
+        target.depthTexture = new DepthTexture(width, height);
     }
-    return { group, disposable: [geometry, lines.geometry] };
+    return target;
 };
 
 // The camera `projectionOf` describes: a pinhole at the figure's anchor, one
@@ -252,18 +267,56 @@ export const drawFigure = (
     options: { selected?: boolean } = {},
 ): void => {
     const hex = toneFor(figure, options.selected === true).body;
-    const width = ctx.canvas.width;
-    const height = ctx.canvas.height;
+    // Drawn at twice the size and copied down: the ink is found per pixel,
+    // and without the supersample every line has stair-steps.
+    const sample = Math.max(ctx.canvas.width, ctx.canvas.height) <= 1400 ? 2 : 1;
+    const width = ctx.canvas.width * sample;
+    const height = ctx.canvas.height * sample;
     const renderer = rendererFor(width, height);
     if (!renderer) {
         drawFlat(ctx, figure, hex);
         return;
     }
+    const camera = cameraFor(figure, ctx.canvas.width, ctx.canvas.height);
+    const geometry = surfaceGeometry(figure);
+    const size = new Vector2(width, height);
+
+    // 1. Normals and depth, off screen.
+    const buffer = targetFor(width, height);
+    const normalScene = new Scene();
+    normalScene.add(new Mesh(geometry, normals));
+    renderer.setRenderTarget(buffer);
+    renderer.setClearColor(0x000000, 0);
+    renderer.clear();
+    renderer.render(normalScene, camera);
+    renderer.setRenderTarget(null);
+
+    // 2. The white body and its construction lines, depth-tested together.
     const scene = new Scene();
-    buildLights(scene);
-    const { group, disposable } = meshesFor(figure, hex, new Vector2(width, height));
-    scene.add(group);
-    renderer.render(scene, cameraFor(figure, width, height));
-    for (const geometry of disposable) geometry.dispose();
-    ctx.drawImage(renderer.domElement, 0, 0);
+    const lines = constructionLines(figure, geometry, size, sample);
+    const body = new Mesh(geometry, fillFor(hex));
+    body.renderOrder = 0;
+    lines.mesh.renderOrder = 1;
+    scene.add(body, lines.mesh);
+    renderer.render(scene, camera);
+
+    // 3. The ink, over both.
+    const u = figureUnit(figure) * sample;
+    inkMaterial.uniforms.tNormal.value = buffer.texture;
+    inkMaterial.uniforms.tDepth.value = buffer.depthTexture;
+    inkMaterial.uniforms.texel.value.set(1 / width, 1 / height);
+    inkMaterial.uniforms.near.value = camera.near;
+    inkMaterial.uniforms.far.value = camera.far;
+    inkMaterial.uniforms.inner.value = Math.min(2.2 * sample, Math.max(1, u * 0.0026));
+    // Capped: a pen has a width, and a big figure should not get a brush.
+    inkMaterial.uniforms.outer.value = Math.min(3.2 * sample, Math.max(1.6, u * 0.0052));
+    inkMaterial.uniforms.ink.value = inkColour;
+    const autoClear = renderer.autoClear;
+    renderer.autoClear = false;
+    renderer.render(inkScene, inkCamera);
+    renderer.autoClear = autoClear;
+
+    geometry.dispose();
+    lines.geometry.dispose();
+    ctx.drawImage(renderer.domElement, 0, 0, ctx.canvas.width, ctx.canvas.height);
 };

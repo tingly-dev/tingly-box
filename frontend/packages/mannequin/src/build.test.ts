@@ -68,7 +68,8 @@ describe('two builds, one library', () => {
             return hi - lo;
         };
         const curve = (build: 'female' | 'male') => {
-            const f = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front, build);
+            // Arms out, so the slab measures the torso and not the hanging arms.
+            const f = createFigure('tPose', DIMS, undefined, 0, VIEW_PRESETS.front, build);
             return widthAt(f, -0.03) / widthAt(f, 0.12);
         };
         expect(curve('female')).toBeGreaterThan(curve('male') * 1.1);

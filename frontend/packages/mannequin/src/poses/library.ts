@@ -149,12 +149,12 @@ const POSE_SPECS: Record<PosePresetKey, PoseSpec> = {
     // up, all fours. Every one of them folds a leg past what a flat angle can
     // show, which is why they were missing before the third dimension was.
 
-    // Kneeling, sitting back on the heels, knees a little apart, hands
-    // resting between them.
+    // Kneeling, sitting back on the heels, knees spread wide, hands resting
+    // on the floor between them.
     seiza: {
-        bend: 6, headNod: 4,
-        arms: { l: [[-6, 26], [10, 46]], r: [[6, 26], [-10, 46]] },
-        legs: { l: [[-10, 82], [-6, -84]], r: [[10, 82], [6, -84]] },
+        bend: 10, headNod: 6,
+        arms: { l: [[-6, 22], [2, 34]], r: [[6, 22], [-2, 34]] },
+        legs: { l: [[-48, 66], [-30, -80]], r: [[48, 66], [30, -80]] },
     },
     // The same kneel with the weight back on the hands, chest open, chin up.
     kneelLeanBack: {

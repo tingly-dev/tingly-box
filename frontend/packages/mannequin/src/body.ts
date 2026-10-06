@@ -220,13 +220,15 @@ void squareTo;
 // frame — and the selected figure wears its own cool tint on top.
 export interface FigureTone { body: string }
 
+// White, like the paper the sheet is drawn on, in three faint values so
+// figures in a crowd stay told apart where they overlap.
 const FIGURE_SHADES: readonly FigureTone[] = [
-    { body: '#c3c7cc' },
-    { body: '#a4aab1' },
-    { body: '#d8dce1' },
+    { body: '#ffffff' },
+    { body: '#f1f2f4' },
+    { body: '#e6e8eb' },
 ];
 
-const SELECTED_TONE: FigureTone = { body: '#b3bccf' };
+const SELECTED_TONE: FigureTone = { body: '#e9effb' };
 
 // Which tone the next figure should wear. Least-used rather than "one past
 // the count": after a delete, counting the list hands out a shade another

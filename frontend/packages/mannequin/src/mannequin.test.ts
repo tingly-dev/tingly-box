@@ -140,7 +140,9 @@ describe('transforms', () => {
         // Alt detaches a joint from its bone length — odd proportions are a
         // drawing choice. The target has to be somewhere the elbow can
         // actually reach, though: Alt escapes the skeleton, not the rig.
-        const figure = createFigure('standing', DIMS);
+        // A fixed view, because "up and in from the wrist" only lands inside
+        // the rig's range from roughly this side.
+        const figure = createFigure('standing', DIMS, undefined, 0, { yaw: 22, pitch: 6 });
         const at = projectFigure(figure);
         const target = { x: at.wristL.x - 24, y: at.wristL.y - 30 };
         const moved = moveJoint(figure, 'wristL', target);
@@ -521,10 +523,11 @@ describe('the skinned surface', () => {
         let top = Infinity, bottom = -Infinity;
         for (let i = 1; i < positions.length; i += 3) { top = Math.min(top, positions[i]); bottom = Math.max(bottom, positions[i]); }
         const heads = (bottom - top) / (HEAD_LENGTH_RATIO * figureUnit(figure));
-        // MakeHuman's "ideal proportions": between the seven and a half heads
-        // of a real adult and the eight of the drawing canon.
-        expect(heads).toBeGreaterThan(7.2);
-        expect(heads).toBeLessThan(8.2);
+        // MakeHuman's "ideal proportions" with the mannequin's head drawn a
+        // size up (`HEAD` in the bake): about seven heads, as stylised
+        // figure-drawing mannequins are.
+        expect(heads).toBeGreaterThan(6.5);
+        expect(heads).toBeLessThan(7.6);
     });
 });
 

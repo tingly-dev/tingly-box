@@ -80,9 +80,38 @@ const race = (gender) => ['african', 'asian', 'caucasian'].map((r) => [`macrodet
 // built on this model from looking like a photograph of an undressed person
 // to the image model it is sent to.
 const MANNEQUIN = [['breast/nipple-size-min', 1], ['breast/nipple-point-in', 1]];
+// Moderate stylisation, the way figure-drawing mannequins push a body: the
+// female a clearer hourglass (a little more bust and hip, a narrower waist,
+// a flat belly), the male a clearer wedge (broader shoulders, more V, a
+// firmer chest). One strength for all of it, so "how stylised" is one number
+// to turn — 0 is MakeHuman's ideal proportions as they are. Kept moderate on
+// purpose: the sketch goes to an image model, and a strongly sexualised
+// silhouette is both what moderation trips on and what would bend every
+// pose in a library shared by both builds.
+const STYLE = 1;
+// A drawing mannequin's head is drawn a size up from life — it is where the
+// eye goes first, and the Loomis lines need room. The egg grows about its
+// chin, so the neck it sits on does not change.
+const HEAD = 1.12;
+const stylised = (pairs) => pairs.map(([target, w]) => [target, w * STYLE]);
+const FEMININE = stylised([
+    ['breast/female-young-averagemuscle-averageweight-maxcup-averagefirmness', 0.28],
+    ['breast/female-young-averagemuscle-averageweight-averagecup-maxfirmness', 0.3],
+    ['measure/measure-waist-decrease', 0.5],
+    ['measure/measure-hips-increase', 0.3],
+    ['buttocks/buttocks-volume-incr', 0.35],
+    ['stomach/stomach-pregnant-decr', 0.5],
+]);
+const MASCULINE = stylised([
+    ['torso/torso-vshape-more', 0.5],
+    ['measure/measure-shoulder-increase', 0.3],
+    ['measure/measure-waist-decrease', 0.3],
+    ['torso/torso-muscle-pectoral-incr', 0.3],
+    ['stomach/stomach-pregnant-decr', 0.5],
+]);
 const BUILDS = {
-    female: morph([...race('female'), ['macrodetails/proportions/female-young-averagemuscle-averageweight-idealproportions', 1], ...MANNEQUIN]),
-    male: morph([...race('male'), ['macrodetails/proportions/male-young-averagemuscle-averageweight-idealproportions', 1], ...MANNEQUIN]),
+    female: morph([...race('female'), ['macrodetails/proportions/female-young-averagemuscle-averageweight-idealproportions', 1], ...FEMININE, ...MANNEQUIN]),
+    male: morph([...race('male'), ['macrodetails/proportions/male-young-averagemuscle-averageweight-idealproportions', 1], ...MASCULINE, ...MANNEQUIN]),
 };
 
 // --- skeleton ---------------------------------------------------------------
@@ -245,9 +274,10 @@ const stylise = (pos, joints) => {
     // puts the eye line.
     const mid = (crownY + chinY) / 2;
     const t = (mid - center[1]) / upAxis[1];
-    const origin = [center[0] + upAxis[0] * t, mid, center[2] + upAxis[2] * t + 0.01 * L];
-    const half = L / 2;
-    const A = 0.40 * L, FRONT = 0.46 * L, BACK = 0.52 * L;
+    const lift = (HEAD - 1) * (L / 2);
+    const origin = [center[0] + upAxis[0] * (t + lift), mid + upAxis[1] * lift, center[2] + upAxis[2] * (t + lift) + 0.01 * L];
+    const half = (L / 2) * HEAD;
+    const A = 0.40 * L * HEAD, FRONT = 0.46 * L * HEAD, BACK = 0.52 * L * HEAD;
     const inside = (u, v, w) => {
         // v is up the head, w forward, u across.
         const s = v < 0 ? Math.min(1, -v / half) : 0;
@@ -296,7 +326,7 @@ const stylise = (pos, joints) => {
         }
         pos.set(next);
     }
-    const egg = { origin, upAxis, side, fwd, L };
+    const egg = { origin, upAxis, side, fwd, L: L * HEAD };
     eggs.set(pos, egg);
     taubin(pos, 25, onHead);
     // Hands and feet: simplified to mittens and socks — the fingers and toes

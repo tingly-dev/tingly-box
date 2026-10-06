@@ -60,8 +60,8 @@ interface Hinge {
 const HINGES: readonly Hinge[] = [
     { joint: 'elbowL', root: 'shoulderL', tip: 'wristL', side: 'shoulderL', other: 'shoulderR', maxBend: 148, normalSign: 1, maxTwist: 85 },
     { joint: 'elbowR', root: 'shoulderR', tip: 'wristR', side: 'shoulderL', other: 'shoulderR', maxBend: 148, normalSign: 1, maxTwist: 85 },
-    { joint: 'kneeL', root: 'hipL', tip: 'ankleL', side: 'hipL', other: 'hipR', maxBend: 150, normalSign: -1, maxTwist: 45 },
-    { joint: 'kneeR', root: 'hipR', tip: 'ankleR', side: 'hipL', other: 'hipR', maxBend: 150, normalSign: -1, maxTwist: 45 },
+    { joint: 'kneeL', root: 'hipL', tip: 'ankleL', side: 'hipL', other: 'hipR', maxBend: 162, normalSign: -1, maxTwist: 45 },
+    { joint: 'kneeR', root: 'hipR', tip: 'ankleR', side: 'hipL', other: 'hipR', maxBend: 162, normalSign: -1, maxTwist: 45 },
 ];
 
 // Below seven degrees of bend a limb is straight enough that its bend plane is
