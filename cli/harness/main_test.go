@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -186,4 +187,20 @@ func isHelpErr(err error) bool {
 	}
 	msg := err.Error()
 	return strings.Contains(msg, "help") || strings.Contains(msg, "usage")
+}
+
+func TestCatalogCheckEmbeddedOK(t *testing.T) {
+	if err := (&CatalogCheckCmd{}).Run(); err != nil {
+		t.Fatalf("embedded catalogs should pass: %v", err)
+	}
+}
+
+func TestCatalogCheckRejectsBadFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "claude.models.json")
+	if err := os.WriteFile(path, []byte(`[{"id":"claude-x","reasoning":{"dialects":["nope"]}}]`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := (&CatalogCheckCmd{Files: []string{path}}).Run(); err == nil {
+		t.Fatal("expected failure for unknown dialect")
+	}
 }

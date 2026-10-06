@@ -6,6 +6,7 @@
 //   - agent: Real agent CLI runs against mock or real upstreams
 //   - lb: Load-balancing scenario simulator (tier/failover/breaker/affinity)
 //   - duo: Two-instance e2e verification (tb2 gateway → tb1 vmodel), function + memory
+//   - catalog: Offline validity check of providers.json / claude.models.json
 //   - provider: Real provider API e2e tests (live API compatibility) - Phase 3
 package main
 
@@ -34,6 +35,7 @@ type CLI struct {
 	Lb         LbCmd         `kong:"cmd,help='Simulate load-balancing (tier/failover/breaker/affinity) over a request sequence'"`
 	Duo        DuoCmd        `kong:"cmd,help='Two-instance e2e verification: tb2 gateway routed to tb1 vmodel (function + memory)'"`
 	Routing    RoutingCmd    `kong:"cmd,help='Smart-routing e2e scenarios on the duo topology (rules via API, wire + trace assertions)'"`
+	Catalog    CatalogCmd    `kong:"cmd,help='Check the validity of the provider / model catalogs'"`
 	Provider   ProviderCmd   `kong:"cmd,help='Real provider API tests (Phase 3 - not yet implemented)'"`
 	InitConfig InitConfigCmd `kong:"cmd,name='init-config',help='Create a providers config file template for agent --config'"`
 }

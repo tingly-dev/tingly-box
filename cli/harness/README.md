@@ -135,6 +135,10 @@ go build -o harness ./cli/harness
 ./harness agent claude   --mock
 ./harness agent batch    --config providers.yaml
 
+# Offline catalog validity check (providers.json + claude.models.json + cross-consistency)
+./harness catalog check                       # embedded catalogs
+./harness catalog check -f providers.json -f claude.models.json --json
+
 # Generate a providers config template for Tier B/C real mode
 ./harness init-config --output providers.yaml
 
