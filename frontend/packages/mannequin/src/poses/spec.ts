@@ -45,6 +45,14 @@ export interface PoseSpec {
     hipTilt?: number;
     arms: { l: readonly [Angle, Angle]; r: readonly [Angle, Angle] };
     legs: { l: readonly [Angle, Angle]; r: readonly [Angle, Angle] };
+    // The spine's curve, split across the waist: `lean` and `bend` above say
+    // where the torso as a whole points (hip to neck); `curve` bends the
+    // ribcage against the pelvis by that much, half each way, so adding a
+    // curve to a pose does not swing its shoulders off where they were.
+    // `curve.lean` side-bends in the picture plane, `curve.bend` arches (−)
+    // or slumps / crunches (+). The hip line tilts with the pelvis and the
+    // shoulder line with the ribcage, which is what makes it read as gesture.
+    curve?: { lean?: number; bend?: number };
     // The whole body, turned rigidly once it is built: `spin` about the
     // vertical axis, then `tip` over in the screen plane. What it is for is
     // the one thing `lean` cannot say — which way the *front* faces once the
@@ -97,16 +105,20 @@ export const buildPose = (spec: PoseSpec, bones: BoneTable = BONE): PresetPoints
     // negated here, which quietly turned every forward fold in the library —
     // the bow, the crouch, the run's lean — into a back-bend of the same size.
     // From the front the two look identical; from the side they are opposites.
-    const spine = along([(spec.lean ?? 0) + 180, spec.bend ?? 0], bones.torso);
-    const neck = add3(hip, spine);
-    // The torso's own axis, which the twist and the head's turn rotate about.
-    const axis = norm3(spine);
+    const curveLean = spec.curve?.lean ?? 0;
+    const curveBend = spec.curve?.bend ?? 0;
+    const lower = along([(spec.lean ?? 0) - curveLean / 2 + 180, (spec.bend ?? 0) - curveBend / 2], bones.lumbar);
+    const chest = add3(hip, lower);
+    const upper = along([(spec.lean ?? 0) + curveLean / 2 + 180, (spec.bend ?? 0) + curveBend / 2], bones.thorax);
+    const neck = add3(chest, upper);
+    // The ribcage's own axis, which the twist and the head's turn rotate about.
+    const axis = norm3(upper);
     const head = add3(neck, along(
-        [(spec.lean ?? 0) + (spec.headTilt ?? 0) + 180, (spec.bend ?? 0) + (spec.headNod ?? 0)],
+        [(spec.lean ?? 0) + curveLean / 2 + (spec.headTilt ?? 0) + 180, (spec.bend ?? 0) + curveBend / 2 + (spec.headNod ?? 0)],
         bones.head,
     ));
 
-    const shoulderAngle = (spec.lean ?? 0) + (spec.shoulderTilt ?? 0);
+    const shoulderAngle = (spec.lean ?? 0) + curveLean / 2 + (spec.shoulderTilt ?? 0);
     const twist = rad(spec.twist ?? 0);
     const shoulderStub = (side: number) => rotateAxis(
         turned({ x: side * bones.shoulderSpan, y: bones.shoulderDrop, z: 0 }, shoulderAngle),
@@ -116,7 +128,7 @@ export const buildPose = (spec: PoseSpec, bones: BoneTable = BONE): PresetPoints
     const shoulderL = add3(neck, shoulderStub(-1));
     const shoulderR = add3(neck, shoulderStub(1));
 
-    const hipAngle = (spec.lean ?? 0) + (spec.hipTilt ?? 0);
+    const hipAngle = (spec.lean ?? 0) - curveLean / 2 + (spec.hipTilt ?? 0);
     const hipL = add3(hip, turned({ x: -bones.hipSpan, y: bones.hipDrop, z: 0 }, hipAngle));
     const hipR = add3(hip, turned({ x: bones.hipSpan, y: bones.hipDrop, z: 0 }, hipAngle));
 
@@ -126,7 +138,7 @@ export const buildPose = (spec: PoseSpec, bones: BoneTable = BONE): PresetPoints
     const kneeR = add3(hipR, along(spec.legs.r[0], bones.thigh));
 
     const raw = {
-        hip, neck, head, shoulderL, shoulderR, hipL, hipR, elbowL, elbowR, kneeL, kneeR,
+        hip, chest, neck, head, shoulderL, shoulderR, hipL, hipR, elbowL, elbowR, kneeL, kneeR,
         wristL: add3(elbowL, along(spec.arms.l[1], bones.foreArm)),
         wristR: add3(elbowR, along(spec.arms.r[1], bones.foreArm)),
         ankleL: add3(kneeL, along(spec.legs.l[1], bones.shin)),

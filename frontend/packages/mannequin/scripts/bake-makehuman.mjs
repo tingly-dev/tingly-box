@@ -88,7 +88,7 @@ const MANNEQUIN = [['breast/nipple-size-min', 1], ['breast/nipple-point-in', 1]]
 // purpose: the sketch goes to an image model, and a strongly sexualised
 // silhouette is both what moderation trips on and what would bend every
 // pose in a library shared by both builds.
-const STYLE = 1;
+const STYLE = 1.35;
 // A drawing mannequin's head is drawn a size up from life — it is where the
 // eye goes first, and the Loomis lines need room. The egg grows about its
 // chin, so the neck it sits on does not change.
@@ -137,6 +137,10 @@ const skeletonOf = (v) => {
         elbowL: at(v, 'lowerarm01.R____head'), elbowR: at(v, 'lowerarm01.L____head'),
         wristL: at(v, 'wrist.R____head'), wristR: at(v, 'wrist.L____head'),
         neck: at(v, 'neck01____head'),
+        // Where the spine bends: the top of the lumbar curve, between the
+        // pelvis and the ribcage. One joint here is what lets a pose have a
+        // gesture — an arch, a slump, a side-bend — instead of a plank.
+        chest: at(v, 'spine02____head'),
         head: mid(at(v, 'head____head'), at(v, 'head____tail')),
     };
     // The root sits a little above the femoral heads, on the spine, which is
@@ -156,9 +160,12 @@ const boneShare = (name) => {
     const s = side ? ours(side) : null;
     const b = base.replace(/\.[LR]$/, '');
     if (b === 'root' || b === 'spine05' || b === 'pelvis') return [[seg('pelvis'), 1]];
-    if (b === 'spine04') return [[seg('pelvis'), 0.75], [seg('chest'), 0.25]];
-    if (b === 'spine03') return [[seg('pelvis'), 0.35], [seg('chest'), 0.65]];
-    if (b === 'spine02' || b === 'spine01' || b === 'breast' || b === 'clavicle') return [[seg('chest'), 1]];
+    // The ribcage turns about the waist joint (`spine02`), so the lumbar bones
+    // below it go with the pelvis and the blend is centred on it.
+    if (b === 'spine04') return [[seg('pelvis'), 1]];
+    if (b === 'spine03') return [[seg('pelvis'), 0.7], [seg('chest'), 0.3]];
+    if (b === 'spine02') return [[seg('pelvis'), 0.2], [seg('chest'), 0.8]];
+    if (b === 'spine01' || b === 'breast' || b === 'clavicle') return [[seg('chest'), 1]];
     if (b === 'shoulder01') return [[seg('chest'), 0.5], [seg(`upperArm${s}`), 0.5]];
     if (/^neck0[12]$/.test(b)) return [[seg('neck'), 1]];
     if (b === 'neck03') return [[seg('neck'), 0.5], [seg('head'), 0.5]];
@@ -348,7 +355,7 @@ const stylise = (pos, joints) => {
         }
         extremity[i] = Math.max(0, e);
     }
-    taubin(pos, 18, extremity);
+    taubin(pos, 40, extremity);
     // The root of the neck — the trapezius and the collarbones — is where
     // the base mesh is most detailed and the ink line most likely to catch.
     const collar = new Float64Array(M);
@@ -385,6 +392,26 @@ const cutLines = (pos, joints) => {
         ring(add(H, scale(thigh, 0.02)), add(thigh, scale(up, -0.6)), 0.12, ['pelvis', `thigh${side}`]);
         ring(K, add(thigh, shin), 0.08, [`thigh${side}`, `shin${side}`]);
         ring(A, shin, 0.06, [`shin${side}`]);
+    }
+    // The torso's own construction, as in the reference sheets: a centre line
+    // down the front from the pit of the neck to the crotch and one down the
+    // back along the spine, and the line under the chest masses.
+    const front = norm(sub(joints.shoulderR, joints.shoulderL));
+    const midline = joints.chest ?? joints.hip;
+    const torsoFront = (p) => p[2] > midline[2] - 0.004;
+    ring(midline, front, 0.3, ['chest', 'pelvis'], (p) => torsoFront(p) && p[1] > joints.neck[1] + 0.02);
+    ring(midline, front, 0.3, ['chest', 'pelvis'], (p) => !torsoFront(p) && p[1] > joints.neck[1] + 0.04 && p[1] < joints.hip[1] + 0.02);
+    const underChest = add(joints.chest, scale(norm(sub(joints.neck, joints.chest)), 0.35 * len(sub(joints.neck, joints.chest))));
+    ring(underChest, add(up, [0, 0, 0.35]), 0.2, ['chest'], (p) => p[2] > underChest[2] + 0.01);
+    // The ball joints, drawn as the little circles a mannequin sheet puts on
+    // them: a cap cut off the front of each knee, the back of each elbow and
+    // the outside of each shoulder.
+    for (const side of ['L', 'R']) {
+        const outward = side === 'L' ? -1 : 1;
+        const K = joints[`knee${side}`], E = joints[`elbow${side}`], S = joints[`shoulder${side}`];
+        ring(add(K, [0, 0, 0.022]), [0, 0, 1], 0.05, [`thigh${side}`, `shin${side}`]);
+        ring(add(E, [0, 0, -0.016]), [0, 0, -1], 0.04, [`upperArm${side}`, `foreArm${side}`]);
+        ring(add(S, [outward * 0.022, -0.006, 0]), [outward, -0.25, 0], 0.05, ['chest', `upperArm${side}`]);
     }
     // The head: a centre line front to back over the crown, and the eye line
     // across the front. The front is +z.

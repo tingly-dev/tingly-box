@@ -1,13 +1,13 @@
 // Making figures: from a preset, from a saved sketch, or by swapping the pose
 // of one that exists. The one place the library, the rig and the view meet.
-import { DEFAULT_BUILD, JOINT_KEYS, figureBuild, figureTurn, figureUnit, derivedFace, type FigureBuild, type FigureTurn, type JointKey, type PoseFigure } from './skeleton';
+import { BONES, DEFAULT_BUILD, JOINT_KEYS, figureBuild, figureTurn, figureUnit, derivedFace, type FigureBuild, type FigureTurn, type JointKey, type PoseFigure } from './skeleton';
 import { constrainFigure } from './rig';
 import { DEFAULT_VIEW, setFigureTurn } from './view';
 import { centerFigureAt, figureCenter, fitFigureInto, mapJoints, scaleFigure } from './transform';
 import { FIGURE_ASPECT } from './poses/spec';
 import { POSE_PRESETS, type PosePresetKey } from './poses/library';
 import type { Point, Size } from './types';
-import { zOf, type Vec3 } from './vec3';
+import { lerp3, zOf, type Vec3 } from './vec3';
 
 // A figure saved before the face joint existed — or one built by hand — gets
 // it put where the body implies. Cheap, idempotent, and the reason nothing
@@ -17,8 +17,16 @@ export const completeFigure = (figure: PoseFigure): PoseFigure => {
     // existed can hold a pose the model no longer allows, and the honest thing
     // is to bring it into range on open rather than to keep a second, laxer
     // set of rules alive for old data.
-    if (figure.joints.face !== undefined) return constrainFigure(figure);
-    const joints = { ...figure.joints, face: derivedFace(figure.joints, figureUnit(figure)) };
+    // A sketch saved before the waist joint existed gets one on its straight
+    // spine, at the build's own proportion — the pose it was saved in, now
+    // with a joint it can bend at.
+    let joints = figure.joints;
+    if (joints.chest === undefined) {
+        const bones = BONES[figureBuild(figure)];
+        joints = { ...joints, chest: lerp3(joints.hip, joints.neck, bones.lumbar / bones.torso) };
+    }
+    if (joints.face === undefined) joints = { ...joints, face: derivedFace(joints, figureUnit({ ...figure, joints })) };
+    if (joints === figure.joints) return constrainFigure(figure);
     return constrainFigure({ ...figure, joints });
 };
 

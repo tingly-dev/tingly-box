@@ -20,11 +20,13 @@ const TURN_ON_FLOOR = 45;
 
 const POSE_SPECS: Record<PosePresetKey, PoseSpec> = {
     standing: {
+        curve: { bend: -4 },
         arms: { l: [[-8, 8], [-6, 12]], r: [[8, 8], [6, 12]] },
         legs: { l: [-3, -2], r: [3, 2] },
     },
     contrapposto: {
-        lean: 4, shoulderTilt: -4, hipTilt: 5, twist: -6,
+        lean: 2, shoulderTilt: -4, hipTilt: 6, twist: -6,
+        curve: { lean: 8, bend: -4 },
         arms: { l: [[-10, 6], [-14, 10]], r: [[6, 10], [10, 14]] },
         legs: { l: [-1, 0], r: [9, 4] },
     },
@@ -125,6 +127,7 @@ const POSE_SPECS: Record<PosePresetKey, PoseSpec> = {
     // the picture, which is what this pose used to do.
     crouching: {
         bend: 40, headNod: -16,
+        curve: { bend: 14 },
         arms: { l: [[-10, 16], [8, 52]], r: [[10, 16], [-8, 52]] },
         legs: { l: [[-40, 78], [-8, -50]], r: [[40, 78], [8, -50]] },
     },
@@ -134,6 +137,7 @@ const POSE_SPECS: Record<PosePresetKey, PoseSpec> = {
         // Upright, a touch back: hip flexion is thigh against torso, so a
         // chest leaning forward would spend the lift the knees need.
         bend: -6, headNod: 16,
+        curve: { bend: 20 },
         arms: { l: [[-6, 34], [52, 26]], r: [[6, 48], [-52, 46]] },
         legs: { l: [[-176, 42], [-4, -22]], r: [[176, 42], [4, -22]] },
     },
@@ -152,32 +156,37 @@ const POSE_SPECS: Record<PosePresetKey, PoseSpec> = {
     // Kneeling, sitting back on the heels, knees spread wide, hands resting
     // on the floor between them.
     seiza: {
-        bend: 10, headNod: 6,
+        bend: 8, headNod: 8,
+        curve: { bend: -12 },
         arms: { l: [[-6, 22], [2, 34]], r: [[6, 22], [-2, 34]] },
         legs: { l: [[-48, 66], [-30, -80]], r: [[48, 66], [30, -80]] },
     },
     // The same kneel with the weight back on the hands, chest open, chin up.
     kneelLeanBack: {
-        bend: -22, twist: 10, headNod: -18, headTurn: 14,
+        bend: -14, twist: 18, headNod: -22, headTurn: 18,
+        curve: { bend: -26, lean: 6 },
         arms: { l: [[-20, -46], [-14, -40]], r: [[20, -46], [14, -40]] },
         legs: { l: [[-12, 80], [-6, -84]], r: [[12, 80], [6, -84]] },
     },
     // Both legs folded to one side, propped on the arm on the other.
     sideSit: {
-        lean: 14, shoulderTilt: -8, headTilt: -10,
+        lean: 12, shoulderTilt: -4, headTilt: -14,
+        curve: { lean: 18, bend: -8 },
         arms: { l: [[-30, 4], [-24, 8]], r: [[18, 34], [-8, 58]] },
         legs: { l: [[30, 74], [96, -38]], r: [[44, 70], [104, -30]] },
     },
     // The side-sit with the free hand behind the head.
     sideSitHandHead: {
-        lean: 12, shoulderTilt: -6, headTilt: -8,
+        lean: 10, shoulderTilt: -4, headTilt: -12,
+        curve: { lean: 16, bend: -14 },
         arms: { l: [[-30, 4], [-24, 8]], r: [[146, -18], [-118, -40]] },
         legs: { l: [[30, 74], [96, -38]], r: [[44, 70], [104, -30]] },
     },
     // Sitting back on one hand, one knee drawn up with the forearm resting
     // across it, the other leg folded flat.
     kneeUp: {
-        lean: -6, bend: -12, headTilt: 6,
+        lean: -6, bend: -10, headTilt: 8,
+        curve: { lean: -8, bend: -10 },
         arms: { l: [[-24, -36], [-18, -40]], r: [[14, 52], [56, 52]] },
         legs: { l: [[-14, 78], [-10, 72]], r: [[170, 58], [6, -10]] },
     },
@@ -186,6 +195,7 @@ const POSE_SPECS: Record<PosePresetKey, PoseSpec> = {
     // on it, and the head lifts to look along it.
     allFours: {
         bend: 10, headNod: -46,
+        curve: { bend: -16 },
         arms: { l: [[-4, 86], [-4, 86]], r: [[4, 86], [4, 86]] },
         legs: { l: [[-4, 86], [-3, 2]], r: [[4, 86], [3, 2]] },
         body: { spin: -90, tip: -90, turn: TURN_ON_FLOOR },
@@ -208,7 +218,8 @@ const POSE_SPECS: Record<PosePresetKey, PoseSpec> = {
     // On one side, the chest raised on the lower forearm, the top arm resting
     // along the body.
     sideElbow: {
-        lean: 66, headTilt: -34,
+        lean: 62, headTilt: -28,
+        curve: { lean: -26 },
         arms: { l: [[74, 30], [76, 40]], r: [[-14, 20], [-88, 16]] },
         legs: { l: [[76, 34], [98, 4]], r: [[88, 2], [94, -6]] },
     },
@@ -222,7 +233,8 @@ const POSE_SPECS: Record<PosePresetKey, PoseSpec> = {
     // Face-down on the forearms, chin on the hands, lower legs in the air.
     // Written like `allFours`: upright, floor in front, then laid down.
     proneOnElbows: {
-        bend: -16, headNod: -36,
+        bend: -12, headNod: -30,
+        curve: { bend: -24 },
         arms: { l: [[-176, 66], [164, -30]], r: [[176, 66], [-164, -30]] },
         legs: { l: [[-3, 4], [6, -74]], r: [[3, 4], [-6, -70]] },
         body: { spin: -90, tip: -90, turn: TURN_ON_FLOOR },

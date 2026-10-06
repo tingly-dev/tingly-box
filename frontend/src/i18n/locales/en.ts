@@ -2090,7 +2090,7 @@ export default {
           },
                     "flip": "Mirror figure",
           "remove": "Remove figure",
-          "hint": "Drag a joint and the limb below it follows — drag it short and the limb points at you; hold Shift to send it behind the body, Alt to move one joint alone. Drag the ring at bottom-left to turn the figure, the corner to resize. The small hollow handle in front of the head aims the face. The grey mannequin is a pose reference — the prompt says who it is."
+          "hint": "Drag a joint and the limb below it follows — drag it short and the limb points at you; hold Shift to send it behind the body, Alt to move one joint alone. Drag the ring at bottom-left to turn the figure, the corner to resize. The small hollow handle in front of the head aims the face. The mannequin is a pose reference — the prompt says who it is."
         }
     },
     "slice": {

@@ -12,7 +12,9 @@ export type JointKey =
     | 'kneeL' | 'kneeR'
     | 'ankleL' | 'ankleR'
     // Where the face looks. See below.
-    | 'face';
+    | 'face'
+    // The waist: where the spine bends. See below.
+    | 'chest';
 
 // Sixteen joints. Fifteen of them are the body; the sixteenth is the face.
 //
@@ -27,6 +29,11 @@ export const JOINT_KEYS: readonly JointKey[] = [
     'head', 'neck', 'shoulderL', 'shoulderR', 'elbowL', 'elbowR', 'wristL', 'wristR',
     'hip', 'hipL', 'hipR', 'kneeL', 'kneeR', 'ankleL', 'ankleR',
     'face',
+    // Seventeenth, and the only joint added for the sake of gesture: with
+    // the torso one bone from hip to neck, every pose was a plank with limbs.
+    // A joint at the waist lets the ribcage arch, slump, twist and side-bend
+    // against the pelvis — the S-curve every figure drawing is built on.
+    'chest',
 ];
 
 
@@ -82,18 +89,21 @@ export const LEGACY_BUILD: FigureBuild = 'male';
 export const figureBuild = (figure: PoseFigure): FigureBuild => figure.build ?? LEGACY_BUILD;
 
 export const figureUnit = (figure: PoseFigure): number => {
-    // hip → neck, the bone itself, in three dimensions. The hip *line's*
-    // midpoint drifts with the torso's lean (the stubs to hipL/hipR rotate
-    // with it), which would make the same body measure differently lying down
-    // than standing up.
-    const torso = dist3(figure.joints.neck, figure.joints.hip);
+    // hip → waist → neck, the two bones themselves, in three dimensions —
+    // their *lengths*, so an arched back measures the same as a straight
+    // one. (The hip line's midpoint drifts with the torso's lean, which would
+    // make the same body measure differently lying down than standing up.)
+    const J = figure.joints;
+    const torso = J.chest
+        ? dist3(J.chest, J.hip) + dist3(J.neck, J.chest)
+        : dist3(J.neck, J.hip);
     return Math.max(torso / TORSO_HEIGHT_RATIO, 1);
 };
 
 
 export const JOINT_PARENT: Record<JointKey, JointKey | null> = {
     hip: null,
-    hipL: 'hip', hipR: 'hip', neck: 'hip',
+    hipL: 'hip', hipR: 'hip', chest: 'hip', neck: 'chest',
     kneeL: 'hipL', ankleL: 'kneeL',
     kneeR: 'hipR', ankleR: 'kneeR',
     shoulderL: 'neck', shoulderR: 'neck', head: 'neck',
@@ -129,6 +139,9 @@ export const SUBTREES = Object.fromEntries(JOINT_KEYS.map((key) => [key, subtree
 // the same size in the same place.
 export interface BoneTable {
     torso: number; head: number;
+    // The torso's two bones, hip → waist and waist → neck; they sum to
+    // `torso`.
+    lumbar: number; thorax: number;
     shoulderSpan: number; shoulderDrop: number;
     upperArm: number; foreArm: number;
     hipSpan: number; hipDrop: number;
@@ -144,6 +157,11 @@ type RestJoints = Record<string, readonly number[]>;
 const gap = (j: RestJoints, a: string, b: string) => Math.hypot(j[a][0] - j[b][0], j[a][1] - j[b][1], j[a][2] - j[b][2]);
 const bonesOf = (j: RestJoints): BoneTable => ({
     torso: 0.36,
+    ...(() => {
+        const lower = gap(j, 'chest', 'hip');
+        const upper = gap(j, 'neck', 'chest');
+        return { lumbar: (0.36 * lower) / (lower + upper), thorax: (0.36 * upper) / (lower + upper) };
+    })(),
     head: gap(j, 'head', 'neck'),
     shoulderSpan: j.shoulderR[0] - j.neck[0],
     shoulderDrop: j.shoulderR[1] - j.neck[1],

@@ -201,6 +201,7 @@ const constrainCone = (joints: Record<JointKey, Vec3>, cone: Cone): void => {
 // does not.
 
 const HEAD_CONE = 62;
+const SPINE_CONE = 55;
 const FACE_CONE = 85;
 
 const constrainAim = (joints: Record<JointKey, Vec3>, key: JointKey, root: JointKey, axis: Vec3, cap: number): void => {
@@ -229,7 +230,13 @@ export const constrainFigure = (figure: PoseFigure): PoseFigure => {
     // shin with it and the knee is then judged in its corrected frame.
     for (const cone of CONES) constrainCone(joints, cone);
     for (const hinge of HINGES) constrainHinge(joints, hinge);
-    constrainAim(joints, 'head', 'neck', sub3(joints.neck, joints.hip), HEAD_CONE);
+    // The ribcage against the pelvis: a spine bends a long way forward but
+    // not far any other way, so one cone, generous enough for a crunch.
+    if (joints.chest) {
+        const lowerUp = sub3(joints.chest, joints.hip);
+        constrainAim(joints, 'neck', 'chest', lowerUp, SPINE_CONE);
+    }
+    constrainAim(joints, 'head', 'neck', sub3(joints.neck, joints.chest ?? joints.hip), HEAD_CONE);
     constrainAim(joints, 'face', 'head', bodyForwardOf(joints), FACE_CONE);
     return { ...figure, joints };
 };

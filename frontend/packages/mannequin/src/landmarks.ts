@@ -154,7 +154,7 @@ interface RawRead {
 // hip line, measured on the reference itself rather than hard-coded — the two
 // numbers live in `poseFigure`'s BONE table and have no business being copied
 // here.
-interface TorsoOffsets { shoulder: number; hip: number }
+interface TorsoOffsets { shoulder: number; hip: number; waist: number }
 
 const torsoOffsetsOf = (reference: PoseFigure): TorsoOffsets => {
     const up = norm(sub(reference.joints.neck, reference.joints.hip));
@@ -163,6 +163,11 @@ const torsoOffsetsOf = (reference: PoseFigure): TorsoOffsets => {
     return {
         shoulder: dot(sub(reference.joints.neck, shoulderMid), up),
         hip: dot(sub(reference.joints.hip, hipMid), up),
+        waist: (() => {
+            const lower = len(sub(reference.joints.chest, reference.joints.hip));
+            const upper = len(sub(reference.joints.neck, reference.joints.chest));
+            return lower / Math.max(lower + upper, 1e-9);
+        })(),
     };
 };
 
@@ -213,6 +218,12 @@ const readJoints = (
         points.neck = add(shoulderMid, mul(up, offsets.shoulder));
         seen.hip = seenOf(LANDMARK.hipL, LANDMARK.hipR);
         seen.neck = seenOf(LANDMARK.shoulderL, LANDMARK.shoulderR);
+        // No landmark for the waist either: it goes on the hip-to-neck line
+        // where the reference has it. A photograph's spine curve is the one
+        // thing this import cannot read, and a straight back is the honest
+        // guess.
+        points.chest = add(points.hip, mul(sub(points.neck, points.hip), offsets.waist));
+        seen.chest = Math.min(seen.hip, seen.neck);
     }
     if (ok(LANDMARK.earL) && ok(LANDMARK.earR)) {
         points.head = mid(at(LANDMARK.earL), at(LANDMARK.earR));

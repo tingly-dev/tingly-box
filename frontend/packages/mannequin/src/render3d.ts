@@ -139,12 +139,24 @@ const INK_SHADER = {
             float zc = linear(texture2D(tDepth, vUv).x);
             vec3 nc = centre.xyz * 2.0 - 1.0;
             float line = 0.0;
-            // Silhouette: any change of coverage within the outer radius.
-            for (int i = 0; i < 8; i++) {
-                float a = float(i) * 0.785398;
-                vec2 o = vec2(cos(a), sin(a)) * outer * texel;
-                float cover = texture2D(tNormal, vUv + o).a;
-                line = max(line, abs(cover - centre.a));
+            // Silhouette, weighted like an inked drawing: heavy on the side
+            // turned away from the light (below and to the right), light on
+            // the lit side. Each direction is sampled at several radii; a
+            // radius counts only up to the weight the body's normal there
+            // asks for, so the stroke swells and thins round the form.
+            vec3 light = normalize(vec3(-0.45, 0.75, 0.5));
+            for (int i = 0; i < 12; i++) {
+                float a = float(i) * 0.523599;
+                vec2 dir = vec2(cos(a), sin(a));
+                for (int k = 1; k <= 4; k++) {
+                    float r = outer * float(k) * 0.35;
+                    vec4 s = texture2D(tNormal, vUv + dir * r * texel);
+                    if (abs(s.a - centre.a) < 0.5) continue;
+                    vec3 n = (centre.a > 0.5 ? centre.xyz : s.xyz) * 2.0 - 1.0;
+                    float shade = 1.0 - max(dot(n, light), 0.0);
+                    float reach = outer * mix(0.62, 1.4, shade);
+                    line = max(line, 1.0 - smoothstep(reach - 0.6, reach + 0.6, r));
+                }
             }
             if (centre.a > 0.5) {
                 for (int i = 0; i < 4; i++) {

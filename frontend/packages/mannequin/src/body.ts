@@ -1,6 +1,6 @@
 import { MODEL } from './model/makehuman';
 import { figureBuild, figureUnit, squareTo, type FigureBuild, type JointKey, type PoseFigure } from './skeleton';
-import { cross3, dot3, len3, mul3, norm3, sub3, add3, type Vec3 } from './vec3';
+import { cross3, dot3, len3, lerp3, mul3, norm3, sub3, add3, type Vec3 } from './vec3';
 
 // --- the white model ---------------------------------------------------------
 //
@@ -67,21 +67,29 @@ const frameOf = (origin: Vec3, tip: Vec3, reference: Vec3, fallback: Vec3): Fram
 const SEGMENT_ORDER = MODEL.segments as readonly SegmentName[];
 
 export const segmentFrames = (J: Record<JointKey, Vec3>): Frame[] => {
-    const up = norm3(sub3(J.neck, J.hip));
-    const flat = (v: Vec3) => {
+    // Two trunk bones: the pelvis from the hip root up to the waist, the
+    // ribcage from the waist up to the neck. Each faces the way its own
+    // girdle does — the hip line for one, the shoulder line for the other —
+    // so a twist at the waist is a real twist of the body, not a shear.
+    const waist = J.chest ?? lerp3(J.hip, J.neck, 0.38);
+    const flatTo = (v: Vec3, up: Vec3) => {
         const f = orthTo(v, up);
         return len3(f) > 1e-9 ? norm3(f) : { x: 1, y: 0, z: 0 };
     };
-    const pelvisAcross = flat(sub3(J.hipR, J.hipL));
-    const chestAcross = flat(sub3(J.shoulderR, J.shoulderL));
-    const pelvisFront = norm3(cross3(up, pelvisAcross));
-    const chestFront = norm3(cross3(up, chestAcross));
-    const torso = len3(sub3(J.neck, J.hip));
-    const trunk = (origin: Vec3, front: Vec3): Frame => ({ origin, axis: up, forward: front, across: norm3(cross3(front, up)), length: torso });
+    const pelvisUp = norm3(sub3(waist, J.hip));
+    const chestUp = norm3(sub3(J.neck, waist));
+    const pelvisAcross = flatTo(sub3(J.hipR, J.hipL), pelvisUp);
+    const chestAcross = flatTo(sub3(J.shoulderR, J.shoulderL), chestUp);
+    const pelvisFront = norm3(cross3(pelvisUp, pelvisAcross));
+    const chestFront = norm3(cross3(chestUp, chestAcross));
+    const bone = (origin: Vec3, up: Vec3, front: Vec3, length: number): Frame => ({
+        origin, axis: up, forward: front, across: norm3(cross3(front, up)), length,
+    });
     const faceDir = sub3(J.face, J.head);
     const frames: Record<SegmentName, Frame> = {
-        pelvis: trunk(J.hip, pelvisFront),
-        chest: trunk(J.neck, chestFront),
+        pelvis: bone(J.hip, pelvisUp, pelvisFront, len3(sub3(waist, J.hip))),
+        // The ribcage turns about the waist, where the spine bends.
+        chest: bone(waist, chestUp, chestFront, len3(sub3(J.neck, waist))),
         neck: frameOf(J.neck, J.head, chestFront, chestFront),
         head: frameOf(J.neck, J.head, faceDir, chestFront),
     } as Record<SegmentName, Frame>;

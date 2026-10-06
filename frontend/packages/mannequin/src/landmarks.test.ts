@@ -35,7 +35,12 @@ const roundTrip = (figure: PoseFigure, frame = FRAME) => {
     return result!;
 };
 
-const apart = (a: PoseFigure, b: PoseFigure): number => Math.max(...JOINT_KEYS.map((key) => Math.hypot(
+// Over every joint a photograph can carry. The waist is not one of them: no
+// landmark sits on the spine, so an import reads the back straight (see
+// `readJoints`) and the waist of a curved pose comes back on the hip-to-neck
+// line. That is measured separately, below.
+const LANDMARKED = JOINT_KEYS.filter((key) => key !== 'chest');
+const apart = (a: PoseFigure, b: PoseFigure): number => Math.max(...LANDMARKED.map((key) => Math.hypot(
     a.joints[key].x - b.joints[key].x,
     a.joints[key].y - b.joints[key].y,
     a.joints[key].z - b.joints[key].z,
@@ -60,20 +65,34 @@ describe('landmarksFromFigure', () => {
 });
 
 describe('figureFromLandmarks', () => {
+    it('puts the waist back on a straight spine, near where a curved one had it', () => {
+        // The honest limit of a photograph: the curve is lost, not invented.
+        // Bounded by how far the library's most curved spine bows.
+        for (const pose of everyPose) {
+            const figure = createFigure(pose, DIMS);
+            const { figure: back } = roundTrip(figure);
+            const w = figure.joints.chest, v = back.joints.chest;
+            expect(Math.hypot(w.x - v.x, w.y - v.y, w.z - v.z), pose).toBeLessThan(figureUnit(figure) * 0.06);
+        }
+    });
+
     it('brings every pose in the library back, to within the torso reconstruction', () => {
         // Exact everywhere except the neck and the hip root, which the landmark
         // set does not contain and which are walked back up the torso axis (see
         // `readJoints`). On our own library that reconstruction is worth at
-        // most ~5% of the figure, in the deep forward fold of the bow (the
+        // most ~5.5% of the figure, in the deep forward fold of the bow and the
+        // strongly side-bent spine of the side-lying pose (the
         // model's shoulders hang lower off the neck than the old hand-made
         // skeleton's, and the walk back along a bent torso is longest there);
         // within 4% everywhere else (the old bound was 3%, on a skeleton whose
-        // shoulders sat half as far below the neck) — still below what any estimator's own
+        // shoulders sat half as far below the neck; another half-percent because
+        // a curved spine, read back straight, moves the shoulders a little) —
+        // still below what any estimator's own
         // jitter will be.
         for (const pose of everyPose) {
             const figure = createFigure(pose, DIMS);
             const { figure: back } = roundTrip(figure);
-            expect(apart(figure, back)).toBeLessThan(figureUnit(figure) * (pose === 'bowing' ? 0.055 : 0.04));
+            expect(apart(figure, back)).toBeLessThan(figureUnit(figure) * (['bowing', 'sideElbow'].includes(pose) ? 0.06 : 0.045));
         }
     });
 
