@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import {
     Box,
-    Stack,
     Paper,
     Typography,
     Chip,
@@ -20,7 +19,7 @@ import {
     CircularProgress,
     useTheme,
 } from '@mui/material';
-import { ProviderLogoByUuid } from '@/components/ProviderLogo';
+import { ProviderLabel } from '@/components/ProviderLogo';
 import { WaveSine as StreamIcon } from '@/components/icons';
 import { TOKEN_COLORS, formatNumber, hasCacheWrites } from './chartStyles';
 import api from '@/services/api';
@@ -177,12 +176,11 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
 
                                 {/* Model */}
                                 <TableCell>
-                                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                                        <ProviderLogoByUuid uuid={r.provider_uuid} size={12} />
+                                    <ProviderLabel uuid={r.provider_uuid} size={12} gap={0.5}>
                                         <Typography sx={{ fontSize: fontSizes.micro, color: 'text.disabled', lineHeight: 1.2 }}>
                                             {r.provider_name || '-'}
                                         </Typography>
-                                    </Stack>
+                                    </ProviderLabel>
                                     <Tooltip title={r.model} placement="top">
                                         <Typography sx={{ fontSize: fontSizes.md, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.4 }}>
                                             {r.model || '-'}

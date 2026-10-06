@@ -4,7 +4,7 @@ import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { fetchUIAPI } from '@/services/api';
-import { ProviderLogoByUuid } from '@/components/ProviderLogo';
+import { ProviderLabel } from '@/components/ProviderLogo';
 import { QuotaRawResponseButton } from '@/components/credential/QuotaRawResponseButton';
 import { formatQuotaRemaining, formatQuotaUsage, isCountable, quotaRemainingPercent, quotaToWindows, type ProviderQuota, type QuotaWindow } from '@/types/quota';
 
@@ -133,10 +133,9 @@ export default function QuotaHistoryView({ startTime, endTime, provider, daily, 
             {providers.map((item) => (
                 <Paper key={item.uuid} variant="outlined" sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 2 }}>
                     <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', gap: 1, mb: 2 }}>
-                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                            <ProviderLogoByUuid uuid={item.uuid} size={22} />
+                        <ProviderLabel uuid={item.uuid} size={22}>
                             <Typography variant="h6" sx={{ fontWeight: 600 }}>{item.name}</Typography>
-                        </Stack>
+                        </ProviderLabel>
                         <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
                             <QuotaRawResponseButton providerName={item.name} response={item.latestRaw} />
                             <Typography variant="caption" color="text.secondary">

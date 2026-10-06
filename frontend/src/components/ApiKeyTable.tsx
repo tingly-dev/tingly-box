@@ -5,7 +5,7 @@ import {
     exportProviderAsJsonlToClipboard,
 } from "@/components/rule-card/utils";
 import {QuotaCell} from "@/components/credential/QuotaCell";
-import ProviderLogo from "@/components/ProviderLogo";
+import {ProviderLabel} from "@/components/ProviderLogo";
 import {
     Check,
     Cancel,
@@ -256,8 +256,7 @@ const ApiKeyTable = ({
                                 </TableCell>
                                 {/* Name */}
                                 <TableCell>
-                                    <Stack direction="row" spacing={1} sx={{alignItems: "center"}}>
-                                        <ProviderLogo provider={provider}/>
+                                    <ProviderLabel provider={provider}>
                                         <Tooltip
                                             arrow
                                             placement="top"
@@ -285,7 +284,7 @@ const ApiKeyTable = ({
                                                 {provider.name}
                                             </Typography>
                                         </Tooltip>
-                                    </Stack>
+                                    </ProviderLabel>
                                 </TableCell>
                                 {/* Quota — the binding window as a ring; hover for the rest, click to refresh */}
                                 {showQuota && (
