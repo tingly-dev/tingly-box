@@ -98,6 +98,13 @@ const PROMPT_FIELD_SX = {
     },
 } as const;
 
+// The prompts with `text` folded into prompt `id`; the same array back when nothing changed.
+const withText = (prompts: ProfilePrompt[], id: string, text: string) => (
+    prompts.some((item) => item.id === id && item.text !== text)
+        ? prompts.map((item) => (item.id === id ? { ...item, text } : item))
+        : prompts
+);
+
 // Pause after the last keystroke before the prompt is saved into the profile.
 const PROMPT_SAVE_DELAY_MS = 600;
 const HISTORY_STRIP_VISIBLE = 6;
@@ -507,23 +514,25 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     // never saved.
     const profileId = profile?.id;
     // The field edits the active saved prompt in place. Typing must stay cheap:
-    // keystrokes only touch `prompt`; the text is copied into the saved list
-    // (which re-renders the tabs and rewrites the profile store) after a pause,
-    // and right away when switching tabs or leaving the page.
+    // keystrokes only touch the prompt store; the text is copied into the saved
+    // list (which re-renders the tabs and rewrites the profile store) after a
+    // pause, and right away when switching tabs or leaving the page.
     const latest = useRef({ prompts: profilePrompts, activePromptId });
     latest.current = { prompts: profilePrompts, activePromptId };
-    const withLatestText = (prompts: ProfilePrompt[], id: string, text: string) => (
-        prompts.some((item) => item.id === id && item.text !== text)
-            ? prompts.map((item) => (item.id === id ? { ...item, text } : item))
-            : prompts
+    // The saved list with the field's current text folded into the active prompt.
+    const syncedPrompts = useCallback(
+        () => withText(latest.current.prompts, latest.current.activePromptId, promptStore.get()),
+        [promptStore],
     );
     useEffect(() => {
         if (!profileId) return;
         let timer: number | undefined;
         const unsubscribe = promptStore.subscribe(() => {
+            // The id the text was typed under, not whichever is active when the timer fires.
+            const id = latest.current.activePromptId;
             window.clearTimeout(timer);
             timer = window.setTimeout(() => {
-                setProfilePrompts((current) => withLatestText(current, latest.current.activePromptId, promptStore.get()));
+                setProfilePrompts((current) => withText(current, id, promptStore.get()));
             }, PROMPT_SAVE_DELAY_MS);
         });
         return () => {
@@ -531,13 +540,19 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             window.clearTimeout(timer);
         };
     }, [profileId, promptStore]);
-    // Leaving the page inside the delay must not lose the last words.
-    useEffect(() => () => {
+    // Leaving inside the delay — a route change or a reload — must not lose the last words.
+    useEffect(() => {
         if (!profileId) return;
-        const { prompts, activePromptId: id } = latest.current;
-        const next = withLatestText(prompts, id, promptStore.get());
-        if (next !== prompts) updateImageProfile(profileId, { prompts: next });
-    }, [profileId, promptStore]);
+        const flush = () => {
+            const next = syncedPrompts();
+            if (next !== latest.current.prompts) updateImageProfile(profileId, { prompts: next });
+        };
+        window.addEventListener('pagehide', flush);
+        return () => {
+            window.removeEventListener('pagehide', flush);
+            flush();
+        };
+    }, [profileId, syncedPrompts]);
     useEffect(() => {
         if (!profileId) return;
         updateImageProfile(profileId, {
@@ -551,42 +566,40 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         });
     }, [activePromptId, count, profileId, profilePrompts, quality, referenceImages, selectedModel, size]);
 
-    const selectPrompt = (id: string) => {
-        if (id === activePromptId) return;
-        const synced = withLatestText(profilePrompts, activePromptId, getPrompt());
-        setProfilePrompts(synced);
-        setActivePromptId(id);
-        setPrompt(synced.find((item) => item.id === id)?.text ?? '');
-    };
-    const addPrompt = () => {
-        const id = newPromptId();
-        setProfilePrompts((current) => [...withLatestText(current, activePromptId, getPrompt()), { id, name: '', text: '' }]);
-        setActivePromptId(id);
-        setPrompt('');
-    };
-    const removePrompt = (id: string) => {
-        const index = profilePrompts.findIndex((item) => item.id === id);
-        if (index === -1 || profilePrompts.length < 2) return;
-        const remaining = withLatestText(profilePrompts, activePromptId, getPrompt()).filter((item) => item.id !== id);
-        setProfilePrompts(remaining);
-        if (id === activePromptId) {
-            // The neighbour takes its place, as closing a tab would.
-            const next = remaining[Math.min(index, remaining.length - 1)];
-            setActivePromptId(next.id);
-            setPrompt(next.text);
-        }
-    };
-
-    // Stable identities, so the memoised tab row is not re-rendered by every
-    // keystroke in the prompt field.
-    const tabHandlers = useRef({ selectPrompt, addPrompt, removePrompt });
-    tabHandlers.current = { selectPrompt, addPrompt, removePrompt };
+    // Stable identities (they read through `latest`), so the memoised tab row
+    // is not re-rendered by every keystroke in the prompt field.
     const tabActions = useMemo(() => ({
-        select: (id: string) => tabHandlers.current.selectPrompt(id),
-        add: () => tabHandlers.current.addPrompt(),
-        remove: (id: string) => tabHandlers.current.removePrompt(id),
+        select: (id: string) => {
+            const { activePromptId: current } = latest.current;
+            if (id === current) return;
+            const synced = syncedPrompts();
+            setProfilePrompts(synced);
+            setActivePromptId(id);
+            setPrompt(synced.find((item) => item.id === id)?.text ?? '');
+        },
+        add: () => {
+            const id = newPromptId();
+            // Read before the field is cleared below.
+            const synced = syncedPrompts();
+            setProfilePrompts([...synced, { id, name: '', text: '' }]);
+            setActivePromptId(id);
+            setPrompt('');
+        },
+        remove: (id: string) => {
+            const { prompts, activePromptId: current } = latest.current;
+            const index = prompts.findIndex((item) => item.id === id);
+            if (index === -1 || prompts.length < 2) return;
+            const remaining = syncedPrompts().filter((item) => item.id !== id);
+            setProfilePrompts(remaining);
+            if (id === current) {
+                // The neighbour takes its place, as closing a tab would.
+                const next = remaining[Math.min(index, remaining.length - 1)];
+                setActivePromptId(next.id);
+                setPrompt(next.text);
+            }
+        },
         rename: (id: string, name: string) => setProfilePrompts((current) => current.map((item) => (item.id === id ? { ...item, name } : item))),
-    }), []);
+    }), [setPrompt, syncedPrompts]);
 
     const location = useLocation();
     const [renaming, setRenaming] = useState(Boolean((location.state as { rename?: boolean } | null)?.rename));
@@ -854,33 +867,33 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             actions={(
                                 <>
                                     <Tooltip title={t('imageLibrary.insertSnippet', { defaultValue: 'Insert a snippet' })}>
-                                    <IconButton
-                                        size="small"
-                                        onClick={(event) => setSnippetAnchor(event.currentTarget)}
-                                        aria-label={t('imageLibrary.insertSnippet', { defaultValue: 'Insert a snippet' })}
-                                    >
-                                        <TextPlus sx={{ fontSize: 16 }} />
-                                    </IconButton>
-                                </Tooltip>
-                                <Tooltip title={t('playground.openPromptFile', { defaultValue: 'Open a text file as the prompt' })}>
-                                    <IconButton
-                                        size="small"
-                                        onClick={() => promptFileInputRef.current?.click()}
-                                        aria-label={t('playground.openPromptFile', { defaultValue: 'Open a text file as the prompt' })}
-                                    >
-                                        <Description sx={{ fontSize: 16 }} />
-                                    </IconButton>
-                                </Tooltip>
-                                <Tooltip title={t('playground.expandPrompt', { defaultValue: 'Open the prompt in a larger editor' })}>
-                                    <IconButton
-                                        size="small"
-                                        edge="end"
-                                        onClick={() => setPromptEditorOpen(true)}
-                                        aria-label={t('playground.expandPrompt', { defaultValue: 'Open the prompt in a larger editor' })}
-                                    >
-                                        <OpenInFull sx={{ fontSize: 16 }} />
-                                    </IconButton>
-                                </Tooltip>
+                                        <IconButton
+                                            size="small"
+                                            onClick={(event) => setSnippetAnchor(event.currentTarget)}
+                                            aria-label={t('imageLibrary.insertSnippet', { defaultValue: 'Insert a snippet' })}
+                                        >
+                                            <TextPlus sx={{ fontSize: 16 }} />
+                                        </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title={t('playground.openPromptFile', { defaultValue: 'Open a text file as the prompt' })}>
+                                        <IconButton
+                                            size="small"
+                                            onClick={() => promptFileInputRef.current?.click()}
+                                            aria-label={t('playground.openPromptFile', { defaultValue: 'Open a text file as the prompt' })}
+                                        >
+                                            <Description sx={{ fontSize: 16 }} />
+                                        </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title={t('playground.expandPrompt', { defaultValue: 'Open the prompt in a larger editor' })}>
+                                        <IconButton
+                                            size="small"
+                                            edge="end"
+                                            onClick={() => setPromptEditorOpen(true)}
+                                            aria-label={t('playground.expandPrompt', { defaultValue: 'Open the prompt in a larger editor' })}
+                                        >
+                                            <OpenInFull sx={{ fontSize: 16 }} />
+                                        </IconButton>
+                                    </Tooltip>
                                 </>
                             )}
                         />
