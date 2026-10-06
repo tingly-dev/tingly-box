@@ -153,5 +153,6 @@
 | [runtime-port-file.md](./runtime-port-file.md) | Runtime Port File | 设计说明；局部实施状态见正文 |
 | [cli-entry-semantics.md](./cli-entry-semantics.md) | CLI entry semantics: npx vs installed CLI, daemon default | 设计说明；局部实施状态见正文 |
 | [npm.md](./npm.md) | npm distribution | 设计说明；局部实施状态见正文 |
+| [npm-ci.md](./npm-ci.md) | 新增 npm 包：占位发布 → `npm trust` → CI 接手 | 操作流程；命令已按 npm 12 文档核对 |
 | [shortcut.md](./shortcut.md) | Desktop Shortcut: Design and Decisions | 设计说明；局部实施状态见正文 |
 | [tui.md](./tui.md) | Federated TUI: Design and Decisions | 设计说明；局部实施状态见正文 |
