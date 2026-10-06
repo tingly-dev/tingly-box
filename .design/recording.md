@@ -2,7 +2,7 @@
 
 > 适用对象：tingly-box 后端 / 前端贡献者。
 > 图示：`.design/recording.pencil.md`（章节一一对应）。
-> 状态：**规划已确认；R1（接入）实施中，试验性推进**。
+> 状态：**R1（接入）已落地，试验性运行；R2 待实施**。进展见 §5.1。
 > 本文取代旧版 recording 梳理（Phase 0–2，见 git 历史）。旧版沉淀下来、仍然成立的结论
 > 在 §6 列出；旧实现（`ProtocolRecorder` + `TransformRecorder`）按 §5 的阶段退场。
 
@@ -92,8 +92,8 @@ Trace（一次入站请求）
 |------|--------|----------|--------|------|
 | `client_request` 入站 | 客户端发来的原始请求 | 入站中间件 / handler 交给 `Enable` 的 `bs` | JSON body | 同左——请求侧没有流，只是 body 里 `stream: true` |
 | `upstream_request` 出站 | 经过转换、发给 provider 的请求（debug 用） | `wireRecordTransport` | JSON body + 真实 header | 同左（Google 是 URL 上的 `:streamGenerateContent?alt=sse`） |
-| `upstream_response` 出站返回 | provider 返回的原始响应 | `wireRecordTransport`，tee response body | 整个 JSON body，读完即收尾 | SSE 原文，随 SDK 读取逐段 tee；EOF 收尾为完整，提前 `Close`（客户端断开、failover 放弃）收尾并标 `incomplete` |
-| `final_response` 回到客户端 | 网关写回客户端的响应 | 入站中间件包装 `ResponseWriter` | 整个 JSON body | SSE 原文（含 keep-alive 注释），按 `Write` 顺序 tee；连接中断标 `incomplete` |
+| `upstream_response` 出站返回 | provider 返回的原始响应 | `wireRecordTransport`，tee response body | 整个 JSON body，读完即收尾 | SSE 原文，随 SDK 读取逐段 tee；记录结束方式 `end`：`eof` / `closed`（读取方先关闭）/ `error` |
+| `final_response` 回到客户端 | 网关写回客户端的响应 | 入站中间件包装 `ResponseWriter` | 整个 JSON body | SSE 原文（含 keep-alive 注释），按 `Write` 顺序 tee；连接中断记 `end` |
 
 流式相关的统一规则：
 
@@ -103,7 +103,11 @@ Trace（一次入站请求）
    组装 / 合成上。原文无损，拆事件、拼消息、展示 delta 都放到查看端（R3）。
 3. **时间点分开记。** 每个响应记 `ttfb`（首字节）与 `duration`（收尾），流式下两者差异就是生成耗时。
 4. **收尾时机。** Trace 在入站中间件 `c.Next()` 返回后 Emit；此时仍未收尾的上游流（理论上
-   handler 返回前都已读完或关闭）按 `incomplete` 落盘，不阻塞 Emit。
+   handler 返回前都已读完或关闭）`end` 为空，照常落盘，不阻塞 Emit。
+5. **结束方式是事实，完整与否由查看端判断。** OpenAI SDK 读到 `data: [DONE]` 就关闭 body、不等 EOF，
+   字节已全部收到却是 `closed`。所以录制只记 `end`（`eof` / `closed` / `error`），不在边界上判断
+   "是否完整"；语义上是否收齐（`[DONE]`、`message_stop` …）由 R3 查看端按协议读 SSE 内容得出。
+   （R1 harness 实测：发往 OpenAI Chat / Responses 的流式请求全部以 `closed` 结束。）
 
 - **大小上限只做安全阀**：请求 body 本来就整份在内存里（SDK 已序列化），录制只是多持有一份引用
   / 拷贝，不按小上限截断——长程任务的请求动辄数 MB，截断就等于没录。上限（暂定 32 MiB / body）
@@ -153,8 +157,9 @@ Trace（一次入站请求）
    记录之前写出。一个分区一个文件，不产生海量小文件（旧 CAS 导出器"一块一个文件、全局 blobs
    目录、无回收"的问题不再出现）。读端顺序扫描一遍即可还原。
    列表查询不应为了看元数据而解压所有块：每个分区旁写一个 `<session>.index.jsonl`，每条 Trace
-   一行元数据（rid、时间、rule、provider、状态码、耗时、错误、所在 member 偏移），R3 的列表只读
-   索引，打开详情才读数据文件（参考 §8：元数据与 body 分离是网关的普遍做法）。
+   一行元数据（rid、时间、rule、provider、状态码、耗时、错误、exchange 数），R3 的列表只读
+   索引，打开详情才读数据文件（块可能在更早的 member 里，所以详情需要顺序扫描整个分区文件；
+   分区按会话 × 天切分、去重后体积小，R1 先接受这一点）（参考 §8：元数据与 body 分离是网关的普遍做法）。
 6. **热路径不做任何解析**：请求处理中只持有 body 字节；切块、哈希、去重全在异步导出 worker 里做。
    导出队列满时丢弃整条 Trace 并计数（录制永远不反压业务请求）。
 7. **响应不切块**：上游返回 / 回到客户端的响应每轮都是新内容（SSE 原文），整体存，只走 gzip。
@@ -184,7 +189,7 @@ handler 前段：解析 rule / scenario → EffectiveRecording                  
 client：logging → advisorLoopback / vendor → ruleFlag round-tripper…                       │
           → wireRecordTransport（只读）→ wire base                         │
              Trace 已启用 ⇒ 追加 Exchange：录 request；tee response body，  │
-             读到 EOF / Close 时收尾                                        │
+             EOF / Close / 读错误时收尾                                       │
                               ▼                                            │
 recordingMiddleware 在 c.Next() 返回后：Trace 已启用 ⇒ 收尾并 Emit ◄────────┘
                               ▼
@@ -199,7 +204,10 @@ wire base 目前有两种形态，挂载点有限且集中在 `internal/client`�
 | wire base | 装配点 |
 |-----------|--------|
 | `TransportPool.GetTransport(...)`（`*http.Transport`） | `openai.go` `NewOpenAIClient`、`anthropic.go` `anthropicTransport`、`opencode_client.go` `openCodeTransport`、`google.go`（非 OAuth） |
-| `SessionBoundTransport` | `http.go` `createSessionBoundTransport`（Claude OAuth、Codex、Kimi、Gemini、Antigravity、xAI、Google OAuth 共用） |
+| `SessionBoundTransport` | `http.go` `createSessionBoundTransport`（Claude OAuth、Codex、Kimi、Gemini、Antigravity、xAI、Google OAuth 共用）。它必须保持具体类型，所以不从外面包，而是在自己的 `RoundTrip` 里调用 `capture.RoundTrip` |
+| vmodel 进程内 transport | `vmodel_client.go`（虚拟模型；harness 靠它跑满矩阵） |
+
+Bedrock（SDK 签名中间件）与 Azure 都经 `NewAnthropicClient` / `NewOpenAIClient` 走上面的 base，签名后的请求同样录得到。
 
 - 只读不改写，所以 vendor 链也可以挂（`rule-flags.md` §8 的不变式约束的是改写型 transport）。
 - Trace 未启用时只有一次 ctx 取值 + 布尔判断，没有任何拷贝。
@@ -233,6 +241,24 @@ wire base 目前有两种形态，挂载点有限且集中在 `internal/client`�
 | **R3 查看** | 后端 list / get API（按 scenario、日期、session、rule、provider、错误筛选，分页）+ codegen；前端录制查看页：Trace 列表 → 详情，**默认视图是两组 diff**（入站 ↔ 出站请求、出站返回 ↔ 回到客户端，§0），辅以 Exchange 时间线与 SSE 事件分栏；不做聊天回放。按 UX 原则"为下一步动作露出产物"：开启录制的 rule / scenario 处直接链到它的录制 | 用户开启录制后无需碰文件系统即可看到结果 |
 | **R4 治理** | 限时 / 限量自动关闭（录 N 分钟或 N 条后关，§0）；保留期与磁盘配额（按天 / 按大小清理；配额满停写 body、保留元数据，见 §8）；逐请求覆盖 header；条件录制（仅错误、采样）；导出（cURL 重放、HAR）；advisor / loopback 关联；脱敏规则可配置 | 长期开启录制不会撑爆磁盘 |
 
+### 5.1 R1 落地记录
+
+| 部分 | 位置 | 说明 |
+|------|------|------|
+| 采集核心 | `internal/recording/capture` | `Trace` / `Exchange`、ctx 传播、`WrapTransport` / `RoundTrip`、header 脱敏、32 MiB 安全上限、结束方式 `end` |
+| 去重落盘 | `internal/recording/tracestore` | 元素切块 + 前缀链、分区文件 + 索引、单 worker 异步写、`ReadPartition` 还原 |
+| client 挂载 | `internal/client/record_wire.go` 及 §4.1 各装配点 | 通用链 / vendor 链 / vmodel 全覆盖 |
+| 入站与生命周期 | `internal/protocolserver/recording_capture.go` | `recordingMiddleware` 挂两个 scenario 路由组；三个 Handle* 交出原始 body；四个入口 `enableCapture` |
+| 存储生命周期 | `Server.TraceWriter`（首个录制请求时创建，`<recordDir>/traces`），停机时 drain |  |
+| 行为护栏 | `protocoltest` `flag_paths/recording_capture/*` | 4 客户端 × 3 provider × 流式 / 非流式 = 24 组合全部出记录（旧 recorder 的 FP3 两条路径在新录制下正常） |
+
+实测：
+- 去重：模拟 100 轮会话、录入站 + 出站请求，请求 body 合计 23 MB，落盘 498 KB（gzip 前），约为终值上下文的 2.3 倍。
+- 关闭录制时的开销：`TestDuoMemoryRegression` 网关侧 slope / churn 与基线在噪声内一致。实现中发现并修复了一处
+  钉内存问题——未启用的 Trace 也必须在请求结束时释放入站 body 引用。
+
+R1 期间新旧并存：旧 `ProtocolRecorder` 仍写 `<recordDir>/<scenario>/sessions/…`，新录制写 `<recordDir>/traces/…`。
+
 每个阶段独立 vet / test 绿；R2 依赖 R1，R3 可在 R1 之后与 R2 并行（先读 R1 的 schema）。
 
 ---
@@ -265,8 +291,9 @@ wire base 目前有两种形态，挂载点有限且集中在 `internal/client`�
 待定（R1 实施时定，倾向写在前面）：
 
 - **落盘**：分区文件 `<configDir>/record/traces/<scenario>/<date>/<session>.jsonl.gz`，
-  块与记录同文件（§3.2）。`obs.BatchProcessor` 目前绑定 `*obs.Record`，倾向泛型化
-  （`BatchProcessor[T]`）复用批处理，而不是再写一份队列；旧 CAS 导出器不跟进，R2 随旧 recorder 删除。
+  块与记录同文件（§3.2）。R1 实际做法：`tracestore.Writer` 自带一个小的有界队列 + 单 worker
+  （约 60 行），没有泛型化 `obs.BatchProcessor`——试验阶段不动旧包，R2 删旧 recorder 时再看
+  能否让 obs 只剩这一套。旧 CAS 导出器不跟进，R2 随旧 recorder 删除。
 - **去重范围**：按分区（会话 × 天）而非全局。全局去重能多省跨会话共享的 system / tools，
   但需要引用计数或标记清除才能做保留期；按分区删目录即可。若 R4 观测到跨会话重复占大头，再考虑
   只对 `tools` / `system` 这类块做全局层。

@@ -356,7 +356,7 @@ func toMessage(m *capture.Message, blocks blockSink) *MessageRecord {
 		Stream:      m.Stream,
 		Size:        m.Size,
 		Truncated:   m.Truncated,
-		Complete:    m.Complete,
+		End:         m.End,
 		Body:        encodeBody(m.Body, blocks),
 	}
 }

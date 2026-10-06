@@ -114,7 +114,6 @@ func (t *Trace) SetInboundRequest(method, url string, header map[string][]string
 		m.Truncated = true
 	}
 	m.Body = body
-	m.Complete = !m.Truncated
 	t.mu.Lock()
 	t.inbound = m
 	t.mu.Unlock()
@@ -151,14 +150,23 @@ func (t *Trace) beginExchange(p ProviderInfo) *Exchange {
 }
 
 // Finish freezes the Trace and returns its snapshot, or nil when it never
-// recorded. Exchanges whose response is still open are snapshotted as
-// incomplete; later writes to them are dropped.
+// recorded. An exchange whose response is still open is snapshotted with an
+// empty Message.End; later writes to it are dropped.
+//
+// Finish always drops the Trace's references, enabled or not: the inbound
+// body is handed over before enablement is known, and anything that outlives
+// the request while holding its context must not pin that body.
 func (t *Trace) Finish(requestID string) *Snapshot {
-	if t == nil || !t.enabled.Load() || !t.done.CompareAndSwap(false, true) {
+	if t == nil || !t.done.CompareAndSwap(false, true) {
 		return nil
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if !t.enabled.Load() {
+		t.inbound = nil
+		t.exchanges = nil
+		return nil
+	}
 	s := &Snapshot{
 		RequestID: requestID,
 		Timestamp: t.started.UTC(),
@@ -206,5 +214,17 @@ type Message struct {
 	Body        []byte
 	Size        int64 // bytes seen, including any truncated tail
 	Truncated   bool
-	Complete    bool // body was read to EOF
+	// End says how a response body ended: EndEOF, EndClosed or EndError.
+	// It is a wire fact, not a judgement: an SDK that stops at the
+	// protocol's own terminator (OpenAI's "data: [DONE]") closes before EOF
+	// with every byte received. Whether a stream is semantically complete is
+	// read from its content by the viewer.
+	End string
 }
+
+// How a response body ended.
+const (
+	EndEOF    = "eof"    // read to EOF
+	EndClosed = "closed" // the reader closed it before EOF
+	EndError  = "error"  // reading failed
+)

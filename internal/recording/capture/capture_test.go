@@ -57,6 +57,9 @@ func TestDisabledTraceRecordsNothing(t *testing.T) {
 	if s := tr.Finish("rid"); s != nil {
 		t.Fatalf("disabled trace produced a snapshot: %+v", s)
 	}
+	if tr.inbound != nil {
+		t.Fatal("disabled trace still holds the inbound body after Finish")
+	}
 	// A nil Trace in context is also a plain pass-through.
 	do(t, nil, srv.URL, `{"x":1}`, true)
 }
@@ -94,7 +97,7 @@ func TestNonStreamExchange(t *testing.T) {
 	if got := ex.Request.Headers["X-Api-Key"]; !strings.Contains(got, "***") {
 		t.Fatalf("upstream api key not redacted: %q", got)
 	}
-	if ex.Response.Status != 200 || ex.Response.Stream || !ex.Response.Complete {
+	if ex.Response.Status != 200 || ex.Response.Stream || ex.Response.End != EndEOF {
 		t.Fatalf("response meta: %+v", ex.Response)
 	}
 	if string(ex.Response.Body) != `{"echo":{"out":1}}` {
@@ -102,7 +105,7 @@ func TestNonStreamExchange(t *testing.T) {
 	}
 }
 
-func TestStreamExchangeCompleteAndIncomplete(t *testing.T) {
+func TestStreamExchangeEnd(t *testing.T) {
 	const sse = "event: message_start\ndata: {\"a\":1}\n\nevent: message_stop\ndata: {}\n\n"
 	srv := newServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -117,11 +120,11 @@ func TestStreamExchangeCompleteAndIncomplete(t *testing.T) {
 		t.Fatalf("exchanges = %d, want 2", len(s.Exchanges))
 	}
 	full, cut := s.Exchanges[0].Response, s.Exchanges[1].Response
-	if !full.Stream || !full.Complete || string(full.Body) != sse {
-		t.Fatalf("full stream: stream=%v complete=%v body=%q", full.Stream, full.Complete, full.Body)
+	if !full.Stream || full.End != EndEOF || string(full.Body) != sse {
+		t.Fatalf("full stream: stream=%v end=%q body=%q", full.Stream, full.End, full.Body)
 	}
-	if !cut.Stream || cut.Complete {
-		t.Fatalf("closed-early stream should be incomplete: %+v", cut)
+	if !cut.Stream || cut.End != EndClosed {
+		t.Fatalf("stream closed before EOF should end %q: %+v", EndClosed, cut)
 	}
 	// upstream_request was not selected: metadata only.
 	if s.Exchanges[0].Request == nil || s.Exchanges[0].Request.Body != nil {

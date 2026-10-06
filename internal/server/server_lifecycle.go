@@ -340,6 +340,17 @@ func (s *Server) Stop(ctx context.Context) error {
 	s.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
 	s.scenarioRecordSinksMu.Unlock()
 
+	// Drain and close the boundary-recording store.
+	s.traceWriterMu.Lock()
+	if s.traceWriter != nil {
+		if err := s.traceWriter.Close(ctx); err != nil {
+			logrus.Warnf("recording: trace writer close: %v", err)
+		}
+		s.traceWriter = nil
+	}
+	s.traceWriterClosed = true
+	s.traceWriterMu.Unlock()
+
 	// Shutdown OTel meter setup
 	if s.otelSetup != nil {
 		if err := s.otelSetup.Shutdown(ctx); err != nil {

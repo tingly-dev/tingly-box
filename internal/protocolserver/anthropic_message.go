@@ -56,6 +56,7 @@ func (ph *ProtocolHandler) HandleAnthropicMessages(c *gin.Context) {
 		})
 		return
 	}
+	captureInbound(c, bodyBytes)
 
 	// Determine provider & requestModel
 	var (
@@ -180,7 +181,9 @@ func (ph *ProtocolHandler) AnthropicMessagesV1(c *gin.Context, req *protocol.Ant
 	// winning attempt's provider/model is re-bound per attempt via SetActiveService.
 	// Enablement is the effective capture-point selection: the rule's recording
 	// flag overrides the scenario-level recording_v2 default.
-	if recMode := typ.EffectiveRecording(rule, scenarioConfig); recMode.Enabled() {
+	recMode := typ.EffectiveRecording(rule, scenarioConfig)
+	enableCapture(c, recMode, scenarioType, rule)
+	if recMode.Enabled() {
 		bs, err := req.MarshalJSON()
 		if err != nil {
 			bs = []byte("{}")
@@ -280,7 +283,9 @@ func (ph *ProtocolHandler) AnthropicMessagesV1Beta(c *gin.Context, req *protocol
 	// Get or create the recorder for dual-stage recording (pristine request
 	// body). Enablement is the effective capture-point selection: the rule's
 	// recording flag overrides the scenario-level recording_v2 default.
-	if recMode := typ.EffectiveRecording(rule, scenarioConfig); recMode.Enabled() {
+	recMode := typ.EffectiveRecording(rule, scenarioConfig)
+	enableCapture(c, recMode, scenarioType, rule)
+	if recMode.Enabled() {
 		bs, err := req.MarshalJSON()
 		if err != nil {
 			bs = []byte("{}")

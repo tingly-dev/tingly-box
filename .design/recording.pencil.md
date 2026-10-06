@@ -85,11 +85,11 @@
 upstream_request │ JSON body + 真实 header         │ 同左（Google 在 URL 上 :streamGenerate…）│
                  ├──────────────────────────────┼──────────────────────────────────────┤
 upstream_response│ 整个 JSON，读完即收尾            │ SSE 原文，随 SDK 读取逐段 tee           │
-                 │                              │   EOF ............ complete             │
-                 │                              │   提前 Close ...... incomplete           │
+                 │                              │   end = eof ...... 读到 EOF             │
+                 │                              │   end = closed ... 读取方先关（[DONE]）  │
                  ├──────────────────────────────┼──────────────────────────────────────┤
   final_response │ 整个 JSON（Writer tee）         │ SSE 原文 + keep-alive，按 Write 顺序 tee │
-                 │                              │   连接中断 ........ incomplete           │
+                 │                              │   连接中断 ........ end 记录中断方式      │
                  └──────────────────────────────┴──────────────────────────────────────┘
 ```
 
@@ -200,10 +200,10 @@ upstream_response│ 整个 JSON，读完即收尾            │ SSE 原文，�
 
   <session>.index.jsonl   （旁路索引，每条 Trace 一行元数据）
   ┌────────────────────────────────────────────────────────────────────────────┐
-  │ {"rid":"r1","ts":…,"rule":…,"provider":…,"status":200,"ms":…,"off":0}       │
-  │ {"rid":"r2",…,"off":18234}                                                  │
+  │ {"rid":"r1","ts":…,"rule":…,"provider":…,"status":200,"duration_ms":…}      │
+  │ {"rid":"r2",…,"exchanges":3}                                                │
   └────────────────────────────────────────────────────────────────────────────┘
-  列表只读索引；打开详情才按 off 读数据文件并还原（元数据 / body 分离，见正文 §8）
+  列表只读索引；打开详情才顺序扫描数据文件并还原（元数据 / body 分离，见正文 §8）
 ```
 
 **热路径与导出 worker 的分工。**
@@ -253,11 +253,11 @@ upstream_response│ 整个 JSON，读完即收尾            │ SSE 原文，�
   │              wireRecordTransport ⟳ ───── t 已启用？                        │       │
   │                     ║                     └─ 追加 Exchange：▸ 出站请求      │       │
   │                     ║                        tee response body ▸ 出站返回   │       │
-  │                     ║                        EOF / Close 时收尾             │       │
+  │                     ║                        EOF / Close / 错误时收尾        │       │
   │                  wire base                                                │       │
   │                                                                           │       │
   │     ◄─────────────────────────────────────────────────────────────────────┘       │
-  │  t 已启用？ → 收尾（未完成的流标 incomplete）→ Emit                               │
+  │  t 已启用？ → 收尾（仍开着的流 end 为空）→ Emit；未启用也释放引用                 │
   │  （成功 / 失败 / panic 恢复后都只走这一处）                                         │
   └───────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -269,7 +269,7 @@ upstream_response│ 整个 JSON，读完即收尾            │ SSE 原文，�
      SDK ─► logging ─► advisorLoopback ─► ruleFlag ─► [wireRecordTransport] ─► pool *http.Transport
 
   vendor 链（Claude OAuth / Codex / Kimi / Gemini / Antigravity / xAI）
-     SDK ─► logging ─► vendor rt（改 header / envelope）─► [wireRecordTransport] ─► SessionBoundTransport
+     SDK ─► logging ─► vendor rt（改 header / envelope）─► SessionBoundTransport.RoundTrip [capture.RoundTrip] ─► pool
 
                                               ▲
                                               └─ 所有改写之后、wire 之前：录到的就是真正发出去的请求

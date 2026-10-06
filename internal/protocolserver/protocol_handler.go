@@ -28,6 +28,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/otel/tracker"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
 	"github.com/tingly-dev/tingly-box/internal/recording"
+	"github.com/tingly-dev/tingly-box/internal/recording/tracestore"
 	"github.com/tingly-dev/tingly-box/internal/routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/vision/visionproxy"
@@ -108,6 +109,11 @@ type ProtocolHandlerDeps struct {
 	// default) — it lets a rule-enabled request create the sink even when
 	// the scenario-level flag is off.
 	GetOrCreateScenarioSink func(scenario typ.RuleScenario, mode obs.RecordMode) *obs.Sink
+
+	// TraceWriter returns the boundary-recording store (lazily created by the
+	// host server; nil when no record directory is configured). Called only
+	// for requests whose Trace was enabled.
+	TraceWriter func() *tracestore.Writer
 
 	// QuotaReader serves GET /tingly/:scenario/quota (may be nil — 503).
 	QuotaReader QuotaReader

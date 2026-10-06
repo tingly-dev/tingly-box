@@ -30,6 +30,7 @@ func (ph *ProtocolHandler) HandleResponsesCreate(c *gin.Context) {
 		})
 		return
 	}
+	captureInbound(c, bodyBytes)
 
 	// Parse request (minimal parsing for validation)
 	var req = &protocol.ResponseCreateRequest{}
@@ -169,7 +170,9 @@ func (ph *ProtocolHandler) ResponsesCreate(c *gin.Context, scenarioType typ.Rule
 	// Anthropic entry points. Enablement is the effective capture-point
 	// selection: the rule's recording flag overrides the scenario-level
 	// recording_v2 default.
-	if recMode := typ.EffectiveRecording(rule, scenarioConfig); recMode.Enabled() {
+	recMode := typ.EffectiveRecording(rule, scenarioConfig)
+	enableCapture(c, recMode, scenarioType, rule)
+	if recMode.Enabled() {
 		bs, err := json.Marshal(req.ResponseNewParams)
 		if err != nil {
 			bs = []byte("{}")

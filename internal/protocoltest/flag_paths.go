@@ -411,6 +411,21 @@ func flagPathsCases() []recorderCase {
 		}
 	}
 
+	// ── Boundary recording (.design/recording.md R1) ──────────────────────
+	// Every source → target pair, streaming or not, must produce one trace
+	// with the inbound request and the upstream exchange — recording no
+	// longer depends on which protocol path served the request (cf. FP3).
+	for _, source := range flagPathsSources {
+		for _, target := range flagPathsTargets {
+			for _, streaming := range []bool{false, true} {
+				source, target, streaming := source, target, streaming
+				cases = append(cases, flagPathsCase("recording_capture", source, target, streaming, func(t flagTB, _ *TestEnv) {
+					checkBoundaryRecording(t, source, target, streaming)
+				}))
+			}
+		}
+	}
+
 	// ── Type 5: session affinity (two Chat upstreams) ─────────────────────
 	for _, source := range flagPathsSources {
 		source := source

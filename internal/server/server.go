@@ -34,6 +34,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/probe"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
+	"github.com/tingly-dev/tingly-box/internal/recording/tracestore"
 	"github.com/tingly-dev/tingly-box/internal/server/hooks"
 	guardrailsmodule "github.com/tingly-dev/tingly-box/internal/server/module/guardrails"
 	imbotmodule "github.com/tingly-dev/tingly-box/internal/server/module/imbot"
@@ -128,6 +129,12 @@ type Server struct {
 	// scenario-specific recording sinks (created on-demand when recording flag is enabled)
 	scenarioRecordSinks   map[typ.RuleScenario]*obs.Sink
 	scenarioRecordSinksMu sync.RWMutex
+
+	// boundary-recording store (.design/recording.md), created on the first
+	// recorded request; traceWriterClosed stops re-creation after shutdown.
+	traceWriter       *tracestore.Writer
+	traceWriterClosed bool
+	traceWriterMu     sync.Mutex
 
 	// affinity store for smart routing session-model locking
 	affinityStore *protocolserver.AffinityStore
@@ -513,6 +520,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		GetServertoolPipeline:   func() *servertool.Pipeline { return server.servertoolPipeline },
 		AffinityStore:           server.affinityStore,
 		GetOrCreateScenarioSink: server.GetOrCreateScenarioSink,
+		TraceWriter:             server.TraceWriter,
 		GuardrailsState:         server.guardrailsState,
 		QuotaReader:             server.quotaManager,
 	})

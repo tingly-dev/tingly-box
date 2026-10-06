@@ -30,6 +30,7 @@ func (ph *ProtocolHandler) HandleOpenAIChatCompletions(c *gin.Context) {
 		})
 		return
 	}
+	captureInbound(c, bodyBytes)
 
 	// Parse OpenAI-style request
 	var req = &protocol.OpenAIChatCompletionRequest{}
@@ -154,7 +155,9 @@ func (ph *ProtocolHandler) OpenAIChatCompletion(c *gin.Context, req *protocol.Op
 	// Anthropic entry points. Enablement is the effective capture-point
 	// selection: the rule's recording flag overrides the scenario-level
 	// recording_v2 default.
-	if recMode := typ.EffectiveRecording(rule, scenarioConfig); recMode.Enabled() {
+	recMode := typ.EffectiveRecording(rule, scenarioConfig)
+	enableCapture(c, recMode, scenarioType, rule)
+	if recMode.Enabled() {
 		bs, err := req.MarshalJSON()
 		if err != nil {
 			bs = []byte("{}")

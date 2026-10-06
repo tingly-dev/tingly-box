@@ -294,6 +294,9 @@ func readRecordedLines(t flagTB, recordDir string) []map[string]any {
 	t.Helper()
 	var records []map[string]any
 	_ = filepath.WalkDir(recordDir, func(path string, d fs.DirEntry, err error) error {
+		if err == nil && d.IsDir() && path == filepath.Join(recordDir, "traces") {
+			return filepath.SkipDir // boundary-recording traces: see readTraces
+		}
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".jsonl.gz") {
 			return nil
 		}

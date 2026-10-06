@@ -1,6 +1,7 @@
 package server
 
 import (
+	"path/filepath"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -10,6 +11,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
 	"github.com/tingly-dev/tingly-box/internal/recording"
+	"github.com/tingly-dev/tingly-box/internal/recording/tracestore"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -216,6 +218,19 @@ func (s *Server) GetOrCreateScenarioSink(scenario typ.RuleScenario, mode obs.Rec
 	s.scenarioRecordSinks[scenario] = sink
 	logrus.Debugf("Created scenario recording sink for %s, mode: %s, directory: %s", scenario, mode, s.recordDir)
 	return sink
+}
+
+// TraceWriter returns the boundary-recording store rooted at
+// <recordDir>/traces, creating it on first use. Nil when no record directory
+// is configured or after shutdown. Exported for the protocol harness, which
+// flushes it before reading recorded traces.
+func (s *Server) TraceWriter() *tracestore.Writer {
+	s.traceWriterMu.Lock()
+	defer s.traceWriterMu.Unlock()
+	if s.traceWriter == nil && s.recordDir != "" && !s.traceWriterClosed {
+		s.traceWriter = tracestore.NewWriter(filepath.Join(s.recordDir, "traces"))
+	}
+	return s.traceWriter
 }
 
 // EnsureProtocolRecorder delegates to the AI Model API handler, which owns

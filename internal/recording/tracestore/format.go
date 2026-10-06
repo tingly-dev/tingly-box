@@ -81,7 +81,7 @@ type MessageRecord struct {
 	Stream      bool              `json:"stream,omitempty"`
 	Size        int64             `json:"size,omitempty"`
 	Truncated   bool              `json:"truncated,omitempty"`
-	Complete    bool              `json:"complete,omitempty"`
+	End         string            `json:"end,omitempty"`
 	Body        *Body             `json:"body,omitempty"`
 }
 

@@ -70,8 +70,8 @@ func (ex *Exchange) appendBody(p []byte) {
 	ex.respBody.write(p)
 }
 
-// closeBody ends the response. complete is true when the body was read to EOF.
-func (ex *Exchange) closeBody(complete bool) {
+// closeBody ends the response; end is one of EndEOF / EndClosed / EndError.
+func (ex *Exchange) closeBody(end string) {
 	ex.mu.Lock()
 	defer ex.mu.Unlock()
 	if ex.frozen || ex.response == nil {
@@ -80,7 +80,7 @@ func (ex *Exchange) closeBody(complete bool) {
 	if ex.duration == 0 {
 		ex.duration = time.Since(ex.StartedAt)
 	}
-	ex.response.Complete = ex.response.Complete || complete
+	ex.response.End = end
 }
 
 func (ex *Exchange) fail(err error) {

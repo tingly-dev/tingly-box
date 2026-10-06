@@ -26,16 +26,22 @@ type transport struct {
 }
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
-	ex := FromContext(req.Context()).beginExchange(t.provider)
+	return RoundTrip(t.base, t.provider, req)
+}
+
+// RoundTrip performs req on base, recording it as an Exchange of the Trace in
+// req's context when that Trace is enabled. For wire transports that cannot
+// be wrapped from outside (they must keep their concrete type).
+func RoundTrip(base http.RoundTripper, p ProviderInfo, req *http.Request) (*http.Response, error) {
+	ex := FromContext(req.Context()).beginExchange(p)
 	if ex == nil {
-		return t.base.RoundTrip(req)
+		return base.RoundTrip(req)
 	}
 
 	reqMsg := &Message{
-		Method:   req.Method,
-		URL:      req.URL.String(),
-		Headers:  redactHeaders(req.Header),
-		Complete: true,
+		Method:  req.Method,
+		URL:     req.URL.String(),
+		Headers: redactHeaders(req.Header),
 	}
 	if ex.withBody.request {
 		body, err := requestBody(req)
@@ -47,14 +53,13 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		if len(body) > maxBodyBytes {
 			body = body[:maxBodyBytes]
 			reqMsg.Truncated = true
-			reqMsg.Complete = false
 		}
 		reqMsg.Body = body
 	}
 	reqMsg.ContentType = req.Header.Get("Content-Type")
 	ex.setRequest(reqMsg)
 
-	resp, err := t.base.RoundTrip(req)
+	resp, err := base.RoundTrip(req)
 	if err != nil {
 		ex.fail(err)
 		return resp, err
@@ -67,7 +72,7 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		Stream:      strings.HasPrefix(strings.ToLower(ct), "text/event-stream"),
 	})
 	if resp.Body == nil || resp.Body == http.NoBody {
-		ex.closeBody(true)
+		ex.closeBody(EndEOF)
 		return resp, nil
 	}
 	resp.Body = &teeBody{rc: resp.Body, ex: ex}
@@ -102,13 +107,11 @@ func requestBody(req *http.Request) ([]byte, error) {
 
 // teeBody mirrors a response body into its Exchange as the SDK reads it, so
 // a streamed (SSE) response is captured verbatim without extra buffering on
-// the read path. EOF marks the body complete; Close before EOF (client gone,
-// failover abandoning the attempt) leaves it incomplete.
+// the read path, and records how the body ended (see Message.End).
 type teeBody struct {
 	rc   io.ReadCloser
 	ex   *Exchange
 	once sync.Once
-	eof  bool
 }
 
 func (b *teeBody) Read(p []byte) (int, error) {
@@ -117,20 +120,21 @@ func (b *teeBody) Read(p []byte) (int, error) {
 		b.ex.appendBody(p[:n])
 	}
 	if err == io.EOF {
-		b.eof = true
-		b.finish()
+		b.finish(EndEOF)
 	} else if err != nil {
 		b.ex.fail(err)
+		b.finish(EndError)
 	}
 	return n, err
 }
 
 func (b *teeBody) Close() error {
 	err := b.rc.Close()
-	b.finish()
+	b.finish(EndClosed)
 	return err
 }
 
-func (b *teeBody) finish() {
-	b.once.Do(func() { b.ex.closeBody(b.eof) })
+// finish records the first way the body ended; later ones are ignored.
+func (b *teeBody) finish(end string) {
+	b.once.Do(func() { b.ex.closeBody(end) })
 }

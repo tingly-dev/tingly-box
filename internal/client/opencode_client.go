@@ -63,6 +63,6 @@ func NewOpenCodeAnthropicClient(provider *typ.Provider, model string, sessionID 
 // NewOpenAIClient/anthropicTransport assemble, with the vendor layer spliced
 // in at the bottom so the rule flags above it stay decisive.
 func openCodeTransport(provider *typ.Provider, model string, sessionID typ.SessionID) http.RoundTripper {
-	base := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
+	base := wireRecord(GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID), provider)
 	return providerTransportChain(&openCodeRoundTripper{RoundTripper: base}, provider)
 }

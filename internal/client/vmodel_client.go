@@ -23,7 +23,7 @@ func NewVModelOpenAIClient(provider *typ.Provider, base http.RoundTripper) (*Ope
 	}
 	return newOpenAIClientWithTransport(provider,
 		vmodelclient.HTTPBase(provider.APIBase, provider.APIStyle),
-		providerTransportChain(base, provider))
+		providerTransportChain(wireRecord(base, provider), provider))
 }
 
 // NewVModelAnthropicClient is the Anthropic counterpart of NewVModelOpenAIClient.
@@ -33,5 +33,5 @@ func NewVModelAnthropicClient(provider *typ.Provider, base http.RoundTripper) (*
 	}
 	return newAnthropicClientWithTransport(provider,
 		vmodelclient.HTTPBase(provider.APIBase, provider.APIStyle),
-		providerTransportChain(base, provider))
+		providerTransportChain(wireRecord(base, provider), provider))
 }

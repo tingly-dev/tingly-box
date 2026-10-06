@@ -11,6 +11,7 @@ import (
 	"github.com/tingly-dev/tingly-box/ai"
 	"golang.org/x/net/proxy"
 
+	"github.com/tingly-dev/tingly-box/internal/recording/capture"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -206,6 +207,11 @@ type SessionBoundTransport struct {
 
 	// Optional: provider-specific response wrapper (e.g., for tool prefix stripping)
 	responseWrapper func(*http.Response) *http.Response
+
+	// recordAs labels the Exchanges this transport records. It is the wire
+	// point of every vendor chain, so the recording tap lives here
+	// (.design/recording.md §4.1).
+	recordAs capture.ProviderInfo
 }
 
 // RoundTrip implements http.RoundTripper for SessionBoundTransport.
@@ -220,7 +226,7 @@ func (t *SessionBoundTransport) RoundTrip(req *http.Request) (*http.Response, er
 		t.sessionID,
 	)
 
-	resp, err := transport.RoundTrip(req)
+	resp, err := capture.RoundTrip(transport, t.recordAs, req)
 	if err != nil {
 		release()
 		return nil, err
@@ -267,5 +273,6 @@ func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID
 		proxyURL:      provider.ProxyURL,
 		issuer:        issuer,
 		sessionID:     sessionID,
+		recordAs:      recordProvider(provider),
 	}
 }

@@ -98,13 +98,13 @@ func snapshot(rid string, inbound, upstream []byte) *capture.Snapshot {
 		Rule:      "rule-1",
 		Session:   typ.SessionID{Value: "session-a", Source: "hdr"},
 		Mode:      "client_request,upstream_request,upstream_response",
-		Inbound:   &capture.Message{Method: "POST", URL: "/v1/messages", Body: inbound, Complete: true},
+		Inbound:   &capture.Message{Method: "POST", URL: "/v1/messages", Body: inbound},
 		Exchanges: []*capture.ExchangeSnapshot{{
 			Seq:      1,
 			Provider: capture.ProviderInfo{Name: "anthropic", APIStyle: "anthropic"},
-			Request:  &capture.Message{Method: "POST", URL: "https://api/v1/messages", Body: upstream, Complete: true},
+			Request:  &capture.Message{Method: "POST", URL: "https://api/v1/messages", Body: upstream},
 			Response: &capture.Message{Status: 200, Stream: true, ContentType: "text/event-stream",
-				Body: []byte("event: message_stop\ndata: {}\n\n"), Complete: true},
+				Body: []byte("event: message_stop\ndata: {}\n\n"), End: capture.EndEOF},
 		}},
 	}
 }

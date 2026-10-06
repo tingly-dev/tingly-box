@@ -67,6 +67,7 @@ func (ph *ProtocolHandler) RegisterRoutes(engine *gin.Engine, modelAuth gin.Hand
 	// tracingMiddleware runs after profileAliasMiddleware so the span's
 	// scenario reflects the canonical "base:pN" form, matching usage records.
 	scenario.Use(ph.tracingMiddleware)
+	scenario.Use(ph.recordingMiddleware)
 	ph.SetupMixinEndpoints(scenario, modelAuth)
 	// Claude Code v2.1+ sends HEAD <ANTHROPIC_BASE_URL> as a connectivity
 	// check before making any API call. Respond 200 so CC doesn't treat the
@@ -80,6 +81,7 @@ func (ph *ProtocolHandler) RegisterRoutes(engine *gin.Engine, modelAuth gin.Hand
 	scenarioV1.Use(ph.profileAliasMiddleware)
 	scenarioV1.Use(ph.contextMiddleware)
 	scenarioV1.Use(ph.tracingMiddleware)
+	scenarioV1.Use(ph.recordingMiddleware)
 	ph.SetupMixinEndpoints(scenarioV1, modelAuth)
 	scenarioV1.HEAD("", func(c *gin.Context) { c.Status(http.StatusOK) })
 }

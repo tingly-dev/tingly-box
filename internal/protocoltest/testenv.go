@@ -69,6 +69,17 @@ func (env *TestEnv) FlushRecordSinks(ctx context.Context, scenarios ...typ.RuleS
 	}
 }
 
+// FlushTraces blocks until every boundary-recording trace emitted so far is
+// on disk (.design/recording.md). No-op when recording is not configured.
+func (env *TestEnv) FlushTraces(ctx context.Context) {
+	if env.srv == nil {
+		return
+	}
+	if w := env.srv.TraceWriter(); w != nil {
+		_ = w.Flush(ctx)
+	}
+}
+
 // TestEnvOption is a functional option for configuring TestEnv.
 type TestEnvOption func(*testEnvConfig)
 
