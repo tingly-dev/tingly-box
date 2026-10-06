@@ -2,9 +2,35 @@
 
 > 适用对象：tingly-box 后端 / 前端贡献者。
 > 图示：`.design/recording.pencil.md`（章节一一对应）。
-> 状态：**规划已确认；R1（接入）待实施**。
+> 状态：**规划已确认；R1（接入）实施中，试验性推进**。
 > 本文取代旧版 recording 梳理（Phase 0–2，见 git 历史）。旧版沉淀下来、仍然成立的结论
 > 在 §6 列出；旧实现（`ProtocolRecorder` + `TransformRecorder`）按 §5 的阶段退场。
+
+---
+
+## 0. 价值定位：网关的转换证据，不是对话存档
+
+客户端（Claude Code、Codex …）本地已经存了对话。网关再存一份对话，价值很低；网关录制的价值
+在于**只有网关看得到的东西**：
+
+| 点位 | 客户端本地有没有 | 价值 |
+|------|------------------|------|
+| `client_request` 入站 | 部分有（通常是消息记录，不是完整 wire 请求；脚本 / SDK 应用往往不存） | 中：对比基准 |
+| `upstream_request` 出站 | **没有** | 高：转换后实际发出的请求、实际命中的 provider / 模型、failover 每次尝试 |
+| `upstream_response` 出站返回 | **没有** | 高：provider 原始返回 |
+| `final_response` 回到客户端 | 有其效果，但不是原始字节 | 中：与出站返回对比，定位回写转换的问题 |
+
+tingly-box 的核心是协议转换与路由，问题也集中在这里——这些只能靠出站一侧定位。由此：
+
+1. **定位为诊断工具。** 默认关闭，按 rule / scenario 开启；R4 提供"录 N 分钟 / N 条后自动关闭"
+   的默认值（开了不用记得去关）。不做长期全量存档。
+2. **成本落在价值上。** 入站与出站共享去重块空间（§3.2），没被转换改动的历史只存一次，每轮
+   新增的主要就是"转换改掉的部分"——正好是网关独有的那部分。入站 / 回到客户端两个基准点位的
+   边际成本很低。
+3. **查看端以对比为核心，不做聊天回放。** R3 的默认视图是"入站 ↔ 出站"、"出站返回 ↔ 回到客户端"
+   两组 diff，直接指出转换改了什么。回看对话请用客户端自己的记录。
+4. **存档 / 团队审计 / 跨 provider 回放**是网关的另一类独特优势（集中、跨客户端、请求是可重放的
+   完整形态），但属于单独的产品决定，R1–R4 不为它设计；落盘格式保持可还原即可，将来不需迁移。
 
 ---
 
@@ -204,8 +230,8 @@ wire base 目前有两种形态，挂载点有限且集中在 `internal/client`�
 |------|------|----------|
 | **R1 接入** | `internal/recording` 新增 Trace / Exchange 实体与 ctx 传播（`WithTrace` / `FromContext`）；`wireRecordTransport` 挂到 §4.1 全部装配点；`recordingMiddleware` 挂四个入口；四个 handler 前段 `Enable`；新 schema 落盘，**从第一天起就用 §3.2 的去重格式**（落盘格式是 R3 查看端读取的契约，不先写整份再迁移）。点位先录 `client_request` / `upstream_request` / `upstream_response`。旧 recorder 保持原样并存 | 单测覆盖 transport / middleware / 截断 / 脱敏 / 切块去重与还原（还原结果与原 body 语义等价）；`protocoltest` 新增 recording 用例跑满 source × target × 流式矩阵（FP3 一并消失），断言每个组合都有 Trace、Exchange 数与 provider 调用数一致 |
 | **R2 收口** | `final_response` 由中间件 tee 产出并在 UI 放开 `upstream_response` / `final_response`；删除旧 recorder 全部接线（`ProtocolRecorder`、`TransformRecorder`、`AttachRecorderHooks`、`recording.FromGin` 及 handler 里的 `Record*` 调用、`obs.Record` 旧字段）；更新 `protocol-stage-pipeline.md`（"Vendor 之后只有录制"一条随之改为"Vendor 是最后一步"） | `internal/protocolserver` 里 `recording` 引用只剩 handler 前段的一行 `Enable` |
-| **R3 查看** | 后端 list / get API（按 scenario、日期、session、rule、provider、错误筛选，分页）+ codegen；前端录制查看页：Trace 列表 → 详情（入站 / 各 Exchange 时间线、请求 / 响应 / SSE 事件分栏、diff 入站与出站）。按 UX 原则"为下一步动作露出产物"：开启录制的 rule / scenario 处直接链到它的录制 | 用户开启录制后无需碰文件系统即可看到结果 |
-| **R4 治理** | 保留期与磁盘配额（按天 / 按大小清理；配额满停写 body、保留元数据，见 §8）；逐请求覆盖 header；条件录制（仅错误、采样）；导出（cURL 重放、HAR）；advisor / loopback 关联；脱敏规则可配置 | 长期开启录制不会撑爆磁盘 |
+| **R3 查看** | 后端 list / get API（按 scenario、日期、session、rule、provider、错误筛选，分页）+ codegen；前端录制查看页：Trace 列表 → 详情，**默认视图是两组 diff**（入站 ↔ 出站请求、出站返回 ↔ 回到客户端，§0），辅以 Exchange 时间线与 SSE 事件分栏；不做聊天回放。按 UX 原则"为下一步动作露出产物"：开启录制的 rule / scenario 处直接链到它的录制 | 用户开启录制后无需碰文件系统即可看到结果 |
+| **R4 治理** | 限时 / 限量自动关闭（录 N 分钟或 N 条后关，§0）；保留期与磁盘配额（按天 / 按大小清理；配额满停写 body、保留元数据，见 §8）；逐请求覆盖 header；条件录制（仅错误、采样）；导出（cURL 重放、HAR）；advisor / loopback 关联；脱敏规则可配置 | 长期开启录制不会撑爆磁盘 |
 
 每个阶段独立 vet / test 绿；R2 依赖 R1，R3 可在 R1 之后与 R2 并行（先读 R1 的 schema）。
 
