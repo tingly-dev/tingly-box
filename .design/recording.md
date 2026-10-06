@@ -125,7 +125,10 @@ Trace（一次入站请求）
 5. **块和记录写在同一个文件里**：分区文件是 gzip member 追加的 JSONL，一行要么是块
    `{"k":"blob","h":"…","d":<原文>}`，要么是记录 `{"k":"trace",…骨架…}`；块总在第一次引用它的
    记录之前写出。一个分区一个文件，不产生海量小文件（旧 CAS 导出器"一块一个文件、全局 blobs
-   目录、无回收"的问题不再出现）。读端顺序扫描一遍即可还原；R3 需要随机访问时再加旁路索引。
+   目录、无回收"的问题不再出现）。读端顺序扫描一遍即可还原。
+   列表查询不应为了看元数据而解压所有块：每个分区旁写一个 `<session>.index.jsonl`，每条 Trace
+   一行元数据（rid、时间、rule、provider、状态码、耗时、错误、所在 member 偏移），R3 的列表只读
+   索引，打开详情才读数据文件（参考 §8：元数据与 body 分离是网关的普遍做法）。
 6. **热路径不做任何解析**：请求处理中只持有 body 字节；切块、哈希、去重全在异步导出 worker 里做。
    导出队列满时丢弃整条 Trace 并计数（录制永远不反压业务请求）。
 7. **响应不切块**：上游返回 / 回到客户端的响应每轮都是新内容（SSE 原文），整体存，只走 gzip。
@@ -202,7 +205,7 @@ wire base 目前有两种形态，挂载点有限且集中在 `internal/client`�
 | **R1 接入** | `internal/recording` 新增 Trace / Exchange 实体与 ctx 传播（`WithTrace` / `FromContext`）；`wireRecordTransport` 挂到 §4.1 全部装配点；`recordingMiddleware` 挂四个入口；四个 handler 前段 `Enable`；新 schema 落盘，**从第一天起就用 §3.2 的去重格式**（落盘格式是 R3 查看端读取的契约，不先写整份再迁移）。点位先录 `client_request` / `upstream_request` / `upstream_response`。旧 recorder 保持原样并存 | 单测覆盖 transport / middleware / 截断 / 脱敏 / 切块去重与还原（还原结果与原 body 语义等价）；`protocoltest` 新增 recording 用例跑满 source × target × 流式矩阵（FP3 一并消失），断言每个组合都有 Trace、Exchange 数与 provider 调用数一致 |
 | **R2 收口** | `final_response` 由中间件 tee 产出并在 UI 放开 `upstream_response` / `final_response`；删除旧 recorder 全部接线（`ProtocolRecorder`、`TransformRecorder`、`AttachRecorderHooks`、`recording.FromGin` 及 handler 里的 `Record*` 调用、`obs.Record` 旧字段）；更新 `protocol-stage-pipeline.md`（"Vendor 之后只有录制"一条随之改为"Vendor 是最后一步"） | `internal/protocolserver` 里 `recording` 引用只剩 handler 前段的一行 `Enable` |
 | **R3 查看** | 后端 list / get API（按 scenario、日期、session、rule、provider、错误筛选，分页）+ codegen；前端录制查看页：Trace 列表 → 详情（入站 / 各 Exchange 时间线、请求 / 响应 / SSE 事件分栏、diff 入站与出站）。按 UX 原则"为下一步动作露出产物"：开启录制的 rule / scenario 处直接链到它的录制 | 用户开启录制后无需碰文件系统即可看到结果 |
-| **R4 治理** | 保留期与磁盘配额（按天 / 按大小清理）；条件录制（仅错误、采样）；导出（cURL 重放、HAR）；advisor / loopback 关联；脱敏规则可配置 | 长期开启录制不会撑爆磁盘 |
+| **R4 治理** | 保留期与磁盘配额（按天 / 按大小清理；配额满停写 body、保留元数据，见 §8）；逐请求覆盖 header；条件录制（仅错误、采样）；导出（cURL 重放、HAR）；advisor / loopback 关联；脱敏规则可配置 | 长期开启录制不会撑爆磁盘 |
 
 每个阶段独立 vet / test 绿；R2 依赖 R1，R3 可在 R1 之后与 R2 并行（先读 R1 的 schema）。
 
@@ -242,3 +245,48 @@ wire base 目前有两种形态，挂载点有限且集中在 `internal/client`�
   但需要引用计数或标记清除才能做保留期；按分区删目录即可。若 R4 观测到跨会话重复占大头，再考虑
   只对 `tools` / `system` 这类块做全局层。
 - **body 安全上限**：32 MiB / body，R4 再做成配置项。
+
+---
+
+## 8. 行业参考（网关层）
+
+只看在网关 / 代理层录制的方案（Langfuse 这类应用内 SDK 埋点不在此列）。
+
+| 方案 | 录什么 / 怎么开 | 存储 | 上限与保留 |
+|------|----------------|------|-----------|
+| Cloudflare AI Gateway | 默认录元数据 + 请求 / 响应；`cf-aig-collect-log-payload` header 逐请求控制是否存 body，关掉时仍存元数据 | 托管 | 单条最大 10 MB；每个 gateway 有存储上限，满了**停止写新日志**，要用户手动删旧的 |
+| LiteLLM Proxy | 默认不存内容，只存 token / 成本 / 模型；`store_prompts_in_spend_logs` 打开后存 messages 与响应，可在 UI 热切换 | spend logs（数据库） | 可配保留期（7d / 30d …）自动删除 |
+| Kong AI Gateway | `log_statistics`（token、延迟、模型）与 `log_payloads`（完整 prompt / 响应）分开两个开关 | 交给外部日志插件 | 依外部系统 |
+| Helicone（代理模式） | 每个请求都录 | 元数据在 ClickHouse，body 因体积过大单独放 S3，API 只返回 `signed_body_url` | body 只保留约 3 个月 |
+| Envoy tap filter | 通用 HTTP 抓包；有 buffered（一请求一条）与 streaming（分段输出）两种模式 | 文件 / admin 端点 | 默认 body 只留 1 KiB（`max_buffered_rx_bytes` / `tx_bytes`），超出标 `truncated` |
+| OpenTelemetry GenAI 语义约定 | 内容（`gen_ai.input.messages` 等）默认不采集、需显式 opt-in | 推荐内容存外部，span 上只记引用 | 由运维方决定 |
+
+**共识，本设计照搬：**
+
+1. **元数据和 body 是两档。** 元数据便宜、可以一直录；body 是显式 opt-in。我们的四个点位已经是
+   body 的 opt-in；元数据索引（§3.2 第 5 条的 `index.jsonl`）对应"metadata-only"那一档。
+2. **元数据与 body 分开存。** Helicone 因 body 过大拆到对象存储，列表只读元数据——对应我们的
+   索引旁路文件。
+3. **有硬上限，满了停写而不是拖垮服务。** Cloudflare 到存储上限后停止写入；Envoy 截断并标
+   `truncated`。对应我们的 body 安全上限、队列满丢弃，以及 R4 的磁盘配额（倾向同 Cloudflare：
+   配额满后停写 body、继续写元数据，并在 UI 提示）。
+4. **逐请求覆盖开关。** Cloudflare 用请求 header 覆盖 gateway 设置。R4 可加一个类似的
+   `X-Tingly-Record` header，方便临时排查单个客户端而不用改 rule。
+5. **流式有专门的抓取模式。** Envoy 的 streaming tap 与我们 tee SSE 的思路一致。
+
+**行业没有解决、我们需要自己做的：长程会话的重复内容。** 以上网关都是每个请求存一份完整 body，
+靠上限、截断和保留期控制体积，没有找到对多轮历史做去重的网关方案；也有项目记录了"每轮重复的
+system 消息让 trace 不断膨胀"的问题而未解决。§3.2 的元素去重 + 前缀链借鉴的是存储系统
+（内容寻址对象库、去重备份）的做法，而非某个网关的现成方案。代价是 body 不再是单个可直接
+打开的文件，读端必须还原——这由 R3 的查看端和一个导出命令（还原成完整 JSON）承担。
+
+来源：
+[Cloudflare AI Gateway logging](https://developers.cloudflare.com/ai-gateway/observability/logging/) ·
+[Cloudflare `cf-aig-collect-log-payload`](https://developers.cloudflare.com/changelog/post/2026-03-17-collect-log-payload-header/) ·
+[LiteLLM UI logs](https://docs.litellm.ai/docs/proxy/ui_logs) ·
+[LiteLLM spend log settings](https://docs.litellm.ai/docs/proxy/ui_spend_log_settings) ·
+[Kong AI Gateway logs](https://developer.konghq.com/ai-gateway/ai-logs/) ·
+[Helicone signed body URL](https://community.helicone.ai/requestresponse-bodies-from-api-t8HysGmJQVBB) ·
+[Envoy tap 配置](https://www.envoyproxy.io/docs/envoy/v1.22.8/api-v3/config/tap/v3/common.proto) ·
+[OTel GenAI 内容采集](https://www.truefoundry.com/blog/opentelemetry-genai-semantic-conventions) ·
+[重复 system 消息导致 trace 膨胀](https://github.com/marromugi/mg/issues/590)
