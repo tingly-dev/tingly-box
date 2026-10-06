@@ -60,6 +60,12 @@ func (fl *FileLock) TryLock() error {
 		return fmt.Errorf("lock already held: server may already be running")
 	}
 
+	// We hold the lock, so any port/version file still on disk was left by a
+	// previous server that died without cleaning up (crash, kill -9, power
+	// loss). Drop them so a launch that fails before rewriting them can never
+	// advertise a stale port or version to CLI readers.
+	_ = fl.RemoveRuntimeFiles()
+
 	// Store current PID for stop command
 	fl.pid = os.Getpid()
 	if _, err := fl.file.Seek(0, 0); err != nil {

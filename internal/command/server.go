@@ -96,6 +96,19 @@ func (s *StopCmdKong) Run(appManager *app.AppManager) error {
 	return doStopServer(appManager)
 }
 
+// StopRunningServer stops the server holding configDir's single-instance lock
+// (CLI, npx or GUI), exactly as `stop` does — a no-op if none is running. It
+// reads only the lock file, never the database, so a launcher that wants to
+// take over (the GUI's "stop it and restart as app") can use it before building
+// AppConfig.
+func StopRunningServer(configDir string) error {
+	fileLock := lock.NewFileLock(configDir)
+	if !fileLock.IsLocked() {
+		return nil
+	}
+	return stopServerWithFileLock(fileLock)
+}
+
 // StatusCmdKong is the Kong version of status command
 type StatusCmdKong struct{}
 

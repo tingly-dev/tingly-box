@@ -2,12 +2,28 @@ package main
 
 import (
 	"fmt"
+	"html"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
+
+// noticeAction is an optional "do something about it" offer shown as a native
+// question dialog on top of the notice window.
+type noticeAction struct {
+	Prompt string // dialog body
+	Label  string // confirm-button text
+}
 
 // runErrorApp creates a minimal app with just an error message window
 func runErrorApp(message string) {
+	runNoticeApp("Port Unavailable", message, nil)
+}
+
+// runNoticeApp shows title/message in a minimal window and blocks until it is
+// closed. With a non-nil action it also asks the user to confirm it; the
+// return value reports whether they did (always false without an action).
+func runNoticeApp(title, message string, action *noticeAction) (confirmed bool) {
 	app := application.New(application.Options{
 		Name:        AppName,
 		Description: AppDescription,
@@ -77,15 +93,28 @@ func runErrorApp(message string) {
 <body>
     <div class="container">
         <div class="error-icon">⚠️</div>
-        <h1>Port Unavailable</h1>
+        <h1>%s</h1>
         <p>%s</p>
     </div>
 </body>
-</html>`, message)
+</html>`, html.EscapeString(title), html.EscapeString(message))
 
 	// Set HTML content directly
 	window.SetHTML(errorHTML)
 
+	if action != nil {
+		app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+			dialog := app.Dialog.Question().SetTitle(title).SetMessage(action.Prompt)
+			dialog.AddButton(action.Label).SetAsDefault().OnClick(func() {
+				confirmed = true
+				app.Quit()
+			})
+			dialog.AddButton("Cancel").SetAsCancel().OnClick(func() { app.Quit() })
+			dialog.Show()
+		})
+	}
+
 	// Run the error app
 	_ = app.Run()
+	return confirmed
 }
