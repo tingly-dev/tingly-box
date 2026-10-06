@@ -7,6 +7,9 @@ name: Harness PR
 # registered known gap does not fail the run; a registered gap that starts
 # passing does, so the registry stays current.
 #
+# Also runs `catalog check` (providers.json / claude.models.json validity and
+# cross-consistency), so catalog edits fail here before the matrix runs.
+#
 # The full matrix (SDK clients, replay, load balancing, duo, routing) keeps its
 # own triggers in harness-matrix.yml: push ci/**, merged PRs, manual dispatch.
 #
@@ -24,6 +27,7 @@ on:
       - 'internal/loadbalance/**'
       - 'internal/forwarding/**'
       - 'internal/toolengine/**'
+      - 'internal/catalog/**'
       - 'internal/guardrails/**'
       - 'internal/server/*.go'        # top-level handlers only, not module/ (management APIs)
       - 'vmodel/**'
@@ -77,6 +81,9 @@ jobs:
 
       - name: Build harness
         run: go build -o harness ./cli/harness
+
+      - name: Run harness — catalog check
+        run: ./harness catalog check
 
       - name: Run harness — matrix --mode=all
         run: |

@@ -53,6 +53,11 @@
 - 不在 catalog 中的模型(第三方代理模型、比快照新的发布)由消费方给保守兜底
   (thinking 场景:budget-only、剥离 effort,见 `ops.anthropicModelThinkingCaps`)。
 
+## 合法性校验
+
+`harness catalog check`（校验逻辑在 `internal/catalog/catalog_check.go`）离线检查两份数据各自合法 + 跨 catalog 一致，
+`harness-pr.yml` 在 `internal/catalog/**` 变化时运行。维护规则见 `internal/catalog/AGENTS.md`。
+
 ## 数值单位
 
 供给注册表里的 `context` / `max_output` 一律写**十进制整数**:K=1000、M=1000000
