@@ -3,7 +3,6 @@ import { Box, ButtonBase, IconButton, InputBase, Stack, Tooltip } from '@mui/mat
 import { useTranslation } from 'react-i18next';
 import { Add, Close } from '@/components/icons';
 import type { ProfilePrompt } from './imageProfileTypes';
-import { deriveLabel } from './promptLabel';
 
 interface Props {
     prompts: ProfilePrompt[];
@@ -17,7 +16,8 @@ interface Props {
 // A profile's prompts as a row of small tabs over the one prompt field —
 // switching swaps what the field holds, nothing more. Text-weight, not
 // chips: it is a header for the field below, not a second control panel.
-// A prompt nobody named is labelled by its opening words; double-click names it.
+// A prompt nobody named is labelled "Prompt N" by position — fixed, so typing in
+// the field never re-renders the tabs; double-click names it.
 const ProfilePromptTabs: React.FC<Props> = ({ prompts, activeId, onSelect, onAdd, onRename, onRemove }) => {
     const { t } = useTranslation();
     const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -29,7 +29,6 @@ const ProfilePromptTabs: React.FC<Props> = ({ prompts, activeId, onSelect, onAdd
         setRenamingId(null);
     };
     const labelOf = (item: ProfilePrompt, index: number) => item.name
-        || deriveLabel(item.text)
         || t('imageProfile.promptN', { defaultValue: 'Prompt {{n}}', n: index + 1 });
 
     return (
