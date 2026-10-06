@@ -12,7 +12,8 @@ run-name: >-
 #   tingly-box-gui-windows-amd64.zip  tingly-box-gui.exe, x86-64 PE
 #   tingly-box-gui-linux-amd64.deb    package tingly-box-gui, /usr/bin/tingly-box-gui
 #   tingly-box-gui-linux-amd64.rpm    RPM package
-#   tingly-box-gui-linux-amd64.zip    tingly-box-gui, x86-64 ELF, GTK3 / WebKitGTK 4.1 (npm)
+#   tingly-box-gui-linux-{amd64,arm64}.zip
+#                                     tingly-box-gui ELF for that arch, GTK3 / WebKitGTK 4.1 (npm)
 #
 # Called by release-gui.yml after it attaches the packages. Can also be run by hand.
 on:
@@ -53,7 +54,7 @@ jobs:
       - name: Verify checksums
         working-directory: assets
         run: |
-          [ "$(ls tingly-box-gui-* | wc -l)" -eq 5 ] || { echo "❌ expected 5 GUI packages"; ls; exit 1; }
+          [ "$(ls tingly-box-gui-* | wc -l)" -eq 6 ] || { echo "❌ expected 6 GUI packages"; ls; exit 1; }
           sha256sum -c checksums-gui.txt
 
       - name: Verify package contents
@@ -89,12 +90,18 @@ jobs:
           # Linux zip: the GTK3 binary at the top level (what the npm shim
           # extracts), executable, linked against GTK3 / WebKitGTK 4.1 and not
           # the GTK4 stack the deb/rpm use.
-          unzip -q -o tingly-box-gui-linux-amd64.zip -d linux
-          file linux/tingly-box-gui | tee /dev/stderr | grep -qE 'ELF 64-bit.*x86-64'
-          [ -x linux/tingly-box-gui ] || { echo "❌ zip entry is not executable"; exit 1; }
-          NEEDED="$(readelf -d linux/tingly-box-gui | grep NEEDED)"
-          echo "$NEEDED" | grep -q 'libgtk-3.so.0'
-          echo "$NEEDED" | grep -q 'libwebkit2gtk-4.1.so.0'
-          if echo "$NEEDED" | grep -qE 'libgtk-4|libwebkitgtk-6'; then
-            echo "❌ the Linux zip links the GTK4 stack"; exit 1
-          fi
+          for arch in amd64 arm64; do
+            case "$arch" in
+              amd64) WANT_ELF='x86-64' ;;
+              arm64) WANT_ELF='ARM aarch64' ;;
+            esac
+            unzip -q -o "tingly-box-gui-linux-$arch.zip" -d "linux-$arch"
+            file "linux-$arch/tingly-box-gui" | tee /dev/stderr | grep -qE "ELF 64-bit.*$WANT_ELF"
+            [ -x "linux-$arch/tingly-box-gui" ] || { echo "❌ $arch zip entry is not executable"; exit 1; }
+            NEEDED="$(readelf -d "linux-$arch/tingly-box-gui" | grep NEEDED)"
+            echo "$NEEDED" | grep -q 'libgtk-3.so.0'
+            echo "$NEEDED" | grep -q 'libwebkit2gtk-4.1.so.0'
+            if echo "$NEEDED" | grep -qE 'libgtk-4|libwebkitgtk-6'; then
+              echo "❌ the $arch Linux zip links the GTK4 stack"; exit 1
+            fi
+          done

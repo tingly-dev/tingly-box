@@ -8,13 +8,14 @@ name: Release GUI
 #   tingly-box-gui-linux-amd64.deb    Ubuntu 24.04+ / Debian 13+ (GTK4)
 #   tingly-box-gui-linux-amd64.rpm    Fedora 40+ (GTK4)
 #   tingly-box-gui-linux-amd64.zip    bare binary, GTK3 / WebKitGTK 4.1: Ubuntu 22.04+,
-#                                     Debian 12+, Fedora 36+ (npx tingly-box-gui)
+#   tingly-box-gui-linux-arm64.zip    Debian 12+, Fedora 36+ (npx tingly-box-gui)
 #
 # Intel Macs are not built: the GUI targets Apple Silicon only (the CLI still
-# ships darwin/amd64). Linux is amd64 only. The deb/rpm declare GTK4 / WebKitGTK
-# 6.0 (build/linux/nfpm/nfpm.yaml); the zip is built with wails' `gtk3` tag on
-# ubuntu-22.04 so it also runs on older distributions, which the user's system
-# libraries must then provide (the npm shim checks for them).
+# ships darwin/amd64). The deb/rpm are amd64 only and declare GTK4 / WebKitGTK
+# 6.0 (build/linux/nfpm/nfpm.yaml); the zips (amd64 and arm64) are built with
+# wails' `gtk3` tag on ubuntu-22.04 runners of the matching architecture (cgo
+# links GTK, so no cross-compile) so they also run on older distributions,
+# which the user's system libraries must then provide (the npm shim checks).
 #
 # The macOS name is a contract: build/npx/tingly-box-gui/bin.js downloads
 # exactly `tingly-box-gui-macos-arm64.zip` from the release tag. macOS apps
@@ -70,6 +71,7 @@ jobs:
           # 22.04: the oldest glibc / WebKitGTK 4.1 the GTK3 zip should run on;
           # a binary links forward-compatibly only, so build on the oldest.
           - { os: ubuntu-22.04, platform: linux-gtk3, arch: amd64 }
+          - { os: ubuntu-22.04-arm, platform: linux-gtk3, arch: arm64 }
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -193,9 +195,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          task linux:build:gtk3 VERSION="${{ steps.ver.outputs.version }}"
+          task linux:build:gtk3 ARCH=${{ matrix.arch }} VERSION="${{ steps.ver.outputs.version }}"
           BIN=bin/gtk3/tingly-box-gui
-          file "$BIN" | tee /dev/stderr | grep -q "ELF 64-bit.*x86-64"
+          case "${{ matrix.arch }}" in
+            amd64) WANT_ELF="x86-64" ;;
+            arm64) WANT_ELF="ARM aarch64" ;;
+          esac
+          file "$BIN" | tee /dev/stderr | grep -q "ELF 64-bit.*$WANT_ELF"
           # Every shared library resolves here (the -dev packages pulled in the
           # runtime libs), and it links GTK3 / WebKitGTK 4.1, not the GTK4 stack.
           if ldd "$BIN" | grep "not found"; then exit 1; fi
@@ -209,7 +215,7 @@ jobs:
           [ "$(printf '%s\n' "$NEWEST" GLIBC_2.35 | sort -V | tail -1)" = "GLIBC_2.35" ]
           mkdir -p dist
           # The binary at the zip's top level, which is what the npm shim extracts.
-          (cd bin/gtk3 && zip -j "$OLDPWD/dist/tingly-box-gui-linux-amd64.zip" tingly-box-gui)
+          (cd bin/gtk3 && zip -j "$OLDPWD/dist/tingly-box-gui-linux-${{ matrix.arch }}.zip" tingly-box-gui)
           ls -la dist/
 
       - name: Upload package
@@ -287,12 +293,13 @@ jobs:
           | Linux x64 — Ubuntu 24.04+ / Debian 13+ | `tingly-box-gui-linux-amd64.deb` |
           | Linux x64 — Fedora 40+ | `tingly-box-gui-linux-amd64.rpm` |
           | Linux x64 — Ubuntu 22.04+ / Debian 12+ / Fedora 36+ (bare binary) | `tingly-box-gui-linux-amd64.zip` |
+          | Linux arm64 — same distributions (bare binary) | `tingly-box-gui-linux-arm64.zip` |
 
           The desktop builds are not signed by Apple or Microsoft.
 
           - **macOS**: easiest is `npx tingly-box-gui`, which skips Gatekeeper. For a browser download, unzip and open `TinglyBox.app`; when macOS blocks it, go to **System Settings → Privacy & Security → Open Anyway**, or run `xattr -dr com.apple.quarantine TinglyBox.app`.
           - **Windows**: if SmartScreen appears, choose **More info → Run anyway**.
-          - **Linux**: `sudo apt install ./tingly-box-gui-linux-amd64.deb` or `sudo dnf install ./tingly-box-gui-linux-amd64.rpm` (pulls in GTK4 and WebKitGTK 6.0), then open **Tingly Box** from the app menu or run `tingly-box-gui`. On older distributions, or to try it without installing anything, run `npx tingly-box-gui` (or unzip the `.zip` and run `tingly-box-gui`); that build needs GTK 3 and WebKitGTK 4.1 from your distribution. The tray icon needs a StatusNotifier host (KDE and most desktops have one; GNOME needs the AppIndicator extension).
+          - **Linux**: `sudo apt install ./tingly-box-gui-linux-amd64.deb` or `sudo dnf install ./tingly-box-gui-linux-amd64.rpm` (pulls in GTK4 and WebKitGTK 6.0), then open **Tingly Box** from the app menu or run `tingly-box-gui`. On older distributions, or to try it without installing anything, run `npx tingly-box-gui` (or unzip the `.zip` for your architecture and run `tingly-box-gui`); that build needs GTK 3 and WebKitGTK 4.1 from your distribution. The tray icon needs a StatusNotifier host (KDE and most desktops have one; GNOME needs the AppIndicator extension).
           NOTES
             echo "$END"
           } > desktop-notes.md

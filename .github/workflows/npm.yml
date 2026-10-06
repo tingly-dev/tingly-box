@@ -729,6 +729,7 @@ jobs:
             --pattern "tingly-box-gui-macos-arm64.zip" \
             --pattern "tingly-box-gui-windows-amd64.zip" \
             --pattern "tingly-box-gui-linux-amd64.zip" \
+            --pattern "tingly-box-gui-linux-arm64.zip" \
             --dir zips || {
               echo "❌ GUI assets missing on $RELEASE_TAG; run the 'Release GUI' workflow for it first"
               exit 1

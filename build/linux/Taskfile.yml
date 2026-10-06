@@ -97,7 +97,7 @@ tasks:
 
   package:
     summary: Packages the GUI for Linux amd64 as .deb and .rpm (bin/tingly-box-gui-linux-amd64.{deb,rpm})
-    # amd64 only: the release ships no other Linux GUI build. AppImage is
+    # amd64 only (the deb/rpm): the zips for npm come from build:gtk3. AppImage is
     # deliberately not produced — bundling WebKitGTK (with its helper
     # processes) into one is fragile, while a deb/rpm lets the distribution
     # supply GTK4/WebKitGTK 6.0 (see build/linux/nfpm/nfpm.yaml).
@@ -111,18 +111,20 @@ tasks:
       - task: generate:rpm
 
   build:gtk3:
-    summary: Builds the GTK3 / WebKitGTK 4.1 variant (bin/gtk3/tingly-box-gui), the bare binary the npm package ships
+    summary: Builds the GTK3 / WebKitGTK 4.1 variant (bin/gtk3/tingly-box-gui) for ARCH (amd64 default, or arm64), the bare binary the npm package ships
     # Same code, wails' `gtk3` build tag: links gtk+-3.0 and webkit2gtk-4.1
     # instead of GTK4 / WebKitGTK 6.0, so it runs on Ubuntu 22.04 / Debian 12
     # and later. Build it on the oldest distro it should run on (glibc is
     # forward-compatible only): release-gui.yml uses ubuntu-22.04.
-    # Needs libgtk-3-dev libwebkit2gtk-4.1-dev. amd64 only, like the deb/rpm.
+    # Needs libgtk-3-dev libwebkit2gtk-4.1-dev. cgo links GTK, so each arch is
+    # built natively on a machine of that arch (no cross-compile); the deb/rpm
+    # stay amd64 only.
     cmds:
       - mkdir -p {{.ROOT_DIR}}/bin/gtk3
       - task: build
         vars:
           PRODUCTION: "true"
-          ARCH: amd64
+          ARCH: '{{.ARCH | default "amd64"}}'
           EXTRA_TAGS: gtk3
           OUTPUT: bin/gtk3/{{.BIN_NAME}}
 

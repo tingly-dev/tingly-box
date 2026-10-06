@@ -14,9 +14,9 @@ also dispatches its own npm publish (`npm.yml`, `publish_gui`, pending approval)
 | macOS Apple Silicon | `tingly-box-gui-macos-arm64.zip` (`TinglyBox.app`, ad-hoc signed) | `npx tingly-box-gui`, or the zip |
 | Windows x64 | `tingly-box-gui-windows-amd64.zip` (`tingly-box-gui.exe`) | the zip |
 | Linux x64 | `tingly-box-gui-linux-amd64.deb` / `.rpm` (GTK4) | `apt install ./…deb` / `dnf install ./…rpm` |
-| Linux x64 | `tingly-box-gui-linux-amd64.zip` (bare binary, GTK3) | `npx tingly-box-gui`, or the zip |
+| Linux x64 / arm64 | `tingly-box-gui-linux-{amd64,arm64}.zip` (bare binary, GTK3) | `npx tingly-box-gui`, or the zip |
 
-Not built: Intel macOS, Linux arm64, Windows arm64. The CLI still ships
+Not built: Intel macOS, Windows arm64, and a Linux arm64 deb/rpm (arm64 Linux gets the zip only). The CLI still ships
 all of those, and it is the full product (the GUI is the same gateway with a
 window and a tray). A GUI build is only worth its CI time and support
 surface where the desktop audience is.
@@ -24,7 +24,7 @@ surface where the desktop audience is.
 ## npm: per-platform packages
 
 `tingly-box-gui` follows the CLI's scheme (`npm.md` F): the shim pins
-`@tingly-dev/tingly-box-gui-darwin-arm64`, `-win32-x64` and `-linux-x64`
+`@tingly-dev/tingly-box-gui-darwin-arm64`, `-win32-x64`, `-linux-x64` and `-linux-arm64`
 as exact-version `optionalDependencies`; each carries the release zip
 (`shared/platform.js` `GUI_PLATFORM_PACKAGES`, built by
 `build-platform-packages.sh … gui`). The Linux one holds the GTK3 zip, not the
@@ -120,8 +120,9 @@ builds Wails v3 with `gtk3` for older distributions.
 the system, so `npx` needs no root; the system supplies GTK 3 / WebKitGTK 4.1
 and the shim reports what is missing instead of leaving a linker error.
 Trade-offs: no `.desktop` entry or icon (use the deb/rpm for that), and the
-libraries are the user's to install. amd64 only; an arm64 build needs a
-native arm64 runner (cgo links GTK, no cross-compile).
+libraries are the user's to install. amd64 and arm64: cgo links GTK, so
+each is built natively on a runner of its architecture (`ubuntu-22.04` and
+`ubuntu-22.04-arm`), no cross-compile.
 
 **Tray.** Wails' Linux tray is pure D-Bus (StatusNotifierItem + dbusmenu,
 `pkg/application/systemtray_linux.go`, no cgo, no extra library) and registers

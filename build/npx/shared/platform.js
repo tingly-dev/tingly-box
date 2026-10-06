@@ -36,6 +36,7 @@ export const PLATFORM_PACKAGES = {
 // binary that needs those system libraries, checked by shared/linuxgui.js.
 export const GUI_PLATFORM_PACKAGES = {
 	"linux-x64": { name: "@tingly-dev/tingly-box-gui-linux-x64", zip: "tingly-box-gui-linux-amd64.zip" },
+	"linux-arm64": { name: "@tingly-dev/tingly-box-gui-linux-arm64", zip: "tingly-box-gui-linux-arm64.zip" },
 	"darwin-arm64": { name: "@tingly-dev/tingly-box-gui-darwin-arm64", zip: "tingly-box-gui-macos-arm64.zip" },
 	"win32-x64": { name: "@tingly-dev/tingly-box-gui-win32-x64", zip: "tingly-box-gui-windows-amd64.zip" },
 };

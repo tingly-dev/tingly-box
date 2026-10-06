@@ -129,11 +129,11 @@ function launchLinux(appPath, cacheRoot) {
 
 	const releasesUrl = "https://github.com/tingly-dev/tingly-box/releases/latest";
 	let unsupported = null;
-	if (platform === "linux" && process.arch !== "x64") {
-		// Only an amd64 build of the desktop app is published.
+	if (platform === "linux" && process.arch !== "x64" && process.arch !== "arm64") {
+		// Only amd64 and arm64 builds of the desktop app are published.
 		unsupported = {
 			name: "Linux on " + process.arch,
-			status: ["The desktop app is built for x64 Linux only"],
+			status: ["The desktop app is built for x64 and arm64 Linux only"],
 		};
 	} else if (platform === "win32" && process.arch !== "x64") {
 		unsupported = {
@@ -161,7 +161,7 @@ function launchLinux(appPath, cacheRoot) {
 		preflightLinux(releasesUrl);
 	}
 
-	// macOS (arm64), Windows (x64) and Linux (x64) continue: install, then launch.
+	// macOS (arm64), Windows (x64) and Linux (x64, arm64) continue: install, then launch.
 	const platformInfo = await getPlatformArchAndBinary();
 	const { platformDir, archDir, binaryName, suffix, appName } = platformInfo;
 
