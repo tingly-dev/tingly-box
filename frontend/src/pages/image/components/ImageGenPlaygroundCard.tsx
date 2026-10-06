@@ -69,6 +69,8 @@ import type {
 // overview (searchable, grid, newest first), not here. Capping the strip to
 // its most recent items and handing off anything older to a single "open the
 // overview" tile keeps the strip a status readout instead of a second archive.
+// Pause after the last keystroke before the prompt is saved into the profile.
+const PROMPT_SAVE_DELAY_MS = 600;
 const HISTORY_STRIP_VISIBLE = 6;
 
 interface ImageGenPlaygroundCardProps {
@@ -471,15 +473,31 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     // so there is no "unsaved" state to manage. The prompt is per-run and
     // never saved.
     const profileId = profile?.id;
-    // The field edits the active saved prompt in place.
+    // The field edits the active saved prompt in place. Typing must stay cheap:
+    // keystrokes only touch `prompt`; the text is copied into the saved list
+    // (which re-renders the tabs and rewrites the profile store) after a pause,
+    // and right away when switching tabs or leaving the page.
+    const latest = useRef({ prompts: profilePrompts, activePromptId, prompt });
+    latest.current = { prompts: profilePrompts, activePromptId, prompt };
+    const withLatestText = (prompts: ProfilePrompt[], id: string, text: string) => (
+        prompts.some((item) => item.id === id && item.text !== text)
+            ? prompts.map((item) => (item.id === id ? { ...item, text } : item))
+            : prompts
+    );
     useEffect(() => {
         if (!profileId) return;
-        // Same array back when nothing changed, so opening the page is not
-        // mistaken for an edit.
-        setProfilePrompts((current) => (current.some((item) => item.id === activePromptId && item.text !== prompt)
-            ? current.map((item) => (item.id === activePromptId ? { ...item, text: prompt } : item))
-            : current));
+        const timer = window.setTimeout(() => {
+            setProfilePrompts((current) => withLatestText(current, activePromptId, prompt));
+        }, PROMPT_SAVE_DELAY_MS);
+        return () => window.clearTimeout(timer);
     }, [activePromptId, profileId, prompt]);
+    // Leaving the page inside the delay must not lose the last words.
+    useEffect(() => () => {
+        if (!profileId) return;
+        const { prompts, activePromptId: id, prompt: text } = latest.current;
+        const next = withLatestText(prompts, id, text);
+        if (next !== prompts) updateImageProfile(profileId, { prompts: next });
+    }, [profileId]);
     useEffect(() => {
         if (!profileId) return;
         updateImageProfile(profileId, {
@@ -494,19 +512,22 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     }, [activePromptId, count, profileId, profilePrompts, quality, referenceImages, selectedModel, size]);
 
     const selectPrompt = (id: string) => {
+        if (id === activePromptId) return;
+        const synced = withLatestText(profilePrompts, activePromptId, prompt);
+        setProfilePrompts(synced);
         setActivePromptId(id);
-        setPrompt(profilePrompts.find((item) => item.id === id)?.text ?? '');
+        setPrompt(synced.find((item) => item.id === id)?.text ?? '');
     };
     const addPrompt = () => {
         const id = newPromptId();
-        setProfilePrompts((current) => [...current, { id, name: '', text: '' }]);
+        setProfilePrompts((current) => [...withLatestText(current, activePromptId, prompt), { id, name: '', text: '' }]);
         setActivePromptId(id);
         setPrompt('');
     };
     const removePrompt = (id: string) => {
         const index = profilePrompts.findIndex((item) => item.id === id);
         if (index === -1 || profilePrompts.length < 2) return;
-        const remaining = profilePrompts.filter((item) => item.id !== id);
+        const remaining = withLatestText(profilePrompts, activePromptId, prompt).filter((item) => item.id !== id);
         setProfilePrompts(remaining);
         if (id === activePromptId) {
             // The neighbour takes its place, as closing a tab would.
