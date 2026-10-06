@@ -186,6 +186,84 @@ else
 	echo "==> [T6] skipped (needs linux/x86_64 to run the linux-x64 package)"
 fi
 
+# --- T7: gui shim on Linux (GTK3 zip, preflight, launch) ---------------------
+# No release needed: a stub script stands in for the app, packaged like the
+# real @tingly-dev/tingly-box-gui-linux-x64 (zip with the binary at its top
+# level), and a fake `ldconfig` on PATH stands in for the host's libraries.
+if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ] && command -v zip >/dev/null; then
+	echo "==> [T7] gui shim: Linux preflight and launch from the platform package"
+	GUI_NM="$WORK/gui-global/node_modules"
+	GUI_VERSION="0.0.7"
+	mkdir -p "$WORK/gui-app" "$WORK/gui-zips" "$GUI_NM/tingly-box-gui/node_modules/@tingly-dev" "$WORK/fakebin"
+	printf '#!/bin/sh\necho started > "%s/app-started"\nexec sleep 5\n' "$WORK" > "$WORK/gui-app/tingly-box-gui"
+	chmod +x "$WORK/gui-app/tingly-box-gui"
+	(cd "$WORK/gui-app" && zip -q -j "$WORK/gui-zips/tingly-box-gui-linux-amd64.zip" tingly-box-gui)
+	"$SCRIPT_DIR/scripts/build-platform-packages.sh" "$GUI_VERSION" "$WORK/gui-zips" "$WORK/gui-platform" gui >/dev/null 2>&1 \
+		&& pass "T7: gui platform package built from the linux zip" \
+		|| fail "T7: build-platform-packages.sh gui failed"
+	cp -r "$WORK/gui-platform/@tingly-dev/tingly-box-gui-linux-x64" "$GUI_NM/tingly-box-gui/node_modules/@tingly-dev/"
+	cp "$WORK/tingly-box-gui.bin.js" "$GUI_NM/tingly-box-gui/bin.js"
+	node -e '
+const fs = require("fs"), [src, dst, version] = process.argv.slice(1);
+fs.writeFileSync(dst, JSON.stringify({ ...JSON.parse(fs.readFileSync(src, "utf8")), version }, null, 2));
+' "$SCRIPT_DIR/tingly-box-gui/package.json" "$GUI_NM/tingly-box-gui/package.json" "$GUI_VERSION"
+	gui_shim() { PATH="$WORK/fakebin:$PATH" node "$GUI_NM/tingly-box-gui/bin.js" "$@"; }
+	fake_ldconfig() { printf '#!/bin/sh\nprintf "\\t%%s (libc6,x86-64) => /x\\n" %s\n' "$*" > "$WORK/fakebin/ldconfig"; chmod +x "$WORK/fakebin/ldconfig"; }
+
+	# No desktop session: exits before touching the network or the cache.
+	if env -u DISPLAY -u WAYLAND_DISPLAY PATH="$WORK/fakebin:$PATH" node "$GUI_NM/tingly-box-gui/bin.js" > "$WORK/gui-nodisplay.log" 2>&1; then
+		fail "T7: shim should fail without a desktop session"
+	else
+		grep -q "No desktop session" "$WORK/gui-nodisplay.log" && grep -q "npx tingly-box" "$WORK/gui-nodisplay.log" \
+			&& pass "T7: no DISPLAY/WAYLAND_DISPLAY -> clear message pointing at the CLI" \
+			|| { fail "T7: no-display message missing:"; head -5 "$WORK/gui-nodisplay.log"; }
+	fi
+
+	# Missing WebKitGTK: names the library, offers the CLI, installs nothing.
+	fake_ldconfig libgtk-3.so.0
+	if DISPLAY=:99 gui_shim > "$WORK/gui-nolib.log" 2>&1; then
+		fail "T7: shim should fail when a library is missing"
+	else
+		grep -q "libwebkit2gtk-4.1.so.0" "$WORK/gui-nolib.log" && ! grep -q "Installing the app" "$WORK/gui-nolib.log" \
+			&& pass "T7: missing library named before anything is installed" \
+			|| { fail "T7: missing-library message wrong:"; head -8 "$WORK/gui-nolib.log"; }
+	fi
+
+	# Libraries present: installs from the platform package and launches detached.
+	fake_ldconfig libgtk-3.so.0 libwebkit2gtk-4.1.so.0
+	rm -f "$WORK/app-started"
+	if DISPLAY=:99 gui_shim > "$WORK/gui-ok.log" 2>&1; then
+		pass "T7: shim returned (app launched detached)"
+	else
+		fail "T7: shim failed:"; tail -5 "$WORK/gui-ok.log"
+	fi
+	grep -q "Installing the app from @tingly-dev/tingly-box-gui-linux-x64@$GUI_VERSION" "$WORK/gui-ok.log" \
+		&& ! grep -q "Downloading" "$WORK/gui-ok.log" \
+		&& pass "T7: app came from the platform package, nothing downloaded" \
+		|| { fail "T7: expected the platform package path:"; head -5 "$WORK/gui-ok.log"; }
+	[ -x "$XDG_CACHE_HOME/tingly-box-gui/v$GUI_VERSION/bin/tingly-box-gui" ] \
+		&& pass "T7: app extracted executable into the versioned cache dir" \
+		|| fail "T7: cached app missing or not executable"
+	[ -f "$WORK/app-started" ] && pass "T7: app was started" || fail "T7: app did not start"
+
+	# An app that dies at startup is reported with its stderr, not swallowed.
+	printf '#!/bin/sh\necho "boom: cannot open display" >&2\nexit 3\n' > "$XDG_CACHE_HOME/tingly-box-gui/v$GUI_VERSION/bin/tingly-box-gui"
+	if DISPLAY=:99 gui_shim > "$WORK/gui-crash.log" 2>&1; then
+		fail "T7: a crashing app should make the shim fail"
+	else
+		grep -q "exited right after start" "$WORK/gui-crash.log" && grep -q "boom: cannot open display" "$WORK/gui-crash.log" \
+			&& pass "T7: startup crash reported with the app's stderr" \
+			|| { fail "T7: crash report missing:"; tail -5 "$WORK/gui-crash.log"; }
+	fi
+	# Exit 0 right away is a running instance taking over: not an error.
+	printf '#!/bin/sh\nexit 0\n' > "$XDG_CACHE_HOME/tingly-box-gui/v$GUI_VERSION/bin/tingly-box-gui"
+	DISPLAY=:99 gui_shim > "$WORK/gui-handoff.log" 2>&1 \
+		&& pass "T7: instant exit 0 (single-instance handoff) is not reported as a failure" \
+		|| { fail "T7: handoff treated as failure:"; tail -5 "$WORK/gui-handoff.log"; }
+else
+	echo "==> [T7] skipped (needs linux/x86_64 and zip)"
+fi
+
 echo
 if [ "$FAILED" -eq 0 ]; then
 	echo "🎉 All shim tests passed for $TAG"

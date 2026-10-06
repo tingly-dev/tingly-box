@@ -26,9 +26,10 @@ waits for the `production` environment approval):
   set. Built by `build/npx/scripts/build-platform-packages.sh` and published
   *before* the shim at the same version. Not meant to be installed directly.
 - **`tingly-box-gui`** — shim variant for the desktop UI, published on demand;
-  download-only (no platform packages). Launches the Apple Silicon macOS app
-  only; on Linux, Windows and Intel Macs it exits pointing at the release
-  assets (`gui-packaging.md`).
+  platform packages for macOS arm64, Windows x64 and Linux x64 (the Linux one
+  is the GTK3 bare binary; the shim checks system libraries first), same
+  scheme as the cli. Intel Macs, Linux arm64 and Windows arm64 exit pointing at
+  the release assets (`gui-packaging.md`).
 
 `tingly-box-bundle` (all platform zips inside one ~70 MB package) is retired
 as of 2026-09; see F below. Its published versions stay on npm because

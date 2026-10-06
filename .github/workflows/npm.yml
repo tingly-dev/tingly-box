@@ -714,9 +714,10 @@ jobs:
 
       # ---- platform packages (same scheme as the cli) -------------------
       # tingly-box-gui-<os>-<cpu> carry the desktop zip from the release, so
-      # `npx tingly-box-gui` needs only the npm registry. Linux has none
-      # (deb/rpm). macOS: the zip holds the ad-hoc signed TinglyBox.app; the
-      # shim re-verifies/re-signs it after extraction.
+      # `npx tingly-box-gui` needs only the npm registry. macOS: the zip holds
+      # the ad-hoc signed TinglyBox.app; the shim re-verifies/re-signs it after
+      # extraction. Linux: the GTK3 bare binary; the shim checks for the
+      # system GTK 3 / WebKitGTK 4.1 libraries before launching it.
       - name: Download GUI release assets
         env:
           RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
@@ -727,6 +728,7 @@ jobs:
           gh release download "$RELEASE_TAG" --repo "$REPO" \
             --pattern "tingly-box-gui-macos-arm64.zip" \
             --pattern "tingly-box-gui-windows-amd64.zip" \
+            --pattern "tingly-box-gui-linux-amd64.zip" \
             --dir zips || {
               echo "❌ GUI assets missing on $RELEASE_TAG; run the 'Release GUI' workflow for it first"
               exit 1
@@ -840,8 +842,9 @@ jobs:
           mv bin.bundled.js bin.js
           npm pkg delete dependencies
           node --check bin.js
-          # On this Linux runner the GUI shim prints "not supported" and exits
-          # non-zero; running it only proves the bundle starts without deps.
+          # On this headless Linux runner the GUI shim exits non-zero at its
+          # no-desktop-session check; running it only proves the bundle starts
+          # without deps.
           rm -rf node_modules ../node_modules
           node bin.js || true
           echo "✅ Bundled bin.js ($(du -h bin.js | cut -f1)), dependencies stripped"

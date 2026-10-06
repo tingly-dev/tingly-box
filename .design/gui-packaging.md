@@ -13,7 +13,8 @@ also dispatches its own npm publish (`npm.yml`, `publish_gui`, pending approval)
 |---|---|---|
 | macOS Apple Silicon | `tingly-box-gui-macos-arm64.zip` (`TinglyBox.app`, ad-hoc signed) | `npx tingly-box-gui`, or the zip |
 | Windows x64 | `tingly-box-gui-windows-amd64.zip` (`tingly-box-gui.exe`) | the zip |
-| Linux x64 | `tingly-box-gui-linux-amd64.deb` / `.rpm` | `apt install ./…deb` / `dnf install ./…rpm` |
+| Linux x64 | `tingly-box-gui-linux-amd64.deb` / `.rpm` (GTK4) | `apt install ./…deb` / `dnf install ./…rpm` |
+| Linux x64 | `tingly-box-gui-linux-amd64.zip` (bare binary, GTK3) | `npx tingly-box-gui`, or the zip |
 
 Not built: Intel macOS, Linux arm64, Windows arm64. The CLI still ships
 all of those, and it is the full product (the GUI is the same gateway with a
@@ -23,10 +24,11 @@ surface where the desktop audience is.
 ## npm: per-platform packages
 
 `tingly-box-gui` follows the CLI's scheme (`npm.md` F): the shim pins
-`@tingly-dev/tingly-box-gui-darwin-arm64` and `@tingly-dev/tingly-box-gui-win32-x64`
+`@tingly-dev/tingly-box-gui-darwin-arm64`, `-win32-x64` and `-linux-x64`
 as exact-version `optionalDependencies`; each carries the release zip
 (`shared/platform.js` `GUI_PLATFORM_PACKAGES`, built by
-`build-platform-packages.sh … gui`). Linux has none (deb/rpm, see below). The
+`build-platform-packages.sh … gui`). The Linux one holds the GTK3 zip, not the
+deb/rpm payload (see "Linux" below). The
 shim extracts the zip into its versioned cache and launches from there; the
 GitHub download is the fallback (`--no-optional`, mirror lag, version
 mismatch, `--transport-version`).
@@ -37,6 +39,15 @@ mismatch, `--transport-version`).
   not prompt on this path (a browser download still needs "Open Anyway").
 - **Windows**: the shim extracts `tingly-box-gui.exe` and starts it detached.
   Unsigned: SmartScreen may still warn on first run.
+- **Linux**: the shim first checks for a desktop session (`DISPLAY` /
+  `WAYLAND_DISPLAY`) and for `libgtk-3.so.0` / `libwebkit2gtk-4.1.so.0` in
+  `ldconfig -p` (`shared/linuxgui.js`), before downloading anything. A miss
+  prints the missing library, the install command for the distribution (from
+  `/etc/os-release`) and `npx tingly-box` as the way to use the product without
+  any system library. It then extracts the binary and starts it detached,
+  but watches the first 2 s: a nonzero early exit is reported with the app's
+  stderr (exit 0 is a running instance taking over; the app is
+  single-instance). Verified by `test-shim.sh` T7 (stub app, fake `ldconfig`).
 - The packages are published by `npm.yml`'s `publish-gui` job, which needs
   the GUI zips already on the release. A platform package that does not exist on npm yet is skipped (warning, not
   published, not pinned; that platform falls back to the release download), so a
@@ -93,6 +104,28 @@ the dock and a second, ungrouped entry.
 sorts before the empty string, so a prerelease or dev build never outranks
 the release it precedes.
 
-**Not in the npm shim.** `npx tingly-box-gui` on Linux prints the two
-install commands instead of downloading anything: a package manager install
-is what pulls in the libraries.
+**Two Linux builds from the same code.** Wails v3 picks its toolkit with a
+build tag: the default links GTK4 + WebKitGTK 6.0 (`pkg-config: gtk4
+webkitgtk-6.0`, `linux_cgo.go`), `-tags gtk3` links GTK 3 + WebKitGTK 4.1
+(`gtk+-3.0 webkit2gtk-4.1`, `linux_cgo_gtk3.go`, a full implementation, not a
+stub). The deb/rpm are the GTK4 build, for the distributions that have it. The
+zip behind npm is the GTK3 build (`task linux:build:gtk3`), built on
+`ubuntu-22.04`, so it runs on Ubuntu 22.04+, Debian 12+, Fedora 36+: a binary
+links forward-compatibly only, so it is built on the oldest glibc it should
+run on, and `release-gui.yml` fails the build if it needs glibc newer than
+2.35 or links the GTK4 stack. Same idea as magpie (yetone/magpie), which also
+builds Wails v3 with `gtk3` for older distributions.
+
+**A bare binary, not a package, for npm.** It does not install anything into
+the system, so `npx` needs no root; the system supplies GTK 3 / WebKitGTK 4.1
+and the shim reports what is missing instead of leaving a linker error.
+Trade-offs: no `.desktop` entry or icon (use the deb/rpm for that), and the
+libraries are the user's to install. amd64 only; an arm64 build needs a
+native arm64 runner (cgo links GTK, no cross-compile).
+
+**Tray.** Wails' Linux tray is pure D-Bus (StatusNotifierItem + dbusmenu,
+`pkg/application/systemtray_linux.go`, no cgo, no extra library) and registers
+with `org.kde.StatusNotifierWatcher`. Where no host answers (stock GNOME
+without the AppIndicator extension) the registration only logs an error and
+no icon is shown; the hub panel hangs off that icon, so the main window is
+the way in there. This is a desktop-environment dependency, not a package one.

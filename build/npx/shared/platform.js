@@ -30,10 +30,12 @@ export const PLATFORM_PACKAGES = {
 };
 
 // Desktop GUI packages, same scheme (`tingly-box-gui` pins them as
-// optionalDependencies). Only the platforms the GUI ships a zip for: Linux is
-// deb/rpm (system GTK4/WebKitGTK), so it has no npm package.
-// zip: tingly-box-gui-<os>-<arch>.zip from release-gui.yml.
+// optionalDependencies). Only the platforms the GUI ships a zip for.
+// zip: tingly-box-gui-<os>-<arch>.zip from release-gui.yml. The Linux zip is
+// the GTK3 / WebKitGTK 4.1 build (the deb/rpm are the GTK4 build): a bare
+// binary that needs those system libraries, checked by shared/linuxgui.js.
 export const GUI_PLATFORM_PACKAGES = {
+	"linux-x64": { name: "@tingly-dev/tingly-box-gui-linux-x64", zip: "tingly-box-gui-linux-amd64.zip" },
 	"darwin-arm64": { name: "@tingly-dev/tingly-box-gui-darwin-arm64", zip: "tingly-box-gui-macos-arm64.zip" },
 	"win32-x64": { name: "@tingly-dev/tingly-box-gui-win32-x64", zip: "tingly-box-gui-windows-amd64.zip" },
 };

@@ -57,7 +57,7 @@ tasks:
         cd {{.WAILS_PACKAGE_PATH}}
         go build {{.BUILD_FLAGS}} -o "${cwd}/{{.OUTPUT}}" ./
     vars:
-      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production -trimpath -buildvcs=false -ldflags="-w -s {{.VERSION_LDFLAGS}}"{{else}}-buildvcs=false -gcflags=all="-l"{{end}}'
+      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags "production{{if .EXTRA_TAGS}} {{.EXTRA_TAGS}}{{end}}" -trimpath -buildvcs=false -ldflags="-w -s {{.VERSION_LDFLAGS}}"{{else}}-buildvcs=false -gcflags=all="-l"{{end}}'
       DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.BIN_NAME}}'
       OUTPUT: '{{ .OUTPUT | default .DEFAULT_OUTPUT }}'
       PRODUCTION: '{{.PRODUCTION | default "false"}}'
@@ -109,6 +109,22 @@ tasks:
     cmds:
       - task: generate:deb
       - task: generate:rpm
+
+  build:gtk3:
+    summary: Builds the GTK3 / WebKitGTK 4.1 variant (bin/gtk3/tingly-box-gui), the bare binary the npm package ships
+    # Same code, wails' `gtk3` build tag: links gtk+-3.0 and webkit2gtk-4.1
+    # instead of GTK4 / WebKitGTK 6.0, so it runs on Ubuntu 22.04 / Debian 12
+    # and later. Build it on the oldest distro it should run on (glibc is
+    # forward-compatible only): release-gui.yml uses ubuntu-22.04.
+    # Needs libgtk-3-dev libwebkit2gtk-4.1-dev. amd64 only, like the deb/rpm.
+    cmds:
+      - mkdir -p {{.ROOT_DIR}}/bin/gtk3
+      - task: build
+        vars:
+          PRODUCTION: "true"
+          ARCH: amd64
+          EXTRA_TAGS: gtk3
+          OUTPUT: bin/gtk3/{{.BIN_NAME}}
 
   generate:deb:
     summary: Creates the deb package

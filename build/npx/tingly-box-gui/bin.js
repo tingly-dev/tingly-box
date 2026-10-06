@@ -8,6 +8,7 @@ import { fileURLToPath } from "url";
 import { cacheDir } from "../shared/cachedir.js";
 import { cleanupRetiredInstallDirs, cleanupStaleBinaryCaches } from "../shared/cleanup.js";
 import { downloadAndExtractZip, extractZipFile } from "../shared/download.js";
+import { checkLibs, hasDisplay, readInstallHint, REQUIRED_LIBS } from "../shared/linuxgui.js";
 import { findPlatformPackage, GUI_PLATFORM_PACKAGES } from "../shared/platform.js";
 import { parseTransportVersion } from "../shared/transport.js";
 
@@ -69,6 +70,58 @@ async function getPlatformArchAndBinary() {
 	return { platformDir, archDir, binaryName: "tingly-box-gui", suffix, appName };
 }
 
+// Linux: the app is a bare binary linking the system's GTK 3 / WebKitGTK 4.1.
+// Check for a desktop session and those libraries before downloading
+// anything, so a missing piece is named up front rather than surfacing as a
+// linker error from a detached process.
+function preflightLinux(releasesUrl) {
+	if (!hasDisplay()) {
+		console.error(`\n❌ No desktop session found (neither DISPLAY nor WAYLAND_DISPLAY is set)`);
+		console.error(`   The desktop app needs a graphical session. Over SSH or in a container use the CLI instead:`);
+		console.error(`   npx tingly-box`);
+		process.exit(1);
+	}
+	const missing = checkLibs();
+	if (missing && missing.length > 0) {
+		console.error(`\n❌ Missing system libraries: ${missing.join(", ")}`);
+		console.error(`   The Linux desktop app uses the system's GTK 3 and WebKitGTK 4.1`);
+		console.error(`   (Ubuntu 22.04+, Debian 12+, Fedora 36+).`);
+		const hint = readInstallHint();
+		console.error(`\n💡 Install them${hint ? `:\n   ${hint}` : ` (${REQUIRED_LIBS.join(", ")}) with your package manager`}`);
+		console.error(`   Or use the CLI, which needs no system libraries: npx tingly-box`);
+		console.error(`   Newer distributions can install the .deb / .rpm instead: ${releasesUrl}`);
+		process.exit(1);
+	}
+}
+
+// Start the app detached so the shell prompt returns, but watch the first
+// moments: a binary that dies at startup (a library the preflight could not
+// see, a display it cannot open) would otherwise vanish silently.
+function launchLinux(appPath, cacheRoot) {
+	console.log(`🚀 Launching ${appPath}...`);
+	const child = spawn(appPath, [], { detached: true, stdio: ["ignore", "ignore", "pipe"] });
+	let stderr = "";
+	child.stderr.on("data", (d) => { if (stderr.length < 4096) stderr += d; });
+	child.on("error", (e) => {
+		console.error(`\n❌ Failed to launch ${appPath}: ${e.message}`);
+		console.error(`   Clear the cache and retry: rm -rf "${cacheRoot}"`);
+		process.exit(1);
+	});
+	child.on("exit", (code, signal) => {
+		// Exit 0: a running instance took over (the app is single-instance).
+		if (code === 0) process.exit(0);
+		console.error(`\n❌ ${appPath} exited right after start (${signal || `code ${code}`})`);
+		if (stderr.trim()) console.error(stderr.trim().split("\n").map((l) => `   ${l}`).join("\n"));
+		console.error(`\n💡 Use the CLI instead: npx tingly-box`);
+		process.exit(code || 1);
+	});
+	setTimeout(() => {
+		child.removeAllListeners("exit");
+		child.stderr.destroy();
+		child.unref();
+	}, 2000);
+}
+
 (async () => {
 	cleanupRetiredInstallDirs(dirname(fileURLToPath(import.meta.url)));
 
@@ -76,17 +129,11 @@ async function getPlatformArchAndBinary() {
 
 	const releasesUrl = "https://github.com/tingly-dev/tingly-box/releases/latest";
 	let unsupported = null;
-	if (platform === "linux") {
-		// Linux ships as distribution packages (they pull in GTK4/WebKitGTK),
-		// not as an npx-launchable bundle.
+	if (platform === "linux" && process.arch !== "x64") {
+		// Only an amd64 build of the desktop app is published.
 		unsupported = {
-			name: "Linux",
-			status: [
-				"Install the desktop app from the .deb / .rpm on the release page:",
-				`  ${releasesUrl}`,
-				"  sudo apt install ./tingly-box-gui-linux-amd64.deb   (Ubuntu 24.04+ / Debian 13+)",
-				"  sudo dnf install ./tingly-box-gui-linux-amd64.rpm   (Fedora 40+)",
-			],
+			name: "Linux on " + process.arch,
+			status: ["The desktop app is built for x64 Linux only"],
 		};
 	} else if (platform === "win32" && process.arch !== "x64") {
 		unsupported = {
@@ -110,7 +157,11 @@ async function getPlatformArchAndBinary() {
 		process.exit(1);
 	}
 
-	// macOS (arm64) and Windows (x64) continue: install, then launch.
+	if (platform === "linux") {
+		preflightLinux(releasesUrl);
+	}
+
+	// macOS (arm64), Windows (x64) and Linux (x64) continue: install, then launch.
 	const platformInfo = await getPlatformArchAndBinary();
 	const { platformDir, archDir, binaryName, suffix, appName } = platformInfo;
 
@@ -133,7 +184,7 @@ async function getPlatformArchAndBinary() {
 		process.exit(1);
 	}
 
-	// macOS: the .app bundle. Windows: the bare exe.
+	// macOS: the .app bundle. Windows/Linux: the bare executable.
 	const isMac = platform === "darwin";
 	const appPath = isMac ? join(tinglyBinDir, appName) : join(tinglyBinDir, `tingly-box-gui${suffix}`);
 
@@ -161,6 +212,11 @@ async function getPlatformArchAndBinary() {
 
 	// The app for this tag is in place — old tag dirs are now safe to GC.
 	cleanupStaleBinaryCaches(cacheRoot, branchName);
+
+	if (platform === "linux") {
+		launchLinux(appPath, cacheRoot);
+		return;
+	}
 
 	if (!isMac) {
 		// Windows: start the exe detached so the shell prompt returns.

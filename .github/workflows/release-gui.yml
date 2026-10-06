@@ -5,12 +5,16 @@ name: Release GUI
 #
 #   tingly-box-gui-macos-arm64.zip    TinglyBox.app (Apple Silicon)
 #   tingly-box-gui-windows-amd64.zip  tingly-box-gui.exe
-#   tingly-box-gui-linux-amd64.deb    Ubuntu 24.04+ / Debian 13+
-#   tingly-box-gui-linux-amd64.rpm    Fedora 40+
+#   tingly-box-gui-linux-amd64.deb    Ubuntu 24.04+ / Debian 13+ (GTK4)
+#   tingly-box-gui-linux-amd64.rpm    Fedora 40+ (GTK4)
+#   tingly-box-gui-linux-amd64.zip    bare binary, GTK3 / WebKitGTK 4.1: Ubuntu 22.04+,
+#                                     Debian 12+, Fedora 36+ (npx tingly-box-gui)
 #
 # Intel Macs are not built: the GUI targets Apple Silicon only (the CLI still
-# ships darwin/amd64). Linux is amd64 only, as distribution packages so the
-# system provides GTK4 / WebKitGTK 6.0 (build/linux/nfpm/nfpm.yaml).
+# ships darwin/amd64). Linux is amd64 only. The deb/rpm declare GTK4 / WebKitGTK
+# 6.0 (build/linux/nfpm/nfpm.yaml); the zip is built with wails' `gtk3` tag on
+# ubuntu-22.04 so it also runs on older distributions, which the user's system
+# libraries must then provide (the npm shim checks for them).
 #
 # The macOS name is a contract: build/npx/tingly-box-gui/bin.js downloads
 # exactly `tingly-box-gui-macos-arm64.zip` from the release tag. macOS apps
@@ -63,6 +67,9 @@ jobs:
           - { os: windows-latest, platform: windows, arch: amd64 }
           # 24.04: the oldest Ubuntu with WebKitGTK 6.0, which wails v3 links.
           - { os: ubuntu-24.04, platform: linux, arch: amd64 }
+          # 22.04: the oldest glibc / WebKitGTK 4.1 the GTK3 zip should run on;
+          # a binary links forward-compatibly only, so build on the oldest.
+          - { os: ubuntu-22.04, platform: linux-gtk3, arch: amd64 }
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -114,6 +121,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev pkg-config
+
+      - name: Install GTK3 / WebKitGTK 4.1 headers (Linux GTK3)
+        if: matrix.platform == 'linux-gtk3'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config zip
 
       - name: Install go-task and wails3
         shell: bash
@@ -173,6 +186,30 @@ jobs:
           if ldd /usr/bin/tingly-box-gui | grep "not found"; then exit 1; fi
           mkdir -p dist
           cp bin/tingly-box-gui-linux-amd64.deb bin/tingly-box-gui-linux-amd64.rpm dist/
+          ls -la dist/
+
+      - name: Package (Linux GTK3 zip)
+        if: matrix.platform == 'linux-gtk3'
+        shell: bash
+        run: |
+          set -euo pipefail
+          task linux:build:gtk3 VERSION="${{ steps.ver.outputs.version }}"
+          BIN=bin/gtk3/tingly-box-gui
+          file "$BIN" | tee /dev/stderr | grep -q "ELF 64-bit.*x86-64"
+          # Every shared library resolves here (the -dev packages pulled in the
+          # runtime libs), and it links GTK3 / WebKitGTK 4.1, not the GTK4 stack.
+          if ldd "$BIN" | grep "not found"; then exit 1; fi
+          ldd "$BIN" | grep -q 'libgtk-3.so.0'
+          ldd "$BIN" | grep -q 'libwebkit2gtk-4.1.so.0'
+          if ldd "$BIN" | grep -qE 'libgtk-4|libwebkitgtk-6'; then echo "❌ linked the GTK4 stack"; exit 1; fi
+          # glibc floor: nothing newer than 22.04's 2.35, or the zip would not
+          # start on the distributions it is meant for.
+          NEWEST="$(objdump -T "$BIN" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)"
+          echo "newest glibc symbol: $NEWEST"
+          [ "$(printf '%s\n' "$NEWEST" GLIBC_2.35 | sort -V | tail -1)" = "GLIBC_2.35" ]
+          mkdir -p dist
+          # The binary at the zip's top level, which is what the npm shim extracts.
+          (cd bin/gtk3 && zip -j "$OLDPWD/dist/tingly-box-gui-linux-amd64.zip" tingly-box-gui)
           ls -la dist/
 
       - name: Upload package
@@ -249,12 +286,13 @@ jobs:
           | Windows x64 | `tingly-box-gui-windows-amd64.zip` |
           | Linux x64 — Ubuntu 24.04+ / Debian 13+ | `tingly-box-gui-linux-amd64.deb` |
           | Linux x64 — Fedora 40+ | `tingly-box-gui-linux-amd64.rpm` |
+          | Linux x64 — Ubuntu 22.04+ / Debian 12+ / Fedora 36+ (bare binary) | `tingly-box-gui-linux-amd64.zip` |
 
           The desktop builds are not signed by Apple or Microsoft.
 
           - **macOS**: easiest is `npx tingly-box-gui`, which skips Gatekeeper. For a browser download, unzip and open `TinglyBox.app`; when macOS blocks it, go to **System Settings → Privacy & Security → Open Anyway**, or run `xattr -dr com.apple.quarantine TinglyBox.app`.
           - **Windows**: if SmartScreen appears, choose **More info → Run anyway**.
-          - **Linux**: `sudo apt install ./tingly-box-gui-linux-amd64.deb` or `sudo dnf install ./tingly-box-gui-linux-amd64.rpm` (pulls in GTK4 and WebKitGTK 6.0), then open **Tingly Box** from the app menu or run `tingly-box-gui`.
+          - **Linux**: `sudo apt install ./tingly-box-gui-linux-amd64.deb` or `sudo dnf install ./tingly-box-gui-linux-amd64.rpm` (pulls in GTK4 and WebKitGTK 6.0), then open **Tingly Box** from the app menu or run `tingly-box-gui`. On older distributions, or to try it without installing anything, run `npx tingly-box-gui` (or unzip the `.zip` and run `tingly-box-gui`); that build needs GTK 3 and WebKitGTK 4.1 from your distribution. The tray icon needs a StatusNotifier host (KDE and most desktops have one; GNOME needs the AppIndicator extension).
           NOTES
             echo "$END"
           } > desktop-notes.md
