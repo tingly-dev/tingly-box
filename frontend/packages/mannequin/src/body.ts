@@ -201,44 +201,6 @@ export const figureSurface = (figure: PoseFigure): Surface => {
 
 export const figureLineEdges = (figure: PoseFigure): LineEdges => model().rest[figureBuild(figure)].lines;
 
-// --- colour: reading depth and side ------------------------------------------
-//
-// Two cues, both for telling a pose apart at a glance and both conventions
-// the image model already knows:
-//
-// - Side. The figure's own right limbs are warm, its left limbs cool, the
-//   trunk and head neutral — the OpenPose colouring (right arm red-orange,
-//   left arm blue-green), kept faint enough to read as a tint on a grey doll
-//   rather than as coloured sleeves. Which arm is in front of which, in a
-//   crossed or twisted pose, stops being a guess.
-// - Depth. Far parts recede toward the paper (`render3d` sets the fog), the
-//   aerial perspective every drawing uses to put one limb behind another.
-//
-// Our `L` keys are the figure's right (picture-left when it faces you).
-export const SIDE_TINT = { right: [1.0, 0.87, 0.76], left: [0.78, 0.88, 1.0] } as const;
-
-let tints: Float32Array | null = null;
-export const figureTint = (): Float32Array => {
-    if (tints) return tints;
-    const m = model();
-    const right = new Set(['upperArmL', 'foreArmL', 'thighL', 'shinL'].map((name) => SEGMENT_ORDER.indexOf(name as SegmentName)));
-    const left = new Set(['upperArmR', 'foreArmR', 'thighR', 'shinR'].map((name) => SEGMENT_ORDER.indexOf(name as SegmentName)));
-    const count = m.weights.length / 4;
-    tints = new Float32Array(count * 3);
-    for (let i = 0; i < count; i += 1) {
-        let r = 0, l = 0;
-        for (let k = 0; k < 4; k += 1) {
-            const s = m.segments[i * 4 + k];
-            const w = m.weights[i * 4 + k] / 255;
-            if (right.has(s)) r += w;
-            if (left.has(s)) l += w;
-        }
-        for (let c = 0; c < 3; c += 1) {
-            tints[i * 3 + c] = 1 + r * (SIDE_TINT.right[c] - 1) + l * (SIDE_TINT.left[c] - 1);
-        }
-    }
-    return tints;
-};
 
 // The canon's unit of measure: crown to chin, as a fraction of the figure's
 // height unit — the male model's egg, as the bake built it.

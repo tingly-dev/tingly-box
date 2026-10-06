@@ -14,7 +14,6 @@ import {
     BufferAttribute,
     BufferGeometry,
     DirectionalLight,
-    Fog,
     Group,
     HemisphereLight,
     Mesh,
@@ -29,7 +28,7 @@ import {
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
-import { figureLineEdges, figureSurface, figureTint, toneFor } from './body';
+import { figureLineEdges, figureSurface, toneFor } from './body';
 import { projectionOf, projectPoint } from './camera';
 import { figureUnit, type PoseFigure } from './skeleton';
 
@@ -47,15 +46,38 @@ const buildLights = (scene: Scene): void => {
     scene.add(key, rim, new HemisphereLight(0xf2f5fa, 0x7d746c, 0.9));
 };
 
+// The body is drawn see-through, like a figure drawn on tracing paper: thin
+// in the middle of each form and solid toward its edges (a Fresnel falloff),
+// so it still reads as a lit, round volume, while the limb behind the torso,
+// the far leg, the hand behind the back all show through it. Where forms
+// overlap the layers add up and darken, which is exactly the "this is in
+// front of that" a pose reference needs. Drawn without depth testing so
+// every layer shows; the depth pre-pass below keeps the lines honest.
+const XRAY = { centre: 0.3, edge: 0.94 };
 const materials = new Map<string, MeshStandardMaterial>();
 const materialFor = (hex: string): MeshStandardMaterial => {
     let material = materials.get(hex);
     if (!material) {
-        material = new MeshStandardMaterial({ color: hex, roughness: 0.55, metalness: 0, vertexColors: true });
+        material = new MeshStandardMaterial({
+            color: hex, roughness: 0.55, metalness: 0,
+            transparent: true, depthTest: false, depthWrite: false,
+        });
+        material.onBeforeCompile = (shader) => {
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <opaque_fragment>',
+                `#include <opaque_fragment>
+                float facing = abs(dot(normalize(normal), normalize(vViewPosition)));
+                gl_FragColor.a *= mix(${XRAY.edge.toFixed(2)}, ${XRAY.centre.toFixed(2)}, pow(facing, 1.4));`,
+            );
+        };
+        material.customProgramCacheKey = () => 'xray-body';
         materials.set(hex, material);
     }
     return material;
 };
+
+// Depth only: the nearest surface, so the ink can tell what is in front.
+const depthOnly = new MeshBasicMaterial({ colorWrite: false });
 
 // The outline is an inverted hull: every surface drawn a second time, pushed
 // out along its normals, back faces only, in ink. It gives the silhouette and
@@ -89,20 +111,25 @@ const outlineFor = (thickness: number): MeshBasicMaterial => {
 // mannequin has, and the ones the reference sheets this is drawn after show.
 // Screen-space thick lines so they hold their weight at any size, nudged off
 // the surface along its normal so the skin does not swallow them.
-const lineMaterials = new Map<number, LineMaterial>();
-const lineMaterialFor = (width: number, size: Vector2): LineMaterial => {
-    const key = Math.round(width * 10) / 10;
+// Each line is drawn twice, as in a construction drawing: solid where it is
+// on the near side of the body, and faint where it runs round behind — so a
+// ring reads as a ring, all the way round, through the see-through skin.
+const lineMaterials = new Map<string, LineMaterial>();
+const lineMaterialFor = (width: number, size: Vector2, hidden: boolean): LineMaterial => {
+    const key = `${Math.round(width * 10) / 10}:${hidden}`;
     let material = lineMaterials.get(key);
     if (!material) {
-        material = new LineMaterial({ color: INK, linewidth: key, transparent: true, opacity: 0.75 });
-        material.fog = true;
+        material = new LineMaterial({
+            color: INK, linewidth: Math.round(width * 10) / 10, transparent: true,
+            opacity: hidden ? 0.22 : 0.8, depthTest: !hidden, depthWrite: false,
+        });
         lineMaterials.set(key, material);
     }
     material.resolution.copy(size);
     return material;
 };
 
-const linesFor = (figure: PoseFigure, geometry: BufferGeometry, size: Vector2): { mesh: LineSegments2; geometry: LineSegmentsGeometry } => {
+const linesFor = (figure: PoseFigure, geometry: BufferGeometry, size: Vector2): { visible: LineSegments2; hidden: LineSegments2; geometry: LineSegmentsGeometry } => {
     const { a, b, t } = figureLineEdges(figure);
     const position = geometry.getAttribute('position');
     const normal = geometry.getAttribute('normal');
@@ -119,7 +146,11 @@ const linesFor = (figure: PoseFigure, geometry: BufferGeometry, size: Vector2): 
     const lines = new LineSegmentsGeometry();
     lines.setPositions(points);
     const width = Math.max(1, Math.min(2.2, figureUnit(figure) * 0.0028));
-    return { mesh: new LineSegments2(lines, lineMaterialFor(width, size)), geometry: lines };
+    return {
+        visible: new LineSegments2(lines, lineMaterialFor(width, size, false)),
+        hidden: new LineSegments2(lines, lineMaterialFor(width * 0.8, size, true)),
+        geometry: lines,
+    };
 };
 
 const meshesFor = (figure: PoseFigure, hex: string, size: Vector2): { group: Group; disposable: { dispose(): void }[] } => {
@@ -134,15 +165,23 @@ const meshesFor = (figure: PoseFigure, hex: string, size: Vector2): { group: Gro
     const geometry = new BufferGeometry();
     geometry.setAttribute('position', new BufferAttribute(flipped, 3));
     geometry.setIndex(new BufferAttribute(index, 1));
-    geometry.setAttribute('color', new BufferAttribute(figureTint(), 3));
     geometry.computeVertexNormals();
     const lines = linesFor(figure, geometry, size);
+    // In order: the nearest surface's depth; the see-through body over
+    // everything; the hidden halves of the lines; the silhouette ink and
+    // the near halves of the lines, both tested against that depth.
+    const passes: [Mesh | LineSegments2, number][] = [
+        [new Mesh(geometry, depthOnly), 0],
+        [new Mesh(geometry, materialFor(hex)), 1],
+        [lines.hidden, 2],
+        [new Mesh(geometry, outlineFor(Math.max(figureUnit(figure) * 0.0024, 0.6))), 3],
+        [lines.visible, 4],
+    ];
     const group = new Group();
-    group.add(
-        new Mesh(geometry, materialFor(hex)),
-        new Mesh(geometry, outlineFor(Math.max(figureUnit(figure) * 0.0024, 0.6))),
-        lines.mesh,
-    );
+    for (const [object, order] of passes) {
+        object.renderOrder = order;
+        group.add(object);
+    }
     return { group, disposable: [geometry, lines.geometry] };
 };
 
@@ -163,19 +202,6 @@ const cameraFor = (figure: PoseFigure, width: number, height: number): Perspecti
     camera.setViewOffset(fullWidth, fullHeight, fullWidth / 2 - anchor.x, fullHeight / 2 - anchor.y, width, height);
     camera.updateProjectionMatrix();
     return camera;
-};
-
-// Aerial perspective: the nearest of the body at full strength, receding
-// toward the paper with distance from the camera. Set per figure, from its
-// own camera and size, so a small figure fades exactly as much as a big one
-// and the fade says "behind" rather than "far away in the scene". Kept to
-// about a quarter at the back of the body: enough to separate the far arm
-// from the near one, not so much that the far side is lost.
-const PAPER = 0xffffff;
-const depthFogFor = (figure: PoseFigure): Fog => {
-    const { distance } = projectionOf(figure);
-    const u = figureUnit(figure);
-    return new Fog(PAPER, distance - u * 0.3, distance + u * 2.4);
 };
 
 let shared: WebGLRenderer | null | undefined;
@@ -235,7 +261,6 @@ export const drawFigure = (
     }
     const scene = new Scene();
     buildLights(scene);
-    scene.fog = depthFogFor(figure);
     const { group, disposable } = meshesFor(figure, hex, new Vector2(width, height));
     scene.add(group);
     renderer.render(scene, cameraFor(figure, width, height));
