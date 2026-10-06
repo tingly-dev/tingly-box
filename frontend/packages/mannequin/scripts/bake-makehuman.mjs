@@ -13,7 +13,8 @@
 //   2. Keep only the body surface (no helper geometry, eyes, teeth, joints).
 //   3. Read the skeleton off MakeHuman's joint helpers, in our sixteen joints.
 //   4. Collapse MakeHuman's 163-bone skin weights onto the twelve segments our
-//      rig moves (pelvis, ribcage, neck, head, and three per limb).
+//      rig moves (pelvis, ribcage, neck, head, and two per limb).
+//   5. Stylise it into an art mannequin and cut its construction lines.
 // Positions are quantised to int16 within the bounding box, so the module is
 // a few hundred kilobytes.
 //
@@ -176,9 +177,217 @@ for (let i = 0; i < M; i += 1) {
     });
 }
 
+// --- stylising: from a person to an art mannequin -----------------------------
+//
+// The reference is a drawing mannequin, not a person: the head an egg with no
+// features, the skin without its anatomy-book detail, hands and feet simple.
+// All of it is done to the mesh here, once, so the runtime stays a plain skin.
+const neighbours = Array.from({ length: M }, () => new Set());
+for (let t = 0; t < triangles.length; t += 3) {
+    const [a, b, c] = [triangles[t], triangles[t + 1], triangles[t + 2]];
+    neighbours[a].add(b).add(c); neighbours[b].add(a).add(c); neighbours[c].add(a).add(b);
+}
+const adjacency = neighbours.map((n) => [...n]);
+const weightOf = (i, segment) => {
+    let w = 0;
+    for (let k = 0; k < 4; k += 1) if (segIdx[i * 4 + k] === segment) w += segW[i * 4 + k] / 255;
+    return w;
+};
+const dominant = (i) => segIdx[i * 4];
+
+// Taubin smoothing (λ|μ): takes detail off without the shrinkage plain
+// Laplacian smoothing has. `mask` weighs how much each vertex may move.
+const taubin = (pos, iterations, mask) => {
+    const step = (factor) => {
+        const next = Float64Array.from(pos);
+        for (let i = 0; i < M; i += 1) {
+            const m = mask ? mask[i] : 1;
+            if (m <= 0) continue;
+            const n = adjacency[i];
+            for (let k = 0; k < 3; k += 1) {
+                let mean = 0;
+                for (const j of n) mean += pos[j * 3 + k];
+                mean /= n.length;
+                next[i * 3 + k] = pos[i * 3 + k] + factor * m * (mean - pos[i * 3 + k]);
+            }
+        }
+        pos.set(next);
+    };
+    for (let it = 0; it < iterations; it += 1) { step(0.5); step(-0.53); }
+};
+
+const eggs = new Map();
+const stylise = (pos, joints) => {
+    const at = (i) => [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]];
+    const head = seg('head');
+    const center = joints.head;
+    // The head becomes a Loomis egg: a cranium ellipsoid over a tapering jaw,
+    // sized off the model's own crown and chin, and every head vertex is
+    // carried out (or in) along its ray from the egg's centre onto that
+    // surface. Eyes, nose, mouth and ears are gone; the skull's mass and the
+    // jaw's wedge stay. Blended by skin weight, so the neck is untouched.
+    const onHead = new Float64Array(M);
+    for (let i = 0; i < M; i += 1) onHead[i] = Math.max(0, Math.min(1, (weightOf(i, head) - 0.3) / 0.55));
+    let crownY = Infinity, chinY = -Infinity;
+    for (let i = 0; i < M; i += 1) {
+        const p = at(i);
+        crownY = Math.min(crownY, p[1]);
+        if (weightOf(i, head) > 0.94 && p[2] > center[2]) chinY = Math.max(chinY, p[1]);
+    }
+    const L = chinY - crownY;
+    // The egg's own axes: up along the head bone (the model's neck leans
+    // forward, and an egg stood bolt upright on it reads as looking up),
+    // forward square to it, across completing the frame.
+    const upAxis = (() => { const d = sub(center, joints.neck); const l = len(d); return [d[0] / l, d[1] / l, d[2] / l]; })();
+    const fwd = (() => { const f = [0, 0, 1]; const k = f[0] * upAxis[0] + f[1] * upAxis[1] + f[2] * upAxis[2]; const g = f.map((x, i) => x - upAxis[i] * k); const l = len(g); return g.map((x) => x / l); })();
+    const side = [upAxis[1] * fwd[2] - upAxis[2] * fwd[1], upAxis[2] * fwd[0] - upAxis[0] * fwd[2], upAxis[0] * fwd[1] - upAxis[1] * fwd[0]];
+    // Centred halfway between crown and chin, which is also where Loomis
+    // puts the eye line.
+    const mid = (crownY + chinY) / 2;
+    const t = (mid - center[1]) / upAxis[1];
+    const origin = [center[0] + upAxis[0] * t, mid, center[2] + upAxis[2] * t + 0.01 * L];
+    const half = L / 2;
+    const A = 0.40 * L, FRONT = 0.46 * L, BACK = 0.52 * L;
+    const inside = (u, v, w) => {
+        // v is up the head, w forward, u across.
+        const s = v < 0 ? Math.min(1, -v / half) : 0;
+        // Loomis: the jaw is about seven-tenths the skull's width and the chin
+        // narrower still; the face plane drops nearly straight; the back of
+        // the skull rounds under onto the neck.
+        const a = A * (1 - 0.5 * s ** 1.9);
+        const front = FRONT * (1 - 0.22 * s ** 1.6);
+        const back = BACK * (1 - 0.72 * s ** 1.3);
+        const depth = w >= 0 ? front : back;
+        return (u / a) ** 2 + (v / half) ** 2 + (w / depth) ** 2;
+    };
+    const dotv = (x, y) => x[0] * y[0] + x[1] * y[1] + x[2] * y[2];
+    // `upAxis` points from neck to head in our y-down space, i.e. "up" the
+    // body is its direction; v is measured along it.
+    const onEgg = (p) => {
+        const d = sub(p, origin);
+        const l = len(d) || 1;
+        const dir = d.map((x) => x / l);
+        const du = dotv(dir, side), dv = dotv(dir, upAxis), dw = dotv(dir, fwd);
+        let lo = 0, hi = L;
+        for (let it = 0; it < 32; it += 1) {
+            const m = (lo + hi) / 2;
+            if (inside(du * m, dv * m, dw * m) < 1) lo = m; else hi = m;
+        }
+        return origin.map((x, k) => x + dir[k] * lo);
+    };
+    const original = Float64Array.from(pos);
+    const blend = Float64Array.from(onHead, (h) => h * h * (3 - 2 * h));
+    const place = (i, target) => {
+        for (let k = 0; k < 3; k += 1) pos[i * 3 + k] = original[i * 3 + k] * (1 - blend[i]) + target[k] * blend[i];
+    };
+    for (let i = 0; i < M; i += 1) if (blend[i] > 0) place(i, onEgg(at(i)));
+    // Projection keeps the old topology, so the mouth, the eye sockets and
+    // the ears collapse onto the egg as overlapping folds. Relaxing the
+    // vertices across the egg — average with the neighbours, back onto the
+    // surface, repeat — spreads those folds out into an even skin.
+    for (let it = 0; it < 160; it += 1) {
+        const next = Float64Array.from(pos);
+        for (let i = 0; i < M; i += 1) {
+            if (blend[i] < 0.999) continue;
+            const mean = [0, 0, 0];
+            for (const j of adjacency[i]) for (let k = 0; k < 3; k += 1) mean[k] += pos[j * 3 + k] / adjacency[i].length;
+            const target = onEgg(mean);
+            for (let k = 0; k < 3; k += 1) next[i * 3 + k] = target[k];
+        }
+        pos.set(next);
+    }
+    const egg = { origin, upAxis, side, fwd, L };
+    eggs.set(pos, egg);
+    taubin(pos, 25, onHead);
+    // Hands and feet: simplified to mittens and socks — the fingers and toes
+    // stay readable as a hand and a foot, without their nails and knuckles.
+    const extremity = new Float64Array(M);
+    for (let i = 0; i < M; i += 1) {
+        const p = at(i);
+        let e = 0;
+        for (const side of ['L', 'R']) {
+            const wrist = joints[`wrist${side}`], elbow = joints[`elbow${side}`];
+            const ankle = joints[`ankle${side}`], knee = joints[`knee${side}`];
+            const along = (from, to) => {
+                const axis = sub(to, from);
+                const l = len(axis);
+                return (sub(p, to).reduce((sum, x, k) => sum + x * axis[k], 0) / l) / 0.03;
+            };
+            if (dominant(i) === seg(`foreArm${side}`)) e = Math.max(e, Math.min(1, along(elbow, wrist)));
+            if (dominant(i) === seg(`shin${side}`)) e = Math.max(e, Math.min(1, along(knee, ankle)));
+        }
+        extremity[i] = Math.max(0, e);
+    }
+    taubin(pos, 18, extremity);
+    // The root of the neck — the trapezius and the collarbones — is where
+    // the base mesh is most detailed and the ink line most likely to catch.
+    const collar = new Float64Array(M);
+    for (let i = 0; i < M; i += 1) collar[i] = Math.max(0, 1 - len(sub(at(i), joints.neck)) / 0.11);
+    taubin(pos, 20, collar);
+    // And everything, lightly: skin detail out, masses in.
+    taubin(pos, 10);
+};
+
+// --- the mannequin's construction lines --------------------------------------
+//
+// Rings round the joints, like the seams on a jointed doll, and the head's
+// centre and eye lines, as in every Loomis head. Each is the cut of the rest
+// mesh by a plane, kept as segments between points on mesh edges (two vertex
+// indices and a fraction), so at runtime they ride the skin exactly.
+const cutLines = (pos, joints) => {
+    const at = (i) => [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]];
+    const norm = (a) => { const l = len(a); return a.map((x) => x / l); };
+    const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const add = (a, b) => a.map((x, k) => x + b[k]);
+    const scale = (a, f) => a.map((x) => x * f);
+    const rings = [];
+    const ring = (point, normal, radius, segments, keep = () => true) => rings.push({ point, normal: norm(normal), radius, segments: new Set(segments.map(seg)), keep });
+    const up = norm(sub(joints.neck, joints.hip));
+    ring(add(joints.neck, scale(up, -0.012)), sub(joints.head, joints.neck), 0.08, ['chest', 'neck']);
+    ring(add(joints.hip, scale(up, 0.15)), up, 0.3, ['chest', 'pelvis']);
+    for (const side of ['L', 'R']) {
+        const S = joints[`shoulder${side}`], E = joints[`elbow${side}`], W = joints[`wrist${side}`];
+        const H = joints[`hip${side}`], K = joints[`knee${side}`], A = joints[`ankle${side}`];
+        const upper = norm(sub(E, S)), fore = norm(sub(W, E)), thigh = norm(sub(K, H)), shin = norm(sub(A, K));
+        ring(add(S, scale(upper, 0.012)), upper, 0.085, ['chest', `upperArm${side}`, `foreArm${side}`]);
+        ring(E, add(upper, fore), 0.06, [`upperArm${side}`, `foreArm${side}`]);
+        ring(W, fore, 0.05, [`foreArm${side}`]);
+        ring(add(H, scale(thigh, 0.02)), add(thigh, scale(up, -0.6)), 0.12, ['pelvis', `thigh${side}`]);
+        ring(K, add(thigh, shin), 0.08, [`thigh${side}`, `shin${side}`]);
+        ring(A, shin, 0.06, [`shin${side}`]);
+    }
+    // The head: a centre line front to back over the crown, and the eye line
+    // across the front. The front is +z.
+    const across = norm(sub(joints.shoulderR, joints.shoulderL));
+    const egg = eggs.get(pos);
+    const ahead = (p) => dot(sub(p, egg.origin), egg.fwd);
+    ring(egg.origin, egg.upAxis, 0.12, ['head'], (p) => ahead(p) > 0);
+    ring(egg.origin, egg.side, 0.12, ['head'], (p) => dot(sub(p, egg.origin), egg.upAxis) > 0 || ahead(p) > 0);
+
+    const a = [], b = [], t = [];
+    for (const r of rings) {
+        const inside = (i) => r.segments.has(dominant(i)) && len(sub(at(i), r.point)) < r.radius && r.keep(at(i));
+        const side = (i) => dot(sub(at(i), r.point), r.normal);
+        for (let k = 0; k < triangles.length; k += 3) {
+            const tri = [triangles[k], triangles[k + 1], triangles[k + 2]];
+            if (!tri.every(inside)) continue;
+            const crossings = [];
+            for (let e = 0; e < 3; e += 1) {
+                const i = tri[e], j = tri[(e + 1) % 3];
+                const si = side(i), sj = side(j);
+                if ((si < 0) !== (sj < 0)) crossings.push([i, j, si / (si - sj)]);
+            }
+            if (crossings.length !== 2) continue;
+            for (const [i, j, f] of crossings) { a.push(i); b.push(j); t.push(Math.round(f * 255)); }
+        }
+    }
+    return { a: encode(new Uint16Array(a)), b: encode(new Uint16Array(b)), t: encode(new Uint8Array(t)) };
+};
+
 // --- per build: positions in our units, hip at the origin --------------------
 const encode = (array) => Buffer.from(array.buffer, array.byteOffset, array.byteLength).toString('base64');
 const builds = {};
+const styled = {};
 for (const [name, v] of Object.entries(BUILDS)) {
     const J = skeletonOf(v);
     const unit = len(sub(J.neck, J.hip)) / 0.36;
@@ -189,6 +398,40 @@ for (const [name, v] of Object.entries(BUILDS)) {
         const p = to([v[order[i] * 3], -v[order[i] * 3 + 1], v[order[i] * 3 + 2]]);
         pos.set(p, i * 3);
     }
+    stylise(pos, joints);
+    styled[name] = { pos, joints };
+}
+
+// Projecting a head onto an egg turns its insides out: the mouth's lining,
+// the eye sockets, the backs of the ears all land on the egg facing inward.
+// Those triangles are dropped (in either build — the index is shared), and
+// what is left is the egg.
+{
+    const keep = [];
+    for (let t = 0; t < triangles.length; t += 3) {
+        const tri = [triangles[t], triangles[t + 1], triangles[t + 2]];
+        let flipped = false;
+        for (const { pos } of Object.values(styled)) {
+            const egg = eggs.get(pos);
+            const P = tri.map((i) => [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]]);
+            const centroid = [0, 1, 2].map((k) => (P[0][k] + P[1][k] + P[2][k]) / 3);
+            if (len(sub(centroid, egg.origin)) > egg.L * 0.62) continue;
+            if (!tri.every((i) => weightOf(i, seg('head')) > 0.6)) continue;
+            const e1 = sub(P[1], P[0]), e2 = sub(P[2], P[0]);
+            // Our space is y-down, so the outward normal is e2 × e1.
+            const n = [e2[1] * e1[2] - e2[2] * e1[1], e2[2] * e1[0] - e2[0] * e1[2], e2[0] * e1[1] - e2[1] * e1[0]];
+            const radial = sub(centroid, egg.origin);
+            if (n[0] * radial[0] + n[1] * radial[1] + n[2] * radial[2] < 0) flipped = true;
+        }
+        if (!flipped) keep.push(...tri);
+    }
+    console.log(`dropped ${(triangles.length - keep.length) / 3} inside-out head triangles`);
+    triangles.length = 0;
+    triangles.push(...keep);
+}
+
+for (const [name, { pos, joints }] of Object.entries(styled)) {
+    const lines = cutLines(pos, joints);
     const lo = [0, 1, 2].map((k) => Math.min(...pos.filter((_, i) => i % 3 === k)));
     const hi = [0, 1, 2].map((k) => Math.max(...pos.filter((_, i) => i % 3 === k)));
     const q = new Int16Array(M * 3);
@@ -196,7 +439,7 @@ for (const [name, v] of Object.entries(BUILDS)) {
         const k = i % 3;
         q[i] = Math.round(((pos[i] - lo[k]) / (hi[k] - lo[k])) * 65535 - 32768);
     }
-    builds[name] = { joints, lo: lo.map((x) => +x.toFixed(6)), hi: hi.map((x) => +x.toFixed(6)), positions: encode(q) };
+    builds[name] = { joints, headLength: +eggs.get(pos).L.toFixed(5), lo: lo.map((x) => +x.toFixed(6)), hi: hi.map((x) => +x.toFixed(6)), positions: encode(q), lines };
 }
 
 const index = M > 65535 ? new Uint32Array(triangles) : new Uint16Array(triangles);
@@ -204,7 +447,9 @@ const ts = `// GENERATED by scripts/bake-makehuman.mjs — do not edit by hand.
 //
 // The mannequin's white model: MakeHuman's base mesh (hm08), morphed to a
 // young female and a young male with MakeHuman's "ideal proportions", body
-// surface only, skinned onto our twelve rig segments. MakeHuman assets are
+// surface only, stylised into an art mannequin (featureless head, simplified
+// hands and feet, smoothed skin) with its construction lines, skinned onto
+// our twelve rig segments. MakeHuman assets are
 // CC0 1.0 (public domain) from MakeHuman 1.1.0 on — https://www.makehuman.org.
 /* eslint-disable */
 export const MODEL = ${JSON.stringify({

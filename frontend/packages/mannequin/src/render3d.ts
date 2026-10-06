@@ -25,7 +25,10 @@ import {
     Vector3,
     WebGLRenderer,
 } from 'three';
-import { figureSurface, toneFor } from './body';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
+import { figureLineEdges, figureSurface, toneFor } from './body';
 import { projectionOf, projectPoint } from './camera';
 import { figureUnit, type PoseFigure } from './skeleton';
 
@@ -80,7 +83,44 @@ const outlineFor = (thickness: number): MeshBasicMaterial => {
     return material;
 };
 
-const meshesFor = (figure: PoseFigure, hex: string): { group: Group; disposable: BufferGeometry[] } => {
+// The construction lines: the seams at the joints of a jointed mannequin and
+// the centre and eye lines of a Loomis head — the lines a figure drawing of a
+// mannequin has, and the ones the reference sheets this is drawn after show.
+// Screen-space thick lines so they hold their weight at any size, nudged off
+// the surface along its normal so the skin does not swallow them.
+const lineMaterials = new Map<number, LineMaterial>();
+const lineMaterialFor = (width: number, size: Vector2): LineMaterial => {
+    const key = Math.round(width * 10) / 10;
+    let material = lineMaterials.get(key);
+    if (!material) {
+        material = new LineMaterial({ color: INK, linewidth: key, transparent: true, opacity: 0.75 });
+        lineMaterials.set(key, material);
+    }
+    material.resolution.copy(size);
+    return material;
+};
+
+const linesFor = (figure: PoseFigure, geometry: BufferGeometry, size: Vector2): { mesh: LineSegments2; geometry: LineSegmentsGeometry } => {
+    const { a, b, t } = figureLineEdges(figure);
+    const position = geometry.getAttribute('position');
+    const normal = geometry.getAttribute('normal');
+    const lift = figureUnit(figure) * 0.0035;
+    const points = new Float32Array(a.length * 3);
+    for (let k = 0; k < a.length; k += 1) {
+        const f = t[k] / 255;
+        for (let c = 0; c < 3; c += 1) {
+            const p = position.array[a[k] * 3 + c] * (1 - f) + position.array[b[k] * 3 + c] * f;
+            const n = normal.array[a[k] * 3 + c] * (1 - f) + normal.array[b[k] * 3 + c] * f;
+            points[k * 3 + c] = p + n * lift;
+        }
+    }
+    const lines = new LineSegmentsGeometry();
+    lines.setPositions(points);
+    const width = Math.max(1, Math.min(2.2, figureUnit(figure) * 0.0028));
+    return { mesh: new LineSegments2(lines, lineMaterialFor(width, size)), geometry: lines };
+};
+
+const meshesFor = (figure: PoseFigure, hex: string, size: Vector2): { group: Group; disposable: { dispose(): void }[] } => {
     const { positions, index } = figureSurface(figure);
     // Into three's y-up space: one sign, as everywhere else.
     const flipped = new Float32Array(positions.length);
@@ -93,12 +133,14 @@ const meshesFor = (figure: PoseFigure, hex: string): { group: Group; disposable:
     geometry.setAttribute('position', new BufferAttribute(flipped, 3));
     geometry.setIndex(new BufferAttribute(index, 1));
     geometry.computeVertexNormals();
+    const lines = linesFor(figure, geometry, size);
     const group = new Group();
     group.add(
         new Mesh(geometry, materialFor(hex)),
         new Mesh(geometry, outlineFor(Math.max(figureUnit(figure) * 0.0024, 0.6))),
+        lines.mesh,
     );
-    return { group, disposable: [geometry] };
+    return { group, disposable: [geometry, lines.geometry] };
 };
 
 // The camera `projectionOf` describes: a pinhole at the figure's anchor, one
@@ -177,7 +219,7 @@ export const drawFigure = (
     }
     const scene = new Scene();
     buildLights(scene);
-    const { group, disposable } = meshesFor(figure, hex);
+    const { group, disposable } = meshesFor(figure, hex, new Vector2(width, height));
     scene.add(group);
     renderer.render(scene, cameraFor(figure, width, height));
     for (const geometry of disposable) geometry.dispose();

@@ -27,7 +27,7 @@ interface Decoded {
     index: Uint16Array | Uint32Array;
     segments: Uint8Array;
     weights: Uint8Array;
-    rest: Record<FigureBuild, { positions: Float32Array; joints: Record<JointKey, Vec3>; frames: Frame[] }>;
+    rest: Record<FigureBuild, { positions: Float32Array; joints: Record<JointKey, Vec3>; frames: Frame[]; lines: LineEdges }>;
 }
 
 const bytes = (base64: string): Uint8Array => {
@@ -36,6 +36,12 @@ const bytes = (base64: string): Uint8Array => {
     for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
     return out;
 };
+
+// The construction lines (joint rings, the head's centre and eye lines), as
+// points on mesh edges: point k sits a fraction `t[k]` of the way from vertex
+// `a[k]` to vertex `b[k]`, and consecutive points pair into segments. Baked
+// once on the rest mesh, so they ride the skin wherever it goes.
+export interface LineEdges { a: Uint16Array; b: Uint16Array; t: Uint8Array }
 
 interface Frame { origin: Vec3; axis: Vec3; across: Vec3; forward: Vec3; length: number }
 
@@ -118,7 +124,9 @@ const model = (): Decoded => {
         const joints = {} as Record<JointKey, Vec3>;
         for (const [key, p] of Object.entries(b.joints)) joints[key as JointKey] = { x: p[0], y: p[1], z: p[2] };
         joints.face = add3(joints.head, { x: 0, y: 0, z: 0.075 });
-        rest[build] = { positions, joints, frames: segmentFrames(joints) };
+        const u16 = (data: string) => { const raw = bytes(data); return new Uint16Array(raw.buffer, raw.byteOffset, raw.byteLength / 2); };
+        const lines = { a: u16(b.lines.a), b: u16(b.lines.b), t: bytes(b.lines.t) };
+        rest[build] = { positions, joints, frames: segmentFrames(joints), lines };
     }
     decoded = { index, segments: bytes(MODEL.skin.segments), weights: bytes(MODEL.skin.weights), rest };
     return decoded;
@@ -191,22 +199,11 @@ export const figureSurface = (figure: PoseFigure): Surface => {
     return surface;
 };
 
+export const figureLineEdges = (figure: PoseFigure): LineEdges => model().rest[figureBuild(figure)].lines;
+
 // The canon's unit of measure: crown to chin, as a fraction of the figure's
-// height unit, read off the male model at rest — the crown is the top of the
-// mesh, the chin the lowest point the skull carries in front of the neck.
-export const HEAD_LENGTH_RATIO = (() => {
-    const m = model();
-    const { positions, joints } = m.rest.male;
-    const head = SEGMENT_ORDER.indexOf('head');
-    let crown = Infinity, chin = -Infinity;
-    for (let i = 0; i < positions.length / 3; i += 1) {
-        const y = positions[i * 3 + 1];
-        crown = Math.min(crown, y);
-        const onSkull = m.segments[i * 4] === head && m.weights[i * 4] > 240;
-        if (onSkull && positions[i * 3 + 2] > joints.head.z) chin = Math.max(chin, y);
-    }
-    return chin - crown;
-})();
+// height unit — the male model's egg, as the bake built it.
+export const HEAD_LENGTH_RATIO: number = MODEL.builds.male.headLength;
 
 void squareTo;
 
