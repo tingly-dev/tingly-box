@@ -110,17 +110,16 @@ func offerTakeover(appManager *app.AppManager, lockErr error) error {
 	}
 
 	if err := command.StopRunningServer(appManager.ConfigDir()); err != nil {
-		runErrorApp(fmt.Sprintf("Failed to stop the running instance (pid %d): %v", pid, err))
-		return err
+		return fmt.Errorf("failed to stop the running instance (pid %d): %w", pid, err)
 	}
 	// Stopping returns once the lock is free, but give a force-killed process a
 	// moment to drop it so the relaunch never loses the single-instance race
 	// to the instance it just stopped.
 	for deadline := time.Now().Add(5 * time.Second); fileLock.IsLocked(); time.Sleep(100 * time.Millisecond) {
 		if time.Now().After(deadline) {
-			err := fmt.Errorf("the previous instance (pid %d) did not release its lock", pid)
-			runErrorApp(err.Error())
-			return err
+			// No second error window: application.New is a singleton and the
+			// notice app has already run, so report through the log + error.
+			return fmt.Errorf("the previous instance (pid %d) did not release its lock", pid)
 		}
 	}
 	exe, err := os.Executable()
@@ -130,9 +129,16 @@ func offerTakeover(appManager *app.AppManager, lockErr error) error {
 	// A restart continues on the port the old server was actually using, like
 	// `tingly-box restart` (see RestartCmdKong). Args are kept so flags such as
 	// --host survive; an explicit --port the user passed still wins.
-	args := os.Args[1:]
-	if !hasPortFlag(args) {
-		args = append(args, "--port", fmt.Sprint(port))
+	args := append([]string(nil), os.Args[1:]...)
+	if port > 0 && !hasPortFlag(args) {
+		insertAt := len(args)
+		for i, a := range args {
+			if a == "--" {
+				insertAt = i
+				break
+			}
+		}
+		args = append(args[:insertAt], append([]string{"--port", fmt.Sprint(port)}, args[insertAt:]...)...)
 	}
 	log.Printf("Stopped pid %d; relaunching GUI on port %d", pid, port)
 	return exec.Command(exe, args...).Start()
@@ -140,7 +146,11 @@ func offerTakeover(appManager *app.AppManager, lockErr error) error {
 
 func hasPortFlag(args []string) bool {
 	for _, a := range args {
-		if a == "--port" || a == "-p" || strings.HasPrefix(a, "--port=") {
+		if a == "--" {
+			return false
+		}
+		if a == "--port" || a == "-p" || strings.HasPrefix(a, "--port=") || strings.HasPrefix(a, "-p=") ||
+			(len(a) > 2 && strings.HasPrefix(a, "-p") && a[2] >= '0' && a[2] <= '9') {
 			return true
 		}
 	}
@@ -187,8 +197,13 @@ func (l *appLauncher) Start(appManager *app.AppManager, flags command.ServerFlag
 	// Same bounded wait as the CLI's startServer: right after a stopped server
 	// exits (restart, or the "Restart as App" takeover) the OS may not have
 	// released its socket yet, and a single instant probe would fail spuriously.
-	if err := network.WaitForPortAvailable(opts.Port, 3*time.Second); err != nil {
-		_, info := network.IsPortAvailableWithInfo(opts.Host, opts.Port)
+	available, info := false, ""
+	for deadline := time.Now().Add(3 * time.Second); ; time.Sleep(100 * time.Millisecond) {
+		if available, info = network.IsPortAvailableWithInfo(opts.Host, opts.Port); available || time.Now().After(deadline) {
+			break
+		}
+	}
+	if !available {
 		log.Printf("[Port Check] Port %d unavailable: %s", opts.Port, info)
 		runErrorApp(fmt.Sprintf("Port %d is already in use.\n\nPlease close the application using this port or use a different port with --port.\n\nDetails: %s", opts.Port, info))
 		return fmt.Errorf("port %d is already in use", opts.Port)
