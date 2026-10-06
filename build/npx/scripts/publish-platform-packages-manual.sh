@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One-off manual publish of the per-platform binary packages
-# (@tingly-dev/tingly-box-linux-x64, …) from a maintainer's machine.
+# (@tingly-dev/tingly-box-linux-x64, …) from a maintainer's machine. With --gui,
+# the desktop-app packages instead (@tingly-dev/tingly-box-gui-linux-x64, …).
 #
 # Needed once per package that does not exist on npm yet: a Trusted Publisher
 # (OIDC) can only be configured on an existing package, so the first version
@@ -11,22 +12,29 @@
 # builds the packages with build-platform-packages.sh and runs `npm publish`
 # for each one; npm prompts for 2FA (browser / passkey) on every publish.
 #
-# Usage: publish-platform-packages-manual.sh <release-tag> [--dry-run] [--otp <code>]
+# Usage: publish-platform-packages-manual.sh <release-tag> [--gui] [--dry-run] [--otp <code>]
 #   release-tag  e.g. v0.260903.1 (the npm version is the tag without "v")
+#   --gui        the desktop-app packages (tingly-box-gui-<os>-<cpu>, zips from
+#                release-gui.yml) instead of the CLI ones. Packages already on
+#                npm are skipped, so only the missing ones are published.
 #   --dry-run    download + build + `npm publish --dry-run`, publish nothing
 #   --otp CODE   authenticator code to pass to npm publish (TOTP accounts).
 #                Without it npm prompts on the terminal for each package
 #                (or opens the browser for a passkey/WebAuthn account).
 #
-# Env: GITHUB_REPO (default tingly-dev/tingly-box), WORK_DIR (default ./.platform-publish)
+# Env: GITHUB_REPO (default tingly-dev/tingly-box),
+#      WORK_DIR (default ./.platform-publish-cli or ./.platform-publish-gui)
 set -euo pipefail
 
-TAG="${1:?usage: $0 <release-tag> [--dry-run] [--otp <code>]}"
+TAG="${1:?usage: $0 <release-tag> [--gui] [--dry-run] [--otp <code>]}"
 shift
 DRY_RUN=""
 OTP=""
+KIND="cli"
+MAP="PLATFORM_PACKAGES"
 while [ $# -gt 0 ]; do
 	case "$1" in
+		--gui) KIND="gui"; MAP="GUI_PLATFORM_PACKAGES" ;;
 		--dry-run) DRY_RUN="--dry-run" ;;
 		--otp) OTP="${2:?--otp needs a code}"; shift ;;
 		--otp=*) OTP="${1#--otp=}" ;;
@@ -43,7 +51,7 @@ VERSION="${TAG#v}"
 REPO="${GITHUB_REPO:-tingly-dev/tingly-box}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NPX_DIR="$(dirname "$SCRIPT_DIR")"
-WORK_DIR="${WORK_DIR:-$PWD/.platform-publish}"
+WORK_DIR="${WORK_DIR:-$PWD/.platform-publish-$KIND}"
 ZIP_DIR="$WORK_DIR/zips"
 OUT_DIR="$WORK_DIR/platform"
 
@@ -63,7 +71,7 @@ fi
 mkdir -p "$ZIP_DIR"
 ZIPS="$(node -e '
 import("'"$NPX_DIR"'/shared/platform.js").then(m => {
-  for (const { zip } of Object.values(m.PLATFORM_PACKAGES)) console.log(zip);
+  for (const { zip } of Object.values(m.'"$MAP"')) console.log(zip);
 });')"
 while read -r zip; do
 	url="https://github.com/$REPO/releases/download/$TAG/$zip"
@@ -78,7 +86,7 @@ done <<< "$ZIPS"
 ls -lh "$ZIP_DIR"
 
 # ---- build ---------------------------------------------------------------
-"$SCRIPT_DIR/build-platform-packages.sh" "$VERSION" "$ZIP_DIR" "$OUT_DIR" > "$WORK_DIR/built.txt"
+"$SCRIPT_DIR/build-platform-packages.sh" "$VERSION" "$ZIP_DIR" "$OUT_DIR" "$KIND" > "$WORK_DIR/built.txt"
 EXPECTED="$(printf '%s\n' "$ZIPS" | wc -l | tr -d ' ')"
 BUILT="$(wc -l < "$WORK_DIR/built.txt" | tr -d ' ')"
 if [ "$BUILT" -ne "$EXPECTED" ]; then
