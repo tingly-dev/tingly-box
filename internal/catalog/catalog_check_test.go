@@ -8,10 +8,7 @@ import (
 )
 
 func TestEmbeddedCatalogsPassCheck(t *testing.T) {
-	docs := EmbeddedCatalogJSON()
-	require.Empty(t, CheckProviderCatalogJSON(docs[KindProviders]))
-	require.Empty(t, CheckClaudeCatalogJSON(docs[KindClaudeModels]))
-	require.Empty(t, CheckCrossCatalog(docs[KindProviders], docs[KindClaudeModels]))
+	require.Empty(t, CheckCatalogs(EmbeddedCatalogJSON()))
 }
 
 func TestDetectCatalogKind(t *testing.T) {
@@ -64,6 +61,12 @@ func TestCheckClaudeCatalogJSONFindsProblems(t *testing.T) {
 	require.Contains(t, joined, `unknown effort level "huge"`)
 	require.Contains(t, joined, `claude-a: duplicate model id`)
 	require.Contains(t, joined, `claude-b: reasoning block has no dialects`)
+}
+
+func TestCheckClaudeCatalogJSONRejectsTrailingData(t *testing.T) {
+	issues := CheckClaudeCatalogJSON([]byte(`[{"id":"claude-a"}] garbage`))
+	require.Len(t, issues, 1)
+	require.Contains(t, issues[0].Message, "parse")
 }
 
 func TestCheckCrossCatalog(t *testing.T) {

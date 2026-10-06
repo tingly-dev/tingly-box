@@ -33,20 +33,19 @@ Without --file the catalogs compiled into this binary are checked.`
 }
 
 type catalogCheckResult struct {
-	Checked []string             `json:"checked"`
-	Issues  []catalog.CheckIssue `json:"issues"`
-	OK      bool                 `json:"ok"`
-	Sources map[string]string    `json:"sources"`
+	Sources map[catalog.CatalogKind]string `json:"sources"`
+	Issues  []catalog.CheckIssue           `json:"issues"`
+	OK      bool                           `json:"ok"`
 }
 
 func (c *CatalogCheckCmd) Run() error {
 	docs := catalog.EmbeddedCatalogJSON()
-	sources := map[string]string{
-		string(catalog.KindProviders):    "embedded",
-		string(catalog.KindClaudeModels): "embedded",
+	sources := map[catalog.CatalogKind]string{}
+	for kind := range docs {
+		sources[kind] = "embedded"
 	}
 
-	var issues []catalog.CheckIssue
+	given := map[catalog.CatalogKind]string{}
 	for _, path := range c.Files {
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -56,23 +55,16 @@ func (c *CatalogCheckCmd) Run() error {
 		if err != nil {
 			return fmt.Errorf("%s: %w", path, err)
 		}
-		if sources[string(kind)] != "embedded" {
-			return fmt.Errorf("%s: a %s catalog was already given (%s)", path, kind, sources[string(kind)])
+		if prev, dup := given[kind]; dup {
+			return fmt.Errorf("%s: a %s catalog was already given (%s)", path, kind, prev)
 		}
+		given[kind] = path
 		docs[kind] = data
-		sources[string(kind)] = path
+		sources[kind] = path
 	}
 
-	issues = append(issues, catalog.CheckProviderCatalogJSON(docs[catalog.KindProviders])...)
-	issues = append(issues, catalog.CheckClaudeCatalogJSON(docs[catalog.KindClaudeModels])...)
-	issues = append(issues, catalog.CheckCrossCatalog(docs[catalog.KindProviders], docs[catalog.KindClaudeModels])...)
-
-	res := catalogCheckResult{
-		Checked: []string{string(catalog.KindProviders), string(catalog.KindClaudeModels)},
-		Issues:  issues,
-		OK:      len(issues) == 0,
-		Sources: sources,
-	}
+	res := catalogCheckResult{Sources: sources, Issues: catalog.CheckCatalogs(docs)}
+	res.OK = len(res.Issues) == 0
 	if res.Issues == nil {
 		res.Issues = []catalog.CheckIssue{}
 	}
@@ -84,10 +76,10 @@ func (c *CatalogCheckCmd) Run() error {
 			return err
 		}
 	} else {
-		for _, k := range res.Checked {
-			fmt.Printf("checked %-14s (%s)\n", k, sources[k])
+		for _, kind := range []catalog.CatalogKind{catalog.KindProviders, catalog.KindClaudeModels} {
+			fmt.Printf("checked %-14s (%s)\n", kind, sources[kind])
 		}
-		for _, i := range issues {
+		for _, i := range res.Issues {
 			fmt.Println("  ✗", i)
 		}
 		if res.OK {
@@ -95,7 +87,7 @@ func (c *CatalogCheckCmd) Run() error {
 		}
 	}
 	if !res.OK {
-		return fmt.Errorf("catalog check failed: %d issue(s)", len(issues))
+		return fmt.Errorf("catalog check failed: %d issue(s)", len(res.Issues))
 	}
 	return nil
 }

@@ -66,7 +66,13 @@ func DetectCatalogKind(data []byte) (CatalogKind, error) {
 func strictDecode(data []byte, v any) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
-	return dec.Decode(v)
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+	if dec.More() {
+		return fmt.Errorf("unexpected data after top-level value")
+	}
+	return nil
 }
 
 // CheckProviderCatalogJSON validates a providers.json document: it must decode
@@ -117,19 +123,10 @@ var (
 	validClaudeEfforts  = map[string]bool{"low": true, "medium": true, "high": true, "xhigh": true, "max": true}
 )
 
-type claudeCheckModel struct {
-	ID        string `json:"id"`
-	Reasoning *struct {
-		Dialects         []string `json:"dialects"`
-		Mandatory        bool     `json:"mandatory"`
-		SupportedEfforts []string `json:"supported_efforts"`
-	} `json:"reasoning"`
-}
-
 // CheckClaudeCatalogJSON validates a claude.models.json document: strict
 // decoding, unique non-empty ids, and known dialect / effort values.
 func CheckClaudeCatalogJSON(data []byte) []CheckIssue {
-	var models []claudeCheckModel
+	var models []catalogModel
 	if err := strictDecode(data, &models); err != nil {
 		return []CheckIssue{{Catalog: KindClaudeModels, Message: fmt.Sprintf("parse: %v", err)}}
 	}
@@ -179,7 +176,7 @@ func CheckCrossCatalog(providersJSON, claudeJSON []byte) []CheckIssue {
 	if err := json.Unmarshal(providersJSON, &reg); err != nil {
 		return nil
 	}
-	var models []claudeCheckModel
+	var models []catalogModel
 	if err := json.Unmarshal(claudeJSON, &models); err != nil {
 		return nil
 	}
@@ -209,6 +206,15 @@ func CheckCrossCatalog(providersJSON, claudeJSON []byte) []CheckIssue {
 		}
 	}
 	return issues
+}
+
+// CheckCatalogs runs every check over the given documents (keyed by kind):
+// each catalog on its own, then consistency across them.
+func CheckCatalogs(docs map[CatalogKind][]byte) []CheckIssue {
+	providers, claude := docs[KindProviders], docs[KindClaudeModels]
+	issues := CheckProviderCatalogJSON(providers)
+	issues = append(issues, CheckClaudeCatalogJSON(claude)...)
+	return append(issues, CheckCrossCatalog(providers, claude)...)
 }
 
 func sortedKeys[V any](m map[string]V) []string {
