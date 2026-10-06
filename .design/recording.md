@@ -1,6 +1,7 @@
 # Recording（录制）：重做规划
 
 > 适用对象：tingly-box 后端 / 前端贡献者。
+> 图示：`.design/recording.pencil.md`（章节一一对应）。
 > 状态：**规划已确认；R1（接入）待实施**。
 > 本文取代旧版 recording 梳理（Phase 0–2，见 git 历史）。旧版沉淀下来、仍然成立的结论
 > 在 §6 列出；旧实现（`ProtocolRecorder` + `TransformRecorder`）按 §5 的阶段退场。
@@ -151,7 +152,7 @@ handler 前段：解析 rule / scenario → EffectiveRecording                  
                               ▼                                            │
 协议管线（Stage / 旧整链 / passthrough / failover …）——对录制无感知        │
                               ▼                                            │
-client：…vendor / ruleFlag / logging round-tripper…                       │
+client：logging → advisorLoopback / vendor → ruleFlag round-tripper…                       │
           → wireRecordTransport（只读）→ wire base                         │
              Trace 已启用 ⇒ 追加 Exchange：录 request；tee response body，  │
              读到 EOF / Close 时收尾                                        │

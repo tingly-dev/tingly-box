@@ -22,6 +22,7 @@
 | [request-failover.pencil.md](./request-failover.pencil.md) | 一次请求内 prologue、候选切换和每次重新变换 | [tier-routing.md](./tier-routing.md)、[请求管线](./protocol-stage-pipeline.md) |
 | [session-affinity.pencil.md](./session-affinity.pencil.md) | strict TTL、分区 pin 与重新锁定时间线 | [tier-routing.md](./tier-routing.md) |
 | [protocol-stage-pipeline.pencil.md](./protocol-stage-pipeline.pencil.md) | Source/Target 阶段装配与迁移图 | [protocol-stage-pipeline.md](./protocol-stage-pipeline.md) |
+| [recording.pencil.md](./recording.pencil.md) | 边界采集、Trace 模型、四点位 × 流式、长程任务去重（前缀链 / 分区文件） | [recording.md](./recording.md) |
 | [bench.pencil.md](./bench.pencil.md) | 测试台线框；被放弃的布局明确标注 | [bench.md](./bench.md) |
 | [probe-panel.pencil.md](./probe-panel.pencil.md) | Probe 面板轴、打开状态与 cURL 流程 | [probe.md](./probe.md) |
 | [imbot-output.pencil.md](./imbot-output.pencil.md) | 消息序列及回复归属；历史图与现行降级分开 | [imbot-output.md](./imbot-output.md) |
