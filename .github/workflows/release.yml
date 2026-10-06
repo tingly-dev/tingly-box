@@ -300,6 +300,12 @@ jobs:
     needs: setup
     if: needs.setup.outputs.build_gui == 'true'
     uses: ./.github/workflows/release-gui.yml
+    # A called workflow's job permissions can only narrow the caller's, so
+    # release-gui.yml's `attach` job (contents: write, actions: write) needs
+    # them granted here; the default token is read-only.
+    permissions:
+      contents: write
+      actions: write
     with:
       release_tag: ${{ needs.setup.outputs.release_tag }}
 
