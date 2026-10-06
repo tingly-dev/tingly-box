@@ -113,8 +113,7 @@ zip behind npm is the GTK3 build (`task linux:build:gtk3`), built on
 `ubuntu-22.04`, so it runs on Ubuntu 22.04+, Debian 12+, Fedora 36+: a binary
 links forward-compatibly only, so it is built on the oldest glibc it should
 run on, and `release-gui.yml` fails the build if it needs glibc newer than
-2.35 or links the GTK4 stack. Same idea as magpie (yetone/magpie), which also
-builds Wails v3 with `gtk3` for older distributions.
+2.35 or links the GTK4 stack.
 
 **A bare binary, not a package, for npm.** It does not install anything into
 the system, so `npx` needs no root; the system supplies GTK 3 / WebKitGTK 4.1
