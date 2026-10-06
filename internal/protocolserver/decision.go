@@ -131,10 +131,11 @@ func requireDecisionEndpoint(provider *typ.Provider) error {
 	return nil
 }
 
-// validateDecisionBody checks the two fields the gateway itself needs — model
-// (for routing) and questions (non-empty map) — and leaves everything else
-// opaque so new Jev fields stay forward-compatible. gjson keeps this a single
-// indexed pass; the body is not copied into an intermediate map.
+// validateDecisionBody checks the only field the gateway itself needs — model
+// (for routing) — and leaves everything else opaque, so Jev's typed questions
+// and any differently-shaped upstream schema (e.g. OpenAI's Decisions API,
+// whose schema is unpublished) pass through for the upstream to validate.
+// gjson keeps this a single indexed pass; the body is not copied.
 func validateDecisionBody(body []byte) (string, error) {
 	if !gjson.ValidBytes(body) {
 		return "", fmt.Errorf("invalid request body: not valid JSON")
@@ -142,10 +143,6 @@ func validateDecisionBody(body []byte) (string, error) {
 	modelResult := gjson.GetBytes(body, "model")
 	if modelResult.Type != gjson.String || strings.TrimSpace(modelResult.String()) == "" {
 		return "", fmt.Errorf("model is required")
-	}
-	questions := gjson.GetBytes(body, "questions")
-	if !questions.IsObject() || len(questions.Map()) == 0 {
-		return "", fmt.Errorf("at least one question is required")
 	}
 	return modelResult.String(), nil
 }

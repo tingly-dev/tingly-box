@@ -39,6 +39,7 @@ func TestDecisionEndpointURL(t *testing.T) {
 		{"https://www.jevai.org/api/v1", "https://www.jevai.org/api/v1/decisions"},
 		{"https://www.jevai.org/api/v1/", "https://www.jevai.org/api/v1/decisions"},
 		{"https://www.jevai.org/api/v1/decisions", "https://www.jevai.org/api/v1/decisions"},
+		{"https://api.openai.com/v1", "https://api.openai.com/v1/decisions"},
 		{"https://www.jevai.org/api/v1/decisions?x=1#frag", "https://www.jevai.org/api/v1/decisions"},
 	}
 	for _, tt := range tests {
