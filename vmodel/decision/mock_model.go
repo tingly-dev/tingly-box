@@ -25,8 +25,11 @@ func First(_ []byte, _ string, _ int) int { return 0 }
 // Stable hashes state+id: the same input always gets the same pick, different
 // inputs spread across the options.
 func Stable(input []byte, id string, n int) int {
-	sum := sha256.Sum256(append(append(append([]byte{}, input...), 0), id...))
-	return int(binary.BigEndian.Uint64(sum[:8]) % uint64(n))
+	h := sha256.New()
+	h.Write(input)
+	h.Write([]byte{0})
+	h.Write([]byte(id))
+	return int(binary.BigEndian.Uint64(h.Sum(nil)[:8]) % uint64(n))
 }
 
 // MockModelConfig configures a MockModel.
@@ -75,7 +78,7 @@ func (m *MockModel) HandleDecision(body []byte) ([]byte, error) {
 		return nil, badRequest("state is required")
 	}
 	qs := root.Get("questions")
-	if !qs.IsObject() || len(qs.Map()) == 0 {
+	if !qs.IsObject() {
 		return nil, badRequest("questions must be a non-empty object")
 	}
 
@@ -85,7 +88,7 @@ func (m *MockModel) HandleDecision(body []byte) ([]byte, error) {
 		return nil, badRequest("invalid state: %v", err)
 	}
 
-	answers := make(map[string]any, len(qs.Map()))
+	answers := map[string]any{}
 	var verr error
 	qs.ForEach(func(k, q gjson.Result) bool {
 		var a map[string]any
@@ -99,6 +102,9 @@ func (m *MockModel) HandleDecision(body []byte) ([]byte, error) {
 	})
 	if verr != nil {
 		return nil, verr
+	}
+	if len(answers) == 0 {
+		return nil, badRequest("questions must be a non-empty object")
 	}
 
 	return json.Marshal(map[string]any{

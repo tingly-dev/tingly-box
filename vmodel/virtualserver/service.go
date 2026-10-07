@@ -47,10 +47,6 @@ func (s *Service) GetAnthropicRegistry() *anthropicvm.Registry { return s.anthro
 // GetOpenAIRegistry returns the OpenAI Chat-protocol model registry.
 func (s *Service) GetOpenAIRegistry() *openaivm.Registry { return s.openaiReg }
 
-// GetDecisionRegistry returns the decisions model registry (served at the
-// OpenAI-style /decisions endpoint).
-func (s *Service) GetDecisionRegistry() *decisionvm.Registry { return s.decisionReg }
-
 // GetHandler returns the HTTP handler.
 func (s *Service) GetHandler() *Handler {
 	return s.handler
