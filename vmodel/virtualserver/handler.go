@@ -84,7 +84,8 @@ func (h *Handler) ListOpenAIModels(c *gin.Context) {
 // openaiModels is everything reachable through an OpenAI-style base URL: chat
 // models plus the decision models served by its /decisions endpoint.
 func (h *Handler) openaiModels() []vmodel.Model {
-	return append(h.openaiReg.ListModels(), h.decisionReg.ListModels()...)
+	chat, dec := h.openaiReg.ListModels(), h.decisionReg.ListModels()
+	return append(append(make([]vmodel.Model, 0, len(chat)+len(dec)), chat...), dec...)
 }
 
 // ListAnthropicModels handles GET /virtual/anthropic/v1/models — returns

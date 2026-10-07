@@ -23,8 +23,7 @@ the new family. It was removed in favor of this design.
 
 ## The one special case: opaque body
 
-The schema is unpublished and differs between vendors, so the body is opaque
-JSON. The gateway reads and rewrites exactly one field:
+OpenAI's schema is unpublished and vendors differ, so the body is opaque JSON. The gateway reads and rewrites exactly one field:
 
 - `model` is read for rule routing and replaced by the routed service model on
   the way up; the caller's model is echoed back on the way down (only when the
@@ -51,33 +50,60 @@ come back as `*openai.Error` and keep their HTTP status via
 `stream.SendForwardingError`. `DecisionsNew` is on `OpenAIClientInterface`;
 Kimi/Codex/xAI/OpenCode inherit it from the embedded `*OpenAIClient`.
 
+## Jev compatibility
+
+Jev is the only published decisions API, so it is the concrete wire reference
+(from its public docs as quoted by third-party guides; the doc sites themselves
+were not reachable when this was checked):
+
+```text
+POST {base}/decisions        Authorization: Bearer <key>
+{ "model": "typesafe/jev-1.13",
+  "state": "<string | object | array>",
+  "questions": { "<id>": { "type": "choice|score|noul", "instructions": "...", "criteria": ... } } }
+  choice: criteria = {"option": "description", ...}
+  score:  criteria = ["lowest level", ..., "highest"]   (2-10 levels)
+  noul:   instructions only (optional true/false criteria)
+-> { "model": "jev-1.13.0",
+     "answers": { "<id>": { "type":"choice","choice":"billing","probabilities":{...},"confidence":0.81 }
+                  | { "type":"score","score":2.4,"legend":{"0":"..."},"probabilities":{"0":0.01,...},"confidence":0.57 }
+                  | { "type":"noul","noul":0.94 } },
+     "usage": { "input_tokens": 318, "output_tokens": 52 } }
+```
+
+How the gateway supports it: a Jev provider is an `openai`-style provider with
+base `https://www.jevai.org/api/v1` (the SDK appends `decisions` and sends the
+bearer token). The body is opaque, so `state`/`questions` pass through
+untouched; only `model` is rewritten. Jev's `usage.input_tokens/output_tokens`
+are lifted for accounting (`usage.cost` is ignored). The response `model` is
+rewritten to the caller's model, so `jev-1.13.0` becomes what the client asked
+for. Not verified against the live service (no key): error body shape, rate
+limits, and whether extra fields exist beyond the examples above.
+
 ## vmodel: a working decisions service
 
 `vmodel/decision` ships real, user-facing virtual models — not test fixtures —
 so decisions can be tried without any upstream (onboarding, dry-runs, routing
-demos). They answer from the options in the opaque body, in two shapes:
+demos). They speak the Jev shape above for `choice`, `score`, and `noul`
+questions (`state` and a non-empty `questions` are required; a bad question is
+a 400 in the OpenAI error envelope, an unknown model a 404).
 
-```text
-{"model","options":["a","b"]}                          -> {"answer","probabilities":{...},"usage"}
-{"model","questions":{"q":{"options":[...]}}}          -> {"answers":{q:..},"probabilities":{q:{..}},"usage"}
-```
+- `decision-first`: first choice option, lowest score level, `noul` = 1.
+  Predictable.
+- `decision-stable`: SHA-256 of the compacted `state` plus the question id picks
+  the option (0.8 mass on the pick, rest split evenly; `noul` 0.8 or 0.2) —
+  reproducible, input-dependent, and independent of key spacing.
 
-Options are strings or objects named by `id`/`label`/`value`/`name`. Models:
-`decision-first` (always the first option, confidence 1) and `decision-stable`
-(SHA-256 of the request picks the option, confidence 0.8: reproducible but
-input-dependent). A request without usable options is a 400 in the OpenAI error
-envelope; an unknown model is a 404.
-
-These shapes are this service's own simulation, derived from the Jev surface
-and third-party write-ups — not OpenAI's schema, which is unpublished. Revisit
-with the real schema.
+Answers are self-consistent: probabilities sum to 1, `confidence` is
+1 − normalized entropy, and `score` is the probability-weighted level.
 
 Wiring: `virtualserver.Service` owns a decision registry, mounts
 `POST .../decisions` next to chat/responses (so the in-process private server,
 `/virtual` endpoint, and the benchmark servers all serve it), lists the models
 in the OpenAI model list, and seeds them into the builtin OpenAI vmodel
-provider. vmodel providers reach it through the standard SDK + transport chain,
-i.e. `OpenAIClient.DecisionsNew` like any other upstream.
+provider (they share the provider's base URL, like the real endpoint). vmodel
+providers reach it through the standard SDK + transport chain, i.e.
+`OpenAIClient.DecisionsNew` like any other upstream.
 
 Harness: `TestEnv.SetupDecisionRoute` / `SendDecision`
 (`internal/protocoltest/decision.go`) drive the real gateway against the real

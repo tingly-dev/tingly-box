@@ -8,7 +8,7 @@ func RegisterDefaults(r *Registry) {
 	_ = r.Register(NewMockModel(&MockModelConfig{
 		ID:          "decision-first",
 		Name:        "Decision (first option)",
-		Description: "Answers every decisions request with the first option; predictable for routing demos and dry-runs.",
+		Description: "Answers every decisions request with the first choice option, lowest score level, and true for noul; predictable for routing demos and dry-runs.",
 		Choose:      First,
 	}))
 	_ = r.Register(NewMockModel(&MockModelConfig{

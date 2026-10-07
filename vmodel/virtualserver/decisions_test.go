@@ -19,15 +19,15 @@ func TestServe_Decisions(t *testing.T) {
 
 	var raw []byte
 	err := client.Post(context.Background(), "decisions", nil, &raw, openaiopt.WithRequestBody("application/json",
-		[]byte(`{"model":"decision-first","options":["a","b"]}`)))
+		[]byte(`{"model":"decision-first","state":"hi","questions":{"q":{"type":"choice","criteria":{"a":"","b":""}}}}`)))
 	require.NoError(t, err)
-	assert.Equal(t, "a", gjson.GetBytes(raw, "answer").String())
+	assert.Equal(t, "a", gjson.GetBytes(raw, "answers.q.choice").String())
 
 	// Unknown model → 404, no options → 400, both with real statuses.
 	for body, want := range map[string]int{
-		`{"model":"nope","options":["a"]}`: http.StatusNotFound,
-		`{"model":"decision-first"}`:       http.StatusBadRequest,
-		`{"options":["a"]}`:                http.StatusBadRequest,
+		`{"model":"nope","state":"x","questions":{"q":{"type":"noul"}}}`: http.StatusNotFound,
+		`{"model":"decision-first","state":"x"}`:                         http.StatusBadRequest,
+		`{"state":"x","questions":{"q":{"type":"noul"}}}`:                http.StatusBadRequest,
 	} {
 		err := client.Post(context.Background(), "decisions", nil, &raw, openaiopt.WithRequestBody("application/json", []byte(body)))
 		var apiErr *openai.Error
