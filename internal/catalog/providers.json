@@ -4662,7 +4662,11 @@
       "pricing_doc": "",
       "base_url_openai": "https://api.typesafe.ai/v1",
       "base_url_anthropic": null,
-      "models": [],
+      "models": [
+        { "id": "jev-latest" },
+        { "id": "jev-1.13.0" },
+        { "id": "jev-preview" }
+      ],
       "supports_models_endpoint": false,
       "last_updated": "2026-10-07",
       "sources": [
