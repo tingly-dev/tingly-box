@@ -13,6 +13,9 @@ const STORAGE_KEY = 'layout.sidebarCollapsed';
 // half-screen browser) start with the sidebar collapsed, so the content keeps
 // its width; its pages are still one click away through the rail flyout.
 // Below MUI's md breakpoint the whole nav is a drawer, so this doesn't apply.
+// A first-time user (no saved preference yet) always starts expanded — the
+// sidebar is how they discover the agent pages, so it must not be hidden on
+// their very first screen.
 const NARROW_DESKTOP_QUERY = '(min-width:900px) and (max-width:1199.95px)';
 
 interface SidebarCollapsedValue {
@@ -29,22 +32,33 @@ interface SidebarCollapsedProviderProps {
 
 export const SidebarCollapsedProvider = ({ children }: SidebarCollapsedProviderProps) => {
     const [collapsed, setCollapsed] = useState<boolean>(() => localStorage.getItem(STORAGE_KEY) === 'true');
-    const narrow = useMediaQuery(NARROW_DESKTOP_QUERY);
+    // Only persist after the user has made a choice, so "no preference yet"
+    // stays distinguishable from "chose expanded".
+    const [hasPref, setHasPref] = useState<boolean>(() => localStorage.getItem(STORAGE_KEY) !== null);
+    const narrow = useMediaQuery(NARROW_DESKTOP_QUERY) && hasPref;
     // Expanding by hand in a narrow window lasts for this session only — the
     // saved preference is about wide windows.
     const [expandedWhileNarrow, setExpandedWhileNarrow] = useState(false);
 
     useEffect(() => {
-        localStorage.setItem(STORAGE_KEY, String(collapsed));
-    }, [collapsed]);
+        if (hasPref) localStorage.setItem(STORAGE_KEY, String(collapsed));
+    }, [collapsed, hasPref]);
 
     const effective = narrow ? !expandedWhileNarrow : collapsed;
 
     const value = useMemo<SidebarCollapsedValue>(
         () => ({
             collapsed: effective,
-            toggle: () => (narrow ? setExpandedWhileNarrow((prev) => !prev) : setCollapsed((prev) => !prev)),
-            setCollapsed: (next: boolean) => (narrow ? setExpandedWhileNarrow(!next) : setCollapsed(next)),
+            toggle: () => {
+                if (narrow) return setExpandedWhileNarrow((prev) => !prev);
+                setHasPref(true);
+                setCollapsed((prev) => !prev);
+            },
+            setCollapsed: (next: boolean) => {
+                if (narrow) return setExpandedWhileNarrow(!next);
+                setHasPref(true);
+                setCollapsed(next);
+            },
         }),
         [effective, narrow],
     );
