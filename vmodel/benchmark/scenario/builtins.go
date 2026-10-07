@@ -1,8 +1,6 @@
 package scenario
 
 import (
-	"math"
-	"math/rand/v2"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/vmodel/benchmark/check"
@@ -605,88 +603,6 @@ func openAIResponsesIncompleteSSE() []string {
 	}
 }
 
-// ─── Decision ─────────────────────────────────────────────────────────────────
-
-// DecisionScenario is the native structured-decision family: typed questions
-// in, calibrated answers back (.design/decision-protocol.md). Decision is
-// request/response JSON only, so just the NonStream builder is defined — the
-// matrix skips streaming modes for it. Because the decision response has no
-// assistant message, assertions run on RawBody rather than parsed Content.
-func DecisionScenario() Scenario {
-	return Scenario{
-		Name:        "decision",
-		Description: "Native decision protocol: typed questions answered with choices and calibrated probabilities",
-		Tags:        []string{"decision"},
-		MockResponses: map[ResponseFormat]MockResponseBuilder{
-			FormatDecision: decisionResponse(),
-		},
-		Assertions: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			// The mock randomizes its answers, so assertions pin shape and
-			// internal consistency, never which option won. Consistency is the
-			// "right" half of random-but-right: the answer must be the argmax
-			// of its own probability map.
-			check.AssertDecisionAnswerConsistent(),
-			check.AssertRawBodyContains(`"probabilities"`),
-			check.AssertUsageNonZero(),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertRawBodyContains(`"answers"`),
-		},
-	}
-}
-
-// decisionResponse builds a random-but-right decision answer: the chosen
-// option is picked at random and the probability map is synthesized to agree
-// with it (the chosen option always holds the largest share), with usage
-// varying per call. The gateway must pass whatever a decision upstream says
-// through untouched, so the mock must not be a fixed echo that a buggy
-// passthrough could satisfy by accident.
-func decisionResponse() MockResponseBuilder {
-	return MockResponseBuilder{
-		NonStream: func() (int, []byte) {
-			options := []string{"option-a", "option-b", "option-c"}
-			pick := rand.IntN(len(options))
-
-			// Random weights for the losing options (each takes a random cut
-			// of what remains); the picked option keeps the rest, which is
-			// guaranteed to stay the largest share.
-			weights := make([]float64, len(options))
-			remaining := 1.0
-			for i := range options {
-				if i == pick {
-					continue
-				}
-				w := remaining * (0.05 + 0.20*rand.Float64())
-				weights[i] = w
-				remaining -= w
-			}
-			weights[pick] = remaining
-
-			probs := make(map[string]interface{}, len(options))
-			for i, o := range options {
-				probs[o] = math.Round(weights[i]*100) / 100
-			}
-			body := map[string]interface{}{
-				"model": "jev-micro-1",
-				"answers": map[string]interface{}{
-					"q_route":      map[string]interface{}{"answer": options[pick], "index": pick},
-					"q_confidence": map[string]interface{}{"answer": math.Round((0.5+0.5*rand.Float64())*100) / 100},
-				},
-				"probabilities": map[string]interface{}{
-					"q_route": probs,
-				},
-				"usage": map[string]interface{}{
-					"input_tokens":  6 + rand.IntN(8),
-					"output_tokens": 3 + rand.IntN(5),
-				},
-			}
-			return 200, mustMarshal(body)
-		},
-	}
-}
-
 // ─── Error ────────────────────────────────────────────────────────────────────
 
 // ErrorScenario tests that provider error responses are forwarded to the client.
@@ -702,7 +618,6 @@ func ErrorScenario() Scenario {
 			FormatOpenAIResponses: BuildErrorFromSpec(FormatOpenAIResponses, spec429),
 			FormatAnthropic:       BuildErrorFromSpec(FormatAnthropic, spec429),
 			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, spec429),
-			FormatDecision:        BuildErrorFromSpec(FormatDecision, spec429),
 		},
 		Assertions: []check.Assertion{
 			check.AssertHTTPStatusAtLeast(400),
@@ -727,7 +642,6 @@ func Error500Scenario() Scenario {
 			FormatOpenAIResponses: BuildErrorFromSpec(FormatOpenAIResponses, spec500),
 			FormatAnthropic:       BuildErrorFromSpec(FormatAnthropic, spec500),
 			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, spec500),
-			FormatDecision:        BuildErrorFromSpec(FormatDecision, spec500),
 		},
 		Assertions: []check.Assertion{
 			check.AssertHTTPStatusAtLeast(400),
@@ -752,7 +666,6 @@ func ErrorAuth401Scenario() Scenario {
 			FormatOpenAIResponses: BuildErrorFromSpec(FormatOpenAIResponses, spec401),
 			FormatAnthropic:       BuildErrorFromSpec(FormatAnthropic, spec401),
 			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, spec401),
-			FormatDecision:        BuildErrorFromSpec(FormatDecision, spec401),
 		},
 		Assertions: []check.Assertion{
 			check.AssertHTTPStatus(401),

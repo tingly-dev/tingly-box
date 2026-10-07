@@ -1,5 +1,4 @@
 import {OpenAI, Anthropic} from '../BrandIcons';
-import {Psychology} from '../icons';
 import {Box, Checkbox, InputBase, Link, Stack, Tooltip, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
 import { fontMono, fontSizes } from '@/theme/fonts';
@@ -10,7 +9,7 @@ export interface ProtocolSlotData {
     enabled: boolean;
 }
 
-export type ProtocolKind = 'openai' | 'anthropic' | 'decision';
+export type ProtocolKind = 'openai' | 'anthropic';
 
 interface ProtocolSlotProps {
     kind: ProtocolKind;
@@ -41,17 +40,11 @@ const BRAND: Record<ProtocolKind, BrandDef> = {
         labelKey: 'providerDialog.protocol.anthropicLabel',
         defaultLabel: 'Anthropic Compatible',
     },
-    decision: {
-        icon: <Psychology sx={{fontSize: 18}}/>,
-        labelKey: 'providerDialog.protocol.decisionLabel',
-        defaultLabel: 'Decision',
-    },
 };
 
 const DEFAULT_HELPERS: Record<ProtocolKind, string> = {
     openai: 'Supports models from OpenAI, Google and many other OpenAI-compatible providers',
     anthropic: 'For Anthropic-compatible AI providers, commonly used with Claude Code',
-    decision: 'Optional structured-decision fork endpoint (e.g. a Jev-compatible /api/v1 base) — adds decision capability without changing the chat style',
 };
 
 const ProtocolSlot: React.FC<ProtocolSlotProps> = ({

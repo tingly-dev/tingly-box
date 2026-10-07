@@ -474,8 +474,6 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 		// Pass "" so the candidate pool spans all API styles: each attempt
 		// re-transforms the request for the selected provider's style, so
 		// heterogeneous failover (e.g. Anthropic → OpenAI) is supported.
-		// (Decision does not fail over at all — its handler never enters
-		// this loop.)
 		nextProvider, nextService, err := ph.selectFallbackService(rule, tried, "")
 		if err != nil {
 			fields := failoverLogFields(c, rule, provider, model, serviceID)

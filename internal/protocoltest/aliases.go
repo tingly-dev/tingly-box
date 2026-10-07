@@ -70,7 +70,6 @@ const (
 	FormatOpenAIResponses = scenario.FormatOpenAIResponses
 	FormatAnthropic       = scenario.FormatAnthropic
 	FormatGoogle          = scenario.FormatGoogle
-	FormatDecision        = scenario.FormatDecision
 )
 
 // ─── scenario: built-in fixtures + helpers ─────────────────────────────────────
@@ -88,7 +87,6 @@ var (
 	MultiTurnScenario           = scenario.MultiTurnScenario
 	StreamingTextScenario       = scenario.StreamingTextScenario
 	StreamingToolUseScenario    = scenario.StreamingToolUseScenario
-	DecisionScenario            = scenario.DecisionScenario
 	IncompleteScenario          = scenario.IncompleteScenario
 	ErrorScenario               = scenario.ErrorScenario
 	Error500Scenario            = scenario.Error500Scenario

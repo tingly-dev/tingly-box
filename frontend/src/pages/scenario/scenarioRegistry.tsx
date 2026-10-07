@@ -6,7 +6,6 @@ import { setSyncedItem } from '@/services/uiPrefs';
 import {
     Extension as IconExtension,
     Photo as IconPhoto,
-    Psychology as IconPsychology,
     Users as IconUsers,
     Vector as IconVector,
 } from '@/components/icons';
@@ -137,14 +136,6 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         descKey: 'scenarioOverview.descriptions.embed',
         path: '/agent/embed',
         icon: (size) => <IconVector sx={{ fontSize: size }} />,
-        hideable: true,
-    },
-    {
-        id: 'decision',
-        labelKey: 'layout.nav.useDecision',
-        descKey: 'scenarioOverview.descriptions.decision',
-        path: '/agent/decision',
-        icon: (size) => <IconPsychology sx={{ fontSize: size }} />,
         hideable: true,
     },
     {

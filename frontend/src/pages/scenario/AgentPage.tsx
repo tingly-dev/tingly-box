@@ -97,11 +97,6 @@ export interface AgentPageDescriptor {
     /** Title of the routing rules card when it is not the default. */
     rulesTitleKey?: string;
     /**
-     * Scenario-specific content card (e.g. Decision's curl example) rendered
-     * between Quick Start and the routing rules. Receives the gateway base URL.
-     */
-    extraContent?: React.FC<{ baseUrl: string }>;
-    /**
      * Fixed model slots (Claude Code): a Unified / Separate switch in the
      * header decides which rules are shown; rules can't be added, removed or
      * switched off, since each one backs a slot.
@@ -263,7 +258,6 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         onConnectProvider={connectAI.handleConnectAIClick}
                     />
                 )}
-                {agent.extraContent && <agent.extraContent baseUrl={baseUrl} />}
                 <TemplatePage
                     scenario={scenario}
                     // One copy of the rules for the whole page: the rule list

@@ -232,7 +232,6 @@ func qsAPIStyle(ctx StepContext, s quickstartState) (quickstartState, StepResult
 		items = []SelectItem[protocol.APIStyle]{
 			{Title: "OpenAI-compatible", Description: "/v1/chat/completions endpoint", Value: protocol.APIStyleOpenAI},
 			{Title: "Anthropic-compatible", Description: "/v1/messages endpoint", Value: protocol.APIStyleAnthropic},
-			{Title: "Decision (Jev)", Description: "/api/v1/decisions endpoint", Value: protocol.APIStyleDecision},
 		}
 	} else {
 		t := s.selectedTemplate
@@ -367,8 +366,6 @@ func qsDetails(ctx StepContext, s quickstartState) (quickstartState, StepResult,
 	if defaultURL == "" {
 		if s.apiStyle == protocol.APIStyleAnthropic {
 			defaultURL = "https://api.anthropic.com"
-		} else if s.apiStyle == protocol.APIStyleDecision {
-			defaultURL = defaultDecisionBaseURL
 		} else {
 			defaultURL = "https://api.example.com/v1"
 		}

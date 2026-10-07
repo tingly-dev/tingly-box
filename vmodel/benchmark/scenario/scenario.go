@@ -33,7 +33,6 @@ const (
 	FormatOpenAIResponses ResponseFormat = "openai_responses" // /v1/responses
 	FormatAnthropic       ResponseFormat = "anthropic"        // /v1/messages
 	FormatGoogle          ResponseFormat = "google"           // /v1beta/models/.../generateContent
-	FormatDecision        ResponseFormat = "decision"         // /decisions (native structured-decision protocol)
 )
 
 // MockResponseBuilder defines how a virtual server should respond for one response format.
@@ -117,7 +116,6 @@ func AllScenarios() []Scenario {
 		MultiTurnScenario(),
 		StreamingTextScenario(),
 		StreamingToolUseScenario(),
-		DecisionScenario(),
 		IncompleteScenario(),
 		ErrorScenario(),
 		Error500Scenario(),
@@ -162,8 +160,6 @@ func BuildErrorFromSpec(format ResponseFormat, spec vmodel.SharedMockSpec) MockR
 		return buildAnthropicError(spec.Error)
 	case FormatGoogle:
 		return buildGoogleError(spec.Error)
-	case FormatDecision:
-		return buildDecisionError(spec.Error)
 	default:
 		return MockResponseBuilder{}
 	}
@@ -297,23 +293,6 @@ func preContentStreamStatus(err *vmodel.ErrorInjection, status int) int {
 		return status
 	}
 	return 0
-}
-
-// buildDecisionError renders a pre-content failure as the decision protocol's
-// error envelope. Decision requests are single-shot JSON with no streaming
-// variant, so only the NonStream builder exists: the gateway passes the
-// status and body through verbatim (.design/decision-protocol.md §3).
-func buildDecisionError(err *vmodel.ErrorInjection) MockResponseBuilder {
-	status, message, typ := normalizeErrorSpec(err)
-	body := map[string]interface{}{
-		"error": map[string]interface{}{
-			"message": message,
-			"type":    typ,
-		},
-	}
-	return MockResponseBuilder{
-		NonStream: func() (int, []byte) { return status, mustMarshal(body) },
-	}
 }
 
 // normalizeErrorSpec centralizes default value logic for error injection fields.

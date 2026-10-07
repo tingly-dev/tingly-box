@@ -627,18 +627,6 @@ func (c *Config) validateRuleServices(rule typ.Rule, existing *typ.Rule) error {
 		if !provider.Enabled {
 			return fmt.Errorf("%s references disabled provider '%s'", context, svc.Provider)
 		}
-		// Provider × scenario compatibility: an incompatible pairing (e.g. a
-		// decision rule pointing at a provider with no decision endpoint) is
-		// refused here, where it is created, instead of failing on the first
-		// request. Provider-aware: decision surfaces are capability-gated
-		// (decision fork URL), chat surfaces accept dual-URL providers.
-		// Same grandfathering rule as above: only newly introduced references
-		// are validated, so existing rules stay editable after their
-		// provider's style or a scenario descriptor changes under them.
-		if !typ.ProviderSupportsScenario(provider, rule.Scenario) {
-			return fmt.Errorf("%s references provider '%s' (api_style '%s'), which cannot serve scenario '%s': %s",
-				context, provider.Name, provider.APIStyle, rule.Scenario, typ.ScenarioProviderRequirement(rule.Scenario))
-		}
 		return nil
 	}
 

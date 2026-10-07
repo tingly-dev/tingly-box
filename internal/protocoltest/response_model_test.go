@@ -58,16 +58,7 @@ func TestResponseCarriesRequestedModel(t *testing.T) {
 				t.Parallel()
 
 				env := NewTestEnv(t)
-				// The scenario must mock the pair's target format (the format
-				// the provider-native endpoint answers in); decision targets
-				// only work with the decision-native scenario.
-				base := TextScenario()
-				if format, ok := formatForAPIType(pair.Target); ok {
-					if _, has := base.MockResponses[format]; !has {
-						base = DecisionScenario()
-					}
-				}
-				scenario := withUpstreamModel(base)
+				scenario := withUpstreamModel(TextScenario())
 				env.SetupRoute(pair.Source, pair.Target, scenario)
 				model := env.findRouteModel(pair.Source, pair.Target, scenario.Name)
 				path, body := buildRequest(pair.Source, model, streaming)

@@ -102,6 +102,9 @@ func (ph *ProtocolHandler) SetupMixinEndpoints(group *gin.RouterGroup, modelAuth
 	// Embeddings endpoint (OpenAI compatible)
 	group.POST("/embeddings", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation("embeddings"), ph.HandleOpenAIEmbeddings)...)
 
+	// Decisions endpoint (OpenAI Decisions API, opaque passthrough)
+	group.POST("/decisions", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation("decisions"), ph.HandleOpenAIDecisions)...)
+
 	// Image generation endpoint (OpenAI compatible).
 	// Routed directly to upstream POST /v1/images/generations; the Responses API
 	// (POST /responses with the image_generation tool) is exposed in parallel via
@@ -113,9 +116,6 @@ func (ph *ProtocolHandler) SetupMixinEndpoints(group *gin.RouterGroup, modelAuth
 	// client layer adapts per vendor (Codex uses its native JSON edits
 	// endpoint, everyone else gets the SDK's multipart /images/edits).
 	group.POST("/images/edits", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation("image_edit"), ph.HandleOpenAIImageEdit)...)
-
-	// Native structured decisions (Jev-compatible).
-	group.POST("/decisions", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation("decision"), ph.HandleDecision)...)
 
 	// Models endpoint (routed by scenario: openai -> OpenAIListModels, anthropic/claude_code -> AnthropicListModels)
 	group.GET("/models", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, ph.ListModelsByScenario)...)

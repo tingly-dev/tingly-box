@@ -44,8 +44,6 @@ export interface EnhancedProviderFormData {
     providerBaseUrls?: { openai?: string; anthropic?: string };
     apiBaseOpenAI?: string;
     apiBaseAnthropic?: string;
-    /** Optional structured-decision fork endpoint base URL. */
-    apiBaseDecision?: string;
     createDualProvider?: boolean;
     /** If set, prefer this exact provider ID when resolving the template.
      *  Avoids mismatches when multiple providers share the same base URL. */
@@ -109,9 +107,6 @@ const ProviderFormDialog = ({
     // ── Protocol slot state (independent from provider selection) ──
     const [slotOpenAI, setSlotOpenAI] = useState<ProtocolSlotData>({url: '', enabled: true});
     const [slotAnthropic, setSlotAnthropic] = useState<ProtocolSlotData>({url: '', enabled: false});
-    // Decision fork slot: optional and orthogonal — enabling it never changes
-    // which chat style (apiStyle) the provider reports.
-    const [slotDecision, setSlotDecision] = useState<ProtocolSlotData>({url: '', enabled: false});
 
     const allProviders = useProviderCatalogs();
 
@@ -197,7 +192,6 @@ const ProviderFormDialog = ({
         };
         setSlotOpenAI(initOpenAI);
         setSlotAnthropic(initAnthropic);
-        setSlotDecision({url: data.apiBaseDecision || '', enabled: !!data.apiBaseDecision});
 
         if (mode === 'edit') {
             // Find ALL presets matching the configured URL(s). When multiple
@@ -314,15 +308,8 @@ const ProviderFormDialog = ({
             setSelectedProvider(null);
         }
     };
-    const updateDecisionUrl = (url: string) => {
-        setSlotDecision({...slotDecision, url});
-        setVerificationResult(null);
-    };
-    // The decision fork is orthogonal to the chat protocols, so it commits on
-    // its own instead of riding commitProtocolState (which derives apiStyle).
-    const commitDecisionSlot = () => {
-        onChangeRef.current('apiBaseDecision', slotDecision.enabled ? slotDecision.url.trim() : '');
-    };
+    // Commit-on-blur is the same for both slots — it always syncs the current
+    // state of both, so one handler serves either ProtocolSlot.
     const commitSlots = () => commitProtocolState(slotOpenAI, slotAnthropic);
 
     const toggleSlot = (kind: ProtocolKind) => {
@@ -330,10 +317,6 @@ const ProviderFormDialog = ({
             const next = {...slotAnthropic, enabled: !slotAnthropic.enabled};
             setSlotAnthropic(next);
             commitProtocolState(slotOpenAI, next);
-        } else if (kind === 'decision') {
-            const next = {...slotDecision, enabled: !slotDecision.enabled};
-            setSlotDecision(next);
-            onChangeRef.current('apiBaseDecision', next.enabled ? next.url.trim() : '');
         } else {
             const next = {...slotOpenAI, enabled: !slotOpenAI.enabled};
             setSlotOpenAI(next);
@@ -449,7 +432,6 @@ const ProviderFormDialog = ({
         const resolved: Partial<EnhancedProviderFormData> = {
             apiBaseOpenAI: slotOpenAI.enabled ? slotOpenAI.url.trim() : '',
             apiBaseAnthropic: slotAnthropic.enabled ? slotAnthropic.url.trim() : '',
-            apiBaseDecision: slotDecision.enabled ? slotDecision.url.trim() : '',
             apiBase: slotOpenAI.url.trim() || slotAnthropic.url.trim(),
             apiStyle: slotOpenAI.enabled ? 'openai' : 'anthropic',
             name: ensureName(),
@@ -610,16 +592,6 @@ const ProviderFormDialog = ({
                                         ? (slotAnthropic.enabled
                                             ? t('providerDialog.protocol.helperAnthropic', {defaultValue: 'For Anthropic-compatible AI providers, commonly used with Claude Code'})
                                             : undefined)
-                                        : undefined}
-                                />
-                                <ProtocolSlot
-                                    kind="decision"
-                                    slot={slotDecision}
-                                    onToggle={() => toggleSlot('decision')}
-                                    onUrlChange={updateDecisionUrl}
-                                    onUrlBlur={commitDecisionSlot}
-                                    helperText={slotDecision.enabled
-                                        ? t('providerDialog.protocol.helperDecision', {defaultValue: 'Optional structured-decision fork endpoint (e.g. a Jev-compatible /api/v1 base) — adds decision capability without changing the chat style'})
                                         : undefined}
                                 />
                             </Stack>

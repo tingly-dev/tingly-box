@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
-	"github.com/tingly-dev/tingly-box/ai"
 )
 
 type ScenarioTransport string
@@ -17,7 +15,6 @@ const (
 	TransportAnthropic ScenarioTransport = "anthropic"
 	TransportEmbed     ScenarioTransport = "embed"
 	TransportImageGen  ScenarioTransport = "imagegen"
-	TransportDecision  ScenarioTransport = "decision"
 )
 
 type ScenarioDescriptor struct {
@@ -75,13 +72,6 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 			// (image_generation tool), TransportImageGen for /images/generations.
 			// The caller chooses; tingly-box does not probe the upstream.
 			SupportedTransport: []ScenarioTransport{TransportOpenAI, TransportImageGen},
-			AllowRuleBinding:   true,
-			AllowDirectPathUse: true,
-		}
-	case ScenarioDecision:
-		return ScenarioDescriptor{
-			ID:                 scenario,
-			SupportedTransport: []ScenarioTransport{TransportDecision},
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}
@@ -248,130 +238,6 @@ func ScenarioSupportsTransport(scenario RuleScenario, transport ScenarioTranspor
 		return false
 	}
 	return slices.Contains(descriptor.SupportedTransport, transport)
-}
-
-// chatAPIStyles lists the provider api styles the chat dispatch graph can
-// convert between, in canonical order (it is also the emit order that keeps
-// allowedApiStylesForScenario deterministic).
-var chatAPIStyles = []ai.APIStyle{ai.APIStyleOpenAI, ai.APIStyleAnthropic, ai.APIStyleGoogle}
-
-// apiStylesForTransport lists the provider api styles that can serve a
-// scenario surface declaring the given transport. Chat-family transports
-// accept every style the dispatch graph can convert to; embed/imagegen
-// handlers require native OpenAI clients. The decision transport contributes
-// no style constraint — it is capability-gated (see
-// scenarioRequiresDecisionCapability), not style-gated.
-func apiStylesForTransport(transport ScenarioTransport) []ai.APIStyle {
-	switch transport {
-	case TransportEmbed, TransportImageGen:
-		return []ai.APIStyle{ai.APIStyleOpenAI}
-	case TransportOpenAI, TransportAnthropic:
-		return chatAPIStyles
-	default:
-		return nil
-	}
-}
-
-// allowedApiStylesForScenario returns the provider api styles a rule bound
-// to this scenario may reference. Returns nil (unconstrained) for unknown,
-// transport-less, or capability-gated scenarios — decision surfaces are
-// gated by endpoint capability instead (ProviderSupportsScenario), and rule
-// binding is separately refused for non-bindable scenarios via
-// AllowRuleBinding.
-func allowedApiStylesForScenario(scenario RuleScenario) []ai.APIStyle {
-	descriptor, ok := GetScenarioDescriptor(scenario)
-	if !ok || len(descriptor.SupportedTransport) == 0 {
-		return nil
-	}
-	var out []ai.APIStyle
-	for _, style := range chatAPIStyles {
-		for _, transport := range descriptor.SupportedTransport {
-			if slices.Contains(apiStylesForTransport(transport), style) {
-				out = append(out, style)
-				break
-			}
-		}
-	}
-	return out
-}
-
-// scenarioRequiresDecisionCapability reports whether rules bound to this
-// scenario dispatch through the decision protocol, in which case every
-// referenced provider must expose a decision endpoint — its own api_style
-// (Jev-native) or a configured decision fork URL — regardless of its chat
-// style. This is what lets users bind any decision-capable model without
-// caring whether the provider speaks OpenAI or Anthropic.
-func scenarioRequiresDecisionCapability(scenario RuleScenario) bool {
-	return ScenarioSupportsTransport(scenario, TransportDecision)
-}
-
-// apiStyleAllowedForScenario reports whether a provider with the given
-// api_style passes the scenario's style-level constraint alone. Most callers
-// want ProviderSupportsScenario, which also applies capability gates.
-func apiStyleAllowedForScenario(scenario RuleScenario, style ai.APIStyle) bool {
-	// Legacy providers predate api_style entirely; the runtime serves them as
-	// OpenAI-style, so validation must not refuse what dispatch accepts.
-	if style == "" {
-		return true
-	}
-	allowed := allowedApiStylesForScenario(scenario)
-	if allowed == nil {
-		return true
-	}
-	return slices.Contains(allowed, style)
-}
-
-// ProviderSupportsScenario reports whether a provider can serve the
-// scenario's surfaces. Two gates apply, per scenario family:
-//
-//   - Decision surfaces are capability-gated: the provider must expose a
-//     decision endpoint (HasDecisionEndpoint). Its chat style is irrelevant —
-//     that is the point of the decision fork.
-//   - Chat/embed/imagegen surfaces are style-gated, with the dual-URL
-//     exception (api_key auth exposing both an OpenAI and an Anthropic base
-//     URL can serve its second chat family via ResolveStyle).
-//
-// Enforced at rule save time so an incompatible pairing is refused where it
-// is created instead of failing on the first request.
-func ProviderSupportsScenario(p *ai.Provider, scenario RuleScenario) bool {
-	if p == nil {
-		return false
-	}
-	if p.APIStyle == "" {
-		return true // legacy provider, see APIStyleAllowedForScenario
-	}
-	if scenarioRequiresDecisionCapability(scenario) {
-		return p.HasDecisionEndpoint()
-	}
-	if apiStyleAllowedForScenario(scenario, p.APIStyle) {
-		return true
-	}
-	// Style alone didn't match — a dual-URL provider can still serve its
-	// second chat family (dispatch resolves it via ResolveStyle).
-	allowed := allowedApiStylesForScenario(scenario)
-	for _, style := range allowed {
-		if p.HasDualURL(style) {
-			return true
-		}
-	}
-	return false
-}
-
-// ScenarioProviderRequirement renders the human-readable provider requirement
-// for binding a rule to this scenario, for validation errors.
-func ScenarioProviderRequirement(scenario RuleScenario) string {
-	if scenarioRequiresDecisionCapability(scenario) {
-		return "requires a provider that exposes a decision endpoint (api_style 'decision', or a decision fork URL)"
-	}
-	styles := allowedApiStylesForScenario(scenario)
-	if styles == nil {
-		return "any provider style"
-	}
-	names := make([]string, 0, len(styles))
-	for _, style := range styles {
-		names = append(names, string(style))
-	}
-	return "allowed api styles: " + strings.Join(names, ", ")
 }
 
 // Base returns the base scenario, stripping any profile suffix.
