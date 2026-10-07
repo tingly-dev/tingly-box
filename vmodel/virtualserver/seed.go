@@ -31,6 +31,10 @@ func (s *Service) BuildBuiltinProviders() []*typ.Provider {
 		openaiModels = append(openaiModels, m.ID)
 	}
 
+	for _, m := range s.decisionReg.ListModels() {
+		openaiModels = append(openaiModels, m.ID)
+	}
+
 	return []*typ.Provider{
 		{
 			UUID:     BuiltinAnthropicUUID,

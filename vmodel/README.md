@@ -27,6 +27,7 @@ vmodel/
 ├── README.md
 ├── anthropic/          // Anthropic-protocol models + Registry alias
 ├── openai/             // OpenAI Chat-protocol models + Registry alias
+├── decision/           // Decisions-endpoint models (options in, one answer out) + Registry alias
 ├── virtualserver/      // Production Gin HTTP handler + Service wiring
 └── benchmark/          // Load-test client + local server factory
     └── examples/       // Runnable server/client examples
@@ -102,6 +103,13 @@ anthropic.RegisterDefaults(anthropicReg)
 openaiReg := openai.NewRegistry()
 openai.RegisterDefaults(openaiReg)
 ```
+
+A model registered in `decision.Registry` is callable only via the OpenAI-style
+`/decisions` endpoint (`/virtual/openai/v1/decisions`); see
+[`.design/decision-protocol.md`](../.design/decision-protocol.md). Defaults are
+`decision-first` (always the first option) and `decision-stable` (input-hashed,
+reproducible). They are listed in the OpenAI model list and seeded into the
+builtin OpenAI provider.
 
 A model registered in `anthropic.Registry` is callable only via
 `/virtual/v1/messages`; a model in `openai.Registry` is callable via

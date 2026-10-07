@@ -12,7 +12,7 @@ import (
 // Server is the virtualserver exposed as a real HTTP upstream for vmodel
 // providers. It serves
 //
-//	/openai/v1/{models,chat/completions,responses}
+//	/openai/v1/{models,chat/completions,responses,decisions}
 //	/anthropic/v1/{models,messages}
 //
 // on a private in-memory listener. There is no auth middleware: the listener

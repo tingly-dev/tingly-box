@@ -17,6 +17,10 @@ const (
 	// program of per-request outcomes (e.g. 200, 200, 429) to simulate a flaky
 	// upstream provider.
 	VirtualModelTypeSequence VirtualModelType = "sequence"
+
+	// VirtualModelTypeDecision represents models that answer OpenAI-style
+	// decisions requests by choosing among caller-supplied options.
+	VirtualModelTypeDecision VirtualModelType = "decision"
 )
 
 // Model represents a virtual model in the models list (OpenAI-compatible format).

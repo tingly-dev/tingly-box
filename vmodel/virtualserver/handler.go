@@ -25,6 +25,7 @@ import (
 	"github.com/tingly-dev/tingly-box/vmodel"
 
 	anthropicvm "github.com/tingly-dev/tingly-box/vmodel/anthropic"
+	decisionvm "github.com/tingly-dev/tingly-box/vmodel/decision"
 	openaivm "github.com/tingly-dev/tingly-box/vmodel/openai"
 )
 
@@ -32,11 +33,12 @@ import (
 type Handler struct {
 	anthropicReg *anthropicvm.Registry
 	openaiReg    *openaivm.Registry
+	decisionReg  *decisionvm.Registry
 }
 
 // NewHandler creates a new Handler backed by the given per-provider registries.
-func NewHandler(anthropicReg *anthropicvm.Registry, openaiReg *openaivm.Registry) *Handler {
-	return &Handler{anthropicReg: anthropicReg, openaiReg: openaiReg}
+func NewHandler(anthropicReg *anthropicvm.Registry, openaiReg *openaivm.Registry, decisionReg *decisionvm.Registry) *Handler {
+	return &Handler{anthropicReg: anthropicReg, openaiReg: openaiReg, decisionReg: decisionReg}
 }
 
 // NotSupported answers 501 for endpoints the virtual models do not simulate
@@ -62,7 +64,7 @@ func (h *Handler) NotSupported(c *gin.Context) {
 // and for test fixtures that want both registries on one endpoint.
 func (h *Handler) ListModels(c *gin.Context) {
 	models := h.anthropicReg.ListModels()
-	models = append(models, h.openaiReg.ListModels()...)
+	models = append(models, h.openaiModels()...)
 	c.JSON(http.StatusOK, OpenAIModelsResponse{
 		Object: "list",
 		Data:   models,
@@ -75,8 +77,14 @@ func (h *Handler) ListModels(c *gin.Context) {
 func (h *Handler) ListOpenAIModels(c *gin.Context) {
 	c.JSON(http.StatusOK, OpenAIModelsResponse{
 		Object: "list",
-		Data:   h.openaiReg.ListModels(),
+		Data:   h.openaiModels(),
 	})
+}
+
+// openaiModels is everything reachable through an OpenAI-style base URL: chat
+// models plus the decision models served by its /decisions endpoint.
+func (h *Handler) openaiModels() []vmodel.Model {
+	return append(h.openaiReg.ListModels(), h.decisionReg.ListModels()...)
 }
 
 // ListAnthropicModels handles GET /virtual/anthropic/v1/models — returns
