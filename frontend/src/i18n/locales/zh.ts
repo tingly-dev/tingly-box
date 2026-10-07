@@ -70,7 +70,6 @@ export default {
       "useVSCode": "VS Code",
       "useCursor": "Cursor",
       "useEmbed": "Embedding",
-      "useDecision": "Decision",
       "useImageGen": "Image API",
       "useTeam": "Team",
       "useCustom": "Custom",
@@ -345,8 +344,6 @@ export default {
       "anthropicLabel": "Anthropic 兼容",
       "helperOpenAI": "支持来自 OpenAI、Google 和许多其他 OpenAI 兼容提供商的模型",
       "helperAnthropic": "用于 Anthropic 兼容的 AI 提供商，通常与 Claude Code 一起使用",
-      "decisionLabel": "Decision",
-      "helperDecision": "可选的 Decision 分叉端点（例如 Jev 兼容的 /api/v1 基础地址）——在不改变聊天协议的情况下为该提供商增加 Decision 能力",
       "fromTemplate": "来自模板",
       "recommendedBadge": "推荐"
     },
@@ -2226,10 +2223,6 @@ export default {
     "modelRules": "模型规则",
     "embedModelRules": "向量模型规则",
     "imageGenModelRules": "图像模型规则",
-    "decisionModelRules": "Decision 模型规则",
-    "decisionQuickStart": "快速开始",
-    "decisionQuickStartHint": "将类型化问题——choice、score、noul——POST 到上方端点，即可以 JSON 返回结构化答案与概率。",
-    "decisionAdvisory": "决策概率仅供参考，不能替代对不可逆操作的权限控制或人工审批。",
     "tooltip": {
       "claude_code": "命令行 AI 开发助手，可用于编码实现、测试与 git 操作",
       "claude_desktop": "为 Claude Desktop 桌面应用提供 API 代理",
@@ -2241,7 +2234,6 @@ export default {
       "pi": "通过 Tingly Box 代理使用 pi 编码 Agent",
       "dsh": "通过 Tingly Box 代理使用 DeepSeek Harness (dsh) 智能体框架",
       "imagegen": "通过 Tingly Box 代理进行 AI 图像生成与编辑，支持多种模型",
-      "decision": "将原生类型化决策请求——选项、评分与校准概率——通过 Tingly Box 路由，无需转换为聊天消息",
     },
     "vscode": {
       "installDescription": "从 VS Code 或应用市场安装 Tingly Box 扩展。",

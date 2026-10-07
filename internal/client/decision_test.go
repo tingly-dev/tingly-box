@@ -1,57 +1,69 @@
 package client
 
 import (
+	"context"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
-	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/openai/openai-go/v3"
+	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func TestNewDecisionClient_RequiresDecisionEndpoint(t *testing.T) {
-	plain := &typ.Provider{Name: "gpt", APIStyle: ai.APIStyleOpenAI, APIBase: "https://api.example.com/v1"}
-	if _, err := NewDecisionClient(plain, "m", typ.SessionID{}); err == nil {
-		t.Error("a chat provider without a decision fork must be refused")
-	}
-
-	native := &typ.Provider{Name: "jev", APIStyle: ai.APIStyleDecision, APIBase: "https://jev.example.com/api/v1"}
-	c, err := NewDecisionClient(native, "m", typ.SessionID{})
-	if err != nil {
-		t.Fatalf("Jev-native provider should construct: %v", err)
-	}
-	if c.endpoint != "https://jev.example.com/api/v1/decisions" {
-		t.Errorf("endpoint = %q, want the normalized /decisions URL", c.endpoint)
-	}
-
-	fork := &typ.Provider{Name: "gpt+decision", APIStyle: ai.APIStyleOpenAI, APIBase: "https://api.example.com/v1", APIBaseDecision: "https://jev.example.com/api/v1"}
-	if c, err = NewDecisionClient(fork, "m", typ.SessionID{}); err != nil {
-		t.Fatalf("fork provider should construct: %v", err)
-	}
-	if c.endpoint != "https://jev.example.com/api/v1/decisions" {
-		t.Errorf("fork endpoint = %q, want the fork base, not the chat base", c.endpoint)
-	}
+func newDecisionTestClient(t *testing.T, base string) *OpenAIClient {
+	t.Helper()
+	c, err := NewOpenAIClient(&typ.Provider{
+		Name:     "decision-test",
+		APIBase:  base,
+		APIStyle: protocol.APIStyleOpenAI,
+		AuthType: typ.AuthTypeAPIKey,
+		Token:    "sk-test",
+	}, "m", typ.SessionID{})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = c.Close() })
+	return c
 }
 
-func TestDecisionEndpointURL(t *testing.T) {
-	tests := []struct {
-		base string
-		want string
-	}{
-		{"https://www.jevai.org/api/v1", "https://www.jevai.org/api/v1/decisions"},
-		{"https://www.jevai.org/api/v1/", "https://www.jevai.org/api/v1/decisions"},
-		{"https://www.jevai.org/api/v1/decisions", "https://www.jevai.org/api/v1/decisions"},
-		{"https://api.openai.com/v1", "https://api.openai.com/v1/decisions"},
-		{"https://www.jevai.org/api/v1/decisions?x=1#frag", "https://www.jevai.org/api/v1/decisions"},
-	}
-	for _, tt := range tests {
-		got, err := DecisionEndpointURL(tt.base)
-		if err != nil {
-			t.Fatalf("DecisionEndpointURL(%q): %v", tt.base, err)
-		}
-		if got != tt.want {
-			t.Errorf("DecisionEndpointURL(%q) = %q, want %q", tt.base, got, tt.want)
-		}
-	}
-	if _, err := DecisionEndpointURL("not-a-url"); err == nil {
-		t.Error("DecisionEndpointURL should reject a relative URL")
-	}
+// The body travels byte-for-byte to {APIBase}/decisions with the provider's
+// bearer token, and the raw JSON answer comes back untouched.
+func TestDecisionsNew_Passthrough(t *testing.T) {
+	var gotPath, gotAuth, gotCT string
+	var gotBody []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotAuth, gotCT = r.URL.Path, r.Header.Get("Authorization"), r.Header.Get("Content-Type")
+		gotBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"answer":"b",  "usage":{"prompt_tokens":3}}`))
+	}))
+	defer srv.Close()
+
+	req := []byte(`{"model":"luna","options":["a","b"], "context":"x"}`)
+	out, err := newDecisionTestClient(t, srv.URL+"/v1").DecisionsNew(context.Background(), req)
+	require.NoError(t, err)
+	require.Equal(t, "/v1/decisions", gotPath)
+	require.Equal(t, "Bearer sk-test", gotAuth)
+	require.Equal(t, "application/json", gotCT)
+	require.Equal(t, req, gotBody)
+	require.Equal(t, `{"answer":"b",  "usage":{"prompt_tokens":3}}`, string(out))
+}
+
+// Upstream failures surface as *openai.Error carrying the HTTP status, which
+// the gateway maps back to the caller.
+func TestDecisionsNew_UpstreamError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":{"message":"not enabled","type":"invalid_request_error"}}`))
+	}))
+	defer srv.Close()
+
+	_, err := newDecisionTestClient(t, srv.URL+"/v1").DecisionsNew(context.Background(), []byte(`{"model":"luna"}`))
+	var apiErr *openai.Error
+	require.True(t, errors.As(err, &apiErr), "got %T: %v", err, err)
+	require.Equal(t, http.StatusForbidden, apiErr.StatusCode)
 }

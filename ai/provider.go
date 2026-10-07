@@ -208,14 +208,6 @@ type Provider struct {
 	APIBaseOpenAI    string `json:"api_base_openai,omitempty"`
 	APIBaseAnthropic string `json:"api_base_anthropic,omitempty"`
 
-	// Decision fork endpoint. Independent of APIBase/APIStyle: a chat provider
-	// (openai or anthropic style) whose vendor exposes a structured-decision
-	// endpoint sets this, and the decision scenario dispatches through the
-	// dedicated DecisionClient — users pick providers by model fit, not by
-	// protocol. Providers whose api_style IS decision (Jev-native) serve
-	// decisions from APIBase directly and do not need this field.
-	APIBaseDecision string `json:"api_base_decision,omitempty"`
-
 	// Auth configuration
 	AuthType     AuthType          `json:"auth_type"`               // api_key, oauth, vmodel, aws_sigv4, azure_key, gcp_sa
 	OAuthDetail  *OAuthDetail      `json:"oauth_detail,omitempty"`  // OAuth credentials (only for oauth auth type)
@@ -330,24 +322,6 @@ func (p *Provider) IsDual() bool {
 		return false
 	}
 	return p.APIBaseOpenAI != "" && p.APIBaseAnthropic != ""
-}
-
-// HasDecisionEndpoint reports whether the provider can serve the structured
-// decision protocol: either its primary style IS decision (Jev-native, so
-// APIBase already points at the decisions surface) or it declares a decision
-// fork URL next to its chat endpoints.
-func (p *Provider) HasDecisionEndpoint() bool {
-	return p.APIStyle == APIStyleDecision || p.APIBaseDecision != ""
-}
-
-// DecisionBase returns the base URL the decision protocol dispatches against.
-// Callers normalize it to the /decisions endpoint via
-// forwarding.DecisionEndpointURL, so ".../api/v1" and ".../decisions" both work.
-func (p *Provider) DecisionBase() string {
-	if p.APIBaseDecision != "" {
-		return p.APIBaseDecision
-	}
-	return p.APIBase
 }
 
 // dualEligible reports whether this provider's auth type allows dual URLs.

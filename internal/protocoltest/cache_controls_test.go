@@ -1,8 +1,6 @@
 package protocoltest
 
-import (
-	"testing"
-)
+import "testing"
 
 // TestCacheControls drives every direct and ABA cache/no-cache request through
 // the real gateway. The case implementation is shared with
@@ -10,10 +8,6 @@ import (
 func TestCacheControls(t *testing.T) {
 	m := DefaultMatrix()
 	for _, pair := range m.Pairs {
-		// Same filter as ExecuteAllCacheControls (supportsCacheControls).
-		if !supportsCacheControls(pair.Source) {
-			continue
-		}
 		for _, streaming := range m.Streaming {
 			t.Run("single/"+pair.String()+"/"+streamMode(streaming), func(t *testing.T) {
 				t.Parallel()

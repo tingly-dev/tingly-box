@@ -14,8 +14,6 @@ const (
 	APIStyleOpenAI    APIStyle = "openai"
 	APIStyleAnthropic APIStyle = "anthropic"
 	APIStyleGoogle    APIStyle = "google"
-	// APIStyleDecision is the native structured-decision protocol used by Jev.
-	APIStyleDecision APIStyle = "decision"
 )
 
 // APIType represents the target API style for protocol conversion
@@ -36,9 +34,6 @@ const (
 
 	// TypeGoogle converts requests to Google Gemini API format
 	TypeGoogle APIType = "google"
-
-	// TypeDecision preserves native typed decision requests and responses.
-	TypeDecision APIType = "decision"
 )
 
 // Client is the unified interface for AI provider clients
@@ -48,40 +43,6 @@ type Client interface {
 
 	// Close closes any resources held by the client
 	Close() error
-}
-
-// DecisionUsage is the optional usage object a decision upstream may report.
-// Both Anthropic-style (input_tokens/output_tokens) and OpenAI-style
-// (prompt_tokens/completion_tokens) spellings are accepted; absent fields
-// mean zero — decision answers are structured and the micro-model may simply
-// not report tokens.
-type DecisionUsage struct {
-	InputTokens      *int `json:"input_tokens"`
-	OutputTokens     *int `json:"output_tokens"`
-	PromptTokens     *int `json:"prompt_tokens"`
-	CompletionTokens *int `json:"completion_tokens"`
-}
-
-// Input returns the input token count, preferring the Anthropic spelling.
-func (u *DecisionUsage) Input() int {
-	if u.InputTokens != nil {
-		return *u.InputTokens
-	}
-	if u.PromptTokens != nil {
-		return *u.PromptTokens
-	}
-	return 0
-}
-
-// Output returns the output token count, preferring the Anthropic spelling.
-func (u *DecisionUsage) Output() int {
-	if u.OutputTokens != nil {
-		return *u.OutputTokens
-	}
-	if u.CompletionTokens != nil {
-		return *u.CompletionTokens
-	}
-	return 0
 }
 
 // OpenAIConfig contains additional metadata that may be used by provider transforms

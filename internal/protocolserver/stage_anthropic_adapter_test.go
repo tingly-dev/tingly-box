@@ -209,11 +209,6 @@ func runStageAnthropic(t *testing.T, s scenario.Scenario, clientProtocol protoco
 func TestStageAnthropicAdapterMatchesGoldenBeta(t *testing.T) {
 	golden := readGolden(t, "anthropic_beta__anthropic_beta.txt")
 	for _, s := range scenario.AllScenarios() {
-		if s.Name == "decision" {
-			// Decision has no chat conversion yet (.design/decision-protocol.md
-			// §8), so it has no golden wire snapshot on the chat adapters.
-			continue
-		}
 		for _, streaming := range []bool{false, true} {
 			s, streaming := s, streaming
 			name := fmt.Sprintf("%s stream=%v", s.Name, streaming)
@@ -232,11 +227,6 @@ func TestStageAnthropicAdapterMatchesGoldenBeta(t *testing.T) {
 func TestStageAnthropicAdapterMatchesGoldenV1(t *testing.T) {
 	golden := readGolden(t, "anthropic_v1__anthropic_beta.txt")
 	for _, s := range scenario.AllScenarios() {
-		if s.Name == "decision" {
-			// Decision has no chat conversion yet (.design/decision-protocol.md
-			// §8), so it has no golden wire snapshot on the chat adapters.
-			continue
-		}
 		for _, streaming := range []bool{false, true} {
 			s, streaming := s, streaming
 			name := fmt.Sprintf("%s stream=%v", s.Name, streaming)

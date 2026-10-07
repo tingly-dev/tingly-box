@@ -244,30 +244,6 @@ func (p *ClientPool) InvalidateSession(providerUUID, sessionID string) {
 	logrus.Infof("Invalidated transport pool entries for provider UUID: %s session: %s", providerUUID, sessionID)
 }
 
-// GetDecisionClient returns the dedicated decision-protocol client for the
-// provider. Returns nil when the provider exposes no decision endpoint
-// (neither api_style decision nor a decision fork URL).
-func (p *ClientPool) GetDecisionClient(ctx context.Context, provider *typ.Provider, model string) *DecisionClient {
-	client, err := NewDecisionClient(provider, model, typ.GetSessionID(ctx))
-	if err != nil {
-		logrus.WithContext(ctx).Errorf("Failed to create decision client for provider %s: %v", provider.Name, err)
-		return nil
-	}
-
-	// Same finalizer contract as the chat clients: idle connections close
-	// when the GC collects the client. Capture only the name so the closure
-	// does not pin the per-request provider clone.
-	providerName := provider.Name
-	runtime.SetFinalizer(client, func(c *DecisionClient) {
-		if c != nil {
-			c.Close()
-			logrus.Debugf("Auto-closed decision client for provider: %s via finalizer", providerName)
-		}
-	})
-
-	return client
-}
-
 // InvalidateProvider invalidates all transports for a specific provider UUID.
 // This should be called when provider credentials are updated (e.g., OAuth token refresh).
 //

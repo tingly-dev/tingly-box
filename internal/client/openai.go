@@ -31,6 +31,7 @@ type OpenAIClientInterface interface {
 	ResponsesNew(ctx context.Context, req responses.ResponseNewParams) (*responses.Response, error)
 	ResponsesNewStreaming(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion]
 	EmbeddingsNew(ctx context.Context, req openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error)
+	DecisionsNew(ctx context.Context, body []byte) ([]byte, error)
 
 	// Utility methods
 	ListModels(ctx context.Context) (*ModelListResult, error)
@@ -144,6 +145,17 @@ func (c *OpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, req open
 // EmbeddingsNew creates a new embeddings request
 func (c *OpenAIClient) EmbeddingsNew(ctx context.Context, req openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error) {
 	return c.client.Embeddings.New(ctx, req)
+}
+
+// DecisionsNew posts a decision request to {APIBase}/decisions and returns the
+// raw JSON answer. The Decisions API has no SDK types (its schema is not
+// public), so the body travels opaquely; auth, proxy, and error handling come
+// from the same SDK client as every other OpenAI endpoint. Upstream errors are
+// returned as *openai.Error and keep their HTTP status.
+func (c *OpenAIClient) DecisionsNew(ctx context.Context, body []byte) ([]byte, error) {
+	var out []byte
+	err := c.client.Post(ctx, "decisions", nil, &out, option.WithRequestBody("application/json", body))
+	return out, err
 }
 
 // ImagesGenerate creates a new image generation request. Most providers speak

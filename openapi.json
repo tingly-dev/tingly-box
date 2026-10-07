@@ -10398,11 +10398,6 @@
             "description": "Dual-mode Anthropic-compatible base URL (optional, api_key auth only)",
             "example": "https://api.example.com"
           },
-          "api_base_decision": {
-            "type": "string",
-            "description": "Structured-decision fork endpoint base URL (optional); lets any provider serve the decision scenario",
-            "example": "https://www.jevai.org/api/v1"
-          },
           "api_base_openai": {
             "type": "string",
             "description": "Dual-mode OpenAI-compatible base URL (optional, api_key auth only)",
@@ -14810,11 +14805,6 @@
             "description": "Field api_base_anthropic",
             "example": "https://api.example.com"
           },
-          "api_base_decision": {
-            "type": "string",
-            "description": "Field api_base_decision",
-            "example": "https://www.jevai.org/api/v1"
-          },
           "api_base_openai": {
             "type": "string",
             "description": "Field api_base_openai",
@@ -17603,10 +17593,6 @@
           "api_base_anthropic": {
             "type": "string",
             "description": "New dual-mode Anthropic-compatible base URL (empty string clears it)"
-          },
-          "api_base_decision": {
-            "type": "string",
-            "description": "New structured-decision fork endpoint base URL (empty string clears it)"
           },
           "api_base_openai": {
             "type": "string",

@@ -37,7 +37,6 @@ const UseXcodePage = lazy(() => import('@/pages/scenario/UseXcodePage'));
 const UseVSCodePage = lazy(() => import('@/pages/scenario/UseVSCodePage'));
 const UseCursorPage = lazy(() => import('@/pages/scenario/UseCursorPage'));
 const UseEmbedPage = lazy(() => import('@/pages/scenario/UseEmbedPage'));
-const UseDecisionPage = lazy(() => import('@/pages/scenario/UseDecisionPage'));
 const ImageApiPage = lazy(() => import('@/pages/image/ImageApiPage'));
 const ImagePlaygroundPage = lazy(() => import('@/pages/image/ImagePlaygroundPage'));
 const ImageProfilePage = lazy(() => import('@/pages/image/ImageProfilePage'));
@@ -135,7 +134,6 @@ export const appRoutes = (
             <Route path="/agent/vscode" element={<UseVSCodePage />} />
             <Route path="/agent/cursor" element={<UseCursorPage />} />
             <Route path="/agent/embed" element={<UseEmbedPage />} />
-            <Route path="/agent/decision" element={<UseDecisionPage />} />
             {/* Image is its own rail item: Playground (work surface) + Image API
                 (the imagegen scenario). Old /agent/* paths keep working. */}
             <Route path="/image" element={<Navigate to="/image/playground" replace />} />

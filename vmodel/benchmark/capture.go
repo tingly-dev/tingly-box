@@ -25,7 +25,6 @@ const (
 	EndpointResponses EndpointKind = "responses"
 	EndpointAnthropic EndpointKind = "anthropic"
 	EndpointGoogle    EndpointKind = "google"
-	EndpointDecision  EndpointKind = "decision"
 	EndpointUnknown   EndpointKind = "unknown"
 )
 
@@ -43,8 +42,6 @@ func classify(path string) EndpointKind {
 		return EndpointAnthropic
 	case strings.Contains(path, "generateContent") || strings.Contains(path, "/v1beta/models"):
 		return EndpointGoogle
-	case strings.HasSuffix(path, "/decisions"):
-		return EndpointDecision
 	default:
 		return EndpointUnknown
 	}

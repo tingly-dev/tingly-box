@@ -271,22 +271,6 @@ func AssertErrorMessageContains(substring string) Assertion {
 	}
 }
 
-// AssertRawBodyContains returns an Assertion that the raw response body
-// contains the given substring. Use it for structured protocols whose answers
-// have no chat-shaped equivalent to parse into Content (e.g. the native
-// decision protocol's answers/probabilities).
-func AssertRawBodyContains(substring string) Assertion {
-	return Assertion{
-		Name: fmt.Sprintf("raw_body_contains(%q)", substring),
-		Check: func(r *RoundTripResult) error {
-			if !strings.Contains(string(r.RawBody), substring) {
-				return fmt.Errorf("raw body does not contain %q", substring)
-			}
-			return nil
-		},
-	}
-}
-
 // AssertModelContains returns an Assertion that the model name contains substring.
 func AssertModelContains(substring string) Assertion {
 	return Assertion{
@@ -538,50 +522,4 @@ func outputItems(resp map[string]any) []map[string]any {
 func str(v any) string {
 	s, _ := v.(string)
 	return s
-}
-
-// AssertDecisionAnswerConsistent validates the internal consistency of a
-// structured-decision body: every string choice answer must appear in its
-// question's probability map and be that map's argmax. Score/noul answers
-// have no probability semantics and are skipped. Use it with mock responses
-// that randomize their answers — it pins "the answer is right for the
-// probabilities" without pinning which option wins.
-func AssertDecisionAnswerConsistent() Assertion {
-	return Assertion{
-		Name: "decision_answer_consistent",
-		Check: func(r *RoundTripResult) error {
-			var body struct {
-				Answers map[string]struct {
-					Answer any `json:"answer"`
-				} `json:"answers"`
-				Probabilities map[string]map[string]float64 `json:"probabilities"`
-			}
-			if err := json.Unmarshal(r.RawBody, &body); err != nil {
-				return fmt.Errorf("decision body is not JSON: %w", err)
-			}
-			if len(body.Answers) == 0 {
-				return fmt.Errorf("decision body has no answers")
-			}
-			for question, entry := range body.Answers {
-				answer, ok := entry.Answer.(string)
-				if !ok {
-					continue
-				}
-				probs := body.Probabilities[question]
-				if _, present := probs[answer]; len(probs) > 0 && !present {
-					return fmt.Errorf("answer %q for %q is missing from its probability map", answer, question)
-				}
-				best, bestP := "", -1.0
-				for opt, p := range probs {
-					if p > bestP {
-						best, bestP = opt, p
-					}
-				}
-				if len(probs) > 0 && answer != best {
-					return fmt.Errorf("answer %q for %q is not the argmax of its probabilities (argmax %q=%.2f)", answer, question, best, bestP)
-				}
-			}
-			return nil
-		},
-	}
 }
