@@ -6,13 +6,11 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
 	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -50,6 +48,7 @@ func (ph *ProtocolHandler) HandleOpenAIDecisions(c *gin.Context) {
 		decisionBadRequest(c, err.Error())
 		return
 	}
+	// Single-shot endpoints share content-free selection (no smart routing).
 	provider, selectedService, err := ph.selectServiceForEmbeddings(c, scenarioType, rule)
 	if err != nil {
 		decisionBadRequest(c, err.Error())
@@ -76,14 +75,12 @@ func (ph *ProtocolHandler) HandleOpenAIDecisions(c *gin.Context) {
 	wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, actualModel)
 	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 
-	resp, cancel, err := forwarding.ForwardOpenAIDecisions(fc, wrapper, actualModel, upstreamBody)
+	resp, cancel, err := forwarding.ForwardOpenAIDecisions(fc, wrapper, upstreamBody)
 	if cancel != nil {
 		defer cancel()
 	}
 	if err != nil {
-		ph.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		logrus.Errorf("Failed to forward decisions request: %v", err)
-		stream.SendForwardingError(c, err)
+		ph.failForward(c, err)
 		return
 	}
 

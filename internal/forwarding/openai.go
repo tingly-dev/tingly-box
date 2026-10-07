@@ -53,14 +53,14 @@ func ForwardOpenAIEmbeddings(fc *ForwardContext, wrapper client.OpenAIClientInte
 
 // ForwardOpenAIDecisions sends a raw OpenAI decision request. Decisions have no
 // streaming and skip the chat transform chain; the body is opaque JSON.
-func ForwardOpenAIDecisions(fc *ForwardContext, wrapper client.OpenAIClientInterface, model string, body []byte) ([]byte, context.CancelFunc, error) {
+func ForwardOpenAIDecisions(fc *ForwardContext, wrapper client.OpenAIClientInterface, body []byte) ([]byte, context.CancelFunc, error) {
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
 	}
 
 	ctx, cancel := fc.PrepareContext(body)
 
-	logrus.Infof("provider: %s, model: %s (decisions)", fc.Provider.Name, model)
+	logrus.Infof("provider: %s (decisions)", fc.Provider.Name)
 
 	resp, err := wrapper.DecisionsNew(ctx, body)
 	fc.Complete(ctx, resp, err)
