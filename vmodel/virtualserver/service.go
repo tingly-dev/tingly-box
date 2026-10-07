@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	anthropicvm "github.com/tingly-dev/tingly-box/vmodel/anthropic"
+	decisionvm "github.com/tingly-dev/tingly-box/vmodel/decision"
 	openaivm "github.com/tingly-dev/tingly-box/vmodel/openai"
 )
 
@@ -16,6 +17,7 @@ import (
 type Service struct {
 	anthropicReg *anthropicvm.Registry
 	openaiReg    *openaivm.Registry
+	decisionReg  *decisionvm.Registry
 	handler      *Handler
 }
 
@@ -28,10 +30,14 @@ func NewService() *Service {
 	o := openaivm.NewRegistry()
 	openaivm.RegisterDefaults(o)
 
+	d := decisionvm.NewRegistry()
+	decisionvm.RegisterDefaults(d)
+
 	return &Service{
 		anthropicReg: a,
 		openaiReg:    o,
-		handler:      NewHandler(a, o),
+		decisionReg:  d,
+		handler:      NewHandler(a, o, d),
 	}
 }
 
@@ -40,6 +46,10 @@ func (s *Service) GetAnthropicRegistry() *anthropicvm.Registry { return s.anthro
 
 // GetOpenAIRegistry returns the OpenAI Chat-protocol model registry.
 func (s *Service) GetOpenAIRegistry() *openaivm.Registry { return s.openaiReg }
+
+// GetDecisionRegistry returns the decisions model registry (served at the
+// OpenAI-style /decisions endpoint).
+func (s *Service) GetDecisionRegistry() *decisionvm.Registry { return s.decisionReg }
 
 // GetHandler returns the HTTP handler.
 func (s *Service) GetHandler() *Handler {
@@ -56,6 +66,7 @@ func (s *Service) SetupRoutes(group *gin.RouterGroup) {
 	group.GET("/models", s.handler.ListModels)
 	group.POST("/chat/completions", s.handler.ChatCompletions)
 	group.POST("/responses", s.handler.Responses)
+	group.POST("/decisions", s.handler.Decisions)
 	group.POST("/messages", s.handler.Messages)
 }
 
@@ -73,6 +84,7 @@ func (s *Service) SetupOpenAIRoutes(group *gin.RouterGroup) {
 	v1.GET("/models", s.handler.ListOpenAIModels)
 	v1.POST("/chat/completions", s.handler.ChatCompletions)
 	v1.POST("/responses", s.handler.Responses)
+	v1.POST("/decisions", s.handler.Decisions)
 }
 
 // SetupAnthropicRoutes mounts the Anthropic-only entrypoints on the given

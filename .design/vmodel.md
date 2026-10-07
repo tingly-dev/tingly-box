@@ -18,6 +18,8 @@ interfaces, registration discipline, how to add a model).
 | [`vmodel-benchmark.md`](./vmodel-benchmark.md) | Elevating `vmodel` into the single shared real-world test-bench for `*test` packages, plus the reusable preset check-logic layer. |
 | [`vmodel-transport.md`](./vmodel-transport.md) | Dispatching `vmodel` providers over real HTTP (private in-memory listener, optional unix socket) through the standard SDK + transport chain, instead of the in-memory `vmodel/client` short-circuit. Covers listener choice, the `vmodel://openai|anthropic` base-URL scheme, and the migration plan. |
 
+| [`decision-protocol.md`](./decision-protocol.md) | Decisions as an OpenAI-native endpoint (`{APIBase}/decisions`), and the `decision-*` virtual models that serve it. |
+
 ## Related design notes
 
 These live outside the `vmodel-*` namespace but intersect with it:
