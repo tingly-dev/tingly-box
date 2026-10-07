@@ -15,9 +15,12 @@ provider style, no new provider field, no new scenario, and no UI: any
 `openai`-style provider already carries everything needed (base URL, token,
 proxy). The endpoint is `{APIBase}/decisions`, so OpenAI's base is
 `https://api.openai.com/v1` and Vercel AI Gateway's is
-`https://ai-gateway.vercel.sh/v1` (it serves Jev behind `/decisions`). Native
-TypeSafe (`/v1/systemone`) and OpenRouter (`/api/alpha/decisions`) do not
-fit `{APIBase}/decisions`, so they are not in the catalog.
+`https://ai-gateway.vercel.sh/v1` (it serves Jev behind `/decisions`). Two
+vendors host decisions elsewhere, so `decisionsPath` (internal/client/openai.go)
+rewrites the upstream URL by host, body unchanged: TypeSafe
+`api.typesafe.ai` → `/v1/systemone`, OpenRouter `openrouter.ai` →
+`/api/alpha/decisions`. Both are in the catalog (`typesafe-ai`, `openrouter-ai`).
+Together/Fireworks: no decisions endpoint found.
 
 Earlier iterations modeled Jev as a fifth protocol family (style/type/transport/
 scenario, a fork URL field, a harness matrix pair, a frontend page). That was

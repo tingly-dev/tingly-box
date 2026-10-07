@@ -4645,6 +4645,30 @@
         "https://developers.cloudflare.com/ai-gateway/usage/universal/"
       ]
     },
+    "typesafe-ai": {
+      "id": "typesafe-ai",
+      "name": "TypeSafe AI (Jev)",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "api.typesafe.ai",
+      "vendor_family": "typesafe",
+      "region": "global",
+      "plan": "standard",
+      "website": "https://typesafe.ai/",
+      "description": "Decision models (Jev, System One); decisions only — the gateway routes /decisions to POST /v1/systemone",
+      "type": "official",
+      "api_doc": "",
+      "model_doc": "",
+      "pricing_doc": "",
+      "base_url_openai": "https://api.typesafe.ai/v1",
+      "base_url_anthropic": null,
+      "models": [],
+      "supports_models_endpoint": false,
+      "last_updated": "2026-10-07",
+      "sources": [
+        "https://typesafe.ai/blog/introducing-system-one-models-and-jev"
+      ]
+    },
     "openrouter-ai": {
       "id": "openrouter-ai",
       "name": "OpenRouter",

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -154,8 +155,27 @@ func (c *OpenAIClient) EmbeddingsNew(ctx context.Context, req openai.EmbeddingNe
 // returned as *openai.Error and keep their HTTP status.
 func (c *OpenAIClient) DecisionsNew(ctx context.Context, body []byte) ([]byte, error) {
 	var out []byte
-	err := c.client.Post(ctx, "decisions", nil, &out, option.WithRequestBody("application/json", body))
+	err := c.client.Post(ctx, decisionsPath(c.provider.APIBase), nil, &out, option.WithRequestBody("application/json", body))
 	return out, err
+}
+
+// decisionsPath resolves where a provider serves decisions. Most vendors expose
+// {APIBase}/decisions; two host the same body elsewhere, so they get an absolute
+// URL (the SDK resolves absolute paths as-is):
+//   - TypeSafe (Jev native): https://api.typesafe.ai/v1/systemone
+//   - OpenRouter (alpha):    https://openrouter.ai/api/alpha/decisions
+func decisionsPath(apiBase string) string {
+	u, err := url.Parse(apiBase)
+	if err != nil {
+		return "decisions"
+	}
+	switch strings.ToLower(u.Hostname()) {
+	case "api.typesafe.ai":
+		return u.Scheme + "://" + u.Host + "/v1/systemone"
+	case "openrouter.ai":
+		return u.Scheme + "://" + u.Host + "/api/alpha/decisions"
+	}
+	return "decisions"
 }
 
 // ImagesGenerate creates a new image generation request. Most providers speak

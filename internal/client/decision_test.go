@@ -67,3 +67,16 @@ func TestDecisionsNew_UpstreamError(t *testing.T) {
 	require.True(t, errors.As(err, &apiErr), "got %T: %v", err, err)
 	require.Equal(t, http.StatusForbidden, apiErr.StatusCode)
 }
+
+func TestDecisionsPath(t *testing.T) {
+	for base, want := range map[string]string{
+		"https://api.openai.com/v1":       "decisions",
+		"https://ai-gateway.vercel.sh/v1": "decisions",
+		"https://api.typesafe.ai":         "https://api.typesafe.ai/v1/systemone",
+		"https://api.typesafe.ai/v1":      "https://api.typesafe.ai/v1/systemone",
+		"https://openrouter.ai/api/v1":    "https://openrouter.ai/api/alpha/decisions",
+		"::bad":                           "decisions",
+	} {
+		require.Equal(t, want, decisionsPath(base), base)
+	}
+}
