@@ -13,6 +13,14 @@ interface UseProviderQuotaOptions {
    * @default true
    */
   fetchOnMount?: boolean;
+  /**
+   * Re-read the stored quota this often (ms), and again whenever the window
+   * becomes visible/focused. The backend refreshes on its own schedule; this
+   * only picks up what it has already stored. Use for long-lived views (e.g.
+   * the tray hub panel, which stays mounted while hidden). 0 disables.
+   * @default 0
+   */
+  pollIntervalMs?: number;
 }
 
 /** 404 means the provider has no quota to show — not an error worth raising. */
@@ -26,7 +34,7 @@ function isMissingQuota(error: unknown): boolean {
  * Uses batch API to fetch quota for multiple providers efficiently.
  */
 export function useProviderQuota(providers: Array<{ uuid: string; name?: string }>, options: UseProviderQuotaOptions = {}) {
-  const { fetchOnMount = true } = options;
+  const { fetchOnMount = true, pollIntervalMs = 0 } = options;
 
   const [quotaData, setQuotaData] = useState<ProviderQuotaData>({});
   const [refreshing, setRefreshing] = useState<Set<string>>(new Set());
@@ -47,12 +55,12 @@ export function useProviderQuota(providers: Array<{ uuid: string; name?: string 
   );
 
   // Batch fetch quota for multiple providers
-  const batchFetchQuota = useCallback(async (providerUuids: string[]): Promise<void> => {
+  const batchFetchQuota = useCallback(async (providerUuids: string[], silent = false): Promise<void> => {
     if (providerUuids.length === 0) {
       return;
     }
 
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const response = await fetchUIAPI('/provider-quota/batch', {
         method: 'POST',
@@ -73,6 +81,9 @@ export function useProviderQuota(providers: Array<{ uuid: string; name?: string 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('[useProviderQuota] Batch fetch failed:', error);
+      // A background re-read keeps the last good data and stays quiet; the
+      // next tick retries.
+      if (silent) return;
       // One notification for the batch, not one per provider: the whole call
       // failed, so per-provider toasts would repeat a single fact N times.
       notify.error(`Failed to load quota: ${errorMessage}`);
@@ -85,7 +96,7 @@ export function useProviderQuota(providers: Array<{ uuid: string; name?: string 
         return next;
       });
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [notify]);
 
@@ -176,6 +187,25 @@ export function useProviderQuota(providers: Array<{ uuid: string; name?: string 
     const providerUuids = providers.map(p => p.uuid);
     batchFetchQuota(providerUuids);
   }, [providers.length, fetchOnMount, batchFetchQuota]);
+
+  // Keep a long-lived view current: re-read on a timer and when the window is
+  // shown again (timers are throttled while a webview is hidden).
+  const uuidsKey = providers.map(p => p.uuid).join(',');
+  useEffect(() => {
+    if (pollIntervalMs <= 0 || !uuidsKey) return;
+    const uuids = uuidsKey.split(',');
+    const reread = () => {
+      if (document.visibilityState === 'visible') void batchFetchQuota(uuids, true);
+    };
+    const timer = window.setInterval(reread, pollIntervalMs);
+    document.addEventListener('visibilitychange', reread);
+    window.addEventListener('focus', reread);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', reread);
+      window.removeEventListener('focus', reread);
+    };
+  }, [pollIntervalMs, uuidsKey, batchFetchQuota]);
 
   return {
     quotaData,
