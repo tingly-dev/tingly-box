@@ -7,14 +7,17 @@
 
 OpenAI's Decisions API (announced at DevDay, 2026-09-29; limited preview) picks
 one answer from options the caller defines. Its request/response schema is not
-public. Jev exposes a compatible `POST {base}/decisions` surface.
+public. Jev (TypeSafe AI) uses the same body shape, but natively at
+`POST https://api.typesafe.ai/v1/systemone`, not `/decisions`.
 
 **Decisions are an OpenAI endpoint, not a protocol family.** There is no new
 provider style, no new provider field, no new scenario, and no UI: any
 `openai`-style provider already carries everything needed (base URL, token,
-proxy). The endpoint is `{APIBase}/decisions`, so a Jev provider is just an
-OpenAI-style provider with base `https://www.jevai.org/api/v1`, and OpenAI's is
-`https://api.openai.com/v1`.
+proxy). The endpoint is `{APIBase}/decisions`, so OpenAI's base is
+`https://api.openai.com/v1` and Vercel AI Gateway's is
+`https://ai-gateway.vercel.sh/v1` (it serves Jev behind `/decisions`). Native
+TypeSafe (`/v1/systemone`) and OpenRouter (`/api/alpha/decisions`) do not
+fit `{APIBase}/decisions`, so they are not in the catalog.
 
 Earlier iterations modeled Jev as a fifth protocol family (style/type/transport/
 scenario, a fork URL field, a harness matrix pair, a frontend page). That was
@@ -71,8 +74,9 @@ POST {base}/decisions        Authorization: Bearer <key>
      "usage": { "input_tokens": 318, "output_tokens": 52 } }
 ```
 
-How the gateway supports it: a Jev provider is an `openai`-style provider with
-base `https://www.jevai.org/api/v1` (the SDK appends `decisions` and sends the
+How the gateway supports it: a Jev-serving provider is an `openai`-style
+provider whose base ends so that `{base}/decisions` is valid, e.g. Vercel AI
+Gateway `https://ai-gateway.vercel.sh/v1` (the SDK appends `decisions` and sends the
 bearer token). The body is opaque, so `state`/`questions` pass through
 untouched; only `model` is rewritten. Jev's `usage.input_tokens/output_tokens`
 are lifted for accounting (`usage.cost` is ignored). The response `model` is
