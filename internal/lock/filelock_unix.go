@@ -46,6 +46,9 @@ func NewFileLock(configDir string) *FileLock {
 // The lock file remains on disk but is unlocked when this process dies.
 // On success, stores the current process PID in the lock file for shutdown signals.
 func (fl *FileLock) TryLock() error {
+	if err := fl.ensureLockDir(); err != nil {
+		return err
+	}
 	var err error
 	fl.file, err = os.OpenFile(fl.lockFile, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -57,7 +60,7 @@ func (fl *FileLock) TryLock() error {
 	if err != nil {
 		fl.file.Close()
 		fl.file = nil
-		return fmt.Errorf("lock already held: server may already be running")
+		return ErrLocked
 	}
 
 	// We hold the lock, so any port/version file still on disk was left by a

@@ -1,11 +1,33 @@
 package lock
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
+
+// ErrLocked is what TryLock returns when another process holds the lock: the
+// one failure that means "an instance is already running". Callers tell it
+// apart from the others (an unusable config directory, a full disk) with
+// errors.Is, because only a held lock calls for focusing or taking over the
+// running instance.
+var ErrLocked = errors.New("lock already held: server may already be running")
+
+// ensureLockDir creates the directory the lock file lives in. A first launch
+// reaches TryLock before anything has created the config directory (the GUI
+// takes the lock first so a second launch never opens the running instance's
+// database), and opening the lock file in a missing directory fails with
+// "no such file or directory". 0700 matches how AppConfig creates the
+// directory.
+func (fl *FileLock) ensureLockDir() error {
+	if err := os.MkdirAll(filepath.Dir(fl.lockFile), 0o700); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+	return nil
+}
 
 // GetLockFilePath returns the lock file path for debugging purposes.
 func (fl *FileLock) GetLockFilePath() string {

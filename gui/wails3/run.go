@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -38,17 +39,31 @@ import (
 //
 // It runs before AppConfig is built and reads only ConfigDir, so losing the
 // race never opens the running instance's database.
+//
+// A held lock is reported as lock.ErrLocked (wrapped), which is how Start tells
+// "another instance is running" from any other failure, such as an unusable
+// config directory: only the former has an instance to focus or take over.
 func acquireSingleInstanceLock(appManager *app.AppManager) (*lock.FileLock, error) {
 	fileLock := lock.NewFileLock(appManager.ConfigDir())
 	if fileLock.IsLocked() {
 		pid, _ := fileLock.GetPID()
-		return nil, fmt.Errorf("Tingly Box is already running (pid %d).\n\nUse the running instance, or stop it first (e.g. `tingly-box stop`).", pid)
+		return nil, &alreadyRunningError{pid: pid}
 	}
 	if err := fileLock.TryLock(); err != nil {
 		return nil, fmt.Errorf("failed to acquire single-instance lock: %w", err)
 	}
 	return fileLock, nil
 }
+
+// alreadyRunningError is the user-facing "already running" message; it unwraps
+// to lock.ErrLocked so errors.Is identifies a lost race.
+type alreadyRunningError struct{ pid int }
+
+func (e *alreadyRunningError) Error() string {
+	return fmt.Sprintf("Tingly Box is already running (pid %d).\n\nUse the running instance, or stop it first (e.g. `tingly-box stop`).", e.pid)
+}
+
+func (e *alreadyRunningError) Unwrap() error { return lock.ErrLocked }
 
 // notifyRunningGUI asks an already-running GUI instance (same config dir,
 // same port, same token) to show its main window, so launching the app a
@@ -175,6 +190,14 @@ func (l *appLauncher) Start(appManager *app.AppManager, flags command.ServerFlag
 	// instead of showing an error.
 	fileLock, err := acquireSingleInstanceLock(appManager)
 	if err != nil {
+		if !errors.Is(err, lock.ErrLocked) {
+			// Not a lost race (e.g. the config directory cannot be created):
+			// there is no other instance to focus or take over, so say what
+			// actually went wrong instead of offering to stop something.
+			log.Printf("Cannot start: %v", err)
+			runNoticeApp("Tingly Box Could Not Start", err.Error(), nil)
+			return err
+		}
 		if notifyErr := notifyRunningGUI(appManager); notifyErr == nil {
 			log.Printf("Another GUI instance is running; asked it to show its window")
 			return nil

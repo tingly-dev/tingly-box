@@ -172,6 +172,14 @@ flags unresolved, because resolving them is what builds `AppConfig`. The
 one deliberate difference is an empty `--host`: the CLI binds every
 interface (Docker relies on it), the GUI pins it to `localhost`.
 
+Taking the lock before `AppConfig` exists means a **first launch has no config
+directory yet**, so `TryLock` creates it (`MkdirAll`, 0700) before opening the
+lock file; without that the app never started on a fresh machine ("failed to
+open lock file … no such file or directory"). `TryLock` returns `lock.ErrLocked`
+only when another process holds the lock, and the GUI offers to focus or take
+over an instance only for that error: any other failure (an unusable config
+directory) is shown as itself, never as "already running".
+
 ### What this does not solve
 
 The yes-rows are correct on any filesystem SQLite supports. Against a live
