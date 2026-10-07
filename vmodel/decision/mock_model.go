@@ -1,31 +1,31 @@
 package decision
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
-	"sort"
-	"time"
+	"math"
+	"strconv"
 
 	"github.com/tidwall/gjson"
-	"github.com/tidwall/sjson"
 
 	"github.com/tingly-dev/tingly-box/vmodel"
 )
 
-// Chooser picks the index of the answer among n options. body is the request
-// with "model" removed, so a chooser can be input-stable but model-independent.
-type Chooser func(body []byte, n int) int
+// Chooser picks an index in [0, n) for one question. input is the request's
+// state and id the question id, so a chooser can be input-stable but
+// independent of the model name.
+type Chooser func(input []byte, id string, n int) int
 
-// First always answers with the first option: the predictable choice for
-// routing demos and dry-runs.
-func First(_ []byte, _ int) int { return 0 }
+// First always picks index 0: the first choice option, the lowest score level,
+// and "true" for noul. Predictable for routing demos and dry-runs.
+func First(_ []byte, _ string, _ int) int { return 0 }
 
-// Stable answers by hashing the request: the same input always yields the same
-// option, different inputs spread across the options. Reproducible without
-// looking like a constant.
-func Stable(body []byte, n int) int {
-	sum := sha256.Sum256(body)
+// Stable hashes state+id: the same input always gets the same pick, different
+// inputs spread across the options.
+func Stable(input []byte, id string, n int) int {
+	sum := sha256.Sum256(append(append(append([]byte{}, input...), 0), id...))
 	return int(binary.BigEndian.Uint64(sum[:8]) % uint64(n))
 }
 
@@ -35,147 +35,155 @@ type MockModelConfig struct {
 	Name        string
 	Description string
 	Choose      Chooser
-	// Confidence is the probability assigned to the chosen option; the rest is
-	// split evenly. Zero means 1 (certain).
+	// Confidence is the probability mass on the picked option/level (and the
+	// noul probability when it picks "true"); the rest is split evenly. Zero
+	// means 1 (certain).
 	Confidence float64
-	Delay      time.Duration
 }
 
 // MockModel is a deterministic, in-memory decision model.
 type MockModel struct {
 	vmodel.BaseMockModel
-	choose     Chooser
-	confidence float64
+	choose Chooser
+	mass   float64
 }
 
 // NewMockModel builds a MockModel from cfg.
 func NewMockModel(cfg *MockModelConfig) *MockModel {
-	choose, conf := cfg.Choose, cfg.Confidence
+	choose, mass := cfg.Choose, cfg.Confidence
 	if choose == nil {
 		choose = First
 	}
-	if conf <= 0 || conf > 1 {
-		conf = 1
+	if mass <= 0 || mass > 1 {
+		mass = 1
 	}
 	return &MockModel{
 		BaseMockModel: vmodel.BaseMockModel{
 			ID: cfg.ID, Name: cfg.Name, Description: cfg.Description,
-			Type: vmodel.VirtualModelTypeDecision, Delay: cfg.Delay,
+			Type: vmodel.VirtualModelTypeDecision,
 		},
-		choose:     choose,
-		confidence: conf,
+		choose: choose,
+		mass:   mass,
 	}
 }
 
 // HandleDecision implements VirtualModel.
 func (m *MockModel) HandleDecision(body []byte) ([]byte, error) {
-	if !gjson.ValidBytes(body) {
-		return nil, badRequest("invalid request body: not valid JSON")
+	root := gjson.ParseBytes(body)
+	state := root.Get("state")
+	if !state.Exists() {
+		return nil, badRequest("state is required")
 	}
-	if m.Delay > 0 {
-		time.Sleep(m.Delay)
-	}
-	// The model name must not influence the answer, only the input does.
-	input, _ := sjson.DeleteBytes(body, "model")
-
-	resp := map[string]any{"object": "decision", "model": m.ID}
-	answered := 0
-
-	if opts := gjson.GetBytes(body, "options"); opts.Exists() {
-		labels, err := optionLabels(opts)
-		if err != nil {
-			return nil, err
-		}
-		ans, probs := m.pick(input, labels)
-		resp["answer"], resp["probabilities"] = ans, probs
-		answered++
+	qs := root.Get("questions")
+	if !qs.IsObject() || len(qs.Map()) == 0 {
+		return nil, badRequest("questions must be a non-empty object")
 	}
 
-	if qs := gjson.GetBytes(body, "questions"); qs.Exists() {
-		if !qs.IsObject() || len(qs.Map()) == 0 {
-			return nil, badRequest("questions must be a non-empty object")
-		}
-		answers, probs := map[string]any{}, map[string]any{}
-		qmap := qs.Map()
-		ids := make([]string, 0, len(qmap))
-		for id := range qmap {
-			ids = append(ids, id)
-		}
-		sort.Strings(ids)
-		for _, id := range ids {
-			labels, err := optionLabels(qmap[id].Get("options"))
-			if err != nil {
-				return nil, badRequest("question %q: %s", id, err.Error())
-			}
-			// Mix the id in so identical questions under different ids may differ.
-			ans, p := m.pick(append(append([]byte{}, input...), id...), labels)
-			answers[id], probs[id] = ans, p
-			answered++
-		}
-		resp["answers"] = answers
-		if _, single := resp["probabilities"]; !single {
-			resp["probabilities"] = probs
-		} else {
-			resp["question_probabilities"] = probs
-		}
+	// Compacted so the pick does not depend on the client's whitespace.
+	var input bytes.Buffer
+	if err := json.Compact(&input, []byte(state.Raw)); err != nil {
+		return nil, badRequest("invalid state: %v", err)
 	}
 
-	if answered == 0 {
-		return nil, badRequest("request needs options or questions")
+	answers := make(map[string]any, len(qs.Map()))
+	var verr error
+	qs.ForEach(func(k, q gjson.Result) bool {
+		var a map[string]any
+		a, verr = m.answer(input.Bytes(), k.String(), q)
+		if verr != nil {
+			verr = badRequest("question %q: %s", k.String(), verr.Error())
+			return false
+		}
+		answers[k.String()] = a
+		return true
+	})
+	if verr != nil {
+		return nil, verr
 	}
 
-	in := len(body)/4 + 1
-	resp["usage"] = map[string]any{"prompt_tokens": in, "completion_tokens": answered, "total_tokens": in + answered}
-	return json.Marshal(resp)
+	return json.Marshal(map[string]any{
+		"model":   m.ID,
+		"answers": answers,
+		"usage": map[string]any{
+			"input_tokens":  len(body)/4 + 1,
+			"output_tokens": len(answers) * 8,
+		},
+	})
 }
 
-// pick chooses one label and returns it with the probability table (chosen gets
-// the confidence, the remainder is split evenly).
-func (m *MockModel) pick(input []byte, labels []string) (string, map[string]float64) {
-	idx := m.choose(input, len(labels))
-	probs := make(map[string]float64, len(labels))
-	rest := 0.0
-	if len(labels) > 1 {
-		rest = (1 - m.confidence) / float64(len(labels)-1)
-	}
-	for i, l := range labels {
-		if i == idx {
-			probs[l] = m.confidence
-		} else {
-			probs[l] = rest
+func (m *MockModel) answer(input []byte, id string, q gjson.Result) (map[string]any, error) {
+	switch typ := q.Get("type").String(); typ {
+	case "choice":
+		var names []string
+		if c := q.Get("criteria"); c.IsObject() {
+			c.ForEach(func(k, _ gjson.Result) bool { names = append(names, k.String()); return true })
 		}
+		if len(names) == 0 {
+			return nil, badRequest("choice needs a non-empty criteria object")
+		}
+		idx := m.choose(input, id, len(names))
+		probs := m.distribution(len(names), idx)
+		byName := make(map[string]float64, len(names))
+		for i, n := range names {
+			byName[n] = probs[i]
+		}
+		return map[string]any{"type": "choice", "choice": names[idx], "probabilities": byName, "confidence": confidence(probs)}, nil
+
+	case "score":
+		levels := q.Get("criteria").Array()
+		if len(levels) < 2 || len(levels) > 10 {
+			return nil, badRequest("score needs a criteria array of 2 to 10 levels")
+		}
+		idx := m.choose(input, id, len(levels))
+		probs := m.distribution(len(levels), idx)
+		legend, byLevel, score := map[string]string{}, map[string]float64{}, 0.0
+		for i, l := range levels {
+			k := strconv.Itoa(i)
+			legend[k], byLevel[k] = l.String(), probs[i]
+			score += float64(i) * probs[i]
+		}
+		return map[string]any{"type": "score", "score": score, "legend": legend, "probabilities": byLevel, "confidence": confidence(probs)}, nil
+
+	case "noul":
+		p := m.mass
+		if m.choose(input, id, 2) != 0 {
+			p = 1 - m.mass
+		}
+		return map[string]any{"type": "noul", "noul": p}, nil
+
+	default:
+		return nil, badRequest("unsupported type %q (want choice, score or noul)", typ)
 	}
-	return labels[idx], probs
 }
 
-// optionLabels reads an options array: strings, or objects naming the option
-// by id / label / value / name. Duplicates and empties are rejected so every
-// option is addressable.
-func optionLabels(opts gjson.Result) ([]string, error) {
-	if !opts.IsArray() || len(opts.Array()) == 0 {
-		return nil, badRequest("options must be a non-empty array")
+// distribution puts the configured mass on idx and splits the rest evenly; a
+// single candidate always gets everything.
+func (m *MockModel) distribution(n, idx int) []float64 {
+	probs := make([]float64, n)
+	if n == 1 {
+		probs[0] = 1
+		return probs
 	}
-	seen := map[string]bool{}
-	var out []string
-	for i, o := range opts.Array() {
-		label := o.String()
-		if o.IsObject() {
-			label = ""
-			for _, k := range []string{"id", "label", "value", "name"} {
-				if v := o.Get(k); v.Type == gjson.String && v.String() != "" {
-					label = v.String()
-					break
-				}
-			}
-		}
-		if label == "" {
-			return nil, badRequest("option %d has no usable label", i)
-		}
-		if seen[label] {
-			return nil, badRequest("duplicate option %q", label)
-		}
-		seen[label] = true
-		out = append(out, label)
+	rest := (1 - m.mass) / float64(n-1)
+	for i := range probs {
+		probs[i] = rest
 	}
-	return out, nil
+	probs[idx] = m.mass
+	return probs
+}
+
+// confidence is 1 minus the normalized entropy of the distribution: 1 when one
+// outcome is certain, 0 when all are equally likely.
+func confidence(probs []float64) float64 {
+	if len(probs) < 2 {
+		return 1
+	}
+	h := 0.0
+	for _, p := range probs {
+		if p > 0 {
+			h -= p * math.Log(p)
+		}
+	}
+	c := 1 - h/math.Log(float64(len(probs)))
+	return math.Round(c*1e4) / 1e4
 }

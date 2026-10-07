@@ -2,7 +2,6 @@ package protocoltest
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -62,7 +61,7 @@ func (env *TestEnv) SendDecision(t *testing.T, body string) (int, []byte) {
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		t.Fatalf("read decision response: %v", fmt.Sprint(err))
+		t.Fatalf("read decision response: %v", err)
 	}
 	return resp.StatusCode, raw
 }

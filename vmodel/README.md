@@ -108,7 +108,7 @@ A model registered in `decision.Registry` is callable only via the OpenAI-style
 `/decisions` endpoint (`/virtual/openai/v1/decisions`); see
 [`.design/decision-protocol.md`](../.design/decision-protocol.md). Defaults are
 `decision-first` (always the first option) and `decision-stable` (input-hashed,
-reproducible). They are listed in the OpenAI model list and seeded into the
+reproducible), speaking Jev's `state`/`questions` shape (choice, score, noul). They are listed in the OpenAI model list and seeded into the
 builtin OpenAI provider.
 
 A model registered in `anthropic.Registry` is callable only via
