@@ -6,9 +6,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -68,15 +70,35 @@ func TestDecisionsNew_UpstreamError(t *testing.T) {
 	require.Equal(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
-func TestDecisionsPath(t *testing.T) {
+// The SDK must actually send to the vendor-specific URL (resolved through the
+// real request path, not just the helper).
+func TestDecisionsTarget_SDKURL(t *testing.T) {
 	for base, want := range map[string]string{
-		"https://api.openai.com/v1":       "decisions",
-		"https://ai-gateway.vercel.sh/v1": "decisions",
-		"https://api.typesafe.ai":         "https://api.typesafe.ai/v1/systemone",
-		"https://api.typesafe.ai/v1":      "https://api.typesafe.ai/v1/systemone",
-		"https://openrouter.ai/api/v1":    "https://openrouter.ai/api/alpha/decisions",
-		"::bad":                           "decisions",
+		"https://api.openai.com/v1":    "https://api.openai.com/v1/decisions",
+		"https://api.typesafe.ai":      "https://api.typesafe.ai/v1/systemone",
+		"https://api.typesafe.ai/v1":   "https://api.typesafe.ai/v1/systemone",
+		"https://openrouter.ai/api/v1": "https://openrouter.ai/api/alpha/decisions",
+		"::bad":                        "",
 	} {
-		require.Equal(t, want, decisionsPath(base), base)
+		path, override := decisionsTarget(base)
+		var got string
+		c := openai.NewClient(
+			option.WithBaseURL(base), option.WithAPIKey("k"),
+			option.WithHTTPClient(&http.Client{Transport: rtPtr(func(r *http.Request) (*http.Response, error) {
+				got = r.URL.String()
+				return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+			})}))
+		var out []byte
+		_ = c.Post(context.Background(), path, nil, &out, override...)
+		if base == "::bad" {
+			require.Equal(t, "decisions", path)
+			continue
+		}
+		require.Equal(t, want, got, base)
 	}
+}
+
+func rtPtr(f func(*http.Request) (*http.Response, error)) http.RoundTripper {
+	rt := roundTripFunc(f)
+	return &rt
 }
