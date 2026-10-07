@@ -84,7 +84,7 @@ export default function HubPage() {
         return () => { cancelled = true; };
     }, []);
 
-    const { quotaData, refreshing, refreshQuota, refreshAllQuotas } = useProviderQuota(providers, { fetchOnMount: true, pollIntervalMs: 60_000 });
+    const { quotaData, refreshing, refreshQuota, refreshAllQuotas } = useProviderQuota(providers, { fetchOnMount: true, pollIntervalMs: 10 * 60_000 });
 
     // The panel answers "am I about to run out?", so the provider closest to
     // its limit comes first. Providers with nothing to count (a balance, a
