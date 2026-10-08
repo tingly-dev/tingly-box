@@ -522,6 +522,39 @@ func ruleFlagCases() []flagCase {
 			}
 		}},
 
+		// ── anthropic_endpoint_override ──────────────────────────────────────
+		// A dual-URL provider (OpenAI primary + Anthropic URL) would serve an
+		// OpenAI Chat client natively from its OpenAI endpoint; the force flag
+		// must instead send the request through the Anthropic endpoint
+		// (converted). The endpoint hit counters can tell the two apart.
+		{key: "anthropic_endpoint_override", run: func(t flagTB, env *TestEnv) {
+			s := flagScenario()
+			env.virtual.RegisterScenario(s)
+			providerName := "flag-anth-ep-" + s.Name
+			_ = env.appConfig.AddProvider(&typ.Provider{
+				UUID:               providerName,
+				Name:               providerName,
+				APIBase:            env.virtual.URL() + "/v1",
+				APIStyle:           protocol.APIStyleOpenAI,
+				APIBaseAnthropic:   env.virtual.URL(),
+				OpenAIEndpointMode: ai.EndpointModeChat,
+				Token:              "virtual-token",
+				Enabled:            true,
+				Timeout:            int64(constant.DefaultRequestTimeout),
+			})
+			reqModel := "pv-flag-anth-ep-" + s.Name
+			providerModel := "virtual-model-" + s.Name
+			rule := newHarnessRule(reqModel, typ.ScenarioOpenAI, reqModel, providerModel,
+				harnessService(providerName, providerModel))
+			rule.Flags = typ.RuleFlags{AnthropicEndpointOverride: "anthropic"}
+			_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
+
+			sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, reqModel, false, nil, nil)
+			if hits := env.virtual.EndpointHits(EndpointAnthropic); hits == 0 {
+				t.Errorf("force anthropic did not route to the Anthropic endpoint (anthropic hits=0, chat hits=%d)", env.virtual.EndpointHits(EndpointChat))
+			}
+		}},
+
 		// ── session_affinity ─────────────────────────────────────────────────
 		// Two distinguishable upstreams behind one rule: with affinity on, every
 		// request carrying the same session id must pin to the upstream the first
