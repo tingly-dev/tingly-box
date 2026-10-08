@@ -1156,18 +1156,10 @@ export default {
   },
   "claudeCode": {
     "slots": {
-      "title": "模型槽位",
-      "subtitle": "每类 Claude Code 请求走哪条规则。绑定到同一条规则的槽位共用它的模型。",
-      "slot": "槽位",
-      "sends": "Claude Code 发出",
-      "rule": "规则",
-      "followDefault": "跟随 default",
-      "newRule": "为此槽位新建规则",
-      "presetUnified": "全部统一",
-      "presetSeparate": "全部分开",
-      "updated": "槽位已更新，重新应用 Claude Code 配置后生效。",
-      "updatedProfile": "槽位已更新，下次启动该 profile 时生效。",
-      "failed": "更新模型槽位失败"
+      "label": "槽位",
+      "ownRule": "使用自己的规则（点击改回主规则）",
+      "mainRule": "使用主规则（点击给它单独加一条规则）",
+      "failed": "更新槽位失败"
     },
     "modeChange": {
       "applyFailed": "应用配置失败"

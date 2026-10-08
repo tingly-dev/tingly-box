@@ -79,7 +79,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
         isLoading,
     } = useScenarioPageInternal(scenario);
     const { launchSource } = useVersion();
-    const slots = useSlotRouting(scenario, !!profileId, true);
+    const slots = useSlotRouting(scenario, !!profileId);
 
     // Profile state
     const { getProfiles, refresh: refreshProfiles } = useProfileContext();
@@ -348,6 +348,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                         showApiKeyRow={true}
                         showBaseUrlRow={true}
                         compact={true}
+                        extraContent={slots.slotsRow}
                     />
                 </UnifiedCard>
 
@@ -357,11 +358,9 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                     onArtifactChange={handleArtifactChange}
                 />
 
-                {slots.slotsCard}
-
                 <TemplatePage
                     scenario={scenario}
-                    // The rules some slot requests; the slot table above binds them.
+                    // The rules in use; the Slots row above adds and removes slot rules.
                     rules={slots.rules}
                     onRulesChange={slots.setRules}
                     collapsible={true}

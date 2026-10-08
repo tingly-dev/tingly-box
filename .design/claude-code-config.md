@@ -235,18 +235,14 @@ page. The Quick Config seeds its form values from whatever is currently
 in those rules, not from a hardcoded list — so the form always reflects
 the actual route topology.
 
-### 5.2 Slot bindings replace the unified/separate mode
+### 5.2 Slots instead of modes
 
-Which rule each slot uses is no longer an all-or-one mode switch: every slot
-is bound to a rule independently (`ScenarioConfig.ClaudeCodeSlots`), unbound
-slots follow the default slot, and an unbound default slot uses
-`builtin:claude_code:cc`. The backend resolves this once
-(`config.ResolveClaudeCodeSlots`) for `GenerateCCEnv`, the tbclient env and the
-slot API; the page fetches the resolved slots and passes slot → rule UUID to
-`derivePrefsFromRules`, which looks rules up by UUID only. Unified / Separate
-survive as presets. See `claude-code-slot-binding.md`.
-
-### 5.3 (merged into 5.2)
+There is no unified/separate mode any more: a slot whose rule
+(`builtin:claude_code:<slot>`) is active requests that rule, every other slot
+requests the main `builtin:claude_code:cc` rule. All slots on is what separate
+used to be. The backend resolves this in `agent.ClaudeCodeSlotModels`; the
+modal's `derivePrefsFromRules({ rules })` mirrors it by UUID lookup, never by
+array order or canonical names. See `claude-code-slot-binding.md`.
 
 ### 5.4 The closing loop: `request_model` is the routing key
 

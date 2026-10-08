@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 
 	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
@@ -51,13 +52,81 @@ func acquireCCProfileBuildLock(path string) func() {
 	}
 }
 
+// ClaudeCodeSlotEnvKeys maps each Claude Code model slot to its env var, in
+// display order.
+var ClaudeCodeSlotEnvKeys = []struct{ Slot, EnvKey string }{
+	{"default", "ANTHROPIC_MODEL"},
+	{"haiku", "ANTHROPIC_DEFAULT_HAIKU_MODEL"},
+	{"sonnet", "ANTHROPIC_DEFAULT_SONNET_MODEL"},
+	{"opus", "ANTHROPIC_DEFAULT_OPUS_MODEL"},
+	{"fable", "ANTHROPIC_DEFAULT_FABLE_MODEL"},
+	{"subagent", "CLAUDE_CODE_SUBAGENT_MODEL"},
+}
+
+// ClaudeCodeSlotModels resolves the model id Claude Code sends for each slot,
+// keyed by env var. A slot with an active rule of its own
+// (builtin:<scenario>:<slot>) uses that rule's request_model; any other slot
+// falls back to the main "cc" rule (or, for a profile created with separate
+// rules and no cc rule, the default slot's rule). All slots on → what used to
+// be separate mode; none → unified. A rule with the 1M context flag advertises
+// it via the [1m] suffix (the client strips it back and sends the context-1m
+// beta header); context1M reports whether any slot does.
+//
+// Reading the rule's request_model (instead of assuming the seeded name) keeps
+// the env aligned when a user renames a rule's model.
+func ClaudeCodeSlotModels(cfg *serverconfig.Config, scenarioPath string, isProfile bool) (models map[string]string, context1M bool) {
+	scenario := typ.RuleScenario(scenarioPath)
+	activeModel := func(uuids ...string) string {
+		if cfg == nil {
+			return ""
+		}
+		for _, uuid := range uuids {
+			if r := cfg.GetRuleByUUID(uuid); r != nil && r.Active {
+				if m := strings.TrimSpace(r.RequestModel); m != "" {
+					if r.Flags.Context1M && !strings.HasSuffix(m, serverconfig.Context1MSuffix) {
+						m += serverconfig.Context1MSuffix
+					}
+					return m
+				}
+			}
+		}
+		return ""
+	}
+	// Main-scenario rules may still carry pre-migration built-in-cc-* UUIDs.
+	slotModel := func(slot string) string {
+		if isProfile {
+			return activeModel(serverconfig.BuiltinRuleUUID(scenario, slot))
+		}
+		return activeModel(serverconfig.BuiltinRuleUUID(scenario, slot), serverconfig.LegacyCCRuleUUID(slot))
+	}
+
+	fallback := slotModel("cc")
+	if fallback == "" {
+		fallback = slotModel("default")
+	}
+	if fallback == "" {
+		fallback = "tingly/cc"
+		if isProfile {
+			fallback = "cc"
+		}
+	}
+
+	models = map[string]string{}
+	for _, s := range ClaudeCodeSlotEnvKeys {
+		m := slotModel(s.Slot)
+		if m == "" {
+			m = fallback
+		}
+		models[s.EnvKey] = m
+		context1M = context1M || strings.HasSuffix(m, serverconfig.Context1MSuffix)
+	}
+	return models, context1M
+}
+
 // GenerateCCEnv builds the env map for Claude Code settings.json.
 //
 // scenarioPath is "claude_code" for the main scenario or "claude_code:p1" for
-// a profile. Each model slot gets the request_model of the rule it is bound to
-// (config.ResolveClaudeCodeSlots), so the env follows renamed rules and any
-// mix of shared and per-slot rules; isProfile only decides whether the main
-// scenario's canonical tunables are added.
+// a profile; the model slots come from ClaudeCodeSlotModels.
 func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath string, isProfile bool) map[string]string {
 	env := map[string]string{
 		"ANTHROPIC_BASE_URL":   baseURL + "/tingly/" + scenarioPath,
@@ -73,36 +142,13 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 		env["API_TIMEOUT_MS"] = "3000000"
 	}
 
-	var slots []serverconfig.CCSlotResolution
-	if cfg != nil {
-		slots = cfg.ResolveClaudeCodeSlots(typ.RuleScenario(scenarioPath))
-	} else {
-		fallback := "tingly/cc"
-		if isProfile {
-			fallback = "cc"
-		}
-		for _, slot := range serverconfig.CCSlots {
-			slots = append(slots, serverconfig.CCSlotResolution{Slot: slot, RequestModel: fallback})
-		}
-	}
-
-	// A slot on a rule with the 1M context flag advertises itself to Claude
-	// Code via the [1m] suffix (the client strips it back and sends the
-	// context-1m beta header), and the auto-compact window follows, mirroring
-	// the frontend quick-config.
-	context1M := false
-	for _, slot := range slots {
-		model := slot.RequestModel
-		if slot.Context1M {
-			context1M = true
-			model += serverconfig.Context1MSuffix
-		}
-		env[serverconfig.CCSlotEnvKeys[slot.Slot]] = model
-	}
+	models, context1M := ClaudeCodeSlotModels(cfg, scenarioPath, isProfile)
+	maps.Copy(env, models)
+	// Mirror the frontend quick-config: with a 1M slot, widen the auto-compact
+	// window so Claude Code doesn't compact prematurely.
 	if context1M {
 		env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] = "1000000"
 	}
-
 	return env
 }
 

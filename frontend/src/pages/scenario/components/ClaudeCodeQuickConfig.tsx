@@ -19,7 +19,6 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
 import { has1M, with1M } from '@/components/rule-card/modelNameUtils';
-import { CLAUDE_CODE_MAIN_RULE_UUID, CLAUDE_CODE_SLOTS, type ClaudeCodeSlot, type ClaudeCodeSlotRules } from './claudeCodeSlots';
 import { fontMono, fontSizes } from '@/theme/fonts';
 
 // ClaudeCodePrefs mirrors the Go struct in internal/agent/prefs.go.
@@ -833,25 +832,25 @@ const useLang = (): AppLanguage => {
 
 interface DerivePrefsInput {
     rules: any[];
-    /** Slot → rule UUID, as resolved by the backend's slot bindings. */
-    slots: ClaudeCodeSlotRules;
 }
 
-export const derivePrefsFromRules = ({ rules, slots }: DerivePrefsInput): ClaudeCodePrefs => {
-    // A slot without a rule follows the default slot; the default slot
-    // without one uses the main rule.
-    const ruleFor = (slot: ClaudeCodeSlot): any => {
-        const uuid = slots[slot] || slots.default || CLAUDE_CODE_MAIN_RULE_UUID;
-        return rules.find((r: any) => r?.uuid === uuid);
-    };
+// A slot with an active rule of its own (builtin:claude_code:<slot>) uses
+// that rule's request model; every other slot uses the main rule
+// (builtin:claude_code:cc) — or, without one, the default slot's rule.
+// Mirrors the backend's ClaudeCodeSlotModels.
+export const derivePrefsFromRules = ({ rules }: DerivePrefsInput): ClaudeCodePrefs => {
+    const activeRule = (name: string) => rules.find((r: any) =>
+        r?.uuid === `builtin:claude_code:${name}` && r.active !== false && r.request_model);
     // Rules here come straight from the API (snake_case flags); accept the
     // camelCase shape too in case a converted rule object is passed in.
     const context1MOf = (rule: any): boolean => !!(rule?.flags?.context_1m || rule?.flags?.context1m);
-    const modelFor = (slot: ClaudeCodeSlot): string => {
-        const rule = ruleFor(slot);
+    const main = activeRule('cc') ?? activeRule('default');
+    const slotRule = (slot: string) => activeRule(slot) ?? main;
+    const modelFor = (slot: string): string => {
+        const rule = slotRule(slot);
         return with1M(rule?.request_model || 'tingly/cc', context1MOf(rule));
     };
-    const context1MEnabled = CLAUDE_CODE_SLOTS.some(slot => context1MOf(ruleFor(slot)));
+    const context1MEnabled = ['default', 'haiku', 'sonnet', 'opus', 'fable', 'subagent'].some(slot => context1MOf(slotRule(slot)));
 
     return {
         ANTHROPIC_MODEL: modelFor('default'),

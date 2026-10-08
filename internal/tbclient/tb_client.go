@@ -166,30 +166,22 @@ func (c *TBClientImpl) GetDataDir() string {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-// claudeCodeModels holds the request-model name for each Claude Code model tier.
+// claudeCodeModels holds the request-model name for each Claude Code model slot.
 type claudeCodeModels struct {
 	def, haiku, sonnet, opus, subagent, fable string
 }
 
-// resolveClaudeCodeModels resolves the per-slot request models from the main
-// scenario's slot bindings (config.ResolveClaudeCodeSlots), with the [1m]
-// marker on slots whose rule has the 1M context flag.
+// resolveClaudeCodeModels resolves the per-slot request models the same way
+// the settings file and the frontend's derivePrefsFromRules do.
 func (c *TBClientImpl) resolveClaudeCodeModels() claudeCodeModels {
-	byslot := map[string]string{}
-	for _, slot := range c.config.ResolveClaudeCodeSlots(typ.ScenarioClaudeCode) {
-		model := slot.RequestModel
-		if slot.Context1M {
-			model += serverconfig.Context1MSuffix
-		}
-		byslot[slot.Slot] = model
-	}
+	m, _ := tbagent.ClaudeCodeSlotModels(c.config, string(typ.ScenarioClaudeCode), false)
 	return claudeCodeModels{
-		def:      byslot[serverconfig.CCSlotDefault],
-		haiku:    byslot[serverconfig.CCSlotHaiku],
-		sonnet:   byslot[serverconfig.CCSlotSonnet],
-		opus:     byslot[serverconfig.CCSlotOpus],
-		subagent: byslot[serverconfig.CCSlotSubagent],
-		fable:    byslot[serverconfig.CCSlotFable],
+		def:      m["ANTHROPIC_MODEL"],
+		haiku:    m["ANTHROPIC_DEFAULT_HAIKU_MODEL"],
+		sonnet:   m["ANTHROPIC_DEFAULT_SONNET_MODEL"],
+		opus:     m["ANTHROPIC_DEFAULT_OPUS_MODEL"],
+		subagent: m["CLAUDE_CODE_SUBAGENT_MODEL"],
+		fable:    m["ANTHROPIC_DEFAULT_FABLE_MODEL"],
 	}
 }
 

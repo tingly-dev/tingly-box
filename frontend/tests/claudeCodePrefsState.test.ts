@@ -64,16 +64,14 @@ test('separate mode keeps each UUID-derived slot distinct', () => {
     assert.equal(restored.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'tingly/cc-haiku');
 });
 
-const allOn = (uuid: string) => ({ default: uuid, haiku: uuid, sonnet: uuid, opus: uuid, fable: uuid, subagent: uuid });
-
-test('every slot on the main rule resolves it by UUID instead of array order or canonical name', () => {
+test('without slot rules every slot uses the main rule, found by UUID', () => {
     const prefs = derivePrefsFromRules({
-        slots: allOn('builtin:claude_code:cc'),
         rules: [
-            { uuid: 'unrelated', request_model: 'wrong/model' },
+            { uuid: 'unrelated', request_model: 'wrong/model', active: true },
             {
                 uuid: 'builtin:claude_code:cc',
                 request_model: 'team/custom-route',
+                active: true,
                 flags: { context_1m: true },
             },
         ],
@@ -82,42 +80,15 @@ test('every slot on the main rule resolves it by UUID instead of array order or 
     assert.equal(prefs.ANTHROPIC_MODEL, 'team/custom-route[1m]');
     assert.equal(prefs.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'team/custom-route[1m]');
     assert.equal(prefs.CLAUDE_CODE_SUBAGENT_MODEL, 'team/custom-route[1m]');
-    assert.equal(prefs.CLAUDE_CODE_AUTO_COMPACT_WINDOW, '1000000');
 });
 
-test('each slot resolves the request model of the rule it is bound to', () => {
+test('only the subagent has its own rule: the rest stay on the main rule', () => {
     const prefs = derivePrefsFromRules({
-        slots: {
-            default: 'builtin:claude_code:default',
-            haiku: 'builtin:claude_code:haiku',
-            sonnet: 'builtin:claude_code:sonnet',
-            opus: 'builtin:claude_code:opus',
-            subagent: 'builtin:claude_code:subagent',
-        },
         rules: [
-            { uuid: 'builtin:claude_code:opus', request_model: 'routes/deep' },
-            { uuid: 'builtin:claude_code:default', request_model: 'routes/default' },
-            { uuid: 'builtin:claude_code:subagent', request_model: 'routes/agent' },
-            { uuid: 'builtin:claude_code:sonnet', request_model: 'routes/main' },
-            { uuid: 'builtin:claude_code:haiku', request_model: 'routes/fast' },
-        ],
-    });
-
-    assert.equal(prefs.ANTHROPIC_MODEL, 'routes/default');
-    assert.equal(prefs.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'routes/fast');
-    assert.equal(prefs.ANTHROPIC_DEFAULT_SONNET_MODEL, 'routes/main');
-    assert.equal(prefs.ANTHROPIC_DEFAULT_OPUS_MODEL, 'routes/deep');
-    assert.equal(prefs.CLAUDE_CODE_SUBAGENT_MODEL, 'routes/agent');
-    // No fable binding: it follows the default slot.
-    assert.equal(prefs.ANTHROPIC_DEFAULT_FABLE_MODEL, 'routes/default');
-});
-
-test('only the subagent split out: everything else stays on the main rule', () => {
-    const prefs = derivePrefsFromRules({
-        slots: { ...allOn('builtin:claude_code:cc'), subagent: 'builtin:claude_code:subagent' },
-        rules: [
-            { uuid: 'builtin:claude_code:cc', request_model: 'tingly/cc' },
-            { uuid: 'builtin:claude_code:subagent', request_model: 'tingly/cc-subagent' },
+            { uuid: 'builtin:claude_code:cc', request_model: 'tingly/cc', active: true },
+            { uuid: 'builtin:claude_code:subagent', request_model: 'tingly/cc-subagent', active: true },
+            // Off: the slot follows the main rule.
+            { uuid: 'builtin:claude_code:opus', request_model: 'tingly/cc-opus', active: false },
         ],
     });
 
@@ -126,8 +97,22 @@ test('only the subagent split out: everything else stays on the main rule', () =
     assert.equal(prefs.CLAUDE_CODE_SUBAGENT_MODEL, 'tingly/cc-subagent');
 });
 
-test('without any slot information every slot uses the main rule', () => {
-    const prefs = derivePrefsFromRules({ slots: {}, rules: [] });
-    assert.equal(prefs.ANTHROPIC_MODEL, 'tingly/cc');
-    assert.equal(prefs.CLAUDE_CODE_SUBAGENT_MODEL, 'tingly/cc');
+test('every slot rule on resolves each custom request model by its UUID', () => {
+    const prefs = derivePrefsFromRules({
+        rules: [
+            { uuid: 'builtin:claude_code:opus', request_model: 'routes/deep', active: true },
+            { uuid: 'builtin:claude_code:default', request_model: 'routes/default', active: true },
+            { uuid: 'builtin:claude_code:subagent', request_model: 'routes/agent', active: true },
+            { uuid: 'builtin:claude_code:sonnet', request_model: 'routes/main', active: true },
+            { uuid: 'builtin:claude_code:haiku', request_model: 'routes/fast', active: true },
+        ],
+    });
+
+    assert.equal(prefs.ANTHROPIC_MODEL, 'routes/default');
+    assert.equal(prefs.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'routes/fast');
+    assert.equal(prefs.ANTHROPIC_DEFAULT_SONNET_MODEL, 'routes/main');
+    assert.equal(prefs.ANTHROPIC_DEFAULT_OPUS_MODEL, 'routes/deep');
+    assert.equal(prefs.CLAUDE_CODE_SUBAGENT_MODEL, 'routes/agent');
+    // No fable rule and no main rule: fable uses the default slot's rule.
+    assert.equal(prefs.ANTHROPIC_DEFAULT_FABLE_MODEL, 'routes/default');
 });

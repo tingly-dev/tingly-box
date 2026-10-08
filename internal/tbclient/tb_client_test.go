@@ -150,7 +150,7 @@ func TestResolveClaudeCodeModels_SeparateMissingTierFallsBack(t *testing.T) {
 	client := NewTBClient(cfg)
 	models := client.resolveClaudeCodeModels()
 
-	// Slots without a rule of their own follow the default slot.
+	// Slots without a rule of their own (and no main rule) use the default slot's.
 	assert.Equal(t, "vendor/default", models.def)
 	assert.Equal(t, "vendor/default", models.haiku)
 	assert.Equal(t, "vendor/default", models.sonnet)

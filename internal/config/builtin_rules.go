@@ -132,3 +132,31 @@ var ccProfileTiers = map[string]bool{
 	"subagent": true,
 	"fable":    true,
 }
+
+var claudeCodeUnifiedRuleUUIDs = map[string]bool{
+	RuleUUIDCC:        true,
+	RuleUUIDBuiltinCC: true,
+}
+
+var claudeCodeSeparateRuleUUIDs = map[string]bool{
+	RuleUUIDCCDefault:         true,
+	RuleUUIDCCHaiku:           true,
+	RuleUUIDCCSonnet:          true,
+	RuleUUIDCCOpus:            true,
+	RuleUUIDCCSubagent:        true,
+	RuleUUIDCCFable:           true,
+	RuleUUIDBuiltinCCDefault:  true,
+	RuleUUIDBuiltinCCHaiku:    true,
+	RuleUUIDBuiltinCCSonnet:   true,
+	RuleUUIDBuiltinCCOpus:     true,
+	RuleUUIDBuiltinCCSubagent: true,
+}
+
+// LegacyCCRuleUUID returns the pre-migration built-in-cc-* UUID of a main
+// Claude Code rule ("cc" or a slot name), kept as a lookup fallback.
+func LegacyCCRuleUUID(slot string) string {
+	if slot == "cc" {
+		return RuleUUIDBuiltinCC
+	}
+	return RuleUUIDBuiltinCC + "-" + slot
+}

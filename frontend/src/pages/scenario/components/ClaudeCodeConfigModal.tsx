@@ -16,7 +16,6 @@ import type { AgentApplyResult } from './AgentSetupCard';
 import Context1MChangeBanner from './Context1MChangeBanner';
 import { api } from '@/services/api';
 import { restoreAppliedClaudeCodePrefs } from './claudeCodePrefsState';
-import type { ClaudeCodeSlotRules } from './claudeCodeSlots';
 import { fontMono, fontSizes } from '@/theme/fonts';
 
 // Raw statusline script URLs in the tingly-box repo — the installers must
@@ -28,8 +27,6 @@ const STATUSLINE_SCRIPT_PS1_URL = 'https://raw.githubusercontent.com/tingly-dev/
 interface ClaudeCodeConfigModalProps {
     open: boolean;
     onClose: () => void;
-    /** Slot → rule UUID: which rule each model slot requests. */
-    slots: ClaudeCodeSlotRules;
     baseUrl: string;
     rules: any[];
     copyToClipboard: (text: string, label: string) => Promise<void>;
@@ -121,7 +118,6 @@ console.log("Config written to", targetPath);`;
 const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     open,
     onClose,
-    slots,
     baseUrl,
     rules,
     copyToClipboard,
@@ -144,11 +140,11 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     // values previously applied to ~/.claude/settings.json; first-time users
     // still start from routing-aware recommendations.
     const [prefs, setPrefs] = React.useState<ClaudeCodePrefs>(() =>
-        derivePrefsFromRules({ rules, slots })
+        derivePrefsFromRules({ rules })
     );
     React.useEffect(() => {
         if (!open) {
-            setPrefs(derivePrefsFromRules({ rules, slots }));
+            setPrefs(derivePrefsFromRules({ rules }));
             setDefaultMode('acceptEdits');
             setShowThinkingSummaries(CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES);
             setInstallStatusLine(true);
@@ -176,7 +172,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                 },
             };
         });
-        const generated = derivePrefsFromRules({ rules: tempRules, slots });
+        const generated = derivePrefsFromRules({ rules: tempRules });
 
         let active = true;
         setIsConfigLoading(true);
@@ -206,7 +202,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
         return () => {
             active = false;
         };
-    }, [pendingContext1MChange, rules, slots, open]);
+    }, [pendingContext1MChange, rules, open]);
 
     // Editing prefs after a previous Apply invalidates the success state —
     // hide the old alert so the user can tell their next Apply hasn't run yet.
@@ -353,10 +349,10 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
     };
 
     const handleResetDefaults = React.useCallback(() => {
-        setPrefsAndClearResult(derivePrefsFromRules({ rules, slots }));
+        setPrefsAndClearResult(derivePrefsFromRules({ rules }));
         setDefaultModeAndClearResult('acceptEdits');
         setShowThinkingSummariesAndClearResult(CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES);
-    }, [slots, rules, setDefaultModeAndClearResult, setPrefsAndClearResult, setShowThinkingSummariesAndClearResult]);
+    }, [rules, setDefaultModeAndClearResult, setPrefsAndClearResult, setShowThinkingSummariesAndClearResult]);
 
     const canApply = !!onApplyWithPrefs;
 

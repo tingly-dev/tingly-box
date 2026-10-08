@@ -48,44 +48,27 @@ func writeGeneratedArtifacts(t *testing.T, dir string) {
 	writeTestFile(t, filepath.Join(dir, "statusline.sh"), "generated")
 }
 
-// separateProfileConfig is a config whose profile p1 was created in the
-// legacy separate mode, with the given rules.
-func separateProfileConfig(rules ...typ.Rule) *serverconfig.Config {
-	return &serverconfig.Config{
-		Rules:    rules,
-		Profiles: map[string][]typ.ProfileMeta{"claude_code": {{ID: "p1", Name: "work"}}},
-	}
-}
-
-// separateMainConfig is a main claude_code scenario in the legacy separate mode.
-func separateMainConfig(rules ...typ.Rule) *serverconfig.Config {
-	return &serverconfig.Config{
-		Rules:     rules,
-		Scenarios: []typ.ScenarioConfig{{Scenario: typ.ScenarioClaudeCode, Flags: typ.ScenarioFlags{Separate: true}}},
-	}
-}
-
 func TestGenerateCCEnv_ProfileSeparate_ResolvesModelsFromCanonicalRules(t *testing.T) {
-	cfg := separateProfileConfig(
-		typ.Rule{UUID: "builtin:claude_code:p1:default", Scenario: "claude_code:p1", RequestModel: "default", Active: true},
+	cfg := &serverconfig.Config{Rules: []typ.Rule{
 		// Renamed request model — env must follow the rule, not the seeded name.
-		typ.Rule{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "my-fast", Active: true},
-		// Inactive rule → the slot follows the default slot.
-		typ.Rule{UUID: "builtin:claude_code:p1:opus", Scenario: "claude_code:p1", RequestModel: "my-smart", Active: false},
-		typ.Rule{UUID: "builtin:claude_code:p1:sonnet", Scenario: "claude_code:p1", RequestModel: "sonnet", Active: true},
-		// subagent rule absent → follows the default slot.
-	)
+		{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "my-fast", Active: true},
+		// Inactive rule → the slot follows the main rule.
+		{UUID: "builtin:claude_code:p1:opus", Scenario: "claude_code:p1", RequestModel: "my-smart", Active: false},
+		{UUID: "builtin:claude_code:p1:sonnet", Scenario: "claude_code:p1", RequestModel: "sonnet", Active: true},
+		// default / subagent rules absent → follow the main rule (none here,
+		// so the canonical "cc").
+	}}
 
 	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code:p1", true)
 
 	wants := map[string]string{
 		"ANTHROPIC_BASE_URL":             "http://localhost:12580/tingly/claude_code:p1",
 		"TINGLY_API_URL":                 "http://localhost:12580",
-		"ANTHROPIC_MODEL":                "default",
+		"ANTHROPIC_MODEL":                "cc",
 		"ANTHROPIC_DEFAULT_HAIKU_MODEL":  "my-fast",
-		"ANTHROPIC_DEFAULT_OPUS_MODEL":   "default",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL":   "cc",
 		"ANTHROPIC_DEFAULT_SONNET_MODEL": "sonnet",
-		"CLAUDE_CODE_SUBAGENT_MODEL":     "default",
+		"CLAUDE_CODE_SUBAGENT_MODEL":     "cc",
 	}
 	for k, want := range wants {
 		if env[k] != want {
@@ -95,16 +78,16 @@ func TestGenerateCCEnv_ProfileSeparate_ResolvesModelsFromCanonicalRules(t *testi
 }
 
 func TestGenerateCCEnv_Profile_Context1MSuffix(t *testing.T) {
-	cfg := separateProfileConfig(
+	cfg := &serverconfig.Config{Rules: []typ.Rule{
 		// Flag set → env model advertises [1m] to Claude Code.
-		typ.Rule{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "haiku",
+		{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "haiku",
 			Flags: typ.RuleFlags{Context1M: true}, Active: true},
 		// Already suffixed (e.g. user renamed it) → no double suffix.
-		typ.Rule{UUID: "builtin:claude_code:p1:opus", Scenario: "claude_code:p1", RequestModel: "opus[1m]",
+		{UUID: "builtin:claude_code:p1:opus", Scenario: "claude_code:p1", RequestModel: "opus[1m]",
 			Flags: typ.RuleFlags{Context1M: true}, Active: true},
 		// Flag off → untouched.
-		typ.Rule{UUID: "builtin:claude_code:p1:sonnet", Scenario: "claude_code:p1", RequestModel: "sonnet", Active: true},
-	)
+		{UUID: "builtin:claude_code:p1:sonnet", Scenario: "claude_code:p1", RequestModel: "sonnet", Active: true},
+	}}
 
 	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code:p1", true)
 
@@ -131,7 +114,6 @@ func TestGenerateCCEnv_ProfileUnified_ResolvesCCRule(t *testing.T) {
 		"ANTHROPIC_DEFAULT_HAIKU_MODEL",
 		"ANTHROPIC_DEFAULT_OPUS_MODEL",
 		"ANTHROPIC_DEFAULT_SONNET_MODEL",
-		"ANTHROPIC_DEFAULT_FABLE_MODEL",
 		"CLAUDE_CODE_SUBAGENT_MODEL",
 	} {
 		if env[k] != "renamed-cc" {
@@ -141,10 +123,12 @@ func TestGenerateCCEnv_ProfileUnified_ResolvesCCRule(t *testing.T) {
 }
 
 func TestGenerateCCEnv_Profile_Context1MAutoCompactWindow(t *testing.T) {
-	// When any slot's rule has Context1M=true, the auto-compact window must be
-	// adjusted to 1M so Claude Code doesn't compact prematurely.
-	cfg := separateProfileConfig(typ.Rule{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "haiku",
-		Flags: typ.RuleFlags{Context1M: true}, Active: true})
+	// When any rule in the profile has Context1M=true, the auto-compact
+	// window must be adjusted to 1M so Claude Code doesn't compact prematurely.
+	cfg := &serverconfig.Config{Rules: []typ.Rule{
+		{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "haiku",
+			Flags: typ.RuleFlags{Context1M: true}, Active: true},
+	}}
 
 	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code:p1", true)
 
@@ -156,8 +140,10 @@ func TestGenerateCCEnv_Profile_Context1MAutoCompactWindow(t *testing.T) {
 func TestGenerateCCEnv_Profile_No1M_NoAutoCompactWindow(t *testing.T) {
 	// Without the 1M flag, the env should NOT include the auto-compact
 	// window override — let Claude Code use its own default.
-	cfg := separateProfileConfig(typ.Rule{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "haiku",
-		Flags: typ.RuleFlags{Context1M: false}, Active: true})
+	cfg := &serverconfig.Config{Rules: []typ.Rule{
+		{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "haiku",
+			Flags: typ.RuleFlags{Context1M: false}, Active: true},
+	}}
 
 	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code:p1", true)
 
@@ -167,7 +153,9 @@ func TestGenerateCCEnv_Profile_No1M_NoAutoCompactWindow(t *testing.T) {
 }
 
 func TestGenerateCCEnv_MainScenario_ResolvesModernBuiltins(t *testing.T) {
-	cfg := separateMainConfig(typ.Rule{UUID: serverconfig.RuleUUIDCCHaiku, Scenario: typ.ScenarioClaudeCode, RequestModel: "vendor/fast", Active: true})
+	cfg := &serverconfig.Config{Rules: []typ.Rule{
+		{UUID: serverconfig.RuleUUIDCCHaiku, Scenario: typ.ScenarioClaudeCode, RequestModel: "vendor/fast", Active: true},
+	}}
 
 	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code", false)
 
@@ -178,46 +166,18 @@ func TestGenerateCCEnv_MainScenario_ResolvesModernBuiltins(t *testing.T) {
 
 func TestGenerateCCEnv_MainScenario_ResolvesLegacyBuiltins(t *testing.T) {
 	// Pre-migration configs still carry the legacy built-in-cc-* UUIDs.
-	cfg := separateMainConfig(typ.Rule{UUID: serverconfig.RuleUUIDBuiltinCCHaiku, Scenario: typ.ScenarioClaudeCode, RequestModel: "vendor/fast", Active: true})
+	cfg := &serverconfig.Config{Rules: []typ.Rule{
+		{UUID: serverconfig.RuleUUIDBuiltinCCHaiku, Scenario: typ.ScenarioClaudeCode, RequestModel: "vendor/fast", Active: true},
+	}}
 
 	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code", false)
 
 	if got := env["ANTHROPIC_DEFAULT_HAIKU_MODEL"]; got != "vendor/fast" {
 		t.Errorf("haiku model = %q, want %q", got, "vendor/fast")
 	}
-	// No default or main rule at all: the canonical main name.
+	// Slots without a rule fall back to the main rule's canonical name.
 	if got := env["ANTHROPIC_MODEL"]; got != "tingly/cc" {
 		t.Errorf("default model = %q, want %q", got, "tingly/cc")
-	}
-}
-
-func TestGenerateCCEnv_MixedSlotBindings(t *testing.T) {
-	// The case the slot model exists for: everything on the main rule, only
-	// the subagent on its own.
-	cfg := &serverconfig.Config{
-		Rules: []typ.Rule{
-			{UUID: serverconfig.RuleUUIDCC, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc", Active: true},
-			{UUID: serverconfig.RuleUUIDCCSubagent, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-subagent", Active: true},
-		},
-		Scenarios: []typ.ScenarioConfig{{
-			Scenario:        typ.ScenarioClaudeCode,
-			ClaudeCodeSlots: map[string]string{"subagent": serverconfig.RuleUUIDCCSubagent},
-		}},
-	}
-
-	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code", false)
-
-	for key, want := range map[string]string{
-		"ANTHROPIC_MODEL":                "tingly/cc",
-		"ANTHROPIC_DEFAULT_HAIKU_MODEL":  "tingly/cc",
-		"ANTHROPIC_DEFAULT_SONNET_MODEL": "tingly/cc",
-		"ANTHROPIC_DEFAULT_OPUS_MODEL":   "tingly/cc",
-		"ANTHROPIC_DEFAULT_FABLE_MODEL":  "tingly/cc",
-		"CLAUDE_CODE_SUBAGENT_MODEL":     "tingly/cc-subagent",
-	} {
-		if env[key] != want {
-			t.Errorf("env[%q] = %q, want %q", key, env[key], want)
-		}
 	}
 }
 
@@ -296,9 +256,9 @@ func TestResolveCCProfileSettings_InheritsThenAppliesOverrides(t *testing.T) {
 		"defaultMode":"plan"
 	}`)
 
-	cfg := separateProfileConfig(
-		typ.Rule{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "profile-fast", Active: true},
-	)
+	cfg := &serverconfig.Config{Rules: []typ.Rule{
+		{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "profile-fast", Active: true},
+	}}
 	profile := typ.ProfileMeta{
 		ID: "p1", Name: "work", Unified: false,
 		ClaudeCode: &typ.ClaudeCodeProfileConfig{
@@ -715,26 +675,51 @@ func TestGenerateCCEnv_FableFollowsDefaultWithoutActiveRule(t *testing.T) {
 			if fable != nil {
 				rules = append(rules, *fable)
 			}
-			env := GenerateCCEnv(separateMainConfig(rules...), "http://localhost:12580", "tok", "claude_code", false)
+			env := GenerateCCEnv(&serverconfig.Config{Rules: rules}, "http://localhost:12580", "tok", "claude_code", false)
 			if got := env["ANTHROPIC_DEFAULT_FABLE_MODEL"]; got != "tingly/cc-default" {
 				t.Errorf("fable = %q, want it to follow the default tier", got)
 			}
 		})
 	}
-	env := GenerateCCEnv(separateMainConfig(
-		typ.Rule{UUID: "builtin:claude_code:fable", Scenario: typ.ScenarioClaudeCode, RequestModel: "my-fable", Active: true},
-	), "http://localhost:12580", "tok", "claude_code", false)
+	env := GenerateCCEnv(&serverconfig.Config{Rules: []typ.Rule{
+		{UUID: "builtin:claude_code:fable", Scenario: typ.ScenarioClaudeCode, RequestModel: "my-fable", Active: true},
+	}}, "http://localhost:12580", "tok", "claude_code", false)
 	if got := env["ANTHROPIC_DEFAULT_FABLE_MODEL"]; got != "my-fable" {
 		t.Errorf("active fable rule = %q, want my-fable", got)
 	}
 }
 
 func TestGenerateCCEnv_ProfileWithoutFableRuleFollowsDefault(t *testing.T) {
-	cfg := separateProfileConfig(
-		typ.Rule{UUID: "builtin:claude_code:p1:default", Scenario: "claude_code:p1", RequestModel: "default", Active: true},
-	)
+	cfg := &serverconfig.Config{Rules: []typ.Rule{
+		{UUID: "builtin:claude_code:p1:default", Scenario: "claude_code:p1", RequestModel: "default", Active: true},
+	}}
 	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code:p1", true)
 	if got := env["ANTHROPIC_DEFAULT_FABLE_MODEL"]; got != "default" {
 		t.Errorf("profile fable = %q, want the default tier", got)
+	}
+}
+
+func TestGenerateCCEnv_OnlySubagentHasItsOwnRule(t *testing.T) {
+	// The case slots exist for: everything on the main rule, only the
+	// subagent on its own.
+	cfg := &serverconfig.Config{Rules: []typ.Rule{
+		{UUID: serverconfig.RuleUUIDCC, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc", Active: true},
+		{UUID: serverconfig.RuleUUIDCCSubagent, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-subagent", Active: true},
+		{UUID: serverconfig.RuleUUIDCCOpus, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-opus", Active: false},
+	}}
+
+	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code", false)
+
+	for key, want := range map[string]string{
+		"ANTHROPIC_MODEL":                "tingly/cc",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL":  "tingly/cc",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL": "tingly/cc",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL":   "tingly/cc",
+		"ANTHROPIC_DEFAULT_FABLE_MODEL":  "tingly/cc",
+		"CLAUDE_CODE_SUBAGENT_MODEL":     "tingly/cc-subagent",
+	} {
+		if env[key] != want {
+			t.Errorf("env[%q] = %q, want %q", key, env[key], want)
+		}
 	}
 }

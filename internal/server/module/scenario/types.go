@@ -2,7 +2,6 @@ package scenario
 
 import (
 	"github.com/tingly-dev/tingly-box/internal/agent"
-	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -96,28 +95,13 @@ type ScenarioDescriptorsResponse struct {
 	Data    []typ.ScenarioDescriptor `json:"data"`
 }
 
-// ClaudeCodeSlotUpdateRequest binds a Claude Code model slot to a rule of the
-// scenario; an empty RuleUUID makes the slot follow the default slot.
-type ClaudeCodeSlotUpdateRequest struct {
-	RuleUUID string `json:"rule_uuid"`
+// ClaudeCodeSlotRequest switches a Claude Code model slot's own rule on or
+// off; off hands the slot back to the main rule.
+type ClaudeCodeSlotRequest struct {
+	Enabled bool `json:"enabled"`
 }
 
-// ClaudeCodeSlotPresetRequest rebinds every slot to one of the presets.
-type ClaudeCodeSlotPresetRequest struct {
-	Preset string `json:"preset" binding:"required" example:"unified"` // "unified" or "separate"
-}
-
-// ClaudeCodeSlotsData lists every Claude Code model slot (in display order)
-// with the rule it resolves to. Unified reports whether they all request the
-// same model.
-type ClaudeCodeSlotsData struct {
-	Slots   []config.CCSlotResolution `json:"slots"`
-	Unified bool                      `json:"unified"`
-	// Rule is set by the create-slot-rule endpoint: the slot's own rule.
-	Rule *typ.Rule `json:"rule,omitempty"`
-}
-
-type ClaudeCodeSlotsResponse struct {
-	Success bool                `json:"success"`
-	Data    ClaudeCodeSlotsData `json:"data"`
+type ClaudeCodeSlotResponse struct {
+	Success bool     `json:"success"`
+	Data    typ.Rule `json:"data"`
 }

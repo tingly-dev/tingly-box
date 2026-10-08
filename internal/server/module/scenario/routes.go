@@ -106,32 +106,11 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 		swagger.WithRequestModel(ProfileUpdateRequest{}),
 	)
 
-	// --- Claude Code model slots ---
-
-	router.GET("/scenario/:scenario/claude-code/slots", h.GetClaudeCodeSlots,
-		swagger.WithDescription("List the Claude Code model slots of the main routing or a profile scenario, each with the rule it requests"),
-		swagger.WithTags("scenarios"),
-		swagger.WithResponseModel(ClaudeCodeSlotsResponse{}),
-	)
-
 	router.PUT("/scenario/:scenario/claude-code/slots/:slot", h.SetClaudeCodeSlot,
-		swagger.WithDescription("Bind a Claude Code model slot to a rule of the scenario; an empty rule_uuid makes it follow the default slot"),
+		swagger.WithDescription("Give a Claude Code model slot its own rule (enabled), or hand it back to the main rule"),
 		swagger.WithTags("scenarios"),
-		swagger.WithRequestModel(ClaudeCodeSlotUpdateRequest{}),
-		swagger.WithResponseModel(ClaudeCodeSlotsResponse{}),
-	)
-
-	router.POST("/scenario/:scenario/claude-code/slots/:slot/rule", h.CreateClaudeCodeSlotRule,
-		swagger.WithDescription("Give a Claude Code model slot its own rule (seeded from the rule it uses now) and bind it"),
-		swagger.WithTags("scenarios"),
-		swagger.WithResponseModel(ClaudeCodeSlotsResponse{}),
-	)
-
-	router.PUT("/scenario/:scenario/claude-code/slot-preset", h.ApplyClaudeCodeSlotPreset,
-		swagger.WithDescription("Rebind every Claude Code model slot: unified (all on the main rule) or separate (each on its own rule)"),
-		swagger.WithTags("scenarios"),
-		swagger.WithRequestModel(ClaudeCodeSlotPresetRequest{}),
-		swagger.WithResponseModel(ClaudeCodeSlotsResponse{}),
+		swagger.WithRequestModel(ClaudeCodeSlotRequest{}),
+		swagger.WithResponseModel(ClaudeCodeSlotResponse{}),
 	)
 
 	router.GET("/scenario/:scenario/models", h.GetClaudeCodeModels,

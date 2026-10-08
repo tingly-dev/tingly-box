@@ -48,37 +48,13 @@ export const scenarioApi = {
         }));
     },
 
-    // Claude Code model slots: which rule each slot (default/haiku/sonnet/
-    // opus/fable/subagent) requests. `scenario` is claude_code or a profile.
-    getClaudeCodeSlots: async (scenario: string): Promise<any> => {
-        return controlApi((client, headers) => client.GET('/api/v1/scenario/{scenario}/claude-code/slots', {
-            headers,
-            params: {path: {scenario}},
-        }));
-    },
-
-    // Bind a slot to a rule; an empty ruleUuid makes it follow the default slot.
-    setClaudeCodeSlot: async (scenario: string, slot: string, ruleUuid: string): Promise<any> => {
+    // Give a Claude Code model slot its own rule (enabled), or hand it back
+    // to the main rule. `scenario` is claude_code or a profile.
+    setClaudeCodeSlot: async (scenario: string, slot: string, enabled: boolean): Promise<any> => {
         return controlApi((client, headers) => client.PUT('/api/v1/scenario/{scenario}/claude-code/slots/{slot}', {
             headers,
             params: {path: {scenario, slot}},
-            body: {rule_uuid: ruleUuid},
-        }));
-    },
-
-    // Give a slot its own rule (a copy of the rule it uses now) and bind it.
-    createClaudeCodeSlotRule: async (scenario: string, slot: string): Promise<any> => {
-        return controlApi((client, headers) => client.POST('/api/v1/scenario/{scenario}/claude-code/slots/{slot}/rule', {
-            headers,
-            params: {path: {scenario, slot}},
-        }));
-    },
-
-    applyClaudeCodeSlotPreset: async (scenario: string, preset: 'unified' | 'separate'): Promise<any> => {
-        return controlApi((client, headers) => client.PUT('/api/v1/scenario/{scenario}/claude-code/slot-preset', {
-            headers,
-            params: {path: {scenario}},
-            body: {preset},
+            body: {enabled},
         }));
     },
 

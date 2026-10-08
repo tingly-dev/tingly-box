@@ -63,44 +63,51 @@ func (c *Config) SetScenarioConfig(config typ.ScenarioConfig) error {
 	// Check if scenario already exists and update it
 	for i := range c.Scenarios {
 		if c.Scenarios[i].Scenario == config.Scenario {
-			prev := c.Scenarios[i]
-			// Slot bindings are owned by the slot API; a whole-record write
-			// from a client that doesn't know them must not wipe them.
-			if config.ClaudeCodeSlots == nil {
-				config.ClaudeCodeSlots = prev.ClaudeCodeSlots
-			}
 			c.Scenarios[i] = config
-			if err := c.syncClaudeCodeSlotModeLocked(prev.GetDefaultFlags(), config); err != nil {
-				return err
-			}
+			c.syncClaudeCodeRuleModeLocked(config)
 			return c.Save()
 		}
 	}
 
 	// Add new scenario config
 	c.Scenarios = append(c.Scenarios, config)
-	if err := c.syncClaudeCodeSlotModeLocked(typ.ScenarioFlags{Unified: true}, config); err != nil {
-		return err
-	}
+	c.syncClaudeCodeRuleModeLocked(config)
 	return c.Save()
 }
 
-// syncClaudeCodeSlotModeLocked keeps the legacy unified/separate flags
-// working as slot presets: a write that switches the main Claude Code
-// scenario to one of them rebinds every slot accordingly. Writes that leave
-// the mode as it was don't touch the bindings.
-func (c *Config) syncClaudeCodeSlotModeLocked(prev typ.ScenarioFlags, config typ.ScenarioConfig) error {
+func (c *Config) syncClaudeCodeRuleModeLocked(config typ.ScenarioConfig) {
 	if config.Scenario != typ.ScenarioClaudeCode {
-		return nil
+		return
 	}
+
 	flags := config.GetDefaultFlags()
-	switch {
-	case flags.Separate && !prev.Separate:
-		return c.applyCCSlotPresetLocked(config.Scenario, CCSlotPresetSeparate)
-	case flags.Unified && !flags.Separate && !prev.Unified:
-		return c.applyCCSlotPresetLocked(config.Scenario, CCSlotPresetUnified)
+	if flags.Separate {
+		c.setClaudeCodeSlotRulesActiveLocked(true)
+		return
 	}
-	return nil
+	if flags.Unified {
+		c.setClaudeCodeSlotRulesActiveLocked(false)
+	}
+}
+
+// setClaudeCodeSlotRulesActiveLocked switches every slot rule on (separate)
+// or off (unified).
+func (c *Config) setClaudeCodeSlotRulesActiveLocked(separateActive bool) {
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+		if !rule.GetScenario().Is(typ.ScenarioClaudeCode) {
+			continue
+		}
+		// The main rule stays on in both modes: it is where every slot
+		// without a rule of its own goes.
+		if claudeCodeUnifiedRuleUUIDs[rule.UUID] {
+			rule.Active = true
+			continue
+		}
+		if claudeCodeSeparateRuleUUIDs[rule.UUID] {
+			rule.Active = separateActive
+		}
+	}
 }
 
 func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) bool {
@@ -170,17 +177,13 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 		config.Flags.Unified = value
 		if scenario == typ.ScenarioClaudeCode && value {
 			config.Flags.Separate = false
-			if err := c.applyCCSlotPresetLocked(scenario, CCSlotPresetUnified); err != nil {
-				return err
-			}
+			c.setClaudeCodeSlotRulesActiveLocked(false)
 		}
 	case constant.FlagSeparate:
 		config.Flags.Separate = value
 		if scenario == typ.ScenarioClaudeCode && value {
 			config.Flags.Unified = false
-			if err := c.applyCCSlotPresetLocked(scenario, CCSlotPresetSeparate); err != nil {
-				return err
-			}
+			c.setClaudeCodeSlotRulesActiveLocked(true)
 		}
 	case constant.FlagSkipUsage:
 		config.Flags.SkipUsage = value

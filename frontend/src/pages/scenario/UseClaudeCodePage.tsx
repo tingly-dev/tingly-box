@@ -35,10 +35,10 @@ const applyClaudeConfig = async (
     }
 };
 
-// One-click apply uses prefs derived from the current rules and slot
-// bindings — the same defaults the dialog seeds with.
-const derivedPrefs = ({ rules, slotRules }: AgentApplyContext) =>
-    derivePrefsFromRules({ rules, slots: slotRules ?? {} }) as Record<string, string>;
+// One-click apply uses prefs derived from the current rules — the same
+// defaults the dialog seeds with.
+const derivedPrefs = ({ rules }: AgentApplyContext) =>
+    derivePrefsFromRules({ rules }) as Record<string, string>;
 
 const ClaudeCodeSetupDialog: React.FC<{ slot: AgentPageSlot }> = ({ slot }) => {
     const { t } = useTranslation();
@@ -46,7 +46,6 @@ const ClaudeCodeSetupDialog: React.FC<{ slot: AgentPageSlot }> = ({ slot }) => {
         <ClaudeCodeConfigModal
             open={slot.dialogOpen}
             onClose={slot.closeDialog}
-            slots={slot.slotRules ?? {}}
             baseUrl={slot.baseUrl}
             rules={slot.rules}
             copyToClipboard={slot.copyToClipboard}

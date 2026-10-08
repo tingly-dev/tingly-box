@@ -1157,18 +1157,10 @@ export default {
   },
   "claudeCode": {
     "slots": {
-      "title": "Model slots",
-      "subtitle": "Which rule each kind of Claude Code request goes to. Slots on the same rule share its model.",
-      "slot": "Slot",
-      "sends": "Claude Code sends",
-      "rule": "Rule",
-      "followDefault": "Follow default",
-      "newRule": "New rule for this slot",
-      "presetUnified": "All on one rule",
-      "presetSeparate": "One rule per slot",
-      "updated": "Slots updated. Re-apply the Claude Code config for the change to take effect.",
-      "updatedProfile": "Slots updated. The change takes effect the next time this profile launches.",
-      "failed": "Failed to update model slots"
+      "label": "Slots",
+      "ownRule": "has its own rule (click to use the main rule)",
+      "mainRule": "uses the main rule (click to give it its own rule)",
+      "failed": "Failed to update the slot"
     },
     "modeChange": {
       "applyFailed": "Failed to apply configurations"
