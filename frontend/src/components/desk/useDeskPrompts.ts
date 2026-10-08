@@ -8,17 +8,19 @@ export interface DeskPrompt {
     text: string;
     createdAt: number;
     builtin?: boolean;
+    // i18n key for a built-in's display name; `name` is the English fallback.
+    nameKey?: string;
 }
 
 // Shipped with the page, read-only. "Copy to mine" turns one into a saved prompt.
 export const BUILTIN_PROMPTS: DeskPrompt[] = [
-    {id: 'builtin-review', name: 'Review changes', createdAt: 0, builtin: true,
+    {id: 'builtin-review', nameKey: 'desk.library.builtin.review', name: 'Review changes', createdAt: 0, builtin: true,
         text: 'Review the uncommitted changes in this repo. List correctness bugs first, then risky spots, then nits.'},
-    {id: 'builtin-fix-tests', name: 'Run tests and fix', createdAt: 0, builtin: true,
+    {id: 'builtin-fix-tests', nameKey: 'desk.library.builtin.fixTests', name: 'Run tests and fix', createdAt: 0, builtin: true,
         text: 'Run the test suite. For each failure, find the root cause and fix it, then rerun until green. Do not skip or disable tests.'},
-    {id: 'builtin-explain', name: 'Explain this repo', createdAt: 0, builtin: true,
+    {id: 'builtin-explain', nameKey: 'desk.library.builtin.explain', name: 'Explain this repo', createdAt: 0, builtin: true,
         text: 'Give me a map of this repo: entry points, main modules, how to build and run it, and where to start reading.'},
-    {id: 'builtin-commit', name: 'Write commit message', createdAt: 0, builtin: true,
+    {id: 'builtin-commit', nameKey: 'desk.library.builtin.commit', name: 'Write commit message', createdAt: 0, builtin: true,
         text: "Look at the staged changes and propose a commit message following this repo's conventions. Do not commit."},
 ];
 

@@ -17,6 +17,7 @@ interface PromptLibraryProps {
 
 const PromptLibrary = ({prompts, canRun, onRun, onFill, onSave, onRemove}: PromptLibraryProps) => {
     const {t} = useTranslation();
+    const label = (p: DeskPrompt) => p.nameKey ? t(p.nameKey, {defaultValue: p.name}) : p.name;
     // `id` undefined = new prompt; a builtin is copied, so its id is dropped.
     const [editing, setEditing] = useState<{id?: string; name: string; text: string} | null>(null);
     const [failed, setFailed] = useState(false);
@@ -35,7 +36,7 @@ const PromptLibrary = ({prompts, canRun, onRun, onFill, onSave, onRemove}: Promp
             <Box sx={{display: 'grid', gap: 1.5, gridTemplateColumns: {xs: '1fr', sm: 'repeat(2, 1fr)'}}}>
                 {prompts.map((p) => (
                     <Box key={p.id} sx={{border: 1, borderColor: 'divider', borderRadius: 2, p: 1.5, display: 'flex', flexDirection: 'column', gap: 0.75, minWidth: 0}}>
-                        <Typography sx={{fontWeight: 500}} noWrap>{p.name}</Typography>
+                        <Typography sx={{fontWeight: 500}} noWrap>{label(p)}</Typography>
                         <Typography sx={{fontFamily: fontMono, fontSize: fontSizes.sm, color: 'text.secondary', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'}}>
                             {p.text}
                         </Typography>
@@ -50,7 +51,7 @@ const PromptLibrary = ({prompts, canRun, onRun, onFill, onSave, onRemove}: Promp
                             <Button size="small" onClick={() => onFill(p.text)}>{t('desk.library.fill', {defaultValue: 'Edit first'})}</Button>
                             <Box sx={{flex: 1}}/>
                             {p.builtin ? (
-                                <Button size="small" onClick={() => {setFailed(false); setEditing({name: p.name, text: p.text});}}>
+                                <Button size="small" onClick={() => {setFailed(false); setEditing({name: label(p), text: p.text});}}>
                                     {t('desk.library.copy', {defaultValue: 'Copy to mine'})}
                                 </Button>
                             ) : confirmId === p.id ? (
