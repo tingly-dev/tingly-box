@@ -831,6 +831,15 @@
           "sources": ["https://developers.openai.com/api/docs/changelog", "https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"]
         },
         {
+          "id": "gpt-6.1-sol:fast",
+          "context": 272000,
+          "max_output": 128000,
+          "created": "2026-09-29",
+          "note": "接近 gpt-6-astra 性能的模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
+          "openai_endpoints": ["responses"],
+          "sources": ["https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"]
+        },
+        {
           "id": "gpt-6-sol",
           "context": 272000,
           "max_output": 128000,
