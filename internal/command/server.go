@@ -377,66 +377,40 @@ func printBanner(cfg BannerConfig) {
 	}
 
 	const (
-		primary   = lipgloss.Color("#3B82F6")
-		success   = lipgloss.Color("#06B6D4")
-		muted     = lipgloss.Color("#64748B")
-		highlight = lipgloss.Color("#60A5FA")
+		primary = lipgloss.Color("#3B82F6")
+		success = lipgloss.Color("#06B6D4")
+		muted   = lipgloss.Color("#64748B")
 	)
 
-	labelStyle := lipgloss.NewStyle().Foreground(muted).Width(11).Align(lipgloss.Right)
-	urlStyle := lipgloss.NewStyle().Foreground(success)
-	tokenStyle := lipgloss.NewStyle().Foreground(highlight)
 	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(primary)
 	versionStyle := lipgloss.NewStyle().Foreground(muted)
-
-	var lines []string
-	addLine := func(label, value string, valueStyle lipgloss.Style) {
-		lines = append(lines, fmt.Sprintf("%s  %s", labelStyle.Render(label), valueStyle.Render(value)))
-	}
-
-	if cfg.GlobalConfig.HasUserToken() {
-		addLine("Web UI", fmt.Sprintf("http://localhost:%d/login/%s", cfg.Port, cfg.GlobalConfig.GetUserToken()), urlStyle)
-	} else {
-		addLine("Web UI", fmt.Sprintf("http://localhost:%d/", cfg.Port), urlStyle)
-	}
-
-	if cfg.GlobalConfig.HasUserToken() {
-		lines = append(lines, "")
-		addLine("Login Token", cfg.GlobalConfig.GetUserToken(), tokenStyle)
-	}
-
+	labelStyle := lipgloss.NewStyle().Foreground(muted)
+	urlStyle := lipgloss.NewStyle().Foreground(success)
 	hintStyle := lipgloss.NewStyle().Foreground(muted).Italic(true)
-	lines = append(lines, "", hintStyle.Render("Open the Web UI above to get started"))
 
-	// Title: product name on one line, version on the next — nothing else.
-	titleText := titleStyle.Render("Tingly-Box")
-	versionText := versionStyle.Render(formatVersion(BuildVersion))
-
-	// Compute visual width for centering the title lines
-	maxWidth := lipgloss.Width(titleText)
-	if w := lipgloss.Width(versionText); w > maxWidth {
-		maxWidth = w
-	}
-	for _, line := range lines {
-		if w := lipgloss.Width(line); w > maxWidth {
-			maxWidth = w
-		}
+	// The login URL already embeds the user token, so no separate token row.
+	webUI := fmt.Sprintf(webUITpl, cfg.Port)
+	if cfg.GlobalConfig.HasUserToken() {
+		webUI = fmt.Sprintf(webUILoginTpl, cfg.Port, cfg.GlobalConfig.GetUserToken())
 	}
 
-	title := lipgloss.PlaceHorizontal(maxWidth, lipgloss.Center, titleText)
-	version := lipgloss.PlaceHorizontal(maxWidth, lipgloss.Center, versionText)
-	for i, line := range lines {
-		lines[i] = lipgloss.PlaceHorizontal(maxWidth, lipgloss.Center, line)
-	}
-	allLines := append([]string{title, version, ""}, lines...)
-
-	box := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
+	// No box: a left accent bar keeps the block recognisable without
+	// breaking when the (long) login URL is wider than the terminal.
+	bar := lipgloss.NewStyle().
+		Border(lipgloss.ThickBorder(), false, false, false, true).
 		BorderForeground(primary).
-		Padding(1, 2)
+		PaddingLeft(2)
+
+	body := strings.Join([]string{
+		titleStyle.Render("Tingly-Box") + "  " + versionStyle.Render(formatVersion(BuildVersion)),
+		"",
+		labelStyle.Render("Web UI  ") + urlStyle.Render(webUI),
+		"",
+		hintStyle.Render("Open the Web UI to get started"),
+	}, "\n")
 
 	fmt.Println()
-	fmt.Println(box.Render(strings.Join(allLines, "\n")))
+	fmt.Println(bar.Render(body))
 	fmt.Println()
 
 	if cfg.IsDaemon {
