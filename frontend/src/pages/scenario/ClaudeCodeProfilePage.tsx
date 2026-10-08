@@ -4,6 +4,7 @@ import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import { SCENARIO_HEADER_CONTENT_MAX_WIDTH } from './components/ScenarioCardHeader';
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
+import { useSlotRouting } from "@/pages/scenario/hooks/useSlotRouting";
 import ConfigRow from "@/components/ConfigRow.tsx";
 import { ChoiceToggle } from "@/components/ChoiceToggle";
 import { useProfileContext } from '@/contexts/ProfileContext';
@@ -78,6 +79,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
         isLoading,
     } = useScenarioPageInternal(scenario);
     const { launchSource } = useVersion();
+    const slots = useSlotRouting(scenario, !!profileId, true);
 
     // Profile state
     const { getProfiles, refresh: refreshProfiles } = useProfileContext();
@@ -87,7 +89,6 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     const [renameName, setRenameName] = useState('');
     const [isProfileMutating, setIsProfileMutating] = useState(false);
     const [appVersion, setAppVersion] = useState('');
-    const [unifiedMode, setUnifiedMode] = useState(currentProfile?.unified || false);
     // npx matches the primary installation path and does not assume that the
     // package has also installed a permanent executable on PATH. Keep the
     // global command available as an explicit alternative for those who have.
@@ -110,11 +111,6 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     // elsewhere) instead of two separate always-expanded rows — same info,
     // less vertical space, one at a time.
     const [profileConfigTab, setProfileConfigTab] = useState<'quickstart' | 'settings-file'>('quickstart');
-
-    // Update unified mode when profile changes
-    useEffect(() => {
-        setUnifiedMode(currentProfile?.unified || false);
-    }, [currentProfile]);
 
     useEffect(() => {
         setSettingsArtifact(null);
@@ -186,7 +182,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     }, [commandMode, appVersion, profileId]);
 
     return (
-        <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
+        <PageLayout loading={isLoading || slots.loading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
             <CardGrid>
                 <UnifiedCard
                     size="full"
@@ -223,8 +219,6 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                                 }}
                             >
                                 {currentProfile ? `${profileId} - ${currentProfile.name}` : profileId}
-                                {' · '}
-                                {unifiedMode ? t('claudeCode.profile.unified') : t('claudeCode.profile.separate')}
                             </Typography>
                         </Stack>
                     }
@@ -363,11 +357,17 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                     onArtifactChange={handleArtifactChange}
                 />
 
+                {slots.slotsCard}
+
                 <TemplatePage
                     scenario={scenario}
+                    // The rules some slot requests; the slot table above binds them.
+                    rules={slots.rules}
+                    onRulesChange={slots.setRules}
                     collapsible={true}
                     allowToggleRule={false}
                     allowAddRule={false}
+                    allowDeleteRule={false}
                 />
 
                 {/* Rename profile dialog */}

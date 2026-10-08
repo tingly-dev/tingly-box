@@ -235,50 +235,18 @@ page. The Quick Config seeds its form values from whatever is currently
 in those rules, not from a hardcoded list — so the form always reflects
 the actual route topology.
 
-### 5.2 Mode-aware rule loading (page side)
+### 5.2 Slot bindings replace the unified/separate mode
 
-`UseClaudeCodePage.tsx` fetches a different slice of rules depending on
-`configMode`:
+Which rule each slot uses is no longer an all-or-one mode switch: every slot
+is bound to a rule independently (`ScenarioConfig.ClaudeCodeSlots`), unbound
+slots follow the default slot, and an unbound default slot uses
+`builtin:claude_code:cc`. The backend resolves this once
+(`config.ResolveClaudeCodeSlots`) for `GenerateCCEnv`, the tbclient env and the
+slot API; the page fetches the resolved slots and passes slot → rule UUID to
+`derivePrefsFromRules`, which looks rules up by UUID only. Unified / Separate
+survive as presets. See `claude-code-slot-binding.md`.
 
-```ts
-if (configMode === 'unified') {
-    // Just the one rule
-    const result = await api.getRule("builtin:claude_code:cc");
-    setRules([result.data]);
-} else {
-    // All Claude Code rules except the unified-only one
-    const result = await api.getRules(SCENARIO);
-    setRules(result.data.filter(r => r.uuid !== 'builtin:claude_code:cc'));
-}
-```
-
-The `rules` array handed to the modal is therefore pre-filtered. The
-modal does not re-filter by mode — it just sees "the rules for this
-mode".
-
-### 5.3 UUID-suffix lookup (modal side)
-
-`derivePrefsFromRules` in `ClaudeCodeQuickConfig.tsx` uses the UUIDs as
-keys. It does not depend on array order or canonical `tingly/cc*` names:
-
-```ts
-const modelForVariant = (variant, fallback) => {
-    if (mode === 'unified') {
-        return rules.find(r => r.uuid === 'builtin:claude_code:cc')?.request_model || fallback;
-    }
-    const rule = rules.find(r => r.uuid === `builtin:claude_code:${variant}`);
-    return rule?.request_model || fallback;
-};
-```
-
-- **unified**: the `builtin:claude_code:cc` rule is found explicitly; its
-  `request_model` populates all 5 slots.
-- **separate**: each of the 5 variants (`default` / `haiku` / `sonnet` /
-  `opus` / `subagent`) does a UUID-exact `find` against
-  `builtin:claude_code:<variant>`.
-
-If a rule is missing (e.g. user deleted it manually), the slot falls back
-to the tb-canonical default string. Form remains usable.
+### 5.3 (merged into 5.2)
 
 ### 5.4 The closing loop: `request_model` is the routing key
 

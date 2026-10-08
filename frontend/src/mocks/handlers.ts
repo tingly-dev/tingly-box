@@ -1006,6 +1006,58 @@ if (isNewcomer) {
     }
 }
 
+// Claude Code slot bindings in mock mode: scenario → slot → rule uuid. The
+// main scenario starts with only the subagent split out, the case slot
+// binding exists for.
+const MOCK_CC_SLOTS = ['default', 'haiku', 'sonnet', 'opus', 'fable', 'subagent']
+const mockCCSlotBindings: Record<string, Record<string, string>> = {
+    claude_code: { subagent: 'mock-rule-cc-smart' },
+}
+
+const mockEnsureCCSlotRule = (scenario: string, slot: string): any => {
+    const rules = getMockRulesForScenario(scenario)
+    const uuid = `builtin:${scenario}:${slot}`
+    let rule = rules.find(r => r.uuid === uuid)
+    if (!rule) {
+        const isProfile = scenario.includes(':')
+        rule = {
+            uuid,
+            scenario,
+            request_model: isProfile ? slot : `tingly/cc-${slot}`,
+            response_model: '',
+            active: true,
+            description: `Claude Code - ${slot} model`,
+            flags: { claude_code_compat: true, clean_header: true },
+            services: [],
+        }
+        rules.push(rule)
+    }
+    rule.active = true
+    return rule
+}
+
+const mockCCSlotsResponse = (scenario: string) => {
+    const rules = getMockRulesForScenario(scenario)
+    const bindings = mockCCSlotBindings[scenario] ?? {}
+    const main = rules.find(r => r.uuid === `builtin:${scenario}:cc`) ?? rules[0]
+    const of = (slot: string, rule: any, bound: boolean) => ({
+        slot,
+        rule_uuid: rule?.uuid ?? '',
+        request_model: rule?.request_model ?? (scenario.includes(':') ? 'cc' : 'tingly/cc'),
+        context_1m: !!rule?.flags?.context_1m,
+        bound,
+    })
+    const boundDefault = rules.find(r => r.uuid === bindings.default)
+    const def = of('default', boundDefault ?? main, !!boundDefault)
+    const slots = MOCK_CC_SLOTS.map(slot => {
+        if (slot === 'default') return def
+        const rule = rules.find(r => r.uuid === bindings[slot])
+        return rule ? of(slot, rule, true) : { ...def, slot, bound: false }
+    })
+    const unified = slots.every(s => s.rule_uuid === slots[0].rule_uuid)
+    return { success: true, data: { slots, unified } }
+}
+
 const getMockRulesForScenario = (scenario: string): any[] => {
     if (!mockV1Rules[scenario] && scenario.startsWith('claude_code:')) {
         const profileId = scenario.slice('claude_code:'.length)
@@ -2490,6 +2542,37 @@ export const handlers = [
     // Playground header (see pages/image/ImagePlaygroundPage + ImageGenPlaygroundCard).
     http.get('/api/v1/imagegen/info', () => {
         return HttpResponse.json({ success: true, output_dir: '/home/demo/.tingly-box/image' })
+    }),
+
+    // Claude Code model slots (see .design/claude-code-slot-binding.md).
+    http.get('/api/v1/scenario/:scenario/claude-code/slots', ({ params }) => {
+        const { scenario } = params as { scenario: string }
+        return HttpResponse.json(mockCCSlotsResponse(scenario))
+    }),
+
+    http.put('/api/v1/scenario/:scenario/claude-code/slots/:slot', async ({ params, request }) => {
+        const { scenario, slot } = params as { scenario: string; slot: string }
+        const body = await request.json() as { rule_uuid?: string }
+        const bindings = (mockCCSlotBindings[scenario] ??= {})
+        if (body.rule_uuid) bindings[slot] = body.rule_uuid
+        else delete bindings[slot]
+        return HttpResponse.json(mockCCSlotsResponse(scenario))
+    }),
+
+    http.post('/api/v1/scenario/:scenario/claude-code/slots/:slot/rule', ({ params }) => {
+        const { scenario, slot } = params as { scenario: string; slot: string }
+        const rule = mockEnsureCCSlotRule(scenario, slot)
+        ;(mockCCSlotBindings[scenario] ??= {})[slot] = rule.uuid
+        return HttpResponse.json({ ...mockCCSlotsResponse(scenario), data: { ...mockCCSlotsResponse(scenario).data, rule } })
+    }),
+
+    http.put('/api/v1/scenario/:scenario/claude-code/slot-preset', async ({ params, request }) => {
+        const { scenario } = params as { scenario: string }
+        const { preset } = await request.json() as { preset: string }
+        mockCCSlotBindings[scenario] = preset === 'separate'
+            ? Object.fromEntries(MOCK_CC_SLOTS.map(slot => [slot, mockEnsureCCSlotRule(scenario, slot).uuid]))
+            : {}
+        return HttpResponse.json(mockCCSlotsResponse(scenario))
     }),
 
     // Scenario config (per-scenario UI prefs incl. unified vs. separate mode)

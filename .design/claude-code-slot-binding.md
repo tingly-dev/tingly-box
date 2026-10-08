@@ -1,6 +1,8 @@
 # Claude Code：槽位绑定（Slot Binding）
 
-> 状态：**设计提案，未实施**。
+> 状态：**已实施**（路由层不变：rule 即 request，`request_model` 仍是路由键；本设计只处理 Claude Code 特有的槽位 → 规则映射）。
+
+![槽位表](images/claude-code-slots.png)
 > 背景文档：`claude-code-config.md`（env 线形、规则 ↔ slot 映射）、`ux-principles.md`（P1–P12）。
 
 ---
@@ -179,8 +181,10 @@ smart routing 的 prompt 指纹用于区分 compact，或旧版 Claude Code 不�
 4. 前端槽位表、预设、Apply 提示；mock handler；ui-preview 截图。
 5. TUI quickstart 的 "Use unified mode?" 改为预设选择；更新 `claude-code-config.md` §5。
 
-## 7. 待确认
+## 7. 决定
 
-- **服务端解析 vs env 直写**：本方案 env 直接写绑定规则的 `request_model`（路由层零改动，env 是真实值），代价是改绑定要重新 Apply。
-  备选是 env 永远写稳定的槽位名（`tingly/cc-subagent`），网关按绑定表解析到规则 —— 改绑定即时生效、运行中的会话也跟着变，但新增一层路由解析，probe 的请求旅程要加"槽位"一步。
-- 槽位绑定是否也开放给其他固定槽位客户端（`useSlotRouting` 目前只服务 Claude Code）。
+- **env 直写绑定规则的 `request_model`**，不做服务端槽位解析：路由图逻辑保持不变，rule 就是 request。改绑定后需要重新 Apply（主场景通过 Client Config 状态芯片的 "Reapply" 提示；profile 的 settings 在启动时重建，无需操作）。
+- 预设不会停用任何规则，所以在重新 Apply 之前，仍在用旧 env 的 Claude Code 照常路由。
+- 存储为 `ScenarioConfig.ClaudeCodeSlots`；从未写过绑定的 scenario 按旧的 unified/separate 标志（profile 为 `ProfileMeta.Unified`）惰性推导，不需要迁移。
+- 实现位置：`internal/config/cc_slots.go`（解析 / 绑定 / 预设）、`internal/server/module/scenario/handler_slots.go`（API）、`frontend/src/pages/scenario/components/ClaudeCodeSlotsCard.tsx`（槽位表）。
+- 未覆盖：`tingly-box agent apply claude-code --unified` 仍按显式参数写 env，不读槽位绑定。

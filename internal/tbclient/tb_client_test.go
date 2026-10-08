@@ -150,11 +150,12 @@ func TestResolveClaudeCodeModels_SeparateMissingTierFallsBack(t *testing.T) {
 	client := NewTBClient(cfg)
 	models := client.resolveClaudeCodeModels()
 
+	// Slots without a rule of their own follow the default slot.
 	assert.Equal(t, "vendor/default", models.def)
-	assert.Equal(t, "tingly/cc-haiku", models.haiku)
-	assert.Equal(t, "tingly/cc-sonnet", models.sonnet)
-	assert.Equal(t, "tingly/cc-opus", models.opus)
-	assert.Equal(t, "tingly/cc-subagent", models.subagent)
+	assert.Equal(t, "vendor/default", models.haiku)
+	assert.Equal(t, "vendor/default", models.sonnet)
+	assert.Equal(t, "vendor/default", models.opus)
+	assert.Equal(t, "vendor/default", models.subagent)
 }
 
 func TestResolveClaudeCodeModels_ModernUUIDWinsOverLegacy(t *testing.T) {

@@ -64,9 +64,11 @@ test('separate mode keeps each UUID-derived slot distinct', () => {
     assert.equal(restored.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'tingly/cc-haiku');
 });
 
-test('unified mode resolves the cc rule by UUID instead of array order or canonical name', () => {
+const allOn = (uuid: string) => ({ default: uuid, haiku: uuid, sonnet: uuid, opus: uuid, fable: uuid, subagent: uuid });
+
+test('every slot on the main rule resolves it by UUID instead of array order or canonical name', () => {
     const prefs = derivePrefsFromRules({
-        mode: 'unified',
+        slots: allOn('builtin:claude_code:cc'),
         rules: [
             { uuid: 'unrelated', request_model: 'wrong/model' },
             {
@@ -80,11 +82,18 @@ test('unified mode resolves the cc rule by UUID instead of array order or canoni
     assert.equal(prefs.ANTHROPIC_MODEL, 'team/custom-route[1m]');
     assert.equal(prefs.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'team/custom-route[1m]');
     assert.equal(prefs.CLAUDE_CODE_SUBAGENT_MODEL, 'team/custom-route[1m]');
+    assert.equal(prefs.CLAUDE_CODE_AUTO_COMPACT_WINDOW, '1000000');
 });
 
-test('separate mode resolves each custom request model by its tier rule UUID', () => {
+test('each slot resolves the request model of the rule it is bound to', () => {
     const prefs = derivePrefsFromRules({
-        mode: 'separate',
+        slots: {
+            default: 'builtin:claude_code:default',
+            haiku: 'builtin:claude_code:haiku',
+            sonnet: 'builtin:claude_code:sonnet',
+            opus: 'builtin:claude_code:opus',
+            subagent: 'builtin:claude_code:subagent',
+        },
         rules: [
             { uuid: 'builtin:claude_code:opus', request_model: 'routes/deep' },
             { uuid: 'builtin:claude_code:default', request_model: 'routes/default' },
@@ -99,25 +108,26 @@ test('separate mode resolves each custom request model by its tier rule UUID', (
     assert.equal(prefs.ANTHROPIC_DEFAULT_SONNET_MODEL, 'routes/main');
     assert.equal(prefs.ANTHROPIC_DEFAULT_OPUS_MODEL, 'routes/deep');
     assert.equal(prefs.CLAUDE_CODE_SUBAGENT_MODEL, 'routes/agent');
+    // No fable binding: it follows the default slot.
+    assert.equal(prefs.ANTHROPIC_DEFAULT_FABLE_MODEL, 'routes/default');
 });
 
-test('separate mode points fable at the default tier when its rule is missing or off', () => {
-    const base = [
-        { uuid: 'builtin:claude_code:default', request_model: 'routes/default' },
-        { uuid: 'builtin:claude_code:opus', request_model: 'routes/deep' },
-    ];
-    const missing = derivePrefsFromRules({ mode: 'separate', rules: base });
-    assert.equal(missing.ANTHROPIC_DEFAULT_FABLE_MODEL, 'routes/default');
-
-    const inactive = derivePrefsFromRules({
-        mode: 'separate',
-        rules: [...base, { uuid: 'builtin:claude_code:fable', request_model: 'routes/fable', active: false }],
+test('only the subagent split out: everything else stays on the main rule', () => {
+    const prefs = derivePrefsFromRules({
+        slots: { ...allOn('builtin:claude_code:cc'), subagent: 'builtin:claude_code:subagent' },
+        rules: [
+            { uuid: 'builtin:claude_code:cc', request_model: 'tingly/cc' },
+            { uuid: 'builtin:claude_code:subagent', request_model: 'tingly/cc-subagent' },
+        ],
     });
-    assert.equal(inactive.ANTHROPIC_DEFAULT_FABLE_MODEL, 'routes/default');
 
-    const active = derivePrefsFromRules({
-        mode: 'separate',
-        rules: [...base, { uuid: 'builtin:claude_code:fable', request_model: 'routes/fable', active: true }],
-    });
-    assert.equal(active.ANTHROPIC_DEFAULT_FABLE_MODEL, 'routes/fable');
+    assert.equal(prefs.ANTHROPIC_MODEL, 'tingly/cc');
+    assert.equal(prefs.ANTHROPIC_DEFAULT_OPUS_MODEL, 'tingly/cc');
+    assert.equal(prefs.CLAUDE_CODE_SUBAGENT_MODEL, 'tingly/cc-subagent');
+});
+
+test('without any slot information every slot uses the main rule', () => {
+    const prefs = derivePrefsFromRules({ slots: {}, rules: [] });
+    assert.equal(prefs.ANTHROPIC_MODEL, 'tingly/cc');
+    assert.equal(prefs.CLAUDE_CODE_SUBAGENT_MODEL, 'tingly/cc');
 });

@@ -132,22 +132,3 @@ var ccProfileTiers = map[string]bool{
 	"subagent": true,
 	"fable":    true,
 }
-
-var claudeCodeUnifiedRuleUUIDs = map[string]bool{
-	RuleUUIDCC:        true,
-	RuleUUIDBuiltinCC: true,
-}
-
-var claudeCodeSeparateRuleUUIDs = map[string]bool{
-	RuleUUIDCCDefault:         true,
-	RuleUUIDCCHaiku:           true,
-	RuleUUIDCCSonnet:          true,
-	RuleUUIDCCOpus:            true,
-	RuleUUIDCCSubagent:        true,
-	RuleUUIDCCFable:           true,
-	RuleUUIDBuiltinCCDefault:  true,
-	RuleUUIDBuiltinCCHaiku:    true,
-	RuleUUIDBuiltinCCSonnet:   true,
-	RuleUUIDBuiltinCCOpus:     true,
-	RuleUUIDBuiltinCCSubagent: true,
-}

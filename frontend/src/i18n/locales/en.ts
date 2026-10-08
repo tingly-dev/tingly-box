@@ -1156,24 +1156,21 @@ export default {
     "modelsPreviewNote": "Model ids written to settings.yaml: {{models}}"
   },
   "claudeCode": {
-    "configModes": {
-      "unified": {
-        "label": "Unified Model",
-        "description": "Config unified model for all claude code requests"
-      },
-      "separate": {
-        "label": "Separate Model",
-        "description": "Config different models for claude code scenario, like subagent, summary, default, ..."
-      }
+    "slots": {
+      "title": "Model slots",
+      "subtitle": "Which rule each kind of Claude Code request goes to. Slots on the same rule share its model.",
+      "slot": "Slot",
+      "sends": "Claude Code sends",
+      "rule": "Rule",
+      "followDefault": "Follow default",
+      "newRule": "New rule for this slot",
+      "presetUnified": "All on one rule",
+      "presetSeparate": "One rule per slot",
+      "updated": "Slots updated. Re-apply the Claude Code config for the change to take effect.",
+      "updatedProfile": "Slots updated. The change takes effect the next time this profile launches.",
+      "failed": "Failed to update model slots"
     },
     "modeChange": {
-      "title": "Change Configuration Mode?",
-      "body": "You are about to switch from {{from}} to {{to}} mode.",
-      "hint": "After changing the mode, you will need to reapply the configuration to Claude Code for the changes to take effect.",
-      "cancel": "Cancel",
-      "confirm": "Confirm",
-      "success": "Configuration mode changed to {{mode}}. Please reapply the configuration to Claude Code.",
-      "failed": "Failed to save configuration mode",
       "applyFailed": "Failed to apply configurations"
     },
     "configPath": "Add env config to Claude Code config file",

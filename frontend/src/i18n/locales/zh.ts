@@ -1155,24 +1155,21 @@ export default {
     "modelsPreviewNote": "写入 settings.yaml 的模型 id：{{models}}"
   },
   "claudeCode": {
-    "configModes": {
-      "unified": {
-        "label": "统一模型",
-        "description": "为所有 Claude Code 请求配置同一个模型"
-      },
-      "separate": {
-        "label": "分离模型",
-        "description": "为 Claude Code 的不同场景（如子代理、摘要、默认等）分别配置模型"
-      }
+    "slots": {
+      "title": "模型槽位",
+      "subtitle": "每类 Claude Code 请求走哪条规则。绑定到同一条规则的槽位共用它的模型。",
+      "slot": "槽位",
+      "sends": "Claude Code 发出",
+      "rule": "规则",
+      "followDefault": "跟随 default",
+      "newRule": "为此槽位新建规则",
+      "presetUnified": "全部统一",
+      "presetSeparate": "全部分开",
+      "updated": "槽位已更新，重新应用 Claude Code 配置后生效。",
+      "updatedProfile": "槽位已更新，下次启动该 profile 时生效。",
+      "failed": "更新模型槽位失败"
     },
     "modeChange": {
-      "title": "切换配置模式？",
-      "body": "即将从 {{from}} 切换到 {{to}} 模式。",
-      "hint": "切换模式后，需要重新将配置应用到 Claude Code 才能生效。",
-      "cancel": "取消",
-      "confirm": "确认",
-      "success": "配置模式已切换为{{mode}}，请重新应用配置到 Claude Code。",
-      "failed": "保存配置模式失败",
       "applyFailed": "应用配置失败"
     },
     "configPath": "将环境配置添加到 Claude Code 配置文件",

@@ -364,6 +364,10 @@ type ScenarioConfig struct {
 	Scenario   RuleScenario           `json:"scenario" yaml:"scenario"`
 	Flags      ScenarioFlags          `json:"flags" yaml:"flags"`                               // Scenario configuration flags
 	Extensions map[string]interface{} `json:"extensions,omitempty" yaml:"extensions,omitempty"` // Reserved for future extensions
+	// ClaudeCodeSlots binds Claude Code model slots (default/haiku/sonnet/opus/
+	// fable/subagent) to rule UUIDs of this scenario. Owned by the slot API
+	// (config.SetClaudeCodeSlot); see .design/claude-code-slot-binding.md.
+	ClaudeCodeSlots map[string]string `json:"claude_code_slots,omitempty" yaml:"claude_code_slots,omitempty"`
 }
 
 // GetDefaultFlags returns the effective flags for a scenario.

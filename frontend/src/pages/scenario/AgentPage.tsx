@@ -13,7 +13,8 @@ import { useProviderDialog } from '@/hooks/useProviderDialog';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 import { useContext1MToggle } from '@/pages/scenario/hooks/useContext1MToggle';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
-import { type SlotMode, useSlotRouting } from '@/pages/scenario/hooks/useSlotRouting';
+import { useSlotRouting } from '@/pages/scenario/hooks/useSlotRouting';
+import type { ClaudeCodeSlotRules } from '@/pages/scenario/components/claudeCodeSlots';
 import AgentSetupCard, {
     type AgentApplyResult,
     type AgentInstallAction,
@@ -47,8 +48,8 @@ export type AgentSetup =
 /** What a one-click apply derives its settings from. */
 export interface AgentApplyContext {
     rules: any[];
-    /** Set for agents with slot routing. */
-    slotMode?: SlotMode;
+    /** Set for agents with slot routing: slot → rule UUID. */
+    slotRules?: ClaudeCodeSlotRules;
 }
 
 /** The Quick Start card: install → configure → pick a model. */
@@ -97,11 +98,11 @@ export interface AgentPageDescriptor {
     /** Title of the routing rules card when it is not the default. */
     rulesTitleKey?: string;
     /**
-     * Fixed model slots (Claude Code): a Unified / Separate switch in the
-     * header decides which rules are shown; rules can't be added, removed or
-     * switched off, since each one backs a slot.
+     * Fixed model slots (Claude Code): a slot table binds each slot to a
+     * rule, and the rules card shows the rules in use; rules can't be added,
+     * removed or switched off there, since each one backs a slot.
      */
-    slotRouting?: { unifiedRuleUuid: string };
+    slotRouting?: boolean;
 }
 
 /** What an agent's setup dialog gets from the page. */
@@ -112,7 +113,7 @@ export interface AgentPageSlot {
     showNotification: ReturnType<typeof useScenarioPageInternal>['showNotification'];
     rules: any[];
     loadRules: (scenario: string) => Promise<void>;
-    slotMode?: SlotMode;
+    slotRules?: ClaudeCodeSlotRules;
     dialogOpen: boolean;
     /** Close the setup dialog and drop a pending 1M-context change. */
     closeDialog: () => void;
@@ -131,9 +132,9 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     const { t } = useTranslation();
     const { scenario, setup, quickStart, headerLinks, slotRouting, connection } = agent;
 
-    // Rules: the scenario's own, or — with slot routing — the set for the current mode.
-    const slots = useSlotRouting(scenario, slotRouting?.unifiedRuleUuid ?? '', !!slotRouting);
-    const slotMode = slotRouting ? slots.mode : undefined;
+    // Rules: the scenario's own, or — with slot routing — the ones some slot requests.
+    const slots = useSlotRouting(scenario, !!slotRouting);
+    const slotRules = slotRouting ? slots.slotRules : undefined;
     const internal = useScenarioPageInternal(scenario, { skipRules: !!slotRouting });
     const { notification, showNotification, copyToClipboard, baseUrl, loadRules } = internal;
     const rules = slotRouting ? slots.rules : internal.rules;
@@ -141,7 +142,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
-    const { status: clientConfigStatus } = useClientConfigStatus(agent.clientConfigTool ?? null, [rules, dialogOpen, slotMode]);
+    const { status: clientConfigStatus } = useClientConfigStatus(agent.clientConfigTool ?? null, [rules, dialogOpen, slotRules]);
     const context1M = useContext1MToggle(() => setDialogOpen(true));
     // Unified Connect AI add flow (picker + form/OAuth/paste/import dialogs), offered by Quick Start.
     const connectAI = useProviderDialog(showNotification, {
@@ -156,7 +157,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
             setIsApplyLoading(false);
         }
     };
-    const applyContext: AgentApplyContext = { rules, slotMode };
+    const applyContext: AgentApplyContext = { rules, slotRules };
 
     const slot: AgentPageSlot = {
         scenario,
@@ -165,7 +166,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
         showNotification,
         rules,
         loadRules,
-        slotMode,
+        slotRules,
         dialogOpen,
         closeDialog: () => {
             setDialogOpen(false);
@@ -191,12 +192,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
             {t(setup.kind === 'auto' ? 'scenarioPage.autoConfig' : 'scenarioPage.setupGuide')}
         </Button>
     );
-    const headerActions = slotRouting ? (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {slots.modeSwitch}
-            {configButton}
-        </Box>
-    ) : headerLinks?.length ? (
+    const headerActions = headerLinks?.length ? (
         <Box sx={{ display: 'flex', gap: 1 }}>
             {headerLinks.map(link => (
                 <Tooltip key={link.href} title={link.href}>
@@ -258,6 +254,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         onConnectProvider={connectAI.handleConnectAIClick}
                     />
                 )}
+                {slotRouting && slots.slotsCard}
                 <TemplatePage
                     scenario={scenario}
                     // One copy of the rules for the whole page: the rule list
@@ -277,7 +274,6 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                     collapsible={true}
                     {...(agent.context1M ? { onContext1MToggle: context1M.handleContext1MToggle } : {})}
                 />
-                {slotRouting && slots.modeDialog}
                 {setup.kind !== 'none' && setup.renderDialog(slot)}
                 {quickStart && <ConnectAIDialogs flow={connectAI} />}
             </CardGrid>

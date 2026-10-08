@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"sync"
 
 	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
@@ -55,14 +54,11 @@ func acquireCCProfileBuildLock(path string) func() {
 // GenerateCCEnv builds the env map for Claude Code settings.json.
 //
 // scenarioPath is "claude_code" for the main scenario or "claude_code:p1" for
-// a profile. isProfile=true → tier models resolved from profile-scoped built-in
-// UUIDs; isProfile=false → resolved from main-scenario built-in UUIDs (with
-// legacy-UUID fallback for pre-migration configs).
-//
-// Reading the rule's request_model (instead of assuming the seeded name) keeps
-// the env aligned when a user renames a rule's model; the seeded name is the
-// fallback when the rule is missing or inactive.
-func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath string, unified, isProfile bool) map[string]string {
+// a profile. Each model slot gets the request_model of the rule it is bound to
+// (config.ResolveClaudeCodeSlots), so the env follows renamed rules and any
+// mix of shared and per-slot rules; isProfile only decides whether the main
+// scenario's canonical tunables are added.
+func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath string, isProfile bool) map[string]string {
 	env := map[string]string{
 		"ANTHROPIC_BASE_URL":   baseURL + "/tingly/" + scenarioPath,
 		"ANTHROPIC_AUTH_TOKEN": apiKey,
@@ -77,67 +73,32 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 		env["API_TIMEOUT_MS"] = "3000000"
 	}
 
-	// Track whether any resolved rule has the 1M context flag so we can
-	// mirror the frontend quick-config's auto-compact window adjustment.
-	context1M := false
-
-	ruleModel := func(fallback string, uuids ...string) string {
-		if cfg != nil {
-			for _, uuid := range uuids {
-				if r := cfg.GetRuleByUUID(uuid); r != nil && r.Active {
-					if m := strings.TrimSpace(r.RequestModel); m != "" {
-						// Mirror the frontend quick-config: a rule with the 1M context
-						// flag advertises itself to Claude Code via the [1m] suffix (the
-						// client strips it back and sends the context-1m beta header).
-						if r.Flags.Context1M {
-							context1M = true
-							if !strings.HasSuffix(m, serverconfig.Context1MSuffix) {
-								m += serverconfig.Context1MSuffix
-							}
-						}
-						return m
-					}
-				}
-			}
-		}
-		return fallback
-	}
-
-	// tierModel resolves one tier slot: profile rules by canonical profiled UUID
-	// with the short tier name as fallback, main-scenario rules by the modern
-	// built-in UUID (legacy UUID as a compat fallback) with canonical tingly/*
-	// name as the final fallback.
-	tierModel := func(tier, legacyUUID, legacyFallback string) string {
-		if isProfile {
-			return ruleModel(tier, serverconfig.BuiltinRuleUUID(typ.RuleScenario(scenarioPath), tier))
-		}
-		return ruleModel(legacyFallback, serverconfig.BuiltinRuleUUID(typ.ScenarioClaudeCode, tier), legacyUUID)
-	}
-
-	if unified {
-		model := tierModel("cc", serverconfig.RuleUUIDBuiltinCC, "tingly/cc")
-		env["ANTHROPIC_MODEL"] = model
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = model
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = model
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = model
-		env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = model
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = model
+	var slots []serverconfig.CCSlotResolution
+	if cfg != nil {
+		slots = cfg.ResolveClaudeCodeSlots(typ.RuleScenario(scenarioPath))
 	} else {
-		env["ANTHROPIC_MODEL"] = tierModel("default", serverconfig.RuleUUIDBuiltinCCDefault, "tingly/cc-default")
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = tierModel("haiku", serverconfig.RuleUUIDBuiltinCCHaiku, "tingly/cc-haiku")
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = tierModel("opus", serverconfig.RuleUUIDBuiltinCCOpus, "tingly/cc-opus")
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = tierModel("sonnet", serverconfig.RuleUUIDBuiltinCCSonnet, "tingly/cc-sonnet")
-		// The fable tier arrived after separate mode shipped, so a profile or
-		// install may have no active fable rule (never seeded, or switched off);
-		// the bare tier name is not routable, so the alias follows the default
-		// tier instead.
-		env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = ruleModel(env["ANTHROPIC_MODEL"], serverconfig.BuiltinRuleUUID(typ.RuleScenario(scenarioPath), "fable"))
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = tierModel("subagent", serverconfig.RuleUUIDBuiltinCCSubagent, "tingly/cc-subagent")
+		fallback := "tingly/cc"
+		if isProfile {
+			fallback = "cc"
+		}
+		for _, slot := range serverconfig.CCSlots {
+			slots = append(slots, serverconfig.CCSlotResolution{Slot: slot, RequestModel: fallback})
+		}
 	}
 
-	// Mirror the frontend quick-config: when any resolved model rule has the
-	// 1M context flag, adjust the auto-compact window to match so Claude Code
-	// doesn't compact prematurely.
+	// A slot on a rule with the 1M context flag advertises itself to Claude
+	// Code via the [1m] suffix (the client strips it back and sends the
+	// context-1m beta header), and the auto-compact window follows, mirroring
+	// the frontend quick-config.
+	context1M := false
+	for _, slot := range slots {
+		model := slot.RequestModel
+		if slot.Context1M {
+			context1M = true
+			model += serverconfig.Context1MSuffix
+		}
+		env[serverconfig.CCSlotEnvKeys[slot.Slot]] = model
+	}
 	if context1M {
 		env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] = "1000000"
 	}
@@ -282,7 +243,7 @@ func ResolveCCProfileSettings(cfg *serverconfig.Config, baseURL, apiKey, scenari
 
 	baseEnv = upgradeLegacyCCEnv(baseEnv)
 
-	generated := GenerateCCEnv(cfg, baseURL, apiKey, scenarioPath, profile.Unified, true)
+	generated := GenerateCCEnv(cfg, baseURL, apiKey, scenarioPath, true)
 	maps.Copy(baseEnv, generated)
 	basePreferences, err := ClaudeCodePrefsFromEnv(baseEnv)
 	if err != nil {
