@@ -1,6 +1,6 @@
-name: Docker Bind-Mount Smoke Test
+name: Verify Docker
 
-# Regression guard for #1662: a freshly `mkdir`ed host directory is owned by
+# Docker bind-mount smoke test. Regression guard for #1662: a freshly `mkdir`ed host directory is owned by
 # the invoking host user, not the image's non-root "tingly" user (UID/GID
 # 999), and the entrypoint in both Dockerfiles is what makes that bind mount
 # writable without a manual `chown`. Builds each image locally (no registry
@@ -10,13 +10,13 @@ on:
   pull_request:
     paths:
       - 'build/docker/**'
-      - '.github/workflows/docker-smoke-test.yml'
+      - '.github/workflows/verify-docker.yml'
       - '.github/scripts/docker-smoke-test.sh'
   push:
     branches: [main]
     paths:
       - 'build/docker/**'
-      - '.github/workflows/docker-smoke-test.yml'
+      - '.github/workflows/verify-docker.yml'
       - '.github/scripts/docker-smoke-test.sh'
   workflow_dispatch:
 
@@ -24,7 +24,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: docker-smoke-test-${{ github.ref }}
+  group: verify-docker-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
