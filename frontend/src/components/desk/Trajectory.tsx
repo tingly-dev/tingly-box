@@ -32,6 +32,8 @@ const kindColor = (theme: Theme, kind: TrajectoryKind): string => {
             return getReadableAccent(theme, 'warning');
         case 'error':
             return getReadableAccent(theme, 'error');
+        case 'reply':
+            return theme.palette.text.primary;
         default:
             return theme.palette.text.secondary;
     }
@@ -67,6 +69,7 @@ const Trajectory = ({blocks, working, pendingRequestId, project, onOpen}: Trajec
         approval: t('desk.trajectoryKindApproval', {defaultValue: 'Approval'}),
         ask: t('desk.trajectoryKindAsk', {defaultValue: 'Question'}),
         error: t('desk.trajectoryKindError', {defaultValue: 'Error'}),
+        note: t('desk.trajectoryKindNote', {defaultValue: 'Note'}),
         reply: t('desk.trajectoryKindReply', {defaultValue: 'Reply'}),
         system: t('desk.trajectoryKindSystem', {defaultValue: 'System'}),
     };
@@ -137,7 +140,7 @@ const Trajectory = ({blocks, working, pendingRequestId, project, onOpen}: Trajec
                                 <Typography component="span" sx={{fontFamily: fontMono, fontSize: fontSizes.xs, fontWeight: 600, textTransform: 'uppercase', color: (theme) => kindColor(theme, r.kind), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
                                     {kindLabel[r.kind]}
                                 </Typography>
-                                <Typography component="span" variant="body2" noWrap sx={{color: r.kind === 'reply' || r.kind === 'system' ? 'text.secondary' : 'text.primary', minWidth: 0}}>
+                                <Typography component="span" variant="body2" noWrap sx={{color: r.kind === 'note' || r.kind === 'system' ? 'text.secondary' : 'text.primary', minWidth: 0}}>
                                     {r.kind === 'tool' || r.kind === 'agent' ? <Box component="span" sx={{fontWeight: 600}}>{r.title}</Box> : r.title}
                                     {r.detail && (
                                         <Box component="span" sx={{fontFamily: fontMono, fontSize: fontSizes.sm, color: 'text.secondary', ml: 1}}>{relative(r.detail, project)}</Box>

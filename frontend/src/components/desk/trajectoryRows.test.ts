@@ -65,6 +65,32 @@ describe('trajectoryRows', () => {
     });
 });
 
+describe('notes and replies', () => {
+    const turn = [
+        msg({role: 'user', content: 'fix it'}),
+        msg({role: 'assistant', content: 'Let me run the tests first.'}),
+        msg({kind: 'tool_use', content: 'Bash', request_id: 'b1', payload: {command: 'make test'}}),
+        msg({kind: 'tool_result', content: 'ok', request_id: 'b1'}),
+        msg({role: 'assistant', content: 'All green now.'}),
+    ];
+
+    it('calls the last text of a turn its reply and the text between steps notes', () => {
+        const rows = rowsOf([...turn, msg({role: 'user', content: 'thanks'}), msg({role: 'assistant', content: 'Anytime.'})]);
+        expect(rows.filter((r) => r.kind === 'note' || r.kind === 'reply').map((r) => [r.kind, r.title])).toEqual([
+            ['note', 'Let me run the tests first.'],
+            ['reply', 'All green now.'],
+            ['reply', 'Anytime.'],
+        ]);
+    });
+
+    it('does not call text a reply while the running turn still has work after it', () => {
+        const running = rowsOf(turn.slice(0, 3), true);
+        expect(running.find((r) => r.title === 'Let me run the tests first.')?.kind).toBe('note');
+        const answered = rowsOf(turn, true);
+        expect(answered.find((r) => r.title === 'All green now.')?.kind).toBe('reply');
+    });
+});
+
 describe('trajectorySummary', () => {
     it('counts distinct edited files, commands, failures and requests', () => {
         const rows = rowsOf([

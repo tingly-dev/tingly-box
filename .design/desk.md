@@ -528,7 +528,8 @@ page can be previewed and screenshotted without a backend.
   data and no API: `trajectoryRows` projects the `buildTranscript` blocks to
   one row per action — user message, tool call (name + `toolSummary`, failed
   or not), subagent (its own steps indented one level), approval/question
-  with its answer, error, and a reply's first line; thinking gets no row.
+  with its answer, error, and text by its first line — the last text of a
+  turn is its reply, text between steps a muted note; thinking gets no row.
   A summary above (files written by Edit/Write, commands, failures,
   approvals) doubles as filters. There is no inspector: a row switches to
   Chat and flashes its message (`data-call-ids` / `data-request-id` /

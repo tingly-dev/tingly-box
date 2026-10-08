@@ -2958,6 +2958,7 @@ export default {
     "trajectoryKindApproval": "Подтверждение",
     "trajectoryKindAsk": "Вопрос",
     "trajectoryKindError": "Ошибка",
+    "trajectoryKindNote": "Пояснение",
     "trajectoryKindReply": "Ответ",
     "trajectoryKindSystem": "Система",
     "handoffBusy": "Остановите текущий ход или дождитесь его завершения, чтобы продолжить в терминале",

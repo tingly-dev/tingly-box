@@ -2897,6 +2897,7 @@ export default {
     "trajectoryKindApproval": "Approval",
     "trajectoryKindAsk": "Question",
     "trajectoryKindError": "Error",
+    "trajectoryKindNote": "Note",
     "trajectoryKindReply": "Reply",
     "trajectoryKindSystem": "System",
     "handoffBusy": "Stop or wait for the current turn to continue in a terminal",

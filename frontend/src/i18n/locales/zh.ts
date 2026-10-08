@@ -2894,6 +2894,7 @@ export default {
     "trajectoryKindApproval": "审批",
     "trajectoryKindAsk": "提问",
     "trajectoryKindError": "错误",
+    "trajectoryKindNote": "说明",
     "trajectoryKindReply": "回复",
     "trajectoryKindSystem": "系统",
     "handoffBusy": "请停止当前轮次或等待其结束后，再在终端中继续",

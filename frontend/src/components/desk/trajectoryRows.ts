@@ -6,7 +6,7 @@ import {agentStatus, toolSummary} from './deskUtils';
 // scrolling through every thought and every tool output. It adds no data —
 // anything here is in the chat, and a row leads back to it.
 
-export type TrajectoryKind = 'user' | 'tool' | 'agent' | 'approval' | 'ask' | 'error' | 'reply' | 'system';
+export type TrajectoryKind = 'user' | 'tool' | 'agent' | 'approval' | 'ask' | 'error' | 'note' | 'reply' | 'system';
 
 // Where a row's message sits in the chat: the tool call (activity row or
 // subagent card), the approval/question card, or a top-level block.
@@ -74,9 +74,29 @@ const toolRow = (step: ToolStep, turn: number, depth: number, anchor: Trajectory
     command: COMMAND_TOOLS.has(step.name),
 });
 
+// replyIndexes picks the reply of each turn: the last text before the next
+// user message. Earlier text is the agent narrating its steps ("let me run
+// the tests"), a note. While the turn still runs, text with work after it
+// is not the reply yet.
+const replyIndexes = (blocks: TranscriptBlock[], live: boolean): Set<number> => {
+    const replies = new Set<number>();
+    let last = -1;
+    blocks.forEach((b, i) => {
+        if (b.type === 'user') {
+            if (last >= 0) replies.add(last);
+            last = -1;
+        } else if (b.type === 'assistant' && b.message.content.trim()) {
+            last = i;
+        }
+    });
+    if (last >= 0 && (!live || last === blocks.length - 1)) replies.add(last);
+    return replies;
+};
+
 // rows flattens one run of blocks. A subagent's steps are anchored to its
 // card: its inner rows only exist in the chat while the card is open.
 const rows = (blocks: TranscriptBlock[], out: TrajectoryRow[], state: {turn: number}, depth: number, parent: TrajectoryAnchor | null, live: boolean) => {
+    const replies = replyIndexes(blocks, live);
     blocks.forEach((b, i) => {
         const at = (own: TrajectoryAnchor): TrajectoryAnchor => parent ?? own;
         switch (b.type) {
@@ -88,7 +108,7 @@ const rows = (blocks: TranscriptBlock[], out: TrajectoryRow[], state: {turn: num
             }
             case 'assistant': {
                 const title = plainLine(b.message.content);
-                if (title) out.push({kind: 'reply', turn: state.turn, depth, anchor: at({block: i}), title});
+                if (title) out.push({kind: replies.has(i) ? 'reply' : 'note', turn: state.turn, depth, anchor: at({block: i}), title});
                 return;
             }
             case 'activity':
