@@ -69,7 +69,7 @@ jobs:
       - name: Filter paths
         id: filter
         if: github.event_name == 'pull_request'
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           # Go surfaces = every file outside the non-Go areas (Go packages
           # go:embed non-Go assets, so those count), minus the other
@@ -141,15 +141,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: '1.26'
-          cache-dependency-path: '**/go.sum'
+          cache: false
+
+      - name: Locate Go caches
+        id: gocache
+        shell: bash
+        run: |
+          echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+          echo "mod=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+
+      # Keyed per job: setup-go's own key is only OS/arch, so jobs sharing a
+      # runner (e.g. the three ubuntu-22.04 targets) overwrite each other's cache.
+      - name: Cache Go build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ steps.gocache.outputs.build }}
+            ${{ steps.gocache.outputs.mod }}
+          key: go-compile-cli-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-compile-cli-
 
       - name: Build CLI
         run: go build ./cli/...
@@ -164,7 +183,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: true
 
@@ -175,10 +194,29 @@ jobs:
           sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: '1.26'
-          cache-dependency-path: '**/go.sum'
+          cache: false
+
+      - name: Locate Go caches
+        id: gocache
+        shell: bash
+        run: |
+          echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+          echo "mod=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+
+      # Keyed per job: setup-go's own key is only OS/arch, so jobs sharing a
+      # runner (e.g. the three ubuntu-22.04 targets) overwrite each other's cache.
+      - name: Cache Go build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ steps.gocache.outputs.build }}
+            ${{ steps.gocache.outputs.mod }}
+          key: go-compile-gui-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-compile-gui-
 
       - name: Build GUI package
         run: go build ./gui/wails3/...
@@ -195,12 +233,12 @@ jobs:
   #   runs-on: ubuntu-latest
   #   steps:
   #     - name: Checkout code
-  #       uses: actions/checkout@v6
+  #       uses: actions/checkout@v7
   #       with:
   #         submodules: true
   #
   #     - name: Setup Go
-  #       uses: actions/setup-go@v5
+  #       uses: actions/setup-go@v7
   #       with:
   #         go-version: '1.26'
   #         cache-dependency-path: '**/go.sum'
@@ -220,7 +258,7 @@ jobs:
         working-directory: ./frontend
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # Same install + codegen as the release build (build-frontend.yml).
       - name: Set up frontend

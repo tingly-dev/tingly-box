@@ -35,7 +35,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # The SDK forks are submodules wired in through local `replace`
           # directives. Without them the Dockerfile's fallback clones each

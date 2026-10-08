@@ -75,7 +75,7 @@ jobs:
       release_tag: ${{ steps.version.outputs.release_tag }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -183,12 +183,12 @@ jobs:
       PKG_DIR: build/npx/tingly-box
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: "https://registry.npmjs.org"
@@ -322,7 +322,7 @@ jobs:
       # Built before the smoke tests run, so it's there for `publish-cli-review`
       # to publish from if a smoke test below fails the job.
       - name: Upload CLI package (in case smoke test fails and review is needed)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tingly-box-npm-package
           path: ${{ env.PKG_DIR }}
@@ -419,18 +419,18 @@ jobs:
     steps:
       # Only for .github/scripts/npm-publish.sh.
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           sparse-checkout: .github
 
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: "https://registry.npmjs.org"
 
       - name: Download CLI package built before the smoke-test failure
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: tingly-box-npm-package
           path: ${{ env.PKG_DIR }}
@@ -532,7 +532,7 @@ jobs:
       needs.setup.outputs.build_docker == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # The docker moving tag mirrors the npm dist-tag: a `latest` npm publish
       # moves docker `latest`, an `rc` publish moves docker `rc` only.
@@ -566,12 +566,12 @@ jobs:
       PKG_TYPE: gui
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: "https://registry.npmjs.org"

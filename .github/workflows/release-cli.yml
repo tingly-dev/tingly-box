@@ -83,19 +83,37 @@ jobs:
             cross_compile: true
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
-          # setup-go caches the module and build caches (keyed by OS/arch).
-          cache-dependency-path: '**/go.sum'
+          cache: false
+
+      - name: Locate Go caches
+        id: gocache
+        shell: bash
+        run: |
+          echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+          echo "mod=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+
+      # Keyed per job: setup-go's own key is only OS/arch, so jobs sharing a
+      # runner (e.g. the three ubuntu-22.04 targets) overwrite each other's cache.
+      - name: Cache Go build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ steps.gocache.outputs.build }}
+            ${{ steps.gocache.outputs.mod }}
+          key: go-${{ matrix.suffix }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-${{ matrix.suffix }}-
 
       - name: Download frontend artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: frontend-dist
           path: internal/web/dist/
@@ -181,36 +199,8 @@ jobs:
           # Make binary executable for non-Windows
           [ "${{ matrix.goos }}" != "windows" ] && chmod +x ./dist/tingly-box${{ matrix.exe }} || true
 
-      # UPX is Linux-only. Windows is deliberately excluded: UPX-packed,
-      # unsigned .exe files are prime targets for Windows Defender / AV
-      # heuristic false positives (e.g. Wacatac), which quarantine or lock the
-      # binary on user machines and surface as "This app can't run on your PC".
-      # macOS is excluded because UPX breaks Mach-O signing/notarization.
-      - name: Install UPX 5.1.1
-        if: matrix.goos == 'linux'
-        shell: bash
-        run: |
-          wget -q https://github.com/upx/upx/releases/download/v5.1.1/upx-5.1.1-amd64_linux.tar.xz
-          tar -xf upx-5.1.1-amd64_linux.tar.xz
-          export PATH="$PWD/upx-5.1.1-amd64_linux:$PATH"
-
-      - name: Compress binary with UPX
-        if: matrix.goos == 'linux'
-        shell: bash
-        run: |
-          if command -v upx &> /dev/null || [ -f "./upx-5.1.1-amd64_linux/upx" ]; then
-            UPX_CMD="upx"
-            [ -f "./upx-5.1.1-amd64_linux/upx" ] && UPX_CMD="./upx-5.1.1-amd64_linux/upx"
-
-            # Use best compression with LZMA (slower but smaller)
-            $UPX_CMD --best --lzma ./dist/tingly-box${{ matrix.exe }} || \
-            $UPX_CMD --best ./dist/tingly-box${{ matrix.exe }}
-          else
-            echo "UPX not available, skipping compression"
-          fi
-
       - name: Upload build artifact (${{ matrix.suffix }})
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cli-${{ matrix.suffix }}
           path: ./dist/tingly-box${{ matrix.exe }}
@@ -237,12 +227,12 @@ jobs:
     steps:
       # Only for the local ensure-release action.
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           sparse-checkout: .github
 
       - name: Download CLI artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: cli-*
           path: ./dist/cli
@@ -303,7 +293,7 @@ jobs:
     steps:
       # Only for the local dispatch-npm action.
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           sparse-checkout: .github
 

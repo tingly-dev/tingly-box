@@ -95,7 +95,7 @@ jobs:
           - { os: ubuntu-22.04-arm, platform: linux-gtk3, arch: arm64 }
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: true
@@ -109,14 +109,14 @@ jobs:
           echo "* \`${{ matrix.platform }}-${{ matrix.arch }}\`: version \`${VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           # setup-go caches the module and build caches (keyed by OS/arch).
           cache-dependency-path: '**/go.sum'
 
       - name: Download frontend artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: frontend-dist
           path: frontend/dist/
@@ -216,7 +216,7 @@ jobs:
           ls -la dist/
 
       - name: Upload package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gui-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
@@ -237,12 +237,12 @@ jobs:
     steps:
       # For the local ensure-release action only.
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           sparse-checkout: .github
 
       - name: Download GUI packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: gui-*
           path: ./gui
