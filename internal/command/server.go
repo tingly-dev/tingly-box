@@ -406,7 +406,7 @@ func printBanner(cfg BannerConfig) {
 	}
 
 	hintStyle := lipgloss.NewStyle().Foreground(muted).Italic(true)
-	lines = append(lines, "", hintStyle.Render("Add providers and copy API endpoints in the Web UI"))
+	lines = append(lines, "", hintStyle.Render("Open the Web UI above to get started"))
 
 	// Title: product name on one line, version on the next — nothing else.
 	titleText := titleStyle.Render("Tingly-Box")
@@ -425,6 +425,9 @@ func printBanner(cfg BannerConfig) {
 
 	title := lipgloss.PlaceHorizontal(maxWidth, lipgloss.Center, titleText)
 	version := lipgloss.PlaceHorizontal(maxWidth, lipgloss.Center, versionText)
+	for i, line := range lines {
+		lines[i] = lipgloss.PlaceHorizontal(maxWidth, lipgloss.Center, line)
+	}
 	allLines := append([]string{title, version, ""}, lines...)
 
 	box := lipgloss.NewStyle().
