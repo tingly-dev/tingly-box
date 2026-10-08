@@ -654,6 +654,13 @@ correctly off that allowlist, so it can only prove the fields are stripped for
 an unrecognized vendor — never that they survive for a recognized one. §10.3
 closes that gap.
 
+The same holds for Anthropic-shaped hops: `VendorTransform` keeps
+`cache_control` only for Anthropic itself (`api.anthropic.com` / `claude.ai`)
+and Claude OAuth providers, and strips it for every other Anthropic-compatible
+provider (`ops/anthropic_prompt_cache.go`). A generic destination is neither,
+so `cacheSurvivesPath` treats any Anthropic hop like a Chat hop; the keep case
+is covered by `TestVendorTransform_AnthropicCacheControl`.
+
 ### 10.3 Vendor-dispatch suite (`vendor_transforms.go`)
 
 This section builds virtual providers whose `APIBase` genuinely matches a

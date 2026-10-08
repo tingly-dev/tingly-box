@@ -210,8 +210,15 @@ func countCacheMarkers(t flagTB, value any, markerKey, discriminator, wantValue 
 // the intended default-deny behavior (see supportsExplicitPromptCache), not
 // a bug this suite should paper over — a dedicated vendor-transform suite
 // (protocoltest vendor category) exercises the allowlisted case.
+//
+// Anthropic-shaped hops follow the same default-deny: cache_control reaches
+// only Anthropic itself and Claude OAuth (ops/anthropic_prompt_cache.go), and
+// no virtual provider here is either, so an Anthropic hop strips every
+// breakpoint too.
 func cacheSurvivesPath(hops ...protocol.APIType) bool {
-	return !slices.Contains(hops, protocol.TypeOpenAIChat)
+	return !slices.ContainsFunc(hops, func(h protocol.APIType) bool {
+		return h == protocol.TypeOpenAIChat || h == protocol.TypeAnthropicBeta || h == protocol.TypeAnthropicV1
+	})
 }
 
 // requireLastRequest returns the request the final provider received on the

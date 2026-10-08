@@ -27,6 +27,12 @@
 //   - Automatic (OpenAI Chat / Responses and the OpenAI-compatible vendors):
 //     every prefix is written and any prefix can be read.
 //
+// An Anthropic request picks its discipline from what it carries
+// (AnthropicDiscipline): with breakpoints it is cached the way Anthropic
+// does; without any — which is what the gateway sends every Anthropic-
+// compatible provider other than Anthropic and Claude OAuth — it is cached
+// automatically, the way those providers do.
+//
 // See .design/vmodel-prompt-cache.md.
 package promptcache
 
@@ -48,6 +54,19 @@ const (
 	// Explicit caches only prefixes that end at a breakpoint (Anthropic-style).
 	Explicit
 )
+
+// AnthropicDiscipline is Explicit when the request carries any cache
+// breakpoint (Anthropic semantics) and Automatic otherwise (the automatic
+// prefix caching of Anthropic-compatible third-party providers, which the
+// gateway sends no cache_control).
+func AnthropicDiscipline(blocks []Block) Discipline {
+	for _, b := range blocks {
+		if b.Breakpoint {
+			return Explicit
+		}
+	}
+	return Automatic
+}
 
 // Block is one cacheable unit of a prompt, in prompt order.
 type Block struct {

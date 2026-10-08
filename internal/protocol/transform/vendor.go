@@ -96,6 +96,11 @@ func (t *VendorTransform) applyAnthropicV1(ctx *TransformContext, req *anthropic
 		ops.SanitizeAnthropicV1ThinkingConfig(req)
 		ops.ApplyAnthropicV1DeepSeekThinkingPatch(req)
 	}
+	// cache_control only reaches backends known to implement it (see
+	// ops/anthropic_prompt_cache.go); the rest rely on automatic caching.
+	if !isClaudeCodeBackend(ctx, host) {
+		ops.StripAnthropicV1CacheControl(req)
+	}
 	return req
 }
 
@@ -114,6 +119,11 @@ func (t *VendorTransform) applyAnthropicBeta(ctx *TransformContext, req *anthrop
 	case host == "api.deepseek.com":
 		ops.SanitizeAnthropicBetaThinkingConfig(req)
 		ops.ApplyAnthropicBetaDeepSeekThinkingPatch(req)
+	}
+	// cache_control only reaches backends known to implement it (see
+	// ops/anthropic_prompt_cache.go); the rest rely on automatic caching.
+	if !isClaudeCodeBackend(ctx, host) {
+		ops.StripAnthropicBetaCacheControl(req)
 	}
 	return req
 }

@@ -48,7 +48,7 @@ func simulatePromptCache(pc vmodel.PromptCacheModel, endpoint, model string, raw
 	switch endpoint {
 	case "anthropic":
 		blocks, err = promptcache.AnthropicBlocks(raw)
-		d = promptcache.Explicit
+		d = promptcache.AnthropicDiscipline(blocks)
 	case "chat":
 		blocks, err = promptcache.ChatBlocks(raw)
 	case "responses":
