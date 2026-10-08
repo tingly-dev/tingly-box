@@ -834,10 +834,10 @@ interface DerivePrefsInput {
     rules: any[];
 }
 
-// A slot with an active rule of its own (builtin:claude_code:<slot>) uses
-// that rule's request model; every other slot uses the main rule
-// (builtin:claude_code:cc) — or, without one, the default slot's rule.
-// Mirrors the backend's ClaudeCodeSlotModels.
+// The default slot is the main rule (builtin:claude_code:cc, or the legacy
+// builtin:claude_code:default when cc is off). Any other slot with an active
+// rule of its own (builtin:claude_code:<slot>) uses that rule's request model,
+// otherwise it follows the default. Mirrors the backend's ClaudeCodeSlotModels.
 export const derivePrefsFromRules = ({ rules }: DerivePrefsInput): ClaudeCodePrefs => {
     const activeRule = (name: string) => rules.find((r: any) =>
         r?.uuid === `builtin:claude_code:${name}` && r.active !== false && r.request_model);
@@ -845,7 +845,7 @@ export const derivePrefsFromRules = ({ rules }: DerivePrefsInput): ClaudeCodePre
     // camelCase shape too in case a converted rule object is passed in.
     const context1MOf = (rule: any): boolean => !!(rule?.flags?.context_1m || rule?.flags?.context1m);
     const main = activeRule('cc') ?? activeRule('default');
-    const slotRule = (slot: string) => activeRule(slot) ?? main;
+    const slotRule = (slot: string) => (slot === 'default' ? main : activeRule(slot) ?? main);
     const modelFor = (slot: string): string => {
         const rule = slotRule(slot);
         return with1M(rule?.request_model || 'tingly/cc', context1MOf(rule));

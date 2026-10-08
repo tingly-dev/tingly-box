@@ -1157,8 +1157,9 @@ export default {
   "claudeCode": {
     "slots": {
       "label": "槽位",
-      "ownRule": "使用自己的规则（点击改回主规则）",
-      "mainRule": "使用主规则（点击给它单独加一条规则）",
+      "ownRule": "使用自己的规则（点击改回跟随 default）",
+      "mainRule": "跟随 default（点击给它单独加一条规则）",
+      "defaultRule": "主规则，没有自己规则的槽位都走它",
       "failed": "更新槽位失败"
     },
     "modeChange": {

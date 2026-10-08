@@ -1158,8 +1158,9 @@ export default {
   "claudeCode": {
     "slots": {
       "label": "Slots",
-      "ownRule": "has its own rule (click to use the main rule)",
-      "mainRule": "uses the main rule (click to give it its own rule)",
+      "ownRule": "has its own rule (click to follow default again)",
+      "mainRule": "follows default (click to give it its own rule)",
+      "defaultRule": "the main rule; slots without their own rule follow it",
       "failed": "Failed to update the slot"
     },
     "modeChange": {

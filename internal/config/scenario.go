@@ -90,18 +90,17 @@ func (c *Config) syncClaudeCodeRuleModeLocked(config typ.ScenarioConfig) {
 	}
 }
 
-// setClaudeCodeSlotRulesActiveLocked switches every slot rule on (separate)
-// or off (unified).
+// setClaudeCodeSlotRulesActiveLocked is the legacy mode switch: separate turns
+// every slot rule on, with the default slot on the "default" rule (cc off);
+// unified turns them off with the default slot on cc.
 func (c *Config) setClaudeCodeSlotRulesActiveLocked(separateActive bool) {
 	for i := range c.Rules {
 		rule := &c.Rules[i]
 		if !rule.GetScenario().Is(typ.ScenarioClaudeCode) {
 			continue
 		}
-		// The main rule stays on in both modes: it is where every slot
-		// without a rule of its own goes.
 		if claudeCodeUnifiedRuleUUIDs[rule.UUID] {
-			rule.Active = true
+			rule.Active = !separateActive
 			continue
 		}
 		if claudeCodeSeparateRuleUUIDs[rule.UUID] {

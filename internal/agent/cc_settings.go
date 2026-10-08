@@ -64,11 +64,11 @@ var ClaudeCodeSlotEnvKeys = []struct{ Slot, EnvKey string }{
 }
 
 // ClaudeCodeSlotModels resolves the model id Claude Code sends for each slot,
-// keyed by env var. A slot with an active rule of its own
-// (builtin:<scenario>:<slot>) uses that rule's request_model; any other slot
-// falls back to the main "cc" rule (or, for a profile created with separate
-// rules and no cc rule, the default slot's rule). All slots on → what used to
-// be separate mode; none → unified. A rule with the 1M context flag advertises
+// keyed by env var. The default slot is the main rule: "cc", or the "default"
+// rule of a profile (or legacy separate config) without an active cc rule.
+// Any other slot with an active rule of its own (builtin:<scenario>:<slot>)
+// uses that rule's request_model, otherwise it follows the default. All slots
+// on → what used to be separate mode; none → unified. A rule with the 1M context flag advertises
 // it via the [1m] suffix (the client strips it back and sends the context-1m
 // beta header); context1M reports whether any slot does.
 //
@@ -113,7 +113,10 @@ func ClaudeCodeSlotModels(cfg *serverconfig.Config, scenarioPath string, isProfi
 
 	models = map[string]string{}
 	for _, s := range ClaudeCodeSlotEnvKeys {
-		m := slotModel(s.Slot)
+		m := ""
+		if s.Slot != "default" {
+			m = slotModel(s.Slot)
+		}
 		if m == "" {
 			m = fallback
 		}

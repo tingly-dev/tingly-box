@@ -7,14 +7,15 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// CCSlots are Claude Code's model slots. A slot whose rule
-// (builtin:<scenario>:<slot>) is active requests that rule; any other slot
-// falls back to the main "cc" rule. All on is what used to be separate mode,
-// none is unified. See .design/claude-code-slot-binding.md.
-var CCSlots = []string{"default", "haiku", "sonnet", "opus", "fable", "subagent"}
+// CCSlots are the Claude Code model slots that can have a rule of their own.
+// The default slot is the main rule itself and is always there; a slot whose
+// rule (builtin:<scenario>:<slot>) is active requests that rule, any other
+// slot follows the default. All on is what used to be separate mode, none is
+// unified. See .design/claude-code-slot-binding.md.
+var CCSlots = []string{"haiku", "sonnet", "opus", "fable", "subagent"}
 
 // SetClaudeCodeSlot gives a slot its own rule (enabled) or hands it back to
-// the main rule. Enabling switches the slot's rule on, creating it from the
+// the default. Enabling switches the slot's rule on, creating it from the
 // main rule's routing when it doesn't exist yet; disabling only switches it
 // off, so turning the slot on again restores what it had.
 func (c *Config) SetClaudeCodeSlot(scenario typ.RuleScenario, slot string, enabled bool) (typ.Rule, error) {
@@ -22,32 +23,46 @@ func (c *Config) SetClaudeCodeSlot(scenario typ.RuleScenario, slot string, enabl
 		return typ.Rule{}, fmt.Errorf("scenario %q has no Claude Code slots", scenario)
 	}
 	if !slices.Contains(CCSlots, slot) {
-		return typ.Rule{}, fmt.Errorf("unknown Claude Code slot %q", slot)
+		return typ.Rule{}, fmt.Errorf("slot %q can't be switched: the default slot is the main rule, the others are %v", slot, CCSlots)
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	main := c.ccRuleLocked(scenario, "cc")
 	rule := c.ccRuleLocked(scenario, slot)
 	if enabled && rule == nil {
-		rule = c.addCCRuleLocked(scenario, slot, main)
-		main = c.ccRuleLocked(scenario, "cc") // the append may have moved it
+		rule = c.addCCRuleLocked(scenario, slot, c.ccMainRuleLocked(scenario))
 	}
 	if rule == nil {
-		return typ.Rule{}, nil // off and absent: already following the main rule
+		return typ.Rule{}, nil // off and absent: already following the default
 	}
 	rule.Active = enabled
 	out := *rule
 	if !enabled {
-		// The slot now relies on the main rule. A profile created with
-		// separate rules has none yet: seed it from the rule being switched off.
-		if main == nil {
-			main = c.addCCRuleLocked(scenario, "cc", c.ccRuleLocked(scenario, slot))
+		// The slot now relies on the main rule; make sure one is on.
+		if main := c.ccMainRuleLocked(scenario); main != nil {
+			main.Active = true
+		} else {
+			c.addCCRuleLocked(scenario, "cc", c.ccRuleLocked(scenario, slot))
 		}
-		main.Active = true
 	}
 	c.syncClaudeCodeModeFlagsLocked(scenario)
 	return out, c.Save()
+}
+
+// ccMainRuleLocked returns the rule the default slot requests: the "cc" rule,
+// or the "default" rule of a profile (or legacy separate config) that has no
+// active cc rule. Active rules win over inactive ones; nil when neither exists.
+func (c *Config) ccMainRuleLocked(scenario typ.RuleScenario) *typ.Rule {
+	cc, def := c.ccRuleLocked(scenario, "cc"), c.ccRuleLocked(scenario, "default")
+	for _, r := range []*typ.Rule{cc, def} {
+		if r != nil && r.Active {
+			return r
+		}
+	}
+	if cc != nil {
+		return cc
+	}
+	return def
 }
 
 // ccRuleLocked returns the scenario's rule for slot (or "cc"), falling back to

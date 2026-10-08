@@ -23,14 +23,14 @@ export interface SlotRouting {
     rules: any[];
     setRules: (rules: any[]) => void;
     loading: boolean;
-    /** The Slots row: one chip per slot, on when it has its own rule. */
+    /** The Slots row: default (always on), then one switchable chip per slot. */
     slotsRow: React.ReactNode;
 }
 
 /**
- * Routing for clients with fixed model slots (Claude Code). Every slot goes
- * to the main rule unless it has an active rule of its own; a slot chip
- * adds or removes that rule. All on is what used to be "separate", none
+ * Routing for clients with fixed model slots (Claude Code). The default slot
+ * is the main rule and always there; every other slot follows it unless it
+ * has an active rule of its own, which its chip adds or removes. All on is what used to be "separate", none
  * "unified". `enabled: false` keeps the hook inert for agents without slots
  * (hooks can't be called conditionally).
  */
@@ -51,10 +51,10 @@ export const useSlotRouting = (scenario: string, enabled: boolean): SlotRouting 
         void load().finally(() => setLoading(false));
     }, [enabled, load]);
 
-    const mainUuid = slotRuleUuid(scenario, 'cc');
-    const rules = allRules
-        .filter(r => r.active)
-        .sort((a, b) => Number(b.uuid === mainUuid) - Number(a.uuid === mainUuid));
+    // The main rule (cc, or default when cc is off) leads.
+    const mains = [slotRuleUuid(scenario, 'cc'), slotRuleUuid(scenario, 'default')];
+    const rank = (r: any) => (mains.includes(r.uuid) ? mains.indexOf(r.uuid) : mains.length);
+    const rules = allRules.filter(r => r.active).sort((a, b) => rank(a) - rank(b));
 
     // The rules card edits the active subset; merge its changes back.
     const setRules = useCallback((next: any[]) => {
@@ -85,20 +85,19 @@ export const useSlotRouting = (scenario: string, enabled: boolean): SlotRouting 
                 content: (
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
                         {CLAUDE_CODE_SLOTS.map(({ slot, env }) => {
-                            const on = hasOwnRule(slot);
+                            // The default slot is the main rule: always there, not a switch.
+                            const isDefault = slot === 'default';
+                            const on = isDefault || hasOwnRule(slot);
+                            const hint = isDefault ? 'claudeCode.slots.defaultRule' : on ? 'claudeCode.slots.ownRule' : 'claudeCode.slots.mainRule';
                             return (
-                                <Tooltip
-                                    key={slot}
-                                    arrow
-                                    title={`${env} — ${t(on ? 'claudeCode.slots.ownRule' : 'claudeCode.slots.mainRule')}`}
-                                >
+                                <Tooltip key={slot} arrow title={`${env} — ${t(hint)}`}>
                                     <Chip
                                         size="small"
                                         label={slot}
                                         color={on ? 'primary' : 'default'}
                                         variant={on ? 'filled' : 'outlined'}
-                                        disabled={busySlot !== null}
-                                        onClick={() => void toggle(slot)}
+                                        disabled={!isDefault && busySlot !== null}
+                                        onClick={isDefault ? undefined : () => void toggle(slot)}
                                     />
                                 </Tooltip>
                             );
