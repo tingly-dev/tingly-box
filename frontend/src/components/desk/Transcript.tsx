@@ -5,7 +5,7 @@ import type {TFunction} from 'i18next';
 import {useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import type {ActivityStep, TaskState, TranscriptBlock} from './deskUtils';
-import {agentReport, formatTokens, toolSummary} from './deskUtils';
+import {agentReport, agentStatus, formatTokens, toolSummary} from './deskUtils';
 import Markdown from './Markdown';
 import {getReadableAccent} from '@/theme/status';
 import { fontMono, fontSizes } from '@/theme/fonts';
@@ -196,7 +196,7 @@ const RequestCard = ({block, pending, onRespond}: {
             ? (isAsk ? response.content || t('desk.noAnswer', {defaultValue: '(no answer)'}) : response.content)
             : t('desk.unanswered', {defaultValue: 'not answered'});
         return (
-            <Typography variant="body2" color="text.secondary" noWrap>
+            <Typography data-request-id={message.request_id} variant="body2" color="text.secondary" noWrap>
                 {isAsk ? message.content : `${message.content}${summary ? ` · ${summary}` : ''}`} → {outcome}
             </Typography>
         );
@@ -254,18 +254,22 @@ interface BlockListProps {
     working: boolean;
     expandAll: boolean;
     onRespond: (requestId: string, approved: boolean, answer: string) => Promise<boolean>;
+    // Marks each top-level message with its block index, so the trajectory
+    // can lead back to it (calls and requests carry their own ids).
+    anchored?: boolean;
 }
 
 // BlockList renders a run of blocks: the conversation, or a subagent's own
 // work inside its card.
-const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond}: BlockListProps) => (
+const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anchored = false}: BlockListProps) => (
     <>
         {blocks.map((b, i) => {
+            const anchor = anchored ? {'data-block': i} : {};
             switch (b.type) {
                 case 'user':
-                    return <UserBubble key={i} message={b.message}/>;
+                    return <Box key={i} {...anchor}><UserBubble message={b.message}/></Box>;
                 case 'assistant':
-                    return <AssistantText key={i} message={b.message}/>;
+                    return <Box key={i} {...anchor}><AssistantText message={b.message}/></Box>;
                 case 'activity':
                     return <ActivityRow key={i} steps={b.steps} live={working && i === blocks.length - 1} expandAll={expandAll}/>;
                 case 'agent':
@@ -281,14 +285,14 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond}: Bl
                     );
                 case 'error':
                     return (
-                        <Stack key={i} direction="row" spacing={0.75} sx={{alignItems: 'flex-start', color: (theme) => getReadableAccent(theme, 'error')}}>
+                        <Stack key={i} {...anchor} direction="row" spacing={0.75} sx={{alignItems: 'flex-start', color: (theme) => getReadableAccent(theme, 'error')}}>
                             <ErrorOutline sx={{fontSize: 18, mt: 0.25}}/>
                             <Typography variant="body2" sx={{color: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{b.message.content}</Typography>
                         </Stack>
                     );
                 case 'system':
                     return (
-                        <Typography key={i} variant="body2" sx={{color: 'text.secondary', textAlign: 'center'}}>
+                        <Typography key={i} {...anchor} variant="body2" sx={{color: 'text.secondary', textAlign: 'center'}}>
                             {b.message.content}
                         </Typography>
                     );
@@ -296,15 +300,6 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond}: Bl
         })}
     </>
 );
-
-// agentStatus is the card's state. Without task events (older Claude Code)
-// the call's result means it finished; a foreground run left "running"
-// after its turn ended was cut off with the turn.
-const agentStatus = (block: Extract<TranscriptBlock, {type: 'agent'}>, turnLive: boolean): TaskState['status'] => {
-    const status = block.task?.status ?? (block.call.result !== undefined ? 'completed' : 'running');
-    if (status === 'running' && !turnLive && !block.task?.background) return 'stopped';
-    return status;
-};
 
 // AgentCard is one subagent run: what it was asked, how it is going (its
 // current action, tools, tokens, time), and — expanded — everything it did
@@ -415,7 +410,7 @@ const Transcript = ({blocks, pendingRequestId, working, expandAll = false, onRes
 
     return (
         <Stack spacing={2.5}>
-            <BlockList blocks={blocks} pendingRequestId={pendingRequestId} working={working} expandAll={expandAll} onRespond={onRespond}/>
+            <BlockList anchored blocks={blocks} pendingRequestId={pendingRequestId} working={working} expandAll={expandAll} onRespond={onRespond}/>
             {showWorking && (
                 <Stack direction="row" spacing={1} sx={{alignItems: 'center', color: 'text.secondary'}}>
                     <CircularProgress size={12}/>

@@ -290,6 +290,15 @@ const buildBlocks = (messages: MessageInfo[], byParent: Map<string, MessageInfo[
     return blocks;
 };
 
+// agentStatus is the card's state. Without task events (older Claude Code)
+// the call's result means it finished; a foreground run left "running"
+// after its turn ended was cut off with the turn.
+export const agentStatus = (block: Extract<TranscriptBlock, {type: 'agent'}>, turnLive: boolean): TaskState['status'] => {
+    const status = block.task?.status ?? (block.call.result !== undefined ? 'completed' : 'running');
+    if (status === 'running' && !turnLive && !block.task?.background) return 'stopped';
+    return status;
+};
+
 // agentReport is what a subagent handed back: its last reply, else the
 // summary Claude Code reported for it.
 export const agentReport = (block: Extract<TranscriptBlock, {type: 'agent'}>): string | undefined => {

@@ -2,8 +2,8 @@ import {Archive, ArrowBack, KeyboardArrowDown, MoreVert, Check, Close, ContentCo
 import ConfirmDialog from '@/components/ConfirmDialog';
 import {useCopyFeedback} from '@/hooks/useCopyFeedback';
 import type {MessageInfo, SessionInfo} from '@/services/deskApi';
-import {Alert, Box, Button, Chip, IconButton, Popover, Stack, Tooltip, Typography, Menu, MenuItem, LinearProgress} from '@mui/material';
-import {useMemo, useRef, useState} from 'react';
+import {Alert, Box, Button, Chip, IconButton, Popover, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography, Menu, MenuItem, LinearProgress} from '@mui/material';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import BackgroundTasksPanel from './BackgroundTasksPanel';
 import Composer from './Composer';
@@ -13,6 +13,8 @@ import ModelSelect from './ModelSelect';
 import PermissionModeSelect from './PermissionModeSelect';
 import ProfileSelect from './ProfileSelect';
 import StatusLine from './StatusLine';
+import Trajectory from './Trajectory';
+import type {TrajectoryAnchor} from './trajectoryRows';
 import Transcript from './Transcript';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import {getReadableAccent} from '@/theme/status';
@@ -53,6 +55,23 @@ interface SessionViewProps {
 const COLUMN_MAX_WIDTH = 760;
 const EXPAND_KEY = 'desk.expandTools';
 
+const VIEW_KEY = 'desk.view';
+type SessionViewMode = 'chat' | 'trajectory';
+
+const readView = (): SessionViewMode => {
+    try {
+        return localStorage.getItem(VIEW_KEY) === 'trajectory' ? 'trajectory' : 'chat';
+    } catch {
+        return 'chat';
+    }
+};
+
+const anchorSelector = (anchor: TrajectoryAnchor): string => {
+    if ('call' in anchor) return `[data-call-ids~="${CSS.escape(anchor.call)}"]`;
+    if ('request' in anchor) return `[data-request-id="${CSS.escape(anchor.request)}"]`;
+    return `[data-block="${anchor.block}"]`;
+};
+
 const readExpand = () => {
     try {
         return localStorage.getItem(EXPAND_KEY) === '1';
@@ -87,6 +106,23 @@ const SessionView = ({
         } catch {
             // Only a remembered preference; the toggle still works.
         }
+    };
+
+    // Chat and Trajectory read the same transcript; the choice is remembered.
+    const [view, setViewState] = useState<SessionViewMode>(readView);
+    const setView = (next: SessionViewMode) => {
+        setViewState(next);
+        try {
+            localStorage.setItem(VIEW_KEY, next);
+        } catch {
+            // Only a remembered preference; the switch still works.
+        }
+    };
+    // A trajectory row opens the chat at its message once the chat is back.
+    const [target, setTarget] = useState<TrajectoryAnchor | null>(null);
+    const openInChat = (anchor: TrajectoryAnchor) => {
+        setView('chat');
+        setTarget(anchor);
     };
 
     // The handoff command stays on screen (with its own copy button) since
@@ -133,13 +169,30 @@ const SessionView = ({
 
     // reveal scrolls the conversation to the call that started a task and
     // flashes it, so "where did this come from" is one click from the panel.
-    const reveal = (callId: string) => {
-        setTasksAnchor(null);
-        const el = scrollRef.current?.querySelector<HTMLElement>(`[data-call-ids~="${CSS.escape(callId)}"]`);
+    const flash = (selector: string) => {
+        const el = scrollRef.current?.querySelector<HTMLElement>(selector);
         if (!el) return;
         revealElement(el);
         el.animate?.([{outline: '2px solid transparent'}, {outline: '2px solid var(--mui-palette-primary-main, #1976d2)'}, {outline: '2px solid transparent'}], {duration: 1600});
     };
+    const reveal = (callId: string) => {
+        setTasksAnchor(null);
+        if (view !== 'chat') {
+            openInChat({call: callId});
+            return;
+        }
+        flash(anchorSelector({call: callId}));
+    };
+    useEffect(() => {
+        if (!target || view !== 'chat') return;
+        // After the chat has rendered (and laid out) in place of the list.
+        const frame = requestAnimationFrame(() => {
+            flash(anchorSelector(target));
+            setTarget(null);
+        });
+        return () => cancelAnimationFrame(frame);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [target, view]);
 
     return (
         <Box sx={{display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0}}>
@@ -158,6 +211,17 @@ const SessionView = ({
                 {session.status === 'failed' && <Chip size="small" color="error" variant="outlined" label={t('desk.statusFailed', {defaultValue: 'failed'})} sx={{color: (theme) => getReadableAccent(theme, 'error'), borderColor: (theme) => getReadableAccent(theme, 'error')}}/>}
                 {isClosed && <Chip size="small" variant="outlined" label={t('desk.statusArchived', {defaultValue: 'archived'})}/>}
                 <Box sx={{flex: 1, display: {xs: 'none', md: 'block'}}}/>
+                <ToggleButtonGroup
+                    size="small"
+                    exclusive
+                    value={view}
+                    onChange={(_, next: SessionViewMode | null) => next && setView(next)}
+                    aria-label={t('desk.viewSwitch', {defaultValue: 'View'})}
+                    sx={{display: {xs: 'none', md: 'inline-flex'}, flexShrink: 0, '& .MuiToggleButton-root': {py: 0.25, px: 1.25, textTransform: 'none', fontSize: '0.8125rem', lineHeight: 1.5}}}
+                >
+                    <ToggleButton value="chat">{t('desk.viewChat', {defaultValue: 'Chat'})}</ToggleButton>
+                    <ToggleButton value="trajectory">{t('desk.viewTrajectory', {defaultValue: 'Trajectory'})}</ToggleButton>
+                </ToggleButtonGroup>
                 {/* Always there, so it can be found before it is needed; while
                     work runs it names itself instead of hiding in a badge. */}
                 {liveTasks.length > 0 ? (
@@ -183,7 +247,7 @@ const SessionView = ({
                     ? t('desk.collapseTools', {defaultValue: 'Collapse tool calls'})
                     : t('desk.expandTools', {defaultValue: 'Expand all tool calls'})}
                 >
-                    <IconButton sx={{display: {xs: 'none', md: 'inline-flex'}}} size="small" onClick={toggleExpand} aria-label={t('desk.expandTools', {defaultValue: 'Expand all tool calls'})} aria-pressed={expandAll}>
+                    <IconButton sx={{display: {xs: 'none', md: view === 'chat' ? 'inline-flex' : 'none'}}} size="small" onClick={toggleExpand} aria-label={t('desk.expandTools', {defaultValue: 'Expand all tool calls'})} aria-pressed={expandAll}>
                         {expandAll ? <FoldUp fontSize="small"/> : <UnfoldMore fontSize="small"/>}
                     </IconButton>
                 </Tooltip>
@@ -208,7 +272,11 @@ const SessionView = ({
                 <IconButton sx={{display: {xs: 'inline-flex', md: 'none'}}} size="small" onClick={(event) => setMenuAnchor(event.currentTarget)} aria-label={t('desk.moreActions', {defaultValue: 'More actions'})}><MoreVert fontSize="small"/></IconButton>
             </Stack>
             <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
-                <MenuItem onClick={() => {toggleExpand(); setMenuAnchor(null);}}>{expandAll ? t('desk.collapseTools', {defaultValue: 'Collapse tool calls'}) : t('desk.expandTools', {defaultValue: 'Expand all tool calls'})}</MenuItem>
+                {/* Narrow screens: the title keeps the header, the switch lives here. */}
+                <MenuItem onClick={() => {setView(view === 'chat' ? 'trajectory' : 'chat'); setMenuAnchor(null);}}>
+                    {view === 'chat' ? t('desk.showTrajectory', {defaultValue: 'Show trajectory'}) : t('desk.showChat', {defaultValue: 'Show chat'})}
+                </MenuItem>
+                {view === 'chat' && <MenuItem onClick={() => {toggleExpand(); setMenuAnchor(null);}}>{expandAll ? t('desk.collapseTools', {defaultValue: 'Collapse tool calls'}) : t('desk.expandTools', {defaultValue: 'Expand all tool calls'})}</MenuItem>}
                 {!isClosed && <MenuItem disabled={turnInFlight || acting || queueSending || changingSettings} onClick={guarded('handoff')}>{t('desk.handoff', {defaultValue: 'Continue in terminal'})}</MenuItem>}
                 {!isClosed && <MenuItem disabled={acting || queueSending || changingSettings} onClick={guarded('archive')}>{t('desk.archive', {defaultValue: 'Archive'})}</MenuItem>}
             </Menu>
@@ -247,7 +315,9 @@ const SessionView = ({
             >
                 <Box ref={contentRef} sx={{maxWidth: COLUMN_MAX_WIDTH, mx: 'auto', py: 3}}>
                     {messagesLoading && <LinearProgress aria-label={t('desk.loadingConversation', {defaultValue: 'Loading conversation'})} sx={{mb: 2}}/>}
-                    <Transcript blocks={blocks} pendingRequestId={pendingId} working={turnInFlight} expandAll={expandAll} onRespond={onRespond}/>
+                    {view === 'chat'
+                        ? <Transcript blocks={blocks} pendingRequestId={pendingId} working={turnInFlight} expandAll={expandAll} onRespond={onRespond}/>
+                        : <Trajectory blocks={blocks} working={turnInFlight} pendingRequestId={pendingId} project={session.project} onOpen={openInChat}/>}
                 </Box>
             </Box>
 
@@ -255,6 +325,10 @@ const SessionView = ({
                 <Box sx={{maxWidth: COLUMN_MAX_WIDTH, mx: 'auto'}}>
                     {(away || pendingId) && <Stack direction="row" spacing={1} sx={{mb: 0.5, justifyContent: 'flex-end'}}>
                         {pendingId && <Button size="small" color="warning" onClick={() => {
+                            if (view !== 'chat') {
+                                openInChat({request: pendingId});
+                                return;
+                            }
                             const card = scrollRef.current?.querySelector<HTMLElement>(`[data-request-id="${CSS.escape(pendingId)}"]`);
                             if (card) {revealElement(card); card.querySelector<HTMLTextAreaElement>('textarea')?.focus({preventScroll: true});}
                         }}>{t('desk.reviewRequest', {defaultValue: 'Review pending request'})}</Button>}

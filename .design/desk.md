@@ -522,6 +522,22 @@ page can be previewed and screenshotted without a backend.
 - Desk's conversation, task and setup strings are defined in English, Chinese
   and Russian, including plural tool counts and the feature-enabling notice.
 
+- **Trajectory** (`Trajectory.tsx`, `trajectoryRows.ts`): a second view of the
+  same transcript, for reviewing what the agent did rather than reading
+  what it said (modeled on DeepSeek Harness's Trajectory tab). It adds no
+  data and no API: `trajectoryRows` projects the `buildTranscript` blocks to
+  one row per action — user message, tool call (name + `toolSummary`, failed
+  or not), subagent (its own steps indented one level), approval/question
+  with its answer, error, and text by its first line — the last text of a
+  turn is its reply, text between steps a muted note; thinking gets no row.
+  A summary above (files written by Edit/Write, commands, failures,
+  approvals) doubles as filters. There is no inspector: a row switches to
+  Chat and flashes its message (`data-call-ids` / `data-request-id` /
+  `data-block` anchors), since Chat already renders the detail well. The
+  Chat / Trajectory switch sits beside the title (in the ⋮ menu on narrow
+  screens) and is remembered. Left out on purpose: served model, routing,
+  tokens per step, timing bars.
+
 Regression coverage: Composer, new-task forms, draft storage, polling lifecycle
 and the Desk page's selection/reconnect/error flows have frontend tests. These
 exercise actual React state and deferred read/send promises, alongside the
