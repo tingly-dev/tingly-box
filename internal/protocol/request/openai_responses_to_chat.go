@@ -239,8 +239,7 @@ func outputMessageText(msg *responses.ResponseOutputMessageParam) (string, bool)
 	return text, text != ""
 }
 
-func createMessageFromResponsesContent(role string, content responses.ResponseInputMessageContentListParam) (openai.ChatCompletionMessageParamUnion, bool) {
-	var text string
+func createMessageFromResponsesContent(role string, content responses.ResponseInputMessageContentListParam) (openai.ChatCompletionMessageParamUnion, bool) {	var text string
 	var hasImage, hasCacheBreakpoint bool
 	for _, item := range content {
 		switch {
