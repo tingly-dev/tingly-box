@@ -18,7 +18,7 @@
     "token_limit_units": "context / max_output 一律写十进制整数：K=1000、M=1000000（1M=1000000、256K=256000、128K=128000、64K=64000），不写 2 的幂（1048576/262144/131072/65536）。官方给出的精确非整数值（如 gpt-3.5-turbo 的 16385）保持原样。"
   },
   "version": "2.5.0",
-  "last_updated": "2026-09-30T00:00:00Z",
+  "last_updated": "2026-10-08T00:00:00Z",
   "providers": {
     "aws-bedrock": {
       "id": "aws-bedrock",
@@ -296,6 +296,13 @@
           "recommended": true
         },
         {
+          "id": "gpt-6.1-sol",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-09-29",
+          "sources": ["https://developers.openai.com/api/docs/models/gpt-6.1-sol", "https://developers.openai.com/api/docs/changelog"]
+        },
+        {
           "id": "gpt-6-sol",
           "context": 1050000,
           "max_output": 128000,
@@ -464,8 +471,9 @@
       "supports_models_endpoint": true,
       "icon": "openai",
       "openai_endpoint_mode": "both",
-      "last_updated": "2026-09-29",
+      "last_updated": "2026-10-08",
       "sources": [
+        "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
         "https://developers.openai.com/api/docs/models/gpt-6-astra",
         "https://developers.openai.com/api/docs/models/gpt-6-sol",
         "https://developers.openai.com/api/docs/models/gpt-6-luna",
@@ -491,6 +499,13 @@
       "base_url_openai": null,
       "base_url_anthropic": "https://api.anthropic.com",
       "models": [
+        {
+          "id": "claude-haiku-5-5",
+          "context": 1000000,
+          "max_output": 128000,
+          "created": "2026-10-07",
+          "sources": ["https://platform.claude.com/docs/en/models/haiku-5-5/overview"]
+        },
         {
           "id": "claude-opus-5-5",
           "context": 1000000,
@@ -596,7 +611,9 @@
         {
           "id": "claude-haiku-4-5-20251001",
           "context": 200000,
-          "max_output": 64000
+          "max_output": 64000,
+          "legacy": true,
+          "sources": ["https://platform.claude.com/docs/en/models/haiku-4-5/overview"]
         },
         {
           "id": "claude-opus-4-5-20251101",
@@ -659,7 +676,7 @@
       "supports_models_endpoint": true,
       "web_search_schema": "web_search_anthropic",
       "icon": "anthropic",
-      "last_updated": "2026-09-29",
+      "last_updated": "2026-10-08",
       "sources": [
         "https://platform.claude.com/docs/en/models/overview",
         "https://platform.claude.com/docs/en/about-claude/model-deprecations",
@@ -685,6 +702,13 @@
       "base_url_openai": null,
       "base_url_anthropic": "https://api.anthropic.com",
       "models": [
+        {
+          "id": "claude-haiku-5-5",
+          "context": 1000000,
+          "max_output": 128000,
+          "created": "2026-10-07",
+          "sources": ["https://platform.claude.com/docs/en/models/haiku-5-5/overview"]
+        },
         {
           "id": "claude-opus-5-5",
           "context": 1000000,
@@ -715,7 +739,9 @@
         {
           "id": "claude-haiku-4-5",
           "context": 200000,
-          "max_output": 64000
+          "max_output": 64000,
+          "legacy": true,
+          "sources": ["https://platform.claude.com/docs/en/models/haiku-4-5/overview"]
         },
         {
           "id": "claude-opus-4-5",
@@ -767,7 +793,7 @@
       "oauth_provider": "claude_code",
       "web_search_schema": "web_search_anthropic",
       "icon": "claudecode",
-      "last_updated": "2026-09-29",
+      "last_updated": "2026-10-08",
       "sources": [
         "https://www.anthropic.com/claude-fable-and-mythos-5-1",
         "https://www.anthropic.com/claude-opus-5-5",
@@ -795,6 +821,15 @@
       "base_url_openai": "https://chatgpt.com/backend-api",
       "base_url_anthropic": null,
       "models": [
+        {
+          "id": "gpt-6.1-sol",
+          "context": 272000,
+          "max_output": 128000,
+          "created": "2026-09-29",
+          "note": "接近 gpt-6-astra 性能但成本更低，适合复杂编码、computer use 与专业工作；按账户套餐、灰度进度和工作区设置开放；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
+          "openai_endpoints": ["responses"],
+          "sources": ["https://developers.openai.com/api/docs/changelog", "https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"]
+        },
         {
           "id": "gpt-6-sol",
           "context": 272000,
@@ -946,7 +981,7 @@
       "oauth_provider": "codex",
       "icon": "opencode",
       "openai_endpoint_mode": "responses",
-      "last_updated": "2026-09-29",
+      "last_updated": "2026-10-08",
       "sources": [
         "https://learn.chatgpt.com/docs/models",
         "https://learn.chatgpt.com/docs/changelog?type=codex-cli",

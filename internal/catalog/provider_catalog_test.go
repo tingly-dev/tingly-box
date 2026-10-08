@@ -193,8 +193,8 @@ func TestLatestOpenAIAndCodexModels(t *testing.T) {
 		modelIDs   []string
 		context    int
 	}{
-		{providerID: "openai-com", modelIDs: []string{"gpt-6-astra", "gpt-6-sol", "gpt-6-luna"}, context: 1050000},
-		{providerID: "codex", modelIDs: []string{"gpt-6-astra", "gpt-6-sol", "gpt-6-luna"}, context: 272000},
+		{providerID: "openai-com", modelIDs: []string{"gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"}, context: 1050000},
+		{providerID: "codex", modelIDs: []string{"gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"}, context: 272000},
 	}
 
 	for _, tt := range tests {
