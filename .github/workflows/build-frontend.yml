@@ -11,6 +11,12 @@ name: Build Frontend
 #   release.yml     calls this once and hands the artifact to both pipelines.
 #   release-cli.yml / release-gui.yml call it themselves only when dispatched
 #                   on their own (no caller to provide it).
+#   harness-npm.yml builds the binaries it rehearses around it, so they carry
+#                   the real UI and no runner installs pnpm.
+#
+# Not here on purpose: verify-compile.yml (the PR check builds and lints in
+# one job, sharing only setup-frontend) and docker.build.Dockerfile (a source
+# image must build on its own).
 on:
   workflow_call:
 

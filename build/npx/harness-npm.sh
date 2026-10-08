@@ -18,7 +18,9 @@
 # Runs on Linux, macOS and Windows (Git Bash). Needs node, npm, python3 (or python),
 # curl and go. The GUI additionally needs: Linux: libgtk-3-dev libwebkit2gtk-4.1-dev,
 # Xvfb and dbus-launch to start it; macOS (Apple Silicon) and Windows (x64): go-task
-# and wails3 and the frontend dependencies, as .github/workflows/release-gui.yml sets up.
+# and wails3, plus the frontend dependencies unless frontend/dist is already built and
+# FRONTEND_PREBUILT=true (what .github/workflows/harness-npm.yml does). The binaries
+# embed whatever internal/web/dist holds: the placeholder page unless it was built.
 # macOS starts the app through `open`, which ignores this shell's environment, so the
 # GUI launch there uses the real home directory and only runs when CI=true (or
 # HARNESS_ALLOW_REAL_HOME=1); a developer's own ~/.tingly-box is never touched.
@@ -128,7 +130,7 @@ case "$HOST" in
 			if (cd "$REPO_ROOT/gui/wails3" && CGO_ENABLED=1 go build -tags "production gtk3" -trimpath -buildvcs=false \
 				-ldflags "-w -s -X main.version=$TAG" -o "$WORK/bin/tingly-box-gui" ./) > "$LOG/build-gui.log" 2>&1; then
 				mkzip "$ZIPS/tingly-box-gui-linux-$CPU.zip" "$WORK/bin/tingly-box-gui" tingly-box-gui
-				pass "built the GTK3 GUI from source ($(du -h "$WORK/bin/tingly-box-gui" | cut -f1)); UI is the checkout's embedded one (placeholder unless the frontend was built)"
+				pass "built the GTK3 GUI from source ($(du -h "$WORK/bin/tingly-box-gui" | cut -f1)); UI is internal/web/dist's (placeholder unless the frontend was built)"
 			else
 				fail "GUI build failed (see $LOG/build-gui.log)"; tail -5 "$LOG/build-gui.log"
 			fi
