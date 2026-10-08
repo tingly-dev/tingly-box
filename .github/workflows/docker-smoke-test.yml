@@ -23,6 +23,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: docker-smoke-test-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   smoke-test-build-image:
     name: Smoke test docker.build.Dockerfile
