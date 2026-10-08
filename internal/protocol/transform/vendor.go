@@ -83,22 +83,20 @@ func isClaudeCodeBackend(ctx *TransformContext, host string) bool {
 // reconcileThinking reports whether the vendor stage reconciles the request's
 // thinking with the rest of the request (ops.Reconcile*ThinkingWithRequest).
 //
-// It does when the thinking is the gateway's: produced by a Bridge from an
-// OpenAI client's reasoning effort, or by a rule's thinking_effort. Those
-// histories carry no thinking blocks, so a tool-use turn needs thinking
-// turned off or Anthropic rejects it.
+// It does for a Claude Code backend, and for thinking the gateway produced
+// from an OpenAI client's reasoning effort: that history carries no thinking
+// blocks, so a tool-use turn needs thinking turned off or Anthropic rejects
+// it.
 //
-// It does not for an Anthropic client's own thinking on a third-party
-// Anthropic-compatible provider: the client owns its history and its request
-// is sent as it came. Reconciling there flipped thinking between enabled and
-// disabled from one request to the next whenever the provider's model had
-// answered a tool call without a leading thinking block, and every flip
-// invalidated the provider's prompt cache for the whole conversation. A
-// Claude Code backend keeps the reconciliation: its models always start a
-// thinking turn with a thinking block, so it never flips there, and it still
-// turns a request Anthropic would reject into one it accepts.
-func reconcileThinking(ctx *TransformContext, host string) bool {
-	if ctx == nil || ctx.ThinkingFromRule || isClaudeCodeBackend(ctx, host) {
+// It does not for an Anthropic client on any other provider: the client owns
+// its history and its request is sent as it came. Reconciling there flipped
+// thinking between enabled and disabled from one request to the next
+// whenever the provider's model had answered a tool call without a leading
+// thinking block, and every flip invalidated the provider's prompt cache for
+// the whole conversation. A rule's thinking_effort does not change who owns
+// the history, so it does not change this.
+func reconcileThinking(ctx *TransformContext, claudeCode bool) bool {
+	if claudeCode || ctx == nil {
 		return true
 	}
 	return ctx.SourceAPI != protocol.TypeAnthropicV1 && ctx.SourceAPI != protocol.TypeAnthropicBeta
@@ -109,13 +107,14 @@ func (t *VendorTransform) applyAnthropicV1(ctx *TransformContext, req *anthropic
 		return req
 	}
 	host, _ := ops.SplitProviderHostPath(providerURL)
+	claudeCode := isClaudeCodeBackend(ctx, host)
 	// Wire rules for gateway-produced thinking, before model-specific
 	// thinking reconciliation. See reconcileThinking.
-	if reconcileThinking(ctx, host) {
+	if reconcileThinking(ctx, claudeCode) {
 		ops.ReconcileV1ThinkingWithRequest(req)
 	}
 	switch {
-	case isClaudeCodeBackend(ctx, host):
+	case claudeCode:
 		req = ops.ApplyAnthropicV1ModelTransform(req, string(req.Model))
 		req = ops.ApplyAnthropicV1MetadataTransform(req, ctx.configExtraForMetadata())
 	case host == "api.deepseek.com":
@@ -130,13 +129,14 @@ func (t *VendorTransform) applyAnthropicBeta(ctx *TransformContext, req *anthrop
 		return req
 	}
 	host, _ := ops.SplitProviderHostPath(providerURL)
+	claudeCode := isClaudeCodeBackend(ctx, host)
 	// Wire rules for gateway-produced thinking, before model-specific
 	// thinking reconciliation. See reconcileThinking.
-	if reconcileThinking(ctx, host) {
+	if reconcileThinking(ctx, claudeCode) {
 		ops.ReconcileBetaThinkingWithRequest(req)
 	}
 	switch {
-	case isClaudeCodeBackend(ctx, host):
+	case claudeCode:
 		req = ops.ApplyAnthropicBetaModelTransform(req, string(req.Model))
 		req = ops.ApplyAnthropicBetaMetadataTransform(req, ctx.configExtraForMetadata())
 	case host == "api.deepseek.com":

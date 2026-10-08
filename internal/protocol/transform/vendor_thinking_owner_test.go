@@ -80,8 +80,7 @@ func TestVendorTransform_AnthropicPassthroughKeepsClientThinking(t *testing.T) {
 }
 
 // Gateway-produced thinking is still reconciled: a Bridge from an OpenAI
-// client (no thinking blocks in its history), a rule's thinking_effort, and a
-// Claude Code backend.
+// client (no thinking blocks in its history), and a Claude Code backend.
 func TestVendorTransform_GatewayThinkingStillReconciled(t *testing.T) {
 	cases := []struct {
 		name string
@@ -92,9 +91,6 @@ func TestVendorTransform_GatewayThinkingStillReconciled(t *testing.T) {
 		}},
 		{"openai_responses_client", func(req any) *TransformContext {
 			return &TransformContext{SourceAPI: protocol.TypeOpenAIResponses, Provider: &typ.Provider{APIBase: thirdPartyAnthropicURL}, Request: req}
-		}},
-		{"rule_thinking_effort", func(req any) *TransformContext {
-			return &TransformContext{SourceAPI: protocol.TypeAnthropicBeta, ThinkingFromRule: true, Provider: &typ.Provider{APIBase: thirdPartyAnthropicURL}, Request: req}
 		}},
 		{"claude_code_backend", func(req any) *TransformContext {
 			return &TransformContext{SourceAPI: protocol.TypeAnthropicBeta, Provider: &typ.Provider{APIBase: "https://api.anthropic.com"}, Request: req,
@@ -117,10 +113,13 @@ func TestVendorTransform_GatewayThinkingStillReconciled(t *testing.T) {
 	}
 }
 
-// RuleThinkingTransform marks the thinking as the gateway's.
-func TestRuleThinkingTransform_MarksThinkingFromRule(t *testing.T) {
+// A rule's thinking_effort rewrites the budget but not who owns the history:
+// an Anthropic client's request stays unreconciled on a third-party provider.
+func TestVendorTransform_RuleThinkingKeepsAnthropicPassthrough(t *testing.T) {
 	req := toolTurnWithoutThinkingBeta()
-	ctx := &TransformContext{SourceAPI: protocol.TypeAnthropicBeta, Request: req}
+	ctx := &TransformContext{SourceAPI: protocol.TypeAnthropicBeta, Provider: &typ.Provider{APIBase: thirdPartyAnthropicURL}, Request: req}
 	require.NoError(t, NewRuleThinkingTransform("high").Apply(ctx))
-	assert.True(t, ctx.ThinkingFromRule)
+	require.NoError(t, NewVendorTransform().Apply(ctx))
+	out := ctx.Request.(*anthropic.BetaMessageNewParams)
+	require.NotNil(t, out.Thinking.OfEnabled, "rule-set thinking on a client-owned history must not flip off")
 }
