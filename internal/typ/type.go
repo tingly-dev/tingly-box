@@ -221,9 +221,9 @@ type RuleFlags struct {
 	// client style, then resolveAttemptTarget). Any other recognized value
 	// ("anthropic") forces the Anthropic-style upstream — including dual-URL
 	// providers that would otherwise serve the client's own style natively.
-	// Providers with no Anthropic style (no APIStyleAnthropic and no
-	// APIBaseAnthropic) warn and fall back to adaptive routing. Google-style
-	// providers are likewise out of scope and ignore the force.
+	// Providers that cannot serve the Anthropic style (per ResolveEndpoint:
+	// no Anthropic primary style and no selectable APIBaseAnthropic) warn and
+	// fall back to adaptive routing.
 	AnthropicEndpointOverride string `json:"anthropic_endpoint_override,omitempty" yaml:"anthropic_endpoint_override,omitempty"`
 
 	// BlockTools is a comma-separated list of tool names to strip from the

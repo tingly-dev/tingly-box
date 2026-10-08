@@ -49,7 +49,7 @@ func (ph *ProtocolHandler) planAttempt(c *gin.Context, rule *typ.Rule, provider 
 	// Resolve dual endpoint: when the provider has a URL in the client's own
 	// style configured, route there natively to avoid a conversion. The
 	// anthropic_endpoint_override rule flag forces the Anthropic style instead
-	// (see resolveAnthropicStyle).
+	// (see resolveAttemptStyle).
 	provider = provider.ResolveStyle(ph.resolveAttemptStyle(c, rule, provider, source))
 	c.Set(ContextKeyProvider, provider)
 	if provider.Timeout <= 0 {
