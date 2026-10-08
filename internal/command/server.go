@@ -377,18 +377,19 @@ func printBanner(cfg BannerConfig) {
 	}
 
 	const (
-		primary = lipgloss.Color("#3B82F6")
-		success = lipgloss.Color("#06B6D4")
-		muted   = lipgloss.Color("#64748B")
+		primary   = lipgloss.Color("#3B82F6")
+		success   = lipgloss.Color("#06B6D4")
+		muted     = lipgloss.Color("#64748B")
+		highlight = lipgloss.Color("#60A5FA")
 	)
 
 	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(primary)
 	versionStyle := lipgloss.NewStyle().Foreground(muted)
 	labelStyle := lipgloss.NewStyle().Foreground(muted)
 	urlStyle := lipgloss.NewStyle().Foreground(success)
+	tokenStyle := lipgloss.NewStyle().Foreground(highlight)
 	hintStyle := lipgloss.NewStyle().Foreground(muted).Italic(true)
 
-	// The login URL already embeds the user token, so no separate token row.
 	webUI := fmt.Sprintf(webUITpl, cfg.Port)
 	if cfg.GlobalConfig.HasUserToken() {
 		webUI = fmt.Sprintf(webUILoginTpl, cfg.Port, cfg.GlobalConfig.GetUserToken())
@@ -401,13 +402,16 @@ func printBanner(cfg BannerConfig) {
 		BorderForeground(primary).
 		PaddingLeft(2)
 
-	body := strings.Join([]string{
+	rows := []string{
 		titleStyle.Render("Tingly-Box") + "  " + versionStyle.Render(formatVersion(BuildVersion)),
 		"",
 		labelStyle.Render("Web UI  ") + urlStyle.Render(webUI),
-		"",
-		hintStyle.Render("Open the Web UI to get started"),
-	}, "\n")
+	}
+	if cfg.GlobalConfig.HasUserToken() {
+		rows = append(rows, labelStyle.Render("Token   ")+tokenStyle.Render(cfg.GlobalConfig.GetUserToken()))
+	}
+	rows = append(rows, "", hintStyle.Render("Open the Web UI to get started"))
+	body := strings.Join(rows, "\n")
 
 	fmt.Println()
 	fmt.Println(bar.Render(body))
