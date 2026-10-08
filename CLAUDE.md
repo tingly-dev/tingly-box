@@ -35,6 +35,10 @@ Key design decisions and architecture notes are kept in `.design/`. Before imple
 
 When changing `.github/workflows/` or `.github/actions/`, read `.github/workflows/AGENTS.md` first and lint with `actionlint` before committing.
 
+# Pull Requests
+
+Follow `.github/PULL_REQUEST_TEMPLATE.md` for PR title and description.
+
 # Build
 
 ## Submodules
