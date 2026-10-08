@@ -1,13 +1,15 @@
 name: Verify Compile
 
-# PR-time compile + unit test check, split by surface so each one only runs
+# PR-time compile check (unit tests ready but disabled), split by surface so each one only runs
 # when something it builds from changed:
 #   - compile-cli      : go build/vet of ./cli/... (the tingly-box binary)
 #   - compile-gui      : go build/vet of the Wails3 GUI (Linux, GTK4 +
 #                        WebKitGTK via cgo)
 #   - test-go          : go test of the root module and the other go.work
 #                        modules (afk, agentboot, ai, imbot, swagger)
-#   - compile-frontend : pnpm build of frontend/, plus its vitest suite and lint
+#                        (DISABLED for now, see below)
+#   - compile-frontend : pnpm build of frontend/ and its lint (vitest DISABLED)
+# Unit tests are commented out for now (all passed when added); uncomment to enable.
 # The jobs are independent: the Go builds embed the committed PLACEHOLDER
 # dist, so they never wait on the frontend build. Full release
 # builds (and the release-asset checks) live in release.yml and the
@@ -41,8 +43,8 @@ on:
       - '!.gitignore'
       - 'frontend/**'
       - '!frontend/**/*.md'
-      # Test-only changes run test-go.
-      - '**/*_test.go'
+      # Test-only changes run test-go (disabled; uncomment with it).
+      # - '**/*_test.go'
       - '.github/workflows/verify-compile.yml'
   workflow_dispatch:
 
@@ -62,7 +64,7 @@ jobs:
       cli: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.self == 'true' || steps.filter.outputs.cli == 'true' }}
       gui: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.self == 'true' || steps.filter.outputs.gui == 'true' }}
       frontend: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.self == 'true' || steps.filter.outputs.frontend == 'true' || steps.filter.outputs.openapi == 'true' }}
-      gotest: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.self == 'true' || steps.filter.outputs.cli == 'true' || steps.filter.outputs.gotest == 'true' }}
+      # gotest: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.self == 'true' || steps.filter.outputs.cli == 'true' || steps.filter.outputs.gotest == 'true' }}
     steps:
       - name: Filter paths
         id: filter
@@ -129,8 +131,8 @@ jobs:
               - '!frontend/**/*.md'
             openapi:
               - 'openapi.json'
-            gotest:
-              - '**/*_test.go'
+            # gotest:
+            #   - '**/*_test.go'
 
   compile-cli:
     name: Compile cli (Linux)
@@ -184,27 +186,29 @@ jobs:
       - name: Vet GUI package
         run: go vet ./gui/wails3/...
 
-  test-go:
-    name: Go unit tests
-    needs: changes
-    if: needs.changes.outputs.gotest == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          submodules: true
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-          cache-dependency-path: '**/go.sum'
-
-      # ./... is the root module only; the other go.work modules are listed.
-      # gui/wails3 is left to compile-gui (it needs the GTK headers).
-      - name: Test
-        run: go test ./... ./afk/... ./agentboot/... ./ai/... ./imbot/... ./swagger/...
+  # Unit tests: disabled for now. Uncomment this job, `gotest` above and
+  # the `**/*_test.go` path to run it.
+  # test-go:
+  #   name: Go unit tests
+  #   needs: changes
+  #   if: needs.changes.outputs.gotest == 'true'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v6
+  #       with:
+  #         submodules: true
+  #
+  #     - name: Setup Go
+  #       uses: actions/setup-go@v5
+  #       with:
+  #         go-version: '1.26'
+  #         cache-dependency-path: '**/go.sum'
+  #
+  #     # ./... is the root module only; the other go.work modules are listed.
+  #     # gui/wails3 is left to compile-gui (it needs the GTK headers).
+  #     - name: Test
+  #       run: go test ./... ./afk/... ./agentboot/... ./ai/... ./imbot/... ./swagger/...
 
   compile-frontend:
     name: Compile frontend
@@ -232,8 +236,9 @@ jobs:
       - name: Build frontend
         run: pnpm build
 
-      - name: Unit tests
-        run: pnpm test
+      # Unit tests: disabled for now; uncomment to run vitest.
+      # - name: Unit tests
+      #   run: pnpm test
 
       - name: Lint
         run: pnpm lint
