@@ -158,13 +158,10 @@ func TestPromptCacheModel_GrowingConversationHits(t *testing.T) {
 	}
 }
 
-// Without breakpoints an Anthropic request is cached automatically — how the
-// third-party providers the gateway strips cache_control for behave.
-func TestPromptCacheModel_AnthropicWithoutBreakpointsCachesAutomatically(t *testing.T) {
+func TestPromptCacheModel_DroppedBreakpointsNeverHitOnAnthropic(t *testing.T) {
 	base := newPromptCacheServer(t)
 	body := []byte(`{"model":"` + vmodel.PromptCacheModelID + `","max_tokens":10,"system":"stable system prompt","messages":[{"role":"user","content":"hi"}]}`)
-	first := postPromptCache(t, base, "messages", body, false)
+	postPromptCache(t, base, "messages", body, false)
 	again := postPromptCache(t, base, "messages", body, false)
-	assert.Zero(t, first.cached)
-	assert.Equal(t, again.prompt, again.cached)
+	assert.Zero(t, again.cached, "Anthropic caches nothing without cache_control, so neither does the simulation")
 }

@@ -75,13 +75,6 @@ func TestExplicitWithoutBreakpointsNeverCaches(t *testing.T) {
 	assert.Zero(t, r.WriteTokens)
 }
 
-func TestAnthropicDiscipline(t *testing.T) {
-	withBP, _ := AnthropicBlocks(anthropicTurn(1, true, "s"))
-	assert.Equal(t, Explicit, AnthropicDiscipline(withBP))
-	without, _ := AnthropicBlocks([]byte(`{"messages":[{"role":"user","content":"hi"}]}`))
-	assert.Equal(t, Automatic, AnthropicDiscipline(without))
-}
-
 func TestAutomaticCachesWithoutBreakpoints(t *testing.T) {
 	s := New()
 	chat := func(n int) []byte {

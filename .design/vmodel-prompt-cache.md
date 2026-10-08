@@ -28,8 +28,7 @@
 3. **网关请求侧前缀稳定**：claude_code 场景 × {Anthropic、OpenAI Chat、Responses} × {stream, nonstream} × {有无 thinking} × {generic、DeepSeek、Kimi、GLM、OpenAI 官方 host}，逐轮增长全部保持前缀。
 4. **stream 回写不丢 cache**：上游 Anthropic（start/delta 各种分布）、Chat（独立 usage chunk、DeepSeek 式 usage 与 finish_reason 同块）、Responses，stream 与 nonstream 的客户端 usage 与落库 usage 一致。Claude Code 从终态 `message_delta` 取 `input_tokens` / `cache_read_input_tokens`（实测），所以 OpenAI→Anthropic 转换把完整 usage 放在终态 delta 是对的。
 5. 发现并修复一处 stream 专有的计数错误：`AnthropicAccumulator` 把 `cache_creation_input_tokens` 在每个携带它的事件上都累加进 input，`message_delta` 重复上报 creation 但不带 `input_tokens` 时 input 被算两遍、命中率被压低（见 `usage-tracking.md` §2.3）。
-6. 后续实测（Dashboard 截图，claude_code 场景）：cache write 一直为 0、cache read 只占约 10–18%、约 19K 的 input 每轮都未命中 —— 推测是第三方 Anthropic 兼容 provider 收到 Claude Code 的 `cache_control` 后没有按 Anthropic 语义处理（只在标记处缓存、或有标记时关掉自动缓存），待实测确认。据此先改为 Anthropic 形态的 `cache_control` 也 default-deny：只发给 Anthropic 官方（`api.anthropic.com` / `claude.ai`）与 Claude OAuth，其余剥掉、交给 provider 自己的自动前缀缓存（`VendorTransform` → `ops.StripAnthropic*CacheControl`）。
-7. 剩余未覆盖的 usage 形态：只在顶层 `usage.cached_tokens` 报命中的旧版 Moonshot 接口会被读成 0（DeepSeek 与当前 Kimi 都同时报 `prompt_tokens_details.cached_tokens`，不受影响）。
+6. 剩余未覆盖的 usage 形态：只在顶层 `usage.cached_tokens` 报命中的旧版 Moonshot 接口会被读成 0（DeepSeek 与当前 Kimi 都同时报 `prompt_tokens_details.cached_tokens`，不受影响）。
 
 结论：网关本身不是"stream 下命中率低"的原因；若真实环境仍低，优先看路由（规则多 service 且无 session affinity、failover 切换账号）、非 claude_code 场景的同协议直通（billing header 不剥，跨会话共享的 system 前缀失效），以及 provider 自身的缓存行为。这个模型就是用来把这几类原因区分开的。
 
@@ -48,11 +47,10 @@
 
 | 端点 | 纪律 | 写 | 读 |
 |---|---|---|---|
-| Anthropic Messages，带 breakpoint | Explicit | 只写以 breakpoint 结尾的前缀（顶层 `cache_control` = 最后一个 block 是 breakpoint） | 只能读到本请求最后一个 breakpoint 为止 |
-| Anthropic Messages，不带 breakpoint | Automatic | 同下 | 同下 |
+| Anthropic Messages | Explicit | 只写以 breakpoint 结尾的前缀（顶层 `cache_control` = 最后一个 block 是 breakpoint） | 只能读到本请求最后一个 breakpoint 为止 |
 | OpenAI Chat / Responses | Automatic | 每个前缀都写 | 任意前缀可读 |
 
-Anthropic 端点按请求本身选纪律：带 breakpoint 按 Anthropic 的语义（发往 Anthropic 官方 / Claude OAuth 时网关保留 `cache_control`）；不带就按自动缓存，对应第三方 Anthropic 兼容 provider —— 网关只给 Anthropic 官方与 Claude OAuth 发 `cache_control`，其余一律剥掉（`ops/anthropic_prompt_cache.go`，与 OpenAI 侧的 default-deny 对称）。vmodel provider 不是 Anthropic 官方，所以端到端测试里 Anthropic target 走的是 Automatic。
+Explicit 的意义：网关如果在发往 Anthropic 形态上游时丢了 `cache_control`，真实 Anthropic 就一点不缓存，模拟器同样报 0 —— 这类回归在 Automatic 下是看不出来的。
 
 usage 按协议形态报回：Anthropic `input_tokens` 不含读写，`cache_read_input_tokens` / `cache_creation_input_tokens` 分列（message_start 与 message_delta 都带）；Chat / Responses 的 `prompt_tokens` / `input_tokens` 是总数，命中在 `*_details.cached_tokens`，不报写入（自动缓存写入不计费）。
 
