@@ -162,4 +162,5 @@ func TestCollapseClaudeCodeMainRule_SeparateProfile(t *testing.T) {
 	assert.Equal(t, p1, cc.Scenario)
 	assert.Nil(t, cfg.findRuleByUUID(BuiltinRuleUUID(p1, "default")))
 	assert.True(t, cfg.findRuleByUUID(BuiltinRuleUUID(p1, "subagent")).Active)
+	assert.True(t, cfg.Profiles["claude_code"][0].Unified, "kept true for a downgraded binary")
 }

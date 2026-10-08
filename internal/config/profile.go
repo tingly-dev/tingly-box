@@ -146,8 +146,9 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 	}
 
 	meta := typ.ProfileMeta{
-		ID:   typ.NextFreeNumberedID("p", existingIDs),
-		Name: name,
+		ID:      typ.NextFreeNumberedID("p", existingIDs),
+		Name:    name,
+		Unified: true, // see ProfileMeta.Unified
 	}
 
 	c.Profiles[base] = append(c.Profiles[base], meta)

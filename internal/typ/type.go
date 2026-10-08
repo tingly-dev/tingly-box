@@ -346,8 +346,10 @@ type ProfileMeta struct {
 	ID   string `json:"id" yaml:"id"`     // Profile ID (e.g. "p1")
 	Name string `json:"name" yaml:"name"` // Human-readable name (unique within base scenario)
 	// Deprecated: Claude Code has no unified/separate mode; its model slots
-	// are rules (see config.SetClaudeCodeSlot). Read only by the one-time
-	// migration, never written.
+	// are rules (see config.SetClaudeCodeSlot). Nothing reads it any more; it
+	// is kept true so that a downgraded binary, which still reads it, sends
+	// every slot through the profile's main rule instead of looking for the
+	// per-tier rules a migrated profile no longer has.
 	Unified    bool                     `json:"unified,omitempty" yaml:"unified,omitempty"`
 	ClaudeCode *ClaudeCodeProfileConfig `json:"claude_code,omitempty" yaml:"claude_code,omitempty"` // Persistent overrides for generated Claude Code settings.
 }

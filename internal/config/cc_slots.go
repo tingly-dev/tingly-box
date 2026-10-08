@@ -160,6 +160,10 @@ func (c *Config) collapseClaudeCodeMainRule(scenario typ.RuleScenario) {
 	if def != nil {
 		defUUID := def.UUID
 		c.Rules = slices.DeleteFunc(c.Rules, func(r typ.Rule) bool { return r.UUID == defUUID })
+		// The default slot's history belongs to the main rule from now on.
+		if cc := c.ccRuleLocked(scenario, "cc"); cc != nil {
+			c.rekeyRuleUUIDState("claude-code-slots", map[string]string{defUUID: cc.UUID})
+		}
 	}
 	if cc := c.ccRuleLocked(scenario, "cc"); cc != nil {
 		cc.Active = true
@@ -172,7 +176,7 @@ func (c *Config) collapseClaudeCodeMainRule(scenario typ.RuleScenario) {
 	base, profileID := typ.ParseScenarioProfile(scenario)
 	for i, p := range c.Profiles[string(base)] {
 		if p.ID == profileID {
-			c.Profiles[string(base)][i].Unified = false
+			c.Profiles[string(base)][i].Unified = true // see ProfileMeta.Unified
 		}
 	}
 }
