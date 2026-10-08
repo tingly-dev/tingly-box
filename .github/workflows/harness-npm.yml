@@ -103,17 +103,17 @@ jobs:
       FRONTEND_PREBUILT: 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           # setup-go caches the module and build caches.
@@ -123,7 +123,7 @@ jobs:
       # internal/web/dist for the binaries built with plain `go build` (the CLI,
       # the Linux GUI), which would otherwise embed the placeholder page.
       - name: Download frontend artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: frontend-dist
           path: frontend/dist/
@@ -182,7 +182,7 @@ jobs:
 
       - name: Upload the harness logs
         if: failure() && env.HARNESS_WORK != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: harness-npm-logs-${{ matrix.platform }}
           path: ${{ env.HARNESS_WORK }}/logs

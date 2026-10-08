@@ -83,12 +83,12 @@ jobs:
             cross_compile: true
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: false
@@ -103,7 +103,7 @@ jobs:
       # Keyed per job: setup-go's own key is only OS/arch, so jobs sharing a
       # runner (e.g. the three ubuntu-22.04 targets) overwrite each other's cache.
       - name: Cache Go build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ${{ steps.gocache.outputs.build }}
@@ -113,7 +113,7 @@ jobs:
             go-${{ matrix.suffix }}-
 
       - name: Download frontend artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: frontend-dist
           path: internal/web/dist/
@@ -200,7 +200,7 @@ jobs:
           [ "${{ matrix.goos }}" != "windows" ] && chmod +x ./dist/tingly-box${{ matrix.exe }} || true
 
       - name: Upload build artifact (${{ matrix.suffix }})
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cli-${{ matrix.suffix }}
           path: ./dist/tingly-box${{ matrix.exe }}
@@ -227,12 +227,12 @@ jobs:
     steps:
       # Only for the local ensure-release action.
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           sparse-checkout: .github
 
       - name: Download CLI artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: cli-*
           path: ./dist/cli
@@ -293,7 +293,7 @@ jobs:
     steps:
       # Only for the local dispatch-npm action.
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           sparse-checkout: .github
 

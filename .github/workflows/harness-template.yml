@@ -37,12 +37,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           # setup-go caches the module and build caches.
@@ -52,7 +52,7 @@ jobs:
         run: go build -trimpath -ldflags="-s -w" -o harness-bin ./cli/harness
 
       - name: Upload harness binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: harness-bin
           path: harness-bin
@@ -181,20 +181,20 @@ jobs:
       # Only the client-driver legs read from the tree (tests/clients).
       - name: Checkout client drivers
         if: steps.gate.outputs.run == 'true' && matrix.leg.setup
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           sparse-checkout: tests/clients
 
       - name: Download harness binary
         if: steps.gate.outputs.run == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: harness-bin
 
       # Per-client driver toolchains (only for legs that declare setup).
       - name: Setup Python
         if: steps.gate.outputs.run == 'true' && matrix.leg.setup == 'python'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
@@ -206,7 +206,7 @@ jobs:
 
       - name: Setup Node
         if: steps.gate.outputs.run == 'true' && (matrix.leg.setup == 'node' || matrix.leg.setup == 'aisdk')
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
 
@@ -225,7 +225,7 @@ jobs:
       # matrix legs emit JSON — keep it for inspection and surface a summary.
       - name: Upload matrix JSON
         if: steps.gate.outputs.run == 'true' && matrix.leg.tier == 'matrix' && always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.leg.name }}-json
           path: harness-${{ matrix.leg.name }}.log
