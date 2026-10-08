@@ -665,19 +665,19 @@ func TestUpgradeLegacyCCEnv(t *testing.T) {
 	}
 }
 
-func TestGenerateCCEnv_FableFollowsDefaultWithoutActiveRule(t *testing.T) {
+func TestGenerateCCEnv_SlotWithoutActiveRuleFollowsMain(t *testing.T) {
 	for name, fable := range map[string]*typ.Rule{
 		"missing":  nil,
 		"inactive": {UUID: "builtin:claude_code:fable", Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-fable", Active: false},
 	} {
 		t.Run(name, func(t *testing.T) {
-			rules := []typ.Rule{{UUID: "builtin:claude_code:default", Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-default", Active: true}}
+			rules := []typ.Rule{{UUID: "builtin:claude_code:cc", Scenario: typ.ScenarioClaudeCode, RequestModel: "my-main", Active: true}}
 			if fable != nil {
 				rules = append(rules, *fable)
 			}
 			env := GenerateCCEnv(&serverconfig.Config{Rules: rules}, "http://localhost:12580", "tok", "claude_code", false)
-			if got := env["ANTHROPIC_DEFAULT_FABLE_MODEL"]; got != "tingly/cc-default" {
-				t.Errorf("fable = %q, want it to follow the default tier", got)
+			if got := env["ANTHROPIC_DEFAULT_FABLE_MODEL"]; got != "my-main" {
+				t.Errorf("fable = %q, want it to follow the main rule", got)
 			}
 		})
 	}
@@ -686,16 +686,6 @@ func TestGenerateCCEnv_FableFollowsDefaultWithoutActiveRule(t *testing.T) {
 	}}, "http://localhost:12580", "tok", "claude_code", false)
 	if got := env["ANTHROPIC_DEFAULT_FABLE_MODEL"]; got != "my-fable" {
 		t.Errorf("active fable rule = %q, want my-fable", got)
-	}
-}
-
-func TestGenerateCCEnv_ProfileWithoutFableRuleFollowsDefault(t *testing.T) {
-	cfg := &serverconfig.Config{Rules: []typ.Rule{
-		{UUID: "builtin:claude_code:p1:default", Scenario: "claude_code:p1", RequestModel: "default", Active: true},
-	}}
-	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code:p1", true)
-	if got := env["ANTHROPIC_DEFAULT_FABLE_MODEL"]; got != "default" {
-		t.Errorf("profile fable = %q, want the default tier", got)
 	}
 }
 

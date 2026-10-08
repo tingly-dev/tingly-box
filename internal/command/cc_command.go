@@ -155,11 +155,7 @@ func selectProfileInteractive(profiles []typ.ProfileMeta, notFoundName string) (
 		fmt.Fprintln(os.Stderr, "Available profiles:")
 	}
 	for _, p := range profiles {
-		mode := "separate"
-		if p.Unified {
-			mode = "unified"
-		}
-		fmt.Fprintf(os.Stderr, "  [%s] %s (%s)\n", p.ID, p.Name, mode)
+		fmt.Fprintf(os.Stderr, "  [%s] %s\n", p.ID, p.Name)
 	}
 	fmt.Fprintf(os.Stderr, "  [0] Continue without profile\n")
 

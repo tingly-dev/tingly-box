@@ -74,14 +74,6 @@ func ccRule(uuid, requestModel string) typ.Rule {
 	}
 }
 
-// ccSeparateFlag returns a scenario config that puts claude_code in separate mode.
-func ccSeparateFlag() typ.ScenarioConfig {
-	return typ.ScenarioConfig{
-		Scenario: typ.ScenarioClaudeCode,
-		Flags:    typ.ScenarioFlags{Separate: true},
-	}
-}
-
 func TestResolveClaudeCodeModels_UnifiedDefault(t *testing.T) {
 	client := NewTBClient(&serverconfig.Config{})
 	models := client.resolveClaudeCodeModels()
@@ -119,11 +111,10 @@ func TestResolveClaudeCodeModels_UnifiedCustomRequestModel(t *testing.T) {
 	assert.Equal(t, "team/coder[1m]", models.subagent)
 }
 
-func TestResolveClaudeCodeModels_Separate(t *testing.T) {
+func TestResolveClaudeCodeModels_EverySlotOn(t *testing.T) {
 	cfg := &serverconfig.Config{
-		Scenarios: []typ.ScenarioConfig{ccSeparateFlag()},
 		Rules: []typ.Rule{
-			ccRule("builtin:claude_code:default", "tingly/cc-default"),
+			ccRule("builtin:claude_code:cc", "tingly/cc-default"),
 			ccRule("builtin:claude_code:haiku", "vendor/fast"),
 			ccRule("builtin:claude_code:sonnet", "tingly/cc-sonnet"),
 			ccRule("builtin:claude_code:opus", "vendor/smart"),
@@ -138,24 +129,26 @@ func TestResolveClaudeCodeModels_Separate(t *testing.T) {
 	assert.Equal(t, "tingly/cc-sonnet", models.sonnet)
 	assert.Equal(t, "vendor/smart", models.opus)
 	assert.Equal(t, "tingly/cc-subagent", models.subagent)
+	// No fable rule: it follows the main rule.
+	assert.Equal(t, "tingly/cc-default", models.fable)
 }
 
-func TestResolveClaudeCodeModels_SeparateMissingTierFallsBack(t *testing.T) {
+func TestResolveClaudeCodeModels_OnlySubagentOn(t *testing.T) {
+	off := ccRule("builtin:claude_code:haiku", "tingly/cc-haiku")
+	off.Active = false
 	cfg := &serverconfig.Config{
-		Scenarios: []typ.ScenarioConfig{ccSeparateFlag()},
 		Rules: []typ.Rule{
-			ccRule("built-in-cc-default", "vendor/default"),
+			ccRule("builtin:claude_code:cc", "vendor/main"),
+			off,
+			ccRule("builtin:claude_code:subagent", "vendor/cheap"),
 		},
 	}
-	client := NewTBClient(cfg)
-	models := client.resolveClaudeCodeModels()
+	models := NewTBClient(cfg).resolveClaudeCodeModels()
 
-	// Slots without a rule of their own (and no main rule) use the default slot's.
-	assert.Equal(t, "vendor/default", models.def)
-	assert.Equal(t, "vendor/default", models.haiku)
-	assert.Equal(t, "vendor/default", models.sonnet)
-	assert.Equal(t, "vendor/default", models.opus)
-	assert.Equal(t, "vendor/default", models.subagent)
+	assert.Equal(t, "vendor/main", models.def)
+	assert.Equal(t, "vendor/main", models.haiku)
+	assert.Equal(t, "vendor/main", models.opus)
+	assert.Equal(t, "vendor/cheap", models.subagent)
 }
 
 func TestResolveClaudeCodeModels_ModernUUIDWinsOverLegacy(t *testing.T) {
@@ -297,13 +290,4 @@ func TestGetScenarioEndpointPath(t *testing.T) {
 			t.Errorf("GetScenarioEndpointPath(%q) = %q, want %q", tt.scenario, got, tt.want)
 		}
 	}
-}
-
-func TestResolveClaudeCodeModels_FableFollowsDefaultWithoutActiveRule(t *testing.T) {
-	cfg := &serverconfig.Config{
-		Scenarios: []typ.ScenarioConfig{ccSeparateFlag()},
-		Rules:     []typ.Rule{ccRule("builtin:claude_code:default", "tingly/cc-default")},
-	}
-	models := NewTBClient(cfg).resolveClaudeCodeModels()
-	assert.Equal(t, "tingly/cc-default", models.fable)
 }

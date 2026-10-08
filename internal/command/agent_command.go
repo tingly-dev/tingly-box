@@ -36,7 +36,7 @@ type AgentApplyFlagCmdKong struct {
 	AgentType  string `kong:"arg,optional,help='Agent type (cc/claude-code, oc/opencode, codex)'"`
 	Provider   string `kong:"flag,name='provider',help='Provider UUID (optional, uses routing rule if not specified)'"`
 	Model      string `kong:"flag,name='model',help='Model name (optional, uses routing rule if not specified)'"`
-	Unified    bool   `kong:"flag,name='unified',default='true',help='Unified mode (claude-code only)'"`
+	Unified    bool   `kong:"flag,name='unified',default='true',hidden,help='Deprecated, ignored: Claude Code model slots are managed in the web UI'"`
 	StatusLine bool   `kong:"flag,name='status-line',help='Install status line integration (claude-code only)'"`
 	Yes        bool   `kong:"flag,name='yes',short='y',help='Skip the confirmation prompt'"`
 	Preview    bool   `kong:"flag,name='preview',help='Preview without applying'"`
@@ -44,7 +44,6 @@ type AgentApplyFlagCmdKong struct {
 
 func (a *AgentApplyFlagCmdKong) Run(appManager *app.AppManager) error {
 	var req agent.ApplyAgentRequest
-	req.Unified = a.Unified
 	req.InstallStatusLine = a.StatusLine
 	req.Yes = a.Yes
 	req.Preview = a.Preview
@@ -285,13 +284,6 @@ func confirmApply(reader *bufio.Reader, req *agent.ApplyAgentRequest) error {
 	} else {
 		fmt.Printf("  Provider:  (will be resolved)\n")
 		fmt.Printf("  Model:  %s\n", req.Model)
-	}
-	if req.AgentType == agent.AgentTypeClaudeCode {
-		mode := "unified"
-		if !req.Unified {
-			mode = "separate"
-		}
-		fmt.Printf("  Mode:  %s\n", mode)
 	}
 
 	fmt.Print("\nApply configuration? [y/N]: ")

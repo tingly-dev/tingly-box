@@ -4,27 +4,21 @@ import (
 	"strings"
 
 	aiagent "github.com/tingly-dev/tingly-box/ai/agent"
+	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// BuildClaudeCodeModelConfig constructs the model configuration for Claude Code.
-// This contains the business logic for unified vs separate mode.
-// Exported for use by HTTP handlers.
-func BuildClaudeCodeModelConfig(unified bool) aiagent.ClaudeCodeModelConfig {
-	if unified {
-		return aiagent.ClaudeCodeModelConfig{
-			Default: "tingly/cc",
-			// All other fields will use Default
-		}
-	}
-
-	// Separate mode - different models for different purposes
+// BuildClaudeCodeModelConfig returns the model each Claude Code slot
+// requests under the main claude_code routing (see ClaudeCodeSlotModels).
+func BuildClaudeCodeModelConfig(cfg *serverconfig.Config) aiagent.ClaudeCodeModelConfig {
+	m, _ := ClaudeCodeSlotModels(cfg, string(typ.ScenarioClaudeCode), false)
 	return aiagent.ClaudeCodeModelConfig{
-		Default:  "tingly/cc-default",
-		Haiku:    "tingly/cc-haiku",
-		Opus:     "tingly/cc-opus",
-		Fable:    "tingly/cc-fable",
-		Sonnet:   "tingly/cc-sonnet",
-		SubAgent: "tingly/cc-subagent",
+		Default:  m["ANTHROPIC_MODEL"],
+		Haiku:    m["ANTHROPIC_DEFAULT_HAIKU_MODEL"],
+		Sonnet:   m["ANTHROPIC_DEFAULT_SONNET_MODEL"],
+		Opus:     m["ANTHROPIC_DEFAULT_OPUS_MODEL"],
+		Fable:    m["ANTHROPIC_DEFAULT_FABLE_MODEL"],
+		SubAgent: m["CLAUDE_CODE_SUBAGENT_MODEL"],
 	}
 }
 

@@ -64,11 +64,9 @@ var ClaudeCodeSlotEnvKeys = []struct{ Slot, EnvKey string }{
 }
 
 // ClaudeCodeSlotModels resolves the model id Claude Code sends for each slot,
-// keyed by env var. The default slot is the main rule: "cc", or the "default"
-// rule of a profile (or legacy separate config) without an active cc rule.
-// Any other slot with an active rule of its own (builtin:<scenario>:<slot>)
-// uses that rule's request_model, otherwise it follows the default. All slots
-// on → what used to be separate mode; none → unified. A rule with the 1M context flag advertises
+// keyed by env var. The default slot is the main rule "cc"; any other slot
+// with an active rule of its own (builtin:<scenario>:<slot>) uses that rule's
+// request_model, otherwise it follows the default (see config.CCSlots). A rule with the 1M context flag advertises
 // it via the [1m] suffix (the client strips it back and sends the context-1m
 // beta header); context1M reports whether any slot does.
 //
@@ -101,9 +99,6 @@ func ClaudeCodeSlotModels(cfg *serverconfig.Config, scenarioPath string, isProfi
 	}
 
 	fallback := slotModel("cc")
-	if fallback == "" {
-		fallback = slotModel("default")
-	}
 	if fallback == "" {
 		fallback = "tingly/cc"
 		if isProfile {
@@ -282,7 +277,7 @@ func ResolveCCProfileSettings(cfg *serverconfig.Config, baseURL, apiKey, scenari
 	if snapshot.Exists {
 		baseEnv = maps.Clone(snapshot.Env)
 	} else {
-		defaults := DefaultClaudeCodePrefs(profile.Unified)
+		defaults := DefaultClaudeCodePrefs()
 		defaultValues, valuesErr := defaults.Values()
 		if valuesErr != nil {
 			return CCProfileSettingsResolution{}, valuesErr

@@ -70,7 +70,7 @@ func (c *TBClientImpl) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
 	apiKey := c.config.GetModelToken()
 
 	models := c.resolveClaudeCodeModels()
-	prefs := tbagent.DefaultClaudeCodePrefs(false)
+	prefs := tbagent.DefaultClaudeCodePrefs()
 	prefs.AnthropicModel = models.def
 	prefs.AnthropicDefaultHaikuModel = models.haiku
 	prefs.AnthropicDefaultSonnetModel = models.sonnet

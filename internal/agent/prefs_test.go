@@ -298,8 +298,8 @@ func TestClaudeCodePrefs_AllTypedFieldsUseOmitempty(t *testing.T) {
 
 // Unified default: every model slot points at the same canonical model,
 // plus tb's privacy/timeout opinions.
-func TestDefaultClaudeCodePrefs_Unified(t *testing.T) {
-	env, err := DefaultClaudeCodePrefs(true).ToEnv("http://localhost:12580", "test-token")
+func TestDefaultClaudeCodePrefs_AllSlotsOnMainRule(t *testing.T) {
+	env, err := DefaultClaudeCodePrefs().ToEnv("http://localhost:12580", "test-token")
 	if err != nil {
 		t.Fatalf("ToEnv: %v", err)
 	}
@@ -326,28 +326,6 @@ func TestDefaultClaudeCodePrefs_Unified(t *testing.T) {
 
 // Separate default: each slot gets its own dedicated tingly/cc-* model so
 // users can route different Claude Code workloads to distinct rules.
-func TestDefaultClaudeCodePrefs_Separate(t *testing.T) {
-	env, _ := DefaultClaudeCodePrefs(false).ToEnv("http://localhost:12580", "test-token")
-	want := map[string]string{
-		"ANTHROPIC_MODEL":                          "tingly/cc-default",
-		"ANTHROPIC_DEFAULT_HAIKU_MODEL":            "tingly/cc-haiku",
-		"ANTHROPIC_DEFAULT_SONNET_MODEL":           "tingly/cc-sonnet",
-		"ANTHROPIC_DEFAULT_OPUS_MODEL":             "tingly/cc-opus",
-		"ANTHROPIC_DEFAULT_FABLE_MODEL":            "tingly/cc-fable",
-		"CLAUDE_CODE_SUBAGENT_MODEL":               "tingly/cc-subagent",
-		"API_TIMEOUT_MS":                           "3000000",
-		"CLAUDE_CODE_MAX_OUTPUT_TOKENS":            "32000",
-		"CLAUDE_CODE_AUTO_COMPACT_WINDOW":          "200000",
-		"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE":          "80",
-		"DISABLE_TELEMETRY":                        "1",
-		"DISABLE_ERROR_REPORTING":                  "1",
-		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-		"ANTHROPIC_BASE_URL":                       "http://localhost:12580/tingly/claude_code",
-		"ANTHROPIC_AUTH_TOKEN":                     "test-token",
-		"NO_PROXY":                                 "localhost,127.0.0.1,::1",
-	}
-	assertEnvMapsEqual(t, want, env)
-}
 
 func TestClaudeCodePrefs_JSONShapeUsesEnvNames(t *testing.T) {
 	b, _ := json.Marshal(ClaudeCodePrefs{

@@ -11,11 +11,10 @@ import (
 // ClaudeCodeRequestModels defines all request models for Claude Code scenario
 // When applying claude-code agent, all these rules should be updated for convenience
 var ClaudeCodeRequestModels = []string{
-	"tingly/cc", // General model (for unified mode)
+	"tingly/cc", // The main rule (default slot)
 	"tingly/cc-haiku",
 	"tingly/cc-sonnet",
 	"tingly/cc-opus",
-	"tingly/cc-default",
 	"tingly/cc-subagent",
 	"tingly/cc-fable",
 }

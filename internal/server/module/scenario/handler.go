@@ -374,7 +374,7 @@ func (h *Handler) CreateProfile(c *gin.Context) {
 		return
 	}
 
-	meta, err := h.config.CreateProfile(scenario, req.Name, req.Unified)
+	meta, err := h.config.CreateProfile(scenario, req.Name, req.Unified == nil || *req.Unified)
 	if err != nil {
 		apierr.Failure(c, http.StatusBadRequest, err.Error())
 		return

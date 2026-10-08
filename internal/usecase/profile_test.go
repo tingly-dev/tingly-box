@@ -38,7 +38,7 @@ func newTestProfileConfig(t *testing.T) (*serverconfig.Config, typ.ProfileMeta, 
 		t.Fatalf("CreateProfile: %v", err)
 	}
 	profiledScenario := typ.ProfiledScenarioName(typ.ScenarioClaudeCode, profile.ID)
-	rule := cfg.GetRuleByRequestModelAndScenario("default", profiledScenario)
+	rule := cfg.GetRuleByRequestModelAndScenario("cc", profiledScenario)
 	if rule == nil {
 		t.Fatal("expected seeded profile rule")
 	}

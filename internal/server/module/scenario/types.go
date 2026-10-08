@@ -28,14 +28,17 @@ type ScenarioUpdateRequest struct {
 
 // ProfileCreateRequest represents the request to create or rename a profile
 type ProfileCreateRequest struct {
-	Name    string `json:"name" binding:"required"`
-	Unified bool   `json:"unified,omitempty"` // Optional, defaults to false (separate mode)
+	Name string `json:"name" binding:"required"`
+	// Deprecated: Claude Code model slots are switched per slot. false (the
+	// old "separate") starts with every slot on; omitted or true starts with
+	// the main rule only.
+	Unified *bool `json:"unified,omitempty"`
 }
 
 // ProfileUpdateRequest represents the request to update a profile
 type ProfileUpdateRequest struct {
 	Name    string `json:"name,omitempty"`
-	Unified *bool  `json:"unified,omitempty"` // Pointer to distinguish zero from unset; nil = no change
+	Unified *bool  `json:"unified,omitempty"` // Deprecated, ignored
 }
 
 // ProfileClaudeConfigRequest is the complete desired typed configuration for

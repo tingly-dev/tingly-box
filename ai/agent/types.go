@@ -43,10 +43,6 @@ type ApplyAgentRequest struct {
 	// Model is the model name to use (optional, prompts if empty)
 	Model string
 
-	// Unified specifies unified mode for claude-code (single config for all models)
-	// Only applicable for AgentTypeClaudeCode
-	Unified bool
-
 	// Yes skips the confirmation prompt (CLI's -y/--yes)
 	Yes bool
 

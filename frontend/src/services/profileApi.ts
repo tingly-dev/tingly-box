@@ -28,21 +28,19 @@ export const profileApi = {
         }));
     },
 
-    createProfile: async (scenario: string, name: string, unified?: boolean): Promise<any> => {
+    // A new profile starts with its main rule; model slots are switched on its page.
+    createProfile: async (scenario: string, name: string): Promise<any> => {
         return controlApi((client, headers) => client.POST('/api/v1/scenario/{scenario}/profiles', {
             headers,
             params: {path: {scenario}},
-            body: {name, unified},
+            body: {name},
         }));
     },
 
-    updateProfile: async (scenario: string, id: string, name: string, unified?: boolean): Promise<any> => {
-        const body: { name?: string; unified?: boolean } = {};
+    updateProfile: async (scenario: string, id: string, name: string): Promise<any> => {
+        const body: { name?: string } = {};
         if (name) {
             body.name = name;
-        }
-        if (unified !== undefined) {
-            body.unified = unified;
         }
         return controlApi((client, headers) => client.PUT('/api/v1/scenario/{scenario}/profiles/{id}', {
             headers,

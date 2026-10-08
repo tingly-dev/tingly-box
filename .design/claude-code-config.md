@@ -200,7 +200,7 @@ unnecessary repeated expansion work.
 
 ## 5. Rule ↔ model slot mapping
 
-The form has 5 model slots; the backend has 6 well-known built-in rules.
+The form has 6 model slots; the backend has one main rule (`cc`, the default slot) plus one well-known rule per other slot.
 The mapping between them is a **UUID convention** baked into both sides,
 not runtime discovery.
 
@@ -211,8 +211,7 @@ not runtime discovery.
 
 | Rule UUID | Initial `request_model` | Maps to env slot |
 |---|---|---|
-| `builtin:claude_code:cc` | `tingly/cc` | (unified mode — all 6 slots) |
-| `builtin:claude_code:default` | `tingly/cc-default` | `ANTHROPIC_MODEL` |
+| `builtin:claude_code:cc` | `tingly/cc` | `ANTHROPIC_MODEL` (the main rule; every slot without its own rule) |
 | `builtin:claude_code:haiku` | `tingly/cc-haiku` | `ANTHROPIC_DEFAULT_HAIKU_MODEL` |
 | `builtin:claude_code:sonnet` | `tingly/cc-sonnet` | `ANTHROPIC_DEFAULT_SONNET_MODEL` |
 | `builtin:claude_code:opus` | `tingly/cc-opus` | `ANTHROPIC_DEFAULT_OPUS_MODEL` |
@@ -237,10 +236,11 @@ the actual route topology.
 
 ### 5.2 Slots instead of modes
 
-There is no unified/separate mode any more: a slot whose rule
+There is no unified/separate mode any more: the main rule
+`builtin:claude_code:cc` is the default slot and always on; a slot whose rule
 (`builtin:claude_code:<slot>`) is active requests that rule, every other slot
-requests the main `builtin:claude_code:cc` rule. All slots on is what separate
-used to be. The backend resolves this in `agent.ClaudeCodeSlotModels`; the
+requests the main rule. All slots on is what separate used to be; the old
+`default` rule was merged into `cc` by a one-time migration. The backend resolves this in `agent.ClaudeCodeSlotModels`; the
 modal's `derivePrefsFromRules({ rules })` mirrors it by UUID lookup, never by
 array order or canonical names. See `claude-code-slot-binding.md`.
 

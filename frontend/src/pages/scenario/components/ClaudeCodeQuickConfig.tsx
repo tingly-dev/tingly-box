@@ -157,7 +157,7 @@ const FIELDS_TEXT_ZH: FieldTextMap = {
     ANTHROPIC_MODEL: {
         label: '默认模型',
         purpose: '未指定具体场景时使用的兜底模型',
-        tooltip: 'Claude Code 在没有专门路由时回退到这个模型。tb 通常映射到 tingly/cc 或 tingly/cc-default。',
+        tooltip: 'Claude Code 在没有专门路由时回退到这个模型。tb 映射到主规则 tingly/cc。',
         placeholder: 'tingly/cc',
     },
     ANTHROPIC_DEFAULT_HAIKU_MODEL: {
@@ -321,7 +321,7 @@ const FIELDS_TEXT_EN: FieldTextMap = {
     ANTHROPIC_MODEL: {
         label: 'Default model',
         purpose: 'Fallback model used when no specific slot applies',
-        tooltip: 'What Claude Code reaches for when no specialized routing matches. tb typically maps this to tingly/cc or tingly/cc-default.',
+        tooltip: 'What Claude Code reaches for when no specialized routing matches. tb maps this to the main rule, tingly/cc.',
         placeholder: 'tingly/cc',
     },
     ANTHROPIC_DEFAULT_HAIKU_MODEL: {
@@ -485,7 +485,7 @@ const FIELDS_TEXT_RU: FieldTextMap = {
     ANTHROPIC_MODEL: {
         label: 'Модель по умолчанию',
         purpose: 'Запасная модель, когда ни один специальный слот не подходит',
-        tooltip: 'К ней Claude Code обращается, если специализированная маршрутизация не сработала. В tb это обычно tingly/cc или tingly/cc-default.',
+        tooltip: 'К ней Claude Code обращается, если специализированная маршрутизация не сработала. В tb это основное правило tingly/cc.',
         placeholder: 'tingly/cc',
     },
     ANTHROPIC_DEFAULT_HAIKU_MODEL: {
@@ -834,17 +834,17 @@ interface DerivePrefsInput {
     rules: any[];
 }
 
-// The default slot is the main rule (builtin:claude_code:cc, or the legacy
-// builtin:claude_code:default when cc is off). Any other slot with an active
-// rule of its own (builtin:claude_code:<slot>) uses that rule's request model,
-// otherwise it follows the default. Mirrors the backend's ClaudeCodeSlotModels.
+// The default slot is the main rule builtin:claude_code:cc. Any other slot
+// with an active rule of its own (builtin:claude_code:<slot>) uses that rule's
+// request model, otherwise it follows the default. Mirrors the backend's
+// ClaudeCodeSlotModels.
 export const derivePrefsFromRules = ({ rules }: DerivePrefsInput): ClaudeCodePrefs => {
     const activeRule = (name: string) => rules.find((r: any) =>
         r?.uuid === `builtin:claude_code:${name}` && r.active !== false && r.request_model);
     // Rules here come straight from the API (snake_case flags); accept the
     // camelCase shape too in case a converted rule object is passed in.
     const context1MOf = (rule: any): boolean => !!(rule?.flags?.context_1m || rule?.flags?.context1m);
-    const main = activeRule('cc') ?? activeRule('default');
+    const main = activeRule('cc');
     const slotRule = (slot: string) => (slot === 'default' ? main : activeRule(slot) ?? main);
     const modelFor = (slot: string): string => {
         const rule = slotRule(slot);

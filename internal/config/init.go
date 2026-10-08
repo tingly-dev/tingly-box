@@ -47,7 +47,6 @@ func init() {
 		ccRule(RuleUUIDCCHaiku, "tingly/cc-haiku", "Claude Code - Haiku mode The model to use for haiku , or background functionality", false),
 		ccRule(RuleUUIDCCSonnet, "tingly/cc-sonnet", "Claude Code - Sonnet model - model to use for sonnet , or for opusplan when Plan Mode is not active.", false),
 		ccRule(RuleUUIDCCOpus, "tingly/cc-opus", "Claude Code - Opus model - to use for opus , or for opusplan when Plan Mode is active.", false),
-		ccRule(RuleUUIDCCDefault, "tingly/cc-default", "Claude Code - Default model - for general task", false),
 		ccRule(RuleUUIDCCSubagent, "tingly/cc-subagent", "Claude Code - Subagent model - model to use for subagents", false),
 		ccRule(RuleUUIDCCFable, "tingly/cc-fable", "Claude Code - Fable model - model to use for the fable alias", false),
 		{

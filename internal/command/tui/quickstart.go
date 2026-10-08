@@ -45,7 +45,6 @@ type quickstartState struct {
 
 	// Apply-agent sub-flow
 	selectedAgents      []agent.AgentType
-	ccUnified           bool
 	ccInstallStatusLine bool
 	agentResults        []*agent.ApplyAgentResult
 }
@@ -531,8 +530,7 @@ func qsRules(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 	}{
 		{serverconfig.RuleUUIDOpenAI, "OpenAI scenario"},
 		{serverconfig.RuleUIDAnthropic, "Anthropic scenario"},
-		{serverconfig.RuleUUIDCC, "Claude Code · unified"},
-		{serverconfig.RuleUUIDCCDefault, "Claude Code · default"},
+		{serverconfig.RuleUUIDCC, "Claude Code · default"},
 		{serverconfig.RuleUUIDCCHaiku, "Claude Code · haiku"},
 		{serverconfig.RuleUUIDCCOpus, "Claude Code · opus"},
 		{serverconfig.RuleUUIDCCSonnet, "Claude Code · sonnet"},
@@ -688,22 +686,6 @@ func qsAgent(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 	hasClaudeCode := slices.Contains(s.selectedAgents, agent.AgentTypeClaudeCode)
 
 	if hasClaudeCode {
-		uni, err := Confirm("Use unified mode for Claude Code? (single config for all models)", ConfirmOptions{
-			Header:     ctx.Header,
-			DefaultYes: true,
-			CanGoBack:  true,
-		})
-		if err != nil {
-			return s, StepCancel, err
-		}
-		if uni.IsBack() {
-			return s, StepBack, nil
-		}
-		if uni.IsCancel() {
-			return s, StepCancel, nil
-		}
-		s.ccUnified = uni.Value
-
 		sl, err := Confirm("Install Claude Code status line script?", ConfirmOptions{
 			Header:     ctx.Header,
 			DefaultYes: false,
@@ -727,7 +709,6 @@ func qsAgent(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 			AgentType:         t,
 			Provider:          s.provider.UUID,
 			Model:             s.model,
-			Unified:           s.ccUnified,
 			InstallStatusLine: s.ccInstallStatusLine,
 			Yes:               true,
 		}

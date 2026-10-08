@@ -97,15 +97,15 @@ func TestProfileScenarioFlagWriteInheritsBaseConfig(t *testing.T) {
 	base := typ.ScenarioClaudeCode
 	profile := typ.RuleScenario("claude_code:p1")
 
-	// Base scenario is switched to separate mode.
-	if err := cfg.SetScenarioFlag(base, constant.FlagSeparate, true); err != nil {
-		t.Fatalf("SetScenarioFlag(base, separate) error: %v", err)
+	// Base scenario turns an extension on.
+	if err := cfg.SetScenarioFlag(base, constant.ExtensionGuardrails, true); err != nil {
+		t.Fatalf("SetScenarioFlag(base, guardrails) error: %v", err)
 	}
 
 	// Sanity: before any profile-local write, the profile reads through to
 	// base via scenarioConfigLocked's fallback.
-	if v := cfg.GetScenarioFlag(profile, constant.FlagSeparate); !v {
-		t.Fatalf("expected profile to inherit base separate=true via fallback before any profile write, got false")
+	if v := cfg.GetScenarioFlag(profile, constant.ExtensionGuardrails); !v {
+		t.Fatalf("expected profile to inherit base guardrails=true via fallback before any profile write, got false")
 	}
 
 	// Writing an unrelated flag on the profile (e.g. toggling Skip Usage
@@ -115,8 +115,8 @@ func TestProfileScenarioFlagWriteInheritsBaseConfig(t *testing.T) {
 		t.Fatalf("SetScenarioFlag(profile, skip_usage) error: %v", err)
 	}
 
-	if v := cfg.GetScenarioFlag(profile, constant.FlagSeparate); !v {
-		t.Errorf("profile lost inherited separate=true after an unrelated profile-local flag write")
+	if v := cfg.GetScenarioFlag(profile, constant.ExtensionGuardrails); !v {
+		t.Errorf("profile lost inherited guardrails=true after an unrelated profile-local flag write")
 	}
 	if v := cfg.GetScenarioFlag(profile, constant.FlagSkipUsage); !v {
 		t.Errorf("profile-local skip_usage write did not persist")

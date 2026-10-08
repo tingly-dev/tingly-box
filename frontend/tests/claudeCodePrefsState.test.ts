@@ -101,7 +101,7 @@ test('every slot rule on resolves each custom request model by its UUID', () => 
     const prefs = derivePrefsFromRules({
         rules: [
             { uuid: 'builtin:claude_code:opus', request_model: 'routes/deep', active: true },
-            { uuid: 'builtin:claude_code:default', request_model: 'routes/default', active: true },
+            { uuid: 'builtin:claude_code:cc', request_model: 'routes/default', active: true },
             { uuid: 'builtin:claude_code:subagent', request_model: 'routes/agent', active: true },
             { uuid: 'builtin:claude_code:sonnet', request_model: 'routes/main', active: true },
             { uuid: 'builtin:claude_code:haiku', request_model: 'routes/fast', active: true },
@@ -113,6 +113,6 @@ test('every slot rule on resolves each custom request model by its UUID', () => 
     assert.equal(prefs.ANTHROPIC_DEFAULT_SONNET_MODEL, 'routes/main');
     assert.equal(prefs.ANTHROPIC_DEFAULT_OPUS_MODEL, 'routes/deep');
     assert.equal(prefs.CLAUDE_CODE_SUBAGENT_MODEL, 'routes/agent');
-    // No fable rule and no main rule: fable uses the default slot's rule.
+    // No fable rule: it follows the main rule.
     assert.equal(prefs.ANTHROPIC_DEFAULT_FABLE_MODEL, 'routes/default');
 });

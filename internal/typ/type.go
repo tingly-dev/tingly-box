@@ -343,9 +343,12 @@ type VisionProxyService struct {
 // Profiles allow multiple Rule + ScenarioFlags configurations per base scenario.
 // A profile is identified by a short service-generated ID (e.g. "p1", "p2").
 type ProfileMeta struct {
-	ID         string                   `json:"id" yaml:"id"`                                       // Profile ID (e.g. "p1")
-	Name       string                   `json:"name" yaml:"name"`                                   // Human-readable name (unique within base scenario)
-	Unified    bool                     `json:"unified" yaml:"unified"`                             // true=unified mode (single model), false=separate mode (individual models, default)
+	ID   string `json:"id" yaml:"id"`     // Profile ID (e.g. "p1")
+	Name string `json:"name" yaml:"name"` // Human-readable name (unique within base scenario)
+	// Deprecated: Claude Code has no unified/separate mode; its model slots
+	// are rules (see config.SetClaudeCodeSlot). Read only by the one-time
+	// migration, never written.
+	Unified    bool                     `json:"unified,omitempty" yaml:"unified,omitempty"`
 	ClaudeCode *ClaudeCodeProfileConfig `json:"claude_code,omitempty" yaml:"claude_code,omitempty"` // Persistent overrides for generated Claude Code settings.
 }
 

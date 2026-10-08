@@ -171,10 +171,10 @@ func appendNoProxy(current string, hosts ...string) string {
 	return current
 }
 
-// DefaultClaudeCodePrefs returns tb's canonical defaults for the given
-// mode. Used by the CLI harness directly and as the seed value for the
-// GUI quick-config form when no user customization exists yet.
-func DefaultClaudeCodePrefs(unified bool) ClaudeCodePrefs {
+// DefaultClaudeCodePrefs returns tb's canonical defaults. Used by the CLI
+// harness directly and as the seed value for the GUI quick-config form when
+// no user customization exists yet.
+func DefaultClaudeCodePrefs() ClaudeCodePrefs {
 	p := ClaudeCodePrefs{
 		APITimeoutMs:                         "3000000",
 		ClaudeCodeMaxOutputTokens:            "32000",
@@ -184,21 +184,13 @@ func DefaultClaudeCodePrefs(unified bool) ClaudeCodePrefs {
 		DisableErrorReporting:                "1",
 		ClaudeCodeDisableNonessentialTraffic: "1",
 	}
-	if unified {
-		p.AnthropicModel = "tingly/cc"
-		p.AnthropicDefaultHaikuModel = "tingly/cc"
-		p.AnthropicDefaultSonnetModel = "tingly/cc"
-		p.AnthropicDefaultOpusModel = "tingly/cc"
-		p.AnthropicDefaultFableModel = "tingly/cc"
-		p.ClaudeCodeSubagentModel = "tingly/cc"
-	} else {
-		p.AnthropicModel = "tingly/cc-default"
-		p.AnthropicDefaultHaikuModel = "tingly/cc-haiku"
-		p.AnthropicDefaultSonnetModel = "tingly/cc-sonnet"
-		p.AnthropicDefaultOpusModel = "tingly/cc-opus"
-		p.AnthropicDefaultFableModel = "tingly/cc-fable"
-		p.ClaudeCodeSubagentModel = "tingly/cc-subagent"
-	}
+	// Every slot on the main rule until it gets a rule of its own.
+	p.AnthropicModel = "tingly/cc"
+	p.AnthropicDefaultHaikuModel = "tingly/cc"
+	p.AnthropicDefaultSonnetModel = "tingly/cc"
+	p.AnthropicDefaultOpusModel = "tingly/cc"
+	p.AnthropicDefaultFableModel = "tingly/cc"
+	p.ClaudeCodeSubagentModel = "tingly/cc"
 	return p
 }
 

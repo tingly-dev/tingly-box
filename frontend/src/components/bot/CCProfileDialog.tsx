@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
 import {
-    Chip,
     Dialog,
     DialogContent,
     DialogTitle,
@@ -18,7 +17,6 @@ import { useTranslation } from 'react-i18next';
 import type { BotSettings } from '@/types/bot';
 import { ccProfileIdFromDefaultAgent } from '@/types/bot';
 import type { ProfileInfo } from '@/contexts/ProfileContext';
-import { fontSizes } from '@/theme/fonts';
 
 interface CCProfileDialogProps {
     open: boolean;
@@ -116,14 +114,6 @@ const CCProfileDialog: React.FC<CCProfileDialogProps> = ({
                             <ListItemText
                                 primary={p.name}
                                 secondary={`claude_code:${p.id}`}
-                            />
-                            <Chip
-                                label={p.unified
-                                    ? t('remoteAgent.ccProfile.unified', { defaultValue: 'unified' })
-                                    : t('remoteAgent.ccProfile.separate', { defaultValue: 'separate' })}
-                                size="small"
-                                variant="outlined"
-                                sx={{ height: 20, fontSize: fontSizes.micro }}
                             />
                         </ListItemButton>
                     ))}

@@ -88,11 +88,7 @@ func profileList(appManager *app.AppManager) error {
 
 	fmt.Println("Claude Code profiles:")
 	for _, p := range profiles {
-		mode := "separate"
-		if p.Unified {
-			mode = "unified"
-		}
-		fmt.Printf("  %s  %-20s %s\n", p.ID, p.Name, mode)
+		fmt.Printf("  %s  %s\n", p.ID, p.Name)
 	}
 	return nil
 }
@@ -127,14 +123,8 @@ func profileShow(appManager *app.AppManager, nameOrID string) error {
 		}
 	}
 
-	mode := "separate"
-	if result.Profile.Unified {
-		mode = "unified"
-	}
-
 	fmt.Printf("Profile: %s (%s)\n", result.Profile.ID, result.Profile.Name)
 	fmt.Printf("  Scenario: %s\n", result.Scenario)
-	fmt.Printf("  Mode:     %s\n", mode)
 	fmt.Println("  Rules:")
 
 	if len(result.Rules) == 0 {

@@ -87,29 +87,10 @@ func (c *Config) UpdateClaudeCodeProfileConfig(baseScenario typ.RuleScenario, pr
 	return fmt.Errorf("profile '%s' not found in scenario '%s'", profileID, baseScenario)
 }
 
-// newCCProfileRules builds fresh rules for a claude_code profile.
-// unified=true → one rule "cc"; unified=false → five rules (default/haiku/sonnet/opus/subagent).
-// Rules are empty (no services, no smart routing) for users to configure.
-// UUIDs follow the modern built-in convention "builtin:<scenario>:<model>"
-// (e.g. "builtin:claude_code:p1:haiku"), so profile rules stay addressable by
-// a deterministic identity just like the main scenario's built-ins.
-func newCCProfileRules(profiledScenario typ.RuleScenario, unified bool) []typ.Rule {
-	if unified {
-		return []typ.Rule{
-			newCCProfileRule(profiledScenario, "cc", "Claude Code profile - unified mode"),
-		}
-	}
-	return []typ.Rule{
-		newCCProfileRule(profiledScenario, "default", "Claude Code profile - default model"),
-		newCCProfileRule(profiledScenario, "haiku", "Claude Code profile - haiku model"),
-		newCCProfileRule(profiledScenario, "sonnet", "Claude Code profile - sonnet model"),
-		newCCProfileRule(profiledScenario, "opus", "Claude Code profile - opus model"),
-		newCCProfileRule(profiledScenario, "subagent", "Claude Code profile - subagent model"),
-		newCCProfileRule(profiledScenario, "fable", "Claude Code profile - fable model"),
-	}
-}
-
-// newCCProfileRule builds one empty, active claude_code profile rule.
+// newCCProfileRule builds one empty, active claude_code profile rule. UUIDs
+// follow the modern built-in convention "builtin:<scenario>:<model>" (e.g.
+// "builtin:claude_code:p1:haiku"), so profile rules stay addressable by a
+// deterministic identity just like the main scenario's built-ins.
 func newCCProfileRule(profiledScenario typ.RuleScenario, requestModel, description string) typ.Rule {
 	return typ.Rule{
 		UUID:         BuiltinRuleUUID(profiledScenario, requestModel),
@@ -130,7 +111,8 @@ func newCCProfileRule(profiledScenario typ.RuleScenario, requestModel, descripti
 }
 
 // CreateProfile adds a new profile to a base scenario. Returns the created ProfileMeta.
-// The unified parameter determines whether to use unified mode (single model) or separate mode (individual models).
+// A Claude Code profile starts with its main rule "cc"; unified=false (the
+// legacy "separate" choice) also switches every model slot on.
 func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unified bool) (typ.ProfileMeta, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -164,28 +146,28 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 	}
 
 	meta := typ.ProfileMeta{
-		ID:      typ.NextFreeNumberedID("p", existingIDs),
-		Name:    name,
-		Unified: unified,
+		ID:   typ.NextFreeNumberedID("p", existingIDs),
+		Name: name,
 	}
 
 	c.Profiles[base] = append(c.Profiles[base], meta)
 
-	// Create fresh profile rules from the DefaultRules templates. For claude_code:
-	// unified mode → one "cc" rule; separate mode → five individual model rules.
 	// Rules start with empty Services/SmartRouting so the user configures the
 	// upstream providers for the new profile explicitly.
 	profiledScenario := typ.ProfiledScenarioName(baseScenario, meta.ID)
 	if baseScenario == typ.ScenarioClaudeCode {
-		c.Rules = append(c.Rules, newCCProfileRules(profiledScenario, unified)...)
+		c.ensureCCMainRuleLocked(profiledScenario)
+		if !unified {
+			c.setAllClaudeCodeSlotsLocked(profiledScenario, true)
+		}
 	}
 
 	return meta, c.Save()
 }
 
 // UpdateProfile updates the name of an existing profile.
-// The unified parameter is accepted for API compatibility but ignored — mode is
-// fixed at creation time. To switch modes, delete and recreate the profile.
+// The unified parameter is accepted for API compatibility but ignored: model
+// slots are switched with SetClaudeCodeSlot.
 func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, name string, unified *bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -227,10 +209,6 @@ func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, 
 
 	// Update fields
 	profiles[idx].Name = name
-	// Note: unified/separate mode is intentionally not updated here.
-	// Mode is fixed at profile creation time; to switch, delete and recreate.
-	// Accepting a unified flag change here would silently diverge the stored
-	// metadata from the actual rules, which are not rebuilt by this function.
 
 	return c.Save()
 }

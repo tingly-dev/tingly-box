@@ -11,7 +11,6 @@ import {
     ListItemText,
     Popover,
     Stack,
-    Switch,
     TextField,
     Tooltip,
     Typography,
@@ -64,7 +63,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
 
     const [addProfileAnchorEl, setAddProfileAnchorEl] = useState<HTMLElement | null>(null);
     const [newProfileName, setNewProfileName] = useState('');
-    const [newProfileUnified, setNewProfileUnified] = useState(true);  // Default to unified
     const [isCreating, setIsCreating] = useState(false);
     const [updatePanelOpen, setUpdatePanelOpen] = useState(false);
     const addProfileInputRef = useRef<HTMLInputElement>(null);
@@ -77,21 +75,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
     const handleAddProfileClick = useCallback((e: React.MouseEvent<HTMLElement>) => {
         setAddProfileAnchorEl(e.currentTarget);
         setNewProfileName('');
-        setNewProfileUnified(true);  // Reset to unified when opening
         setTimeout(() => addProfileInputRef.current?.focus(), 100);
     }, []);
 
     const handleAddProfileClose = useCallback(() => {
         setAddProfileAnchorEl(null);
         setNewProfileName('');
-        setNewProfileUnified(true);  // Reset to unified when closing
     }, []);
 
     const handleCreateProfile = useCallback(async () => {
         if (!newProfileName.trim()) return;
         try {
             setIsCreating(true);
-            const result = await api.createProfile('claude_code', newProfileName.trim(), newProfileUnified);
+            const result = await api.createProfile('claude_code', newProfileName.trim());
             if (result.success) {
                 handleAddProfileClose();
                 refresh();
@@ -101,7 +97,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
         } finally {
             setIsCreating(false);
         }
-    }, [newProfileName, newProfileUnified, refresh, handleAddProfileClose]);
+    }, [newProfileName, refresh, handleAddProfileClose]);
 
     const handleAddTeamClick = useCallback((e: React.MouseEvent<HTMLElement>) => {
         setAddTeamAnchorEl(e.currentTarget);
@@ -317,32 +313,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     onKeyDown={(e) => e.key === 'Enter' && handleCreateProfile()}
                     disabled={isCreating}
                 />
-                <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{t('layout.sidebar.mode')}</Typography>
-                        <Typography variant="caption" sx={{
-                            color: "text.secondary"
-                        }}>
-                            {newProfileUnified ? t('layout.sidebar.modeUnified') : t('layout.sidebar.modeSeparate')}
-                        </Typography>
-                    </Box>
-                    <Stack direction="row" spacing={1} sx={{
-                        alignItems: "center"
-                    }}>
-                        <Typography variant="body2" sx={{
-                            color: "text.secondary"
-                        }}>{t('layout.sidebar.separate')}</Typography>
-                        <Switch
-                            size="small"
-                            checked={newProfileUnified}
-                            onChange={(e) => setNewProfileUnified(e.target.checked)}
-                            disabled={isCreating}
-                        />
-                        <Typography variant="body2" sx={{
-                            color: "text.secondary"
-                        }}>{t('layout.sidebar.unified')}</Typography>
-                    </Stack>
-                </Box>
                 <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
                     <Button size="small" onClick={handleAddProfileClose} disabled={isCreating}>{t('common.cancel')}</Button>
                     <Button size="small" variant="contained" onClick={handleCreateProfile} disabled={!newProfileName.trim() || isCreating}>

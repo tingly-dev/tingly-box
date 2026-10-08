@@ -51,10 +51,11 @@ export const useSlotRouting = (scenario: string, enabled: boolean): SlotRouting 
         void load().finally(() => setLoading(false));
     }, [enabled, load]);
 
-    // The main rule (cc, or default when cc is off) leads.
-    const mains = [slotRuleUuid(scenario, 'cc'), slotRuleUuid(scenario, 'default')];
-    const rank = (r: any) => (mains.includes(r.uuid) ? mains.indexOf(r.uuid) : mains.length);
-    const rules = allRules.filter(r => r.active).sort((a, b) => rank(a) - rank(b));
+    // The main rule leads.
+    const mainUuid = slotRuleUuid(scenario, 'cc');
+    const rules = allRules
+        .filter(r => r.active)
+        .sort((a, b) => Number(b.uuid === mainUuid) - Number(a.uuid === mainUuid));
 
     // The rules card edits the active subset; merge its changes back.
     const setRules = useCallback((next: any[]) => {
