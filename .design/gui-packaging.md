@@ -2,10 +2,13 @@
 
 What the Wails GUI (`gui/wails3`) ships as, per platform, and why. Built by
 `.github/workflows/release-gui.yml`, a pipeline independent of the CLI's
-(`release-cli.yml`). `release.yml` is only the entry point and starts the two in
-parallel; a tag push runs the CLI only, and the GUI is opt-in (dispatch `release.yml`
-with `build_gui`, or dispatch `release-gui.yml` with a tag, before or after the
-CLI release). Whichever pipeline finishes first creates the GitHub release
+(`release-cli.yml`). `release.yml` is the entry point: a tag push builds the web
+UI once (`build-frontend.yml`, artifact `frontend-dist`), runs the harness once,
+and then starts both pipelines in parallel, gated on that harness. The GUI
+runners take the shared frontend as is (`FRONTEND_PREBUILT=true`, see
+`build/Taskfile.yml`), so none of them needs Node. To redo just the GUI,
+dispatch `release-gui.yml` with a tag (before or after the CLI release); run
+alone it builds its own frontend and skips the harness. Whichever pipeline finishes first creates the GitHub release
 (`.github/actions/ensure-release`); the other attaches to it. The GUI pipeline
 also dispatches its own npm publish (`npm.yml`, `publish_gui`, pending approval).
 

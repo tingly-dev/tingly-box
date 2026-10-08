@@ -1,13 +1,16 @@
 name: Release CLI
 
-# The CLI half of a release: build the frontend and the six CLI binaries, gate
-# on the harness, publish the GitHub release (the zips + checksums.txt), dispatch
-# the CLI npm publish (npm.yml, pending its `production` approval) and verify the
-# result (verify-release-cli.yml). The desktop GUI is a separate, independent
-# pipeline (release-gui.yml); release.yml runs the two in parallel.
+# The CLI half of a release: build the six CLI binaries around the shared
+# frontend build, gate on the harness, publish the GitHub release (the zips +
+# checksums.txt), dispatch the CLI npm publish (npm.yml, pending its
+# `production` approval) and verify the result (verify-release-cli.yml). The
+# desktop GUI is a separate, independent pipeline (release-gui.yml); release.yml
+# runs the two in parallel.
 #
-# Run by release.yml (tag push, or dispatch there), or dispatch it by hand with a
-# tag to redo just the CLI release.
+# Run by release.yml (tag push, or dispatch there), which builds the frontend and
+# runs the harness once for both pipelines (`orchestrated`). Dispatched by hand
+# with a tag to redo just the CLI release, it builds its own frontend and runs
+# its own harness gate.
 on:
   workflow_call:
     inputs:
@@ -15,6 +18,11 @@ on:
         description: 'Release tag (e.g., v0.20250101.0)'
         required: true
         type: string
+      orchestrated:
+        description: 'Set by release.yml: the frontend-dist artifact and the harness gate come from the caller'
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       release_tag:
@@ -27,66 +35,18 @@ permissions:
 
 env:
   GO_VERSION: '1.26'
-  NODE_VERSION: '24'
 
 jobs:
-  build-frontend:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          submodules: true
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache pnpm modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pnpm-store
-            frontend/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('frontend/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
-
-      - name: Install pnpm
-        run: corepack enable
-
-      - name: Install frontend dependencies
-        run: |
-          pnpm approve-builds --all
-          pnpm install --frozen-lockfile
-        working-directory: ./frontend
-
-      - name: Run codegen
-        run: pnpm gen:api
-        working-directory: ./frontend
-
-      - name: Type check (non-blocking)
-        # Legacy type errors exist; report but don't fail the release build.
-        continue-on-error: true
-        run: |
-          pnpm typecheck || echo "::warning::TypeScript errors found (non-blocking, see step log)"
-        working-directory: ./frontend
-
-      - name: Build frontend
-        run: |
-          pnpm build && mkdir -p ../internal/web/dist && cp -R dist/* ../internal/web/dist/
-        working-directory: ./frontend
-
-      - name: Upload frontend artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: internal/web/dist/
-          retention-days: 7
+  # Only when run on its own: release.yml builds it once for both pipelines.
+  frontend:
+    name: Frontend
+    if: ${{ !inputs.orchestrated }}
+    uses: ./.github/workflows/build-frontend.yml
 
   build-cli:
-    needs: build-frontend
+    needs: frontend
+    # `frontend` is skipped when orchestrated; a skipped need would skip this too.
+    if: ${{ !failure() && !cancelled() }}
     env:
       RELEASE_TAG: ${{ inputs.release_tag }}
     runs-on: ${{ matrix.runs-on }}
@@ -131,16 +91,8 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+          # setup-go caches the module and build caches (keyed by OS/arch).
+          cache-dependency-path: '**/go.sum'
 
       - name: Download frontend artifact
         uses: actions/download-artifact@v4
@@ -166,10 +118,6 @@ jobs:
         run: |
           # Create build directory
           mkdir -p dist
-
-          # Remove dev-only files before embedding
-          rm -f internal/web/dist/stats.html
-          rm -f internal/web/dist/mockServiceWorker.js
 
           # Get build info
           VERSION="${{ env.RELEASE_TAG }}"
@@ -266,10 +214,11 @@ jobs:
           path: ./dist/tingly-box${{ matrix.exe }}
           retention-days: 7
 
-  # Gate releases on a green harness. We call the shared template directly
-  # (same definition harness-matrix.yml uses) and run the full matrix
-  # (focus=all).
+  # Gate the release on a green harness: the shared template (same definition
+  # harness-matrix.yml uses), full matrix. Only when run on its own; release.yml
+  # runs it once for both pipelines and only calls this workflow once it passed.
   harness:
+    if: ${{ !inputs.orchestrated }}
     uses: ./.github/workflows/harness-template.yml
     with:
       focus: all
@@ -277,7 +226,8 @@ jobs:
   github-release:
     needs: [build-cli, harness]
     runs-on: ubuntu-latest
-    if: needs.build-cli.result == 'success' && needs.harness.result == 'success'
+    # harness: success, or skipped because the caller already gated on it.
+    if: ${{ !failure() && !cancelled() && needs.build-cli.result == 'success' }}
     env:
       RELEASE_TAG: ${{ inputs.release_tag }}
     permissions:
@@ -339,8 +289,11 @@ jobs:
           gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber -- \
             release/*.zip release/checksums.txt
 
+  # The explicit conditions on the jobs below: a skipped ancestor (frontend,
+  # harness when orchestrated) would otherwise skip them too.
   trigger-npm-publish:
     needs: github-release
+    if: ${{ !cancelled() && needs.github-release.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -365,6 +318,7 @@ jobs:
   # as above), so call it directly. Non-blocking for the npm dispatch.
   verify-release:
     needs: github-release
+    if: ${{ !cancelled() && needs.github-release.result == 'success' }}
     uses: ./.github/workflows/verify-release-cli.yml
     with:
       tag: ${{ inputs.release_tag }}

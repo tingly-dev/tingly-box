@@ -24,14 +24,19 @@ name: Release GUI
 # "Open Anyway" (see the release notes).
 #
 # The GUI half of a release, independent of the CLI (release-cli.yml) and run in
-# parallel with it by release.yml, which only does so when asked (GUI builds are
-# off by default). Build the packages, make sure the GitHub release exists
+# parallel with it by release.yml. Build the packages, make sure the GitHub release exists
 # (whichever pipeline finishes first creates it), attach the packages, add the
 # desktop-app section to the notes, dispatch the GUI-only npm publish (pending its
 # `production` approval) and verify the result (verify-release-gui.yml).
 #
-# Run by release.yml (workflow_call), or dispatch it by hand with a release tag:
-# it works the same before, after or without the CLI release.
+# The web UI is not built here: every package embeds the same production build
+# (`frontend-dist`, build-frontend.yml), dropped into frontend/dist with
+# FRONTEND_PREBUILT=true so the Taskfile skips pnpm. No runner needs Node.
+#
+# Run by release.yml (tag push, or dispatch there), which builds that frontend
+# and runs the harness gate once for both pipelines (`orchestrated`). Or
+# dispatch it by hand with a release tag: it then builds its own frontend (no
+# harness) and works the same before, after or without the CLI release.
 
 on:
   workflow_call:
@@ -40,6 +45,11 @@ on:
         description: 'Release tag: the version baked into the binaries and the release the packages are attached to'
         required: true
         type: string
+      orchestrated:
+        description: 'Set by release.yml: the frontend-dist artifact and the harness gate come from the caller'
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       release_tag:
@@ -49,7 +59,6 @@ on:
 
 env:
   GO_VERSION: '1.26'
-  NODE_VERSION: '24'
   # Keep in lockstep with gui/wails3/go.mod and Taskfile.wails.yml's wails:check.
   WAILS_VERSION: v3.0.0-beta.26
 
@@ -57,9 +66,21 @@ permissions:
   contents: read
 
 jobs:
+  # Only when run on its own: release.yml builds it once for both pipelines.
+  frontend:
+    name: Frontend
+    if: ${{ !inputs.orchestrated }}
+    uses: ./.github/workflows/build-frontend.yml
+
   package:
     name: Package (${{ matrix.platform }}-${{ matrix.arch }})
+    needs: frontend
+    # `frontend` is skipped when orchestrated; a skipped need would skip this too.
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ${{ matrix.os }}
+    env:
+      # build/Taskfile.yml: use frontend/dist as downloaded, no pnpm.
+      FRONTEND_PREBUILT: 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -87,36 +108,18 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "* \`${{ matrix.platform }}-${{ matrix.arch }}\`: version \`${VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          # setup-go caches the module and build caches (keyed by OS/arch).
+          cache-dependency-path: '**/go.sum'
 
-      - name: Cache Go modules
-        uses: actions/cache@v4
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-gui-${{ matrix.arch }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-gui-${{ matrix.arch }}-
-            ${{ runner.os }}-go-
-
-      - name: Cache pnpm modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pnpm-store
-            frontend/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('frontend/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
+          name: frontend-dist
+          path: frontend/dist/
 
       - name: Install GTK4 / WebKitGTK 6.0 headers (Linux)
         if: matrix.platform == 'linux'
@@ -140,17 +143,6 @@ jobs:
         run: |
           go install github.com/go-task/task/v3/cmd/task@latest
           go install -tags "${WAILS_TAGS}" github.com/wailsapp/wails/v3/cmd/wails3@${WAILS_VERSION}
-
-      - name: Install frontend dependencies
-        shell: bash
-        working-directory: ./frontend
-        run: |
-          corepack enable
-          pnpm approve-builds --all
-          pnpm install --frozen-lockfile
-
-      - name: Run codegen
-        run: task codegen
 
       - name: Package (macOS)
         if: matrix.platform == 'macos'
@@ -236,6 +228,8 @@ jobs:
   publish:
     name: Publish to release ${{ inputs.release_tag }}
     needs: package
+    # Explicit: a skipped ancestor (frontend when orchestrated) would skip it.
+    if: ${{ !cancelled() && needs.package.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -321,6 +315,7 @@ jobs:
   verify:
     name: Verify GUI release ${{ inputs.release_tag }}
     needs: publish
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
     uses: ./.github/workflows/verify-release-gui.yml
     with:
       tag: ${{ inputs.release_tag }}

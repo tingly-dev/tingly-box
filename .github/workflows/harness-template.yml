@@ -6,8 +6,9 @@ name: Harness Template
 #
 #   - harness-matrix.yml : the CI trigger wrapper (push ci/**, PR-merge to
 #     main, manual dispatch). Calls this template with the chosen focus.
-#   - release-cli.yml    : gates the GitHub release on a green harness by
-#     calling this template directly.
+#   - release.yml        : gates a tag's CLI and GUI release on a green
+#     harness by calling this template directly (release-cli.yml does the same
+#     when it is dispatched on its own).
 #
 # Both callers share this matrix definition, so the leg set and the pass/fail
 # aggregation live in exactly one place. Each caller controls independently:
@@ -44,16 +45,8 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+          # setup-go caches the module and build caches.
+          cache-dependency-path: '**/go.sum'
 
       - name: Build harness
         run: go build -trimpath -ldflags="-s -w" -o harness-bin ./cli/harness

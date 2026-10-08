@@ -1,18 +1,22 @@
 name: Release
 
-# Entry point of a release. It only resolves the tag and starts the two
-# independent pipelines, in parallel:
+# Entry point of a release: a tag push (v*) releases the CLI AND the desktop
+# GUI. The shared work runs once here, then the two pipelines run in parallel:
 #
-#   release-cli.yml  frontend + CLI binaries, harness gate, GitHub release,
-#                    CLI npm publish, verify-release-cli.yml
-#   release-gui.yml  desktop packages, attach to the release, GUI npm publish,
-#                    verify-release-gui.yml
+#   frontend         build-frontend.yml: the web UI both the CLI binaries and
+#                    the GUI embed, built once (artifact `frontend-dist`)
+#   harness          harness-template.yml, full matrix: the gate for BOTH
+#                    pipelines, so a red harness publishes neither
+#   release-cli.yml  CLI binaries, GitHub release, CLI npm publish,
+#                    verify-release-cli.yml
+#   release-gui.yml  desktop packages, attached to the same release, GUI npm
+#                    publish, verify-release-gui.yml
 #
-# A tag push (v*) runs the CLI only: GUI builds are slow, unsigned and rarer, so
-# they are opt-in. Start one by dispatching this workflow with build_gui, or
-# dispatch release-gui.yml directly (any time, before or after the CLI release).
-# Either pipeline can also be dispatched alone; whichever finishes first creates
-# the GitHub release (ensure-release) and the other attaches to it.
+# Whichever pipeline finishes first creates the GitHub release (ensure-release)
+# and the other attaches to it. A dispatch here can leave one pipeline out
+# (build_cli / build_gui). To redo just one half of an existing release,
+# dispatch release-cli.yml or release-gui.yml directly: run alone they build
+# their own frontend (and the CLI its own harness gate).
 on:
   push:
     tags:
@@ -24,34 +28,55 @@ on:
         required: true
         type: string
         default: ''
-      build_gui:
-        description: 'Release the desktop GUI (release-gui.yml); off by default'
+      build_cli:
+        description: 'Release the CLI (release-cli.yml)'
         required: false
         type: boolean
-        default: false
+        default: true
+      build_gui:
+        description: 'Release the desktop GUI (release-gui.yml)'
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
 
 jobs:
+  frontend:
+    name: Frontend
+    uses: ./.github/workflows/build-frontend.yml
+
+  # Runs alongside the frontend build; both pipelines wait for it.
+  harness:
+    name: Harness
+    uses: ./.github/workflows/harness-template.yml
+    with:
+      focus: all
+
   # A called workflow's job permissions can only narrow its caller's, so the
   # write scopes the pipelines need (release assets, npm dispatch) are granted here.
-  # A tag push has no inputs: the tag is the ref name, and only the CLI runs.
+  # A tag push has no inputs: the tag is the ref name and both pipelines run.
   cli:
     name: Release CLI
+    needs: [frontend, harness]
+    if: github.event_name == 'push' || inputs.build_cli
     uses: ./.github/workflows/release-cli.yml
     permissions:
       contents: write
       actions: write
     with:
       release_tag: ${{ inputs.release_tag || github.ref_name }}
+      orchestrated: true
 
   gui:
     name: Release GUI
-    if: inputs.build_gui
+    needs: [frontend, harness]
+    if: github.event_name == 'push' || inputs.build_gui
     uses: ./.github/workflows/release-gui.yml
     permissions:
       contents: write
       actions: write
     with:
-      release_tag: ${{ inputs.release_tag }}
+      release_tag: ${{ inputs.release_tag || github.ref_name }}
+      orchestrated: true

@@ -8,7 +8,8 @@ name: Verify Compile
 #   - compile-frontend : pnpm build of frontend/
 # The three jobs are independent: the Go builds embed the committed
 # PLACEHOLDER dist, so they never wait on the frontend build. Full release
-# builds (and the release-asset checks) live in release-cli.yml / verify-release-cli.yml.
+# builds (and the release-asset checks) live in release.yml and the
+# release-*/verify-release-* workflows it calls.
 on:
   pull_request:
     # Everything except areas no build here reads (docs, CI config, the
@@ -188,23 +189,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: '24'
+      # Same install + codegen as the release build (build-frontend.yml).
+      - name: Set up frontend
+        uses: ./.github/actions/setup-frontend
 
-      - name: Install pnpm
-        run: corepack enable
-
-      - name: Install frontend dependencies
-        run: |
-          pnpm approve-builds --all
-          pnpm install --frozen-lockfile
-
-      - name: Run codegen
-        run: pnpm gen:api
-
-      # Same policy as release-cli.yml: legacy type errors exist, so report them
+      # Same policy as build-frontend.yml (the release build): legacy type errors exist, so report them
       # without failing the check.
       - name: Type check (non-blocking)
         continue-on-error: true

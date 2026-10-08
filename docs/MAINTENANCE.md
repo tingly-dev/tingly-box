@@ -25,10 +25,10 @@ Pushing to any `ci/*` branch automatically triggers the build pipeline:
 git push origin ci/your-fix-description
 ```
 
-The GitHub Actions workflow (`.github/workflows/release-cli.yml`, started by `release.yml`) will:
-1. Build the frontend (React + MUI)
-2. Generate API client from swagger.json
-3. Build CLI binaries for all platforms (linux-amd64, linux-arm64, macos-amd64, macos-arm64, windows-amd64)
+The GitHub Actions workflow (`.github/workflows/release.yml`, which runs `release-cli.yml` and `release-gui.yml`) will:
+1. Build the frontend once (React + MUI; `build-frontend.yml`), shared by the CLI and the GUI
+2. Generate API client from openapi.json
+3. Build CLI binaries for all platforms (linux-amd64, linux-arm64, macos-amd64, macos-arm64, windows-amd64, windows-arm64) and the desktop GUI packages
 4. Compress binaries with UPX
 5. Upload build artifacts
 
@@ -108,19 +108,21 @@ All binaries are:
 - Stripped of symbols (`-s -w` ldflags)
 - Compressed with UPX using LZMA for maximum compression
 
-### GUI Builds (Optional)
+### GUI Builds
 
 The GUI is its own pipeline (`release-gui.yml`), independent of the CLI's
-(`release-cli.yml`) and off by default: a tag push releases the CLI only.
+(`release-cli.yml`). A tag push releases both: `release.yml` builds the frontend
+once (shared by the CLI binaries and the GUI packages), runs the harness once as
+the gate for both, then runs the two pipelines in parallel.
 
-- **With a release**: dispatch `release.yml` with `build_gui=true`; the CLI and GUI
-  pipelines run in parallel.
+- **With a release**: push the tag, or dispatch `release.yml` (`build_cli` /
+  `build_gui` both default on; turn one off to leave that half out).
 - **Alone, any time**: Actions → "Release GUI" → Run workflow with
-  `release_tag=<tag>`. It builds all platforms, creates the release if the CLI
-  one is not there yet, attaches the packages (replacing same-named assets) plus
-  `checksums-gui.txt`, then dispatches `npm.yml` for the GUI package only
-  (`publish_gui=true`, waits for `production` approval) and verifies the result.
-  No CLI build or harness.
+  `release_tag=<tag>`. It builds its own frontend and all platforms, creates the
+  release if the CLI one is not there yet, attaches the packages (replacing
+  same-named assets) plus `checksums-gui.txt`, then dispatches `npm.yml` for the
+  GUI package only (`publish_gui=true`, waits for `production` approval) and
+  verifies the result. No CLI build or harness.
 - **npm, on its own**: `npm.yml` with `publish_gui=true`, `publish_cli=false`,
   `build_docker=false` publishes only `tingly-box-gui` (it builds the per-platform
   packages `@tingly-dev/tingly-box-gui-{darwin-arm64,win32-x64,linux-x64,linux-arm64}` from the GUI zips
@@ -195,8 +197,11 @@ Release is created, with `publish_cli=true`, `publish_gui=false`,
 `production` environment approval gate — approving it is the only manual step
 left. (The explicit dispatch is needed because releases created with the
 workflow's `GITHUB_TOKEN` do not fire the `release: published` trigger.)
+The GUI pipeline (`release-gui.yml`) dispatches a second, GUI-only run
+(`publish_gui=true`) once its packages are attached, so a tag push asks for two
+approvals.
 
-Run it manually only to re-publish, to publish the GUI package, or to override the defaults:
+Run it manually only to re-publish or to override the defaults:
 
 ### Steps to Publish NPX Packages Manually
 

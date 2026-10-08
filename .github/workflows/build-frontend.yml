@@ -1,0 +1,51 @@
+name: Build Frontend
+
+# The web UI, built ONCE per release and shared: the CLI binaries and the
+# desktop GUI embed the very same production build (internal/web/dist; the page
+# picks its host bridge at runtime, see build/Taskfile.yml's build:frontend),
+# so there is nothing platform-specific to rebuild on each runner.
+#
+# Uploads the `frontend-dist` artifact: the contents of frontend/dist, minus the
+# dev-only files that must not be embedded.
+#
+#   release.yml     calls this once and hands the artifact to both pipelines.
+#   release-cli.yml / release-gui.yml call it themselves only when dispatched
+#                   on their own (no caller to provide it).
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up frontend
+        uses: ./.github/actions/setup-frontend
+
+      - name: Type check (non-blocking)
+        # Legacy type errors exist; report but don't fail the release build.
+        continue-on-error: true
+        working-directory: ./frontend
+        run: |
+          pnpm typecheck || echo "::warning::TypeScript errors found (non-blocking, see step log)"
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: |
+          pnpm build
+          # Dev-only files: never embed them in a release binary.
+          rm -f dist/stats.html dist/mockServiceWorker.js
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          if-no-files-found: error
+          retention-days: 7

@@ -24,10 +24,11 @@ tasks:
     generates:
       - node_modules
     preconditions:
-      - sh: pnpm --version
+      - sh: '{{if eq .FRONTEND_PREBUILT "true"}}true{{else}}pnpm --version{{end}}'
         msg: "pnpm not found. Install it via: npm install -g pnpm"
     cmds:
-      - pnpm install
+      # FRONTEND_PREBUILT: see build:frontend:dist.
+      - '{{if eq .FRONTEND_PREBUILT "true"}}true{{else}}pnpm install{{end}}'
 
   build:frontend:
     label: build:frontend (PRODUCTION={{.PRODUCTION}})
@@ -71,7 +72,11 @@ tasks:
     deps:
       - task: install:frontend:deps
     cmds:
-      - pnpm run {{.BUILD_COMMAND}}
+      # FRONTEND_PREBUILT=true (env or var): frontend/dist already holds the
+      # build, e.g. the release's shared `frontend-dist` artifact
+      # (.github/workflows/build-frontend.yml), so neither Node nor pnpm is
+      # needed and only the copy in build:frontend runs.
+      - '{{if eq .FRONTEND_PREBUILT "true"}}test -f dist/index.html || { echo "FRONTEND_PREBUILT=true but frontend/dist/index.html is missing"; exit 1; }{{else}}pnpm run {{.BUILD_COMMAND}}{{end}}'
     env:
       PRODUCTION: '{{.PRODUCTION | default "false"}}'
     vars:
