@@ -716,6 +716,7 @@ func contentShapeCases() []contentShapeCase {
 	}
 	cases = append(cases, reasoningEffortToChatCases()...)
 	cases = append(cases, thinkingAcrossProtocolCases()...)
+	cases = append(cases, anthropicThinkingPassthroughCases()...)
 	return append(cases, outputLimitCases()...)
 }
 
@@ -905,4 +906,60 @@ func thinkingAcrossProtocolCases() []contentShapeCase {
 				toolLoop(), thinkingType, "disabled")
 		}},
 	}
+}
+
+// anthropicThinkingPassthroughCases pin that an Anthropic client's own
+// thinking reaches a third-party Anthropic provider as sent, even on a
+// tool-loop turn whose last assistant message has no thinking block. The
+// vendor stage's thinking guard is for gateway-produced thinking only
+// (transform.reconcileThinking): applied to a client's own request it flipped
+// thinking between enabled and disabled from one request to the next of a
+// conversation, and each flip invalidated the provider's prompt cache.
+func anthropicThinkingPassthroughCases() []contentShapeCase {
+	thinkingType := func(body map[string]any) (string, bool) {
+		t, _ := body["thinking"].(map[string]any)
+		v, ok := t["type"].(string)
+		return v, ok
+	}
+	toolLoop := func() map[string]any {
+		return map[string]any{
+			"max_tokens":  32000,
+			"temperature": 0.6,
+			"thinking":    map[string]any{"type": "enabled", "budget_tokens": 4096},
+			"tools": []map[string]any{{
+				"name": "shell", "input_schema": map[string]any{"type": "object"},
+			}},
+			"messages": []map[string]any{
+				{"role": "user", "content": "list files"},
+				{"role": "assistant", "content": []map[string]any{
+					{"type": "text", "text": "ok"},
+					{"type": "tool_use", "id": "toolu_1", "name": "shell", "input": map[string]any{"cmd": "ls"}},
+				}},
+				{"role": "user", "content": []map[string]any{
+					{"type": "tool_result", "tool_use_id": "toolu_1", "content": "a.txt"},
+				}},
+			},
+		}
+	}
+	temperature := func(body map[string]any) (string, bool) {
+		v, ok := body["temperature"].(float64)
+		return fmt.Sprintf("%.1f", v), ok
+	}
+	var cases []contentShapeCase
+	for _, source := range []protocol.APIType{protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta} {
+		source := source
+		prefix := "anthropic_v1_to_anthropic/"
+		if source == protocol.TypeAnthropicBeta {
+			prefix = "anthropic_beta_to_anthropic/"
+		}
+		cases = append(cases,
+			contentShapeCase{name: prefix + "tool_loop_turn_keeps_client_thinking", run: func(t flagTB, env *TestEnv) {
+				assertUpstreamText(t, env, source, source, EndpointAnthropic, toolLoop(), thinkingType, "enabled")
+			}},
+			contentShapeCase{name: prefix + "tool_loop_turn_keeps_client_temperature", run: func(t flagTB, env *TestEnv) {
+				assertUpstreamText(t, env, source, source, EndpointAnthropic, toolLoop(), temperature, "0.6")
+			}},
+		)
+	}
+	return cases
 }

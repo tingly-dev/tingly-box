@@ -35,6 +35,7 @@ func (t *RuleThinkingTransform) Apply(ctx *TransformContext) error {
 	if err := ops.ApplyThinkingEffort(ctx.Request, t.Effort); err != nil {
 		return err
 	}
+	ctx.ThinkingFromRule = true
 	t.syncConfig(ctx)
 	return nil
 }

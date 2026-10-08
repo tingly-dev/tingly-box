@@ -147,6 +147,13 @@ type TransformContext struct {
 	// present in the request, so tingly-box must not inject or bridge a second advisor.
 	HasNativeAdvisor bool
 
+	// ThinkingFromRule is set by RuleThinkingTransform once a rule's
+	// thinking_effort rewrote the request's thinking. The vendor stage reads
+	// it to tell gateway-produced thinking (which it must reconcile with the
+	// rest of the request) from an Anthropic client's own thinking (which is
+	// sent as is, so the prompt-cache prefix the client built stays intact).
+	ThinkingFromRule bool
+
 	// OriginalRequest stores the original request before any transformations
 	OriginalRequest interface{}
 

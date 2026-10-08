@@ -177,10 +177,13 @@ func ApplyAnthropicBetaModelTransform(req *anthropic.BetaMessageNewParams, model
 }
 
 // ReconcileV1ThinkingWithRequest makes the request's thinking legal on the
-// Anthropic wire given the rest of the request. It runs on every
-// Anthropic-shaped target, before model-specific thinking reconciliation,
-// because thinking can arrive from places that never saw those other fields
-// (an OpenAI client's effort, a rule level):
+// Anthropic wire given the rest of the request. The vendor stage runs it on
+// gateway-produced thinking (transform.reconcileThinking), before
+// model-specific thinking reconciliation, because such thinking arrives from
+// places that never saw those other fields (an OpenAI client's effort, a rule
+// level). An Anthropic client's own thinking on a third-party provider is not
+// reconciled: rewriting it flips thinking between the requests of one
+// conversation and invalidates the provider's prompt cache.
 //   - a tool-use turn with no thinking block turns budget thinking off
 //     (DisableV1ThinkingForUnsignedToolTurn);
 //   - forced tool use (tool_choice any / tool) turns thinking off, since
