@@ -479,9 +479,9 @@ func runCachePrefixChecks(t flagTB, r cachePrefixRun) {
 	}
 
 	// Rotation: the same history, with the client's breakpoint parked on the
-	// last cacheable block and then on the one before it — what happens
-	// naturally as a client's fixed pool of breakpoints rolls forward.
-	r.send(t, cachePrefixTurns, blocks-1, cachePrefixSessionID)
+	// last cacheable block (the repeat sends above) and then on the one
+	// before it — what happens naturally as a client's fixed pool of
+	// breakpoints rolls forward.
 	rotationBaseline := r.capture(t, "/rotation")
 	if r.client.rotates {
 		for _, at := range []int{blocks - 2, 0, -1} {

@@ -89,6 +89,7 @@ func ConvertOpenAIResponsesToAnthropicBetaRequest(
 		}
 	}
 
+	reconcileGatewayThinking(anthropicParams)
 	return anthropicParams
 }
 

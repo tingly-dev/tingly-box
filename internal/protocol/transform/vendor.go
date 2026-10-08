@@ -6,6 +6,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
+	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
 )
 
 // VendorTransform applies provider-specific request adjustments. Per-shape
@@ -80,41 +81,21 @@ func isClaudeCodeBackend(ctx *TransformContext, host string) bool {
 	return ctx != nil && ctx.Provider != nil && ctx.Provider.IsClaudeCodeProvider()
 }
 
-// reconcileThinking reports whether the vendor stage reconciles the request's
-// thinking with the rest of the request (ops.Reconcile*ThinkingWithRequest).
-//
-// It does for a Claude Code backend, and for thinking the gateway produced
-// from an OpenAI client's reasoning effort: that history carries no thinking
-// blocks, so a tool-use turn needs thinking turned off or Anthropic rejects
-// it.
-//
-// It does not for an Anthropic client on any other provider: the client owns
-// its history and its request is sent as it came. Reconciling there flipped
-// thinking between enabled and disabled from one request to the next
-// whenever the provider's model had answered a tool call without a leading
-// thinking block, and every flip invalidated the provider's prompt cache for
-// the whole conversation. A rule's thinking_effort does not change who owns
-// the history, so it does not change this.
-func reconcileThinking(ctx *TransformContext, claudeCode bool) bool {
-	if claudeCode || ctx == nil {
-		return true
-	}
-	return ctx.SourceAPI != protocol.TypeAnthropicV1 && ctx.SourceAPI != protocol.TypeAnthropicBeta
-}
-
 func (t *VendorTransform) applyAnthropicV1(ctx *TransformContext, req *anthropic.MessageNewParams, providerURL string) *anthropic.MessageNewParams {
 	if req.Model == "" {
 		return req
 	}
 	host, _ := ops.SplitProviderHostPath(providerURL)
-	claudeCode := isClaudeCodeBackend(ctx, host)
-	// Wire rules for gateway-produced thinking, before model-specific
-	// thinking reconciliation. See reconcileThinking.
-	if reconcileThinking(ctx, claudeCode) {
-		ops.ReconcileV1ThinkingWithRequest(req)
-	}
 	switch {
-	case claudeCode:
+	case isClaudeCodeBackend(ctx, host):
+		// Anthropic's wire rules for thinking, before model-specific thinking
+		// reconciliation. Only here: a third-party Anthropic-compatible
+		// provider gets the request as the client sent it, since rewriting
+		// it (thinking on, then off on the next tool turn) invalidated the
+		// provider's prompt cache for the whole conversation. Thinking the
+		// gateway produces from an OpenAI client's effort is reconciled
+		// where it is produced (request.applyOpenAIEffortAsThinking).
+		thinking.ReconcileV1WithRequest(req)
 		req = ops.ApplyAnthropicV1ModelTransform(req, string(req.Model))
 		req = ops.ApplyAnthropicV1MetadataTransform(req, ctx.configExtraForMetadata())
 	case host == "api.deepseek.com":
@@ -129,14 +110,16 @@ func (t *VendorTransform) applyAnthropicBeta(ctx *TransformContext, req *anthrop
 		return req
 	}
 	host, _ := ops.SplitProviderHostPath(providerURL)
-	claudeCode := isClaudeCodeBackend(ctx, host)
-	// Wire rules for gateway-produced thinking, before model-specific
-	// thinking reconciliation. See reconcileThinking.
-	if reconcileThinking(ctx, claudeCode) {
-		ops.ReconcileBetaThinkingWithRequest(req)
-	}
 	switch {
-	case claudeCode:
+	case isClaudeCodeBackend(ctx, host):
+		// Anthropic's wire rules for thinking, before model-specific thinking
+		// reconciliation. Only here: a third-party Anthropic-compatible
+		// provider gets the request as the client sent it, since rewriting
+		// it (thinking on, then off on the next tool turn) invalidated the
+		// provider's prompt cache for the whole conversation. Thinking the
+		// gateway produces from an OpenAI client's effort is reconciled
+		// where it is produced (request.applyOpenAIEffortAsThinking).
+		thinking.ReconcileBetaWithRequest(req)
 		req = ops.ApplyAnthropicBetaModelTransform(req, string(req.Model))
 		req = ops.ApplyAnthropicBetaMetadataTransform(req, ctx.configExtraForMetadata())
 	case host == "api.deepseek.com":

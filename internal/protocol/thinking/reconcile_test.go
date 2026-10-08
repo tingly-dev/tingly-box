@@ -1,4 +1,4 @@
-package ops
+package thinking
 
 import (
 	"testing"
@@ -7,11 +7,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestToolTurnWithoutThinkingTurnsBudgetThinkingOff pins the vendor-stage
-// guard (run for every Anthropic-shaped target, before model reconciliation): with budget thinking enabled, Anthropic requires the final assistant
-// message to start with a thinking block, so a tool-use turn without one (an
-// OpenAI client's history, or a rule forcing thinking_effort onto it) keeps
-// thinking off instead of failing upstream.
+// TestToolTurnWithoutThinkingTurnsBudgetThinkingOff pins the wire guard: with
+// budget thinking enabled, Anthropic requires the final assistant message to
+// start with a thinking block, so a tool-use turn without one (an OpenAI
+// client's history) keeps thinking off instead of failing upstream.
 func TestToolTurnWithoutThinkingTurnsBudgetThinkingOff(t *testing.T) {
 	toolUse := anthropic.BetaContentBlockParamUnion{OfToolUse: &anthropic.BetaToolUseBlockParam{ID: "toolu_1", Name: "shell", Input: map[string]any{}}}
 	signed := anthropic.BetaContentBlockParamUnion{OfThinking: &anthropic.BetaThinkingBlockParam{Thinking: "plan", Signature: "sig"}}
@@ -36,7 +35,7 @@ func TestToolTurnWithoutThinkingTurnsBudgetThinkingOff(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := &anthropic.BetaMessageNewParams{Model: "third-party-model", MaxTokens: 8192, Messages: tt.messages, Thinking: tt.thinking}
-			DisableBetaThinkingForUnsignedToolTurn(req)
+			DisableBetaForUnsignedToolTurn(req)
 			if got := req.Thinking.OfEnabled != nil; got != tt.wantEnabled {
 				t.Errorf("thinking enabled = %v, want %v (thinking=%+v)", got, tt.wantEnabled, req.Thinking)
 			}
@@ -61,7 +60,7 @@ func TestToolTurnWithoutThinkingTurnsBudgetThinkingOff(t *testing.T) {
 				}
 				v1.Messages = append(v1.Messages, anthropic.MessageParam{Role: anthropic.MessageParamRole(m.Role), Content: blocks})
 			}
-			DisableV1ThinkingForUnsignedToolTurn(v1)
+			DisableV1ForUnsignedToolTurn(v1)
 			if got := v1.Thinking.OfEnabled != nil; got != tt.wantEnabled {
 				t.Errorf("v1 thinking enabled = %v, want %v", got, tt.wantEnabled)
 			}
@@ -84,7 +83,7 @@ func TestReconcileThinkingWithRequest(t *testing.T) {
 		} {
 			for kind, th := range map[string]anthropic.BetaThinkingConfigParamUnion{"enabled": enabled, "adaptive": adaptive} {
 				req := &anthropic.BetaMessageNewParams{Model: "m", MaxTokens: 4096, Messages: user, Thinking: th, ToolChoice: choice}
-				ReconcileBetaThinkingWithRequest(req)
+				ReconcileBetaWithRequest(req)
 				assert.NotNil(t, req.Thinking.OfDisabled, "%s/%s", name, kind)
 			}
 		}
@@ -93,14 +92,14 @@ func TestReconcileThinkingWithRequest(t *testing.T) {
 	t.Run("auto tool choice keeps thinking", func(t *testing.T) {
 		req := &anthropic.BetaMessageNewParams{Model: "m", MaxTokens: 4096, Messages: user, Thinking: enabled,
 			ToolChoice: anthropic.BetaToolChoiceUnionParam{OfAuto: &anthropic.BetaToolChoiceAutoParam{}}}
-		ReconcileBetaThinkingWithRequest(req)
+		ReconcileBetaWithRequest(req)
 		assert.NotNil(t, req.Thinking.OfEnabled)
 	})
 
 	t.Run("sampling made legal", func(t *testing.T) {
 		req := &anthropic.BetaMessageNewParams{Model: "m", MaxTokens: 4096, Messages: user, Thinking: enabled,
 			Temperature: anthropic.Float(0.2), TopK: anthropic.Int(40), TopP: anthropic.Float(0.5)}
-		ReconcileBetaThinkingWithRequest(req)
+		ReconcileBetaWithRequest(req)
 		assert.False(t, req.Temperature.Valid())
 		assert.False(t, req.TopK.Valid())
 		assert.Equal(t, 0.95, req.TopP.Value)
@@ -109,7 +108,7 @@ func TestReconcileThinkingWithRequest(t *testing.T) {
 			Messages:    []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("hi"))},
 			Thinking:    anthropic.ThinkingConfigParamOfEnabled(2048),
 			Temperature: anthropic.Float(1), TopP: anthropic.Float(0.98)}
-		ReconcileV1ThinkingWithRequest(v1)
+		ReconcileV1WithRequest(v1)
 		assert.Equal(t, 1.0, v1.Temperature.Value, "temperature 1 is allowed")
 		assert.Equal(t, 0.98, v1.TopP.Value, "top_p in range is kept")
 	})
@@ -117,7 +116,7 @@ func TestReconcileThinkingWithRequest(t *testing.T) {
 	t.Run("thinking off leaves the request alone", func(t *testing.T) {
 		req := &anthropic.BetaMessageNewParams{Model: "m", MaxTokens: 4096, Messages: user,
 			Temperature: anthropic.Float(0.2), ToolChoice: anthropic.BetaToolChoiceParamOfTool("x")}
-		ReconcileBetaThinkingWithRequest(req)
+		ReconcileBetaWithRequest(req)
 		assert.Equal(t, 0.2, req.Temperature.Value)
 		assert.Nil(t, req.Thinking.OfDisabled)
 	})

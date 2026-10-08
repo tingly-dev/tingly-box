@@ -3,6 +3,7 @@ package protocoltest
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -867,11 +868,7 @@ func outputLimitCases() []contentShapeCase {
 // budget thinking on, Anthropic requires the final assistant message to start
 // with a signed thinking block, which an OpenAI client never has.
 func thinkingAcrossProtocolCases() []contentShapeCase {
-	thinkingType := func(body map[string]any) (string, bool) {
-		t, _ := body["thinking"].(map[string]any)
-		v, ok := t["type"].(string)
-		return v, ok
-	}
+	thinkingType := anthropicThinkingType
 	firstTurn := func() map[string]any {
 		return map[string]any{
 			"max_tokens":       32000,
@@ -916,11 +913,6 @@ func thinkingAcrossProtocolCases() []contentShapeCase {
 // thinking between enabled and disabled from one request to the next of a
 // conversation, and each flip invalidated the provider's prompt cache.
 func anthropicThinkingPassthroughCases() []contentShapeCase {
-	thinkingType := func(body map[string]any) (string, bool) {
-		t, _ := body["thinking"].(map[string]any)
-		v, ok := t["type"].(string)
-		return v, ok
-	}
 	toolLoop := func() map[string]any {
 		return map[string]any{
 			"max_tokens":  32000,
@@ -941,25 +933,43 @@ func anthropicThinkingPassthroughCases() []contentShapeCase {
 			},
 		}
 	}
-	temperature := func(body map[string]any) (string, bool) {
-		v, ok := body["temperature"].(float64)
-		return fmt.Sprintf("%.1f", v), ok
+	checks := []struct {
+		name    string
+		extract func(map[string]any) (string, bool)
+		want    string
+	}{
+		{"tool_loop_turn_keeps_client_thinking", anthropicThinkingType, "enabled"},
+		{"tool_loop_turn_keeps_client_temperature", numberText("temperature"), "0.6"},
 	}
 	var cases []contentShapeCase
-	for _, source := range []protocol.APIType{protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta} {
-		source := source
-		prefix := "anthropic_v1_to_anthropic/"
-		if source == protocol.TypeAnthropicBeta {
-			prefix = "anthropic_beta_to_anthropic/"
+	for _, route := range []struct {
+		source protocol.APIType
+		prefix string
+	}{
+		{protocol.TypeAnthropicV1, "anthropic_v1_to_anthropic/"},
+		{protocol.TypeAnthropicBeta, "anthropic_beta_to_anthropic/"},
+	} {
+		for _, check := range checks {
+			cases = append(cases, contentShapeCase{name: route.prefix + check.name, run: func(t flagTB, env *TestEnv) {
+				assertUpstreamText(t, env, route.source, route.source, EndpointAnthropic, toolLoop(), check.extract, check.want)
+			}})
 		}
-		cases = append(cases,
-			contentShapeCase{name: prefix + "tool_loop_turn_keeps_client_thinking", run: func(t flagTB, env *TestEnv) {
-				assertUpstreamText(t, env, source, source, EndpointAnthropic, toolLoop(), thinkingType, "enabled")
-			}},
-			contentShapeCase{name: prefix + "tool_loop_turn_keeps_client_temperature", run: func(t flagTB, env *TestEnv) {
-				assertUpstreamText(t, env, source, source, EndpointAnthropic, toolLoop(), temperature, "0.6")
-			}},
-		)
 	}
 	return cases
+}
+
+// anthropicThinkingType extracts thinking.type from a captured Anthropic
+// request body.
+func anthropicThinkingType(body map[string]any) (string, bool) {
+	v := stringField(body, "thinking", "type")
+	return v, v != ""
+}
+
+// numberText extracts a number at path from a captured request body as its
+// shortest decimal text ("0.6", "8192").
+func numberText(path ...string) func(map[string]any) (string, bool) {
+	return func(body map[string]any) (string, bool) {
+		n, ok := numberField(body, path...)
+		return strconv.FormatFloat(n, 'f', -1, 64), ok
+	}
 }
