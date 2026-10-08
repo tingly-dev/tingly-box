@@ -405,12 +405,12 @@ func printBanner(cfg BannerConfig) {
 	rows := []string{
 		titleStyle.Render("Tingly-Box") + "  " + versionStyle.Render(formatVersion(BuildVersion)),
 		"",
-		labelStyle.Render("Web UI  ") + urlStyle.Render(webUI),
+		labelStyle.Render("WebUI   ") + urlStyle.Render(webUI),
 	}
 	if cfg.GlobalConfig.HasUserToken() {
 		rows = append(rows, labelStyle.Render("Token   ")+tokenStyle.Render(cfg.GlobalConfig.GetUserToken()))
 	}
-	rows = append(rows, "", hintStyle.Render("Open the Web UI to get started"))
+	rows = append(rows, "", hintStyle.Render("Open the WebUI to get started"))
 	body := strings.Join(rows, "\n")
 
 	fmt.Println()
