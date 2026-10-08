@@ -342,12 +342,21 @@ launch_app() { # <name> <command...>
 			RC=$? ;;
 	esac
 	[ "$RC" -eq 0 ] && pass "$name: the launcher returned (exit 0)" || { fail "$name: the launcher exited $RC"; tail -6 "$LOG/launch-$name.log"; }
-	local seen=0 t code=""
-	for t in 6 12 20; do
-		sleep $(( t - seen )); seen=$t
+	local code="" i
+	# A cold start can be slow (Windows scans a freshly extracted exe before running it), so wait
+	# up to 90 s for the first answer; then it must keep serving 20 s later.
+	for i in $(seq 1 90); do
 		code="$(curl -s -m 3 -o /dev/null -w '%{http_code}' http://127.0.0.1:12580/health 2>/dev/null || true)"
-		[ -n "$code" ] && [ "$code" != "000" ] || { fail "$name: the app is not serving at +${t}s (it died, or never started)"; code=""; break; }
+		[ -n "$code" ] && [ "$code" != "000" ] && break
+		code=""; sleep 1
 	done
+	if [ -z "$code" ]; then
+		fail "$name: the app never started serving within 90 s (it died, or never started)"
+	else
+		sleep 20
+		code="$(curl -s -m 3 -o /dev/null -w '%{http_code}' http://127.0.0.1:12580/health 2>/dev/null || true)"
+		[ -n "$code" ] && [ "$code" != "000" ] || { fail "$name: the app stopped serving within 20 s of starting"; code=""; }
+	fi
 	[ -n "$code" ] && pass "$name: the app still serves 20 s after launch (it survived logging past the launcher)"
 	[ -f "$CFG/tingly-server.lock" ] && pass "$name: first launch created ~/.tingly-box" || fail "$name: no ~/.tingly-box after launch"
 	[ "$(tr -d '\r' < "$CFG/tingly-server.version" 2>/dev/null)" = "$TAG" ] \
@@ -355,6 +364,9 @@ launch_app() { # <name> <command...>
 		|| fail "$name: the running app reports '$(tr -d '\r' < "$CFG/tingly-server.version" 2>/dev/null)', not $TAG"
 	# the app's own logs, for the artifact when something above failed
 	[ -d "$CFG/log" ] && cp -R "$CFG/log" "$LOG/app-$name-log" 2>/dev/null
+	if [ -z "$code" ]; then # show why in the job log too
+		for f in "$CFG"/log/*; do [ -f "$f" ] && { echo "--- $f (tail)"; tail -15 "$f"; }; done 2>/dev/null
+	fi
 	kill_app "$MARK"
 	[ -n "$XP" ] && kill "$XP" 2>/dev/null
 	[ -n "$BUSPID" ] && kill "$BUSPID" 2>/dev/null
