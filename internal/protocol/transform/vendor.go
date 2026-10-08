@@ -71,6 +71,29 @@ func (t *VendorTransform) applyResponses(ctx *TransformContext, req *responses.R
 	return req
 }
 
+// thinkingGuardApplies reports whether the request's thinking must be made
+// legal for the Anthropic wire (ops.Reconcile*ThinkingWithRequest).
+//
+// The guard exists for thinking the gateway made, not the client: an OpenAI
+// client's history carries no thinking blocks, and a rule's thinking_effort can
+// turn thinking on over a client that had it off. An Anthropic client's own
+// request is forwarded as sent. Running the guard on it made thinking flip
+// between enabled and disabled as a tool loop progressed (it turns thinking off
+// whenever the last tool-use turn has no thinking block, which providers that
+// do not always return one produce), and a changed thinking setting invalidates
+// the provider's cached prefix.
+func thinkingGuardApplies(ctx *TransformContext) bool {
+	if ctx == nil {
+		return true
+	}
+	switch ctx.SourceAPI {
+	case protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta:
+		forced, _ := ctx.Extra[extraRuleForcedThinking].(bool)
+		return forced
+	}
+	return true
+}
+
 // isClaudeCodeBackend: Anthropic's host, or a Claude Code OAuth provider on
 // any host (a relay still needs the identity rewrite).
 func isClaudeCodeBackend(ctx *TransformContext, host string) bool {
@@ -85,9 +108,11 @@ func (t *VendorTransform) applyAnthropicV1(ctx *TransformContext, req *anthropic
 		return req
 	}
 	host, _ := ops.SplitProviderHostPath(providerURL)
-	// Wire rules for every Anthropic-shaped target, before model-specific
-	// thinking reconciliation.
-	ops.ReconcileV1ThinkingWithRequest(req)
+	// Wire rules for Anthropic-shaped targets, before model-specific thinking
+	// reconciliation. An Anthropic client's own thinking is left alone.
+	if thinkingGuardApplies(ctx) {
+		ops.ReconcileV1ThinkingWithRequest(req)
+	}
 	switch {
 	case isClaudeCodeBackend(ctx, host):
 		req = ops.ApplyAnthropicV1ModelTransform(req, string(req.Model))
@@ -104,9 +129,11 @@ func (t *VendorTransform) applyAnthropicBeta(ctx *TransformContext, req *anthrop
 		return req
 	}
 	host, _ := ops.SplitProviderHostPath(providerURL)
-	// Wire rules for every Anthropic-shaped target, before model-specific
-	// thinking reconciliation.
-	ops.ReconcileBetaThinkingWithRequest(req)
+	// Wire rules for Anthropic-shaped targets, before model-specific thinking
+	// reconciliation. An Anthropic client's own thinking is left alone.
+	if thinkingGuardApplies(ctx) {
+		ops.ReconcileBetaThinkingWithRequest(req)
+	}
 	switch {
 	case isClaudeCodeBackend(ctx, host):
 		req = ops.ApplyAnthropicBetaModelTransform(req, string(req.Model))

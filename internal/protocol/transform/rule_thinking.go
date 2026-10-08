@@ -36,8 +36,19 @@ func (t *RuleThinkingTransform) Apply(ctx *TransformContext) error {
 		return err
 	}
 	t.syncConfig(ctx)
+	// The request's thinking is now the rule's, not the client's: the vendor
+	// step's thinking guard must treat it as gateway-made (see
+	// thinkingGuardApplies).
+	if ctx.Extra == nil {
+		ctx.Extra = map[string]interface{}{}
+	}
+	ctx.Extra[extraRuleForcedThinking] = true
 	return nil
 }
+
+// extraRuleForcedThinking marks, in TransformContext.Extra, a request whose
+// thinking a rule's thinking_effort set.
+const extraRuleForcedThinking = "rule_forced_thinking"
 
 // syncConfig keeps the metadata produced by the base transform aligned with
 // the request mutation above. Vendor transforms consult this metadata after
