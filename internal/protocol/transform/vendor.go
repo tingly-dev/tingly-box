@@ -96,11 +96,6 @@ func (t *VendorTransform) applyAnthropicV1(ctx *TransformContext, req *anthropic
 		ops.SanitizeAnthropicV1ThinkingConfig(req)
 		ops.ApplyAnthropicV1DeepSeekThinkingPatch(req)
 	}
-	// Anthropic finds the previous turn's cache entry by lookback; third-party
-	// providers need its position marked (ops/anthropic_prompt_cache.go).
-	if !isClaudeCodeBackend(ctx, host) {
-		ops.AddAnthropicV1PreviousTurnBreakpoint(req)
-	}
 	return req
 }
 
@@ -119,11 +114,6 @@ func (t *VendorTransform) applyAnthropicBeta(ctx *TransformContext, req *anthrop
 	case host == "api.deepseek.com":
 		ops.SanitizeAnthropicBetaThinkingConfig(req)
 		ops.ApplyAnthropicBetaDeepSeekThinkingPatch(req)
-	}
-	// Anthropic finds the previous turn's cache entry by lookback; third-party
-	// providers need its position marked (ops/anthropic_prompt_cache.go).
-	if !isClaudeCodeBackend(ctx, host) {
-		ops.AddAnthropicBetaPreviousTurnBreakpoint(req)
 	}
 	return req
 }
