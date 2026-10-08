@@ -70,6 +70,7 @@ export default {
       "useVSCode": "VS Code",
       "useCursor": "Cursor",
       "useEmbed": "Embedding",
+      "useDecisions": "Decisions",
       "useImageGen": "Image API",
       "useTeam": "Team",
       "useCustom": "Custom",
@@ -2222,6 +2223,7 @@ export default {
     "sharingKeys": "Team 密钥",
     "modelRules": "模型规则",
     "embedModelRules": "向量模型规则",
+    "decisionsModelRules": "决策模型规则",
     "imageGenModelRules": "图像模型规则",
     "tooltip": {
       "claude_code": "命令行 AI 开发助手，可用于编码实现、测试与 git 操作",

@@ -10,13 +10,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestDecisionsEndpoint_TeamScenarioPassesTransportGate pins that
-// /tingly/team[/v1]/decisions clears the scenario transport gate (the team
+// TestDecisionsEndpoint_ScenariosPassTransportGate pins that
+// /tingly/team[/v1]/decisions (and the openai and dedicated decisions
+// scenarios) clears the scenario transport gate (the team
 // descriptor declares TransportOpenAI) for both the default team and an
 // isolated team scope ("team:<id>" derived by teamScopeMiddleware). With no
 // rules configured the request must reach rule resolution ("not configured"),
 // never the transport rejection.
-func TestDecisionsEndpoint_TeamScenarioPassesTransportGate(t *testing.T) {
+func TestDecisionsEndpoint_ScenariosPassTransportGate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	NewHandler(ProtocolHandlerDeps{}).RegisterRoutes(router, setTeamIDFromHeader)
@@ -26,6 +27,8 @@ func TestDecisionsEndpoint_TeamScenarioPassesTransportGate(t *testing.T) {
 		{name: "default team /v1", path: "/tingly/team/v1/decisions", wantErr: "not configured"},
 		{name: "default team bare", path: "/tingly/team/decisions", wantErr: "not configured"},
 		{name: "isolated team /v1", path: "/tingly/team/v1/decisions", teamID: "team-a", wantErr: "not configured"},
+		{name: "dedicated decisions scenario", path: "/tingly/decisions/v1/decisions", wantErr: "not configured"},
+		{name: "openai scenario", path: "/tingly/openai/v1/decisions", wantErr: "not configured"},
 		// Control: an anthropic-only scenario still fails closed.
 		{name: "rejected for anthropic-only scenario", path: "/tingly/claude_code/v1/decisions", wantErr: "does not support"},
 	}

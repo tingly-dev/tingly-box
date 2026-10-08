@@ -72,6 +72,7 @@ export default {
       "useVSCode": "VS Code",
       "useCursor": "Cursor",
       "useEmbed": "Эмбеддинги",
+      "useDecisions": "Решения",
       "useImageGen": "Image API",
       "useTeam": "Команда",
       "useCustom": "Свой сценарий",
@@ -2254,6 +2255,7 @@ export default {
     "sharingKeys": "Ключи команд",
     "modelRules": "Правила моделей",
     "embedModelRules": "Правила моделей эмбеддингов",
+    "decisionsModelRules": "Правила моделей решений",
     "imageGenModelRules": "Правила моделей изображений",
     "tooltip": {
       "claude_code": "CLI-агент разработки на базе ИИ: реализация, тесты и операции с Git",
@@ -2334,6 +2336,7 @@ export default {
       "openai": "Готовый эндпоинт, совместимый с OpenAI SDK.",
       "anthropic": "Готовый эндпоинт, совместимый с Anthropic SDK.",
       "embed": "Направьте запросы эмбеддингов вашему провайдеру.",
+      "decisions": "Направьте запросы решений вашему провайдеру.",
       "imagegen": "Генерация и редактирование изображений через Tingly Box.",
       "custom": "Своё название модели в запросе — универсальный сценарий на все случаи. По умолчанию скрыт.",
       "team": "Общее централизованное развёртывание моделей для всей команды."

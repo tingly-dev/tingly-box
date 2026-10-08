@@ -25,6 +25,7 @@ import {
     Shield as IconShield,
     Lock as IconLock,
     Vector as IconVector,
+    Rule as IconRule,
     Photo as IconPhoto,
     Palette as IconPalette,
     Cable as IconPlug,
@@ -180,6 +181,7 @@ export function useActivityItems(): ActivityItem[] {
             { id: 'openai', nav: { path: '/agent/openai', label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }), icon: <OpenAI size={20} /> } },
             { id: 'anthropic', nav: { path: '/agent/anthropic', label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }), icon: <Anthropic size={20} /> } },
             { id: 'embed', nav: { path: '/agent/embed', label: t('layout.nav.useEmbed', { defaultValue: 'Embedding' }), icon: <IconVector sx={{ fontSize: 20 }} /> } },
+            { id: 'decisions', nav: { path: '/agent/decisions', label: t('layout.nav.useDecisions', { defaultValue: 'Decisions' }), icon: <IconRule sx={{ fontSize: 20 }} /> } },
         ]);
 
         const scenarioChildren: NavItem[] = [];

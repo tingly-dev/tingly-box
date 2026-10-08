@@ -7,6 +7,7 @@ import {
     Extension as IconExtension,
     Photo as IconPhoto,
     Users as IconUsers,
+    Rule as IconRule,
     Vector as IconVector,
 } from '@/components/icons';
 import {
@@ -136,6 +137,14 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         descKey: 'scenarioOverview.descriptions.embed',
         path: '/agent/embed',
         icon: (size) => <IconVector sx={{ fontSize: size }} />,
+        hideable: true,
+    },
+    {
+        id: 'decisions',
+        labelKey: 'layout.nav.useDecisions',
+        descKey: 'scenarioOverview.descriptions.decisions',
+        path: '/agent/decisions',
+        icon: (size) => <IconRule sx={{ fontSize: size }} />,
         hideable: true,
     },
     {

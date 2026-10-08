@@ -25,7 +25,7 @@ const VISION_PROXY_SERVICE_KEY = 'vision_proxy_service';
 // of showing dead controls. Kept as a blacklist so any new *chat* scenario
 // automatically inherits the full plugin set. See UX principle #9 (reduce
 // visual noise) / #1 (organize around the user's real question).
-const NON_CHAT_SCENARIOS = new Set(['embed', 'imagegen']);
+const NON_CHAT_SCENARIOS = new Set(['embed', 'imagegen', 'decisions']);
 
 const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
     const baseScenario = scenario.includes(':') ? scenario.split(':')[0] : scenario;

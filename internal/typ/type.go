@@ -71,9 +71,10 @@ const (
 	ScenarioCursor        RuleScenario = "cursor"
 	ScenarioClaudeDesktop RuleScenario = "claude_desktop"
 	ScenarioSmartGuide    RuleScenario = "_smart_guide"
-	ScenarioGlobal        RuleScenario = "_global"  // Global flags that apply to all scenarios
-	ScenarioEmbed         RuleScenario = "embed"    // Embedding application scenario; only serves /embeddings
-	ScenarioImageGen      RuleScenario = "imagegen" // Image generation scenario; only serves /images/generations
+	ScenarioGlobal        RuleScenario = "_global"   // Global flags that apply to all scenarios
+	ScenarioEmbed         RuleScenario = "embed"     // Embedding application scenario; only serves /embeddings
+	ScenarioImageGen      RuleScenario = "imagegen"  // Image generation scenario; only serves /images/generations
+	ScenarioDecisions     RuleScenario = "decisions" // Decisions application scenario; only serves /decisions
 )
 
 func BuiltinScenarios() []RuleScenario {
@@ -95,6 +96,7 @@ func BuiltinScenarios() []RuleScenario {
 		ScenarioGlobal,
 		ScenarioEmbed,
 		ScenarioImageGen,
+		ScenarioDecisions,
 	}
 }
 

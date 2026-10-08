@@ -70,6 +70,7 @@ export default {
       "useVSCode": "VS Code",
       "useCursor": "Cursor",
       "useEmbed": "Embedding",
+      "useDecisions": "Decisions",
       "useImageGen": "Image API",
       "useTeam": "Team",
       "useCustom": "Custom",
@@ -2228,6 +2229,7 @@ export default {
     "sharingKeys": "Team Keys",
     "modelRules": "Model Rules",
     "embedModelRules": "Embedding Model Rules",
+    "decisionsModelRules": "Decisions Model Rules",
     "imageGenModelRules": "Image Model Rules",
     "tooltip": {
       "claude_code": "AI-powered CLI development agent for implementation, testing, and git operations",
@@ -2308,6 +2310,7 @@ export default {
       "openai": "Drop-in OpenAI-compatible SDK endpoint.",
       "anthropic": "Drop-in Anthropic-compatible SDK endpoint.",
       "embed": "Route embedding requests to your provider.",
+      "decisions": "Route decision requests to your provider.",
       "imagegen": "Route image generation and editing through Tingly Box.",
       "custom": "Bring your own request model name — a generic catch-all scenario. Hidden by default.",
       "team": "Shared central model deployment for your whole team."

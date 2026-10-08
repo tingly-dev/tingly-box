@@ -5,6 +5,12 @@
 
 ## Position
 
+> Update: a dedicated `decisions` scenario (`TransportDecisions`, decisions-only,
+> page at `/agent/decisions`) was added as a convenience entry point, like
+> `embed`. It adds no new provider style or protocol family; `openai`, `team`
+> and every other `TransportOpenAI` scenario keep serving `/decisions`
+> unchanged.
+
 OpenAI's Decisions API (announced at DevDay, 2026-09-29; limited preview) picks
 one answer from options the caller defines. Its request/response schema is not
 public. Jev (TypeSafe AI) uses the same body shape, but natively at

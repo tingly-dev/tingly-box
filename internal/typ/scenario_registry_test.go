@@ -58,6 +58,22 @@ func TestEmbedScenarioDescriptor(t *testing.T) {
 	}
 }
 
+func TestDecisionsScenarioDescriptor(t *testing.T) {
+	d, ok := GetScenarioDescriptor(ScenarioDecisions)
+	if !ok {
+		t.Fatalf("expected %q descriptor to be registered", ScenarioDecisions)
+	}
+	if !d.AllowRuleBinding || !d.AllowDirectPathUse {
+		t.Fatalf("expected decisions descriptor to allow rule binding and path use, got %+v", d)
+	}
+	if !ScenarioSupportsTransport(ScenarioDecisions, TransportDecisions) {
+		t.Fatalf("expected decisions scenario to support TransportDecisions")
+	}
+	if ScenarioSupportsTransport(ScenarioDecisions, TransportOpenAI) || ScenarioSupportsTransport(ScenarioDecisions, TransportAnthropic) {
+		t.Fatalf("decisions scenario must NOT serve chat transports")
+	}
+}
+
 func TestOpenAIScenarioSupportsBothTransports(t *testing.T) {
 	if !ScenarioSupportsTransport(ScenarioOpenAI, TransportOpenAI) {
 		t.Fatalf("openai scenario should support TransportOpenAI")

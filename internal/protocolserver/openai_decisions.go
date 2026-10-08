@@ -22,12 +22,14 @@ import (
 // handling is that the body is opaque JSON (the upstream schema is not
 // public) of which the gateway reads and rewrites just "model". Like
 // embeddings it is non-streaming, skips the chat transform chain, and is
-// reachable from any scenario that declares TransportOpenAI.
+// reachable from any scenario that declares TransportOpenAI or
+// TransportDecisions (the dedicated `decisions` scenario).
 func (ph *ProtocolHandler) HandleOpenAIDecisions(c *gin.Context) {
 	scenario := c.Param("scenario")
 	scenarioType := typ.RuleScenario(scenario)
 
-	if !IsValidRuleScenario(scenarioType) || !typ.ScenarioSupportsTransport(scenarioType, typ.TransportOpenAI) {
+	if !IsValidRuleScenario(scenarioType) || (!typ.ScenarioSupportsTransport(scenarioType, typ.TransportOpenAI) &&
+		!typ.ScenarioSupportsTransport(scenarioType, typ.TransportDecisions)) {
 		decisionBadRequest(c, fmt.Sprintf("scenario %s does not support decisions", scenario))
 		return
 	}

@@ -15,6 +15,7 @@ const (
 	TransportAnthropic ScenarioTransport = "anthropic"
 	TransportEmbed     ScenarioTransport = "embed"
 	TransportImageGen  ScenarioTransport = "imagegen"
+	TransportDecisions ScenarioTransport = "decisions"
 )
 
 type ScenarioDescriptor struct {
@@ -62,6 +63,17 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 		return ScenarioDescriptor{
 			ID:                 scenario,
 			SupportedTransport: []ScenarioTransport{TransportEmbed},
+			AllowRuleBinding:   true,
+			AllowDirectPathUse: true,
+		}
+	case ScenarioDecisions:
+		// Dedicated entry point for the OpenAI Decisions API. The endpoint
+		// itself is reachable from any TransportOpenAI scenario (openai, team,
+		// custom, ...) — see .design/decision-protocol.md — so this scenario
+		// only adds a decisions-only surface with its own rules and page.
+		return ScenarioDescriptor{
+			ID:                 scenario,
+			SupportedTransport: []ScenarioTransport{TransportDecisions},
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}
