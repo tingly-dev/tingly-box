@@ -1,0 +1,47 @@
+name: Verify CI
+
+# Lints the CI itself on PRs that touch it: actionlint over the workflows
+# (bad `needs`, wrong `with:` inputs, expression errors, and the shell in each
+# `run:` through shellcheck) plus shellcheck over .github/scripts/. Same check
+# AGENTS.md asks for before committing; warnings and errors fail, shellcheck's
+# info/style notes do not.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - '.github/scripts/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ACTIONLINT_VERSION: '1.7.12'
+
+jobs:
+  lint:
+    name: actionlint + shellcheck
+    runs-on: ubuntu-latest
+    env:
+      SHELLCHECK_OPTS: --severity=warning
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install actionlint
+        run: |
+          bash <(curl -sSfL "https://raw.githubusercontent.com/rhysd/actionlint/v${ACTIONLINT_VERSION}/scripts/download-actionlint.bash") "$ACTIONLINT_VERSION"
+          ./actionlint -version
+
+      # Only workflows/*.yml: actionlint reads actions/*/action.yml as
+      # workflows and rejects them.
+      - name: actionlint
+        run: ./actionlint .github/workflows/*.yml
+
+      - name: shellcheck .github/scripts
+        run: shellcheck --version && shellcheck .github/scripts/*.sh

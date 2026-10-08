@@ -1,0 +1,50 @@
+name: Set up frontend
+description: >-
+  Node + pnpm (corepack), a cached pnpm store, `pnpm install --frozen-lockfile`
+  and `pnpm gen:api` (the client types from the committed openapi.json) in
+  frontend/. Shared by build-frontend.yml and verify-compile.yml so the release
+  and the PR check install and generate the same way. Needs a checkout.
+inputs:
+  node-version:
+    description: Node.js version
+    required: false
+    default: '24'
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v5
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Enable pnpm
+      shell: bash
+      run: corepack enable
+
+    - name: Locate the pnpm store
+      id: store
+      shell: bash
+      working-directory: ./frontend
+      run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+    # Only the store: node_modules is rebuilt from it by the install below,
+    # which is fast with a warm store and never restores a stale tree.
+    - name: Cache the pnpm store
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.store.outputs.path }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-store-
+
+    - name: Install frontend dependencies
+      shell: bash
+      working-directory: ./frontend
+      run: |
+        pnpm approve-builds --all
+        pnpm install --frozen-lockfile
+
+    - name: Run codegen
+      shell: bash
+      working-directory: ./frontend
+      run: pnpm gen:api

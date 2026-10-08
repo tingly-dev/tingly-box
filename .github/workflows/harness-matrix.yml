@@ -8,7 +8,7 @@ run-name: >-
 
 # Trigger wrapper for the harness. This workflow owns ONLY when the harness
 # runs; the matrix itself lives in harness-template.yml (the single shared
-# definition), which this calls and which release-cli.yml also calls directly.
+# definition), which this calls and which release.yml also calls directly.
 #
 # Triggers:
 #   - push ci/**             : validate CI branch changes.
@@ -23,7 +23,7 @@ run-name: >-
 # don't run the matrix; use workflow_dispatch if one should.
 #
 # Release tags are deliberately NOT triggered here — they run the harness
-# only through release-cli.yml's workflow_call, so the matrix is never scheduled
+# only through release.yml's workflow_call, so the matrix is never scheduled
 # twice for the same tag.
 #
 # See .design/harness-matrix.md and cli/harness/README.md for the modes.
@@ -40,6 +40,7 @@ on:
       - 'internal/loadbalance/**'
       - 'internal/forwarding/**'
       - 'internal/toolengine/**'
+      - 'internal/catalog/**'
       - 'internal/guardrails/**'
       - 'internal/server/*.go'        # top-level handlers only, not module/ (management APIs)
       - 'vmodel/**'
@@ -73,6 +74,7 @@ on:
       - 'internal/loadbalance/**'
       - 'internal/forwarding/**'
       - 'internal/toolengine/**'
+      - 'internal/catalog/**'
       - 'internal/guardrails/**'
       - 'internal/server/*.go'        # top-level handlers only, not module/ (management APIs)
       - 'vmodel/**'
