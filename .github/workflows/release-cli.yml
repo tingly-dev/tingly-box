@@ -181,34 +181,6 @@ jobs:
           # Make binary executable for non-Windows
           [ "${{ matrix.goos }}" != "windows" ] && chmod +x ./dist/tingly-box${{ matrix.exe }} || true
 
-      # UPX is Linux-only. Windows is deliberately excluded: UPX-packed,
-      # unsigned .exe files are prime targets for Windows Defender / AV
-      # heuristic false positives (e.g. Wacatac), which quarantine or lock the
-      # binary on user machines and surface as "This app can't run on your PC".
-      # macOS is excluded because UPX breaks Mach-O signing/notarization.
-      - name: Install UPX 5.1.1
-        if: matrix.goos == 'linux'
-        shell: bash
-        run: |
-          wget -q https://github.com/upx/upx/releases/download/v5.1.1/upx-5.1.1-amd64_linux.tar.xz
-          tar -xf upx-5.1.1-amd64_linux.tar.xz
-          export PATH="$PWD/upx-5.1.1-amd64_linux:$PATH"
-
-      - name: Compress binary with UPX
-        if: matrix.goos == 'linux'
-        shell: bash
-        run: |
-          if command -v upx &> /dev/null || [ -f "./upx-5.1.1-amd64_linux/upx" ]; then
-            UPX_CMD="upx"
-            [ -f "./upx-5.1.1-amd64_linux/upx" ] && UPX_CMD="./upx-5.1.1-amd64_linux/upx"
-
-            # Use best compression with LZMA (slower but smaller)
-            $UPX_CMD --best --lzma ./dist/tingly-box${{ matrix.exe }} || \
-            $UPX_CMD --best ./dist/tingly-box${{ matrix.exe }}
-          else
-            echo "UPX not available, skipping compression"
-          fi
-
       - name: Upload build artifact (${{ matrix.suffix }})
         uses: actions/upload-artifact@v4
         with:
