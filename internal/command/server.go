@@ -355,10 +355,8 @@ func runSwagger(appManager *app.AppManager, output string, stdout bool) error {
 
 const (
 	// URL templates for displaying to users
-	webUITpl             = "http://localhost:%d/"
-	webUILoginTpl        = "http://localhost:%d/login/%s"
-	openAIEndpointTpl    = "http://localhost:%d/tingly/openai/v1/chat/completions"
-	anthropicEndpointTpl = "http://localhost:%d/tingly/anthropic/v1/messages"
+	webUITpl      = "http://localhost:%d/"
+	webUILoginTpl = "http://localhost:%d/login/%s"
 )
 
 // BannerConfig holds configuration for banner display
@@ -401,8 +399,6 @@ func printBanner(cfg BannerConfig) {
 	} else {
 		addLine("Web UI", fmt.Sprintf("http://localhost:%d/", cfg.Port), urlStyle)
 	}
-	addLine("OpenAI API", fmt.Sprintf("http://localhost:%d/tingly/openai/v1/chat/completions", cfg.Port), urlStyle)
-	addLine("Anthropic API", fmt.Sprintf("http://localhost:%d/tingly/anthropic/v1/messages", cfg.Port), urlStyle)
 
 	if cfg.GlobalConfig.HasUserToken() {
 		lines = append(lines, "")
