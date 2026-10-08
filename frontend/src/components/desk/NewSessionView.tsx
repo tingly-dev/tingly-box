@@ -1,13 +1,16 @@
 import type {RecentFolder} from '@/services/deskApi';
 import {ArrowBack} from '@/components/icons';
 import {Box, Button, Chip, Stack, Typography} from '@mui/material';
+import {useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import Composer from './Composer';
 import FolderPicker from './FolderPicker';
 import ModelSelect from './ModelSelect';
 import PermissionModeSelect from './PermissionModeSelect';
+import PromptLibrary from './PromptLibrary';
 import ProfileSelect from './ProfileSelect';
 import {useDeskDrafts} from './useDeskDrafts';
+import {useDeskPrompts} from './useDeskPrompts';
 
 interface NewSessionViewProps {
     initialFolder?: string;
@@ -33,6 +36,14 @@ const NewSessionView = ({initialFolder, recentFolders, permissionModes, onCreate
     const profile = form.profile ?? '';
     // A tier belongs to the profile it was picked under.
     const model = form.model ?? '';
+    const {prompts, savePrompt, removePrompt} = useDeskPrompts();
+    const [kept, setKept] = useState(false);
+    const draft = (form.prompt ?? '').trim();
+    const keepDraft = () => {
+        // Named after its first line; rename from the library if needed.
+        const name = draft.split('\n')[0].slice(0, 40);
+        if (savePrompt({name, text: draft})) setKept(true);
+    };
     const pickProfile = (p: string) => {
         setForm((prev) => ({...prev, profile: p, model: ''}));
     };
@@ -59,7 +70,7 @@ const NewSessionView = ({initialFolder, recentFolders, permissionModes, onCreate
                     placeholder={t('desk.promptPlaceholder', {defaultValue: 'Describe a task…'})}
                     canSubmit={folder.trim() !== ''}
                     text={form.prompt ?? ''}
-                    onTextChange={(text) => update('prompt', text)}
+                    onTextChange={(text) => {setKept(false); update('prompt', text);}}
                     onAccepted={(submitted) => setForm((previous) => previous.prompt === submitted ? {...previous, prompt: ''} : previous)}
                     onSubmit={(prompt) => onCreate(folder.trim(), prompt, permissionMode, profile, model)}
                     context={(
@@ -69,6 +80,19 @@ const NewSessionView = ({initialFolder, recentFolders, permissionModes, onCreate
                             <PermissionModeSelect value={permissionMode} permissionModes={permissionModes} onChange={(value) => update('permissionMode', value)}/>
                         </>
                     )}
+                />
+                {draft !== '' && (
+                    <Button size="small" disabled={kept} onClick={keepDraft} sx={{mt: 0.5}}>
+                        {kept ? t('desk.library.kept', {defaultValue: 'Saved to library'}) : t('desk.library.keep', {defaultValue: 'Save to library'})}
+                    </Button>
+                )}
+                <PromptLibrary
+                    prompts={prompts}
+                    canRun={folder.trim() !== ''}
+                    onRun={(text) => void onCreate(folder.trim(), text, permissionMode, profile, model)}
+                    onFill={(text) => update('prompt', text)}
+                    onSave={savePrompt}
+                    onRemove={removePrompt}
                 />
                 {recentFolders.length > 1 && (
                     <Stack direction="row" spacing={0.75} sx={{mt: 1.5, flexWrap: 'wrap', rowGap: 0.75, justifyContent: 'center'}}>

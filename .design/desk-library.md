@@ -1,6 +1,6 @@
 # Desk 提示词库（Library）
 
-> 状态：**设计稿，未实现**。前置阅读：`desk.md`、`image-library.md`（本功能照搬它的「描述片段」）。
+> 状态：**v1 已实现**（`frontend/src/components/desk/PromptLibrary.tsx`、`useDeskPrompts.ts`，接在 `NewSessionView` 里）。前置阅读：`desk.md`、`image-library.md`（本功能照搬它的「描述片段」）。
 
 ## 1. 是什么
 
