@@ -91,8 +91,26 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          # setup-go caches the module and build caches (keyed by OS/arch).
-          cache-dependency-path: '**/go.sum'
+          cache: false
+
+      - name: Locate Go caches
+        id: gocache
+        shell: bash
+        run: |
+          echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+          echo "mod=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+
+      # Keyed per job: setup-go's own key is only OS/arch, so jobs sharing a
+      # runner (e.g. the three ubuntu-22.04 targets) overwrite each other's cache.
+      - name: Cache Go build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.gocache.outputs.build }}
+            ${{ steps.gocache.outputs.mod }}
+          key: go-${{ matrix.suffix }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-${{ matrix.suffix }}-
 
       - name: Download frontend artifact
         uses: actions/download-artifact@v4
