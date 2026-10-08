@@ -132,9 +132,14 @@ jobs:
 
       - name: Install go-task and wails3
         shell: bash
+        env:
+          # wails3 itself compiles its cgo `operatingsystem` package on Linux,
+          # which defaults to GTK4 / WebKitGTK 6.0; the GTK3 runners only have
+          # the 3 / 4.1 headers, so build the CLI with the same `gtk3` tag.
+          WAILS_TAGS: ${{ matrix.platform == 'linux-gtk3' && 'gtk3' || '' }}
         run: |
           go install github.com/go-task/task/v3/cmd/task@latest
-          go install github.com/wailsapp/wails/v3/cmd/wails3@${WAILS_VERSION}
+          go install -tags "${WAILS_TAGS}" github.com/wailsapp/wails/v3/cmd/wails3@${WAILS_VERSION}
 
       - name: Install frontend dependencies
         shell: bash
