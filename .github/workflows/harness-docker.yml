@@ -1,22 +1,23 @@
-name: Verify Docker
+name: Harness Docker
 
-# Docker bind-mount smoke test. Regression guard for #1662: a freshly `mkdir`ed host directory is owned by
-# the invoking host user, not the image's non-root "tingly" user (UID/GID
-# 999), and the entrypoint in both Dockerfiles is what makes that bind mount
-# writable without a manual `chown`. Builds each image locally (no registry
-# push) and actually runs it against such a directory, so a future change to
-# build/docker/** that breaks the ownership fix fails CI instead of shipping.
+# Docker bind-mount smoke test. Regression guard for #1662: a freshly
+# `mkdir`ed host directory is owned by the invoking host user, not the image's
+# non-root "tingly" user (UID/GID 999), and the entrypoint in both Dockerfiles
+# is what makes that bind mount writable without a manual `chown`. Builds each
+# image locally (no registry push) and actually runs it against such a
+# directory, so a future change to build/docker/** that breaks the ownership
+# fix fails CI instead of shipping.
 on:
   pull_request:
     paths:
       - 'build/docker/**'
-      - '.github/workflows/verify-docker.yml'
+      - '.github/workflows/harness-docker.yml'
       - '.github/scripts/docker-smoke-test.sh'
   push:
     branches: [main]
     paths:
       - 'build/docker/**'
-      - '.github/workflows/verify-docker.yml'
+      - '.github/workflows/harness-docker.yml'
       - '.github/scripts/docker-smoke-test.sh'
   workflow_dispatch:
 
@@ -24,7 +25,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: verify-docker-${{ github.ref }}
+  group: harness-docker-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
