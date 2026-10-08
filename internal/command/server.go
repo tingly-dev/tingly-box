@@ -383,7 +383,7 @@ func printBanner(cfg BannerConfig) {
 		highlight = lipgloss.Color("#60A5FA")
 	)
 
-	labelStyle := lipgloss.NewStyle().Foreground(muted).Width(14).Align(lipgloss.Right)
+	labelStyle := lipgloss.NewStyle().Foreground(muted).Width(11).Align(lipgloss.Right)
 	urlStyle := lipgloss.NewStyle().Foreground(success)
 	tokenStyle := lipgloss.NewStyle().Foreground(highlight)
 	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(primary)
@@ -404,6 +404,9 @@ func printBanner(cfg BannerConfig) {
 		lines = append(lines, "")
 		addLine("Login Token", cfg.GlobalConfig.GetUserToken(), tokenStyle)
 	}
+
+	hintStyle := lipgloss.NewStyle().Foreground(muted).Italic(true)
+	lines = append(lines, "", hintStyle.Render("Add providers and copy API endpoints in the Web UI"))
 
 	// Title: product name on one line, version on the next — nothing else.
 	titleText := titleStyle.Render("Tingly-Box")
