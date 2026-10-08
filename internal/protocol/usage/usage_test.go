@@ -345,6 +345,31 @@ func TestAnthropicAccumulator_WithCacheCreation(t *testing.T) {
 	assert.Equal(t, 800, got.CacheReadTokens)
 }
 
+// TestAnthropicAccumulator_CacheCreationRepeatedOnDelta verifies a
+// cache_creation value repeated on message_delta (without input_tokens there)
+// is counted once, not once per usage-bearing event — the double count used to
+// inflate streamed input and depress the reported cache-hit ratio.
+func TestAnthropicAccumulator_CacheCreationRepeatedOnDelta(t *testing.T) {
+	events := []string{
+		messageStartJSON(t, 100, 900, 800),
+		`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":50,"cache_creation_input_tokens":900,"cache_read_input_tokens":800}}`,
+	}
+	dec := newFakeDecoder(events)
+	stream := anthropicstream.NewStream[anthropic.MessageStreamEventUnion](dec, nil)
+
+	acc := usage.NewAnthropicAccumulator()
+	for stream.Next() {
+		evt := stream.Current()
+		acc.Consume(&evt)
+	}
+
+	got := acc.Result()
+	assert.Equal(t, 1000, got.InputTokens) // 100 + 900, not 100 + 900 + 900
+	assert.Equal(t, 900, got.CacheWriteTokens)
+	assert.Equal(t, 800, got.CacheReadTokens)
+	assert.Equal(t, 50, got.OutputTokens)
+}
+
 // TestAnthropicAccumulator_NonStandardDelta verifies backward compat for providers
 // that send input_tokens in message_delta instead of message_start.
 func TestAnthropicAccumulator_NonStandardDelta(t *testing.T) {

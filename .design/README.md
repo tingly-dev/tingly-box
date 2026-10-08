@@ -135,6 +135,7 @@
 | [rule-flag-testing.md](./rule-flag-testing.md) | Rule-Flag Behavior Testing | 设计说明；局部实施状态见正文 |
 | [vmodel.md](./vmodel.md) | vmodel — design index | 入口索引 |
 | [vmodel-benchmark.md](./vmodel-benchmark.md) | vmodel as a shared real-world benchmark | Phase 1–3 已完成 |
+| [vmodel-prompt-cache.md](./vmodel-prompt-cache.md) | Prompt cache simulation (`virtual-prompt-cache`) | 已实现 |
 | [vmodel-sequence.md](./vmodel-sequence.md) | Virtual sequence models | 设计说明；局部实施状态见正文 |
 | [vmodel-transport.md](./vmodel-transport.md) | vmodel transport — dispatch virtual providers over HTTP, not in-memory | 内存 listener 已实现；unix socket 未做 |
 | [python-sdk.md](./python-sdk.md) | Python SDK (tingly) — v1 framework | 设计说明；局部实施状态见正文 |

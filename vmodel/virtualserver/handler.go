@@ -103,6 +103,7 @@ func (h *Handler) ListAnthropicModels(c *gin.Context) {
 
 // ChatCompletions handles POST /virtual/v1/chat/completions.
 func (h *Handler) ChatCompletions(c *gin.Context) {
+	raw := readRawBody(c)
 	var req ChatCompletionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{
@@ -131,6 +132,7 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 	// Resolve per-request behaviour (sequence models advance their cursor
 	// here, exactly once) into a concrete snapshot before any dispatch.
 	vm = openaivm.Snapshot(vm)
+	vm, preset := openaiPromptCache(vm, "chat", req.Model, raw)
 
 	if e := vmodel.ExtractErrorInjection(vm); e != nil && e.Stage == vmodel.ErrorStagePreContent {
 		writePreContentErrorOpenAI(c, e)
@@ -138,9 +140,9 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 	}
 
 	if req.Stream {
-		h.handleOpenAIStreaming(c, &req, vm)
+		h.handleOpenAIStreaming(c, &req, vm, preset)
 	} else {
-		h.handleOpenAINonStreaming(c, &req, vm)
+		h.handleOpenAINonStreaming(c, &req, vm, preset)
 	}
 }
 
@@ -152,6 +154,7 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 // the beta superset struct so vmodel implementations only deal with one
 // request shape.
 func (h *Handler) Messages(c *gin.Context) {
+	raw := readRawBody(c)
 	var req AnthropicMessageRequest
 	if c.Query("beta") == "true" {
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -200,6 +203,7 @@ func (h *Handler) Messages(c *gin.Context) {
 	// Resolve per-request behaviour (sequence models advance their cursor
 	// here, exactly once) into a concrete snapshot before any dispatch.
 	vm = anthropicvm.Snapshot(vm)
+	vm, preset := anthropicPromptCache(vm, req.Model, raw)
 
 	if e := vmodel.ExtractErrorInjection(vm); e != nil && e.Stage == vmodel.ErrorStagePreContent {
 		writePreContentErrorAnthropic(c, e)
@@ -207,15 +211,17 @@ func (h *Handler) Messages(c *gin.Context) {
 	}
 
 	if req.Stream {
-		h.handleAnthropicStreaming(c, &req, vm)
+		h.handleAnthropicStreaming(c, &req, vm, preset)
 	} else {
-		h.handleAnthropicNonStreaming(c, &req, vm)
+		h.handleAnthropicNonStreaming(c, &req, vm, preset)
 	}
 }
 
 // ── Anthropic handlers ────────────────────────────────────────────────────────
 
-func (h *Handler) handleAnthropicNonStreaming(c *gin.Context, req *AnthropicMessageRequest, vm anthropicvm.VirtualModel) {
+// preset, when non-nil, is the usage to report instead of the token estimate
+// (prompt-cache simulation); the same holds for every handle* function below.
+func (h *Handler) handleAnthropicNonStreaming(c *gin.Context, req *AnthropicMessageRequest, vm anthropicvm.VirtualModel, preset *vmodel.MockUsage) {
 	if d := vm.SimulatedDelay(); d > 0 {
 		time.Sleep(d)
 	}
@@ -231,6 +237,14 @@ func (h *Handler) handleAnthropicNonStreaming(c *gin.Context, req *AnthropicMess
 
 	content := vmodelContentToAnthropic(resp)
 
+	usage := AnthropicUsage{
+		InputTokens:  token.EstimateBetaAnthropicTokens(req.Messages),
+		OutputTokens: token.EstimateTokensString(vmodelTextContent(resp)),
+	}
+	if preset != nil {
+		usage = anthropicUsageFrom(preset)
+	}
+
 	c.JSON(http.StatusOK, AnthropicMessageResponse{
 		ID:         fmt.Sprintf("msg_virtual_%d", time.Now().Unix()),
 		Type:       "message",
@@ -238,14 +252,11 @@ func (h *Handler) handleAnthropicNonStreaming(c *gin.Context, req *AnthropicMess
 		Model:      req.Model,
 		StopReason: string(resp.StopReason),
 		Content:    content,
-		Usage: AnthropicUsage{
-			InputTokens:  token.EstimateBetaAnthropicTokens(req.Messages),
-			OutputTokens: token.EstimateTokensString(vmodelTextContent(resp)),
-		},
+		Usage:      usage,
 	})
 }
 
-func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessageRequest, vm anthropicvm.VirtualModel) {
+func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessageRequest, vm anthropicvm.VirtualModel, preset *vmodel.MockUsage) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
@@ -259,7 +270,7 @@ func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessage
 			time.Sleep(d)
 		}
 
-		var explicitUsage *vmodel.MockUsage
+		explicitUsage := preset
 		var stopReason string
 		// Count streamed text bytes so the terminal usage fallback can estimate
 		// output tokens (the len/4 rule of token.EstimateTokensString — no need
@@ -324,11 +335,17 @@ func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessage
 				if id == "" {
 					id = msgID
 				}
+				startUsage := AnthropicUsage{InputTokens: estimatedInput}
+				if preset != nil {
+					// Real Anthropic reports input and cache usage up front.
+					startUsage = anthropicUsageFrom(preset)
+					startUsage.OutputTokens = 0
+				}
 				data, _ := json.Marshal(AnthropicStreamEvent{
 					Type: "message_start",
 					Message: &AnthropicMessageResponse{
 						ID: id, Type: "message", Role: "assistant", Model: req.Model,
-						Usage: AnthropicUsage{InputTokens: estimatedInput},
+						Usage: startUsage,
 					},
 				})
 				fmt.Fprintf(w, "event: message_start\ndata: %s\n\n", data)
@@ -446,7 +463,7 @@ func newMidStreamGate(midInj *vmodel.ErrorInjection) *vmodel.EmitGate {
 
 // ── OpenAI handlers ───────────────────────────────────────────────────────────
 
-func (h *Handler) handleOpenAINonStreaming(c *gin.Context, req *ChatCompletionRequest, vm openaivm.VirtualModel) {
+func (h *Handler) handleOpenAINonStreaming(c *gin.Context, req *ChatCompletionRequest, vm openaivm.VirtualModel, preset *vmodel.MockUsage) {
 	if d := vm.SimulatedDelay(); d > 0 {
 		time.Sleep(d)
 	}
@@ -464,6 +481,15 @@ func (h *Handler) handleOpenAINonStreaming(c *gin.Context, req *ChatCompletionRe
 	outputTokens := token.EstimateTokensString(resp.Content)
 	toolCalls := vmodelToolCallsToOpenAI(resp.ToolCalls)
 
+	usage := Usage{
+		PromptTokens:     token.EstimateMessagesTokens(req.Messages),
+		CompletionTokens: outputTokens,
+		TotalTokens:      token.EstimateMessagesTokens(req.Messages) + outputTokens,
+	}
+	if preset != nil {
+		usage = chatUsageFrom(preset)
+	}
+
 	c.JSON(http.StatusOK, ChatCompletionResponse{
 		ID:      fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()),
 		Created: time.Now().Unix(),
@@ -473,15 +499,11 @@ func (h *Handler) handleOpenAINonStreaming(c *gin.Context, req *ChatCompletionRe
 			Message:      Message{Content: resp.Content, ToolCalls: toolCalls},
 			FinishReason: finishReason,
 		}},
-		Usage: Usage{
-			PromptTokens:     token.EstimateMessagesTokens(req.Messages),
-			CompletionTokens: outputTokens,
-			TotalTokens:      token.EstimateMessagesTokens(req.Messages) + outputTokens,
-		},
+		Usage: usage,
 	})
 }
 
-func (h *Handler) handleOpenAIStreaming(c *gin.Context, req *ChatCompletionRequest, vm openaivm.VirtualModel) {
+func (h *Handler) handleOpenAIStreaming(c *gin.Context, req *ChatCompletionRequest, vm openaivm.VirtualModel, preset *vmodel.MockUsage) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
@@ -507,7 +529,7 @@ func (h *Handler) handleOpenAIStreaming(c *gin.Context, req *ChatCompletionReque
 		chunkIndex := 0
 		var finishReason string
 		var completionText string
-		var explicitUsage *vmodel.MockUsage
+		explicitUsage := preset
 
 		err := vm.HandleOpenAIChatStream(c.Request.Context(), req, func(ev any) {
 			select {

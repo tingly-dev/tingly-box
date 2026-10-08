@@ -11,7 +11,8 @@ import (
 // RegisterDefaults registers the default Anthropic-protocol virtual models
 // into r: the Anthropic-only "virtual-claude-3" mock, the shared mocks
 // ("echo-model", "ask-user-question", "ask-confirmation", "web-search-example"),
-// and the compact transform models ("compact-round-only", "compact-round-files",
+// the prompt-cache simulation model ("virtual-prompt-cache"), and the compact
+// transform models ("compact-round-only", "compact-round-files",
 // "claude-code-compact", "claude-code-strategy").
 func RegisterDefaults(r *Registry) {
 	_ = r.Register(NewMockModel(&MockModelConfig{
@@ -31,6 +32,8 @@ func RegisterDefaults(r *Registry) {
 			Error:    spec.Error,
 		}))
 	}
+
+	_ = r.Register(NewPromptCacheModel())
 
 	compactModels := []TransformModelConfig{
 		{

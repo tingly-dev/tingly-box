@@ -71,9 +71,11 @@ type AnthropicContent struct {
 
 // AnthropicUsage holds token usage in Anthropic format.
 type AnthropicUsage struct {
-	InputTokens         int64                         `json:"input_tokens"`
-	OutputTokens        int64                         `json:"output_tokens"`
-	OutputTokensDetails *AnthropicOutputTokensDetails `json:"output_tokens_details,omitempty"`
+	InputTokens              int64                         `json:"input_tokens"`
+	OutputTokens             int64                         `json:"output_tokens"`
+	CacheReadInputTokens     int64                         `json:"cache_read_input_tokens,omitempty"`
+	CacheCreationInputTokens int64                         `json:"cache_creation_input_tokens,omitempty"`
+	OutputTokensDetails      *AnthropicOutputTokensDetails `json:"output_tokens_details,omitempty"`
 }
 
 // AnthropicOutputTokensDetails mirrors Anthropic's usage.output_tokens_details;

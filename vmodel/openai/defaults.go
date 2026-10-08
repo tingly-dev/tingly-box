@@ -8,7 +8,8 @@ import (
 
 // RegisterDefaults registers the default OpenAI-protocol virtual models into r:
 // the OpenAI-only "virtual-gpt-4" mock plus the shared mocks ("echo-model",
-// "ask-user-question", "ask-confirmation", "web-search-example").
+// "ask-user-question", "ask-confirmation", "web-search-example") and the
+// prompt-cache simulation model ("virtual-prompt-cache").
 //
 // Compact-style transform models are Anthropic-only and live in the anthropic
 // sub-package; they are intentionally not registered here.
@@ -30,6 +31,8 @@ func RegisterDefaults(r *Registry) {
 			Error:    spec.Error,
 		}))
 	}
+
+	_ = r.Register(NewPromptCacheModel())
 
 	for _, sc := range vmodel.DefaultSequenceConfigs() {
 		_ = r.Register(NewSequenceModel(&sc))

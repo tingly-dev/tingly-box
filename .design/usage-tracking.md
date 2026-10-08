@@ -233,7 +233,7 @@ return protocol.ZeroTokenUsage(), nil
 - **Input**：`message_start` 优先，回退 `message_delta`；每个来源还有 SDK 字段 + gjson raw 两条路（非标准 provider 兜底，仅非 beta 需要 gjson，beta 的 SDK 字段可靠）
 - **Output**：只看 delta
 - **Cache read**：`message_start` 优先，回退 delta，单独存 `cacheTokens`
-- **Cache creation**：直接 `+=` 进 `inputTokens`（归一化，见上）
+- **Cache creation**：与其它字段一样"最新一次上报为准"（赋值，不累加），`InputTokens = 未命中 input + CacheWriteTokens` 在每个事件后重算。真实 Anthropic 会在 `message_delta` 里重复上报 creation；早先这里是 `+=`，delta 带 creation 却不带 `input_tokens` 时 input 被算两遍、stream 的命中率被压低（`TestAnthropicAccumulator_CacheCreationRepeatedOnDelta`）。端到端的命中率回归见 `vmodel-prompt-cache.md`
 
 ### 2.4 流式 OpenAI：`StreamTokenCounter`（`internal/protocol/token/`）
 

@@ -38,6 +38,7 @@ type ResponsesRequest struct {
 
 // Responses handles POST /virtual/openai/v1/responses (OpenAI Responses API).
 func (h *Handler) Responses(c *gin.Context) {
+	raw := readRawBody(c)
 	var req ResponsesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{
@@ -63,6 +64,8 @@ func (h *Handler) Responses(c *gin.Context) {
 		return
 	}
 
+	vm, preset := openaiPromptCache(vm, "responses", req.Model, raw)
+
 	if e := vmodel.ExtractErrorInjection(vm); e != nil && e.Stage == vmodel.ErrorStagePreContent {
 		writePreContentErrorOpenAI(c, e)
 		return
@@ -78,9 +81,9 @@ func (h *Handler) Responses(c *gin.Context) {
 	}
 
 	if req.Stream {
-		h.handleResponsesStreaming(c, req.Model, inputText, chatReq, vm)
+		h.handleResponsesStreaming(c, req.Model, inputText, chatReq, vm, preset)
 	} else {
-		h.handleResponsesNonStreaming(c, req.Model, inputText, chatReq, vm)
+		h.handleResponsesNonStreaming(c, req.Model, inputText, chatReq, vm, preset)
 	}
 }
 
@@ -187,7 +190,7 @@ func responsesEnvelope(respID, model, status string, createdAt int64, output []m
 	return envelope
 }
 
-func (h *Handler) handleResponsesNonStreaming(c *gin.Context, model, inputText string, chatReq *ChatCompletionRequest, vm openaivm.VirtualModel) {
+func (h *Handler) handleResponsesNonStreaming(c *gin.Context, model, inputText string, chatReq *ChatCompletionRequest, vm openaivm.VirtualModel, preset *vmodel.MockUsage) {
 	if d := vm.SimulatedDelay(); d > 0 {
 		time.Sleep(d)
 	}
@@ -200,13 +203,16 @@ func (h *Handler) handleResponsesNonStreaming(c *gin.Context, model, inputText s
 		return
 	}
 
+	usage := responsesUsageMap(inputText, token.EstimateTokensString(resp.Content))
+	if preset != nil {
+		usage = responsesUsageFrom(preset)
+	}
 	respID := newRespID()
 	c.JSON(http.StatusOK, responsesEnvelope(respID, model, "completed", time.Now().Unix(),
-		responsesOutputItems("item-"+respID, &resp, false),
-		responsesUsageMap(inputText, token.EstimateTokensString(resp.Content))))
+		responsesOutputItems("item-"+respID, &resp, false), usage))
 }
 
-func (h *Handler) handleResponsesStreaming(c *gin.Context, model, inputText string, chatReq *ChatCompletionRequest, vm openaivm.VirtualModel) {
+func (h *Handler) handleResponsesStreaming(c *gin.Context, model, inputText string, chatReq *ChatCompletionRequest, vm openaivm.VirtualModel, preset *vmodel.MockUsage) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
@@ -326,11 +332,14 @@ func (h *Handler) handleResponsesStreaming(c *gin.Context, model, inputText stri
 		// includeEmptyMessage: streaming announced the message item at
 		// output_index 0 up front, so the terminal output array must include
 		// it even for tool-only responses to keep indices aligned.
+		usage := responsesUsageMap(inputText, token.EstimateTokensString(final.Content))
+		if preset != nil {
+			usage = responsesUsageFrom(preset)
+		}
 		send(map[string]interface{}{
 			"type": "response.completed",
 			"response": responsesEnvelope(respID, model, "completed", createdAt,
-				responsesOutputItems(itemID, &final, true),
-				responsesUsageMap(inputText, token.EstimateTokensString(final.Content))),
+				responsesOutputItems(itemID, &final, true), usage),
 		})
 		c.SSEvent("", "[DONE]")
 		c.Writer.Flush()

@@ -18,8 +18,13 @@ import (
 // (BetaRawMessageStreamEventUnion) streams are supported via Consume and
 // ConsumeBeta respectively.
 type AnthropicAccumulator struct {
-	usage    *protocol.TokenUsage
-	hasUsage bool
+	usage *protocol.TokenUsage
+	// uncachedInput is the wire input_tokens (cache misses only). It is kept
+	// apart from usage.InputTokens, which is the normalized
+	// uncachedInput + CacheWriteTokens, so that a cache_creation value seen on
+	// both message_start and message_delta is counted once, not once per event.
+	uncachedInput int
+	hasUsage      bool
 }
 
 // NewAnthropicAccumulator returns a zeroed accumulator ready to consume events.
@@ -107,16 +112,16 @@ func (a *AnthropicAccumulator) consumeRaw(
 	// Input tokens — prefer message_start, fall back to message_delta
 	switch {
 	case msgStartInput > 0:
-		a.usage.InputTokens = int(msgStartInput)
+		a.uncachedInput = int(msgStartInput)
 		a.hasUsage = true
 	case msgStartInputRaw > 0:
-		a.usage.InputTokens = int(msgStartInputRaw)
+		a.uncachedInput = int(msgStartInputRaw)
 		a.hasUsage = true
 	case deltaInput > 0:
-		a.usage.InputTokens = int(deltaInput)
+		a.uncachedInput = int(deltaInput)
 		a.hasUsage = true
 	case deltaInputRaw > 0:
-		a.usage.InputTokens = int(deltaInputRaw)
+		a.uncachedInput = int(deltaInputRaw)
 		a.hasUsage = true
 	}
 
@@ -146,16 +151,21 @@ func (a *AnthropicAccumulator) consumeRaw(
 		a.hasUsage = true
 	}
 
-	// Normalize: add cache_creation to inputTokens so denominator =
-	// input (uncached) + creation (write cost). Cache reads stay in cache details.
+	// Cache creation — the latest report wins, like every other field.
+	// Real Anthropic repeats it on message_delta, so accumulating it would
+	// count the write once per usage-bearing event.
 	switch {
 	case msgStartCacheCreation > 0:
 		a.usage.CacheWriteTokens = int(msgStartCacheCreation)
-		a.usage.InputTokens += int(msgStartCacheCreation)
+		a.hasUsage = true
 	case deltaCacheCreation > 0:
 		a.usage.CacheWriteTokens = int(deltaCacheCreation)
-		a.usage.InputTokens += int(deltaCacheCreation)
+		a.hasUsage = true
 	}
+
+	// Normalize: denominator = input (uncached) + creation (write cost).
+	// Cache reads stay in cache details.
+	a.usage.InputTokens = a.uncachedInput + a.usage.CacheWriteTokens
 
 	// Reasoning (extended thinking) tokens — a subset of OutputTokens, not
 	// added on top of it. Delta path only, same as output tokens.
