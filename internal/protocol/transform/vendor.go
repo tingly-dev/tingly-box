@@ -6,6 +6,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
+	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
 )
 
 // VendorTransform applies provider-specific request adjustments. Per-shape
@@ -85,11 +86,16 @@ func (t *VendorTransform) applyAnthropicV1(ctx *TransformContext, req *anthropic
 		return req
 	}
 	host, _ := ops.SplitProviderHostPath(providerURL)
-	// Wire rules for every Anthropic-shaped target, before model-specific
-	// thinking reconciliation.
-	ops.ReconcileV1ThinkingWithRequest(req)
 	switch {
 	case isClaudeCodeBackend(ctx, host):
+		// Anthropic's wire rules for thinking, before model-specific thinking
+		// reconciliation. Only here: a third-party Anthropic-compatible
+		// provider gets the request as the client sent it, since rewriting
+		// it (thinking on, then off on the next tool turn) invalidated the
+		// provider's prompt cache for the whole conversation. Thinking the
+		// gateway produces from an OpenAI client's effort is reconciled
+		// where it is produced (request.applyOpenAIEffortAsThinking).
+		thinking.ReconcileV1WithRequest(req)
 		req = ops.ApplyAnthropicV1ModelTransform(req, string(req.Model))
 		req = ops.ApplyAnthropicV1MetadataTransform(req, ctx.configExtraForMetadata())
 	case host == "api.deepseek.com":
@@ -104,11 +110,16 @@ func (t *VendorTransform) applyAnthropicBeta(ctx *TransformContext, req *anthrop
 		return req
 	}
 	host, _ := ops.SplitProviderHostPath(providerURL)
-	// Wire rules for every Anthropic-shaped target, before model-specific
-	// thinking reconciliation.
-	ops.ReconcileBetaThinkingWithRequest(req)
 	switch {
 	case isClaudeCodeBackend(ctx, host):
+		// Anthropic's wire rules for thinking, before model-specific thinking
+		// reconciliation. Only here: a third-party Anthropic-compatible
+		// provider gets the request as the client sent it, since rewriting
+		// it (thinking on, then off on the next tool turn) invalidated the
+		// provider's prompt cache for the whole conversation. Thinking the
+		// gateway produces from an OpenAI client's effort is reconciled
+		// where it is produced (request.applyOpenAIEffortAsThinking).
+		thinking.ReconcileBetaWithRequest(req)
 		req = ops.ApplyAnthropicBetaModelTransform(req, string(req.Model))
 		req = ops.ApplyAnthropicBetaMetadataTransform(req, ctx.configExtraForMetadata())
 	case host == "api.deepseek.com":

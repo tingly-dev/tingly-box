@@ -204,7 +204,7 @@
       现在：③ applyOpenAIEffortAsThinking ── BudgetMapping[high] = 20480
               ──► thinking.enabled + output_config.effort "high"
                   并给回答留空间：没设上限 max_tokens 4096 + 20480；设了 32000 → budget ≤ 16000
-              ──► ④ output_limit 截到模型上限 ──► ④ vendor ReconcileBetaThinkingWithRequest：
+              ──► ③ 转换末尾 thinking.ReconcileBetaWithRequest（④ vendor 只在 Claude Code 后端再做一次）：
                     最后一条 assistant tool_use 消息没有 thinking 块？ ── 是 ──► thinking.disabled
                     tool_choice 强制用工具（any / tool）？         ── 是 ──► thinking.disabled
                     否则 temperature ≠ 1、top_k 丢掉，top_p 抬到 0.95

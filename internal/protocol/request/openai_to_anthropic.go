@@ -188,6 +188,7 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 		params.ToolChoice = ConvertOpenAIToAnthropicToolChoice(&req.ToolChoice)
 	}
 
+	reconcileGatewayThinking(params)
 	return params
 }
 
@@ -312,9 +313,11 @@ func ConvertOpenAIToAnthropicToolChoice(tc *openai.ChatCompletionToolChoiceOptio
 //     budget takes at most half of it, and a limit too small for the 1024
 //     minimum leaves thinking off.
 //
-// The target half then caps both at the model limit (output_limit), and the
-// vendor stage reconciles thinking with the model's dialects and the rest of
-// the request (ops.ReconcileBetaThinkingWithRequest).
+// The target half then caps both at the model limit (output_limit) and, on a
+// Claude Code backend, reconciles thinking with the model's dialects.
+//
+// Once the conversion is complete, reconcileGatewayThinking makes this
+// thinking legal with the rest of the request.
 func applyOpenAIEffortAsThinking(params *anthropic.BetaMessageNewParams, effort shared.ReasoningEffort, limitSet bool) {
 	level := string(effort)
 	budget, ok := thinking.BudgetMapping[level]
@@ -335,3 +338,17 @@ func applyOpenAIEffortAsThinking(params *anthropic.BetaMessageNewParams, effort 
 
 // minThinkingBudget is Anthropic's smallest accepted budget_tokens.
 const minThinkingBudget int64 = 1024
+
+// reconcileGatewayThinking runs once a conversion has built the whole
+// request: the thinking it produced from an OpenAI client's effort sits on a
+// history that carries no thinking blocks, so a tool-use turn needs thinking
+// turned off, a forced tool_choice too, and the sampling parameters thinking
+// forbids are dropped (thinking.ReconcileBetaWithRequest). It runs here,
+// where that thinking is produced, so the vendor stage need not tell
+// gateway-produced thinking from a client's own: a client's own request
+// reaches a third-party provider as it came.
+func reconcileGatewayThinking(params *anthropic.BetaMessageNewParams) {
+	if params.Thinking.OfEnabled != nil {
+		thinking.ReconcileBetaWithRequest(params)
+	}
+}

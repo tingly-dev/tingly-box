@@ -3,6 +3,7 @@ package protocoltest
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -716,6 +717,7 @@ func contentShapeCases() []contentShapeCase {
 	}
 	cases = append(cases, reasoningEffortToChatCases()...)
 	cases = append(cases, thinkingAcrossProtocolCases()...)
+	cases = append(cases, anthropicThinkingPassthroughCases()...)
 	return append(cases, outputLimitCases()...)
 }
 
@@ -866,11 +868,7 @@ func outputLimitCases() []contentShapeCase {
 // budget thinking on, Anthropic requires the final assistant message to start
 // with a signed thinking block, which an OpenAI client never has.
 func thinkingAcrossProtocolCases() []contentShapeCase {
-	thinkingType := func(body map[string]any) (string, bool) {
-		t, _ := body["thinking"].(map[string]any)
-		v, ok := t["type"].(string)
-		return v, ok
-	}
+	thinkingType := anthropicThinkingType
 	firstTurn := func() map[string]any {
 		return map[string]any{
 			"max_tokens":       32000,
@@ -904,5 +902,74 @@ func thinkingAcrossProtocolCases() []contentShapeCase {
 			assertUpstreamText(t, env, protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta, EndpointAnthropic,
 				toolLoop(), thinkingType, "disabled")
 		}},
+	}
+}
+
+// anthropicThinkingPassthroughCases pin that an Anthropic client's own
+// thinking reaches a third-party Anthropic provider as sent, even on a
+// tool-loop turn whose last assistant message has no thinking block. The
+// vendor stage's thinking guard is for gateway-produced thinking only
+// (transform.reconcileThinking): applied to a client's own request it flipped
+// thinking between enabled and disabled from one request to the next of a
+// conversation, and each flip invalidated the provider's prompt cache.
+func anthropicThinkingPassthroughCases() []contentShapeCase {
+	toolLoop := func() map[string]any {
+		return map[string]any{
+			"max_tokens":  32000,
+			"temperature": 0.6,
+			"thinking":    map[string]any{"type": "enabled", "budget_tokens": 4096},
+			"tools": []map[string]any{{
+				"name": "shell", "input_schema": map[string]any{"type": "object"},
+			}},
+			"messages": []map[string]any{
+				{"role": "user", "content": "list files"},
+				{"role": "assistant", "content": []map[string]any{
+					{"type": "text", "text": "ok"},
+					{"type": "tool_use", "id": "toolu_1", "name": "shell", "input": map[string]any{"cmd": "ls"}},
+				}},
+				{"role": "user", "content": []map[string]any{
+					{"type": "tool_result", "tool_use_id": "toolu_1", "content": "a.txt"},
+				}},
+			},
+		}
+	}
+	checks := []struct {
+		name    string
+		extract func(map[string]any) (string, bool)
+		want    string
+	}{
+		{"tool_loop_turn_keeps_client_thinking", anthropicThinkingType, "enabled"},
+		{"tool_loop_turn_keeps_client_temperature", numberText("temperature"), "0.6"},
+	}
+	var cases []contentShapeCase
+	for _, route := range []struct {
+		source protocol.APIType
+		prefix string
+	}{
+		{protocol.TypeAnthropicV1, "anthropic_v1_to_anthropic/"},
+		{protocol.TypeAnthropicBeta, "anthropic_beta_to_anthropic/"},
+	} {
+		for _, check := range checks {
+			cases = append(cases, contentShapeCase{name: route.prefix + check.name, run: func(t flagTB, env *TestEnv) {
+				assertUpstreamText(t, env, route.source, route.source, EndpointAnthropic, toolLoop(), check.extract, check.want)
+			}})
+		}
+	}
+	return cases
+}
+
+// anthropicThinkingType extracts thinking.type from a captured Anthropic
+// request body.
+func anthropicThinkingType(body map[string]any) (string, bool) {
+	v := stringField(body, "thinking", "type")
+	return v, v != ""
+}
+
+// numberText extracts a number at path from a captured request body as its
+// shortest decimal text ("0.6", "8192").
+func numberText(path ...string) func(map[string]any) (string, bool) {
+	return func(body map[string]any) (string, bool) {
+		n, ok := numberField(body, path...)
+		return strconv.FormatFloat(n, 'f', -1, 64), ok
 	}
 }

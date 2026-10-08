@@ -26,8 +26,12 @@ import (
 // conversation. #1718's Codex collapse was exactly this and went unnoticed
 // through every existing section, because each individual request was valid.
 //
-// Three properties are checked, per client shape × target protocol:
+// Four properties are checked, per client shape × target protocol:
 //
+//   - repeat: the same request, sent again, reaches the upstream byte for
+//     byte identical. The other properties compare canonical JSON (sorted
+//     keys), which cannot see a body that re-permutes its keys on every
+//     call; a provider whose cache is keyed on the request bytes can.
 //   - rotation: a client moves its cache breakpoints forward every turn (Claude
 //     Code carries four). Moving one must not change anything else about the
 //     dispatched request.
@@ -119,9 +123,15 @@ func anthropicCachePrefixBody(model string, streaming bool, turns, breakpointAt 
 	}
 
 	tool := map[string]any{
-		"name":         "read_file",
-		"description":  "Read a file",
-		"input_schema": map[string]any{"type": "object", "properties": map[string]any{}},
+		"name":        "read_file",
+		"description": "Read a file",
+		// Real tool definitions carry JSON Schema keys the SDKs do not model
+		// ($schema, additionalProperties); they must still reach the upstream
+		// in a stable order (the repeat property below).
+		"input_schema": map[string]any{
+			"type": "object", "properties": map[string]any{},
+			"additionalProperties": false, "$schema": "http://json-schema.org/draft-07/schema#",
+		},
 	}
 	if claudeCode {
 		tool["cache_control"] = ephemeral
@@ -454,10 +464,24 @@ func runCachePrefixChecks(t flagTB, r cachePrefixRun) {
 	t.Helper()
 	blocks := cachePrefixCacheableBlocks(cachePrefixTurns)
 
-	// Rotation: the same history, with the client's breakpoint parked on the
-	// last cacheable block and then on the one before it — what happens
-	// naturally as a client's fixed pool of breakpoints rolls forward.
+	// Repeat: the identical request must produce the identical upstream
+	// bytes. Keys the SDK keeps as extra fields (tool schemas most visibly)
+	// once went out in map order, a different permutation on every request.
 	r.send(t, cachePrefixTurns, blocks-1, cachePrefixSessionID)
+	repeatBaseline := requireLastRequest(t, r.env, r.target, r.base+"/repeat").Body
+	for i := 0; i < 5; i++ {
+		r.send(t, cachePrefixTurns, blocks-1, cachePrefixSessionID)
+		if again := requireLastRequest(t, r.env, r.target, r.base+"/repeat").Body; string(again) != string(repeatBaseline) {
+			t.Errorf("%s/repeat: the same request reached the upstream with different bytes on send %d:\n%s\n%s",
+				r.base, i+2, repeatBaseline, again)
+			break
+		}
+	}
+
+	// Rotation: the same history, with the client's breakpoint parked on the
+	// last cacheable block (the repeat sends above) and then on the one
+	// before it — what happens naturally as a client's fixed pool of
+	// breakpoints rolls forward.
 	rotationBaseline := r.capture(t, "/rotation")
 	if r.client.rotates {
 		for _, at := range []int{blocks - 2, 0, -1} {
