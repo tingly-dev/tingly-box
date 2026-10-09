@@ -24,6 +24,7 @@ import {
     Typography,
 } from '@mui/material';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation, Trans } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { useNotify } from '@/hooks/useNotify';
@@ -41,6 +42,7 @@ const CredentialPage = () => {
     const [providers, setProviders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const notify = useNotify();
+    const { t } = useTranslation();
 
     // Reauthorize dialog state (page-local: re-authenticates an existing OAuth
     // provider in place — the shared Connect AI flow only covers adding).
@@ -73,7 +75,7 @@ const CredentialPage = () => {
         setLoading(true);
         const result = await api.getProviders();
         if (result.success) { setProviders(result.data); }
-        else { showNotification(`Failed to load providers: ${result.error}`, 'error'); }
+        else { showNotification(t('credentialPage.loadFailed', { error: result.error }), 'error'); }
         setLoading(false);
     };
 
@@ -84,14 +86,14 @@ const CredentialPage = () => {
 
     const handleDeleteProvider = async (uuid: string) => {
         const result = await api.deleteProvider(uuid);
-        if (result.success) { showNotification('Provider deleted successfully!', 'success'); loadProviders(); }
-        else { showNotification(`Failed to delete provider: ${result.error}`, 'error'); }
+        if (result.success) { showNotification(t('credentialPage.deleted'), 'success'); loadProviders(); }
+        else { showNotification(t('credentialPage.deleteFailed', { error: result.error }), 'error'); }
     };
 
     const handleToggleProvider = async (uuid: string) => {
         const result = await api.toggleProvider(uuid);
         if (result.success) { showNotification(result.message, 'success'); loadProviders(); }
-        else { showNotification(`Failed to toggle provider: ${result.error}`, 'error'); }
+        else { showNotification(t('credentialPage.toggleFailed', { error: result.error }), 'error'); }
     };
 
 
@@ -118,7 +120,7 @@ const CredentialPage = () => {
 
     // Reauthorize handlers (add-flow OAuth success is handled by the shared hook)
     const handleReauthSuccess = () => {
-        showNotification('Provider reauthorized successfully!', 'success');
+        showNotification(t('credentialPage.reauthorized'), 'success');
         setOAuthReauthUuid(null);
         loadProviders();
     };
@@ -126,7 +128,7 @@ const CredentialPage = () => {
     const handleReauthorize = (providerUuid: string) => {
         const provider = oauthProviders.find((p: any) => p.uuid === providerUuid);
         const issuer = provider?.oauth_detail?.provider_type || provider?.oauth_detail?.issuer;
-        if (!issuer) { showNotification('Cannot reauthorize: provider issuer is unknown', 'error'); return; }
+        if (!issuer) { showNotification(t('credentialPage.reauthorizeUnknownIssuer'), 'error'); return; }
         setOAuthReauthUuid(providerUuid);
         setOAuthAutoStartId(issuer);
         setOAuthDialogOpen(true);
@@ -134,16 +136,16 @@ const CredentialPage = () => {
 
     const promptReauthAfterRefreshFailure = (providerUuid: string, reason: string) => {
         const provider = oauthProviders.find((p: any) => p.uuid === providerUuid);
-        setRefreshFailPrompt({ open: true, providerUuid, providerName: provider?.name || 'this provider', reason: reason || 'Unknown error' });
+        setRefreshFailPrompt({ open: true, providerUuid, providerName: provider?.name || t('credentialPage.fallbackProviderName'), reason: reason || t('credentialPage.unknownError') });
     };
 
     const handleRefreshToken = async (providerUuid: string) => {
         try {
             const response = await api.oauthRefresh({ provider_uuid: providerUuid });
-            if (response?.success) { showNotification('Token refreshed successfully!', 'success'); await loadProviders(); }
-            else { promptReauthAfterRefreshFailure(providerUuid, response?.data?.error || response?.error || response?.message || 'Unknown error'); }
+            if (response?.success) { showNotification(t('credentialPage.tokenRefreshed'), 'success'); await loadProviders(); }
+            else { promptReauthAfterRefreshFailure(providerUuid, response?.data?.error || response?.error || response?.message || t('credentialPage.unknownError')); }
         } catch (error: any) {
-            promptReauthAfterRefreshFailure(providerUuid, error?.response?.data?.error || error?.message || 'Unknown error');
+            promptReauthAfterRefreshFailure(providerUuid, error?.response?.data?.error || error?.message || t('credentialPage.unknownError'));
         }
     };
 
@@ -157,14 +159,14 @@ const CredentialPage = () => {
         <PageLayout loading={loading}>
             <Stack spacing={2.5}>
                 <PageHeader
-                    title="Credentials"
+                    title={t('layout.credentials')}
                     subtitle={credentialCounts.total === 0
-                        ? 'No credentials yet'
-                        : `Managing ${credentialCounts.total} credential${credentialCounts.total !== 1 ? 's' : ''}`}
+                        ? t('credentialPage.empty')
+                        : t('credentialPage.managing', { count: credentialCounts.total })}
                     // Empty: the landing below carries Connect AI — one CTA, not two.
                     // The provider catalog is reached from inside Connect AI.
                     actions={credentialCounts.total === 0 ? undefined : (
-                        <Button variant="contained" startIcon={<Add />} onClick={handleConnectAIClick} size="small" sx={{ minWidth: 150 }}>Connect AI</Button>
+                        <Button variant="contained" startIcon={<Add />} onClick={handleConnectAIClick} size="small" sx={{ minWidth: 150 }}>{t('templateActions.connectAI')}</Button>
                     )}
                 />
 
@@ -184,21 +186,21 @@ const CredentialPage = () => {
                     {credentialCounts.total === 0 ? (
                         <EmptyState
                             icon={<VpnKey />}
-                            title="Connect your first AI"
-                            description="Sign in with a subscription you already have (Claude Code, Codex, Gemini CLI…) or paste an API key (OpenAI, Anthropic, DeepSeek…). Every credential lands here, and routing rules pick models from them."
-                            primaryAction={{ label: 'Connect AI', icon: <Add />, onClick: handleConnectAIClick }}
+                            title={t('credentialPage.emptyTitle')}
+                            description={t('credentialPage.emptyDescription')}
+                            primaryAction={{ label: t('templateActions.connectAI'), icon: <Add />, onClick: handleConnectAIClick }}
                         />
                     ) : (
                         <Stack spacing={3} divider={<Divider />}>
                             {credentialCounts.oauth > 0 && (
                                 <Box>
-                                    <SectionTitle label="OAuth" count={credentialCounts.oauth}/>
+                                    <SectionTitle label={t('credentialPage.sectionOAuth')} count={credentialCounts.oauth}/>
                                     <OAuthTable providers={oauthProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onRefreshToken={handleRefreshToken} onReauthorize={handleReauthorize} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota}/>
                                 </Box>
                             )}
                             {credentialCounts.apiKeys > 0 && (
                                 <Box>
-                                    <SectionTitle label="API Keys" count={credentialCounts.apiKeys}/>
+                                    <SectionTitle label={t('credentialPage.sectionApiKeys')} count={credentialCounts.apiKeys}/>
                                     <ApiKeyTable providers={apiKeyProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota}/>
                                 </Box>
                             )}
@@ -213,20 +215,20 @@ const CredentialPage = () => {
             <OAuthDialog open={oauthDialogOpen} autoStartProviderId={oauthAutoStartId} reauthProviderUuid={oauthReauthUuid} onClose={() => { setOAuthDialogOpen(false); setOAuthAutoStartId(null); setOAuthReauthUuid(null); }} onSuccess={handleReauthSuccess}/>
             {/* Refresh-failed → reauthorize guidance */}
             <Dialog open={refreshFailPrompt.open} onClose={() => setRefreshFailPrompt((s) => ({ ...s, open: false }))} maxWidth="xs" fullWidth>
-                <DialogTitle>Token refresh failed</DialogTitle>
+                <DialogTitle>{t('credentialPage.refreshFailedTitle')}</DialogTitle>
                 <DialogContent>
                     <Stack spacing={2} sx={{ pt: 0.5 }}>
                         <Alert severity="warning">{refreshFailPrompt.reason}</Alert>
                         <Typography variant="body2" sx={{
                             color: "text.secondary"
                         }}>
-                            Refreshing the token for <strong>{refreshFailPrompt.providerName}</strong> didn't work. If the credential was revoked or has fully expired, a refresh can't recover it — reauthorize to sign in again. This overwrites the credential in place, keeping the same provider so your routing rules and model keys stay intact.
+                            <Trans i18nKey="credentialPage.refreshFailedBody" values={{ name: refreshFailPrompt.providerName }} components={{ 1: <strong /> }} />
                         </Typography>
                     </Stack>
                 </DialogContent>
                 <DialogActions>
-                    <Button color="inherit" onClick={() => setRefreshFailPrompt((s) => ({ ...s, open: false }))}>Dismiss</Button>
-                    <Button variant="contained" startIcon={<VpnKey />} onClick={() => { const uuid = refreshFailPrompt.providerUuid; setRefreshFailPrompt((s) => ({ ...s, open: false })); handleReauthorize(uuid); }}>Reauthorize</Button>
+                    <Button color="inherit" onClick={() => setRefreshFailPrompt((s) => ({ ...s, open: false }))}>{t('credentialPage.dismiss')}</Button>
+                    <Button variant="contained" startIcon={<VpnKey />} onClick={() => { const uuid = refreshFailPrompt.providerUuid; setRefreshFailPrompt((s) => ({ ...s, open: false })); handleReauthorize(uuid); }}>{t('credentialPage.reauthorize')}</Button>
                 </DialogActions>
             </Dialog>
             {providerEditDialogs}
