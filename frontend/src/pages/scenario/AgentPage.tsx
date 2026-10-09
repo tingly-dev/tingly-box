@@ -3,6 +3,7 @@ import { Box, Button, Stack, Tooltip, Typography } from '@mui/material';
 import { BarChart as UsageIcon, ListAlt as RequestsIcon, Rule as QuickStartIcon } from '@/components/icons';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
+import ConfigRow from '@/components/ConfigRow';
 import PageHeader from '@/components/PageHeader';
 import { ClientConfigStatusChip } from '@/components/ClientConfigStatusChip';
 import ConnectAIDialogs from '@/components/ConnectAIDialogs';
@@ -128,6 +129,10 @@ export interface AgentPageSlot {
     runApply: (apply: () => Promise<AgentApplyResult>) => Promise<AgentApplyResult>;
     isApplyLoading: boolean;
 }
+
+// Text buttons in a ConfigRow's content: no border or caps, so the row reads like its
+// neighbours (a value and its small controls), not like a toolbar.
+const linkButtonSx = { textTransform: 'none', minWidth: 0, px: 1 } as const;
 
 const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) => {
     const { t } = useTranslation();
@@ -275,39 +280,37 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         showApiKeyRow={connection?.apiKeyRow}
                         showBaseUrlRow={connection?.baseUrlRow}
                     />
-                    {/* Same three columns as the ConfigRows above (label | content | action). */}
-                    <Box
-                        sx={{
-                            px: 2,
-                            pt: 1,
-                            display: 'grid',
-                            alignItems: 'center',
-                            columnGap: { xs: 1, sm: 3 },
-                            rowGap: 0.5,
-                            gridTemplateColumns: { xs: 'minmax(0, 1fr) auto', sm: '168px minmax(0, 1fr) auto' },
-                        }}
-                    >
-                        <Typography variant="body2" sx={{ fontWeight: 500, pl: 1.5, gridColumn: { xs: '1 / -1', sm: '1' } }}>
-                            {t('scenarioPage.lookIn', { defaultValue: 'Status' })}
-                        </Typography>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, minWidth: 0, gridColumn: { xs: '1', sm: '2' } }}>
-                            <Button onClick={() => setLookIn('requests')} variant="outlined" size="small" startIcon={<RequestsIcon />}>
-                                {t('agentActivity.requests')}
-                            </Button>
-                            <Button onClick={() => setLookIn('usage')} variant="outlined" size="small" startIcon={<UsageIcon />}>
-                                {t('agentActivity.usage')}
-                            </Button>
-                            {/* Quick Start is not a dialog: it sits above the rules while there is
-                                setup to do and leaves when done. This brings it back, reset. */}
-                            {quickStart && quickStartHidden && (
-                                <Tooltip title={t('agentSetup.restartTooltip', { defaultValue: 'Run Quick Start again' })}>
-                                    <Button onClick={restartQuickStart} variant="outlined" size="small" startIcon={<QuickStartIcon />}>
-                                        {t('agentSetup.quickStart')}
-                                    </Button>
-                                </Tooltip>
-                            )}
-                        </Box>
-                        {slotRouting && <Box sx={{ gridColumn: { xs: '2', sm: '3' }, justifySelf: 'end' }}>{slots.modeSwitch}</Box>}
+                    {/* A row like the ones above — the same ConfigRow — whose content is
+                        three light text buttons rather than a value. */}
+                    <Box sx={{ px: 2, py: 0.5 }}>
+                        <ConfigRow
+                            activeTab="status"
+                            onTabChange={() => undefined}
+                            tabs={[{
+                                key: 'status',
+                                label: t('scenarioPage.lookIn', { defaultValue: 'Status' }),
+                                content: (
+                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 0.5 }}>
+                                        <Button onClick={() => setLookIn('requests')} variant="text" size="small" startIcon={<RequestsIcon />} sx={linkButtonSx}>
+                                            {t('agentActivity.requests')}
+                                        </Button>
+                                        <Button onClick={() => setLookIn('usage')} variant="text" size="small" startIcon={<UsageIcon />} sx={linkButtonSx}>
+                                            {t('agentActivity.usage')}
+                                        </Button>
+                                        {/* Quick Start is not a dialog: it sits above the rules while there is
+                                            setup to do and leaves when done. This brings it back, reset. */}
+                                        {quickStart && quickStartHidden && (
+                                            <Tooltip title={t('agentSetup.restartTooltip', { defaultValue: 'Run Quick Start again' })}>
+                                                <Button onClick={restartQuickStart} variant="text" size="small" startIcon={<QuickStartIcon />} sx={linkButtonSx}>
+                                                    {t('agentSetup.quickStart')}
+                                                </Button>
+                                            </Tooltip>
+                                        )}
+                                    </Box>
+                                ),
+                                actions: slotRouting ? slots.modeSwitch : undefined,
+                            }]}
+                        />
                     </Box>
                 </UnifiedCard>
 
