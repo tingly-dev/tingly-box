@@ -101,28 +101,9 @@ next request" is the property that makes Python's `write → call` flow (PR2)
 race-free. The directory defaults to the real config dir, so a script written
 for a test also works against a developer's running tb.
 
-## Harness: `harness script <file>…`
-
-Drives each script through the in-process gateway (built-in rule → vmodel
-provider → the agent's wire format) with **one request per step**, then checks
-each response against what its step declares: error steps by HTTP status, tool
-steps by tool name and text, plain steps by text, `midstream` steps by the
-stream *not* completing (`protocoltest.StreamShapeForAgent`). Expectations are
-resolved by the same `vmodel.Sequence` the server runs, so defaults, tool ids
-and `repeat` cannot drift between the check and the engine.
-
-- `--agent claude|codex|opencode` picks the wire format (Anthropic messages /
-  OpenAI Responses); `--no-stream` skips mid-stream steps.
-- Shipped scripts in `cli/harness/testdata/scripts/` run in CI as the `script`
-  harness leg and in `go test ./cli/harness`.
-
-This verifies "does my script do what I wrote, through the real pipeline" — it
-is also the fastest way to preview a script. Driving a script with a *real*
-agent CLI (`harness agent … --script`) is deferred.
-
 ## Phases
 
-1. **PR1 — engine, YAML, directory serving, harness** *(this change)*.
+1. **PR1 — engine, YAML, directory serving** *(this change)*; then `harness script` (a follow-up PR) to check a script step by step through the gateway.
 2. **PR2 — Python `tingly.vmodel`.** A chain builder that compiles to this
    schema plus a `Testbed` that launches a real tb with a throwaway config dir,
    drops scripts into `vmodels/`, and hands back ready base URLs — so no tb-side
@@ -142,4 +123,3 @@ agent CLI (`harness agent … --script`) is deferred.
 - `vmodel/{anthropic,openai}/sequence_model.go` — `Snapshot` carries tool/usage/stop reason.
 - `vmodel/virtualserver/scripts.go` — the directory store; `service.go` `SetScriptDir`; `handler.go` refresh hooks.
 - `internal/server/server.go` — wires `<config-dir>/vmodels`.
-- `cli/harness/script.go`, `testdata/scripts/` — the harness command and shipped scripts.
