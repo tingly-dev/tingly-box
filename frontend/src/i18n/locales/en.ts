@@ -2253,8 +2253,6 @@ export default {
     }
   },
   "scenarioPage": {
-    "connectionDetails": "Connection details",
-    "hideConnectionDetails": "Hide details",
     "setupGuide": "Setup Guide",
     "config": "Config",
     "autoConfig": "Auto Config",

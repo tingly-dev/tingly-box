@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { Box, Button, IconButton, Tooltip, Typography } from '@mui/material';
-import { BarChart as ActivityIcon, ContentCopy, ExpandLess, ExpandMore } from '@/components/icons';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { Box, Button, Tooltip } from '@mui/material';
+import { BarChart as ActivityIcon } from '@/components/icons';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import CardGrid from '@/components/CardGrid.tsx';
@@ -107,18 +106,6 @@ export interface AgentPageDescriptor {
     slotRouting?: { unifiedRuleUuid: string };
 }
 
-// Whether the user opened (or closed) the connection details by hand, per
-// agent. Absent = no choice yet: the page decides from the config status.
-const connectionPrefKey = (scenario: string) => `agent-connection-expanded-${scenario}`;
-const readConnectionPref = (scenario: string): boolean | null => {
-    try {
-        const v = localStorage.getItem(connectionPrefKey(scenario));
-        return v === null ? null : v === 'true';
-    } catch {
-        return null;
-    }
-};
-
 /** What an agent's setup dialog gets from the page. */
 export interface AgentPageSlot {
     scenario: string;
@@ -157,7 +144,6 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     const [dialogOpen, setDialogOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
     const [activityOpen, setActivityOpen] = useState(false);
-    const [connectionPref, setConnectionPref] = useState<boolean | null>(() => readConnectionPref(scenario));
     const { status: clientConfigStatus } = useClientConfigStatus(agent.clientConfigTool ?? null, [rules, dialogOpen, slotMode]);
     const context1M = useContext1MToggle(() => setDialogOpen(true));
     // Unified Connect AI add flow (picker + form/OAuth/paste/import dialogs), offered by Quick Start.
@@ -200,18 +186,6 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
         isApplyLoading,
     };
     const openDialog = () => setDialogOpen(true);
-
-    // Once the client is known to use this gateway (its config file reads
-    // back as applied), the Base URL / Key / Plugins rows have done their job:
-    // fold them into one line so the model rules get the screen. Without that
-    // proof (SDK pages, a config that is outdated or not applied) they stay
-    // open — there the values ARE the page. A manual choice always wins.
-    const connectionExpanded = connectionPref ?? clientConfigStatus?.state !== 'applied';
-    const setConnectionExpanded = (expanded: boolean) => {
-        setConnectionPref(expanded);
-        try { localStorage.setItem(connectionPrefKey(scenario), String(expanded)); } catch { /* per-session only */ }
-    };
-    const baseUrlFull = `${baseUrl}/tingly/${scenario}`;
 
     const configButton = setup.kind !== 'none' && (
         <Button
@@ -273,24 +247,6 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                     contentMaxWidth={SCENARIO_HEADER_CONTENT_MAX_WIDTH}
                     rightAction={headerActions}
                 >
-                    {!connectionExpanded ? (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 0.5, minWidth: 0 }}>
-                            <Typography variant="caption" sx={{ color: 'text.secondary', flexShrink: 0 }}>Base URL</Typography>
-                            <Typography noWrap title={baseUrlFull} sx={{ fontFamily: fontMono, fontSize: fontSizes.md, color: 'primary.main', minWidth: 0 }}>
-                                {baseUrlFull}
-                            </Typography>
-                            <Tooltip title={t('common.copy', { defaultValue: 'Copy' })}>
-                                <IconButton size="small" onClick={() => void copyToClipboard(baseUrlFull, 'Base URL')} aria-label="Copy Base URL">
-                                    <ContentCopy sx={{ fontSize: 16 }} />
-                                </IconButton>
-                            </Tooltip>
-                            <Box sx={{ flex: 1 }} />
-                            <Button size="small" variant="text" endIcon={<ExpandMore />} onClick={() => setConnectionExpanded(true)} sx={{ textTransform: 'none', color: 'text.secondary', flexShrink: 0 }}>
-                                {t('scenarioPage.connectionDetails', { defaultValue: 'Connection details' })}
-                            </Button>
-                        </Box>
-                    ) : (
-                    <>
                     <ProviderConfigCard
                         title={connection?.titleKey ? t(connection.titleKey) : agent.title}
                         baseUrlPath={`/tingly/${scenario}`}
@@ -301,15 +257,6 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         showApiKeyRow={connection?.apiKeyRow}
                         showBaseUrlRow={connection?.baseUrlRow}
                     />
-                    {clientConfigStatus?.state === 'applied' && (
-                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', px: 2 }}>
-                            <Button size="small" variant="text" endIcon={<ExpandLess />} onClick={() => setConnectionExpanded(false)} sx={{ textTransform: 'none', color: 'text.secondary' }}>
-                                {t('scenarioPage.hideConnectionDetails', { defaultValue: 'Hide details' })}
-                            </Button>
-                        </Box>
-                    )}
-                    </>
-                    )}
                 </UnifiedCard>
                 {quickStart && (
                     <AgentSetupCard
