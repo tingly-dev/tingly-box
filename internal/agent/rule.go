@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -39,10 +41,27 @@ var DshRequestModels = []string{
 	"tingly-dsh",
 }
 
-// createOrUpdateClaudeCodeRules creates or updates all Claude Code rules.
-// For convenience, all tingly/cc-* rules are updated with the same provider + model.
-func (aa *AgentApply) createOrUpdateClaudeCodeRules(providerUUID, model string) (int, int, error) {
-	return aa.createOrUpdateRulesForScenario(typ.ScenarioClaudeCode, "Claude Code", ClaudeCodeRequestModels, providerUUID, model)
+// createOrUpdateClaudeCodeRules points the Claude Code rules at one provider +
+// model. Separate mode (or a separate-mode apply) updates and switches on every
+// tingly/cc-* rule, for convenience. Unified mode only updates the main rule:
+// every slot without a rule of its own already uses it, and a slot the user
+// gave its own rule (config.SetClaudeCodeSlot) keeps it, on or off.
+func (aa *AgentApply) createOrUpdateClaudeCodeRules(providerUUID, model string, unified bool) (int, int, error) {
+	if !unified || aa.config.GetScenarioFlag(typ.ScenarioClaudeCode, constant.FlagSeparate) {
+		return aa.createOrUpdateRulesForScenario(typ.ScenarioClaudeCode, "Claude Code", ClaudeCodeRequestModels, providerUUID, model)
+	}
+	service := &loadbalance.Service{Active: true, Provider: providerUUID, Model: model}
+	for _, uuid := range []string{serverconfig.RuleUUIDCC, serverconfig.RuleUUIDBuiltinCC} {
+		if rule := aa.config.GetRuleByUUID(uuid); rule != nil {
+			rule.Services = []*loadbalance.Service{service}
+			rule.Active = true
+			if err := aa.config.UpdateRule(rule.UUID, *rule); err != nil {
+				return 0, 0, fmt.Errorf("failed to update rule %s: %w", rule.RequestModel, err)
+			}
+			return 0, 1, nil
+		}
+	}
+	return aa.createOrUpdateRulesForScenario(typ.ScenarioClaudeCode, "Claude Code", ClaudeCodeRequestModels[:1], providerUUID, model)
 }
 
 // createOrUpdateOpenCodeRules creates or updates OpenCode rules.

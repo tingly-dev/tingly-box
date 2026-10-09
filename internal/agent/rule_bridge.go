@@ -171,7 +171,7 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 			fileResult.ProviderUUID = provider.UUID
 			fileResult.Model = req.Model
 
-			ruleCreated, ruleUpdated, err := aa.createOrUpdateRules(req.AgentType, req.Provider, req.Model)
+			ruleCreated, ruleUpdated, err := aa.createOrUpdateRules(req.AgentType, req.Provider, req.Model, req.Unified)
 			if err != nil {
 				fileResult.Warnings = append(fileResult.Warnings,
 					fmt.Sprintf("failed to create/update routing rules: %v", err))
@@ -187,10 +187,10 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 }
 
 // createOrUpdateRules creates or updates routing rules for the given agent type
-func (aa *AgentApply) createOrUpdateRules(agentType AgentType, providerUUID, model string) (int, int, error) {
+func (aa *AgentApply) createOrUpdateRules(agentType AgentType, providerUUID, model string, unified bool) (int, int, error) {
 	switch agentType {
 	case AgentTypeClaudeCode:
-		return aa.createOrUpdateClaudeCodeRules(providerUUID, model)
+		return aa.createOrUpdateClaudeCodeRules(providerUUID, model, unified)
 	case AgentTypeOpenCode:
 		return aa.createOrUpdateOpenCodeRules(providerUUID, model)
 	case AgentTypeCodex:

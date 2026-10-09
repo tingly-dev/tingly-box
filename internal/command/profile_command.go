@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -88,13 +89,22 @@ func profileList(appManager *app.AppManager) error {
 
 	fmt.Println("Claude Code profiles:")
 	for _, p := range profiles {
-		mode := "separate"
-		if p.Unified {
-			mode = "unified"
-		}
-		fmt.Printf("  %s  %-20s %s\n", p.ID, p.Name, mode)
+		fmt.Printf("  %s  %-20s %s\n", p.ID, p.Name, profileModeLabel(p))
 	}
 	return nil
+}
+
+// profileModeLabel describes how a profile routes Claude Code's model slots:
+// "separate", "unified", or "unified + subagent" when unified-mode slots have
+// a rule of their own.
+func profileModeLabel(p typ.ProfileMeta) string {
+	if !p.Unified {
+		return "separate"
+	}
+	if len(p.ClaudeCodeSlots) == 0 {
+		return "unified"
+	}
+	return "unified + " + strings.Join(p.ClaudeCodeSlots, ", ")
 }
 
 // profileShow prints detailed information about a specific profile.
@@ -127,14 +137,9 @@ func profileShow(appManager *app.AppManager, nameOrID string) error {
 		}
 	}
 
-	mode := "separate"
-	if result.Profile.Unified {
-		mode = "unified"
-	}
-
 	fmt.Printf("Profile: %s (%s)\n", result.Profile.ID, result.Profile.Name)
 	fmt.Printf("  Scenario: %s\n", result.Scenario)
-	fmt.Printf("  Mode:     %s\n", mode)
+	fmt.Printf("  Mode:     %s\n", profileModeLabel(result.Profile))
 	fmt.Println("  Rules:")
 
 	if len(result.Rules) == 0 {

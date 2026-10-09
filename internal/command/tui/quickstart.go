@@ -41,11 +41,13 @@ type quickstartState struct {
 	apiToken         string
 	proxyURL         string
 	model            string
+	models           []string // the provider's models, as fetched by qsModel
 	startServer      bool
 
 	// Apply-agent sub-flow
 	selectedAgents      []agent.AgentType
 	ccUnified           bool
+	ccSubagentModel     string // unified mode: subagent model, "" = same as the default
 	ccInstallStatusLine bool
 	agentResults        []*agent.ApplyAgentResult
 }
@@ -458,6 +460,7 @@ func qsModel(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 		}
 		return res.Models, nil
 	})
+	s.models = models
 
 	if len(models) == 0 {
 		r, err := Input("Couldn't fetch models - enter a model name:", InputOptions{
@@ -703,6 +706,13 @@ func qsAgent(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 			return s, StepCancel, nil
 		}
 		s.ccUnified = uni.Value
+		s.ccSubagentModel = ""
+		if s.ccUnified {
+			var res StepResult
+			if s, res, err = qsSubagentModel(ctx, s); res != StepContinue {
+				return s, res, err
+			}
+		}
 
 		sl, err := Confirm("Install Claude Code status line script?", ConfirmOptions{
 			Header:     ctx.Header,
@@ -719,6 +729,14 @@ func qsAgent(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 			return s, StepCancel, nil
 		}
 		s.ccInstallStatusLine = sl.Value
+	}
+
+	// Before applying, so the Claude Code env written below already sends
+	// subagents to their own rule.
+	if hasClaudeCode && s.ccUnified && s.ccSubagentModel != "" {
+		if err := splitSubagentSlot(s.mgr.GetGlobalConfig(), s.provider.UUID, s.ccSubagentModel); err != nil {
+			fmt.Println(errorStyle.Render(fmt.Sprintf("  ✗ Claude Code subagent model: %v", err)))
+		}
 	}
 
 	agentUC := usecase.NewAgentUseCase(s.mgr.GetGlobalConfig(), "localhost")
@@ -748,6 +766,65 @@ func qsAgent(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 		}
 	}
 	return s, StepContinue, nil
+}
+
+// qsSubagentModel asks which model Claude Code's subagents use in unified
+// mode: the default model, or one of their own (the most common reason to
+// split a slot off the unified rule).
+func qsSubagentModel(ctx StepContext, s quickstartState) (quickstartState, StepResult, error) {
+	const other = "\x00other"
+	items := []SelectItem[string]{
+		{Title: "Same as the default model", Description: s.model, Value: ""},
+	}
+	for _, m := range s.models {
+		if m != s.model {
+			items = append(items, SelectItem[string]{Title: m, Value: m})
+		}
+	}
+	items = append(items, SelectItem[string]{Title: "Other…", Description: "Enter a model name manually", Value: other})
+	r, err := Select("Model for Claude Code subagents:", items, SelectOptions{
+		Header:    ctx.Header,
+		CanGoBack: true,
+		PageSize:  12,
+	})
+	if err != nil {
+		return s, StepCancel, err
+	}
+	switch {
+	case r.IsBack():
+		return s, StepBack, nil
+	case r.IsCancel():
+		return s, StepCancel, nil
+	}
+	if r.Value != other {
+		s.ccSubagentModel = r.Value
+		return s, StepContinue, nil
+	}
+	in, err := Input("Subagent model name:", InputOptions{Header: ctx.Header, Required: true, CanGoBack: true})
+	if err != nil {
+		return s, StepCancel, err
+	}
+	if in.IsBack() {
+		return s, StepBack, nil
+	}
+	if in.IsCancel() {
+		return s, StepCancel, nil
+	}
+	if in.Value != s.model {
+		s.ccSubagentModel = in.Value
+	}
+	return s, StepContinue, nil
+}
+
+// splitSubagentSlot gives Claude Code's subagent slot a rule of its own,
+// routed to providerUUID + model.
+func splitSubagentSlot(cfg *serverconfig.Config, providerUUID, model string) error {
+	rule, err := cfg.SetClaudeCodeSlot(typ.ScenarioClaudeCode, "subagent", true)
+	if err != nil {
+		return err
+	}
+	rule.Services = []*loadbalance.Service{{Active: true, Provider: providerUUID, Model: model}}
+	return cfg.UpdateRule(rule.UUID, rule)
 }
 
 // agentItemDescription returns a one-line summary of where the agent writes
