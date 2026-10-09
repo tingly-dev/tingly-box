@@ -125,8 +125,8 @@
 | 提交 | 对应 | 做了什么 | 设计取舍 |
 |---|---|---|---|
 | `fix(agent): tick Quick Start's install and apply steps from the real config status` | F16 | 新增 `configApplied`（头部状态芯片同一信号）：配置回读为 applied 时，③ 安装、④ 应用自动完成 | 先于版面改动单独提交：它不改变任何布局，风险最低，且独立有价值（修了"已应用却不打勾"）。只对有回读能力的 Agent（Claude Code / Codex / DSH）生效，其余仍靠请求信号或手点 |
-| `feat(agent): merge Quick Start into the header card, actions in a side column` | F15、F17、F18 | **首版（侧栏竖排）被否决，版式已由下一行取代**；保留其 `inline` 步骤组件与"完成后消失"逻辑。 | —— |
-| `fix(agent): lay the merged header out on the title row, setup as an inset` | F15、F17、F18（修正） | ① `AgentSetupCard` 新增 `inline` 形态：只显示当前一步 + 四个进度圆点（可点回看），全部完成后**整块消失**；② `AgentPage` 把头卡、步骤、连接行合成一张卡，操作按钮在右侧竖排（Claude Code 的 Unified/Separate 开关在栏顶，侧栏更宽）；③ 步骤消失后，侧栏出现"Setup steps"文字按钮可重新打开 | 主按钮随状态变化：配置未应用时 Auto Config 为主按钮，已应用或有 Web UI 链接时让位。按钮列在窄屏掉到卡片下方成一列 |
+| `feat(agent): merge Quick Start into the header card, actions in a side column` | F15、F17、F18 | 首版：`AgentSetupCard` 新增 `inline` 形态（只显示当前一步 + 四个进度圆点，可点回看，全部完成后整块消失），`AgentPage` 把头卡、步骤、连接行合成一张卡，操作按钮在右侧竖排 | **版式被否决，由下一行取代**；`inline` 步骤组件与"完成后消失"逻辑保留 |
+| `fix(agent): lay the merged header out on the title row, setup as a tinted inset` | F15、F17、F18（修正） | 操作按钮回到标题行右侧：主按钮随状态变化（配置未应用时 Auto Config 为主，已应用或有 Web UI 链接时让位），「请求与用量」「重新打开设置步骤」收成图标；Claude Code 的 Unified/Separate 开关仍在标题行；设置步骤变成卡内有底色的嵌入区，完成后整块消失；连接行恢复整行宽度 | 合并不等于抹掉边界：会来了又走的那一块应当有自己的容器（见 8.6）。次要动作用图标，是因为它们是"随时看一眼"而不是"需要你做" |
 
 ### 8.4 验证
 
