@@ -49,6 +49,14 @@ export interface DashboardRecordsParams {
     provider: string;
     model: string;
     user: string;
+    /** Agent (usage-record scenario), or 'all'. */
+    scenario: string;
+}
+
+/** An agent that has usage in the current range, for the Agent filter. */
+export interface ScenarioOption {
+    scenario: string;
+    requests: number;
 }
 
 export interface ProviderOptionGroup {
@@ -70,10 +78,13 @@ export function useDashboardData({
     timeRange,
     isHourlyRange,
     viewMode,
+    initialScenario = 'all',
 }: {
     timeRange: TimeRange;
     isHourlyRange: boolean;
     viewMode: 'summary' | 'requests' | 'activity';
+    /** Agent to start filtered to (a deep link from an agent page). */
+    initialScenario?: string;
 }) {
     const { t } = useTranslation();
 
@@ -89,6 +100,8 @@ export function useDashboardData({
     const [selectedProvider, setSelectedProvider] = useState<string>('all');
     const [selectedModel, setSelectedModel] = useState<string>('all');
     const [selectedUser, setSelectedUser] = useState<string>('all');
+    const [selectedScenario, setSelectedScenario] = useState<string>(initialScenario);
+    const [scenarioOptions, setScenarioOptions] = useState<ScenarioOption[]>([]);
     // Bumped on manual refresh so the fixed-window activity heatmap refetches too.
     const [heatmapRefresh, setHeatmapRefresh] = useState(0);
     const [records, setRecords] = useState<UsageRecord[]>([]);
@@ -102,7 +115,7 @@ export function useDashboardData({
     // once from the new time params).
     const [recordsParams, setRecordsParams] = useState<DashboardRecordsParams | null>(null);
 
-    const buildTimeParams = useCallback((provider: string, model: string, user: string, range: TimeRange) => {
+    const buildTimeParams = useCallback((provider: string, model: string, user: string, scenario: string, range: TimeRange) => {
         const now = new Date();
         const config = TIME_RANGE_CONFIG[range];
         const todayStart = getLocalMidnight(now);
@@ -132,6 +145,9 @@ export function useDashboardData({
         }
         if (user && user !== 'all') {
             params.user_id = user;
+        }
+        if (scenario && scenario !== 'all') {
+            params.scenario = scenario;
         }
         return params;
     }, []);
@@ -178,11 +194,11 @@ export function useDashboardData({
         }
     }, []);
 
-    const loadData = useCallback(async (provider: string, model: string, user: string, range: TimeRange) => {
+    const loadData = useCallback(async (provider: string, model: string, user: string, scenario: string, range: TimeRange) => {
         const seq = ++requestSeq.current;
         try {
             const config = TIME_RANGE_CONFIG[range];
-            const params = buildTimeParams(provider, model, user, range);
+            const params = buildTimeParams(provider, model, user, scenario, range);
 
             const [statsResult, timeSeriesResult] = await Promise.all([
                 // limit is the server-side max (1000): the stat-card totals are
@@ -205,7 +221,7 @@ export function useDashboardData({
             }
 
             // Store the records query params for the requests view
-            setRecordsParams({ start_time: params.start_time, end_time: params.end_time, provider, model, user });
+            setRecordsParams({ start_time: params.start_time, end_time: params.end_time, provider, model, user, scenario });
         } catch (error) {
             console.error('Failed to load dashboard data:', error);
         } finally {
@@ -240,6 +256,9 @@ export function useDashboardData({
             if (params.user !== 'all') {
                 filters.user_id = params.user;
             }
+            if (params.scenario !== 'all') {
+                filters.scenario = params.scenario;
+            }
             const result = await api.getUsageRecords(filters);
             if (seq !== recordsSeq.current) {
                 return;
@@ -262,8 +281,31 @@ export function useDashboardData({
     }, [loadFilterOptions]);
 
     useEffect(() => {
-        loadData(selectedProvider, selectedModel, selectedUser, timeRange);
-    }, [loadData, selectedProvider, selectedModel, selectedUser, timeRange]);
+        loadData(selectedProvider, selectedModel, selectedUser, selectedScenario, timeRange);
+    }, [loadData, selectedProvider, selectedModel, selectedUser, selectedScenario, timeRange]);
+
+    // Agents with usage in this range. Asked for on its own, over the time
+    // range only: deriving it from the filtered stats would shrink the list
+    // to the selected agent (same trap as the provider options above). An
+    // agent picked from a link stays in the list even if it has no usage in
+    // this range, so the select never shows a value it doesn't offer.
+    const [scenarioRefresh, setScenarioRefresh] = useState(0);
+    useEffect(() => {
+        let cancelled = false;
+        const { start_time, end_time } = buildTimeParams('all', 'all', 'all', 'all', timeRange);
+        api.getUsageStats({ start_time, end_time, group_by: 'scenario', limit: 1000 })
+            .then((result: any) => {
+                if (cancelled || !Array.isArray(result?.data)) return;
+                setScenarioOptions(
+                    result.data
+                        .map((row: any) => ({ scenario: row.scenario || row.key || '', requests: row.request_count || 0 }))
+                        .filter((o: ScenarioOption) => o.scenario !== '')
+                        .sort((a: ScenarioOption, b: ScenarioOption) => b.requests - a.requests),
+                );
+            })
+            .catch((error: unknown) => console.error('Failed to load agent options:', error));
+        return () => { cancelled = true; };
+    }, [buildTimeParams, timeRange, scenarioRefresh]);
 
     // Provider/model options are snapshotted from the current range's stats, so a
     // selection from one range can be stale (or simply absent) in another. Clear
@@ -305,17 +347,18 @@ export function useDashboardData({
                 // loadData refreshes charts and, via the fresh recordsParams
                 // object it publishes, the requests view. Bump the heatmap key
                 // too — the Activity view used to go stale under auto-refresh.
-                loadData(selectedProvider, selectedModel, selectedUser, timeRange);
+                loadData(selectedProvider, selectedModel, selectedUser, selectedScenario, timeRange);
                 setHeatmapRefresh((n) => n + 1);
             }, 60000);
             return () => clearInterval(interval);
         }
-    }, [autoRefresh, loadData, selectedProvider, selectedModel, selectedUser, timeRange]);
+    }, [autoRefresh, loadData, selectedProvider, selectedModel, selectedUser, selectedScenario, timeRange]);
 
     const handleRefresh = () => {
         setRefreshing(true);
         loadFilterOptions();
-        loadData(selectedProvider, selectedModel, selectedUser, timeRange);
+        setScenarioRefresh((n) => n + 1);
+        loadData(selectedProvider, selectedModel, selectedUser, selectedScenario, timeRange);
         setHeatmapRefresh((n) => n + 1);
     };
 
@@ -390,7 +433,7 @@ export function useDashboardData({
             .map((m) => m.model));
     }, [stats, selectedModel]);
 
-    const hasActiveFilters = selectedProvider !== 'all' || selectedModel !== 'all' || selectedUser !== 'all';
+    const hasActiveFilters = selectedProvider !== 'all' || selectedModel !== 'all' || selectedUser !== 'all' || selectedScenario !== 'all';
 
     // Owner label is rendered through t() so a live language switch updates it;
     // sharing-key labels carry their own display name instead.
@@ -410,6 +453,7 @@ export function useDashboardData({
         setSelectedProvider('all');
         setSelectedModel('all');
         setSelectedUser('all');
+        setSelectedScenario('all');
     };
 
     return {
@@ -434,6 +478,9 @@ export function useDashboardData({
         setSelectedModel,
         selectedUser,
         setSelectedUser,
+        selectedScenario,
+        setSelectedScenario,
+        scenarioOptions,
         hasActiveFilters,
         handleClearFilters,
         // filter options

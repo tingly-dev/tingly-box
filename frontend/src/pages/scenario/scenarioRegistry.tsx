@@ -167,6 +167,18 @@ export const SCENARIOS: ScenarioDescriptor[] = [
     },
 ];
 
+/**
+ * Display name of a usage-record `scenario` value. Profiled scenarios come as
+ * "claude_code:p1" — the agent's name, then the profile after a "·". Unknown
+ * ids (retired or custom scenarios) are shown as-is.
+ */
+export const scenarioLabel = (t: (key: string) => string, scenario: string): string => {
+    const [base, profile] = scenario.split(':', 2);
+    const known = SCENARIOS.find((s) => s.id === base);
+    const name = known ? t(known.labelKey) : base;
+    return profile ? `${name} · ${profile}` : name;
+};
+
 const STORAGE_KEY = 'scenario.hiddenScenarios';
 const DEFAULTS_VERSION_KEY = 'scenario.hiddenDefaultsVersion';
 const VISIBILITY_EVENT = 'scenario-visibility-change';
