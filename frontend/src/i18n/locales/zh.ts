@@ -2193,6 +2193,7 @@ export default {
     "loadFailed": "无法加载该 Agent 的请求。"
   },
   "agentSetup": {
+    "setup": "设置",
     "showSteps": "设置步骤",
     "quickStart": "快速开始",
     "done": "已完成",
@@ -2247,6 +2248,9 @@ export default {
     },
   },
   "scenarioPage": {
+    "tabs": {
+      "connection": "连接"
+    },
     "setupGuide": "配置指南",
     "config": "配置",
     "autoConfig": "自动配置",

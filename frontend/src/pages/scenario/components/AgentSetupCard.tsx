@@ -327,6 +327,9 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     // are done), unless the user picked another with the dots.
     const [viewStep, setViewStep] = useState<number | null>(null);
     const [reopened, setReopened] = useState(false);
+    // Inline: the row's details (install commands, the apply description, reset)
+    // open on demand; the row itself stays one line.
+    const [detailsOpen, setDetailsOpen] = useState(false);
     const shown = viewStep ?? (firstIncomplete === -1 ? 3 : firstIncomplete);
     useEffect(() => { onAllDoneChange?.(allDone); }, [allDone, onAllDoneChange]);
     useEffect(() => { if (reopenKey > 0) { setReopened(true); setViewStep(null); } }, [reopenKey]);
@@ -346,46 +349,6 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         applyStepLabel,
     ];
     const stepDone = [providerDone, modelDone, installDone, applyDone];
-    const progressRow = (
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                {t('agentSetup.quickStart')} {progressLabel}
-            </Typography>
-            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-                {stepNames.map((name, i) => (
-                    <Tooltip key={i} title={name}>
-                        <Box
-                            component="button"
-                            type="button"
-                            aria-label={name}
-                            aria-current={shown === i ? 'step' : undefined}
-                            onClick={() => setViewStep(i)}
-                            sx={{
-                                width: 10, height: 10, p: 0, border: 0, borderRadius: '50%', cursor: 'pointer',
-                                bgcolor: stepDone[i] ? 'success.main' : shown === i ? 'primary.main' : 'action.disabledBackground',
-                                boxShadow: shown === i ? (theme) => `0 0 0 3px ${theme.palette.action.selected}` : 'none',
-                            }}
-                        />
-                    </Tooltip>
-                ))}
-            </Stack>
-            <Box sx={{ flex: 1 }} />
-            <Button size="small" variant="text" onClick={handleReset}
-                sx={{ py: 0, textTransform: 'none', color: 'text.secondary', minWidth: 0, fontSize: fontSizes.sm }}>
-                {t('agentSetup.resetProgress')}
-            </Button>
-            <Tooltip title={t('templateActions.howRoutingWorks', { defaultValue: 'How routing works' })}>
-                <IconButton
-                    size="small"
-                    aria-label={t('templateActions.howRoutingWorks', { defaultValue: 'How routing works' })}
-                    onClick={() => { if (onShowGuide) onShowGuide(); else setShowGuide(true); }}
-                    sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
-                >
-                    <HelpOutlineIcon fontSize="small" />
-                </IconButton>
-            </Tooltip>
-        </Stack>
-    );
     const guideDialog = !onShowGuide && (
         <EntryGuideDialog open={showGuide} onClose={() => setShowGuide(false)} mode="direct" />
     );
@@ -399,7 +362,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             direction="row"
                             spacing={1.25}
                             sx={{ alignItems: "center", flexWrap: 'wrap', rowGap: 0.5 }}>
-                            {providerLoading ? <CircularProgress size={20} sx={{ flexShrink: 0 }} /> : <StepIndicator step={1} done={providerDone} active={firstIncomplete === 0} />}
+                            {providerLoading ? <CircularProgress size={20} sx={{ flexShrink: 0 }} /> : (!inline && <StepIndicator step={1} done={providerDone} active={firstIncomplete === 0} />)}
                             <Typography
                                 variant="body2"
                                 color={providerDone ? 'text.primary' : firstIncomplete === 0 ? 'primary.main' : 'text.disabled'}
@@ -439,7 +402,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             direction="row"
                             spacing={1.25}
                             sx={{ alignItems: "center", flexWrap: 'wrap', rowGap: 0.5 }}>
-                            <StepIndicator step={2} done={modelDone} active={firstIncomplete === 1} />
+                            {!inline && <StepIndicator step={2} done={modelDone} active={firstIncomplete === 1} />}
                             <Typography
                                 variant="body2"
                                 color={modelDone ? 'text.primary' : firstIncomplete === 1 ? 'primary.main' : 'text.disabled'}
@@ -495,7 +458,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                 flexWrap: 'wrap',
                                 rowGap: 0.5
                             }, installDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : false]}>
-                            <StepIndicator step={3} done={installDone} active={firstIncomplete === 2} />
+                            {!inline && <StepIndicator step={3} done={installDone} active={firstIncomplete === 2} />}
                             <Typography
                                 variant="body2"
                                 color={installDone ? 'text.primary' : firstIncomplete === 2 ? 'primary.main' : 'text.disabled'}
@@ -516,6 +479,13 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             )}
                             {/* Step-completing action lives in the row's right action
                                 column, same as steps 1 / 2 / 4. */}
+                            {/* Inline the artifact for the step is right here: the command is
+                                one click from the clipboard without opening the row. */}
+                            {inline && !installDone && installCommand && !installActions?.length && (
+                                <Button variant="outlined" size="small" onClick={(e) => { e.stopPropagation(); handleCopy(); }} sx={{ py: 0.25 }}>
+                                    {copied ? t('agentSetup.install.copied') : t('agentSetup.install.copy')}
+                                </Button>
+                            )}
                             {!installDone && firstIncomplete === 2 && (
                                 <Tooltip title={t('agentSetup.install.confirmTooltip', { agent: agentName })}>
                                     <Button
@@ -532,7 +502,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                 expandedDoneSteps.has(2) ? <ExpandLessIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} /> : <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
                             )}
                         </Stack>
-                        <Collapse in={inline ? shown === 2 : (!installDone && firstIncomplete === 2) || expandedDoneSteps.has(2)}>
+                        <Collapse in={inline ? detailsOpen && shown === 2 : (!installDone && firstIncomplete === 2) || expandedDoneSteps.has(2)}>
                             <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
                                 {installActions?.length ? (
                                     <>
@@ -611,7 +581,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                 flexWrap: 'wrap',
                                 rowGap: 0.5
                             }, applyDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : false]}>
-                            <StepIndicator step={4} done={applyDone} active={firstIncomplete === 3} />
+                            {!inline && <StepIndicator step={4} done={applyDone} active={firstIncomplete === 3} />}
                             <Typography
                                 variant="body2"
                                 color={applyDone ? 'text.primary' : firstIncomplete === 3 ? 'primary.main' : 'text.disabled'}
@@ -671,7 +641,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                 )}
                             </Alert>
                         )}
-                        <Collapse in={applyDone && (inline ? shown === 3 : expandedDoneSteps.has(3))}>
+                        <Collapse in={applyDone && (inline ? detailsOpen && shown === 3 : expandedDoneSteps.has(3))}>
                             <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
                                 <Typography variant="body2" sx={{
                                     color: "text.secondary"
@@ -703,15 +673,68 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     );
 
     if (inline) {
-        // Everything done: the steps leave the page (Reset or the page's
-        // "setup steps" action brings them back).
+        // Everything done: the row leaves the page (the page's "setup steps"
+        // action or Reset brings it back).
         if (allDone && !reopened) return guideDialog || null;
-        // A tinted inset: the one part of the card that comes and goes, so it
-        // reads as its own thing rather than rows glued under the title.
+        // One row in the connection list: same three columns as its siblings
+        // (label | content | action). The label is "Setup" with a dot per step
+        // (click one to see that step); the content is the step to do now.
         return (
-            <Box sx={{ bgcolor: 'action.hover', borderRadius: 2, px: 1.5, py: 1.25, mb: 2 }}>
-                {progressRow}
-                {steps}
+            <Box sx={{ mb: 0.5, px: 2 }}>
+                <Box
+                    sx={{
+                        display: 'grid',
+                        alignItems: 'center',
+                        columnGap: { xs: 1, sm: 3 },
+                        gridTemplateColumns: { xs: 'minmax(0, 1fr) auto', sm: '168px minmax(0, 1fr) auto' },
+                    }}
+                >
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', gridColumn: { xs: '1 / -1', sm: '1' } }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{t('agentSetup.setup', { defaultValue: 'Setup' })}</Typography>
+                        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                            {stepNames.map((name, i) => (
+                                <Tooltip key={i} title={name}>
+                                    <Box
+                                        component="button"
+                                        type="button"
+                                        aria-label={name}
+                                        aria-current={shown === i ? 'step' : undefined}
+                                        onClick={() => setViewStep(i)}
+                                        sx={{
+                                            width: 10, height: 10, p: 0, border: 0, borderRadius: '50%', cursor: 'pointer',
+                                            bgcolor: stepDone[i] ? 'success.main' : shown === i ? 'primary.main' : 'action.disabledBackground',
+                                            boxShadow: shown === i ? (theme) => `0 0 0 3px ${theme.palette.action.selected}` : 'none',
+                                        }}
+                                    />
+                                </Tooltip>
+                            ))}
+                        </Stack>
+                    </Stack>
+                    <Box sx={{ minWidth: 0, gridColumn: { xs: '1', sm: '2' } }}>{steps}</Box>
+                    <Tooltip title={detailsOpen ? t('agentSetup.collapse') : t('agentSetup.expand')}>
+                        <IconButton size="small" onClick={() => setDetailsOpen((v) => !v)} sx={{ gridColumn: { xs: '2', sm: '3' } }}>
+                            {detailsOpen ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                        </IconButton>
+                    </Tooltip>
+                </Box>
+                <Collapse in={detailsOpen}>
+                    <Stack direction="row" spacing={1} sx={{ pt: 0.5, justifyContent: 'flex-end', alignItems: 'center' }}>
+                        <Button size="small" variant="text" onClick={handleReset}
+                            sx={{ py: 0, textTransform: 'none', color: 'text.secondary', minWidth: 0, fontSize: fontSizes.sm }}>
+                            {t('agentSetup.resetProgress')}
+                        </Button>
+                        <Tooltip title={t('templateActions.howRoutingWorks', { defaultValue: 'How routing works' })}>
+                            <IconButton
+                                size="small"
+                                aria-label={t('templateActions.howRoutingWorks', { defaultValue: 'How routing works' })}
+                                onClick={() => { if (onShowGuide) onShowGuide(); else setShowGuide(true); }}
+                                sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
+                            >
+                                <HelpOutlineIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    </Stack>
+                </Collapse>
                 {guideDialog}
             </Box>
         );

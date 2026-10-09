@@ -2200,6 +2200,7 @@ export default {
     "loadFailed": "Couldn't load this agent's requests."
   },
   "agentSetup": {
+    "setup": "Setup",
     "showSteps": "Setup steps",
     "quickStart": "Quick Start",
     "done": "Done",
@@ -2254,6 +2255,9 @@ export default {
     }
   },
   "scenarioPage": {
+    "tabs": {
+      "connection": "Connection"
+    },
     "setupGuide": "Setup Guide",
     "config": "Config",
     "autoConfig": "Auto Config",
