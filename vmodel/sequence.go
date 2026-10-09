@@ -2,6 +2,7 @@ package vmodel
 
 import (
 	"fmt"
+	"hash/fnv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -98,6 +99,9 @@ func (m *MidStreamSpec) UnmarshalYAML(node *yaml.Node) error {
 // UnmarshalYAML accepts a bare status number (`- 429`) or a mapping.
 func (s *SequenceStep) UnmarshalYAML(node *yaml.Node) error {
 	if node.Kind == yaml.ScalarNode {
+		if node.Tag != "!!int" { // not a null / empty item (`- ~`, a stray `-`) or a word
+			return fmt.Errorf("line %d: a bare step must be an HTTP status number, not %q", node.Line, node.Value)
+		}
 		var status int
 		if err := node.Decode(&status); err != nil {
 			return fmt.Errorf("line %d: a bare step must be an HTTP status number: %w", node.Line, err)
@@ -309,12 +313,14 @@ func (s *Sequence) Next() ResolvedStep {
 }
 
 // toolID builds a tool_use id of the shape real APIs accept (A-Za-z0-9_-, at
-// most 64 characters) from a script id and the served-request number. Long or
-// unusual script ids are sanitised and truncated; uniqueness comes from n.
+// most 64 characters) from a script id and the served-request number. A name
+// that had to be sanitised or truncated gets a short hash of the original, so
+// two different scripts never share an id prefix; uniqueness within a script
+// comes from n.
 func toolID(script string, n uint64) string {
 	var b strings.Builder
 	for _, r := range script {
-		if b.Len() >= 40 {
+		if b.Len() >= 24 {
 			break
 		}
 		if r < 128 && (r == '-' || r == '_' || (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')) {
@@ -323,10 +329,15 @@ func toolID(script string, n uint64) string {
 			b.WriteByte('_')
 		}
 	}
-	if b.Len() == 0 {
-		b.WriteString("vmodel")
+	name := b.String()
+	if name == "" {
+		name = "vmodel"
+	} else if name != script {
+		h := fnv.New32a()
+		h.Write([]byte(script))
+		name += fmt.Sprintf("-%04x", h.Sum32()&0xffff)
 	}
-	return fmt.Sprintf("toolu_%s_%d", b.String(), n)
+	return fmt.Sprintf("toolu_%s_%d", name, n)
 }
 
 // exhaustedStep is the terminal error served once an ExhaustFail program is

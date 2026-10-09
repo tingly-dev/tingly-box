@@ -149,6 +149,28 @@ func TestToolID_IsAWellFormedAPIId(t *testing.T) {
 	}
 }
 
+func TestToolID_DifferentScriptsNeverShareAPrefix(t *testing.T) {
+	assert.NotEqual(t, toolID("a.b", 1), toolID("a_b", 1), "a lossy name carries a hash of the original")
+	assert.Equal(t, "toolu_plain-id_1", toolID("plain-id", 1), "a clean name is left readable")
+	long := strings.Repeat("x", 30)
+	assert.NotEqual(t, toolID(long+"1", 1), toolID(long+"2", 1), "a truncated name carries a hash too")
+}
+
+func TestParseScript_RejectsEmptyItemsAndExtraDocuments(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{"steps:\n  - say: a\n  -\n  - say: b", "step 2 is empty"},
+		{"steps: [200, ~, 429]", "step 2 is empty"},
+		{"steps: [200, '']", "bare step must be an HTTP status number"},
+	} {
+		_, err := ParseScript([]byte(c.src), "f")
+		require.Error(t, err, c.src)
+		assert.Contains(t, err.Error(), c.want, c.src)
+	}
+	_, err := ParseScript([]byte("steps: [200]\n---\nsteps: [429]"), "f")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "one document")
+}
+
 func TestSequence_ToolWithoutArgumentsCarriesAnEmptyObject(t *testing.T) {
 	cfg, err := ParseScript([]byte("steps:\n  - tool: {name: Done}"), "s")
 	require.NoError(t, err)

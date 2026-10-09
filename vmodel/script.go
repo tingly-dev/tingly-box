@@ -42,6 +42,9 @@ var scriptIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 // are rejected so a typo fails loudly instead of silently becoming a default.
 func ParseScript(data []byte, fallbackID string) (SequenceConfig, error) {
 	var cfg SequenceConfig
+	if err := rejectEmptySteps(data); err != nil {
+		return cfg, err
+	}
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
@@ -49,6 +52,9 @@ func ParseScript(data []byte, fallbackID string) (SequenceConfig, error) {
 			return cfg, errors.New("script is empty")
 		}
 		return cfg, err
+	}
+	if err := dec.Decode(new(yaml.Node)); !errors.Is(err, io.EOF) {
+		return cfg, errors.New("a script file holds one document; found more after the first (`---`)")
 	}
 	if cfg.ID == "" {
 		cfg.ID = fallbackID
@@ -60,6 +66,28 @@ func ParseScript(data []byte, fallbackID string) (SequenceConfig, error) {
 		return cfg, err
 	}
 	return cfg, nil
+}
+
+// rejectEmptySteps catches a null step (`- ~`, or a stray `-`). yaml.v3 hands
+// those to no UnmarshalYAML at all — they decode to a zero step, which would
+// silently become an extra default-text success in the middle of the program.
+func rejectEmptySteps(data []byte) error {
+	var root yaml.Node
+	if yaml.Unmarshal(data, &root) != nil || len(root.Content) == 0 || root.Content[0].Kind != yaml.MappingNode {
+		return nil // malformed input is reported by the real decode
+	}
+	m := root.Content[0]
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value != "steps" || m.Content[i+1].Kind != yaml.SequenceNode {
+			continue
+		}
+		for j, item := range m.Content[i+1].Content {
+			if item.Tag == "!!null" {
+				return fmt.Errorf("line %d: step %d is empty (write a status number or a mapping)", item.Line, j+1)
+			}
+		}
+	}
+	return nil
 }
 
 // Validate checks a config for the mistakes a hand-written script can make and

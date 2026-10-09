@@ -46,8 +46,8 @@ type scriptStore struct {
 }
 
 type scriptFile struct {
-	sig    string // modtime+size when last loaded
-	id     string // model id registered from this file ("" if it failed)
+	stamp  fileStamp // identity of the file content when last loaded
+	id     string    // model id registered from this file ("" if it failed)
 	failed bool
 }
 
@@ -65,7 +65,7 @@ func (s *scriptStore) Refresh() {
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return // transient failure: keep what is loaded rather than drop every model
 	}
-	current := map[string]string{}
+	current := map[string]fileStamp{}
 	var names []string
 	for _, e := range entries {
 		name := e.Name()
@@ -77,16 +77,22 @@ func (s *scriptStore) Refresh() {
 		}
 		info, err := e.Info()
 		if err != nil {
+			// Briefly unstatable (an editor mid-rename): not "deleted". Keep
+			// whatever we last loaded from it.
+			if f, ok := s.files[name]; ok {
+				current[name] = f.stamp
+				names = append(names, name)
+			}
 			continue
 		}
-		current[name] = fileSignature(filepath.Join(s.dir, name), info)
+		current[name] = stampFile(filepath.Join(s.dir, name), info)
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
 	sig := strings.Join(names, "|")
 	for _, n := range names {
-		sig += "|" + current[n]
+		sig += "|" + current[n].base + current[n].hash
 	}
 	if sig == s.sig {
 		return
@@ -107,7 +113,7 @@ func (s *scriptStore) Refresh() {
 	for pass := 0; pass < 2; pass++ {
 		loaded := false
 		for _, name := range names {
-			if f, ok := s.files[name]; ok && f.sig == current[name] && !f.failed {
+			if f, ok := s.files[name]; ok && f.stamp.same(current[name]) && !f.failed {
 				continue
 			}
 			if pass == 1 && !s.files[name].failed {
@@ -122,7 +128,7 @@ func (s *scriptStore) Refresh() {
 }
 
 // load (re)registers one file and reports whether it succeeded.
-func (s *scriptStore) load(name, sig string) bool {
+func (s *scriptStore) load(name string, stamp fileStamp) bool {
 	prev := s.files[name].id
 	data, err := os.ReadFile(filepath.Join(s.dir, name))
 	var cfg vmodel.SequenceConfig
@@ -136,15 +142,17 @@ func (s *scriptStore) load(name, sig string) bool {
 		// A file that does not load serves nothing: its old model goes too,
 		// so what is served always matches what is on disk.
 		s.unregister(prev)
-		s.files[name] = scriptFile{sig: sig, failed: true}
+		s.files[name] = scriptFile{stamp: stamp, failed: true}
+		if s.errors[name] != err.Error() { // once per distinct problem, not on every directory change
+			logrus.Warnf("vmodel script %s ignored: %v", name, err)
+		}
 		s.errors[name] = err.Error()
-		logrus.Warnf("vmodel script %s ignored: %v", name, err)
 		return false
 	}
 	if prev != cfg.ID {
 		s.unregister(prev)
 	}
-	s.files[name] = scriptFile{sig: sig, id: cfg.ID}
+	s.files[name] = scriptFile{stamp: stamp, id: cfg.ID}
 	delete(s.errors, name)
 	logrus.Infof("vmodel script %s loaded as model %q", name, cfg.ID)
 	return true
@@ -177,21 +185,32 @@ func (s *scriptStore) unregister(id string) {
 	s.oai.Unregister(id)
 }
 
-// fileSignature identifies a file's content cheaply: modtime and size. File
-// systems stamp mtime coarsely (milliseconds), so a same-size rewrite right
-// after the last one can carry an identical mtime; for a file modified in the
-// last couple of seconds the content hash is included too, so a quick
-// edit-and-call is never served stale.
-func fileSignature(path string, info fs.FileInfo) string {
-	sig := fmt.Sprintf("%d-%d", info.ModTime().UnixNano(), info.Size())
+// fileStamp identifies a file's content cheaply: modtime and size (base), plus
+// a content hash while the file is fresh. File systems stamp mtime coarsely
+// (milliseconds), so a same-size rewrite right after the last one can carry an
+// identical mtime; hashing files modified in the last couple of seconds closes
+// that window, and ageing out of it must not look like a change.
+type fileStamp struct {
+	base string
+	hash string // "" once the file is old enough not to need it
+}
+
+// same reports whether two stamps describe the same content: equal base, and
+// equal hash whenever both have one.
+func (a fileStamp) same(b fileStamp) bool {
+	return a.base == b.base && (a.hash == "" || b.hash == "" || a.hash == b.hash)
+}
+
+func stampFile(path string, info fs.FileInfo) fileStamp {
+	st := fileStamp{base: fmt.Sprintf("%d-%d", info.ModTime().UnixNano(), info.Size())}
 	if time.Since(info.ModTime()) < 2*time.Second {
 		if data, err := os.ReadFile(path); err == nil {
 			h := fnv.New64a()
 			h.Write(data)
-			sig += fmt.Sprintf("-%x", h.Sum64())
+			st.hash = fmt.Sprintf("-%x", h.Sum64())
 		}
 	}
-	return sig
+	return st
 }
 
 // Problems returns the current load errors, "file: reason", sorted. Used to
