@@ -2193,6 +2193,7 @@ export default {
     "loadFailed": "无法加载该 Agent 的请求。"
   },
   "agentSetup": {
+    "showSteps": "设置步骤",
     "quickStart": "快速开始",
     "done": "已完成",
     "expand": "展开",

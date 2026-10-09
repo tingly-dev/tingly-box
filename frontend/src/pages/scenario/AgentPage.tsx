@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Box, Button, Tooltip } from '@mui/material';
+import { Box, Button, Stack, Tooltip } from '@mui/material';
 import { BarChart as ActivityIcon } from '@/components/icons';
+import { fontSizes } from '@/theme/fonts';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import CardGrid from '@/components/CardGrid.tsx';
@@ -144,6 +145,8 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     const [dialogOpen, setDialogOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
     const [activityOpen, setActivityOpen] = useState(false);
+    const [setupDone, setSetupDone] = useState(false);
+    const [setupReopenKey, setSetupReopenKey] = useState(0);
     const { status: clientConfigStatus } = useClientConfigStatus(agent.clientConfigTool ?? null, [rules, dialogOpen, slotMode]);
     const context1M = useContext1MToggle(() => setDialogOpen(true));
     // Unified Connect AI add flow (picker + form/OAuth/paste/import dialogs), offered by Quick Start.
@@ -187,12 +190,19 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     };
     const openDialog = () => setDialogOpen(true);
 
+    // The header's actions stack in a column beside the card's content, so
+    // the title row stays one line however many an agent has. The first one
+    // that matters now is the primary: a header link (DSH's Web UI), else
+    // Auto Config until the client's config reads back as applied.
+    const configApplied = clientConfigStatus?.state === 'applied';
+    const sideButtonSx = { justifyContent: 'flex-start', textTransform: 'none' } as const;
     const configButton = setup.kind !== 'none' && (
         <Button
             onClick={openDialog}
-            // A header link takes the primary style; the config button steps back.
-            variant={headerLinks?.length ? 'outlined' : 'contained'}
+            fullWidth
+            variant={headerLinks?.length || configApplied ? 'outlined' : 'contained'}
             size="small"
+            sx={sideButtonSx}
         >
             {t(setup.kind === 'auto' ? 'scenarioPage.autoConfig' : 'scenarioPage.setupGuide')}
         </Button>
@@ -200,40 +210,53 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     // Watching an agent is a look-in, not page furniture: it opens a dialog so
     // the rules below keep the screen (a standing panel pushed them off it).
     const activityButton = (
-        <Button onClick={() => setActivityOpen(true)} variant="outlined" size="small" startIcon={<ActivityIcon />}>
+        <Button onClick={() => setActivityOpen(true)} fullWidth variant="outlined" size="small" startIcon={<ActivityIcon />} sx={sideButtonSx}>
             {t('agentActivity.title')}
         </Button>
     );
-    const headerActions = slotRouting ? (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {slots.modeSwitch}
-            <Box sx={{ display: 'flex', gap: 1 }}>
-                {activityButton}
-                {configButton}
-            </Box>
-        </Box>
-    ) : headerLinks?.length ? (
-        <Box sx={{ display: 'flex', gap: 1 }}>
-            {headerLinks.map(link => (
+    const sideActions = (
+        <Stack
+            spacing={1}
+            sx={{
+                // Wide enough for "Requests & usage" on one line; the slot switch's two labels need more.
+                width: { xs: '100%', md: slotRouting ? 216 : 184 },
+                flexShrink: 0,
+                borderColor: 'divider',
+                borderLeft: { md: '1px solid' },
+                pl: { md: 2 },
+            }}
+        >
+            {slotRouting && (
+                // Two long labels in a narrow column: share its width, no clipping.
+                <Box sx={{ '& .MuiToggleButtonGroup-root': { width: '100%' }, '& .MuiToggleButton-root': { flex: 1, minWidth: 0, px: 0.5, fontSize: fontSizes.sm, whiteSpace: 'nowrap', textTransform: 'none' } }}>
+                    {slots.modeSwitch}
+                </Box>
+            )}
+            {headerLinks?.map(link => (
                 <Tooltip key={link.href} title={link.href}>
-                    <Button href={link.href} target="_blank" rel="noopener noreferrer" variant="contained" size="small">
+                    <Button href={link.href} target="_blank" rel="noopener noreferrer" fullWidth variant="contained" size="small" sx={sideButtonSx}>
                         {t(link.labelKey)}
                     </Button>
                 </Tooltip>
             ))}
-            {activityButton}
             {configButton}
-        </Box>
-    ) : (
-        <Box sx={{ display: 'flex', gap: 1 }}>
             {activityButton}
-            {configButton}
-        </Box>
+            {/* The steps leave the page once done; this brings them back. */}
+            {quickStart && setupDone && (
+                <Button onClick={() => setSetupReopenKey((k) => k + 1)} fullWidth variant="text" size="small" sx={{ ...sideButtonSx, color: 'text.secondary' }}>
+                    {t('agentSetup.showSteps', { defaultValue: 'Setup steps' })}
+                </Button>
+            )}
+        </Stack>
     );
 
     return (
         <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
             <CardGrid>
+                {/* One card for "is this tool connected to the gateway": who it is
+                    and whether its config is applied, the setup step still to do
+                    (gone once all are done), the connection values, and the
+                    actions in a column on the side. */}
                 <UnifiedCard
                     titleHeadingLevel={1}
                     title={
@@ -244,45 +267,51 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         />
                     }
                     size="full"
-                    contentMaxWidth={SCENARIO_HEADER_CONTENT_MAX_WIDTH}
-                    rightAction={headerActions}
                 >
-                    <ProviderConfigCard
-                        title={connection?.titleKey ? t(connection.titleKey) : agent.title}
-                        baseUrlPath={`/tingly/${scenario}`}
-                        baseUrl={baseUrl}
-                        onCopy={copyToClipboard}
-                        scenario={scenario}
-                        compact={connection?.compact}
-                        showApiKeyRow={connection?.apiKeyRow}
-                        showBaseUrlRow={connection?.baseUrlRow}
-                    />
+                    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, alignItems: 'stretch' }}>
+                        <Box sx={{ flex: 1, minWidth: 0, maxWidth: SCENARIO_HEADER_CONTENT_MAX_WIDTH }}>
+                            {quickStart && (
+                                <AgentSetupCard
+                                    inline
+                                    reopenKey={setupReopenKey}
+                                    onAllDoneChange={setSetupDone}
+                                    agentKey={scenario}
+                                    agentName={agent.title}
+                                    installCommand={quickStart.installCommand ?? ''}
+                                    installMirrorCommand={quickStart.installMirrorCommand}
+                                    installStepDescription={quickStart.installDescriptionKey && t(quickStart.installDescriptionKey)}
+                                    installActions={quickStart.installActions?.(t)}
+                                    onApply={setup.kind === 'auto' ? slot.apply : undefined}
+                                    onApplyWithStatusLine={setup.kind === 'auto' && setup.applyWithStatusLine
+                                        ? () => runApply(() => setup.applyWithStatusLine!(t, applyContext))
+                                        : undefined}
+                                    isApplyLoading={isApplyLoading}
+                                    onViewConfig={openDialog}
+                                    applyStepLabel={quickStart.applyStepLabelKey && t(quickStart.applyStepLabelKey)}
+                                    applyStepDescription={quickStart.applyStepDescriptionKey && t(quickStart.applyStepDescriptionKey)}
+                                    viewConfigButtonLabel={quickStart.openDialogLabelKey && t(quickStart.openDialogLabelKey)}
+                                    hasModelSelected={hasModelOnAnyRule(rules)}
+                                    onSelectModel={scrollToModelsCard}
+                                    onConnectProvider={connectAI.handleConnectAIClick}
+                                    providers={internal.providers}
+                                    providersLoading={internal.loading}
+                                    configApplied={configApplied}
+                                />
+                            )}
+                            <ProviderConfigCard
+                                title={connection?.titleKey ? t(connection.titleKey) : agent.title}
+                                baseUrlPath={`/tingly/${scenario}`}
+                                baseUrl={baseUrl}
+                                onCopy={copyToClipboard}
+                                scenario={scenario}
+                                compact={connection?.compact}
+                                showApiKeyRow={connection?.apiKeyRow}
+                                showBaseUrlRow={connection?.baseUrlRow}
+                            />
+                        </Box>
+                        {sideActions}
+                    </Box>
                 </UnifiedCard>
-                {quickStart && (
-                    <AgentSetupCard
-                        agentKey={scenario}
-                        agentName={agent.title}
-                        installCommand={quickStart.installCommand ?? ''}
-                        installMirrorCommand={quickStart.installMirrorCommand}
-                        installStepDescription={quickStart.installDescriptionKey && t(quickStart.installDescriptionKey)}
-                        installActions={quickStart.installActions?.(t)}
-                        onApply={setup.kind === 'auto' ? slot.apply : undefined}
-                        onApplyWithStatusLine={setup.kind === 'auto' && setup.applyWithStatusLine
-                            ? () => runApply(() => setup.applyWithStatusLine!(t, applyContext))
-                            : undefined}
-                        isApplyLoading={isApplyLoading}
-                        onViewConfig={openDialog}
-                        applyStepLabel={quickStart.applyStepLabelKey && t(quickStart.applyStepLabelKey)}
-                        applyStepDescription={quickStart.applyStepDescriptionKey && t(quickStart.applyStepDescriptionKey)}
-                        viewConfigButtonLabel={quickStart.openDialogLabelKey && t(quickStart.openDialogLabelKey)}
-                        hasModelSelected={hasModelOnAnyRule(rules)}
-                        onSelectModel={scrollToModelsCard}
-                        onConnectProvider={connectAI.handleConnectAIClick}
-                        providers={internal.providers}
-                        providersLoading={internal.loading}
-                        configApplied={clientConfigStatus?.state === 'applied'}
-                    />
-                )}
                 <TemplatePage
                     scenario={scenario}
                     // One copy of the providers too: the rule toolbar's

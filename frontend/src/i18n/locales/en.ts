@@ -2200,6 +2200,7 @@ export default {
     "loadFailed": "Couldn't load this agent's requests."
   },
   "agentSetup": {
+    "showSteps": "Setup steps",
     "quickStart": "Quick Start",
     "done": "Done",
     "expand": "Expand",

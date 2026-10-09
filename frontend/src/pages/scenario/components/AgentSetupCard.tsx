@@ -76,6 +76,15 @@ export interface AgentSetupCardProps {
      * steps tick over by themselves instead of waiting for a click.
      */
     configApplied?: boolean;
+    /**
+     * Render inside another card (the page's header) instead of as its own:
+     * one step at a time with a row of progress dots, and nothing at all once
+     * every step is done. `reopenKey` bringing a new value shows the steps
+     * again after that.
+     */
+    inline?: boolean;
+    reopenKey?: number;
+    onAllDoneChange?: (allDone: boolean) => void;
     /** Opened by the header "How routing works" help button. */
     onShowGuide?: () => void;
 }
@@ -147,6 +156,9 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     providers,
     providersLoading = false,
     configApplied = false,
+    inline = false,
+    reopenKey = 0,
+    onAllDoneChange,
     onShowGuide,
 }) => {
     const { t } = useTranslation();
@@ -311,82 +323,78 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     // Which step is the first incomplete one (determines which expands)
     const firstIncomplete = !providerDone ? 0 : !modelDone ? 1 : !installDone ? 2 : !applyDone ? 3 : -1;
 
-    const stepRowSx = () => ({
-        py: 0.75,
-        px: 1.5,
-        borderRadius: 1.5,
-    });
+    // Inline: the step on show is the first unfinished one (the last once all
+    // are done), unless the user picked another with the dots.
+    const [viewStep, setViewStep] = useState<number | null>(null);
+    const [reopened, setReopened] = useState(false);
+    const shown = viewStep ?? (firstIncomplete === -1 ? 3 : firstIncomplete);
+    useEffect(() => { onAllDoneChange?.(allDone); }, [allDone, onAllDoneChange]);
+    useEffect(() => { if (reopenKey > 0) { setReopened(true); setViewStep(null); } }, [reopenKey]);
+    // A step that completes moves the view on to the next one.
+    useEffect(() => { setViewStep(null); }, [firstIncomplete]);
+    useEffect(() => { if (!allDone) setReopened(false); }, [allDone]);
 
-    return (
-        <>
-        <UnifiedCard
-            size="header"
-            titleMarginBottom={collapsed ? 0 : 2}
-            title={
-                <Stack
-                    direction="row"
-                    spacing={1}
-                    sx={{
-                        alignItems: "center",
-                        flex: 1
-                    }}>
-                    <Typography variant="subtitle1" sx={{
-                        fontWeight: 600
-                    }}>{t('agentSetup.quickStart')}</Typography>
-                    <Chip
-                        label={progressLabel}
-                        size="small"
-                        color={progressColor as any}
-                        sx={{ height: 20, fontSize: fontSizes.sm }}
-                    />
-                    {collapsed && !allDone && (
-                        <Typography
-                            variant="body2"
+    const stepRowSx = (step: number) => [
+        { py: 0.75, px: 1.5, borderRadius: 1.5 },
+        inline && shown !== step && { display: 'none' },
+    ];
+
+    const stepNames = [
+        t('agentSetup.provider.label'),
+        t('agentSetup.model.label'),
+        t('agentSetup.install.label', { agent: agentName }),
+        applyStepLabel,
+    ];
+    const stepDone = [providerDone, modelDone, installDone, applyDone];
+    const progressRow = (
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                {t('agentSetup.quickStart')} {progressLabel}
+            </Typography>
+            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                {stepNames.map((name, i) => (
+                    <Tooltip key={i} title={name}>
+                        <Box
+                            component="button"
+                            type="button"
+                            aria-label={name}
+                            aria-current={shown === i ? 'step' : undefined}
+                            onClick={() => setViewStep(i)}
                             sx={{
-                                color: "text.secondary",
-                                ml: 0.5
-                            }}>
-                            {collapsedHint}
-                        </Typography>
-                    )}
-                </Stack>
-            }
-            rightAction={
-                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                    {/* Reset is always reachable from the header (not buried at the
-                        bottom of an expanded card), so it works whether the card is
-                        open, closed, or mid-flow. */}
-                    <Button
-                        size="small"
-                        variant="text"
-                        onClick={handleReset}
-                        sx={{ py: 0, textTransform: 'none', color: 'text.secondary', minWidth: 0, fontSize: fontSizes.sm }}
-                    >
-                        {t('agentSetup.resetProgress')}
-                    </Button>
-                    <Tooltip title={t('templateActions.howRoutingWorks', { defaultValue: 'How routing works' })}>
-                        <IconButton
-                            size="small"
-                            aria-label={t('templateActions.howRoutingWorks', { defaultValue: 'How routing works' })}
-                            onClick={() => { if (onShowGuide) onShowGuide(); else setShowGuide(true); }}
-                            sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
-                        >
-                            <HelpOutlineIcon fontSize="small" />
-                        </IconButton>
+                                width: 10, height: 10, p: 0, border: 0, borderRadius: '50%', cursor: 'pointer',
+                                bgcolor: stepDone[i] ? 'success.main' : shown === i ? 'primary.main' : 'action.disabledBackground',
+                                boxShadow: shown === i ? (theme) => `0 0 0 3px ${theme.palette.action.selected}` : 'none',
+                            }}
+                        />
                     </Tooltip>
-                    <Tooltip title={collapsed ? t('agentSetup.expand') : t('agentSetup.collapse')}>
-                        <IconButton size="small" onClick={toggleCollapsed}>
-                            {collapsed ? <ExpandMoreIcon fontSize="small" /> : <ExpandLessIcon fontSize="small" />}
-                        </IconButton>
-                    </Tooltip>
-                </Stack>
-            }
-        >
-            <Collapse in={!collapsed} unmountOnExit={false}>
+                ))}
+            </Stack>
+            <Box sx={{ flex: 1 }} />
+            <Button size="small" variant="text" onClick={handleReset}
+                sx={{ py: 0, textTransform: 'none', color: 'text.secondary', minWidth: 0, fontSize: fontSizes.sm }}>
+                {t('agentSetup.resetProgress')}
+            </Button>
+            <Tooltip title={t('templateActions.howRoutingWorks', { defaultValue: 'How routing works' })}>
+                <IconButton
+                    size="small"
+                    aria-label={t('templateActions.howRoutingWorks', { defaultValue: 'How routing works' })}
+                    onClick={() => { if (onShowGuide) onShowGuide(); else setShowGuide(true); }}
+                    sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
+                >
+                    <HelpOutlineIcon fontSize="small" />
+                </IconButton>
+            </Tooltip>
+        </Stack>
+    );
+    const guideDialog = !onShowGuide && (
+        <EntryGuideDialog open={showGuide} onClose={() => setShowGuide(false)} mode="direct" />
+    );
+
+    const steps = (
                 <Stack spacing={0.5}>
 
                     {/* Step 1 — Provider (always a single flat row — no expand needed) */}
-                    <Box sx={stepRowSx()}>
+                    <Box sx={stepRowSx(0)}>
                         <Stack
                             direction="row"
                             spacing={1.25}
@@ -426,7 +434,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     </Box>
 
                     {/* Step 2 — Model (always a single flat row — no expand needed) */}
-                    <Box sx={stepRowSx()}>
+                    <Box sx={stepRowSx(1)}>
                         <Stack
                             direction="row"
                             spacing={1.25}
@@ -477,7 +485,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     </Box>
 
                     {/* Step 3 — Install */}
-                    <Box sx={stepRowSx()}>
+                    <Box sx={stepRowSx(2)}>
                         <Stack
                             direction="row"
                             spacing={1.25}
@@ -524,7 +532,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                 expandedDoneSteps.has(2) ? <ExpandLessIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} /> : <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
                             )}
                         </Stack>
-                        <Collapse in={(!installDone && firstIncomplete === 2) || expandedDoneSteps.has(2)}>
+                        <Collapse in={inline ? shown === 2 : (!installDone && firstIncomplete === 2) || expandedDoneSteps.has(2)}>
                             <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
                                 {installActions?.length ? (
                                     <>
@@ -593,7 +601,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     </Box>
 
                     {/* Step 4 — Apply (flat row while active; re-expandable once done for re-view) */}
-                    <Box sx={stepRowSx()}>
+                    <Box sx={stepRowSx(3)}>
                         <Stack
                             direction="row"
                             spacing={1.25}
@@ -663,7 +671,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                 )}
                             </Alert>
                         )}
-                        <Collapse in={applyDone && expandedDoneSteps.has(3)}>
+                        <Collapse in={applyDone && (inline ? shown === 3 : expandedDoneSteps.has(3))}>
                             <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
                                 <Typography variant="body2" sx={{
                                     color: "text.secondary"
@@ -692,6 +700,88 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         </Collapse>
                     </Box>
                 </Stack>
+    );
+
+    if (inline) {
+        // Everything done: the steps leave the page (Reset or the page's
+        // "setup steps" action brings them back).
+        if (allDone && !reopened) return guideDialog || null;
+        return (
+            <Box>
+                {progressRow}
+                {steps}
+                {guideDialog}
+            </Box>
+        );
+    }
+
+    return (
+        <>
+        <UnifiedCard
+            size="header"
+            titleMarginBottom={collapsed ? 0 : 2}
+            title={
+                <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                        alignItems: "center",
+                        flex: 1
+                    }}>
+                    <Typography variant="subtitle1" sx={{
+                        fontWeight: 600
+                    }}>{t('agentSetup.quickStart')}</Typography>
+                    <Chip
+                        label={progressLabel}
+                        size="small"
+                        color={progressColor as any}
+                        sx={{ height: 20, fontSize: fontSizes.sm }}
+                    />
+                    {collapsed && !allDone && (
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: "text.secondary",
+                                ml: 0.5
+                            }}>
+                            {collapsedHint}
+                        </Typography>
+                    )}
+                </Stack>
+            }
+            rightAction={
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                    {/* Reset is always reachable from the header (not buried at the
+                        bottom of an expanded card), so it works whether the card is
+                        open, closed, or mid-flow. */}
+                    <Button
+                        size="small"
+                        variant="text"
+                        onClick={handleReset}
+                        sx={{ py: 0, textTransform: 'none', color: 'text.secondary', minWidth: 0, fontSize: fontSizes.sm }}
+                    >
+                        {t('agentSetup.resetProgress')}
+                    </Button>
+                    <Tooltip title={t('templateActions.howRoutingWorks', { defaultValue: 'How routing works' })}>
+                        <IconButton
+                            size="small"
+                            aria-label={t('templateActions.howRoutingWorks', { defaultValue: 'How routing works' })}
+                            onClick={() => { if (onShowGuide) onShowGuide(); else setShowGuide(true); }}
+                            sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
+                        >
+                            <HelpOutlineIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title={collapsed ? t('agentSetup.expand') : t('agentSetup.collapse')}>
+                        <IconButton size="small" onClick={toggleCollapsed}>
+                            {collapsed ? <ExpandMoreIcon fontSize="small" /> : <ExpandLessIcon fontSize="small" />}
+                        </IconButton>
+                    </Tooltip>
+                </Stack>
+            }
+        >
+            <Collapse in={!collapsed} unmountOnExit={false}>
+                {steps}
             </Collapse>
         </UnifiedCard>
 
