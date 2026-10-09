@@ -146,8 +146,8 @@ func offerTakeover(appManager *app.AppManager, lockErr error) error {
 			}
 			args = append(args[:insertAt], append([]string{"--port", fmt.Sprint(port)}, args[insertAt:]...)...)
 		}
-		log.Printf("Stopped pid %d; relaunching GUI on port %d", pid, port)
-		return exec.Command(exe, args...).Start()
+		log.Printf("Stopped pid %d; relaunching GUI: %s %v", pid, exe, args)
+		return relaunch(exe, args, filepath.Join(appManager.ConfigDir(), "gui-relaunch.log"))
 	}
 
 	// The restart runs inside the notice app's confirm handler, before it quits:
@@ -164,6 +164,32 @@ func offerTakeover(appManager *app.AppManager, lockErr error) error {
 		log.Printf("Restart as app failed: %v", err)
 	}
 	return err
+}
+
+// relaunch starts the GUI again as a detached process (own session, so it
+// outlives this notice app and its terminal), with output captured in logPath
+// so a launch that dies right away leaves something to read. It waits briefly
+// and reports a child that exits immediately.
+func relaunch(exe string, args []string, logPath string) error {
+	cmd := exec.Command(exe, args...)
+	if f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600); err == nil {
+		defer f.Close()
+		cmd.Stdout, cmd.Stderr = f, f
+	}
+	detach(cmd)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to relaunch %s: %w", exe, err)
+	}
+	log.Printf("Relaunched GUI as pid %d (output: %s)", cmd.Process.Pid, logPath)
+
+	exited := make(chan error, 1)
+	go func() { exited <- cmd.Wait() }()
+	select {
+	case err := <-exited:
+		return fmt.Errorf("relaunched GUI exited immediately (%v); see %s", err, logPath)
+	case <-time.After(2 * time.Second):
+		return nil
+	}
 }
 
 func hasPortFlag(args []string) bool {
