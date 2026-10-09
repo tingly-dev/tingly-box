@@ -2187,6 +2187,8 @@ export default {
     }
   },
   "agentActivity": {
+    "usage": "Usage",
+    "requests": "Requests",
     "title": "Requests & usage",
     "openDashboard": "Open in Dashboard",
     "refresh": "Refresh",

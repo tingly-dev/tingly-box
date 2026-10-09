@@ -231,3 +231,23 @@
 - Claude Code 的 Base URL 在 1100 宽下仍被截断（来自共用的 `ConfigRow` 列宽，改它会影响其它页面，另议）。
 - Quick Start 完成时 Tab 位置的一次跳动。
 - Model Rules 卡片自带标题与页面重复（卡片仍叫 Model Rules，Tab 条之下又没有同名 Tab，现在已不算重复，可忽略）。
+
+### 8.11 第六次修正：Tab 换成一行弹窗按钮，Connection 回到页面里
+
+**反馈**：**"截断没问题。不过是不是可以用一个 row 把 quick start 和 requests 还有 usage 分开的放一排按钮用于触发弹窗？或者 reset（quick start）"**——采纳，**取代 8.8 / 8.9 的 Tab 方案**。
+
+**实现**：
+- 页面从上到下：页头（名称 + 状态 + Auto Config）→ **一行按钮**（Quick Start · Requests · Usage，Claude Code 的 Unified/Separate 在行尾）→ **Connection 卡**（常驻，Base URL / API Key / Plugins）→ Model Rules。没有 Tab、没有面板切换。
+- 三个按钮各开各的弹窗：**Quick Start**（四步列表，带进度标签如 `3/4`，完成后 `✓`；**Reset progress 在弹窗里**）、**Requests**（最近 20 条请求）、**Usage**（今日请求 / Token / 错误）。Requests 与 Usage 从原来的"请求与用量"里**拆开**。
+- Quick Start 没完成时排在行首，完成后移到行尾（沿用 8.9 的位置规则）。
+- 弹窗打开时才加载、每 30 秒刷新；Quick Start 弹窗保持挂载，这样按钮上的进度在打开前就已知。Quick Start 里"Choose Model"会先关弹窗，再定位到下面的规则。
+
+**取舍与结果**：
+- 去掉 Tab 之后，Connection 不再与其它面板分时占用同一位置，**不再有"选哪个 Tab"的决定**；一行按钮只有"想看再点"。
+- Connection 卡取回整行宽度，上一轮的 Claude Code Base URL 截断也随之消失（1280 宽下完整显示）。
+- 代价：Connection 卡常驻，约占 150px；用户明确接受（"反正卡会占用一些"）。
+
+**已知不足**：
+- 按钮行不能一眼看出"Quick Start 还差哪一步"，只有 `3/4`。
+- 点 Quick Start 里的"Connect"会在 Quick Start 弹窗上再叠一层连接弹窗（两层）。
+- 没验证：中文 / 俄文下按钮行的换行、真实后端时序、"完成后移到行尾"（mock 里没有能走完四步的 Agent）。

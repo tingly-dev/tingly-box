@@ -645,6 +645,8 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         <>
         <UnifiedCard
             size="header"
+            // Inside the Quick Start dialog the dialog is the card.
+            sx={panel ? { border: 'none' } : undefined}
             titleMarginBottom={foldedAway ? 0 : 2}
             title={
                 <Stack

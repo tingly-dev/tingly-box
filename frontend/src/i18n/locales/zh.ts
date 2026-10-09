@@ -2180,6 +2180,8 @@ export default {
     }
   },
   "agentActivity": {
+    "usage": "用量",
+    "requests": "请求",
     "title": "请求与用量",
     "openDashboard": "在仪表盘中查看",
     "refresh": "刷新",

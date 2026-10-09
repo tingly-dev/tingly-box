@@ -2215,6 +2215,8 @@ export default {
     }
   },
   "agentActivity": {
+    "usage": "Использование",
+    "requests": "Запросы",
     "title": "Запросы и использование",
     "openDashboard": "Открыть в панели",
     "refresh": "Обновить",

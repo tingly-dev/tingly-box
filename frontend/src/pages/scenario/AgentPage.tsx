@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { Box, Button, IconButton, Stack, Tab, Tabs, Tooltip } from '@mui/material';
+import { Box, Button, Chip, Dialog, DialogContent, Stack, Tooltip } from '@mui/material';
+import { BarChart as UsageIcon, ListAlt as RequestsIcon, Rule as QuickStartIcon } from '@/components/icons';
+import DialogHeader from '@/components/DialogHeader';
+import { fontSizes } from '@/theme/fonts';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import PageHeader from '@/components/PageHeader';
@@ -14,7 +17,7 @@ import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPage
 import { useContext1MToggle } from '@/pages/scenario/hooks/useContext1MToggle';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { type SlotMode, useSlotRouting } from '@/pages/scenario/hooks/useSlotRouting';
-import AgentActivityPanel from './components/AgentActivityPanel';
+import AgentActivityDialog, { type AgentActivityView } from './components/AgentActivityDialog';
 import AgentSetupCard, {
     type AgentApplyResult,
     type AgentInstallAction,
@@ -105,20 +108,6 @@ export interface AgentPageDescriptor {
     slotRouting?: { unifiedRuleUuid: string };
 }
 
-// The header's tabs: three looks at the agent, one always open. Connection
-// leads; Quick Start sits next to it while there is setup to do and moves to
-// the end once it is done (it stays, for re-reading).
-export type AgentTab = 'connection' | 'quickstart' | 'activity';
-const tabPrefKey = (scenario: string) => `agent-tab-${scenario}`;
-const readTabPref = (scenario: string): AgentTab | null => {
-    try {
-        const v = localStorage.getItem(tabPrefKey(scenario));
-        return v === 'connection' || v === 'quickstart' || v === 'activity' ? v : null;
-    } catch {
-        return null;
-    }
-};
-
 /** What an agent's setup dialog gets from the page. */
 export interface AgentPageSlot {
     scenario: string;
@@ -157,8 +146,9 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     const [dialogOpen, setDialogOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
     const [setupProgress, setSetupProgress] = useState<{ done: number; total: number; allDone: boolean } | null>(null);
-    // Which tab is open; the pick is remembered per agent. Connection until chosen.
-    const [tabPref, setTabPref] = useState<AgentTab | null>(() => readTabPref(scenario));
+    // The one dialog open from the button row: Quick Start, today's usage, or the
+    // latest requests. Each button opens its own; nothing is on the page itself.
+    const [lookIn, setLookIn] = useState<'quickstart' | AgentActivityView | null>(null);
     const { status: clientConfigStatus } = useClientConfigStatus(agent.clientConfigTool ?? null, [rules, dialogOpen, slotMode]);
     const context1M = useContext1MToggle(() => setDialogOpen(true));
     // Unified Connect AI add flow (picker + form/OAuth/paste/import dialogs), offered by Quick Start.
@@ -229,17 +219,27 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
         </>
     );
 
-    const tab: AgentTab = tabPref === 'quickstart' && !quickStart ? 'connection' : tabPref ?? 'connection';
-    const selectTab = (next: AgentTab) => {
-        setTabPref(next);
-        try { localStorage.setItem(tabPrefKey(scenario), next); } catch { /* per-session only */ }
-    };
-    const panelSx = (name: AgentTab) => (tab === name ? undefined : { display: 'none' });
-    const quickStartLabel = setupProgress
-        ? `${t('agentSetup.quickStart')} ${setupProgress.allDone ? '✓' : `${setupProgress.done}/${setupProgress.total}`}`
-        : t('agentSetup.quickStart');
-    const quickStartTab = quickStart && <Tab key="quickstart" value="quickstart" label={quickStartLabel} />;
     const setupFinished = !!setupProgress?.allDone;
+    const quickStartProgress = setupProgress ? (setupProgress.allDone ? '✓' : `${setupProgress.done}/${setupProgress.total}`) : null;
+    // "Choose a model" lives in the rules below the page: close the dialog, then point at them.
+    const chooseModel = () => {
+        setLookIn(null);
+        window.setTimeout(scrollToModelsCard, 250);
+    };
+    const quickStartButton = quickStart && (
+        <Button
+            key="quickstart"
+            onClick={() => setLookIn('quickstart')}
+            variant="outlined"
+            size="small"
+            startIcon={<QuickStartIcon />}
+            endIcon={quickStartProgress && (
+                <Chip label={quickStartProgress} size="small" color={setupFinished ? 'success' : 'primary'} variant="outlined" sx={{ height: 18, fontSize: fontSizes.xs, '& .MuiChip-label': { px: 0.75 } }} />
+            )}
+        >
+            {t('agentSetup.quickStart')}
+        </Button>
+    );
 
     return (
         <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
@@ -263,74 +263,34 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         '& h1': { whiteSpace: 'nowrap' },
                     }}
                 />
-                {/* Three looks at the agent in one row of tabs, one always open. Panels
-                    stay mounted (only hidden) so a tab keeps its state, except the
-                    activity one, which loads only while it is open. Model rules are
-                    not a tab: they are the page. */}
-                {/* Unified / Separate chooses how the model rules below are laid out, so
-                    it sits at the end of this row, next to them, not up with the title. */}
-                <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-                    <Tabs
-                        value={tab}
-                        onChange={(_, next: AgentTab) => selectTab(next)}
-                        sx={{ flex: 1, minHeight: 40, '& .MuiTab-root': { textTransform: 'none', minHeight: 40 } }}
-                    >
-                        <Tab value="connection" label={t('scenarioPage.tabs.connection', { defaultValue: 'Connection' })} />
-                        {!setupFinished && quickStartTab}
-                        <Tab value="activity" label={t('agentActivity.title')} />
-                        {setupFinished && quickStartTab}
-                    </Tabs>
-                    {slotRouting && <Box sx={{ py: 0.5 }}>{slots.modeSwitch}</Box>}
+                {/* One row of buttons, each opening its own dialog: Quick Start (until
+                    it is done it leads, after it moves to the end), Requests and
+                    Usage. Unified / Separate chooses how the model rules below are
+                    laid out, so it ends this row, next to them. */}
+                <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                    {!setupFinished && quickStartButton}
+                    <Button onClick={() => setLookIn('requests')} variant="outlined" size="small" startIcon={<RequestsIcon />}>
+                        {t('agentActivity.requests')}
+                    </Button>
+                    <Button onClick={() => setLookIn('usage')} variant="outlined" size="small" startIcon={<UsageIcon />}>
+                        {t('agentActivity.usage')}
+                    </Button>
+                    {setupFinished && quickStartButton}
+                    {slotRouting && <Box sx={{ ml: 'auto' }}>{slots.modeSwitch}</Box>}
                 </Box>
 
-                {quickStart && (
-                    <Box role="tabpanel" sx={panelSx('quickstart')}>
-                        <AgentSetupCard
-                            panel
-                            onProgressChange={setSetupProgress}
-                            agentKey={scenario}
-                            agentName={agent.title}
-                            installCommand={quickStart.installCommand ?? ''}
-                            installMirrorCommand={quickStart.installMirrorCommand}
-                            installStepDescription={quickStart.installDescriptionKey && t(quickStart.installDescriptionKey)}
-                            installActions={quickStart.installActions?.(t)}
-                            onApply={setup.kind === 'auto' ? slot.apply : undefined}
-                            onApplyWithStatusLine={setup.kind === 'auto' && setup.applyWithStatusLine
-                                ? () => runApply(() => setup.applyWithStatusLine!(t, applyContext))
-                                : undefined}
-                            isApplyLoading={isApplyLoading}
-                            onViewConfig={openDialog}
-                            applyStepLabel={quickStart.applyStepLabelKey && t(quickStart.applyStepLabelKey)}
-                            applyStepDescription={quickStart.applyStepDescriptionKey && t(quickStart.applyStepDescriptionKey)}
-                            viewConfigButtonLabel={quickStart.openDialogLabelKey && t(quickStart.openDialogLabelKey)}
-                            hasModelSelected={hasModelOnAnyRule(rules)}
-                            onSelectModel={scrollToModelsCard}
-                            onConnectProvider={connectAI.handleConnectAIClick}
-                            providers={internal.providers}
-                            providersLoading={internal.loading}
-                            configApplied={configApplied}
-                        />
-                    </Box>
-                )}
-
-                <Box role="tabpanel" sx={panelSx('connection')}>
-                    <UnifiedCard size="full" contentMaxWidth={SCENARIO_HEADER_CONTENT_MAX_WIDTH}>
-                        <ProviderConfigCard
-                            title={connection?.titleKey ? t(connection.titleKey) : agent.title}
-                            baseUrlPath={`/tingly/${scenario}`}
-                            baseUrl={baseUrl}
-                            onCopy={copyToClipboard}
-                            scenario={scenario}
-                            compact={connection?.compact}
-                            showApiKeyRow={connection?.apiKeyRow}
-                            showBaseUrlRow={connection?.baseUrlRow}
-                        />
-                    </UnifiedCard>
-                </Box>
-
-                <Box role="tabpanel" sx={panelSx('activity')}>
-                    <AgentActivityPanel scenario={scenario} active={tab === 'activity'} />
-                </Box>
+                <UnifiedCard size="full" contentMaxWidth={SCENARIO_HEADER_CONTENT_MAX_WIDTH}>
+                    <ProviderConfigCard
+                        title={connection?.titleKey ? t(connection.titleKey) : agent.title}
+                        baseUrlPath={`/tingly/${scenario}`}
+                        baseUrl={baseUrl}
+                        onCopy={copyToClipboard}
+                        scenario={scenario}
+                        compact={connection?.compact}
+                        showApiKeyRow={connection?.apiKeyRow}
+                        showBaseUrlRow={connection?.baseUrlRow}
+                    />
+                </UnifiedCard>
 
                 <TemplatePage
                     scenario={scenario}
@@ -356,6 +316,46 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                     {...(agent.context1M ? { onContext1MToggle: context1M.handleContext1MToggle } : {})}
                 />
 
+                {quickStart && (
+                    // Kept mounted so the button's progress is known before it is opened.
+                    <Dialog open={lookIn === 'quickstart'} onClose={() => setLookIn(null)} maxWidth="md" fullWidth keepMounted aria-labelledby="agent-quickstart-title">
+                        <DialogHeader
+                            title={`${t('agentSetup.quickStart')}${quickStartProgress ? ` · ${quickStartProgress}` : ''}`}
+                            titleId="agent-quickstart-title"
+                            closeLabel={t('common.close')}
+                            onClose={() => setLookIn(null)}
+                        />
+                        <DialogContent sx={{ p: 0 }}>
+                            <AgentSetupCard
+                                panel
+                                onProgressChange={setSetupProgress}
+                                agentKey={scenario}
+                                agentName={agent.title}
+                                installCommand={quickStart.installCommand ?? ''}
+                                installMirrorCommand={quickStart.installMirrorCommand}
+                                installStepDescription={quickStart.installDescriptionKey && t(quickStart.installDescriptionKey)}
+                                installActions={quickStart.installActions?.(t)}
+                                onApply={setup.kind === 'auto' ? slot.apply : undefined}
+                                onApplyWithStatusLine={setup.kind === 'auto' && setup.applyWithStatusLine
+                                    ? () => runApply(() => setup.applyWithStatusLine!(t, applyContext))
+                                    : undefined}
+                                isApplyLoading={isApplyLoading}
+                                onViewConfig={openDialog}
+                                applyStepLabel={quickStart.applyStepLabelKey && t(quickStart.applyStepLabelKey)}
+                                applyStepDescription={quickStart.applyStepDescriptionKey && t(quickStart.applyStepDescriptionKey)}
+                                viewConfigButtonLabel={quickStart.openDialogLabelKey && t(quickStart.openDialogLabelKey)}
+                                hasModelSelected={hasModelOnAnyRule(rules)}
+                                onSelectModel={chooseModel}
+                                onConnectProvider={connectAI.handleConnectAIClick}
+                                providers={internal.providers}
+                                providersLoading={internal.loading}
+                                configApplied={configApplied}
+                            />
+                        </DialogContent>
+                    </Dialog>
+                )}
+                <AgentActivityDialog scenario={scenario} view="usage" open={lookIn === 'usage'} onClose={() => setLookIn(null)} />
+                <AgentActivityDialog scenario={scenario} view="requests" open={lookIn === 'requests'} onClose={() => setLookIn(null)} />
                 {slotRouting && slots.modeDialog}
                 {setup.kind !== 'none' && setup.renderDialog(slot)}
                 {quickStart && <ConnectAIDialogs flow={connectAI} />}
