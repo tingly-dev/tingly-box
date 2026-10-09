@@ -105,16 +105,15 @@ export interface AgentPageDescriptor {
     slotRouting?: { unifiedRuleUuid: string };
 }
 
-// The header's tabs: three things about the agent that are looked at now and
-// then, kept to one row. "closed" is a choice too (only the tab row shows), so
-// the model rules, which are the page's subject, keep the screen.
-export type AgentTab = 'quickstart' | 'connection' | 'activity';
-type TabPref = AgentTab | 'closed';
+// The header's tabs: three looks at the agent, one always open. Connection
+// leads; Quick Start sits next to it while there is setup to do and moves to
+// the end once it is done (it stays, for re-reading).
+export type AgentTab = 'connection' | 'quickstart' | 'activity';
 const tabPrefKey = (scenario: string) => `agent-tab-${scenario}`;
-const readTabPref = (scenario: string): TabPref | null => {
+const readTabPref = (scenario: string): AgentTab | null => {
     try {
         const v = localStorage.getItem(tabPrefKey(scenario));
-        return v === 'quickstart' || v === 'connection' || v === 'activity' || v === 'closed' ? v : null;
+        return v === 'connection' || v === 'quickstart' || v === 'activity' ? v : null;
     } catch {
         return null;
     }
@@ -158,10 +157,8 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     const [dialogOpen, setDialogOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
     const [setupProgress, setSetupProgress] = useState<{ done: number; total: number; allDone: boolean } | null>(null);
-    // Which tab is open. Until the user picks (or closes) one it follows the
-    // agent: one that already routes a model starts closed, a new one opens on
-    // its Quick Start (or, with none, its connection). The pick is remembered.
-    const [tabPref, setTabPref] = useState<TabPref | null>(() => readTabPref(scenario));
+    // Which tab is open; the pick is remembered per agent. Connection until chosen.
+    const [tabPref, setTabPref] = useState<AgentTab | null>(() => readTabPref(scenario));
     const { status: clientConfigStatus } = useClientConfigStatus(agent.clientConfigTool ?? null, [rules, dialogOpen, slotMode]);
     const context1M = useContext1MToggle(() => setDialogOpen(true));
     // Unified Connect AI add flow (picker + form/OAuth/paste/import dialogs), offered by Quick Start.
@@ -233,21 +230,17 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
         </>
     );
 
-    const tab: AgentTab | null = (() => {
-        const pref = tabPref ?? (hasModelOnAnyRule(rules) ? 'closed' : quickStart ? 'quickstart' : 'connection');
-        if (pref === 'closed') return null;
-        return pref === 'quickstart' && !quickStart ? 'connection' : pref;
-    })();
-    const selectTab = (next: TabPref) => {
+    const tab: AgentTab = tabPref === 'quickstart' && !quickStart ? 'connection' : tabPref ?? 'connection';
+    const selectTab = (next: AgentTab) => {
         setTabPref(next);
         try { localStorage.setItem(tabPrefKey(scenario), next); } catch { /* per-session only */ }
     };
-    // A tab opens its panel; clicking the open one closes it again.
-    const onTabClick = (clicked: AgentTab) => selectTab(clicked === tab ? 'closed' : clicked);
     const panelSx = (name: AgentTab) => (tab === name ? undefined : { display: 'none' });
     const quickStartLabel = setupProgress
         ? `${t('agentSetup.quickStart')} ${setupProgress.allDone ? '✓' : `${setupProgress.done}/${setupProgress.total}`}`
         : t('agentSetup.quickStart');
+    const quickStartTab = quickStart && <Tab key="quickstart" value="quickstart" label={quickStartLabel} />;
+    const setupFinished = !!setupProgress?.allDone;
 
     return (
         <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
@@ -271,17 +264,19 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         '& h1': { whiteSpace: 'nowrap' },
                     }}
                 />
-                {/* Three looks at the agent in one row of tabs. Panels stay mounted
-                    (only hidden) so a tab keeps its state, except the activity
-                    one, which loads only while it is open. Model rules are not
-                    a tab: they are the page. */}
+                {/* Three looks at the agent in one row of tabs, one always open. Panels
+                    stay mounted (only hidden) so a tab keeps its state, except the
+                    activity one, which loads only while it is open. Model rules are
+                    not a tab: they are the page. */}
                 <Tabs
-                    value={tab ?? false}
+                    value={tab}
+                    onChange={(_, next: AgentTab) => selectTab(next)}
                     sx={{ borderBottom: '1px solid', borderColor: 'divider', minHeight: 40, '& .MuiTab-root': { textTransform: 'none', minHeight: 40 } }}
                 >
-                    {quickStart && <Tab value="quickstart" label={quickStartLabel} onClick={() => onTabClick('quickstart')} />}
-                    <Tab value="connection" label={t('scenarioPage.tabs.connection', { defaultValue: 'Connection' })} onClick={() => onTabClick('connection')} />
-                    <Tab value="activity" label={t('agentActivity.title')} onClick={() => onTabClick('activity')} />
+                    <Tab value="connection" label={t('scenarioPage.tabs.connection', { defaultValue: 'Connection' })} />
+                    {!setupFinished && quickStartTab}
+                    <Tab value="activity" label={t('agentActivity.title')} />
+                    {setupFinished && quickStartTab}
                 </Tabs>
 
                 {quickStart && (

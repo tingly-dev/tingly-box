@@ -199,3 +199,20 @@
 - 已配模型的 Agent 默认收起，Quick Start 的进度只剩 Tab 上一个数字，新手之外的人可能不会注意到它还没完成（比如配置过期）。
 - Claude Code 的 Unified/Separate 开关在窄宽下掉到标题下一行，与 Auto Config 同行。
 - 没验证：存量用户对默认收起的感受；中文、俄文排版；真实后端上的时序。
+
+### 8.9 第五次修正：Connection 在最前，Quick Start 完成后移到最后，不再收起
+
+**反馈**：**"connection 应该在最前面展示，quick start 结束了就应该到后面去，也不用收起了，反正卡会占用一些"** —— 采纳，并**取代 8.8 里"默认收起"的设计**。
+
+**实现**：
+- Tab 顺序：**Connection 固定第一**；Quick Start 在有设置要做时紧跟其后（`Connection · Quick Start 3/4 · Requests & usage`），**全部完成后移到最后**（`Connection · Requests & usage · Quick Start ✓`），仍在，供回看。
+- **取消"收起"**：始终有一个 Tab 展开，再点不会收起。默认打开 Connection，之后记住用户的选择。
+- 旧版本存下的 `closed` 偏好被忽略，回落到 Connection。
+
+**取舍**：
+- 之前"已配模型默认收起，让规则占满首屏"的收益被放弃：用户明确接受卡片占一些空间，换来的是**行为更可预期**（不会有时有面板有时没有，也没有"点哪都没反应"的收起态）。
+- Quick Start 的位置随完成状态变化，而不是固定：这样"需要你做的事"离 Connection 近，"已完成的事"退到后面，不占黄金位置。
+
+**已知不足**：
+- Tab 位置会在 Quick Start 完成的那一刻变化（从第二个变成最后一个），当前页面上有一次跳动；没有做动画。
+- 默认打开 Connection 对新手不如直接打开 Quick Start 直观，但新手在 Connection 旁就能看到 "Quick Start 0/4" 的提示。
