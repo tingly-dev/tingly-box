@@ -706,8 +706,10 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         // Everything done: the steps leave the page (Reset or the page's
         // "setup steps" action brings them back).
         if (allDone && !reopened) return guideDialog || null;
+        // A tinted inset: the one part of the card that comes and goes, so it
+        // reads as its own thing rather than rows glued under the title.
         return (
-            <Box>
+            <Box sx={{ bgcolor: 'action.hover', borderRadius: 2, px: 1.5, py: 1.25, mb: 2 }}>
                 {progressRow}
                 {steps}
                 {guideDialog}

@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { Box, Button, Stack, Tooltip } from '@mui/material';
-import { BarChart as ActivityIcon } from '@/components/icons';
-import { fontSizes } from '@/theme/fonts';
+import { Box, Button, IconButton, Tooltip } from '@mui/material';
+import { BarChart as ActivityIcon, Rule as SetupStepsIcon } from '@/components/icons';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import CardGrid from '@/components/CardGrid.tsx';
@@ -190,64 +189,50 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     };
     const openDialog = () => setDialogOpen(true);
 
-    // The header's actions stack in a column beside the card's content, so
-    // the title row stays one line however many an agent has. The first one
-    // that matters now is the primary: a header link (DSH's Web UI), else
-    // Auto Config until the client's config reads back as applied.
+    // Header actions sit on the title row's right. Only the one that matters
+    // now is a filled button: a header link (DSH's Web UI), else Auto Config
+    // until the client's config reads back as applied. Looking in on requests
+    // and re-opening the setup steps are icons — a look-in, not a call to act.
     const configApplied = clientConfigStatus?.state === 'applied';
-    const sideButtonSx = { justifyContent: 'flex-start', textTransform: 'none' } as const;
     const configButton = setup.kind !== 'none' && (
         <Button
             onClick={openDialog}
-            fullWidth
             variant={headerLinks?.length || configApplied ? 'outlined' : 'contained'}
             size="small"
-            sx={sideButtonSx}
         >
             {t(setup.kind === 'auto' ? 'scenarioPage.autoConfig' : 'scenarioPage.setupGuide')}
         </Button>
     );
-    // Watching an agent is a look-in, not page furniture: it opens a dialog so
-    // the rules below keep the screen (a standing panel pushed them off it).
+    // Watching an agent opens a dialog so the rules below keep the screen
+    // (a standing panel pushed them off it).
     const activityButton = (
-        <Button onClick={() => setActivityOpen(true)} fullWidth variant="outlined" size="small" startIcon={<ActivityIcon />} sx={sideButtonSx}>
-            {t('agentActivity.title')}
-        </Button>
+        <Tooltip title={t('agentActivity.title')}>
+            <IconButton onClick={() => setActivityOpen(true)} size="small" aria-label={t('agentActivity.title')} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                <ActivityIcon fontSize="small" />
+            </IconButton>
+        </Tooltip>
     );
-    const sideActions = (
-        <Stack
-            spacing={1}
-            sx={{
-                // Wide enough for "Requests & usage" on one line; the slot switch's two labels need more.
-                width: { xs: '100%', md: slotRouting ? 216 : 184 },
-                flexShrink: 0,
-                borderColor: 'divider',
-                borderLeft: { md: '1px solid' },
-                pl: { md: 2 },
-            }}
-        >
-            {slotRouting && (
-                // Two long labels in a narrow column: share its width, no clipping.
-                <Box sx={{ '& .MuiToggleButtonGroup-root': { width: '100%' }, '& .MuiToggleButton-root': { flex: 1, minWidth: 0, px: 0.5, fontSize: fontSizes.sm, whiteSpace: 'nowrap', textTransform: 'none' } }}>
-                    {slots.modeSwitch}
-                </Box>
-            )}
+    const headerActions = (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {slotRouting && slots.modeSwitch}
             {headerLinks?.map(link => (
                 <Tooltip key={link.href} title={link.href}>
-                    <Button href={link.href} target="_blank" rel="noopener noreferrer" fullWidth variant="contained" size="small" sx={sideButtonSx}>
+                    <Button href={link.href} target="_blank" rel="noopener noreferrer" variant="contained" size="small">
                         {t(link.labelKey)}
                     </Button>
                 </Tooltip>
             ))}
             {configButton}
             {activityButton}
-            {/* The steps leave the page once done; this brings them back. */}
+            {/* The setup steps leave the page once done; this brings them back. */}
             {quickStart && setupDone && (
-                <Button onClick={() => setSetupReopenKey((k) => k + 1)} fullWidth variant="text" size="small" sx={{ ...sideButtonSx, color: 'text.secondary' }}>
-                    {t('agentSetup.showSteps', { defaultValue: 'Setup steps' })}
-                </Button>
+                <Tooltip title={t('agentSetup.showSteps', { defaultValue: 'Setup steps' })}>
+                    <IconButton onClick={() => setSetupReopenKey((k) => k + 1)} size="small" aria-label={t('agentSetup.showSteps', { defaultValue: 'Setup steps' })} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                        <SetupStepsIcon fontSize="small" />
+                    </IconButton>
+                </Tooltip>
             )}
-        </Stack>
+        </Box>
     );
 
     return (
@@ -255,8 +240,8 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
             <CardGrid>
                 {/* One card for "is this tool connected to the gateway": who it is
                     and whether its config is applied, the setup step still to do
-                    (gone once all are done), the connection values, and the
-                    actions in a column on the side. */}
+                    (gone once all are done) as a tinted inset, the connection values,
+                    and the actions on the title row. */}
                 <UnifiedCard
                     titleHeadingLevel={1}
                     title={
@@ -267,9 +252,11 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         />
                     }
                     size="full"
+                    contentMaxWidth={SCENARIO_HEADER_CONTENT_MAX_WIDTH}
+                    rightAction={headerActions}
                 >
-                    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, alignItems: 'stretch' }}>
-                        <Box sx={{ flex: 1, minWidth: 0, maxWidth: SCENARIO_HEADER_CONTENT_MAX_WIDTH }}>
+                    <Box>
+                        <Box>
                             {quickStart && (
                                 <AgentSetupCard
                                     inline
@@ -309,7 +296,6 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                                 showBaseUrlRow={connection?.baseUrlRow}
                             />
                         </Box>
-                        {sideActions}
                     </Box>
                 </UnifiedCard>
                 <TemplatePage
