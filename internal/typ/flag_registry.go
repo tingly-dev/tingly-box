@@ -279,6 +279,17 @@ func RuleFlagRegistry() []FlagSpec {
 			Category:    FlagCategoryApp,
 		},
 		{
+			Key:         "anthropic_endpoint_override",
+			Label:       "Anthropic endpoint override",
+			Description: "Choose the upstream Anthropic endpoint style for this rule. Auto follows the inbound client's protocol (a dual-URL provider serves it natively without conversion). Force Anthropic style always sends the request in Anthropic form — an OpenAI client's request is converted, and a dual-URL provider serves its Anthropic URL. Only providers that support the Anthropic style can be forced; others fall back to Auto with a warning. OpenAI/Google-style providers without an Anthropic endpoint ignore this flag.",
+			Type:        FlagTypeEnum,
+			Category:    FlagCategoryRequestAnthropic,
+			Options: []FlagOption{
+				{Value: "auto", Label: "Auto (follow inbound client)"},
+				{Value: "anthropic", Label: "Force Anthropic style"},
+			},
+		},
+		{
 			Key:         "claude_org_id",
 			Label:       "Claude organization ID",
 			Description: "Control the anthropic-organization-id header sent to Anthropic for this rule (Claude OAuth providers). Leave empty (default) to attach no organization header — the classic behavior, so existing setups are unaffected. Choose \"Login organization\" to attribute requests to the organization captured at OAuth login (org-bound entitlements such as Cyber Verification need this), or enter an organization UUID to attribute requests to that specific organization.",

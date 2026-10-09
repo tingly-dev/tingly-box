@@ -59,6 +59,71 @@ func TestResolveAttemptTarget(t *testing.T) {
 	}
 }
 
+// TestResolveAttemptStyle pins the anthropic_endpoint_override style
+// resolution: the inbound client's own style by default, the Anthropic style
+// when the rule forces it and the provider supports one, and the client style
+// (with just a warning) when it does not.
+func TestResolveAttemptStyle(t *testing.T) {
+	dualOpenAI := &typ.Provider{Name: "dual", APIStyle: protocol.APIStyleOpenAI, APIBase: "https://o.example", APIBaseAnthropic: "https://a.example"}
+	dualOAuthBound := &typ.Provider{Name: "dual-oauth", AuthType: ai.AuthTypeOAuth, APIStyle: protocol.APIStyleOpenAI, APIBase: "https://o.example", APIBaseAnthropic: "https://a.example"}
+	nativeAnthropic := &typ.Provider{Name: "native", APIStyle: protocol.APIStyleAnthropic, APIBase: "https://a.example"}
+	chatOnly := &typ.Provider{Name: "chat", APIStyle: protocol.APIStyleOpenAI, APIBase: "https://o.example"}
+	googleStyle := &typ.Provider{Name: "google", APIStyle: protocol.APIStyleGoogle, APIBase: "https://g.example"}
+
+	tests := []struct {
+		name     string
+		flags    typ.RuleFlags
+		provider *typ.Provider
+		source   protocol.APIType
+		want     ai.APIStyle
+	}{
+		{"no flag follows client style", typ.RuleFlags{}, dualOpenAI, protocol.TypeOpenAIChat, ai.APIStyleOpenAI},
+		{"auto flag follows client style", typ.RuleFlags{AnthropicEndpointOverride: "auto"}, dualOpenAI, protocol.TypeOpenAIChat, ai.APIStyleOpenAI},
+		{"unknown flag value follows client style", typ.RuleFlags{AnthropicEndpointOverride: "bogus"}, dualOpenAI, protocol.TypeOpenAIChat, ai.APIStyleOpenAI},
+		{"force on dual provider picks anthropic", typ.RuleFlags{AnthropicEndpointOverride: "anthropic"}, dualOpenAI, protocol.TypeOpenAIChat, ai.APIStyleAnthropic},
+		// OAuth bearers are endpoint-scoped: the dual URL is ignored unless the
+		// issuer allows dual use, so the force cannot select it.
+		{"force on non-dual-eligible oauth provider falls back", typ.RuleFlags{AnthropicEndpointOverride: "anthropic"}, dualOAuthBound, protocol.TypeOpenAIChat, ai.APIStyleOpenAI},
+		{"force on native anthropic provider stays anthropic", typ.RuleFlags{AnthropicEndpointOverride: "anthropic"}, nativeAnthropic, protocol.TypeAnthropicBeta, ai.APIStyleAnthropic},
+		{"force on openai-only provider falls back", typ.RuleFlags{AnthropicEndpointOverride: "anthropic"}, chatOnly, protocol.TypeOpenAIChat, ai.APIStyleOpenAI},
+		{"force on google provider falls back", typ.RuleFlags{AnthropicEndpointOverride: "anthropic"}, googleStyle, protocol.TypeOpenAIChat, ai.APIStyleOpenAI},
+	}
+	ph := &ProtocolHandler{}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest("POST", "/", nil)
+			got := ph.resolveAttemptStyle(c, &typ.Rule{Flags: tt.flags}, tt.provider, tt.source)
+			if got != tt.want {
+				t.Errorf("style = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAttemptPlanForcedAnthropic pins the end-to-end style+target pair for a
+// forced rule: a dual-URL OpenAI-style provider serves an OpenAI Chat client
+// from its Anthropic endpoint, with the target protocol following the
+// resolved provider style.
+func TestAttemptPlanForcedAnthropic(t *testing.T) {
+	dualOpenAI := &typ.Provider{Name: "dual", APIStyle: protocol.APIStyleOpenAI, APIBase: "https://o.example", APIBaseAnthropic: "https://a.example"}
+	ph := &ProtocolHandler{}
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("POST", "/", nil)
+
+	resolved := dualOpenAI.ResolveStyle(ph.resolveAttemptStyle(c, &typ.Rule{Flags: typ.RuleFlags{AnthropicEndpointOverride: "anthropic"}}, dualOpenAI, protocol.TypeOpenAIChat))
+	if resolved.APIBase != "https://a.example" || resolved.APIStyle != protocol.APIStyleAnthropic {
+		t.Fatalf("resolved = %s %s, want https://a.example anthropic", resolved.APIBase, resolved.APIStyle)
+	}
+	target, err := ph.resolveAttemptTarget(c, &typ.Rule{}, resolved, "m", protocol.TypeOpenAIChat)
+	if err != nil {
+		t.Fatalf("resolveAttemptTarget: %v", err)
+	}
+	if target != protocol.TypeAnthropicBeta {
+		t.Errorf("target = %q, want anthropic beta", target)
+	}
+}
+
 func TestAttemptPlanServedByStage(t *testing.T) {
 	tests := []struct {
 		source, target protocol.APIType

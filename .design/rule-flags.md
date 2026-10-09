@@ -114,7 +114,7 @@ func RuleFlagRegistry() []FlagSpec { … }
 
 ---
 
-## 4. 当前已注册 flag（18 个）
+## 4. 当前已注册 flag（19 个）
 
 以 `internal/typ/flag_registry.go::RuleFlagRegistry` 为权威清单；新增项同步本表和
 [`rule-flag-testing.md`](./rule-flag-testing.md) 的覆盖矩阵。
@@ -124,6 +124,7 @@ func RuleFlagRegistry() []FlagSpec { … }
 | `extra_headers` | headers (map) | request | — | — | 追加出站 HTTP headers，仅 API-key provider 生效。允许显式覆盖 Authorization 等默认头；只校验结构与大小写重名，没有 denylist。provider/model 级尚属提案，见 `provider-flags.md`。 | `ruleFlagTransport`，Type 2；`typ.ValidateExtraHeaders` |
 | `custom_user_agent` | string | request | **yes** | override | 覆盖出站 User-Agent header。registry 通过 `Suggestions`（`typ.DefaultUserAgents()`）透出几个常见 CLI/agent 的 UA 预设供快选。特殊值 `none`（`typ.UserAgentNone`）= 完全去掉 User-Agent header。| `ruleFlagTransport` + `applyRuleFlags(c, flags)` → `typ.WithRuleFlags(ctx, flags)`（Type 2）|
 | `openai_endpoint_override` | enum (`auto`/`chat`/`responses`) | request | — | — | 强制单条 rule 的 OpenAI 出口走 Chat 或 Responses；与 provider 声明的 `OpenAIEndpointMode` 冲突时 provider 赢（见 `.design/openai-endpoint-routing.md`）| `ParseEndpointOverride` → `ResolveOpenAIEndpoint`（Type 4：路由层决策）|
+| `anthropic_endpoint_override` | enum (`auto`/`anthropic`) | request_anthropic | — | — | 强制单条 rule 的出站走 Anthropic style（含双 URL provider 本可原生直连的场景，强制后改走 Anthropic 端点 + 协议转换）。检查很简单：`supportsAnthropicStyle`（复用 `ResolveEndpoint`，OAuth 双 URL 不可用则不算支持）；不支持时 warn 并回退 auto | `ParseAnthropicOverride` → `resolveAttemptStyle` → `ResolveStyle`（Type 4：路由层决策）|
 | `use_max_completion_tokens` | bool | request | — | — | 把 `max_tokens` 字段名重写为 `max_completion_tokens`（OpenAI o1/o3/gpt-5 系列必需） | `transform.OpenAIMaxTokensRewriteTransform` → `ops.ApplyMaxCompletionTokensRewrite`（Type 1b-post）|
 | `use_max_tokens` | bool | request | — | — | 反向：把 `max_completion_tokens` 写回旧字段 `max_tokens`（用于拒绝新字段的 provider/模型）| 同上 → `ops.ApplyMaxTokensRewrite`（Type 1b-post）|
 | `block_tools` | string (逗号分隔) | request | — | — | 按名字从请求 tool list 中剔除指定工具（发出前），跨 OpenAI Chat / Responses / Anthropic / Google 入站形态生效 | `transform.ToolBlockTransform` → `ops.ApplyToolBlock*`（Type 1b-pre）|

@@ -159,6 +159,9 @@ func formatAppliedFlags(f typ.RuleFlags) string {
 	if f.OpenAIEndpointOverride != "" && f.OpenAIEndpointOverride != "auto" {
 		parts = append(parts, "endpoint="+f.OpenAIEndpointOverride)
 	}
+	if f.AnthropicEndpointOverride != "" && f.AnthropicEndpointOverride != "auto" {
+		parts = append(parts, "anthropic_endpoint="+f.AnthropicEndpointOverride)
+	}
 	if f.ThinkingEffort != "" {
 		parts = append(parts, "thinking="+string(f.ThinkingEffort))
 	}

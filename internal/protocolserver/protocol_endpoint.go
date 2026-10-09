@@ -129,3 +129,39 @@ func ParseEndpointOverride(s string) EndpointOverride {
 		return OverrideAuto
 	}
 }
+
+// AnthropicOverride is the typed value of the anthropic_endpoint_override rule
+// flag. It forces a request onto the Anthropic-style upstream, overriding the
+// inbound-client-style resolution (provider.ResolveStyle) for providers that
+// support the Anthropic style.
+type AnthropicOverride string
+
+const (
+	AnthropicOverrideAuto      AnthropicOverride = "auto"
+	AnthropicOverrideAnthropic AnthropicOverride = "anthropic"
+)
+
+// ParseAnthropicOverride coerces a raw rule-flag string to a known
+// AnthropicOverride. Empty, "auto" and any unrecognized value map to
+// AnthropicOverrideAuto so misconfigured rules degrade safely.
+func ParseAnthropicOverride(s string) AnthropicOverride {
+	switch s {
+	case string(AnthropicOverrideAnthropic):
+		return AnthropicOverrideAnthropic
+	default:
+		return AnthropicOverrideAuto
+	}
+}
+
+// supportsAnthropicStyle reports whether a provider can serve an
+// Anthropic-style request. It asks ResolveEndpoint — the same function
+// ResolveStyle uses — so a dual Anthropic URL only counts when the provider's
+// auth may actually select it (endpoint-scoped OAuth bearers skip dual URLs),
+// and a primary endpoint only counts when it already speaks Anthropic.
+func supportsAnthropicStyle(provider *typ.Provider) bool {
+	if provider == nil {
+		return false
+	}
+	_, style := provider.ResolveEndpoint(ai.APIStyleAnthropic)
+	return style == ai.APIStyleAnthropic
+}

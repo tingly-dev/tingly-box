@@ -64,6 +64,7 @@ export interface RuleFlags {
     useMaxCompletionTokens?: boolean;
     useMaxTokens?: boolean;
     openaiEndpointOverride?: string;
+    anthropicEndpointOverride?: string;
     blockTools?: string;
     thinkingEffort?: string;
     sessionAffinity?: number;
@@ -84,6 +85,7 @@ export interface RuleFlagsApi {
     use_max_completion_tokens?: boolean;
     use_max_tokens?: boolean;
     openai_endpoint_override?: string;
+    anthropic_endpoint_override?: string;
     block_tools?: string;
     thinking_effort?: string;
     session_affinity?: number;

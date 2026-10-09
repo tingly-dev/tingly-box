@@ -216,6 +216,16 @@ type RuleFlags struct {
 	// is silently ignored (Codex has no Chat endpoint) and a warning is logged.
 	OpenAIEndpointOverride string `json:"openai_endpoint_override,omitempty" yaml:"openai_endpoint_override,omitempty"`
 
+	// AnthropicEndpointOverride forces the Anthropic endpoint selection.
+	// Empty or "auto" preserves adaptive behavior (ResolveStyle by inbound
+	// client style, then resolveAttemptTarget). Any other recognized value
+	// ("anthropic") forces the Anthropic-style upstream — including dual-URL
+	// providers that would otherwise serve the client's own style natively.
+	// Providers that cannot serve the Anthropic style (per ResolveEndpoint:
+	// no Anthropic primary style and no selectable APIBaseAnthropic) warn and
+	// fall back to adaptive routing.
+	AnthropicEndpointOverride string `json:"anthropic_endpoint_override,omitempty" yaml:"anthropic_endpoint_override,omitempty"`
+
 	// BlockTools is a comma-separated list of tool names to strip from the
 	// inbound request's tool list before it is forwarded upstream. Matching is
 	// exact on the tool name as the client sent it. Empty means no blocking.

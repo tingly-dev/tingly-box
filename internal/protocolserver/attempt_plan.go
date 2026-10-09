@@ -4,7 +4,9 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
@@ -45,8 +47,10 @@ type attemptPlan struct {
 // User-Agent) to the request context for the outbound client layer.
 func (ph *ProtocolHandler) planAttempt(c *gin.Context, rule *typ.Rule, provider *typ.Provider, model string, source protocol.APIType, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig) (*attemptPlan, error) {
 	// Resolve dual endpoint: when the provider has a URL in the client's own
-	// style configured, route there natively to avoid a conversion.
-	provider = provider.ResolveStyle(clientAPIStyle(source))
+	// style configured, route there natively to avoid a conversion. The
+	// anthropic_endpoint_override rule flag forces the Anthropic style instead
+	// (see resolveAttemptStyle).
+	provider = provider.ResolveStyle(ph.resolveAttemptStyle(c, rule, provider, source))
 	c.Set(ContextKeyProvider, provider)
 	if provider.Timeout <= 0 {
 		provider.Timeout = constant.DefaultRequestTimeout
@@ -68,6 +72,24 @@ func (ph *ProtocolHandler) planAttempt(c *gin.Context, rule *typ.Rule, provider 
 		MaxAllowed:       ph.deps.TemplateManager.GetMaxTokensForModelByProvider(provider, model),
 		DefaultMaxTokens: ph.deps.Config.GetDefaultMaxTokens(),
 	}, nil
+}
+
+// resolveAttemptStyle picks the provider style ResolveStyle resolves the
+// provider to: the inbound client's own style when it can be served natively,
+// or the Anthropic style when the rule's anthropic_endpoint_override forces
+// it and the provider supports one. A force on a provider without Anthropic
+// support is logged and ignored — the override degrades to adaptive routing,
+// mirroring how an unsupported openai_endpoint_override only warns.
+func (ph *ProtocolHandler) resolveAttemptStyle(c *gin.Context, rule *typ.Rule, provider *typ.Provider, source protocol.APIType) ai.APIStyle {
+	style := clientAPIStyle(source)
+	if ParseAnthropicOverride(ResolveRuleFlags(c, rule).AnthropicEndpointOverride) != AnthropicOverrideAnthropic {
+		return style
+	}
+	if supportsAnthropicStyle(provider) {
+		return ai.APIStyleAnthropic
+	}
+	logrus.Warnf("Rule forces the Anthropic endpoint on provider %s which has no Anthropic style; ignoring the override", provider.UUID)
+	return style
 }
 
 // resolveAttemptTarget maps the provider's API style to the protocol the

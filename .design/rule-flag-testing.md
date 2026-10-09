@@ -101,6 +101,7 @@ or the chosen **endpoint**.
 | `cursor_compat` | openai_chat→openai_chat | `true` | array content flattened to a string | upstream body |
 | `cursor_compat_auto` | openai_chat→openai_chat | `true` + `User-Agent: Cursor/...` | flattened (auto-detected by header) | upstream body |
 | `openai_endpoint_override` | openai_chat→openai_responses *(provider mode=both)* | `"responses"` | forwarded to `/v1/responses` | endpoint hits |
+| `anthropic_endpoint_override` | openai_chat→openai_chat *(dual-URL provider)* | `"anthropic"` | forwarded to the Anthropic endpoint (converted), not the native OpenAI one | endpoint hits |
 | `session_affinity` | one rule, **two** upstreams | `3600` + `X-Tingly-Session-ID` | all N requests pin to the first-chosen upstream | upstream hits |
 | `vision_proxy_service` | openai_chat→openai_chat + describer | `{describer, vision-model}` | image block described + replaced; describer called; text spliced upstream | upstream body + describer hits |
 | `recording` | gateway request with per-rule recording | request-point selection | selected request points recorded; paused response points stay disabled | recording sink |
@@ -108,7 +109,7 @@ or the chosen **endpoint**.
 | `claude_code_version` | real Claude OAuth client path | default / 2.1.86 / 2.1.280 | selected identity, beta and billing profile applied | upstream wire |
 | `context_1m` | Anthropic path, including `[1m]` routing | true | context beta injected; routing suffix normalized | upstream header + routing |
 
-The matrix summarizes `internal/protocoltest/flags.go`; all 18 registry keys
+The matrix summarizes `internal/protocoltest/flags.go`; all 19 registry keys
 are represented. Cross-protocol/streaming combinations are separately exercised
 by `flag_paths.go` (see `harness-matrix.md`), not all by the single-route fixtures
 above. Completeness of the key list does not prove every protocol combination.

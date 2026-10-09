@@ -217,6 +217,46 @@ func TestParseEndpointOverride(t *testing.T) {
 	}
 }
 
+func TestParseAnthropicOverride(t *testing.T) {
+	cases := []struct {
+		in   string
+		want AnthropicOverride
+	}{
+		{"", AnthropicOverrideAuto},
+		{"auto", AnthropicOverrideAuto},
+		{"anthropic", AnthropicOverrideAnthropic},
+		{"unknown", AnthropicOverrideAuto},
+		{"ANTHROPIC", AnthropicOverrideAuto}, // case-sensitive on purpose; the registry emits lowercase
+	}
+	for _, c := range cases {
+		got := ParseAnthropicOverride(c.in)
+		if got != c.want {
+			t.Errorf("ParseAnthropicOverride(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestSupportsAnthropicStyle(t *testing.T) {
+	tests := []struct {
+		name     string
+		provider *typ.Provider
+		want     bool
+	}{
+		{"nil provider", nil, false},
+		{"native anthropic", &typ.Provider{APIStyle: ai.APIStyleAnthropic}, true},
+		{"dual anthropic url", &typ.Provider{APIStyle: ai.APIStyleOpenAI, APIBaseAnthropic: "https://a.example"}, true},
+		{"openai only", &typ.Provider{APIStyle: ai.APIStyleOpenAI}, false},
+		{"google only", &typ.Provider{APIStyle: ai.APIStyleGoogle}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := supportsAnthropicStyle(tt.provider); got != tt.want {
+				t.Errorf("supportsAnthropicStyle = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsCodexProvider(t *testing.T) {
 	if (&typ.Provider{UUID: "p-1"}).IsCodexProvider() {
 		t.Error("provider without OAuthDetail should not be Codex")
