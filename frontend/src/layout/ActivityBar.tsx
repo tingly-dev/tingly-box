@@ -105,7 +105,6 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
             <Box sx={activityIconsScrollSx}>
                 {activityItems.map((item) => {
                     const isActiveItem = activeActivity === item.key;
-                    const shortLabel = item.label.length > 12 ? item.label.slice(0, 7) + '…' : item.label;
                     // Mirrors Layout.handleActivityClick's own targetPath logic, so the
                     // rendered href always matches where a click would actually navigate —
                     // even for activities that own a level-2 sidebar (item.children).
@@ -134,6 +133,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                             </ListItemIcon>
                             <Typography
                                 variant="caption"
+                                title={item.label}
                                 sx={{
                                     fontWeight: isActiveItem ? 600 : 400,
                                     color: 'inherit',
@@ -145,7 +145,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                                     whiteSpace: 'nowrap',
                                 }}
                             >
-                                {shortLabel}
+                                {item.label}
                             </Typography>
                         </ListItemButton>
                     );
