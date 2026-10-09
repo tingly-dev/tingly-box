@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	tbagent "github.com/tingly-dev/tingly-box/internal/agent"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
@@ -172,54 +171,21 @@ type claudeCodeModels struct {
 	def, haiku, sonnet, opus, subagent, fable string
 }
 
-// resolveClaudeCodeModels resolves the per-tier request models the same way the
-// frontend's derivePrefsFromRules does.
+// resolveClaudeCodeModels resolves the per-tier request models of the main
+// claude_code scenario through the same resolver as the settings file.
 func (c *TBClientImpl) resolveClaudeCodeModels() claudeCodeModels {
-	byUUID := map[string]string{}
-	for _, rule := range c.config.GetRequestConfigs() {
-		if rule.GetScenario() != typ.ScenarioClaudeCode || !rule.Active {
-			continue
-		}
-		if m := strings.TrimSpace(rule.RequestModel); m != "" {
-			if rule.Flags.Context1M && !strings.HasSuffix(m, serverconfig.Context1MSuffix) {
-				m += serverconfig.Context1MSuffix
-			}
-			byUUID[rule.UUID] = m
-		}
+	separate := false
+	if sc := c.config.GetScenarioConfig(typ.ScenarioClaudeCode); sc != nil {
+		separate = sc.GetDefaultFlags().Separate
 	}
-
-	ruleModel := func(uuid, legacyUUID, fallback string) string {
-		if m, ok := byUUID[uuid]; ok {
-			return m
-		}
-		if m, ok := byUUID[legacyUUID]; ok {
-			return m
-		}
-		return fallback
-	}
-
-	if sc := c.config.GetScenarioConfig(typ.ScenarioClaudeCode); sc != nil && sc.GetDefaultFlags().Separate {
-		def := ruleModel("builtin:claude_code:default", "built-in-cc-default", "tingly/cc-default")
-		return claudeCodeModels{
-			def:      def,
-			haiku:    ruleModel("builtin:claude_code:haiku", "built-in-cc-haiku", "tingly/cc-haiku"),
-			sonnet:   ruleModel("builtin:claude_code:sonnet", "built-in-cc-sonnet", "tingly/cc-sonnet"),
-			opus:     ruleModel("builtin:claude_code:opus", "built-in-cc-opus", "tingly/cc-opus"),
-			subagent: ruleModel("builtin:claude_code:subagent", "built-in-cc-subagent", "tingly/cc-subagent"),
-			// No active fable rule (never seeded, or switched off): the bare tier
-			// name is not routable, so the alias follows the default tier.
-			fable: ruleModel(serverconfig.RuleUUIDCCFable, "", def),
-		}
-	}
-
-	unified := ruleModel("builtin:claude_code:cc", "built-in-cc", "tingly/cc")
+	m, _ := tbagent.ClaudeCodeSlotModels(c.config, string(typ.ScenarioClaudeCode), !separate, false)
 	return claudeCodeModels{
-		def:      unified,
-		haiku:    unified,
-		sonnet:   unified,
-		opus:     unified,
-		subagent: unified,
-		fable:    unified,
+		def:      m["ANTHROPIC_MODEL"],
+		haiku:    m["ANTHROPIC_DEFAULT_HAIKU_MODEL"],
+		sonnet:   m["ANTHROPIC_DEFAULT_SONNET_MODEL"],
+		opus:     m["ANTHROPIC_DEFAULT_OPUS_MODEL"],
+		subagent: m["CLAUDE_CODE_SUBAGENT_MODEL"],
+		fable:    m["ANTHROPIC_DEFAULT_FABLE_MODEL"],
 	}
 }
 

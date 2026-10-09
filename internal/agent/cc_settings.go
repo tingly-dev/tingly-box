@@ -52,43 +52,31 @@ func acquireCCProfileBuildLock(path string) func() {
 	}
 }
 
-// GenerateCCEnv builds the env map for Claude Code settings.json.
+// ClaudeCodeSlotModels resolves the model id Claude Code sends for each model
+// slot, keyed by env var, and reports whether any of them carries the 1M
+// context marker. It is the one place that maps the Claude Code rules onto the
+// env, shared by the settings file (GenerateCCEnv) and the tbclient env.
 //
 // scenarioPath is "claude_code" for the main scenario or "claude_code:p1" for
-// a profile. isProfile=true → tier models resolved from profile-scoped built-in
+// a profile. isProfile=true → slot models resolved from profile-scoped built-in
 // UUIDs; isProfile=false → resolved from main-scenario built-in UUIDs (with
 // legacy-UUID fallback for pre-migration configs).
 //
 // Reading the rule's request_model (instead of assuming the seeded name) keeps
 // the env aligned when a user renames a rule's model; the seeded name is the
 // fallback when the rule is missing or inactive.
-func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath string, unified, isProfile bool) map[string]string {
-	env := map[string]string{
-		"ANTHROPIC_BASE_URL":   baseURL + "/tingly/" + scenarioPath,
-		"ANTHROPIC_AUTH_TOKEN": apiKey,
-		"TINGLY_API_URL":       baseURL,
-	}
-	// Named profiles inherit tunables from the main settings file. The main
-	// synthetic profile keeps the historical canonical defaults.
-	if !isProfile {
-		env["DISABLE_TELEMETRY"] = "1"
-		env["DISABLE_ERROR_REPORTING"] = "1"
-		env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
-		env["API_TIMEOUT_MS"] = "3000000"
-	}
-
-	// Track whether any resolved rule has the 1M context flag so we can
-	// mirror the frontend quick-config's auto-compact window adjustment.
-	context1M := false
-
+func ClaudeCodeSlotModels(cfg *serverconfig.Config, scenarioPath string, unified, isProfile bool) (models map[string]string, context1M bool) {
 	ruleModel := func(fallback string, uuids ...string) string {
 		if cfg != nil {
 			for _, uuid := range uuids {
+				if uuid == "" {
+					continue
+				}
 				if r := cfg.GetRuleByUUID(uuid); r != nil && r.Active {
 					if m := strings.TrimSpace(r.RequestModel); m != "" {
-						// Mirror the frontend quick-config: a rule with the 1M context
-						// flag advertises itself to Claude Code via the [1m] suffix (the
-						// client strips it back and sends the context-1m beta header).
+						// A rule with the 1M context flag advertises itself to
+						// Claude Code via the [1m] suffix (the client strips it
+						// back and sends the context-1m beta header).
 						if r.Flags.Context1M {
 							context1M = true
 							if !strings.HasSuffix(m, serverconfig.Context1MSuffix) {
@@ -114,26 +102,49 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 		return ruleModel(legacyFallback, serverconfig.BuiltinRuleUUID(typ.ScenarioClaudeCode, tier), legacyUUID)
 	}
 
+	models = map[string]string{}
 	if unified {
 		model := tierModel("cc", serverconfig.RuleUUIDBuiltinCC, "tingly/cc")
-		env["ANTHROPIC_MODEL"] = model
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = model
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = model
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = model
-		env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = model
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = model
-	} else {
-		env["ANTHROPIC_MODEL"] = tierModel("default", serverconfig.RuleUUIDBuiltinCCDefault, "tingly/cc-default")
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = tierModel("haiku", serverconfig.RuleUUIDBuiltinCCHaiku, "tingly/cc-haiku")
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = tierModel("opus", serverconfig.RuleUUIDBuiltinCCOpus, "tingly/cc-opus")
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = tierModel("sonnet", serverconfig.RuleUUIDBuiltinCCSonnet, "tingly/cc-sonnet")
-		// The fable tier arrived after separate mode shipped, so a profile or
-		// install may have no active fable rule (never seeded, or switched off);
-		// the bare tier name is not routable, so the alias follows the default
-		// tier instead.
-		env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = ruleModel(env["ANTHROPIC_MODEL"], serverconfig.BuiltinRuleUUID(typ.RuleScenario(scenarioPath), "fable"))
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = tierModel("subagent", serverconfig.RuleUUIDBuiltinCCSubagent, "tingly/cc-subagent")
+		models["ANTHROPIC_MODEL"] = model
+		models["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = model
+		models["ANTHROPIC_DEFAULT_OPUS_MODEL"] = model
+		models["ANTHROPIC_DEFAULT_SONNET_MODEL"] = model
+		models["ANTHROPIC_DEFAULT_FABLE_MODEL"] = model
+		models["CLAUDE_CODE_SUBAGENT_MODEL"] = model
+		return models, context1M
 	}
+	models["ANTHROPIC_MODEL"] = tierModel("default", serverconfig.RuleUUIDBuiltinCCDefault, "tingly/cc-default")
+	models["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = tierModel("haiku", serverconfig.RuleUUIDBuiltinCCHaiku, "tingly/cc-haiku")
+	models["ANTHROPIC_DEFAULT_OPUS_MODEL"] = tierModel("opus", serverconfig.RuleUUIDBuiltinCCOpus, "tingly/cc-opus")
+	models["ANTHROPIC_DEFAULT_SONNET_MODEL"] = tierModel("sonnet", serverconfig.RuleUUIDBuiltinCCSonnet, "tingly/cc-sonnet")
+	// The fable tier arrived after separate mode shipped, so a profile or
+	// install may have no active fable rule (never seeded, or switched off);
+	// the bare tier name is not routable, so the alias follows the default
+	// tier instead.
+	models["ANTHROPIC_DEFAULT_FABLE_MODEL"] = ruleModel(models["ANTHROPIC_MODEL"], serverconfig.BuiltinRuleUUID(typ.RuleScenario(scenarioPath), "fable"))
+	models["CLAUDE_CODE_SUBAGENT_MODEL"] = tierModel("subagent", serverconfig.RuleUUIDBuiltinCCSubagent, "tingly/cc-subagent")
+	return models, context1M
+}
+
+// GenerateCCEnv builds the env map for Claude Code settings.json; the model
+// slots come from ClaudeCodeSlotModels.
+func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath string, unified, isProfile bool) map[string]string {
+	env := map[string]string{
+		"ANTHROPIC_BASE_URL":   baseURL + "/tingly/" + scenarioPath,
+		"ANTHROPIC_AUTH_TOKEN": apiKey,
+		"TINGLY_API_URL":       baseURL,
+	}
+	// Named profiles inherit tunables from the main settings file. The main
+	// synthetic profile keeps the historical canonical defaults.
+	if !isProfile {
+		env["DISABLE_TELEMETRY"] = "1"
+		env["DISABLE_ERROR_REPORTING"] = "1"
+		env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
+		env["API_TIMEOUT_MS"] = "3000000"
+	}
+
+	models, context1M := ClaudeCodeSlotModels(cfg, scenarioPath, unified, isProfile)
+	maps.Copy(env, models)
 
 	// Mirror the frontend quick-config: when any resolved model rule has the
 	// 1M context flag, adjust the auto-compact window to match so Claude Code

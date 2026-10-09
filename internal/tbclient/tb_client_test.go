@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	tbagent "github.com/tingly-dev/tingly-box/internal/agent"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -305,4 +306,38 @@ func TestResolveClaudeCodeModels_FableFollowsDefaultWithoutActiveRule(t *testing
 	}
 	models := NewTBClient(cfg).resolveClaudeCodeModels()
 	assert.Equal(t, "tingly/cc-default", models.fable)
+}
+
+// The tbclient env and the settings file resolve the model slots through the
+// same function, so they must agree for every shape of Claude Code config.
+func TestResolveClaudeCodeModels_MatchesSettingsFile(t *testing.T) {
+	flagged := ccRule("builtin:claude_code:haiku", "vendor/fast")
+	flagged.Flags.Context1M = true
+	off := ccRule("builtin:claude_code:fable", "tingly/cc-fable")
+	off.Active = false
+	for name, cfg := range map[string]*serverconfig.Config{
+		"unified default": {},
+		"unified rule":    {Rules: []typ.Rule{ccRule("built-in-cc", "team/coder")}},
+		"separate": {
+			Scenarios: []typ.ScenarioConfig{ccSeparateFlag()},
+			Rules: []typ.Rule{
+				ccRule("builtin:claude_code:default", "vendor/default"),
+				flagged,
+				ccRule("built-in-cc-opus", "vendor/smart"),
+				off,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			separate := len(cfg.Scenarios) > 0
+			env := tbagent.GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code", !separate, false)
+			m := NewTBClient(cfg).resolveClaudeCodeModels()
+			assert.Equal(t, env["ANTHROPIC_MODEL"], m.def)
+			assert.Equal(t, env["ANTHROPIC_DEFAULT_HAIKU_MODEL"], m.haiku)
+			assert.Equal(t, env["ANTHROPIC_DEFAULT_SONNET_MODEL"], m.sonnet)
+			assert.Equal(t, env["ANTHROPIC_DEFAULT_OPUS_MODEL"], m.opus)
+			assert.Equal(t, env["ANTHROPIC_DEFAULT_FABLE_MODEL"], m.fable)
+			assert.Equal(t, env["CLAUDE_CODE_SUBAGENT_MODEL"], m.subagent)
+		})
+	}
 }
