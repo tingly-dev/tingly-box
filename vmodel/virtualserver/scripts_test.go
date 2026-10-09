@@ -372,3 +372,20 @@ func atoiT(t *testing.T, s string) int {
 	}
 	return n
 }
+
+// A script's program must not restart merely because its file aged past the
+// "fresh, so hash it" window (mtime unchanged, only the clock moved on).
+func TestScript_AgeingPastTheFreshWindowDoesNotRestartTheProgram(t *testing.T) {
+	_, dir, baseURL := newScriptService(t)
+	writeScript(t, dir, "age.yaml", "steps:\n  - say: first\n  - say: second")
+	almostOld := time.Now().Add(-1900 * time.Millisecond) // fresh for another ~100ms
+	require.NoError(t, os.Chtimes(filepath.Join(dir, "age.yaml"), almostOld, almostOld))
+	ask := func() string {
+		_, out := postJSON(t, baseURL+"/v1/chat/completions", map[string]any{
+			"model": "age", "messages": []map[string]string{{"role": "user", "content": "hi"}}})
+		return string(out)
+	}
+	assert.Contains(t, ask(), "first") // fresh: stamped with a content hash
+	time.Sleep(300 * time.Millisecond) // now older than the window, mtime untouched
+	assert.Contains(t, ask(), "second", "same file, no edit: the cursor must not reset")
+}
