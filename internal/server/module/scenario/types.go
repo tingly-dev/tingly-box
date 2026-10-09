@@ -94,3 +94,21 @@ type ScenarioDescriptorsResponse struct {
 	Success bool                     `json:"success" example:"true"`
 	Data    []typ.ScenarioDescriptor `json:"data"`
 }
+
+// ClaudeCodeSlotRequest gives a Claude Code model slot a rule of its own
+// (enabled) or hands it back to the main rule.
+type ClaudeCodeSlotRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+// ClaudeCodeSlotsData lists the slots that have a rule of their own in a
+// unified-mode Claude Code scenario; Rule is the toggled slot's rule.
+type ClaudeCodeSlotsData struct {
+	Slots []string  `json:"slots"`
+	Rule  *typ.Rule `json:"rule,omitempty"`
+}
+
+type ClaudeCodeSlotsResponse struct {
+	Success bool                `json:"success"`
+	Data    ClaudeCodeSlotsData `json:"data"`
+}

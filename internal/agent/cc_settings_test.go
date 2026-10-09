@@ -697,3 +697,57 @@ func TestGenerateCCEnv_ProfileWithoutFableRuleFollowsDefault(t *testing.T) {
 		t.Errorf("profile fable = %q, want the default tier", got)
 	}
 }
+
+func TestGenerateCCEnv_UnifiedWithSubagentOnItsOwnRule(t *testing.T) {
+	cfg := &serverconfig.Config{
+		Rules: []typ.Rule{
+			{UUID: serverconfig.RuleUUIDCC, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc", Active: true},
+			{UUID: serverconfig.RuleUUIDCCSubagent, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-subagent", Active: true},
+			// Active (e.g. after `agent apply`) but not a split slot: ignored.
+			{UUID: serverconfig.RuleUUIDCCOpus, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-opus", Active: true},
+		},
+		Scenarios: []typ.ScenarioConfig{{Scenario: typ.ScenarioClaudeCode, ClaudeCodeSlots: []string{"subagent"}}},
+	}
+
+	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code", true, false)
+
+	for key, want := range map[string]string{
+		"ANTHROPIC_MODEL":                "tingly/cc",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL":  "tingly/cc",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL": "tingly/cc",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL":   "tingly/cc",
+		"ANTHROPIC_DEFAULT_FABLE_MODEL":  "tingly/cc",
+		"CLAUDE_CODE_SUBAGENT_MODEL":     "tingly/cc-subagent",
+	} {
+		if env[key] != want {
+			t.Errorf("env[%q] = %q, want %q", key, env[key], want)
+		}
+	}
+}
+
+func TestGenerateCCEnv_UnifiedProfileSlot(t *testing.T) {
+	cfg := &serverconfig.Config{
+		Rules: []typ.Rule{
+			{UUID: "builtin:claude_code:p1:cc", Scenario: "claude_code:p1", RequestModel: "cc", Active: true},
+			{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "fast", Active: true},
+		},
+		Scenarios: []typ.ScenarioConfig{
+			{Scenario: "claude_code:p1", ClaudeCodeSlots: []string{"haiku", "subagent"}},
+			// The main scenario's slots never leak into a profile.
+			{Scenario: typ.ScenarioClaudeCode, ClaudeCodeSlots: []string{"opus"}},
+		},
+	}
+
+	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code:p1", true, true)
+
+	if got := env["ANTHROPIC_DEFAULT_HAIKU_MODEL"]; got != "fast" {
+		t.Errorf("haiku = %q, want fast", got)
+	}
+	// Listed but with no rule: falls back to the main rule, never a bare name.
+	if got := env["CLAUDE_CODE_SUBAGENT_MODEL"]; got != "cc" {
+		t.Errorf("subagent = %q, want cc", got)
+	}
+	if got := env["ANTHROPIC_DEFAULT_OPUS_MODEL"]; got != "cc" {
+		t.Errorf("opus = %q, want cc", got)
+	}
+}

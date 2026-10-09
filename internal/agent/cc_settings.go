@@ -52,6 +52,16 @@ func acquireCCProfileBuildLock(path string) func() {
 	}
 }
 
+// ccSlotEnvKeys maps each Claude Code model slot to the env var it fills.
+var ccSlotEnvKeys = map[string]string{
+	"default":  "ANTHROPIC_MODEL",
+	"haiku":    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+	"sonnet":   "ANTHROPIC_DEFAULT_SONNET_MODEL",
+	"opus":     "ANTHROPIC_DEFAULT_OPUS_MODEL",
+	"fable":    "ANTHROPIC_DEFAULT_FABLE_MODEL",
+	"subagent": "CLAUDE_CODE_SUBAGENT_MODEL",
+}
+
 // ClaudeCodeSlotModels resolves the model id Claude Code sends for each model
 // slot, keyed by env var, and reports whether any of them carries the 1M
 // context marker. It is the one place that maps the Claude Code rules onto the
@@ -104,13 +114,23 @@ func ClaudeCodeSlotModels(cfg *serverconfig.Config, scenarioPath string, unified
 
 	models = map[string]string{}
 	if unified {
+		// Every slot uses the main rule, except the slots given a rule of
+		// their own (config.SetClaudeCodeSlot) whose rule is on.
 		model := tierModel("cc", serverconfig.RuleUUIDBuiltinCC, "tingly/cc")
-		models["ANTHROPIC_MODEL"] = model
-		models["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = model
-		models["ANTHROPIC_DEFAULT_OPUS_MODEL"] = model
-		models["ANTHROPIC_DEFAULT_SONNET_MODEL"] = model
-		models["ANTHROPIC_DEFAULT_FABLE_MODEL"] = model
-		models["CLAUDE_CODE_SUBAGENT_MODEL"] = model
+		for _, key := range ccSlotEnvKeys {
+			models[key] = model
+		}
+		if cfg != nil {
+			for _, slot := range cfg.ClaudeCodeSlots(typ.RuleScenario(scenarioPath)) {
+				legacy := ""
+				if !isProfile {
+					legacy = serverconfig.LegacyCCRuleUUID(slot)
+				}
+				if m := ruleModel("", serverconfig.BuiltinRuleUUID(typ.RuleScenario(scenarioPath), slot), legacy); m != "" {
+					models[ccSlotEnvKeys[slot]] = m
+				}
+			}
+		}
 		return models, context1M
 	}
 	models["ANTHROPIC_MODEL"] = tierModel("default", serverconfig.RuleUUIDBuiltinCCDefault, "tingly/cc-default")

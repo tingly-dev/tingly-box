@@ -256,6 +256,10 @@ The `rules` array handed to the modal is therefore pre-filtered. The
 modal does not re-filter by mode — it just sees "the rules for this
 mode".
 
+In unified mode the page also shows the rules of the slots that have one of
+their own (see `claude-code-slots.md`); the modal receives that slot list
+alongside the rules.
+
 ### 5.3 UUID-suffix lookup (modal side)
 
 `derivePrefsFromRules` in `ClaudeCodeQuickConfig.tsx` uses the UUIDs as

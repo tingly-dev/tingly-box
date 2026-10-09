@@ -364,6 +364,11 @@ type ScenarioConfig struct {
 	Scenario   RuleScenario           `json:"scenario" yaml:"scenario"`
 	Flags      ScenarioFlags          `json:"flags" yaml:"flags"`                               // Scenario configuration flags
 	Extensions map[string]interface{} `json:"extensions,omitempty" yaml:"extensions,omitempty"` // Reserved for future extensions
+	// ClaudeCodeSlots lists the Claude Code model slots that have a rule of
+	// their own in unified mode; every other slot uses the main rule. Only
+	// read for the exact scenario (never inherited by a profile) and owned by
+	// config.SetClaudeCodeSlot. See .design/claude-code-slots.md.
+	ClaudeCodeSlots []string `json:"claude_code_slots,omitempty" yaml:"claude_code_slots,omitempty"`
 }
 
 // GetDefaultFlags returns the effective flags for a scenario.

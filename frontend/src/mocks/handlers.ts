@@ -1006,6 +1006,9 @@ if (isNewcomer) {
     }
 }
 
+// Claude Code slots with a rule of their own, per scenario (mock state).
+const mockCCSlots: Record<string, string[]> = {}
+
 const getMockRulesForScenario = (scenario: string): any[] => {
     if (!mockV1Rules[scenario] && scenario.startsWith('claude_code:')) {
         const profileId = scenario.slice('claude_code:'.length)
@@ -2490,6 +2493,36 @@ export const handlers = [
     // Playground header (see pages/image/ImagePlaygroundPage + ImageGenPlaygroundCard).
     http.get('/api/v1/imagegen/info', () => {
         return HttpResponse.json({ success: true, output_dir: '/home/demo/.tingly-box/image' })
+    }),
+
+    // Claude Code slots with a rule of their own (unified mode).
+    http.get('/api/v1/scenario/:scenario/claude-code/slots', ({ params }) => {
+        const { scenario } = params as { scenario: string }
+        return HttpResponse.json({ success: true, data: { slots: mockCCSlots[scenario] ?? [] } })
+    }),
+
+    http.put('/api/v1/scenario/:scenario/claude-code/slots/:slot', async ({ params, request }) => {
+        const { scenario, slot } = params as { scenario: string; slot: string }
+        const { enabled } = await request.json() as { enabled: boolean }
+        const rules = getMockRulesForScenario(scenario)
+        const uuid = `builtin:${scenario}:${slot}`
+        let rule = rules.find(r => r.uuid === uuid)
+        if (enabled && !rule) {
+            // A new slot rule starts as a copy of the main rule.
+            const main = rules.find(r => r.uuid === `builtin:${scenario}:cc`) ?? rules[0]
+            rule = {
+                ...structuredClone(main ?? {}),
+                uuid,
+                scenario,
+                request_model: scenario.includes(':') ? slot : `tingly/cc-${slot}`,
+                description: `Claude Code - ${slot} model`,
+            }
+            rules.push(rule)
+        }
+        if (rule) rule.active = enabled
+        const current = (mockCCSlots[scenario] ?? []).filter(s => s !== slot)
+        mockCCSlots[scenario] = enabled ? [...current, slot] : current
+        return HttpResponse.json({ success: true, data: { slots: mockCCSlots[scenario], rule } })
     }),
 
     // Scenario config (per-scenario UI prefs incl. unified vs. separate mode)

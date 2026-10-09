@@ -1155,6 +1155,13 @@ export default {
     "modelsPreviewNote": "写入 settings.yaml 的模型 id：{{models}}"
   },
   "claudeCode": {
+    "slots": {
+      "label": "槽位",
+      "defaultRule": "主规则，没有自己规则的槽位都走它",
+      "mainRule": "使用主规则（点击给它单独加一条规则）",
+      "ownRule": "使用自己的规则（点击改回主规则）",
+      "failed": "更新槽位失败"
+    },
     "configModes": {
       "unified": {
         "label": "统一模型",

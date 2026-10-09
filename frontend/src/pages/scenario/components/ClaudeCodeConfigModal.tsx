@@ -30,6 +30,8 @@ interface ClaudeCodeConfigModalProps {
     open: boolean;
     onClose: () => void;
     configMode: ConfigMode;
+    /** Unified mode: slots with a rule of their own. */
+    slots?: string[];
     baseUrl: string;
     rules: any[];
     copyToClipboard: (text: string, label: string) => Promise<void>;
@@ -122,6 +124,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     open,
     onClose,
     configMode,
+    slots,
     baseUrl,
     rules,
     copyToClipboard,
@@ -144,11 +147,11 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     // values previously applied to ~/.claude/settings.json; first-time users
     // still start from routing-aware recommendations.
     const [prefs, setPrefs] = React.useState<ClaudeCodePrefs>(() =>
-        derivePrefsFromRules({ rules, mode: configMode })
+        derivePrefsFromRules({ rules, mode: configMode, slots })
     );
     React.useEffect(() => {
         if (!open) {
-            setPrefs(derivePrefsFromRules({ rules, mode: configMode }));
+            setPrefs(derivePrefsFromRules({ rules, mode: configMode, slots }));
             setDefaultMode('acceptEdits');
             setShowThinkingSummaries(CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES);
             setInstallStatusLine(true);
@@ -176,7 +179,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                 },
             };
         });
-        const generated = derivePrefsFromRules({ rules: tempRules, mode: configMode });
+        const generated = derivePrefsFromRules({ rules: tempRules, mode: configMode, slots });
 
         let active = true;
         setIsConfigLoading(true);
@@ -206,7 +209,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
         return () => {
             active = false;
         };
-    }, [pendingContext1MChange, rules, configMode, open]);
+    }, [pendingContext1MChange, rules, configMode, slots, open]);
 
     // Editing prefs after a previous Apply invalidates the success state —
     // hide the old alert so the user can tell their next Apply hasn't run yet.
@@ -353,10 +356,10 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
     };
 
     const handleResetDefaults = React.useCallback(() => {
-        setPrefsAndClearResult(derivePrefsFromRules({ rules, mode: configMode }));
+        setPrefsAndClearResult(derivePrefsFromRules({ rules, mode: configMode, slots }));
         setDefaultModeAndClearResult('acceptEdits');
         setShowThinkingSummariesAndClearResult(CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES);
-    }, [configMode, rules, setDefaultModeAndClearResult, setPrefsAndClearResult, setShowThinkingSummariesAndClearResult]);
+    }, [configMode, slots, rules, setDefaultModeAndClearResult, setPrefsAndClearResult, setShowThinkingSummariesAndClearResult]);
 
     const canApply = !!onApplyWithPrefs;
 

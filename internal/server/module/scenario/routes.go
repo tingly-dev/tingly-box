@@ -106,6 +106,19 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 		swagger.WithRequestModel(ProfileUpdateRequest{}),
 	)
 
+	router.GET("/scenario/:scenario/claude-code/slots", h.GetClaudeCodeSlots,
+		swagger.WithDescription("List the Claude Code model slots that have a rule of their own in unified mode (main routing or a profile)"),
+		swagger.WithTags("scenarios"),
+		swagger.WithResponseModel(ClaudeCodeSlotsResponse{}),
+	)
+
+	router.PUT("/scenario/:scenario/claude-code/slots/:slot", h.SetClaudeCodeSlot,
+		swagger.WithDescription("Give a Claude Code model slot a rule of its own in unified mode (enabled), or hand it back to the main rule"),
+		swagger.WithTags("scenarios"),
+		swagger.WithRequestModel(ClaudeCodeSlotRequest{}),
+		swagger.WithResponseModel(ClaudeCodeSlotsResponse{}),
+	)
+
 	router.GET("/scenario/:scenario/models", h.GetClaudeCodeModels,
 		swagger.WithDescription("List the model tiers Claude Code can be asked for under the main routing or a profile, each with its current route"),
 		swagger.WithTags("scenarios"),

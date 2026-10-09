@@ -121,3 +121,23 @@ test('separate mode points fable at the default tier when its rule is missing or
     });
     assert.equal(active.ANTHROPIC_DEFAULT_FABLE_MODEL, 'routes/fable');
 });
+
+test('unified mode: a slot with its own rule uses it, the rest stay on the unified rule', () => {
+    const prefs = derivePrefsFromRules({
+        mode: 'unified',
+        slots: ['subagent', 'opus'],
+        rules: [
+            { uuid: 'builtin:claude_code:cc', request_model: 'tingly/cc', active: true },
+            { uuid: 'builtin:claude_code:subagent', request_model: 'tingly/cc-subagent', active: true, flags: { context_1m: true } },
+            // Listed but switched off: falls back to the unified rule.
+            { uuid: 'builtin:claude_code:opus', request_model: 'tingly/cc-opus', active: false },
+            // Active but not listed (e.g. after `agent apply`): ignored.
+            { uuid: 'builtin:claude_code:haiku', request_model: 'tingly/cc-haiku', active: true },
+        ],
+    });
+
+    assert.equal(prefs.ANTHROPIC_MODEL, 'tingly/cc');
+    assert.equal(prefs.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'tingly/cc');
+    assert.equal(prefs.ANTHROPIC_DEFAULT_OPUS_MODEL, 'tingly/cc');
+    assert.equal(prefs.CLAUDE_CODE_SUBAGENT_MODEL, 'tingly/cc-subagent[1m]');
+});

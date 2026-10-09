@@ -5774,6 +5774,92 @@
         }
       }
     },
+    "/api/v1/scenario/{scenario}/claude-code/slots": {
+      "get": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "List the Claude Code model slots that have a rule of their own in unified mode (main routing or a profile)",
+        "description": "List the Claude Code model slots that have a rule of their own in unified mode (main routing or a profile)",
+        "operationId": "apiV1ScenarioScenarioClaude-codeSlotsGet",
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeCodeSlotsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenario/{scenario}/claude-code/slots/{slot}": {
+      "put": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Give a Claude Code model slot a rule of its own in unified mode (enabled), or hand it back to the main rule",
+        "description": "Give a Claude Code model slot a rule of its own in unified mode (enabled), or hand it back to the main rule",
+        "operationId": "apiV1ScenarioScenarioClaude-codeSlotsSlotPut",
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slot",
+            "in": "path",
+            "description": "Path parameter 'slot'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaudeCodeSlotRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeCodeSlotsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/scenario/{scenario}/flag/{flag}": {
       "get": {
         "tags": [
@@ -10005,6 +10091,52 @@
             "description": "Field USE_BUILTIN_RIPGREP"
           }
         }
+      },
+      "ClaudeCodeSlotRequest": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          }
+        },
+        "required": [
+          "enabled"
+        ]
+      },
+      "ClaudeCodeSlotsData": {
+        "type": "object",
+        "properties": {
+          "rule": {
+            "$ref": "#/components/schemas/Rule"
+          },
+          "slots": {
+            "type": "array",
+            "description": "Field slots",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "slots"
+        ]
+      },
+      "ClaudeCodeSlotsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClaudeCodeSlotsData"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
       },
       "ClaudeConfigResponse": {
         "type": "object",
@@ -15742,6 +15874,13 @@
       "ScenarioConfig": {
         "type": "object",
         "properties": {
+          "claude_code_slots": {
+            "type": "array",
+            "description": "Field claude_code_slots",
+            "items": {
+              "type": "string"
+            }
+          },
           "extensions": {
             "type": "object",
             "description": "Field extensions",

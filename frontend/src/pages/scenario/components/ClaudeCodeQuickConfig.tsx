@@ -833,12 +833,19 @@ const useLang = (): AppLanguage => {
 interface DerivePrefsInput {
     rules: any[];
     mode: 'unified' | 'separate' | 'smart';
+    /** Unified mode: slots with a rule of their own (the rest use the unified rule). */
+    slots?: string[];
 }
 
-export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeCodePrefs => {
+export const derivePrefsFromRules = ({ rules, mode, slots = [] }: DerivePrefsInput): ClaudeCodePrefs => {
     const unifiedRule = rules.find((r: any) => r?.uuid === 'builtin:claude_code:cc');
+    // Unified mode: the active rule of a split slot (mirrors the backend's
+    // ClaudeCodeSlotModels), undefined when the slot uses the unified rule.
+    const splitRule = (variant: string) => (mode === 'unified' && slots.includes(variant)
+        ? rules.find((r: any) => r?.uuid === `builtin:claude_code:${variant}` && r.active !== false && r.request_model)
+        : undefined);
     const modelForVariant = (variant: string, fallback: string): string => {
-        if (mode === 'unified') return unifiedRule?.request_model || fallback;
+        if (mode === 'unified') return splitRule(variant)?.request_model || unifiedRule?.request_model || fallback;
         const rule = rules.find((r: any) => r?.uuid === `builtin:claude_code:${variant}`);
         return rule?.request_model || fallback;
     };
@@ -854,7 +861,7 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
     // Get the 1M state for a specific variant (only used in separate mode)
     const getContext1MStateForVariant = (variant: string): boolean => {
         if (mode === 'unified') {
-            return getContext1MStateForRule(unifiedRule);
+            return getContext1MStateForRule(splitRule(variant) ?? unifiedRule);
         }
         // In separate mode, check the specific rule for this variant
         const rule = rules.find((r: any) => r?.uuid === `builtin:claude_code:${variant}`);

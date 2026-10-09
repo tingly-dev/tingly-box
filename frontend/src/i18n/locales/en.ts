@@ -1156,6 +1156,13 @@ export default {
     "modelsPreviewNote": "Model ids written to settings.yaml: {{models}}"
   },
   "claudeCode": {
+    "slots": {
+      "label": "Slots",
+      "defaultRule": "the main rule; every slot without its own rule uses it",
+      "mainRule": "uses the main rule (click to give it its own rule)",
+      "ownRule": "has its own rule (click to use the main rule again)",
+      "failed": "Failed to update the slot"
+    },
     "configModes": {
       "unified": {
         "label": "Unified Model",

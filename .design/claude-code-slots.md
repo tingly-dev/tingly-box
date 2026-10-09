@@ -1,0 +1,37 @@
+# Claude Code: per-slot rules in unified mode
+
+> Status: implemented. Background: `claude-code-config.md` (env shape, rule ↔ slot mapping).
+
+![Slots row](images/claude-code-slots.png)
+
+## Problem
+
+Claude Code has two modes: **unified** (every model slot requests the `cc` rule) and **separate** (every slot has its own rule). The common need sits in between — "unified, but the subagent on another model" — and used to mean switching to separate and keeping five rules identical by hand.
+
+## Design
+
+The modes stay. Unified mode gains per-slot rules:
+
+- The **default slot** (`ANTHROPIC_MODEL`) is the unified rule `builtin:<scenario>:cc` and is always there.
+- Each other slot — `haiku` `sonnet` `opus` `fable` `subagent` — uses the unified rule unless it is in the scenario's **slot list**; then it requests its own rule `builtin:<scenario>:<slot>` (while that rule is on).
+- Routing is untouched: the env carries a rule's `request_model`, which stays the routing key.
+
+UI: in unified mode a **Slots** row sits under Base URL / API Key. `default` is always lit; clicking another slot gives it its own rule (the rules card then shows it) or hands it back. Separate mode, and separate-mode profiles, look and behave as before.
+
+## Why an explicit slot list, not `Active`
+
+`agent apply` (and older code) switches every Claude Code rule on, so `Active` can't mean "this slot has its own rule" without silently splitting the slots of users who once ran it. The list (`ScenarioConfig.ClaudeCodeSlots`) is written only by `SetClaudeCodeSlot`.
+
+- Read for the **exact** scenario only: a profile never inherits the main scenario's list.
+- A whole-record scenario write that doesn't carry the list keeps it; a mode change clears it (switching back to unified merges every slot, as before). The unified-mode rule sync keeps listed slots' rules on.
+- Turning a slot on reuses its built-in rule. A rule without routing yet (the main scenario pre-seeds empty ones) — or a missing rule — starts as a copy of the unified rule's routing, so nothing changes until the user edits it. Turning it off only switches the rule off, so turning it on again restores it.
+- Rejected: separate mode (main or profile), unknown profiles, the default slot.
+
+## Implementation
+
+- `config.SetClaudeCodeSlot` / `ClaudeCodeSlots` (`internal/config/cc_slots.go`); mode sync in `scenario.go`.
+- `agent.ClaudeCodeSlotModels`: the one resolver behind the settings file and the tbclient env.
+- API: `GET /api/v1/scenario/:scenario/claude-code/slots`, `PUT …/claude-code/slots/:slot {enabled}`.
+- Frontend: `useSlotRouting` (Slots row, unified-mode rule list, fixed mode for profiles); `derivePrefsFromRules({ rules, mode, slots })`.
+
+Changing a slot changes the env: the main page's Client Config status chip offers Reapply; profile settings are rebuilt at launch.
