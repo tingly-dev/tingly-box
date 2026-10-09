@@ -77,6 +77,22 @@ class VModelThroughTB(unittest.TestCase):
         edit = [b for b in self.tb.messages(model, "next")["content"] if b["type"] == "tool_use"][0]
         self.assertEqual(edit["name"], "Edit", "the OpenAI call did not consume an Anthropic step")
 
+    def test_sessions_are_independent_runs_of_the_same_script(self):
+        self.tb.add(FLOW)
+        a, b = self.tb.session(), self.tb.session()
+        name = lambda reply: [x for x in reply["content"] if x["type"] == "tool_use"][0]["name"]  # noqa: E731
+
+        self.assertEqual(name(a.messages(FLOW, "go")), "Read")
+        self.assertEqual(name(b.messages(FLOW, "go")), "Read", "b starts at the beginning, whatever a did")
+        self.assertEqual(name(self.tb.messages(FLOW.model, "go")), "Read", "the plain name is its own run")
+        self.assertEqual(name(a.messages(FLOW, "next")), "Edit")
+        # OpenAI in the same session is a separate run again, but still scoped to it.
+        self.assertEqual(b.chat(FLOW, "go")["choices"][0]["message"]["tool_calls"][0]["function"]["name"], "Read")
+        with self.assertRaises(TinglyError) as ctx:
+            a.messages(FLOW, "next")  # a's third step; b and the default never consumed theirs
+        self.assertEqual(ctx.exception.status, 529)
+        self.assertEqual(name(b.messages(FLOW, "next")), "Edit")
+
     def test_mid_stream_cuts_are_visible_on_the_wire(self):
         model = self.fresh(FLAKY)
         url = f"{self.tb.anthropic_base}/v1/messages"

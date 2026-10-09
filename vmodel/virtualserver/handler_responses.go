@@ -55,7 +55,7 @@ func (h *Handler) Responses(c *gin.Context) {
 		return
 	}
 
-	vm := h.openaiReg.Get(req.Model)
+	vm, session := h.lookupOpenAI(req.Model)
 	if vm == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{
 			"message": h.notFoundMessage(req.Model),
@@ -63,6 +63,10 @@ func (h *Handler) Responses(c *gin.Context) {
 		}})
 		return
 	}
+
+	// Resolve per-request behaviour (a scripted model advances its cursor
+	// here, exactly once) into a concrete snapshot before any dispatch.
+	vm = openaivm.SnapshotSession(vm, session)
 
 	if e := vmodel.ExtractErrorInjection(vm); e != nil && e.Stage == vmodel.ErrorStagePreContent {
 		writePreContentErrorOpenAI(c, e)

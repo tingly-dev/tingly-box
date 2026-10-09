@@ -58,7 +58,7 @@ must never silently become a default step.
 
 ### What a step is *not* (yet)
 
-No request matching (`when:`), no per-conversation cursors, no `think` blocks,
+No request matching (`when:`), no *implicit* conversation detection (sessions are explicit, below), no `think` blocks,
 no multiple tool calls per step, no request capture. See *Phases*.
 
 ## Serving: the script directory
@@ -70,8 +70,35 @@ own independent copy of the program** — its own cursor. This is deliberate: a
 request on one wire (a probe, a second client, a stray `chat()` call) must never
 consume a step of the other, or a test's outcome would depend on call order it
 cannot see. Within one protocol the cursor is still shared by every client of
-that model (per-conversation cursors are deferred); rewriting the file is the
+that model — isolate a run with a session (below); rewriting the file is the
 reset.
+
+### Sessions: `<id>@<session>`
+
+Callers of one model share its cursor, which makes concurrent tests (or a probe
+plus an agent) consume each other's steps. A client requests the model
+**`<id>@<session>`** — e.g. `read-edit@test-42` — to get an independent run:
+its own cursor, created on first use, on every wire (Anthropic, OpenAI chat,
+Responses). The plain `<id>` is the shared default session, unchanged.
+
+- **Explicit, never inferred.** The session is a string the caller chose. A
+  conversation fingerprint (hash of the first message) was rejected: two
+  conversations with the same prompt would collide, and a magic key is exactly
+  the kind of hidden coupling that makes a test hard to read.
+- **In the model name** because it is the one thing every client can set —
+  any SDK, any agent CLI's model option — and it shows up in every log and
+  trace, which a header would not. Script ids cannot contain `@`, so the split
+  is unambiguous.
+- **Strict.** A session is 1–64 characters of `A-Za-z0-9._-`; a model that has
+  no sessions (a built-in) with a `@` suffix is a 404, not silently the default;
+  sessions are not listed in `/models`. Rewriting the script file restarts every
+  session. A script remembers at most `vmodel.MaxSessions` (1024) sessions —
+  the least recently used is forgotten, so a client minting ids cannot grow
+  memory without bound.
+- **Direct endpoints only.** The gateway's rule rewrites the requested model to
+  the provider's, so a session suffix does not survive `/tingly/*`; through the
+  gateway a script runs in its default session (the harness gets a fresh env per
+  run, so it is isolated anyway).
 
 **Which protocol to use.** The gateway converts between protocols, so scripts
 need only one: the docs, `harness script` (default `claude`) and the Python
@@ -125,7 +152,7 @@ agent CLI (`harness agent … --script`) is deferred.
 1. **PR1 — engine, YAML, directory serving, harness** *(this change)*.
 2. **PR2 — Python `tingly.vmodel`** *(see below)*.
 3. **Deferred until there is a consumer:** `when:` request matching and
-   per-conversation cursors (needed once several clients share one script),
+   implicit per-conversation detection (explicit sessions exist; this would key agents that cannot set the model name),
    a management API / CLI / UI (remote or non-file registration), request
    capture for asserting on client behaviour, recording → script, a webhook
    step, `think` blocks and multiple tool calls per step.
@@ -167,7 +194,7 @@ behaviour), so assert on it with `stream: true`.
 
 ## Files
 
-- `vmodel/sequence.go` — `SequenceStep` (full outcome, `UnmarshalYAML`), `Sequence`, `ResolvedStep`.
+- `vmodel/sequence.go` — `SequenceStep` (full outcome, `UnmarshalYAML`), `Sequence` (`NextFor`, sessions), `ResolvedStep`.
 - `vmodel/script.go` — `ParseScript`, `SequenceConfig.Validate`.
 - `vmodel/types.go` — `ToolCallConfig.ID`, strict `UnmarshalYAML`.
 - `vmodel/{anthropic,openai}/sequence_model.go` — `Snapshot` carries tool/usage/stop reason.

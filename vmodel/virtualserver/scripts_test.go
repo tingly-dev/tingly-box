@@ -336,6 +336,66 @@ func TestScript_StopReasonIsMappedPerProtocol(t *testing.T) {
 	}
 }
 
+// "<id>@<session>" runs an independent copy of a script, on every wire, so
+// concurrent conversations and tests never consume each other's steps.
+func TestScript_SessionsViaModelSuffix(t *testing.T) {
+	_, dir, baseURL := newScriptService(t)
+	writeScript(t, dir, "flow.yaml", "steps:\n  - say: first\n  - say: second\n  - 529")
+	say := func(path string, body map[string]any, model string) (int, string) {
+		body["model"] = model
+		body["messages"] = []map[string]string{{"role": "user", "content": "hi"}}
+		code, out := postJSON(t, baseURL+path, body)
+		return code, string(out)
+	}
+	anth := func(model string) (int, string) {
+		return say("/v1/messages?beta=true", map[string]any{"max_tokens": 16}, model)
+	}
+	chat := func(model string) (int, string) { return say("/v1/chat/completions", map[string]any{}, model) }
+
+	// Two sessions interleaved, plus the default: three independent runs.
+	_, b := anth("flow@a")
+	assert.Contains(t, b, "first")
+	_, b = anth("flow@b")
+	assert.Contains(t, b, "first", "b starts at the beginning, whatever a did")
+	_, b = anth("flow")
+	assert.Contains(t, b, "first", "the default session is its own run")
+	_, b = anth("flow@a")
+	assert.Contains(t, b, "second")
+	code, _ := chat("flow@a") // OpenAI keeps its own run per session too
+	assert.Equal(t, 200, code)
+	code, _ = anth("flow@a")
+	assert.Equal(t, 529, code, "a's third step; b and the default were not consumed")
+	_, b = anth("flow@b")
+	assert.Contains(t, b, "second")
+
+	// The Responses surface honours sessions and error steps (it previously
+	// bypassed per-request resolution entirely).
+	for i, want := range []int{200, 200, 529} {
+		code, _ := say("/v1/responses", map[string]any{"input": "hi"}, "flow@r")
+		assert.Equal(t, want, code, "responses step %d", i+1)
+	}
+}
+
+func TestScript_SessionSuffixIsStrict(t *testing.T) {
+	_, dir, baseURL := newScriptService(t)
+	writeScript(t, dir, "flow.yaml", "steps:\n  - say: hi")
+	ask := func(model string) (int, string) {
+		code, out := postJSON(t, baseURL+"/v1/chat/completions", map[string]any{
+			"model": model, "messages": []map[string]string{{"role": "user", "content": "hi"}}})
+		return code, string(out)
+	}
+	code, body := ask("flow@bad session")
+	assert.Equal(t, 404, code)
+	assert.Contains(t, body, "session name after '@'")
+
+	code, _ = ask("echo-model@s1")
+	assert.Equal(t, 404, code, "a model without sessions does not silently ignore one")
+
+	code, _ = ask("nope@s1")
+	assert.Equal(t, 404, code)
+	assert.False(t, modelIDs(t, baseURL)["flow@s1"], "sessions are not listed as models")
+}
+
 // A tool step carries exactly the author's text: no say means no text block,
 // even when the arguments look like a question (streaming and not alike).
 func TestScript_ToolStepTextIsExactlyWhatTheScriptSays(t *testing.T) {

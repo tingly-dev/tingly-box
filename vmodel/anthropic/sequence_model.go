@@ -26,6 +26,23 @@ func Snapshot(vm VirtualModel) VirtualModel {
 	return vm
 }
 
+// SessionSnapshotter is a Snapshotter whose behaviour can also be scoped to a
+// named session (a request for model "<id>@<session>"): each session is an
+// independent run of the model's program.
+type SessionSnapshotter interface {
+	SnapshotSession(session string) VirtualModel
+}
+
+// SnapshotSession is Snapshot for a named session; "" is the default session.
+// Models that are not SessionSnapshotters have no sessions and are returned
+// unchanged (callers that were given a session should have rejected them).
+func SnapshotSession(vm VirtualModel, session string) VirtualModel {
+	if s, ok := vm.(SessionSnapshotter); ok {
+		return s.SnapshotSession(session)
+	}
+	return Snapshot(vm)
+}
+
 // SequenceModel walks a configured program of per-request outcomes (e.g.
 // 200, 200, 429) to simulate a flaky upstream. Each request atomically
 // advances a shared cursor; the resolved step is materialised as a plain
@@ -38,8 +55,9 @@ type SequenceModel struct {
 
 // Compile-time interface checks.
 var (
-	_ VirtualModel = (*SequenceModel)(nil)
-	_ Snapshotter  = (*SequenceModel)(nil)
+	_ VirtualModel       = (*SequenceModel)(nil)
+	_ Snapshotter        = (*SequenceModel)(nil)
+	_ SessionSnapshotter = (*SequenceModel)(nil)
 )
 
 // NewSequenceModel constructs an Anthropic-protocol sequence model from cfg. It
@@ -78,8 +96,11 @@ func NewStatusSequence(id, name string, statuses ...int) *SequenceModel {
 
 // Snapshot advances the sequence and returns the MockModel snapshot for this
 // request. This is the single point at which the cursor advances.
-func (m *SequenceModel) Snapshot() VirtualModel {
-	step := m.seq.Next()
+func (m *SequenceModel) Snapshot() VirtualModel { return m.SnapshotSession("") }
+
+// SnapshotSession is Snapshot for a named session (see SessionSnapshotter).
+func (m *SequenceModel) SnapshotSession(session string) VirtualModel {
+	step := m.seq.NextFor(session)
 	// Anthropic's word for "finished answering" is end_turn; MockModel's
 	// generic default ("stop") is not an Anthropic stop_reason, and agent
 	// clients key their loop on it.
