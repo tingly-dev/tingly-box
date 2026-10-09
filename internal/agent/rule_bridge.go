@@ -94,7 +94,7 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 			return nil, fmt.Errorf("claude code config not registered")
 		}
 		// Build env vars with business logic
-		modelConfig := BuildClaudeCodeModelConfig(req.Unified)
+		modelConfig := BuildClaudeCodeModelConfig(aa.config, req.Unified)
 		var statusLineScript []byte
 		if req.InstallStatusLine {
 			statusLineScript, err = internal.ScriptAssets.ReadFile("script/tingly-statusline.sh")

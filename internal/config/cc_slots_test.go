@@ -123,3 +123,38 @@ func TestSetClaudeCodeSlot_UnifiedProfile(t *testing.T) {
 	_, err = cfg.SetClaudeCodeSlot(typ.ProfiledScenarioName(typ.ScenarioClaudeCode, separate.ID), "haiku", true)
 	assert.Error(t, err, "separate profiles already have a rule per slot")
 }
+
+func TestSetClaudeCodeSlot_ScenarioWritesNeverSetTheList(t *testing.T) {
+	cfg := newSlotTestConfig(t)
+	_, err := cfg.SetClaudeCodeSlot(typ.ScenarioClaudeCode, "opus", true)
+	require.NoError(t, err)
+	meta, err := cfg.CreateProfile(typ.ScenarioClaudeCode, "solo", true)
+	require.NoError(t, err)
+	profile := typ.ProfiledScenarioName(typ.ScenarioClaudeCode, meta.ID)
+
+	// The profile page's GET-merge reads the main record through the
+	// fallback, slot list included, and writes it back as the profile's.
+	merged := *cfg.GetScenarioConfig(profile)
+	merged.Scenario = profile
+	require.NoError(t, cfg.SetScenarioConfig(merged))
+	assert.Empty(t, cfg.ClaudeCodeSlots(profile), "a scenario write can't give a profile slots")
+
+	// A client can't set the main list either: only SetClaudeCodeSlot does.
+	main := *cfg.GetScenarioConfig(typ.ScenarioClaudeCode)
+	main.ClaudeCodeSlots = []string{"haiku", "default", "bogus"}
+	require.NoError(t, cfg.SetScenarioConfig(main))
+	assert.Equal(t, []string{"opus"}, cfg.ClaudeCodeSlots(typ.ScenarioClaudeCode))
+	assert.False(t, cfg.GetRuleByUUID(RuleUUIDCCHaiku).Active)
+
+	// Splitting a profile slot doesn't fork a scenario record for the
+	// profile: it keeps following the main scenario's settings.
+	fresh, err := cfg.CreateProfile(typ.ScenarioClaudeCode, "fresh", true)
+	require.NoError(t, err)
+	freshScenario := typ.ProfiledScenarioName(typ.ScenarioClaudeCode, fresh.ID)
+	_, err = cfg.SetClaudeCodeSlot(freshScenario, "subagent", true)
+	require.NoError(t, err)
+	for _, sc := range cfg.GetScenarios() {
+		assert.NotEqual(t, freshScenario, sc.Scenario, "no scenario record created for the profile")
+	}
+	assert.Equal(t, []string{"subagent"}, cfg.ClaudeCodeSlots(freshScenario))
+}

@@ -868,8 +868,10 @@ export const derivePrefsFromRules = ({ rules, mode, slots = [] }: DerivePrefsInp
         return getContext1MStateForRule(rule);
     };
 
+    // Unified mode: any slot's rule, split ones included (mirrors the
+    // backend's GenerateCCEnv).
     const context1MEnabled = mode === 'unified'
-        ? getContext1MStateForRule(unifiedRule)
+        ? ['default', 'haiku', 'sonnet', 'opus', 'fable', 'subagent'].some(getContext1MStateForVariant)
         : getContext1MStateForRule(rules.find((r: any) => r?.uuid === 'builtin:claude_code:default'));
 
 

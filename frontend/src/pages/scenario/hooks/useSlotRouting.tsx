@@ -76,15 +76,13 @@ export const useSlotRouting = (
     ];
     const modeLabel = (mode: SlotMode | null) => modes.find(m => m.value === mode)?.label ?? mode ?? '';
 
-    const [mode, setMode] = useState<SlotMode>('unified');
+    const [mode, setMode] = useState<SlotMode>(fixedMode ?? 'unified');
     const [pendingMode, setPendingMode] = useState<SlotMode | null>(null);
     // Separate from pendingMode so the dialog's text stays put while it fades out.
     const [dialogOpen, setDialogOpen] = useState(false);
     const [rules, setRules] = useState<any[]>([]);
     const [loading, setLoading] = useState(enabled);
     const [slots, setSlots] = useState<string[]>([]);
-    // Bumped after a slot switch so the rules reload.
-    const [reloadKey, setReloadKey] = useState(0);
     const [busySlot, setBusySlot] = useState<string | null>(null);
 
     useEffect(() => {
@@ -123,20 +121,37 @@ export const useSlotRouting = (
             if (!isMounted) return;
             setRules(next);
             setSlots(split);
-            setLoading(false);
+        }).catch((error) => {
+            console.error('Failed to load Claude Code rules:', error);
+        }).finally(() => {
+            if (isMounted) setLoading(false);
         });
         return () => { isMounted = false; };
-    }, [scenario, unifiedRuleUuid, mode, enabled, reloadKey]);
+    }, [scenario, unifiedRuleUuid, mode, enabled]);
 
+    // Apply a slot switch from the response in place: a reload would flip
+    // `loading` and blank the page.
     const toggleSlot = async (slot: string) => {
+        const enable = !slots.includes(slot);
         setBusySlot(slot);
         try {
-            const result = await api.setClaudeCodeSlot(scenario, slot, !slots.includes(slot));
-            if (result?.success) {
-                setReloadKey(k => k + 1);
-            } else {
+            const result = await api.setClaudeCodeSlot(scenario, slot, enable);
+            if (!result?.success) {
                 notify.show('error', `${t('claudeCode.slots.failed')}: ${result?.error || ''}`, { duration: 6000 });
+                return;
             }
+            const split: string[] = result.data?.slots ?? [];
+            const rule = result.data?.rule;
+            setSlots(split);
+            setRules(prev => {
+                const rest = prev.filter(r => r.uuid !== slotRuleUuid(scenario, slot));
+                if (!enable || !rule?.uuid) return rest;
+                // Keep slot order: the unified rule, then the split slots.
+                const order = [unifiedRuleUuid, ...split.map(s => slotRuleUuid(scenario, s))];
+                return [...rest, rule].sort((a, b) => order.indexOf(a.uuid) - order.indexOf(b.uuid));
+            });
+        } catch (error) {
+            notify.show('error', `${t('claudeCode.slots.failed')}: ${String(error)}`, { duration: 6000 });
         } finally {
             setBusySlot(null);
         }

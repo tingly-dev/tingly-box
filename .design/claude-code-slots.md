@@ -20,17 +20,17 @@ UI: in unified mode a **Slots** row sits under Base URL / API Key. `default` is 
 
 ## Why an explicit slot list, not `Active`
 
-`agent apply` (and older code) switches every Claude Code rule on, so `Active` can't mean "this slot has its own rule" without silently splitting the slots of users who once ran it. The list (`ScenarioConfig.ClaudeCodeSlots`) is written only by `SetClaudeCodeSlot`.
+`agent apply` (and older code) switches every Claude Code rule on, so `Active` can't mean "this slot has its own rule" without silently splitting the slots of users who once ran it. The list is written only by `SetClaudeCodeSlot`.
 
-- Read for the **exact** scenario only: a profile never inherits the main scenario's list.
-- A whole-record scenario write that doesn't carry the list keeps it; a mode change clears it (switching back to unified merges every slot, as before). The unified-mode rule sync keeps listed slots' rules on.
+- Stored on the main scenario's record (`ScenarioConfig.ClaudeCodeSlots`) and on each profile (`ProfileMeta.ClaudeCodeSlots`). A profile keeps its own list so it never inherits the main one, and splitting a profile slot never creates a scenario record that would fork the profile from the main scenario's settings.
+- Whole-record scenario writes never change the list (a profile page's GET-merge reads the main record through the fallback); a mode change clears the main list (switching back to unified merges every slot, as before), and the unified-mode rule sync keeps listed slots' rules on.
 - Turning a slot on reuses its built-in rule. A rule without routing yet (the main scenario pre-seeds empty ones) — or a missing rule — starts as a copy of the unified rule's routing, so nothing changes until the user edits it. Turning it off only switches the rule off, so turning it on again restores it.
 - Rejected: separate mode (main or profile), unknown profiles, the default slot.
 
 ## Implementation
 
 - `config.SetClaudeCodeSlot` / `ClaudeCodeSlots` (`internal/config/cc_slots.go`); mode sync in `scenario.go`.
-- `agent.ClaudeCodeSlotModels`: the one resolver behind the settings file and the tbclient env.
+- `agent.ClaudeCodeSlotModels`: the one resolver behind the settings file and the tbclient env; `agent apply` in unified mode also writes the split slots.
 - API: `GET /api/v1/scenario/:scenario/claude-code/slots`, `PUT …/claude-code/slots/:slot {enabled}`.
 - Frontend: `useSlotRouting` (Slots row, unified-mode rule list, fixed mode for profiles); `derivePrefsFromRules({ rules, mode, slots })`.
 

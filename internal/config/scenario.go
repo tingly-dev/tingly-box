@@ -60,10 +60,16 @@ func (c *Config) SetScenarioConfig(config typ.ScenarioConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// The slot list is owned by SetClaudeCodeSlot: whatever the client sent
+	// (e.g. a GET-merge of a profile that read the main record through the
+	// fallback) is replaced by the stored list.
+	config.ClaudeCodeSlots = nil
+
 	// Check if scenario already exists and update it
 	for i := range c.Scenarios {
 		if c.Scenarios[i].Scenario == config.Scenario {
 			prev := c.Scenarios[i]
+			config.ClaudeCodeSlots = prev.ClaudeCodeSlots
 			c.Scenarios[i] = config
 			c.syncClaudeCodeRuleModeLocked(&prev, &c.Scenarios[i])
 			return c.Save()
@@ -77,20 +83,16 @@ func (c *Config) SetScenarioConfig(config typ.ScenarioConfig) error {
 }
 
 // syncClaudeCodeRuleModeLocked applies the main Claude Code scenario's mode
-// to its rules after a whole-record write. The unified-mode slot list is
-// owned by SetClaudeCodeSlot: a write that doesn't carry it keeps it, and a
-// mode change clears it (switching back to unified merges every slot).
+// to its rules after a whole-record write. A mode change clears the
+// unified-mode slot list (switching back to unified merges every slot).
 func (c *Config) syncClaudeCodeRuleModeLocked(prev, config *typ.ScenarioConfig) {
 	if config.Scenario != typ.ScenarioClaudeCode {
 		return
 	}
 
 	separate := config.GetDefaultFlags().Separate
-	switch {
-	case prev != nil && prev.GetDefaultFlags().Separate != separate:
+	if prev != nil && prev.GetDefaultFlags().Separate != separate {
 		config.ClaudeCodeSlots = nil
-	case config.ClaudeCodeSlots == nil && prev != nil:
-		config.ClaudeCodeSlots = prev.ClaudeCodeSlots
 	}
 	c.setClaudeCodeModeRulesActiveLocked(!separate, separate, config.ClaudeCodeSlots)
 }

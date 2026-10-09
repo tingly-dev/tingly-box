@@ -47,6 +47,7 @@ func (c *Config) GetProfile(baseScenario typ.RuleScenario, profileID string) (ty
 
 func cloneProfileMeta(profile typ.ProfileMeta) typ.ProfileMeta {
 	profile.ClaudeCode = cloneClaudeCodeProfileConfig(profile.ClaudeCode)
+	profile.ClaudeCodeSlots = slices.Clone(profile.ClaudeCodeSlots)
 	return profile
 }
 

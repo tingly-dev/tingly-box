@@ -140,4 +140,6 @@ test('unified mode: a slot with its own rule uses it, the rest stay on the unifi
     assert.equal(prefs.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'tingly/cc');
     assert.equal(prefs.ANTHROPIC_DEFAULT_OPUS_MODEL, 'tingly/cc');
     assert.equal(prefs.CLAUDE_CODE_SUBAGENT_MODEL, 'tingly/cc-subagent[1m]');
+    // The split slot's 1M widens the compact window, as the backend does.
+    assert.equal(prefs.CLAUDE_CODE_AUTO_COMPACT_WINDOW, '1000000');
 });

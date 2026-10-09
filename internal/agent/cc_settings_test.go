@@ -731,11 +731,9 @@ func TestGenerateCCEnv_UnifiedProfileSlot(t *testing.T) {
 			{UUID: "builtin:claude_code:p1:cc", Scenario: "claude_code:p1", RequestModel: "cc", Active: true},
 			{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "fast", Active: true},
 		},
-		Scenarios: []typ.ScenarioConfig{
-			{Scenario: "claude_code:p1", ClaudeCodeSlots: []string{"haiku", "subagent"}},
-			// The main scenario's slots never leak into a profile.
-			{Scenario: typ.ScenarioClaudeCode, ClaudeCodeSlots: []string{"opus"}},
-		},
+		Profiles: map[string][]typ.ProfileMeta{"claude_code": {{ID: "p1", Name: "solo", Unified: true, ClaudeCodeSlots: []string{"haiku", "subagent"}}}},
+		// The main scenario's slots never leak into a profile.
+		Scenarios: []typ.ScenarioConfig{{Scenario: typ.ScenarioClaudeCode, ClaudeCodeSlots: []string{"opus"}}},
 	}
 
 	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code:p1", true, true)
@@ -749,5 +747,22 @@ func TestGenerateCCEnv_UnifiedProfileSlot(t *testing.T) {
 	}
 	if got := env["ANTHROPIC_DEFAULT_OPUS_MODEL"]; got != "cc" {
 		t.Errorf("opus = %q, want cc", got)
+	}
+}
+
+func TestBuildClaudeCodeModelConfig_UnifiedFollowsSplitSlots(t *testing.T) {
+	cfg := &serverconfig.Config{
+		Rules: []typ.Rule{
+			{UUID: serverconfig.RuleUUIDCC, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc", Active: true},
+			{UUID: serverconfig.RuleUUIDCCSubagent, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-subagent", Active: true},
+		},
+		Scenarios: []typ.ScenarioConfig{{Scenario: typ.ScenarioClaudeCode, ClaudeCodeSlots: []string{"subagent"}}},
+	}
+	mc := BuildClaudeCodeModelConfig(cfg, true)
+	if mc.Default != "tingly/cc" || mc.SubAgent != "tingly/cc-subagent" || mc.Haiku != "" {
+		t.Errorf("model config = %+v, want default tingly/cc, subagent tingly/cc-subagent, the rest following default", mc)
+	}
+	if got := BuildClaudeCodeModelConfig(nil, true); got.Default != "tingly/cc" || got.SubAgent != "" {
+		t.Errorf("without config = %+v", got)
 	}
 }

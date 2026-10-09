@@ -4,17 +4,41 @@ import (
 	"strings"
 
 	aiagent "github.com/tingly-dev/tingly-box/ai/agent"
+	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // BuildClaudeCodeModelConfig constructs the model configuration for Claude Code.
-// This contains the business logic for unified vs separate mode.
+// This contains the business logic for unified vs separate mode. In unified
+// mode, the slots given a rule of their own (config.SetClaudeCodeSlot) request
+// that rule, as in the settings file; cfg may be nil.
 // Exported for use by HTTP handlers.
-func BuildClaudeCodeModelConfig(unified bool) aiagent.ClaudeCodeModelConfig {
+func BuildClaudeCodeModelConfig(cfg *serverconfig.Config, unified bool) aiagent.ClaudeCodeModelConfig {
 	if unified {
-		return aiagent.ClaudeCodeModelConfig{
+		mc := aiagent.ClaudeCodeModelConfig{
 			Default: "tingly/cc",
 			// All other fields will use Default
 		}
+		if cfg == nil || len(cfg.ClaudeCodeSlots(typ.ScenarioClaudeCode)) == 0 {
+			return mc
+		}
+		m, _ := ClaudeCodeSlotModels(cfg, string(typ.ScenarioClaudeCode), true, false)
+		for _, slot := range cfg.ClaudeCodeSlots(typ.ScenarioClaudeCode) {
+			model := m[ccSlotEnvKeys[slot]]
+			switch slot {
+			case "haiku":
+				mc.Haiku = model
+			case "sonnet":
+				mc.Sonnet = model
+			case "opus":
+				mc.Opus = model
+			case "fable":
+				mc.Fable = model
+			case "subagent":
+				mc.SubAgent = model
+			}
+		}
+		return mc
 	}
 
 	// Separate mode - different models for different purposes

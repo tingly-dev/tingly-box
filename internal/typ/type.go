@@ -347,6 +347,11 @@ type ProfileMeta struct {
 	Name       string                   `json:"name" yaml:"name"`                                   // Human-readable name (unique within base scenario)
 	Unified    bool                     `json:"unified" yaml:"unified"`                             // true=unified mode (single model), false=separate mode (individual models, default)
 	ClaudeCode *ClaudeCodeProfileConfig `json:"claude_code,omitempty" yaml:"claude_code,omitempty"` // Persistent overrides for generated Claude Code settings.
+	// ClaudeCodeSlots: in a unified profile, the model slots with a rule of
+	// their own (see ScenarioConfig.ClaudeCodeSlots, its main-scenario twin).
+	// Kept on the profile so it lives and dies with it and never forks or
+	// inherits a scenario record.
+	ClaudeCodeSlots []string `json:"claude_code_slots,omitempty" yaml:"claude_code_slots,omitempty"`
 }
 
 // ClaudeCodeProfileConfig stores only the delta from a profile's inherited
@@ -364,10 +369,11 @@ type ScenarioConfig struct {
 	Scenario   RuleScenario           `json:"scenario" yaml:"scenario"`
 	Flags      ScenarioFlags          `json:"flags" yaml:"flags"`                               // Scenario configuration flags
 	Extensions map[string]interface{} `json:"extensions,omitempty" yaml:"extensions,omitempty"` // Reserved for future extensions
-	// ClaudeCodeSlots lists the Claude Code model slots that have a rule of
-	// their own in unified mode; every other slot uses the main rule. Only
-	// read for the exact scenario (never inherited by a profile) and owned by
-	// config.SetClaudeCodeSlot. See .design/claude-code-slots.md.
+	// ClaudeCodeSlots lists, for the main claude_code scenario in unified
+	// mode, the model slots that have a rule of their own; every other slot
+	// uses the main rule. Written only by config.SetClaudeCodeSlot: whole-record
+	// scenario writes never change it (profiles keep theirs on ProfileMeta).
+	// See .design/claude-code-slots.md.
 	ClaudeCodeSlots []string `json:"claude_code_slots,omitempty" yaml:"claude_code_slots,omitempty"`
 }
 

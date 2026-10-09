@@ -20,12 +20,34 @@ func (c *Config) ClaudeCodeSlots(scenario typ.RuleScenario) []string {
 	return slices.Clone(c.ccSlotsLocked(scenario))
 }
 
-// ccSlotsLocked reads the slot list of exactly this scenario: a profile never
-// inherits the main scenario's list.
+// ccSlotsLocked reads the slot list of exactly this scenario: the main
+// scenario's record, or the profile itself — never one through the other.
 func (c *Config) ccSlotsLocked(scenario typ.RuleScenario) []string {
+	if p := c.ccProfileLocked(scenario); p != nil {
+		return p.ClaudeCodeSlots
+	}
+	if scenario != typ.ScenarioClaudeCode {
+		return nil
+	}
 	for i := range c.Scenarios {
 		if c.Scenarios[i].Scenario == scenario {
 			return c.Scenarios[i].ClaudeCodeSlots
+		}
+	}
+	return nil
+}
+
+// ccProfileLocked returns the Claude Code profile a profiled scenario
+// names, nil for the main scenario or an unknown profile.
+func (c *Config) ccProfileLocked(scenario typ.RuleScenario) *typ.ProfileMeta {
+	base, profileID := typ.ParseScenarioProfile(scenario)
+	if base != typ.ScenarioClaudeCode || profileID == "" {
+		return nil
+	}
+	profiles := c.Profiles[string(base)]
+	for i := range profiles {
+		if profiles[i].ID == profileID {
+			return &profiles[i]
 		}
 	}
 	return nil
@@ -69,7 +91,11 @@ func (c *Config) SetClaudeCodeSlot(scenario typ.RuleScenario, slot string, enabl
 		slots = append(slots, slot)
 	}
 	slices.SortFunc(slots, func(a, b string) int { return slices.Index(CCSlots, a) - slices.Index(CCSlots, b) })
-	c.findOrCreateScenarioConfigLocked(scenario).ClaudeCodeSlots = slots
+	if p := c.ccProfileLocked(scenario); p != nil {
+		p.ClaudeCodeSlots = slots
+	} else {
+		c.findOrCreateScenarioConfigLocked(scenario).ClaudeCodeSlots = slots
+	}
 
 	var out typ.Rule
 	if rule != nil {
@@ -92,15 +118,14 @@ func (c *Config) checkCCSlotScenarioLocked(scenario typ.RuleScenario) error {
 		}
 		return nil
 	}
-	for _, p := range c.Profiles[string(base)] {
-		if p.ID == profileID {
-			if !p.Unified {
-				return fmt.Errorf("profile %q is in separate mode: every slot already has its own rule", profileID)
-			}
-			return nil
-		}
+	p := c.ccProfileLocked(scenario)
+	if p == nil {
+		return fmt.Errorf("profile %q not found", profileID)
 	}
-	return fmt.Errorf("profile %q not found", profileID)
+	if !p.Unified {
+		return fmt.Errorf("profile %q is in separate mode: every slot already has its own rule", profileID)
+	}
+	return nil
 }
 
 // ccRuleLocked returns the scenario's rule for slot (or "cc"), falling back to
@@ -110,7 +135,9 @@ func (c *Config) ccRuleLocked(scenario typ.RuleScenario, slot string) *typ.Rule 
 		return r
 	}
 	if scenario == typ.ScenarioClaudeCode {
-		return c.findRuleByUUID(LegacyCCRuleUUID(slot))
+		if legacy := LegacyCCRuleUUID(slot); legacy != "" {
+			return c.findRuleByUUID(legacy)
+		}
 	}
 	return nil
 }
@@ -140,10 +167,13 @@ func copyCCRouting(dst, src *typ.Rule) {
 }
 
 // LegacyCCRuleUUID returns the pre-migration built-in-cc-* UUID of a main
-// Claude Code rule ("cc" or a slot name), kept as a lookup fallback.
+// Claude Code rule ("cc" or a slot name), or "" when it never had one.
 func LegacyCCRuleUUID(slot string) string {
-	if slot == "cc" {
-		return RuleUUIDBuiltinCC
+	modern := BuiltinRuleUUID(typ.ScenarioClaudeCode, slot)
+	for legacy, m := range legacyCCRuleUUIDs {
+		if m == modern {
+			return legacy
+		}
 	}
-	return RuleUUIDBuiltinCC + "-" + slot
+	return ""
 }
