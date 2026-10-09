@@ -19,10 +19,9 @@ import (
 //   - database empty, JSON has rules -> one-time import into the database
 //   - both empty -> nothing to do (fresh install; built-ins arrive via AddRule)
 //
-// Transition period: unlike migrateProvidersToDB (which nulls the JSON copy),
-// Save() keeps writing a live "rules" mirror into config.json so downgrading
-// to a pre-database version loses nothing. The mirror is write-only; a later
-// release removes it. See .design/rule-storage.md §5.
+// The JSON copy is read only for the one-time import; Save() writes the
+// file's "rules" key as null (the former downgrade-compat mirror is gone).
+// See .design/rule-storage.md §5.
 
 // rulesStore resolves the rule store at call time from the StoreManager, so
 // store liveness has a single owner: after StoreManager.Close() the accessor
@@ -62,13 +61,12 @@ func (c *Config) hydrateRulesFromStore() error {
 	}
 
 	if len(stored) > 0 {
-		// Database is authoritative. The file's rules array (Save()'s own
-		// mirror, or a hand edit made while the server was down) is not an
-		// input anymore; the next Save() rewrites it from the live rules.
-		// A divergent mirror means rule changes were made outside this
-		// version's control — most plausibly via an older (pre-database)
-		// binary during a downgrade — and those changes are NOT merged back;
-		// say so loudly instead of discarding them in silence.
+		// Database is authoritative. A non-empty rules array in the file
+		// (a hand edit, or a leftover mirror from a pre-removal version) is
+		// not an input anymore; the next Save() nulls it. Divergent content
+		// means rule changes were made outside this version's control —
+		// those changes are NOT merged back; say so loudly instead of
+		// discarding them in silence.
 		if len(legacy) > 0 && !rulesEquivalent(legacy, stored) {
 			logrus.Warnf("config.json rules differ from the database (%d in file, %d in database); the database wins and the file copy will be overwritten — rule changes made under an older version or by hand are not merged back", len(legacy), len(stored))
 		}
@@ -91,10 +89,9 @@ func (c *Config) hydrateRulesFromStore() error {
 	// applies on every startup).
 	ensureRuleUUIDs(c.Rules)
 
-	// Save() persists the rules to the store; subsequent startups find the
-	// database populated and take the database-authoritative path. The file
-	// keeps its "rules" array (rewritten as a live mirror) for downgrade
-	// compatibility during the transition period.
+	// Save() persists the rules to the store (and nulls the file's "rules"
+	// key); subsequent startups find the database populated and take the
+	// database-authoritative path.
 	if err := c.Save(); err != nil {
 		return fmt.Errorf("failed to migrate rules to database: %w", err)
 	}
@@ -103,39 +100,39 @@ func (c *Config) hydrateRulesFromStore() error {
 	return nil
 }
 
-// syncRulesToStore writes the in-memory rule list through to the database
-// and returns the JSON snapshot of the rules, which Save() reuses as the
-// file mirror so the rules are marshaled exactly once per Save. Called from
-// Save() so every existing rule-mutation path persists without individual
-// call sites needing to know about the store. The store write is skipped
-// when the rules did not change since the last sync (snapshot compare) or
-// when no store is attached (lightweight test configs, closed stores) — the
-// snapshot is still returned for the mirror. Returns (nil, nil) before
-// hydration. ruleSyncMu serializes concurrent Save() calls (not all of them
-// hold c.mu).
-func (c *Config) syncRulesToStore() ([]byte, error) {
+// syncRulesToStore writes the in-memory rule list through to the database.
+// Called from Save() so every existing rule-mutation path persists without
+// individual call sites needing to know about the store. The store write is
+// skipped when the rules did not change since the last sync (snapshot
+// compare) or when no store is attached (lightweight test configs, closed
+// stores). No-op before hydration. ruleSyncMu serializes concurrent Save()
+// calls (not all of them hold c.mu).
+func (c *Config) syncRulesToStore() error {
 	c.ruleSyncMu.Lock()
 	defer c.ruleSyncMu.Unlock()
 
 	if !c.rulesHydrated {
-		return nil, nil
+		return nil
+	}
+
+	store := c.rulesStore()
+	if store == nil {
+		return nil
 	}
 
 	snapshot, err := json.Marshal(c.Rules)
 	if err != nil {
-		return nil, fmt.Errorf("failed to snapshot rules: %w", err)
+		return fmt.Errorf("failed to snapshot rules: %w", err)
 	}
-
-	store := c.rulesStore()
-	if store == nil || bytes.Equal(snapshot, c.lastSyncedRules) {
-		return snapshot, nil
+	if bytes.Equal(snapshot, c.lastSyncedRules) {
+		return nil
 	}
 
 	if err := store.SyncAll(c.Rules); err != nil {
-		return nil, fmt.Errorf("failed to sync rules to store: %w", err)
+		return fmt.Errorf("failed to sync rules to store: %w", err)
 	}
 	c.lastSyncedRules = snapshot
-	return snapshot, nil
+	return nil
 }
 
 // rulesEquivalent reports whether two rule lists carry the same content,

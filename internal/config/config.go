@@ -35,9 +35,9 @@ type Config struct {
 	// LegacyRules receives the file's "rules" array on load. It is consumed
 	// exactly once, by hydrateRulesFromStore (one-time import into the
 	// database on upgraded installs); after hydration the field stays nil and
-	// file rules are ignored on reload. The "rules" key itself keeps being
-	// written by Save() as a live mirror of Rules during the transition
-	// period, purely for downgrade compatibility — see Save().
+	// file rules are ignored on reload. The "rules" key is no longer mirrored
+	// by Save() (dual-write removed): it is read only for the legacy import and
+	// written back as null.
 	LegacyRules        []typ.Rule           `yaml:"-" json:"rules"`
 	DefaultRequestID   int                  `yaml:"default_request_id" json:"default_request_id"` // Index of the default Rule
 	UserToken          string               `yaml:"user_token" json:"user_token"`                 // User token for UI and control API authentication
@@ -460,7 +460,7 @@ func (c *Config) load() error {
 	// expecting the pre-database behavior; tell them where rules live now
 	// instead of eating the edit without a trace.
 	if c.rulesHydrated {
-		if !rulesEquivalent(c.LegacyRules, c.Rules) {
+		if len(c.LegacyRules) > 0 && !rulesEquivalent(c.LegacyRules, c.Rules) {
 			logrus.Warn("Ignoring rule edits in config.json: rules are stored in the database now; manage them via the UI/API/CLI")
 		}
 		c.LegacyRules = nil
@@ -501,21 +501,10 @@ func (c *Config) Save() error {
 	// store. The store MUST be written before the file: if the store sync
 	// fails during the one-time legacy import, aborting here leaves the file's
 	// legacy rules untouched so the next startup retries the import.
-	rulesSnapshot, err := c.syncRulesToStore()
-	if err != nil {
+	// After hydration LegacyRules is nil, so the marshaled "rules" key is
+	// null; pre-hydration Saves keep the file's legacy array intact.
+	if err := c.syncRulesToStore(); err != nil {
 		return err
-	}
-
-	// Transition-period dual write: the file keeps a live "rules" mirror
-	// (the same snapshot the sync produced) so downgrading to a pre-database
-	// version loses nothing — the old binary reads the array as before. The
-	// mirror is write-only; load() ignores it once hydrated. Scheduled for
-	// removal in a later release; see .design/rule-storage.md §5.
-	// Pre-hydration Saves get a nil snapshot and leave the marshaled
-	// LegacyRules value in place, so an unmigrated file's rules can never be
-	// overwritten with an empty list.
-	if rulesSnapshot != nil {
-		next["rules"] = json.RawMessage(rulesSnapshot)
 	}
 
 	out, err := json.MarshalIndent(next, "", "    ")
