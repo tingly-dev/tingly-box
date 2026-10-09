@@ -41,6 +41,7 @@ func TestKongAllTopLevelSubcommandsRecognized(t *testing.T) {
 		{"version", []string{"version"}},
 		{"matrix-help", []string{"matrix", "--help"}},
 		{"agent-help", []string{"agent", "--help"}},
+		{"script-parse", []string{"script", "testdata/scripts/read-edit-done.yaml", "--agent", "codex", "--no-stream"}},
 		{"provider-list", []string{"provider", "list"}},
 		{"provider-test", []string{"provider", "test"}},
 		{"init-config-help", []string{"init-config", "--help"}},
