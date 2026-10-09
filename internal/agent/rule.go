@@ -2,9 +2,9 @@ package agent
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/google/uuid"
-	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -41,27 +41,48 @@ var DshRequestModels = []string{
 	"tingly-dsh",
 }
 
+// claudeCodeRuleNames are the built-in Claude Code rules agent apply points
+// at the chosen provider: the main rule and every per-tier rule.
+var claudeCodeRuleNames = []string{"cc", "default", "haiku", "sonnet", "opus", "subagent", "fable"}
+
 // createOrUpdateClaudeCodeRules points the Claude Code rules at one provider +
 // model. Separate mode (or a separate-mode apply) updates and switches on every
-// tingly/cc-* rule, for convenience. Unified mode only updates the main rule:
-// every slot without a rule of its own already uses it, and a slot the user
-// gave its own rule (config.SetClaudeCodeSlot) keeps it, on or off.
+// tingly/cc-* rule, for convenience. Unified mode leaves alone the slots the
+// user gave a rule of their own (config.SetClaudeCodeSlot): it switches the
+// main rule on and gives every other tier rule the provider too, without
+// switching it on, so a later switch to separate mode still routes.
 func (aa *AgentApply) createOrUpdateClaudeCodeRules(providerUUID, model string, unified bool) (int, int, error) {
 	if !unified || aa.config.GetScenarioFlag(typ.ScenarioClaudeCode, constant.FlagSeparate) {
 		return aa.createOrUpdateRulesForScenario(typ.ScenarioClaudeCode, "Claude Code", ClaudeCodeRequestModels, providerUUID, model)
 	}
-	service := &loadbalance.Service{Active: true, Provider: providerUUID, Model: model}
-	for _, uuid := range []string{serverconfig.RuleUUIDCC, serverconfig.RuleUUIDBuiltinCC} {
-		if rule := aa.config.GetRuleByUUID(uuid); rule != nil {
-			rule.Services = []*loadbalance.Service{service}
-			rule.Active = true
-			if err := aa.config.UpdateRule(rule.UUID, *rule); err != nil {
-				return 0, 0, fmt.Errorf("failed to update rule %s: %w", rule.RequestModel, err)
-			}
-			return 0, 1, nil
+	split := aa.config.ClaudeCodeSlots(typ.ScenarioClaudeCode)
+	created, updated := 0, 0
+	for _, name := range claudeCodeRuleNames {
+		if slices.Contains(split, name) {
+			continue
 		}
+		uuid := aa.config.ClaudeCodeRuleUUID(typ.ScenarioClaudeCode, name)
+		if uuid == "" {
+			if name == "cc" {
+				c, u, err := aa.createOrUpdateRulesForScenario(typ.ScenarioClaudeCode, "Claude Code", ClaudeCodeRequestModels[:1], providerUUID, model)
+				created, updated = created+c, updated+u
+				if err != nil {
+					return created, updated, err
+				}
+			}
+			continue
+		}
+		rule := aa.config.GetRuleByUUID(uuid)
+		rule.Services = []*loadbalance.Service{{Active: true, Provider: providerUUID, Model: model}}
+		if name == "cc" {
+			rule.Active = true
+		}
+		if err := aa.config.UpdateRule(rule.UUID, *rule); err != nil {
+			return created, updated, fmt.Errorf("failed to update rule %s: %w", rule.RequestModel, err)
+		}
+		updated++
 	}
-	return aa.createOrUpdateRulesForScenario(typ.ScenarioClaudeCode, "Claude Code", ClaudeCodeRequestModels[:1], providerUUID, model)
+	return created, updated, nil
 }
 
 // createOrUpdateOpenCodeRules creates or updates OpenCode rules.

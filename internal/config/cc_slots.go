@@ -128,6 +128,17 @@ func (c *Config) checkCCSlotScenarioLocked(scenario typ.RuleScenario) error {
 	return nil
 }
 
+// ClaudeCodeRuleUUID returns the UUID of a Claude Code scenario's built-in rule
+// for slot ("cc" for the main rule; legacy UUIDs included), or "" if missing.
+func (c *Config) ClaudeCodeRuleUUID(scenario typ.RuleScenario, slot string) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if r := c.ccRuleLocked(scenario, slot); r != nil {
+		return r.UUID
+	}
+	return ""
+}
+
 // ccRuleLocked returns the scenario's rule for slot (or "cc"), falling back to
 // the pre-migration UUID in the main scenario.
 func (c *Config) ccRuleLocked(scenario typ.RuleScenario, slot string) *typ.Rule {

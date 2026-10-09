@@ -31,8 +31,8 @@ UI: in unified mode a **Slots** row sits under Base URL / API Key. `default` is 
 
 - `config.SetClaudeCodeSlot` / `ClaudeCodeSlots` (`internal/config/cc_slots.go`); mode sync in `scenario.go`.
 - `agent.ClaudeCodeSlotModels`: the one resolver behind the settings file and the tbclient env; `agent apply` in unified mode also writes the split slots.
-- `agent apply` with a provider: in unified mode it updates only the main rule; split slots keep their own model and the other slot rules stay off. Separate mode (or a separate-mode apply) still points every rule at the provider.
-- TUI quickstart: after choosing unified mode it asks for the subagent model ("same as the default" or another one); another one splits the subagent slot before the env is written.
+- `agent apply` with a provider: in unified mode split slots keep their own rule untouched; the main rule is switched on and every other tier rule gets the provider without being switched on (so a later switch to separate mode still routes). Separate mode (or a separate-mode apply) still points every rule at the provider and switches it on.
+- TUI quickstart: the claude_code scenario follows the unified/separate answer. In unified mode it asks for the subagent model: another model splits the subagent slot (routed to exactly that model — no inherited smart routing or 1M) before the env is written; "same as the default" undoes an earlier split. Back on that question returns to the unified question.
 - CLI: `profile list/show` and the `cc` profile picker show `unified + subagent` for split slots.
 - API: `GET /api/v1/scenario/:scenario/claude-code/slots`, `PUT …/claude-code/slots/:slot {enabled}`.
 - Frontend: `useSlotRouting` (Slots row, unified-mode rule list, fixed mode for profiles); `derivePrefsFromRules({ rules, mode, slots })`.
