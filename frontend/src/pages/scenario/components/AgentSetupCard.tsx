@@ -76,12 +76,11 @@ export interface AgentSetupCardProps {
      * steps tick over by themselves instead of waiting for a click.
      */
     configApplied?: boolean;
-    /**
-     * Shown as the page's Quick Start tab: always open (no fold-away header),
-     * since the tab itself is what keeps it out of the way.
-     */
-    panel?: boolean;
-    /** Progress for the tab's label. */
+    /** Render nothing (the page hides a finished Quick Start); progress is still tracked. */
+    hidden?: boolean;
+    /** A new value resets the progress, as the card's own Reset does. */
+    resetKey?: number;
+    /** Reported whenever progress changes, so the page can hide / show the card. */
     onProgressChange?: (progress: { done: number; total: number; allDone: boolean }) => void;
     /** Opened by the header "How routing works" help button. */
     onShowGuide?: () => void;
@@ -154,7 +153,8 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     providers,
     providersLoading = false,
     configApplied = false,
-    panel = false,
+    hidden = false,
+    resetKey = 0,
     onProgressChange,
     onShowGuide,
 }) => {
@@ -166,8 +166,6 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     const viewConfigButtonLabel = viewConfigButtonLabelProp ?? t('agentSetup.apply.viewConfig');
     const initialCollapsedPref = useRef<string | null>(localStorage.getItem(COLLAPSED_KEY(agentKey)));
     const [collapsed, setCollapsed] = useState(initialCollapsedPref.current === 'true');
-    // As the page's tab the card never folds away: the tab is what keeps it out of the way.
-    const foldedAway = collapsed && !panel;
     const [installConfirmed, setInstallConfirmed] = useState(
         () => localStorage.getItem(INSTALL_DONE_KEY(agentKey)) === 'true'
     );
@@ -241,7 +239,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     useEffect(() => {
         if (autoCollapsedRef.current) return;
         if (providerLoading) return;
-        if (panel || initialCollapsedPref.current !== null) return;
+        if (initialCollapsedPref.current !== null) return;
         if (allDone) {
             autoCollapsedRef.current = true;
             setCollapsed(true);
@@ -312,6 +310,8 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         resetCopied();
         resetCopiedMirror();
     };
+
+    useEffect(() => { if (resetKey > 0) handleReset(); }, [resetKey]);  // eslint-disable-line react-hooks/exhaustive-deps
 
     const progressLabel = allDone ? t('agentSetup.done') : `${doneCount}/${TOTAL_STEPS}`;
     const progressColor = allDone ? 'success' : 'default';
@@ -646,13 +646,13 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                 </Stack>
     );
 
+    if (hidden) return null;
+
     return (
         <>
         <UnifiedCard
             size="header"
-            // Inside the Quick Start dialog the dialog is the card.
-            sx={panel ? { border: 'none' } : undefined}
-            titleMarginBottom={foldedAway ? 0 : 2}
+            titleMarginBottom={collapsed ? 0 : 2}
             title={
                 <Stack
                     direction="row"
@@ -661,25 +661,16 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         alignItems: "center",
                         flex: 1
                     }}>
-                    {/* As a tab, its name and progress are already on the tab: say what is next. */}
-                    {panel ? (
-                        <Typography variant="body2" sx={{ color: allDone ? 'success.main' : 'text.secondary' }}>
-                            {allDone ? t('agentSetup.done') : collapsedHint}
-                        </Typography>
-                    ) : (
-                        <>
-                            <Typography variant="subtitle1" sx={{
-                                fontWeight: 600
-                            }}>{t('agentSetup.quickStart')}</Typography>
-                            <Chip
-                                label={progressLabel}
-                                size="small"
-                                color={progressColor as any}
-                                sx={{ height: 20, fontSize: fontSizes.sm }}
-                            />
-                        </>
-                    )}
-                    {foldedAway && !allDone && (
+                    <Typography variant="subtitle1" sx={{
+                        fontWeight: 600
+                    }}>{t('agentSetup.quickStart')}</Typography>
+                    <Chip
+                        label={progressLabel}
+                        size="small"
+                        color={progressColor as any}
+                        sx={{ height: 20, fontSize: fontSizes.sm }}
+                    />
+                    {collapsed && !allDone && (
                         <Typography
                             variant="body2"
                             sx={{
@@ -714,17 +705,15 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             <HelpOutlineIcon fontSize="small" />
                         </IconButton>
                     </Tooltip>
-                    {!panel && (
-                        <Tooltip title={collapsed ? t('agentSetup.expand') : t('agentSetup.collapse')}>
-                            <IconButton size="small" onClick={toggleCollapsed}>
-                                {collapsed ? <ExpandMoreIcon fontSize="small" /> : <ExpandLessIcon fontSize="small" />}
-                            </IconButton>
-                        </Tooltip>
-                    )}
+                    <Tooltip title={collapsed ? t('agentSetup.expand') : t('agentSetup.collapse')}>
+                        <IconButton size="small" onClick={toggleCollapsed}>
+                            {collapsed ? <ExpandMoreIcon fontSize="small" /> : <ExpandLessIcon fontSize="small" />}
+                        </IconButton>
+                    </Tooltip>
                 </Stack>
             }
         >
-            <Collapse in={!foldedAway} unmountOnExit={false}>
+            <Collapse in={!collapsed} unmountOnExit={false}>
                 {steps}
             </Collapse>
         </UnifiedCard>

@@ -2230,6 +2230,7 @@ export default {
     "loadFailed": "Не удалось загрузить запросы этого агента."
   },
   "agentSetup": {
+    "restartTooltip": "Запустить быстрый старт заново",
     "autoSkipped": "Пропущено: модель уже задана",
     "setup": "Настройка",
     "showSteps": "Шаги настройки",

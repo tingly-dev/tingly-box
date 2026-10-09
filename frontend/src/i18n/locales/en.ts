@@ -2202,6 +2202,7 @@ export default {
     "loadFailed": "Couldn't load this agent's requests."
   },
   "agentSetup": {
+    "restartTooltip": "Run Quick Start again",
     "autoSkipped": "Skipped — a model is already set",
     "setup": "Setup",
     "showSteps": "Setup steps",

@@ -1,8 +1,6 @@
-import { useState } from 'react';
-import { Box, Button, Chip, Dialog, DialogContent, Stack, Tooltip, Typography } from '@mui/material';
+import { useCallback, useRef, useState } from 'react';
+import { Box, Button, Stack, Tooltip, Typography } from '@mui/material';
 import { BarChart as UsageIcon, ListAlt as RequestsIcon, Rule as QuickStartIcon } from '@/components/icons';
-import DialogHeader from '@/components/DialogHeader';
-import { fontSizes } from '@/theme/fonts';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import PageHeader from '@/components/PageHeader';
@@ -146,9 +144,19 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     const [dialogOpen, setDialogOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
     const [setupProgress, setSetupProgress] = useState<{ done: number; total: number; allDone: boolean } | null>(null);
-    // The one dialog open from the button row: Quick Start, today's usage, or the
-    // latest requests. Each button opens its own; nothing is on the page itself.
-    const [lookIn, setLookIn] = useState<'quickstart' | AgentActivityView | null>(null);
+    // Requests and Usage are looks-in opened from the status row, one dialog at a time.
+    const [lookIn, setLookIn] = useState<AgentActivityView | null>(null);
+    // A finished Quick Start leaves the page; its button in the status row brings it back
+    // (and resets it). `reopened` keeps it on show until it is finished again.
+    const [quickStartReopened, setQuickStartReopened] = useState(false);
+    const [quickStartResetKey, setQuickStartResetKey] = useState(0);
+    const wasAllDone = useRef<boolean | null>(null);
+    const onSetupProgress = useCallback((p: { done: number; total: number; allDone: boolean }) => {
+        // Finished again after a reopen: it hides itself once more.
+        if (wasAllDone.current === false && p.allDone) setQuickStartReopened(false);
+        wasAllDone.current = p.allDone;
+        setSetupProgress(p);
+    }, []);
     const { status: clientConfigStatus } = useClientConfigStatus(agent.clientConfigTool ?? null, [rules, dialogOpen, slotMode]);
     const context1M = useContext1MToggle(() => setDialogOpen(true));
     // Unified Connect AI add flow (picker + form/OAuth/paste/import dialogs), offered by Quick Start.
@@ -219,27 +227,14 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
         </>
     );
 
-    const setupFinished = !!setupProgress?.allDone;
-    const quickStartProgress = setupProgress ? (setupProgress.allDone ? '✓' : `${setupProgress.done}/${setupProgress.total}`) : null;
-    // "Choose a model" lives in the rules below the page: close the dialog, then point at them.
-    const chooseModel = () => {
-        setLookIn(null);
-        window.setTimeout(scrollToModelsCard, 250);
+    // Until progress is known, an agent that already routes a model counts as done.
+    const setupFinished = setupProgress ? setupProgress.allDone : hasModelOnAnyRule(rules);
+    const quickStartHidden = !quickStart || (setupFinished && !quickStartReopened);
+    const restartQuickStart = () => {
+        wasAllDone.current = null;
+        setQuickStartReopened(true);
+        setQuickStartResetKey((k) => k + 1);
     };
-    const quickStartButton = quickStart && (
-        <Button
-            key="quickstart"
-            onClick={() => setLookIn('quickstart')}
-            variant="outlined"
-            size="small"
-            startIcon={<QuickStartIcon />}
-            endIcon={quickStartProgress && (
-                <Chip label={quickStartProgress} size="small" color={setupFinished ? 'success' : 'primary'} variant="outlined" sx={{ height: 18, fontSize: fontSizes.xs, '& .MuiChip-label': { px: 0.75 } }} />
-            )}
-        >
-            {t('agentSetup.quickStart')}
-        </Button>
-    );
 
     return (
         <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
@@ -296,19 +291,55 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                             {t('scenarioPage.lookIn', { defaultValue: 'Status' })}
                         </Typography>
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, minWidth: 0, gridColumn: { xs: '1', sm: '2' } }}>
-                            {!setupFinished && quickStartButton}
                             <Button onClick={() => setLookIn('requests')} variant="outlined" size="small" startIcon={<RequestsIcon />}>
                                 {t('agentActivity.requests')}
                             </Button>
                             <Button onClick={() => setLookIn('usage')} variant="outlined" size="small" startIcon={<UsageIcon />}>
                                 {t('agentActivity.usage')}
                             </Button>
-                            {setupFinished && quickStartButton}
+                            {/* Quick Start is not a dialog: it sits above the rules while there is
+                                setup to do and leaves when done. This brings it back, reset. */}
+                            {quickStart && quickStartHidden && (
+                                <Tooltip title={t('agentSetup.restartTooltip', { defaultValue: 'Run Quick Start again' })}>
+                                    <Button onClick={restartQuickStart} variant="outlined" size="small" startIcon={<QuickStartIcon />}>
+                                        {t('agentSetup.quickStart')}
+                                    </Button>
+                                </Tooltip>
+                            )}
                         </Box>
                         {slotRouting && <Box sx={{ gridColumn: { xs: '2', sm: '3' }, justifySelf: 'end' }}>{slots.modeSwitch}</Box>}
                     </Box>
                 </UnifiedCard>
 
+                {quickStart && (
+                    // Embedded where it always was, above the rules; gone once done.
+                    <AgentSetupCard
+                        hidden={quickStartHidden}
+                        resetKey={quickStartResetKey}
+                        onProgressChange={onSetupProgress}
+                        agentKey={scenario}
+                        agentName={agent.title}
+                        installCommand={quickStart.installCommand ?? ''}
+                        installMirrorCommand={quickStart.installMirrorCommand}
+                        installStepDescription={quickStart.installDescriptionKey && t(quickStart.installDescriptionKey)}
+                        installActions={quickStart.installActions?.(t)}
+                        onApply={setup.kind === 'auto' ? slot.apply : undefined}
+                        onApplyWithStatusLine={setup.kind === 'auto' && setup.applyWithStatusLine
+                            ? () => runApply(() => setup.applyWithStatusLine!(t, applyContext))
+                            : undefined}
+                        isApplyLoading={isApplyLoading}
+                        onViewConfig={openDialog}
+                        applyStepLabel={quickStart.applyStepLabelKey && t(quickStart.applyStepLabelKey)}
+                        applyStepDescription={quickStart.applyStepDescriptionKey && t(quickStart.applyStepDescriptionKey)}
+                        viewConfigButtonLabel={quickStart.openDialogLabelKey && t(quickStart.openDialogLabelKey)}
+                        hasModelSelected={hasModelOnAnyRule(rules)}
+                        onSelectModel={scrollToModelsCard}
+                        onConnectProvider={connectAI.handleConnectAIClick}
+                        providers={internal.providers}
+                        providersLoading={internal.loading}
+                        configApplied={configApplied}
+                    />
+                )}
                 <TemplatePage
                     scenario={scenario}
                     // One copy of the providers too: the rule toolbar's
@@ -333,44 +364,6 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                     {...(agent.context1M ? { onContext1MToggle: context1M.handleContext1MToggle } : {})}
                 />
 
-                {quickStart && (
-                    // Kept mounted so the button's progress is known before it is opened.
-                    <Dialog open={lookIn === 'quickstart'} onClose={() => setLookIn(null)} maxWidth="md" fullWidth keepMounted aria-labelledby="agent-quickstart-title">
-                        <DialogHeader
-                            title={`${t('agentSetup.quickStart')}${quickStartProgress ? ` · ${quickStartProgress}` : ''}`}
-                            titleId="agent-quickstart-title"
-                            closeLabel={t('common.close')}
-                            onClose={() => setLookIn(null)}
-                        />
-                        <DialogContent sx={{ p: 0 }}>
-                            <AgentSetupCard
-                                panel
-                                onProgressChange={setSetupProgress}
-                                agentKey={scenario}
-                                agentName={agent.title}
-                                installCommand={quickStart.installCommand ?? ''}
-                                installMirrorCommand={quickStart.installMirrorCommand}
-                                installStepDescription={quickStart.installDescriptionKey && t(quickStart.installDescriptionKey)}
-                                installActions={quickStart.installActions?.(t)}
-                                onApply={setup.kind === 'auto' ? slot.apply : undefined}
-                                onApplyWithStatusLine={setup.kind === 'auto' && setup.applyWithStatusLine
-                                    ? () => runApply(() => setup.applyWithStatusLine!(t, applyContext))
-                                    : undefined}
-                                isApplyLoading={isApplyLoading}
-                                onViewConfig={openDialog}
-                                applyStepLabel={quickStart.applyStepLabelKey && t(quickStart.applyStepLabelKey)}
-                                applyStepDescription={quickStart.applyStepDescriptionKey && t(quickStart.applyStepDescriptionKey)}
-                                viewConfigButtonLabel={quickStart.openDialogLabelKey && t(quickStart.openDialogLabelKey)}
-                                hasModelSelected={hasModelOnAnyRule(rules)}
-                                onSelectModel={chooseModel}
-                                onConnectProvider={connectAI.handleConnectAIClick}
-                                providers={internal.providers}
-                                providersLoading={internal.loading}
-                                configApplied={configApplied}
-                            />
-                        </DialogContent>
-                    </Dialog>
-                )}
                 <AgentActivityDialog scenario={scenario} view="usage" open={lookIn === 'usage'} onClose={() => setLookIn(null)} />
                 <AgentActivityDialog scenario={scenario} view="requests" open={lookIn === 'requests'} onClose={() => setLookIn(null)} />
                 {slotRouting && slots.modeDialog}
