@@ -69,6 +69,13 @@ export interface AgentSetupCardProps {
      */
     providers: Array<{ enabled?: boolean }>;
     providersLoading?: boolean;
+    /**
+     * The client's own config file reads back as applied (the page's status
+     * chip). The real answer to "installed?" and "applied?" — a tool whose
+     * config points at this gateway is installed and configured — so those
+     * steps tick over by themselves instead of waiting for a click.
+     */
+    configApplied?: boolean;
     /** Opened by the header "How routing works" help button. */
     onShowGuide?: () => void;
 }
@@ -139,6 +146,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     onConnectProvider,
     providers,
     providersLoading = false,
+    configApplied = false,
     onShowGuide,
 }) => {
     const { t } = useTranslation();
@@ -152,7 +160,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     const [installConfirmed, setInstallConfirmed] = useState(
         () => localStorage.getItem(INSTALL_DONE_KEY(agentKey)) === 'true'
     );
-    const [applyDone, setApplyDone] = useState(
+    const [applyConfirmed, setApplyDone] = useState(
         () => localStorage.getItem(APPLY_DONE_KEY(agentKey)) === 'true'
     );
     const [modelSkipped, setModelSkipped] = useState(
@@ -170,7 +178,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         }).catch(() => { /* no signal: fall back to the manual confirm */ });
         return () => { cancelled = true; };
     }, [agentKey]);
-    const installDone = installConfirmed || lastRequestAt !== null;
+    const installDone = installConfirmed || lastRequestAt !== null || configApplied;
     const enabledProviders = providers.filter((p: any) => p.enabled && isCredentialProvider(p));
     const hasProvider = enabledProviders.length > 0;
     const providerCount = enabledProviders.length;
@@ -203,6 +211,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         });
     };
 
+    const applyDone = applyConfirmed || configApplied;
     const providerDone = hasProvider;
     const modelSelected = hasModelSelected;
     // The step counts as done either when a model is really configured (the

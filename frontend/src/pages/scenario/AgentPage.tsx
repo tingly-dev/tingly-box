@@ -280,6 +280,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         onConnectProvider={connectAI.handleConnectAIClick}
                         providers={internal.providers}
                         providersLoading={internal.loading}
+                        configApplied={clientConfigStatus?.state === 'applied'}
                     />
                 )}
                 <TemplatePage
