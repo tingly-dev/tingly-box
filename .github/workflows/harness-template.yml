@@ -146,6 +146,10 @@ jobs:
             tier: replay
             focus: replay
             cmd: replay batch --upstream=vmodel
+          - name: script
+            tier: script
+            focus: script
+            cmd: script cli/harness/testdata/scripts/read-edit-done.yaml cli/harness/testdata/scripts/flaky-stream.yaml
           - name: lb
             tier: lb
             focus: lb
