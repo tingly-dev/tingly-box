@@ -25,6 +25,7 @@ export interface PerformanceQueryParams {
     provider: string;
     model: string;
     user: string;
+    scenario?: string;
 }
 
 const fmtLatency = (ms: number) => {
@@ -72,6 +73,7 @@ export default function PerformanceSummary({ queryParams }: { queryParams: Perfo
                 if (queryParams.provider !== 'all') filters.provider = queryParams.provider;
                 if (queryParams.model !== 'all') filters.model = queryParams.model;
                 if (queryParams.user !== 'all') filters.user_id = queryParams.user;
+                if (queryParams.scenario && queryParams.scenario !== 'all') filters.scenario = queryParams.scenario;
                 const result = await api.getUsagePerformance(filters);
                 if (seq === requestSeq.current && result?.ttft) setData(result);
             } catch (error) {

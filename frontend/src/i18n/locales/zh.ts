@@ -1493,6 +1493,8 @@ export default {
       "identity": "账号",
       "allProviders": "全部",
       "allModels": "全部",
+      "agent": "Agent",
+      "allAgents": "全部",
       "allIdentities": "全部",
       "sharingKeys": "Team 密钥",
       "disabledSuffix": "（已停用）",
