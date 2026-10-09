@@ -1,0 +1,91 @@
+# UI 动线分析 — 发现、人工打标反馈与实现结论
+
+> 状态：**第 1 轮已落地**（2026-10-09）。本文是一份**滚动记录**，不是一次性方案：每一轮按同样的四段追加——
+> ①动线与发现（分析）→ ②人工打标反馈（产品负责人对每条提议的取舍）→ ③实现结论（做了什么、没做什么、为什么）→ ④验证。
+> 这样日后回头看，每个改动都能追溯到"当时看到了什么、谁怎么判的、最后怎么落的"。
+>
+> 判断标准沿用 `ux-principles.md` 的 P1–P12。与 `ui-redesign.md`（导航骨架）、`agent-page-redesign.md`（Agent 页模板）互补：那两份讲**页面和导航长什么样**，这份讲**用户沿着它们走一遍，哪里断了**。
+>
+> 方法与局限：本轮分析来自代码走读（路由表、`useActivityItems`、`Layout`、`AgentPage`/`AgentSetupCard`、Credentials、Help、Dashboard），不是用户访谈或埋点；视觉判断只在实现后用 mock 模式截图核对过。后续轮次若有真实使用数据，应优先于这里的推断。
+
+---
+
+## 1. 动线清单
+
+| # | 动线 | 当前路径 |
+|---|---|---|
+| J1 | 首次接入 | 登录 → `/agent` → 上次访问的 Agent（默认 Claude Code）→ 页内 Quick Start：连 Provider → 选模型 → 安装 → 应用 |
+| J2 | 接入第二个工具 | 在 Agent sidebar 的 13 个入口里找 → 重复 Quick Start |
+| J3 | 日常观测"正常吗" | rail › Dashboard › Usage（今日） |
+| J4 | 排障"请求为什么失败" | Agent 页规则栏的 Troubleshoot / Test all；Dashboard › By Request；System › Logs |
+| J5 | 凭据维护（额度、OAuth 过期） | Credentials 页；Dashboard › Quota history |
+| J6 | 团队共享 | Team rail › Team Keys |
+| J7 | 远程控制 | Remote rail › Bots › Remote Control / IM Notify / Desk |
+| J8 | 发现扩展功能 | 用户菜单 › Power-ups；或 System › Experimental |
+
+## 2. 第 1 轮：发现
+
+按影响排序。证据均为 2026-10-09 时的代码位置。
+
+| 编号 | 动线 | 发现 | 证据 |
+|---|---|---|---|
+| F1 | J1 | Quick Start 里连完 Provider 后**整页刷新**，滚动位置、展开状态、spotlight 全丢（违反 P10 / P12）。根因：Quick Start 自己取一份 provider 列表，与规则区不共享，只好 reload 对齐 | `AgentPage.tsx` 的 `onProviderAdded: () => window.location.reload()` |
+| F2 | J1 | 默认落在 Claude Code，sidebar 里没有"先选你在用的那个"的线索 | `lastAgent.ts` |
+| F3 | J1 / J2 | Quick Start 进度按 Agent 分别记，第 1 步（连 Provider）是全局状态却在每个 Agent 页都占位 | `AgentSetupCard` 的 `setup-card-*-{agentKey}` |
+| F4 | J1 | Help 页注释自称"onboarding 前门"，但没有任何路径送用户过去；内容与 Credentials / Agent 页内引导重复（P8） | `HelpPage.tsx`、`appRoutes.tsx`、`OnboardingGate.tsx` 三处注释互相矛盾 |
+| F5 | J4 | "这个请求去了哪、为什么失败"分散在三处，没有一条完整的路；请求旅程（P1）只存在于 Probe 里 | Troubleshoot / Dashboard By Request / System › Logs |
+| F6 | J3 | **仪表盘没有 Agent 维度**：后端 `usage/stats|timeseries|records|performance` 全部支持 `scenario` 过滤，`group_by=scenario` 也支持，但筛选栏只有 Provider / Model / Identity | `usageApi.ts` 已有 `scenario` 参数；`DashboardFilterBar` 没有 |
+| F7 | J3 / J5 | 系统状态是被动的：rail 上除断线外没有任何角标；额度见底、OAuth 过期要用户自己去页面看 | `ActivityBar.tsx` |
+| F8 | J2 | sidebar 不显示哪些 Agent 已接好；状态 chip 只在进入页面后才看得到 | `ClientConfigStatusChip` |
+| F9 | J8 | 同一组开关有两个入口（Power-ups、System › Experimental）；"Power-ups / Experimental / Beta"三个词指同一类东西（违反 P3） | `PowerUpsMenu.tsx`、`ExperimentalPage` |
+| F10 | J5 | VModel（内置的合成 Provider，用于 onboarding / 演练）与 Credentials 并列为同级页，暗示它是"用户自己的凭据"；侧栏还用缩写 "VModel" 躲截断 | `useActivityItems.tsx` |
+| F11 | 全局 | `CredentialPage` 的标题、按钮、空状态、通知、对话框**全是硬编码英文**，中文用户在核心页面看到英文 | `CredentialPage.tsx` |
+| F12 | 全局 | rail 标签用 `slice(0, 7) + '…'` 硬截断，不随语言和宽度变化 | `ActivityBar.tsx` |
+| F13 | J6 / J2 | Team 既在 `SCENARIOS` 里（`/agent/team`）又是独立 rail 项，`lastAgentPath` 要特判 `id !== 'team'` | `lastAgent.ts` |
+| F14 | J7 | "Remote"（rail）→"Remote Control"（行）→"Bots"（行）三个相邻名字，Bot 只是通道 | `useActivityItems.tsx` |
+
+## 3. 第 1 轮：人工打标反馈
+
+产品负责人对分析与提议的逐条取舍（2026-10-09）。**这一栏是人的判断，不是推断，以此为准。**
+
+| 提议 | 反馈 | 结论 |
+|---|---|---|
+| 落地页是否改（Dashboard 概览 / 其他） | **落地不改** | 保持 `/agent`；不再讨论新增概览页 |
+| 每个 Agent 页加"最近请求"（复用请求旅程，F5） | **加请求和用量小板是好的**——"因为时不时要观测" | 采纳，但**先做轻量版**：今日请求 / Token / 错误 + 最近请求，链接到仪表盘；"请求旅程"版留待后续 |
+| VModel 挪出 Credentials 同级（F10） | **作为新的 Power-up，默认打开** | 采纳 |
+| 仪表盘是否缺 Agent 区分（F6，分析中提出的问号） | **本质上少了 Agent 区分？**——认可这个判断 | 采纳：给仪表盘加 Agent 筛选 |
+| 范围 | **暂时只改提及的这一小部分，避免动作太大**；这几项独立，可以拆成多个分支做 | 只做 F1、F4、F6、F10、F11、F12 和小板；其余顺延。实现上每项独立提交，便于以后各自摘成分支 |
+| 本文档 | 动线文档单独记录，写明变化分析、人工打标反馈和最终实现结论 | 即本文 |
+
+未被点名的提议（F2、F3、F7、F8、F9、F13、F14）**没有被否决**，只是本轮没有排期。
+
+## 4. 第 1 轮：实现结论
+
+每项一个独立提交（顺序即提交顺序）。
+
+| 提交 | 对应 | 做了什么 | 设计取舍 |
+|---|---|---|---|
+| `fix(agent): refresh providers in place after Connect AI` | F1 | 去掉 `window.location.reload()`。`AgentSetupCard` 不再自己取 provider，改由 `AgentPage` 传入页面已有的列表；规则栏的 Connect AI 与 Quick Start 的 Connect AI 共用同一份刷新 | 根因是"两份 provider 状态"，所以修的是状态归属，而不是换个刷新方式。连完后第 1 步就地打勾，第 2 步成为当前步，用户停在原处（P10） |
+| `chore(ui): let CSS ellipsize rail labels; fix stale onboarding comments` | F12、F4（注释部分） | rail 标签去掉硬截断，交给已有的 CSS ellipsis，并加 `title`；校正 `appRoutes` / `HelpPage` 的过期注释 | **Help 页本身没动**（内容重复的问题 F4 留到后续），只让注释不再误导 |
+| `fix(i18n): translate the Credentials page (en/zh/ru)` | F11 | 新增 `credentialPage.*` 命名空间；复用已有的 `layout.credentials`、`templateActions.connectAI`；刷新失败对话框用 `<Trans>` 保留加粗的 Provider 名 | 三套语言同步加（`localeParity` 测试要求）；复数用 i18next 的 `_one/_other`（ru 四档） |
+| `feat(power-ups): make VModel a power-up, on by default` | F10 | Power-ups 菜单新增 "Virtual Models" 一行；复用隐藏集合（`'vmodel'` 不在集合里 = 开）。关闭后只隐藏 Credentials 侧栏那一行 | **默认开不需要迁移**：隐藏集合里没有该 id 即为开，老用户无感。关闭后 `/credentials/virtual-models` 仍可直达，rail 仍高亮 Credentials。只剩一个子页时 Credentials 不再弹 sidebar（既有规则） |
+| `feat(dashboard): filter usage by agent, with ?scenario= deep link` | F6 | 筛选栏新增 Agent 下拉，贯穿 stats / 时序 / 请求 / 性能 / 热力图。选项 = 当前时间范围内**有用量的**Agent；支持 `?scenario=` 深链接 | 选项单独取（只按时间范围），不从已筛选的 stats 推——否则选中后列表缩成一项（与 Provider 选项同一个坑）。深链指向的 Agent 即使当天没量也保留在选项里，避免下拉显示一个它不提供的值。**精确匹配**：`claude_code` 与 `claude_code:p1` 是两项，各自如实显示 |
+| `feat(agent): add a Requests & usage panel to agent pages` | F5（轻量版） | 新增 `AgentActivityCard`：今日请求 / Token / 错误（含错误率）+ 最近 5 条请求（时间、状态、`请求模型 → 实际模型`、Provider、延迟）；30 秒刷新（仅标签页可见时），手动刷新按钮，"在仪表盘中查看"链到 `?scenario=`。放在规则栏之上，**不随 Quick Start 折叠** | 观测是常驻需求，不是配置步骤，所以不放进 Quick Start（P10）。空状态是一句话"收到第一个请求后会显示在这里"——它本身就是 Quick Start 里"真实请求即验证"的同一个信号（P7）。直接引 `chartStyles` 而不是 `dashboard` barrel，避免把图表库带进每个 Agent 页 chunk |
+
+### 明确没做
+
+- 落地页、rail 角标（F7）、sidebar 状态点（F8）、Quick Start 第 1 步全局化（F3）、"不是 Claude Code？"提示（F2）、Power-ups / Experimental 合并（F9）、Remote 命名重整（F14）。
+- 小板里的"请求旅程"展开（F5 的完整版）——小板先回答"有没有流量、健不健康"，"这个请求去了哪"留给下一轮。
+- Help 页降级（F4 的内容部分）。
+
+## 5. 第 1 轮：验证
+
+- `pnpm vitest run`：62 个文件、452 个测试通过（含 `localeParity`、`tKeyCoverage`、路由契约）。
+- `pnpm typecheck`：71 个错误，**与改动前完全一致**（均为既有遗留，无新增）。
+- mock 模式截图：OpenAI SDK 页小板显示 1,842 / 25.9M / 12 错误（0.7%）与 5 条最近请求；仪表盘 `?scenario=codex` 时 Agent 下拉显示 Codex；Credentials 页正常渲染。
+- **已知的 mock 局限**：mock 的 `usage/stats` 不按 `scenario` 过滤，所以仪表盘选了某个 Agent 数字不变；这是 mock 的问题，不是实现的问题，但意味着**按 Agent 过滤的真实效果需要在真实后端上再看一遍**。
+- **未验证**：Power-ups 菜单里 VModel 行的悬停展开视觉；中文 / 俄文下小板和仪表盘新增文案的排版。
+
+## 6. 追加记录的约定
+
+下一轮请在本文件**末尾追加** `## 7. 第 2 轮：…`，沿用 发现 → 人工打标反馈 → 实现结论 → 验证 四段；已有的 F 编号不重排，新发现从 F15 起。被否决的提议也要留在反馈表里并写明理由——"为什么没做"和"做了什么"一样值得追溯。
