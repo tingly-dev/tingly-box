@@ -2230,6 +2230,7 @@ export default {
     "loadFailed": "Не удалось загрузить запросы этого агента."
   },
   "agentSetup": {
+    "autoSkipped": "Пропущено: модель уже задана",
     "setup": "Настройка",
     "showSteps": "Шаги настройки",
     "quickStart": "Быстрый старт",
@@ -2285,6 +2286,7 @@ export default {
     }
   },
   "scenarioPage": {
+    "lookIn": "Состояние",
     "tabs": {
       "connection": "Подключение"
     },

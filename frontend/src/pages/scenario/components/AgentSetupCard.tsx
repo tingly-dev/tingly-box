@@ -189,7 +189,11 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         }).catch(() => { /* no signal: fall back to the manual confirm */ });
         return () => { cancelled = true; };
     }, [agentKey]);
-    const installDone = installConfirmed || lastRequestAt !== null || configApplied;
+    // An agent that already routes a model is in use: installing and applying
+    // are not steps left to ask for, so they skip themselves (and say so — it
+    // is not a claim that anything was installed or applied).
+    const installProven = installConfirmed || lastRequestAt !== null || configApplied;
+    const installDone = installProven || hasModelSelected;
     const enabledProviders = providers.filter((p: any) => p.enabled && isCredentialProvider(p));
     const hasProvider = enabledProviders.length > 0;
     const providerCount = enabledProviders.length;
@@ -222,7 +226,8 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         });
     };
 
-    const applyDone = applyConfirmed || configApplied;
+    const applyProven = applyConfirmed || configApplied;
+    const applyDone = applyProven || hasModelSelected;
     const providerDone = hasProvider;
     const modelSelected = hasModelSelected;
     // The step counts as done either when a model is really configured (the
@@ -450,7 +455,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                 }}>
                                     {lastRequestAt
                                         ? t('agentSetup.install.detected', { time: timeAgo(lastRequestAt) })
-                                        : t('agentSetup.install.installed')}
+                                        : installProven ? t('agentSetup.install.installed') : t('agentSetup.autoSkipped')}
                                 </Typography>
                             )}
                             {/* Step-completing action lives in the row's right action
@@ -563,7 +568,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             {applyDone && (
                                 <Typography variant="body2" sx={{
                                     color: "text.secondary"
-                                }}>{t('agentSetup.apply.applied')}</Typography>
+                                }}>{applyProven ? t('agentSetup.apply.applied') : t('agentSetup.autoSkipped')}</Typography>
                             )}
                             {!applyDone && firstIncomplete === 3 && (
                                 <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>

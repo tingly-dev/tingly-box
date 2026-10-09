@@ -2202,6 +2202,7 @@ export default {
     "loadFailed": "Couldn't load this agent's requests."
   },
   "agentSetup": {
+    "autoSkipped": "Skipped — a model is already set",
     "setup": "Setup",
     "showSteps": "Setup steps",
     "quickStart": "Quick Start",
@@ -2257,6 +2258,7 @@ export default {
     }
   },
   "scenarioPage": {
+    "lookIn": "Status",
     "tabs": {
       "connection": "Connection"
     },

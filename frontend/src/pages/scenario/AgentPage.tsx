@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Button, Chip, Dialog, DialogContent, Stack, Tooltip } from '@mui/material';
+import { Box, Button, Chip, Dialog, DialogContent, Stack, Tooltip, Typography } from '@mui/material';
 import { BarChart as UsageIcon, ListAlt as RequestsIcon, Rule as QuickStartIcon } from '@/components/icons';
 import DialogHeader from '@/components/DialogHeader';
 import { fontSizes } from '@/theme/fonts';
@@ -263,22 +263,12 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         '& h1': { whiteSpace: 'nowrap' },
                     }}
                 />
-                {/* One row of buttons, each opening its own dialog: Quick Start (until
-                    it is done it leads, after it moves to the end), Requests and
-                    Usage. Unified / Separate chooses how the model rules below are
-                    laid out, so it ends this row, next to them. */}
-                <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                    {!setupFinished && quickStartButton}
-                    <Button onClick={() => setLookIn('requests')} variant="outlined" size="small" startIcon={<RequestsIcon />}>
-                        {t('agentActivity.requests')}
-                    </Button>
-                    <Button onClick={() => setLookIn('usage')} variant="outlined" size="small" startIcon={<UsageIcon />}>
-                        {t('agentActivity.usage')}
-                    </Button>
-                    {setupFinished && quickStartButton}
-                    {slotRouting && <Box sx={{ ml: 'auto' }}>{slots.modeSwitch}</Box>}
-                </Box>
-
+                {/* The header card: how this tool connects (Base URL, API Key, Plugins)
+                    and, as the last row of the same list, three looks at it, each a
+                    button that opens its own dialog — Quick Start (leads until it is
+                    done, then moves to the end), Requests and Usage. Unified /
+                    Separate chooses how the model rules below are laid out, so it
+                    ends this row. */}
                 <UnifiedCard size="full" contentMaxWidth={SCENARIO_HEADER_CONTENT_MAX_WIDTH}>
                     <ProviderConfigCard
                         title={connection?.titleKey ? t(connection.titleKey) : agent.title}
@@ -290,6 +280,33 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         showApiKeyRow={connection?.apiKeyRow}
                         showBaseUrlRow={connection?.baseUrlRow}
                     />
+                    {/* Same three columns as the ConfigRows above (label | content | action). */}
+                    <Box
+                        sx={{
+                            px: 2,
+                            pt: 1,
+                            display: 'grid',
+                            alignItems: 'center',
+                            columnGap: { xs: 1, sm: 3 },
+                            rowGap: 0.5,
+                            gridTemplateColumns: { xs: 'minmax(0, 1fr) auto', sm: '168px minmax(0, 1fr) auto' },
+                        }}
+                    >
+                        <Typography variant="body2" sx={{ fontWeight: 500, pl: 1.5, gridColumn: { xs: '1 / -1', sm: '1' } }}>
+                            {t('scenarioPage.lookIn', { defaultValue: 'Status' })}
+                        </Typography>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, minWidth: 0, gridColumn: { xs: '1', sm: '2' } }}>
+                            {!setupFinished && quickStartButton}
+                            <Button onClick={() => setLookIn('requests')} variant="outlined" size="small" startIcon={<RequestsIcon />}>
+                                {t('agentActivity.requests')}
+                            </Button>
+                            <Button onClick={() => setLookIn('usage')} variant="outlined" size="small" startIcon={<UsageIcon />}>
+                                {t('agentActivity.usage')}
+                            </Button>
+                            {setupFinished && quickStartButton}
+                        </Box>
+                        {slotRouting && <Box sx={{ gridColumn: { xs: '2', sm: '3' }, justifySelf: 'end' }}>{slots.modeSwitch}</Box>}
+                    </Box>
                 </UnifiedCard>
 
                 <TemplatePage

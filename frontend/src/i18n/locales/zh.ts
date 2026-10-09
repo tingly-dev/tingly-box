@@ -2195,6 +2195,7 @@ export default {
     "loadFailed": "无法加载该 Agent 的请求。"
   },
   "agentSetup": {
+    "autoSkipped": "已跳过：已经配置了模型",
     "setup": "设置",
     "showSteps": "设置步骤",
     "quickStart": "快速开始",
@@ -2250,6 +2251,7 @@ export default {
     },
   },
   "scenarioPage": {
+    "lookIn": "状态",
     "tabs": {
       "connection": "连接"
     },
