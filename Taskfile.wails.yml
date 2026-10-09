@@ -60,7 +60,7 @@ tasks:
     run: once
     silent: true
     vars:
-      WAILS_REQUIRED_VERSION: v3.0.0-beta.26
+      WAILS_REQUIRED_VERSION: v3.0.0-beta.28
     cmds:
       - |
         if ! command -v wails3 >/dev/null 2>&1; then

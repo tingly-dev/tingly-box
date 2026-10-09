@@ -72,7 +72,7 @@
     "d3-contour": "^4.0.2"
   },
   "optionalDependencies": {
-    "@wailsio/runtime": "3.0.0-beta.26"
+    "@wailsio/runtime": "3.0.0-beta.28"
   },
   "msw": {
     "workerDirectory": [

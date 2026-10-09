@@ -60,7 +60,7 @@ on:
 env:
   GO_VERSION: '1.26'
   # Keep in lockstep with gui/wails3/go.mod and Taskfile.wails.yml's wails:check.
-  WAILS_VERSION: v3.0.0-beta.26
+  WAILS_VERSION: v3.0.0-beta.28
 
 permissions:
   contents: read

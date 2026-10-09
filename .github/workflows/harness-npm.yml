@@ -52,7 +52,7 @@ env:
   GO_VERSION: '1.26'
   NODE_VERSION: '24'
   # Keep in lockstep with release-gui.yml, gui/wails3/go.mod and Taskfile.wails.yml.
-  WAILS_VERSION: v3.0.0-beta.26
+  WAILS_VERSION: v3.0.0-beta.28
 
 jobs:
   # `matrix` is not available in a job-level `if`, so the platform choice is
