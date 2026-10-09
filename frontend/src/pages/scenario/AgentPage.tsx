@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Box, Button, IconButton, Stack, Tab, Tabs, Tooltip } from '@mui/material';
-import { Rule as SetupStepsIcon } from '@/components/icons';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import PageHeader from '@/components/PageHeader';
@@ -106,12 +105,16 @@ export interface AgentPageDescriptor {
     slotRouting?: { unifiedRuleUuid: string };
 }
 
-export type AgentTab = 'connection' | 'rules' | 'activity';
+// The header's tabs: three things about the agent that are looked at now and
+// then, kept to one row. "closed" is a choice too (only the tab row shows), so
+// the model rules, which are the page's subject, keep the screen.
+export type AgentTab = 'quickstart' | 'connection' | 'activity';
+type TabPref = AgentTab | 'closed';
 const tabPrefKey = (scenario: string) => `agent-tab-${scenario}`;
-const readTabPref = (scenario: string): AgentTab | null => {
+const readTabPref = (scenario: string): TabPref | null => {
     try {
         const v = localStorage.getItem(tabPrefKey(scenario));
-        return v === 'connection' || v === 'rules' || v === 'activity' ? v : null;
+        return v === 'quickstart' || v === 'connection' || v === 'activity' || v === 'closed' ? v : null;
     } catch {
         return null;
     }
@@ -154,12 +157,11 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
-    const [setupDone, setSetupDone] = useState(false);
-    // Which tab is on show. Until the user picks one it follows the agent: one
-    // that already routes a model opens on its rules, a new one on its
-    // connection (where the setup steps are). Their pick is remembered.
-    const [tabPref, setTabPref] = useState<AgentTab | null>(() => readTabPref(scenario));
-    const [setupReopenKey, setSetupReopenKey] = useState(0);
+    const [setupProgress, setSetupProgress] = useState<{ done: number; total: number; allDone: boolean } | null>(null);
+    // Which tab is open. Until the user picks (or closes) one it follows the
+    // agent: one that already routes a model starts closed, a new one opens on
+    // its Quick Start (or, with none, its connection). The pick is remembered.
+    const [tabPref, setTabPref] = useState<TabPref | null>(() => readTabPref(scenario));
     const { status: clientConfigStatus } = useClientConfigStatus(agent.clientConfigTool ?? null, [rules, dialogOpen, slotMode]);
     const context1M = useContext1MToggle(() => setDialogOpen(true));
     // Unified Connect AI add flow (picker + form/OAuth/paste/import dialogs), offered by Quick Start.
@@ -211,7 +213,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
             onClick={openDialog}
             // One filled button at a time: while the setup row is on the page it carries
             // the step to do (Auto Config at the apply step), so this one steps back.
-            variant={headerLinks?.length || configApplied || (quickStart && !setupDone) ? 'outlined' : 'contained'}
+            variant={headerLinks?.length || configApplied ? 'outlined' : 'contained'}
             size="small"
         >
             {t(setup.kind === 'auto' ? 'scenarioPage.autoConfig' : 'scenarioPage.setupGuide')}
@@ -228,28 +230,24 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                 </Tooltip>
             ))}
             {configButton}
-            {/* The setup row leaves the page once its steps are done; this brings it back. */}
-            {quickStart && setupDone && (
-                <Tooltip title={t('agentSetup.showSteps', { defaultValue: 'Setup steps' })}>
-                    <IconButton onClick={() => { setSetupReopenKey((k) => k + 1); selectTab('connection'); }} size="small" aria-label={t('agentSetup.showSteps', { defaultValue: 'Setup steps' })} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-                        <SetupStepsIcon fontSize="small" />
-                    </IconButton>
-                </Tooltip>
-            )}
         </>
     );
 
-    const tab: AgentTab = tabPref ?? (hasModelOnAnyRule(rules) ? 'rules' : 'connection');
-    const selectTab = (next: AgentTab) => {
+    const tab: AgentTab | null = (() => {
+        const pref = tabPref ?? (hasModelOnAnyRule(rules) ? 'closed' : quickStart ? 'quickstart' : 'connection');
+        if (pref === 'closed') return null;
+        return pref === 'quickstart' && !quickStart ? 'connection' : pref;
+    })();
+    const selectTab = (next: TabPref) => {
         setTabPref(next);
         try { localStorage.setItem(tabPrefKey(scenario), next); } catch { /* per-session only */ }
     };
-    // "Choose a model" lives on the rules tab: show it first, then point at it.
-    const chooseModel = () => {
-        selectTab('rules');
-        window.setTimeout(scrollToModelsCard, 150);
-    };
+    // A tab opens its panel; clicking the open one closes it again.
+    const onTabClick = (clicked: AgentTab) => selectTab(clicked === tab ? 'closed' : clicked);
     const panelSx = (name: AgentTab) => (tab === name ? undefined : { display: 'none' });
+    const quickStartLabel = setupProgress
+        ? `${t('agentSetup.quickStart')} ${setupProgress.allDone ? '✓' : `${setupProgress.done}/${setupProgress.total}`}`
+        : t('agentSetup.quickStart');
 
     return (
         <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
@@ -273,50 +271,51 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         '& h1': { whiteSpace: 'nowrap' },
                     }}
                 />
-                {/* One section at a time: how the tool connects, how requests are
-                    routed, how it is doing. Panels stay mounted (only hidden) so
-                    switching keeps their state, except the activity one, which
-                    loads only while it is on show. */}
+                {/* Three looks at the agent in one row of tabs. Panels stay mounted
+                    (only hidden) so a tab keeps its state, except the activity
+                    one, which loads only while it is open. Model rules are not
+                    a tab: they are the page. */}
                 <Tabs
-                    value={tab}
-                    onChange={(_, next: AgentTab) => selectTab(next)}
+                    value={tab ?? false}
                     sx={{ borderBottom: '1px solid', borderColor: 'divider', minHeight: 40, '& .MuiTab-root': { textTransform: 'none', minHeight: 40 } }}
                 >
-                    <Tab value="connection" label={t('scenarioPage.tabs.connection', { defaultValue: 'Connection' })} />
-                    <Tab value="rules" label={agent.rulesTitleKey ? t(agent.rulesTitleKey) : t('scenarioPage.modelRules')} />
-                    <Tab value="activity" label={t('agentActivity.title')} />
+                    {quickStart && <Tab value="quickstart" label={quickStartLabel} onClick={() => onTabClick('quickstart')} />}
+                    <Tab value="connection" label={t('scenarioPage.tabs.connection', { defaultValue: 'Connection' })} onClick={() => onTabClick('connection')} />
+                    <Tab value="activity" label={t('agentActivity.title')} onClick={() => onTabClick('activity')} />
                 </Tabs>
+
+                {quickStart && (
+                    <Box role="tabpanel" sx={panelSx('quickstart')}>
+                        <AgentSetupCard
+                            panel
+                            onProgressChange={setSetupProgress}
+                            agentKey={scenario}
+                            agentName={agent.title}
+                            installCommand={quickStart.installCommand ?? ''}
+                            installMirrorCommand={quickStart.installMirrorCommand}
+                            installStepDescription={quickStart.installDescriptionKey && t(quickStart.installDescriptionKey)}
+                            installActions={quickStart.installActions?.(t)}
+                            onApply={setup.kind === 'auto' ? slot.apply : undefined}
+                            onApplyWithStatusLine={setup.kind === 'auto' && setup.applyWithStatusLine
+                                ? () => runApply(() => setup.applyWithStatusLine!(t, applyContext))
+                                : undefined}
+                            isApplyLoading={isApplyLoading}
+                            onViewConfig={openDialog}
+                            applyStepLabel={quickStart.applyStepLabelKey && t(quickStart.applyStepLabelKey)}
+                            applyStepDescription={quickStart.applyStepDescriptionKey && t(quickStart.applyStepDescriptionKey)}
+                            viewConfigButtonLabel={quickStart.openDialogLabelKey && t(quickStart.openDialogLabelKey)}
+                            hasModelSelected={hasModelOnAnyRule(rules)}
+                            onSelectModel={scrollToModelsCard}
+                            onConnectProvider={connectAI.handleConnectAIClick}
+                            providers={internal.providers}
+                            providersLoading={internal.loading}
+                            configApplied={configApplied}
+                        />
+                    </Box>
+                )}
 
                 <Box role="tabpanel" sx={panelSx('connection')}>
                     <UnifiedCard size="full" contentMaxWidth={SCENARIO_HEADER_CONTENT_MAX_WIDTH}>
-                        {quickStart && (
-                            <AgentSetupCard
-                                inline
-                                reopenKey={setupReopenKey}
-                                onAllDoneChange={setSetupDone}
-                                agentKey={scenario}
-                                agentName={agent.title}
-                                installCommand={quickStart.installCommand ?? ''}
-                                installMirrorCommand={quickStart.installMirrorCommand}
-                                installStepDescription={quickStart.installDescriptionKey && t(quickStart.installDescriptionKey)}
-                                installActions={quickStart.installActions?.(t)}
-                                onApply={setup.kind === 'auto' ? slot.apply : undefined}
-                                onApplyWithStatusLine={setup.kind === 'auto' && setup.applyWithStatusLine
-                                    ? () => runApply(() => setup.applyWithStatusLine!(t, applyContext))
-                                    : undefined}
-                                isApplyLoading={isApplyLoading}
-                                onViewConfig={openDialog}
-                                applyStepLabel={quickStart.applyStepLabelKey && t(quickStart.applyStepLabelKey)}
-                                applyStepDescription={quickStart.applyStepDescriptionKey && t(quickStart.applyStepDescriptionKey)}
-                                viewConfigButtonLabel={quickStart.openDialogLabelKey && t(quickStart.openDialogLabelKey)}
-                                hasModelSelected={hasModelOnAnyRule(rules)}
-                                onSelectModel={chooseModel}
-                                onConnectProvider={connectAI.handleConnectAIClick}
-                                providers={internal.providers}
-                                providersLoading={internal.loading}
-                                configApplied={configApplied}
-                            />
-                        )}
                         <ProviderConfigCard
                             title={connection?.titleKey ? t(connection.titleKey) : agent.title}
                             baseUrlPath={`/tingly/${scenario}`}
@@ -330,35 +329,33 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                     </UnifiedCard>
                 </Box>
 
-                <Box role="tabpanel" sx={panelSx('rules')}>
-                    <TemplatePage
-                        scenario={scenario}
-                        // One copy of the providers too: the rule toolbar's
-                        // Connect AI and Quick Start's both refresh it.
-                        providers={internal.providers}
-                        onProvidersLoad={internal.loadProviders}
-                        // One copy of the rules for the whole page: the rule list
-                        // and the setup dialog (slot.rules) read the same state.
-                        rules={rules}
-                        {...(slotRouting
-                            // Each slot rule backs a model slot: it can't be added, removed or switched off.
-                            ? { onRulesChange: slots.setRules, allowAddRule: false, allowToggleRule: false, allowDeleteRule: false }
-                            : {
-                                loadRules,
-                                onRulesChange: internal.handleRulesChange,
-                                onRuleDelete: internal.handleRuleDelete,
-                                newlyCreatedRuleUuids: internal.newlyCreatedRuleUuids,
-                                allowDeleteRule: true,
-                            })}
-                        {...(agent.rulesTitleKey ? { title: t(agent.rulesTitleKey) } : {})}
-                        collapsible={true}
-                        {...(agent.context1M ? { onContext1MToggle: context1M.handleContext1MToggle } : {})}
-                    />
-                </Box>
-
                 <Box role="tabpanel" sx={panelSx('activity')}>
                     <AgentActivityPanel scenario={scenario} active={tab === 'activity'} />
                 </Box>
+
+                <TemplatePage
+                    scenario={scenario}
+                    // One copy of the providers too: the rule toolbar's
+                    // Connect AI and Quick Start's both refresh it.
+                    providers={internal.providers}
+                    onProvidersLoad={internal.loadProviders}
+                    // One copy of the rules for the whole page: the rule list
+                    // and the setup dialog (slot.rules) read the same state.
+                    rules={rules}
+                    {...(slotRouting
+                        // Each slot rule backs a model slot: it can't be added, removed or switched off.
+                        ? { onRulesChange: slots.setRules, allowAddRule: false, allowToggleRule: false, allowDeleteRule: false }
+                        : {
+                            loadRules,
+                            onRulesChange: internal.handleRulesChange,
+                            onRuleDelete: internal.handleRuleDelete,
+                            newlyCreatedRuleUuids: internal.newlyCreatedRuleUuids,
+                            allowDeleteRule: true,
+                        })}
+                    {...(agent.rulesTitleKey ? { title: t(agent.rulesTitleKey) } : {})}
+                    collapsible={true}
+                    {...(agent.context1M ? { onContext1MToggle: context1M.handleContext1MToggle } : {})}
+                />
 
                 {slotRouting && slots.modeDialog}
                 {setup.kind !== 'none' && setup.renderDialog(slot)}
