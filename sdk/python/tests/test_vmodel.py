@@ -58,13 +58,14 @@ class _FakeTB(BaseHTTPRequestHandler):
 
     conf_dir = ""
     hidden: set = set()  # ids on disk that this tb "failed to load"
+    builtin: set = {"echo-model"}  # models that exist without any file
 
     def log_message(self, *args):
         pass
 
     def do_GET(self):
         directory = os.path.join(self.conf_dir, "vmodels")
-        ids = []
+        ids = sorted(self.builtin)
         for n in sorted(os.listdir(directory)) if os.path.isdir(directory) else []:
             if n.endswith(".yaml") and n[:-5] not in self.hidden:
                 with open(os.path.join(directory, n)) as f:
@@ -136,6 +137,15 @@ class AttachTest(unittest.TestCase):
         self.assertTrue(os.path.exists(mine), "the user's own file survives")
         with open(mine) as f:
             self.assertEqual(f.read(), "steps: [200]\n")
+
+    def test_a_script_cannot_silently_shadow_a_builtin_or_another_scripts_model(self):
+        with vmodel.Testbed.attach(config_dir=self.conf, base_url=self.url) as tb:
+            with self.assertRaises(vmodel.ScriptError) as ctx:
+                tb.add(vmodel.Script("echo-model").say("hi"))
+            self.assertIn("already served", str(ctx.exception))
+            self.assertFalse(os.path.exists(os.path.join(self.conf, "vmodels", "echo-model.yaml")), "nothing written")
+            tb.add(vmodel.Script("mine").say("hi"))
+            tb.add(vmodel.Script("mine").say("again"))  # re-adding one's own is fine
 
     def test_add_path_uses_the_ids_the_file_declares(self):
         src = os.path.join(tempfile.mkdtemp(prefix="tingly-src-"), "by-file-name.yaml")
