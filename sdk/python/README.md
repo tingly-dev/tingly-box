@@ -32,6 +32,48 @@ models can share one process; they're listed on `/v1/models` and routed by
 [`examples/image.py`](examples/image.py) is a runnable image provider with a
 fake model.
 
+## Script a model, run it against a real tb
+
+Need a *specific interaction* — call a tool, get the result, call another,
+hit a 529, then answer? Write it as a script and let `tingly.vmodel` start a
+tb to serve it. No provider to register, no rule to create:
+
+```python
+from tingly import vmodel
+
+flow = (vmodel.Script("read-edit")
+        .tool("Read", {"file_path": "/tmp/a.go"}, say="Let me look.")
+        .tool("Edit", {"file_path": "/tmp/a.go", "old_string": "foo", "new_string": "bar"})
+        .error(529)                       # the upstream hiccups once
+        .say("Done."))
+
+with vmodel.Testbed(flow) as tb:          # starts a throwaway tb, writes the script
+    reply = tb.messages(flow.model, "fix foo")      # Anthropic wire; tb.chat() is OpenAI
+    # ...or point a real SDK/agent at it:
+    #   Anthropic(base_url=tb.anthropic_base, api_key=tb.token)
+    #   OpenAI(base_url=tb.openai_base,       api_key=tb.token)
+```
+
+`python examples/vmodel_flow.py` (or `task demo:vmodel` from the repo root)
+runs the whole thing with a small agent loop. Step kinds: `.say()`, `.tool()`,
+`.error(status)`, `.cut(mode)` (a stream that dies part-way), each taking
+`usage=`, `stop_reason=`, `repeat=`; `Script(..., on_exhaust="clamp")` decides
+what happens after the last step. `stop_reason=` takes `end_turn`, `tool_use`,
+`max_tokens` or `stop_sequence` (mapped for OpenAI). The same script also
+answers the OpenAI protocol (`tb.chat()`), but as its own independent run:
+each protocol has its own place in the program, so a call on one never
+consumes a step of the other. Within one protocol every caller shares the
+place; re-adding the script (`tb.add(flow)`) restarts it.
+
+- **Needs a tb binary**: `TINGLY_TB_BIN`, `tb_bin=...`, or `tingly-box` on
+  `PATH` (`go build -o tb ./cli/tingly-box` builds one).
+- **Already running tb?** `Testbed.attach(flow)` writes into its config dir
+  (`~/.tingly-box`, or `config_dir=` / `$TINGLY_CONFIG_DIR`) and removes the
+  script on exit; `base_url` defaults to `http://localhost:12580`.
+- **A script is just a file** `<config-dir>/vmodels/<id>.yaml`; `Testbed.add()`
+  also takes the path of a hand-written one, and raises `ScriptError` with tb's
+  own message if tb rejects it. Schema: [`.design/vmodel-script.md`](../../.design/vmodel-script.md).
+
 ### Register it in tb
 
 - **Connect AI → Self-hosted → Custom endpoint**, OpenAI,
