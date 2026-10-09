@@ -131,6 +131,10 @@ go build -o harness ./cli/harness
 ./harness replay batch --upstream vmodel      # in-process vmodel dispatch
 ./harness replay claude --upstream real --config providers.yaml
 
+# Tier B+ — drive a vmodel script (scripted multi-step interaction), one request per step
+./harness script cli/harness/testdata/scripts/read-edit-done.yaml
+./harness script flow.yaml --agent codex      # OpenAI Responses wire format
+
 # Tier C — run a real agent CLI through the gateway
 ./harness agent claude   --mock
 ./harness agent batch    --config providers.yaml
@@ -352,6 +356,20 @@ canonical `internal/agent` package (`BuildClaudeCodeEnv`, `BuildOpenCodeConfig`,
 providers.
 
 ---
+
+## Tier B+ — `script`
+
+`harness script <file>…` runs a **vmodel script** (see `.design/vmodel-script.md`)
+through the same in-process gateway as `replay`: it drops the file into the
+test env's `<config-dir>/vmodels/`, routes the agent's built-in rule to the
+script's model, and sends **one request per step**. Each response is checked
+against what its step declares — error steps by HTTP status, tool steps by tool
+name and text, plain steps by text, `midstream` steps by the stream being cut
+short — with expectations resolved by the same `vmodel.Sequence` the server
+runs. Use it to preview a script or to guard a shipped one; `--agent` selects
+the wire format (`claude`/`opencode` = Anthropic messages, `codex` = OpenAI
+Responses) and `--no-stream` skips mid-stream steps. Scripts under
+`testdata/scripts/` run in CI as the `script` leg.
 
 ## Tier LB — `lb`
 
@@ -631,6 +649,7 @@ cli/harness/
                      duo / routing / provider / init-config
   matrix.go          Tier A command — wraps protocoltest.Matrix
   replay.go          Tier B command — fixture replay, upstream selection
+  script.go          Tier B+ command — vmodel script, one request per step
   duo.go             Tier Duo command — wraps protocoltest.DuoEnv (function +
                      per-instance memory); child mode via MaybeRunDuoServe in main.go
   routing.go         Tier Routing command — smart-routing scenarios on the duo
