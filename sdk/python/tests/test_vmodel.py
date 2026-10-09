@@ -52,6 +52,24 @@ class ScriptTest(unittest.TestCase):
             self.assertEqual(os.listdir(os.path.join(conf, "vmodels")), [])
 
 
+class SessionTest(unittest.TestCase):
+    def test_model_names_the_session(self):
+        tb = vmodel.Testbed()
+        s = tb.session("t-1")
+        self.assertEqual(s.model(vmodel.Script("flow")), "flow@t-1")
+        self.assertEqual(s.model("flow"), "flow@t-1")
+
+    def test_default_session_ids_are_unique_and_valid(self):
+        tb = vmodel.Testbed()
+        ids = {tb.session().id for _ in range(50)}
+        self.assertEqual(len(ids), 50)
+
+    def test_invalid_session_names_are_rejected(self):
+        for bad in ("has space", "a@b", "x" * 65):
+            with self.assertRaises(ValueError):
+                vmodel.Testbed().session(bad)
+
+
 class _FakeTB(BaseHTTPRequestHandler):
     """Lists whatever is in the config dir's vmodels/, like tb would; 404s
     with tb's error text for anything else."""

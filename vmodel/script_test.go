@@ -143,17 +143,20 @@ func TestSequence_ToolIDsAreUniquePerServedRequest(t *testing.T) {
 
 func TestToolID_IsAWellFormedAPIId(t *testing.T) {
 	for _, script := range []string{"v1.2", "has space", "ünï", strings.Repeat("long", 40), ""} {
-		id := toolID(script, 12345)
-		assert.Regexp(t, `^toolu_[A-Za-z0-9_-]+_12345$`, id, script)
-		assert.LessOrEqual(t, len(id), 64, script)
+		for _, session := range []string{"", "t-42", "has.dot and space", strings.Repeat("s", 64)} {
+			id := toolID(script, session, 18446744073709551615)
+			assert.Regexp(t, `^toolu_[A-Za-z0-9_-]+$`, id, "%q %q", script, session)
+			assert.LessOrEqual(t, len(id), 64, "%q %q", script, session)
+		}
 	}
 }
 
 func TestToolID_DifferentScriptsNeverShareAPrefix(t *testing.T) {
-	assert.NotEqual(t, toolID("a.b", 1), toolID("a_b", 1), "a lossy name carries a hash of the original")
-	assert.Equal(t, "toolu_plain-id_1", toolID("plain-id", 1), "a clean name is left readable")
+	assert.NotEqual(t, toolID("a.b", "", 1), toolID("a_b", "", 1), "a lossy name carries a hash of the original")
+	assert.NotEqual(t, toolID("s", "a.b", 1), toolID("s", "a_b", 1), "so does a lossy session")
+	assert.Equal(t, "toolu_plain-id_1", toolID("plain-id", "", 1), "a clean name is left readable")
 	long := strings.Repeat("x", 30)
-	assert.NotEqual(t, toolID(long+"1", 1), toolID(long+"2", 1), "a truncated name carries a hash too")
+	assert.NotEqual(t, toolID(long+"1", "", 1), toolID(long+"2", "", 1), "a truncated name carries a hash too")
 }
 
 func TestParseScript_RejectsEmptyItemsAndExtraDocuments(t *testing.T) {

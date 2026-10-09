@@ -45,11 +45,48 @@ func (h *Handler) refreshScripts() {
 	}
 }
 
+// lookupModel resolves a requested model name against a registry. A name of
+// the form "<id>@<session>" selects an independent run of a model that has
+// sessions (hasSessions); anything else is looked up as-is and runs in the
+// default session.
+func lookupModel[T vmodel.VirtualModel](reg *vmodel.GenericRegistry[T], model string, hasSessions func(T) bool) (vm T, session string) {
+	if vm = reg.Get(model); !isNil(vm) {
+		return vm, ""
+	}
+	if id, session, ok := vmodel.SplitSessionModel(model); ok {
+		if vm = reg.Get(id); !isNil(vm) && hasSessions(vm) {
+			return vm, session
+		}
+	}
+	var none T
+	return none, ""
+}
+
+// isNil reports whether a registry miss returned the zero value.
+func isNil[T any](v T) bool { return any(v) == nil }
+
+func (h *Handler) lookupOpenAI(model string) (openaivm.VirtualModel, string) {
+	return lookupModel(h.openaiReg, model, func(vm openaivm.VirtualModel) bool {
+		_, ok := vm.(openaivm.SessionSnapshotter)
+		return ok
+	})
+}
+
+func (h *Handler) lookupAnthropic(model string) (anthropicvm.VirtualModel, string) {
+	return lookupModel(h.anthropicReg, model, func(vm anthropicvm.VirtualModel) bool {
+		_, ok := vm.(anthropicvm.SessionSnapshotter)
+		return ok
+	})
+}
+
 // notFoundMessage is the 404 text for an unknown model; when a script failed
 // to load it says so, since that is the likeliest reason a script model is
 // missing.
 func (h *Handler) notFoundMessage(model string) string {
 	msg := fmt.Sprintf("Model not found: %s", model)
+	if i := strings.IndexByte(model, '@'); i > 0 && !vmodel.ValidSessionID(model[i+1:]) {
+		msg += " (a session name after '@' is 1-64 characters of A-Z a-z 0-9 . _ -)"
+	}
 	if h.scripts != nil {
 		if p := h.scripts.Problems(); len(p) > 0 {
 			msg += " (script load errors: " + strings.Join(p, "; ") + ")"
@@ -145,7 +182,7 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	vm := h.openaiReg.Get(req.Model)
+	vm, session := h.lookupOpenAI(req.Model)
 	if vm == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{
 			"message": h.notFoundMessage(req.Model),
@@ -156,7 +193,7 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 
 	// Resolve per-request behaviour (sequence models advance their cursor
 	// here, exactly once) into a concrete snapshot before any dispatch.
-	vm = openaivm.Snapshot(vm)
+	vm = openaivm.SnapshotSession(vm, session)
 
 	if e := vmodel.ExtractErrorInjection(vm); e != nil && e.Stage == vmodel.ErrorStagePreContent {
 		writePreContentErrorOpenAI(c, e)
@@ -215,7 +252,7 @@ func (h *Handler) Messages(c *gin.Context) {
 		return
 	}
 
-	vm := h.anthropicReg.Get(req.Model)
+	vm, session := h.lookupAnthropic(req.Model)
 	if vm == nil {
 		c.JSON(http.StatusNotFound, gin.H{"type": "error", "error": gin.H{
 			"type":    "not_found_error",
@@ -226,7 +263,7 @@ func (h *Handler) Messages(c *gin.Context) {
 
 	// Resolve per-request behaviour (sequence models advance their cursor
 	// here, exactly once) into a concrete snapshot before any dispatch.
-	vm = anthropicvm.Snapshot(vm)
+	vm = anthropicvm.SnapshotSession(vm, session)
 
 	if e := vmodel.ExtractErrorInjection(vm); e != nil && e.Stage == vmodel.ErrorStagePreContent {
 		writePreContentErrorAnthropic(c, e)
