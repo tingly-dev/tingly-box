@@ -2287,6 +2287,7 @@ export default {
     }
   },
   "scenarioPage": {
+    "slotMode": "Режим моделей",
     "lookIn": "Состояние",
     "tabs": {
       "connection": "Подключение"

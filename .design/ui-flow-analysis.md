@@ -298,3 +298,20 @@
 **修正**：这一行改为直接使用 `ConfigRow`（标签样式、列宽、间距由它统一），内容改成三个无边框的蓝色文字按钮（Requests / Usage / Quick Start），Claude Code 的 Unified / Separate 放进 `ConfigRow` 的操作列（与上面 Local | Docker 开关同位置）。
 
 **教训**：往已有列表里加一行，先找这一列表的行组件复用，而不是复刻它的网格；复用才能保证标签、间距、字重一起对齐，以后改行样式也会一起变。
+
+### 8.15 Model mode 单独一行；Status 用分段按钮组
+
+**反馈**：**"claude 的分离也可以放进一行，你新加的一行可以用 button group 更加一致性美观"** —— 采纳。
+
+**实现**：
+- **Model mode 行**（仅 Claude Code）：Unified / Separate 不再挂在 Status 行的操作列，而是自己一行，与 Base URL / API Key / Plugins 同级。为此 `useSlotRouting` 不再返回现成的 `modeSwitch`，改为返回 `modeOptions` 和 `requestMode`（切换仍会先弹确认框，已验证）。
+- **Status 行**：Requests / Usage / Quick Start 由文字按钮改成**分段按钮组**，直接复用 `ChoiceToggle`（就是 Base URL 后面 Local | Docker 的那个组件），不选中任何项，每项只负责"打开"。`ChoiceToggle` 新增可选的 `optionWidth`（默认不变），因为"Quick Start"比默认宽度长。
+- 两行各补一点垂直内边距，行距与上面几行一致。
+
+**取舍**：
+- 8.14 复用的是"行"组件，这次复用的是"行里的控件"组件：整张卡里同一类东西（二选一 / 多选一的小开关）都长一个样。
+- `ChoiceToggle` 本意是"选一个值"，这里拿来当"一排入口"用，语义略勉强：因为从不选中，不会出现选中态，但读屏会把它读成单选组。如果以后再有类似的"入口组"，应当抽一个 `ActionGroup`，而不是继续借用。
+
+**已知不足**：
+- 无障碍：入口组的语义是 toggle group，不是 button group，需要后续修正（见上）。
+- 没验证：中文 / 俄文下分段按钮的宽度（100px 是按英文估的）。

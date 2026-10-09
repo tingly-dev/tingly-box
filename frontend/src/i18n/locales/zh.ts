@@ -2252,6 +2252,7 @@ export default {
     },
   },
   "scenarioPage": {
+    "slotMode": "模型模式",
     "lookIn": "状态",
     "tabs": {
       "connection": "连接"

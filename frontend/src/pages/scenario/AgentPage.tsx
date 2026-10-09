@@ -3,6 +3,7 @@ import { Box, Button, Stack, Tooltip, Typography } from '@mui/material';
 import { BarChart as UsageIcon, ListAlt as RequestsIcon, Rule as QuickStartIcon } from '@/components/icons';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
+import ChoiceToggle from '@/components/ChoiceToggle';
 import ConfigRow from '@/components/ConfigRow';
 import PageHeader from '@/components/PageHeader';
 import { ClientConfigStatusChip } from '@/components/ClientConfigStatusChip';
@@ -129,10 +130,6 @@ export interface AgentPageSlot {
     runApply: (apply: () => Promise<AgentApplyResult>) => Promise<AgentApplyResult>;
     isApplyLoading: boolean;
 }
-
-// Text buttons in a ConfigRow's content: no border or caps, so the row reads like its
-// neighbours (a value and its small controls), not like a toolbar.
-const linkButtonSx = { textTransform: 'none', minWidth: 0, px: 1 } as const;
 
 const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) => {
     const { t } = useTranslation();
@@ -280,9 +277,34 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         showApiKeyRow={connection?.apiKeyRow}
                         showBaseUrlRow={connection?.baseUrlRow}
                     />
-                    {/* A row like the ones above — the same ConfigRow — whose content is
-                        three light text buttons rather than a value. */}
+                    {/* More rows of the same list (ConfigRow, like the ones above): Claude
+                        Code's Unified / Separate, and three looks at the agent as one
+                        segmented control, like Local | Docker. */}
                     <Box sx={{ px: 2, py: 0.5 }}>
+                        {slotRouting && (
+                            <Box sx={{ py: 0.5 }}>
+                            <ConfigRow
+                                activeTab="mode"
+                                onTabChange={() => undefined}
+                                tabs={[{
+                                    key: 'mode',
+                                    label: t('scenarioPage.slotMode', { defaultValue: 'Model mode' }),
+                                    content: (
+                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                            <ChoiceToggle<SlotMode>
+                                                value={slots.mode}
+                                                options={slots.modeOptions}
+                                                onChange={slots.requestMode}
+                                                optionWidth={112}
+                                                ariaLabel={t('scenarioPage.slotMode', { defaultValue: 'Model mode' })}
+                                            />
+                                        </Box>
+                                    ),
+                                }]}
+                            />
+                            </Box>
+                        )}
+                        <Box sx={{ py: 0.5 }}>
                         <ConfigRow
                             activeTab="status"
                             onTabChange={() => undefined}
@@ -290,27 +312,32 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                                 key: 'status',
                                 label: t('scenarioPage.lookIn', { defaultValue: 'Status' }),
                                 content: (
-                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 0.5 }}>
-                                        <Button onClick={() => setLookIn('requests')} variant="text" size="small" startIcon={<RequestsIcon />} sx={linkButtonSx}>
-                                            {t('agentActivity.requests')}
-                                        </Button>
-                                        <Button onClick={() => setLookIn('usage')} variant="text" size="small" startIcon={<UsageIcon />} sx={linkButtonSx}>
-                                            {t('agentActivity.usage')}
-                                        </Button>
-                                        {/* Quick Start is not a dialog: it sits above the rules while there is
-                                            setup to do and leaves when done. This brings it back, reset. */}
-                                        {quickStart && quickStartHidden && (
-                                            <Tooltip title={t('agentSetup.restartTooltip', { defaultValue: 'Run Quick Start again' })}>
-                                                <Button onClick={restartQuickStart} variant="text" size="small" startIcon={<QuickStartIcon />} sx={linkButtonSx}>
-                                                    {t('agentSetup.quickStart')}
-                                                </Button>
-                                            </Tooltip>
-                                        )}
+                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                        {/* None is ever selected: each option just opens something.
+                                            Quick Start is not a dialog — it sits above the rules while
+                                            there is setup to do and leaves when done — so its option
+                                            exists only while hidden, and brings it back, reset. */}
+                                        <ChoiceToggle<'requests' | 'usage' | 'quickstart' | ''>
+                                            value=""
+                                            optionWidth={100}
+                                            ariaLabel={t('scenarioPage.lookIn', { defaultValue: 'Status' })}
+                                            onChange={(next) => {
+                                                if (next === 'quickstart') restartQuickStart();
+                                                else if (next) setLookIn(next);
+                                            }}
+                                            options={[
+                                                { value: 'requests', label: t('agentActivity.requests'), icon: <RequestsIcon /> },
+                                                { value: 'usage', label: t('agentActivity.usage'), icon: <UsageIcon /> },
+                                                ...(quickStart && quickStartHidden
+                                                    ? [{ value: 'quickstart' as const, label: t('agentSetup.quickStart'), icon: <QuickStartIcon />, tooltip: t('agentSetup.restartTooltip', { defaultValue: 'Run Quick Start again' }) }]
+                                                    : []),
+                                            ]}
+                                        />
                                     </Box>
                                 ),
-                                actions: slotRouting ? slots.modeSwitch : undefined,
                             }]}
                         />
+                        </Box>
                     </Box>
                 </UnifiedCard>
 

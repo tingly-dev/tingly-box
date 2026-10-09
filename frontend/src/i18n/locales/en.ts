@@ -2259,6 +2259,7 @@ export default {
     }
   },
   "scenarioPage": {
+    "slotMode": "Model mode",
     "lookIn": "Status",
     "tabs": {
       "connection": "Connection"

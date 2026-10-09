@@ -23,9 +23,11 @@ interface ChoiceToggleProps<T extends string> {
     options: ChoiceOption<T>[];
     onChange: (value: T) => void;
     ariaLabel?: string;
+    /** Width of every option when the default doesn't fit the longest label. */
+    optionWidth?: number;
 }
 
-export function ChoiceToggle<T extends string>({ value, options, onChange, ariaLabel }: ChoiceToggleProps<T>) {
+export function ChoiceToggle<T extends string>({ value, options, onChange, ariaLabel, optionWidth = OPTION_WIDTH }: ChoiceToggleProps<T>) {
     return (
         <ToggleButtonGroup
             exclusive
@@ -36,7 +38,7 @@ export function ChoiceToggle<T extends string>({ value, options, onChange, ariaL
             // Every option is the same width, so switches next to each other
             // (Local / Docker under NPX / Global) line up, and so do the copy
             // buttons beside them.
-            sx={{ ml: 0.5, '& .MuiToggleButton-root': { width: OPTION_WIDTH, justifyContent: 'center', px: 0.75, py: 0.25, gap: 0.5, textTransform: 'none', fontSize: fontSizes.sm, lineHeight: 1.2 } }}
+            sx={{ ml: 0.5, '& .MuiToggleButton-root': { width: optionWidth, justifyContent: 'center', px: 0.75, py: 0.25, gap: 0.5, textTransform: 'none', fontSize: fontSizes.sm, lineHeight: 1.2 } }}
         >
             {options.map((option) => {
                 const button = (
