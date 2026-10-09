@@ -464,6 +464,30 @@ export default {
       "closeTooltip": "Закрыть"
     }
   },
+  "credentialPage": {
+    "empty": "Пока нет ключей",
+    "managing_one": "Управление {{count}} ключом",
+    "managing_few": "Управление {{count}} ключами",
+    "managing_many": "Управление {{count}} ключами",
+    "managing_other": "Управление {{count}} ключами",
+    "emptyTitle": "Подключите свой первый ИИ",
+    "emptyDescription": "Войдите по имеющейся подписке (Claude Code, Codex, Gemini CLI…) или вставьте API-ключ (OpenAI, Anthropic, DeepSeek…). Все ключи появляются здесь, а правила маршрутизации выбирают из них модели.",
+    "sectionOAuth": "OAuth",
+    "sectionApiKeys": "API-ключи",
+    "fallbackProviderName": "этого провайдера",
+    "unknownError": "Неизвестная ошибка",
+    "loadFailed": "Не удалось загрузить провайдеров: {{error}}",
+    "deleted": "Провайдер удалён",
+    "deleteFailed": "Не удалось удалить провайдера: {{error}}",
+    "toggleFailed": "Не удалось переключить провайдера: {{error}}",
+    "tokenRefreshed": "Токен обновлён",
+    "reauthorized": "Провайдер повторно авторизован",
+    "reauthorizeUnknownIssuer": "Невозможно повторно авторизовать: издатель провайдера неизвестен",
+    "refreshFailedTitle": "Не удалось обновить токен",
+    "refreshFailedBody": "Обновить токен для <1>{{name}}</1> не удалось. Если ключ отозван или полностью истёк, обновление его не восстановит — авторизуйтесь заново. Ключ будет перезаписан на месте у того же провайдера, поэтому правила маршрутизации и ключи моделей останутся нетронутыми.",
+    "dismiss": "Закрыть",
+    "reauthorize": "Авторизоваться заново"
+  },
   "templateActions": {
     "troubleshoot": "Диагностика",
     "collapseAllRules": "Свернуть все правила",

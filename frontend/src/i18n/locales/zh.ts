@@ -464,6 +464,27 @@ export default {
       "closeTooltip": "关闭"
     }
   },
+  "credentialPage": {
+    "empty": "还没有凭证",
+    "managing_other": "共 {{count}} 个凭证",
+    "emptyTitle": "连接你的第一个 AI",
+    "emptyDescription": "用你已有的订阅登录（Claude Code、Codex、Gemini CLI…），或粘贴 API Key（OpenAI、Anthropic、DeepSeek…）。所有凭证都会出现在这里，路由规则从中选择模型。",
+    "sectionOAuth": "OAuth",
+    "sectionApiKeys": "API Key",
+    "fallbackProviderName": "该服务商",
+    "unknownError": "未知错误",
+    "loadFailed": "加载服务商失败：{{error}}",
+    "deleted": "服务商已删除",
+    "deleteFailed": "删除服务商失败：{{error}}",
+    "toggleFailed": "切换服务商状态失败：{{error}}",
+    "tokenRefreshed": "令牌已刷新",
+    "reauthorized": "服务商已重新授权",
+    "reauthorizeUnknownIssuer": "无法重新授权：未知该服务商的签发方",
+    "refreshFailedTitle": "令牌刷新失败",
+    "refreshFailedBody": "刷新 <1>{{name}}</1> 的令牌没有成功。如果凭证已被撤销或完全过期，刷新无法恢复，需要重新授权并再次登录。重新授权会原地覆盖该凭证，沿用同一个服务商，路由规则和模型 Key 都不受影响。",
+    "dismiss": "忽略",
+    "reauthorize": "重新授权"
+  },
   "templateActions": {
     "troubleshoot": "错误检查",
     "collapseAllRules": "收起所有规则",
