@@ -1,9 +1,9 @@
-import { Box, Button, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Button, Chip, Dialog, DialogActions, DialogContent, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { Refresh as RefreshIcon } from '@/components/icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
-import UnifiedCard from '@/components/UnifiedCard';
+import DialogHeader from '@/components/DialogHeader';
 // Straight from chartStyles, not the dashboard barrel: the barrel pulls the
 // charting library into every agent page.
 import { formatNumber, getTotalTokens } from '@/components/dashboard/chartStyles';
@@ -34,13 +34,14 @@ interface RecentRequest {
 const fmtLatency = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`);
 
 /**
- * AgentActivityCard — "is this agent getting traffic, and is it healthy?",
- * answered on the agent's own page: today's requests / tokens / errors and its
- * last few requests, with a link into the dashboard filtered to this agent.
- * It is the quick-look half of observing an agent; the dashboard keeps the
- * analysis half.
+ * AgentActivityDialog — "is this agent getting traffic, and is it healthy?",
+ * answered from the agent's own page: today's requests / tokens / errors and
+ * its last few requests, with a link into the dashboard filtered to this
+ * agent. It is the quick-look half of observing an agent; the dashboard keeps
+ * the analysis half. A dialog, not a card: the page is for routing models, and
+ * a standing panel pushed the rules off screen. Nothing loads until it opens.
  */
-const AgentActivityCard: React.FC<{ scenario: string }> = ({ scenario }) => {
+const AgentActivityDialog: React.FC<{ scenario: string; open: boolean; onClose: () => void }> = ({ scenario, open, onClose }) => {
     const { t, i18n } = useTranslation();
     const [totals, setTotals] = useState<TodayTotals | null>(null);
     const [recent, setRecent] = useState<RecentRequest[] | null>(null);
@@ -80,6 +81,7 @@ const AgentActivityCard: React.FC<{ scenario: string }> = ({ scenario }) => {
     }, [scenario]);
 
     useEffect(() => {
+        if (!open) return;
         void load();
         // Watching an agent means leaving this open: keep it fresh, but not
         // from a background tab.
@@ -87,7 +89,7 @@ const AgentActivityCard: React.FC<{ scenario: string }> = ({ scenario }) => {
             if (document.visibilityState === 'visible') void load();
         }, REFRESH_MS);
         return () => window.clearInterval(timer);
-    }, [load]);
+    }, [open, load]);
 
     const relative = (iso: string) => {
         const seconds = Math.round((new Date(iso).getTime() - Date.now()) / 1000);
@@ -113,25 +115,14 @@ const AgentActivityCard: React.FC<{ scenario: string }> = ({ scenario }) => {
     );
 
     return (
-        <UnifiedCard
-            id="agent-activity"
-            title={t('agentActivity.title')}
-            size="full"
-            rightAction={
-                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                    <Tooltip title={t('agentActivity.refresh')}>
-                        <span>
-                            <IconButton size="small" onClick={() => void load()} disabled={loading} aria-label={t('agentActivity.refresh')}>
-                                <RefreshIcon fontSize="small" />
-                            </IconButton>
-                        </span>
-                    </Tooltip>
-                    <Button component={RouterLink} to={dashboardHref} size="small" variant="text" sx={{ textTransform: 'none' }}>
-                        {t('agentActivity.openDashboard')}
-                    </Button>
-                </Stack>
-            }
-        >
+        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth aria-labelledby="agent-activity-title">
+            <DialogHeader
+                title={t('agentActivity.title')}
+                titleId="agent-activity-title"
+                closeLabel={t('common.close')}
+                onClose={onClose}
+            />
+            <DialogContent>
             {failed && recent === null ? (
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('agentActivity.loadFailed')}</Typography>
             ) : empty && (totals?.requests ?? 0) === 0 ? (
@@ -193,8 +184,21 @@ const AgentActivityCard: React.FC<{ scenario: string }> = ({ scenario }) => {
                     )}
                 </Stack>
             )}
-        </UnifiedCard>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2, justifyContent: 'space-between' }}>
+                <Tooltip title={t('agentActivity.refresh')}>
+                    <span>
+                        <IconButton size="small" onClick={() => void load()} disabled={loading} aria-label={t('agentActivity.refresh')}>
+                            <RefreshIcon fontSize="small" />
+                        </IconButton>
+                    </span>
+                </Tooltip>
+                <Button component={RouterLink} to={dashboardHref} onClick={onClose} size="small" variant="contained">
+                    {t('agentActivity.openDashboard')}
+                </Button>
+            </DialogActions>
+        </Dialog>
     );
 };
 
-export default AgentActivityCard;
+export default AgentActivityDialog;

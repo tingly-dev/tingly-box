@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Box, Button, Tooltip } from '@mui/material';
+import { BarChart as ActivityIcon } from '@/components/icons';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import CardGrid from '@/components/CardGrid.tsx';
@@ -14,7 +15,7 @@ import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPage
 import { useContext1MToggle } from '@/pages/scenario/hooks/useContext1MToggle';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { type SlotMode, useSlotRouting } from '@/pages/scenario/hooks/useSlotRouting';
-import AgentActivityCard from './components/AgentActivityCard';
+import AgentActivityDialog from './components/AgentActivityDialog';
 import AgentSetupCard, {
     type AgentApplyResult,
     type AgentInstallAction,
@@ -142,6 +143,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
+    const [activityOpen, setActivityOpen] = useState(false);
     const { status: clientConfigStatus } = useClientConfigStatus(agent.clientConfigTool ?? null, [rules, dialogOpen, slotMode]);
     const context1M = useContext1MToggle(() => setDialogOpen(true));
     // Unified Connect AI add flow (picker + form/OAuth/paste/import dialogs), offered by Quick Start.
@@ -195,10 +197,20 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
             {t(setup.kind === 'auto' ? 'scenarioPage.autoConfig' : 'scenarioPage.setupGuide')}
         </Button>
     );
+    // Watching an agent is a look-in, not page furniture: it opens a dialog so
+    // the rules below keep the screen (a standing panel pushed them off it).
+    const activityButton = (
+        <Button onClick={() => setActivityOpen(true)} variant="outlined" size="small" startIcon={<ActivityIcon />}>
+            {t('agentActivity.title')}
+        </Button>
+    );
     const headerActions = slotRouting ? (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             {slots.modeSwitch}
-            {configButton}
+            <Box sx={{ display: 'flex', gap: 1 }}>
+                {activityButton}
+                {configButton}
+            </Box>
         </Box>
     ) : headerLinks?.length ? (
         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -209,9 +221,15 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                     </Button>
                 </Tooltip>
             ))}
+            {activityButton}
             {configButton}
         </Box>
-    ) : configButton;
+    ) : (
+        <Box sx={{ display: 'flex', gap: 1 }}>
+            {activityButton}
+            {configButton}
+        </Box>
+    );
 
     return (
         <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
@@ -264,9 +282,6 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         providersLoading={internal.loading}
                     />
                 )}
-                {/* Watching an agent is a standing need, not a setup step: it stays
-                    above the rules and does not fold away with Quick Start. */}
-                <AgentActivityCard scenario={scenario} />
                 <TemplatePage
                     scenario={scenario}
                     // One copy of the providers too: the rule toolbar's
@@ -290,6 +305,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                     collapsible={true}
                     {...(agent.context1M ? { onContext1MToggle: context1M.handleContext1MToggle } : {})}
                 />
+                <AgentActivityDialog scenario={scenario} open={activityOpen} onClose={() => setActivityOpen(false)} />
                 {slotRouting && slots.modeDialog}
                 {setup.kind !== 'none' && setup.renderDialog(slot)}
                 {quickStart && <ConnectAIDialogs flow={connectAI} />}

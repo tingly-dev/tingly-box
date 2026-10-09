@@ -54,6 +54,7 @@
 | 每个 Agent 页加"最近请求"（复用请求旅程，F5） | **加请求和用量小板是好的**——"因为时不时要观测" | 采纳，但**先做轻量版**：今日请求 / Token / 错误 + 最近请求，链接到仪表盘；"请求旅程"版留待后续 |
 | VModel 挪出 Credentials 同级（F10） | **作为新的 Power-up，默认打开** | 采纳 |
 | 仪表盘是否缺 Agent 区分（F6，分析中提出的问号） | **本质上少了 Agent 区分？**——认可这个判断 | 采纳：给仪表盘加 Agent 筛选 |
+| 小板的形态（实现后复看） | **小板放上页面后看不到模型信息了，太差；板面被大幅污染，不如弹窗** | **采纳，已改**：常驻卡片 → 头部按钮 + 弹窗。见 §4 的修正提交 |
 | 范围 | **暂时只改提及的这一小部分，避免动作太大**；这几项独立，可以拆成多个分支做 | 只做 F1、F4、F6、F10、F11、F12 和小板；其余顺延。实现上每项独立提交，便于以后各自摘成分支 |
 | 本文档 | 动线文档单独记录，写明变化分析、人工打标反馈和最终实现结论 | 即本文 |
 
@@ -70,22 +71,28 @@
 | `fix(i18n): translate the Credentials page (en/zh/ru)` | F11 | 新增 `credentialPage.*` 命名空间；复用已有的 `layout.credentials`、`templateActions.connectAI`；刷新失败对话框用 `<Trans>` 保留加粗的 Provider 名 | 三套语言同步加（`localeParity` 测试要求）；复数用 i18next 的 `_one/_other`（ru 四档） |
 | `feat(power-ups): make VModel a power-up, on by default` | F10 | Power-ups 菜单新增 "Virtual Models" 一行；复用隐藏集合（`'vmodel'` 不在集合里 = 开）。关闭后只隐藏 Credentials 侧栏那一行 | **默认开不需要迁移**：隐藏集合里没有该 id 即为开，老用户无感。关闭后 `/credentials/virtual-models` 仍可直达，rail 仍高亮 Credentials。只剩一个子页时 Credentials 不再弹 sidebar（既有规则） |
 | `feat(dashboard): filter usage by agent, with ?scenario= deep link` | F6 | 筛选栏新增 Agent 下拉，贯穿 stats / 时序 / 请求 / 性能 / 热力图。选项 = 当前时间范围内**有用量的**Agent；支持 `?scenario=` 深链接 | 选项单独取（只按时间范围），不从已筛选的 stats 推——否则选中后列表缩成一项（与 Provider 选项同一个坑）。深链指向的 Agent 即使当天没量也保留在选项里，避免下拉显示一个它不提供的值。**精确匹配**：`claude_code` 与 `claude_code:p1` 是两项，各自如实显示 |
-| `feat(agent): add a Requests & usage panel to agent pages` | F5（轻量版） | 新增 `AgentActivityCard`：今日请求 / Token / 错误（含错误率）+ 最近 5 条请求（时间、状态、`请求模型 → 实际模型`、Provider、延迟）；30 秒刷新（仅标签页可见时），手动刷新按钮，"在仪表盘中查看"链到 `?scenario=`。放在规则栏之上，**不随 Quick Start 折叠** | 观测是常驻需求，不是配置步骤，所以不放进 Quick Start（P10）。空状态是一句话"收到第一个请求后会显示在这里"——它本身就是 Quick Start 里"真实请求即验证"的同一个信号（P7）。直接引 `chartStyles` 而不是 `dashboard` barrel，避免把图表库带进每个 Agent 页 chunk |
+| `feat(agent): add a Requests & usage panel to agent pages` | F5（轻量版） | 首版：新增常驻卡片 `AgentActivityCard`，放在规则栏之上 | **此形态被否决（见下一行）**。当时的判断"观测是常驻需求，所以不该随 Quick Start 折叠"本身没错，错在把"常驻需求"等同于"常驻版面" |
+| `fix(agent): show Requests & usage in a dialog, not a standing card` | F5（修正） | 卡片改为 `AgentActivityDialog`：Agent 页头部多一个「Requests & usage」按钮（与 Auto Config / Setup Guide 并列），点开才看。内容不变：今日请求 / Token / 错误 + 最近 5 条请求，手动刷新，"Open in Dashboard"链到 `?scenario=`。**打开时才加载和 30 秒刷新**，关闭即停 | Agent 页的主角是模型与路由规则（P9），观测只是"时不时看一眼"（P12：副作用限定在当前表面）。常驻卡片把规则整体下推近一屏，用户看不到自己最关心的模型信息，是**版面代价大于观测收益**。弹窗把代价降为一个按钮，且不打开时零请求。直接引 `chartStyles` 而不是 `dashboard` barrel，避免把图表库带进每个 Agent 页 chunk |
 
 ### 明确没做
 
 - 落地页、rail 角标（F7）、sidebar 状态点（F8）、Quick Start 第 1 步全局化（F3）、"不是 Claude Code？"提示（F2）、Power-ups / Experimental 合并（F9）、Remote 命名重整（F14）。
-- 小板里的"请求旅程"展开（F5 的完整版）——小板先回答"有没有流量、健不健康"，"这个请求去了哪"留给下一轮。
+- 弹窗里的"请求旅程"展开（F5 的完整版）——弹窗先回答"有没有流量、健不健康"，"这个请求去了哪"留给下一轮。
 - Help 页降级（F4 的内容部分）。
 
 ## 5. 第 1 轮：验证
 
 - `pnpm vitest run`：62 个文件、452 个测试通过（含 `localeParity`、`tKeyCoverage`、路由契约）。
 - `pnpm typecheck`：71 个错误，**与改动前完全一致**（均为既有遗留，无新增）。
-- mock 模式截图：OpenAI SDK 页小板显示 1,842 / 25.9M / 12 错误（0.7%）与 5 条最近请求；仪表盘 `?scenario=codex` 时 Agent 下拉显示 Codex；Credentials 页正常渲染。
+- 修正后复看 mock 截图：Agent 页恢复为头部 + 连接信息 + Model Rules，三条规则整屏可见；点击按钮弹出弹窗，显示 1,842 / 25.9M / 12 错误（0.7%）与 5 条最近请求。此前（卡片形态）的截图：仪表盘 `?scenario=codex` 时 Agent 下拉显示 Codex；Credentials 页正常渲染。
 - **已知的 mock 局限**：mock 的 `usage/stats` 不按 `scenario` 过滤，所以仪表盘选了某个 Agent 数字不变；这是 mock 的问题，不是实现的问题，但意味着**按 Agent 过滤的真实效果需要在真实后端上再看一遍**。
 - **未验证**：Power-ups 菜单里 VModel 行的悬停展开视觉；中文 / 俄文下小板和仪表盘新增文案的排版。
 
-## 6. 追加记录的约定
+## 6. 复盘：这一轮学到的
 
-下一轮请在本文件**末尾追加** `## 7. 第 2 轮：…`，沿用 发现 → 人工打标反馈 → 实现结论 → 验证 四段；已有的 F 编号不重排，新发现从 F15 起。被否决的提议也要留在反馈表里并写明理由——"为什么没做"和"做了什么"一样值得追溯。
+- **"值得常驻"不等于"值得占版面"。** 我把观测判成"常驻需求"，就直接做成了常驻卡片；实际用户要的是"随时能看"，不是"一直摆着"。判断一个新增区块时，应先问它会**挤掉谁**——这里被挤掉的是页面的主角（模型规则）。
+- **截图验证要看"主角还在不在"，不只看新东西好不好看。** 首版截图我只核对了小板本身渲染正确，没有对比加入后 Model Rules 被推到了哪里。后续 UI 改动的验证清单应加一条：改动前后同一视口下，原有主角内容是否仍在首屏。
+
+## 7. 追加记录的约定
+
+下一轮请在本文件**末尾追加** `## 8. 第 2 轮：…`，沿用 发现 → 人工打标反馈 → 实现结论 → 验证 四段；已有的 F 编号不重排，新发现从 F15 起。被否决的提议也要留在反馈表里并写明理由——"为什么没做"和"做了什么"一样值得追溯。
