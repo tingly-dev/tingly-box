@@ -218,7 +218,6 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     );
     const headerActions = (
         <>
-            {slotRouting && slots.modeSwitch}
             {headerLinks?.map(link => (
                 <Tooltip key={link.href} title={link.href}>
                     <Button href={link.href} target="_blank" rel="noopener noreferrer" variant="contained" size="small">
@@ -257,10 +256,10 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                     // Title, status and actions share a row only where they fit; below that
                     // the actions drop under the title instead of wrapping it.
                     sx={{
-                        pb: 1.5,
+                        pb: 0,
                         borderBottom: 0,
-                        flexDirection: { xs: 'column', lg: 'row' },
-                        alignItems: { xs: 'flex-start', lg: 'center' },
+                        flexDirection: { xs: 'column', md: 'row' },
+                        alignItems: { xs: 'flex-start', md: 'center' },
                         '& h1': { whiteSpace: 'nowrap' },
                     }}
                 />
@@ -268,16 +267,21 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                     stay mounted (only hidden) so a tab keeps its state, except the
                     activity one, which loads only while it is open. Model rules are
                     not a tab: they are the page. */}
-                <Tabs
-                    value={tab}
-                    onChange={(_, next: AgentTab) => selectTab(next)}
-                    sx={{ borderBottom: '1px solid', borderColor: 'divider', minHeight: 40, '& .MuiTab-root': { textTransform: 'none', minHeight: 40 } }}
-                >
-                    <Tab value="connection" label={t('scenarioPage.tabs.connection', { defaultValue: 'Connection' })} />
-                    {!setupFinished && quickStartTab}
-                    <Tab value="activity" label={t('agentActivity.title')} />
-                    {setupFinished && quickStartTab}
-                </Tabs>
+                {/* Unified / Separate chooses how the model rules below are laid out, so
+                    it sits at the end of this row, next to them, not up with the title. */}
+                <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <Tabs
+                        value={tab}
+                        onChange={(_, next: AgentTab) => selectTab(next)}
+                        sx={{ flex: 1, minHeight: 40, '& .MuiTab-root': { textTransform: 'none', minHeight: 40 } }}
+                    >
+                        <Tab value="connection" label={t('scenarioPage.tabs.connection', { defaultValue: 'Connection' })} />
+                        {!setupFinished && quickStartTab}
+                        <Tab value="activity" label={t('agentActivity.title')} />
+                        {setupFinished && quickStartTab}
+                    </Tabs>
+                    {slotRouting && <Box sx={{ py: 0.5 }}>{slots.modeSwitch}</Box>}
+                </Box>
 
                 {quickStart && (
                     <Box role="tabpanel" sx={panelSx('quickstart')}>
