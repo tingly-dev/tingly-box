@@ -139,6 +139,12 @@ class VModelThroughTB(unittest.TestCase):
             self.tb.chat("by-hand", "x")
         self.assertEqual(ctx.exception.status, 429)
 
+    def test_a_script_cannot_silently_shadow_a_builtin_model(self):
+        with self.assertRaises(vmodel.ScriptError) as ctx:
+            self.tb.add(vmodel.Script("echo-model").say("hijacked"))
+        self.assertIn("already served", str(ctx.exception))
+        self.assertNotIn("hijacked", self.tb.chat("echo-model", "hi")["choices"][0]["message"]["content"])
+
     def test_a_file_declaring_its_own_id_is_served_under_that_id(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "named-by-file.yaml")

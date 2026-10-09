@@ -312,6 +312,10 @@ class Testbed:
         path = _script_path(self.config_dir, name)
         if self._attached and os.path.exists(path) and path not in self._written:
             raise ScriptError(f"{path} already exists and was not written by this Testbed; use another id")
+        if path not in self._written and model in self._models():
+            # tb keeps a built-in (or another file's) model and ignores the
+            # script, so a listing alone could not tell the two apart later.
+            raise ScriptError(f"{model!r} is already served by this tb (a built-in model or another script); use another id")
         _write_text(self.config_dir, name, text)
         if path not in self._written:
             self._written.append(path)
