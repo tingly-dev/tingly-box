@@ -2186,6 +2186,19 @@ export default {
       "videoWebmOnly": "This browser has no H.264 encoder, so the file will be a WebM — playable in browsers, but some chat apps refuse it."
     }
   },
+  "agentActivity": {
+    "title": "Requests & usage",
+    "openDashboard": "Open in Dashboard",
+    "refresh": "Refresh",
+    "requestsToday": "Requests today",
+    "tokensToday": "Tokens today",
+    "errorsToday": "Errors today",
+    "recent": "Latest requests",
+    "ok": "OK",
+    "error": "Error",
+    "empty": "No requests from this agent yet. Once it sends one, today's numbers and the latest requests show up here.",
+    "loadFailed": "Couldn't load this agent's requests."
+  },
   "agentSetup": {
     "quickStart": "Quick Start",
     "done": "Done",

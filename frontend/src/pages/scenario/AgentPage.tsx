@@ -14,6 +14,7 @@ import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPage
 import { useContext1MToggle } from '@/pages/scenario/hooks/useContext1MToggle';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { type SlotMode, useSlotRouting } from '@/pages/scenario/hooks/useSlotRouting';
+import AgentActivityCard from './components/AgentActivityCard';
 import AgentSetupCard, {
     type AgentApplyResult,
     type AgentInstallAction,
@@ -263,6 +264,9 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         providersLoading={internal.loading}
                     />
                 )}
+                {/* Watching an agent is a standing need, not a setup step: it stays
+                    above the rules and does not fold away with Quick Start. */}
+                <AgentActivityCard scenario={scenario} />
                 <TemplatePage
                     scenario={scenario}
                     // One copy of the providers too: the rule toolbar's

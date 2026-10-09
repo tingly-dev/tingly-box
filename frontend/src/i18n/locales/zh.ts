@@ -2179,6 +2179,19 @@ export default {
       "videoWebmOnly": "当前浏览器没有 H.264 编码器,只能导出 WebM——浏览器里能播放,但部分聊天应用不接受。"
     }
   },
+  "agentActivity": {
+    "title": "请求与用量",
+    "openDashboard": "在仪表盘中查看",
+    "refresh": "刷新",
+    "requestsToday": "今日请求",
+    "tokensToday": "今日 Token",
+    "errorsToday": "今日错误",
+    "recent": "最近请求",
+    "ok": "成功",
+    "error": "错误",
+    "empty": "这个 Agent 还没有发过请求。收到第一个请求后，今日数据和最近请求会显示在这里。",
+    "loadFailed": "无法加载该 Agent 的请求。"
+  },
   "agentSetup": {
     "quickStart": "快速开始",
     "done": "已完成",
