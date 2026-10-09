@@ -50,6 +50,8 @@ import { useBotPlatformSummary } from './useBotPlatformSummary';
 
 const IconLibraryPhoto = tablerMui(TablerLibraryPhoto);
 
+const VMODEL_PATH = '/credentials/virtual-models';
+
 // The usage charts' URLs, one per time range (/dashboard/today, /dashboard/7d, …).
 const DASHBOARD_RANGE_PATH = /^\/dashboard\/(today|yesterday|3d|7d|30d|90d)$/;
 
@@ -104,6 +106,8 @@ export function useActivityItems(): ActivityItem[] {
         }
         return items;
     }, [skillUser, skillIde, t]);
+
+    const vmodelOff = hiddenScenarios.has('vmodel');
 
     return useMemo(() => {
         const claudeCodeProfiles = profiles['claude_code'] || [];
@@ -348,9 +352,19 @@ export function useActivityItems(): ActivityItem[] {
                 label: t('layout.nav.credential', { defaultValue: 'Credentials' }),
                 defaultPath: '/credentials',
                 children: [
-                    { path: '/credentials', label: t('layout.credentials', { defaultValue: 'Credentials' }), icon: <IconLock sx={{ fontSize: 20 }} /> },
+                    // With the VModel power-up off the page stays reachable by URL
+                    // and keeps this rail item lit, but loses its sidebar row.
                     {
-                        path: '/credentials/virtual-models',
+                        path: '/credentials',
+                        label: t('layout.credentials', { defaultValue: 'Credentials' }),
+                        icon: <IconLock sx={{ fontSize: 20 }} />,
+                        ...(vmodelOff ? { match: (p: string) => p === '/credentials' || p === VMODEL_PATH } : {}),
+                    },
+                    // VModel is a power-up (PowerUpsMenu), on by default: the
+                    // built-in synthetic providers are for onboarding and
+                    // dry-runs, not credentials the user owns.
+                    ...(vmodelOff ? [] : [{
+                        path: VMODEL_PATH,
                         // Abbreviated here only — the sidebar is the tight spot;
                         // the page itself (VirtualModelsPage) keeps the full
                         // "Virtual Models" title via the shared layout.virtualModels key.
@@ -359,7 +373,7 @@ export function useActivityItems(): ActivityItem[] {
                         tooltip: t('layout.virtualModelsTooltip', {
                             defaultValue: 'Built-in synthetic model providers for onboarding and dry-runs.',
                         }),
-                    },
+                    }]),
                 ],
             },
             {
@@ -378,5 +392,5 @@ export function useActivityItems(): ActivityItem[] {
         ];
 
         return items;
-    }, [t, promptMenuItems, enableGuardrails, enableMCP, enableBench, enableDesk, profiles, imageProfiles, teams, botSummary, hiddenScenarios]);
+    }, [t, promptMenuItems, enableGuardrails, enableMCP, enableBench, enableDesk, profiles, imageProfiles, teams, botSummary, hiddenScenarios, vmodelOff]);
 }
