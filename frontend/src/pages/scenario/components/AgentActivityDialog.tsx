@@ -1,12 +1,14 @@
 import { Box, Button, Chip, Dialog, DialogActions, DialogContent, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { Refresh as RefreshIcon } from '@/components/icons';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import DialogHeader from '@/components/DialogHeader';
 // Straight from chartStyles, not the dashboard barrel: the barrel pulls the
 // charting library into every agent page.
 import { formatNumber, getTotalTokens } from '@/components/dashboard/chartStyles';
+// Straight from runProbe, not the probe barrel (which pulls in the probe dialogs).
+import { formatLatency } from '@/components/probe/runProbe';
 import { api } from '@/services/api';
 import { getLocalMidnight, toLocalISOString } from '@/utils/datetime';
 import { fontMono, fontSizes } from '@/theme/fonts';
@@ -30,8 +32,6 @@ interface RecentRequest {
     latency_ms?: number;
     error_code?: string;
 }
-
-const fmtLatency = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`);
 
 export type AgentActivityView = 'usage' | 'requests';
 
@@ -99,9 +99,9 @@ const AgentActivityDialog: React.FC<{
         return () => window.clearInterval(timer);
     }, [open, load]);
 
+    const rtf = useMemo(() => new Intl.RelativeTimeFormat(i18n.language, { numeric: 'auto', style: 'narrow' }), [i18n.language]);
     const relative = (iso: string) => {
         const seconds = Math.round((new Date(iso).getTime() - Date.now()) / 1000);
-        const rtf = new Intl.RelativeTimeFormat(i18n.language, { numeric: 'auto', style: 'narrow' });
         if (Math.abs(seconds) < 60) return rtf.format(seconds, 'second');
         if (Math.abs(seconds) < 3600) return rtf.format(Math.round(seconds / 60), 'minute');
         if (Math.abs(seconds) < 86400) return rtf.format(Math.round(seconds / 3600), 'hour');
@@ -173,7 +173,7 @@ const AgentActivityDialog: React.FC<{
                             )}
                             {r.latency_ms ? (
                                 <Typography variant="caption" sx={{ color: 'text.secondary', width: 48, textAlign: 'right', flexShrink: 0 }}>
-                                    {fmtLatency(r.latency_ms)}
+                                    {formatLatency(r.latency_ms)}
                                 </Typography>
                             ) : null}
                         </Stack>

@@ -81,8 +81,8 @@ export interface AgentSetupCardProps {
     /** Shown as a "Hide" button once every step is done, so a card that was brought back
      *  (when its steps are done by facts that reset can't undo) can be put away again. */
     onDismiss?: () => void;
-    /** Reported whenever progress changes, so the page can hide / show the card. */
-    onProgressChange?: (progress: { done: number; total: number; allDone: boolean }) => void;
+    /** Reported whenever it changes, so the page can hide / show the card. */
+    onAllDoneChange?: (allDone: boolean) => void;
     /** Opened by the header "How routing works" help button. */
     onShowGuide?: () => void;
 }
@@ -169,7 +169,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     configApplied = false,
     hidden = false,
     onDismiss,
-    onProgressChange,
+    onAllDoneChange,
     onShowGuide,
 }) => {
     const { t } = useTranslation();
@@ -336,323 +336,323 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     // Which step is the first incomplete one (determines which expands)
     const firstIncomplete = !providerDone ? 0 : !modelDone ? 1 : !installDone ? 2 : !applyDone ? 3 : -1;
 
-    useEffect(() => { onProgressChange?.({ done: doneCount, total: TOTAL_STEPS, allDone }); }, [doneCount, allDone, onProgressChange]);
+    useEffect(() => { onAllDoneChange?.(allDone); }, [allDone, onAllDoneChange]);
 
-    const stepRowSx = (_step?: number) => ({
+    const stepRowSx = {
         py: 0.75,
         px: 1.5,
         borderRadius: 1.5,
-    });
+    };
     const steps = (
-                <Stack spacing={0.5}>
+        <Stack spacing={0.5}>
 
-                    {/* Step 1 — Provider (always a single flat row — no expand needed) */}
-                    <Box sx={stepRowSx(0)}>
-                        <Stack
-                            direction="row"
-                            spacing={1.25}
-                            sx={{ alignItems: "center", flexWrap: 'wrap', rowGap: 0.5 }}>
-                            {providerLoading ? <CircularProgress size={20} sx={{ flexShrink: 0 }} /> : <StepIndicator step={1} done={providerDone} active={firstIncomplete === 0} />}
-                            <Typography
-                                variant="body2"
-                                color={providerDone ? 'text.primary' : firstIncomplete === 0 ? 'primary.main' : 'text.disabled'}
-                                sx={{
-                                    fontWeight: 500,
-                                    flex: 1
-                                }}>
-                                {t('agentSetup.provider.label')}
-                            </Typography>
-                            {providerDone && (
-                                <Typography variant="body2" sx={{
-                                    color: "text.secondary"
-                                }}>
-                                    {providerCount === 1
-                                        ? t('agentSetup.provider.countOne')
-                                        : t('agentSetup.provider.count', { count: providerCount })}
-                                </Typography>
-                            )}
-                            {onConnectProvider && (
-                                <Tooltip title={providerDone ? '' : t('agentSetup.provider.tooltip', { agent: agentName })}>
-                                    <Button
-                                        size="small"
-                                        variant={providerDone ? 'text' : 'contained'}
-                                        onClick={onConnectProvider}
-                                        sx={providerDone ? { py: 0, textTransform: 'none', minWidth: 0 } : { py: 0.25 }}
-                                    >
-                                        {providerDone ? t('agentSetup.provider.addMore') : t('agentSetup.provider.connect')}
-                                    </Button>
-                                </Tooltip>
-                            )}
-                        </Stack>
-                    </Box>
+            {/* Step 1 — Provider (always a single flat row — no expand needed) */}
+            <Box sx={stepRowSx}>
+                <Stack
+                    direction="row"
+                    spacing={1.25}
+                    sx={{ alignItems: "center", flexWrap: 'wrap', rowGap: 0.5 }}>
+                    {providerLoading ? <CircularProgress size={20} sx={{ flexShrink: 0 }} /> : <StepIndicator step={1} done={providerDone} active={firstIncomplete === 0} />}
+                    <Typography
+                        variant="body2"
+                        color={providerDone ? 'text.primary' : firstIncomplete === 0 ? 'primary.main' : 'text.disabled'}
+                        sx={{
+                            fontWeight: 500,
+                            flex: 1
+                        }}>
+                        {t('agentSetup.provider.label')}
+                    </Typography>
+                    {providerDone && (
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
+                            {providerCount === 1
+                                ? t('agentSetup.provider.countOne')
+                                : t('agentSetup.provider.count', { count: providerCount })}
+                        </Typography>
+                    )}
+                    {onConnectProvider && (
+                        <Tooltip title={providerDone ? '' : t('agentSetup.provider.tooltip', { agent: agentName })}>
+                            <Button
+                                size="small"
+                                variant={providerDone ? 'text' : 'contained'}
+                                onClick={onConnectProvider}
+                                sx={providerDone ? { py: 0, textTransform: 'none', minWidth: 0 } : { py: 0.25 }}
+                            >
+                                {providerDone ? t('agentSetup.provider.addMore') : t('agentSetup.provider.connect')}
+                            </Button>
+                        </Tooltip>
+                    )}
+                </Stack>
+            </Box>
 
-                    {/* Step 2 — Model (always a single flat row — no expand needed) */}
-                    <Box sx={stepRowSx(1)}>
-                        <Stack
-                            direction="row"
-                            spacing={1.25}
-                            sx={{ alignItems: "center", flexWrap: 'wrap', rowGap: 0.5 }}>
-                            <StepIndicator step={2} done={modelDone} active={firstIncomplete === 1} />
-                            <Typography
-                                variant="body2"
-                                color={modelDone ? 'text.primary' : firstIncomplete === 1 ? 'primary.main' : 'text.disabled'}
-                                sx={{
-                                    fontWeight: 500,
-                                    flex: 1
-                                }}>
-                                {t('agentSetup.model.label')}
-                            </Typography>
-                            {modelSelected && (
-                                <Typography variant="body2" sx={{
-                                    color: "text.secondary"
-                                }}>{t('agentSetup.model.configured')}</Typography>
-                            )}
-                            {modelSkipped && !modelSelected && (
-                                <Typography variant="body2" sx={{
-                                    color: "text.secondary"
-                                }}>{t('agentSetup.model.skipped')}</Typography>
-                            )}
-                            {onSelectModel && (
-                                <Tooltip title={modelDone ? '' : t('agentSetup.model.tooltip', { agent: agentName })}>
-                                    <span>
+            {/* Step 2 — Model (always a single flat row — no expand needed) */}
+            <Box sx={stepRowSx}>
+                <Stack
+                    direction="row"
+                    spacing={1.25}
+                    sx={{ alignItems: "center", flexWrap: 'wrap', rowGap: 0.5 }}>
+                    <StepIndicator step={2} done={modelDone} active={firstIncomplete === 1} />
+                    <Typography
+                        variant="body2"
+                        color={modelDone ? 'text.primary' : firstIncomplete === 1 ? 'primary.main' : 'text.disabled'}
+                        sx={{
+                            fontWeight: 500,
+                            flex: 1
+                        }}>
+                        {t('agentSetup.model.label')}
+                    </Typography>
+                    {modelSelected && (
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>{t('agentSetup.model.configured')}</Typography>
+                    )}
+                    {modelSkipped && !modelSelected && (
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>{t('agentSetup.model.skipped')}</Typography>
+                    )}
+                    {onSelectModel && (
+                        <Tooltip title={modelDone ? '' : t('agentSetup.model.tooltip', { agent: agentName })}>
+                            <span>
+                                <Button
+                                    size="small"
+                                    variant={modelDone ? 'text' : 'contained'}
+                                    disabled={!modelDone && !providerDone}
+                                    onClick={handleChooseModel}
+                                    sx={modelDone ? { py: 0, textTransform: 'none', minWidth: 0 } : { py: 0.25 }}
+                                >
+                                    {modelSelected ? t('agentSetup.model.change') : t('agentSetup.model.choose')}
+                                </Button>
+                            </span>
+                        </Tooltip>
+                    )}
+                    {firstIncomplete === 1 && (
+                        <Button variant="text" size="small"
+                            onClick={(e) => { e.stopPropagation(); markModelSkipped(); }}
+                            sx={{ py: 0, textTransform: 'none', color: 'text.disabled', minWidth: 0 }}>
+                            {t('agentSetup.model.skip')}
+                        </Button>
+                    )}
+                </Stack>
+            </Box>
+
+            {/* Step 3 — Install */}
+            <Box sx={stepRowSx}>
+                <Stack
+                    direction="row"
+                    spacing={1.25}
+                    onClick={installDone ? () => toggleDoneStep(2) : undefined}
+                    sx={[{
+                        alignItems: "center",
+                        flexWrap: 'wrap',
+                        rowGap: 0.5
+                    }, installDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : false]}>
+                    <StepIndicator step={3} done={installDone} active={firstIncomplete === 2} />
+                    <Typography
+                        variant="body2"
+                        color={installDone ? 'text.primary' : firstIncomplete === 2 ? 'primary.main' : 'text.disabled'}
+                        sx={{
+                            fontWeight: 500,
+                            flex: 1
+                        }}>
+                        {t('agentSetup.install.label', { agent: agentName })}
+                    </Typography>
+                    {installDone && (
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
+                            {lastRequestAt
+                                ? t('agentSetup.install.detected', { time: timeAgo(lastRequestAt) })
+                                : installProven ? t('agentSetup.install.installed') : t('agentSetup.autoSkipped')}
+                        </Typography>
+                    )}
+                    {/* Step-completing action lives in the row's right action
+                        column, same as steps 1 / 2 / 4. */}
+                    {!installDone && firstIncomplete === 2 && (
+                        <Tooltip title={t('agentSetup.install.confirmTooltip', { agent: agentName })}>
+                            <Button
+                                variant="contained"
+                                size="small"
+                                onClick={(e) => { e.stopPropagation(); markInstallDone(); }}
+                                sx={{ py: 0.25 }}
+                            >
+                                {t('agentSetup.install.confirm')}
+                            </Button>
+                        </Tooltip>
+                    )}
+                    {installDone && (
+                        expandedDoneSteps.has(2) ? <ExpandLessIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} /> : <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
+                    )}
+                </Stack>
+                <Collapse in={(!installDone && firstIncomplete === 2) || expandedDoneSteps.has(2)}>
+                    <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
+                        {installActions?.length ? (
+                            <>
+                                {installStepDescription && (
+                                    <Typography variant="body2" sx={{
+                                        color: "text.secondary"
+                                    }}>{installStepDescription}</Typography>
+                                )}
+                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ maxWidth: 520 }}>
+                                    {installActions.map((action) => (
                                         <Button
+                                            key={`${action.label}-${action.href}`}
+                                            href={action.href}
+                                            target={action.external ? '_blank' : undefined}
+                                            rel={action.external ? 'noopener noreferrer' : undefined}
+                                            variant={action.variant ?? 'outlined'}
                                             size="small"
-                                            variant={modelDone ? 'text' : 'contained'}
-                                            disabled={!modelDone && !providerDone}
-                                            onClick={handleChooseModel}
-                                            sx={modelDone ? { py: 0, textTransform: 'none', minWidth: 0 } : { py: 0.25 }}
+                                            sx={{ flex: 1 }}
                                         >
-                                            {modelSelected ? t('agentSetup.model.change') : t('agentSetup.model.choose')}
+                                            {action.label}
+                                        </Button>
+                                    ))}
+                                </Stack>
+                            </>
+                        ) : (
+                            <>
+                                <Typography variant="body2" sx={{
+                                    color: "text.secondary"
+                                }}>
+                                    {installStepDescription || t('agentSetup.install.description', { agent: agentName })}
+                                </Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800 }}>
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
+                                            color: "text.secondary",
+                                            minWidth: '80px'
+                                        }}>{t('agentSetup.install.npmOfficial')}</Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}>
+                                        <Tooltip title={copied ? t('agentSetup.install.copied') : t('agentSetup.install.copy')}>
+                                            <IconButton size="small" onClick={handleCopy} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 16 }} /></IconButton>
+                                        </Tooltip>
+                                        <Typography variant="body2" onClick={handleCopy} sx={{ fontFamily: fontMono, flex: 1, color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installCommand}>{installCommand}</Typography>
+                                    </Box>
+                                </Box>
+                                {installMirrorCommand && (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800 }}>
+                                        <Typography
+                                            variant="body2"
+                                            sx={{
+                                                color: "text.secondary",
+                                                minWidth: '80px'
+                                            }}>{t('agentSetup.install.npmMirror')}</Typography>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}>
+                                            <Tooltip title={copiedMirror ? t('agentSetup.install.copied') : t('agentSetup.install.copy')}>
+                                                <IconButton size="small" onClick={handleCopyMirror} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 16 }} /></IconButton>
+                                            </Tooltip>
+                                            <Typography variant="body2" onClick={handleCopyMirror} sx={{ fontFamily: fontMono, flex: 1, color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installMirrorCommand}>{installMirrorCommand}</Typography>
+                                        </Box>
+                                    </Box>
+                                )}
+                            </>
+                        )}
+                    </Stack>
+                </Collapse>
+            </Box>
+
+            {/* Step 4 — Apply (flat row while active; re-expandable once done for re-view) */}
+            <Box sx={stepRowSx}>
+                <Stack
+                    direction="row"
+                    spacing={1.25}
+                    onClick={applyDone ? () => toggleDoneStep(3) : undefined}
+                    sx={[{
+                        alignItems: "center",
+                        flexWrap: 'wrap',
+                        rowGap: 0.5
+                    }, applyDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : false]}>
+                    <StepIndicator step={4} done={applyDone} active={firstIncomplete === 3} />
+                    <Typography
+                        variant="body2"
+                        color={applyDone ? 'text.primary' : firstIncomplete === 3 ? 'primary.main' : 'text.disabled'}
+                        sx={{
+                            fontWeight: 500,
+                            flex: 1
+                        }}>
+                        {applyStepLabel}
+                    </Typography>
+                    {applyDone && (
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>{applyProven ? t('agentSetup.apply.applied') : t('agentSetup.autoSkipped')}</Typography>
+                    )}
+                    {!applyDone && firstIncomplete === 3 && (
+                        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+                            {onApply && (
+                                <Tooltip title={applyStepDescription ?? t('agentSetup.apply.tooltip', { agent: agentName })}>
+                                    <span>
+                                        <Button variant="contained" size="small" disabled={isApplyLoading} onClick={(e) => { e.stopPropagation(); handleApplyWithStatusLine(); }} startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined} sx={{ py: 0.25 }}>
+                                            {applyButtonLabel}
                                         </Button>
                                     </span>
                                 </Tooltip>
                             )}
-                            {firstIncomplete === 1 && (
-                                <Button variant="text" size="small"
-                                    onClick={(e) => { e.stopPropagation(); markModelSkipped(); }}
-                                    sx={{ py: 0, textTransform: 'none', color: 'text.disabled', minWidth: 0 }}>
-                                    {t('agentSetup.model.skip')}
+                            {onViewConfig && (
+                                <Button variant="text" size="small" onClick={(e) => { e.stopPropagation(); onViewConfig(); }} sx={{ py: 0, textTransform: 'none', color: 'text.secondary', minWidth: 0 }}>
+                                    {viewConfigButtonLabel}
+                                </Button>
+                            )}
+                            <Button variant="text" size="small" onClick={(e) => {
+                                e.stopPropagation();
+                                setSyncedItem(APPLY_DONE_KEY(agentKey), 'true');
+                                setApplyDone(true);
+                            }} sx={{ py: 0, textTransform: 'none', color: 'text.disabled', minWidth: 0 }}>
+                                {t('agentSetup.apply.skip')}
+                            </Button>
+                        </Stack>
+                    )}
+                    {applyDone && (
+                        expandedDoneSteps.has(3) ? <ExpandLessIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} /> : <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
+                    )}
+                </Stack>
+                {applyResult && (
+                    <Alert severity={applyResult.success ? 'success' : 'error'} sx={{ mt: 0.75, ml: 4.25, py: 0.5 }}>
+                        {applyResult.success ? (
+                            <Box>
+                                <Typography variant="body2" sx={{
+                                    fontWeight: 600
+                                }}>{applySuccessLabel}</Typography>
+                                {applyResult.files?.map(f => (
+                                    <Typography key={f} variant="body2" sx={{ display: 'block', fontFamily: fontMono, color: 'text.secondary' }}>{f}</Typography>
+                                ))}
+                            </Box>
+                        ) : (
+                            <Typography variant="body2">{applyResult.error ?? t('agentSetup.apply.failed')}</Typography>
+                        )}
+                    </Alert>
+                )}
+                <Collapse in={applyDone && expandedDoneSteps.has(3)}>
+                    <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
+                            {applyStepDescription ?? t('agentSetup.apply.tooltip', { agent: agentName })}
+                        </Typography>
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{
+                                flexWrap: "wrap",
+                                gap: 0.5
+                            }}>
+                            {onApply && (
+                                <Button variant="contained" size="small" disabled={isApplyLoading} onClick={handleApplyWithStatusLine} startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined}>
+                                    {applyButtonLabel}
+                                </Button>
+                            )}
+                            {onViewConfig && (
+                                <Button variant="text" size="small" onClick={onViewConfig} sx={{ textTransform: 'none', color: 'text.secondary' }}>
+                                    {t('agentSetup.apply.viewConfigAdvanced', { label: viewConfigButtonLabel })}
                                 </Button>
                             )}
                         </Stack>
-                    </Box>
-
-                    {/* Step 3 — Install */}
-                    <Box sx={stepRowSx(2)}>
-                        <Stack
-                            direction="row"
-                            spacing={1.25}
-                            onClick={installDone ? () => toggleDoneStep(2) : undefined}
-                            sx={[{
-                                alignItems: "center",
-                                flexWrap: 'wrap',
-                                rowGap: 0.5
-                            }, installDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : false]}>
-                            <StepIndicator step={3} done={installDone} active={firstIncomplete === 2} />
-                            <Typography
-                                variant="body2"
-                                color={installDone ? 'text.primary' : firstIncomplete === 2 ? 'primary.main' : 'text.disabled'}
-                                sx={{
-                                    fontWeight: 500,
-                                    flex: 1
-                                }}>
-                                {t('agentSetup.install.label', { agent: agentName })}
-                            </Typography>
-                            {installDone && (
-                                <Typography variant="body2" sx={{
-                                    color: "text.secondary"
-                                }}>
-                                    {lastRequestAt
-                                        ? t('agentSetup.install.detected', { time: timeAgo(lastRequestAt) })
-                                        : installProven ? t('agentSetup.install.installed') : t('agentSetup.autoSkipped')}
-                                </Typography>
-                            )}
-                            {/* Step-completing action lives in the row's right action
-                                column, same as steps 1 / 2 / 4. */}
-                            {!installDone && firstIncomplete === 2 && (
-                                <Tooltip title={t('agentSetup.install.confirmTooltip', { agent: agentName })}>
-                                    <Button
-                                        variant="contained"
-                                        size="small"
-                                        onClick={(e) => { e.stopPropagation(); markInstallDone(); }}
-                                        sx={{ py: 0.25 }}
-                                    >
-                                        {t('agentSetup.install.confirm')}
-                                    </Button>
-                                </Tooltip>
-                            )}
-                            {installDone && (
-                                expandedDoneSteps.has(2) ? <ExpandLessIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} /> : <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
-                            )}
-                        </Stack>
-                        <Collapse in={(!installDone && firstIncomplete === 2) || expandedDoneSteps.has(2)}>
-                            <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
-                                {installActions?.length ? (
-                                    <>
-                                        {installStepDescription && (
-                                            <Typography variant="body2" sx={{
-                                                color: "text.secondary"
-                                            }}>{installStepDescription}</Typography>
-                                        )}
-                                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ maxWidth: 520 }}>
-                                            {installActions.map((action) => (
-                                                <Button
-                                                    key={`${action.label}-${action.href}`}
-                                                    href={action.href}
-                                                    target={action.external ? '_blank' : undefined}
-                                                    rel={action.external ? 'noopener noreferrer' : undefined}
-                                                    variant={action.variant ?? 'outlined'}
-                                                    size="small"
-                                                    sx={{ flex: 1 }}
-                                                >
-                                                    {action.label}
-                                                </Button>
-                                            ))}
-                                        </Stack>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Typography variant="body2" sx={{
-                                            color: "text.secondary"
-                                        }}>
-                                            {installStepDescription || t('agentSetup.install.description', { agent: agentName })}
-                                        </Typography>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800 }}>
-                                            <Typography
-                                                variant="body2"
-                                                sx={{
-                                                    color: "text.secondary",
-                                                    minWidth: '80px'
-                                                }}>{t('agentSetup.install.npmOfficial')}</Typography>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}>
-                                                <Tooltip title={copied ? t('agentSetup.install.copied') : t('agentSetup.install.copy')}>
-                                                    <IconButton size="small" onClick={handleCopy} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 16 }} /></IconButton>
-                                                </Tooltip>
-                                                <Typography variant="body2" onClick={handleCopy} sx={{ fontFamily: fontMono, flex: 1, color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installCommand}>{installCommand}</Typography>
-                                            </Box>
-                                        </Box>
-                                        {installMirrorCommand && (
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800 }}>
-                                                <Typography
-                                                    variant="body2"
-                                                    sx={{
-                                                        color: "text.secondary",
-                                                        minWidth: '80px'
-                                                    }}>{t('agentSetup.install.npmMirror')}</Typography>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}>
-                                                    <Tooltip title={copiedMirror ? t('agentSetup.install.copied') : t('agentSetup.install.copy')}>
-                                                        <IconButton size="small" onClick={handleCopyMirror} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 16 }} /></IconButton>
-                                                    </Tooltip>
-                                                    <Typography variant="body2" onClick={handleCopyMirror} sx={{ fontFamily: fontMono, flex: 1, color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installMirrorCommand}>{installMirrorCommand}</Typography>
-                                                </Box>
-                                            </Box>
-                                        )}
-                                    </>
-                                )}
-                            </Stack>
-                        </Collapse>
-                    </Box>
-
-                    {/* Step 4 — Apply (flat row while active; re-expandable once done for re-view) */}
-                    <Box sx={stepRowSx(3)}>
-                        <Stack
-                            direction="row"
-                            spacing={1.25}
-                            onClick={applyDone ? () => toggleDoneStep(3) : undefined}
-                            sx={[{
-                                alignItems: "center",
-                                flexWrap: 'wrap',
-                                rowGap: 0.5
-                            }, applyDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : false]}>
-                            <StepIndicator step={4} done={applyDone} active={firstIncomplete === 3} />
-                            <Typography
-                                variant="body2"
-                                color={applyDone ? 'text.primary' : firstIncomplete === 3 ? 'primary.main' : 'text.disabled'}
-                                sx={{
-                                    fontWeight: 500,
-                                    flex: 1
-                                }}>
-                                {applyStepLabel}
-                            </Typography>
-                            {applyDone && (
-                                <Typography variant="body2" sx={{
-                                    color: "text.secondary"
-                                }}>{applyProven ? t('agentSetup.apply.applied') : t('agentSetup.autoSkipped')}</Typography>
-                            )}
-                            {!applyDone && firstIncomplete === 3 && (
-                                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
-                                    {onApply && (
-                                        <Tooltip title={applyStepDescription ?? t('agentSetup.apply.tooltip', { agent: agentName })}>
-                                            <span>
-                                                <Button variant="contained" size="small" disabled={isApplyLoading} onClick={(e) => { e.stopPropagation(); handleApplyWithStatusLine(); }} startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined} sx={{ py: 0.25 }}>
-                                                    {applyButtonLabel}
-                                                </Button>
-                                            </span>
-                                        </Tooltip>
-                                    )}
-                                    {onViewConfig && (
-                                        <Button variant="text" size="small" onClick={(e) => { e.stopPropagation(); onViewConfig(); }} sx={{ py: 0, textTransform: 'none', color: 'text.secondary', minWidth: 0 }}>
-                                            {viewConfigButtonLabel}
-                                        </Button>
-                                    )}
-                                    <Button variant="text" size="small" onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSyncedItem(APPLY_DONE_KEY(agentKey), 'true');
-                                        setApplyDone(true);
-                                    }} sx={{ py: 0, textTransform: 'none', color: 'text.disabled', minWidth: 0 }}>
-                                        {t('agentSetup.apply.skip')}
-                                    </Button>
-                                </Stack>
-                            )}
-                            {applyDone && (
-                                expandedDoneSteps.has(3) ? <ExpandLessIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} /> : <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
-                            )}
-                        </Stack>
-                        {applyResult && (
-                            <Alert severity={applyResult.success ? 'success' : 'error'} sx={{ mt: 0.75, ml: 4.25, py: 0.5 }}>
-                                {applyResult.success ? (
-                                    <Box>
-                                        <Typography variant="body2" sx={{
-                                            fontWeight: 600
-                                        }}>{applySuccessLabel}</Typography>
-                                        {applyResult.files?.map(f => (
-                                            <Typography key={f} variant="body2" sx={{ display: 'block', fontFamily: fontMono, color: 'text.secondary' }}>{f}</Typography>
-                                        ))}
-                                    </Box>
-                                ) : (
-                                    <Typography variant="body2">{applyResult.error ?? t('agentSetup.apply.failed')}</Typography>
-                                )}
-                            </Alert>
-                        )}
-                        <Collapse in={applyDone && expandedDoneSteps.has(3)}>
-                            <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
-                                <Typography variant="body2" sx={{
-                                    color: "text.secondary"
-                                }}>
-                                    {applyStepDescription ?? t('agentSetup.apply.tooltip', { agent: agentName })}
-                                </Typography>
-                                <Stack
-                                    direction="row"
-                                    spacing={1}
-                                    sx={{
-                                        flexWrap: "wrap",
-                                        gap: 0.5
-                                    }}>
-                                    {onApply && (
-                                        <Button variant="contained" size="small" disabled={isApplyLoading} onClick={handleApplyWithStatusLine} startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined}>
-                                            {applyButtonLabel}
-                                        </Button>
-                                    )}
-                                    {onViewConfig && (
-                                        <Button variant="text" size="small" onClick={onViewConfig} sx={{ textTransform: 'none', color: 'text.secondary' }}>
-                                            {t('agentSetup.apply.viewConfigAdvanced', { label: viewConfigButtonLabel })}
-                                        </Button>
-                                    )}
-                                </Stack>
-                            </Stack>
-                        </Collapse>
-                    </Box>
-                </Stack>
+                    </Stack>
+                </Collapse>
+            </Box>
+        </Stack>
     );
 
     if (hidden) return null;

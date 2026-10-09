@@ -6,13 +6,11 @@
 // buttons with a green check badge on the active one.
 import { Box, ToggleButton, ToggleButtonGroup, Tooltip } from '@mui/material';
 import React from 'react';
+import { controlHeight } from '@/theme/controls';
 import { fontSizes } from '@/theme/fonts';
 
 // Fits the widest option in use (icon + "Docker") with room to spare.
 const OPTION_WIDTH = 84;
-// Fixed, so a toggle without icons is as tall as one with them. The other small
-// controls in the connection card (the Plugins strip) use the same height.
-export const CONTROL_HEIGHT = 26;
 
 export interface ChoiceOption<T extends string> {
     value: T;
@@ -41,7 +39,7 @@ export function ChoiceToggle<T extends string>({ value, options, onChange, ariaL
             // Every option is the same width, so switches next to each other
             // (Local / Docker under NPX / Global) line up, and so do the copy
             // buttons beside them.
-            sx={{ ml: 0.5, '& .MuiToggleButton-root': { width: optionWidth, height: CONTROL_HEIGHT, justifyContent: 'center', px: 0.75, py: 0, gap: 0.5, textTransform: 'none', fontSize: fontSizes.sm, lineHeight: 1.2 } }}
+            sx={{ ml: 0.5, '& .MuiToggleButton-root': { width: optionWidth, height: controlHeight, justifyContent: 'center', px: 0.75, py: 0, gap: 0.5, textTransform: 'none', fontSize: fontSizes.sm, lineHeight: 1.2 } }}
         >
             {options.map((option) => {
                 const button = (

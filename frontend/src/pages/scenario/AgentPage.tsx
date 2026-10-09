@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { Box, Button, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Button, Stack, Tooltip } from '@mui/material';
 import { BarChart as UsageIcon, ListAlt as RequestsIcon, Rule as QuickStartIcon } from '@/components/icons';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
@@ -132,6 +132,17 @@ export interface AgentPageSlot {
     isApplyLoading: boolean;
 }
 
+/** One more row of the connection list: a ConfigRow whose content is a control, not a value. */
+const ToggleRow: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+    <Box sx={{ py: 0.5 }}>
+        <ConfigRow
+            activeTab="row"
+            onTabChange={() => undefined}
+            tabs={[{ key: 'row', label, content: <Box sx={{ display: 'flex', alignItems: 'center' }}>{children}</Box> }]}
+        />
+    </Box>
+);
+
 const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) => {
     const { t } = useTranslation();
     const { scenario, setup, quickStart, headerLinks, slotRouting, connection } = agent;
@@ -146,7 +157,8 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
-    const [setupProgress, setSetupProgress] = useState<{ done: number; total: number; allDone: boolean } | null>(null);
+    // Whether every Quick Start step is done; null until the card has worked it out.
+    const [setupDone, setSetupDone] = useState<boolean | null>(null);
     // Requests and Usage are looks-in opened from the status row, one dialog at a time.
     const [lookIn, setLookIn] = useState<AgentActivityView | null>(null);
     // A finished Quick Start leaves the page; its button in the status row brings it back
@@ -154,11 +166,11 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     const [quickStartReopened, setQuickStartReopened] = useState(false);
     const [quickStartResetKey, setQuickStartResetKey] = useState(0);
     const wasAllDone = useRef<boolean | null>(null);
-    const onSetupProgress = useCallback((p: { done: number; total: number; allDone: boolean }) => {
+    const onSetupDoneChange = useCallback((done: boolean) => {
         // Finished again after a reopen: it hides itself once more.
-        if (wasAllDone.current === false && p.allDone) setQuickStartReopened(false);
-        wasAllDone.current = p.allDone;
-        setSetupProgress(p);
+        if (wasAllDone.current === false && done) setQuickStartReopened(false);
+        wasAllDone.current = done;
+        setSetupDone(done);
     }, []);
     const { status: clientConfigStatus } = useClientConfigStatus(agent.clientConfigTool ?? null, [rules, dialogOpen, slotMode]);
     const context1M = useContext1MToggle(() => setDialogOpen(true));
@@ -231,8 +243,10 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     );
 
     // Until progress is known, an agent that already routes a model counts as done.
-    const setupFinished = setupProgress ? setupProgress.allDone : hasModelOnAnyRule(rules);
+    const setupFinished = setupDone ?? hasModelOnAnyRule(rules);
     const quickStartHidden = !quickStart || (setupFinished && !quickStartReopened);
+    const slotModeLabel = t('scenarioPage.slotMode', { defaultValue: 'Model mode' });
+    const statusLabel = t('scenarioPage.lookIn', { defaultValue: 'Status' });
     const restartQuickStart = () => {
         resetSetupProgress(scenario);
         wasAllDone.current = null;
@@ -284,62 +298,38 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         segmented control, like Local | Docker. */}
                     <Box sx={{ px: 2, py: 0.5 }}>
                         {slotRouting && (
-                            <Box sx={{ py: 0.5 }}>
-                            <ConfigRow
-                                activeTab="mode"
-                                onTabChange={() => undefined}
-                                tabs={[{
-                                    key: 'mode',
-                                    label: t('scenarioPage.slotMode', { defaultValue: 'Model mode' }),
-                                    content: (
-                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                            <ChoiceToggle<SlotMode>
-                                                value={slots.mode}
-                                                options={slots.modeOptions}
-                                                onChange={slots.requestMode}
-                                                optionWidth={112}
-                                                ariaLabel={t('scenarioPage.slotMode', { defaultValue: 'Model mode' })}
-                                            />
-                                        </Box>
-                                    ),
-                                }]}
-                            />
-                            </Box>
+                            <ToggleRow label={slotModeLabel}>
+                                <ChoiceToggle<SlotMode>
+                                    value={slots.mode}
+                                    options={slots.modeOptions}
+                                    onChange={slots.requestMode}
+                                    optionWidth={112}
+                                    ariaLabel={slotModeLabel}
+                                />
+                            </ToggleRow>
                         )}
-                        <Box sx={{ py: 0.5 }}>
-                        <ConfigRow
-                            activeTab="status"
-                            onTabChange={() => undefined}
-                            tabs={[{
-                                key: 'status',
-                                label: t('scenarioPage.lookIn', { defaultValue: 'Status' }),
-                                content: (
-                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                        {/* None is ever selected: each option just opens something.
-                                            Quick Start is not a dialog — it sits above the rules while
-                                            there is setup to do and leaves when done — so its option
-                                            exists only while hidden, and brings it back, reset. */}
-                                        <ChoiceToggle<'requests' | 'usage' | 'quickstart' | ''>
-                                            value=""
-                                            optionWidth={100}
-                                            ariaLabel={t('scenarioPage.lookIn', { defaultValue: 'Status' })}
-                                            onChange={(next) => {
-                                                if (next === 'quickstart') restartQuickStart();
-                                                else if (next) setLookIn(next);
-                                            }}
-                                            options={[
-                                                { value: 'requests', label: t('agentActivity.requests'), icon: <RequestsIcon /> },
-                                                { value: 'usage', label: t('agentActivity.usage'), icon: <UsageIcon /> },
-                                                ...(quickStart && quickStartHidden
-                                                    ? [{ value: 'quickstart' as const, label: t('agentSetup.quickStart'), icon: <QuickStartIcon />, tooltip: t('agentSetup.restartTooltip', { defaultValue: 'Run Quick Start again' }) }]
-                                                    : []),
-                                            ]}
-                                        />
-                                    </Box>
-                                ),
-                            }]}
-                        />
-                        </Box>
+                        <ToggleRow label={statusLabel}>
+                            {/* None is ever selected: each option just opens something. Quick
+                                Start is not a dialog — it sits above the rules while there is
+                                setup to do and leaves when done — so its option exists only
+                                while hidden, and brings it back, reset. */}
+                            <ChoiceToggle<'requests' | 'usage' | 'quickstart' | ''>
+                                value=""
+                                optionWidth={100}
+                                ariaLabel={statusLabel}
+                                onChange={(next) => {
+                                    if (next === 'quickstart') restartQuickStart();
+                                    else if (next) setLookIn(next);
+                                }}
+                                options={[
+                                    { value: 'requests', label: t('agentActivity.requests'), icon: <RequestsIcon /> },
+                                    { value: 'usage', label: t('agentActivity.usage'), icon: <UsageIcon /> },
+                                    ...(quickStart && quickStartHidden
+                                        ? [{ value: 'quickstart' as const, label: t('agentSetup.quickStart'), icon: <QuickStartIcon />, tooltip: t('agentSetup.restartTooltip', { defaultValue: 'Run Quick Start again' }) }]
+                                        : []),
+                                ]}
+                            />
+                        </ToggleRow>
                     </Box>
                 </UnifiedCard>
 
@@ -349,7 +339,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         key={quickStartResetKey}
                         hidden={quickStartHidden}
                         onDismiss={() => setQuickStartReopened(false)}
-                        onProgressChange={onSetupProgress}
+                        onAllDoneChange={onSetupDoneChange}
                         agentKey={scenario}
                         agentName={agent.title}
                         installCommand={quickStart.installCommand ?? ''}

@@ -336,3 +336,34 @@
 **结果**：四个控件高度均为 26px、字号 12px、圆角与边框同款；行距因此也更均匀。
 
 **教训**：8.15 我复用了 `ChoiceToggle` 却没核对它的实际尺寸，只凭眼睛判断"看着差不多"。**视觉一致性要量，不要看**（高度、字号、圆角、边框四项）。
+
+### 8.17 提 PR 前的代码评审与简化
+
+**评审范围**：本分支相对 `main` 的净改动（前端源码，不含文档和 i18n）。`code-review` 另报了若干发生在 `internal/`、`.github/`、`desk/` 的问题——**不在本分支的改动里**（`git diff origin/main` 无这些文件），属于 `main` 上别人的改动，未处理。
+
+**属于本分支的评审发现**：
+
+| 发现 | 处理 |
+|---|---|
+| 已有模型的 Agent 重新打开 Quick Start 后关不掉（步骤由事实判定，重置撤销不了，自动隐藏只在 false→true 时触发） | **已修**：全部完成时卡片显示 **Hide** 按钮 |
+| Usage / Requests 按 `scenario=claude_code` 精确匹配，不含 `claude_code:p1` 等 profile | **不改**：Claude Code 的 profile 有独立页面（`ClaudeCodeProfilePage`，不走 `AgentPage`），这一页显示的就是默认那个，与页面一致；已写进 PR 说明 |
+
+**简化（4 个并行 reviewer：复用 / 精简 / 效率 / 层次）已采纳**：
+- 复用 `formatLatency`（`probe/runProbe`），删除本地副本；`Intl.RelativeTimeFormat` 实例用 `useMemo` 缓存。
+- 重置 Quick Start 由"`resetKey` prop + effect 里 setState"改为导出 `resetSetupProgress` + 用 `key` 重新挂载（去掉一个 lint 新增 warning）。
+- 仪表盘 Agent 选项由"刷新计数器触发的 effect"改为 `useCallback` 加载函数（去掉另一个 lint 新增 warning）。
+- `setupProgress` 对象只用到 `allDone`，收成布尔 `setupDone`；`AgentSetupCard` 的 `onProgressChange` 改为 `onAllDoneChange`。
+- 两处重复的 `Box > ConfigRow` 包装抽成 `ToggleRow`；重复的 `t()` 标签提成常量；顺手修正了残留的错位缩进。
+- 控件高度常量从 `ChoiceToggle` 挪到 `@/theme/controls`（`PluginFeatures` 不再依赖具体组件）。
+- 清理无人使用的无用 import 与文案（Tab / 弹窗方案残留）。
+
+**评审提出、本次有意不做**（记为后续）：
+
+| 建议 | 为什么没做 |
+|---|---|
+| 把 `ChoiceToggle` 当"入口按钮组"用是错层，应有专门的 `ActionButtonGroup` | 视觉是用户确认过的；换成 `ButtonGroup` 会改外观。语义问题（读屏当单选组）留作后续 |
+| 抽 `useAgentSetup` hook 统一"什么算完成"（卡片与页面各算一遍） | 最彻底的做法，但约半天工作量且行为风险高；先用本 PR 的小修稳住 |
+| `scenarioLabel` 从 `pages/` 挪到公共位置（`components/` 反向依赖 `pages/`） | `AgentQuickNav` 已有同样的先例；挪动要拆注册表的图标数据，另议 |
+| `buildTimeParams` 的 5 个位置参数改成 filters 对象 | 动到既有签名与所有调用点，另议 |
+| 两个 `AgentActivityDialog` 合成一个实例 | 会失去关闭时的淡出动画 |
+| 去掉 `wasAllDone` 自动隐藏 | 是行为取舍，不是纯简化 |
