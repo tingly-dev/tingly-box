@@ -3,7 +3,9 @@ package vmodel
 import (
 	"fmt"
 	"hash/fnv"
+	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -254,8 +256,41 @@ type Sequence struct {
 	flat           []ResolvedStep
 	defaultContent string
 	onExhaust      ExhaustPolicy
-	exhausted      ResolvedStep // served by Next when onExhaust == ExhaustFail
-	cursor         atomic.Uint64
+	exhausted      ResolvedStep  // served by Next when onExhaust == ExhaustFail
+	cursor         atomic.Uint64 // the default session (no `@session` in the model name)
+
+	mu       sync.Mutex
+	sessions map[string]*sessionCursor // named sessions, by id; see NextFor
+	tick     uint64
+}
+
+// sessionCursor is one named session's place in the program.
+type sessionCursor struct {
+	n    uint64
+	used uint64 // tick of last use, for eviction
+}
+
+// MaxSessions bounds how many named sessions one Sequence remembers. A client
+// minting endless session ids cannot grow memory without limit: past the cap
+// the least recently used session is forgotten (and would restart if it came
+// back).
+const MaxSessions = 1024
+
+var sessionIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
+
+// ValidSessionID reports whether id is usable as a session name.
+func ValidSessionID(id string) bool { return sessionIDPattern.MatchString(id) }
+
+// SplitSessionModel splits a requested model name of the form "<id>@<session>"
+// (e.g. "read-edit@test-42"). ok is false when there is no '@' or the session
+// part is not a valid id. Script ids cannot contain '@', so the split is
+// unambiguous.
+func SplitSessionModel(model string) (id, session string, ok bool) {
+	i := strings.IndexByte(model, '@')
+	if i <= 0 || !ValidSessionID(model[i+1:]) {
+		return model, "", false
+	}
+	return model[:i], model[i+1:], true
 }
 
 // NewSequence flattens cfg.Steps (expanding Repeat) and pre-resolves each step
@@ -285,11 +320,22 @@ func NewSequence(cfg SequenceConfig) *Sequence {
 	return s
 }
 
-// Next atomically advances the cursor and returns the step for this request.
+// Next advances the default session and returns the step for this request.
 // It is safe for concurrent use; each caller observes a distinct cursor value.
 // Behaviour past the end of the program is governed by OnExhaust.
-func (s *Sequence) Next() ResolvedStep {
-	n := s.cursor.Add(1) - 1
+func (s *Sequence) Next() ResolvedStep { return s.NextFor("") }
+
+// NextFor is Next for a named session: each session id has its own cursor, so
+// concurrent conversations (or tests) run independent copies of the program
+// and never consume each other's steps. "" is the default session, shared by
+// every caller that names none. Sessions start on first use.
+func (s *Sequence) NextFor(session string) ResolvedStep {
+	var n uint64
+	if session == "" {
+		n = s.cursor.Add(1) - 1
+	} else {
+		n = s.advanceSession(session)
+	}
 	var r ResolvedStep
 	switch {
 	case n < uint64(len(s.flat)):
@@ -306,21 +352,62 @@ func (s *Sequence) Next() ResolvedStep {
 		// request, so repeat:, looping and clamped programs never replay the
 		// same tool_use id into an agent's transcript.
 		tool := *r.Tool
-		tool.ID = toolID(s.id, n+1)
+		tool.ID = toolID(s.id, session, n+1)
 		r.Tool = &tool
 	}
 	return r
 }
 
+// advanceSession returns the session's cursor value and moves it on.
+func (s *Sequence) advanceSession(session string) uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := s.sessions[session]
+	if c == nil {
+		if s.sessions == nil {
+			s.sessions = map[string]*sessionCursor{}
+		}
+		if len(s.sessions) >= MaxSessions {
+			var oldest string
+			var oldestUsed uint64 = ^uint64(0)
+			for id, sc := range s.sessions {
+				if sc.used < oldestUsed {
+					oldest, oldestUsed = id, sc.used
+				}
+			}
+			delete(s.sessions, oldest)
+		}
+		c = &sessionCursor{}
+		s.sessions[session] = c
+	}
+	s.tick++
+	c.used = s.tick
+	n := c.n
+	c.n++
+	return n
+}
+
 // toolID builds a tool_use id of the shape real APIs accept (A-Za-z0-9_-, at
-// most 64 characters) from a script id and the served-request number. A name
-// that had to be sanitised or truncated gets a short hash of the original, so
-// two different scripts never share an id prefix; uniqueness within a script
-// comes from n.
-func toolID(script string, n uint64) string {
+// most 64 characters) from a script id, an optional session and the
+// served-request number. A name that had to be sanitised or truncated (script to
+// 18, session to 8) gets a short hash of the original, so different scripts or
+// sessions never share an id prefix; uniqueness within a session comes from n.
+func toolID(script, session string, n uint64) string {
+	if script = idPart(script, 18); script == "" {
+		script = "vmodel"
+	}
+	if session = idPart(session, 8); session != "" {
+		session += "_"
+	}
+	return fmt.Sprintf("toolu_%s_%s%d", script, session, n)
+}
+
+// idPart keeps the A-Za-z0-9_- characters of s (others become '_'), up to max.
+// If that changed anything it appends "-" and 4 hex digits of a hash of s.
+func idPart(s string, max int) string {
 	var b strings.Builder
-	for _, r := range script {
-		if b.Len() >= 24 {
+	for _, r := range s {
+		if b.Len() >= max {
 			break
 		}
 		if r < 128 && (r == '-' || r == '_' || (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')) {
@@ -330,14 +417,12 @@ func toolID(script string, n uint64) string {
 		}
 	}
 	name := b.String()
-	if name == "" {
-		name = "vmodel"
-	} else if name != script {
+	if name != s {
 		h := fnv.New32a()
-		h.Write([]byte(script))
+		h.Write([]byte(s))
 		name += fmt.Sprintf("-%04x", h.Sum32()&0xffff)
 	}
-	return fmt.Sprintf("toolu_%s_%d", name, n)
+	return name
 }
 
 // exhaustedStep is the terminal error served once an ExhaustFail program is
