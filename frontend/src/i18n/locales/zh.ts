@@ -2182,23 +2182,20 @@ export default {
   "agentActivity": {
     "usage": "用量",
     "requests": "请求",
-    "title": "请求与用量",
     "openDashboard": "在仪表盘中查看",
     "refresh": "刷新",
     "requestsToday": "今日请求",
     "tokensToday": "今日 Token",
     "errorsToday": "今日错误",
-    "recent": "最近请求",
     "ok": "成功",
     "error": "错误",
     "empty": "这个 Agent 还没有发过请求。收到第一个请求后，今日数据和最近请求会显示在这里。",
     "loadFailed": "无法加载该 Agent 的请求。"
   },
   "agentSetup": {
+    "hide": "隐藏",
     "restartTooltip": "重新运行快速开始",
     "autoSkipped": "已跳过：已经配置了模型",
-    "setup": "设置",
-    "showSteps": "设置步骤",
     "quickStart": "快速开始",
     "done": "已完成",
     "expand": "展开",
@@ -2254,9 +2251,6 @@ export default {
   "scenarioPage": {
     "slotMode": "模型模式",
     "lookIn": "状态",
-    "tabs": {
-      "connection": "连接"
-    },
     "setupGuide": "配置指南",
     "config": "配置",
     "autoConfig": "自动配置",

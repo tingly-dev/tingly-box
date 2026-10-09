@@ -2189,23 +2189,20 @@ export default {
   "agentActivity": {
     "usage": "Usage",
     "requests": "Requests",
-    "title": "Requests & usage",
     "openDashboard": "Open in Dashboard",
     "refresh": "Refresh",
     "requestsToday": "Requests today",
     "tokensToday": "Tokens today",
     "errorsToday": "Errors today",
-    "recent": "Latest requests",
     "ok": "OK",
     "error": "Error",
     "empty": "No requests from this agent yet. Once it sends one, today's numbers and the latest requests show up here.",
     "loadFailed": "Couldn't load this agent's requests."
   },
   "agentSetup": {
+    "hide": "Hide",
     "restartTooltip": "Run Quick Start again",
     "autoSkipped": "Skipped — a model is already set",
-    "setup": "Setup",
-    "showSteps": "Setup steps",
     "quickStart": "Quick Start",
     "done": "Done",
     "expand": "Expand",
@@ -2261,9 +2258,6 @@ export default {
   "scenarioPage": {
     "slotMode": "Model mode",
     "lookIn": "Status",
-    "tabs": {
-      "connection": "Connection"
-    },
     "setupGuide": "Setup Guide",
     "config": "Config",
     "autoConfig": "Auto Config",

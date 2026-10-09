@@ -289,23 +289,22 @@ export function useDashboardData({
     // to the selected agent (same trap as the provider options above). An
     // agent picked from a link stays in the list even if it has no usage in
     // this range, so the select never shows a value it doesn't offer.
-    const [scenarioRefresh, setScenarioRefresh] = useState(0);
-    useEffect(() => {
-        let cancelled = false;
+    const loadScenarioOptions = useCallback(async () => {
         const { start_time, end_time } = buildTimeParams('all', 'all', 'all', 'all', timeRange);
-        api.getUsageStats({ start_time, end_time, group_by: 'scenario', limit: 1000 })
-            .then((result: any) => {
-                if (cancelled || !Array.isArray(result?.data)) return;
-                setScenarioOptions(
-                    result.data
-                        .map((row: any) => ({ scenario: row.scenario || row.key || '', requests: row.request_count || 0 }))
-                        .filter((o: ScenarioOption) => o.scenario !== '')
-                        .sort((a: ScenarioOption, b: ScenarioOption) => b.requests - a.requests),
-                );
-            })
-            .catch((error: unknown) => console.error('Failed to load agent options:', error));
-        return () => { cancelled = true; };
-    }, [buildTimeParams, timeRange, scenarioRefresh]);
+        try {
+            const result: any = await api.getUsageStats({ start_time, end_time, group_by: 'scenario', limit: 1000 });
+            if (!Array.isArray(result?.data)) return;
+            setScenarioOptions(
+                result.data
+                    .map((row: any) => ({ scenario: row.scenario || row.key || '', requests: row.request_count || 0 }))
+                    .filter((o: ScenarioOption) => o.scenario !== '')
+                    .sort((a: ScenarioOption, b: ScenarioOption) => b.requests - a.requests),
+            );
+        } catch (error) {
+            console.error('Failed to load agent options:', error);
+        }
+    }, [buildTimeParams, timeRange]);
+    useEffect(() => { void loadScenarioOptions(); }, [loadScenarioOptions]);
 
     // Provider/model options are snapshotted from the current range's stats, so a
     // selection from one range can be stale (or simply absent) in another. Clear
@@ -357,7 +356,7 @@ export function useDashboardData({
     const handleRefresh = () => {
         setRefreshing(true);
         loadFilterOptions();
-        setScenarioRefresh((n) => n + 1);
+        void loadScenarioOptions();
         loadData(selectedProvider, selectedModel, selectedUser, selectedScenario, timeRange);
         setHeatmapRefresh((n) => n + 1);
     };

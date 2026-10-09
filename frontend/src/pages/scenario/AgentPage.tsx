@@ -22,6 +22,7 @@ import AgentSetupCard, {
     type AgentApplyResult,
     type AgentInstallAction,
     hasModelOnAnyRule,
+    resetSetupProgress,
     scrollToModelsCard,
 } from './components/AgentSetupCard';
 import { SCENARIO_HEADER_CONTENT_MAX_WIDTH, ScenarioCardHeader } from './components/ScenarioCardHeader';
@@ -233,9 +234,10 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     const setupFinished = setupProgress ? setupProgress.allDone : hasModelOnAnyRule(rules);
     const quickStartHidden = !quickStart || (setupFinished && !quickStartReopened);
     const restartQuickStart = () => {
+        resetSetupProgress(scenario);
         wasAllDone.current = null;
         setQuickStartReopened(true);
-        setQuickStartResetKey((k) => k + 1);
+        setQuickStartResetKey((k) => k + 1); // remount: the card re-reads its (now empty) progress
     };
 
     return (
@@ -344,8 +346,9 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                 {quickStart && (
                     // Embedded where it always was, above the rules; gone once done.
                     <AgentSetupCard
+                        key={quickStartResetKey}
                         hidden={quickStartHidden}
-                        resetKey={quickStartResetKey}
+                        onDismiss={() => setQuickStartReopened(false)}
                         onProgressChange={onSetupProgress}
                         agentKey={scenario}
                         agentName={agent.title}

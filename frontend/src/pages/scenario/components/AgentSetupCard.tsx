@@ -78,8 +78,9 @@ export interface AgentSetupCardProps {
     configApplied?: boolean;
     /** Render nothing (the page hides a finished Quick Start); progress is still tracked. */
     hidden?: boolean;
-    /** A new value resets the progress, as the card's own Reset does. */
-    resetKey?: number;
+    /** Shown as a "Hide" button once every step is done, so a card that was brought back
+     *  (when its steps are done by facts that reset can't undo) can be put away again. */
+    onDismiss?: () => void;
     /** Reported whenever progress changes, so the page can hide / show the card. */
     onProgressChange?: (progress: { done: number; total: number; allDone: boolean }) => void;
     /** Opened by the header "How routing works" help button. */
@@ -93,6 +94,19 @@ const APPLY_DONE_KEY = (agentKey: string) => `setup-card-step3-done-${agentKey}`
 // step done so the wizard advances, without claiming a model was configured.
 const MODEL_SKIPPED_KEY = (agentKey: string) => `setup-card-step2-skipped-${agentKey}`;
 const TOTAL_STEPS = 4;
+
+/**
+ * Forget the progress a user recorded by hand for this agent (what the card's
+ * own Reset clears). The card reads it on mount, so a caller that wants a reset
+ * card clears this and remounts it. Facts (a model is set, the config is
+ * applied) are not recorded progress and are not affected.
+ */
+export const resetSetupProgress = (agentKey: string): void => {
+    removeSyncedItem(COLLAPSED_KEY(agentKey));
+    removeSyncedItem(INSTALL_DONE_KEY(agentKey));
+    removeSyncedItem(APPLY_DONE_KEY(agentKey));
+    removeSyncedItem(MODEL_SKIPPED_KEY(agentKey));
+};
 
 /** True iff at least one rule has a service with both a non-empty provider and model. */
 export const hasModelOnAnyRule = (rules: any[] | null | undefined): boolean =>
@@ -154,7 +168,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     providersLoading = false,
     configApplied = false,
     hidden = false,
-    resetKey = 0,
+    onDismiss,
     onProgressChange,
     onShowGuide,
 }) => {
@@ -298,10 +312,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     };
 
     const handleReset = () => {
-        removeSyncedItem(COLLAPSED_KEY(agentKey));
-        removeSyncedItem(INSTALL_DONE_KEY(agentKey));
-        removeSyncedItem(APPLY_DONE_KEY(agentKey));
-        removeSyncedItem(MODEL_SKIPPED_KEY(agentKey));
+        resetSetupProgress(agentKey);
         setCollapsed(false);
         setInstallConfirmed(false);
         setApplyDone(false);
@@ -310,8 +321,6 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         resetCopied();
         resetCopiedMirror();
     };
-
-    useEffect(() => { if (resetKey > 0) handleReset(); }, [resetKey]);  // eslint-disable-line react-hooks/exhaustive-deps
 
     const progressLabel = allDone ? t('agentSetup.done') : `${doneCount}/${TOTAL_STEPS}`;
     const progressColor = allDone ? 'success' : 'default';
@@ -684,6 +693,12 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
             }
             rightAction={
                 <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                    {allDone && onDismiss && (
+                        <Button size="small" variant="text" onClick={onDismiss}
+                            sx={{ py: 0, textTransform: 'none', minWidth: 0, fontSize: fontSizes.sm }}>
+                            {t('agentSetup.hide')}
+                        </Button>
+                    )}
                     {/* Reset is always reachable from the header (not buried at the
                         bottom of an expanded card), so it works whether the card is
                         open, closed, or mid-flow. */}
