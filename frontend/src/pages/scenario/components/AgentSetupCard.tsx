@@ -62,6 +62,13 @@ export interface AgentSetupCardProps {
     hasModelSelected?: boolean;
     onSelectModel?: () => void;
     onConnectProvider?: () => void;
+    /**
+     * The page's provider list. The card reads it instead of fetching its own
+     * copy, so a provider connected from anywhere on the page (this card or
+     * the rule toolbar) updates step 1 without a reload.
+     */
+    providers: Array<{ enabled?: boolean }>;
+    providersLoading?: boolean;
     /** Opened by the header "How routing works" help button. */
     onShowGuide?: () => void;
 }
@@ -130,6 +137,8 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     hasModelSelected = false,
     onSelectModel,
     onConnectProvider,
+    providers,
+    providersLoading = false,
     onShowGuide,
 }) => {
     const { t } = useTranslation();
@@ -162,9 +171,10 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         return () => { cancelled = true; };
     }, [agentKey]);
     const installDone = installConfirmed || lastRequestAt !== null;
-    const [hasProvider, setHasProvider] = useState(false);
-    const [providerCount, setProviderCount] = useState(0);
-    const [providerLoading, setProviderLoading] = useState(true);
+    const enabledProviders = providers.filter((p: any) => p.enabled && isCredentialProvider(p));
+    const hasProvider = enabledProviders.length > 0;
+    const providerCount = enabledProviders.length;
+    const providerLoading = providersLoading;
     const [applyResult, setApplyResult] = useState<AgentApplyResult | null>(null);
     const { copied, copy: copyInstallCommand, reset: resetCopied } = useCopyFeedback(1500);
     const { copied: copiedMirror, copy: copyInstallMirrorCommand, reset: resetCopiedMirror } = useCopyFeedback(1500);
@@ -192,21 +202,6 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
             return next;
         });
     };
-
-    useEffect(() => {
-        let cancelled = false;
-        api.getProviders().then((result) => {
-            if (cancelled) return;
-            const providers = Array.isArray(result?.data) ? result.data : [];
-            const enabled = providers.filter((p: any) => p.enabled && isCredentialProvider(p));
-            setHasProvider(enabled.length > 0);
-            setProviderCount(enabled.length);
-            setProviderLoading(false);
-        }).catch(() => {
-            if (!cancelled) setProviderLoading(false);
-        });
-        return () => { cancelled = true; };
-    }, []);
 
     const providerDone = hasProvider;
     const modelSelected = hasModelSelected;
