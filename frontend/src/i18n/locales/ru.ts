@@ -2281,6 +2281,8 @@ export default {
     }
   },
   "scenarioPage": {
+    "connectionDetails": "Параметры подключения",
+    "hideConnectionDetails": "Скрыть параметры",
     "setupGuide": "Инструкция",
     "config": "Конфиг",
     "autoConfig": "Автонастройка",

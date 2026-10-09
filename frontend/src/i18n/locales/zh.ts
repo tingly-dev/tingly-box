@@ -2246,6 +2246,8 @@ export default {
     },
   },
   "scenarioPage": {
+    "connectionDetails": "连接详情",
+    "hideConnectionDetails": "收起详情",
     "setupGuide": "配置指南",
     "config": "配置",
     "autoConfig": "自动配置",
