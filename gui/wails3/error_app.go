@@ -32,7 +32,11 @@ func runNoticeApp(title, message string, action *noticeAction) (confirmed bool, 
 		Name:        AppName,
 		Description: AppDescription,
 		Mac: application.MacOptions{
-			ApplicationShouldTerminateAfterLastWindowClosed: true,
+			// There is no window at all, so "last window closed" would end the
+			// process the moment the dialog is dismissed on macOS, killing the
+			// goroutine that is still stopping the old server and relaunching.
+			// Every path quits explicitly via app.Quit() instead.
+			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
 	})
 
