@@ -116,47 +116,54 @@ func offerTakeover(appManager *app.AppManager, lockErr error) error {
 	}
 
 	message := fmt.Sprintf("Tingly Box is already running in the background (pid %d, port %d, %s).\n\nIt was started from the command line, so it has no window. You can restart it as the app, or keep using the running instance.", pid, port, version)
-	confirmed := runNoticeApp("Tingly Box Is Already Running", message, &noticeAction{
+	restart := func() error {
+		if err := command.StopRunningServer(appManager.ConfigDir()); err != nil {
+			return fmt.Errorf("failed to stop the running instance (pid %d): %w", pid, err)
+		}
+		// Stopping returns once the lock is free, but give a force-killed process a
+		// moment to drop it so the relaunch never loses the single-instance race
+		// to the instance it just stopped.
+		for deadline := time.Now().Add(5 * time.Second); fileLock.IsLocked(); time.Sleep(100 * time.Millisecond) {
+			if time.Now().After(deadline) {
+				return fmt.Errorf("the previous instance (pid %d) did not release its lock", pid)
+			}
+		}
+		exe, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		// A restart continues on the port the old server was actually using, like
+		// `tingly-box restart` (see RestartCmdKong). Args are kept so flags such as
+		// --host survive; an explicit --port the user passed still wins.
+		args := append([]string(nil), os.Args[1:]...)
+		if port > 0 && !hasPortFlag(args) {
+			insertAt := len(args)
+			for i, a := range args {
+				if a == "--" {
+					insertAt = i
+					break
+				}
+			}
+			args = append(args[:insertAt], append([]string{"--port", fmt.Sprint(port)}, args[insertAt:]...)...)
+		}
+		log.Printf("Stopped pid %d; relaunching GUI on port %d", pid, port)
+		return exec.Command(exe, args...).Start()
+	}
+
+	// The restart runs inside the notice app's confirm handler, before it quits:
+	// app.Quit() may terminate the process without app.Run() returning.
+	confirmed, err := runNoticeApp("Tingly Box Is Already Running", message, &noticeAction{
 		Prompt: fmt.Sprintf("Stop the running instance (pid %d, port %d) and restart it as the app?\n\nIn-flight AI requests will be interrupted.", pid, port),
 		Label:  "Restart as App",
+		Run:    restart,
 	})
 	if !confirmed {
 		return lockErr
 	}
-
-	if err := command.StopRunningServer(appManager.ConfigDir()); err != nil {
-		return fmt.Errorf("failed to stop the running instance (pid %d): %w", pid, err)
-	}
-	// Stopping returns once the lock is free, but give a force-killed process a
-	// moment to drop it so the relaunch never loses the single-instance race
-	// to the instance it just stopped.
-	for deadline := time.Now().Add(5 * time.Second); fileLock.IsLocked(); time.Sleep(100 * time.Millisecond) {
-		if time.Now().After(deadline) {
-			// No second error window: application.New is a singleton and the
-			// notice app has already run, so report through the log + error.
-			return fmt.Errorf("the previous instance (pid %d) did not release its lock", pid)
-		}
-	}
-	exe, err := os.Executable()
 	if err != nil {
-		return err
+		log.Printf("Restart as app failed: %v", err)
 	}
-	// A restart continues on the port the old server was actually using, like
-	// `tingly-box restart` (see RestartCmdKong). Args are kept so flags such as
-	// --host survive; an explicit --port the user passed still wins.
-	args := append([]string(nil), os.Args[1:]...)
-	if port > 0 && !hasPortFlag(args) {
-		insertAt := len(args)
-		for i, a := range args {
-			if a == "--" {
-				insertAt = i
-				break
-			}
-		}
-		args = append(args[:insertAt], append([]string{"--port", fmt.Sprint(port)}, args[insertAt:]...)...)
-	}
-	log.Printf("Stopped pid %d; relaunching GUI on port %d", pid, port)
-	return exec.Command(exe, args...).Start()
+	return err
 }
 
 func hasPortFlag(args []string) bool {
@@ -195,7 +202,7 @@ func (l *appLauncher) Start(appManager *app.AppManager, flags command.ServerFlag
 			// there is no other instance to focus or take over, so say what
 			// actually went wrong instead of offering to stop something.
 			log.Printf("Cannot start: %v", err)
-			runNoticeApp("Tingly Box Could Not Start", err.Error(), nil)
+			_, _ = runNoticeApp("Tingly Box Could Not Start", err.Error(), nil)
 			return err
 		}
 		if notifyErr := notifyRunningGUI(appManager); notifyErr == nil {

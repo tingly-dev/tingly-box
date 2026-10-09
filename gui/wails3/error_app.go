@@ -13,17 +13,22 @@ import (
 type noticeAction struct {
 	Prompt string // dialog body
 	Label  string // confirm-button text
+	// Run performs the action. It must run before the notice app quits: on some
+	// platforms (notably macOS) app.Quit() terminates the process outright and
+	// app.Run() never returns, so work scheduled "after Run" would be lost.
+	Run func() error
 }
 
 // runErrorApp creates a minimal app with just an error message window
 func runErrorApp(message string) {
-	runNoticeApp("Port Unavailable", message, nil)
+	_, _ = runNoticeApp("Port Unavailable", message, nil)
 }
 
 // runNoticeApp shows title/message in a minimal window and blocks until it is
 // closed. With a non-nil action it also asks the user to confirm it; the
-// return value reports whether they did (always false without an action).
-func runNoticeApp(title, message string, action *noticeAction) (confirmed bool) {
+// return value reports whether they did (always false without an action) and
+// the error from action.Run.
+func runNoticeApp(title, message string, action *noticeAction) (confirmed bool, runErr error) {
 	app := application.New(application.Options{
 		Name:        AppName,
 		Description: AppDescription,
@@ -107,7 +112,13 @@ func runNoticeApp(title, message string, action *noticeAction) (confirmed bool) 
 			dialog := app.Dialog.Question().SetTitle(title).SetMessage(action.Prompt)
 			dialog.AddButton(action.Label).SetAsDefault().OnClick(func() {
 				confirmed = true
-				app.Quit()
+				// Off the UI thread: stopping the old server can take seconds.
+				go func() {
+					if action.Run != nil {
+						runErr = action.Run()
+					}
+					app.Quit()
+				}()
 			})
 			dialog.AddButton("Cancel").SetAsCancel().OnClick(func() { app.Quit() })
 			dialog.Show()
@@ -116,5 +127,5 @@ func runNoticeApp(title, message string, action *noticeAction) (confirmed bool) 
 
 	// Run the error app
 	_ = app.Run()
-	return confirmed
+	return confirmed, runErr
 }
