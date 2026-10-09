@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -395,27 +394,23 @@ func printBanner(cfg BannerConfig) {
 		webUI = fmt.Sprintf(webUILoginTpl, cfg.Port, cfg.GlobalConfig.GetUserToken())
 	}
 
-	// No box: a left accent bar keeps the block recognisable without
+	// No box: a wide left accent bar keeps the block recognisable without
 	// breaking when the (long) login URL is wider than the terminal.
-	bar := lipgloss.NewStyle().
-		Border(lipgloss.ThickBorder(), false, false, false, true).
-		BorderForeground(primary).
-		PaddingLeft(2)
+	bar := lipgloss.NewStyle().Foreground(primary).Render("\u2588\u2588\u2588") + "  "
 
 	rows := []string{
 		titleStyle.Render("Tingly-Box") + "  " + versionStyle.Render(formatVersion(BuildVersion)),
-		"",
 		labelStyle.Render("WebUI   ") + urlStyle.Render(webUI),
 	}
 	if cfg.GlobalConfig.HasUserToken() {
 		rows = append(rows, labelStyle.Render("Token   ")+tokenStyle.Render(cfg.GlobalConfig.GetUserToken()))
 	}
-	rows = append(rows, "", hintStyle.Render("Open the WebUI to get started"))
-	body := strings.Join(rows, "\n")
+	rows = append(rows, hintStyle.Render("Open the WebUI to get started"))
 
 	fmt.Println()
-	fmt.Println(bar.Render(body))
-	fmt.Println()
+	for _, row := range rows {
+		fmt.Println(bar + row)
+	}
 
 	if cfg.IsDaemon {
 		fmt.Println("Server is running in background. Use 'tingly-box stop' / 'tb stop' to stop.")
