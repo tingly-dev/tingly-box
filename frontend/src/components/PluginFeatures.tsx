@@ -8,6 +8,8 @@ import type { VisionService } from './flags';
 import { normalizePoints, RECORDING_POINTS } from './flags/RecordingV2Control';
 import { EFFORT_LEVELS } from './flags/ThinkingEffortControl';
 import type { Provider } from '@/types/provider';
+import { controlHeight } from '@/theme/controls';
+import { fontSizes } from '@/theme/fonts';
 
 interface PluginFeaturesProps {
     scenario: string;
@@ -182,7 +184,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                                 size="small"
                                 endIcon={<IconChevronDown sx={{ fontSize: 18 }} />}
                                 onClick={(e) => setPanelAnchor(e.currentTarget)}
-                                sx={{ textTransform: 'none', borderColor: 'divider', maxWidth: '100%', py: 0.25, pl: 0.5, justifyContent: 'space-between' }}
+                                sx={{ textTransform: 'none', borderColor: 'divider', maxWidth: '100%', height: controlHeight, py: 0, pl: 0.5, fontSize: fontSizes.sm, justifyContent: 'space-between' }}
                             >
                                 <Box component="span" sx={{ display: 'flex', alignItems: 'center', minWidth: 0, overflow: 'hidden' }}>
                                     {summary.map((item, i) => (

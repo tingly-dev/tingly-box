@@ -5,14 +5,10 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
-    ToggleButton,
-    ToggleButtonGroup,
-    Tooltip,
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
-import { toggleButtonGroupStyle, toggleButtonStyle } from '@/styles/toggleStyles';
 import { notify } from '@/utils/notify';
 
 /**
@@ -28,8 +24,10 @@ export interface SlotRouting {
     rules: any[];
     setRules: (rules: any[]) => void;
     loading: boolean;
-    /** Unified / Separate switch; changing it asks for confirmation first. */
-    modeSwitch: React.ReactNode;
+    /** Unified / Separate, as options for a choice control. */
+    modeOptions: { value: SlotMode; label: string; tooltip: string }[];
+    /** Ask to change the mode; the user confirms in `modeDialog` first. */
+    requestMode: (mode: SlotMode) => void;
     /** The confirmation dialog for a mode change. */
     modeDialog: React.ReactNode;
 }
@@ -120,27 +118,14 @@ export const useSlotRouting = (scenario: string, unifiedRuleUuid: string, enable
         setPendingMode(null);
     };
 
-    const modeSwitch = (
-        <ToggleButtonGroup
-            value={mode}
-            exclusive
-            size="small"
-            onChange={(_, value: SlotMode | null) => {
-                if (!value || value === mode) return;
-                setPendingMode(value);
-                setDialogOpen(true);
-            }}
-            sx={toggleButtonGroupStyle}
-        >
-            {modes.map((m) => (
-                <Tooltip key={m.value} title={m.description} arrow>
-                    <ToggleButton value={m.value} sx={toggleButtonStyle}>
-                        {m.label}
-                    </ToggleButton>
-                </Tooltip>
-            ))}
-        </ToggleButtonGroup>
-    );
+    // Unified / Separate as plain options + a request function, so the page can lay
+    // the choice out like its other rows; a change still asks for confirmation.
+    const modeOptions = modes.map((m) => ({ value: m.value, label: m.label, tooltip: m.description }));
+    const requestMode = (value: SlotMode) => {
+        if (value === mode) return;
+        setPendingMode(value);
+        setDialogOpen(true);
+    };
 
     const modeDialog = (
         <Dialog open={dialogOpen} onClose={cancelModeChange} maxWidth="sm" fullWidth>
@@ -164,5 +149,5 @@ export const useSlotRouting = (scenario: string, unifiedRuleUuid: string, enable
         </Dialog>
     );
 
-    return { mode, rules, setRules, loading, modeSwitch, modeDialog };
+    return { mode, rules, setRules, loading, modeOptions, requestMode, modeDialog };
 };
