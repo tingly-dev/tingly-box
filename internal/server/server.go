@@ -7,6 +7,7 @@ import (
 	desksvc "github.com/tingly-dev/tingly-box/internal/desk"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -443,6 +444,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Initialize virtual model service
 	server.virtualModelService = virtualserver.NewService()
+	// Scripted virtual models: every *.yaml in <config-dir>/vmodels becomes a
+	// model (.design/vmodel-script.md).
+	server.virtualModelService.SetScriptDir(filepath.Join(cfg.ConfigDir, virtualserver.ScriptDirName))
 	logrus.Debugf("Virtual model service initialized with default models")
 
 	// Serve the virtual models on a private in-memory listener and hand this
