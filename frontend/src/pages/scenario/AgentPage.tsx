@@ -144,8 +144,11 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     const { status: clientConfigStatus } = useClientConfigStatus(agent.clientConfigTool ?? null, [rules, dialogOpen, slotMode]);
     const context1M = useContext1MToggle(() => setDialogOpen(true));
     // Unified Connect AI add flow (picker + form/OAuth/paste/import dialogs), offered by Quick Start.
+    // A new provider refreshes the page's list in place: Quick Start's first
+    // step ticks over and the flow carries on to "pick a model" instead of
+    // the page reloading under the user.
     const connectAI = useProviderDialog(showNotification, {
-        onProviderAdded: () => window.location.reload(),
+        onProviderAdded: () => { void internal.loadProviders(); },
     });
 
     const runApply = async (apply: () => Promise<AgentApplyResult>) => {
@@ -256,10 +259,16 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         hasModelSelected={hasModelOnAnyRule(rules)}
                         onSelectModel={scrollToModelsCard}
                         onConnectProvider={connectAI.handleConnectAIClick}
+                        providers={internal.providers}
+                        providersLoading={internal.loading}
                     />
                 )}
                 <TemplatePage
                     scenario={scenario}
+                    // One copy of the providers too: the rule toolbar's
+                    // Connect AI and Quick Start's both refresh it.
+                    providers={internal.providers}
+                    onProvidersLoad={internal.loadProviders}
                     // One copy of the rules for the whole page: the rule list
                     // and the setup dialog (slot.rules) read the same state.
                     rules={rules}
