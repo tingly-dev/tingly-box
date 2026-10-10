@@ -8,10 +8,8 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import ExperimentalFeatureGate from '@/components/ExperimentalFeatureGate';
 import Layout from '@/layout/Layout';
 // Login is the only pre-auth screen — it's reachable before ProtectedRoute
-// can even evaluate, so it stays eager. HelpPage (the onboarding front door
-// — OnboardingGate decides at runtime whether a fresh install lands there)
-// is a normal post-auth route, so it's lazy-loaded with everything else
-// below.
+// can even evaluate, so it stays eager. Everything else, HelpPage included,
+// is a normal post-auth route and is lazy-loaded below.
 import Login from '@/pages/Login';
 import OnboardingGate from './OnboardingGate';
 
@@ -103,13 +101,13 @@ export const appRoutes = (
                 </ProtectedRoute>
             }
         >
-            {/* Default landing: send first-time users (no providers) to Help,
-                everyone else to their last-active activity. */}
+            {/* Default landing: everyone, first run included, opens the agent
+                page they were last on (OnboardingGate). */}
             <Route index element={<OnboardingGate />} />
             <Route path="/help" element={<HelpPage />} />
             <Route path="/bench" element={<ExperimentalFeatureGate feature="bench"><BenchPage /></ExperimentalFeatureGate>} />
             {/* Back-compat: the old standalone Onboarding page was folded into
-                Help as ProvidersCard — keep old bookmarks/links working. */}
+                Help — keep old bookmarks/links working. */}
             <Route path="/onboarding" element={<Navigate to="/help" replace />} />
             {/* Tray hub: compact landing page shown by the tray-mode window */}
             <Route path="/hub" element={<HubPage />} />

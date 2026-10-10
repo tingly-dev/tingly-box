@@ -23,17 +23,19 @@ const PROVIDERS_CONTENT_MAX_HEIGHT = 480;
 type HelpSectionId = 'shortcut' | 'providers' | 'routing' | 'team';
 
 /**
- * HelpPage — the lightbulb entry in the activity bar, replacing the old
- * standalone "Quick Add Provider" wand in that exact nav slot. This *is* the
- * product's onboarding front door now.
+ * HelpPage — the lightbulb entry in the activity bar: a small set of
+ * easy-to-miss useful actions (desktop shortcut, browse & connect providers,
+ * reopen the routing/tier/team guides). It is *not* the first-run landing —
+ * OnboardingGate sends everyone, new installs included, to the agent page,
+ * whose Quick Start walks provider → model → install → apply. Help is where
+ * the same material stays reachable afterwards (ux-principles #10).
  *
  * Each section is an accordion (CollapsibleCard): title + one-line summary
  * always visible, body behind a chevron. Cards here vary wildly in shape —
  * a two-line shortcut action next to a full provider catalog next to a set
  * of guide launchers — so keeping them all open at once made the page look
  * like several unrelated tools glued together. Providers is expanded by
- * default (OnboardingGate sends brand-new, provider-less installs straight
- * here to add one); every other section is a click away. Sections toggle
+ * default; every other section is a click away. Sections toggle
  * independently — each is a standalone, re-entrant action, not a step in a
  * linear tour, so opening one doesn't imply closing another.
  *
