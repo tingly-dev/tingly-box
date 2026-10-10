@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Box, Grid, Skeleton } from '@mui/material';
 import { Outbound as CallMadeIcon, ErrorOutline as ErrorOutlineIcon, Token as PaidIcon, Stream as StreamIcon, Autorenew as CachedIcon } from '@/components/icons';
 import {
@@ -53,6 +53,11 @@ export default function DashboardPage() {
     const { t } = useTranslation();
     const { timeRange: urlTimeRange } = useParams<{ timeRange: TimeRange }>();
     const navigate = useNavigate();
+    // `?scenario=<agent>` opens the dashboard already filtered to one agent
+    // (the agent pages' usage panel links here). Read once; the filter bar
+    // owns it from then on.
+    const [searchParams] = useSearchParams();
+    const initialScenario = searchParams.get('scenario') || 'all';
 
     // Validate and set time range from URL
     const validTimeRanges: TimeRange[] = ['today', 'yesterday', '3d', '7d', '30d', '90d'];
@@ -88,13 +93,16 @@ export default function DashboardPage() {
         setSelectedModel,
         selectedUser,
         setSelectedUser,
+        selectedScenario,
+        setSelectedScenario,
+        scenarioOptions,
         hasActiveFilters,
         handleClearFilters,
         groupedProviderOptions,
         modelOptions,
         usageIdentities,
         selectedIdentityLabel,
-    } = useDashboardData({ timeRange, isHourlyRange, viewMode });
+    } = useDashboardData({ timeRange, isHourlyRange, viewMode, initialScenario });
 
     // Reset view mode when switching away from hourly ranges
     useEffect(() => {
@@ -142,6 +150,9 @@ export default function DashboardPage() {
             selectedUser={selectedUser}
             onUserChange={setSelectedUser}
             selectedIdentityLabel={selectedIdentityLabel}
+            scenarioOptions={scenarioOptions}
+            selectedScenario={selectedScenario}
+            onScenarioChange={setSelectedScenario}
             hasActiveFilters={hasActiveFilters}
             onClearFilters={handleClearFilters}
             autoRefresh={autoRefresh}
@@ -272,6 +283,7 @@ export default function DashboardPage() {
                             provider={selectedProvider}
                             model={selectedModel}
                             user={selectedUser}
+                            scenario={selectedScenario}
                             refreshKey={heatmapRefresh}
                         />
                     ) : effectiveViewMode === 'summary' ? (

@@ -1522,6 +1522,8 @@ export default {
       "identity": "Идентификатор",
       "allProviders": "Все провайдеры",
       "allModels": "Все модели",
+      "agent": "Агент",
+      "allAgents": "Все агенты",
       "allIdentities": "Все идентификаторы",
       "sharingKeys": "Ключи команд",
       "disabledSuffix": "(отключён)",

@@ -1499,6 +1499,8 @@ export default {
       "identity": "Identity",
       "allProviders": "All providers",
       "allModels": "All models",
+      "agent": "Agent",
+      "allAgents": "All agents",
       "allIdentities": "All identities",
       "sharingKeys": "Team Keys",
       "disabledSuffix": "(disabled)",

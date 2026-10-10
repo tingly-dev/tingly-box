@@ -22,11 +22,13 @@ interface DashboardHeatmapSectionProps {
     model?: string;
     /** Identity (user_id) filter, or 'all'. Shared with the rest of the dashboard. */
     user?: string;
+    /** Agent (scenario) filter, or 'all'. Shared with the rest of the dashboard. */
+    scenario?: string;
     /** Bumping this triggers a refetch (e.g. on manual refresh). */
     refreshKey?: number;
 }
 
-export default function DashboardHeatmapSection({ provider, model = 'all', user = 'all', refreshKey = 0 }: DashboardHeatmapSectionProps) {
+export default function DashboardHeatmapSection({ provider, model = 'all', user = 'all', scenario = 'all', refreshKey = 0 }: DashboardHeatmapSectionProps) {
     const { t } = useTranslation();
     const [dailyData, setDailyData] = useState<DailyUsage[]>([]);
     const [loading, setLoading] = useState(true);
@@ -34,7 +36,7 @@ export default function DashboardHeatmapSection({ provider, model = 'all', user 
     // faster than requests complete (same pattern as DashboardPage.loadData).
     const requestSeq = useRef(0);
 
-    const loadData = useCallback(async (providerFilter: string, modelFilter: string, userFilter: string) => {
+    const loadData = useCallback(async (providerFilter: string, modelFilter: string, userFilter: string, scenarioFilter: string) => {
         const seq = ++requestSeq.current;
         try {
             const todayStart = getLocalMidnight(new Date());
@@ -56,6 +58,9 @@ export default function DashboardHeatmapSection({ provider, model = 'all', user 
             }
             if (userFilter && userFilter !== 'all') {
                 params.user_id = userFilter;
+            }
+            if (scenarioFilter && scenarioFilter !== 'all') {
+                params.scenario = scenarioFilter;
             }
 
             const result = await api.getUsageTimeSeries(params);
@@ -103,8 +108,8 @@ export default function DashboardHeatmapSection({ provider, model = 'all', user 
     }, []);
 
     useEffect(() => {
-        loadData(provider, model, user);
-    }, [loadData, provider, model, user, refreshKey]);
+        loadData(provider, model, user, scenario);
+    }, [loadData, provider, model, user, scenario, refreshKey]);
 
     return (
         // Standard dashboard card (same style as RequestsView / Usage by

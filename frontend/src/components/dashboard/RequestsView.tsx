@@ -315,6 +315,7 @@ export interface RecordsQueryParams {
     provider: string;
     model: string;
     user: string;
+    scenario?: string;
 }
 
 interface RequestsViewProps {
@@ -346,7 +347,7 @@ export default function RequestsView({ records, loading, totalCount, queryParams
     // Back to the first page when the filters or the range start change —
     // but not on every auto-refresh tick (only end_time moves there).
     const resetKey = queryParams
-        ? `${queryParams.provider}|${queryParams.model}|${queryParams.user}|${queryParams.start_time}`
+        ? `${queryParams.provider}|${queryParams.model}|${queryParams.user}|${queryParams.scenario ?? 'all'}|${queryParams.start_time}`
         : '';
     useEffect(() => {
         setPage(0);
@@ -367,6 +368,7 @@ export default function RequestsView({ records, loading, totalCount, queryParams
                 if (queryParams.provider !== 'all') filters.provider = queryParams.provider;
                 if (queryParams.model !== 'all') filters.model = queryParams.model;
                 if (queryParams.user !== 'all') filters.user_id = queryParams.user;
+                if (queryParams.scenario && queryParams.scenario !== 'all') filters.scenario = queryParams.scenario;
                 // Status values are exactly 'success' | 'error' in the store,
                 // so the server-side equality filter matches the toggle 1:1.
                 if (statusFilter !== 'all') filters.status = statusFilter;

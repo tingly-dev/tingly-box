@@ -16,7 +16,8 @@ import {
 } from '@mui/material';
 import { Refresh as RefreshIcon, FilterOff } from '@/components/icons';
 import { switchControlLabelStyle } from '@/styles/toggleStyles';
-import type { ProviderOptionGroup, UsageIdentity } from '@/hooks/useDashboardData';
+import type { ProviderOptionGroup, ScenarioOption, UsageIdentity } from '@/hooks/useDashboardData';
+import { scenarioLabel } from '@/pages/scenario/scenarioRegistry';
 import { shortenUserId } from '@/hooks/useDashboardData';
 import { useTeamContext } from '@/contexts/TeamContext';
 import { groupByTeam } from '@/utils/team';
@@ -61,6 +62,9 @@ export default function DashboardFilterBar({
     selectedUser,
     onUserChange,
     selectedIdentityLabel,
+    scenarioOptions,
+    selectedScenario,
+    onScenarioChange,
     hasActiveFilters,
     onClearFilters,
     autoRefresh,
@@ -78,6 +82,9 @@ export default function DashboardFilterBar({
     selectedUser: string;
     onUserChange: (value: string) => void;
     selectedIdentityLabel: string;
+    scenarioOptions: ScenarioOption[];
+    selectedScenario: string;
+    onScenarioChange: (value: string) => void;
     hasActiveFilters: boolean;
     onClearFilters: () => void;
     autoRefresh: boolean;
@@ -101,8 +108,37 @@ export default function DashboardFilterBar({
         ];
     }, [usageIdentities, teams]);
 
+    // The selected agent stays selectable even when this range has no usage
+    // for it (a link from an agent page can land on a quiet one).
+    const agentOptions = useMemo(
+        () => selectedScenario !== 'all' && !scenarioOptions.some((o) => o.scenario === selectedScenario)
+            ? [...scenarioOptions, { scenario: selectedScenario, requests: 0 }]
+            : scenarioOptions,
+        [scenarioOptions, selectedScenario],
+    );
+
     return (
         <>
+            <FormControl size="small" sx={{ minWidth: { xs: 140, sm: 160 } }}>
+                <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>{t('dashboard.overview.agent', { defaultValue: 'Agent' })}</InputLabel>
+                <Select
+                    value={selectedScenario}
+                    label={t('dashboard.overview.agent', { defaultValue: 'Agent' })}
+                    onChange={(e) => onScenarioChange(e.target.value)}
+                    sx={{
+                        borderRadius: 2,
+                        '& .MuiOutlinedInput-input': { py: 1 },
+                    }}
+                >
+                    <MenuItem value="all">{t('dashboard.overview.allAgents', { defaultValue: 'All agents' })}</MenuItem>
+                    {agentOptions.map((o) => (
+                        <MenuItem key={o.scenario} value={o.scenario}>
+                            {scenarioLabel(t, o.scenario)}
+                        </MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
+
             <FormControl size="small" sx={{ minWidth: { xs: 140, sm: 160 } }}>
                 <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>{t('dashboard.overview.provider', { defaultValue: 'Provider' })}</InputLabel>
                 <Select
