@@ -19,6 +19,7 @@ import {
     Shield as IconShield,
     TestPipe as IconTestPipe,
     Handyman as IconTools,
+    Science as IconFlask,
 } from '@/components/icons';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -113,6 +114,18 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             status: botTotals.total > 0
                 ? t('bots.activeCount', { defaultValue: 'active {{active}} / {{total}}', active: botTotals.active, total: botTotals.total })
                 : undefined,
+        },
+        // VModel — the built-in synthetic providers (onboarding, demos,
+        // dry-runs). On by default: it only hides/shows the Credentials
+        // sidebar row, the providers themselves keep working.
+        {
+            key: 'vmodel',
+            icon: <IconFlask sx={iconSx} />,
+            name: t('layout.virtualModels'),
+            description: t('layout.virtualModelsTooltip'),
+            path: '/credentials/virtual-models',
+            enabled: !isHidden('vmodel'),
+            onToggle: () => toggleHidden('vmodel'),
         },
         {
             key: 'bench',
