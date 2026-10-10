@@ -465,6 +465,28 @@ export default {
       "closeTooltip": "Close"
     }
   },
+  "credentialPage": {
+    "empty": "No credentials yet",
+    "managing_one": "Managing {{count}} credential",
+    "managing_other": "Managing {{count}} credentials",
+    "emptyTitle": "Connect your first AI",
+    "emptyDescription": "Sign in with a subscription you already have (Claude Code, Codex, Gemini CLI…) or paste an API key (OpenAI, Anthropic, DeepSeek…). Every credential lands here, and routing rules pick models from them.",
+    "sectionOAuth": "OAuth",
+    "sectionApiKeys": "API Keys",
+    "fallbackProviderName": "this provider",
+    "unknownError": "Unknown error",
+    "loadFailed": "Failed to load providers: {{error}}",
+    "deleted": "Provider deleted successfully!",
+    "deleteFailed": "Failed to delete provider: {{error}}",
+    "toggleFailed": "Failed to toggle provider: {{error}}",
+    "tokenRefreshed": "Token refreshed successfully!",
+    "reauthorized": "Provider reauthorized successfully!",
+    "reauthorizeUnknownIssuer": "Cannot reauthorize: provider issuer is unknown",
+    "refreshFailedTitle": "Token refresh failed",
+    "refreshFailedBody": "Refreshing the token for <1>{{name}}</1> didn't work. If the credential was revoked or has fully expired, a refresh can't recover it — reauthorize to sign in again. This overwrites the credential in place, keeping the same provider so your routing rules and model keys stay intact.",
+    "dismiss": "Dismiss",
+    "reauthorize": "Reauthorize"
+  },
   "templateActions": {
     "troubleshoot": "Troubleshoot",
     "collapseAllRules": "Collapse all rules",
