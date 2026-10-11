@@ -1,6 +1,6 @@
 # UX 梳理 — 前端"杂乱"的审计、讨论与决定
 
-> 状态：**讨论中，未开工**。除"已确定"一节外，其余都是待定或已否决的记录，不是实现计划。
+> 状态：**讨论中**。"已确定"一节里的两项（Star 入口、Dashboard 头部）已定方案；其余是待定或已否决的记录，不是实现计划。
 > 来源：对 mock 模式下 6 个页面的截图审计（1440×900，实验功能全开，2026-10-11）和随后的讨论。草图（线框、方案对比）保存在设计画布里，本文只记录结论与理由。
 > 约定：现在处于草图阶段，**得到明确同意之前不改代码**。相关文档：[ux-principles.md](./ux-principles.md)（判断标准）、[agent-page-redesign.md](./agent-page-redesign.md)（Agent 页的既有重设计）、[ui-redesign.md](./ui-redesign.md)。
 
@@ -26,6 +26,16 @@
 - `frontend/src/layout/ActivityBar.tsx`：一级图标栏
 
 依据：[ux-principles.md](./ux-principles.md) §9（降低视觉噪声）。同一个动作有两处入口，其中一处还占整行，且与当前任务无关。
+
+**Dashboard 头部与 Tab：采用方案 2**（解决已确认的 D1–D4）。
+
+- 4 个筛选（Agent / Provider / Model / Identity）保留，和时间段、Auto、刷新一起放进一条白色工具栏：筛选在左，范围与刷新在右，不折行。
+- 时间段改成下拉（Today / Yesterday / 3 days / 7 days / 30 days / 90 days），不再像 Tab。
+- 视图 Tab（Summary / By Request / Activity）收进内容面板顶部，左对齐下划线样式；整页只剩"侧栏 + 面板 Tab"两层。
+- 5 张指标卡去掉装饰图标；只有 Cache Hit Rate 和 Error Rate 保留状态点，颜色沿用现有健康阈值。
+- **不做"自定义范围"**（现状没有，需要后端和路由支持，未确认）。
+- D5（Response Performance 行距）、D6（二级侧栏三项）未确认，不动。
+- 实现方式：独立分支（`claude/dashboard-toolbar`，从 main 切出，不依赖本文档所在分支）。**合并顺序：本文档（ux-review）先合并，Dashboard 实现随后。**
 
 ---
 
@@ -135,7 +145,7 @@
 
 | 项 | 现状 |
 |---|---|
-| 审计的 40 个问题 | 逐项确认中。**已确认是问题：** D1–D4（Dashboard 顶部 7 个控件、时间段 Tab 折行、指标卡无意义图标、页内三层 Tab）；C6 重新归类为命名问题。其余等待标记"最想先改 / 不算问题" |
+| 审计的 40 个问题 | 逐项确认中。**已确认是问题并已定方案：** D1–D4（见 §1，方案 2）（Dashboard 顶部 7 个控件、时间段 Tab 折行、指标卡无意义图标、页内三层 Tab）；C6 重新归类为命名问题。其余等待标记"最想先改 / 不算问题" |
 | Profile 放哪里 | C（页面顶部"配置：xxx ▾"切换器，侧栏不放 Profile）已画草图、尚未表态。成立的前提是默认页与 Profile 页能合并（B3），需先读代码评估改动量 |
 | 侧栏加分区标题、折叠 SDK | 收益小于预想（默认可点条目 12 → 9），暂挂起 |
 | Credentials 服务"被谁引用"只读反查；Dashboard 按 Agent / 按服务切换 | 提过未细聊；需要后端配合（按规则反查引用；用量按服务聚合） |
