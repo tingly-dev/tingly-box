@@ -37,9 +37,7 @@ func ClassifyUpstreamFailure(err error, fallbackStatus int) UpstreamFailure {
 
 	var oaiErr *openai.Error
 	if errors.As(err, &oaiErr) {
-		redacted := *oaiErr
-		redacted.Request = redactedRequest(oaiErr.Request)
-		return withSDKStatus(fallbackStatus, oaiErr.StatusCode, redacted.Error())
+		return withSDKStatus(fallbackStatus, oaiErr.StatusCode, safeOpenAIMessage(oaiErr))
 	}
 
 	var anthropicErr *anthropic.Error

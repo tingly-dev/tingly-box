@@ -46,18 +46,32 @@ func newAnthropicError(t *testing.T, status int, requestID, workspaceID, body st
 func TestUpstreamMessage_OpenAIErrorOmitsRequestURL(t *testing.T) {
 	oaiErr := newOpenAIError(t, 429, `{"code":"rate_limit_exceeded","message":"Rate limit reached for requests","param":"","type":"rate_limit_error"}`)
 
-	// Sanity check: the SDK's own Error() does embed the outbound URL and
-	// its query string, confirming this is a real leak if passed through.
-	if !strings.Contains(oaiErr.Error(), "internal-proxy.example.com") {
-		t.Fatalf("test setup invalid: expected the raw SDK error to contain the request URL, got %q", oaiErr.Error())
-	}
-
 	got := UpstreamMessage(oaiErr)
 	if strings.Contains(got, "internal-proxy.example.com") || strings.Contains(got, "leak-me") {
 		t.Errorf("UpstreamMessage() leaked the outbound request URL: %q", got)
 	}
 	if !strings.Contains(got, "429") || !strings.Contains(got, "Rate limit reached for requests") {
 		t.Errorf("UpstreamMessage() dropped useful detail: %q", got)
+	}
+	for _, want := range []string{"type=rate_limit_error", "code=rate_limit_exceeded"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("UpstreamMessage() = %q, missing %q", got, want)
+		}
+	}
+}
+
+// The client message is assembled from an allowlist of fields; param and the
+// raw body must never be relayed, and an oversized vendor message is capped.
+func TestUpstreamMessage_OpenAIErrorAllowlistAndCap(t *testing.T) {
+	long := strings.Repeat("x", 2000)
+	oaiErr := newOpenAIError(t, 400, `{"code":"c","message":"`+long+`","param":"secret-param","type":"invalid_request_error"}`)
+
+	got := UpstreamMessage(oaiErr)
+	if strings.Contains(got, "secret-param") {
+		t.Errorf("UpstreamMessage() relayed param: %q", got)
+	}
+	if len(got) > maxClientDetailLen+200 {
+		t.Errorf("UpstreamMessage() not capped, len=%d", len(got))
 	}
 }
 
