@@ -251,9 +251,14 @@ export function useActivityItems(): ActivityItem[] {
                 icon: <IconPhoto sx={{ fontSize: 22 }} />,
                 label: t('layout.image', { defaultValue: 'Image' }),
                 defaultPath: '/image/playground',
-                // Same shape as Claude Code's profiles: the default Playground,
-                // one row per profile (its own page), then "New profile".
+                // Image API + Library on top, then the same shape as Claude Code's
+                // profiles: the default Playground, one row per profile, "New profile".
                 children: [
+                    // Shared surfaces first: the API endpoint and what is kept
+                    // across profiles, then the Playground and its profiles.
+                    { path: '/image/api', label: t('layout.nav.useImageGen', { defaultValue: 'Image API' }), icon: <IconPlug sx={{ fontSize: 20 }} /> },
+                    { path: '/image/library', label: t('imageLibrary.title', { defaultValue: 'Library' }), icon: <IconLibraryPhoto sx={{ fontSize: 20 }} /> },
+                    { type: 'divider' },
                     { path: '/image/playground', label: t('layout.imagePlayground', { defaultValue: 'Playground' }), subtitle: t('layout.default'), icon: <IconPalette sx={{ fontSize: 20 }} /> },
                     ...imageProfiles.map((profile): NavItem => ({
                         path: `/image/profile/${profile.id}`,
@@ -265,11 +270,6 @@ export function useActivityItems(): ActivityItem[] {
                             : <IconPalette sx={{ fontSize: 20 }} />,
                     })),
                     { path: '/image/profile/new', label: t('imageProfile.new', { defaultValue: 'New profile' }), icon: <IconPlus sx={{ fontSize: 20 }} /> },
-                    { type: 'divider' },
-                    // What is kept, across profiles — separate from the
-                    // profiles that use it.
-                    { path: '/image/library', label: t('imageLibrary.title', { defaultValue: 'Library' }), icon: <IconLibraryPhoto sx={{ fontSize: 20 }} /> },
-                    { path: '/image/api', label: t('layout.nav.useImageGen', { defaultValue: 'Image API' }), icon: <IconPlug sx={{ fontSize: 20 }} /> },
                 ],
             }] as ActivityItem[] : []),
             // ── Power-ups: what extends an agent beyond plain model routing ──
