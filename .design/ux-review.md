@@ -1,6 +1,6 @@
 # UX 梳理 — 前端"杂乱"的审计、讨论与决定
 
-> 状态：**讨论中**。"已确定"一节里的两项（Star 入口、Dashboard 头部）已定方案；其余是待定或已否决的记录，不是实现计划。
+> 状态：**讨论中**。"已确定"一节里的三项（Star 入口、Dashboard 头部、Agent 页 v4）已定方案并有对应 PR；其余是待定或已否决的记录，不是实现计划。
 > 来源：对 mock 模式下 6 个页面的截图审计（1440×900，实验功能全开，2026-10-11）和随后的讨论。草图（线框、方案对比）保存在设计画布里，本文只记录结论与理由。
 > 约定：现在处于草图阶段，**得到明确同意之前不改代码**。相关文档：[ux-principles.md](./ux-principles.md)（判断标准）、[agent-page-redesign.md](./agent-page-redesign.md)（Agent 页的既有重设计）、[ui-redesign.md](./ui-redesign.md)。
 
@@ -36,6 +36,19 @@
 - **不做"自定义范围"**（现状没有，需要后端和路由支持，未确认）。
 - D5（Response Performance 行距）、D6（二级侧栏三项）未确认，不动。
 - 实现方式：独立分支（`claude/dashboard-toolbar`，从 main 切出，不依赖本文档所在分支）。**合并顺序：本文档（ux-review）先合并，Dashboard 实现随后。**
+
+**Agent 页 v4**（已定方案并已实现，见 PR [#2031](https://github.com/tingly-dev/tingly-box/pull/2031)）。判断依据：先问用户来这一页想知道什么——接上了吗、请求怎么走、要改哪里——而不是把后端字段平铺。
+
+- 路由图原样保留（节点、T0/T1/T2 向下排列、每个 tier 行末常驻的"+ Add model"都不动；Quick Start 的聚光灯依赖这个节点）。
+- 规则标题行统一（Smart 与 Direct 相同）：规则名、`1M`、`Endpoint`（都常驻，偏离默认值高亮）、有插件才显示的 `Plugins N`、只有图标的 Test、"⋯"菜单。常驻右侧的 Plugins 面板改为浮层。
+- 状态行：已接入 · 最近请求 · 今日次数 · 错误率，加 Requests / Usage / Log 三个按钮；Log 替代原来的 Troubleshoot（后者本来就只是日志查看器）；配置过期时在这一行给"重新应用"。
+- 接入卡：展开态保持原版；折叠时保留展开态第一行（Base URL 标签 + URL），折叠箭头在右上角，与规则卡一致。页面级 Plugins 单独成卡。
+- 工具栏：Test All、Connect AI、New Rule、"⋯"。
+- 不做：把接入区做成多种新摆法（5 种备选均被否决，原版只需要修折叠态）、共享路由层、Smart 条件规则分 tier。
+
+**Star 入口合并**（PR [#2032](https://github.com/tingly-dev/tingly-box/pull/2032)）已实现：顶部横条与侧栏页脚星标移除，图标栏 Help 下方加一个常驻 Star。
+
+Dashboard 头部方案 2 已实现（PR [#2030](https://github.com/tingly-dev/tingly-box/pull/2030)）。以上三个实现 PR 互相独立，**都应在本文档之后合并**。
 
 ---
 
