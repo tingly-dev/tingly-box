@@ -44,6 +44,8 @@
 - 状态行：已接入 · 最近请求 · 今日次数 · 错误率，加 Requests / Usage / Log 三个按钮；Log 替代原来的 Troubleshoot（后者本来就只是日志查看器）；配置过期时在这一行给"重新应用"。
 - 接入卡：展开态保持原版；折叠时保留展开态第一行（Base URL 标签 + URL），折叠箭头在右上角，与规则卡一致。页面级 Plugins 单独成卡。
 - 工具栏：Test All、Connect AI、New Rule、"⋯"。
+- 实现时确认的事实：Endpoint 是规则级 flag（`openai_endpoint_override`），所有规则都接受，Anthropic / Google 上游会忽略它，所以常驻显示，没有 OpenAI 兼容上游时用提示说明；观测摘要用现有的 usage 记录与统计接口，没有新增后端接口；Image API、Profile、Team 页没有状态行，它们的"⋯"菜单仍保留 Troubleshoot。
+- 还没处理：页面级 Plugins 卡目前所有 Agent 页都显示（没有统一的"这页有没有页面级 Plugins"信号）；"⋯"菜单里的 Edit flag 未改名。
 - 不做：把接入区做成多种新摆法（5 种备选均被否决，原版只需要修折叠态）、共享路由层、Smart 条件规则分 tier。
 
 **Star 入口合并**（PR [#2032](https://github.com/tingly-dev/tingly-box/pull/2032)）已实现：顶部横条与侧栏页脚星标移除，图标栏 Help 下方加一个常驻 Star。
@@ -140,6 +142,16 @@ Dashboard 头部方案 2 已实现（PR [#2030](https://github.com/tingly-dev/ti
 | F4 | 视觉 | Status 列同时有开关和 On/Off 徽标，信息重复 |
 | F5 | 页面内部 | Platform 徽标与上面的平台卡片过滤重复 |
 | F6 | 导航 | 二级侧栏用分隔线分 3 组，总共只有 4 项 |
+
+### 处理状态（截至目前）
+
+| 状态 | 审计项 | 说明 |
+|---|---|---|
+| 已解决 | A1 | Star 横条与侧栏星标合并成图标栏里的一个 Star（[#2032](https://github.com/tingly-dev/tingly-box/pull/2032)） |
+| 已解决 | A3、A7、A8 | 去掉"Status"行（Requests/Usage 进状态行，另加 Log）；规则标题行统一；常驻的 Plugins 面板改成浮层，路由图不再被挤截断（[#2031](https://github.com/tingly-dev/tingly-box/pull/2031)） |
+| 部分解决 | A2、A4、A6 | 状态与"重新应用"同在状态行，但 Auto Config 仍在标题栏；Plugins 单独成卡，其余仍在接入卡里；规则区工具栏收成 Test All / Connect AI / New Rule / "⋯"，仍有 3 个按钮 |
+| 已解决 | D1–D4 | Dashboard 单条工具栏、时间段下拉、指标卡去装饰图标、视图 Tab 收进面板（[#2030](https://github.com/tingly-dev/tingly-box/pull/2030)） |
+| 未处理 | A5、A9–A11、B1–B6、C1–C6、D5、D6、E1–E4、F1–F6 | Profile 页与侧栏、Credentials 表格与命名（C6）、System、Bots 都还没有方案或实现 |
 
 ---
 
