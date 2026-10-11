@@ -1,4 +1,4 @@
-import { Person as IconUser, ChevronRight as IconChevronRight, Lightbulb as IconLightbulb, Error as IconAlertCircle } from '@/components/icons';
+import { Person as IconUser, ChevronRight as IconChevronRight, Lightbulb as IconLightbulb, Error as IconAlertCircle, Star as IconStar } from '@/components/icons';
 import { displayVersion } from '@/utils/version';
 import { Box, Divider, IconButton, ListItemButton, ListItemIcon, Tooltip, Typography } from '@mui/material';
 import React, { useCallback, useState } from 'react';
@@ -20,6 +20,7 @@ import {
     activityLogoCellSx,
     activityRailSx,
 } from './styles';
+import { REPO_URL } from './links';
 import { useSidebarCollapsed } from './useSidebarCollapsed';
 import type { ActivityItem } from './types';
 import { PreferencesMenu } from './PreferencesMenu';
@@ -191,6 +192,33 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                             </Typography>
                         </ListItemButton>
                     </Tooltip>
+
+                {/* Star — the one place the app asks for a GitHub star: an
+                    always-there rail item under Help, instead of a banner over
+                    every agent page plus a link in the sidebar footer. A link
+                    out, so it never takes the "active" look. */}
+                <Tooltip title={t('layout.githubStar.text')} placement="right" arrow>
+                    <ListItemButton
+                        component="a"
+                        href={REPO_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={t('layout.githubStar.cta')}
+                        sx={activityItemSx({
+                            '&:hover': { bgcolor: 'action.hover', color: 'primary.main' },
+                        })}
+                    >
+                        <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
+                            <IconStar sx={{ fontSize: 22 }} />
+                        </ListItemIcon>
+                        <Typography
+                            variant="caption"
+                            sx={{ color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}
+                        >
+                            {t('layout.githubStar.short')}
+                        </Typography>
+                    </ListItemButton>
+                </Tooltip>
 
             </Box>
 

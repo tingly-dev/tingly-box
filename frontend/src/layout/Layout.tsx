@@ -13,7 +13,6 @@ import { useActivityItems } from './useActivityItems.tsx';
 import { SidebarCollapsedProvider, useSidebarCollapsed } from './useSidebarCollapsed';
 import type { ActivityItem, LayoutProps } from './types';
 import { FloatingStatusIndicators } from '../components/FloatingStatusIndicators';
-import { GitHubStarBanner } from './GitHubStarBanner';
 import { syncUiPrefs } from '../services/uiPrefs';
 import { useHiddenScenarios } from '@/pages/scenario/scenarioRegistry';
 import { rememberAgentPath } from '@/pages/scenario/lastAgent';
@@ -301,14 +300,6 @@ const LayoutInner = ({ children }: LayoutProps) => {
                     /hub (nav is hidden above), so mobileContentSx's xs
                     padding-top would just be 72px of dead space. */}
                 <Box sx={isHubPage ? { flex: 1, minHeight: 0, overflow: 'hidden' } : isDeskPage ? {...mobileContentSx, minHeight: 0, overflow: 'hidden', px: {xs: 0.5, md: 3}, pb: {xs: 0.5, md: 3}, pt: {xs: 7.5, md: 3}} : mobileContentSx}>
-                    {/* The closable star request shows on agent pages only
-                        (Team pages, also under /agent/team, belong to the
-                        Team rail item). See GitHubStarBanner. */}
-                    {location.pathname.startsWith('/agent/') && !location.pathname.startsWith('/agent/team') && (
-                        <Box sx={{ mb: 2 }}>
-                            <GitHubStarBanner />
-                        </Box>
-                    )}
                     {children ?? <Outlet />}
                 </Box>
             </Box>

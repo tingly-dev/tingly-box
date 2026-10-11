@@ -134,7 +134,8 @@ export default {
     "easterEgg": "Hi, I'm Tingly-Box, Your Smart AI Orchestrator",
     "githubStar": {
       "text": "Enjoying Tingly-Box? A star on GitHub helps others find it.",
-      "cta": "Star on GitHub"
+      "cta": "Star on GitHub",
+      "short": "Star"
     },
     "dashboard": "Dashboard",
     // Rail-level label only — the sidebar rows and the Team page's own
