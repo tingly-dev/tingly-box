@@ -17,7 +17,7 @@ POST /v1/responses
   "model": "virtual-model-error"
 }
 --- client response (status 429)
-{"error":{"message":"OpenAI API error: 429 Too Many Requests (type=rate_limit_error): simulated rate limit: Failed to forward request","type":"protocol_error","code":"Failed to forward request"}}
+{"error":{"message":"Upstream error: 429 Too Many Requests (type=rate_limit_error): simulated rate limit: Failed to forward request","type":"protocol_error","code":"Failed to forward request"}}
 
 === error stream=true
 --- upstream request
@@ -39,7 +39,7 @@ POST /v1/responses
   "stream": true
 }
 --- client response (status 429)
-{"error":{"message":"Failed to create streaming request: OpenAI API error: 429 Too Many Requests (type=rate_limit_error): simulated rate limit","type":"api_error"}}
+{"error":{"message":"Failed to create streaming request: Upstream error: 429 Too Many Requests (type=rate_limit_error): simulated rate limit","type":"api_error"}}
 
 === error-500 stream=false
 --- upstream request
@@ -60,7 +60,7 @@ POST /v1/responses
   "model": "virtual-model-error-500"
 }
 --- client response (status 500)
-{"error":{"message":"OpenAI API error: 500 Internal Server Error (type=api_error): simulated upstream error: Failed to forward request","type":"protocol_error","code":"Failed to forward request"}}
+{"error":{"message":"Upstream error: 500 Internal Server Error (type=api_error): simulated upstream error: Failed to forward request","type":"protocol_error","code":"Failed to forward request"}}
 
 === error-500 stream=true
 --- upstream request
@@ -82,7 +82,7 @@ POST /v1/responses
   "stream": true
 }
 --- client response (status 500)
-{"error":{"message":"Failed to create streaming request: OpenAI API error: 500 Internal Server Error (type=api_error): simulated upstream error","type":"api_error"}}
+{"error":{"message":"Failed to create streaming request: Upstream error: 500 Internal Server Error (type=api_error): simulated upstream error","type":"api_error"}}
 
 === error-auth-401 stream=false
 --- upstream request
@@ -103,7 +103,7 @@ POST /v1/responses
   "model": "virtual-model-error-auth-401"
 }
 --- client response (status 401)
-{"error":{"message":"OpenAI API error: 401 Unauthorized (type=authentication_error): authentication failed: Failed to forward request","type":"protocol_error","code":"Failed to forward request"}}
+{"error":{"message":"Upstream error: 401 Unauthorized (type=authentication_error): authentication failed: Failed to forward request","type":"protocol_error","code":"Failed to forward request"}}
 
 === error-auth-401 stream=true
 --- upstream request
@@ -125,7 +125,7 @@ POST /v1/responses
   "stream": true
 }
 --- client response (status 401)
-{"error":{"message":"Failed to create streaming request: OpenAI API error: 401 Unauthorized (type=authentication_error): authentication failed","type":"api_error"}}
+{"error":{"message":"Failed to create streaming request: Upstream error: 401 Unauthorized (type=authentication_error): authentication failed","type":"api_error"}}
 
 === error-midstream-close stream=false
 --- upstream request

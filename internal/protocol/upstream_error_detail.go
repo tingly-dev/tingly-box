@@ -27,9 +27,13 @@ const maxLogDetailLen = 4096
 // belong in the server log (see UpstreamLogDetail).
 
 // safeOpenAIMessage builds the client-safe description of an openai.Error.
+// openai.Error also carries OpenAI-compatible third-party vendors (DeepSeek,
+// OpenRouter, self-hosted gateways), so the prefix is deliberately neutral:
+// naming "OpenAI" would mislabel them, and naming the vendor or its host
+// would expose routing details. Vendor identity stays in the server log.
 func safeOpenAIMessage(e *openai.Error) string {
 	var b strings.Builder
-	b.WriteString("OpenAI API error: ")
+	b.WriteString("Upstream error: ")
 	b.WriteString(statusLine(e.StatusCode))
 	var attrs []string
 	if e.Type != "" {

@@ -53,6 +53,9 @@ func TestUpstreamMessage_OpenAIErrorOmitsRequestURL(t *testing.T) {
 	if !strings.Contains(got, "429") || !strings.Contains(got, "Rate limit reached for requests") {
 		t.Errorf("UpstreamMessage() dropped useful detail: %q", got)
 	}
+	if !strings.HasPrefix(got, "Upstream error: ") || strings.Contains(strings.ToLower(got), "openai") {
+		t.Errorf("UpstreamMessage() prefix must be vendor-neutral: %q", got)
+	}
 	for _, want := range []string{"type=rate_limit_error", "code=rate_limit_exceeded"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("UpstreamMessage() = %q, missing %q", got, want)
