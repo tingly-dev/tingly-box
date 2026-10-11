@@ -23,9 +23,9 @@ vars:
 
   # Submodule versions (format: "name:branch/tag/commit")
   # Example: "openai-go:tingly-dev-v3.32.0"
-  OPENAI_GO_VERSION: "tingly-dev-v3.68.0"
-  ANTHROPIC_SDK_GO_VERSION: "tingly-dev-v1.78.0"
-  GO_GENAI_VERSION: "upstream-v1.71.0"
+  OPENAI_GO_VERSION: "tingly-dev-v3.76.0"
+  ANTHROPIC_SDK_GO_VERSION: "tingly-dev-v1.80.0"
+  GO_GENAI_VERSION: "upstream-v1.73.0"
 
 tasks:
   build:
