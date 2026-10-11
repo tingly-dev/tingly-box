@@ -146,6 +146,7 @@
 | [onboarding-ux.md](./onboarding-ux.md) | Onboarding UX — guidance for first-time users | 设计说明；局部实施状态见正文 |
 | [ui-redesign.md](./ui-redesign.md) | UI 重设计 — 决策、实施状态与后续 | 部分落地；有撤回及后续项 |
 | [agent-page-redesign.md](./agent-page-redesign.md) | Agent 页重设计 — 模板、配置状态与实施边界 | A–D 落地；E 部分撤回；Profile 暂缓 |
+| [ux-review.md](./ux-review.md) | UX 梳理 — 前端"杂乱"的审计、讨论与决定 | 讨论中，未开工；仅 Star 入口合并已确定 |
 | [ui-flow-analysis.md](./ui-flow-analysis.md) | UI 动线分析 — 发现、人工打标反馈与实现结论 | 第 1 轮已落地；其余项见正文 |
 | [refactor-frontend-2026-09.md](./refactor-frontend-2026-09.md) | Frontend Refactor 2026-09 — Plan & Survey Reports (merged) | 已完成的历史审计与交付记录 |
 | [icon-hierarchy.md](./icon-hierarchy.md) | Icon Hierarchy | 设计说明；局部实施状态见正文 |
