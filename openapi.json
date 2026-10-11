@@ -15588,6 +15588,10 @@
       "RuleFlags": {
         "type": "object",
         "properties": {
+          "anthropic_endpoint_override": {
+            "type": "string",
+            "description": "Field anthropic_endpoint_override"
+          },
           "block_tools": {
             "type": "string",
             "description": "Field block_tools"
