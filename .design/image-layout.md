@@ -26,9 +26,12 @@ Playground 长到约 7k 行、5 份专属设计文档之后,仍然是 scenario �
 
 ## 2. 决定
 
-- activity bar 新增 **Image**,两个子项:
-  - **Playground** — `/image/playground`,也是 `/image` 与点击 rail 图标的落点(天天用的那个优先)。
+- activity bar 新增 **Image**,子项按顺序为:
   - **Image API** — `/image/api`,即原 `/agent/image`(imagegen scenario:Base URL、Quick Start、规则)。
+  - **Library** — `/image/library`,跨 profile 保留下来的图。
+  - (分隔线)
+  - **Playground** — `/image/playground`,也是 `/image` 与点击 rail 图标的落点(天天用的那个优先);其后是各 profile 与 "New profile"。
+  - 共享的入口(Image API、Library)排在最上面,工作面(Playground 及其 profile)在下;落点仍是 Playground,不随排序改变。
 - 名字统一为 **Image API**:侧栏、Agent 概览卡、页面标题都是这一个词。
 - Gallery / 草图 / mask / 切分仍是 Playground 内的对话框(原则 12),不升级为子导航。
 
