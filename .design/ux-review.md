@@ -85,7 +85,7 @@
 | C3 | 页面内部 | Quota 一列里混着 3 种格式 |
 | C4 | 页面内部 | 每行 Actions 是"编辑 \| Models \| ⋮"三层并排 |
 | C5 | 页面内部 | OAuth 与 API Keys 两张表列不同，页面一屏装不下 |
-| C6 | 导航 | 整列二级侧栏只有两项 |
+| C6 | 命名 | 一级叫"Credential"，二级第一项又叫"Credentials"，同名重复；二级这一项其实是已连接的 AI Provider（OAuth + API Key，按钮也是"Connect AI"），不该叫 credentials。（原先误记为"侧栏只有两项"，已更正为命名问题） |
 
 ### D · Dashboard（Usage）
 
@@ -139,6 +139,7 @@
 | Profile 放哪里 | C（页面顶部"配置：xxx ▾"切换器，侧栏不放 Profile）已画草图、尚未表态。成立的前提是默认页与 Profile 页能合并（B3），需先读代码评估改动量 |
 | 侧栏加分区标题、折叠 SDK | 收益小于预想（默认可点条目 12 → 9），暂挂起 |
 | Credentials 服务"被谁引用"只读反查；Dashboard 按 Agent / 按服务切换 | 提过未细聊；需要后端配合（按规则反查引用；用量按服务聚合） |
+| Credential 二级入口改名 | 已定方向：二级不叫 credentials。候选"AI Provider"，具体名称待定；同时要对齐一级标签、页标题（"Credentials"）和 i18n（[ux-principles.md](./ux-principles.md) §3：一词一义） |
 | 页面归位（Logs → Dashboard，Access Control → Credentials）、"实验室"入口 | 暂缓 |
 
 ---
