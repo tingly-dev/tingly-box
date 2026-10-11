@@ -3,7 +3,6 @@ package protocol
 import (
 	"errors"
 	"net/http"
-	"net/url"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -42,9 +41,7 @@ func ClassifyUpstreamFailure(err error, fallbackStatus int) UpstreamFailure {
 
 	var anthropicErr *anthropic.Error
 	if errors.As(err, &anthropicErr) {
-		redacted := *anthropicErr
-		redacted.Request = redactedRequest(anthropicErr.Request)
-		return withSDKStatus(fallbackStatus, anthropicErr.StatusCode, redacted.Error())
+		return withSDKStatus(fallbackStatus, anthropicErr.StatusCode, safeAnthropicMessage(anthropicErr))
 	}
 
 	var genaiErr genai.APIError
@@ -86,10 +83,10 @@ func UpstreamStatus(err error, fallback int) int {
 
 // UpstreamMessage returns a client-safe description of err: a transport
 // failure is described by category, not its raw Go dial/DNS/TLS text; an
-// SDK-typed error is the vendor's own Error() with the outbound request URL
-// redacted (delegating to Error() itself rather than reprinting selected
-// fields keeps every other field — e.g. anthropic.Error's WorkspaceID — in
-// sync with the SDK automatically). A thin wrapper over
+// SDK-typed error is assembled from its typed fields (see
+// safeOpenAIMessage / safeAnthropicMessage) because the SDKs' own Error()
+// text is not a stable contract. The URL, param and raw body stay out; use
+// UpstreamLogDetail for the server log. A thin wrapper over
 // ClassifyUpstreamFailure.
 func UpstreamMessage(err error) string {
 	return ClassifyUpstreamFailure(err, 0).Message
@@ -103,14 +100,4 @@ func withSDKStatus(fallbackStatus, sdkStatus int, message string) UpstreamFailur
 		f.Status = sdkStatus
 	}
 	return f
-}
-
-// redactedRequest returns a copy of req (nil-safe) with the URL replaced by
-// a fixed placeholder, keeping the method intact.
-func redactedRequest(req *http.Request) *http.Request {
-	redacted := &http.Request{URL: &url.URL{Path: "REDACTED"}}
-	if req != nil {
-		redacted.Method = req.Method
-	}
-	return redacted
 }

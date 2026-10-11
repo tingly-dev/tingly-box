@@ -101,20 +101,40 @@ func TestUpstreamMessage_AnthropicErrorOmitsRequestURL(t *testing.T) {
 	}
 }
 
-// TestUpstreamMessage_MatchesSDKErrorMinusURL pins UpstreamMessage's
-// "delegate to the real Error(), URL redacted" strategy: the result must be
-// byte-for-byte identical to the SDK's own Error() with only the URL
-// swapped out, proving nothing else is dropped or altered.
-func TestUpstreamMessage_MatchesSDKErrorMinusURL(t *testing.T) {
+// TestUpstreamMessage_AnthropicExplicitFormat pins the client message built
+// from typed fields in the existing wire shape; it deliberately does not depend on the SDK's Error()
+// text, which embeds the URL and raw body and may change between versions.
+func TestUpstreamMessage_AnthropicExplicitFormat(t *testing.T) {
 	anthErr := newAnthropicError(t, 500, "req_789", "ws_012", `{"type":"error","error":{"type":"api_error","message":"Internal server error"}}`)
 
-	original := anthErr.Error()
-	wantURL := anthErr.Request.URL.String()
-	want := strings.Replace(original, `"`+wantURL+`"`, `"REDACTED"`, 1)
+	want := `POST "REDACTED": 500 Internal Server Error (Request-ID: req_789) (Workspace-ID: ws_012) {"type":"error","error":{"type":"api_error","message":"Internal server error"}}`
+	if got := UpstreamMessage(anthErr); got != want {
+		t.Errorf("UpstreamMessage() = %q, want %q", got, want)
+	}
+}
 
-	got := UpstreamMessage(anthErr)
-	if got != want {
-		t.Errorf("UpstreamMessage() = %q, want %q (original SDK error: %q)", got, want, original)
+// The log wrapper carries what clients must not see, and stays transparent
+// to errors.As so status classification is unchanged.
+func TestLoggableUpstreamError_AddsDetailForLogOnly(t *testing.T) {
+	oaiErr := newOpenAIError(t, 400, `{"code":"c","message":"bad","param":"secret-param","type":"invalid_request_error"}`)
+
+	logged := LoggableUpstreamError(oaiErr)
+	if !strings.Contains(logged.Error(), "secret-param") || !strings.Contains(logged.Error(), `"message":"bad"`) {
+		t.Errorf("log text missing detail: %q", logged.Error())
+	}
+	if strings.Contains(UpstreamMessage(logged), "secret-param") {
+		t.Errorf("client message relayed log-only detail: %q", UpstreamMessage(logged))
+	}
+	if got := UpstreamStatus(logged, http.StatusInternalServerError); got != 400 {
+		t.Errorf("status through wrapper = %d, want 400", got)
+	}
+
+	plain := errors.New("boom")
+	if LoggableUpstreamError(plain) != plain {
+		t.Error("errors without SDK detail must be returned unchanged")
+	}
+	if LoggableUpstreamError(nil) != nil {
+		t.Error("nil must stay nil")
 	}
 }
 

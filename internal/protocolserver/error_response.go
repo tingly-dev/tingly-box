@@ -66,7 +66,7 @@ func SendErrorResponse(c *gin.Context, err error, desc string) {
 	// c.Error keeps the full raw error for the server-side access log
 	// (internal/middleware/memory_log.go); the JSON body below shows the
 	// client a categorized, non-leaky message instead.
-	asErr := fmt.Errorf("%s: %s", err.Error(), desc)
+	asErr := fmt.Errorf("%s: %s", protocol.LoggableUpstreamError(err).Error(), desc)
 	c.Error(asErr).SetType(gin.ErrorTypePublic) //nolint:errcheck
 	c.JSON(failure.Status, ErrorResponse{
 		Error: ErrorDetail{
