@@ -644,12 +644,18 @@ func (us *UsageStore) GetRecords(startTime, endTime time.Time, filters map[strin
 	return records, total, nil
 }
 
+// MinDecodeWindowMs is the shortest first-to-last-token window that yields a
+// meaningful TPS. Shorter windows mostly measure delivery granularity (the
+// upstream flushed the completion in a burst), not decode speed.
+const MinDecodeWindowMs = 250
+
 // TokensPerSecond derives per-request output TPS from persisted timing fields.
 // The first token is accounted for by TTFT, leaving N-1 decode intervals from
-// the first output token to the last.
+// the first output token to the last. Returns 0 when the decode window is
+// shorter than MinDecodeWindowMs.
 func TokensPerSecond(outputTokens, latencyMs, ttftMs int) float64 {
 	decodeMs := latencyMs - ttftMs
-	if outputTokens <= 1 || ttftMs <= 0 || decodeMs <= 0 {
+	if outputTokens <= 1 || ttftMs <= 0 || decodeMs < MinDecodeWindowMs {
 		return 0
 	}
 	return float64(outputTokens-1) * 1000 / float64(decodeMs)
