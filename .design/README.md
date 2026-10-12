@@ -99,7 +99,7 @@
 | [im-feishu.md](./im-feishu.md) | Feishu/Lark: IM Service Built Directly, Not via the Fat SDK Client | 设计说明；局部实施状态见正文 |
 | [remote-cc-profile.md](./remote-cc-profile.md) | Remote @cc Profile Selection | 设计说明；局部实施状态见正文 |
 | [desk.md](./desk.md) | Desk (MVP) | 设计说明；局部实施状态见正文 |
-| [projects.md](./projects.md) | Projects 接入：tingly-project 以 submodule 引用包嵌入，Host 注入、路由、开关、`@tingly/ui` | 部分落地；接入步骤 3–5 未开始 |
+| [projects.md](./projects.md) | Projects 接入（宿主侧）：submodule、Host 适配器、`projects` 开关、导航与命名；契约见 tingly-project | 设计说明；接入未开始 |
 | [smart-guide-on-claude-code.md](./smart-guide-on-claude-code.md) | Smart Guide on Claude Code (retiring tingly-agentscope) | 已废弃方案；现行 runtime 见 afk |
 | [smart-guide-react-anthropic-sdk.md](./smart-guide-react-anthropic-sdk.md) | Smart Guide: in-house ReAct loop on the official Anthropic SDK | 已交付的起源记录；现行设计见 afk |
 ## Image 与图形工具
