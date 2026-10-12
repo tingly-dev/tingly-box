@@ -32,3 +32,16 @@ export function tablerMui(Icon: TablerIcon, defaultStrokeWidth = 1.75) {
     // an `@mui/icons-material` icon is expected.
     return Wrapped as unknown as SvgIconComponent;
 }
+
+/**
+ * Same as `tablerMui`, for Tabler's `*Filled` icons. Those are drawn with
+ * `fill="currentColor"` and no stroke, so the outline wrapper's `fill: none`
+ * would leave them blank; keep MUI's `fill: currentColor` instead.
+ */
+export function tablerMuiFilled(Icon: TablerIcon) {
+    const Wrapped = forwardRef<SVGSVGElement, SvgIconProps>(function TablerMuiFilledIcon(props, ref) {
+        return <SvgIcon ref={ref} component={Icon} inheritViewBox {...props} />;
+    });
+    Wrapped.displayName = `TablerMuiFilled(${Icon.displayName ?? 'Icon'})`;
+    return Wrapped as unknown as SvgIconComponent;
+}

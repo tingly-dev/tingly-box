@@ -165,9 +165,9 @@ import {
     IconArrowsSort,
     IconSortAZ,
 } from '@tabler/icons-react';
-import { tablerMui } from './tablerMui';
+import { tablerMui, tablerMuiFilled } from './tablerMui';
 
-export { tablerMui };
+export { tablerMui, tablerMuiFilled };
 export { OpenAIStyleMark, AnthropicStyleMark, GoogleStyleMark } from './ApiStyleMarks';
 export type { SvgIconComponent } from '@mui/icons-material';
 
@@ -231,11 +231,11 @@ export const Warning = tablerMui(IconAlertTriangle);
 export const WarningAmber = tablerMui(IconAlertTriangle);
 export const Block = tablerMui(IconBan);
 export const Bolt = tablerMui(IconBolt);
-export const FiberManualRecord = tablerMui(IconPointFilled);
+export const FiberManualRecord = tablerMuiFilled(IconPointFilled);
 
 // --- Visibility / security ---------------------------------------------------
 export const Pin = tablerMui(IconPin);
-export const PinFilled = tablerMui(IconPinFilled);
+export const PinFilled = tablerMuiFilled(IconPinFilled);
 export const Visibility = tablerMui(IconEye);
 export const VisibilityOutlined = tablerMui(IconEye);
 export const VisibilityOff = tablerMui(IconEyeOff);
@@ -357,7 +357,7 @@ export const AiAgents = tablerMui(IconAiAgents);
 export const Photo = tablerMui(IconPhoto);
 export const Vector = tablerMui(IconVector);
 export const WaveSine = tablerMui(IconWaveSine);
-export const Circle = tablerMui(IconCircleFilled);
+export const Circle = tablerMuiFilled(IconCircleFilled);
 
 // --- Infrastructure ----------------------------------------------------------
 export const Handyman = tablerMui(IconTools);
