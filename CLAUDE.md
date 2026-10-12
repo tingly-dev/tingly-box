@@ -18,6 +18,7 @@ For each new feature, use a placeholder function for api (if not support for cur
 
 - use `MUI` for new frontend component.
 - take care of `layout` while add new pages.
+- The theme, icons and page primitives (`PageLayout`, `PageHeader`, `Surface`, `EmptyState`, `DialogHeader`, `ConfirmDialog`, `CopyIconButton`) live in `frontend/packages/ui` (`@tingly/ui`), shared with the embedded Projects pages. Change them there; the old `src/` paths only re-export.
 
 ### Icons
 General UI icons come from `@/components/icons` (Tabler icons adapted to MUI via `tablerMui()`). **Do not import `@mui/icons-material` directly.**

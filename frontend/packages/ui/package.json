@@ -1,0 +1,23 @@
+{
+  "name": "@tingly/ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tingly's look: the MUI theme (palettes, component overrides, fonts, status colours), Tabler icons in MUI form, and the page primitives every page is built from. Shared by Tingly Box and the Projects pages it embeds.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./theme": "./src/theme/index.ts",
+    "./theme/*": "./src/theme/*.ts",
+    "./icons": "./src/icons/index.tsx",
+    "./components/*": "./src/components/*.tsx",
+    "./hooks/*": "./src/hooks/*.ts",
+    "./utils/*": "./src/utils/*.ts"
+  },
+  "types": "./src/index.ts",
+  "sideEffects": false,
+  "peerDependencies": {
+    "@mui/material": "^9.5.0",
+    "@tabler/icons-react": "^3.49.0",
+    "react": "^19.3.0"
+  }
+}

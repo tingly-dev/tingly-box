@@ -26,6 +26,9 @@ importers:
       '@tingly/mannequin':
         specifier: workspace:*
         version: link:packages/mannequin
+      '@tingly/ui':
+        specifier: workspace:*
+        version: link:packages/ui
       '@tingly/vision':
         specifier: workspace:*
         version: link:packages/vision
@@ -158,6 +161,18 @@ importers:
       '@types/three':
         specifier: 0.186.0
         version: 0.186.0
+
+  packages/ui:
+    dependencies:
+      '@mui/material':
+        specifier: ^9.5.0
+        version: 9.5.0(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.0))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.0))(@types/react@19.3.0)(react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@tabler/icons-react':
+        specifier: ^3.49.0
+        version: 3.49.0(react@19.3.0)
+      react:
+        specifier: ^19.3.0
+        version: 19.3.0
 
   packages/vision:
     dependencies:

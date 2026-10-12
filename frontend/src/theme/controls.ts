@@ -1,3 +1,2 @@
-// Height of the small controls that sit in a settings row (segmented toggles,
-// the Plugins strip), so rows of mixed controls line up.
-export const controlHeight = 26;
+// Moved to @tingly/ui, shared with the Projects pages; this path stays so imports don't churn.
+export * from '@tingly/ui/theme/controls';
