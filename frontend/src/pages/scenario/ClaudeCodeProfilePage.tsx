@@ -206,12 +206,26 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
         <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
             <Stack spacing={2}>
             <PageHeader
+                // The profile's alias is its name: "Claude Code - ds". Rename / delete act on
+                // that name, so they sit right next to it rather than among the page actions.
                 title={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box component="span" sx={{ minWidth: 0 }}>Claude Code</Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                        <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {`Claude Code - ${currentProfile?.name || profileId}`}
+                        </Box>
                         <Tooltip title={`Base URL: ${baseUrl}/tingly/${scenario}`}>
                             <IconButton size="small" aria-label="Base URL">
                                 <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title={t('claudeCode.profile.renameProfile')}>
+                            <IconButton size="small" aria-label={t('claudeCode.profile.renameProfile')} onClick={() => { setRenameName(currentProfile?.name || ''); setRenameProfileOpen(true); }}>
+                                <EditIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title={t('claudeCode.profile.deleteProfile')}>
+                            <IconButton size="small" color="error" aria-label={t('claudeCode.profile.deleteProfile')} onClick={() => setDeleteProfileOpen(true)}>
+                                <DeleteIcon fontSize="small" />
                             </IconButton>
                         </Tooltip>
                     </Box>
@@ -222,30 +236,22 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                         connected={launched === true}
                         configStatus={null}
                         unconnectedText={t('agentStatus.noRequestsYet')}
-                        leading={`${currentProfile ? `${profileId} - ${currentProfile.name}` : profileId} · ${unifiedMode ? t('claudeCode.profile.unified') : t('claudeCode.profile.separate')}`}
+                        // The alias is in the title; the id stays here since the launch command uses it.
+                        leading={`${currentProfile ? `${profileId} · ` : ''}${unifiedMode ? t('claudeCode.profile.unified') : t('claudeCode.profile.separate')}`}
                     />
                 )}
-                // Same shape as the Agent pages: title left, one row of buttons right.
+                // Same shape as the Agent pages: looks-in first, the key action
+                // (Setup Guide) filled and rightmost.
                 actions={(
                     <>
-                        <Button onClick={() => setSetupOpen(true)} variant="outlined" size="small">
-                            {t('scenarioPage.setupGuide')}
-                        </Button>
                         <AgentLooksIn
                             onOpenRequests={() => setRequestsOpen(true)}
                             onOpenLog={() => setLogOpen(true)}
                             onOpenUsage={() => navigate(`/dashboard/today?scenario=${encodeURIComponent(scenario)}`)}
                         />
-                        <Tooltip title={t('claudeCode.profile.renameProfile')}>
-                            <IconButton size="small" aria-label={t('claudeCode.profile.renameProfile')} onClick={() => { setRenameName(currentProfile?.name || ''); setRenameProfileOpen(true); }}>
-                                <EditIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title={t('claudeCode.profile.deleteProfile')}>
-                            <IconButton size="small" color="error" aria-label={t('claudeCode.profile.deleteProfile')} onClick={() => setDeleteProfileOpen(true)}>
-                                <DeleteIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
+                        <Button onClick={() => setSetupOpen(true)} variant="contained" size="small">
+                            {t('scenarioPage.setupGuide')}
+                        </Button>
                     </>
                 )}
                 sx={{
@@ -254,6 +260,9 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                     flexDirection: { xs: 'column', md: 'row' },
                     alignItems: { xs: 'flex-start', md: 'center' },
                     '& h1': { whiteSpace: 'nowrap' },
+                    // The buttons stay on one row (the primary one never drops to a line of its
+                    // own); the status text wraps under the title instead.
+                    '& > :last-child': { flexWrap: { md: 'nowrap' }, flexShrink: { md: 0 } },
                 }}
             />
                 <AgentAccessSection expanded={access.expanded} onToggle={access.toggle} url={accessUrl}>

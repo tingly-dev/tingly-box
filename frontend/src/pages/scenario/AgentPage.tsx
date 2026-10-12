@@ -244,19 +244,22 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     const access = useAccessExpanded(scenario, !connected || clientConfigStatus?.state === 'outdated');
 
     const configApplied = clientConfigStatus?.state === 'applied';
-    // Only the action that matters now is filled: a header link (DSH's Web UI),
-    // else Auto Config until the client's config reads back as applied.
+    // Looks-in (Requests / Usage / Log) lead; the key actions (Quick Start,
+    // header links, Auto Config / Setup Guide) follow, with the config button
+    // always filled and rightmost so the next step is where the eye lands.
     const configButton = setup.kind !== 'none' && (
-        <Button
-            onClick={openDialog}
-            variant={headerLinks?.length || configApplied ? 'outlined' : 'contained'}
-            size="small"
-        >
+        <Button onClick={openDialog} variant="contained" size="small">
             {t(setup.kind === 'auto' ? 'scenarioPage.autoConfig' : 'scenarioPage.setupGuide')}
         </Button>
     );
     const headerActions = (
         <>
+            <AgentLooksIn
+                onOpenRequests={() => setRequestsOpen(true)}
+                onOpenLog={() => setLogOpen(true)}
+                // The Dashboard already opens filtered to one agent (?scenario=).
+                onOpenUsage={() => navigate(`/dashboard/today?scenario=${encodeURIComponent(scenario)}`)}
+            />
             {quickStart && quickStartHidden && (
                 // A finished Quick Start leaves the page; this brings it back (reset).
                 <Tooltip title={t('agentSetup.restartTooltip', { defaultValue: 'Run Quick Start again' })}>
@@ -272,12 +275,6 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                     </Button>
                 </Tooltip>
             ))}
-            <AgentLooksIn
-                onOpenRequests={() => setRequestsOpen(true)}
-                onOpenLog={() => setLogOpen(true)}
-                // The Dashboard already opens filtered to one agent (?scenario=).
-                onOpenUsage={() => navigate(`/dashboard/today?scenario=${encodeURIComponent(scenario)}`)}
-            />
             {configButton}
         </>
     );
@@ -308,6 +305,9 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         flexDirection: { xs: 'column', md: 'row' },
                         alignItems: { xs: 'flex-start', md: 'center' },
                         '& h1': { whiteSpace: 'nowrap' },
+                        // The buttons stay on one row (the primary one never drops to a line of its
+                        // own); the status text wraps under the title instead.
+                        '& > :last-child': { flexWrap: { md: 'nowrap' }, flexShrink: { md: 0 } },
                     }}
                 />
                 {/* Connection: always here, between the status row and the rules; open
