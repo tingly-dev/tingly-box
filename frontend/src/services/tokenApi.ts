@@ -59,14 +59,25 @@ export const tokenApi = {
             params: {query: params as any}
         })),
 
-    // Create a new API token
+    // Create a new API token. rpm_limit: omit or 0 = unlimited (the server
+    // default is 0; limiting is opt-in per key).
     createAPIToken: async (data: {
         display_name: string;
         team_id?: string;
+        rpm_limit?: number;
     }): Promise<any> =>
         tokenWrap((client, headers) => client.POST('/api/v1/tokens', {
             headers,
             body: data as any
+        })),
+
+    // Set a token's requests-per-minute budget (0 = unlimited). Applies on
+    // the key's next request; no rotation.
+    setAPITokenRateLimit: async (tokenId: string, rpmLimit: number): Promise<any> =>
+        tokenWrap((client, headers) => client.PUT('/api/v1/tokens/{token_id}/rate-limit', {
+            headers,
+            params: {path: {token_id: tokenId}},
+            body: {rpm_limit: rpmLimit},
         })),
 
     // Delete an API token

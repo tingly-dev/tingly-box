@@ -34,6 +34,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/probe"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
+	"github.com/tingly-dev/tingly-box/internal/ratelimit"
 	"github.com/tingly-dev/tingly-box/internal/server/hooks"
 	guardrailsmodule "github.com/tingly-dev/tingly-box/internal/server/module/guardrails"
 	imbotmodule "github.com/tingly-dev/tingly-box/internal/server/module/imbot"
@@ -66,6 +67,9 @@ type Server struct {
 	loadBalancer    *protocolserver.LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
 	healthMonitor   *loadbalance.HealthMonitor
+	// sharingKeyLimiter enforces per-sharing-key rpm_limit on the model
+	// endpoints (TEP-1851). Process-local; see .design/rate-limit.md.
+	sharingKeyLimiter *ratelimit.RPMLimiter
 
 	// client pool for caching
 	clientPool *client.ClientPool
@@ -377,6 +381,10 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.loadBalancer = loadBalancer
 	server.loadBalancerAPI = loadBalancerAPI
 	server.healthMonitor = healthMonitor
+	// Buckets older than two minutes are already full, so sweeping them
+	// changes no decision; the sweeper only bounds memory to active keys.
+	server.sharingKeyLimiter = ratelimit.NewRPMLimiter()
+	server.sharingKeyLimiter.StartSweeper(time.Minute, 2*time.Minute, server.ctx.Done())
 	server.oauthManager = oauthManager
 	server.oauthRefresher = tokenRefresher
 	server.affinityStore = affinityStore
@@ -515,6 +523,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		GetOrCreateScenarioSink: server.GetOrCreateScenarioSink,
 		GuardrailsState:         server.guardrailsState,
 		QuotaReader:             server.quotaManager,
+		SharingKeyLimiter:       server.sharingKeyLimiter,
 	})
 
 	// Setup middleware

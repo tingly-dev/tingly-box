@@ -37,10 +37,12 @@ func (ph *ProtocolHandler) debugHeaderGuard(c *gin.Context) {
 
 // modelAuthChain builds the standard per-route handler prefix: modelAuth
 // itself, then debugHeaderGuard (which depends on modelAuth having already
-// set the auth-kind context key), then any route-specific middleware.
+// set the auth-kind context key), then the sharing-key rate limiter (which
+// reads the key id and rpm_limit modelAuth placed on the context; a no-op for
+// every other principal), then any route-specific middleware.
 func (ph *ProtocolHandler) modelAuthChain(modelAuth gin.HandlerFunc, extra ...gin.HandlerFunc) []gin.HandlerFunc {
-	chain := make([]gin.HandlerFunc, 0, 2+len(extra))
-	chain = append(chain, modelAuth, ph.debugHeaderGuard)
+	chain := make([]gin.HandlerFunc, 0, 3+len(extra))
+	chain = append(chain, modelAuth, ph.debugHeaderGuard, middleware.SharingKeyRateLimitMiddleware(ph.deps.SharingKeyLimiter))
 	chain = append(chain, extra...)
 	return chain
 }

@@ -1822,8 +1822,8 @@ let mockTeams = [
     { id: '00000000-0000-0000-0000-000000000002', name: 'Platform', slug: 't1', enabled: true, is_default: false, created_at: '2026-08-01T00:00:00Z', updated_at: '2026-08-01T00:00:00Z' },
 ]
 let mockSharingKeys = [
-    { token_id: 'tb-share-design0000000000000000000000000001', user_id: 'user-design', team_id: defaultMockTeamID, display_name: 'Design team', enabled: true, created_at: '2026-06-08T00:00:00Z' },
-    { token_id: 'tb-share-platform00000000000000000000000001', user_id: 'user-platform', team_id: '00000000-0000-0000-0000-000000000002', display_name: 'Platform CI', enabled: true, created_at: '2026-07-12T00:00:00Z' },
+    { token_id: 'tb-share-design0000000000000000000000000001', user_id: 'user-design', team_id: defaultMockTeamID, display_name: 'Design team', enabled: true, created_at: '2026-06-08T00:00:00Z', rpm_limit: 60 },
+    { token_id: 'tb-share-platform00000000000000000000000001', user_id: 'user-platform', team_id: '00000000-0000-0000-0000-000000000002', display_name: 'Platform CI', enabled: true, created_at: '2026-07-12T00:00:00Z', rpm_limit: 0 },
 ]
 
 // Shared by the imagegen fixtures below: SVG source -> data URL.
@@ -2973,9 +2973,17 @@ export const handlers = [
 
     http.post('/api/v1/tokens', async ({request}) => {
         const body = await request.json() as any
-        const token = {token_id: `tb-share-${crypto.randomUUID().replaceAll('-', '')}`, user_id: crypto.randomUUID(), team_id: body.team_id || defaultMockTeamID, display_name: body.display_name, enabled: true, created_at: new Date().toISOString()}
+        const token = {token_id: `tb-share-${crypto.randomUUID().replaceAll('-', '')}`, user_id: crypto.randomUUID(), team_id: body.team_id || defaultMockTeamID, display_name: body.display_name, enabled: true, created_at: new Date().toISOString(), rpm_limit: body.rpm_limit ?? 0}
         mockSharingKeys = [token, ...mockSharingKeys]
         return HttpResponse.json({...token, token: token.token_id}, {status: 201})
+    }),
+
+    // Must precede the `:action` catch-all below, which would otherwise match
+    // "rate-limit" as an action and disable the key.
+    http.put('/api/v1/tokens/:tokenId/rate-limit', async ({params, request}) => {
+        const body = await request.json() as any
+        mockSharingKeys = mockSharingKeys.map((token) => token.token_id === params.tokenId ? {...token, rpm_limit: body.rpm_limit ?? 0} : token)
+        return HttpResponse.json(mockSharingKeys.find((token) => token.token_id === params.tokenId))
     }),
 
     http.put('/api/v1/tokens/:tokenId/team', async ({params, request}) => {

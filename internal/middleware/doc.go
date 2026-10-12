@@ -83,6 +83,20 @@
 // attempt limiter, not a token bucket, and it is not wired into the default
 // route stack today.
 //
+// SharingKeyRateLimitMiddleware (sharing_key_ratelimit.go)
+//
+// Per-sharing-key requests-per-minute budget (TEP-1851, .design/rate-limit.md).
+// Applied on every model route through modelAuthChain in
+// internal/protocolserver/routes.go, directly after ModelAuthMiddleware and
+// debugHeaderGuard. It decides from context alone: ModelAuthMiddleware stores
+// the key id (CtxKeySharingKeyID) and its budget (CtxKeySharingKeyRPMLimit)
+// for sharing-key callers; the middleware consults a ratelimit.Limiter (an
+// in-memory token bucket owned by the server) and answers 429 + Retry-After
+// when the budget is spent. Only POSTs from sharing keys are counted; the
+// global model token, enterprise callers, GET discovery routes,
+// POST /messages/count_tokens (tokenizes without running the model) and keys
+// with rpm_limit 0 pass through. A nil limiter makes it a no-op.
+//
 // ClearServerIOTimeouts (io_timeout.go)
 //
 // Applied to the AI protocol route groups (/tingly/:scenario and

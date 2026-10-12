@@ -345,6 +345,10 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 					c.Set(constant.CtxKeyAuthKind, constant.AuthKindSharingKey)
 					c.Set(constant.CtxKeyUserID, tokenRecord.UserID)
 					c.Set(constant.CtxKeyTeamID, tokenRecord.TeamID)
+					// Consumed by SharingKeyRateLimitMiddleware; read here so the
+					// limiter never touches the token store on the hot path.
+					c.Set(constant.CtxKeySharingKeyID, tokenRecord.TokenID)
+					c.Set(constant.CtxKeySharingKeyRPMLimit, tokenRecord.RPMLimit)
 
 					// Update last used asynchronously
 					go am.apiTokenStore.UpdateLastUsed(tokenRecord.TokenID)

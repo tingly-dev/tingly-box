@@ -1,6 +1,7 @@
-import { Key as IconKey, DeleteOutline as IconDeleteOutline, ContentCopy as IconCopy, AccessTime as IconClock, Person as IconUser, Visibility as IconEye, VisibilityOff as IconEyeOff, CompareArrows as IconMove } from '@/components/icons';
+import { Key as IconKey, DeleteOutline as IconDeleteOutline, ContentCopy as IconCopy, AccessTime as IconClock, Person as IconUser, Visibility as IconEye, VisibilityOff as IconEyeOff, CompareArrows as IconMove, Speed as IconSpeed } from '@/components/icons';
 import {
     Box,
+    ButtonBase,
     Stack,
     Table,
     TableBody,
@@ -26,6 +27,8 @@ export interface SharingKey {
     last_used_at?: string;
     created_at: string;
     created_by?: string;
+    /** Requests per minute allowed on /tingly/team; 0 = unlimited. */
+    rpm_limit: number;
 }
 
 const maskToken = (token: string): string => {
@@ -48,6 +51,7 @@ interface SharingKeysTableProps {
     onToggleEnabled: (token: SharingKey) => void;
     onDelete: (token: SharingKey) => void;
     onMove: (token: SharingKey) => void;
+    onEditRateLimit: (token: SharingKey) => void;
 }
 
 const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
@@ -59,9 +63,10 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
     onToggleEnabled,
     onDelete,
     onMove,
+    onEditRateLimit,
 }) => {
     const { t } = useTranslation();
-    const colSpan = 7;
+    const colSpan = 8;
 
     return (
         <TableContainer>
@@ -69,14 +74,20 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                 page (one per Team) line their columns up; minWidth keeps the
                 columns readable and lets narrow screens scroll the table
                 instead of the page. */}
-            <Table sx={{ tableLayout: 'fixed', minWidth: 760 }}>
+            {/* minWidth 880 keeps the table inside the Team dialog's content box
+                (lg paper 936 − 2×24 padding) at narrow viewports. */}
+            <Table sx={{ tableLayout: 'fixed', minWidth: 880 }}>
                 <colgroup>
-                    <col style={{ width: '20%' }} />
+                    <col style={{ width: '17%' }} />
                     <col style={{ width: '10%' }} />
-                    <col style={{ width: '22%' }} />
-                    <col style={{ width: 88 }} />
-                    <col style={{ width: '18%' }} />
-                    <col style={{ width: '18%' }} />
+                    <col style={{ width: '21%' }} />
+                    <col style={{ width: 80 }} />
+                    {/* The longest "unlimited" string (ru "Без ограничения") plus the
+                        icon needs ~130px of content with a fallback monospace font;
+                        168 leaves slack for wider system fonts. */}
+                    <col style={{ width: 168 }} />
+                    <col style={{ width: '16%' }} />
+                    <col style={{ width: '16%' }} />
                     <col style={{ width: 96 }} />
                 </colgroup>
                 <TableHead>
@@ -92,6 +103,11 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                 borderBottom: '2px solid',
                                 borderColor: 'divider',
                                 py: 1.5,
+                                // Long translated headers (ru "Пользователь") must
+                                // not run into the next column in fixed layout.
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
                             },
                         }}
                     >
@@ -99,6 +115,7 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                         <TableCell>{t('sharingKeys.table.user')}</TableCell>
                         <TableCell>{t('sharingKeys.table.token')}</TableCell>
                         <TableCell>{t('sharingKeys.table.status')}</TableCell>
+                        <TableCell>{t('sharingKeys.table.rateLimit')}</TableCell>
                         <TableCell>{t('sharingKeys.table.created')}</TableCell>
                         <TableCell>{t('sharingKeys.table.lastUsed')}</TableCell>
                         <TableCell align="right">{t('sharingKeys.table.actions')}</TableCell>
@@ -177,11 +194,15 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                             spacing={0.5}
                                             sx={{
                                                 alignItems: "center",
-                                                width: 'fit-content',
+                                                // Clip inside the cell instead of running under the
+                                                // token chip when the column is narrow.
+                                                maxWidth: '100%',
+                                                minWidth: 0,
+                                                overflow: 'hidden',
                                                 cursor: 'default'
                                             }}>
                                             <IconUser sx={{ fontSize: 13, opacity: 0.4, flexShrink: 0 }} />
-                                            <Typography variant="caption" noWrap sx={{ fontFamily: fontMono, color: 'text.secondary' }}>
+                                            <Typography variant="caption" noWrap sx={{ fontFamily: fontMono, color: 'text.secondary', minWidth: 0 }}>
                                                 {key.user_id.slice(0, 8)}…
                                             </Typography>
                                         </Stack>
@@ -242,6 +263,53 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                             color="success"
                                         />
                                     </Tooltip>
+                                </TableCell>
+                                <TableCell>
+                                    {/* Concrete value, not a "limited" badge: the number is
+                                        what the key holder will hit. A real button (not a
+                                        clickable Stack) so it is focusable, Enter/Space
+                                        activate it and the tooltip shows on focus too; the
+                                        dotted underline marks it as the one editable caption
+                                        in the row. */}
+                                    {(() => {
+                                        const label = key.rpm_limit > 0
+                                            ? t('sharingKeys.table.perMinute', { n: key.rpm_limit })
+                                            : t('sharingKeys.table.unlimited');
+                                        return (
+                                            <Tooltip title={t('sharingKeys.table.rateLimitTooltip')} placement="top">
+                                                <ButtonBase
+                                                    onClick={() => onEditRateLimit(key)}
+                                                    aria-label={`${t('sharingKeys.table.rateLimitTooltip')}: ${label}`}
+                                                    sx={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 0.5,
+                                                        maxWidth: '100%',
+                                                        px: 0.5,
+                                                        mx: -0.5,
+                                                        borderRadius: 0.5,
+                                                        color: 'text.secondary',
+                                                        textDecoration: 'underline dotted',
+                                                        textUnderlineOffset: 3,
+                                                        '&:hover': { color: 'text.primary', bgcolor: 'action.hover' },
+                                                        // Keyboard focus needs a cue stronger than the hover
+                                                        // pill: ButtonBase disables the UA outline.
+                                                        '&.Mui-focusVisible': {
+                                                            color: 'text.primary',
+                                                            outline: '2px solid',
+                                                            outlineColor: 'primary.main',
+                                                            outlineOffset: 1,
+                                                        },
+                                                    }}
+                                                >
+                                                    <IconSpeed sx={{ fontSize: 13, opacity: 0.4, flexShrink: 0 }} />
+                                                    <Typography variant="caption" noWrap sx={{ fontFamily: fontMono, minWidth: 0 }}>
+                                                        {label}
+                                                    </Typography>
+                                                </ButtonBase>
+                                            </Tooltip>
+                                        );
+                                    })()}
                                 </TableCell>
                                 <TableCell>
                                     <Stack direction="row" spacing={0.5} sx={{

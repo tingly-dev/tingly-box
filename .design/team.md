@@ -186,8 +186,9 @@ NULL 的 Sharing Key 自动回填为 `DefaultTeamID`，raw token 不轮换。
 | Layer | File | Responsibility |
 |---|---|---|
 | Persistence | `internal/db/team_store.go` | Team identity、编号、生命周期 |
-| Persistence | `internal/db/api_token_store.go` | Key-Team binding、迁移、启停和移动 |
+| Persistence | `internal/db/api_token_store.go` | Key-Team binding、迁移、启停、移动和 `rpm_limit` |
 | Authentication | `internal/middleware/auth.go` | Sharing Key route authorization boundary |
+| Rate limit | `internal/middleware/sharing_key_ratelimit.go` | Per-key RPM 限流（见 `.design/rate-limit.md`） |
 | Routing | `internal/protocolserver/routes_middleware.go` | Authenticated Team → internal rule scenario |
 | Usage | `internal/protocolserver/usage_tracking.go` | Persist authenticated `team_id` |
 | Control API | `internal/server/module/team/` | Team CRUD |
@@ -200,7 +201,9 @@ NULL 的 Sharing Key 自动回填为 `DefaultTeamID`，raw token 不轮换。
 Primary regression coverage:
 
 - `internal/middleware/auth_sharing_scope_test.go`
+- `internal/middleware/sharing_key_ratelimit_test.go`
 - `internal/protocolserver/team_scope_test.go`
+- `internal/protocolserver/sharing_key_ratelimit_chain_test.go`
 - `internal/db/team_store_test.go`
 - `internal/server/module/team/handler_test.go`
 - `internal/server/module/sharing/team_handler_test.go`

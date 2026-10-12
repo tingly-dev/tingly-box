@@ -45,6 +45,12 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 		swagger.WithRequestModel(TokenMoveRequest{}),
 		swagger.WithResponseModel(APITokenInfo{}),
 	)
+	group.PUT("/tokens/:token_id/rate-limit", h.SetRateLimit,
+		swagger.WithTags("tokens"),
+		swagger.WithDescription("Set a shared API token's requests-per-minute limit (0 = unlimited)"),
+		swagger.WithRequestModel(TokenRateLimitRequest{}),
+		swagger.WithResponseModel(APITokenInfo{}),
+	)
 	group.POST("/tokens/:token_id/regenerate", h.Regenerate,
 		swagger.WithTags("tokens"),
 		swagger.WithDescription("Regenerate a shared API token"),

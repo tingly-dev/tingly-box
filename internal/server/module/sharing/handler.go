@@ -57,6 +57,19 @@ func recordToInfo(r *db.APITokenRecord) APITokenInfo {
 		LastUsedAt:  r.LastUsedAt,
 		CreatedAt:   r.CreatedAt,
 		CreatedBy:   r.CreatedBy,
+		RPMLimit:    r.RPMLimit,
+	}
+}
+
+func recordToCreateResponse(token string, r *db.APITokenRecord) TokenCreateResponse {
+	return TokenCreateResponse{
+		Token:       token,
+		TokenID:     r.TokenID,
+		UserID:      r.UserID,
+		TeamID:      r.TeamID,
+		DisplayName: r.DisplayName,
+		CreatedAt:   r.CreatedAt,
+		RPMLimit:    r.RPMLimit,
 	}
 }
 
@@ -92,20 +105,43 @@ func (h *Handler) Create(c *gin.Context) {
 	if teamID == "" {
 		teamID = db.DefaultTeamID
 	}
-	record, err := h.store.CreateTokenForTeam(userUUID, tokenString, teamID, req.DisplayName, "admin", nil)
+	rpmLimit := db.DefaultSharingKeyRPMLimit
+	if req.RPMLimit != nil {
+		rpmLimit = *req.RPMLimit
+	}
+	record, err := h.store.CreateTokenForTeamWithRPMLimit(userUUID, tokenString, teamID, req.DisplayName, "admin", nil, rpmLimit)
 	if err != nil {
 		sendStoreError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, TokenCreateResponse{
-		Token:       tokenString,
-		TokenID:     record.TokenID,
-		UserID:      record.UserID,
-		TeamID:      record.TeamID,
-		DisplayName: record.DisplayName,
-		CreatedAt:   record.CreatedAt,
-	})
+	c.JSON(http.StatusCreated, recordToCreateResponse(tokenString, record))
+}
+
+// SetRateLimit handles PUT /tokens/:token_id/rate-limit — changes the key's
+// requests-per-minute budget. Takes effect on the next request through the
+// auth middleware; no restart or key rotation.
+func (h *Handler) SetRateLimit(c *gin.Context) {
+	tokenID := c.Param("token_id")
+	if tokenID == "" {
+		apierr.Send(c, http.StatusBadRequest, errors.New("token_id is required"), "invalid_request_error")
+		return
+	}
+	var req TokenRateLimitRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apierr.Send(c, http.StatusBadRequest, err, "invalid_request_error")
+		return
+	}
+	if err := h.store.SetTokenRPMLimit(tokenID, *req.RPMLimit); err != nil {
+		sendStoreError(c, err)
+		return
+	}
+	record, err := h.store.GetToken(tokenID)
+	if err != nil {
+		apierr.Send(c, http.StatusNotFound, err, "not_found_error")
+		return
+	}
+	c.JSON(http.StatusOK, recordToInfo(record))
 }
 
 // List handles GET /tokens — lists tokens with optional filters.
@@ -247,12 +283,5 @@ func (h *Handler) Regenerate(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, TokenCreateResponse{
-		Token:       newTokenString,
-		TokenID:     record.TokenID,
-		UserID:      record.UserID,
-		TeamID:      record.TeamID,
-		DisplayName: record.DisplayName,
-		CreatedAt:   record.CreatedAt,
-	})
+	c.JSON(http.StatusOK, recordToCreateResponse(newTokenString, record))
 }

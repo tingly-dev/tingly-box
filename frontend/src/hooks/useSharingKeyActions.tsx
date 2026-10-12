@@ -23,8 +23,26 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 
 type TableActionProps = Pick<
     ComponentProps<typeof SharingKeysTable>,
-    'visibleTokens' | 'onToggleVisibility' | 'onCopy' | 'onToggleEnabled' | 'onDelete' | 'onMove'
+    'visibleTokens' | 'onToggleVisibility' | 'onCopy' | 'onToggleEnabled' | 'onDelete' | 'onMove' | 'onEditRateLimit'
 >;
+
+/** Server default for a new key's requests-per-minute budget (TEP-1851): 0 = unlimited. */
+const DEFAULT_RPM_LIMIT = 0;
+/** Mirrors db.MaxSharingKeyRPMLimit; the API rejects anything above it. */
+const MAX_RPM_LIMIT = 1_000_000;
+
+/**
+ * Parse the rpm field: a whole number in [0, MAX_RPM_LIMIT], where 0 means
+ * unlimited. An empty field also means 0 — the user has to clear the
+ * prefilled "0" to type a value, and that moment must not read as an error.
+ */
+const parseRpm = (raw: string): number | null => {
+    const trimmed = raw.trim();
+    if (trimmed === '') return 0;
+    if (!/^\d+$/.test(trimmed)) return null;
+    const n = Number(trimmed);
+    return n > MAX_RPM_LIMIT ? null : n;
+};
 
 interface UseSharingKeyActionsOptions {
     /** All teams — used as move destinations. */
@@ -34,10 +52,10 @@ interface UseSharingKeyActionsOptions {
 }
 
 /**
- * Create / move / enable / delete behaviour for Sharing Keys, shared by every
- * surface that lists them (the per-Team dialog and the all-keys page) so the
- * dialogs, copy and notifications stay identical. Spread `tableProps` into
- * `SharingKeysTable` and render `dialogs` once.
+ * Create / move / enable / delete / rate-limit behaviour for Sharing Keys,
+ * shared by every surface that lists them (the per-Team dialog and the
+ * all-keys page) so the dialogs, copy and notifications stay identical.
+ * Spread `tableProps` into `SharingKeysTable` and render `dialogs` once.
  */
 export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsOptions) {
     const { t } = useTranslation();
@@ -46,7 +64,11 @@ export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsO
     const [visibleTokens, setVisibleTokens] = useState<Record<string, boolean>>({});
     const [createTeam, setCreateTeam] = useState<Team | null>(null);
     const [newTokenName, setNewTokenName] = useState('');
+    const [newTokenRpm, setNewTokenRpm] = useState(String(DEFAULT_RPM_LIMIT));
     const [creatingToken, setCreatingToken] = useState(false);
+    const [tokenToLimit, setTokenToLimit] = useState<SharingKey | null>(null);
+    const [limitRpm, setLimitRpm] = useState('');
+    const [savingLimit, setSavingLimit] = useState(false);
     const [tokenToDelete, setTokenToDelete] = useState<SharingKey | null>(null);
     // Kept separate from tokenToDelete so the name doesn't blank out while the dialog animates closed.
     const [deleteOpen, setDeleteOpen] = useState(false);
@@ -57,6 +79,7 @@ export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsO
 
     const openCreate = (team: Team) => {
         setNewTokenName('');
+        setNewTokenRpm(String(DEFAULT_RPM_LIMIT));
         setCreateTeam(team);
     };
 
@@ -66,8 +89,13 @@ export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsO
             notify.error(t('sharingKeys.nameRequired'));
             return;
         }
+        const rpm = parseRpm(newTokenRpm);
+        if (rpm === null) {
+            notify.error(t('sharingKeys.rpmInvalid'));
+            return;
+        }
         setCreatingToken(true);
-        const result = await api.createAPIToken({ display_name: newTokenName.trim(), team_id: createTeam.id });
+        const result = await api.createAPIToken({ display_name: newTokenName.trim(), team_id: createTeam.id, rpm_limit: rpm });
         setCreatingToken(false);
         if (result.success) {
             notify.success(t('sharingKeys.createSuccess'));
@@ -95,6 +123,25 @@ export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsO
             onChanged();
         } else {
             notify.error(result.error?.message || t('sharingKeys.moveFailed'));
+        }
+    };
+
+    const handleSaveRateLimit = async () => {
+        if (!tokenToLimit) return;
+        const rpm = parseRpm(limitRpm);
+        if (rpm === null) {
+            notify.error(t('sharingKeys.rpmInvalid'));
+            return;
+        }
+        setSavingLimit(true);
+        const result = await api.setAPITokenRateLimit(tokenToLimit.token_id, rpm);
+        setSavingLimit(false);
+        if (result.success) {
+            notify.success(t('sharingKeys.rateLimitSuccess'));
+            setTokenToLimit(null);
+            onChanged();
+        } else {
+            notify.error(result.error?.message || t('sharingKeys.rateLimitFailed'));
         }
     };
 
@@ -140,7 +187,27 @@ export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsO
             setTokenToMove(key);
             setMoveTargetTeamID('');
         },
+        onEditRateLimit: (key) => {
+            setLimitRpm(String(key.rpm_limit));
+            setTokenToLimit(key);
+        },
     };
+
+    // Shared by the create and edit dialogs so both explain "0 = unlimited"
+    // the same way (one number, no separate on/off toggle).
+    const rpmField = (value: string, onChange: (v: string) => void, autoFocus = false) => (
+        <TextField
+            label={t('sharingKeys.rpmLimit')}
+            fullWidth
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="0"
+            slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' } }}
+            error={parseRpm(value) === null}
+            helperText={parseRpm(value) === null ? t('sharingKeys.rpmInvalid') : t('sharingKeys.rpmLimitHelper')}
+            autoFocus={autoFocus}
+        />
+    );
 
     const eligibleMoveTargets = teams.filter(
         (candidate) => candidate.id !== tokenToMove?.team_id && candidate.enabled,
@@ -189,6 +256,7 @@ export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsO
                             helperText={t('sharingKeys.displayNameHelper')}
                             autoFocus
                         />
+                        {rpmField(newTokenRpm, setNewTokenRpm)}
                     </Stack>
                 </DialogContent>
                 <DialogActions>
@@ -196,12 +264,39 @@ export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsO
                     <Button
                         variant="contained"
                         onClick={handleCreateToken}
-                        disabled={creatingToken || !newTokenName.trim()}
+                        disabled={creatingToken || !newTokenName.trim() || parseRpm(newTokenRpm) === null}
                         startIcon={creatingToken ? <CircularProgress size={16} /> : <IconPlus sx={{ fontSize: 18 }} />}
                     >
                         {t('sharingKeys.createToken')}
                     </Button>
                 </DialogActions>
+            </Dialog>
+            <Dialog open={Boolean(tokenToLimit)} onClose={() => setTokenToLimit(null)} maxWidth="xs" fullWidth>
+                {/* A form so Enter in the single field submits. */}
+                <form
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        if (!savingLimit && parseRpm(limitRpm) !== null) void handleSaveRateLimit();
+                    }}
+                >
+                    <DialogTitle>{t('sharingKeys.rateLimitDialogTitle')}</DialogTitle>
+                    <DialogContent>
+                        <Stack spacing={2} sx={{ mt: 1 }}>
+                            {rpmField(limitRpm, setLimitRpm, true)}
+                        </Stack>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setTokenToLimit(null)} disabled={savingLimit}>{t('common.cancel')}</Button>
+                        <Button
+                            type="submit"
+                            variant="contained"
+                            disabled={savingLimit || parseRpm(limitRpm) === null}
+                            startIcon={savingLimit ? <CircularProgress size={16} /> : undefined}
+                        >
+                            {t('sharingKeys.saveRateLimit')}
+                        </Button>
+                    </DialogActions>
+                </form>
             </Dialog>
             <ConfirmDialog
                 open={deleteOpen}

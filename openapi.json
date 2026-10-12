@@ -7146,6 +7146,50 @@
         }
       }
     },
+    "/api/v1/tokens/{token_id}/rate-limit": {
+      "put": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Set a shared API token's requests-per-minute limit (0 = unlimited)",
+        "description": "Set a shared API token's requests-per-minute limit (0 = unlimited)",
+        "operationId": "apiV1TokensToken_idRate-limitPut",
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRateLimitRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APITokenInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/tokens/{token_id}/regenerate": {
       "post": {
         "tags": [
@@ -8801,6 +8845,11 @@
             "format": "date-time",
             "description": "Field last_used_at"
           },
+          "rpm_limit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Requests per minute allowed for this key; 0 = unlimited"
+          },
           "team_id": {
             "type": "string",
             "description": "Field team_id"
@@ -8820,7 +8869,8 @@
           "team_id",
           "display_name",
           "enabled",
-          "created_at"
+          "created_at",
+          "rpm_limit"
         ]
       },
       "ActionHistoryEntry": {
@@ -17255,6 +17305,14 @@
             "type": "string",
             "description": "Field display_name"
           },
+          "rpm_limit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Requests per minute allowed for this key; 0 or omitted = unlimited; at most 1000000",
+            "maximum": 1000000,
+            "minimum": 0,
+            "example": 60
+          },
           "team_id": {
             "type": "string",
             "description": "Field team_id"
@@ -17275,6 +17333,11 @@
           "display_name": {
             "type": "string",
             "description": "Field display_name"
+          },
+          "rpm_limit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Requests per minute allowed for this key; 0 = unlimited"
           },
           "team_id": {
             "type": "string",
@@ -17299,7 +17362,8 @@
           "user_id",
           "team_id",
           "display_name",
-          "created_at"
+          "created_at",
+          "rpm_limit"
         ]
       },
       "TokenInfo": {
@@ -17384,6 +17448,22 @@
         },
         "required": [
           "team_id"
+        ]
+      },
+      "TokenRateLimitRequest": {
+        "type": "object",
+        "properties": {
+          "rpm_limit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Requests per minute allowed for this key; 0 = unlimited; at most 1000000",
+            "maximum": 1000000,
+            "minimum": 0,
+            "example": 60
+          }
+        },
+        "required": [
+          "rpm_limit"
         ]
       },
       "TokenResponse": {

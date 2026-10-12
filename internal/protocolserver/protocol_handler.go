@@ -27,6 +27,7 @@ import (
 	pkgotel "github.com/tingly-dev/tingly-box/internal/otel"
 	"github.com/tingly-dev/tingly-box/internal/otel/tracker"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
+	"github.com/tingly-dev/tingly-box/internal/ratelimit"
 	"github.com/tingly-dev/tingly-box/internal/recording"
 	"github.com/tingly-dev/tingly-box/internal/routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -111,6 +112,11 @@ type ProtocolHandlerDeps struct {
 
 	// QuotaReader serves GET /tingly/:scenario/quota (may be nil — 503).
 	QuotaReader QuotaReader
+
+	// SharingKeyLimiter enforces each sharing key's rpm_limit on the model
+	// endpoints (TEP-1851, .design/rate-limit.md). Nil disables enforcement;
+	// the middleware then passes every request through.
+	SharingKeyLimiter ratelimit.Limiter
 }
 
 // ProtocolHandler is the aggregate handler for the AI Model API. Individual method

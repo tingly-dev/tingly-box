@@ -8,6 +8,8 @@ const (
 	CtxKeyAuthKind                  = "auth_kind"                   // string (see AuthKind* constants)
 	CtxKeyUserID                    = "user_id"                     // string
 	CtxKeyTeamID                    = "team_id"                     // string (authorized team identity)
+	CtxKeySharingKeyID              = "sharing_key_id"              // string (token_id of the authenticating sharing key; unset for other auth kinds)
+	CtxKeySharingKeyRPMLimit        = "sharing_key_rpm_limit"       // int (requests/minute allowed for that key; 0 = unlimited)
 	CtxKeyEnterpriseUserID          = "enterprise_user_id"          // string
 	CtxKeyEnterpriseDepartmentID    = "enterprise_department_id"    // string
 	CtxKeyEnterpriseKeyPrefix       = "enterprise_key_prefix"       // string
