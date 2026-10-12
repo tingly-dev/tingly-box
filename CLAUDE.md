@@ -37,7 +37,8 @@ When changing `.github/workflows/` or `.github/actions/`, read `.github/workflow
 
 # Pull Requests
 
-Follow `.github/PULL_REQUEST_TEMPLATE.md` for PR title and description.
+Follow `.github/PULL_REQUEST_TEMPLATE.md` for PR title and description. Requester
+and session attribution go in the footer, never at the top of the description.
 
 # Build
 

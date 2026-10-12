@@ -57,5 +57,9 @@ fact, one place — nothing repeats across title/Summary/bullets/Notes.
 -->
 
 <!--
-No footer details from agent except session link
+Footer — attribution goes at the end, never above the Summary. After a `---`
+rule, one line at most: who requested it and the agent session link, e.g.
+  _Requested by **name** · [thread](…) · <session link>_
+Nothing else from the agent (no "Generated with" badges, no model names).
+A hidden HTML-comment marker may stay on the first line; it does not render.
 -->
