@@ -162,11 +162,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                             disablePadding
                             sx={{
                                 opacity: editing && item.hidden ? 0.5 : 1,
-                                // The pin shows on hover / keyboard focus, and stays visible once set.
-                                '& .pin-btn': { opacity: item.pinned ? 0.9 : 0, transition: 'opacity 0.12s' },
+                                // The pin shows only on hover / keyboard focus; pinned rows already sit in their own group up top.
+                                '& .pin-btn': { opacity: 0, transition: 'opacity 0.12s' },
                                 '&:hover .pin-btn, & .pin-btn:focus-visible': { opacity: 1 },
                                 // Room for the pin only while it is showing, so names keep their width.
-                                ...(pinnable && !item.pinned && {
+                                ...(pinnable && {
                                     '&& > .MuiListItemButton-root': { pr: 1.5 },
                                     '&&:hover > .MuiListItemButton-root, &&:focus-within > .MuiListItemButton-root': { pr: 5 },
                                 }),
