@@ -273,6 +273,9 @@ agentboot/
 ├── run.go                # High-level Prompter/MessageSink consumer
 ├── service.go            # AgentService — the single public entry point (registry + query + execute)
 ├── lifecycle.go          # Runtime LifecycleStore interface
+├── conductor.go          # One reader per resident process (turns, unsolicited turns, tasks)
+├── engine/               # Drive sessions for a page: turns, transcript entries, approvals, background tasks; storage via a host Store
+├── pool/                 # Resident process pool
 ├── history/              # SessionReader + historical session types
 ├── process/              # LaunchSpec + process abstraction (OS/fake)
 ├── protocol/             # Stream-JSON encoder / decoder + canonical Event

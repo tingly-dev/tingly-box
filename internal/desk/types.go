@@ -34,9 +34,3 @@ func ValidPermissionMode(m string) bool {
 	}
 	return false
 }
-
-// autoApproves reports whether the host should answer permission requests
-// itself. Only bypassPermissions promises unconditional approval; every
-// other mode keeps Claude Code's own deny/plan/classifier semantics (the
-// same policy as @cc's own noApprovalModes).
-func autoApproves(mode string) bool { return mode == PermissionBypassPermissions }

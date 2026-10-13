@@ -16,6 +16,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
+	"github.com/tingly-dev/tingly-box/agentboot/engine"
 	"github.com/tingly-dev/tingly-box/agentboot/pool"
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/remote/session"
@@ -986,29 +987,6 @@ func TestMessages_ReadableAfterArchive(t *testing.T) {
 	}
 }
 
-func TestStartTurn_LosingClaimRecordsNothing(t *testing.T) {
-	svc, _ := newTestService(t, completingScript)
-	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi"})
-	if err != nil {
-		t.Fatalf("CreateSession: %v", err)
-	}
-	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
-	before, _ := svc.Messages(sess.ID)
-
-	// Simulate a concurrent send that already won the claim.
-	svc.mu.Lock()
-	svc.runs[sess.ID] = &run{cancel: func() {}, done: make(chan struct{})}
-	svc.mu.Unlock()
-
-	if svc.startTurn(sess.ID, sess.Project, "second", turnSettings{}, true) {
-		t.Fatal("startTurn succeeded while another turn held the claim")
-	}
-	after, _ := svc.Messages(sess.ID)
-	if len(after) != len(before) {
-		t.Fatalf("losing startTurn changed the transcript: %d -> %d messages", len(before), len(after))
-	}
-}
-
 // fakeRouting knows one profile, "p1".
 type fakeRouting struct{}
 
@@ -1167,23 +1145,6 @@ func TestHandoff_ReleasesTheResidentProcessAndBuildsTheCommand(t *testing.T) {
 	want := `cd '` + strings.ReplaceAll(dir, `'`, `'\''`) + `' && '/opt/tingly box/tingly-box' profile 'p1' --resume '` + sess.ID + `'`
 	if cmd != want {
 		t.Fatalf("command:\n got %s\nwant %s", cmd, want)
-	}
-}
-
-// An edited profile keeps its settings path, so the path alone would let a
-// resident process keep running on the settings it was launched with.
-func TestLaunchSignature_ChangesWhenTheSettingsFileChanges(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "settings.json")
-	if err := os.WriteFile(path, []byte(`{"model":"a"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	opts := agentboot.ExecutionOptions{SettingsPath: path}
-	before := launchSignature(opts)
-	if err := os.WriteFile(path, []byte(`{"model":"b"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if launchSignature(opts) == before {
-		t.Fatal("signature unchanged after the profile's settings changed; the resident process would not restart")
 	}
 }
 
@@ -1483,7 +1444,7 @@ func TestTaskOutput_ReadsOnlyTheReportedFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte("line1\nline2\n[exited with code 0]\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	payload, _ := json.Marshal(taskEvent{Event: "output_file", TaskID: "b1", OutputFile: path})
+	payload, _ := json.Marshal(engine.TaskEvent{Event: "output_file", TaskID: "b1", OutputFile: path})
 	mgr.AppendMessage(sess.ID, session.Message{Kind: "task", RequestID: "toolu_1", Payload: payload})
 
 	out, err := svc.TaskOutput(sess.ID, "b1", 0)
@@ -1501,7 +1462,7 @@ func TestTaskOutput_ReadsOnlyTheReportedFile(t *testing.T) {
 		t.Fatalf("bad id: err = %v, want ErrValidation", err)
 	}
 	// A reported path that isn't a task output file is never read.
-	bad, _ := json.Marshal(taskEvent{Event: "output_file", TaskID: "b3", OutputFile: "/etc/passwd"})
+	bad, _ := json.Marshal(engine.TaskEvent{Event: "output_file", TaskID: "b3", OutputFile: "/etc/passwd"})
 	mgr.AppendMessage(sess.ID, session.Message{Kind: "task", Payload: bad})
 	if _, err := svc.TaskOutput(sess.ID, "b3", 0); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("foreign path: err = %v, want ErrNotFound", err)
@@ -1537,7 +1498,7 @@ func TestFinishedCommandOutputIsKept(t *testing.T) {
 
 	msgs, _ := svc.Messages(sess.ID)
 	for _, m := range msgs {
-		var ev taskEvent
+		var ev engine.TaskEvent
 		if m.Kind == "task" && json.Unmarshal(m.Payload, &ev) == nil && ev.Event == "output_snapshot" {
 			if m.RequestID != "toolu_b" || ev.Output != "building…\nok\n[exited with code 0]\n" {
 				t.Fatalf("snapshot = %s %+v", m.RequestID, ev)
@@ -1546,4 +1507,29 @@ func TestFinishedCommandOutputIsKept(t *testing.T) {
 		}
 	}
 	t.Fatalf("no output snapshot in %+v", msgs)
+}
+
+func TestRequestedModel_IsTheLatestTurnsModel(t *testing.T) {
+	svc, mgr := newTestService(t, completingScript)
+	sess := mgr.CreateWith(webChatID, agentType, t.TempDir())
+	if got := svc.RequestedModel(sess.ID); got != "" {
+		t.Fatalf("before any turn: %q, want empty", got)
+	}
+	for _, model := range []string{"tingly/cc", "tingly/cc-opus"} {
+		payload, _ := json.Marshal(engine.TurnUsage{Model: model})
+		mgr.AppendMessage(sess.ID, session.Message{Kind: "usage", Payload: payload})
+	}
+	mgr.AppendMessage(sess.ID, session.Message{Role: "assistant", Content: "after"})
+	if got := svc.RequestedModel(sess.ID); got != "tingly/cc-opus" {
+		t.Fatalf("RequestedModel = %q, want the latest turn's model", got)
+	}
+}
+
+func TestScenario(t *testing.T) {
+	if got := Scenario(""); got != "claude_code" {
+		t.Errorf("Scenario(\"\") = %q", got)
+	}
+	if got := Scenario("p1"); got != "claude_code:p1" {
+		t.Errorf("Scenario(\"p1\") = %q", got)
+	}
 }

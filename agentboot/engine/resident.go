@@ -1,18 +1,16 @@
-package desk
+package engine
 
 import (
 	"context"
-	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
-// resident is Desk's handle on one pooled Claude Code process. Its Conductor
-// reads everything the process emits for as long as it lives: the turns Desk
+// resident is the engine's handle on one pooled Claude Code process. Its Conductor
+// reads everything the process emits for as long as it lives: the turns the host
 // starts, and what happens between them — background task progress, and the
 // turn Claude Code starts on its own when a background task finishes after
-// the turn that launched it. Reading only during Desk's turns would leave
+// the turn that launched it. Reading only during the host's turns would leave
 // that output unread and misattributed to the next message (.design/desk.md
 // §3.7).
 type resident struct {
@@ -21,123 +19,120 @@ type resident struct {
 
 // newResident starts conducting a freshly opened process. Call it right
 // after Open, before the first turn's events pile up.
-func (s *Service) newResident(sessionID string, ps agentboot.PersistentSession) *resident {
+func (e *Engine) newResident(sessionID string, ps agentboot.PersistentSession) *resident {
 	r := &resident{}
 	// One converter for the process's life: its dedupe state spans turns
 	// and it resets its usage tally at each turn's result.
 	conv := newConverter()
 	r.c = agentboot.NewConductor(ps, agentboot.ConductorHooks{
 		Sink: func(raw any) {
-			s.record(sessionID, conv, raw)
+			e.record(sessionID, conv, raw)
 			// Activity between turns (a background task reporting in)
 			// counts as use: the pool must not evict a process that is
 			// still working.
-			s.pool.Touch(sessionID)
+			e.pool.Touch(sessionID)
 		},
 		OnUnsolicitedTurn: func() (context.Context, agentboot.Prompter) {
-			return s.beginUnsolicitedTurn(sessionID)
+			return e.beginUnsolicitedTurn(sessionID)
 		},
 		OnUnsolicitedTurnComplete: func(_ *agentboot.Result, err error) {
-			s.endUnsolicitedTurn(sessionID, err)
+			e.endUnsolicitedTurn(sessionID, err)
 		},
 		OnTerminated: func(string) {
-			s.mu.Lock()
-			if s.residents[sessionID] == r {
-				delete(s.residents, sessionID)
+			e.mu.Lock()
+			if e.residents[sessionID] == r {
+				delete(e.residents, sessionID)
 				// Its background tasks ended with it.
-				delete(s.live, sessionID)
+				delete(e.live, sessionID)
 			}
-			s.mu.Unlock()
+			e.mu.Unlock()
 		},
 	})
-	s.mu.Lock()
-	s.residents[sessionID] = r
-	s.mu.Unlock()
+	e.mu.Lock()
+	e.residents[sessionID] = r
+	e.mu.Unlock()
 	return r
 }
 
 // record turns one agent message into transcript entries.
-func (s *Service) record(sessionID string, conv *converter, raw any) {
+func (e *Engine) record(sessionID string, conv *converter, raw any) {
 	if ev, ok := raw.(agentboot.ErrorEvent); ok {
 		if ev.Err != nil {
-			s.sessions.AppendMessage(sessionID, session.Message{Kind: "error", Content: ev.Err.Error(), Timestamp: time.Now()})
+			e.appendError(sessionID, ev.Err.Error())
 		}
 		return
 	}
 	for _, m := range conv.messages(raw) {
-		s.sessions.AppendMessage(sessionID, m)
-		s.noteUsage(sessionID, m)
-		s.noteTask(sessionID, m)
+		e.store.Append(sessionID, m)
+		e.noteTask(sessionID, m)
 	}
 }
 
 // beginUnsolicitedTurn registers the turn Claude Code started by itself as
 // the session's run, so the page shows it working and its approvals, Stop
 // and the "busy" check all behave as for any turn.
-func (s *Service) beginUnsolicitedTurn(sessionID string) (context.Context, agentboot.Prompter) {
+func (e *Engine) beginUnsolicitedTurn(sessionID string) (context.Context, agentboot.Prompter) {
 	ctx, cancel := context.WithTimeout(context.Background(), turnTimeout)
-	wp := newWebPrompter(sessionID, s.sessions)
+	wp := newWebPrompter(sessionID, e.store)
 
-	s.mu.Lock()
-	if existing, ok := s.runs[sessionID]; ok {
-		// A message from the page claimed the session in the same instant;
+	e.mu.Lock()
+	if existing, ok := e.runs[sessionID]; ok {
+		// A message from the host claimed the session in the same instant;
 		// its Send will be refused (the agent's turn came first), so this
 		// turn answers approvals through that run's prompter.
-		s.mu.Unlock()
+		e.mu.Unlock()
 		cancel()
 		return context.Background(), existing.prompter
 	}
-	s.runs[sessionID] = &run{cancel: cancel, prompter: wp, done: make(chan struct{}), unsolicited: true}
-	s.mu.Unlock()
+	e.runs[sessionID] = &run{cancel: cancel, prompter: wp, done: make(chan struct{}), unsolicited: true}
+	e.mu.Unlock()
 
-	s.appendSystem(sessionID, "a background task finished; Claude is following up")
-	s.sessions.SetRunning(sessionID)
+	e.appendSystem(sessionID, "a background task finished; Claude is following up")
+	e.store.SetRunning(sessionID)
 
 	var prompter agentboot.Prompter = wp
-	if snap, ok := s.sessions.Snapshot(sessionID); ok && autoApproves(snap.PermissionMode) {
+	if e.permissionMode != nil && autoApproves(e.permissionMode(sessionID)) {
 		prompter = autoApprovePrompter{inner: wp}
 	}
 	return ctx, prompter
 }
 
-func (s *Service) endUnsolicitedTurn(sessionID string, err error) {
-	s.mu.Lock()
-	r, ok := s.runs[sessionID]
+func (e *Engine) endUnsolicitedTurn(sessionID string, err error) {
+	e.mu.Lock()
+	r, ok := e.runs[sessionID]
 	if ok && r.unsolicited {
-		delete(s.runs, sessionID)
+		delete(e.runs, sessionID)
 	} else {
 		// Adopted by a message's run in the same instant (see
 		// beginUnsolicitedTurn): that run cleans itself up, but the status
 		// is still this turn's to settle.
 		r = nil
 	}
-	s.mu.Unlock()
+	e.mu.Unlock()
 	interrupted := false
 	if r != nil {
 		interrupted = r.stopped.Load()
 		r.cancel()
 		close(r.done)
 	}
-	s.pool.Touch(sessionID)
+	e.pool.Touch(sessionID)
 
 	switch {
 	case interrupted:
-		s.sessions.Update(sessionID, func(sess *session.Session) {
-			sess.Status, sess.Error = session.StatusCompleted, ""
-		})
-		s.appendSystem(sessionID, "interrupted; send a message to resume")
+		e.store.SetInterrupted(sessionID)
+		e.appendSystem(sessionID, "interrupted; send a message to resume")
 	case err != nil:
-		s.sessions.SetFailed(sessionID, err.Error())
-		s.sessions.AppendMessage(sessionID, session.Message{Kind: "error", Content: err.Error(), Timestamp: time.Now()})
+		e.store.SetFailed(sessionID, err.Error())
+		e.appendError(sessionID, err.Error())
 	default:
-		s.sessions.SetCompleted(sessionID, "")
+		e.store.SetCompleted(sessionID, "")
 	}
 }
 
 // residentFor returns the Conductor of id's pooled process, if it has one.
-func (s *Service) residentFor(id string) (*resident, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	r, ok := s.residents[id]
+func (e *Engine) residentFor(id string) (*resident, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	r, ok := e.residents[id]
 	return r, ok
 }

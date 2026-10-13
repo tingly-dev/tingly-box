@@ -1,4 +1,4 @@
-package desk
+package engine
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
 // approvalTimeout bounds how long a turn waits for a web answer before
@@ -21,7 +20,7 @@ const approvalTimeout = 5 * time.Minute
 // it, ctx is cancelled, or approvalTimeout elapses.
 type webPrompter struct {
 	sessionID string
-	sessions  *session.Manager
+	store     Store
 
 	mu      sync.Mutex
 	pending map[string]chan approvalResult
@@ -32,8 +31,8 @@ type approvalResult struct {
 	answer   string
 }
 
-func newWebPrompter(sessionID string, sessions *session.Manager) *webPrompter {
-	return &webPrompter{sessionID: sessionID, sessions: sessions, pending: map[string]chan approvalResult{}}
+func newWebPrompter(sessionID string, store Store) *webPrompter {
+	return &webPrompter{sessionID: sessionID, store: store, pending: map[string]chan approvalResult{}}
 }
 
 // hasPending reports whether a question or approval is waiting on the user.
@@ -73,7 +72,7 @@ func (p *webPrompter) await(ctx context.Context, kind, requestID, text string, p
 	}()
 
 	raw, _ := json.Marshal(payload)
-	p.sessions.AppendMessage(p.sessionID, session.Message{
+	p.store.Append(p.sessionID, Entry{
 		Kind: kind, RequestID: requestID, Content: text, Payload: raw, Timestamp: time.Now(),
 	})
 
@@ -88,18 +87,18 @@ func (p *webPrompter) await(ctx context.Context, kind, requestID, text string, p
 }
 
 func (p *webPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalRequestEvent) (agentboot.ApprovalResponse, error) {
-	res := p.await(ctx, "approval_request", req.ID, req.ToolName, req.Input)
+	res := p.await(ctx, KindApprovalRequest, req.ID, req.ToolName, req.Input)
 	label := "denied"
 	if res.approved {
 		label = "approved"
 	}
-	p.sessions.AppendMessage(p.sessionID, session.Message{Kind: "approval_response", RequestID: req.ID, Content: label, Timestamp: time.Now()})
+	p.store.Append(p.sessionID, Entry{Kind: KindApprovalResponse, RequestID: req.ID, Content: label, Timestamp: time.Now()})
 	return agentboot.ApprovalResponse{Approved: res.approved}, nil
 }
 
 func (p *webPrompter) OnAsk(ctx context.Context, req agentboot.AskRequestEvent) (agentboot.AskResponse, error) {
-	res := p.await(ctx, "ask_request", req.ID, req.Message, req.Input)
-	p.sessions.AppendMessage(p.sessionID, session.Message{Kind: "ask_response", RequestID: req.ID, Content: res.answer, Timestamp: time.Now()})
+	res := p.await(ctx, KindAskRequest, req.ID, req.Message, req.Input)
+	p.store.Append(p.sessionID, Entry{Kind: KindAskResponse, RequestID: req.ID, Content: res.answer, Timestamp: time.Now()})
 	return agentboot.AskResponse{Approved: res.approved, Response: res.answer}, nil
 }
 

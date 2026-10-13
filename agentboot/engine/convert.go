@@ -1,4 +1,4 @@
-package desk
+package engine
 
 import (
 	"encoding/json"
@@ -8,7 +8,6 @@ import (
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
-	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
 // maxToolOutput caps a tool result stored in the transcript; the full
@@ -20,7 +19,7 @@ const maxToolOutput = 4 * 1024
 // message and as a standalone message depending on the CLI version.
 //
 // It also tallies the turn's token usage for the "usage" entry written when
-// the turn ends (see turnUsage).
+// the turn ends (see TurnUsage).
 type converter struct {
 	seenTools map[string]bool
 	// toolParent attributes a tool_result to the subagent whose tool_use it
@@ -41,11 +40,11 @@ func newConverter() *converter {
 	return &converter{seenTools: map[string]bool{}, toolParent: map[string]string{}, taskTool: map[string]string{}, taskType: map[string]string{}, calls: map[string]anthropic.Usage{}}
 }
 
-// turnUsage is the payload of a "usage" transcript entry: one per turn.
+// TurnUsage is the payload of a "usage" transcript entry: one per turn.
 // Token counts are summed over the turn's API calls as the gateway returned
 // them. Claude Code's own cost figure is left out: it prices every call at
 // Anthropic list prices, which is wrong whenever a profile routes elsewhere.
-type turnUsage struct {
+type TurnUsage struct {
 	Model            string `json:"model,omitempty"`
 	InputTokens      int64  `json:"input_tokens"`
 	OutputTokens     int64  `json:"output_tokens"`
@@ -58,7 +57,7 @@ type turnUsage struct {
 	DurationMS    int64 `json:"duration_ms,omitempty"`
 }
 
-func (c *converter) messages(raw any) []session.Message {
+func (c *converter) messages(raw any) []Entry {
 	switch m := raw.(type) {
 	case *claude.AssistantMessage:
 		return c.assistant(m)
@@ -68,7 +67,7 @@ func (c *converter) messages(raw any) []session.Message {
 		}
 		c.seenTools[m.ToolUseID] = true
 		payload, _ := json.Marshal(m.Input)
-		return []session.Message{c.msg("tool_use", m.Name, m.ToolUseID, payload)}
+		return []Entry{c.msg("tool_use", m.Name, m.ToolUseID, payload)}
 	case *claude.ToolResultMessage:
 		out := m.Output
 		if out == "" && len(m.Content) > 0 {
@@ -86,18 +85,18 @@ func (c *converter) messages(raw any) []session.Message {
 		payload, _ := json.Marshal(map[string]any{"is_error": m.IsError})
 		entry := c.msg("tool_result", out, m.ToolUseID, payload)
 		entry.Parent = c.toolParent[m.ToolUseID]
-		entries := []session.Message{entry}
+		entries := []Entry{entry}
 		// A call that started a background task says where its output
 		// goes ("Output is being written to: …", "output_file: …"); the
 		// task's own events only name that file once it has finished.
 		if match := taskOutputRe.FindStringSubmatch(out); match != nil {
-			ev, _ := json.Marshal(taskEvent{Event: "output_file", TaskID: match[2], OutputFile: match[1]})
+			ev, _ := json.Marshal(TaskEvent{Event: "output_file", TaskID: match[2], OutputFile: match[1]})
 			c.taskTool[match[2]] = m.ToolUseID
 			entries = append(entries, c.msg("task", "", m.ToolUseID, ev))
 		}
 		return entries
 	case *claude.ResultMessage:
-		var out []session.Message
+		var out []Entry
 		if m.IsError && m.Result != "" {
 			out = append(out, c.msg("error", m.Result, "", nil))
 		}
@@ -111,10 +110,10 @@ func (c *converter) messages(raw any) []session.Message {
 			if model, ok := m.Raw["model"].(string); ok {
 				c.model = model
 			}
-			return []session.Message{c.msg("system", "claude code session "+m.SessionID, "", nil)}
+			return []Entry{c.msg("system", "claude code session "+m.SessionID, "", nil)}
 		}
 		if t, ok := c.task(m); ok {
-			return []session.Message{t}
+			return []Entry{t}
 		}
 		return nil
 	}
@@ -123,11 +122,11 @@ func (c *converter) messages(raw any) []session.Message {
 
 // usage totals the turn's API calls. It reports nothing for a turn that made
 // no call (one that failed before reaching the model).
-func (c *converter) usage(res *claude.ResultMessage) (turnUsage, bool) {
+func (c *converter) usage(res *claude.ResultMessage) (TurnUsage, bool) {
 	if len(c.calls) == 0 {
-		return turnUsage{}, false
+		return TurnUsage{}, false
 	}
-	u := turnUsage{Model: c.model, ContextTokens: c.contextTokens, DurationMS: res.DurationMS}
+	u := TurnUsage{Model: c.model, ContextTokens: c.contextTokens, DurationMS: res.DurationMS}
 	for _, call := range c.calls {
 		u.InputTokens += call.InputTokens
 		u.OutputTokens += call.OutputTokens
@@ -149,7 +148,7 @@ func (c *converter) usage(res *claude.ResultMessage) (turnUsage, bool) {
 	return u, true
 }
 
-func (c *converter) assistant(m *claude.AssistantMessage) []session.Message {
+func (c *converter) assistant(m *claude.AssistantMessage) []Entry {
 	if id := m.Message.ID; id != "" {
 		c.calls[id] = m.Message.Usage
 	}
@@ -163,11 +162,11 @@ func (c *converter) assistant(m *claude.AssistantMessage) []session.Message {
 			c.contextTokens = n
 		}
 	}
-	var out []session.Message
+	var out []Entry
 	var text strings.Builder
 	flush := func() {
 		if t := strings.TrimSpace(text.String()); t != "" {
-			out = append(out, session.Message{Role: "assistant", Content: t, Parent: parent, Timestamp: time.Now()})
+			out = append(out, Entry{Role: "assistant", Content: t, Parent: parent, Timestamp: time.Now()})
 		}
 		text.Reset()
 	}
@@ -206,47 +205,47 @@ func (c *converter) assistant(m *claude.AssistantMessage) []session.Message {
 	return out
 }
 
-// taskEvent is the payload of a "task" transcript entry: one lifecycle event
+// TaskEvent is the payload of a "task" transcript entry: one lifecycle event
 // of a subagent or background shell command, as Claude Code reports it in
 // its system messages (task_started, task_progress, task_updated,
 // task_notification, background_tasks_changed). The entry's RequestID is the
 // tool call that started the task, so the page can put its state on that
 // call. Only the fields that event carries are set.
-type taskEvent struct {
-	Event        string      `json:"event"`
-	TaskID       string      `json:"task_id,omitempty"`
-	TaskType     string      `json:"task_type,omitempty"` // local_agent, local_bash
-	Description  string      `json:"description,omitempty"`
-	SubagentType string      `json:"subagent_type,omitempty"`
-	Background   *bool       `json:"background,omitempty"`
-	Status       string      `json:"status,omitempty"` // completed, stopped, failed…
-	Summary      string      `json:"summary,omitempty"`
-	LastTool     string      `json:"last_tool,omitempty"`
-	OutputFile   string      `json:"output_file,omitempty"`
-	Usage        *taskUsage  `json:"usage,omitempty"`
-	Tasks        []taskBrief `json:"tasks,omitempty"` // background_tasks_changed: the full live set
+type TaskEvent struct {
+	Event        string     `json:"event"`
+	TaskID       string     `json:"task_id,omitempty"`
+	TaskType     string     `json:"task_type,omitempty"` // local_agent, local_bash
+	Description  string     `json:"description,omitempty"`
+	SubagentType string     `json:"subagent_type,omitempty"`
+	Background   *bool      `json:"background,omitempty"`
+	Status       string     `json:"status,omitempty"` // completed, stopped, failed…
+	Summary      string     `json:"summary,omitempty"`
+	LastTool     string     `json:"last_tool,omitempty"`
+	OutputFile   string     `json:"output_file,omitempty"`
+	Usage        *TaskUsage `json:"usage,omitempty"`
+	Tasks        []TaskRef  `json:"tasks,omitempty"` // background_tasks_changed: the full live set
 	// output_snapshot: the end of a finished command's output, kept in the
 	// transcript because the file it came from is temporary.
 	Output    string `json:"output,omitempty"`
 	Truncated bool   `json:"truncated,omitempty"`
 }
 
-type taskUsage struct {
+type TaskUsage struct {
 	TotalTokens int64 `json:"total_tokens"`
 	ToolUses    int64 `json:"tool_uses"`
 	DurationMS  int64 `json:"duration_ms"`
 }
 
-type taskBrief struct {
+type TaskRef struct {
 	TaskID      string `json:"task_id"`
 	TaskType    string `json:"task_type,omitempty"`
 	Description string `json:"description,omitempty"`
 }
 
 // task turns a task lifecycle system message into a "task" entry.
-func (c *converter) task(m *claude.SystemMessage) (session.Message, bool) {
+func (c *converter) task(m *claude.SystemMessage) (Entry, bool) {
 	raw := m.Raw
-	ev := taskEvent{Event: m.SubType, TaskID: m.TaskID, TaskType: m.TaskType, Description: m.Description}
+	ev := TaskEvent{Event: m.SubType, TaskID: m.TaskID, TaskType: m.TaskType, Description: m.Description}
 	switch m.SubType {
 	case claude.SystemSubtypeTaskStarted:
 		ev.SubagentType, _ = raw["subagent_type"].(string)
@@ -275,11 +274,11 @@ func (c *converter) task(m *claude.SystemMessage) (session.Message, bool) {
 			ev.TaskType = c.taskType[m.TaskID]
 		}
 	case claude.SystemSubtypeBackgroundTasksChanged:
-		ev.Tasks = []taskBrief{}
+		ev.Tasks = []TaskRef{}
 		if list, ok := raw["tasks"].([]any); ok {
 			for _, item := range list {
 				if t, ok := item.(map[string]any); ok {
-					b := taskBrief{}
+					b := TaskRef{}
 					b.TaskID, _ = t["task_id"].(string)
 					b.TaskType, _ = t["task_type"].(string)
 					b.Description, _ = t["description"].(string)
@@ -288,7 +287,7 @@ func (c *converter) task(m *claude.SystemMessage) (session.Message, bool) {
 			}
 		}
 	default:
-		return session.Message{}, false
+		return Entry{}, false
 	}
 	toolUseID := m.ToolUseID
 	if toolUseID == "" {
@@ -306,7 +305,7 @@ func (c *converter) task(m *claude.SystemMessage) (session.Message, bool) {
 // call that started it: /…/tasks/<task_id>.output.
 var taskOutputRe = regexp.MustCompile(`(/\S*/tasks/([A-Za-z0-9_-]+)\.output)`)
 
-func taskUsageOf(v any) *taskUsage {
+func taskUsageOf(v any) *TaskUsage {
 	u, ok := v.(map[string]any)
 	if !ok {
 		return nil
@@ -315,12 +314,12 @@ func taskUsageOf(v any) *taskUsage {
 		f, _ := u[k].(float64)
 		return int64(f)
 	}
-	return &taskUsage{TotalTokens: num("total_tokens"), ToolUses: num("tool_uses"), DurationMS: num("duration_ms")}
+	return &TaskUsage{TotalTokens: num("total_tokens"), ToolUses: num("tool_uses"), DurationMS: num("duration_ms")}
 }
 
-func (c *converter) msg(kind, text, reqID string, payload json.RawMessage) session.Message {
+func (c *converter) msg(kind, text, reqID string, payload json.RawMessage) Entry {
 	if len(payload) == 0 || string(payload) == "null" {
 		payload = nil
 	}
-	return session.Message{Kind: kind, Content: text, RequestID: reqID, Payload: payload, Timestamp: time.Now()}
+	return Entry{Kind: kind, Content: text, RequestID: reqID, Payload: payload, Timestamp: time.Now()}
 }

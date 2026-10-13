@@ -1,4 +1,4 @@
-package desk
+package engine
 
 import (
 	"bufio"
@@ -10,7 +10,6 @@ import (
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/agentboot/protocol"
-	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
 func assistantCall(id string, parent *string, in, cacheRead, out int64) *claude.AssistantMessage {
@@ -20,11 +19,11 @@ func assistantCall(id string, parent *string, in, cacheRead, out int64) *claude.
 	}
 }
 
-func usageOf(t *testing.T, msgs []session.Message) turnUsage {
+func usageOf(t *testing.T, msgs []Entry) TurnUsage {
 	t.Helper()
 	for _, m := range msgs {
 		if m.Kind == "usage" {
-			var u turnUsage
+			var u TurnUsage
 			if err := json.Unmarshal(m.Payload, &u); err != nil {
 				t.Fatalf("usage payload: %v", err)
 			}
@@ -32,7 +31,7 @@ func usageOf(t *testing.T, msgs []session.Message) turnUsage {
 		}
 	}
 	t.Fatalf("no usage entry in %+v", msgs)
-	return turnUsage{}
+	return TurnUsage{}
 }
 
 func TestConverter_TurnUsage(t *testing.T) {
@@ -50,7 +49,7 @@ func TestConverter_TurnUsage(t *testing.T) {
 		DurationMS: 4200,
 		ModelUsage: map[string]claude.ModelUsage{"tingly/cc": {OutputTokens: 60, ContextWindow: 200000}},
 	}))
-	want := turnUsage{
+	want := TurnUsage{
 		Model: "tingly/cc", InputTokens: 180, OutputTokens: 65, CacheReadTokens: 2500,
 		ContextTokens: 1530, ContextWindow: 200000, DurationMS: 4200,
 	}
@@ -94,35 +93,10 @@ func TestConverter_NoUsageForATurnWithoutCalls(t *testing.T) {
 	}
 }
 
-func TestRequestedModel_IsTheLatestTurnsModel(t *testing.T) {
-	svc, mgr := newTestService(t, completingScript)
-	sess := mgr.CreateWith(webChatID, agentType, t.TempDir())
-	if got := svc.RequestedModel(sess.ID); got != "" {
-		t.Fatalf("before any turn: %q, want empty", got)
-	}
-	for _, model := range []string{"tingly/cc", "tingly/cc-opus"} {
-		payload, _ := json.Marshal(turnUsage{Model: model})
-		mgr.AppendMessage(sess.ID, session.Message{Kind: "usage", Payload: payload})
-	}
-	mgr.AppendMessage(sess.ID, session.Message{Role: "assistant", Content: "after"})
-	if got := svc.RequestedModel(sess.ID); got != "tingly/cc-opus" {
-		t.Fatalf("RequestedModel = %q, want the latest turn's model", got)
-	}
-}
-
-func TestScenario(t *testing.T) {
-	if got := Scenario(""); got != "claude_code" {
-		t.Errorf("Scenario(\"\") = %q", got)
-	}
-	if got := Scenario("p1"); got != "claude_code:p1" {
-		t.Errorf("Scenario(\"p1\") = %q", got)
-	}
-}
-
 // replayFixture feeds a captured Claude Code stream-json run through the
 // real agentboot accumulator and the converter, the way a live process's
 // output reaches the transcript.
-func replayFixture(t *testing.T, name string) []session.Message {
+func replayFixture(t *testing.T, name string) []Entry {
 	t.Helper()
 	f, err := os.Open(filepath.Join("testdata", name))
 	if err != nil {
@@ -131,7 +105,7 @@ func replayFixture(t *testing.T, name string) []session.Message {
 	defer f.Close()
 	tr := claude.NewTransport()
 	conv := newConverter()
-	var out []session.Message
+	var out []Entry
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 1<<20), 1<<20)
 	for sc.Scan() {
@@ -153,42 +127,42 @@ func replayFixture(t *testing.T, name string) []session.Message {
 func TestConverter_AttributesSubagentsAndRecordsTasks(t *testing.T) {
 	msgs := replayFixture(t, "claude-2.1.282-agents-and-background.jsonl")
 
-	find := func(pred func(session.Message) bool) (session.Message, bool) {
+	find := func(pred func(Entry) bool) (Entry, bool) {
 		for _, m := range msgs {
 			if pred(m) {
 				return m, true
 			}
 		}
-		return session.Message{}, false
+		return Entry{}, false
 	}
 
 	// The subagents' own output is attributed to the Agent call that ran them…
-	if m, ok := find(func(m session.Message) bool { return m.Content == "sub bg done" && m.Role == "assistant" }); !ok || m.Parent != "toolu_agent_bg" {
+	if m, ok := find(func(m Entry) bool { return m.Content == "sub bg done" && m.Role == "assistant" }); !ok || m.Parent != "toolu_agent_bg" {
 		t.Fatalf("background subagent text = %+v, want parent toolu_agent_bg", m)
 	}
-	if m, ok := find(func(m session.Message) bool { return m.Kind == "tool_use" && m.RequestID == "toolu_subfg_bash" }); !ok || m.Parent != "toolu_agent_fg" {
+	if m, ok := find(func(m Entry) bool { return m.Kind == "tool_use" && m.RequestID == "toolu_subfg_bash" }); !ok || m.Parent != "toolu_agent_fg" {
 		t.Fatalf("subagent's tool call = %+v, want parent toolu_agent_fg", m)
 	}
-	if m, ok := find(func(m session.Message) bool { return m.Kind == "tool_result" && m.RequestID == "toolu_subfg_bash" }); !ok || m.Parent != "toolu_agent_fg" {
+	if m, ok := find(func(m Entry) bool { return m.Kind == "tool_result" && m.RequestID == "toolu_subfg_bash" }); !ok || m.Parent != "toolu_agent_fg" {
 		t.Fatalf("subagent's tool result = %+v, want parent toolu_agent_fg (inherited from its call)", m)
 	}
 	// …and the main conversation's is not.
-	if m, ok := find(func(m session.Message) bool { return m.Kind == "tool_use" && m.RequestID == "toolu_agent_fg" }); !ok || m.Parent != "" {
+	if m, ok := find(func(m Entry) bool { return m.Kind == "tool_use" && m.RequestID == "toolu_agent_fg" }); !ok || m.Parent != "" {
 		t.Fatalf("main Agent call = %+v, want no parent", m)
 	}
 
-	task := func(event, toolUseID string) (taskEvent, bool) {
+	task := func(event, toolUseID string) (TaskEvent, bool) {
 		for _, m := range msgs {
 			if m.Kind != "task" || m.RequestID != toolUseID {
 				continue
 			}
-			var ev taskEvent
+			var ev TaskEvent
 			_ = json.Unmarshal(m.Payload, &ev)
 			if ev.Event == event {
 				return ev, true
 			}
 		}
-		return taskEvent{}, false
+		return TaskEvent{}, false
 	}
 	started, ok := task("task_started", "toolu_agent_bg")
 	if !ok || started.SubagentType != "general-purpose" || started.Background == nil || !*started.Background || started.TaskType != "local_agent" {
@@ -208,9 +182,9 @@ func TestConverter_AttributesSubagentsAndRecordsTasks(t *testing.T) {
 
 func TestConverter_RecordsWhereABackgroundTaskWritesItsOutput(t *testing.T) {
 	msgs := replayFixture(t, "claude-2.1.282-agents-and-background.jsonl")
-	outputs := map[string]taskEvent{}
+	outputs := map[string]TaskEvent{}
 	for _, m := range msgs {
-		var ev taskEvent
+		var ev TaskEvent
 		if m.Kind == "task" && json.Unmarshal(m.Payload, &ev) == nil && ev.Event == "output_file" {
 			outputs[m.RequestID] = ev
 		}

@@ -1,7 +1,7 @@
 // Package desk is a web front door onto the SAME machinery IM's
 // `@cc` already uses: `remote/session.Manager` for session identity and
-// transcript, `agentboot.AgentService.Run` for actually driving the Claude
-// Code CLI. A web page is just another caller of that shared core — it
+// transcript, and `agentboot/engine` (over `agentboot.AgentService`) for
+// actually driving the Claude Code CLI. A web page is just another caller of that shared core — it
 // gets its own chatID ("web") so its sessions are its own, but the store,
 // the process-execution path, the --resume bookkeeping and the profile /
 // gateway routing are the ones @cc already exercises in production. There
@@ -19,21 +19,18 @@ package desk
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/engine"
 	"github.com/tingly-dev/tingly-box/agentboot/pool"
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -65,41 +62,17 @@ type Routing interface {
 // Service is the single entry point every HTTP handler goes through.
 type Service struct {
 	sessions *session.Manager
-	agent    *agentboot.AgentService
 	routing  Routing
-	pool     *pool.Pool // optional: nil keeps every turn one-shot
+	// engine runs the turns: processes, approvals, background tasks.
+	engine *engine.Engine
+	pool   *pool.Pool // the engine's, kept for tests; nil keeps every turn one-shot
 
-	mu   sync.Mutex
-	runs map[string]*run // sessionID -> live turn, while one is in flight
-	// launch records what each resident persistent process was started
-	// with (see launchSignature), so a changed permission mode or gateway
-	// env restarts it instead of being silently ignored.
-	launch map[string]string
-	// residents holds the Conductor of each pooled process (resident.go).
-	residents map[string]*resident
-	// live is each session's running background tasks (tasks.go).
-	live          map[string][]TaskBrief
-	stopKeepAlive chan struct{}
-	shutdownOnce  sync.Once
+	mu sync.Mutex
 	// model is each session's latest requested model (from its usage
 	// entries), so Status needn't reload the transcript to find it.
 	model map[string]string
 	// launcher is the tingly-box binary Handoff's command runs.
 	launcher string
-}
-
-// run is what Interrupt and Respond need for a session with a turn in
-// flight. It is removed once the turn ends, so Interrupt/Respond outside a
-// turn correctly find nothing to act on.
-type run struct {
-	cancel   context.CancelFunc
-	prompter *webPrompter
-	done     chan struct{} // closed once the turn goroutine has fully exited
-	// unsolicited marks a turn Claude Code started by itself (resident.go):
-	// no goroutine of Desk's waits on it, so stopping it means interrupting
-	// the process directly.
-	unsolicited bool
-	stopped     atomic.Bool // the user stopped it, so its error result is expected
 }
 
 // archiveWaitTimeout bounds how long Archive waits for a cancelled turn to
@@ -130,13 +103,19 @@ type Config struct {
 // every web session still marked running or pending as left over from a
 // previous process (see recoverInterrupted).
 func NewService(cfg Config) *Service {
-	s := &Service{sessions: cfg.Sessions, agent: cfg.Agent, routing: cfg.Routing, pool: cfg.Pool, runs: map[string]*run{}, launch: map[string]string{}, model: map[string]string{}, residents: map[string]*resident{}, live: map[string][]TaskBrief{}, stopKeepAlive: make(chan struct{})}
+	s := &Service{sessions: cfg.Sessions, routing: cfg.Routing, pool: cfg.Pool, model: map[string]string{}}
+	s.engine = engine.New(engine.Config{
+		Agent: cfg.Agent,
+		Store: deskStore{s},
+		Pool:  cfg.Pool,
+		PermissionMode: func(id string) string {
+			snap, _ := s.sessions.Snapshot(id)
+			return snap.PermissionMode
+		},
+	})
 	s.launcher = cfg.Launcher
 	if s.launcher == "" {
 		s.launcher = selfExecutable()
-	}
-	if s.pool != nil {
-		go s.keepAlive(s.stopKeepAlive)
 	}
 	s.recoverInterrupted()
 	return s
@@ -174,34 +153,7 @@ func (s *Service) recoverInterrupted() {
 
 // Shutdown stops every in-flight turn and closes every resident persistent
 // process, so none outlives the server holding its Claude session file open.
-func (s *Service) Shutdown(ctx context.Context) {
-	s.shutdownOnce.Do(func() { close(s.stopKeepAlive) })
-	s.mu.Lock()
-	for _, r := range s.runs {
-		r.cancel()
-	}
-	s.mu.Unlock()
-	if s.pool != nil {
-		s.pool.Shutdown(ctx)
-	}
-}
-
-// launchSignature captures the launch-time settings a persistent process
-// cannot change once started. Env is sorted because Routing builds it from
-// a map. A profile's settings file keeps its path when the profile is
-// edited, so its content is part of the signature, not just the path.
-func launchSignature(opts agentboot.ExecutionOptions) string {
-	env := append([]string(nil), opts.Env...)
-	sort.Strings(env)
-	settings := opts.SettingsPath
-	if settings != "" {
-		if b, err := os.ReadFile(settings); err == nil {
-			sum := sha256.Sum256(b)
-			settings += "@" + hex.EncodeToString(sum[:])
-		}
-	}
-	return opts.PermissionMode + "\x00" + opts.Model + "\x00" + settings + "\x00" + strings.Join(env, "\x00")
-}
+func (s *Service) Shutdown(ctx context.Context) { s.engine.Shutdown(ctx) }
 
 // ---------- folders (a thin, un-persisted convenience) ----------
 
@@ -402,10 +354,10 @@ func (s *Service) noteUsage(id string, m session.Message) {
 }
 
 func usageModel(m session.Message) string {
-	if m.Kind != "usage" {
+	if m.Kind != engine.KindUsage {
 		return ""
 	}
-	var u turnUsage
+	var u engine.TurnUsage
 	if json.Unmarshal(m.Payload, &u) != nil {
 		return ""
 	}
@@ -436,7 +388,7 @@ func (s *Service) SendMessage(ctx context.Context, id, text string) error {
 	if !s.canSteer(sess) {
 		return conflict("session is %s", sess.Status)
 	}
-	// canSteer above is only a pre-check; startTurn's own claim on s.runs is
+	// canSteer above is only a pre-check; startTurn's own claim in the engine is
 	// the atomic one, and it records the message only once it has won, so a
 	// losing concurrent send leaves nothing in the transcript.
 	if !s.startTurn(id, sess.Project, text, settingsOf(sess), true) {
@@ -449,10 +401,7 @@ func (s *Service) canSteer(sess session.Session) bool {
 	if sess.Status == session.StatusClosed || sess.Status == session.StatusExpired {
 		return false
 	}
-	s.mu.Lock()
-	_, busy := s.runs[sess.ID]
-	s.mu.Unlock()
-	return !busy
+	return !s.engine.Busy(sess.ID)
 }
 
 // SetPermissionMode changes a session's mode for its next turn.
@@ -471,7 +420,7 @@ func (s *Service) SetPermissionMode(id, mode string) (*session.Session, error) {
 
 // SetProfile changes which Claude Code profile the session's next turn runs
 // with ("" for the main claude_code routing). A resident process started with
-// another profile is restarted for that turn (see launchSignature).
+// another profile is restarted for that turn (the engine compares launch settings).
 func (s *Service) SetProfile(ctx context.Context, id, profile string) (*session.Session, error) {
 	profile = strings.TrimSpace(profile)
 	if _, ok := s.sessions.Get(id); !ok {
@@ -510,7 +459,7 @@ func (s *Service) checkProfile(ctx context.Context, profile string) error {
 }
 
 // SetModel picks the model tier the session's next turns ask for. A resident
-// process started with another tier restarts with --resume (launchSignature).
+// process started with another tier restarts with --resume (the engine compares launch settings).
 func (s *Service) SetModel(ctx context.Context, id, model string) (*session.Session, error) {
 	model = strings.TrimSpace(model)
 	// A copy: the live *Session is written by a turn's goroutine.
@@ -609,19 +558,12 @@ func profileLabel(profile string) string {
 
 // AwaitingInput reports whether the session's live turn is blocked on the
 // user: an approval or a question nobody has answered yet.
-func (s *Service) AwaitingInput(id string) bool {
-	s.mu.Lock()
-	r, ok := s.runs[id]
-	s.mu.Unlock()
-	return ok && r.prompter.hasPending()
-}
+func (s *Service) AwaitingInput(id string) bool { return s.engine.AwaitingInput(id) }
 
 // Handoff releases a session so it can be continued in a terminal, and
 // returns the command that does it. The resident process is closed first:
 // two processes writing one Claude session file corrupts it (see
-// evictPersistent). A turn in flight is refused rather than killed, and the
-// session is claimed while the process closes, so a turn can't start in
-// between and have its process closed under it.
+// engine.Release). A turn in flight is refused rather than killed.
 //
 // The command goes through tingly-box (`cc`, or `profile <id>` for a
 // profile; the binary by absolute path, see Config.Launcher) rather than
@@ -633,21 +575,9 @@ func (s *Service) Handoff(id string) (string, error) {
 	if !ok {
 		return "", notFound("session", id)
 	}
-	done := make(chan struct{})
-	s.mu.Lock()
-	if _, busy := s.runs[id]; busy {
-		s.mu.Unlock()
+	if err := s.engine.Release(id); err != nil {
 		return "", conflict("stop the current turn before continuing in a terminal")
 	}
-	s.runs[id] = &run{cancel: func() {}, prompter: newWebPrompter(id, s.sessions), done: done}
-	s.mu.Unlock()
-	defer func() {
-		s.mu.Lock()
-		delete(s.runs, id)
-		s.mu.Unlock()
-		close(done)
-	}()
-	s.evictPersistent(id)
 
 	launch := shellQuote(s.launcher) + " cc"
 	if sess.Profile != "" {
@@ -666,45 +596,22 @@ func (s *Service) Respond(id, requestID string, approved bool, answer string) er
 	if strings.TrimSpace(requestID) == "" {
 		return invalid("request_id is required")
 	}
-	s.mu.Lock()
-	r, ok := s.runs[id]
-	s.mu.Unlock()
-	if !ok {
+	switch err := s.engine.Respond(id, requestID, approved, answer); {
+	case errors.Is(err, engine.ErrNoTurn):
 		return conflict("session has no pending request")
-	}
-	if !r.prompter.resolve(requestID, approved, answer) {
+	case errors.Is(err, engine.ErrUnknownRequest):
 		return notFound("request", requestID)
+	default:
+		return err
 	}
-	return nil
 }
 
 // Interrupt stops the current turn; the session stays resumable.
 func (s *Service) Interrupt(id string) error {
-	if _, ok := s.cancelRun(id); !ok {
+	if _, ok := s.engine.Stop(id); !ok {
 		return conflict("session has no turn in progress")
 	}
 	return nil
-}
-
-// cancelRun cancels id's in-flight turn, if any. Returns false if there was
-// none to cancel.
-func (s *Service) cancelRun(id string) (<-chan struct{}, bool) {
-	s.mu.Lock()
-	r, ok := s.runs[id]
-	s.mu.Unlock()
-	if !ok {
-		return nil, false
-	}
-	r.stopped.Store(true)
-	r.cancel()
-	if r.unsolicited {
-		if res, ok := s.residentFor(id); ok {
-			ctx, cancel := context.WithTimeout(context.Background(), agentboot.SessionCloseTimeout)
-			defer cancel()
-			_ = res.c.Interrupt(ctx)
-		}
-	}
-	return r.done, true
 }
 
 // Archive ends a session for good. Nothing on disk is touched: the folder
@@ -718,7 +625,7 @@ func (s *Service) Archive(id string) (*session.Session, error) {
 		// Wait for a cancelled turn to exit first: otherwise its late status
 		// write can revive the session after Close, and a persistent Open
 		// still in flight can register a new process after the eviction.
-		if done, ok := s.cancelRun(id); ok {
+		if done, ok := s.engine.Stop(id); ok {
 			select {
 			case <-done:
 			case <-time.After(archiveWaitTimeout):
@@ -728,7 +635,7 @@ func (s *Service) Archive(id string) (*session.Session, error) {
 		// would keep the on-disk Claude session file open, corrupting any
 		// later resume attempt (the exact bug .design/claude-code-session.md §5.4
 		// documents fixing for @cc's own bot-stop/setting-off paths).
-		s.evictPersistent(id)
+		s.engine.Evict(id)
 		// Close removes the session from the manager's live index (it stays
 		// only in the store), so re-reading it via Snapshot afterward would
 		// spuriously find nothing; the transition is known here, so just
@@ -737,21 +644,6 @@ func (s *Service) Archive(id string) (*session.Session, error) {
 		snap.Status = session.StatusClosed
 	}
 	return &snap, nil
-}
-
-// evictPersistent closes and forgets id's resident persistent session, if
-// any. A no-op when persistence isn't configured or the session was never
-// promoted to persistent (e.g. it only ever ran one-shot turns).
-func (s *Service) evictPersistent(id string) {
-	if s.pool == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), agentboot.SessionCloseTimeout)
-	defer cancel()
-	_ = s.pool.CloseAndRemove(ctx, id)
-	s.mu.Lock()
-	delete(s.launch, id)
-	s.mu.Unlock()
 }
 
 func isActive(st session.Status) bool {
@@ -769,12 +661,8 @@ func modeLabel(mode string) string {
 	return mode
 }
 
-func (s *Service) appendUserMessage(id, text string) {
-	s.sessions.AppendMessage(id, session.Message{Role: "user", Content: text, Timestamp: time.Now()})
-}
-
 func (s *Service) appendSystem(id, text string) {
-	s.sessions.AppendMessage(id, session.Message{Kind: "system", Content: text, Timestamp: time.Now()})
+	s.sessions.AppendMessage(id, session.Message{Kind: engine.KindSystem, Content: text, Timestamp: time.Now()})
 }
 
 var (

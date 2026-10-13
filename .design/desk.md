@@ -100,19 +100,30 @@ type Message struct {
 ```
 
 `Kind == ""` is still a plain chat message — every line `@cc` has already
-written to disk decodes unchanged. `internal/desk/convert.go`
+written to disk decodes unchanged. `agentboot/engine`'s `convert.go`
 (agentboot Claude messages → transcript entries) and `prompter.go`
 (approval/ask round trip) are the only writers of the new `Kind` values.
 
 ## 3. What `internal/desk.Service` actually does
 
-One package, no sub-packages, built directly on the pieces above:
+Desk is two layers. `agentboot/engine` drives the turns: it runs them
+(resident or one-shot), converts what the CLI emits, holds approvals,
+tracks background tasks, and writes everything through a small `Store`
+interface (append an entry, record a status). It owns no storage and knows
+nothing of profiles or the gateway. `internal/desk` is the host: it keeps
+the sessions in `remote/session` (a `deskStore` adapter is the engine's
+`Store`), resolves each turn's routing in the engine's `Launch` callback,
+and owns everything about profiles, models, folders, status and handoff.
+The split exists so another host can drive Claude Code the same way
+(Projects' threads, tingly-project `.design/projects.md` §9); the file
+names below in `turn.go`, `convert.go`, `prompter.go`, `resident.go` and
+`tasks.go` are the engine's.
 
 | concern | how |
 |---|---|
 | pick a folder | `RecentFolders` derives a live list from past web sessions (no separate CRUD store — "recent" just means "used", and nothing here ever scans the filesystem: every path shown is one a session already started in) |
 | start a session | `CreateSession` → `session.Manager.CreateWith` + `startTurn`, which runs the turn in a goroutine (persistent if possible, see §3.1) |
-| drive a turn | `turn.go`'s `runTurn`: converts agentboot events to transcript messages (`convert.go`), routes approvals through a per-turn `webPrompter` (`prompter.go`) that appends the question to the transcript and blocks for `Respond` |
+| drive a turn | the engine's `runTurn` (`turn.go`): converts agentboot events to transcript messages (`convert.go`), routes approvals through a per-turn `webPrompter` (`prompter.go`) that appends the question to the transcript and blocks for `Respond` |
 | steer | `SendMessage` (next turn, `Resume: true`), `Respond` (answer a pending approval/ask), `Interrupt` (cancel the turn's context; the session is left `Completed`+resumable, not `Failed`), `SetPermissionMode` (next turn's `--permission-mode`) |
 | end | `Archive` closes the session for good and closes its resident process, if any — **nothing on disk is touched**: no clone, no directory the tool created, so there is nothing to delete. Archiving only stops tingly-box from resuming that session id |
 
