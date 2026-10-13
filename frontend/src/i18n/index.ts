@@ -62,27 +62,34 @@ const detectBrowserLanguage = (): AppLanguage => {
     return DEFAULT_LANGUAGE;
 };
 
-// Custom language detector: an explicit user choice (persisted to localStorage
-// by i18n.changeLanguage) always wins; otherwise fall back to the browser's language.
-const languageDetectorOptions = {
-    // Order and sources where to look for language
-    order: ['localStorage'],
-    // Keys or params to lookup language from
-    lookupLocalStorage: 'i18nextLng',
-    // Cache user language
-    caches: ['localStorage'],
-    // Custom detection function - check localStorage first, else detect from the browser
-    detection: () => {
-        const stored = localStorage.getItem('i18nextLng');
-        if (isSupported(stored)) {
-            return stored;
+// An explicit user choice (persisted to localStorage by i18n.changeLanguage)
+// wins; otherwise the browser's languages pick one we ship. The detector
+// plugin only runs detectors it knows by name, so this one is registered
+// below rather than passed as an option.
+const supportedLanguageDetector = {
+    name: 'supportedLanguage',
+    lookup: (): AppLanguage => {
+        let stored: string | null = null;
+        try {
+            stored = localStorage.getItem('i18nextLng');
+        } catch {
+            // Storage can be blocked (private windows); fall through to the browser.
         }
-        return detectBrowserLanguage();
+        return isSupported(stored) ? stored : detectBrowserLanguage();
     },
 };
 
+const languageDetector = new LanguageDetector();
+languageDetector.addDetector(supportedLanguageDetector);
+
+const languageDetectorOptions = {
+    order: [supportedLanguageDetector.name],
+    lookupLocalStorage: 'i18nextLng',
+    caches: ['localStorage'],
+};
+
 i18n
-    .use(LanguageDetector) // Detect user language
+    .use(languageDetector) // Detect user language
     .use(initReactI18next) // Passes i18n down to react-i18next
     .init({
         resources,
