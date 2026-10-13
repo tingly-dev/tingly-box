@@ -82,7 +82,7 @@ func (e *Engine) beginUnsolicitedTurn(sessionID string) (context.Context, agentb
 		// turn answers approvals through that run's prompter.
 		e.mu.Unlock()
 		cancel()
-		return context.Background(), existing.prompter
+		return context.Background(), e.prompterFor(sessionID, existing.prompter, e.currentMode(sessionID))
 	}
 	e.runs[sessionID] = &run{cancel: cancel, prompter: wp, done: make(chan struct{}), unsolicited: true}
 	e.mu.Unlock()
@@ -90,11 +90,14 @@ func (e *Engine) beginUnsolicitedTurn(sessionID string) (context.Context, agentb
 	e.appendSystem(sessionID, "a background task finished; Claude is following up")
 	e.store.SetRunning(sessionID)
 
-	var prompter agentboot.Prompter = wp
-	if e.permissionMode != nil && autoApproves(e.permissionMode(sessionID)) {
-		prompter = autoApprovePrompter{inner: wp}
+	return ctx, e.prompterFor(sessionID, wp, e.currentMode(sessionID))
+}
+
+func (e *Engine) currentMode(id string) string {
+	if e.permissionMode == nil {
+		return ""
 	}
-	return ctx, prompter
+	return e.permissionMode(id)
 }
 
 func (e *Engine) endUnsolicitedTurn(sessionID string, err error) {
@@ -117,16 +120,20 @@ func (e *Engine) endUnsolicitedTurn(sessionID string, err error) {
 	}
 	e.pool.Touch(sessionID)
 
+	end := TurnEnd{Unsolicited: true}
 	switch {
 	case interrupted:
 		e.store.SetInterrupted(sessionID)
 		e.appendSystem(sessionID, "interrupted; send a message to resume")
+		end.Stopped = true
 	case err != nil:
 		e.store.SetFailed(sessionID, err.Error())
 		e.appendError(sessionID, err.Error())
+		end.Err = err
 	default:
 		e.store.SetCompleted(sessionID, "")
 	}
+	e.turnEnded(sessionID, end)
 }
 
 // residentFor returns the Conductor of id's pooled process, if it has one.

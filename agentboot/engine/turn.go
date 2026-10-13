@@ -52,12 +52,14 @@ func (e *Engine) Start(id, dir, prompt string, resume bool, launch Launch) bool 
 }
 
 func (e *Engine) runTurn(ctx context.Context, sessionID, projectPath, prompt string, resume bool, launch Launch, webPrompt *webPrompter, cancel context.CancelFunc, done chan struct{}) {
+	var end TurnEnd
 	defer func() {
 		e.mu.Lock()
 		delete(e.runs, sessionID)
 		e.mu.Unlock()
 		cancel()
 		close(done)
+		e.turnEnded(sessionID, end)
 	}()
 
 	var opts agentboot.ExecutionOptions
@@ -68,16 +70,16 @@ func (e *Engine) runTurn(ctx context.Context, sessionID, projectPath, prompt str
 	opts.Resume = resume
 	opts.PermissionPromptTool = "stdio"
 
-	var prompter agentboot.Prompter = webPrompt
-	if autoApproves(opts.PermissionMode) {
-		prompter = autoApprovePrompter{inner: webPrompt}
-	}
+	prompter := e.prompterFor(sessionID, webPrompt, opts.PermissionMode)
 
 	var werr error
 	if e.pool != nil {
 		var handled bool
 		if werr, handled = e.runPersistentTurn(ctx, sessionID, projectPath, prompt, opts, prompter); handled {
-			e.finishTurn(ctx, sessionID, werr, nil)
+			if errors.Is(werr, agentboot.ErrTurnInFlight) {
+				end.NotSent, werr = true, nil
+			}
+			end.Err, end.Stopped = e.finishTurn(ctx, sessionID, werr, nil)
 			return
 		}
 	}
@@ -90,7 +92,7 @@ func (e *Engine) runTurn(ctx context.Context, sessionID, projectPath, prompt str
 	// A one-shot process exits with its turn, and its background tasks
 	// with it.
 	e.clearTasks(sessionID)
-	e.finishTurn(ctx, sessionID, werr, settled)
+	end.Err, end.Stopped = e.finishTurn(ctx, sessionID, werr, settled)
 }
 
 // settleStore notes whether the runner recorded a one-shot turn's outcome.
@@ -174,7 +176,7 @@ func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, 
 			// Not a failure of this session: the note says what happened,
 			// and the status stays with the turn that is running.
 			e.appendSystem(sessionID, "not sent: Claude is following up on a finished background task; send it again when that's done")
-			return nil, true
+			return werr, true
 		case errors.Is(werr, agentboot.ErrSessionClosed):
 			// The process ended before the message reached it: nothing was
 			// sent, so a one-shot turn can still take it.
@@ -207,15 +209,16 @@ func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, 
 // corrected here rather than left to read as a real error. Second, a
 // one-shot turn that failed before its process started is recorded as
 // failed: settled says whether the runner recorded an outcome (nil on the
-// persistent path, which always records its own).
-func (e *Engine) finishTurn(ctx context.Context, sessionID string, werr error, settled *settleStore) {
+// persistent path, which always records its own). It returns the turn's
+// failure, or stopped for a turn the user stopped.
+func (e *Engine) finishTurn(ctx context.Context, sessionID string, werr error, settled *settleStore) (err error, stopped bool) {
 	if werr == nil {
-		return
+		return nil, false
 	}
 	if ctx.Err() == context.Canceled {
 		e.store.SetInterrupted(sessionID)
 		e.appendSystem(sessionID, "interrupted; send a message to resume")
-		return
+		return nil, true
 	}
 	// The runner records the outcome of any turn whose process started.
 	// Unrecorded here means it failed before that (CLI not found, launch
@@ -224,6 +227,7 @@ func (e *Engine) finishTurn(ctx context.Context, sessionID string, werr error, s
 		e.store.SetFailed(sessionID, werr.Error())
 		e.appendError(sessionID, werr.Error())
 	}
+	return werr, false
 }
 
 // launchSignature captures the launch-time settings a persistent process

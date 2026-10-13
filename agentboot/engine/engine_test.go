@@ -2,12 +2,15 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
 )
 
 // memStore records what the engine writes.
@@ -69,5 +72,114 @@ func TestLaunchSignature_ChangesWhenTheSettingsFileChanges(t *testing.T) {
 	}
 	if launchSignature(opts) == before {
 		t.Fatal("signature unchanged after the profile's settings changed; the resident process would not restart")
+	}
+}
+
+// recorder collects OnTurnEnd calls.
+type recorder struct{ ends chan TurnEnd }
+
+func (r recorder) wait(t *testing.T) TurnEnd {
+	t.Helper()
+	select {
+	case end := <-r.ends:
+		return end
+	case <-time.After(5 * time.Second):
+		t.Fatal("no OnTurnEnd")
+		return TurnEnd{}
+	}
+}
+
+func newScripted(t *testing.T, script func(*enginetest.Turn) error, prompter func(string) agentboot.Prompter) (*Engine, *memStore, recorder) {
+	t.Helper()
+	store := newMemStore()
+	rec := recorder{ends: make(chan TurnEnd, 4)}
+	a := &enginetest.Agent{Script: script}
+	e := New(Config{Agent: a.Service(), Store: store, Prompter: prompter, OnTurnEnd: func(_ string, end TurnEnd) { rec.ends <- end }})
+	t.Cleanup(func() { e.Shutdown(context.Background()) })
+	return e, store, rec
+}
+
+func TestOnTurnEnd_ReportsEachOutcomeOnce(t *testing.T) {
+	boom := errors.New("boom")
+	e, store, rec := newScripted(t, func(turn *enginetest.Turn) error {
+		switch turn.Prompt {
+		case "fail":
+			return boom
+		case "block":
+			<-turn.Ctx.Done()
+			return turn.Ctx.Err()
+		}
+		turn.Say("done", 3, 2)
+		return nil
+	}, nil)
+
+	if !e.Start("s1", t.TempDir(), "hello", false, nil) {
+		t.Fatal("Start refused")
+	}
+	if end := rec.wait(t); end != (TurnEnd{}) {
+		t.Fatalf("completed turn: %+v", end)
+	}
+	if e.Busy("s1") {
+		t.Fatal("still busy after OnTurnEnd")
+	}
+	var sawText bool
+	for _, en := range store.entries["s1"] {
+		sawText = sawText || (en.Role == "assistant" && en.Content == "done")
+	}
+	if !sawText {
+		t.Fatalf("assistant text not recorded: %+v", store.entries["s1"])
+	}
+
+	e.Start("s1", t.TempDir(), "fail", true, nil)
+	if end := rec.wait(t); !errors.Is(end.Err, boom) || end.Stopped {
+		t.Fatalf("failed turn: %+v", end)
+	}
+
+	e.Start("s1", t.TempDir(), "block", true, nil)
+	for !e.Busy("s1") {
+		time.Sleep(time.Millisecond)
+	}
+	e.Stop("s1")
+	if end := rec.wait(t); !end.Stopped || end.Err != nil {
+		t.Fatalf("stopped turn: %+v", end)
+	}
+}
+
+// hostPrompter answers every approval itself.
+type hostPrompter struct{ asked chan string }
+
+func (p hostPrompter) OnApproval(_ context.Context, req agentboot.ApprovalRequestEvent) (agentboot.ApprovalResponse, error) {
+	p.asked <- req.ToolName
+	return agentboot.ApprovalResponse{Approved: true}, nil
+}
+
+func (p hostPrompter) OnAsk(context.Context, agentboot.AskRequestEvent) (agentboot.AskResponse, error) {
+	return agentboot.AskResponse{Approved: true, Response: "yes"}, nil
+}
+
+func TestPrompter_HostAnswersApprovals(t *testing.T) {
+	hp := hostPrompter{asked: make(chan string, 1)}
+	e, store, rec := newScripted(t, func(turn *enginetest.Turn) error {
+		resp, err := turn.Approve("req-1", "Bash", map[string]any{"command": "ls"})
+		if err != nil {
+			return err
+		}
+		if !resp.Approved {
+			return errors.New("denied")
+		}
+		return nil
+	}, func(string) agentboot.Prompter { return hp })
+
+	e.Start("s1", t.TempDir(), "go", false, nil)
+	if end := rec.wait(t); end.Err != nil {
+		t.Fatalf("turn: %+v", end)
+	}
+	if got := <-hp.asked; got != "Bash" {
+		t.Fatalf("host prompter asked about %q", got)
+	}
+	for _, en := range store.entries["s1"] {
+		if en.Kind == KindApprovalRequest {
+			t.Fatal("the engine recorded an approval the host answered")
+		}
 	}
 }

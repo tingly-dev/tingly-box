@@ -115,7 +115,12 @@ the sessions in `remote/session` (a `deskStore` adapter is the engine's
 `Store`), resolves each turn's routing in the engine's `Launch` callback,
 and owns everything about profiles, models, folders, status and handoff.
 The split exists so another host can drive Claude Code the same way
-(Projects' threads, tingly-project `.design/projects.md` §9); the file
+(Projects' threads, tingly-project `.design/projects.md` §4.4). Such a host
+can also answer approvals with its own `Prompter` (Projects keeps them in
+the thread, without a timeout, with per-thread "allow this tool"), learn
+how each turn ended through `OnTurnEnd` (to report it and send the next
+queued message), and test against `engine/enginetest`, a scripted stand-in
+for the CLI; the file
 names below in `turn.go`, `convert.go`, `prompter.go`, `resident.go` and
 `tasks.go` are the engine's.
 

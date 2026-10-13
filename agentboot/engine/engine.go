@@ -86,6 +86,30 @@ type Config struct {
 	// Claude Code starts by itself consults it to decide whether its
 	// approvals are answered by the host. Optional.
 	PermissionMode func(id string) string
+	// Prompter, if set, answers a session's approvals and questions in
+	// place of the engine's own (which records them in the transcript and
+	// waits for Respond). Respond and AwaitingInput then have nothing to
+	// act on: the host answers through its prompter. bypassPermissions
+	// still approves tool use without asking it. Optional.
+	Prompter func(id string) agentboot.Prompter
+	// OnTurnEnd is called once after every turn, solicited or not, once
+	// its status is recorded and the session is free for the next Start.
+	// Optional.
+	OnTurnEnd func(id string, end TurnEnd)
+}
+
+// TurnEnd is how a turn ended.
+type TurnEnd struct {
+	// Err is the turn's failure; nil when it completed or was stopped.
+	Err error
+	// Stopped: the user stopped it (Stop, Shutdown).
+	Stopped bool
+	// NotSent: the message never reached Claude, because Claude had just
+	// started a turn of its own (a background task finished). The host
+	// may send it again once that turn ends.
+	NotSent bool
+	// Unsolicited: Claude Code started this turn by itself.
+	Unsolicited bool
 }
 
 // Engine runs the turns of any number of sessions, keyed by session id.
@@ -94,6 +118,8 @@ type Engine struct {
 	store          Store
 	pool           *pool.Pool
 	permissionMode func(id string) string
+	hostPrompter   func(id string) agentboot.Prompter
+	onTurnEnd      func(id string, end TurnEnd)
 
 	mu   sync.Mutex
 	runs map[string]*run // session id -> live turn, while one is in flight
@@ -140,6 +166,8 @@ func New(cfg Config) *Engine {
 		store:          cfg.Store,
 		pool:           cfg.Pool,
 		permissionMode: cfg.PermissionMode,
+		hostPrompter:   cfg.Prompter,
+		onTurnEnd:      cfg.OnTurnEnd,
 		runs:           map[string]*run{},
 		launch:         map[string]string{},
 		residents:      map[string]*resident{},
@@ -263,6 +291,25 @@ func (e *Engine) appendSystem(id, text string) {
 
 func (e *Engine) appendError(id, text string) {
 	e.store.Append(id, Entry{Kind: KindError, Content: text, Timestamp: time.Now()})
+}
+
+// prompterFor is the prompter a turn of id answers with, before the
+// bypassPermissions wrapper: the host's, or the engine's own wp.
+func (e *Engine) prompterFor(id string, wp *webPrompter, mode string) agentboot.Prompter {
+	var p agentboot.Prompter = wp
+	if e.hostPrompter != nil {
+		p = e.hostPrompter(id)
+	}
+	if autoApproves(mode) {
+		p = autoApprovePrompter{inner: p}
+	}
+	return p
+}
+
+func (e *Engine) turnEnded(id string, end TurnEnd) {
+	if e.onTurnEnd != nil {
+		e.onTurnEnd(id, end)
+	}
 }
 
 // autoApproves reports whether the host should answer permission requests
