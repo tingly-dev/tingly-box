@@ -1,9 +1,9 @@
 import CardGrid from '@/components/CardGrid.tsx';
-import UnifiedCard from '@/components/UnifiedCard.tsx';
 import ProviderConfigCard from '@/components/ProviderConfigCard.tsx';
+import PluginFeatures from '@/components/PluginFeatures';
 import ConfirmDialog from '@/components/ConfirmDialog.tsx';
 import {
-    Alert, Box, Button, CircularProgress, Dialog, DialogActions,
+    Alert, Box, Button, Card, CircularProgress, Dialog, DialogActions,
     DialogContent, DialogTitle, FormControlLabel, IconButton, Stack, Switch,
     TextField, Tooltip,
 } from '@mui/material';
@@ -14,6 +14,7 @@ import {useNavigate, useParams} from 'react-router-dom';
 import PageLayout from '@/components/PageLayout';
 import PageHeader from '@/components/PageHeader';
 import ScenarioLogDialog from '@/components/RuleLogDialog';
+import AgentAccessSection, {useAccessExpanded} from './components/AgentAccessSection';
 import AgentActivityDialog from './components/AgentActivityDialog';
 import AgentStatusRow, {AgentLooksIn} from './components/AgentStatusRow';
 import {useAgentObservation} from '@/pages/scenario/hooks/useAgentObservation';
@@ -42,6 +43,7 @@ const UseTeamPageContent: React.FC = () => {
     const {isLoading, notification, copyToClipboard, baseUrl} = useScenarioPageInternal(scenario);
 
     const observation = useAgentObservation(scenario);
+    const access = useAccessExpanded(scenario, !observation.data?.lastRequestAt);
     const [requestsOpen, setRequestsOpen] = useState(false);
     const [logOpen, setLogOpen] = useState(false);
     const [sharingKeysOpen, setSharingKeysOpen] = useState(false);
@@ -236,14 +238,24 @@ const UseTeamPageContent: React.FC = () => {
                             '& > :last-child': {flexWrap: {lg: 'nowrap'}, flexShrink: {lg: 0}},
                         }}
                     />
-                    <CardGrid>
-                    <UnifiedCard size="full" contentMaxWidth={SCENARIO_HEADER_CONTENT_MAX_WIDTH}>
-                        <Stack spacing={2}>
-                            {!currentTeam.enabled && <Alert severity="warning">{t('teams.disabledHint')}</Alert>}
+                    {!currentTeam.enabled && <Alert severity="warning">{t('teams.disabledHint')}</Alert>}
+                    {/* Folds to one Base URL line, like the Agent pages; open until the first request. */}
+                    <AgentAccessSection expanded={access.expanded} onToggle={access.toggle} url={`${baseUrl}/tingly/team`}>
+                        <Box sx={{maxWidth: SCENARIO_HEADER_CONTENT_MAX_WIDTH}}>
                             <ProviderConfigCard title={t('teams.accessTitle')} baseUrlPath="/tingly/team" baseUrl={baseUrl}
-                                                onCopy={copyToClipboard} compact scenario={scenario} />
-                        </Stack>
-                    </UnifiedCard>
+                                                onCopy={copyToClipboard} compact scenario={scenario} showPlugins={false} />
+                        </Box>
+                    </AgentAccessSection>
+
+                    {/* Page-level plugins: their own card, shown whether the connection above is folded or not. */}
+                    <Card sx={{borderRadius: 2, border: '1px solid', borderColor: 'divider', boxShadow: 'none', backgroundColor: 'background.paper'}}>
+                        {/* Same height and left inset as the folded connection card above. */}
+                        <Box sx={{px: 2, py: 0.5, minHeight: 58, display: 'flex', alignItems: 'center', '& > *': {flex: 1, minWidth: 0}}}>
+                            <PluginFeatures scenario={scenario} />
+                        </Box>
+                    </Card>
+
+                    <CardGrid>
                     <TemplatePage key={scenario} scenario={scenario} collapsible allowDeleteRule />
                     </CardGrid>
                 </Stack>
