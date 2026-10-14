@@ -5,13 +5,18 @@ import ConfirmDialog from '@/components/ConfirmDialog.tsx';
 import {
     Alert, Box, Button, CircularProgress, Dialog, DialogActions,
     DialogContent, DialogTitle, FormControlLabel, IconButton, Stack, Switch,
-    TextField, Tooltip, Typography,
+    TextField, Tooltip,
 } from '@mui/material';
 import {Delete, Edit, HelpOutline, Info as IconInfo, Key as IconKey} from '@/components/icons';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useNavigate, useParams} from 'react-router-dom';
 import PageLayout from '@/components/PageLayout';
+import PageHeader from '@/components/PageHeader';
+import ScenarioLogDialog from '@/components/RuleLogDialog';
+import AgentActivityDialog from './components/AgentActivityDialog';
+import AgentStatusRow, {AgentLooksIn} from './components/AgentStatusRow';
+import {useAgentObservation} from '@/pages/scenario/hooks/useAgentObservation';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import { SCENARIO_HEADER_CONTENT_MAX_WIDTH } from './components/ScenarioCardHeader';
 import TemplatePage from './components/TemplatePage.tsx';
@@ -36,6 +41,9 @@ const UseTeamPageContent: React.FC = () => {
     const scenario = currentTeam && !currentTeam.is_default ? `team:${currentTeam.id}` : 'team';
     const {isLoading, notification, copyToClipboard, baseUrl} = useScenarioPageInternal(scenario);
 
+    const observation = useAgentObservation(scenario);
+    const [requestsOpen, setRequestsOpen] = useState(false);
+    const [logOpen, setLogOpen] = useState(false);
     const [sharingKeysOpen, setSharingKeysOpen] = useState(false);
     const [teamGuideOpen, setTeamGuideOpen] = useState(false);
     const [editorOpen, setEditorOpen] = useState(false);
@@ -116,70 +124,69 @@ const UseTeamPageContent: React.FC = () => {
         <PageLayout loading={teamsLoading || isLoading || !currentTeam}
                     loadingContent={<ScenarioPageSkeleton />} notification={notification}>
             {currentTeam && (
-                <CardGrid>
-                    <UnifiedCard
-                        titleHeadingLevel={1}
+                <Stack spacing={2}>
+                    <PageHeader
+                        // Same shape as the Agent pages: the name carries its edit / delete,
+                        // the switch and looks-in lead, the key action (Sharing Keys) is
+                        // filled and rightmost; status text wraps under the title.
                         title={(
-                            <Stack spacing={0.25} sx={{minWidth: 0}}>
-                                <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
-                                    <Box component="span" sx={{lineHeight: 1.2, minWidth: 0}}>
-                                        {t('layout.nav.useTeam', {defaultValue: 'Team'})} - {currentTeam.name}
-                                    </Box>
-                                    <Tooltip
-                                        title={t('teams.keyScopeSummary', {
-                                            team: currentTeam.name,
-                                            slug: currentTeam.slug,
-                                        })}
-                                        arrow
-                                        placement="bottom"
-                                        slotProps={{tooltip: {sx: {maxWidth: 380}}}}
-                                    >
-                                        <IconButton
-                                            size="small"
-                                            aria-label={t('teams.keyScopeInfoLabel')}
-                                            sx={{color: 'text.secondary'}}
-                                        >
-                                            <IconInfo fontSize="small" />
-                                        </IconButton>
-                                    </Tooltip>
-                                    <Tooltip title={t('teams.guide.trigger')}>
-                                        <IconButton
-                                            size="small"
-                                            aria-label={t('teams.guide.trigger')}
-                                            onClick={() => setTeamGuideOpen(true)}
-                                            sx={{color: 'text.secondary', '&:hover': {color: 'primary.main'}}}
-                                        >
-                                            <HelpOutline fontSize="small" />
-                                        </IconButton>
-                                    </Tooltip>
-                                    <Tooltip title={t('teams.editTeam')}>
-                                        <IconButton size="small" onClick={openEditor}><Edit fontSize="small" /></IconButton>
-                                    </Tooltip>
-                                    {!currentTeam.is_default && (
-                                        <Tooltip title={t('teams.deleteTeam')}>
-                                            <IconButton size="small" color="error" onClick={() => setDeleteOpen(true)}>
-                                                <Delete fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                    )}
+                            <Box sx={{display: 'flex', alignItems: 'center', gap: 1, minWidth: 0}}>
+                                <Box component="span" sx={{minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                                    {t('layout.nav.useTeam', {defaultValue: 'Team'})} - {currentTeam.name}
                                 </Box>
-                                <Typography
-                                    component="span"
-                                    variant="caption"
-                                    sx={{
-                                        color: 'text.secondary',
-                                        fontWeight: 400,
-                                        lineHeight: 1.2,
-                                    }}
+                                <Tooltip
+                                    title={t('teams.keyScopeSummary', {
+                                        team: currentTeam.name,
+                                        slug: currentTeam.slug,
+                                    })}
+                                    arrow
+                                    placement="bottom"
+                                    slotProps={{tooltip: {sx: {maxWidth: 380}}}}
                                 >
-                                    {currentTeam.slug} - {currentTeam.name}
-                                </Typography>
-                            </Stack>
+                                    <IconButton
+                                        size="small"
+                                        aria-label={t('teams.keyScopeInfoLabel')}
+                                        sx={{color: 'text.secondary'}}
+                                    >
+                                        <IconInfo fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title={t('teams.guide.trigger')}>
+                                    <IconButton
+                                        size="small"
+                                        aria-label={t('teams.guide.trigger')}
+                                        onClick={() => setTeamGuideOpen(true)}
+                                        sx={{color: 'text.secondary', '&:hover': {color: 'primary.main'}}}
+                                    >
+                                        <HelpOutline fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title={t('teams.editTeam')}>
+                                    <IconButton size="small" aria-label={t('teams.editTeam')} onClick={openEditor}>
+                                        <Edit fontSize="small" sx={{color: 'text.secondary'}} />
+                                    </IconButton>
+                                </Tooltip>
+                                {!currentTeam.is_default && (
+                                    <Tooltip title={t('teams.deleteTeam')}>
+                                        <IconButton size="small" color="error" aria-label={t('teams.deleteTeam')}
+                                                    onClick={() => setDeleteOpen(true)}>
+                                            <Delete fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                )}
+                            </Box>
                         )}
-                        size="full"
-                        contentMaxWidth={SCENARIO_HEADER_CONTENT_MAX_WIDTH}
-                        rightAction={(
-                            <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
+                        meta={(
+                            <AgentStatusRow
+                                observation={observation.data}
+                                connected={!!observation.data?.lastRequestAt}
+                                configStatus={null}
+                                unconnectedText={t('agentStatus.noRequestsYet')}
+                                leading={currentTeam.slug}
+                            />
+                        )}
+                        actions={(
+                            <>
                                 <FormControlLabel
                                     labelPlacement="start"
                                     label={t(currentTeam.enabled ? 'common.enabled' : 'common.disabled')}
@@ -207,13 +214,30 @@ const UseTeamPageContent: React.FC = () => {
                                         },
                                     }}
                                 />
+                                <AgentLooksIn
+                                    onOpenRequests={() => setRequestsOpen(true)}
+                                    onOpenLog={() => setLogOpen(true)}
+                                    onOpenUsage={() => navigate(`/dashboard/today?scenario=${encodeURIComponent(scenario)}`)}
+                                />
                                 <Button variant="contained" size="small" startIcon={<IconKey sx={{fontSize: 18}} />}
-                                        onClick={() => setSharingKeysOpen(true)} sx={{height: 32}}>
+                                        onClick={() => setSharingKeysOpen(true)}>
                                     {t('scenarioPage.sharingKeys')}
                                 </Button>
-                            </Stack>
+                            </>
                         )}
-                    >
+                        sx={{
+                            pb: 0,
+                            borderBottom: 0,
+                            flexDirection: {xs: 'column', lg: 'row'},
+                            alignItems: {xs: 'flex-start', lg: 'center'},
+                            '& h1': {whiteSpace: 'nowrap'},
+                            // One row of buttons on desktop (more of them than an Agent page, so the
+                            // breakpoint is lg); the status text wraps under the title.
+                            '& > :last-child': {flexWrap: {lg: 'nowrap'}, flexShrink: {lg: 0}},
+                        }}
+                    />
+                    <CardGrid>
+                    <UnifiedCard size="full" contentMaxWidth={SCENARIO_HEADER_CONTENT_MAX_WIDTH}>
                         <Stack spacing={2}>
                             {!currentTeam.enabled && <Alert severity="warning">{t('teams.disabledHint')}</Alert>}
                             <ProviderConfigCard title={t('teams.accessTitle')} baseUrlPath="/tingly/team" baseUrl={baseUrl}
@@ -221,7 +245,8 @@ const UseTeamPageContent: React.FC = () => {
                         </Stack>
                     </UnifiedCard>
                     <TemplatePage key={scenario} scenario={scenario} collapsible allowDeleteRule />
-                </CardGrid>
+                    </CardGrid>
+                </Stack>
             )}
 
             {currentTeam && (
@@ -229,6 +254,8 @@ const UseTeamPageContent: React.FC = () => {
                                    team={currentTeam} teams={teams} />
             )}
 
+            <ScenarioLogDialog open={logOpen} onClose={() => setLogOpen(false)} scenario={scenario} title={t('agentStatus.log')} />
+            <AgentActivityDialog scenario={scenario} open={requestsOpen} onClose={() => setRequestsOpen(false)} />
             <TeamGuideDialog open={teamGuideOpen} onClose={() => setTeamGuideOpen(false)} />
 
             <Dialog open={editorOpen} onClose={() => setEditorOpen(false)} maxWidth="sm" fullWidth>
