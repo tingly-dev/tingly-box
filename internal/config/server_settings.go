@@ -183,6 +183,42 @@ func (c *Config) SetToolConfig(toolType string, config interface{}) error {
 	return c.Save()
 }
 
+// UpdateMCPRuntimeConfig performs a read-modify-save under one lock so edits to
+// different sources cannot overwrite each other. A failed save rolls back memory.
+func (c *Config) UpdateMCPRuntimeConfig(change func(*typ.MCPRuntimeConfig) error) (*typ.MCPRuntimeConfig, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var next typ.MCPRuntimeConfig
+	previous, existed := c.ToolConfigs[ToolTypeMCPRuntime]
+	if existed {
+		if err := json.Unmarshal(previous, &next); err != nil {
+			return nil, err
+		}
+	}
+	typ.ApplyMCPRuntimeDefaults(&next)
+	if err := change(&next); err != nil {
+		return nil, err
+	}
+	typ.ApplyMCPRuntimeDefaults(&next)
+	data, err := json.Marshal(next)
+	if err != nil {
+		return nil, err
+	}
+	if c.ToolConfigs == nil {
+		c.ToolConfigs = make(map[string]json.RawMessage)
+	}
+	c.ToolConfigs[ToolTypeMCPRuntime] = data
+	if err := c.Save(); err != nil {
+		if existed {
+			c.ToolConfigs[ToolTypeMCPRuntime] = previous
+		} else {
+			delete(c.ToolConfigs, ToolTypeMCPRuntime)
+		}
+		return nil, err
+	}
+	return &next, nil
+}
+
 // SetDefaultMaxTokens updates the default max_tokens
 func (c *Config) SetDefaultMaxTokens(maxTokens int) error {
 	c.mu.Lock()

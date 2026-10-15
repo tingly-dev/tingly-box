@@ -1,48 +1,17 @@
-export interface MCPSourceConfig {
-    id?: string;
-    name?: string;
-    enabled?: boolean;
-    transport?: 'http' | 'stdio' | 'sse' | 'advisor';
-    endpoint?: string;
-    headers?: Record<string, string>;
-    tools?: string[];
-    command?: string;
-    args?: string[];
-    cwd?: string;
-    env?: Record<string, string>;
-    proxy_url?: string;
-    visibility?: 'client' | 'server';
-    // Local mode specific fields
-    connection_type?: 'stdio' | 'http' | 'sse';
-    auth_type?: 'none' | 'headers' | 'oauth';
-    tools_to_execute?: string[];
-    tools_auto_exec?: string[];
-    allowed_extra_headers?: string[];
-    auto_registered?: boolean;
-    advisor?: {
-        provider_uuid?: string;
-        model?: string;
-        max_uses_per_request?: number;
-        max_tokens?: number;
-    };
-}
+import type { components } from '@/client';
 
-export interface MCPRuntimeConfig {
-    sources?: MCPSourceConfig[];
-    request_timeout?: number;
-    strip_disabled_mcp_tools?: boolean;
-}
-
-export interface MCPConfigResponse {
-    success: boolean;
-    config?: MCPRuntimeConfig;
-    error?: string;
-}
+export type MCPSourceConfig = components['schemas']['MCPSourceConfig'];
+export type MCPRuntimeConfig = components['schemas']['MCPRuntimeConfig'];
+export type MCPConfigResponse = components['schemas']['MCPRuntimeConfigResponse'];
+export type MCPCatalogTool = components['schemas']['CatalogTool'];
+export type MCPSourceStatus = components['schemas']['SourceStatus'];
+export type MCPClientProfile = components['schemas']['MCPClientProfile'];
+export type MCPToolUsage = components['schemas']['MCPToolUsage'];
 
 export const BUILTIN_WEBTOOLS_ID = 'webtools' as const;
 export const BUILTIN_ADVISOR_ID = 'advisor' as const;
 export const BUILTIN_IDS = [BUILTIN_WEBTOOLS_ID, BUILTIN_ADVISOR_ID] as const;
-export type BuiltinId = typeof BUILTIN_IDS[number];
+export type BuiltinId = (typeof BUILTIN_IDS)[number];
 
 export interface MCPKVPair {
     key: string;
@@ -63,6 +32,9 @@ export interface MCPSourceFormValue {
     useGlobalProxy: boolean;
     proxyUrl: string;
     visibility: 'client' | 'server';
+    headers: MCPKVPair[];
+    usage: MCPToolUsage;
+    original?: MCPSourceConfig;
 }
 
 export const MCP_DEFAULT_CWD = '~/.tingly-box/mcp';
@@ -81,6 +53,8 @@ export const defaultMCPSourceFormValue = (): MCPSourceFormValue => ({
     useGlobalProxy: true,
     proxyUrl: '',
     visibility: 'client',
+    headers: [],
+    usage: { client: true, gateway: false },
 });
 
 const isPassthroughValue = (key: string, value: string): boolean => value === `\${${key}}`;
@@ -109,9 +83,10 @@ export const sourceToFormValue = (source?: MCPSourceConfig): MCPSourceFormValue 
         args = [];
     }
 
-    const normalizedTransport = source.transport === 'http' || source.transport === 'sse' || source.transport === 'stdio'
-        ? source.transport
-        : 'stdio';
+    const normalizedTransport =
+        source.transport === 'http' || source.transport === 'sse' || source.transport === 'stdio'
+            ? source.transport
+            : 'stdio';
 
     // advisor is an in-process backend transport; keep frontend UX on stdio editor.
     if (source.transport === 'advisor' && !command) {
@@ -120,6 +95,12 @@ export const sourceToFormValue = (source?: MCPSourceConfig): MCPSourceFormValue 
     }
 
     return {
+        original: source,
+        headers: Object.entries(source.headers || {}).map(([key, value]) => ({ key, value })),
+        usage: source.usage ?? {
+            client: source.visibility !== 'server' && source.transport !== 'advisor',
+            gateway: source.visibility === 'server' || source.transport === 'advisor',
+        },
         id: source.id || '',
         enabled: source.enabled ?? true,
         transport: normalizedTransport,
@@ -150,6 +131,8 @@ export const formValueToSource = (form: MCPSourceFormValue): MCPSourceConfig => 
     }
 
     const source: MCPSourceConfig = {
+        ...form.original,
+        usage: form.usage,
         id: form.id.trim(),
         enabled: form.enabled,
         transport: form.transport,
@@ -157,8 +140,11 @@ export const formValueToSource = (form: MCPSourceFormValue): MCPSourceConfig => 
         visibility: form.visibility,
     };
 
-    if (form.transport === 'http') {
+    if (form.transport === 'http' || form.transport === 'sse') {
         source.endpoint = form.endpoint.trim();
+        source.headers = Object.fromEntries(
+            form.headers.filter((row) => row.key.trim()).map((row) => [row.key.trim(), row.value])
+        );
     } else {
         // Handle builtin command marker
         if (form.command === 'builtin') {
@@ -167,18 +153,14 @@ export const formValueToSource = (form: MCPSourceFormValue): MCPSourceConfig => 
             source.args = ['mcp-builtin'];
         } else {
             source.command = form.command.trim();
-            source.args = (form.args || []).map((a) => a.trim()).filter(Boolean);
+            source.args = [...form.args];
         }
         source.cwd = form.cwd.trim();
     }
 
-    if (Object.keys(envMap).length > 0) {
-        source.env = envMap;
-    }
+    source.env = envMap;
 
-    if (!form.useGlobalProxy && form.proxyUrl.trim()) {
-        source.proxy_url = form.proxyUrl.trim();
-    }
+    source.proxy_url = form.useGlobalProxy ? '' : form.proxyUrl.trim();
 
     return source;
 };

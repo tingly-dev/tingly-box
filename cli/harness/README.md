@@ -57,6 +57,14 @@ path — because that is the product's core. This boundary is deliberate:
   roadmap). See [Planned work & known issues](#planned-work--known-issues)
   below for scenario/fixture/upstream-coverage work still open.
 
+The `servertool` matrix also covers real SDK MCP servers over Streamable HTTP
+and SSE: discovery and gateway injection, owned-call suppression, argument
+forwarding, structured results, `isError`, and the second model round, across
+Anthropic/OpenAI sources and targets in stream and nonstream modes. These
+hermetic remote-MCP cases run in the existing `matrix-servertool` CI leg.
+Configuration persistence, lifecycle and client grants are covered by the MCP
+package integration tests.
+
 ### CI
 
 Every hermetic mode runs in

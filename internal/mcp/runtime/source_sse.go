@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -44,7 +45,13 @@ func NewSSEToolSource(sourceConfig typ.MCPSourceConfig, sc *sessionCache) (*SSET
 func (s *SSEToolSource) Connect(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.IsRetired() {
+		return &ConnectionError{Source: s.GetSourceID(), Reason: "source configuration was replaced"}
+	}
 
+	if s.session != nil && s.session.connected() {
+		return nil
+	}
 	s.setState(StateConnecting, nil)
 
 	logrus.Debugf("mcp: connecting sse source=%s endpoint=%s", s.GetSourceID(), s.sourceConfig.Endpoint)
@@ -90,7 +97,7 @@ func (s *SSEToolSource) Disconnect(ctx context.Context) error {
 func (s *SSEToolSource) IsConnected() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.session != nil && s.session.session != nil
+	return s.session != nil && s.session.connected()
 }
 
 // IsConfigured returns whether this source has sufficient configuration to connect.
@@ -100,13 +107,12 @@ func (s *SSEToolSource) IsConfigured() bool {
 
 // ListTools returns all tools from the SSE MCP server.
 func (s *SSEToolSource) ListTools(ctx context.Context) ([]ToolDefinition, error) {
-	if !s.IsConnected() {
-		return nil, &ConnectionError{Source: s.GetSourceID(), Reason: "not connected"}
-	}
-
 	s.mu.RLock()
 	ss := s.session
 	s.mu.RUnlock()
+	if ss == nil || s.IsRetired() {
+		return nil, &ConnectionError{Source: s.GetSourceID(), Reason: "not connected"}
+	}
 
 	tools, err := ss.listTools(ctx)
 	if err != nil {
@@ -116,9 +122,11 @@ func (s *SSEToolSource) ListTools(ctx context.Context) ([]ToolDefinition, error)
 	result := make([]ToolDefinition, len(tools))
 	for i, tool := range tools {
 		result[i] = ToolDefinition{
-			Name:        tool.Name,
-			Description: tool.Description,
-			InputSchema: tool.schema(),
+			Name:         tool.Name,
+			Description:  tool.Description,
+			InputSchema:  tool.schema(),
+			OutputSchema: tool.OutputSchema,
+			Annotations:  tool.Annotations,
 		}
 	}
 
@@ -127,19 +135,18 @@ func (s *SSEToolSource) ListTools(ctx context.Context) ([]ToolDefinition, error)
 }
 
 // CallTool executes a tool from the SSE MCP server.
-func (s *SSEToolSource) CallTool(ctx context.Context, toolName string, arguments string) (string, error) {
-	if !s.IsConnected() {
-		return "", &ConnectionError{Source: s.GetSourceID(), Reason: "not connected"}
-	}
-
+func (s *SSEToolSource) CallTool(ctx context.Context, toolName string, arguments string) (coretool.ToolResult, error) {
 	s.mu.RLock()
 	ss := s.session
 	s.mu.RUnlock()
+	if ss == nil || s.IsRetired() {
+		return coretool.ToolResult{}, &ConnectionError{Source: s.GetSourceID(), Reason: "not connected"}
+	}
 
 	var argsMap map[string]interface{}
 	if strings.TrimSpace(arguments) != "" {
 		if err := json.Unmarshal([]byte(arguments), &argsMap); err != nil {
-			return "", &ToolExecutionError{ToolName: toolName, Message: "invalid arguments: " + err.Error()}
+			return coretool.ToolResult{}, &ToolExecutionError{ToolName: toolName, Message: "invalid arguments: " + err.Error()}
 		}
 	}
 
@@ -154,7 +161,7 @@ func (s *SSEToolSource) CallTool(ctx context.Context, toolName string, arguments
 			"tool":   toolName,
 			"error":  err.Error(),
 		}).Debug("mcp: sse tool execution failed")
-		return "", err
+		return coretool.ToolResult{}, err
 	}
 
 	logrus.WithFields(logrus.Fields{
