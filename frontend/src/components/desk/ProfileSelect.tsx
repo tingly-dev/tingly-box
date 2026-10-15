@@ -3,6 +3,7 @@ import {useProfileContext} from '@/contexts/ProfileContext';
 import {MenuItem, Select, Stack, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
 import { fontMono } from '@/theme/fonts';
+import {composerPickerLabelSx, composerPickerSx} from '@tingly/projects';
 
 interface ProfileSelectProps {
     value: string;
@@ -36,20 +37,11 @@ const ProfileSelect = ({value, onChange, disabled}: ProfileSelectProps) => {
             onChange={(e) => onChange(e.target.value)}
             renderValue={(v) => (
                 <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
-                    <Route sx={{fontSize: 14}}/>
-                    <Typography variant="caption" noWrap sx={{color: 'inherit', minWidth: 0}}>{v ? label(v) : defaultLabel}</Typography>
+                    <Route/>
+                    <Typography noWrap sx={composerPickerLabelSx}>{v ? label(v) : defaultLabel}</Typography>
                 </Stack>
             )}
-            sx={{
-                px: 1,
-                borderRadius: 1.5,
-                border: 1,
-                borderColor: 'divider',
-                maxWidth: '100%',
-                minWidth: 0,
-                color: 'text.secondary',
-                '& .MuiSelect-select': {py: {xs: 0.75, md: 0.25}, minHeight: {xs: '24px !important', md: 'initial'}, display: 'flex', alignItems: 'center'},
-            }}
+            sx={composerPickerSx}
         >
             <MenuItem value="">{defaultLabel}</MenuItem>
             {profiles.map((p) => (

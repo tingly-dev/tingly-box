@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert, Box, Button, Collapse, IconButton,
+    Alert, Box, Button, Collapse, Divider, IconButton, Menu, MenuItem,
     Skeleton, Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
@@ -9,11 +9,11 @@ import { buildTranscript, Transcript, type Respond } from '../../transcript';
 import { Composer } from '../Composer';
 import { CodeBlock, Markdown } from '../Markdown';
 import { CopyIconButton } from '@tingly/ui';
-import { ArrowBack, Branch, DiffIcon, Merge } from '../icons';
+import { ArrowBack, Branch, DiffIcon, Merge, MoreVert } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { formatTokens } from '../../utils/format';
 import { DiffDialog } from './DiffDialog';
-import { ThreadStatusChip } from './threadStatus';
+import { ThreadStatusChip, toneColor } from './threadStatus';
 import { threadTranscript } from './threadTranscript';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
@@ -24,7 +24,7 @@ function MetaLine({ items }: { items: React.ReactNode[] }) {
     const shown = items.filter(Boolean);
     if (shown.length === 0) return null;
     return (
-        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 0.75, mt: 0.25, color: 'text.secondary', fontSize: fontSizes.md }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 0.75, rowGap: 0.25, color: 'text.secondary', fontSize: fontSizes.md }}>
             {shown.map((x, i) => (
                 <Box key={i} component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
                     {i > 0 && <Box component="span" sx={{ color: 'text.disabled' }}>·</Box>}
@@ -49,6 +49,7 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const [diffOpen, setDiffOpen] = useState(false);
+    const [menu, setMenu] = useState<HTMLElement | null>(null);
     const [taskOpen, setTaskOpen] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
@@ -93,39 +94,46 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-            <Box sx={{ px: 2, pt: 1.5, pb: 1, borderBottom: 1, borderColor: 'divider' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ px: 1.5, pt: 1, pb: 1, borderBottom: 1, borderColor: 'divider' }}>
+                {/* One row to name the thread and act on it, one quiet row of facts. */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                     <IconButton size="small" onClick={onBack} aria-label={t('thread.back')}><ArrowBack fontSize="small" /></IconButton>
-                    <Typography variant="h5" noWrap sx={{ flex: 1, minWidth: 0 }}>{thread.title}</Typography>
-                    <ThreadStatusChip thread={thread} />
+                    <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: '0.9375rem', fontWeight: 650, color: 'text.primary' }} title={thread.title}>{thread.title}</Typography>
+                    {canReview && <Button size="small" variant="contained" startIcon={<DiffIcon />} onClick={() => setDiffOpen(true)} sx={{ flexShrink: 0, py: 0.25 }}>{t('thread.review')}</Button>}
+                    <IconButton size="small" onClick={(e) => setMenu(e.currentTarget)} aria-label={t('common.more')}><MoreVert fontSize="small" /></IconButton>
+                    <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
+                        <MenuItem onClick={() => { setMenu(null); setTaskOpen((v) => !v); }}>{taskOpen ? t('thread.hideTask') : t('thread.showTask')}</MenuItem>
+                        {thread.status !== 'resolved'
+                            ? <MenuItem onClick={() => { setMenu(null); void act('/api/v1/projects/{id}/threads/{tid}/resolve'); }}>{t('thread.resolve')}</MenuItem>
+                            : <MenuItem onClick={() => { setMenu(null); void act('/api/v1/projects/{id}/threads/{tid}/reopen'); }}>{t('thread.reopen')}</MenuItem>}
+                        {/* Run details, for when they matter: kept off the header. */}
+                        {(thread.model || thread.input_tokens > 0 || thread.output_tokens > 0) && <Divider />}
+                        {(thread.model || thread.input_tokens > 0 || thread.output_tokens > 0) && (
+                            <Box sx={{ px: 2, py: 0.75, fontSize: fontSizes.sm, color: 'text.secondary' }}>
+                                {thread.model && <Box sx={{ ...mono }}>{thread.model}</Box>}
+                                {(thread.input_tokens > 0 || thread.output_tokens > 0) && <Box>{formatTokens(thread.input_tokens)} in / {formatTokens(thread.output_tokens)} out</Box>}
+                            </Box>
+                        )}
+                    </Menu>
                 </Box>
-                {thread.branch ? (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5, color: 'text.secondary', fontSize: fontSizes.md, minWidth: 0 }}>
-                        <Branch sx={{ fontSize: 14, flexShrink: 0 }} />
-                        <Box component="span" sx={{ ...mono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{thread.branch}</Box>
-                        <Box component="span" sx={{ flexShrink: 0 }}>{t('thread.fromBase', { base: thread.base_branch })}</Box>
-                        <CopyIconButton value={`cd ${thread.worktree}`} label={t('thread.copyCd')} copiedLabel={t('common.copied')} iconSize={14} />
-                    </Box>
-                ) : (
-                    <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.5 }}>{t('thread.noRepo')}</Typography>
-                )}
-                <MetaLine items={[
-                    thread.merged_at
-                        ? <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: 'success.main' }}><Merge sx={{ fontSize: 13 }} />{t('thread.mergedInto', { base: thread.base_branch })}</Box>
-                        : thread.commits_ahead > 0 && <>{t('thread.commits', { count: thread.commits_ahead })} · {t('thread.files', { count: thread.files_changed })}</>,
-                    thread.uncommitted && <Box component="span" sx={{ color: 'warning.main' }}>{t('thread.uncommitted')}</Box>,
-                    thread.model && <Box component="span" sx={{ ...mono }}>{thread.model}</Box>,
-                    (thread.input_tokens > 0 || thread.output_tokens > 0) && <>{formatTokens(thread.input_tokens)} in / {formatTokens(thread.output_tokens)} out</>,
-                ]} />
-                <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
-                    {canReview && <Button size="small" variant="contained" startIcon={<DiffIcon />} onClick={() => setDiffOpen(true)}>{t('thread.review')}</Button>}
-                    {thread.status !== 'resolved'
-                        ? <Button size="small" color="inherit" onClick={() => void act('/api/v1/projects/{id}/threads/{tid}/resolve')}>{t('thread.resolve')}</Button>
-                        : <Button size="small" color="inherit" onClick={() => void act('/api/v1/projects/{id}/threads/{tid}/reopen')}>{t('thread.reopen')}</Button>}
-                    <Button size="small" color="inherit" onClick={() => setTaskOpen((v) => !v)}>{taskOpen ? t('thread.hideTask') : t('thread.showTask')}</Button>
+                <Box sx={{ pl: 4.5 }}>
+                    <MetaLine items={[
+                        <ThreadStatusChip thread={thread} />,
+                        thread.branch
+                            ? <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                                <Branch sx={{ fontSize: 14, flexShrink: 0 }} />
+                                <Box component="span" sx={{ ...mono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={t('thread.fromBase', { base: thread.base_branch })}>{thread.branch}</Box>
+                                <CopyIconButton value={`cd ${thread.worktree}`} label={t('thread.copyCd')} copiedLabel={t('common.copied')} iconSize={13} />
+                            </Box>
+                            : t('thread.noRepo'),
+                        thread.merged_at
+                            ? <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: toneColor('success') }}><Merge sx={{ fontSize: 13 }} />{t('thread.mergedInto', { base: thread.base_branch })}</Box>
+                            : thread.commits_ahead > 0 && <>{t('thread.commits', { count: thread.commits_ahead })} · {t('thread.files', { count: thread.files_changed })}</>,
+                        thread.uncommitted && <Box component="span" sx={{ color: toneColor('warning') }}>{t('thread.uncommitted')}</Box>,
+                    ]} />
                 </Box>
                 <Collapse in={taskOpen}>
-                    <Box sx={{ mt: 1, p: 1.25, bgcolor: 'action.hover', borderRadius: 2, maxHeight: 220, overflow: 'auto' }}><Markdown text={thread.task} /></Box>
+                    <Box sx={{ mt: 1, p: 1.25, bgcolor: 'action.hover', borderRadius: 1, maxHeight: 220, overflow: 'auto' }}><Markdown text={thread.task} /></Box>
                 </Collapse>
                 {/* A pending request card is already the call to action. */}
                 {thread.status === 'waiting' && thread.wait_reason && !pendingRequestId && (

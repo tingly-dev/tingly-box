@@ -87,7 +87,7 @@ export function ThreadSubtitle({ thread }: { thread: Thread }) {
 }
 
 const pill = {
-    display: 'inline-flex', alignItems: 'center', gap: 0.5, height: 22, px: 0.875, borderRadius: 999, flexShrink: 0,
+    display: 'inline-flex', alignItems: 'center', gap: 0.5, height: 22, px: 0.875, borderRadius: 0.75, flexShrink: 0,
     fontSize: fontSizes.sm, fontWeight: 500, whiteSpace: 'nowrap', border: 1, borderColor: 'divider', color: 'text.secondary',
     '& svg': { fontSize: 13 },
 } as const;

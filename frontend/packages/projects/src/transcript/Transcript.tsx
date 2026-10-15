@@ -52,7 +52,7 @@ const preBox = {
 const UserBubble = ({message}: {message: TranscriptEntry}) => (
     <Box sx={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end'}}>
         {message.author && <Typography variant="caption" sx={{color: 'text.secondary', mb: 0.25}}>{message.author}</Typography>}
-        <Box sx={{maxWidth: '80%', bgcolor: 'action.hover', px: 1.75, py: 1, borderRadius: 3}}>
+        <Box sx={{maxWidth: '80%', bgcolor: 'action.hover', px: 1.75, py: 1, borderRadius: 1.5}}>
             <Typography variant="body1" sx={conversationText}>{message.content}</Typography>
         </Box>
     </Box>
@@ -348,7 +348,7 @@ const RequestCard = ({block, onRespond}: {
     };
 
     return (
-        <Paper data-request-id={message.request_id} variant="outlined" sx={{p: 1.5, borderRadius: 2, borderColor: 'primary.main'}}>
+        <Paper data-request-id={message.request_id} variant="outlined" sx={{p: 1.5, borderRadius: 1.5, borderColor: 'primary.main'}}>
             <Stack direction="row" spacing={1} sx={{alignItems: 'center', mb: 1}}>
                 {isAsk
                     ? <Help sx={{fontSize: 16, color: 'primary.main'}}/>
@@ -534,7 +534,7 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
     }[status];
 
     return (
-        <Paper variant="outlined" data-call-ids={block.call.id} sx={{borderRadius: 2, overflow: 'hidden'}}>
+        <Paper variant="outlined" data-call-ids={block.call.id} sx={{borderRadius: 1.5, overflow: 'hidden'}}>
             <Box
                 role="button"
                 aria-expanded={open}

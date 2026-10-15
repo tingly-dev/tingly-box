@@ -64,7 +64,7 @@ const NewSessionView = ({initialFolder, recentFolders, permissionModes, onCreate
                     onTextChange={(text) => update('prompt', text)}
                     onAccepted={(submitted) => setForm((previous) => previous.prompt === submitted ? {...previous, prompt: ''} : previous)}
                     onSend={(prompt) => onCreate(folder.trim(), prompt, permissionMode, profile, model)}
-                    context={(
+                    leftSlot={(
                         <>
                             <ProfileSelect value={profile} onChange={pickProfile}/>
                             <ModelSelect profile={profile} value={model} onChange={(value) => update('model', value)}/>

@@ -21,7 +21,7 @@ const COLUMN = { maxWidth: 780, mx: 'auto', width: '100%', px: { xs: 2, md: 3 } 
 function UserBubble({ text }: { text: string }) {
     return (
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', my: 2 }}>
-            <Box sx={{ maxWidth: '85%', bgcolor: 'action.hover', borderRadius: 3, px: 1.75, py: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'text.primary', fontSize: '0.875rem', lineHeight: 1.65 }}>
+            <Box sx={{ maxWidth: '85%', bgcolor: 'action.hover', borderRadius: 1.5, px: 1.75, py: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'text.primary', fontSize: '0.875rem', lineHeight: 1.65 }}>
                 {text}
             </Box>
         </Box>

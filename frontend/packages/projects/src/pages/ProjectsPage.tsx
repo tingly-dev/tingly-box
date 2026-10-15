@@ -23,7 +23,7 @@ function ProjectCard({ p }: { p: ProjectSummary }) {
         { key: 'working', n: c.working, color: 'info' },
     ];
     return (
-        <Card variant="outlined" sx={{ borderRadius: 3, '&:hover': { borderColor: 'text.disabled' } }}>
+        <Card variant="outlined" sx={{ borderRadius: 1.5, '&:hover': { borderColor: 'text.disabled' } }}>
             <CardActionArea onClick={() => navigate(routes.project(p.id))} sx={{ p: 2.25, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Typography variant="h5" noWrap sx={{ flex: 1 }}>{p.name}</Typography>

@@ -92,7 +92,7 @@ export default function ChatsPage() {
                 ) : (
                     <>
                         <Typography variant="caption" color="text.secondary">{t('chats.count', { count: chats.length })}</Typography>
-                        <Box sx={{ mt: 1, border: 1, borderColor: 'divider', borderRadius: 3, overflow: 'hidden', '& > a:first-of-type': { borderTop: 0 } }}>
+                        <Box sx={{ mt: 1, border: 1, borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden', '& > a:first-of-type': { borderTop: 0 } }}>
                             {chats.map((c) => <Row key={c.id} chat={c} onChanged={() => setTick((x) => x + 1)} />)}
                         </Box>
                     </>

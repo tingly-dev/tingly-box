@@ -14,7 +14,7 @@ export function CodeBlock({ code, language }: { code: string; language: string }
     const { t } = useTranslation('projects');
     const { copied, copy } = useCopyFeedback();
     return (
-        <Box sx={{ position: 'relative', my: 1.5, borderRadius: 2, border: 1, borderColor: 'divider', overflow: 'hidden' }}>
+        <Box sx={{ position: 'relative', my: 1.5, borderRadius: 1, border: 1, borderColor: 'divider', overflow: 'hidden' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1.5, py: 0.25, bgcolor: 'action.hover', fontSize: fontSizes.sm, color: 'text.secondary' }}>
                 <span>{language || 'text'}</span>
                 <Tooltip title={copied ? t('common.copied') : t('common.copy')}>

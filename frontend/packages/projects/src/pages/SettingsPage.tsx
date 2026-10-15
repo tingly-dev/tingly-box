@@ -35,7 +35,7 @@ const mono = { fontFamily: fontMono, fontSize: fontSizes.lg } as const;
 
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
     return (
-        <Paper variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, md: 3 }, mb: 3 }}>
+        <Paper variant="outlined" sx={{ borderRadius: 1.5, p: { xs: 2, md: 3 }, mb: 3 }}>
             <Typography variant="h4">{title}</Typography>
             {subtitle && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{subtitle}</Typography>}
             <Box sx={{ mt: 2.5 }}>{children}</Box>

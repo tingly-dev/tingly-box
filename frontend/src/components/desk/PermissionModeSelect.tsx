@@ -1,6 +1,7 @@
 import {Lock} from '@/components/icons';
 import {MenuItem, Select, Stack, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
+import {composerPickerLabelSx, composerPickerSx} from '@tingly/projects';
 
 interface PermissionModeSelectProps {
     value: string;
@@ -26,20 +27,11 @@ const PermissionModeSelect = ({value, permissionModes, onChange, disabled}: Perm
             onChange={(e) => onChange(e.target.value)}
             renderValue={(v) => (
                 <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
-                    <Lock sx={{fontSize: 14}}/>
-                    <Typography variant="caption" noWrap sx={{color: 'inherit', minWidth: 0}}>{v || inherit}</Typography>
+                    <Lock/>
+                    <Typography noWrap sx={composerPickerLabelSx}>{v || inherit}</Typography>
                 </Stack>
             )}
-            sx={{
-                px: 1,
-                borderRadius: 1.5,
-                border: 1,
-                borderColor: 'divider',
-                maxWidth: '100%',
-                minWidth: 0,
-                color: 'text.secondary',
-                '& .MuiSelect-select': {py: {xs: 0.75, md: 0.25}, minHeight: {xs: '24px !important', md: 'initial'}, display: 'flex', alignItems: 'center'},
-            }}
+            sx={composerPickerSx}
         >
             <MenuItem value="">{inherit}</MenuItem>
             {permissionModes.map((m) => <MenuItem key={m} value={m}>{m}</MenuItem>)}

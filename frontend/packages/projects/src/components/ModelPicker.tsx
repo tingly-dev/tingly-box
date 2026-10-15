@@ -31,7 +31,7 @@ export function ModelPicker({ value, onChange, disabled }: Props) {
                 disabled={disabled}
                 onClick={(e) => setAnchor(e.currentTarget)}
                 endIcon={<ExpandMore fontSize="small" />}
-                sx={{ color: 'text.secondary', fontWeight: 500, fontFamily: fontMono, fontSize: fontSizes.md, maxWidth: 260 }}
+                sx={{ color: 'text.secondary', fontWeight: 500, fontSize: fontSizes.sm, maxWidth: 260, px: 0.75, minWidth: 0, borderRadius: 1 }}
             >
                 <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {value || t('model.auto')}

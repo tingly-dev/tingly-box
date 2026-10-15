@@ -5,6 +5,7 @@ import {Box, MenuItem, Select, Stack, Tooltip, Typography} from '@mui/material';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import { fontMono } from '@/theme/fonts';
+import {composerPickerLabelSx, composerPickerSx} from '@tingly/projects';
 
 interface ModelSelectProps {
     // The profile whose tiers are offered ('' is the main routing).
@@ -15,15 +16,6 @@ interface ModelSelectProps {
     onChange: (model: string) => void;
 }
 
-const chipSx = {
-    px: 1,
-    borderRadius: 1.5,
-    border: 1,
-    borderColor: 'divider',
-    maxWidth: '100%',
-    minWidth: 0,
-    color: 'text.secondary',
-};
 
 // The concrete model a tier ends up on (ux-principles #5): the routed
 // provider model when a rule matches, else the gateway model id.
@@ -65,9 +57,9 @@ const ModelSelect = ({profile, value, onChange, disabled}: ModelSelectProps) => 
                 route: route(only),
             })}
             >
-                <Stack direction="row" spacing={0.5} sx={{...chipSx, alignItems: 'center', py: 0.25}} aria-label={t('desk.model', {defaultValue: 'Model'})}>
-                    <Psychology sx={{fontSize: 14}}/>
-                    <Typography variant="caption" noWrap sx={{color: 'inherit', minWidth: 0}}>{concrete(only)}</Typography>
+                <Stack direction="row" spacing={0.5} sx={{...composerPickerSx, alignItems: 'center', py: 0.5}} aria-label={t('desk.model', {defaultValue: 'Model'})}>
+                    <Psychology/>
+                    <Typography noWrap sx={composerPickerLabelSx}>{concrete(only)}</Typography>
                 </Stack>
             </Tooltip>
         );
@@ -86,13 +78,13 @@ const ModelSelect = ({profile, value, onChange, disabled}: ModelSelectProps) => 
             inputProps={{'aria-label': t('desk.model', {defaultValue: 'Model'})}}
             renderValue={() => (
                 <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
-                    <Psychology sx={{fontSize: 14}}/>
-                    <Typography variant="caption" noWrap sx={{color: 'inherit', minWidth: 0}}>
+                    <Psychology/>
+                    <Typography noWrap sx={composerPickerLabelSx}>
                         {tierLabel(selected.alias)} · {concrete(selected)}
                     </Typography>
                 </Stack>
             )}
-            sx={{...chipSx, '& .MuiSelect-select': {py: {xs: 0.75, md: 0.25}, minHeight: {xs: '24px !important', md: 'initial'}, display: 'flex', alignItems: 'center'}}}
+            sx={composerPickerSx}
         >
             {data.tiers.map((tier) => (
                 <MenuItem key={tier.alias} value={tier.alias}>

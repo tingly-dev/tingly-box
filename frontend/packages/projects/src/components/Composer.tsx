@@ -24,6 +24,7 @@ export interface ComposerProps {
     context?: ReactNode;
     /** Controls shown at the bottom-left (project / memory chips). */
     leftSlot?: ReactNode;
+    /** Lines the box shows when empty (one by default). */
     minRows?: number;
     /** Text to place in the box when it changes (e.g. a refused first message). */
     seed?: string;
@@ -49,7 +50,7 @@ export interface ComposerProps {
  */
 export function Composer({
     onSend, streaming, onStop, sendWhileStreaming, disabled, canSubmit = true, placeholder, autoFocus, model, onModelChange,
-    context, leftSlot, minRows = 2, seed, keepUntilSent, text: controlled, onTextChange, onAccepted, keysHint,
+    context, leftSlot, minRows = 1, seed, keepUntilSent, text: controlled, onTextChange, onAccepted, keysHint,
 }: ComposerProps) {
     const { t } = useTranslation('projects');
     const mobile = useMediaQuery(useTheme().breakpoints.down('sm'));
@@ -119,14 +120,76 @@ export function Composer({
     // While a turn runs, Send shows next to Stop once there is something to send.
     const showSend = !showStop || (sendWhileStreaming && text.trim() !== '');
 
+    const sendButton = showSend && (
+        <Tooltip title={t('composer.send')}>
+            <span>
+                <IconButton
+                    onClick={() => void submit()}
+                    disabled={!canSend}
+                    size="small"
+                    aria-label={t('composer.sendShort')}
+                    sx={{
+                        bgcolor: 'primary.main',
+                        color: 'primary.contrastText',
+                        '&:hover': { bgcolor: 'primary.dark' },
+                        '&.Mui-disabled': { bgcolor: 'action.selected', color: 'text.disabled' },
+                    }}
+                >
+                    {sending ? <CircularProgress size={18} color="inherit" /> : <ArrowUpward fontSize="small" />}
+                </IconButton>
+            </span>
+        </Tooltip>
+    );
+    const stopButton = showStop && (
+        <Tooltip title={t('composer.stopTurn')}>
+            <span>
+                <IconButton
+                    onClick={() => void stop()}
+                    disabled={stopping}
+                    size="small"
+                    aria-label={t('composer.stop')}
+                    sx={{ bgcolor: 'text.primary', color: 'background.paper', '&:hover': { bgcolor: 'text.secondary' } }}
+                >
+                    {stopping ? <CircularProgress size={18} color="inherit" /> : <Stop fontSize="small" />}
+                </IconButton>
+            </span>
+        </Tooltip>
+    );
+    const hint = keysHint && !mobile && !leftSlot;
+    // Nothing under the text: the buttons sit beside it and the box is one
+    // line until the text grows.
+    const inline = !leftSlot && !onModelChange && !hint;
+
+    const input = (
+        <InputBase
+            inputRef={inputRef}
+            multiline
+            minRows={minRows}
+            maxRows={mobile ? 6 : 14}
+            fullWidth
+            value={text}
+            disabled={disabled}
+            placeholder={placeholder ?? t('composer.placeholder')}
+            inputProps={{ 'aria-label': placeholder ?? t('composer.placeholder') }}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && (!mobile || e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    void submit();
+                }
+            }}
+            sx={{ fontSize: '0.875rem', lineHeight: 1.65, color: 'text.primary', ...(inline && { py: 0.5 }) }}
+        />
+    );
+
     return (
         <Paper
             variant="outlined"
             sx={{
-                borderRadius: 4,
-                px: 2,
-                pt: 1.5,
-                pb: 1,
+                borderRadius: 1.5,
+                px: inline ? 1.5 : 1.75,
+                pt: inline ? 0.75 : 1.25,
+                pb: 0.75,
                 bgcolor: 'background.paper',
                 boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
                 '&:focus-within': { borderColor: 'text.disabled' },
@@ -135,69 +198,26 @@ export function Composer({
             {context && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', rowGap: 0.5, mb: 1 }}>{context}</Box>
             )}
-            <InputBase
-                inputRef={inputRef}
-                multiline
-                minRows={minRows}
-                maxRows={mobile ? 6 : 14}
-                fullWidth
-                value={text}
-                disabled={disabled}
-                placeholder={placeholder ?? t('composer.placeholder')}
-                inputProps={{ 'aria-label': placeholder ?? t('composer.placeholder') }}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && (!mobile || e.ctrlKey || e.metaKey)) {
-                        e.preventDefault();
-                        void submit();
-                    }
-                }}
-                sx={{ fontSize: '0.875rem', lineHeight: 1.65, color: 'text.primary' }}
-            />
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
-                    {leftSlot}
-                    {keysHint && !mobile && !leftSlot && (
-                        <Typography variant="caption" color="text.secondary">{t('composer.keys')}</Typography>
-                    )}
+            {inline ? (
+                <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1 }}>
+                    {input}
+                    {sendButton}
+                    {stopButton}
                 </Box>
-                {onModelChange && <ModelPicker value={model ?? ''} onChange={onModelChange} />}
-                {showSend && (
-                    <Tooltip title={t('composer.send')}>
-                        <span>
-                            <IconButton
-                                onClick={() => void submit()}
-                                disabled={!canSend}
-                                size="small"
-                                aria-label={t('composer.sendShort')}
-                                sx={{
-                                    bgcolor: 'primary.main',
-                                    color: 'primary.contrastText',
-                                    '&:hover': { bgcolor: 'primary.dark' },
-                                    '&.Mui-disabled': { bgcolor: 'action.selected', color: 'text.disabled' },
-                                }}
-                            >
-                                {sending ? <CircularProgress size={18} color="inherit" /> : <ArrowUpward fontSize="small" />}
-                            </IconButton>
-                        </span>
-                    </Tooltip>
-                )}
-                {showStop && (
-                    <Tooltip title={t('composer.stopTurn')}>
-                        <span>
-                            <IconButton
-                                onClick={() => void stop()}
-                                disabled={stopping}
-                                size="small"
-                                aria-label={t('composer.stop')}
-                                sx={{ bgcolor: 'text.primary', color: 'background.paper', '&:hover': { bgcolor: 'text.secondary' } }}
-                            >
-                                {stopping ? <CircularProgress size={18} color="inherit" /> : <Stop fontSize="small" />}
-                            </IconButton>
-                        </span>
-                    </Tooltip>
-                )}
-            </Box>
+            ) : (
+                <>
+                    {input}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.75 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
+                            {leftSlot}
+                            {hint && <Typography variant="caption" color="text.secondary">{t('composer.keys')}</Typography>}
+                        </Box>
+                        {onModelChange && <ModelPicker value={model ?? ''} onChange={onModelChange} />}
+                        {sendButton}
+                        {stopButton}
+                    </Box>
+                </>
+            )}
         </Paper>
     );
 }

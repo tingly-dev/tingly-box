@@ -48,7 +48,7 @@ function Row({ row, onOpen }: { row: StatusRow; onOpen: (id: string) => void }) 
             onClick={() => onOpen(row.id)}
             onKeyDown={(e) => e.key === 'Enter' && onOpen(row.id)}
             sx={{
-                px: 1.5, py: 1, borderRadius: 2, outline: 'none', cursor: 'pointer',
+                px: 1.5, py: 1, borderRadius: 1, outline: 'none', cursor: 'pointer',
                 bgcolor: row.selected ? 'action.selected' : undefined,
                 '&:hover': { bgcolor: row.selected ? 'action.selected' : 'action.hover' },
                 '&:focus-visible': { boxShadow: (t) => `inset 0 0 0 2px ${t.palette.primary.main}` },

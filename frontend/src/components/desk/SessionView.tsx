@@ -427,7 +427,7 @@ const SessionView = ({
                             canSubmit={!changingSettings && !acting}
                             onSend={onSend}
                             minRows={1}
-                            context={(
+                            leftSlot={(
                                 <>
                                     <ProfileSelect disabled={changingSettings || acting || queueSending} value={session.profile} onChange={(p) => void changeSetting(() => onProfileChange(p))}/>
                                     <ModelSelect disabled={changingSettings || acting || queueSending} profile={session.profile} value={session.model} onChange={(m) => void changeSetting(() => onModelChange(m))}/>

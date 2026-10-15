@@ -49,7 +49,7 @@ export function RepoField({ value, onChange }: { value: RepoEntry[]; onChange: (
     return (
         <Box>
             {value.map((r, i) => (
-                <Box key={r.root} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.75, px: 1.25, mb: 0.75, border: 1, borderColor: 'divider', borderRadius: 2 }}>
+                <Box key={r.root} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.75, px: 1.25, mb: 0.75, border: 1, borderColor: 'divider', borderRadius: 1 }}>
                     <Typography sx={{ ...mono, fontSize: fontSizes.lg, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'text.primary' }} title={r.root}>
                         {r.root}
                     </Typography>
