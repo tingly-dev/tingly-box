@@ -178,7 +178,7 @@ export default function ProjectPage() {
                 title={project ? (
                     // One line: the name, then the goal as long as it fits.
                     <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, minWidth: 0 }}>
-                        <Typography variant="h5" noWrap sx={{ flexShrink: 0, maxWidth: '60%' }}>
+                        <Typography variant="h5" noWrap sx={{ flexShrink: { xs: 1, md: 0 }, minWidth: 0, maxWidth: { md: '60%' } }}>
                             {/* No Projects sidebar in a host: the way back to the list is here. */}
                             {embedded && (
                                 <>
@@ -188,7 +188,7 @@ export default function ProjectPage() {
                             )}
                             {project.name}
                         </Typography>
-                        {project.goal && <Typography variant="body2" color="text.secondary" noWrap title={project.goal} sx={{ minWidth: 0 }}>{project.goal}</Typography>}
+                        {project.goal && <Typography variant="body2" color="text.secondary" noWrap title={project.goal} sx={{ minWidth: 0, display: { xs: 'none', md: 'block' } }}>{project.goal}</Typography>}
                     </Box>
                 ) : <Skeleton width={200} />}
                 actions={project && (
