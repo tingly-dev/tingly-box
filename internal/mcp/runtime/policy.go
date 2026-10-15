@@ -8,10 +8,14 @@ import (
 
 func SourceUsage(source typ.MCPSourceConfig) typ.MCPToolUsage {
 	if source.Usage != nil {
-		return *source.Usage
+		usage := *source.Usage
+		if SourceImplementation(source) == typ.ToolImplementationVirtual {
+			usage.Client = false
+		}
+		return usage
 	}
 	server := SourceVisibility(source) == typ.ToolVisibilityServer
-	return typ.MCPToolUsage{Client: !server, Gateway: server}
+	return typ.MCPToolUsage{Client: !server && SourceImplementation(source) != typ.ToolImplementationVirtual, Gateway: server}
 }
 
 // EffectiveToolPolicy applies source enablement, its allow list, and a per-tool override.
@@ -27,6 +31,10 @@ func EffectiveToolPolicy(source typ.MCPSourceConfig, name string) (bool, typ.MCP
 		if policy.Usage != nil {
 			usage = *policy.Usage
 		}
+	}
+	// In-process Advisor needs model-loop context and cannot be called by an MCP client.
+	if SourceImplementation(source) == typ.ToolImplementationVirtual {
+		usage.Client = false
 	}
 	return enabled, usage
 }

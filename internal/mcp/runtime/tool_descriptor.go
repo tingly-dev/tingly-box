@@ -26,6 +26,12 @@ func SourceImplementation(source typ.MCPSourceConfig) typ.ToolImplementation {
 }
 
 func SourceProvider(source typ.MCPSourceConfig) typ.ToolProvider {
+	if source.Origin != "" {
+		if source.Origin == "builtin" {
+			return typ.ToolProviderBuiltin
+		}
+		return typ.ToolProviderCustom
+	}
 	if source.ID == mcptools.BuiltinWebtoolsSourceID || source.ID == mcptools.BuiltinAdvisorSourceID {
 		return typ.ToolProviderBuiltin
 	}

@@ -4527,6 +4527,50 @@
         }
       }
     },
+    "/api/v1/mcp/client-profiles/{profile_id}/probe": {
+      "post": {
+        "tags": [
+          "mcp"
+        ],
+        "summary": "Check initialize, discovery and optional tool call through the actual local MCP gateway",
+        "description": "Check initialize, discovery and optional tool call through the actual local MCP gateway",
+        "operationId": "apiV1McpClient-profilesProfile_idProbePost",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPClientProbeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPClientProbeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/mcp/client/{id}": {
       "get": {
         "tags": [
@@ -4800,6 +4844,28 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InstallCommandResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/routing": {
+      "get": {
+        "tags": [
+          "mcp"
+        ],
+        "summary": "Effective ordinary-tool and server-tool routes, including discovery status",
+        "description": "Effective ordinary-tool and server-tool routes, including discovery status",
+        "operationId": "apiV1McpRoutingGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPRoutingResponse"
                 }
               }
             }
@@ -10525,6 +10591,46 @@
           "success"
         ]
       },
+      "ClientRoute": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "Field endpoint"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "legacy": {
+            "type": "boolean",
+            "description": "Field legacy"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "sources": {
+            "type": "array",
+            "description": "Field sources",
+            "items": {
+              "$ref": "#/components/schemas/RouteSource"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "endpoint",
+          "enabled",
+          "legacy",
+          "sources"
+        ]
+      },
       "CodexConfigPreviewResponse": {
         "type": "object",
         "properties": {
@@ -13157,6 +13263,58 @@
           "state"
         ]
       },
+      "MCPClientProbeRequest": {
+        "type": "object",
+        "properties": {
+          "arguments": {
+            "type": "object",
+            "description": "Field arguments",
+            "additionalProperties": {}
+          },
+          "tool_name": {
+            "type": "string",
+            "description": "Field tool_name"
+          }
+        }
+      },
+      "MCPClientProbeResponse": {
+        "type": "object",
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "description": "Field endpoint"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "execution_time": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field execution_time"
+          },
+          "result": {
+            "$ref": "#/components/schemas/ToolResult"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          },
+          "tools": {
+            "type": "array",
+            "description": "Field tools",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "success",
+          "endpoint",
+          "tools",
+          "execution_time"
+        ]
+      },
       "MCPClientProfile": {
         "type": "object",
         "properties": {
@@ -13249,6 +13407,31 @@
           "client_id",
           "authorize_url",
           "token_url"
+        ]
+      },
+      "MCPRoutingResponse": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "routing": {
+            "$ref": "#/components/schemas/RoutingSnapshot"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "enabled",
+          "routing"
         ]
       },
       "MCPRuntimeConfig": {
@@ -13408,6 +13591,10 @@
           },
           "oauth_config": {
             "$ref": "#/components/schemas/MCPOAuthConfig"
+          },
+          "origin": {
+            "type": "string",
+            "description": "Field origin"
           },
           "proxy_url": {
             "type": "string",
@@ -16033,6 +16220,27 @@
           "updated_at"
         ]
       },
+      "RouteAdvisor": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          },
+          "provider_name": {
+            "type": "string",
+            "description": "Field provider_name"
+          },
+          "provider_uuid": {
+            "type": "string",
+            "description": "Field provider_uuid"
+          }
+        },
+        "required": [
+          "provider_uuid",
+          "model"
+        ]
+      },
       "RouteListResponse": {
         "type": "object",
         "properties": {
@@ -16057,6 +16265,63 @@
         },
         "required": [
           "route"
+        ]
+      },
+      "RouteSource": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Field address"
+          },
+          "advisor": {
+            "$ref": "#/components/schemas/RouteAdvisor"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "origin": {
+            "type": "string",
+            "description": "Field origin"
+          },
+          "processing": {
+            "type": "string",
+            "description": "Field processing"
+          },
+          "state": {
+            "type": "string",
+            "description": "Field state"
+          },
+          "tools": {
+            "type": "array",
+            "description": "Field tools",
+            "items": {
+              "$ref": "#/components/schemas/CatalogTool"
+            }
+          },
+          "transport": {
+            "type": "string",
+            "description": "Field transport"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "origin",
+          "transport",
+          "address",
+          "state",
+          "processing",
+          "tools"
         ]
       },
       "RouteTargetRequest": {
@@ -16115,6 +16380,37 @@
           "events",
           "target",
           "enabled"
+        ]
+      },
+      "RoutingSnapshot": {
+        "type": "object",
+        "properties": {
+          "clients": {
+            "type": "array",
+            "description": "Field clients",
+            "items": {
+              "$ref": "#/components/schemas/ClientRoute"
+            }
+          },
+          "server_tools": {
+            "type": "array",
+            "description": "Field server_tools",
+            "items": {
+              "$ref": "#/components/schemas/RouteSource"
+            }
+          },
+          "sources": {
+            "type": "array",
+            "description": "Field sources",
+            "items": {
+              "$ref": "#/components/schemas/RouteSource"
+            }
+          }
+        },
+        "required": [
+          "sources",
+          "clients",
+          "server_tools"
         ]
       },
       "Rule": {

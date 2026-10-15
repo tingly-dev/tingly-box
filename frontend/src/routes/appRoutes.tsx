@@ -203,13 +203,15 @@ export const appRoutes = (
             <Route path="/guardrails/credentials" element={<ExperimentalFeatureGate feature="guardrails"><GuardrailsCredentialsPage /></ExperimentalFeatureGate>} />
             <Route path="/guardrails/history" element={<ExperimentalFeatureGate feature="guardrails"><GuardrailsHistoryPage /></ExperimentalFeatureGate>} />
             {/* MCP Settings */}
+            <Route path="/mcp/routes" element={<MCPRegisteredServers />} />
+            <Route path="/mcp/server-tools" element={<MCPRegisteredServers />} />
             <Route path="/mcp/sources" element={<MCPRegisteredServers />} />
             <Route path="/mcp/tools" element={<MCPRegisteredServers />} />
             <Route path="/mcp/clients" element={<MCPRegisteredServers />} />
             <Route path="/mcp/local-mode" element={<Navigate to="/mcp/clients" replace />} />
-            <Route path="/mcp" element={<Navigate to="/mcp/sources" replace />} />
+            <Route path="/mcp" element={<Navigate to="/mcp/routes" replace />} />
             {/* Tools */}
-            <Route path="/tools/servertool" element={<Navigate to="/mcp/sources" replace />} />
+            <Route path="/tools/servertool" element={<Navigate to="/mcp/server-tools" replace />} />
             {/* Catch-all redirect for unknown routes (also covers legacy /zen/* links) */}
             <Route path="*" element={<Navigate to="/agent" replace />} />
         </Route>

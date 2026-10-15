@@ -32,7 +32,7 @@ function resolvesToPage(path: string): boolean {
 // including ones wrapped in gates like <ExperimentalFeatureGate>.
 function navigateTargets(node: ReactNode, out: string[] = []): string[] {
     if (Array.isArray(node)) {
-        node.forEach(n => navigateTargets(n, out));
+        node.forEach((n) => navigateTargets(n, out));
     } else if (isValidElement<{ to?: unknown; children?: ReactNode }>(node)) {
         if (node.type === Navigate && typeof node.props.to === 'string') out.push(node.props.to);
         navigateTargets(node.props.children, out);
@@ -41,14 +41,14 @@ function navigateTargets(node: ReactNode, out: string[] = []): string[] {
 }
 
 function allNavigateTargets(rs: RouteObject[]): string[] {
-    return rs.flatMap(r => [...navigateTargets(r.element), ...allNavigateTargets(r.children ?? [])]);
+    return rs.flatMap((r) => [...navigateTargets(r.element), ...allNavigateTargets(r.children ?? [])]);
 }
 
 describe('route contract', () => {
     it('resolves the paths the Wails tray navigates to', () => {
-        const paths = [...routesGo.matchAll(/^\s*Route\w+\s*=\s*"([^"]+)"/gm)].map(m => m[1]);
+        const paths = [...routesGo.matchAll(/^\s*Route\w+\s*=\s*"([^"]+)"/gm)].map((m) => m[1]);
         expect(paths.length).toBeGreaterThan(0);
-        expect(paths.filter(p => !resolvesToPage(p))).toEqual([]);
+        expect(paths.filter((p) => !resolvesToPage(p))).toEqual([]);
     });
 
     it('keeps tray navigation on the shared route constants', () => {
@@ -62,13 +62,23 @@ describe('route contract', () => {
 
     it('resolves the paths the tray hub panel jumps to', () => {
         const paths = Object.values(SHELL_ROUTES);
-        expect(paths.filter(p => !resolvesToPage(p))).toEqual([]);
+        expect(paths.filter((p) => !resolvesToPage(p))).toEqual([]);
     });
 
     it('points every redirect at a real page', () => {
         const targets = allNavigateTargets(routes);
         expect(targets.length).toBeGreaterThan(0);
-        expect(targets.filter(t => !resolvesToPage(t))).toEqual([]);
+        expect(targets.filter((t) => !resolvesToPage(t))).toEqual([]);
+    });
+
+    it('keeps both MCP tool usages on their own pages', () => {
+        expect(
+            ['/mcp/routes', '/mcp/tools', '/mcp/server-tools', '/mcp/sources', '/mcp/clients'].filter(
+                (path) => !resolvesToPage(path)
+            )
+        ).toEqual([]);
+        const legacy = matchRoutes(routes, '/tools/servertool')!.at(-1)!.route;
+        expect(navigateTargets(legacy.element)).toEqual(['/mcp/server-tools']);
     });
 
     it('falls through to the catch-all for unknown paths', () => {

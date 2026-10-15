@@ -9,6 +9,7 @@ vi.mock('@/hooks/useNotify', () => ({ useNotify: () => ({ error: mocks.notify })
 vi.mock('@/contexts/FeatureFlagsContext', () => ({ useFeatureFlags: () => ({ refresh: vi.fn() }) }));
 vi.mock('@/components/PageLayout', () => ({ PageLayout: ({ children }: { children: React.ReactNode }) => children }));
 vi.mock('./AdvisorSettings', () => ({ default: () => null }));
+vi.mock('./MCPRoutingPanel', () => ({ default: () => <div>Routing panel</div> }));
 vi.mock('./MCPToolsPanel', () => ({ default: () => <div>Capabilities panel</div> }));
 vi.mock('./MCPClientsPanel', () => ({ default: () => <div>Clients panel</div> }));
 vi.mock('react-i18next', () => ({

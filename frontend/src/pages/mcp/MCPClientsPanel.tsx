@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
     Alert,
@@ -34,9 +35,20 @@ export default function MCPClientsPanel({
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [catalog, setCatalog] = useState<MCPSourceStatus[]>([]);
-    const [selected, setSelected] = useState('tb');
+    const [search] = useSearchParams();
+    const [selected, setSelected] = useState(search.get('install') || search.get('profile') || 'tb');
+    const openedProfile = useRef('');
     const profiles = config.client_profiles || [];
     const profileOpen = profile !== null;
+    const requestedProfile = search.get('profile');
+    useEffect(() => {
+        const found = profiles.find((item) => item.id === requestedProfile);
+        if (found && openedProfile.current !== requestedProfile) {
+            openedProfile.current = requestedProfile!;
+            setIsNew(false);
+            setProfile(found);
+        }
+    }, [requestedProfile, profiles]);
     useEffect(() => {
         if (!profileOpen) return;
         let active = true;
