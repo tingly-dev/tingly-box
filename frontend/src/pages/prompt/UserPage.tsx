@@ -302,7 +302,7 @@ const UserPage = () => {
                       color: "text.secondary",
                       mb: 1
                     }}>
-                    Project: {selectedRecording.project}
+                    {t('prompt.user.projectFilter')}: {selectedRecording.project}
                   </Typography>
                   <Typography
                     variant="body2"

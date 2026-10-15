@@ -39,9 +39,9 @@ const FolderPicker = ({value, onChange, recentFolders}: FolderPickerProps) => {
             renderInput={(params) => (
                 <TextField
                     {...params}
-                    label={t('desk.projectDirectory', {defaultValue: 'Project directory'})}
+                    label={t('desk.projectDirectory', {defaultValue: 'Working folder'})}
                     variant="outlined"
-                    placeholder={t('desk.folderPlaceholder', {defaultValue: '/path/to/project'})}
+                    placeholder={t('desk.folderPlaceholder', {defaultValue: '/path/to/folder'})}
                     slotProps={{
                         ...params.slotProps,
                         input: {

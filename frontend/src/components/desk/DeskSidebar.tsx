@@ -91,7 +91,7 @@ const DeskSidebar = ({sessions, selectedId, onSelect, onNew, unseen, projects = 
                     <Typography variant="body2" sx={{color: 'inherit'}}>{t('desk.newSession', {defaultValue: 'New session'})}</Typography>
                 </ListItemButton>
                 {onAddProject && <Button fullWidth size="small" startIcon={<FolderOpen/>} onClick={onAddProject} sx={{justifyContent: 'flex-start', px: 1.5, mt: 0.5}}>
-                    {t('desk.addProject', {defaultValue: 'Add project'})}
+                    {t('desk.addProject', {defaultValue: 'Add working folder'})}
                 </Button>}
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.5, mt: 0.5, borderRadius: 1.5, bgcolor: 'action.hover'}}>
                     <Search sx={{fontSize: 16, color: 'text.secondary'}}/>
@@ -126,8 +126,8 @@ const DeskSidebar = ({sessions, selectedId, onSelect, onNew, unseen, projects = 
                                     {folderName(g.path)}
                                 </Typography>
                             </Tooltip>
-                            {g.sessions.length === 0 && onRemoveProject && <Tooltip title={t('desk.removeProjectShortcut', {defaultValue: 'Remove project shortcut'})}>
-                                <IconButton size="small" aria-label={t('desk.removeProjectShortcut', {defaultValue: 'Remove project shortcut'})} onClick={() => onRemoveProject(g.path)} sx={{p: 0.25}}><Close sx={{fontSize: 16}}/></IconButton>
+                            {g.sessions.length === 0 && onRemoveProject && <Tooltip title={t('desk.removeProjectShortcut', {defaultValue: 'Remove folder shortcut'})}>
+                                <IconButton size="small" aria-label={t('desk.removeProjectShortcut', {defaultValue: 'Remove folder shortcut'})} onClick={() => onRemoveProject(g.path)} sx={{p: 0.25}}><Close sx={{fontSize: 16}}/></IconButton>
                             </Tooltip>}
                             <Tooltip title={t('desk.newInFolder', {defaultValue: 'New session in this folder'})}>
                                 <IconButton

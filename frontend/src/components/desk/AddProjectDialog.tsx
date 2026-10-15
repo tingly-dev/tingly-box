@@ -23,25 +23,25 @@ const AddProjectDialog = ({onClose, onAdd}: AddProjectDialogProps) => {
                 if (!path || invalid) return;
                 setError(!onAdd(path));
             }}>
-                <DialogTitle id="desk-add-project-title">{t('desk.addProject', {defaultValue: 'Add project'})}</DialogTitle>
+                <DialogTitle id="desk-add-project-title">{t('desk.addProject', {defaultValue: 'Add working folder'})}</DialogTitle>
                 <DialogContent>
                     <DialogContentText sx={{mb: 2}}>
-                        {t('desk.addProjectDescription', {defaultValue: 'Enter an existing project directory on the machine running tingly-box. Tasks will run in this directory.'})}
+                        {t('desk.addProjectDescription', {defaultValue: 'Enter an existing folder on the machine running tingly-box. Tasks will run in this folder.'})}
                     </DialogContentText>
                     <TextField
-                        autoFocus fullWidth label={t('desk.projectDirectory', {defaultValue: 'Project directory'})}
-                        placeholder={t('desk.projectPathExample', {defaultValue: '/path/to/project or C:\\projects\\app'})}
+                        autoFocus fullWidth label={t('desk.projectDirectory', {defaultValue: 'Working folder'})}
+                        placeholder={t('desk.projectPathExample', {defaultValue: '/path/to/folder or C:\\code\\app'})}
                         value={value} onChange={(event) => {setValue(event.target.value); setError(false);}}
                         error={invalid || error}
-                        helperText={invalid ? t('desk.projectPathAbsolute', {defaultValue: 'Enter a full absolute path, such as /home/me/projects/app.'})
-                            : error ? t('desk.projectSaveFailed', {defaultValue: 'Could not save the project in this browser. Please try again.'})
-                                : t('desk.projectStorageHint', {defaultValue: 'Saved in this browser. The directory is checked when you start a task.'})}
+                        helperText={invalid ? t('desk.projectPathAbsolute', {defaultValue: 'Enter a full absolute path, such as /home/me/code/app.'})
+                            : error ? t('desk.projectSaveFailed', {defaultValue: 'Could not save the working folder in this browser. Please try again.'})
+                                : t('desk.projectStorageHint', {defaultValue: 'Saved in this browser. The folder is checked when you start a task.'})}
                         slotProps={{htmlInput: {style: {fontFamily: fontMono}}}}
                     />
                 </DialogContent>
                 <DialogActions sx={{px: 3, pb: 2}}>
                     <Button onClick={onClose}>{t('common.cancel', {defaultValue: 'Cancel'})}</Button>
-                    <Button type="submit" variant="contained" disabled={!path || invalid}>{t('desk.addProject', {defaultValue: 'Add project'})}</Button>
+                    <Button type="submit" variant="contained" disabled={!path || invalid}>{t('desk.addProject', {defaultValue: 'Add working folder'})}</Button>
                 </DialogActions>
             </form>
         </Dialog>

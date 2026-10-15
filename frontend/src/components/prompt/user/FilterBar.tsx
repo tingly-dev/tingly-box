@@ -1,6 +1,7 @@
 import { Box, TextField, FormControl, InputLabel, Select, MenuItem, Chip } from '@mui/material';
 import { Search } from '@/components/icons';
 import type { RecordingType } from '@/types/prompt';
+import { useTranslation } from 'react-i18next';
 
 const RECORDING_TYPE_LABELS: Record<RecordingType, string> = {
   'code-review': 'Code Review',
@@ -35,6 +36,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
   users,
   projects,
 }) => {
+  const { t } = useTranslation();
   const handleClearFilters = () => {
     onUserFilterChange(undefined);
     onProjectFilterChange(undefined);
@@ -47,7 +49,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
     <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
       {/* Search Input */}
       <TextField
-        placeholder="Search recordings..."
+        placeholder={t('prompt.user.searchPlaceholder')}
         value={searchQuery}
         onChange={(e) => onSearchChange(e.target.value)}
         sx={{ minWidth: 200, flex: 1, maxWidth: 300 }}
@@ -60,13 +62,13 @@ const FilterBar: React.FC<FilterBarProps> = ({
       />
       {/* User Filter */}
       <FormControl size="small" sx={{ minWidth: 130 }}>
-        <InputLabel>User</InputLabel>
+        <InputLabel>{t('prompt.user.userFilter')}</InputLabel>
         <Select
           value={userFilter || ''}
-          label="User"
+          label={t('prompt.user.userFilter')}
           onChange={(e) => onUserFilterChange(e.target.value || undefined)}
         >
-          <MenuItem value="">All Users</MenuItem>
+          <MenuItem value="">{t('prompt.user.allUsers')}</MenuItem>
           {users.map((user) => (
             <MenuItem key={user} value={user}>
               {user}
@@ -74,15 +76,15 @@ const FilterBar: React.FC<FilterBarProps> = ({
           ))}
         </Select>
       </FormControl>
-      {/* Project Filter */}
+      {/* Workspace filter: the IDE workspace a recording was made in */}
       <FormControl size="small" sx={{ minWidth: 130 }}>
-        <InputLabel>Project</InputLabel>
+        <InputLabel>{t('prompt.user.projectFilter')}</InputLabel>
         <Select
           value={projectFilter || ''}
-          label="Project"
+          label={t('prompt.user.projectFilter')}
           onChange={(e) => onProjectFilterChange(e.target.value || undefined)}
         >
-          <MenuItem value="">All Projects</MenuItem>
+          <MenuItem value="">{t('prompt.user.allProjects')}</MenuItem>
           {projects.map((project) => (
             <MenuItem key={project} value={project}>
               {project}
@@ -92,13 +94,13 @@ const FilterBar: React.FC<FilterBarProps> = ({
       </FormControl>
       {/* Type Filter */}
       <FormControl size="small" sx={{ minWidth: 130 }}>
-        <InputLabel>Type</InputLabel>
+        <InputLabel>{t('prompt.user.typeFilter')}</InputLabel>
         <Select
           value={typeFilter || ''}
-          label="Type"
+          label={t('prompt.user.typeFilter')}
           onChange={(e) => onTypeFilterChange((e.target.value || undefined) as RecordingType | undefined)}
         >
-          <MenuItem value="">All Types</MenuItem>
+          <MenuItem value="">{t('prompt.user.allTypes')}</MenuItem>
           {(Object.keys(RECORDING_TYPE_LABELS) as RecordingType[]).map((type) => (
             <MenuItem key={type} value={type}>
               {RECORDING_TYPE_LABELS[type]}
@@ -111,7 +113,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', ml: 'auto' }}>
           {userFilter && (
             <Chip
-              label={`User: ${userFilter}`}
+              label={`${t('prompt.user.userFilter')}: ${userFilter}`}
               onDelete={() => onUserFilterChange(undefined)}
               size="small"
               color="primary"
@@ -120,7 +122,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
           )}
           {projectFilter && (
             <Chip
-              label={`Project: ${projectFilter}`}
+              label={`${t('prompt.user.projectFilter')}: ${projectFilter}`}
               onDelete={() => onProjectFilterChange(undefined)}
               size="small"
               color="primary"
@@ -129,7 +131,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
           )}
           {typeFilter && (
             <Chip
-              label={`Type: ${RECORDING_TYPE_LABELS[typeFilter]}`}
+              label={`${t('prompt.user.typeFilter')}: ${RECORDING_TYPE_LABELS[typeFilter]}`}
               onDelete={() => onTypeFilterChange(undefined)}
               size="small"
               color="primary"

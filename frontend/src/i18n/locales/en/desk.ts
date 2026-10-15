@@ -41,7 +41,7 @@ export default {
     "noMatches": "No matching sessions",
     "noSessions": "No sessions yet",
     "newInFolder": "New session in this folder",
-    "folderPlaceholder": "/path/to/project",
+    "folderPlaceholder": "/path/to/folder",
     "modelDefault": "Default",
     "modelUnified": "{{route}} — this profile uses one model for every tier; change it in the profile's rules",
     "model": "Model",
@@ -118,15 +118,15 @@ export default {
     "retry": "Retry",
     "refreshFailed": "Could not refresh Desk. Your last loaded data and drafts are kept. Reconnecting automatically.",
     "sessionUnavailable": "This session is unavailable. Retry refreshing or start a new session.",
-    "addProject": "Add project",
-    "addProjectDescription": "Enter an existing project directory on the machine running tingly-box. Tasks will run in this directory.",
-    "projectDirectory": "Project directory",
-    "projectPathExample": "/path/to/project or C:\\projects\\app",
-    "projectPathAbsolute": "Enter a full absolute path, such as /home/me/projects/app.",
-    "projectSaveFailed": "Could not save the project in this browser. Please try again.",
-    "projectStorageHint": "Saved in this browser. The directory is checked when you start a task.",
-    "removeProjectShortcut": "Remove project shortcut",
+    "addProject": "Add working folder",
+    "addProjectDescription": "Enter an existing folder on the machine running tingly-box. Tasks will run in this folder.",
+    "projectDirectory": "Working folder",
+    "projectPathExample": "/path/to/folder or C:\\code\\app",
+    "projectPathAbsolute": "Enter a full absolute path, such as /home/me/code/app.",
+    "projectSaveFailed": "Could not save the working folder in this browser. Please try again.",
+    "projectStorageHint": "Saved in this browser. The folder is checked when you start a task.",
+    "removeProjectShortcut": "Remove folder shortcut",
     "firstProjectTask": "Create first task",
-    "taskDirectoryHint": "Choose a project directory, then describe the task below."
+    "taskDirectoryHint": "Choose a working folder, then describe the task below."
   }
 };

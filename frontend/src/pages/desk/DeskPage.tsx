@@ -403,7 +403,7 @@ const DeskPage = () => {
                     <DeskSidebar sessions={sessions} selectedId={selectedId} unseen={unseen} onSelect={openSession} onNew={openNew}
                         projects={projects} selectedProject={searchParams.get('folder') ?? undefined} onAddProject={() => setAddingProject(true)}
                         onRemoveProject={(path) => {
-                            if (!removeProject(path)) notify.error(t('desk.projectSaveFailed', {defaultValue: 'Could not save the project in this browser. Please try again.'}));
+                            if (!removeProject(path)) notify.error(t('desk.projectSaveFailed', {defaultValue: 'Could not save the working folder in this browser. Please try again.'}));
                             else if (searchParams.get('folder') === path) setSearchParams({});
                         }}/>
                 </Box>

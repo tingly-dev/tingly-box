@@ -58,10 +58,10 @@ describe('Desk local workflow', () => {
         open();
         await settle();
         fireEvent.click(screen.getByRole('button', {name: 'Add a project'}));
-        fireEvent.change(screen.getByLabelText('Project directory'), {target: {value: '/projects/new app/'}});
-        await act(async () => fireEvent.click(screen.getByRole('button', {name: 'Add project'})));
+        fireEvent.change(screen.getByLabelText('Working folder'), {target: {value: '/projects/new app/'}});
+        await act(async () => fireEvent.click(screen.getByRole('button', {name: 'Add working folder'})));
         expect(screen.getByText('/projects/new app')).toBeInTheDocument();
-        expect(screen.queryByRole('dialog', {name: 'Add project'})).not.toBeInTheDocument();
+        expect(screen.queryByRole('dialog', {name: 'Add working folder'})).not.toBeInTheDocument();
         expect(JSON.parse(localStorage.getItem('desk.projectDirectories:v1')!)).toEqual({'/projects/new app': true});
         expect(api.createSession).not.toHaveBeenCalled();
     });

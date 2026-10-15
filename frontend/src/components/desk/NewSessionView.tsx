@@ -48,10 +48,10 @@ const NewSessionView = ({initialFolder, recentFolders, permissionModes, onCreate
                 </Typography>
                 <Stack direction="row" spacing={1} sx={{alignItems: 'center', mb: 1.5}}>
                     <FolderPicker value={folder} onChange={setPicked} recentFolders={recentFolders}/>
-                    {onAddProject && <Button size="small" onClick={onAddProject} sx={{flexShrink: 0}}>{t('desk.addProject', {defaultValue: 'Add project'})}</Button>}
+                    {onAddProject && <Button size="small" onClick={onAddProject} sx={{flexShrink: 0}}>{t('desk.addProject', {defaultValue: 'Add working folder'})}</Button>}
                 </Stack>
                 <Typography variant="caption" sx={{display: 'block', mb: 1.5, color: 'text.secondary'}}>
-                    {t('desk.taskDirectoryHint', {defaultValue: 'Choose a project directory, then describe the task below.'})}
+                    {t('desk.taskDirectoryHint', {defaultValue: 'Choose a working folder, then describe the task below.'})}
                 </Typography>
                 <Composer
                     autoFocus
