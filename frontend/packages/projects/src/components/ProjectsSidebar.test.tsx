@@ -34,7 +34,7 @@ describe('ProjectsSidebar', () => {
     it('lists projects starred first, marks the open one and counts what waits', async () => {
         show(host([summary('a', 'Alpha', 0), summary('b', 'Beta', 2, true)]), '/p/a');
         const projects = await screen.findByRole('region', { name: 'nav.projects' });
-        await waitFor(() => expect(within(projects).getAllByRole('link').map((l) => l.textContent)).toEqual(['nav.projects', 'Beta2', 'Alpha']));
+        await waitFor(() => expect(within(projects).getAllByRole('link').map((l) => l.textContent)).toEqual(['nav.projects', 'Betasidebar.waiting', 'Alpha']));
         expect(within(projects).getByRole('link', { name: 'Alpha' })).toHaveAttribute('aria-current', 'page');
         expect(within(projects).getByRole('link', { name: /Beta/ })).toHaveAttribute('href', '/p/b');
     });

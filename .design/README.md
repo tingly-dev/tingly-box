@@ -100,6 +100,7 @@
 | [remote-cc-profile.md](./remote-cc-profile.md) | Remote @cc Profile Selection | 设计说明；局部实施状态见正文 |
 | [desk.md](./desk.md) | Desk (MVP) | 设计说明；局部实施状态见正文 |
 | [projects-panel.md](./projects-panel.md) | Projects 面板：Desk 的工作目录和项目共用一个侧边栏（TEP-2063） | 第 1 步已实现 |
+| [projects-ui.md](./projects-ui.md) | Projects 面板的 UI 对齐：对照 TB 页面和官方 Projects 的审查与分批计划 | 进行中 |
 | [projects.md](./projects.md) | Projects 接入（宿主侧）：`projects/` 模块、Host 适配器、`projects` 开关、导航与命名；契约见 `projects/.design/projects.md` | 设计说明；代码已搬入，接入未开始 |
 | [smart-guide-on-claude-code.md](./smart-guide-on-claude-code.md) | Smart Guide on Claude Code (retiring tingly-agentscope) | 已废弃方案；现行 runtime 见 afk |
 | [smart-guide-react-anthropic-sdk.md](./smart-guide-react-anthropic-sdk.md) | Smart Guide: in-house ReAct loop on the official Anthropic SDK | 已交付的起源记录；现行设计见 afk |

@@ -5,7 +5,6 @@
 import { useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Tooltip, Typography } from '@mui/material';
 import { IconFolderCode } from '@tabler/icons-react';
 import { ProjectsHostProvider, ProjectsSidebar, type ProjectsSidebarSection } from '@tingly/projects';
 import { tablerMui } from '@/components/icons';
@@ -20,6 +19,9 @@ import { projectsHost } from './projectsHost';
 const FolderCode = tablerMui(IconFolderCode);
 
 const deskFolderPath = (path: string) => `/desk?folder=${encodeURIComponent(path)}`;
+
+// The folder a working directory sits in, home shortened to ~.
+const parentPath = (path: string) => path.replace(/[\\/]+$/, '').replace(/[\\/][^\\/]*$/, '').replace(/^\/(Users|home)\/[^/]+/, '~') || '/';
 
 interface ProjectsNavProps {
     enableProjects: boolean;
@@ -48,17 +50,12 @@ const ProjectsNav = ({ enableProjects, enableDesk, onNavigate }: ProjectsNavProp
             key: w.path,
             label: folderName(w.path),
             title: w.path,
-            icon: <FolderCode sx={{ fontSize: 17 }} />,
+            icon: <FolderCode />,
+            // What waits here, else where the folder is.
+            subtitle: w.waiting > 0 ? t('layout.workingFolderWaiting', { count: w.waiting }) : parentPath(w.path),
             to: deskFolderPath(w.path),
             selected: scope === w.path,
             attention: w.waiting > 0,
-            end: w.waiting > 0 ? (
-                <Tooltip title={t('layout.workingFolderWaiting', { count: w.waiting })}>
-                    <Typography component="span" variant="caption" sx={{ fontWeight: 600, color: 'warning.main', fontVariantNumeric: 'tabular-nums' }}>
-                        {w.waiting}
-                    </Typography>
-                </Tooltip>
-            ) : undefined,
         })),
     }] : [];
 

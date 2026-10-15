@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Badge, Box, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from '@mui/material';
+import { Badge, Box, Divider, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from '@mui/material';
+import { NAV_ROW_SX, navRowSelectedSx, navRowTextSlotProps } from '@tingly/ui/theme/nav';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, unwrap, type ProjectSummary } from '../client';
@@ -13,6 +15,8 @@ export interface ProjectsSidebarRow {
     /** Hover text, e.g. a folder's full path. */
     title?: string;
     icon?: ReactNode;
+    /** The second line: what waits here, where it is. */
+    subtitle?: ReactNode;
     /** Router path the row opens. */
     to: string;
     selected?: boolean;
@@ -80,13 +84,13 @@ function useSidebarProjects(enabled: boolean): ProjectSummary[] | null {
 
 function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection; onNavigate?: () => void }) {
     const title = (
-        <Typography variant="caption" noWrap sx={{ flex: 1, fontWeight: 600, color: 'text.secondary', letterSpacing: 0.2 }}>
+        <Typography noWrap sx={{ flex: 1, fontSize: fontSizes.sm, fontWeight: 600, color: 'text.secondary' }}>
             {section.title}
         </Typography>
     );
     return (
-        <Box component="section" aria-label={section.title} sx={{ mt: 1.5, '&:first-of-type': { mt: 0.5 } }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', pl: 2.25, pr: 1.25, minHeight: 28 }}>
+        <Box component="section" aria-label={section.title}>
+            <Box sx={{ display: 'flex', alignItems: 'center', pl: 3, pr: 1.5, minHeight: 32 }}>
                 {section.to ? (
                     <Box component={NavLink} to={section.to} onClick={onNavigate} sx={{ flex: 1, minWidth: 0, display: 'flex', textDecoration: 'none', '&:hover .MuiTypography-root': { color: 'text.primary' } }}>
                         {title}
@@ -94,15 +98,15 @@ function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection;
                 ) : title}
                 {section.action && (
                     <Tooltip title={section.action.label}>
-                        <IconButton size="small" aria-label={section.action.label} onClick={section.action.onClick} sx={{ p: 0.25, color: 'text.secondary', '&:hover': { color: 'primary.main' } }}>
-                            <Add sx={{ fontSize: 16 }} />
+                        <IconButton size="small" aria-label={section.action.label} onClick={section.action.onClick} sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}>
+                            <Add sx={{ fontSize: 18 }} />
                         </IconButton>
                     </Tooltip>
                 )}
             </Box>
-            <List dense disablePadding>
+            <List disablePadding>
                 {section.rows.length === 0 && section.empty && (
-                    <Typography variant="body2" color="text.secondary" sx={{ px: 2.25, py: 0.75, fontSize: 13 }}>{section.empty}</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ px: 3, py: 1 }}>{section.empty}</Typography>
                 )}
                 {section.rows.map((row) => (
                     <ListItemButton
@@ -111,20 +115,21 @@ function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection;
                         to={row.to}
                         onClick={onNavigate}
                         title={row.title}
-                        selected={row.selected}
                         aria-current={row.selected ? 'page' : undefined}
                         sx={{
-                            mx: 1, px: 1.25, py: 0.5, minHeight: 36, borderRadius: 1.25, color: 'text.primary',
-                            '&.Mui-selected': { bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.main' } },
-                            '&.Mui-selected .row-end, &.Mui-selected .row-end *': { color: 'inherit' },
+                            ...NAV_ROW_SX,
+                            color: 'text.secondary',
+                            '&:hover': { backgroundColor: 'action.hover', color: 'text.primary' },
+                            ...(row.selected && navRowSelectedSx),
+                            '& .row-end, & .row-end *': row.selected ? { color: 'inherit' } : {},
                         }}
                     >
-                        <ListItemIcon sx={{ minWidth: 28, color: 'inherit' }}>
+                        <ListItemIcon sx={{ minWidth: 32, color: 'inherit', '& svg': { fontSize: 20 } }}>
                             <Badge color="warning" variant="dot" invisible={!row.attention}>
-                                {row.icon ?? <Folder sx={{ fontSize: 17 }} />}
+                                {row.icon ?? <Folder />}
                             </Badge>
                         </ListItemIcon>
-                        <ListItemText primary={row.label} slotProps={{ primary: { noWrap: true, sx: { fontSize: 13.5, color: 'inherit', fontWeight: row.selected ? 500 : 400 } } }} />
+                        <ListItemText primary={row.label} secondary={row.subtitle} slotProps={navRowTextSlotProps(!!row.selected)} sx={{ minWidth: 0, my: 0 }} />
                         {row.end != null && <Box className="row-end" sx={{ ml: 1, flexShrink: 0, display: 'flex', alignItems: 'center' }}>{row.end}</Box>}
                     </ListItemButton>
                 ))}
@@ -164,23 +169,20 @@ export function ProjectsSidebar({ showProjects = true, sections = [], onNavigate
                 to,
                 selected: location.pathname === to,
                 attention: p.threads.waiting > 0,
-                icon: p.starred ? <Star sx={{ fontSize: 17 }} /> : undefined,
-                end: p.threads.waiting > 0 ? (
-                    <Tooltip title={t('sidebar.waiting', { count: p.threads.waiting })}>
-                        <Typography component="span" variant="caption" sx={{ fontWeight: 600, color: 'warning.main', fontVariantNumeric: 'tabular-nums' }}>
-                            {p.threads.waiting}
-                        </Typography>
-                    </Tooltip>
-                ) : undefined,
+                icon: p.starred ? <Star /> : undefined,
+                subtitle: p.threads.waiting > 0 ? t('sidebar.waiting', { count: p.threads.waiting }) : undefined,
             };
         }),
         empty: projects ? t('sidebar.noProjects') : undefined,
     } : null;
 
     return (
-        <Box component="nav" aria-label={t('nav.projects')} sx={{ py: 0.5 }}>
-            {[...(projectSection ? [projectSection] : []), ...sections].map((s) => (
-                <SectionView key={s.key} section={s} onNavigate={onNavigate} />
+        <Box component="nav" aria-label={t('nav.projects')} sx={{ py: 1 }}>
+            {[...(projectSection ? [projectSection] : []), ...sections].map((s, i) => (
+                <Box key={s.key}>
+                    {i > 0 && <Divider sx={{ mx: 2, my: 1 }} />}
+                    <SectionView section={s} onNavigate={onNavigate} />
+                </Box>
             ))}
         </Box>
     );

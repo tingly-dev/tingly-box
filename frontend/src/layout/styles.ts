@@ -201,30 +201,9 @@ export const activityLogoButtonSx: SxProps<Theme> = {
 // Sidebar — secondary nav list
 // ---------------------------------------------------------------------------
 
-/** Shared sizing for the sidebar's nav-style rows, kept here so every row is
- *  the same height whether or not it happens to carry a subtitle. `mx` is part
- *  of the row geometry (inset from the rail edge), so it lives here too.
- *  minHeight is sized to comfortably fit two text lines (primary 14px +
- *  secondary 11px ≈ 31px) with breathing room above and below. */
-export const NAV_ROW_SX = {
-    mx: 1,
-    minHeight: 52,
-    borderRadius: 1.25,
-    py: 1,
-    px: 2,
-} as const;
-
-export const navRowTextSlotProps = (active: boolean) => ({
-    primary: { noWrap: true, variant: 'body2' as const, sx: { fontWeight: 500, lineHeight: 1.3, fontSize: '0.875rem' } },
-    secondary: {
-        variant: 'caption' as const,
-        sx: {
-            fontSize: '0.6875rem',
-            lineHeight: 1.2,
-            color: active ? 'rgba(255,255,255,0.7)' : 'text.secondary',
-        },
-    },
-});
+// Nav rows (sizing, selected look, text) live in @tingly/ui so the Projects
+// sidebar draws the same rows.
+export { NAV_ROW_SX, navRowSelectedSx, navRowTextSlotProps } from '@tingly/ui/theme/nav';
 
 export const sidebarContainerSx: SxProps<Theme> = {
     height: '100%',
