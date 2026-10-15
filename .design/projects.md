@@ -6,7 +6,8 @@
 > [`projects/.design/projects.md` §9](../projects/.design/projects.md)，
 > 这里不重复，只记 tingly-box 这一侧要做什么。
 
-状态：`@tingly/ui` 已合并（#2038）；Go 部分已搬进 `projects/`；下面的接入工作尚未开始。
+状态：`@tingly/ui` 已合并（#2038）；Go 部分已搬进 `projects/`；前端接入（§3）和改名（§4）已完成，
+后端接入（§2）在另一个 PR 里做。
 
 ## 1. 依赖与构建
 
@@ -34,18 +35,37 @@
 
 ## 3. 前端
 
+状态：已完成。页面在 `/projects`、`/projects/:id`，由 `src/pages/projects/ProjectsRoute.tsx`
+懒加载（包和它的文案都不进首屏，`dist/index.html` 的 modulepreload 里没有）；鉴权的
+`fetch` 在 `src/services/projectsApi.ts`，复用控制面 API 的 base URL 和 `Authorization`；
+toast 走 Tingly Box 的 `notify`。mock 数据在 `src/mocks/projectsHandlers.ts`。
+
 - 视觉统一靠 `@tingly/ui`（`frontend/packages/ui`）：Projects 页面用的就是这里的
   主题、图标和页面原语，改视觉一律改这里。
 - `appRoutes.tsx` 用 `lazy()` 挂 `ProjectsPage` / `ProjectPage`，外面包
   `ExperimentalFeatureGate feature="projects"`（`ExperimentalFeature` 类型加上
   `'projects'`）；用 `ProjectsHostProvider` 注入带鉴权的 `fetch`、路由路径和
   `onProjectsChanged`。
-- 导航：Projects 是一级功能，左侧 rail 有自己的图标，有等你处理的线程时显示小红点。
-  Desk 留在 Remote 下。
-- i18n：合并 `projects` 命名空间（en / zh），ru 由语言对齐测试补齐。
+- 导航：Projects 是一级功能，左侧 rail 有自己的图标（文件夹，和 Projects 页面里一致），
+  放在 Image 之后、Remote 之前；有等你处理的线程时图标上有一个点（和 Projects 里“等你处理”
+  同色，warning）。点的数据来自 `GET /api/v1/projects` 每个项目的 `threads.waiting`：
+  打开时、Projects 页面改动项目后（`onProjectsChanged` 发 `tingly:projects-changed`）、
+  标签页回到前台时和每 30 秒各读一次。Desk 留在 Remote 下。开关也在 Power-ups 菜单和
+  System → Experimental 里。
+- 外边距：`/projects` 路由在宿主布局里没有内边距（项目页是满高的分栏），页面自己排；
+  宿主传 `embedded: true`，页面去掉独立版为浮动侧栏按钮留的位置，项目页标题前加
+  “项目 /”链接回列表（宿主里没有 Projects 侧栏）。
+- i18n：包里的文案在 i18next 命名空间 `projects`（`useTranslation('projects')`），由懒加载
+  模块 `addResourceBundle` 加 en / zh；ru 回落到 en（语言对齐测试只管 Tingly Box 自己的
+  bundle）。对话记录（`src/transcript/`）仍用默认命名空间里的 `projects.transcript.*`。
+  `tKeyCoverage` 另检查包里每个 `t()` key 在 `projects` 的 en / zh 里都有。
 
 ## 4. 命名
 
-Desk 现在把文件夹叫“项目目录”（`desk.projectDirectory`），用量页也有“项目”
-筛选。Projects 进来后“项目”一词两义（UX 原则：拆开同名冲突）。建议把 Desk 的
-叫法改成“工作文件夹”，用量页的“项目”按实际含义重新命名。
+Desk 原来把文件夹叫“项目目录”（`desk.projectDirectory`），Projects 进来后“项目”
+一词两义（UX 原则：拆开同名冲突）。
+
+状态：已完成。Desk 的文件夹改叫“工作文件夹” / Working folder / Рабочая папка
+（只改文案，key 不变）。“项目”筛选其实在 User prompts（`/prompt/user`）的录制页，
+筛的是录制时 IDE 打开的工作区，改叫“工作区” / Workspace / Рабочая область，
+筛选栏的文案也接上了 i18n（原来写死英文）。用量页（Dashboard）没有“项目”筛选。
