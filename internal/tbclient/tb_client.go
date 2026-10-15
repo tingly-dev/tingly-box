@@ -91,6 +91,13 @@ func (c *TBClientImpl) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
 	return env, nil
 }
 
+// ClaudeCodeDefaultModel is the request model Claude Code is pointed at by
+// default (ANTHROPIC_MODEL in GetClaudeCodeEnv): the claude_code scenario's
+// default tier, which its routing rules resolve.
+func (c *TBClientImpl) ClaudeCodeDefaultModel() string {
+	return c.resolveClaudeCodeModels().def
+}
+
 // GetClaudeCodeSettingsPathForProfile materializes the profiled scenario
 // settings file and returns its path for the --settings CLI flag.
 func (c *TBClientImpl) GetClaudeCodeSettingsPathForProfile(ctx context.Context, profileID string) (string, error) {

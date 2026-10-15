@@ -20,6 +20,8 @@ replace github.com/tingly-dev/tingly-box/swagger => ../../swagger
 
 replace github.com/tingly-dev/tingly-box/afk => ../../afk
 
+replace github.com/tingly-dev/tingly-box/projects => ../../projects
+
 require (
 	github.com/alecthomas/kong v1.15.0
 	github.com/gin-gonic/gin v1.12.0
@@ -168,6 +170,7 @@ require (
 	github.com/tingly-dev/tingly-box/agentboot v0.0.0-00010101000000-000000000000 // indirect
 	github.com/tingly-dev/tingly-box/ai v0.0.0-00010101000000-000000000000 // indirect
 	github.com/tingly-dev/tingly-box/imbot v0.1.0 // indirect
+	github.com/tingly-dev/tingly-box/projects v0.0.0-00010101000000-000000000000 // indirect
 	github.com/tingly-dev/tingly-box/swagger v0.0.0-20260706041525-46cbb39cc7ff // indirect
 	github.com/tingly-dev/weixin v0.4.10 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect

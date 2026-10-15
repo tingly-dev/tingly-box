@@ -86,9 +86,6 @@ jobs:
             cli:
               - '**'
               - '!gui/**'
-              # Nothing in the root module imports projects/ yet; drop this
-              # once Tingly Box mounts Projects.
-              - '!projects/**'
               - '!**/*_test.go'
               - '!frontend/**'
               - '!homepage/**'
@@ -113,7 +110,6 @@ jobs:
             gui:
               - '**'
               - '!cli/**'
-              - '!projects/**'
               - '!**/*_test.go'
               - '!frontend/**'
               - '!homepage/**'

@@ -1013,19 +1013,6 @@ export interface components {
             /** @description Field path */
             path: string;
         };
-        RespondRequest: {
-            /** @description Field allow */
-            allow: boolean;
-            /** @description Field answer */
-            answer?: string;
-            /** @description Field request_id */
-            request_id: string;
-            /**
-             * @description Field scope
-             * @enum {string}
-             */
-            scope?: "once" | "thread";
-        };
         SendMessageRequest: {
             /** @description Field content */
             content: string;
@@ -1244,6 +1231,19 @@ export interface components {
             payload?: string;
             /** @description Field thread_id */
             thread_id: string;
+        };
+        ThreadRespondRequest: {
+            /** @description Field allow */
+            allow: boolean;
+            /** @description Field answer */
+            answer?: string;
+            /** @description Field request_id */
+            request_id: string;
+            /**
+             * @description Field scope
+             * @enum {string}
+             */
+            scope?: "once" | "thread";
         };
         ThreadRuntime: {
             /** @description Field cli_path */
@@ -2224,7 +2224,7 @@ export interface operations {
         /** @description Request body */
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RespondRequest"];
+                "application/json": components["schemas"]["ThreadRespondRequest"];
             };
         };
         responses: {

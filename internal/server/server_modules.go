@@ -13,6 +13,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
+	projectsmodule "github.com/tingly-dev/tingly-box/internal/server/module/projects"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/providerquota"
 	"github.com/tingly-dev/tingly-box/internal/server/module/sharing"
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
@@ -150,6 +151,21 @@ func (s *Server) apiModules(ctx context.Context, schema bool, status *statusline
 		mods = append(mods, deskmodule.NewHandler(nil, nil).WithGate(s.deskEnabled))
 	} else if s.desk = newDeskService(sm, s.config); s.desk != nil {
 		mods = append(mods, deskmodule.NewHandler(s.desk, status).WithGate(s.deskEnabled))
+	}
+
+	// Projects: schema generation mounts an in-memory app that never starts.
+	// At runtime it keeps its own database under <data dir>/projects and
+	// starts when the flag is on: at boot, or on the first request after the
+	// flag is switched on.
+	if app := newProjectsApp(s.config, schema); app != nil {
+		start := func() { app.Start(ctx) }
+		mods = append(mods, projectsmodule.NewHandler(app, s.projectsEnabled, start))
+		if !schema {
+			s.projects = app
+			if s.projectsEnabled() {
+				start()
+			}
+		}
 	}
 
 	if schema {
