@@ -1,19 +1,16 @@
 import ModelSelectDialog, { type ProviderSelectTabOption } from '@/components/ModelSelectDialog';
-import ToolCard from '@/components/ToolCard';
 import { api } from '@/services/api';
 import type { Provider } from '@/types/provider';
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography } from '@mui/material';
-import { Psychology as IconBrain } from '@/components/icons';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BUILTIN_ADVISOR_ID, type MCPSourceConfig } from './types';
 interface AdvisorCardProps {
     advisorSource: MCPSourceConfig | undefined;
     onSave: (patch: MCPSourceConfig) => Promise<void>;
-    expanded?: boolean;
 }
 
-const AdvisorSettings: React.FC<AdvisorCardProps> = ({ advisorSource, onSave, expanded }) => {
+const AdvisorSettings: React.FC<AdvisorCardProps> = ({ advisorSource, onSave }) => {
     const { t } = useTranslation();
     const label = (key: string, fallback: string) => t(`mcp.workspace.${key}`, { defaultValue: fallback });
     const [model, setModel] = useState(advisorSource?.advisor?.model ?? '');
@@ -32,13 +29,6 @@ const AdvisorSettings: React.FC<AdvisorCardProps> = ({ advisorSource, onSave, ex
         void load();
     }, []);
 
-    const enabled = advisorSource?.enabled ?? false;
-
-    const handleToggle = (next: boolean) => {
-        if (!advisorSource) return;
-        void onSave({ ...advisorSource, enabled: next });
-    };
-
     const handleSave = async () => {
         setSaving(true);
         try {
@@ -50,7 +40,7 @@ const AdvisorSettings: React.FC<AdvisorCardProps> = ({ advisorSource, onSave, ex
                 enabled: false,
             };
             await onSave({
-                ...base,
+                id: base.id,
                 advisor: {
                     ...(base.advisor ?? {}),
                     provider_uuid: selectedProviderUuid || undefined,
@@ -110,27 +100,7 @@ const AdvisorSettings: React.FC<AdvisorCardProps> = ({ advisorSource, onSave, ex
         </Stack>
     );
 
-    return (
-        <ToolCard
-            icon={<IconBrain sx={{ fontSize: 18 }} />}
-            name={label('advisorName', 'Advisor')}
-            description={label(
-                'advisorDescription',
-                'The gateway consults a second model and returns its advice to the current model.'
-            )}
-            enabled={enabled}
-            onToggle={handleToggle}
-            toggleDisabled={saving}
-            badges={[
-                { label: 'Server', color: 'green' },
-                { label: label('experimental', 'Experimental'), color: 'orange' },
-            ]}
-            tags={['advisor']}
-            settings={settings}
-            defaultExpanded
-            expanded={expanded}
-        />
-    );
+    return settings;
 };
 
 export default AdvisorSettings;

@@ -846,7 +846,8 @@ export default {
       "saving": "Saving…",
       "save": "Save",
       "experimental": "Experimental",
-      "closeModel": "Close"
+      "closeModel": "Close",
+      "noAdditionalTools": "No other available tools to add."
     }
   }
 };
