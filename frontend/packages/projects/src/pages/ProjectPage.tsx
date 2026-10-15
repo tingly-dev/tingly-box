@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Badge, Box, Button, Drawer, IconButton, Skeleton, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Alert, Badge, Box, Button, Drawer, IconButton, Link, Skeleton, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, unwrap, type Project, type ProjectMessage, type Thread, type ThreadEvent } from '../client';
@@ -25,12 +25,12 @@ function upsert<T extends { id: string }>(list: T[], item: T): T[] {
 
 export default function ProjectPage() {
     const { id = '' } = useParams();
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const theme = useTheme();
     const narrow = useMediaQuery(theme.breakpoints.down('lg'));
     const navigate = useNavigate();
     const notify = useNotify();
-    const { onProjectsChanged: refresh, paths: routes } = useProjectsHost();
+    const { onProjectsChanged: refresh, paths: routes, embedded } = useProjectsHost();
     const [params, setParams] = useSearchParams();
     const threadId = params.get('thread') ?? '';
 
@@ -177,7 +177,7 @@ export default function ProjectPage() {
 
     if (error) {
         return (
-            <Box sx={{ maxWidth: 720, mx: 'auto', pt: 8, px: 2 }}>
+            <Box sx={{ maxWidth: 720, mx: 'auto', pt: embedded ? 3 : 8, px: 2 }}>
                 <Alert severity="error" action={<Button color="inherit" component={RouterLink} to={routes.list}>{t('projects.all')}</Button>}>{error}</Alert>
             </Box>
         );
@@ -198,10 +198,19 @@ export default function ProjectPage() {
 
     return (
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: { xs: 6, md: 3 }, py: 1, minHeight: 52, borderBottom: 1, borderColor: 'divider' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: { xs: embedded ? 2 : 6, md: 3 }, py: 1, minHeight: 52, borderBottom: 1, borderColor: 'divider' }}>
                 {project ? (
                     <Box sx={{ minWidth: 0, flex: 1 }}>
-                        <Typography variant="h5" noWrap>{project.name}</Typography>
+                        <Typography variant="h5" noWrap>
+                            {/* No Projects sidebar in a host: the way back to the list is here. */}
+                            {embedded && (
+                                <>
+                                    <Link component={RouterLink} to={routes.list} color="text.secondary" underline="hover">{t('projects.title')}</Link>
+                                    <Box component="span" sx={{ color: 'text.disabled', mx: 0.75 }}>/</Box>
+                                </>
+                            )}
+                            {project.name}
+                        </Typography>
                         {project.goal && <Typography variant="caption" color="text.secondary" noWrap component="div">{project.goal}</Typography>}
                     </Box>
                 ) : <Skeleton width={200} sx={{ flex: 1 }} />}

@@ -11,7 +11,7 @@ import { STATUS_ORDER, StatusHeading, ThreadSubtitle } from './threadStatus';
 const mono = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' } as const;
 
 function ThreadRow({ thread, onOpen }: { thread: Thread; onOpen: (id: string) => void }) {
-    const { i18n } = useTranslation();
+    const { i18n } = useTranslation('projects');
     return (
         <Box
             role="button"
@@ -30,7 +30,7 @@ function ThreadRow({ thread, onOpen }: { thread: Thread; onOpen: (id: string) =>
 }
 
 function ThreadGroups({ threads, onOpen }: { threads: Thread[]; onOpen: (id: string) => void }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const [showResolved, setShowResolved] = useState(false);
     if (threads.length === 0) {
         return <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>{t('overview.noThreads')}</Typography>;
@@ -62,7 +62,7 @@ function ThreadGroups({ threads, onOpen }: { threads: Thread[]; onOpen: (id: str
 }
 
 function Library({ projectId, refreshKey }: { projectId: string; refreshKey: number }) {
-    const { t, i18n } = useTranslation();
+    const { t, i18n } = useTranslation('projects');
     const notify = useNotify();
     const input = useRef<HTMLInputElement>(null);
     const [files, setFiles] = useState<LibraryFile[] | null>(null);
@@ -157,7 +157,7 @@ function Library({ projectId, refreshKey }: { projectId: string; refreshKey: num
 }
 
 export function OverviewPane({ projectId, threads, onOpen, libraryKey }: { projectId: string; threads: Thread[]; onOpen: (id: string) => void; libraryKey: number }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const [tab, setTab] = useState<'threads' | 'library'>('threads');
     const waiting = threads.filter((th) => th.status === 'waiting').length;
     return (

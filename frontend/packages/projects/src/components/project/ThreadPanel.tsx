@@ -46,7 +46,7 @@ function toolSummary(input: Record<string, unknown> | null): string {
 
 /** How a settled permission request ended, as a short tag on its tool call. */
 function RequestOutcome({ pl }: { pl: RequestPayload }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const ok = pl.state === 'allowed' || pl.state === 'answered';
     return (
         <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25, flexShrink: 0, fontSize: 12, color: ok ? 'success.main' : pl.state === 'denied' ? 'error.main' : 'text.disabled' }}>
@@ -86,7 +86,7 @@ function ToolRow({ ev, result, approval }: { ev: ThreadEvent; result?: ThreadEve
 }
 
 function RequestCard({ ev, projectId, threadId, active }: { ev: ThreadEvent; projectId: string; threadId: string; active: boolean }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const notify = useNotify();
     const [answer, setAnswer] = useState('');
     const [busy, setBusy] = useState(false);
@@ -156,7 +156,7 @@ function RequestCard({ ev, projectId, threadId, active }: { ev: ThreadEvent; pro
 }
 
 function DiffDialog({ thread, open, onClose }: { thread: Thread; open: boolean; onClose: () => void }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const notify = useNotify();
     const [diff, setDiff] = useState<Diff | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -260,7 +260,7 @@ interface Props {
 }
 
 export function ThreadPanel({ projectId, threadId, thread, events, running, disabled, onBack }: Props) {
-    const { t, i18n } = useTranslation();
+    const { t, i18n } = useTranslation('projects');
     const notify = useNotify();
     const [diffOpen, setDiffOpen] = useState(false);
     const [taskOpen, setTaskOpen] = useState(false);

@@ -8,7 +8,7 @@ import { Sidebar } from './Sidebar';
 
 export function Layout() {
     const theme = useTheme();
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const mobile = useMediaQuery(theme.breakpoints.down('md'));
     const [collapsed, setCollapsed] = useState(() => readLocal('sidebarCollapsed') === '1');
     const [mobileOpen, setMobileOpen] = useState(false);

@@ -11,7 +11,7 @@ import { timeAgo } from '../utils/format';
 import { EmptyState, PageHeader } from '@tingly/ui';
 
 function ProjectCard({ p }: { p: ProjectSummary }) {
-    const { t, i18n } = useTranslation();
+    const { t, i18n } = useTranslation('projects');
     const navigate = useNavigate();
     const { paths: routes } = useProjectsHost();
     const c = p.threads;
@@ -46,10 +46,10 @@ function ProjectCard({ p }: { p: ProjectSummary }) {
 }
 
 export default function ProjectsPage() {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const navigate = useNavigate();
     const notify = useNotify();
-    const { onProjectsChanged: refresh, paths: routes } = useProjectsHost();
+    const { onProjectsChanged: refresh, paths: routes, embedded } = useProjectsHost();
     const [tab, setTab] = useState<'active' | 'archived'>('active');
     const [q, setQ] = useState('');
     const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
@@ -79,7 +79,9 @@ export default function ProjectsPage() {
 
     return (
         <Box sx={{ flex: 1, overflowY: 'auto' }}>
-            <Box sx={{ maxWidth: 1040, mx: 'auto', px: { xs: 2, md: 4 }, pt: { xs: 7, md: 5 }, pb: 6 }}>
+            {/* Standalone, the top-left corner belongs to the floating sidebar
+                button; a host's layout keeps its own navigation clear. */}
+            <Box sx={{ maxWidth: 1040, mx: 'auto', px: { xs: 2, md: embedded ? 3 : 4 }, pt: embedded ? { xs: 2, md: 3 } : { xs: 7, md: 5 }, pb: 6 }}>
                 <PageHeader
                     title={t('projects.title')}
                     subtitle={t('projects.intro')}

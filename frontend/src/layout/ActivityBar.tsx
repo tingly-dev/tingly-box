@@ -1,6 +1,6 @@
 import { Person as IconUser, ChevronRight as IconChevronRight, Lightbulb as IconLightbulb, Error as IconAlertCircle, Star as IconStar } from '@/components/icons';
 import { displayVersion } from '@/utils/version';
-import { Box, Divider, IconButton, ListItemButton, ListItemIcon, Tooltip, Typography } from '@mui/material';
+import { Badge, Box, Divider, IconButton, ListItemButton, ListItemIcon, Tooltip, Typography } from '@mui/material';
 import React, { useCallback, useState } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -130,7 +130,15 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                             })}
                         >
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                                {item.icon}
+                                <Badge
+                                    color="warning"
+                                    variant="dot"
+                                    invisible={!item.attention}
+                                    title={item.attention}
+                                    aria-label={item.attention}
+                                >
+                                    {item.icon}
+                                </Badge>
                             </ListItemIcon>
                             <Typography
                                 variant="caption"

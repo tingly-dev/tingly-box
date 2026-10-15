@@ -6,6 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/embed.ts",
+    "./locales/en": "./src/i18n/en.ts",
+    "./locales/zh": "./src/i18n/zh.ts",
     "./transcript": "./src/transcript/index.ts",
     "./transcript/locales/*": "./src/transcript/locales/*.ts"
   },

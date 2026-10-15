@@ -69,6 +69,9 @@ const BotOverviewPage = lazy(() => import('@/pages/bots/BotOverviewPage'));
 const RemoteAgentPage = lazy(() => import('@/pages/remote-agent/RemoteAgentPage'));
 const NotifyPage = lazy(() => import('@/pages/notify/NotifyPage'));
 const DeskPage = lazy(() => import('@/pages/desk/DeskPage'));
+// Projects' pages come from @tingly/projects; this wrapper gives them Tingly
+// Box's fetch, routes and strings (.design/projects.md §3).
+const ProjectsRoute = lazy(() => import('@/pages/projects/ProjectsRoute'));
 const MCPLocalMode = lazy(() => import('@/pages/mcp/MCPLocalMode'));
 const MCPRegisteredServers = lazy(() => import('@/pages/mcp/MCPRegisteredServers'));
 const ServerToolPage = lazy(() => import('@/pages/servertool/ServerToolPage'));
@@ -193,6 +196,10 @@ export const appRoutes = (
             {/* Desk — a web-side twin of local `claude`, no IM bot
                 involved. See useActivityItems for the nav row. */}
             <Route path="/desk" element={<ExperimentalFeatureGate feature="desk"><DeskPage /></ExperimentalFeatureGate>} />
+            {/* Projects — a coordinator running Claude Code threads; its own
+                rail item (useActivityItems). */}
+            <Route path="/projects" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="list" /></ExperimentalFeatureGate>} />
+            <Route path="/projects/:id" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="project" /></ExperimentalFeatureGate>} />
             {/* Remote Control — one page, every bot (see RemoteAgentPage). */}
             <Route path="/remote-agent" element={<RemoteAgentPage />} />
             {/* Back-compat: per-platform pages and the pre-split /remote-control/* */}

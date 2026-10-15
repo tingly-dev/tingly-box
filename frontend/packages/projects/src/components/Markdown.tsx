@@ -9,7 +9,7 @@ import { useCopyFeedback } from '../hooks/useCopyFeedback';
 
 function CodeBlock({ code, language }: { code: string; language: string }) {
     const theme = useTheme();
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const { copied, copy } = useCopyFeedback();
     return (
         <Box sx={{ position: 'relative', my: 1.5, borderRadius: 2, border: 1, borderColor: 'divider', overflow: 'hidden' }}>

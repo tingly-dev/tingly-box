@@ -12,7 +12,7 @@ interface Props {
 /** Only the name is required: a project can be created first and filled in
  * as the work takes shape. */
 export function NewProjectDialog({ open, onClose, onCreate }: Props) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const [name, setName] = useState('');
     const [goal, setGoal] = useState('');
     const [repos, setRepos] = useState<RepoEntry[]>([]);

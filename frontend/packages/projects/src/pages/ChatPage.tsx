@@ -28,7 +28,7 @@ function UserBubble({ text }: { text: string }) {
 }
 
 function AssistantActions({ msg, isLast, onRegenerate, disabled }: { msg: Message; isLast: boolean; onRegenerate: () => void; disabled: boolean }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const { copied, copy } = useCopyFeedback();
     const meta = [msg.model, msg.input_tokens ? `${formatTokens(msg.input_tokens)} in` : '', msg.output_tokens ? `${formatTokens(msg.output_tokens)} out` : '']
         .filter(Boolean)
@@ -64,7 +64,7 @@ function AssistantActions({ msg, isLast, onRegenerate, disabled }: { msg: Messag
 
 export default function ChatPage() {
     const { id = '' } = useParams();
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const navigate = useNavigate();
     const location = useLocation();
     const notify = useNotify();

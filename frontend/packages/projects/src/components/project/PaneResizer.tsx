@@ -18,7 +18,7 @@ export function clampPane(width: number, room = window.innerWidth): number {
  * and use the arrow keys. `onCommit` runs once a drag or key press settles.
  */
 export function PaneResizer({ width, onWidth, onCommit }: { width: number; onWidth: (w: number) => void; onCommit: (w: number) => void }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const start = useRef<{ x: number; width: number } | null>(null);
     const [dragging, setDragging] = useState(false);
     const last = useRef(width);

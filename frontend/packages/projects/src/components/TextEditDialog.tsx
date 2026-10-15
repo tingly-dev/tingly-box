@@ -22,7 +22,7 @@ interface Props {
 /** Large text editor used for instructions, memory and knowledge text. Shows
  * the live token estimate so the cost of what is being written is visible. */
 export function TextEditDialog({ open, title, intro, initialText, nameField, placeholder, submitLabel, readOnly, onClose, onSubmit }: Props) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const [text, setText] = useState(initialText);
     const [name, setName] = useState(nameField?.initial ?? '');
     const [busy, setBusy] = useState(false);

@@ -21,7 +21,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 function ChatRow({ chat, selected }: { chat: Conversation; selected: boolean }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const navigate = useNavigate();
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     return (
@@ -62,7 +62,7 @@ function ChatRow({ chat, selected }: { chat: Conversation; selected: boolean }) 
 }
 
 export function Sidebar({ onCollapse, onNavigate }: { onCollapse?: () => void; onNavigate?: () => void }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const navigate = useNavigate();
     const location = useLocation();
     const theme = useTheme();

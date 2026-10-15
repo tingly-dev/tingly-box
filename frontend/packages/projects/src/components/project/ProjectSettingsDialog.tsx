@@ -25,7 +25,7 @@ type Mode = NonNullable<Patch['thread_permission_mode']>;
 
 function ModelField({ label, value, onChange, help }: { label: string; value: string; onChange: (v: string) => void; help: string }) {
     const { models } = useModels('projects');
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     return (
         <Autocomplete
             freeSolo
@@ -41,7 +41,7 @@ function ModelField({ label, value, onChange, help }: { label: string; value: st
 }
 
 function General({ project, patch }: { project: Project; patch: (p: Patch) => Promise<void> }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const navigate = useNavigate();
     const notify = useNotify();
     const { onProjectsChanged, paths: routes } = useProjectsHost();
@@ -110,7 +110,7 @@ function General({ project, patch }: { project: Project; patch: (p: Patch) => Pr
 }
 
 function Memory({ project, patch, refreshKey }: { project: Project; patch: (p: Patch) => Promise<void>; refreshKey: number }) {
-    const { t, i18n } = useTranslation();
+    const { t, i18n } = useTranslation('projects');
     const notify = useNotify();
     const [instructions, setInstructions] = useState(project.instructions);
     const [files, setFiles] = useState<MemoryFile[]>([]);
@@ -200,7 +200,7 @@ function Memory({ project, patch, refreshKey }: { project: Project; patch: (p: P
 }
 
 function Environment({ project, patch }: { project: Project; patch: (p: Patch) => Promise<void> }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const [runtime, setRuntime] = useState<ProjectRuntime | null>(null);
     useEffect(() => {
         unwrap(api.GET('/api/v1/projects/runtime')).then(setRuntime).catch(() => {});
@@ -240,7 +240,7 @@ function Environment({ project, patch }: { project: Project; patch: (p: Patch) =
 }
 
 function UsageTab({ projectId }: { projectId: string }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const [usage, setUsage] = useState<Usage | null>(null);
     useEffect(() => {
         unwrap(api.GET('/api/v1/projects/{id}/usage', { params: { path: { id: projectId } } })).then(setUsage).catch(() => {});
@@ -280,7 +280,7 @@ interface Props {
 }
 
 export function ProjectSettingsDialog({ project, open, tab, onTab, onClose, onChanged, memoryKey }: Props) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const notify = useNotify();
     const { onProjectsChanged } = useProjectsHost();
     const patch = async (body: Patch) => {

@@ -41,6 +41,8 @@ export default {
   },
   "layout": {
     "desk": "工作台",
+    "projects": "项目",
+    "projectsWaiting": "有线程在等你处理",
     "appTitle": "Tingly Box",
     "slogan": "智能，尽在掌握。",
     "version": "版本<br/>{{version}}",
@@ -283,6 +285,9 @@ export default {
       "saveFailed": "语言设置更新失败"
     },
     "experimentalFeatures": {
+      "projects": "项目",
+      "enableProjects": "工作一冒出来就丢给项目：协调者为每个任务开一个 Claude Code 线程，各自在独立的 git worktree 里运行。",
+      "projectsEnabledInfo": "现在，任何能登录这个 tingly-box 的人都可以在这台机器上、在其项目所指定的仓库里运行 Claude Code 线程。",
       "desk": "工作台",
       "enableDesk": "在浏览器中运行本机的 Claude Code，并选择其工作文件夹。",
       "deskEnabledInfo": "任何能登录此 tingly-box 的用户都可以在本机启动 Claude Code 会话，并批准其工具调用。",

@@ -89,6 +89,7 @@ import {
     IconSun,
     IconMoon,
     IconBrandGithub,
+    IconFolder,
     IconFolderOpen,
     IconPointFilled,
     IconBolt,
@@ -247,6 +248,7 @@ export const Logout = tablerMui(IconLogout);
 
 // --- Content / objects -------------------------------------------------------
 export const Description = tablerMui(IconFileDescription);
+export const Folder = tablerMui(IconFolder);
 export const FolderOpen = tablerMui(IconFolderOpen);
 export const ListAlt = tablerMui(IconListDetails);
 export const Code = tablerMui(IconCode);

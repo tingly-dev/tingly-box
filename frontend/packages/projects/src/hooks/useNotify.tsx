@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 import { Alert, Snackbar } from '@mui/material';
 
-type Severity = 'success' | 'error' | 'info' | 'warning';
-type Notify = (message: string, severity?: Severity) => void;
+export type Severity = 'success' | 'error' | 'info' | 'warning';
+export type Notify = (message: string, severity?: Severity) => void;
 
 const Ctx = createContext<Notify>(() => {});
 
@@ -30,6 +30,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             </Snackbar>
         </Ctx.Provider>
     );
+}
+
+/** Routes the pages' toasts to a host's own notifications instead of this Snackbar. */
+export function HostNotifyProvider({ notify, children }: { notify: Notify; children: ReactNode }) {
+    return <Ctx.Provider value={notify}>{children}</Ctx.Provider>;
 }
 
 export const useNotify = () => useContext(Ctx);

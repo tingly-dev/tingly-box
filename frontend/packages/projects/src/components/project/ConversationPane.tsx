@@ -53,7 +53,7 @@ function SuggestionsCard({ message, threads, onStart, onOpen, disabled }: {
     onOpen: (id: string) => void;
     disabled: boolean;
 }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const [busy, setBusy] = useState(false);
     const suggestions = parse<{ suggestions: Suggestion[] }>(message.payload)?.suggestions ?? [];
     const remaining = suggestions.filter((s) => !s.thread_id).length;
@@ -93,7 +93,7 @@ function SuggestionsCard({ message, threads, onStart, onOpen, disabled }: {
 }
 
 function UpdateLine({ message, threads, onOpen }: { message: ProjectMessage; threads: Map<string, Thread>; onOpen: (id: string) => void }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const pl = parse<{ thread_id: string; title: string; kind: string }>(message.payload);
     if (!pl) return null;
     const th = threads.get(pl.thread_id);
@@ -124,7 +124,7 @@ interface Props {
 }
 
 export function ConversationPane({ messages, threads, busy, disabled, disabledReason, onSend, onOpenThread, onStartSuggestions }: Props) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
     const [seed, setSeed] = useState('');

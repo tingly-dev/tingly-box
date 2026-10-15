@@ -18,7 +18,7 @@ const mono = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' } as
  * branch from.
  */
 export function RepoField({ value, onChange }: { value: RepoEntry[]; onChange: (v: RepoEntry[]) => void }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const [path, setPath] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);

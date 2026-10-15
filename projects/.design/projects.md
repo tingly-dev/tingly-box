@@ -192,7 +192,7 @@ MVP 已实现（§2 中标 ✅ 的部分）。验证：
 - **挂载方式**：宿主把本仓库前端加进自己的 pnpm workspace，用 `lazy()` 挂页面。不用 iframe，也不在子路径下另挂一个 SPA，否则会出现两套侧栏、两套主题和两套登录状态。
 - **共享依赖**：react、react-dom、@mui/material、react-router-dom、i18next、react-i18next 作为 peerDependencies，只打包一份；i18n 用独立命名空间 `projects`。
 - **包内路径**：`@/` 别名属于 Tingly Box 的应用，`@tingly/projects` 内部一律用相对路径。
-- **待解决**：页面自带的外边距在宿主布局里要去掉。
+- **外边距**：宿主传 `embedded: true`（`ProjectsHost`）时，页面去掉为独立版浮动侧栏按钮留的位置，项目页标题前加回到列表的链接；宿主布局给 Projects 路由不留内边距。另有可选的 `notify`，让 toast 走宿主的通知。
 
 ### 9.5 产品边界
 

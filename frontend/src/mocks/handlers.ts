@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw'
 import { mockClaudeCodeModels } from './claudeCodeModels'
 import { deskHandlers } from './deskHandlers'
+import { projectsHandlers } from './projectsHandlers'
 import { resolveMockDataProfile } from './mockConfig'
 import { systemHandlers } from './systemHandlers'
 import { createSkillHandlers } from './skillHandlers'
@@ -3994,4 +3995,5 @@ export const handlers = [
         })
     }),
     ...deskHandlers,
+    ...projectsHandlers,
 ]

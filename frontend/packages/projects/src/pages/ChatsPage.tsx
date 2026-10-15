@@ -10,7 +10,7 @@ import { timeAgo } from '../utils/format';
 import { EmptyState, PageHeader } from '@tingly/ui';
 
 function Row({ chat, onChanged }: { chat: Conversation; onChanged: () => void }) {
-    const { t, i18n } = useTranslation();
+    const { t, i18n } = useTranslation('projects');
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     return (
         <Box
@@ -43,7 +43,7 @@ function Row({ chat, onChanged }: { chat: Conversation; onChanged: () => void })
 }
 
 export default function ChatsPage() {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const navigate = useNavigate();
     const notify = useNotify();
     const [q, setQ] = useState('');

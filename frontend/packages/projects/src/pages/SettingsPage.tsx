@@ -43,7 +43,7 @@ function Card({ title, subtitle, children }: { title: string; subtitle?: string;
 }
 
 export default function SettingsPage() {
-    const { t, i18n } = useTranslation();
+    const { t, i18n } = useTranslation('projects');
     const notify = useNotify();
     const { settings, refreshSettings } = useAppData();
     const { mode, setMode } = useThemeMode();

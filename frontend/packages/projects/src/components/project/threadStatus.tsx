@@ -37,7 +37,7 @@ function StatusIcon({ status }: { status: string }) {
 }
 
 export function ThreadStatusChip({ thread, size = 'small' }: { thread: Pick<Thread, 'status'>; size?: 'small' | 'medium' }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     return (
         <Chip
             size={size}
@@ -68,7 +68,7 @@ export function InlineCode({ text }: { text: string }) {
 /** The line under a thread's title: what it waits on, where its work landed,
  * or which branch it is on. */
 export function ThreadSubtitle({ thread }: { thread: Thread }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     if (thread.status === 'waiting' && thread.wait_reason) return <InlineCode text={thread.wait_reason} />;
     if (thread.merged_at) {
         return (
@@ -89,7 +89,7 @@ export function ThreadSubtitle({ thread }: { thread: Thread }) {
 
 /** A quiet group heading for the Overview: a status dot, the name, a count. */
 export function StatusHeading({ status, count }: { status: ThreadStatus; count: number }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const c = statusColor(status);
     return (
         <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>

@@ -16,7 +16,7 @@ interface Props {
  * over so chatting is never blocked on discovery.
  */
 export function ModelPicker({ value, onChange, disabled }: Props) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const { models, error } = useModels();
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     const [custom, setCustom] = useState('');

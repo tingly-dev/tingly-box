@@ -14,6 +14,7 @@ import {
 import {
     Bolt as IconBolt,
     Code as IconCode,
+    Folder as IconFolder,
     Send as IconSend,
     RemoteControl as IconRemote,
     Shield as IconShield,
@@ -73,7 +74,7 @@ interface PowerUpsMenuProps {
 export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, onNavigate, onMouseEnter, onMouseLeave }) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const { skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableDesk, loading, refresh } = useFeatureFlags();
+    const { skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableDesk, enableProjects, loading, refresh } = useFeatureFlags();
     const [updating, setUpdating] = useState<ExperimentalFeature>();
     const [failed, setFailed] = useState(false);
     const { isHidden, toggleHidden } = useHiddenScenarios();
@@ -147,6 +148,17 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             stage: 'beta' as const,
             enabled: enableDesk,
             enabledNotice: t('system.experimentalFeatures.deskEnabledInfo', { defaultValue: 'Anyone who can sign in to this tingly-box can now start Claude Code sessions on this machine and approve the tool calls they make.' }),
+        },
+        {
+            key: 'projects',
+            feature: 'projects' as const,
+            icon: <IconFolder sx={iconSx} />,
+            name: t('system.experimentalFeatures.projects'),
+            description: t('system.experimentalFeatures.enableProjects'),
+            path: '/projects',
+            stage: 'beta' as const,
+            enabled: enableProjects,
+            enabledNotice: t('system.experimentalFeatures.projectsEnabledInfo'),
         },
         {
             key: 'mcp',

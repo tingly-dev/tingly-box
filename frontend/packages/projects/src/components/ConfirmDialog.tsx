@@ -13,7 +13,7 @@ interface Props {
 
 /** Tingly Box's confirm dialog, with Projects' strings and close-on-confirm. */
 export function ConfirmDialog({ open, title, message, confirmLabel, danger, onConfirm, onClose }: Props) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     return (
         <TinglyConfirmDialog
             open={open}

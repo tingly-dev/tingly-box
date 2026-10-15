@@ -37,6 +37,7 @@ import {
     Extension as IconExtension,
     Code as IconCode,
     TestPipe as IconTestPipe,
+    Folder as IconFolder,
     tablerMui,
 } from '@/components/icons';
 import { IconLibraryPhoto as TablerLibraryPhoto } from '@tabler/icons-react';
@@ -47,6 +48,7 @@ import { useTeamContext } from '@/contexts/TeamContext';
 import { orderTeams, teamPath } from '@/utils/team';
 import type { ActivityItem, NavItem, NavItemBase } from './types';
 import { useBotPlatformSummary } from './useBotPlatformSummary';
+import { useProjectsWaiting } from './useProjectsWaiting';
 
 const IconLibraryPhoto = tablerMui(TablerLibraryPhoto);
 
@@ -57,7 +59,8 @@ const DASHBOARD_RANGE_PATH = /^\/dashboard\/(today|yesterday|3d|7d|30d|90d)$/;
 
 export function useActivityItems(): ActivityItem[] {
     const { t } = useTranslation();
-    const { skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableDesk } = useFeatureFlags();
+    const { skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableDesk, enableProjects } = useFeatureFlags();
+    const projectsWaiting = useProjectsWaiting(enableProjects);
     const { profiles } = useProfileContext();
     const imageProfiles = useImageProfiles();
     const { teams } = useTeamContext();
@@ -294,6 +297,20 @@ export function useActivityItems(): ActivityItem[] {
                     { path: '/image/profile/new', label: t('imageProfile.new', { defaultValue: 'New profile' }), icon: <IconPlus sx={{ fontSize: 20 }} /> },
                 ],
             }] as ActivityItem[] : []),
+            // Projects — hand work to a coordinator that runs each task as a
+            // Claude Code thread (.design/projects.md). A first-level work
+            // surface like Image, behind its experimental flag; one page
+            // family, so no sidebar. The dot says a thread waits on you.
+            ...(enableProjects ? [{
+                key: 'projects',
+                icon: <IconFolder sx={{ fontSize: 22 }} />,
+                label: t('layout.projects'),
+                defaultPath: '/projects',
+                attention: projectsWaiting ? t('layout.projectsWaiting') : undefined,
+                children: [
+                    { path: '/projects', label: t('layout.projects'), icon: <IconFolder sx={{ fontSize: 20 }} />, match: (p: string) => p === '/projects' || p.startsWith('/projects/') },
+                ],
+            }] as ActivityItem[] : []),
             // ── Power-ups: what extends an agent beyond plain model routing ──
             // Remote — one rail icon for the whole domain, named after the
             // product pillar (remote control) rather than the implementation
@@ -414,5 +431,5 @@ export function useActivityItems(): ActivityItem[] {
         ];
 
         return items;
-    }, [t, promptMenuItems, enableGuardrails, enableMCP, enableBench, enableDesk, profiles, imageProfiles, teams, botSummary, hiddenScenarios, pinnedScenarios, vmodelOff]);
+    }, [t, promptMenuItems, enableGuardrails, enableMCP, enableBench, enableDesk, enableProjects, projectsWaiting, profiles, imageProfiles, teams, botSummary, hiddenScenarios, pinnedScenarios, vmodelOff]);
 }

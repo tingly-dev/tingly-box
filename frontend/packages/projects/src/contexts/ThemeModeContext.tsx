@@ -21,7 +21,7 @@ export function ThemeModeProvider({ children }: { children: ReactNode }) {
         const stored = readLocal('themeMode');
         return isThemeMode(stored) ? stored : 'system';
     });
-    const { i18n } = useTranslation();
+    const { i18n } = useTranslation('projects');
     const resolved = resolveThemeMode(mode, prefersDark);
     const theme = useMemo(() => createAppTheme(resolved, i18n.language), [resolved, i18n.language]);
 

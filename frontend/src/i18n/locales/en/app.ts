@@ -41,6 +41,8 @@ export default {
   },
   "layout": {
     "desk": "Desk",
+    "projects": "Projects",
+    "projectsWaiting": "A thread is waiting on you",
     "appTitle": "Tingly Box",
     "slogan": "Your Intelligence, Orchestrated.",
     "version": "version<br/>{{version}}",
@@ -283,6 +285,9 @@ export default {
       "saveFailed": "Failed to update language settings"
     },
     "experimentalFeatures": {
+      "projects": "Projects",
+      "enableProjects": "Hand a project its work as it comes up: a coordinator runs each task as a Claude Code thread in its own git worktree.",
+      "projectsEnabledInfo": "Anyone who can sign in to this tingly-box can now run Claude Code threads on this machine, in the repositories their projects name.",
       "desk": "Desk",
       "enableDesk": "Run Claude Code on this machine from a browser tab, in a folder you choose.",
       "deskEnabledInfo": "Anyone who can sign in to this tingly-box can now start Claude Code sessions on this machine and approve the tool calls they make.",

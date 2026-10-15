@@ -13,7 +13,7 @@ function greetingKey(): string {
 
 /** New standalone chat. Ongoing work belongs in a project. */
 export default function HomePage() {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const start = useStartChat();
     const { model, setModel } = useChosenModel();
 

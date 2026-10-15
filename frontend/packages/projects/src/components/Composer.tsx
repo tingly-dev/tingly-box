@@ -23,7 +23,7 @@ interface Props {
 }
 
 export function Composer({ onSend, onStop, streaming, disabled, placeholder, autoFocus, model, onModelChange, leftSlot, minRows = 2, seed }: Props) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const [text, setText] = useState('');
     const [sending, setSending] = useState(false);
     const inputRef = useRef<HTMLTextAreaElement>(null);

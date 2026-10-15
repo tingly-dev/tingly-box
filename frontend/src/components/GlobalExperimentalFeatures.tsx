@@ -1,6 +1,6 @@
 import {useFeatureFlags} from '@/contexts/FeatureFlagsContext';
 import type {ExperimentalFeature} from '@/components/ExperimentalFeatureGate';
-import { Code as IconCode, Psychology as IconBrain, Shield as IconShield, SettingsApplications, TestPipe as IconTestPipe } from '@/components/icons';
+import { Code as IconCode, Folder as IconFolder, Psychology as IconBrain, Shield as IconShield, SettingsApplications, TestPipe as IconTestPipe } from '@/components/icons';
 import {Alert, Box, Chip, Typography,} from '@mui/material';
 import {alpha} from '@mui/material/styles';
 import React, {useEffect, useState} from 'react';
@@ -34,6 +34,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
     const [mcpEnabled, setMCPEnabled] = useState(false);
     const [benchEnabled, setBenchEnabled] = useState(false);
     const [deskEnabled, setDeskEnabled] = useState(false);
+    const [projectsEnabled, setProjectsEnabled] = useState(false);
     const [loading, setLoading] = useState(true);
     const [updatingFeature, setUpdatingFeature] = useState<ExperimentalFeature>();
     const [actionError, setActionError] = useState(false);
@@ -67,6 +68,10 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
             // Load Desk flag
             const deskResult = await api.getScenarioFlag('_global', 'desk');
             setDeskEnabled(deskResult?.data?.value || false);
+
+            // Load Projects flag
+            const projectsResult = await api.getScenarioFlag('_global', 'projects');
+            setProjectsEnabled(projectsResult?.data?.value || false);
 
         } catch (error) {
             console.error('Failed to load global experimental features:', error);
@@ -127,6 +132,11 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
     const toggleDesk = () => {
         const newValue = !deskEnabled;
         return finishUpdate('desk', newValue, () => setDeskEnabled(newValue));
+    };
+
+    const toggleProjects = () => {
+        const newValue = !projectsEnabled;
+        return finishUpdate('projects', newValue, () => setProjectsEnabled(newValue));
     };
 
     useEffect(() => {
@@ -201,6 +211,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
             mcp: `${t('system.experimentalFeatures.mcp')} Tools`,
             bench: t('system.experimentalFeatures.bench'),
             desk: t('system.experimentalFeatures.desk', {defaultValue: 'Desk'}),
+            projects: t('system.experimentalFeatures.projects'),
         }[requestedFeature]
         : undefined;
 
@@ -300,6 +311,24 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
                 <Alert severity="info" sx={{ mt: 1 }}>
                     <Typography variant="body2">
                         {t('system.experimentalFeatures.deskEnabledInfo', {defaultValue: 'Anyone who can sign in to this tingly-box can now start Claude Code sessions on this machine and approve the tool calls they make.'})}
+                    </Typography>
+                </Alert>
+            )}
+
+            {/* Projects Section */}
+            {featureRow(
+                'projects',
+                <IconFolder sx={{ fontSize: 16, color: 'text.secondary' }} />,
+                t('system.experimentalFeatures.projects'),
+                t('system.experimentalFeatures.enableProjects'),
+                projectsEnabled,
+                toggleProjects,
+            )}
+
+            {projectsEnabled && (
+                <Alert severity="info" sx={{ mt: 1 }}>
+                    <Typography variant="body2">
+                        {t('system.experimentalFeatures.projectsEnabledInfo')}
                     </Typography>
                 </Alert>
             )}

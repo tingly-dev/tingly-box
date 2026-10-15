@@ -19,7 +19,7 @@ interface Props {
 
 /** Star / rename / delete a chat. */
 export function ChatActionsMenu({ chat, anchorEl, onClose, onChanged, onDeleted }: Props) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('projects');
     const notify = useNotify();
     const { refresh } = useAppData();
     const [renaming, setRenaming] = useState(false);
