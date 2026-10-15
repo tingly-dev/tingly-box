@@ -16,7 +16,9 @@
   `replace => ./projects`，并去掉 CI `verify-compile` 里 cli/gui 对 `projects/**` 的排除。
 - 只 import `projects` 和 `projects/llm`；其余在它的 `internal/` 下，碰不到。
   反方向（projects import 根模块）由 `task projects:boundary` 和 CI 拦住。
-- 前端搬进 `frontend/packages/projects`（`@tingly/projects`），是 workspace 里的普通包。
+- 前端在 `frontend/packages/projects`（`@tingly/projects`），是 workspace 里的普通包；入口 `src/embed.ts`，
+  包内用相对路径（`@/` 留给 Tingly Box 的应用）。独立版 `task projects:frontend` 把它构建进
+  `projects/web/dist` 嵌入二进制。
 
 ## 2. 后端
 

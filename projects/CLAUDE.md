@@ -40,21 +40,25 @@ Instructions, Goal.
 
 ## Frontend
 
+The web UI is `frontend/packages/projects` (`@tingly/projects`) in the repo's pnpm
+workspace; `task projects:frontend` builds it into `web/dist`, which the binary
+embeds. Imports inside the package are relative (the workspace's `@/` belongs
+to Tingly Box's app).
+
 - Use MUI for components. Every page in `src/routes/appRoutes.tsx` is `lazy()`.
-- Icons come from `@/components/icons` (Tabler via `tablerMui()`); do not import
+- Icons come from the package's `components/icons` (Tabler via `tablerMui()`); do not import
   `@mui/icons-material` directly.
 - Toasts: `useNotify()`. Copy feedback: `useCopyFeedback()`.
 - Every user-facing string goes through i18n, in both `en.ts` and `zh.ts`
   (`zh.ts` is type-checked against `en.ts`).
 - `localStorage` only for per-browser conveniences, via `utils/storage`.
 - The look is Tingly Box's `@tingly/ui` (theme, icons, `PageHeader`, `EmptyState`,
-  `ConfirmDialog`, …), vendored in `frontend/vendor/tingly-ui` until this frontend joins the repo's pnpm
-  workspace, refreshed with `task projects:ui:sync`. Change it in `frontend/packages/ui`,
-  not in the copy; build pages from its primitives.
+  `ConfirmDialog`, …), from `frontend/packages/ui`. Change it there; build pages
+  from its primitives.
 
 # Cross frontend and backend
 
-`openapi.json` and `frontend/src/client/schema.d.ts` are generated — never
+`openapi.json` and `frontend/packages/projects/src/client/schema.d.ts` are generated — never
 hand-edit them. After changing API models or routes:
 
 ```bash

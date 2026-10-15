@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tingly-dev/tingly-box/projects/frontend"
 	"github.com/tingly-dev/tingly-box/projects/internal/server/module"
+	"github.com/tingly-dev/tingly-box/projects/web"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
@@ -73,7 +73,7 @@ func (healthModule) RegisterRoutes(rt *module.Routes) {
 // serveUI serves the embedded single-page app, falling back to index.html
 // for client-side routes.
 func serveUI(engine *gin.Engine) {
-	dist, err := fs.Sub(frontend.Dist, "dist")
+	dist, err := fs.Sub(web.Dist, "dist")
 	if err != nil {
 		panic(err)
 	}

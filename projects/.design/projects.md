@@ -188,10 +188,11 @@ MVP 已实现（§2 中标 ✅ 的部分）。验证：
 ### 9.4 前端
 
 - **入口**：`src/embed.ts` 导出 `ProjectsHostProvider`、`ProjectsPage`、`ProjectPage`。宿主通过 `ProjectsHost` 注入带鉴权的 `fetch`（事件流和 Library 下载也走它）、路由位置（`paths.list`、`paths.project(id)`）和 `onProjectsChanged`。事件流用 fetch 读取，不用 `EventSource`，因为后者带不了鉴权头。页面不带自己的 `ThemeProvider`，用宿主的。
-- **外观**：独立版和 Tingly Box 共用 `@tingly/ui`（主题、图标、页面原语：`PageHeader`、`EmptyState`、`ConfirmDialog` 等）。过渡期在 `frontend/vendor/tingly-ui` 放一份复制，用 `task ui:sync` 刷新；以后换成真正的包只改 `package.json` 一行。
+- **外观**：独立版和 Tingly Box 共用 `@tingly/ui`（主题、图标、页面原语：`PageHeader`、`EmptyState`、`ConfirmDialog` 等），即同一 pnpm workspace 里的 `frontend/packages/ui`。
 - **挂载方式**：宿主把本仓库前端加进自己的 pnpm workspace，用 `lazy()` 挂页面。不用 iframe，也不在子路径下另挂一个 SPA，否则会出现两套侧栏、两套主题和两套登录状态。
 - **共享依赖**：react、react-dom、@mui/material、react-router-dom、i18next、react-i18next 作为 peerDependencies，只打包一份；i18n 用独立命名空间 `projects`。
-- **待解决**：本仓库内部的 `@/` 别名和 Tingly Box 的冲突，接入前要改成包内相对路径或独立别名；页面自带的外边距在宿主布局里要去掉。
+- **包内路径**：`@/` 别名属于 Tingly Box 的应用，`@tingly/projects` 内部一律用相对路径。
+- **待解决**：页面自带的外边距在宿主布局里要去掉。
 
 ### 9.5 产品边界
 

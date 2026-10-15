@@ -29,11 +29,9 @@ profile.cov
 # .idea/
 # .vscode/
 
-# Frontend
-frontend/node_modules/
-frontend/dist/*
-!frontend/dist/.gitkeep
-*.tsbuildinfo
+# Web UI built from frontend/packages/projects (task frontend)
+web/dist/*
+!web/dist/.gitkeep
 
 # Build output
 /bin/

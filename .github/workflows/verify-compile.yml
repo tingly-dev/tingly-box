@@ -8,7 +8,8 @@ name: Verify Compile
 #   - test-go          : go test of the root module and the other go.work
 #                        modules (afk, agentboot, ai, imbot, swagger)
 #                        (DISABLED for now, see below)
-#   - compile-frontend : pnpm build of frontend/ and its lint (vitest DISABLED)
+#   - compile-frontend : pnpm build of frontend/ and its lint (vitest DISABLED),
+#                        plus typecheck, vitest and build of @tingly/projects
 #   - test-projects    : go vet, go test and the boundary check of projects/
 #                        (Projects, its own go.work module; enabled: it was
 #                        tested on every change before it moved here)
@@ -142,7 +143,6 @@ jobs:
             projects:
               - 'projects/**'
               - '!projects/**/*.md'
-              - '!projects/frontend/**'
             # gotest:
             #   - '**/*_test.go'
 
@@ -339,6 +339,13 @@ jobs:
 
       - name: Build frontend
         run: pnpm build
+
+      # @tingly/projects (the Projects web UI) is type-clean, so its checks block.
+      - name: Projects web UI
+        run: |
+          pnpm --filter @tingly/projects typecheck
+          pnpm --filter @tingly/projects test
+          pnpm --filter @tingly/projects build
 
       # Unit tests: disabled for now; uncomment to run vitest.
       # - name: Unit tests

@@ -6,11 +6,13 @@ tasks:
       - task --list
 
   frontend:
-    desc: Build the web UI into frontend/dist (embedded by go build)
-    dir: frontend
+    desc: Build the web UI (@tingly/projects) into web/dist (embedded by go build)
+    dir: ../frontend
     cmds:
       - pnpm install --frozen-lockfile
-      - pnpm build
+      - pnpm --filter @tingly/projects build
+      - find ../projects/web/dist -mindepth 1 ! -name .gitkeep -exec rm -rf {} +
+      - cp -r packages/projects/dist/. ../projects/web/dist/
 
   build:
     desc: Build the single binary with the embedded web UI
@@ -28,7 +30,7 @@ tasks:
     desc: Regenerate openapi.json and the typed frontend client
     cmds:
       - task: swagger
-      - cd frontend && pnpm gen:api
+      - cd ../frontend/packages/projects && pnpm gen:api
 
   dev:backend:
     desc: Run the API server on :12590
@@ -37,18 +39,9 @@ tasks:
 
   dev:frontend:
     desc: Run the Vite dev server (proxies /api to :12590)
-    dir: frontend
+    dir: ../frontend/packages/projects
     cmds:
       - pnpm dev
-
-  ui:sync:
-    desc: Refresh the vendored copy of Tingly Box's @tingly/ui (theme, icons, page primitives)
-    vars:
-      TINGLY_BOX: '{{.TINGLY_BOX | default ".."}}'
-    cmds:
-      - rm -rf frontend/vendor/tingly-ui/src
-      - cp -r {{.TINGLY_BOX}}/frontend/packages/ui/src {{.TINGLY_BOX}}/frontend/packages/ui/package.json frontend/vendor/tingly-ui/
-      - git -C {{.TINGLY_BOX}} rev-parse --short HEAD > frontend/vendor/tingly-ui/SOURCE_COMMIT
 
   boundary:
     desc: Fail if this module depends on Tingly Box's root module (Tingly Box imports us, never the other way)
@@ -65,4 +58,4 @@ tasks:
       - task: boundary
       - go vet ./...
       - go test ./...
-      - cd frontend && pnpm typecheck && pnpm lint && pnpm test
+      - cd ../frontend/packages/projects && pnpm typecheck && pnpm lint && pnpm test

@@ -2,19 +2,67 @@
   "name": "@tingly/projects",
   "version": "0.1.0",
   "private": true,
-  "description": "The Projects frontend. For now only its transcript: the model and rendering of an agent session's conversation (tool calls, approvals, subagents), shared by Desk and Projects' thread page.",
+  "description": "Projects' frontend: the standalone tingly-project app and the pages Tingly Box embeds (.), and the agent-session transcript Desk and Projects' thread page share (./transcript).",
   "type": "module",
   "exports": {
+    ".": "./src/embed.ts",
     "./transcript": "./src/transcript/index.ts",
     "./transcript/locales/*": "./src/transcript/locales/*.ts"
   },
+  "types": "./src/embed.ts",
   "sideEffects": false,
+  "scripts": {
+    "dev": "vite --port 3010",
+    "build": "vite build",
+    "preview": "vite preview",
+    "gen:api": "openapi-typescript ../../../projects/openapi.json -o ./src/client/schema.d.ts",
+    "lint": "oxlint src",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "i18next-browser-languagedetector": "^8.2.1",
+    "openapi-fetch": "^0.17.0",
+    "prism-react-renderer": "^2.4.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
   "peerDependencies": {
     "@ant-design/x-markdown": "^2.9.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
     "@mui/material": "^9.5.0",
+    "@tabler/icons-react": "^3.49.0",
     "@tingly/ui": "workspace:*",
     "i18next": "^26.4.3",
     "react": "^19.3.0",
-    "react-i18next": "^17.0.16"
+    "react-dom": "^19.3.0",
+    "react-i18next": "^17.0.16",
+    "react-router-dom": "^7.18.4"
+  },
+  "devDependencies": {
+    "@ant-design/x-markdown": "^2.9.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^9.5.0",
+    "@mui/material": "^9.5.0",
+    "@tabler/icons-react": "^3.49.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@tingly/ui": "workspace:*",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "i18next": "^26.4.3",
+    "jsdom": "^30.1.2",
+    "openapi-typescript": "^7.13.0",
+    "oxlint": "^1.87.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-i18next": "^17.0.16",
+    "react-router-dom": "^7.18.4",
+    "typescript": "^5.9.3",
+    "vite": "8.3.4",
+    "vitest": "^5.0.3"
   }
 }

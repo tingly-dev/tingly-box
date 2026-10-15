@@ -5,7 +5,7 @@ import {useTranslation} from 'react-i18next';
 import {fontMono, fontSizes} from '@tingly/ui/theme/fonts';
 import {getReadableAccent} from '@tingly/ui/theme/status';
 import type {TranscriptBlock} from './model';
-import type {TrajectoryAnchor, TrajectoryFilter, TrajectoryKind, TrajectoryRow} from './trajectoryRows';
+import type {TrajectoryAnchor, TrajectoryFilter, TrajectoryKind} from './trajectoryRows';
 import {matchesFilter, trajectoryRows, trajectorySummary} from './trajectoryRows';
 
 interface TrajectoryProps {
