@@ -129,7 +129,7 @@ export default {
     "projectStorageHint": "Сохраняется в этом браузере. Папка проверяется при запуске задачи.",
     "removeProjectShortcut": "Убрать ярлык папки",
     "firstProjectTask": "Создать первую задачу",
-    "taskDirectoryHint": "Выберите рабочую папку, затем опишите задачу ниже.",
+    "chooseFolder": "Выберите рабочую папку",
     "refreshTimeout": "Сервер слишком долго не отвечает."
   }
 };

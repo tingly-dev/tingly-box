@@ -1,4 +1,4 @@
-import {Route} from '@/components/icons';
+import {Route, ExpandMore} from '@/components/icons';
 import {useProfileContext} from '@/contexts/ProfileContext';
 import {MenuItem, Select, Stack, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
@@ -31,6 +31,7 @@ const ProfileSelect = ({value, onChange, disabled}: ProfileSelectProps) => {
             size="small"
             variant="standard"
             disableUnderline
+            IconComponent={ExpandMore}
             displayEmpty
             inputProps={{'aria-label': t('desk.profile', {defaultValue: 'Configuration profile'})}}
             value={value}

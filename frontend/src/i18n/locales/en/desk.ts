@@ -130,6 +130,6 @@ export default {
     "projectStorageHint": "Saved in this browser. The folder is checked when you start a task.",
     "removeProjectShortcut": "Remove folder shortcut",
     "firstProjectTask": "Create first task",
-    "taskDirectoryHint": "Choose a working folder, then describe the task below."
+    "chooseFolder": "Choose a working folder"
   }
 };

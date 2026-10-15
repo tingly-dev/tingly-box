@@ -1,4 +1,4 @@
-import {Psychology} from '@/components/icons';
+import {Psychology, ExpandMore} from '@/components/icons';
 import {profileApi} from '@/services/profileApi';
 import type {ClaudeCodeModels as ModelChoice, ClaudeCodeModelTier as ModelTier} from '@/services/profileApi';
 import {Box, MenuItem, Select, Stack, Tooltip, Typography} from '@mui/material';
@@ -72,6 +72,7 @@ const ModelSelect = ({profile, value, onChange, disabled}: ModelSelectProps) => 
             size="small"
             variant="standard"
             disableUnderline
+            IconComponent={ExpandMore}
             displayEmpty
             value={selected.alias}
             onChange={(e) => onChange(e.target.value)}

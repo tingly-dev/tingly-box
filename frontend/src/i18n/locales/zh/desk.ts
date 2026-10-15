@@ -129,7 +129,7 @@ export default {
     "projectStorageHint": "保存在此浏览器中，启动任务时会检查文件夹。",
     "removeProjectShortcut": "移除工作目录快捷入口",
     "firstProjectTask": "创建第一个任务",
-    "taskDirectoryHint": "先选择工作目录，再在下方描述任务。",
+    "chooseFolder": "选择工作目录",
     "refreshTimeout": "服务器响应超时。"
   }
 };

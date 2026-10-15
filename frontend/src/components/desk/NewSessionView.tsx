@@ -1,6 +1,6 @@
 import type {RecentFolder} from '@/services/deskApi';
 import {ArrowBack} from '@/components/icons';
-import {Box, Button, Chip, Stack, Typography} from '@mui/material';
+import {Box, Button, Typography} from '@mui/material';
 import {Composer} from '@tingly/projects';
 import {useTranslation} from 'react-i18next';
 import FolderPicker from './FolderPicker';
@@ -19,8 +19,9 @@ interface NewSessionViewProps {
 }
 
 // NewSessionView opens straight onto the prompt (ux-principles #2): the
-// project directory has its own visible field above the composer; launch
-// settings stay with the prompt, so starting a task is type-and-Enter.
+// working folder is the first picker under the text, beside the launch
+// settings, so starting a task is type-and-Enter. The sidebar already lists
+// the folders, so there is no second list of them here.
 const NewSessionView = ({initialFolder, recentFolders, permissionModes, onCreate, onAddProject, onBack}: NewSessionViewProps) => {
     const {t} = useTranslation();
     // null until the user picks or types a folder; until then it follows the
@@ -46,13 +47,6 @@ const NewSessionView = ({initialFolder, recentFolders, permissionModes, onCreate
                 <Typography variant="h5" sx={{textAlign: 'center', mb: 3, fontWeight: 500}}>
                     {t('desk.newSessionHeading', {defaultValue: 'What should the agent work on?'})}
                 </Typography>
-                <Stack direction="row" spacing={1} sx={{alignItems: 'center', mb: 1.5}}>
-                    <FolderPicker value={folder} onChange={setPicked} recentFolders={recentFolders}/>
-                    {onAddProject && <Button size="small" onClick={onAddProject} sx={{flexShrink: 0}}>{t('desk.addProject', {defaultValue: 'Add working folder'})}</Button>}
-                </Stack>
-                <Typography variant="caption" sx={{display: 'block', mb: 1.5, color: 'text.secondary'}}>
-                    {t('desk.taskDirectoryHint', {defaultValue: 'Choose a working folder, then describe the task below.'})}
-                </Typography>
                 <Composer
                     autoFocus
                     keepUntilSent
@@ -66,26 +60,13 @@ const NewSessionView = ({initialFolder, recentFolders, permissionModes, onCreate
                     onSend={(prompt) => onCreate(folder.trim(), prompt, permissionMode, profile, model)}
                     leftSlot={(
                         <>
+                            <FolderPicker value={folder} onChange={setPicked} recentFolders={recentFolders} onAddFolder={onAddProject}/>
                             <ProfileSelect value={profile} onChange={pickProfile}/>
                             <ModelSelect profile={profile} value={model} onChange={(value) => update('model', value)}/>
                             <PermissionModeSelect value={permissionMode} permissionModes={permissionModes} onChange={(value) => update('permissionMode', value)}/>
                         </>
                     )}
                 />
-                {recentFolders.length > 1 && (
-                    <Stack direction="row" spacing={0.75} sx={{mt: 1.5, flexWrap: 'wrap', rowGap: 0.75, justifyContent: 'center'}}>
-                        {recentFolders.slice(0, 6).map((f) => (
-                            <Chip
-                                key={f.path}
-                                size="small"
-                                label={f.name}
-                                title={f.path}
-                                variant={folder === f.path ? 'filled' : 'outlined'}
-                                onClick={() => setPicked(f.path)}
-                            />
-                        ))}
-                    </Stack>
-                )}
             </Box>
         </Box>
     );

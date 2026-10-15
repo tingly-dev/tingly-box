@@ -1,4 +1,4 @@
-import {Lock} from '@/components/icons';
+import {Lock, ExpandMore} from '@/components/icons';
 import {MenuItem, Select, Stack, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
 import {composerPickerLabelSx, composerPickerSx} from '@tingly/projects';
@@ -21,6 +21,7 @@ const PermissionModeSelect = ({value, permissionModes, onChange, disabled}: Perm
             size="small"
             variant="standard"
             disableUnderline
+            IconComponent={ExpandMore}
             displayEmpty
             inputProps={{'aria-label': t('desk.permissions', {defaultValue: 'Permissions'})}}
             value={value}
