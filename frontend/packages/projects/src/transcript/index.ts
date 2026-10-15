@@ -18,5 +18,6 @@ export type {CodeBlockComponent, DraftStorage} from './context';
 export {createMemoryDraftStorage} from './context';
 
 export {default as Transcript} from './Transcript';
+export type {Respond} from './Transcript';
 export {default as Trajectory} from './Trajectory';
 export {default as Markdown} from './Markdown';

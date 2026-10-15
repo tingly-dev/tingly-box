@@ -202,3 +202,22 @@ describe('tool calls', () => {
         expect(screen.queryByText('Working…')).not.toBeInTheDocument();
     });
 });
+
+describe('host extensions', () => {
+    it('offers to remember an approval only when the host labels it', async () => {
+        const respond = vi.fn().mockResolvedValue(true);
+        const view = show(respond);
+        expect(screen.getAllByRole('button')).toHaveLength(3); // Allow, Details, Deny
+        view.unmount();
+        render(<Transcript blocks={[request('r3')]} pendingRequestId="r3" working onRespond={respond} drafts={drafts} rememberLabel={(tool) => `Always allow ${tool}`}/>);
+        await act(async () => fireEvent.click(screen.getByRole('button', {name: 'Always allow Bash'})));
+        expect(respond).toHaveBeenLastCalledWith('r3', true, '', true);
+    });
+
+    it('names who sent a message when the host knows', () => {
+        const message = (author?: string): TranscriptBlock => ({type: 'user', message: {role: 'user', content: 'Do it', author, timestamp: '2026-10-04T00:00:00Z'}});
+        render(<Transcript blocks={[message('Coordinator'), message()]} working={false} onRespond={vi.fn()} drafts={drafts}/>);
+        expect(screen.getAllByText('Coordinator')).toHaveLength(1);
+        expect(screen.getAllByText('Do it')).toHaveLength(2);
+    });
+});

@@ -7,7 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { Check, ContentCopy } from './icons';
 import { useCopyFeedback } from '../hooks/useCopyFeedback';
 
-function CodeBlock({ code, language }: { code: string; language: string }) {
+/** A fenced code block: highlighted, with a copy button. */
+export function CodeBlock({ code, language }: { code: string; language: string }) {
     const theme = useTheme();
     const { t } = useTranslation('projects');
     const { copied, copy } = useCopyFeedback();

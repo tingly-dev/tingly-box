@@ -17,6 +17,9 @@ export interface TranscriptEntry {
     request_id?: string;
     payload?: unknown;
     parent?: string;
+    // Who sent a user message, when the host knows more than "the user"
+    // (a Projects thread is also written to by its coordinator).
+    author?: string;
     timestamp: string;
 }
 

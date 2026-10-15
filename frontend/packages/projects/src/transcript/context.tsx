@@ -44,12 +44,18 @@ export type CodeBlockComponent = ComponentType<{code: string; language: string}>
 interface TranscriptHost {
     drafts: DraftStorage;
     codeBlock?: CodeBlockComponent;
+    rememberLabel?: (tool: string) => string;
 }
 
 const HostContext = createContext<TranscriptHost>({drafts: memoryDrafts});
 
-export const TranscriptHostProvider = ({drafts, codeBlock, children}: {drafts?: DraftStorage; codeBlock?: CodeBlockComponent; children: ReactNode}) => {
-    const value = useMemo(() => ({drafts: drafts ?? memoryDrafts, codeBlock}), [drafts, codeBlock]);
+export const TranscriptHostProvider = ({drafts, codeBlock, rememberLabel, children}: {
+    drafts?: DraftStorage;
+    codeBlock?: CodeBlockComponent;
+    rememberLabel?: (tool: string) => string;
+    children: ReactNode;
+}) => {
+    const value = useMemo(() => ({drafts: drafts ?? memoryDrafts, codeBlock, rememberLabel}), [drafts, codeBlock, rememberLabel]);
     return <HostContext.Provider value={value}>{children}</HostContext.Provider>;
 };
 

@@ -66,8 +66,28 @@ standalone tingly-project keeps building.
   area, not in the side pane, because a Desk session is the work surface
   itself (a project's main area is its coordinator conversation).
 
-Next (3b): the thread view and Desk's session view converge on the shared
-Transcript and Desk's Composer, with TB controls as slots.
+## Step 3b: one transcript
+
+A project thread now renders with the transcript Desk uses
+(`@tingly/projects/transcript`), so both read the same way: tool calls as quiet
+one-line rows with their result one click away, a settled approval folded into
+its call ("Allowed"), the pending approval as one card, subagent cards, and
+highlighted code.
+
+- Threads keep their own event format (`ThreadEvent`). `threadTranscript`
+  (in the package, next to `ThreadPanel`) converts it: calls pair with their
+  results in order (thread events carry no call id), a settled request gets
+  the answer entry the transcript expects, an expired one reads as not
+  answered, and a report that repeats the last reply shows once.
+- Two generic extensions on the transcript, both off unless the host passes
+  them: `TranscriptEntry.author` names who sent a message (a thread's
+  coordinator), and `rememberLabel` adds a second "allow" that also allows the
+  tool from now on (a thread's "Always allow Bash here"); `onRespond` then gets
+  `remember: true`.
+- No server change: the API and event format are untouched (TEP step 4).
+
+Next (3c): Desk's Composer (queue, drafts, IME) moves into the package and the
+thread uses it, with TB-only controls (profile, model, status line) as slots.
 
 ## Not yet
 

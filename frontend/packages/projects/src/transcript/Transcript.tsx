@@ -8,10 +8,14 @@ import type {ReactNode} from 'react';
 import {useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import type {CodeBlockComponent, DraftStorage} from './context';
-import {TranscriptHostProvider, useDraft} from './context';
+import {TranscriptHostProvider, useDraft, useTranscriptHost} from './context';
 import type {ActivityStep, RequestBlock, RequestOutcome, TaskState, ThinkingStep, ToolStep, TranscriptBlock, TranscriptEntry} from './model';
 import {agentReport, agentStatus, approvalSubject, formatTokens, requestOutcome, toolSummary} from './model';
 import Markdown from './Markdown';
+
+// Respond answers a request. remember asks to allow the tool from now on
+// without asking (offered only when the host passes rememberLabel).
+export type Respond = (requestId: string, approved: boolean, answer: string, remember?: boolean) => Promise<boolean>;
 
 interface TranscriptProps {
     blocks: TranscriptBlock[];
@@ -20,11 +24,14 @@ interface TranscriptProps {
     // Opens every tool call, thought and subagent; each can still be toggled
     // on its own.
     expandAll?: boolean;
-    onRespond: (requestId: string, approved: boolean, answer: string) => Promise<boolean>;
+    onRespond: Respond;
     // Where request-card drafts live; in memory unless the host passes a store.
     drafts?: DraftStorage;
     // Renders fenced code in replies; plain monospace unless the host passes one.
     codeBlock?: CodeBlockComponent;
+    // The label of a second "allow" on an approval card that also allows the
+    // tool from now on ("Allow Bash in this thread"); none unless passed.
+    rememberLabel?: (tool: string) => string;
 }
 
 const mono = {fontFamily: fontMono, fontSize: fontSizes.md};
@@ -43,7 +50,8 @@ const preBox = {
 } as const;
 
 const UserBubble = ({message}: {message: TranscriptEntry}) => (
-    <Box sx={{display: 'flex', justifyContent: 'flex-end'}}>
+    <Box sx={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end'}}>
+        {message.author && <Typography variant="caption" sx={{color: 'text.secondary', mb: 0.25}}>{message.author}</Typography>}
         <Box sx={{maxWidth: '80%', bgcolor: 'action.hover', px: 2, py: 1.25, borderRadius: 3}}>
             <Typography variant="body1" sx={conversationText}>{message.content}</Typography>
         </Box>
@@ -309,9 +317,10 @@ const SettledRequest = ({block}: {block: RequestBlock}) => {
 // what exactly is being approved, with the full input one click away.
 const RequestCard = ({block, onRespond}: {
     block: RequestBlock;
-    onRespond: (approved: boolean, answer: string) => Promise<boolean>;
+    onRespond: (approved: boolean, answer: string, remember?: boolean) => Promise<boolean>;
 }) => {
     const {t} = useTranslation();
+    const {rememberLabel} = useTranscriptHost();
     const {message} = block;
     const [request, setRequest, latestRequest] = useDraft(`requestDraft:${message.request_id ?? ''}`, decodeApproval);
     const [details, setDetails] = useState(false);
@@ -323,12 +332,12 @@ const RequestCard = ({block, onRespond}: {
     const isAsk = message.kind === 'ask_request';
     const input = isAsk ? '' : prettyInput(message.payload);
 
-    const respond = async (approved: boolean) => {
+    const respond = async (approved: boolean, remember?: boolean) => {
         if (latestRequest().status !== 'idle' || (approved && isAsk && !answer.trim())) return;
         setRequest((previous) => ({...previous, status: 'sending'}));
         setFailed(false);
         try {
-            if (await onRespond(approved, answer.trim())) {
+            if (await (remember ? onRespond(approved, answer.trim(), true) : onRespond(approved, answer.trim()))) {
                 setRequest((previous) => ({answer: previous.answer === answer ? '' : previous.answer, status: 'accepted'}));
             } else setFailed(true);
         } catch {
@@ -401,6 +410,11 @@ const RequestCard = ({block, onRespond}: {
                 <Button size="small" variant="contained" startIcon={<Check/>} disabled={busy || submitted || (isAsk && !answer.trim())} onClick={() => respond(true)}>
                     {isAsk ? t('projects.transcript.answer', {defaultValue: 'Answer'}) : t('projects.transcript.approve', {defaultValue: 'Allow'})}
                 </Button>
+                {!isAsk && rememberLabel && (
+                    <Button size="small" variant="outlined" disabled={busy || submitted} onClick={() => respond(true, true)}>
+                        {rememberLabel(message.content)}
+                    </Button>
+                )}
                 <Button size="small" variant="outlined" color="inherit" startIcon={<Close/>} disabled={busy || submitted} onClick={() => respond(false)}>
                     {isAsk ? t('projects.transcript.decline', {defaultValue: 'Decline'}) : t('projects.transcript.deny', {defaultValue: 'Deny'})}
                 </Button>
@@ -414,7 +428,7 @@ interface BlockListProps {
     pendingRequestId?: string;
     working: boolean;
     expandAll: boolean;
-    onRespond: (requestId: string, approved: boolean, answer: string) => Promise<boolean>;
+    onRespond: Respond;
     // Marks each top-level message with its block index, so the trajectory
     // can lead back to it (calls and requests carry their own ids).
     anchored?: boolean;
@@ -463,7 +477,7 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anc
                             <RequestCard
                                 key={b.message.request_id}
                                 block={b}
-                                onRespond={(approved, answer) => onRespond(b.message.request_id ?? '', approved, answer)}
+                                onRespond={(...args) => onRespond(b.message.request_id ?? '', ...args)}
                             />
                         )
                         : <SettledRequest key={b.message.request_id ?? i} block={b}/>;
@@ -494,7 +508,7 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
     turnLive: boolean;
     expandAll: boolean;
     pendingRequestId?: string;
-    onRespond: (requestId: string, approved: boolean, answer: string) => Promise<boolean>;
+    onRespond: Respond;
 }) => {
     const {t} = useTranslation();
     const [open, toggle] = useExpanded(expandAll);
@@ -586,7 +600,7 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
     );
 };
 
-const Transcript = ({blocks, pendingRequestId, working, expandAll = false, onRespond, drafts, codeBlock}: TranscriptProps) => {
+const Transcript = ({blocks, pendingRequestId, working, expandAll = false, onRespond, drafts, codeBlock, rememberLabel}: TranscriptProps) => {
     const {t} = useTranslation();
     const last = shownBlocks(blocks, pendingRequestId).at(-1)?.block;
     // The spinner rides on the last activity line while a turn runs; if the
@@ -594,7 +608,7 @@ const Transcript = ({blocks, pendingRequestId, working, expandAll = false, onRes
     const showWorking = working && !pendingRequestId && last?.type !== 'activity';
 
     return (
-        <TranscriptHostProvider drafts={drafts} codeBlock={codeBlock}>
+        <TranscriptHostProvider drafts={drafts} codeBlock={codeBlock} rememberLabel={rememberLabel}>
             <Stack spacing={2.5}>
                 <BlockList anchored blocks={blocks} pendingRequestId={pendingRequestId} working={working} expandAll={expandAll} onRespond={onRespond}/>
                 {showWorking && (

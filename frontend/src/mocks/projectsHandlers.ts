@@ -51,6 +51,46 @@ const threads = [
     thread({ id: 't-trace', title: 'Add tracing spans to /charge', status: 'resolved', task: 'Add OpenTelemetry spans around each downstream call in /charge.', turns: 7, input_tokens: 90_000, output_tokens: 6_200, commits_ahead: 2, files_changed: 4, merged_at: ago(60 * 20), resolved_at: ago(60 * 20), updated_at: ago(60 * 20) }),
 ]
 
+// A thread's transcript: the coordinator's brief, then what the thread did.
+// t-pool waits on an approval; t-cache finished with a report.
+const threadEvents = (th: (typeof threads)[number]) => {
+    let n = 0
+    const ev = (kind: string, content: string, min: number, extra: Record<string, unknown> = {}) =>
+        ({ id: `${th.id}-e${++n}`, thread_id: th.id, kind, content, created_at: ago(min), ...extra })
+    const call = (tool: string, input: unknown, out: string, min: number) => [
+        ev('tool_use', tool, min, { payload: JSON.stringify(input) }),
+        ev('tool_result', out, min, { payload: '{"is_error":false}' }),
+    ]
+    const brief = ev('user', th.task, 30, { from: 'coordinator' })
+    if (th.id === 't-pool') {
+        return [
+            brief,
+            ev('assistant', 'Profiling /charge first, then I will size the pool from the numbers.', 12),
+            ...call('Read', { file_path: 'internal/db/pool.go' }, 'MaxOpenConns: 10, MaxIdleConns: 2', 11),
+            ...call('Grep', { pattern: 'SetMaxOpenConns' }, 'internal/db/pool.go:42', 11),
+            ...call('Edit', { file_path: 'internal/db/pool.go' }, 'Updated pool sizing', 8),
+            ev('assistant', 'Raised the pool to 40 open / 10 idle. To confirm under load I need to run the benchmark against staging.', 5),
+            ev('tool_use', 'Bash', 4, { payload: JSON.stringify({ command: 'go test ./... -run Bench -staging' }) }),
+            ev('approval', 'Run go test ./... -run Bench -staging', 4, { payload: JSON.stringify({ request_id: 'req-pool', tool: 'Bash', input: { command: 'go test ./... -run Bench -staging' }, state: 'pending' }) }),
+        ]
+    }
+    if (th.id === 't-cache') {
+        const report = 'Lookups moved to Redis behind `IDEMPOTENCY_REDIS`. p99 for /charge drops from 410 ms to 260 ms in the load test.\n\n```go\nkey := "idem:" + req.Key\nok, err := rdb.SetNX(ctx, key, 1, 24*time.Hour).Result()\n```'
+        return [
+            brief,
+            ...call('Grep', { pattern: 'idempotency_keys' }, 'store/idempotency.go:18', 40),
+            ...call('Edit', { file_path: 'store/idempotency.go' }, 'ok', 35),
+            ev('tool_use', 'Bash', 30, { payload: JSON.stringify({ command: 'go test ./store/...' }) }),
+            ev('approval', 'Run go test ./store/...', 30, { payload: JSON.stringify({ request_id: 'req-cache', tool: 'Bash', input: { command: 'go test ./store/...' }, state: 'allowed', scope: 'thread' }) }),
+            ev('tool_result', 'ok  store 1.8s', 29, { payload: '{"is_error":false}' }),
+            ev('user', 'Also keep the Postgres path as a fallback.', 25),
+            ev('assistant', report, 18),
+            ev('report', report, 18, { payload: '{"commits_ahead":3,"files_changed":6}' }),
+        ]
+    }
+    return [brief]
+}
+
 const counts = (pid: string) => {
     const list = pid === 'p-latency' ? threads : []
     const n = (s: string) => list.filter((t) => t.status === s).length
@@ -128,8 +168,9 @@ export const projectsHandlers = [
         if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
         return HttpResponse.json({
             thread: th,
-            running: th.status === 'working',
-            events: [{ id: 'e1', thread_id: th.id, kind: 'task', from: 'coordinator', content: th.task, created_at: th.created_at }],
+            // A thread waiting on an approval is mid-turn.
+            running: th.status === 'working' || th.status === 'waiting',
+            events: threadEvents(th),
         })
     }),
 ]
