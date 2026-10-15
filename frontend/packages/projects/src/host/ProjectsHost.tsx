@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, type ReactNode } from 'react';
 import { setApiFetch } from '../client';
 import { HostNotifyProvider, type Notify } from '../hooks/useNotify';
 
@@ -45,10 +45,20 @@ export function ProjectsHostProvider({ host, children }: { host: ProjectsHost; c
     return host.notify ? <HostNotifyProvider notify={host.notify}>{content}</HostNotifyProvider> : content;
 }
 
-const noop = () => {};
+/**
+ * Fired on window whenever a page reports a project change, so the package's
+ * own navigation (ProjectsSidebar) refreshes without the host relaying it.
+ */
+export const PROJECTS_CHANGED = 'tingly-projects:changed';
 
 export function useProjectsHost(): ProjectsHost & { onProjectsChanged: () => void; embedded: boolean } {
     const host = useContext(Ctx);
+    const hostChanged = host?.onProjectsChanged;
+    // Stable while the host's callback is: pages list it in effect dependencies.
+    const onProjectsChanged = useCallback(() => {
+        window.dispatchEvent(new Event(PROJECTS_CHANGED));
+        hostChanged?.();
+    }, [hostChanged]);
     if (!host) throw new Error('useProjectsHost outside ProjectsHostProvider');
-    return { ...host, onProjectsChanged: host.onProjectsChanged ?? noop, embedded: host.embedded ?? false };
+    return { ...host, onProjectsChanged, embedded: host.embedded ?? false };
 }

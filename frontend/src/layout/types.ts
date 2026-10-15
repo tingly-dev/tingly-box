@@ -61,4 +61,11 @@ export interface ActivityItem {
     defaultPath?: string;
     /** Something here needs the user: a dot on the rail icon, with this as its hover text. */
     attention?: string;
+    /**
+     * Renders the sidebar body in place of the `children` rows, for an
+     * activity whose sidebar lists things rather than pages (Projects lists
+     * projects and working folders). `children` still decide which routes
+     * light this activity up. `onNavigate` closes a drawer or flyout.
+     */
+    sidebar?: (onNavigate: () => void) => ReactNode;
 }

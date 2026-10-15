@@ -17,10 +17,12 @@ vi.mock('@/components/desk/useDeskAttention', () => ({requestNotifications: vi.f
 vi.mock('@/services/deskApi', () => ({
     listSessions: vi.fn(), listRecentFolders: vi.fn(), listPermissionModes: vi.fn(), getMessages: vi.fn(), getSession: vi.fn(), sendMessage: vi.fn(), interrupt: vi.fn(), archive: vi.fn(), createSession: vi.fn(),
 }));
-vi.mock('@/components/desk/DeskSidebar', () => ({default: ({onSelect, onAddProject}: {onSelect: (id: string) => void; onAddProject: () => void}) => (
-    <div><button onClick={() => onSelect('a')}>Session A</button><button onClick={() => onSelect('b')}>Session B</button><button onClick={onAddProject}>Add a project</button></div>
+vi.mock('@/components/desk/DeskSidebar', () => ({default: ({onSelect}: {onSelect: (id: string) => void}) => (
+    <div><button onClick={() => onSelect('a')}>Session A</button><button onClick={() => onSelect('b')}>Session B</button></div>
 )}));
-vi.mock('@/components/desk/NewSessionView', () => ({default: ({initialFolder}: {initialFolder?: string}) => <div>New task form<span>{initialFolder}</span></div>}));
+vi.mock('@/components/desk/NewSessionView', () => ({default: ({initialFolder, onAddProject}: {initialFolder?: string; onAddProject?: () => void}) => (
+    <div>New task form<span>{initialFolder}</span><button onClick={onAddProject}>Add a project</button></div>
+)}));
 vi.mock('@/components/desk/SessionView', () => ({default: ({session, messages, queued, draft, onSend, onSendQueuedNow, onUnqueue, onInterrupt}: ComponentProps<typeof SessionView>) => (
     <div><span>Viewing {session.id}: {session.status}</span>{messages.map((m, i) => <p key={i}>{m.content}</p>)}
         <p>Draft: {draft}</p>{queued.map((text, i) => <button key={i} onClick={() => onUnqueue(i)}>{text}</button>)}
@@ -55,7 +57,7 @@ afterEach(() => { cleanup(); sessionStorage.clear(); localStorage.clear(); vi.us
 
 describe('Desk local workflow', () => {
     it('adds a project without starting a task and closes its dialog with the chosen directory visible', async () => {
-        open();
+        open('/desk');
         await settle();
         fireEvent.click(screen.getByRole('button', {name: 'Add a project'}));
         fireEvent.change(screen.getByLabelText('Working folder'), {target: {value: '/projects/new app/'}});

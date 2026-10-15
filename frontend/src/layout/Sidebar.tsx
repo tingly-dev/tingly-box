@@ -44,6 +44,8 @@ import { UpdatePanelDialog } from '@/components/UpdatePanelDialog';
 
 interface SidebarProps {
     sidebarItems: NavItem[];
+    /** A custom body in place of the rows (ActivityItem.sidebar). */
+    body?: (onNavigate: () => void) => React.ReactNode;
     activeActivityLabel: string;
     onClose: () => void;
     headerAction?: React.ReactNode;
@@ -54,7 +56,7 @@ interface SidebarProps {
     onTogglePinned?: (id: string) => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLabel, onClose, headerAction, editing = false, onToggleHidden, onTogglePinned }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActivityLabel, onClose, headerAction, editing = false, onToggleHidden, onTogglePinned }) => {
     const { t } = useTranslation();
     const location = useLocation();
     const navigate = useNavigate();
@@ -144,6 +146,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                 {headerAction}
             </Box>
             {/* Nav Items */}
+            {body ? <Box sx={sidebarListScrollSx}>{body(onClose)}</Box> : (
             <List sx={sidebarListScrollSx}>
                 {sidebarItems.map((item, index) => {
                     if (item.type === 'divider') {
@@ -305,6 +308,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     );
                 })}
             </List>
+            )}
             {/* Footer: the running version and its update badge — app state,
                 one row. A dev build's long version ellipsizes, the badge stays.
                 The GitHub star link lives under the slogan below instead:

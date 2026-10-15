@@ -134,7 +134,8 @@ const LayoutInner = ({ children }: LayoutProps) => {
     // A sidebar is a choice between pages; an activity with a single page
     // (Bench, or Prompt with one of its two flags on) has nothing to choose,
     // so its rail item goes straight to that page with no sidebar.
-    const hasSidebar = sidebarItems.filter(item => item.type !== 'divider').length > 1;
+    const activeSidebar = activityItems.find(item => item.key === activeActivity)?.sidebar;
+    const hasSidebar = !!activeSidebar || sidebarItems.filter(item => item.type !== 'divider').length > 1;
 
     const activeActivityLabel = useMemo(() => {
         const activity = activityItems.find(item => item.key === activeActivity);
@@ -150,7 +151,7 @@ const LayoutInner = ({ children }: LayoutProps) => {
     const [flyoutOpen, setFlyoutOpen] = useState(false);
 
     const handleActivityClick = (item: ActivityItem) => {
-        const hasSidebarItems = (item.children?.filter(child => child.type !== 'divider').length ?? 0) > 1;
+        const hasSidebarItems = !!item.sidebar || (item.children?.filter(child => child.type !== 'divider').length ?? 0) > 1;
         if (!hasSidebarItems) {
             setMobileOpen(false);
         }
@@ -232,6 +233,7 @@ const LayoutInner = ({ children }: LayoutProps) => {
             {hasSidebar && !sidebarCollapsed && (
                 <Sidebar
                     sidebarItems={sidebarItems}
+                    body={activeSidebar}
                     activeActivityLabel={activeActivityLabel}
                     onClose={() => setMobileOpen(false)}
                     headerAction={sidebarHeaderAction}
@@ -251,6 +253,7 @@ const LayoutInner = ({ children }: LayoutProps) => {
                     <Box sx={{ position: 'absolute', left: '100%', top: 0, bottom: 0, zIndex: Z_INDEX.drawer + 2, boxShadow: 8, bgcolor: 'background.paper' }}>
                         <Sidebar
                             sidebarItems={sidebarItems}
+                            body={activeSidebar}
                             activeActivityLabel={activeActivityLabel}
                             onClose={() => { setFlyoutOpen(false); setMobileOpen(false); }}
                             headerAction={sidebarHeaderAction}

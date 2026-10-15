@@ -1,4 +1,6 @@
+import {useEffect} from 'react';
 import {useLocalStorage} from '@/hooks/useLocalStorage';
+import {DESK_FOLDERS_EVENT} from './deskEvents';
 
 export const PROJECTS_KEY = 'desk.projectDirectories:v1';
 const EMPTY: Record<string, boolean> = {};
@@ -24,15 +26,21 @@ const options = {
 // remain the existing backend's responsibility when a task starts.
 export function useDeskProjects() {
     const {data, saveData, removeKey, refetch} = useLocalStorage(PROJECTS_KEY, EMPTY, options);
+    // Desk's page and the Projects sidebar each hold an instance.
+    useEffect(() => {
+        window.addEventListener(DESK_FOLDERS_EVENT, refetch);
+        return () => window.removeEventListener(DESK_FOLDERS_EVENT, refetch);
+    }, [refetch]);
+    const changed = () => window.dispatchEvent(new Event(DESK_FOLDERS_EVENT));
     const add = (value: string): boolean => {
         const path = normalizeProjectPath(value);
         if (!isAbsoluteProjectPath(path) || !saveData(path, true)) return false;
-        refetch();
+        changed();
         return true;
     };
     const remove = (path: string) => {
         const saved = removeKey(path);
-        refetch();
+        changed();
         return saved;
     };
     return {projects: Object.keys(data).reverse(), addProject: add, removeProject: remove};

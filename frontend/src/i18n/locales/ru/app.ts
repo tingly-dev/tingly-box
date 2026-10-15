@@ -40,6 +40,9 @@ export default {
     "saved": "Сохранено"
   },
   "layout": {
+    "workingFolders": "Рабочие папки",
+    "noWorkingFolders": "Рабочих папок пока нет",
+    "workingFolderWaiting": "Ждут вашего ответа: {{count}}",
     "desk": "Рабочее место",
     "projects": "Проекты",
     "projectsWaiting": "Поток ждёт вашего ответа",

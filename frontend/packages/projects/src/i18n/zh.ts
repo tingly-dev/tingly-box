@@ -12,6 +12,7 @@ export const zh: Dict<typeof en> = {
         newChat: '新对话', chats: '对话', projects: '项目', recentChats: '最近对话',
         settings: '设置', noChats: '还没有对话', collapse: '收起侧栏', expand: '展开侧栏',
     },
+    sidebar: { noProjects: '还没有项目', waiting_one: '{{count}} 个线程在等你', waiting_other: '{{count}} 个线程在等你' },
     theme: { system: '跟随系统', light: '浅色', dark: '深色', sunlit: '日光', claude: 'Claude', ds: 'DeepSeek' },
     home: {
         greetingMorning: '早上好', greetingAfternoon: '下午好', greetingEvening: '晚上好', greetingNight: '夜深了，还在忙？',

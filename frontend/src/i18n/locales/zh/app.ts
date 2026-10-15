@@ -40,6 +40,9 @@ export default {
     "saved": "已保存"
   },
   "layout": {
+    "workingFolders": "工作文件夹",
+    "noWorkingFolders": "还没有工作文件夹",
+    "workingFolderWaiting": "{{count}} 个会话在等你",
     "desk": "工作台",
     "projects": "项目",
     "projectsWaiting": "有线程在等你处理",

@@ -567,9 +567,9 @@ exercise actual React state and deferred read/send promises, alongside the
 existing transcript and attention unit tests. Real Claude Code/gateway execution
 still needs a configured local installation to validate end to end.
 
-Nav: one row ("Desk") alongside "Remote Control" and "IM Notify"
-under the existing "Remote" rail icon in `layout/useActivityItems.tsx` — a
-new purpose on the same product pillar, not a new top-level domain.
+Nav: Desk's working folders are listed in the Projects rail item's sidebar,
+next to real projects (see `projects-panel.md`). It first shipped as a row
+under Remote; it moved because it never used a bot.
 
 ## 6. Deliberately out of scope for this landing
 

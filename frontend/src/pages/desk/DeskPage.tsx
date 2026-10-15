@@ -3,6 +3,7 @@ import AddProjectDialog from '@/components/desk/AddProjectDialog';
 import NewSessionView from '@/components/desk/NewSessionView';
 import SessionView from '@/components/desk/SessionView';
 import {folderName, isBusyStatus} from '@/components/desk/deskUtils';
+import {deskScope, publishDeskSessions} from '@/components/desk/deskEvents';
 import {requestNotifications, useDeskAttention} from '@/components/desk/useDeskAttention';
 import {useDeskDrafts} from '@/components/desk/useDeskDrafts';
 import {useDeskQueues} from '@/components/desk/useDeskQueues';
@@ -373,9 +374,19 @@ const DeskPage = () => {
         }
     };
 
+    // The Projects sidebar lists the working folders; tell it what this page
+    // loaded so its waiting counts move with the list here.
+    useEffect(() => {
+        if (!loading) publishDeskSessions(sessions);
+    }, [sessions, loading]);
+
+    // A working folder opened from the Projects sidebar scopes the list to
+    // that folder; plain /desk lists every folder.
+    const scope = deskScope(searchParams, sessions);
+
     const openSession = useCallback((id: string) => setSearchParams({session: id}), [setSearchParams]);
     const unseen = useDeskAttention(sessions, selectedId, openSession);
-    const openNew = (folder?: string) => setSearchParams(folder ? {new: '1', folder} : {new: '1'});
+    const openNew = (folder = scope) => setSearchParams(folder ? {new: '1', folder} : {new: '1'});
     const backToList = () => setSearchParams({});
 
     // On narrow screens the list and the work area are separate views: the
@@ -400,8 +411,9 @@ const DeskPage = () => {
         >
             {showList && (
                 <Box sx={{width: isNarrow ? '100%' : 280, flexShrink: 0, borderRight: isNarrow ? 0 : 1, borderColor: 'divider', bgcolor: 'background.default'}}>
-                    <DeskSidebar sessions={sessions} selectedId={selectedId} unseen={unseen} onSelect={openSession} onNew={openNew}
-                        projects={projects} selectedProject={searchParams.get('folder') ?? undefined} onAddProject={() => setAddingProject(true)}
+                    <DeskSidebar sessions={scope ? sessions.filter((s) => s.project === scope) : sessions} selectedId={selectedId} unseen={unseen}
+                        onSelect={openSession} onNew={openNew}
+                        projects={scope ? [scope] : projects} selectedProject={searchParams.get('folder') ?? undefined}
                         onRemoveProject={(path) => {
                             if (!removeProject(path)) notify.error(t('desk.projectSaveFailed', {defaultValue: 'Could not save the working folder in this browser. Please try again.'}));
                             else if (searchParams.get('folder') === path) setSearchParams({});
