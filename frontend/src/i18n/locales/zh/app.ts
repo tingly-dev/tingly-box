@@ -40,8 +40,8 @@ export default {
     "saved": "已保存"
   },
   "layout": {
-    "workingFolders": "工作文件夹",
-    "noWorkingFolders": "还没有工作文件夹",
+    "workingFolders": "工作目录",
+    "noWorkingFolders": "还没有工作目录",
     "workingFolderWaiting": "{{count}} 个会话在等你",
     "desk": "工作台",
     "projects": "项目",
@@ -292,7 +292,7 @@ export default {
       "enableProjects": "工作一冒出来就丢给项目：协调者为每个任务开一个 Claude Code 线程，各自在独立的 git worktree 里运行。",
       "projectsEnabledInfo": "现在，任何能登录这个 tingly-box 的人都可以在这台机器上、在其项目所指定的仓库里运行 Claude Code 线程。",
       "desk": "工作台",
-      "enableDesk": "在浏览器中运行本机的 Claude Code，并选择其工作文件夹。",
+      "enableDesk": "在浏览器中运行本机的 Claude Code，并选择其工作目录。",
       "deskEnabledInfo": "任何能登录此 tingly-box 的用户都可以在本机启动 Claude Code 会话，并批准其工具调用。",
       "title": "实验性功能",
       "description": "这些实验性功能适用于所有场景。各个场景可以覆盖这些设置。",

@@ -70,7 +70,7 @@ toast 走 Tingly Box 的 `notify`。mock 数据在 `src/mocks/projectsHandlers.t
 Desk 原来把文件夹叫“项目目录”（`desk.projectDirectory`），Projects 进来后“项目”
 一词两义（UX 原则：拆开同名冲突）。
 
-状态：已完成。Desk 的文件夹改叫“工作文件夹” / Working folder / Рабочая папка
+状态：已完成。Desk 的文件夹改叫“工作文件夹”（2026-10-15 起中文改为“工作目录”，与 TB 其他页面一致） / Working folder / Рабочая папка
 （只改文案，key 不变）。“项目”筛选其实在 User prompts（`/prompt/user`）的录制页，
 筛的是录制时 IDE 打开的工作区，改叫“工作区” / Workspace / Рабочая область，
 筛选栏的文案也接上了 i18n（原来写死英文）。用量页（Dashboard）没有“项目”筛选。
