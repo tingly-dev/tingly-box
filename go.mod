@@ -18,11 +18,14 @@ replace github.com/tingly-dev/tingly-box/swagger => ./swagger
 
 replace github.com/tingly-dev/tingly-box/afk => ./afk
 
+replace github.com/tingly-dev/tingly-box/projects => ./projects
+
 require (
 	github.com/tingly-dev/tingly-box/afk v0.0.0-00010101000000-000000000000
 	github.com/tingly-dev/tingly-box/agentboot v0.0.0-00010101000000-000000000000
 	github.com/tingly-dev/tingly-box/ai v0.0.0-00010101000000-000000000000
 	github.com/tingly-dev/tingly-box/imbot v0.0.0-00010101000000-000000000000
+	github.com/tingly-dev/tingly-box/projects v0.0.0-00010101000000-000000000000
 	github.com/tingly-dev/tingly-box/swagger v0.0.0-00010101000000-000000000000
 )
 

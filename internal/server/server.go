@@ -42,6 +42,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/worker/tokenrefresh"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
+	projectsapp "github.com/tingly-dev/tingly-box/projects"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 	"github.com/tingly-dev/tingly-box/remote/scenario"
@@ -157,6 +158,10 @@ type Server struct {
 	// desk is nil when the store is unavailable; Stop shuts it down
 	// so no resident Claude Code process outlives the server.
 	desk *desksvc.Service
+
+	// projects is nil when it could not open its store; Stop closes it so
+	// no thread's Claude Code process outlives the server.
+	projects *projectsapp.App
 
 	// options
 	enableUI    bool

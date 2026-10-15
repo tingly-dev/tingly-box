@@ -27,8 +27,8 @@ type SendRequest struct {
 	Content string `json:"content" binding:"required"`
 }
 
-// RespondRequest answers a pending approval or question.
-type RespondRequest struct {
+// ThreadRespondRequest answers a pending approval or question.
+type ThreadRespondRequest struct {
 	RequestID string `json:"request_id" binding:"required"`
 	Allow     bool   `json:"allow"`
 	// Scope "thread" also allows later calls of the same tool in this thread.
@@ -66,7 +66,7 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithResponseModel(db.Thread{}))
 	api.POST("/projects/:id/threads/:tid/respond", h.respond, tag,
 		swagger.WithDescription("Answer a permission request or question the thread is waiting on"),
-		swagger.WithRequestModel(RespondRequest{}),
+		swagger.WithRequestModel(ThreadRespondRequest{}),
 		swagger.WithResponseModel(db.Thread{}))
 	api.POST("/projects/:id/threads/:tid/stop", h.stop, tag,
 		swagger.WithDescription("Interrupt the thread's running turn"),
@@ -150,7 +150,7 @@ func (h *Handler) send(c *gin.Context) {
 }
 
 func (h *Handler) respond(c *gin.Context) {
-	var req RespondRequest
+	var req ThreadRespondRequest
 	if !apierr.Bind(c, &req) {
 		return
 	}

@@ -1371,7 +1371,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RespondRequest"
+                "$ref": "#/components/schemas/ThreadRespondRequest"
               }
             }
           }
@@ -2430,35 +2430,6 @@
           "base_branch"
         ]
       },
-      "RespondRequest": {
-        "type": "object",
-        "properties": {
-          "allow": {
-            "type": "boolean",
-            "description": "Field allow"
-          },
-          "answer": {
-            "type": "string",
-            "description": "Field answer"
-          },
-          "request_id": {
-            "type": "string",
-            "description": "Field request_id"
-          },
-          "scope": {
-            "type": "string",
-            "description": "Field scope",
-            "enum": [
-              "once",
-              "thread"
-            ]
-          }
-        },
-        "required": [
-          "request_id",
-          "allow"
-        ]
-      },
       "SendMessageRequest": {
         "type": "object",
         "properties": {
@@ -2882,6 +2853,35 @@
           "kind",
           "content",
           "created_at"
+        ]
+      },
+      "ThreadRespondRequest": {
+        "type": "object",
+        "properties": {
+          "allow": {
+            "type": "boolean",
+            "description": "Field allow"
+          },
+          "answer": {
+            "type": "string",
+            "description": "Field answer"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Field request_id"
+          },
+          "scope": {
+            "type": "string",
+            "description": "Field scope",
+            "enum": [
+              "once",
+              "thread"
+            ]
+          }
+        },
+        "required": [
+          "request_id",
+          "allow"
         ]
       },
       "ThreadRuntime": {

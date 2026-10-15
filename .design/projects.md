@@ -6,14 +6,14 @@
 > [`projects/.design/projects.md` §9](../projects/.design/projects.md)，
 > 这里不重复，只记 tingly-box 这一侧要做什么。
 
-状态：`@tingly/ui` 已合并（#2038）；Go 部分已搬进 `projects/`；下面的接入工作尚未开始。
+状态：`@tingly/ui` 已合并（#2038）；代码已搬进 `projects/` 和 `frontend/packages/projects`；后端接入（§1、§2）已完成。
 
 ## 1. 依赖与构建
 
 - `projects/` 是 go.work 里的一个 module（`github.com/tingly-dev/tingly-box/projects`），
   和 `agentboot`、`swagger` 一样用 `replace` 指本地目录，不钉版本。
-- 接入时根 go.mod 加 `require github.com/tingly-dev/tingly-box/projects` +
-  `replace => ./projects`，并去掉 CI `verify-compile` 里 cli/gui 对 `projects/**` 的排除。
+- 根 go.mod（和 `gui/wails3/go.mod`）`require github.com/tingly-dev/tingly-box/projects` +
+  `replace` 指本地目录；CI `verify-compile` 的 cli/gui 不再排除 `projects/**`。
 - 只 import `projects` 和 `projects/llm`；其余在它的 `internal/` 下，碰不到。
   反方向（projects import 根模块）由 `task projects:boundary` 和 CI 拦住。
 - 前端在 `frontend/packages/projects`（`@tingly/projects`），是 workspace 里的普通包；入口 `src/embed.ts`，
@@ -22,15 +22,21 @@
 
 ## 2. 后端
 
-- 新增 `internal/server/module/projects/`：`Host` 适配器（`ClientFor` 走网关，
-  `ThreadEnv` 复用 `tbclient.GetClaudeCodeEnv`，`Models` 列网关可用模型）和 gate。
-- `server_modules.go` 里 `projects.New(Options{DataDir: <数据目录>/projects, Host})`，
-  `Register(rt.V1)`；schema 生成时只 `Register` 不 `Start`。跑 `task codegen`。
-- 开关：新增 `constant.ExtensionProjects = "projects"`（加进
-  `KnownExtensionBoolFlags`），默认关闭。照 Desk 用 `WithGate`：关闭时整个
-  `/projects` 返回 404；第一次打开时才调用 `App.Start`。
-- 模型路由：线程沿用 `claude_code` 场景；协调者建议新增 `projects` 场景，用量和
-  路由规则可以单独看、单独配。
+- `internal/server/module/projects/`：
+  - `Host`：协调者和线程都走网关的 `claude_code` 场景，路由规则、用量和配额照常生效。
+    `ClientFor` 用 model token 以 Anthropic Messages 调 `/tingly/claude_code`，不指定模型时用
+    该场景的默认档（`tbclient.ClaudeCodeDefaultModel`，即 Claude Code 的 `ANTHROPIC_MODEL`）；
+    `Models` 列该场景启用中的请求模型，默认档排第一；`ThreadEnv` 复用 `tbclient.GetClaudeCodeEnv`。
+  - `Handler`：给 Projects 单开一个 `/api/v1` 路由组（用户鉴权 + 开关闸门），只罩住它自己的路由。
+- `server_modules.go`：`newProjectsApp` 建 App，数据放 `<数据目录>/projects`，和主库分开；
+  schema 生成时用内存库、不启动。服务停止时 `Close`，不留下线程的 `claude` 进程。
+- 开关：`constant.ExtensionProjects = "projects"`（在 `KnownExtensionBoolFlags` 里），默认关闭。
+  关闭时整个 `/api/v1/projects` 返回 404；开着启动时立即 `Start`，运行中打开则在第一个请求时 `Start`。
+- 已知代价：开关关着也会在数据目录建一个空的 Projects 数据库（路由要在启动时挂好）。
+- 待定：协调者单独的 `projects` 场景（用量和路由规则单独看、单独配），现在先和线程共用 `claude_code`。
+- OpenAPI：两边的 schema 按类型名合并，同名类型会互相覆盖（线程的 `RespondRequest` 已改名为
+  `ThreadRespondRequest`）。根模块里 imbot 和 team 已有几组同名（`CreateRequest`、`UpdateRequest`、
+  `ListResponse`），尚未处理。
 
 ## 3. 前端
 
