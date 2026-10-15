@@ -42,7 +42,7 @@ export default {
   "layout": {
     "workingFolders": "Working folders",
     "noWorkingFolders": "No working folders yet",
-    "workingFolderWaiting": "Sessions waiting on you: {{count}}",
+    "workingFolderWaiting": "{{count}} waiting on you",
     "desk": "Desk",
     "projects": "Projects",
     "projectsWaiting": "A thread is waiting on you",

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Box, Button, Card, CardActionArea, Chip, InputAdornment, Skeleton, Tab, Tabs, TextField, Typography } from '@mui/material';
+import { Box, Button, Card, CardActionArea, InputAdornment, Skeleton, Tab, Tabs, TextField, Typography } from '@mui/material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, unwrap, type ProjectSummary } from '../client';
@@ -9,6 +9,8 @@ import { useNotify } from '../hooks/useNotify';
 import { useProjectsHost } from '../host/ProjectsHost';
 import { timeAgo } from '../utils/format';
 import { EmptyState, PageHeader } from '@tingly/ui';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { toneColor } from '../components/project/threadStatus';
 
 function ProjectCard({ p }: { p: ProjectSummary }) {
     const { t, i18n } = useTranslation('projects');
@@ -31,14 +33,20 @@ function ProjectCard({ p }: { p: ProjectSummary }) {
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, minHeight: 40, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                     {p.goal || t('projects.noGoal')}
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mt: 1.5, minHeight: 24 }}>
+                {/* What needs you, in one quiet line: a dot per state that has threads. */}
+                <Box sx={{ display: 'flex', columnGap: 1.5, rowGap: 0.5, flexWrap: 'wrap', mt: 1.5, minHeight: 20, fontSize: fontSizes.sm }}>
                     {counts.filter((x) => x.n > 0).map((x) => (
-                        <Chip key={x.key} size="small" color={x.color} label={`${t(`overview.group.${x.key}`)} · ${x.n}`} sx={{ height: 22, fontSize: 12 }} />
-                    ))}
-                    {p.repos.slice(0, 2).map((r) => (
-                        <Chip key={r.path} size="small" variant="outlined" icon={<Branch sx={{ fontSize: 13 }} />} label={r.path.split('/').pop()} sx={{ height: 22, fontSize: 12 }} />
+                        <Box key={x.key} component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, color: x.key === 'waiting' ? toneColor(x.color) : 'text.secondary', fontWeight: x.key === 'waiting' ? 600 : 400 }}>
+                            <Box component="span" sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: toneColor(x.color) }} />
+                            {x.n} {t(`overview.group.${x.key}`)}
+                        </Box>
                     ))}
                 </Box>
+                {p.repos.length > 0 && (
+                    <Typography variant="caption" color="text.secondary" noWrap sx={{ mt: 0.75, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Branch sx={{ fontSize: 13 }} />{p.repos.map((r) => r.path.split('/').pop()).join(' · ')}
+                    </Typography>
+                )}
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>{t('projects.updated', { time: timeAgo(p.updated_at, i18n.language) })}</Typography>
             </CardActionArea>
         </Card>

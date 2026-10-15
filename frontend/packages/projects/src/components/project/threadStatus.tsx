@@ -1,4 +1,6 @@
-import { Box, Chip, type ChipProps } from '@mui/material';
+import { Box, type ChipProps } from '@mui/material';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { getReadableAccent } from '@tingly/ui/theme/status';
 import { useTranslation } from 'react-i18next';
 import { Branch, CheckCircle, CircleDashed, HandStop, Merge, Spinner } from '../icons';
 import type { Thread } from '../../client';
@@ -36,17 +38,25 @@ function StatusIcon({ status }: { status: string }) {
     }
 }
 
-export function ThreadStatusChip({ thread, size = 'small' }: { thread: Pick<Thread, 'status'>; size?: 'small' | 'medium' }) {
+/** A tone's readable text colour, or the secondary text colour for none. */
+export const toneColor = (color: ChipProps['color']) => (theme: Parameters<typeof getReadableAccent>[0]) =>
+    color === 'default' || color === 'primary' || color === 'secondary' || !color
+        ? theme.palette.text.secondary
+        : getReadableAccent(theme, color);
+
+/** A thread's status as quiet text: its icon and name in the status colour,
+ * no fill, so the title stays the subject. */
+export function ThreadStatusChip({ thread }: { thread: Pick<Thread, 'status'> }) {
     const { t } = useTranslation('projects');
     return (
-        <Chip
-            size={size}
-            color={statusColor(thread.status)}
-            variant={thread.status === 'resolved' || thread.status === 'idle' ? 'outlined' : 'filled'}
-            icon={<Box component="span" sx={{ display: 'inline-flex', pl: 0.5 }}><StatusIcon status={thread.status} /></Box>}
-            label={t(`thread.status.${thread.status}`)}
-            sx={{ height: 22, fontSize: 12, '& .MuiChip-label': { px: 0.75 } }}
-        />
+        <Box
+            component="span"
+            data-status={thread.status}
+            sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, flexShrink: 0, fontSize: fontSizes.sm, fontWeight: 500, whiteSpace: 'nowrap', color: toneColor(statusColor(thread.status)) }}
+        >
+            <StatusIcon status={thread.status} />
+            {t(`thread.status.${thread.status}`)}
+        </Box>
     );
 }
 

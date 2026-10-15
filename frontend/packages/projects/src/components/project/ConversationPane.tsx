@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, Chip, Paper, Typography } from '@mui/material';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { ProjectMessage, Thread } from '../../client';
 import { Composer } from '../Composer';
 import { Markdown } from '../Markdown';
 import { PlayArrow } from '../icons';
-import { ThreadStatusChip, ThreadSubtitle } from './threadStatus';
+import { statusColor, ThreadStatusChip, ThreadSubtitle, toneColor } from './threadStatus';
 
 const COLUMN = { maxWidth: 760, mx: 'auto', width: '100%', px: { xs: 2, md: 3 } } as const;
 
@@ -97,15 +98,24 @@ function UpdateLine({ message, threads, onOpen }: { message: ProjectMessage; thr
     const pl = parse<{ thread_id: string; title: string; kind: string }>(message.payload);
     if (!pl) return null;
     const th = threads.get(pl.thread_id);
+    // A quiet line, not a box: the thread's card above already carries its
+    // live status; this only marks when it changed.
     return (
-        <Box sx={{ display: 'flex', justifyContent: 'center', my: 1 }}>
-            <Chip
-                size="small"
-                variant="outlined"
+        <Box sx={{ display: 'flex', justifyContent: 'center', my: 0.5 }}>
+            <Box
+                component="button"
+                type="button"
                 onClick={() => onOpen(pl.thread_id)}
-                label={t(`conversation.update.${pl.kind}`, { title: th?.title ?? pl.title })}
-                sx={{ color: 'text.secondary', maxWidth: '100%' }}
-            />
+                sx={{
+                    display: 'inline-flex', alignItems: 'center', gap: 0.75, maxWidth: '100%', p: 0.5, border: 0, bgcolor: 'transparent', font: 'inherit',
+                    fontSize: fontSizes.sm, color: 'text.secondary', cursor: 'pointer', borderRadius: 1, '&:hover': { color: 'text.primary', bgcolor: 'action.hover' },
+                }}
+            >
+                {th && <Box component="span" sx={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, bgcolor: toneColor(statusColor(th.status)) }} />}
+                <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {t(`conversation.update.${pl.kind}`, { title: th?.title ?? pl.title })}
+                </Box>
+            </Box>
         </Box>
     );
 }
