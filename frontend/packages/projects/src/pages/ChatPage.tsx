@@ -14,13 +14,14 @@ import type { PendingFirstMessage } from '../hooks/useStartChat';
 import { useChosenModel } from '../hooks/useStartChat';
 import { useAppData } from '../contexts/AppDataContext';
 import { formatTokens } from '../utils/format';
+import { fontMono } from '@tingly/ui/theme/fonts';
 
 const COLUMN = { maxWidth: 780, mx: 'auto', width: '100%', px: { xs: 2, md: 3 } } as const;
 
 function UserBubble({ text }: { text: string }) {
     return (
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', my: 2 }}>
-            <Box sx={{ maxWidth: '85%', bgcolor: 'action.hover', borderRadius: 3, px: 2, py: 1.25, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'text.primary', fontSize: 15, lineHeight: 1.6 }}>
+            <Box sx={{ maxWidth: '85%', bgcolor: 'action.hover', borderRadius: 3, px: 2, py: 1.25, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'text.primary', fontSize: '0.9375rem', lineHeight: 1.6 }}>
                 {text}
             </Box>
         </Box>
@@ -55,7 +56,7 @@ function AssistantActions({ msg, isLast, onRegenerate, disabled }: { msg: Messag
             {(msg.stop_reason === 'max_tokens' || msg.stop_reason === 'length') && (
                 <Typography variant="caption" color="warning.main">{t('chat.truncated')}</Typography>
             )}
-            <Typography className="meta" variant="caption" sx={{ ml: 1, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', transition: 'opacity .15s' }}>
+            <Typography className="meta" variant="caption" sx={{ ml: 1, fontFamily: fontMono, transition: 'opacity .15s' }}>
                 {meta}
             </Typography>
         </Box>
@@ -220,7 +221,7 @@ export default function ChatPage() {
                             size="small"
                             endIcon={<ExpandMore fontSize="small" />}
                             onClick={(e) => setMenuAnchor(e.currentTarget)}
-                            sx={{ fontWeight: 600, fontSize: 14, maxWidth: { xs: 200, md: 420 }, color: 'text.primary' }}
+                            sx={{ fontWeight: 600, fontSize: '0.875rem', maxWidth: { xs: 200, md: 420 }, color: 'text.primary' }}
                         >
                             <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {conv.title || t('chat.untitled')}

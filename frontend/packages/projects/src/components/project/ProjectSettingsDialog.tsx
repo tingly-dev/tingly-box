@@ -14,11 +14,12 @@ import { useNotify } from '../../hooks/useNotify';
 import { useProjectsHost } from '../../host/ProjectsHost';
 import { formatBytes, formatTokens, timeAgo } from '../../utils/format';
 import { RepoField, type RepoEntry } from './RepoField';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
 export type SettingsTab = 'general' | 'memory' | 'environment' | 'usage';
 
 const MAX_INSTRUCTIONS = 16000;
-const mono = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' } as const;
+const mono = { fontFamily: fontMono } as const;
 
 type Patch = NonNullable<paths['/api/v1/projects/{id}']['patch']['requestBody']>['content']['application/json'];
 type Mode = NonNullable<Patch['thread_permission_mode']>;
@@ -34,7 +35,7 @@ function ModelField({ label, value, onChange, help }: { label: string; value: st
             onInputChange={(_, v) => onChange(v)}
             renderInput={(params) => (
                 <TextField {...params} label={label} placeholder={t('projectSettings.modelDefault')} helperText={help}
-                    slotProps={{ ...params.slotProps, inputLabel: { shrink: true }, htmlInput: { ...params.slotProps?.htmlInput, style: { ...mono, fontSize: 13 } } }} />
+                    slotProps={{ ...params.slotProps, inputLabel: { shrink: true }, htmlInput: { ...params.slotProps?.htmlInput, style: { ...mono, fontSize: fontSizes.lg } } }} />
             )}
         />
     );
@@ -61,7 +62,7 @@ function General({ project, patch }: { project: Project; patch: (p: Patch) => Pr
             <ModelField label={t('projectSettings.threadModel')} value={threadModel} onChange={setThreadModel} help={t('projectSettings.threadModelHelp')} />
             <TextField select label={t('projectSettings.permissionMode')} value={mode} onChange={(e) => setMode(e.target.value as Mode)} helperText={t(`projectSettings.mode.${mode}Help`)}>
                 {['acceptEdits', 'default', 'auto', 'bypassPermissions'].map((m) => (
-                    <MenuItem key={m} value={m}><Box component="span" sx={{ ...mono, fontSize: 13, mr: 1 }}>{m}</Box>{t(`projectSettings.mode.${m}`)}</MenuItem>
+                    <MenuItem key={m} value={m}><Box component="span" sx={{ ...mono, fontSize: fontSizes.lg, mr: 1 }}>{m}</Box>{t(`projectSettings.mode.${m}`)}</MenuItem>
                 ))}
             </TextField>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -146,7 +147,7 @@ function Memory({ project, patch, refreshKey }: { project: Project; patch: (p: P
                 <TextField multiline minRows={8} maxRows={18} fullWidth value={instructions} onChange={(e) => setInstructions(e.target.value)}
                     placeholder={t('projectSettings.instructionsPlaceholder')} error={over}
                     helperText={`${instructions.length.toLocaleString()} / ${MAX_INSTRUCTIONS.toLocaleString()}`}
-                    slotProps={{ htmlInput: { style: { fontSize: 13.5, lineHeight: 1.6 } } }} />
+                    slotProps={{ htmlInput: { style: { fontSize: fontSizes.lg, lineHeight: 1.6 } } }} />
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
                     <Button variant="contained" disabled={instructions === project.instructions || over} onClick={() => void patch({ instructions })}>{t('common.save')}</Button>
                 </Box>
@@ -164,7 +165,7 @@ function Memory({ project, patch, refreshKey }: { project: Project; patch: (p: P
                         <Box key={f.name} role="button" tabIndex={0} onClick={() => void open(f.name)}
                             sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.75, px: 1, borderRadius: 1.5, '&:hover': { bgcolor: 'action.hover' } }}>
                             <Description sx={{ fontSize: 18, color: 'text.secondary' }} />
-                            <Typography sx={{ ...mono, fontSize: 13.5, flex: 1, color: 'text.primary' }}>{f.name}</Typography>
+                            <Typography sx={{ ...mono, fontSize: fontSizes.lg, flex: 1, color: 'text.primary' }}>{f.name}</Typography>
                             <Typography variant="caption" color="text.secondary">{formatBytes(f.size)} · {timeAgo(f.updated_at, i18n.language)}</Typography>
                             {f.name !== 'MEMORY.md' && (
                                 <IconButton size="small" aria-label={t('common.delete')} onClick={(e) => {

@@ -19,7 +19,7 @@ function Row({ chat, onChanged }: { chat: Conversation; onChanged: () => void })
             sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1.5, textDecoration: 'none', color: 'inherit', borderTop: 1, borderColor: 'divider', '&:hover': { bgcolor: 'action.hover' }, '& .row-menu': { opacity: anchor ? 1 : 0 }, '&:hover .row-menu': { opacity: 1 } }}
         >
             <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography noWrap sx={{ color: 'text.primary', fontWeight: 500, fontSize: 14.5 }}>
+                <Typography noWrap sx={{ color: 'text.primary', fontWeight: 500, fontSize: '0.875rem' }}>
                     {chat.title || t('chat.untitled')}
                     {chat.starred && <Star sx={{ fontSize: 14, ml: 0.75, verticalAlign: '-2px' }} color="primary" />}
                 </Typography>

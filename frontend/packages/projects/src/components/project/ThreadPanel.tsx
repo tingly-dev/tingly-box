@@ -15,8 +15,9 @@ import { useNotify } from '../../hooks/useNotify';
 import { formatTokens } from '../../utils/format';
 import { ThreadStatusChip } from './threadStatus';
 import { threadTranscript } from './threadTranscript';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
-const mono = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' } as const;
+const mono = { fontFamily: fontMono } as const;
 
 function DiffDialog({ thread, open, onClose }: { thread: Thread; open: boolean; onClose: () => void }) {
     const { t } = useTranslation('projects');
@@ -57,16 +58,16 @@ function DiffDialog({ thread, open, onClose }: { thread: Thread; open: boolean; 
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <DiffIcon />
                 <Box component="span" sx={{ flex: 1 }}>{thread.title}</Box>
-                <Typography component="span" sx={{ ...mono, fontSize: 13, color: 'text.secondary' }}>{thread.base_branch}…{thread.branch}</Typography>
+                <Typography component="span" sx={{ ...mono, fontSize: fontSizes.lg, color: 'text.secondary' }}>{thread.base_branch}…{thread.branch}</Typography>
             </DialogTitle>
             <DialogContent dividers>
                 {error && <Alert severity="error">{error}</Alert>}
                 {!diff && !error && <Skeleton variant="rounded" height={200} />}
                 {diff && (
                     <>
-                        {diff.uncommitted && <Alert severity="warning" sx={{ mb: 1.5 }}>{t('thread.uncommittedWarn')}<Box component="pre" sx={{ ...mono, fontSize: 12, m: 0, mt: 0.5 }}>{diff.uncommitted}</Box></Alert>}
-                        <Box component="pre" sx={{ ...mono, fontSize: 12.5, m: 0, mb: 1.5, color: 'text.secondary', whiteSpace: 'pre-wrap' }}>{diff.stat || t('thread.noChanges')}</Box>
-                        <Box component="pre" sx={{ ...mono, fontSize: 12.5, m: 0, p: 1.5, bgcolor: 'action.hover', borderRadius: 2, overflow: 'auto', maxHeight: '55vh' }}>
+                        {diff.uncommitted && <Alert severity="warning" sx={{ mb: 1.5 }}>{t('thread.uncommittedWarn')}<Box component="pre" sx={{ ...mono, fontSize: fontSizes.sm, m: 0, mt: 0.5 }}>{diff.uncommitted}</Box></Alert>}
+                        <Box component="pre" sx={{ ...mono, fontSize: fontSizes.md, m: 0, mb: 1.5, color: 'text.secondary', whiteSpace: 'pre-wrap' }}>{diff.stat || t('thread.noChanges')}</Box>
+                        <Box component="pre" sx={{ ...mono, fontSize: fontSizes.md, m: 0, p: 1.5, bgcolor: 'action.hover', borderRadius: 2, overflow: 'auto', maxHeight: '55vh' }}>
                             {diff.patch.split('\n').map((line, i) => (
                                 <Box key={i} component="div" sx={{
                                     color: line.startsWith('+') && !line.startsWith('+++') ? 'success.main' : line.startsWith('-') && !line.startsWith('---') ? 'error.main' : line.startsWith('@@') ? 'info.main' : 'text.primary',
@@ -81,7 +82,7 @@ function DiffDialog({ thread, open, onClose }: { thread: Thread; open: boolean; 
                     <Alert severity="warning" sx={{ mt: 1.5, '& .MuiAlert-message': { width: '100%' } }}>
                         <Typography variant="body2" sx={{ color: 'inherit', fontWeight: 600 }}>{t('thread.mergeBlocked')}: {blocked.error}</Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1, p: 1, bgcolor: 'background.paper', borderRadius: 1 }}>
-                            <Box component="code" sx={{ ...mono, fontSize: 12.5, flex: 1, wordBreak: 'break-all' }}>{blocked.command}</Box>
+                            <Box component="code" sx={{ ...mono, fontSize: fontSizes.md, flex: 1, wordBreak: 'break-all' }}>{blocked.command}</Box>
                             <Button size="small" onClick={() => copy(blocked.command)}>{copied ? t('common.copied') : t('common.copy')}</Button>
                         </Box>
                     </Alert>
@@ -101,7 +102,7 @@ function MetaLine({ items }: { items: React.ReactNode[] }) {
     const shown = items.filter(Boolean);
     if (shown.length === 0) return null;
     return (
-        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 0.75, mt: 0.25, color: 'text.secondary', fontSize: 12.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 0.75, mt: 0.25, color: 'text.secondary', fontSize: fontSizes.md }}>
             {shown.map((x, i) => (
                 <Box key={i} component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
                     {i > 0 && <Box component="span" sx={{ color: 'text.disabled' }}>·</Box>}
@@ -177,7 +178,7 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
                     <ThreadStatusChip thread={thread} />
                 </Box>
                 {thread.branch ? (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5, color: 'text.secondary', fontSize: 12.5, minWidth: 0 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5, color: 'text.secondary', fontSize: fontSizes.md, minWidth: 0 }}>
                         <Branch sx={{ fontSize: 14, flexShrink: 0 }} />
                         <Box component="span" sx={{ ...mono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{thread.branch}</Box>
                         <Box component="span" sx={{ flexShrink: 0 }}>{t('thread.fromBase', { base: thread.base_branch })}</Box>

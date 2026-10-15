@@ -6,6 +6,7 @@ import { Highlight, themes } from 'prism-react-renderer';
 import { useTranslation } from 'react-i18next';
 import { Check, ContentCopy } from './icons';
 import { useCopyFeedback } from '../hooks/useCopyFeedback';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
 /** A fenced code block: highlighted, with a copy button. */
 export function CodeBlock({ code, language }: { code: string; language: string }) {
@@ -14,7 +15,7 @@ export function CodeBlock({ code, language }: { code: string; language: string }
     const { copied, copy } = useCopyFeedback();
     return (
         <Box sx={{ position: 'relative', my: 1.5, borderRadius: 2, border: 1, borderColor: 'divider', overflow: 'hidden' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1.5, py: 0.25, bgcolor: 'action.hover', fontSize: 12, color: 'text.secondary' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1.5, py: 0.25, bgcolor: 'action.hover', fontSize: fontSizes.sm, color: 'text.secondary' }}>
                 <span>{language || 'text'}</span>
                 <Tooltip title={copied ? t('common.copied') : t('common.copy')}>
                     <IconButton size="small" onClick={() => copy(code)} aria-label={t('common.copy')}>
@@ -24,7 +25,7 @@ export function CodeBlock({ code, language }: { code: string; language: string }
             </Box>
             <Highlight code={code} language={language || 'text'} theme={theme.palette.mode === 'dark' ? themes.vsDark : themes.github}>
                 {({ style, tokens, getLineProps, getTokenProps }) => (
-                    <Box component="pre" sx={{ m: 0, p: 1.5, overflowX: 'auto', fontSize: 13, lineHeight: 1.55 }} style={{ ...style, background: 'transparent' }}>
+                    <Box component="pre" sx={{ m: 0, p: 1.5, overflowX: 'auto', fontSize: fontSizes.lg, lineHeight: 1.55 }} style={{ ...style, background: 'transparent' }}>
                         {tokens.map((line, i) => (
                             <div key={i} {...getLineProps({ line })}>
                                 {line.map((token, key) => <span key={key} {...getTokenProps({ token })} />)}
@@ -54,8 +55,8 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
                 '& h3': { fontSize: '1.05rem' },
                 '& a': { color: 'primary.main' },
                 '& blockquote': { m: 0, my: 1, pl: 2, borderLeft: 3, borderColor: 'divider', color: 'text.secondary' },
-                '& :not(pre) > code': { px: 0.5, py: 0.1, borderRadius: 0.75, bgcolor: 'action.hover', fontSize: '0.85em', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
-                '& pre, & pre code': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+                '& :not(pre) > code': { px: 0.5, py: 0.1, borderRadius: 0.75, bgcolor: 'action.hover', fontSize: '0.85em', fontFamily: fontMono },
+                '& pre, & pre code': { fontFamily: fontMono },
                 '& table': { borderCollapse: 'collapse', my: 1.5, display: 'block', overflowX: 'auto' },
                 '& th, & td': { border: 1, borderColor: 'divider', px: 1.25, py: 0.5, textAlign: 'left' },
                 '& th': { bgcolor: 'action.hover' },

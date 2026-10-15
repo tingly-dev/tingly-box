@@ -34,7 +34,7 @@ export const zh: Dict<typeof en> = {
     },
     projects: {
         title: '项目', new: '新建项目', all: '全部项目', search: '搜索项目…',
-        intro: '工作一冒出来就丢给项目。协调者会为每个任务开一个线程（一个在独立分支上工作的 Claude Code 会话），并告诉你哪些可以 review、哪些需要你处理。',
+        intro: '把工作交给项目，协调者为每个任务开一个线程，并告诉你哪些需要你处理。',
         tabActive: '我的项目', tabArchived: '已归档', noneFound: '没有找到项目', noArchived: '没有已归档的项目',
         emptyTitle: '开始你的第一个项目',
         emptyBody: '当工作有一个比单次会话更长久的目标、并且会不断产生新任务时，就值得建项目：一个改动横跨多个仓库、某个领域持续有 bug 要处理，或者一次装不进一个会话的迁移。',

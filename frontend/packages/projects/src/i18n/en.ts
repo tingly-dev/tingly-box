@@ -30,7 +30,7 @@ export const en = {
     },
     projects: {
         title: 'Projects', new: 'New project', all: 'All projects', search: 'Search projects…',
-        intro: 'Send a project the work as it comes up. Its coordinator starts a thread for each task — a Claude Code session on its own branch — and tells you what is ready for review and what needs you.',
+        intro: 'Hand a project the work; its coordinator runs each task in its own thread and tells you what needs you.',
         tabActive: 'Your projects', tabArchived: 'Archived', noneFound: 'No projects found', noArchived: 'No archived projects',
         emptyTitle: 'Start your first project',
         emptyBody: 'A project is worth it when the work has a goal that outlasts one session and keeps producing tasks: one change across several repositories, an area you keep feeding bugs to, or a migration bigger than a session.',

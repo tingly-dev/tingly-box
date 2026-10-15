@@ -13,6 +13,7 @@ import { useThemeMode, type ThemeMode } from '../contexts/ThemeModeContext';
 import { THEME_MODE_VALUES, ThemeModeIcon } from '../theme/modes';
 import { LANGUAGES } from '../i18n';
 import { PageHeader } from '@tingly/ui';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
 type Style = 'anthropic' | 'openai';
 
@@ -30,7 +31,7 @@ function endpointFor(style: Style, base: string) {
     return style === 'openai' ? `${b}/chat/completions` : `${b}/v1/messages`;
 }
 
-const mono = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13 } as const;
+const mono = { fontFamily: fontMono, fontSize: fontSizes.lg } as const;
 
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
     return (
@@ -174,7 +175,7 @@ export default function SettingsPage() {
                                     endpoint ? (
                                         <span>
                                             {t('settings.requestsGoTo')}{' '}
-                                            <Box component="span" sx={{ ...mono, fontSize: 12, color: 'text.primary' }}>{endpoint}</Box>
+                                            <Box component="span" sx={{ ...mono, fontSize: fontSizes.sm, color: 'text.primary' }}>{endpoint}</Box>
                                         </span>
                                     ) : undefined
                                 }
@@ -251,7 +252,7 @@ export default function SettingsPage() {
                                     <Typography variant="body2" sx={{ fontWeight: 600, color: 'inherit' }}>
                                         {test.ok ? t('settings.testOk', { ms: test.latency_ms }) : t('settings.testFailed')}
                                     </Typography>
-                                    <Box component="dl" sx={{ m: 0, mt: 0.75, display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 1.5, rowGap: 0.25, fontSize: 12.5, '& dt': { color: 'text.secondary' }, '& dd': { m: 0, ...mono, fontSize: 12.5, wordBreak: 'break-all' } }}>
+                                    <Box component="dl" sx={{ m: 0, mt: 0.75, display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 1.5, rowGap: 0.25, fontSize: fontSizes.md, '& dt': { color: 'text.secondary' }, '& dd': { m: 0, ...mono, fontSize: fontSizes.md, wordBreak: 'break-all' } }}>
                                         <dt>{t('settings.testEndpoint')}</dt><dd>{test.endpoint}</dd>
                                         {test.model && (<><dt>{t('settings.testModel')}</dt><dd>{test.model}</dd></>)}
                                         {test.reply && (<><dt>{t('settings.testReply')}</dt><dd>{test.reply}</dd></>)}

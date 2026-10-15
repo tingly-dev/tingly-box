@@ -8,8 +8,9 @@ import { useNotify } from '../../hooks/useNotify';
 import { formatBytes, timeAgo } from '../../utils/format';
 import { STATUS_ORDER, ThreadSubtitle, statusColor } from './threadStatus';
 import { StatusGroups } from '../workspace/StatusGroups';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
-const mono = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' } as const;
+const mono = { fontFamily: fontMono } as const;
 
 function ThreadGroups({ threads, selectedId, onOpen }: { threads: Thread[]; selectedId?: string; onOpen: (id: string) => void }) {
     const { t, i18n } = useTranslation('projects');
@@ -98,10 +99,10 @@ function Library({ projectId, refreshKey }: { projectId: string; refreshKey: num
                 <Box key={f.path} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.75, px: 1, borderRadius: 1.5, '&:hover': { bgcolor: 'action.hover' }, '& .act': { opacity: 0 }, '&:hover .act': { opacity: 1 } }}>
                     <Description sx={{ fontSize: 18, color: 'text.secondary' }} />
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography noWrap sx={{ fontSize: 13.5, color: 'text.primary', ...mono }}>{f.path}</Typography>
+                        <Typography noWrap sx={{ fontSize: fontSizes.lg, color: 'text.primary', ...mono }}>{f.path}</Typography>
                         <Typography variant="caption" color="text.secondary">{formatBytes(f.size)} · {timeAgo(f.updated_at, i18n.language)}</Typography>
                     </Box>
-                    <Chip size="small" variant="outlined" label={t(`library.origin.${f.origin}`)} sx={{ height: 20, fontSize: 11 }} />
+                    <Chip size="small" variant="outlined" label={t(`library.origin.${f.origin}`)} sx={{ height: 20, fontSize: fontSizes.xs }} />
                     <Tooltip title={t('library.download')}>
                         <IconButton className="act" size="small" onClick={() => void download(f.path)}><Download fontSize="small" /></IconButton>
                     </Tooltip>

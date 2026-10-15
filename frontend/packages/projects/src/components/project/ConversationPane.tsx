@@ -32,7 +32,7 @@ export function ThreadCard({ thread, onOpen }: { thread: Thread; onOpen: (id: st
             sx={{ p: 1.25, px: 1.5, borderRadius: 2.5, display: 'flex', alignItems: 'center', gap: 1.25, '&:hover': { borderColor: 'text.disabled', bgcolor: 'action.hover' } }}
         >
             <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography noWrap sx={{ fontWeight: 600, fontSize: 14, color: 'text.primary' }}>{thread.title}</Typography>
+                <Typography noWrap sx={{ fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>{thread.title}</Typography>
                 <Typography variant="caption" color="text.secondary" noWrap component="div"><ThreadSubtitle thread={thread} /></Typography>
             </Box>
             <ThreadStatusChip thread={thread} />
@@ -76,7 +76,7 @@ function SuggestionsCard({ message, threads, onStart, onOpen, disabled }: {
                     return (
                         <Box key={i} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, p: 1.25, borderRadius: 2, bgcolor: 'action.hover' }}>
                             <Box sx={{ flex: 1, minWidth: 0 }}>
-                                <Typography sx={{ fontWeight: 600, fontSize: 14, color: 'text.primary' }}>{s.title}</Typography>
+                                <Typography sx={{ fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>{s.title}</Typography>
                                 <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{s.task}</Typography>
                             </Box>
                             <Button size="small" startIcon={<PlayArrow />} disabled={busy || disabled} onClick={() => void start([i])}>{t('conversation.start')}</Button>
@@ -160,7 +160,7 @@ export function ConversationPane({ messages, threads, busy, disabled, disabledRe
                             <Typography variant="h3" sx={{ mb: 2 }}>{t('conversation.emptyTitle')}</Typography>
                             {[1, 2, 3].map((i) => (
                                 <Box key={i} sx={{ display: 'flex', gap: 1.5, mb: 1.5 }}>
-                                    <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, mt: 0.25 }}>{i}</Box>
+                                    <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', fontSize: fontSizes.sm, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, mt: 0.25 }}>{i}</Box>
                                     <Typography color="text.secondary">{t(`conversation.step${i}`)}</Typography>
                                 </Box>
                             ))}
@@ -177,7 +177,7 @@ export function ConversationPane({ messages, threads, busy, disabled, disabledRe
                             case 'text':
                                 return m.role === 'user' ? (
                                     <Box key={m.id} sx={{ display: 'flex', justifyContent: 'flex-end', my: 2 }}>
-                                        <Box sx={{ maxWidth: '85%', bgcolor: 'action.hover', borderRadius: 3, px: 2, py: 1.25, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'text.primary', fontSize: 15, lineHeight: 1.6 }}>{m.content}</Box>
+                                        <Box sx={{ maxWidth: '85%', bgcolor: 'action.hover', borderRadius: 3, px: 2, py: 1.25, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'text.primary', fontSize: '0.9375rem', lineHeight: 1.6 }}>{m.content}</Box>
                                     </Box>
                                 ) : (
                                     <Box key={m.id} sx={{ my: 2 }}><Markdown text={m.content} /></Box>

@@ -53,6 +53,9 @@ function ProjectCard({ p }: { p: ProjectSummary }) {
     );
 }
 
+// Search shows once a tab lists more projects than this.
+const SEARCH_FROM = 6;
+
 export default function ProjectsPage() {
     const { t } = useTranslation('projects');
     const navigate = useNavigate();
@@ -60,6 +63,7 @@ export default function ProjectsPage() {
     const { onProjectsChanged: refresh, paths: routes, embedded } = useProjectsHost();
     const [tab, setTab] = useState<'active' | 'archived'>('active');
     const [q, setQ] = useState('');
+    const [many, setMany] = useState(false);
     const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
     const [params, setParams] = useSearchParams();
     const [creating, setCreating] = useState(false);
@@ -76,7 +80,11 @@ export default function ProjectsPage() {
         let alive = true;
         const timer = window.setTimeout(() => {
             unwrap(api.GET('/api/v1/projects', { params: { query: { q: q || undefined, archived: tab === 'archived' || undefined } } }))
-                .then((r) => alive && setProjects(r.projects))
+                .then((r) => {
+                    if (!alive) return;
+                    setProjects(r.projects);
+                    if (!q) setMany(r.projects.length > SEARCH_FROM);
+                })
                 .catch((e: Error) => alive && notify(e.message, 'error'));
         }, q ? 200 : 0);
         return () => {
@@ -97,13 +105,18 @@ export default function ProjectsPage() {
                     sx={{ mb: 3 }}
                 />
 
-                <TextField fullWidth placeholder={t('projects.search')} value={q} onChange={(e) => setQ(e.target.value)}
-                    slotProps={{ input: { startAdornment: <InputAdornment position="start"><Search fontSize="small" /></InputAdornment> } }}
-                    sx={{ mb: 2, '& .MuiOutlinedInput-root': { bgcolor: 'background.paper' } }} />
-                <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3, minHeight: 40, borderBottom: 1, borderColor: 'divider', '& .MuiTab-root': { minHeight: 40 } }}>
-                    <Tab value="active" label={t('projects.tabActive')} />
-                    <Tab value="archived" label={t('projects.tabArchived')} />
-                </Tabs>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, borderBottom: 1, borderColor: 'divider' }}>
+                    <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ flex: 1, minHeight: 40, '& .MuiTab-root': { minHeight: 40 } }}>
+                        <Tab value="active" label={t('projects.tabActive')} />
+                        <Tab value="archived" label={t('projects.tabArchived')} />
+                    </Tabs>
+                    {/* A handful of projects is read at a glance; search only once there are more. */}
+                    {(many || q) && (
+                        <TextField size="small" placeholder={t('projects.search')} value={q} onChange={(e) => setQ(e.target.value)}
+                            slotProps={{ input: { startAdornment: <InputAdornment position="start"><Search fontSize="small" /></InputAdornment> } }}
+                            sx={{ width: { xs: 160, sm: 240 }, mb: 0.5 }} />
+                    )}
+                </Box>
 
                 {projects === null ? (
                     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: '1fr 1fr 1fr' }, gap: 2 }}>

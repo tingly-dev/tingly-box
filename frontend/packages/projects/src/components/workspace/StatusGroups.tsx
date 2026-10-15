@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Box, Collapse, Typography, type ChipProps } from '@mui/material';
 import { ExpandMore } from '../icons';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 /** One group of the list: what needs the user comes first. */
 export interface StatusGroup {
@@ -30,8 +31,8 @@ export function StatusHeading({ label, color, count }: { label: string; color: C
     return (
         <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
             <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: color === 'default' ? 'text.disabled' : `${color}.main` }} />
-            <Box component="span" sx={{ fontSize: 12, fontWeight: 600, color: color === 'default' ? 'text.secondary' : `${color}.main` }}>{label}</Box>
-            <Box component="span" sx={{ fontSize: 12, color: 'text.disabled' }}>{count}</Box>
+            <Box component="span" sx={{ fontSize: fontSizes.sm, fontWeight: 600, color: color === 'default' ? 'text.secondary' : `${color}.main` }}>{label}</Box>
+            <Box component="span" sx={{ fontSize: fontSizes.sm, color: 'text.disabled' }}>{count}</Box>
         </Box>
     );
 }
@@ -52,7 +53,7 @@ function Row({ row, onOpen }: { row: StatusRow; onOpen: (id: string) => void }) 
             }}
         >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: row.unseen ? 650 : 500, color: 'text.primary' }}>{row.title}</Typography>
+                <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: '0.875rem', fontWeight: row.unseen ? 650 : 500, color: 'text.primary' }}>{row.title}</Typography>
                 {row.meta != null && <Typography component="span" variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>{row.meta}</Typography>}
             </Box>
             {row.subtitle != null && <Typography variant="caption" color="text.secondary" noWrap component="div">{row.subtitle}</Typography>}

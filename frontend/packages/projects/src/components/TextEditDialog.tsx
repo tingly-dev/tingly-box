@@ -63,7 +63,7 @@ export function TextEditDialog({ open, title, intro, initialText, nameField, pla
                         maxRows={28}
                         fullWidth
                         autoFocus={!nameField}
-                        slotProps={{ input: { readOnly }, htmlInput: { style: { fontSize: 14, lineHeight: 1.6 } } }}
+                        slotProps={{ input: { readOnly }, htmlInput: { style: { fontSize: '0.875rem', lineHeight: 1.6 } } }}
                     />
                 </Stack>
             </DialogContent>

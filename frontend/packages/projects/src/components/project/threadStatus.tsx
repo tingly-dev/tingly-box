@@ -1,5 +1,5 @@
 import { Box, type ChipProps } from '@mui/material';
-import { fontSizes } from '@tingly/ui/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { getReadableAccent } from '@tingly/ui/theme/status';
 import { useTranslation } from 'react-i18next';
 import { Branch, CheckCircle, CircleDashed, HandStop, Merge, Spinner } from '../icons';
@@ -60,7 +60,7 @@ export function ThreadStatusChip({ thread }: { thread: Pick<Thread, 'status'> })
     );
 }
 
-const mono = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' } as const;
+const mono = { fontFamily: fontMono } as const;
 
 /** One line of backend text where `backticks` mark a literal (a command, a
  * path): the literal shows as code, not as raw backticks. */

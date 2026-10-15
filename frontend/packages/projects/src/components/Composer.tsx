@@ -152,7 +152,7 @@ export function Composer({
                         void submit();
                     }
                 }}
-                sx={{ fontSize: 15, lineHeight: 1.6, color: 'text.primary' }}
+                sx={{ fontSize: '0.9375rem', lineHeight: 1.6, color: 'text.primary' }}
             />
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
