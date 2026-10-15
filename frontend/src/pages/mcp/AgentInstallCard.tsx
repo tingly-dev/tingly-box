@@ -169,6 +169,8 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ filename, runtimeLabel, command }
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export interface AgentInstallCardProps {
+    /** Initial command format; users can still choose any supported client. */
+    defaultRuntime?: AgentRuntime;
     /** Overrides the default runtime options (commands/filenames) */
     runtimeOptions?: RuntimeOptions;
     clientId?: string;
@@ -214,6 +216,7 @@ const buildDefaultRuntimeOptions = (baseUrl: string, clientId: string): RuntimeO
 const DEFAULT_BASE_URL = 'http://localhost:12580';
 
 export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
+    defaultRuntime = 'claude',
     runtimeOptions,
     clientId = 'tb',
     sectionNumber = '01',
@@ -222,7 +225,7 @@ export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
     footer,
 }) => {
     const { t } = useTranslation();
-    const [runtime, setRuntime] = useState<AgentRuntime>('claude');
+    const [runtime, setRuntime] = useState<AgentRuntime>(defaultRuntime);
     const [baseUrl, setBaseUrl] = useState(DEFAULT_BASE_URL);
 
     useEffect(() => {

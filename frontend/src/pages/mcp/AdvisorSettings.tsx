@@ -5,6 +5,7 @@ import type { Provider } from '@/types/provider';
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography } from '@mui/material';
 import { Psychology as IconBrain } from '@/components/icons';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BUILTIN_ADVISOR_ID, type MCPSourceConfig } from './types';
 interface AdvisorCardProps {
     advisorSource: MCPSourceConfig | undefined;
@@ -13,6 +14,8 @@ interface AdvisorCardProps {
 }
 
 const AdvisorSettings: React.FC<AdvisorCardProps> = ({ advisorSource, onSave, expanded }) => {
+    const { t } = useTranslation();
+    const label = (key: string, fallback: string) => t(`mcp.workspace.${key}`, { defaultValue: fallback });
     const [model, setModel] = useState(advisorSource?.advisor?.model ?? '');
     const [selectedProviderUuid, setSelectedProviderUuid] = useState(advisorSource?.advisor?.provider_uuid ?? '');
     const [saving, setSaving] = useState(false);
@@ -65,25 +68,27 @@ const AdvisorSettings: React.FC<AdvisorCardProps> = ({ advisorSource, onSave, ex
         <Stack spacing={1.5}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <Button size="small" variant="outlined" onClick={() => setModelDialogOpen(true)}>
-                    Choose Model
+                    {label('chooseModel', 'Choose consultation model')}
                 </Button>
                 <Typography
                     variant="body2"
                     sx={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'text.secondary' }}
                 >
                     {selectedProvider
-                        ? `${selectedProvider.name} (${selectedProvider.api_style}) / ${model || '(no model)'}`
-                        : '(no provider selected)'}
+                        ? `${selectedProvider.name} (${selectedProvider.api_style}) / ${model || label('noModel', 'No model selected')}`
+                        : label('noProvider', 'No consultation provider selected')}
                 </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <Button variant="contained" size="small" onClick={() => void handleSave()} disabled={saving}>
-                    {saving ? 'Saving...' : 'Save'}
+                    {saving ? label('saving', 'Saving…') : label('save', 'Save')}
                 </Button>
             </Box>
 
             <Dialog open={modelDialogOpen} onClose={() => setModelDialogOpen(false)} maxWidth="lg" fullWidth>
-                <DialogTitle sx={{ textAlign: 'center' }}>Choose Model</DialogTitle>
+                <DialogTitle sx={{ textAlign: 'center' }}>
+                    {label('chooseModel', 'Choose consultation model')}
+                </DialogTitle>
                 <DialogContent sx={{ height: '70vh' }}>
                     <ModelSelectDialog
                         providers={providerCatalog}
@@ -98,7 +103,7 @@ const AdvisorSettings: React.FC<AdvisorCardProps> = ({ advisorSource, onSave, ex
                 </DialogContent>
                 <DialogActions>
                     <Button size="small" onClick={() => setModelDialogOpen(false)}>
-                        Close
+                        {label('closeModel', 'Close')}
                     </Button>
                 </DialogActions>
             </Dialog>
@@ -108,14 +113,17 @@ const AdvisorSettings: React.FC<AdvisorCardProps> = ({ advisorSource, onSave, ex
     return (
         <ToolCard
             icon={<IconBrain sx={{ fontSize: 18 }} />}
-            name="Advisor"
-            description="Sub-LLM consultation tool for hard decisions. An in-process tool agents can call to consult a second model."
+            name={label('advisorName', 'Advisor')}
+            description={label(
+                'advisorDescription',
+                'The gateway consults a second model and returns its advice to the current model.'
+            )}
             enabled={enabled}
             onToggle={handleToggle}
             toggleDisabled={saving}
             badges={[
                 { label: 'Server', color: 'green' },
-                { label: 'Experimental', color: 'orange' },
+                { label: label('experimental', 'Experimental'), color: 'orange' },
             ]}
             tags={['advisor']}
             settings={settings}
