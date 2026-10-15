@@ -6,7 +6,7 @@ import {Alert, Box, Button, Chip, IconButton, Popover, Stack, ToggleButton, Togg
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import BackgroundTasksPanel from './BackgroundTasksPanel';
-import Composer from './Composer';
+import {Composer} from '@tingly/projects';
 import {buildTranscript, pendingRequestId, Trajectory, Transcript} from '@tingly/projects/transcript';
 import type {TrajectoryAnchor} from '@tingly/projects/transcript';
 import {backgroundTasks, isBusyStatus, sessionTitle} from './deskUtils';
@@ -411,17 +411,21 @@ const SessionView = ({
                     ) : (
                         <Composer
                             key={session.id}
+                            keepUntilSent
+                            keysHint
                             text={draft}
                             onTextChange={onDraftChange}
                             onAccepted={onDraftAccepted}
-                            onStop={turnInFlight ? onInterrupt : undefined}
+                            streaming={turnInFlight}
+                            sendWhileStreaming
+                            onStop={onInterrupt}
                             placeholder={turnInFlight
                                 ? (pendingId
                                     ? t('desk.waitingForYou', {defaultValue: 'Waiting for your answer above…'})
                                     : t('desk.queuePlaceholder', {defaultValue: 'Queue a follow-up…'}))
                                 : t('desk.messagePlaceholder', {defaultValue: 'Reply…'})}
                             canSubmit={!changingSettings && !acting}
-                            onSubmit={onSend}
+                            onSend={onSend}
                             minRows={1}
                             context={(
                                 <>

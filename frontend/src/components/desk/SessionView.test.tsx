@@ -3,7 +3,7 @@ import type {ComponentProps} from 'react';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import SessionView from './SessionView';
 
-vi.mock('react-i18next', () => ({useTranslation: () => ({t: (_key: string, opts: {defaultValue: string}) => opts.defaultValue})}));
+vi.mock('react-i18next', () => ({useTranslation: () => ({t: (key: string, opts?: {defaultValue?: string}) => opts?.defaultValue ?? key})}));
 vi.mock('./ProfileSelect', () => ({default: ({disabled, onChange}: {disabled: boolean; onChange: (value: string) => void}) => <button disabled={disabled} onClick={() => onChange('profile')}>Change profile</button>}));
 vi.mock('./ModelSelect', () => ({default: ({disabled, onChange}: {disabled: boolean; onChange: (value: string) => void}) => <button disabled={disabled} onClick={() => onChange('model')}>Change model</button>}));
 vi.mock('./PermissionModeSelect', () => ({default: ({disabled, onChange}: {disabled: boolean; onChange: (value: string) => void}) => <button disabled={disabled} onClick={() => onChange('mode')}>Change permissions</button>}));
@@ -29,12 +29,12 @@ describe('Desk session actions', () => {
         fireEvent.click(screen.getByRole('button', {name: 'Change profile'}));
         expect(screen.getByRole('button', {name: 'Change model'})).toBeDisabled();
         expect(screen.getByRole('button', {name: 'Change permissions'})).toBeDisabled();
-        expect(screen.getByRole('button', {name: 'Send'})).toBeDisabled();
+        expect(screen.getByRole('button', {name: 'composer.sendShort'})).toBeDisabled();
         fireEvent.click(screen.getByRole('button', {name: 'Change model'}));
         expect(config.onModelChange).not.toHaveBeenCalled();
         await act(async () => finish());
         expect(screen.getByRole('button', {name: 'Change model'})).toBeEnabled();
-        expect(screen.getByRole('button', {name: 'Send'})).toBeEnabled();
+        expect(screen.getByRole('button', {name: 'composer.sendShort'})).toBeEnabled();
     });
 
     it('confirms archiving even an idle session, blocks duplicate requests and allows retry on failure', async () => {

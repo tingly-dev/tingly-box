@@ -1,8 +1,8 @@
 import type {RecentFolder} from '@/services/deskApi';
 import {ArrowBack} from '@/components/icons';
 import {Box, Button, Chip, Stack, Typography} from '@mui/material';
+import {Composer} from '@tingly/projects';
 import {useTranslation} from 'react-i18next';
-import Composer from './Composer';
 import FolderPicker from './FolderPicker';
 import ModelSelect from './ModelSelect';
 import PermissionModeSelect from './PermissionModeSelect';
@@ -55,13 +55,15 @@ const NewSessionView = ({initialFolder, recentFolders, permissionModes, onCreate
                 </Typography>
                 <Composer
                     autoFocus
+                    keepUntilSent
+                    keysHint
                     minRows={3}
                     placeholder={t('desk.promptPlaceholder', {defaultValue: 'Describe a task…'})}
                     canSubmit={folder.trim() !== ''}
                     text={form.prompt ?? ''}
                     onTextChange={(text) => update('prompt', text)}
                     onAccepted={(submitted) => setForm((previous) => previous.prompt === submitted ? {...previous, prompt: ''} : previous)}
-                    onSubmit={(prompt) => onCreate(folder.trim(), prompt, permissionMode, profile, model)}
+                    onSend={(prompt) => onCreate(folder.trim(), prompt, permissionMode, profile, model)}
                     context={(
                         <>
                             <ProfileSelect value={profile} onChange={pickProfile}/>

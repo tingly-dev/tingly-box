@@ -2,7 +2,7 @@ import {act, cleanup, fireEvent, render, screen} from '@testing-library/react';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import NewSessionView from './NewSessionView';
 
-vi.mock('react-i18next', () => ({useTranslation: () => ({t: (_key: string, opts: {defaultValue: string}) => opts.defaultValue})}));
+vi.mock('react-i18next', () => ({useTranslation: () => ({t: (key: string, opts?: {defaultValue?: string}) => opts?.defaultValue ?? key})}));
 vi.mock('./FolderPicker', () => ({default: ({value, onChange}: {value: string; onChange: (path: string) => void}) => (
     <input aria-label="Folder" value={value} onChange={(e) => onChange(e.target.value)}/>
 )}));
@@ -53,7 +53,7 @@ describe('New local task drafts', () => {
         const create = vi.fn().mockResolvedValue(true);
         const first = open('/projects/one', create);
         fireEvent.change(screen.getByPlaceholderText('Describe a task…'), {target: {value: 'task'}});
-        await act(async () => fireEvent.click(screen.getByRole('button', {name: 'Send'})));
+        await act(async () => fireEvent.click(screen.getByRole('button', {name: 'composer.sendShort'})));
         expect(create).toHaveBeenCalledWith('/projects/one', 'task', '', '', '');
         first.unmount();
         open();
@@ -68,7 +68,7 @@ it('does not clear a newer draft when an accepted start finishes after leaving a
     const create = vi.fn(() => new Promise<boolean>((resolve) => {finish = resolve;}));
     const first = open('/projects/one', create);
     fireEvent.change(screen.getByPlaceholderText('Describe a task…'), {target: {value: 'original task'}});
-    fireEvent.click(screen.getByRole('button', {name: 'Send'}));
+    fireEvent.click(screen.getByRole('button', {name: 'composer.sendShort'}));
     first.unmount();
     open('/projects/one');
     fireEvent.change(screen.getByPlaceholderText('Describe a task…'), {target: {value: 'next task after returning'}});

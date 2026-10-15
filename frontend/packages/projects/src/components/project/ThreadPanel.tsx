@@ -9,7 +9,7 @@ import { buildTranscript, Transcript, type Respond } from '../../transcript';
 import { Composer } from '../Composer';
 import { CodeBlock, Markdown } from '../Markdown';
 import { CopyIconButton } from '@tingly/ui';
-import { ArrowBack, Branch, DiffIcon, Merge, Stop } from '../icons';
+import { ArrowBack, Branch, DiffIcon, Merge } from '../icons';
 import { useCopyFeedback } from '../../hooks/useCopyFeedback';
 import { useNotify } from '../../hooks/useNotify';
 import { formatTokens } from '../../utils/format';
@@ -196,7 +196,6 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
                 ]} />
                 <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
                     {canReview && <Button size="small" variant="contained" startIcon={<DiffIcon />} onClick={() => setDiffOpen(true)}>{t('thread.review')}</Button>}
-                    {running && <Button size="small" variant="outlined" color="inherit" startIcon={<Stop />} onClick={() => void act('/api/v1/projects/{id}/threads/{tid}/stop')}>{t('thread.stop')}</Button>}
                     {thread.status !== 'resolved'
                         ? <Button size="small" color="inherit" onClick={() => void act('/api/v1/projects/{id}/threads/{tid}/resolve')}>{t('thread.resolve')}</Button>
                         : <Button size="small" color="inherit" onClick={() => void act('/api/v1/projects/{id}/threads/{tid}/reopen')}>{t('thread.reopen')}</Button>}
@@ -223,6 +222,10 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
             <Box sx={{ px: 2, pb: 2 }}>
                 <Composer
                     minRows={1}
+                    keepUntilSent
+                    streaming={running}
+                    sendWhileStreaming
+                    onStop={() => act('/api/v1/projects/{id}/threads/{tid}/stop')}
                     disabled={disabled || thread.status === 'resolved'}
                     placeholder={thread.status === 'resolved' ? t('thread.resolvedPlaceholder') : running ? t('thread.queuePlaceholder') : t('thread.placeholder')}
                     onSend={async (text) => {

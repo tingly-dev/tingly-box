@@ -86,8 +86,25 @@ highlighted code.
   `remember: true`.
 - No server change: the API and event format are untouched (TEP step 4).
 
-Next (3c): Desk's Composer (queue, drafts, IME) moves into the package and the
-thread uses it, with TB-only controls (profile, model, status line) as slots.
+## Step 3c: one message box
+
+`Composer` in the package is now the only message box: the project
+conversation, chats, threads and Desk all write in it. Desk's own is gone.
+
+- It took Desk's behaviour: Enter sends on desktop, on a phone Enter adds a
+  line and Ctrl/Cmd+Enter sends, an IME's Enter never sends, a send or a stop
+  never runs twice.
+- Two policies for the text, picked by the host: a streamed reply (chat,
+  conversation) clears the box at once and puts a refused message back;
+  `keepUntilSent` (threads, Desk) keeps the text until the send is accepted,
+  so a reload mid-request loses nothing. Desk keeps its drafts through
+  `text` / `onTextChange` / `onAccepted`.
+- While a turn runs, Stop sits in the box (a thread's Stop moved here from
+  its header); `sendWhileStreaming` keeps Send for hosts that take messages
+  mid-turn (a thread reads them after the turn, Desk queues them).
+- Tingly Box's profile, model and permission pickers go in through `context`;
+  the status line stays below the box in Desk. Nothing TB-specific is in the
+  package.
 
 ## Not yet
 

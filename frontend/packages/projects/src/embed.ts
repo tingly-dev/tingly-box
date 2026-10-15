@@ -13,5 +13,6 @@ export {
     type ProjectsSidebarSection,
 } from './components/ProjectsSidebar';
 export { WorkspaceLayout, useWorkspacePane, type WorkspacePane } from './components/workspace/WorkspaceLayout';
+export { Composer, type ComposerProps } from './components/Composer';
 export { StatusGroups, StatusHeading, type StatusGroup, type StatusRow } from './components/workspace/StatusGroups';
 export { timeAgo } from './utils/format';

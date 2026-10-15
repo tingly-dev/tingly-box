@@ -15,7 +15,7 @@ export const en = {
         placeholder: 'How can I help you today?',
         projectHint: 'A quick chat with the model. For ongoing work that should run as threads, start a project.',
     },
-    composer: { placeholder: 'Write a message…', send: 'Send (Enter)', stop: 'Stop' },
+    composer: { placeholder: 'Write a message…', send: 'Send (Enter)', sendShort: 'Send', stop: 'Stop', stopTurn: 'Stop the current turn', keys: 'Enter to send · Shift+Enter for a new line' },
     model: { auto: 'Default model', listFailed: 'Could not list models from the endpoint. Type a model ID instead.', customPlaceholder: 'Model ID, e.g. claude-sonnet-4-5' },
     connection: { open: 'Settings' },
     chat: {
@@ -76,7 +76,7 @@ export const en = {
         files_one: '{{count}} file', files_other: '{{count}} files',
         noRepo: 'No repository — files go to the Library', fromBase: 'from {{base}}', uncommitted: 'uncommitted changes',
         copyCd: 'Copy cd command to the worktree', back: 'Back to Overview',
-        review: 'Review changes', stop: 'Stop', resolve: 'Mark resolved', reopen: 'Reopen', showTask: 'Show task', hideTask: 'Hide task',
+        review: 'Review changes', resolve: 'Mark resolved', reopen: 'Reopen', showTask: 'Show task', hideTask: 'Hide task',
         fromCoordinator: 'Coordinator', allowThread: 'Always allow {{tool}} here',
         placeholder: 'Message this thread directly…', queuePlaceholder: 'Message this thread — it reads it after its current turn…',
         resolvedPlaceholder: 'Reopen the thread to send it more work',

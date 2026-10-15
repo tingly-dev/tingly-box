@@ -19,7 +19,7 @@ export const zh: Dict<typeof en> = {
         placeholder: '今天想聊点什么？',
         projectHint: '这里是和模型的快速对话。需要以线程方式持续推进的工作，请新建一个项目。',
     },
-    composer: { placeholder: '输入消息…', send: '发送（Enter）', stop: '停止' },
+    composer: { placeholder: '输入消息…', send: '发送（Enter）', sendShort: '发送', stop: '停止', stopTurn: '停止当前轮次', keys: 'Enter 发送 · Shift+Enter 换行' },
     model: { auto: '默认模型', listFailed: '无法从端点获取模型列表，请直接输入模型 ID。', customPlaceholder: '模型 ID，例如 claude-sonnet-4-5' },
     connection: { open: '去设置' },
     chat: {
@@ -80,7 +80,7 @@ export const zh: Dict<typeof en> = {
         files_one: '{{count}} 个文件', files_other: '{{count}} 个文件',
         noRepo: '无仓库——文件放入文件库', fromBase: '基于 {{base}}', uncommitted: '有未提交的改动',
         copyCd: '复制进入 worktree 的 cd 命令', back: '返回 Overview',
-        review: 'Review 改动', stop: '停止', resolve: '标记为已解决', reopen: '重新打开', showTask: '查看任务', hideTask: '收起任务',
+        review: 'Review 改动', resolve: '标记为已解决', reopen: '重新打开', showTask: '查看任务', hideTask: '收起任务',
         fromCoordinator: '协调者', allowThread: '本线程都允许 {{tool}}',
         placeholder: '直接给这个线程发消息…', queuePlaceholder: '给这个线程发消息——它会在当前这轮结束后读到…',
         resolvedPlaceholder: '重新打开线程才能继续发送工作',
