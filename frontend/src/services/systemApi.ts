@@ -135,6 +135,11 @@ export const systemApi = {
     getLatestVersion: async (): Promise<any> =>
         controlApi((client, headers) => client.GET('/api/v1/info/version/check', {headers})),
 
+    // Applies the latest version to an npm global install (see the check's
+    // self_update). The server may restart itself right after answering.
+    applyUpdate: async (): Promise<any> =>
+        controlApi((client, headers) => client.POST('/api/v1/info/version/update', {headers})),
+
     // Desktop / start-menu shortcut. getShortcutStatus is a read-only check
     // (does every artifact createShortcut would write already exist?); it
     // never writes to disk. createShortcut is idempotent — safe to call again

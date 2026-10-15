@@ -89,6 +89,21 @@ func Daemonize(overrideArgs ...string) error {
 	return nil
 }
 
+// SpawnDetached starts name with args as a detached process (session leader
+// on Unix, detached process on Windows) that outlives the caller, and returns
+// without waiting for it.
+func SpawnDetached(name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.SysProcAttr = daemonSysProcAttr()
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start detached process: %w", err)
+	}
+	return cmd.Process.Release()
+}
+
 // buildDaemonArgs computes the argv for the re-exec'd daemon child. Daemonize
 // re-runs the current command, so a value the parent *resolved* rather than
 // received on the command line (e.g. a `restart` preserving the running port)
