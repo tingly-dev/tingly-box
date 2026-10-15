@@ -1,6 +1,13 @@
 // Desk
 export default {
   "desk": {
+    "sessions": "Сессии",
+    "group": {
+      "waiting": "Ждут вас",
+      "running": "В работе",
+      "failed": "С ошибкой",
+      "done": "Готово"
+    },
     "noBackgroundTasks": "Нет фоновых задач",
     "backgroundTasksHint": "Здесь отображаются команды и субагенты, запущенные Claude в фоне. Они продолжают работать после его ответа.",
     "tasksRunning": "Выполняются",

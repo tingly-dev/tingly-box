@@ -1,8 +1,7 @@
-import DeskSidebar from '@/components/desk/DeskSidebar';
 import AddProjectDialog from '@/components/desk/AddProjectDialog';
 import NewSessionView from '@/components/desk/NewSessionView';
 import SessionView from '@/components/desk/SessionView';
-import {folderName, isBusyStatus} from '@/components/desk/deskUtils';
+import {folderName, isBusyStatus, sessionTitle} from '@/components/desk/deskUtils';
 import {deskScope, publishDeskSessions} from '@/components/desk/deskEvents';
 import {requestNotifications, useDeskAttention} from '@/components/desk/useDeskAttention';
 import {useDeskDrafts} from '@/components/desk/useDeskDrafts';
@@ -13,7 +12,10 @@ import {fontSizes} from '@/theme/fonts';
 import {useNotify} from '@/hooks/useNotify';
 import * as deskApi from '@/services/deskApi';
 import type {MessageInfo, RecentFolder, SessionInfo} from '@/services/deskApi';
-import {Alert, Box, Button, CircularProgress, Stack, useMediaQuery, useTheme} from '@mui/material';
+import {Alert, Box, Button, CircularProgress, IconButton, Stack, Tooltip, Typography} from '@mui/material';
+import {StatusGroups, WorkspaceLayout, timeAgo, useWorkspacePane, type StatusGroup} from '@tingly/projects';
+import '@/pages/projects/projectsHost';
+import {Add, Close} from '@/components/icons';
 import {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {useSearchParams} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
@@ -29,12 +31,11 @@ const READ_TIMEOUT_MS = 15000;
 // backend machinery @cc already drives (remote/session.Manager +
 // agentboot.AgentService) — see .design/desk.md.
 const DeskPage = () => {
-    const {t} = useTranslation();
+    const {t, i18n} = useTranslation();
     const notify = useNotify();
     const [searchParams, setSearchParams] = useSearchParams();
     const selectedId = searchParams.get('session');
-    const theme = useTheme();
-    const isNarrow = useMediaQuery(theme.breakpoints.down('md'));
+    const pane = useWorkspacePane('desk.');
 
     const [sessions, setSessions] = useState<SessionInfo[]>([]);
     const [recentFolders, setRecentFolders] = useState<RecentFolder[]>([]);
@@ -387,106 +388,139 @@ const DeskPage = () => {
     const openSession = useCallback((id: string) => setSearchParams({session: id}), [setSearchParams]);
     const unseen = useDeskAttention(sessions, selectedId, openSession);
     const openNew = (folder = scope) => setSearchParams(folder ? {new: '1', folder} : {new: '1'});
-    const backToList = () => setSearchParams({});
-
-    // On narrow screens the list and the work area are separate views: the
-    // list shows until a session (or a new one) is opened.
-    const showList = !isNarrow || (!selectedId && !searchParams.has('new'));
-    const showMain = !isNarrow || !showList;
+    const openFromPane = (id: string) => {
+        openSession(id);
+        pane.setDrawerOpen(false);
+    };
     const refreshError = sessionsError || (transcriptError?.id === selectedId ? transcriptError.message : null)
         || (sessionError?.id === selectedId ? sessionError.message : null);
 
+    // The pane lists the sessions here the way a project lists its threads:
+    // what needs the user first.
+    const inScope = scope ? sessions.filter((s) => s.project === scope) : sessions;
+    const groupOf = (s: SessionInfo) => s.status === 'closed' ? 'archived'
+        : s.awaiting_input ? 'waiting'
+        : isBusyStatus(s.status) || (s.background_tasks?.length ?? 0) > 0 ? 'running'
+        : s.status === 'failed' ? 'failed' : 'done';
+    const groups: StatusGroup[] = [
+        {key: 'waiting', label: t('desk.group.waiting', {defaultValue: 'Waiting on you'}), color: 'warning'},
+        {key: 'running', label: t('desk.group.running', {defaultValue: 'Working'}), color: 'info'},
+        {key: 'failed', label: t('desk.group.failed', {defaultValue: 'Failed'}), color: 'error'},
+        {key: 'done', label: t('desk.group.done', {defaultValue: 'Done'}), color: 'default'},
+        {key: 'archived', label: t('desk.archivedSessions', {defaultValue: 'Archived'}), color: 'default', collapsed: true},
+    ];
+    const rows = inScope.map((s) => {
+        const bg = s.background_tasks?.length ?? 0;
+        const detail = s.status === 'failed' && s.error ? s.error
+            : bg > 0 ? t('desk.backgroundRunning', {defaultValue: '{{count}} background task(s) running', count: bg}) : '';
+        return {
+            id: s.id,
+            group: groupOf(s),
+            title: sessionTitle(s),
+            subtitle: [scope ? '' : folderName(s.project), detail].filter(Boolean).join(' · ') || undefined,
+            meta: timeAgo(s.last_activity, i18n.language),
+            selected: s.id === selectedId,
+            unseen: unseen.has(s.id),
+        };
+    });
+    const waitingHere = inScope.some((s) => s.awaiting_input);
+    const savedScope = scope && projects.includes(scope) && !inScope.some((s) => s.status !== 'closed');
+
     return (
-        <Box
-            sx={{
-                height: '100%',
-                minHeight: 0,
-                display: 'flex',
-                border: 1,
-                borderColor: 'divider',
-                borderRadius: 2,
-                overflow: 'hidden',
-                bgcolor: 'background.paper',
-            }}
-        >
-            {showList && (
-                <Box sx={{width: isNarrow ? '100%' : 280, flexShrink: 0, borderRight: isNarrow ? 0 : 1, borderColor: 'divider', bgcolor: 'background.default'}}>
-                    <DeskSidebar sessions={scope ? sessions.filter((s) => s.project === scope) : sessions} selectedId={selectedId} unseen={unseen}
-                        onSelect={openSession} onNew={openNew}
-                        projects={scope ? [scope] : projects} selectedProject={searchParams.get('folder') ?? undefined}
-                        onRemoveProject={(path) => {
-                            if (!removeProject(path)) notify.error(t('desk.projectSaveFailed', {defaultValue: 'Could not save the working folder in this browser. Please try again.'}));
-                            else if (searchParams.get('folder') === path) setSearchParams({});
-                        }}/>
-                </Box>
-            )}
-            {showMain && (
-                <Box sx={{flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column'}}>
-                    {refreshError && (
-                        <Alert severity="warning" action={(
-                            <Button color="inherit" size="small" onClick={() => void Promise.all([loadSessions(), refreshTranscript()])}>
-                                {t('desk.retry', {defaultValue: 'Retry'})}
-                            </Button>
-                        )}>
-                            {t('desk.refreshFailed', {defaultValue: 'Could not refresh Desk. Your last loaded data and drafts are kept. Reconnecting automatically.'})}
-                            <Box component="span" sx={{display: 'block', fontSize: fontSizes.md}}>{refreshError}</Box>
-                        </Alert>
-                    )}
-                    <Box sx={{flex: 1, minHeight: 0}}>
-                        {loading ? (
-                            <Stack sx={{height: '100%', alignItems: 'center', justifyContent: 'center'}}><CircularProgress size={24}/></Stack>
-                        ) : selectedSession ? (
-                            <SessionView
-                                key={selectedSession.id}
-                                session={selectedSession}
-                                messages={messages}
-                                permissionModes={permissionModes}
-                                onSend={handleSend}
-                                onRespond={handleRespond}
-                                onInterrupt={handleInterrupt}
-                                onArchive={handleArchive}
-                                onPermissionModeChange={handlePermissionModeChange}
-                                onProfileChange={handleProfileChange}
-                                onModelChange={handleModelChange}
-                                queued={queues[selectedSession.id]?.items ?? []}
-                                queueHeld={queues[selectedSession.id]?.held}
-                                queueSending={Boolean(queues[selectedSession.id]?.inFlight)}
-                                messagesLoading={transcript?.id !== selectedSession.id && transcriptError?.id !== selectedSession.id}
-                                onUnqueue={unqueue}
-                                onSendQueuedNow={() => void flushQueue(selectedSession, true)}
-                                draft={drafts[selectedSession.id] ?? ''}
-                                onDraftChange={(text) => setDrafts((d) => ({...d, [selectedSession.id]: text}))}
-                                onDraftAccepted={(submitted) => setDrafts((d) => d[selectedSession.id] === submitted ? {...d, [selectedSession.id]: ''} : d)}
-                                onHandoff={handleHandoff}
-                                onRefresh={() => void Promise.all([loadMessages(selectedSession.id), refreshSelectedSession(selectedSession.id)])}
-                                onBack={isNarrow ? backToList : undefined}
-                            />
-                        ) : selectedId ? (
-                            <Alert severity="info" sx={{m: 2}} action={<Button color="inherit" onClick={() => openNew()}>{t('desk.newSession', {defaultValue: 'New session'})}</Button>}>
-                                {t('desk.sessionUnavailable', {defaultValue: 'This session is unavailable. Retry refreshing or start a new session.'})}
-                            </Alert>
-                        ) : sessionsError && sessions.length === 0 ? null : (
-                            <NewSessionView
-                                // Remount per folder so a folder group's "+" resets the form.
-                                key={searchParams.get('folder') ?? ''}
-                                initialFolder={searchParams.get('folder') ?? undefined}
-                                recentFolders={projectFolders}
-                                permissionModes={permissionModes}
-                                onCreate={handleCreate}
-                                onAddProject={() => setAddingProject(true)}
-                                onBack={isNarrow ? backToList : undefined}
-                            />
+        <>
+            <WorkspaceLayout
+                pane={pane}
+                paneLabel={t('desk.sessions', {defaultValue: 'Sessions'})}
+                paneAttention={waitingHere}
+                title={scope ? (
+                    <>
+                        <Typography variant="h5" noWrap>{folderName(scope)}</Typography>
+                        <Typography variant="caption" color="text.secondary" noWrap component="div" sx={{fontFamily: 'monospace'}}>{scope}</Typography>
+                    </>
+                ) : <Typography variant="h5" noWrap>{t('layout.workingFolders')}</Typography>}
+                actions={(
+                    <>
+                        {savedScope && (
+                            <Tooltip title={t('desk.removeProjectShortcut', {defaultValue: 'Remove folder shortcut'})}>
+                                <IconButton size="small" aria-label={t('desk.removeProjectShortcut', {defaultValue: 'Remove folder shortcut'})} onClick={() => {
+                                    if (!removeProject(scope)) notify.error(t('desk.projectSaveFailed', {defaultValue: 'Could not save the working folder in this browser. Please try again.'}));
+                                    else setSearchParams({});
+                                }}><Close fontSize="small"/></IconButton>
+                            </Tooltip>
                         )}
+                        <Button size="small" startIcon={<Add/>} onClick={() => openNew()}>{t('desk.newSession', {defaultValue: 'New session'})}</Button>
+                    </>
+                )}
+                notice={refreshError && (
+                    <Alert severity="warning" action={(
+                        <Button color="inherit" size="small" onClick={() => void Promise.all([loadSessions(), refreshTranscript()])}>
+                            {t('desk.retry', {defaultValue: 'Retry'})}
+                        </Button>
+                    )}>
+                        {t('desk.refreshFailed', {defaultValue: 'Could not refresh Desk. Your last loaded data and drafts are kept. Reconnecting automatically.'})}
+                        <Box component="span" sx={{display: 'block', fontSize: fontSizes.md}}>{refreshError}</Box>
+                    </Alert>
+                )}
+                side={(
+                    <Box sx={{display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0}}>
+                        <Box sx={{display: 'flex', alignItems: 'center', px: 2, minHeight: 44, borderBottom: 1, borderColor: 'divider'}}>
+                            <Typography variant="body2" sx={{fontWeight: 600}}>{t('desk.sessions', {defaultValue: 'Sessions'})}</Typography>
+                        </Box>
+                        <Box sx={{flex: 1, overflowY: 'auto', px: 0.5}}>
+                            <StatusGroups groups={groups} rows={rows} onOpen={openFromPane} empty={t('desk.noSessions', {defaultValue: 'No sessions yet'})}/>
+                        </Box>
                     </Box>
-                </Box>
-            )}
+                )}
+                main={loading ? (
+                    <Stack sx={{height: '100%', alignItems: 'center', justifyContent: 'center'}}><CircularProgress size={24}/></Stack>
+                ) : selectedSession ? (
+                    <SessionView
+                        key={selectedSession.id}
+                        session={selectedSession}
+                        messages={messages}
+                        permissionModes={permissionModes}
+                        onSend={handleSend}
+                        onRespond={handleRespond}
+                        onInterrupt={handleInterrupt}
+                        onArchive={handleArchive}
+                        onPermissionModeChange={handlePermissionModeChange}
+                        onProfileChange={handleProfileChange}
+                        onModelChange={handleModelChange}
+                        queued={queues[selectedSession.id]?.items ?? []}
+                        queueHeld={queues[selectedSession.id]?.held}
+                        queueSending={Boolean(queues[selectedSession.id]?.inFlight)}
+                        messagesLoading={transcript?.id !== selectedSession.id && transcriptError?.id !== selectedSession.id}
+                        onUnqueue={unqueue}
+                        onSendQueuedNow={() => void flushQueue(selectedSession, true)}
+                        draft={drafts[selectedSession.id] ?? ''}
+                        onDraftChange={(text) => setDrafts((d) => ({...d, [selectedSession.id]: text}))}
+                        onDraftAccepted={(submitted) => setDrafts((d) => d[selectedSession.id] === submitted ? {...d, [selectedSession.id]: ''} : d)}
+                        onHandoff={handleHandoff}
+                        onRefresh={() => void Promise.all([loadMessages(selectedSession.id), refreshSelectedSession(selectedSession.id)])}
+                    />
+                ) : selectedId ? (
+                    <Alert severity="info" sx={{m: 2}} action={<Button color="inherit" onClick={() => openNew()}>{t('desk.newSession', {defaultValue: 'New session'})}</Button>}>
+                        {t('desk.sessionUnavailable', {defaultValue: 'This session is unavailable. Retry refreshing or start a new session.'})}
+                    </Alert>
+                ) : sessionsError && sessions.length === 0 ? null : (
+                    <NewSessionView
+                        // Remount per folder so a folder group's "+" resets the form.
+                        key={searchParams.get('folder') ?? ''}
+                        initialFolder={searchParams.get('folder') ?? undefined}
+                        recentFolders={projectFolders}
+                        permissionModes={permissionModes}
+                        onCreate={handleCreate}
+                        onAddProject={() => setAddingProject(true)}
+                    />
+                )}
+            />
             {addingProject && <AddProjectDialog onClose={() => {setAddingProject(false); setPendingProject(null);}} onAdd={(path) => {
                 if (!addProject(path)) return false;
                 setPendingProject(path);
                 openNew(path);
                 return true;
             }}/>}
-        </Box>
+        </>
     );
 };
 

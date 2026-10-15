@@ -9,17 +9,15 @@ import DeskPage from './DeskPage';
 
 const {notifyError, t} = vi.hoisted(() => ({
     notifyError: vi.fn(),
-    t: (_key: string, opts: {defaultValue: string}) => opts.defaultValue,
+    t: (key: string, opts?: {defaultValue?: string}) => opts?.defaultValue ?? key,
 }));
-vi.mock('react-i18next', () => ({useTranslation: () => ({t})}));
+vi.mock('react-i18next', () => ({useTranslation: () => ({t, i18n: {language: 'en'}})}));
 vi.mock('@/hooks/useNotify', () => ({useNotify: () => ({error: notifyError})}));
 vi.mock('@/components/desk/useDeskAttention', () => ({requestNotifications: vi.fn(), useDeskAttention: () => new Set()}));
 vi.mock('@/services/deskApi', () => ({
     listSessions: vi.fn(), listRecentFolders: vi.fn(), listPermissionModes: vi.fn(), getMessages: vi.fn(), getSession: vi.fn(), sendMessage: vi.fn(), interrupt: vi.fn(), archive: vi.fn(), createSession: vi.fn(),
 }));
-vi.mock('@/components/desk/DeskSidebar', () => ({default: ({onSelect}: {onSelect: (id: string) => void}) => (
-    <div><button onClick={() => onSelect('a')}>Session A</button><button onClick={() => onSelect('b')}>Session B</button></div>
-)}));
+vi.mock('@/pages/projects/projectsHost', () => ({}));
 vi.mock('@/components/desk/NewSessionView', () => ({default: ({initialFolder, onAddProject}: {initialFolder?: string; onAddProject?: () => void}) => (
     <div>New task form<span>{initialFolder}</span><button onClick={onAddProject}>Add a project</button></div>
 )}));
@@ -32,7 +30,7 @@ vi.mock('@/components/desk/SessionView', () => ({default: ({session, messages, q
     </div>
 )}));
 
-const session = (id: string, status = 'completed') => ({id, status, last_activity: '2026-10-03T00:00:00Z'} as SessionInfo);
+const session = (id: string, status = 'completed') => ({id, status, project: '/w', request: `Session ${id.toUpperCase()}`, last_activity: '2026-10-03T00:00:00Z'} as SessionInfo);
 const message = (content: string) => [{role: 'assistant', content}] as MessageInfo[];
 function deferred<T>() {
     let resolve!: (value: T) => void;
@@ -62,7 +60,7 @@ describe('Desk local workflow', () => {
         fireEvent.click(screen.getByRole('button', {name: 'Add a project'}));
         fireEvent.change(screen.getByLabelText('Working folder'), {target: {value: '/projects/new app/'}});
         await act(async () => fireEvent.click(screen.getByRole('button', {name: 'Add working folder'})));
-        expect(screen.getByText('/projects/new app')).toBeInTheDocument();
+        expect(screen.getAllByText('/projects/new app')).toHaveLength(2); // header and form
         expect(screen.queryByRole('dialog', {name: 'Add working folder'})).not.toBeInTheDocument();
         expect(JSON.parse(localStorage.getItem('desk.projectDirectories:v1')!)).toEqual({'/projects/new app': true});
         expect(api.createSession).not.toHaveBeenCalled();
@@ -74,7 +72,7 @@ describe('Desk local workflow', () => {
         expect(screen.getByText('Transcript a')).toBeInTheDocument();
         const next = deferred<MessageInfo[]>();
         vi.mocked(api.getMessages).mockImplementation((id) => id === 'b' ? next.promise : Promise.resolve(message('Transcript a')));
-        fireEvent.click(screen.getByRole('button', {name: 'Session B'}));
+        fireEvent.click(screen.getByRole('button', {name: /Session B/}));
         await settle();
         expect(screen.getByText('Viewing b: completed')).toBeInTheDocument();
         expect(screen.queryByText('Transcript a')).not.toBeInTheDocument();
@@ -87,9 +85,9 @@ describe('Desk local workflow', () => {
         vi.mocked(api.getMessages).mockImplementationOnce(() => old.promise);
         open();
         await settle();
-        fireEvent.click(screen.getByRole('button', {name: 'Session B'}));
+        fireEvent.click(screen.getByRole('button', {name: /Session B/}));
         await settle();
-        fireEvent.click(screen.getByRole('button', {name: 'Session A'}));
+        fireEvent.click(screen.getByRole('button', {name: /Session A/}));
         await settle();
         expect(screen.getByText('Transcript a')).toBeInTheDocument();
         await act(async () => old.resolve(message('Outdated transcript')));

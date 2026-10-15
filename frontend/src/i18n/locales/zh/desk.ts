@@ -1,6 +1,13 @@
 // Desk
 export default {
   "desk": {
+    "sessions": "会话",
+    "group": {
+      "waiting": "等你处理",
+      "running": "进行中",
+      "failed": "失败",
+      "done": "已完成"
+    },
     "noBackgroundTasks": "暂无后台任务",
     "backgroundTasksHint": "Claude 在后台运行的命令和子代理会显示在这里，回复后仍会继续运行。",
     "tasksRunning": "运行中",

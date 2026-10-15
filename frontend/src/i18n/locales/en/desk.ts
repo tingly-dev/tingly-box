@@ -1,6 +1,13 @@
 // Desk
 export default {
   "desk": {
+    "sessions": "Sessions",
+    "group": {
+      "waiting": "Waiting on you",
+      "running": "Working",
+      "failed": "Failed",
+      "done": "Done"
+    },
     "noBackgroundTasks": "No background tasks",
     "backgroundTasksHint": "Commands and subagents Claude runs in the background show up here, and keep running after its reply.",
     "tasksRunning": "Running",

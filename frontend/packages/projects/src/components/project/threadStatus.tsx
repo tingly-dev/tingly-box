@@ -86,16 +86,3 @@ export function ThreadSubtitle({ thread }: { thread: Thread }) {
     }
     return <>{(thread.last_report || '').split('\n')[0] || t('thread.noRepo')}</>;
 }
-
-/** A quiet group heading for the Overview: a status dot, the name, a count. */
-export function StatusHeading({ status, count }: { status: ThreadStatus; count: number }) {
-    const { t } = useTranslation('projects');
-    const c = statusColor(status);
-    return (
-        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
-            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: c === 'default' ? 'text.disabled' : `${c}.main` }} />
-            <Box component="span" sx={{ fontSize: 12, fontWeight: 600, color: c === 'default' ? 'text.secondary' : `${c}.main` }}>{t(`overview.group.${status}`)}</Box>
-            <Box component="span" sx={{ fontSize: 12, color: 'text.disabled' }}>{count}</Box>
-        </Box>
-    );
-}

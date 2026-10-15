@@ -44,6 +44,31 @@ on, and its sidebar shows only the sections whose flag is on.
   polls slowly otherwise. Folder shortcuts are synced between the two
   `useDeskProjects` instances by `DESK_FOLDERS_EVENT`.
 
+## Step 3a: one workspace shell (TEP step 3)
+
+Direction (YZ, 2026-10-15): Desk adopts Projects' interaction; generic UI
+lives in `@tingly/projects`, Tingly Box-only parts (profile, model tiers,
+status line, terminal handoff) come in through props/slots, and the
+standalone tingly-project keeps building.
+
+- `WorkspaceLayout` + `useWorkspacePane` (package): header, main area and a
+  resizable side pane that becomes a drawer below `lg`. ProjectPage is built
+  on it; so is Desk.
+- `StatusGroups` (package): rows grouped by status, most urgent first, with
+  collapsed groups for finished work. The project Overview's thread list and
+  Desk's session list are both this component.
+- Desk's page is now that shell: the header names the working directory (or
+  "Working folders" when unscoped), the side pane lists its sessions in
+  groups (waiting on you, working, failed, done, archived), and the main
+  area shows the open session or the new-session form. Desk's own left
+  sidebar (`DeskSidebar`) is gone; the Projects sidebar picks the directory.
+- The one deliberate difference from a project: a session opens in the main
+  area, not in the side pane, because a Desk session is the work surface
+  itself (a project's main area is its coordinator conversation).
+
+Next (3b): the thread view and Desk's session view converge on the shared
+Transcript and Desk's Composer, with TB controls as slots.
+
 ## Not yet
 
 - The rail dot still reflects Projects only (TEP step 2: one waiting signal).

@@ -1,18 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Badge, Box, Button, Drawer, IconButton, Link, Skeleton, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Box, Button, IconButton, Link, Skeleton, Tooltip, Typography } from '@mui/material';
 import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, unwrap, type Project, type ProjectMessage, type Thread, type ThreadEvent } from '../client';
 import { ConversationPane } from '../components/project/ConversationPane';
 import { OverviewPane } from '../components/project/OverviewPane';
 import { ProjectSettingsDialog, type SettingsTab } from '../components/project/ProjectSettingsDialog';
-import { PANE_DEFAULT, PaneResizer, clampPane } from '../components/project/PaneResizer';
 import { ThreadPanel } from '../components/project/ThreadPanel';
-import { OverviewPane as OverviewIcon, Pause, Settings, Star, StarBorder } from '../components/icons';
+import { WorkspaceLayout, useWorkspacePane } from '../components/workspace/WorkspaceLayout';
+import { Pause, Settings, Star, StarBorder } from '../components/icons';
 import { useNotify } from '../hooks/useNotify';
 import { useProjectEvents, type ProjectEvent } from '../hooks/useProjectEvents';
 import { useProjectsHost } from '../host/ProjectsHost';
-import { readLocal, writeLocal } from '../utils/storage';
 
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
@@ -26,8 +25,6 @@ function upsert<T extends { id: string }>(list: T[], item: T): T[] {
 export default function ProjectPage() {
     const { id = '' } = useParams();
     const { t } = useTranslation('projects');
-    const theme = useTheme();
-    const narrow = useMediaQuery(theme.breakpoints.down('lg'));
     const navigate = useNavigate();
     const notify = useNotify();
     const { onProjectsChanged: refresh, paths: routes, embedded } = useProjectsHost();
@@ -40,11 +37,7 @@ export default function ProjectPage() {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [threadEvents, setThreadEvents] = useState<ThreadEvent[] | null>(null);
-    const [paneOpen, setPaneOpen] = useState(() => readLocal('overviewOpen') !== '0');
-    const [paneWidth, setPaneWidth] = useState(() => clampPane(Number(readLocal('paneWidth')) || PANE_DEFAULT));
-    const row = useRef<HTMLDivElement>(null);
-    // On narrow screens the pane is a drawer, closed until asked for.
-    const [drawerOpen, setDrawerOpen] = useState(false);
+    const pane = useWorkspacePane();
     const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
     const [memoryKey, setMemoryKey] = useState(0);
     const [libraryKey, setLibraryKey] = useState(0);
@@ -80,15 +73,6 @@ export default function ProjectPage() {
         setMessages(null);
         void load();
     }, [load]);
-
-    // Keep the conversation usable when the window shrinks; the saved width
-    // comes back once there is room again.
-    useEffect(() => {
-        const fit = () => setPaneWidth(clampPane(Number(readLocal('paneWidth')) || PANE_DEFAULT, row.current?.clientWidth));
-        fit();
-        window.addEventListener('resize', fit);
-        return () => window.removeEventListener('resize', fit);
-    }, []);
 
     useEffect(() => {
         setThreadEvents(null);
@@ -148,24 +132,12 @@ export default function ProjectPage() {
             p.set('thread', tid);
             return p;
         });
-        if (narrow) setDrawerOpen(true);
-        else if (!paneOpen) setPaneOpen(true);
+        pane.reveal();
     };
     const closeThread = () => setParams((p) => {
         p.delete('thread');
         return p;
     });
-    const togglePane = () => {
-        if (narrow) {
-            setDrawerOpen((v) => !v);
-            return;
-        }
-        setPaneOpen((v) => {
-            writeLocal('overviewOpen', v ? '0' : '1');
-            return !v;
-        });
-    };
-
     const patch = async (body: { starred?: boolean; paused?: boolean; archived?: boolean }) => {
         try {
             setProject(await unwrap(api.PATCH('/api/v1/projects/{id}', { params: { path: { id } }, body })));
@@ -190,17 +162,21 @@ export default function ProjectPage() {
         <Alert severity="warning" icon={<Pause />} sx={{ mb: 1 }} action={<Button color="inherit" size="small" onClick={() => void patch({ paused: false })}>{t('projectSettings.resume')}</Button>}>{t('project.pausedBanner')}</Alert>
     ) : null;
 
-    const pane = threadId ? (
+    const side = threadId ? (
         <ThreadPanel projectId={id} threadId={threadId} thread={selected} events={threadEvents} running={threadRunning} disabled={blocked} onBack={closeThread} />
     ) : (
         <OverviewPane projectId={id} threads={threads} onOpen={openThread} libraryKey={libraryKey} />
     );
 
     return (
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: { xs: embedded ? 2 : 6, md: 3 }, py: 1, minHeight: 52, borderBottom: 1, borderColor: 'divider' }}>
-                {project ? (
-                    <Box sx={{ minWidth: 0, flex: 1 }}>
+        <>
+            <WorkspaceLayout
+                pane={pane}
+                headerInsetXs={embedded ? 2 : 6}
+                paneLabel={t('project.overview')}
+                paneAttention={waiting > 0}
+                title={project ? (
+                    <>
                         <Typography variant="h5" noWrap>
                             {/* No Projects sidebar in a host: the way back to the list is here. */}
                             {embedded && (
@@ -212,27 +188,20 @@ export default function ProjectPage() {
                             {project.name}
                         </Typography>
                         {project.goal && <Typography variant="caption" color="text.secondary" noWrap component="div">{project.goal}</Typography>}
-                    </Box>
-                ) : <Skeleton width={200} sx={{ flex: 1 }} />}
-                {project && (
+                    </>
+                ) : <Skeleton width={200} />}
+                actions={project && (
                     <>
                         <Tooltip title={project.starred ? t('common.unstar') : t('common.star')}>
                             <IconButton size="small" onClick={() => void patch({ starred: !project.starred })}>{project.starred ? <Star fontSize="small" color="primary" /> : <StarBorder fontSize="small" />}</IconButton>
-                        </Tooltip>
-                        <Tooltip title={t('project.overview')}>
-                            <IconButton size="small" onClick={togglePane} aria-label={t('project.overview')}>
-                                <Badge color="warning" variant="dot" invisible={waiting === 0}><OverviewIcon fontSize="small" /></Badge>
-                            </IconButton>
                         </Tooltip>
                         <Tooltip title={t('projectSettings.title')}>
                             <IconButton size="small" onClick={() => setSettingsTab('general')} aria-label={t('projectSettings.title')}><Settings fontSize="small" /></IconButton>
                         </Tooltip>
                     </>
                 )}
-            </Box>
-
-            <Box ref={row} sx={{ flex: 1, display: 'flex', minHeight: 0 }}>
-                {messages === null ? (
+                side={side}
+                main={messages === null ? (
                     <Box sx={{ flex: 1, p: 3 }}><Skeleton variant="rounded" height={80} /></Box>
                 ) : (
                     <ConversationPane
@@ -263,18 +232,7 @@ export default function ProjectPage() {
                         }}
                     />
                 )}
-                {narrow ? (
-                    <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}
-                        slotProps={{ paper: { sx: { width: { xs: '100%', sm: PANE_DEFAULT } } } }}>
-                        {pane}
-                    </Drawer>
-                ) : paneOpen && (
-                    <Box sx={{ position: 'relative', width: paneWidth, flexShrink: 0, borderLeft: 1, borderColor: 'divider', bgcolor: 'background.paper', minHeight: 0 }}>
-                        <PaneResizer width={paneWidth} onWidth={setPaneWidth} onCommit={(w) => writeLocal('paneWidth', String(w))} />
-                        {pane}
-                    </Box>
-                )}
-            </Box>
+            />
 
             {project && settingsTab && (
                 <ProjectSettingsDialog
@@ -290,6 +248,6 @@ export default function ProjectPage() {
                     memoryKey={memoryKey}
                 />
             )}
-        </Box>
+        </>
     );
 }

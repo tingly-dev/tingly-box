@@ -68,10 +68,10 @@ const LayoutInner = ({ children }: LayoutProps) => {
     // small window and duplicate the hub's own status row.
     const isHubPage = location.pathname === '/hub';
     const isDeskPage = location.pathname === '/desk';
-    // Projects' pages are work surfaces that lay out their own spacing (the
-    // project page is a full-height split view), so they get the content
-    // area edge to edge, clear of the mobile menu bar only.
-    const isProjectsPage = location.pathname === '/projects' || location.pathname.startsWith('/projects/');
+    // Projects' pages and Desk are work surfaces that lay out their own
+    // spacing (full-height split views), so they get the content area edge
+    // to edge, clear of the mobile menu bar only.
+    const isProjectsPage = location.pathname === '/projects' || location.pathname.startsWith('/projects/') || isDeskPage;
 
     const isActive = (path: string) => location.pathname === path;
     const isChildActive = (children?: ActivityItem['children']) =>
@@ -309,7 +309,7 @@ const LayoutInner = ({ children }: LayoutProps) => {
                 {/* The hub panel is full-bleed: no mobile toolbar exists on
                     /hub (nav is hidden above), so mobileContentSx's xs
                     padding-top would just be 72px of dead space. */}
-                <Box sx={isHubPage ? { flex: 1, minHeight: 0, overflow: 'hidden' } : isProjectsPage ? { flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', pt: { xs: 7, md: 0 } } : isDeskPage ? {...mobileContentSx, minHeight: 0, overflow: 'hidden', px: {xs: 0.5, md: 3}, pb: {xs: 0.5, md: 3}, pt: {xs: 7.5, md: 3}} : mobileContentSx}>
+                <Box sx={isHubPage ? { flex: 1, minHeight: 0, overflow: 'hidden' } : isProjectsPage ? { flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', pt: { xs: 7, md: 0 } } : mobileContentSx}>
                     {children ?? <Outlet />}
                 </Box>
             </Box>

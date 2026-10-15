@@ -1,64 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
-import { Box, Button, Chip, Collapse, IconButton, LinearProgress, Tab, Tabs, Tooltip, Typography } from '@mui/material';
+import { Box, Button, Chip, IconButton, LinearProgress, Tab, Tabs, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { CopyIconButton } from '@tingly/ui';
 import { api, apiFetch, unwrap, type LibraryFile, type Thread } from '../../client';
-import { Delete, Description, Download, ExpandMore, UploadFile } from '../icons';
+import { Delete, Description, Download, UploadFile } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { formatBytes, timeAgo } from '../../utils/format';
-import { STATUS_ORDER, StatusHeading, ThreadSubtitle } from './threadStatus';
+import { STATUS_ORDER, ThreadSubtitle, statusColor } from './threadStatus';
+import { StatusGroups } from '../workspace/StatusGroups';
 
 const mono = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' } as const;
 
-function ThreadRow({ thread, onOpen }: { thread: Thread; onOpen: (id: string) => void }) {
-    const { i18n } = useTranslation('projects');
-    return (
-        <Box
-            role="button"
-            tabIndex={0}
-            onClick={() => onOpen(thread.id)}
-            onKeyDown={(e) => e.key === 'Enter' && onOpen(thread.id)}
-            sx={{ px: 1.5, py: 1, borderRadius: 2, '&:hover': { bgcolor: 'action.hover' }, outline: 'none' }}
-        >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 500, color: 'text.primary' }}>{thread.title}</Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>{timeAgo(thread.updated_at, i18n.language)}</Typography>
-            </Box>
-            <Typography variant="caption" color="text.secondary" noWrap component="div"><ThreadSubtitle thread={thread} /></Typography>
-        </Box>
-    );
-}
-
-function ThreadGroups({ threads, onOpen }: { threads: Thread[]; onOpen: (id: string) => void }) {
-    const { t } = useTranslation('projects');
-    const [showResolved, setShowResolved] = useState(false);
-    if (threads.length === 0) {
-        return <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>{t('overview.noThreads')}</Typography>;
-    }
-    return (
-        <Box sx={{ py: 1 }}>
-            {STATUS_ORDER.map((status) => {
-                const list = threads.filter((th) => th.status === status);
-                if (list.length === 0) return null;
-                const collapsible = status === 'resolved';
-                return (
-                    <Box key={status} sx={{ mb: 1.5 }}>
-                        <Box
-                            role={collapsible ? 'button' : undefined}
-                            onClick={collapsible ? () => setShowResolved((v) => !v) : undefined}
-                            sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.5 }}
-                        >
-                            <StatusHeading status={status} count={list.length} />
-                            {collapsible && <ExpandMore sx={{ fontSize: 16, color: 'text.secondary', transform: showResolved ? 'rotate(180deg)' : 'none' }} />}
-                        </Box>
-                        <Collapse in={!collapsible || showResolved}>
-                            {list.map((th) => <ThreadRow key={th.id} thread={th} onOpen={onOpen} />)}
-                        </Collapse>
-                    </Box>
-                );
-            })}
-        </Box>
-    );
+function ThreadGroups({ threads, selectedId, onOpen }: { threads: Thread[]; selectedId?: string; onOpen: (id: string) => void }) {
+    const { t, i18n } = useTranslation('projects');
+    const groups = STATUS_ORDER.map((status) => ({
+        key: status, label: t(`overview.group.${status}`), color: statusColor(status), collapsed: status === 'resolved',
+    }));
+    const rows = threads.map((th) => ({
+        id: th.id, group: th.status, title: th.title, selected: th.id === selectedId,
+        subtitle: <ThreadSubtitle thread={th} />, meta: timeAgo(th.updated_at, i18n.language),
+    }));
+    return <StatusGroups groups={groups} rows={rows} onOpen={onOpen} empty={t('overview.noThreads')} />;
 }
 
 function Library({ projectId, refreshKey }: { projectId: string; refreshKey: number }) {
