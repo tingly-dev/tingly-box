@@ -47,7 +47,7 @@ export default {
     "newInFolder": "在此文件夹中创建会话",
     "folderPlaceholder": "/工作目录路径",
     "modelDefault": "默认",
-    "modelUnified": "{{route}}：此配置为所有层级使用同一个模型，请在该配置的规则中修改",
+    "modelUnifiedHint": "这个配置方案的所有档位都用同一个模型，要换请改配置方案的规则。",
     "model": "模型",
     "newSessionHeading": "需要代理处理什么任务？",
     "promptPlaceholder": "描述任务…",

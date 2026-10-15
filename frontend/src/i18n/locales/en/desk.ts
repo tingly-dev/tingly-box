@@ -47,7 +47,7 @@ export default {
     "newInFolder": "New session in this folder",
     "folderPlaceholder": "/path/to/folder",
     "modelDefault": "Default",
-    "modelUnified": "{{route}} — this profile uses one model for every tier; change it in the profile's rules",
+    "modelUnifiedHint": "This profile uses one model for every tier. Change it in the profile's rules.",
     "model": "Model",
     "newSessionHeading": "What should the agent work on?",
     "promptPlaceholder": "Describe a task…",

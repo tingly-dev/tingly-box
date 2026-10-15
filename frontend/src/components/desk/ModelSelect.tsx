@@ -1,10 +1,10 @@
-import {Psychology, ExpandMore} from '@/components/icons';
+import {AutoAwesome, ExpandMore} from '@/components/icons';
 import {profileApi} from '@/services/profileApi';
 import type {ClaudeCodeModels as ModelChoice, ClaudeCodeModelTier as ModelTier} from '@/services/profileApi';
-import {Box, MenuItem, Select, Stack, Tooltip, Typography} from '@mui/material';
+import {Box, MenuItem, Select, Stack, Typography} from '@mui/material';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import { fontMono } from '@/theme/fonts';
+import {fontMono, fontSizes} from '@/theme/fonts';
 import {composerPickerLabelSx, composerPickerSx} from '@tingly/projects';
 
 interface ModelSelectProps {
@@ -24,8 +24,8 @@ const concrete = (tier: ModelTier) => tier.provider_model || tier.model;
 // ModelSelect sits beside the profile picker and always names the model a
 // session runs on. A profile that routes tiers separately lets the session
 // pick one (passed to Claude Code as --model); a unified profile has one
-// model for every tier, so the chip shows it without a menu — changing it
-// means editing the profile's rules, which would affect every client.
+// model for every tier, so its menu shows that one model and says that
+// changing it means editing the profile's rules (it affects every client).
 const ModelSelect = ({profile, value, onChange, disabled}: ModelSelectProps) => {
     const {t} = useTranslation();
     const [choice, setChoice] = useState<{profile: string; data: ModelChoice} | null>(null);
@@ -49,23 +49,10 @@ const ModelSelect = ({profile, value, onChange, disabled}: ModelSelectProps) => 
         : t('desk.modelDefault', {defaultValue: 'Default'}));
     const route = (tier: ModelTier) => (tier.provider_name ? `${concrete(tier)} @ ${tier.provider_name}` : tier.model);
 
-    if (data.unified) {
-        const only = data.tiers[0];
-        return (
-            <Tooltip title={t('desk.modelUnified', {
-                defaultValue: '{{route}} — this profile uses one model for every tier; change it in the profile\'s rules',
-                route: route(only),
-            })}
-            >
-                <Stack direction="row" spacing={0.5} sx={{...composerPickerSx, alignItems: 'center', py: 0.5}} aria-label={t('desk.model', {defaultValue: 'Model'})}>
-                    <Psychology/>
-                    <Typography noWrap sx={composerPickerLabelSx}>{concrete(only)}</Typography>
-                </Stack>
-            </Tooltip>
-        );
-    }
-
-    const selected = data.tiers.find((x) => x.alias === value) ?? data.tiers[0];
+    // A unified profile has one model for every tier: the menu still opens,
+    // shows that model and says where to change it.
+    const tiers = data.unified ? [data.tiers[0]] : data.tiers;
+    const selected = tiers.find((x) => x.alias === value) ?? tiers[0];
     return (
         <Select
             disabled={disabled}
@@ -79,22 +66,27 @@ const ModelSelect = ({profile, value, onChange, disabled}: ModelSelectProps) => 
             inputProps={{'aria-label': t('desk.model', {defaultValue: 'Model'})}}
             renderValue={() => (
                 <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
-                    <Psychology/>
+                    <AutoAwesome/>
                     <Typography noWrap sx={composerPickerLabelSx}>
-                        {tierLabel(selected.alias)} · {concrete(selected)}
+                        {data.unified ? concrete(selected) : `${tierLabel(selected.alias)} · ${concrete(selected)}`}
                     </Typography>
                 </Stack>
             )}
             sx={composerPickerSx}
         >
-            {data.tiers.map((tier) => (
+            {tiers.map((tier) => (
                 <MenuItem key={tier.alias} value={tier.alias}>
                     <Box>
-                        <Typography variant="body2" sx={{color: 'text.primary'}}>{tierLabel(tier.alias)}</Typography>
-                        <Typography variant="caption" sx={{color: 'text.secondary', fontFamily: fontMono}}>{route(tier)}</Typography>
+                        <Typography variant="body2" sx={{color: 'text.primary'}}>{data.unified ? concrete(tier) : tierLabel(tier.alias)}</Typography>
+                        <Typography sx={{color: 'text.secondary', fontFamily: fontMono, fontSize: fontSizes.xs}}>{route(tier)}</Typography>
                     </Box>
                 </MenuItem>
             ))}
+            {data.unified && (
+                <Typography component="li" sx={{px: 2, py: 1, maxWidth: 320, fontSize: fontSizes.sm, color: 'text.secondary'}}>
+                    {t('desk.modelUnifiedHint', {defaultValue: 'This profile uses one model for every tier. Change it in the profile\'s rules.'})}
+                </Typography>
+            )}
         </Select>
     );
 };
