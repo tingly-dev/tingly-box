@@ -56,3 +56,64 @@ func TestResolveProviderModels_ExpiredCache_FetchFails_ServesStale(t *testing.T)
 	require.NoError(t, err)
 	assert.Empty(t, refreshed.Models, "manual refresh must not mask the failure with the stale list")
 }
+
+// A manual refresh invalidates the cache even when the upstream call fails:
+// the next normal read re-queries upstream rather than serving the
+// pre-refresh list until its TTL runs out, and still falls back to that list
+// while upstream stays down. A later success clears the invalidation.
+func TestResolveProviderModels_ManualRefreshInvalidatesCache(t *testing.T) {
+	up := false
+	hits := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		if !up {
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"tb-new","object":"model"}]}`))
+	}))
+	defer upstream.Close()
+
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	require.NoError(t, err)
+	p := &typ.Provider{
+		Name:     "upstream-tb",
+		APIBase:  upstream.URL + "/tingly/openai/v1",
+		APIStyle: protocol.APIStyleOpenAI,
+		AuthType: typ.AuthTypeAPIKey,
+		Token:    "tb-token",
+		Enabled:  true,
+	}
+	require.NoError(t, cfg.AddProvider(p))
+	require.NoError(t, cfg.GetModelManager().SaveModels(p, []string{"tb-old"}, db.ModelSourceAPI))
+
+	// Fresh cache: a normal read does not touch upstream.
+	got, err := cfg.ResolveProviderModels(false, false, p.UUID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"tb-old"}, got.Models)
+	assert.Equal(t, 0, hits)
+
+	// Manual refresh fails, but the cache is now invalidated.
+	_, err = cfg.ResolveProviderModels(true, false, p.UUID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, hits)
+
+	got, err = cfg.ResolveProviderModels(false, false, p.UUID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, hits, "invalidated cache must re-query upstream")
+	assert.Equal(t, []string{"tb-old"}, got.Models, "stale list still served while upstream is down")
+
+	// Upstream recovers: the next read picks up the change and re-caches it.
+	up = true
+	got, err = cfg.ResolveProviderModels(false, false, p.UUID)
+	require.NoError(t, err)
+	assert.Equal(t, ModelListSourceAPI, got.Source)
+	assert.Equal(t, []string{"tb-new"}, got.Models)
+	assert.False(t, got.LastUpdatedAt.IsZero())
+
+	got, err = cfg.ResolveProviderModels(false, false, p.UUID)
+	require.NoError(t, err)
+	assert.Equal(t, ModelListSourceCache, got.Source)
+	assert.Equal(t, 3, hits, "successful save clears the invalidation")
+}

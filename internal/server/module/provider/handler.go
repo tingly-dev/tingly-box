@@ -19,6 +19,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/bind"
 
 	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/dataio"
@@ -445,15 +446,29 @@ func (h *Handler) ToggleProvider(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// modelListExpiry returns the response expiry for a resolved source. VModel
-// lists are static (far future, avoiding a serialised zero time); every other
-// source uses a 1h TTL matching the DB cache.
-func modelListExpiry(source config.ModelListSource) time.Time {
-	if source == config.ModelListSourceVModel {
+// modelListExpiry returns when the frontend should stop trusting a resolved
+// list. Lists fetched from upstream expire one cache TTL after that fetch (not
+// after this response), so the browser never holds a list longer than the
+// server would; an already-expired stale list gets a short grace period so
+// the browser retries soon without hammering a down upstream. VModel lists
+// are static (far future, avoiding a serialised zero time); template lists
+// keep a plain TTL from now.
+func modelListExpiry(resolved config.ResolvedModels) time.Time {
+	now := time.Now()
+	switch resolved.Source {
+	case config.ModelListSourceVModel:
 		const neverExpires = 20 * 365 * 24 * time.Hour
-		return time.Now().Add(neverExpires)
+		return now.Add(neverExpires)
+	case config.ModelListSourceCache, config.ModelListSourceAPI:
+		if !resolved.LastUpdatedAt.IsZero() {
+			const minGrace = time.Minute
+			if exp := resolved.LastUpdatedAt.Add(catalog.ModelCacheTTL); exp.After(now.Add(minGrace)) {
+				return exp
+			}
+			return now.Add(minGrace)
+		}
 	}
-	return time.Now().Add(1 * time.Hour)
+	return now.Add(catalog.ModelCacheTTL)
 }
 
 // UpdateProviderModelsByUUID force-refreshes and returns the model list for the
@@ -498,7 +513,12 @@ func (h *Handler) UpdateProviderModelsByUUID(c *gin.Context) {
 		"models_count": len(resolved.Models),
 	}).Info(fmt.Sprintf("Successfully fetched %d models for provider %s", len(resolved.Models), uid))
 
-	providerModels := ProviderModelInfo{Models: resolved.Models, Source: ModelCacheSource(resolved.Source)}
+	providerModels := ProviderModelInfo{
+		Models:      resolved.Models,
+		Source:      ModelCacheSource(resolved.Source),
+		ExpiresAt:   modelListExpiry(resolved),
+		LastUpdated: resolved.LastUpdated,
+	}
 
 	if h.quotaManager != nil {
 		ctx := c.Request.Context()
@@ -535,7 +555,7 @@ func (h *Handler) GetProviderModelsByUUID(c *gin.Context) {
 	providerModels := ProviderModelInfo{
 		Models:      resolved.Models,
 		Source:      ModelCacheSource(resolved.Source),
-		ExpiresAt:   modelListExpiry(resolved.Source),
+		ExpiresAt:   modelListExpiry(resolved),
 		LastUpdated: resolved.LastUpdated,
 	}
 
