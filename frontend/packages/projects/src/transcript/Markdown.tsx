@@ -52,8 +52,8 @@ const Markdown = ({content}: {content: string}) => (
     <Box
         sx={{
             color: 'text.primary',
-            fontSize: '0.9375rem',
-            lineHeight: 1.7,
+            fontSize: '0.875rem',
+            lineHeight: 1.65,
             wordBreak: 'break-word',
             '& p': {m: 0, mb: 1.25},
             '& > .x-markdown > :last-child, & p:last-child': {mb: 0},

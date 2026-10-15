@@ -41,7 +41,7 @@ const mono = {fontFamily: fontMono, fontSize: fontSizes.md};
 // the primary color at reading size; labels, notes and tool detail stay
 // secondary so they recede.
 const conversationText = {
-    color: 'text.primary', fontSize: '0.9375rem', lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+    color: 'text.primary', fontSize: '0.875rem', lineHeight: 1.65, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
 } as const;
 
 const preBox = {
@@ -52,7 +52,7 @@ const preBox = {
 const UserBubble = ({message}: {message: TranscriptEntry}) => (
     <Box sx={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end'}}>
         {message.author && <Typography variant="caption" sx={{color: 'text.secondary', mb: 0.25}}>{message.author}</Typography>}
-        <Box sx={{maxWidth: '80%', bgcolor: 'action.hover', px: 2, py: 1.25, borderRadius: 3}}>
+        <Box sx={{maxWidth: '80%', bgcolor: 'action.hover', px: 1.75, py: 1, borderRadius: 3}}>
             <Typography variant="body1" sx={conversationText}>{message.content}</Typography>
         </Box>
     </Box>

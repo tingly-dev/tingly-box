@@ -61,9 +61,6 @@ export const en = {
         example2: 'Add a README section explaining how to run the tests.',
         example3: 'From now on, propose threads and wait for my go-ahead before starting them.',
         suggested: 'Suggested threads', start: 'Start', startAll: 'Start all {{count}}',
-        update: {
-            finished: '“{{title}}” finished', needs_input: '“{{title}}” needs your input', failed: '“{{title}}” failed',
-        },
     },
     overview: {
         threads: 'Threads', threadsWaiting: 'Threads · {{count}} waiting', library: 'Library',
@@ -80,7 +77,7 @@ export const en = {
         fromCoordinator: 'Coordinator', allowThread: 'Always allow {{tool}} here',
         placeholder: 'Message this thread directly…', queuePlaceholder: 'Message this thread — it reads it after its current turn…',
         resolvedPlaceholder: 'Reopen the thread to send it more work',
-        mergeIt: 'Merge it', mergedInto: 'Merged into {{base}}', merged: 'Merged {{branch}} into {{base}}', mergeBlocked: 'Not merged',
+        mergeIt: 'Merge it', mergedInto: 'Merged into {{base}}', merged: 'Merged {{branch}} into {{base}}', mergeBlocked: 'Not merged', mergedBadge: 'Merged',
         mergeHint: 'Merges into {{base}} in {{repo}}. The checkout must be on {{base}} with no local changes.',
         noChanges: 'No committed changes.', truncated: 'Diff truncated.',
         uncommittedWarn: 'The thread left uncommitted changes in its worktree; they are not part of the merge:',

@@ -6,7 +6,7 @@ import { api, apiFetch, unwrap, type LibraryFile, type Thread } from '../../clie
 import { Delete, Description, Download, UploadFile } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { formatBytes, timeAgo } from '../../utils/format';
-import { STATUS_ORDER, ThreadSubtitle, statusColor } from './threadStatus';
+import { STATUS_ORDER, ThreadBadges, ThreadSubtitle, statusColor } from './threadStatus';
 import { StatusGroups } from '../workspace/StatusGroups';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
@@ -19,7 +19,7 @@ function ThreadGroups({ threads, selectedId, onOpen }: { threads: Thread[]; sele
     }));
     const rows = threads.map((th) => ({
         id: th.id, group: th.status, title: th.title, selected: th.id === selectedId,
-        subtitle: <ThreadSubtitle thread={th} />, meta: timeAgo(th.updated_at, i18n.language),
+        subtitle: <ThreadSubtitle thread={th} />, badges: <ThreadBadges thread={th} />, meta: timeAgo(th.updated_at, i18n.language),
     }));
     return <StatusGroups groups={groups} rows={rows} onOpen={onOpen} empty={t('overview.noThreads')} />;
 }

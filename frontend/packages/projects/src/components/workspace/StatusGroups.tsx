@@ -19,7 +19,9 @@ export interface StatusRow {
     title: string;
     /** The line under the title: what it waits on, where its work is. */
     subtitle?: ReactNode;
-    /** Right of the title: when it last moved. */
+    /** At the right: small pills about its work (commits, merged). */
+    badges?: ReactNode;
+    /** At the far right: when it last moved. */
     meta?: ReactNode;
     selected?: boolean;
     /** Changed since the user last looked. */
@@ -53,10 +55,13 @@ function Row({ row, onOpen }: { row: StatusRow; onOpen: (id: string) => void }) 
             }}
         >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: '0.875rem', fontWeight: row.unseen ? 650 : 500, color: 'text.primary' }}>{row.title}</Typography>
-                {row.meta != null && <Typography component="span" variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>{row.meta}</Typography>}
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography noWrap sx={{ fontSize: '0.875rem', fontWeight: row.unseen ? 650 : 500, color: 'text.primary' }}>{row.title}</Typography>
+                    {row.subtitle != null && <Typography noWrap component="div" sx={{ fontSize: fontSizes.md, color: 'text.secondary' }}>{row.subtitle}</Typography>}
+                </Box>
+                {row.badges}
+                {row.meta != null && <Typography component="span" sx={{ flexShrink: 0, fontSize: fontSizes.sm, color: 'text.disabled', minWidth: 28, textAlign: 'right' }}>{row.meta}</Typography>}
             </Box>
-            {row.subtitle != null && <Typography variant="caption" color="text.secondary" noWrap component="div">{row.subtitle}</Typography>}
         </Box>
     );
 }

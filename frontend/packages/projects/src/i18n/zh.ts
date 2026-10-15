@@ -65,9 +65,6 @@ export const zh: Dict<typeof en> = {
         example2: '在 README 里加一节，说明如何运行测试。',
         example3: '从现在起，先提议线程，等我确认后再启动。',
         suggested: '建议的线程', start: '启动', startAll: '全部启动（{{count}}）',
-        update: {
-            finished: '「{{title}}」已完成', needs_input: '「{{title}}」需要你的输入', failed: '「{{title}}」失败了',
-        },
     },
     overview: {
         threads: '线程', threadsWaiting: '线程 · {{count}} 个等你处理', library: '文件库',
@@ -84,7 +81,7 @@ export const zh: Dict<typeof en> = {
         fromCoordinator: '协调者', allowThread: '本线程都允许 {{tool}}',
         placeholder: '直接给这个线程发消息…', queuePlaceholder: '给这个线程发消息——它会在当前这轮结束后读到…',
         resolvedPlaceholder: '重新打开线程才能继续发送工作',
-        mergeIt: '合并', mergedInto: '已合并进 {{base}}', merged: '已把 {{branch}} 合并进 {{base}}', mergeBlocked: '未合并',
+        mergeIt: '合并', mergedInto: '已合并进 {{base}}', merged: '已把 {{branch}} 合并进 {{base}}', mergeBlocked: '未合并', mergedBadge: '已合并',
         mergeHint: '合并进 {{repo}} 的 {{base}}。该工作区必须处于 {{base}} 且没有本地改动。',
         noChanges: '没有已提交的改动。', truncated: 'diff 已截断。',
         uncommittedWarn: '线程在 worktree 里留下了未提交的改动，它们不在本次合并中：',
