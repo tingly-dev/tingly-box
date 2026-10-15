@@ -1,6 +1,7 @@
 package protocolserver
 
 import (
+	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -53,4 +54,30 @@ func AuthTypeSortWeight(a typ.AuthType) int {
 	default:
 		return 1
 	}
+}
+
+// ruleModelInfo returns the catalog details (description, context, max
+// output) for a rule's first active service. The template is matched from
+// the backing provider itself — its user-chosen name is not a template id —
+// and looked up by the upstream model the rule routes to, falling back to the
+// rule's request model for rules that keep the upstream name.
+func ruleModelInfo(cfg *config.Config, rule typ.Rule) (catalog.ModelInfo, bool) {
+	tm := cfg.GetTemplateManager()
+	if tm == nil {
+		return catalog.ModelInfo{}, false
+	}
+	for _, svc := range rule.GetServices() {
+		if svc == nil || !svc.Active {
+			continue
+		}
+		provider, err := cfg.GetProviderByUUID(svc.Provider)
+		if err != nil || provider == nil {
+			continue
+		}
+		if info, ok := tm.GetModelInfoForProvider(provider, svc.Model); ok {
+			return info, true
+		}
+		return tm.GetModelInfoForProvider(provider, rule.RequestModel)
+	}
+	return catalog.ModelInfo{}, false
 }

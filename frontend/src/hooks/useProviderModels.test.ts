@@ -184,6 +184,48 @@ describe('useProviderModels - Cache Convergence', () => {
       });
     });
 
+    it('should dispatch refresh_finished even when the refresh fails', async () => {
+      mockApi.updateProviderModelsByUUID.mockRejectedValue(new Error('upstream down'));
+
+      const { result } = renderHook(() => useProviderModels());
+
+      await act(async () => {
+        await result.current.refreshModels('provider-1');
+      });
+
+      expect(mockDispatch).toHaveBeenCalledWith({
+        type: 'refresh_finished',
+        providerUuid: 'provider-1',
+      });
+    });
+
+    it('should clear refreshing state set by another instance once it finishes', async () => {
+      const { result } = renderHook(() => useProviderModels());
+      const calls = mockListen.mock.calls as unknown as Array<[(e: unknown) => void]>;
+      const listener = calls[calls.length - 1][0];
+
+      act(() => {
+        listener({ type: 'refresh_trigger', providerUuid: 'provider-1' });
+      });
+      expect(result.current.refreshingProviders).toContain('provider-1');
+
+      act(() => {
+        listener({ type: 'refresh_finished', providerUuid: 'provider-1' });
+      });
+      expect(result.current.refreshingProviders).not.toContain('provider-1');
+
+      // fetchModels must work again instead of short-circuiting to null.
+      mockApi.getProviderModelsByUUID.mockResolvedValue({
+        success: true,
+        data: { models: ['model-1'], source: 'db' },
+      });
+      let data: unknown = null;
+      await act(async () => {
+        data = await result.current.fetchModels('provider-1');
+      });
+      expect(data).not.toBeNull();
+    });
+
     it('should dispatch cache_invalidated event when removing models', () => {
       const { result } = renderHook(() => useProviderModels());
 

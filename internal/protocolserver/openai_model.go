@@ -57,7 +57,6 @@ func (ph *ProtocolHandler) openAIListModelsWithScenario(c *gin.Context, scenario
 	}
 
 	rules := cfg.GetRequestConfigs()
-	templateManager := cfg.GetTemplateManager()
 
 	var models []OpenAIModel
 	for _, rule := range rules {
@@ -72,12 +71,6 @@ func (ph *ProtocolHandler) openAIListModelsWithScenario(c *gin.Context, scenario
 		var created int64
 		services := rule.GetServices()
 
-		// Track provider for template lookup only — the backing provider's
-		// identity is intentionally not disclosed in the response, since
-		// /v1/models is consumed by external clients and must not leak
-		// upstream vendor identity.
-		var primaryProvider *typ.Provider
-
 		for i := range services {
 			svc := services[i]
 			// Skip nil services (defensive check after DB migration)
@@ -88,9 +81,6 @@ func (ph *ProtocolHandler) openAIListModelsWithScenario(c *gin.Context, scenario
 			if svc.Active {
 				provider, err := cfg.GetProviderByUUID(svc.Provider)
 				if err == nil {
-					if primaryProvider == nil {
-						primaryProvider = provider
-					}
 					// Parse LastUpdated timestamp if available
 					if provider.LastUpdated != "" {
 						if t, err := time.Parse(time.RFC3339, provider.LastUpdated); err == nil {
@@ -105,31 +95,18 @@ func (ph *ProtocolHandler) openAIListModelsWithScenario(c *gin.Context, scenario
 		// provider name here.
 		ownedBy := "tingly-box"
 
-		// Get model description from template if available
-		var description string
-		var context int
-		var maxOutput int
-		if templateManager != nil && primaryProvider != nil {
-			if tmpl, err := templateManager.GetTemplate(primaryProvider.Name); err == nil && tmpl != nil {
-				for _, modelInfo := range tmpl.Models {
-					if modelInfo.ID == rule.RequestModel {
-						description = modelInfo.Description
-						context = modelInfo.Context
-						maxOutput = modelInfo.MaxOutput
-						break
-					}
-				}
-			}
-		}
+		// Model details come from the catalog entry of the upstream model
+		// this rule routes to.
+		info, _ := ruleModelInfo(cfg, rule)
 
 		models = append(models, OpenAIModel{
 			ID:          rule.RequestModel,
 			Object:      "model",
 			Created:     created,
 			OwnedBy:     ownedBy,
-			Description: description,
-			Context:     context,
-			MaxOutput:   maxOutput,
+			Description: info.Description,
+			Context:     info.Context,
+			MaxOutput:   info.MaxOutput,
 			AuthType:    string(PrimaryAuthTypeForRule(cfg, rule)),
 		})
 	}

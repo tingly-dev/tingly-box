@@ -41,7 +41,7 @@ type ResolvedModels struct {
 // walking the full fallback chain in ONE place so every caller (HTTP read,
 // HTTP refresh, CLI, OAuth completion) sees identical behavior:
 //
-//	cache (DB) → VModel (virtual) → upstream API → embedded template
+//	cache (DB) → VModel (virtual) → upstream API → stale cache → embedded template
 //
 // When forceRefresh is false, a fresh-enough DB cache short-circuits the
 // chain; when true the cache is bypassed and upstream is re-queried (the
@@ -90,6 +90,16 @@ func (c *Config) ResolveProviderModels(forceRefresh, forceUpstream bool, uid str
 	if err := c.fetchAndSaveAPIModels(provider, forceUpstream); err == nil {
 		if fresh := c.modelManager.GetModels(uid); len(fresh) > 0 {
 			return finalize(fresh, ModelListSourceAPI), nil
+		}
+	}
+
+	// Step 3b: the cache only expired and the refetch failed (upstream briefly
+	// unreachable, e.g. another tingly-box restarting). Serve the last real
+	// list rather than dropping to the template or nothing. A manual refresh
+	// skips this so its failure is still reported.
+	if !forceRefresh && !forceUpstream {
+		if stale := c.modelManager.GetStaleModels(uid); len(stale) > 0 {
+			return finalize(stale, ModelListSourceCache), nil
 		}
 	}
 

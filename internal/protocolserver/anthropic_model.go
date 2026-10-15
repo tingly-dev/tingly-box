@@ -138,22 +138,9 @@ func (ph *ProtocolHandler) anthropicListModelsWithScenario(c *gin.Context, scena
 			}
 		}
 
-		// Get model description from template if available
-		var description string
-		var maxInputTokens int
-		var maxTokens int
-		if templateManager != nil && primaryProvider != nil {
-			if tmpl, err := templateManager.GetTemplate(primaryProvider.Name); err == nil && tmpl != nil {
-				for _, modelInfo := range tmpl.Models {
-					if modelInfo.ID == rule.RequestModel {
-						description = modelInfo.Description
-						maxInputTokens = modelInfo.Context
-						maxTokens = modelInfo.MaxOutput
-						break
-					}
-				}
-			}
-		}
+		// Model details come from the catalog entry of the upstream model
+		// this rule routes to.
+		info, _ := ruleModelInfo(cfg, rule)
 
 		// Build capabilities from Anthropic API provider data
 		var caps *ModelCapabilities
@@ -204,9 +191,9 @@ func (ph *ProtocolHandler) anthropicListModelsWithScenario(c *gin.Context, scena
 			DisplayName: displayName,
 			Type:        "model",
 			// Capabilities:   caps,
-			MaxInputTokens: maxInputTokens,
-			MaxTokens:      maxTokens,
-			Description:    description,
+			MaxInputTokens: info.Context,
+			MaxTokens:      info.MaxOutput,
+			Description:    info.Description,
 			AuthType:       string(PrimaryAuthTypeForRule(cfg, rule)),
 		})
 	}

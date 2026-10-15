@@ -9,6 +9,7 @@ import { usePageVisibility } from './usePageVisibility';
 type ModelCacheEvent =
   | { type: 'provider_models_update'; providerUuid: string; models: ProviderModelData | null }
   | { type: 'refresh_trigger'; providerUuid: string }
+  | { type: 'refresh_finished'; providerUuid: string }
   | { type: 'cache_invalidated'; providerUuid: string; reason: 'ttl_expired' | 'manual_refresh' | 'provider_deleted' };
 
 // Event system for provider models updates — crossTab:true propagates to other browser tabs
@@ -138,6 +139,13 @@ export const useProviderModels = () => {
                 next.delete(providerUuid);
                 return next;
             });
+            // Every listener that marked this provider as refreshing on
+            // refresh_trigger must clear it again, success or failure —
+            // otherwise its fetchModels short-circuits to null forever.
+            modelCacheEvent.dispatch({
+                type: 'refresh_finished',
+                providerUuid,
+            });
         }
 
         return null;
@@ -198,8 +206,17 @@ export const useProviderModels = () => {
                 }
 
                 case 'refresh_trigger':
-                    // Another tab is refreshing, show loading state
+                    // Another hook instance or tab is refreshing, show loading state
                     setRefreshingProviders(prev => new Set(prev).add(event.providerUuid));
+                    break;
+
+                case 'refresh_finished':
+                    setRefreshingProviders(prev => {
+                        if (!prev.has(event.providerUuid)) return prev;
+                        const next = new Set(prev);
+                        next.delete(event.providerUuid);
+                        return next;
+                    });
                     break;
 
                 case 'cache_invalidated':

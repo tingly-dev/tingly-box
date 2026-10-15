@@ -50,6 +50,13 @@ func (mm *ModelListManager) GetModels(uid string) []string {
 	return mm.modelStore.GetModels(uid, ModelCacheTTL)
 }
 
+// GetStaleModels returns the last stored model list regardless of age. It is
+// the fallback for when a refetch of an expired list fails: the previous real
+// list beats an embedded template or nothing.
+func (mm *ModelListManager) GetStaleModels(uid string) []string {
+	return mm.modelStore.GetModels(uid, 0)
+}
+
 // GetAllProviders returns all provider UUIDs that have models
 func (mm *ModelListManager) GetAllProviders() []string {
 	return mm.modelStore.GetAllProviders()
