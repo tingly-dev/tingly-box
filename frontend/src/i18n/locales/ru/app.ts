@@ -41,7 +41,7 @@ export default {
   },
   "layout": {
     "projects": "Проекты",
-    "projectsWaiting": "Поток ждёт вашего ответа",
+    "projectsWaiting": "Claude ждёт вашего ответа",
     "appTitle": "Tingly Box",
     "slogan": "Ваш интеллект под управлением.",
     "version": "версия<br/>{{version}}",

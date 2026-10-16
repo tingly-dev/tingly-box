@@ -43,10 +43,25 @@ interface ProjectSummaryLite {
     threads?: { waiting?: number };
 }
 
-/** Whether any active project has a thread waiting on the user. */
-export async function anyProjectWaiting(signal?: AbortSignal): Promise<boolean> {
-    const res = await projectsFetch('/api/v1/projects', { signal });
-    if (!res.ok) return false;
-    const body = (await res.json()) as { projects?: ProjectSummaryLite[] };
-    return (body.projects ?? []).some((p) => (p.threads?.waiting ?? 0) > 0);
+/** The fields of GET /api/v1/projects/workdirs the nav reads. */
+interface WorkdirLite {
+    waiting?: number;
+}
+
+async function readJSON<T>(path: string, signal?: AbortSignal): Promise<T | undefined> {
+    const res = await projectsFetch(path, { signal });
+    return res.ok ? ((await res.json()) as T) : undefined;
+}
+
+/**
+ * Whether anything in Projects waits on the user: a project thread or a
+ * working-folder session. One signal for the rail's dot, whichever kind it is.
+ */
+export async function anythingWaiting(signal?: AbortSignal): Promise<boolean> {
+    const [projects, folders] = await Promise.all([
+        readJSON<{ projects?: ProjectSummaryLite[] }>('/api/v1/projects', signal),
+        readJSON<{ workdirs?: WorkdirLite[] }>('/api/v1/projects/workdirs', signal),
+    ]);
+    return (projects?.projects ?? []).some((p) => (p.threads?.waiting ?? 0) > 0)
+        || (folders?.workdirs ?? []).some((w) => (w.waiting ?? 0) > 0);
 }

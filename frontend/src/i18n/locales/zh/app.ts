@@ -41,7 +41,7 @@ export default {
   },
   "layout": {
     "projects": "项目",
-    "projectsWaiting": "有线程在等你处理",
+    "projectsWaiting": "有线程或会话在等你处理",
     "appTitle": "Tingly Box",
     "slogan": "智能，尽在掌握。",
     "version": "版本<br/>{{version}}",

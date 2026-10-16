@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
-import { anyProjectWaiting, PROJECTS_CHANGED_EVENT } from '@/services/projectsApi';
+import { anythingWaiting, PROJECTS_CHANGED_EVENT } from '@/services/projectsApi';
 
 const POLL_MS = 30_000;
 
 /**
- * Whether any project has a thread waiting on the user, for the dot on the
- * rail's Projects item. Reads the project list (which carries each project's
- * waiting count), again whenever the Projects pages change a project, on a
- * slow poll while the tab is visible, and when the tab comes back.
+ * Whether a project thread or a working-folder session waits on the user,
+ * for the dot on the rail's Projects item. Reads the project and folder
+ * lists (which carry waiting counts), again whenever the Projects pages report
+ * a change, on a slow poll while the tab is visible, and when the tab comes
+ * back.
  */
 export function useProjectsWaiting(enabled: boolean): boolean {
     const [waiting, setWaiting] = useState(false);
@@ -19,7 +20,7 @@ export function useProjectsWaiting(enabled: boolean): boolean {
             if (document.visibilityState === 'hidden') return;
             ctrl?.abort();
             ctrl = new AbortController();
-            anyProjectWaiting(ctrl.signal).then(setWaiting).catch(() => {
+            anythingWaiting(ctrl.signal).then(setWaiting).catch(() => {
                 // Unreachable or aborted: keep what the dot showed.
             });
         };

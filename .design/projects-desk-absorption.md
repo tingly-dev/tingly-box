@@ -156,8 +156,10 @@ until phase 4.
      line strings moved to `components/claudeCode` and `claudeSession.*`.
    - [x] `desk.md` marked retired (its §3 engine behaviour still applies),
      `projects-panel.md` rewritten to the current panel.
-5. **After.** One waiting signal on the rail (#2063 step 2), hand a session to
-   a project, `@cc` visibility if wanted.
+5. **After.**
+   - [x] One waiting signal on the rail (#2063 step 2): the dot reads both the
+     project list and the working folders' waiting counts.
+   - [ ] Hand a session to a project, `@cc` visibility: only when asked for.
 
 ## Decisions
 

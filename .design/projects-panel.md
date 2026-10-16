@@ -96,5 +96,5 @@ conversation, chats, threads and folder sessions all write in it.
 
 ## Not yet
 
-- The rail dot reflects project threads only (TEP step 2: one waiting
-  signal that also counts folder sessions).
+- Nothing open. The rail dot is one waiting signal (TEP step 2): it lights
+  when a project thread or a working-folder session waits on the user.
