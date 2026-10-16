@@ -3,7 +3,9 @@
 // own. Threads record a little less than Desk sessions (no request id on a
 // tool call, a request's answer kept on the request itself), so this fills
 // the gaps: calls pair with their results in order, and a settled request
-// gets the answer entry the transcript expects.
+// gets the answer entry the transcript expects. A folder session also keeps
+// the request id, the parent of a subagent's steps, task events and usage,
+// which pass through as they are.
 import type { ThreadEvent } from '../../client';
 import type { TranscriptEntry } from '../../transcript';
 
@@ -44,6 +46,7 @@ export function threadTranscript(events: ThreadEvent[], running: boolean, author
 
     for (const e of events) {
         const timestamp = e.created_at;
+        const first = entries.length;
         switch (e.kind) {
             case 'user':
                 entries.push({ role: 'user', content: e.content, author: author(e.from), timestamp });
@@ -59,13 +62,19 @@ export function threadTranscript(events: ThreadEvent[], running: boolean, author
                 break;
             }
             case 'tool_use': {
-                const id = `call:${e.id}`;
+                const id = e.request_id || `call:${e.id}`;
                 open.push(id);
                 entries.push({ kind: 'tool_use', content: e.content, request_id: id, payload: parse(e.payload), timestamp });
                 break;
             }
             case 'tool_result':
-                entries.push({ kind: 'tool_result', content: e.content, request_id: open.pop(), payload: parse(e.payload), timestamp });
+                entries.push({ kind: 'tool_result', content: e.content, request_id: e.request_id || open.pop(), payload: parse(e.payload), timestamp });
+                break;
+            case 'task':
+                entries.push({ kind: 'task', content: '', request_id: e.request_id, payload: parse(e.payload), timestamp });
+                break;
+            case 'usage':
+                entries.push({ kind: 'usage', content: '', payload: parse(e.payload), timestamp });
                 break;
             case 'approval':
             case 'ask': {
@@ -95,6 +104,7 @@ export function threadTranscript(events: ThreadEvent[], running: boolean, author
             default:
                 entries.push({ kind: 'system', content: e.content, timestamp });
         }
+        if (e.parent) for (let i = first; i < entries.length; i++) entries[i].parent = e.parent;
     }
     return { entries, pendingRequestId: pending };
 }

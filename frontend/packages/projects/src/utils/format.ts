@@ -38,3 +38,8 @@ export function timeAgo(iso: string | undefined, locale: string): string {
     if (abs < 86400 * 365) return rtf.format(Math.round(diff / (86400 * 30)), 'month');
     return rtf.format(Math.round(diff / (86400 * 365)), 'year');
 }
+
+/** The last part of a folder path (either separator), or the path itself for a root. */
+export function folderName(path: string): string {
+    return path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path;
+}

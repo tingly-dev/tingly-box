@@ -1,14 +1,31 @@
 export const en = {
     common: {
         cancel: 'Cancel', save: 'Save', close: 'Close', delete: 'Delete', edit: 'Edit', rename: 'Rename',
-        copy: 'Copy', copied: 'Copied', more: 'More', star: 'Star', unstar: 'Unstar',
+        copy: 'Copy', copied: 'Copied', more: 'More', star: 'Star', unstar: 'Unstar', retry: 'Retry',
         tokensApprox: '≈ {{value}} tokens',
     },
     nav: {
         newChat: 'New chat', chats: 'Chats', projects: 'Projects', recentChats: 'Recent chats',
         settings: 'Settings', noChats: 'No chats yet', collapse: 'Close sidebar', expand: 'Open sidebar',
     },
-    sidebar: { noProjects: 'No projects yet', waiting_one: '{{count}} thread waits on you', waiting_other: '{{count}} threads wait on you' },
+    sidebar: { noWorkdirs: 'No working folders yet', sessionsWaiting_one: '{{count}} session waits on you', sessionsWaiting_other: '{{count}} sessions wait on you', noProjects: 'No projects yet', waiting_one: '{{count}} thread waits on you', waiting_other: '{{count}} threads wait on you' },
+    workdir: {
+        title: 'Working folders', add: 'Add working folder', remove: 'Remove from the sidebar',
+        addHelp: 'Enter an existing folder on the machine running this app. Sessions you start there work in the folder itself, with no worktree.',
+        pathExample: '/path/to/folder',
+    },
+    session: {
+        sessions: 'Sessions', new: 'New session', none: 'No sessions yet', folder: 'Working folder', chooseFolder: 'Choose a working folder',
+        folderPlaceholder: '/path/to/folder', heading: 'What should Claude work on?', promptPlaceholder: 'Describe a task…',
+        placeholder: 'Message this session…', queuePlaceholder: 'Message this session — it reads it after its current turn…',
+        archivedPlaceholder: 'Reopen the session to send it more work', archive: 'Archive session', reopen: 'Reopen session',
+        refreshFailed: 'Could not refresh the sessions. What is shown is the last loaded; reconnecting automatically.',
+        group: { waiting: 'Waiting on you', working: 'Working', idle: 'Done', resolved: 'Archived' },
+        permissions: 'Permissions', permissionDefault: 'Default permissions',
+        mode: {
+            default: 'Ask for everything', acceptEdits: 'Accept edits', auto: 'Auto', plan: 'Plan only', dontAsk: 'Don’t ask', bypassPermissions: 'Never ask',
+        },
+    },
     theme: { system: 'System', light: 'Light', dark: 'Dark', sunlit: 'Sunlit', claude: 'Claude', ds: 'DeepSeek' },
     home: {
         greetingMorning: 'Good morning', greetingAfternoon: 'Good afternoon', greetingEvening: 'Good evening', greetingNight: 'Burning the midnight oil?',

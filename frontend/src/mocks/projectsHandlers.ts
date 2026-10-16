@@ -120,11 +120,110 @@ const library = [
     { path: 'charge-flamegraph.svg', origin: 'user', size: 182_330, updated_at: ago(60 * 22) },
 ]
 
+// Folder sessions: Claude Code in plain folders (no project). One waits on an
+// approval, one is working, one finished, one is archived.
+const workdirs = [
+    { path: '/Users/me/code/notes-app', saved: true },
+    { path: '/Users/me/code/website', saved: true },
+    { path: '/Users/me/scratch', saved: false },
+]
+
+const session = (o: Partial<Record<string, unknown>> & { id: string; title: string; status: string; task: string; worktree: string }) => ({
+    project_id: '', origin: 'user', permission_mode: '' as string | undefined, commits_ahead: 0, files_changed: 0, input_tokens: 0, output_tokens: 0, turns: 1,
+    uncommitted: false, model: 'claude-sonnet-4-5', repo_path: '', base_branch: '', branch: '', session_id: o.id,
+    created_at: ago(120), updated_at: ago(8), ...o,
+})
+
+const sessions = [
+    session({ id: 's-dark', title: 'Add a dark mode toggle', status: 'waiting', worktree: '/Users/me/code/notes-app', task: 'Add a dark mode toggle to the settings page and remember it.', wait_reason: 'Approve: Run `npm test`', input_tokens: 48_000, output_tokens: 2_900, updated_at: ago(2) }),
+    session({ id: 's-links', title: 'Fix the broken links check', status: 'working', worktree: '/Users/me/code/website', task: 'The link checker fails on anchors. Fix it.', updated_at: ago(1) }),
+    session({ id: 's-readme', title: 'Rewrite the README intro', status: 'idle', worktree: '/Users/me/code/website', task: 'Rewrite the README intro in plain language.', permission_mode: 'plan', input_tokens: 21_000, output_tokens: 1_500, updated_at: ago(50) }),
+    session({ id: 's-old', title: 'Rename the config keys', status: 'resolved', worktree: '/Users/me/scratch', task: 'Rename the config keys to snake_case.', resolved_at: ago(60 * 30), updated_at: ago(60 * 30) }),
+]
+
+const sessionEvents = (s: (typeof sessions)[number]) => {
+    let n = 0
+    const ev = (kind: string, content: string, min: number, extra: Record<string, unknown> = {}) =>
+        ({ id: `${s.id}-e${++n}`, thread_id: s.id, kind, content, created_at: ago(min), ...extra })
+    const call = (tool: string, input: unknown, out: string, min: number, id: string, extra: Record<string, unknown> = {}) => [
+        ev('tool_use', tool, min, { request_id: id, payload: JSON.stringify(input), ...extra }),
+        ev('tool_result', out, min, { request_id: id, payload: '{"is_error":false}', ...extra }),
+    ]
+    const first = ev('user', s.task, 30, { from: 'user' })
+    if (s.id === 's-dark') {
+        return [
+            first,
+            ev('assistant', 'I will look at how the settings page stores preferences first.', 12),
+            ...call('Read', { file_path: 'src/settings/Settings.tsx' }, 'export function Settings() { ... }', 11, 'c1'),
+            ev('tool_use', 'Agent', 10, { request_id: 'agent-1', payload: JSON.stringify({ description: 'Find where the theme is applied', subagent_type: 'Explore' }) }),
+            ev('task', '', 10, { request_id: 'agent-1', payload: JSON.stringify({ event: 'task_started', task_type: 'local_agent', description: 'Find where the theme is applied', subagent_type: 'Explore' }) }),
+            ...call('Grep', { pattern: 'prefers-color-scheme' }, 'src/theme/index.ts:14', 10, 'c2', { parent: 'agent-1' }),
+            ev('tool_result', 'The theme is applied in src/theme/index.ts and read from localStorage.', 9, { request_id: 'agent-1', payload: '{"is_error":false}' }),
+            ...call('Edit', { file_path: 'src/settings/Settings.tsx' }, 'Updated', 6, 'c3'),
+            ev('assistant', 'Added the toggle and persisted it. Running the tests to check.', 3),
+            ev('tool_use', 'Bash', 2, { request_id: 'c4', payload: JSON.stringify({ command: 'npm test' }) }),
+            ev('approval', 'Run npm test', 2, { payload: JSON.stringify({ request_id: 'req-test', tool: 'Bash', input: { command: 'npm test' }, state: 'pending' }) }),
+        ]
+    }
+    if (s.id === 's-links') {
+        return [first, ev('assistant', 'Reading the checker to see how it parses anchors.', 1), ev('tool_use', 'Read', 1, { request_id: 'c1', payload: JSON.stringify({ file_path: 'scripts/check-links.mjs' }) })]
+    }
+    return [first, ev('assistant', 'Done. The intro now opens with what the tool does and who it is for, in three short paragraphs.', 49)]
+}
+
 const summary = (p: Proj) => ({ ...p, threads: counts(p.id) })
 const find = (id: string) => projects.find((p) => p.id === id)
 const notFound = () => HttpResponse.json({ error: 'project not found' }, { status: 404 })
 
 export const projectsHandlers = [
+    http.get('/api/v1/projects/workdirs', () => {
+        const rows = [...workdirs.map((w) => w.path), ...sessions.map((x) => x.worktree)]
+        const paths = [...new Set(rows)]
+        return HttpResponse.json({
+            workdirs: paths.map((path) => {
+                const list = sessions.filter((x) => x.worktree === path)
+                return {
+                    path, saved: workdirs.some((w) => w.path === path), sessions: list.length,
+                    waiting: list.filter((x) => x.status === 'waiting').length, working: list.filter((x) => x.status === 'working').length,
+                }
+            }),
+        })
+    }),
+    http.post('/api/v1/projects/workdirs', async ({ request }) => {
+        const body = (await request.json()) as { path: string }
+        if (!body.path.startsWith('/')) return HttpResponse.json({ error: `the path is not a folder: "${body.path}"` }, { status: 400 })
+        if (!workdirs.some((w) => w.path === body.path)) workdirs.push({ path: body.path, saved: true })
+        return HttpResponse.json({ path: body.path, saved: true, waiting: 0, working: 0, sessions: 0 })
+    }),
+    http.delete('/api/v1/projects/workdirs', ({ request }) => {
+        const path = new URL(request.url).searchParams.get('path')
+        const i = workdirs.findIndex((w) => w.path === path)
+        if (i >= 0) workdirs.splice(i, 1)
+        return new HttpResponse(null, { status: 204 })
+    }),
+    http.get('/api/v1/projects/permission-modes', () => HttpResponse.json({ modes: ['default', 'acceptEdits', 'auto', 'plan', 'dontAsk', 'bypassPermissions'] })),
+    http.get('/api/v1/projects/sessions/events', () => new HttpResponse('', { headers: { 'Content-Type': 'text/event-stream' } })),
+    http.get('/api/v1/projects/sessions', ({ request }) => {
+        const folder = new URL(request.url).searchParams.get('folder')
+        return HttpResponse.json({ sessions: sessions.filter((x) => !folder || x.worktree === folder) })
+    }),
+    http.post('/api/v1/projects/sessions', async ({ request }) => {
+        const body = (await request.json()) as { folder: string; content: string; permission_mode?: string }
+        const s = session({ id: `s-${Date.now()}`, title: body.content.slice(0, 60), status: 'working', worktree: body.folder, task: body.content, permission_mode: body.permission_mode, turns: 0, updated_at: ago(0) })
+        sessions.unshift(s)
+        return HttpResponse.json(s)
+    }),
+    http.get('/api/v1/projects/sessions/:sid', ({ params }) => {
+        const s = sessions.find((x) => x.id === params.sid)
+        if (!s) return HttpResponse.json({ error: 'session not found' }, { status: 404 })
+        return HttpResponse.json({ session: s, running: s.status === 'working' || s.status === 'waiting', events: sessionEvents(s), background_tasks: [] })
+    }),
+    http.put('/api/v1/projects/sessions/:sid/permission-mode', async ({ params, request }) => {
+        const s = sessions.find((x) => x.id === params.sid)
+        if (!s) return HttpResponse.json({ error: 'session not found' }, { status: 404 })
+        s.permission_mode = ((await request.json()) as { permission_mode: string }).permission_mode
+        return HttpResponse.json(s)
+    }),
     http.get('/api/v1/projects', ({ request }) => {
         const url = new URL(request.url)
         const q = (url.searchParams.get('q') ?? '').toLowerCase()

@@ -29,6 +29,10 @@ export type TestResponse = S['TestResponse'];
 
 export type ProjectRuntime = S['ProjectRuntimeResponse'];
 
+export type Workdir = S['Workdir'];
+export type SessionDetail = S['SessionDetailResponse'];
+export type BackgroundTask = S['BackgroundTask'];
+
 let hostFetch: typeof fetch = (input, init) => globalThis.fetch(input, init);
 
 /**

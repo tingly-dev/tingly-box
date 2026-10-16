@@ -8,7 +8,7 @@ import { appRoutes } from './routes/appRoutes';
 
 const router = createBrowserRouter(appRoutes);
 
-const paths: ProjectsHost['paths'] = { list: '/', project: (id) => `/project/${id}` };
+const paths: ProjectsHost['paths'] = { list: '/', project: (id) => `/project/${id}`, folder: (path) => (path ? `/folder?path=${encodeURIComponent(path)}` : '/folder') };
 
 /** The standalone app is its own Projects host: browser fetch, its own routes and sidebar. */
 function StandaloneHost({ children }: { children: ReactNode }) {

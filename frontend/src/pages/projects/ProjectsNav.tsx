@@ -61,7 +61,7 @@ const ProjectsNav = ({ enableProjects, enableDesk, onNavigate }: ProjectsNavProp
 
     return (
         <ProjectsHostProvider host={projectsHost}>
-            <ProjectsSidebar showProjects={enableProjects} sections={sections} onNavigate={onNavigate} />
+            <ProjectsSidebar showProjects={enableProjects} showWorkdirs={enableProjects && !enableDesk} sections={sections} onNavigate={onNavigate} />
             {adding && (
                 <AddProjectDialog
                     onClose={() => setAdding(false)}

@@ -40,20 +40,29 @@ export async function readEventStream(res: Response, onData: (data: string) => v
  * goes through the host's authentication like every other request.
  */
 export function useProjectEvents(projectId: string, onEvent: (ev: ProjectEvent) => void, onOpen?: () => void) {
+    useEventStream(projectId ? `/api/v1/projects/${projectId}/events` : '', onEvent, onOpen);
+}
+
+/** Folder sessions' live events: the same stream, for sessions that belong to no project. */
+export function useSessionEvents(onEvent: (ev: ProjectEvent) => void, onOpen?: () => void) {
+    useEventStream('/api/v1/projects/sessions/events', onEvent, onOpen);
+}
+
+function useEventStream(url: string, onEvent: (ev: ProjectEvent) => void, onOpen?: () => void) {
     const handler = useRef(onEvent);
     const opened = useRef(onOpen);
     handler.current = onEvent;
     opened.current = onOpen;
 
     useEffect(() => {
-        if (!projectId) return;
+        if (!url) return;
         const abort = new AbortController();
         const { signal } = abort;
         void (async () => {
             let first = true;
             while (!signal.aborted) {
                 try {
-                    const res = await apiFetch(`/api/v1/projects/${projectId}/events`, {
+                    const res = await apiFetch(url, {
                         headers: { Accept: 'text/event-stream' },
                         signal,
                     });
@@ -74,5 +83,5 @@ export function useProjectEvents(projectId: string, onEvent: (ev: ProjectEvent) 
             }
         })();
         return () => abort.abort();
-    }, [projectId]);
+    }, [url]);
 }

@@ -2,10 +2,12 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Badge, Box, Divider, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from '@mui/material';
 import { NAV_ROW_SX, navRowSelectedSx, navRowTextSlotProps } from '@tingly/ui/theme/nav';
 import { fontSizes } from '@tingly/ui/theme/fonts';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, unwrap, type ProjectSummary } from '../client';
-import { Add, Folder, Star } from './icons';
+import { useWorkdirs } from './workdir/useWorkdirs';
+import { folderName } from '../utils/format';
+import { Add, Folder, FolderOpen, Star } from './icons';
 import { PROJECTS_CHANGED, useProjectsHost } from '../host/ProjectsHost';
 
 /** One row of a sidebar section: a place the user can open. */
@@ -42,6 +44,8 @@ export interface ProjectsSidebarSection {
 export interface ProjectsSidebarProps {
     /** List the user's projects (default true). Off when the host shows only its own sections. */
     showProjects?: boolean;
+    /** List the working folders (default false): the saved ones and any folder with a session, with what waits there. */
+    showWorkdirs?: boolean;
     /** Host sections, rendered after Projects. */
     sections?: ProjectsSidebarSection[];
     /** Called after a row or link is followed (closes a host's mobile drawer). */
@@ -49,6 +53,9 @@ export interface ProjectsSidebarProps {
 }
 
 const POLL_MS = 15_000;
+
+// The folder a working directory sits in, home shortened to ~.
+const parentPath = (path: string) => path.replace(/[\\/]+$/, '').replace(/[\\/][^\\/]*$/, '').replace(/^\/(Users|home)\/[^/]+/, '~') || '/';
 
 /** The active projects, starred first, refreshed when a page changes one and on a slow poll. */
 function useSidebarProjects(enabled: boolean): ProjectSummary[] | null {
@@ -143,12 +150,15 @@ function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection;
  * them), followed by whatever sections the host adds. It knows nothing about
  * the host; Tingly Box passes its working folders in as a section.
  */
-export function ProjectsSidebar({ showProjects = true, sections = [], onNavigate }: ProjectsSidebarProps) {
+export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sections = [], onNavigate }: ProjectsSidebarProps) {
     const { t } = useTranslation('projects');
     const navigate = useNavigate();
     const location = useLocation();
     const { paths } = useProjectsHost();
     const projects = useSidebarProjects(showProjects);
+    const { workdirs } = useWorkdirs(showWorkdirs);
+    const [params] = useSearchParams();
+    const scope = location.pathname === paths.folder().split('?')[0] ? params.get('path') ?? '' : undefined;
 
     const projectSection: ProjectsSidebarSection | null = showProjects ? {
         key: 'projects',
@@ -176,9 +186,34 @@ export function ProjectsSidebar({ showProjects = true, sections = [], onNavigate
         empty: projects ? t('sidebar.noProjects') : undefined,
     } : null;
 
+    const workdirSection: ProjectsSidebarSection | null = showWorkdirs ? {
+        key: 'workdirs',
+        title: t('workdir.title'),
+        to: paths.folder(),
+        action: {
+            label: t('workdir.add'),
+            onClick: () => {
+                navigate(`${paths.folder()}${paths.folder().includes('?') ? '&' : '?'}add=1`);
+                onNavigate?.();
+            },
+        },
+        rows: (workdirs ?? []).map((w) => ({
+            key: w.path,
+            label: folderName(w.path),
+            title: w.path,
+            icon: <FolderOpen />,
+            // What waits here, else where the folder is.
+            subtitle: w.waiting > 0 ? t('sidebar.sessionsWaiting', { count: w.waiting }) : parentPath(w.path),
+            to: paths.folder(w.path),
+            selected: scope === w.path,
+            attention: w.waiting > 0,
+        })),
+        empty: workdirs ? t('sidebar.noWorkdirs') : undefined,
+    } : null;
+
     return (
         <Box component="nav" aria-label={t('nav.projects')} sx={{ py: 1 }}>
-            {[...(projectSection ? [projectSection] : []), ...sections].map((s, i) => (
+            {[...(projectSection ? [projectSection] : []), ...(workdirSection ? [workdirSection] : []), ...sections].map((s, i) => (
                 <Box key={s.key}>
                     {i > 0 && <Divider sx={{ mx: 2, my: 1 }} />}
                     <SectionView section={s} onNavigate={onNavigate} />

@@ -118,11 +118,13 @@ until phase 4.
    `Workdir`, the routes above, tests ported from `internal/desk` (race test
    and the resident-process e2e come with them). No UI change.
 2. **Working folders in the library UI.** Native sidebar section, folder page,
-   new-session form, session view, background tasks panel. Behind the
-   existing `projects` flag; the TB nav switches to it while `/desk` still
-   exists for comparison.
-3. **TB capabilities.** `Launcher` (profile, tier), status line route + slot,
-   handoff override. Parity checklist against Desk (every row above).
+   new-session form, session view. Behind the existing `projects` flag; the TB
+   nav shows the native section only while the `desk` flag is off, so the two
+   can be compared. The background tasks panel, the Trajectory view and
+   handoff move to phase 3 with the rest of the parity list.
+3. **Session parity and TB capabilities.** Background tasks panel, Trajectory,
+   handoff, expand-tools, drafts; `Launcher` (profile, tier), status line route
+   + slot, handoff override. Parity checklist against Desk (every row above).
 4. **Cutover.** Import old sessions, redirect `/desk` and `/api/v1/desk`,
    retire the `desk` flag (on → `projects` on), delete `internal/desk`,
    `module/desk` and the Desk frontend, update `desk.md` and

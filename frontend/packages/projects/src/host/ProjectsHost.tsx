@@ -18,6 +18,8 @@ export interface ProjectsHost {
     paths: {
         list: string;
         project: (id: string) => string;
+        /** A working folder, optionally scoped to a path and an open session (the page reads `path`, `session`, `new` and `add` from its query). */
+        folder: (path?: string) => string;
     };
     /** A project was created, changed or deleted: refresh any navigation that lists projects. */
     onProjectsChanged?: () => void;

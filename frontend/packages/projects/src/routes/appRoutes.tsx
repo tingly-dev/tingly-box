@@ -8,6 +8,7 @@ const ChatPage = lazy(() => import('../pages/ChatPage'));
 const ChatsPage = lazy(() => import('../pages/ChatsPage'));
 const ProjectsPage = lazy(() => import('../pages/ProjectsPage'));
 const ProjectPage = lazy(() => import('../pages/ProjectPage'));
+const WorkdirPage = lazy(() => import('../pages/WorkdirPage'));
 const SettingsPage = lazy(() => import('../pages/SettingsPage'));
 
 export const appRoutes: RouteObject[] = [
@@ -20,6 +21,7 @@ export const appRoutes: RouteObject[] = [
             { path: '/chat/:id', element: <ChatPage /> },
             { path: '/chats', element: <ChatsPage /> },
             { path: '/project/:id', element: <ProjectPage /> },
+            { path: '/folder', element: <WorkdirPage /> },
             { path: '/settings', element: <SettingsPage /> },
             { path: '*', element: <Navigate to="/" replace /> },
         ],

@@ -47,4 +47,22 @@ describe('threadTranscript', () => {
             ['ask_request', 'Which branch?'], ['ask_response', 'main'], ['assistant', 'Done.'], ['assistant', 'Merged into main.'], ['system', 'Stopped.'],
         ]);
     });
+
+    it('keeps what a folder session records: call ids, a subagent\'s parent, task and usage events', () => {
+        const { entries } = threadTranscript([
+            ev('tool_use', 'Agent', { request_id: 'agent-1', payload: '{"description":"look"}' }),
+            ev('task', '', { request_id: 'agent-1', payload: '{"event":"task_started","task_type":"local_agent"}' }),
+            ev('tool_use', 'Read', { request_id: 'call-2', parent: 'agent-1', payload: '{"file_path":"a.go"}' }),
+            ev('tool_result', 'package a', { request_id: 'call-2', parent: 'agent-1' }),
+            ev('usage', '', { payload: '{"input_tokens":5}' }),
+        ], false, author);
+        expect(entries.map((e) => [e.kind, e.request_id, e.parent])).toEqual([
+            ['tool_use', 'agent-1', undefined],
+            ['task', 'agent-1', undefined],
+            ['tool_use', 'call-2', 'agent-1'],
+            ['tool_result', 'call-2', 'agent-1'],
+            ['usage', undefined, undefined],
+        ]);
+        expect(entries[1].payload).toMatchObject({ event: 'task_started' });
+    });
 });

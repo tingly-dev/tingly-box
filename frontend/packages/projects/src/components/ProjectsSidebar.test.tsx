@@ -20,8 +20,14 @@ const summary = (id: string, name: string, waiting: number, starred = false) => 
 });
 
 const host = (projects: unknown[]): ProjectsHost => {
-    list.mockResolvedValue({ data: { projects }, response: new Response() });
-    return { paths: { list: '/p', project: (id) => `/p/${id}` } };
+    list.mockImplementation((path: string) => Promise.resolve({
+        data: path === '/api/v1/projects/workdirs' ? { workdirs: [
+            { path: '/home/me/app', saved: true, waiting: 2, working: 0, sessions: 3 },
+            { path: '/home/me/notes', saved: false, waiting: 0, working: 1, sessions: 1 },
+        ] } : { projects },
+        response: new Response(),
+    }));
+    return { paths: { list: '/p', project: (id) => `/p/${id}`, folder: (path) => (path ? `/f?path=${encodeURIComponent(path)}` : '/f') } };
 };
 
 const show = (h: ProjectsHost, path: string, props: Parameters<typeof ProjectsSidebar>[0] = {}) => render(
@@ -50,5 +56,14 @@ describe('ProjectsSidebar', () => {
         expect(within(section).getByRole('link', { name: 'app' })).toHaveAttribute('aria-current', 'page');
         expect(screen.queryByRole('region', { name: 'nav.projects' })).not.toBeInTheDocument();
         expect(list).not.toHaveBeenCalled();
+    });
+
+    it('lists working folders with what waits there and marks the open one', async () => {
+        show(host([]), '/f?path=%2Fhome%2Fme%2Fnotes', { showProjects: false, showWorkdirs: true });
+        const folders = await screen.findByRole('region', { name: 'workdir.title' });
+        await waitFor(() => expect(within(folders).getAllByRole('link').map((l) => l.textContent)).toEqual(['workdir.title', 'appsidebar.sessionsWaiting', 'notes~']));
+        const notes = within(folders).getByTitle('/home/me/notes');
+        expect(notes.getAttribute('aria-current')).toBe('page');
+        expect(within(folders).getByTitle('/home/me/app').getAttribute('href')).toBe('/f?path=%2Fhome%2Fme%2Fapp');
     });
 });

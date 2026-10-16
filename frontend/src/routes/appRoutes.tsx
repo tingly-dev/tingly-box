@@ -199,6 +199,7 @@ export const appRoutes = (
             {/* Projects — a coordinator running Claude Code threads; its own
                 rail item (useActivityItems). */}
             <Route path="/projects" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="list" /></ExperimentalFeatureGate>} />
+            <Route path="/projects/folder" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="folder" /></ExperimentalFeatureGate>} />
             <Route path="/projects/:id" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="project" /></ExperimentalFeatureGate>} />
             {/* Remote Control — one page, every bot (see RemoteAgentPage). */}
             <Route path="/remote-agent" element={<RemoteAgentPage />} />

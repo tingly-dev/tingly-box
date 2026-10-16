@@ -5,14 +5,31 @@ type Dict<T> = { [K in keyof T]: T[K] extends string ? string : Dict<T[K]> };
 export const zh: Dict<typeof en> = {
     common: {
         cancel: '取消', save: '保存', close: '关闭', delete: '删除', edit: '编辑', rename: '重命名',
-        copy: '复制', copied: '已复制', more: '更多', star: '收藏', unstar: '取消收藏',
+        copy: '复制', copied: '已复制', more: '更多', star: '收藏', unstar: '取消收藏', retry: '重试',
         tokensApprox: '≈ {{value}} tokens',
     },
     nav: {
         newChat: '新对话', chats: '对话', projects: '项目', recentChats: '最近对话',
         settings: '设置', noChats: '还没有对话', collapse: '收起侧栏', expand: '展开侧栏',
     },
-    sidebar: { noProjects: '还没有项目', waiting_one: '{{count}} 个线程在等你', waiting_other: '{{count}} 个线程在等你' },
+    sidebar: { noWorkdirs: '还没有工作目录', sessionsWaiting_one: '{{count}} 个会话在等你', sessionsWaiting_other: '{{count}} 个会话在等你', noProjects: '还没有项目', waiting_one: '{{count}} 个线程在等你', waiting_other: '{{count}} 个线程在等你' },
+    workdir: {
+        title: '工作目录', add: '添加工作目录', remove: '从侧栏移除',
+        addHelp: '填写运行本应用的这台机器上已有的目录。在这里开的会话直接在该目录里工作，不建 worktree。',
+        pathExample: '/目录路径',
+    },
+    session: {
+        sessions: '会话', new: '新建会话', none: '还没有会话', folder: '工作目录', chooseFolder: '选择工作目录',
+        folderPlaceholder: '/目录路径', heading: '需要 Claude 处理什么任务？', promptPlaceholder: '描述一个任务…',
+        placeholder: '给这个会话发消息…', queuePlaceholder: '给这个会话发消息——它会在当前一轮结束后读到…',
+        archivedPlaceholder: '重新打开会话后才能继续发消息', archive: '归档会话', reopen: '重新打开会话',
+        refreshFailed: '无法刷新会话列表，显示的是上次加载的内容，正在自动重连。',
+        group: { waiting: '等你处理', working: '进行中', idle: '已完成', resolved: '已归档' },
+        permissions: '权限', permissionDefault: '默认权限',
+        mode: {
+            default: '全部询问', acceptEdits: '自动接受编辑', auto: '自动', plan: '仅规划', dontAsk: '不再询问', bypassPermissions: '从不询问',
+        },
+    },
     theme: { system: '跟随系统', light: '浅色', dark: '深色', sunlit: '日光', claude: 'Claude', ds: 'DeepSeek' },
     home: {
         greetingMorning: '早上好', greetingAfternoon: '下午好', greetingEvening: '晚上好', greetingNight: '夜深了，还在忙？',

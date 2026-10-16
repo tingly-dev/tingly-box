@@ -6,6 +6,7 @@
 export { ProjectsHostProvider, type ProjectsHost } from './host/ProjectsHost';
 export { default as ProjectsPage } from './pages/ProjectsPage';
 export { default as ProjectPage } from './pages/ProjectPage';
+export { default as WorkdirPage } from './pages/WorkdirPage';
 export {
     ProjectsSidebar,
     type ProjectsSidebarProps,

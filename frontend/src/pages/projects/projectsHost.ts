@@ -23,7 +23,11 @@ for (const [lng, bundle] of [['en', projectsEn], ['zh', projectsZh]] as const) {
 
 export const projectsHost: ProjectsHost = {
     fetch: projectsFetch,
-    paths: { list: '/projects', project: (id) => `/projects/${id}` },
+    paths: {
+        list: '/projects',
+        project: (id) => `/projects/${id}`,
+        folder: (path) => (path ? `/projects/folder?path=${encodeURIComponent(path)}` : '/projects/folder'),
+    },
     // The rail's waiting dot is the nav that reflects projects.
     onProjectsChanged: notifyProjectsChanged,
     notify: (message, severity = 'info') => {
