@@ -32,6 +32,11 @@ var (
 // are the coordinator's to follow; this is only the safety net.
 const MaxRunningPerProject = 4
 
+// MaxRunningSessions caps concurrently running folder sessions, which share
+// one limit because they belong to no project. It matches the resident
+// process pool.
+const MaxRunningSessions = 10
+
 // Default permission mode threads run in: edits are accepted, anything else
 // that needs approval waits on the user in the thread.
 const DefaultPermissionMode = "acceptEdits"
@@ -124,10 +129,15 @@ func NewThreads(store *db.Store, layout Layout, hub *Hub, agents Agents, env Thr
 		Prompter:  func(sid string) agentboot.Prompter { return m.prompter(m.threadOf(sid)) },
 		OnTurnEnd: func(sid string, end engine.TurnEnd) { m.turnEnded(m.threadOf(sid), end) },
 		PermissionMode: func(sid string) string {
-			if t, err := store.GetThread(m.threadOf(sid)); err == nil {
-				if p, err := store.GetProject(t.ProjectID); err == nil {
-					return permissionMode(p)
-				}
+			t, err := store.GetThread(m.threadOf(sid))
+			if err != nil {
+				return DefaultPermissionMode
+			}
+			if t.PermissionMode != "" {
+				return t.PermissionMode
+			}
+			if p, err := store.GetProject(t.ProjectID); err == nil {
+				return permissionMode(p)
 			}
 			return DefaultPermissionMode
 		},
@@ -175,6 +185,25 @@ func (m *Threads) prompter(threadID string) *threadPrompter {
 	return p
 }
 
+// threadPermissionMode is the mode a thread's turns run in: its own, else
+// its project's.
+func threadPermissionMode(p *db.Project, t *db.Thread) string {
+	if t.PermissionMode != "" {
+		return t.PermissionMode
+	}
+	if p == nil {
+		return DefaultPermissionMode
+	}
+	return permissionMode(p)
+}
+
+func queuedNote(p *db.Project) string {
+	if p == nil {
+		return fmt.Sprintf("Queued: %d sessions are already running.", MaxRunningSessions)
+	}
+	return fmt.Sprintf("Queued: %d threads are already running in this project.", MaxRunningPerProject)
+}
+
 func permissionMode(p *db.Project) string {
 	if p.ThreadPermissionMode != "" {
 		return p.ThreadPermissionMode
@@ -182,12 +211,18 @@ func permissionMode(p *db.Project) string {
 	return DefaultPermissionMode
 }
 
+// slot is the running-turn limit of a project, or of all folder sessions
+// together (projectID "").
 func (m *Threads) slot(projectID string) chan struct{} {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	s, ok := m.slots[projectID]
 	if !ok {
-		s = make(chan struct{}, MaxRunningPerProject)
+		n := MaxRunningPerProject
+		if projectID == "" {
+			n = MaxRunningSessions
+		}
+		s = make(chan struct{}, n)
 		m.slots[projectID] = s
 	}
 	return s
@@ -360,15 +395,17 @@ func (m *Threads) Send(ctx context.Context, threadID, text, from string) (*db.Th
 	if err != nil {
 		return nil, err
 	}
-	p, err := m.store.GetProject(t.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	if p.ArchivedAt != nil {
-		return nil, ErrArchived
-	}
-	if p.Paused {
-		return nil, ErrPaused
+	if t.ProjectID != "" {
+		p, err := m.store.GetProject(t.ProjectID)
+		if err != nil {
+			return nil, err
+		}
+		if p.ArchivedAt != nil {
+			return nil, ErrArchived
+		}
+		if p.Paused {
+			return nil, ErrPaused
+		}
 	}
 	if t.Status == db.ThreadResolved {
 		return nil, ErrResolved
@@ -422,10 +459,14 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 		m.drop(threadID)
 		return
 	}
-	p, err := m.store.GetProject(t.ProjectID)
-	if err != nil {
-		m.drop(threadID)
-		return
+	// A folder session has no project: no instructions, library or limit
+	// but the shared one.
+	var p *db.Project
+	if t.ProjectID != "" {
+		if p, err = m.store.GetProject(t.ProjectID); err != nil {
+			m.drop(threadID)
+			return
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -433,11 +474,11 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	m.mu.Lock()
 	a.cancel = cancel
 	m.mu.Unlock()
-	slot := m.slot(p.ID)
+	slot := m.slot(t.ProjectID)
 	select {
 	case slot <- struct{}{}:
 	default:
-		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: fmt.Sprintf("Queued: %d threads are already running in this project.", MaxRunningPerProject)})
+		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: queuedNote(p)})
 		select {
 		case slot <- struct{}{}:
 		case <-ctx.Done():
@@ -458,19 +499,20 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	m.mu.Unlock()
 
 	env, defModel := m.env.ThreadEnv(ctx)
-	model := p.ThreadModel
+	model := t.Model
+	if p != nil && p.ThreadModel != "" {
+		model = p.ThreadModel
+	}
 	if model == "" {
 		model = defModel
 	}
 	m.mu.Lock()
 	m.turns[threadID] = &turnTally{launchModel: model}
 	m.mu.Unlock()
-	opts := agentboot.ExecutionOptions{
-		Model:              model,
-		PermissionMode:     permissionMode(p),
-		AppendSystemPrompt: threadSystemPrompt(m.layout, p, t),
-		SettingsPath:       m.layout.SettingsFile(p.ID, t.ID),
-		Env:                env,
+	opts := agentboot.ExecutionOptions{Model: model, PermissionMode: threadPermissionMode(p, t), Env: env}
+	if p != nil {
+		opts.AppendSystemPrompt = threadSystemPrompt(m.layout, p, t)
+		opts.SettingsPath = m.layout.SettingsFile(p.ID, t.ID)
 	}
 	started := m.engine.Start(m.sessionOf(threadID), t.Worktree, prompt, t.Turns > 0, func(context.Context) agentboot.ExecutionOptions { return opts })
 	if !started {
@@ -575,6 +617,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 	if t.RepoPath != "" {
 		stats = Stats(context.Background(), t.Worktree, t.BaseBranch)
 	}
+	session := t.ProjectID == ""
 	report := Report{Kind: ReportFinished, Text: strings.TrimSpace(tally.text)}
 	t, _ = m.update(threadID, func(t *db.Thread) {
 		t.Turns++
@@ -599,7 +642,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 			t.Status, t.WaitReason = db.ThreadWaiting, "Failed: "+end.Err.Error()
 			report.Kind, report.Text = ReportFailed, end.Err.Error()
 		default:
-			if mm := needsInputRe.FindStringSubmatch(report.Text); mm != nil {
+			if mm := needsInputRe.FindStringSubmatch(report.Text); mm != nil && !session {
 				t.Status, t.WaitReason = db.ThreadWaiting, strings.TrimSpace(mm[1])
 				report.Kind = ReportNeedsInput
 			} else if stats.CommitsAhead > 0 {
@@ -620,10 +663,16 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "Stopped."})
 	case end.Err != nil:
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvError, Content: end.Err.Error()})
+	case session:
+		// The report is for the coordinator; a session shows the turn itself.
 	default:
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvReport, Content: report.Text, Payload: jsonString(map[string]any{
 			"status": t.Status, "commits_ahead": stats.CommitsAhead, "files_changed": stats.FilesChanged, "uncommitted": stats.Uncommitted,
 		})})
+	}
+	if session {
+		// Nobody to report to; the session page shows the turn itself.
+		return
 	}
 	_ = m.store.TouchProject(t.ProjectID)
 	if report.Kind != "" && m.OnReport != nil {
@@ -787,7 +836,8 @@ func (m *Threads) AutoResolve(maxIdle time.Duration) {
 		return
 	}
 	for _, t := range threads {
-		if time.Since(t.UpdatedAt) > maxIdle {
+		// Folder sessions are archived by hand, as Desk's were.
+		if t.ProjectID != "" && time.Since(t.UpdatedAt) > maxIdle {
 			_, _ = m.Resolve(t.ID)
 		}
 	}

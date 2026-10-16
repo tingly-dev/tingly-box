@@ -44,7 +44,7 @@ func Open(path string) (*Store, error) {
 		}
 		sqlDB.SetMaxOpenConns(1)
 	}
-	if err := g.AutoMigrate(&Project{}, &ProjectMessage{}, &Thread{}, &ThreadEvent{}, &Conversation{}, &Message{}, &Setting{}); err != nil {
+	if err := g.AutoMigrate(&Project{}, &ProjectMessage{}, &Thread{}, &ThreadEvent{}, &Conversation{}, &Message{}, &Setting{}, &Workdir{}); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	return &Store{db: g}, nil

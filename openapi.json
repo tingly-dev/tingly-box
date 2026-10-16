@@ -5245,6 +5245,28 @@
         }
       }
     },
+    "/api/v1/projects/permission-modes": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "The Claude Code permission modes a session can run in",
+        "description": "The Claude Code permission modes a session can run in",
+        "operationId": "apiV1ProjectsPermission-modesGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionModesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/repos/inspect": {
       "post": {
         "tags": [
@@ -5293,6 +5315,533 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProjectRuntimeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/sessions": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Folder sessions, most recently updated first",
+        "description": "Folder sessions, most recently updated first",
+        "operationId": "apiV1ProjectsSessionsGet",
+        "parameters": [
+          {
+            "name": "folder",
+            "in": "query",
+            "description": "Only this folder's sessions",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Start a session in a folder",
+        "description": "Start a session in a folder",
+        "operationId": "apiV1ProjectsSessionsPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/sessions/events": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Server-sent events for folder sessions (session and transcript changes)",
+        "description": "Server-sent events for folder sessions (session and transcript changes)",
+        "operationId": "apiV1ProjectsSessionsEventsGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/sessions/{sid}": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "A session with its transcript",
+        "description": "A session with its transcript",
+        "operationId": "apiV1ProjectsSessionsSidGet",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/sessions/{sid}/archive": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Archive the session (it stays readable and can be reopened)",
+        "description": "Archive the session (it stays readable and can be reopened)",
+        "operationId": "apiV1ProjectsSessionsSidArchivePost",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/sessions/{sid}/messages": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Send a message (runs after the current turn)",
+        "description": "Send a message (runs after the current turn)",
+        "operationId": "apiV1ProjectsSessionsSidMessagesPost",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/sessions/{sid}/permission-mode": {
+      "put": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Set the permission mode of the session's next turn",
+        "description": "Set the permission mode of the session's next turn",
+        "operationId": "apiV1ProjectsSessionsSidPermission-modePut",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PermissionModeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/sessions/{sid}/reopen": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Reopen an archived session",
+        "description": "Reopen an archived session",
+        "operationId": "apiV1ProjectsSessionsSidReopenPost",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/sessions/{sid}/respond": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Answer a permission request or question the session is waiting on",
+        "description": "Answer a permission request or question the session is waiting on",
+        "operationId": "apiV1ProjectsSessionsSidRespondPost",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespondRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/sessions/{sid}/stop": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Interrupt the running turn; the process and its background tasks survive",
+        "description": "Interrupt the running turn; the process and its background tasks survive",
+        "operationId": "apiV1ProjectsSessionsSidStopPost",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/sessions/{sid}/tasks/{task_id}/output": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "The end of a background task's output",
+        "description": "The end of a background task's output",
+        "operationId": "apiV1ProjectsSessionsSidTasksTask_idOutputGet",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tail",
+            "in": "query",
+            "description": "Bytes from the end (default 8192)",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOutputResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/sessions/{sid}/tasks/{task_id}/stop": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Stop one background task",
+        "description": "Stop one background task",
+        "operationId": "apiV1ProjectsSessionsSidTasksTask_idStopPost",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/workdirs": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Working folders: the saved ones and every folder that has a session, with what waits there",
+        "description": "Working folders: the saved ones and every folder that has a session, with what waits there",
+        "operationId": "apiV1ProjectsWorkdirsGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkdirsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Keep an existing folder in the sidebar",
+        "description": "Keep an existing folder in the sidebar",
+        "operationId": "apiV1ProjectsWorkdirsPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddWorkdirRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workdir"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Drop a folder from the sidebar; its sessions stay",
+        "description": "Drop a folder from the sidebar; its sessions stay",
+        "operationId": "apiV1ProjectsWorkdirsDelete",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "description": "The folder",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -10136,6 +10685,18 @@
           "message"
         ]
       },
+      "AddWorkdirRequest": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
       "AdvisorConfig": {
         "type": "object",
         "properties": {
@@ -10632,6 +11193,28 @@
         "required": [
           "success",
           "data"
+        ]
+      },
+      "BackgroundTask": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Field description"
+          },
+          "task_id": {
+            "type": "string",
+            "description": "Field task_id"
+          },
+          "task_type": {
+            "type": "string",
+            "description": "Field task_type"
+          }
+        },
+        "required": [
+          "task_id",
+          "task_type",
+          "description"
         ]
       },
       "BackgroundTaskInfo": {
@@ -11719,33 +12302,30 @@
       "CreateSessionRequest": {
         "type": "object",
         "properties": {
+          "content": {
+            "type": "string",
+            "description": "Field content"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Field folder"
+          },
           "model": {
             "type": "string",
             "description": "Field model"
-          },
-          "path": {
-            "type": "string",
-            "description": "Field path"
           },
           "permission_mode": {
             "type": "string",
             "description": "Field permission_mode"
           },
-          "profile": {
+          "title": {
             "type": "string",
-            "description": "Field profile"
-          },
-          "prompt": {
-            "type": "string",
-            "description": "Field prompt"
+            "description": "Field title"
           }
         },
         "required": [
-          "path",
-          "prompt",
-          "permission_mode",
-          "profile",
-          "model"
+          "folder",
+          "content"
         ]
       },
       "CurlData": {
@@ -15549,6 +16129,18 @@
           "updated_at"
         ]
       },
+      "PermissionModeRequest": {
+        "type": "object",
+        "properties": {
+          "permission_mode": {
+            "type": "string",
+            "description": "Field permission_mode"
+          }
+        },
+        "required": [
+          "permission_mode"
+        ]
+      },
       "PermissionModesResponse": {
         "type": "object",
         "properties": {
@@ -16965,23 +17557,30 @@
       "RespondRequest": {
         "type": "object",
         "properties": {
+          "allow": {
+            "type": "boolean",
+            "description": "Field allow"
+          },
           "answer": {
             "type": "string",
             "description": "Field answer"
           },
-          "approved": {
-            "type": "boolean",
-            "description": "Field approved"
-          },
           "request_id": {
             "type": "string",
             "description": "Field request_id"
+          },
+          "scope": {
+            "type": "string",
+            "description": "Field scope",
+            "enum": [
+              "once",
+              "thread"
+            ]
           }
         },
         "required": [
           "request_id",
-          "approved",
-          "answer"
+          "allow"
         ]
       },
       "RestoreConfigResponse": {
@@ -17904,6 +18503,38 @@
           "time_window"
         ]
       },
+      "SessionDetailResponse": {
+        "type": "object",
+        "properties": {
+          "background_tasks": {
+            "type": "array",
+            "description": "Field background_tasks",
+            "items": {
+              "$ref": "#/components/schemas/BackgroundTask"
+            }
+          },
+          "events": {
+            "type": "array",
+            "description": "Field events",
+            "items": {
+              "$ref": "#/components/schemas/ThreadEvent"
+            }
+          },
+          "running": {
+            "type": "boolean",
+            "description": "Field running"
+          },
+          "session": {
+            "$ref": "#/components/schemas/Thread"
+          }
+        },
+        "required": [
+          "session",
+          "events",
+          "running",
+          "background_tasks"
+        ]
+      },
       "SessionInfo": {
         "type": "object",
         "properties": {
@@ -17987,7 +18618,7 @@
             "type": "array",
             "description": "Field sessions",
             "items": {
-              "$ref": "#/components/schemas/SessionInfo"
+              "$ref": "#/components/schemas/Thread"
             }
           }
         },
@@ -18894,6 +19525,10 @@
             "format": "int64",
             "description": "Field output_tokens"
           },
+          "permission_mode": {
+            "type": "string",
+            "description": "Field permission_mode"
+          },
           "project_id": {
             "type": "string",
             "description": "Field project_id"
@@ -19049,9 +19684,17 @@
             "type": "string",
             "description": "Field kind"
           },
+          "parent": {
+            "type": "string",
+            "description": "Field parent"
+          },
           "payload": {
             "type": "string",
             "description": "Field payload"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Field request_id"
           },
           "thread_id": {
             "type": "string",
@@ -20480,6 +21123,56 @@
           "model"
         ]
       },
+      "Workdir": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "saved": {
+            "type": "boolean",
+            "description": "Field saved"
+          },
+          "sessions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field sessions"
+          },
+          "waiting": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field waiting"
+          },
+          "working": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field working"
+          }
+        },
+        "required": [
+          "path",
+          "saved",
+          "waiting",
+          "working",
+          "sessions"
+        ]
+      },
+      "WorkdirsResponse": {
+        "type": "object",
+        "properties": {
+          "workdirs": {
+            "type": "array",
+            "description": "Field workdirs",
+            "items": {
+              "$ref": "#/components/schemas/Workdir"
+            }
+          }
+        },
+        "required": [
+          "workdirs"
+        ]
+      },
       "WriteMemoryRequest": {
         "type": "object",
         "properties": {
@@ -21432,6 +22125,10 @@
     {
       "name": "server",
       "description": "Operations related to server"
+    },
+    {
+      "name": "sessions",
+      "description": "Operations related to sessions"
     },
     {
       "name": "shortcut",

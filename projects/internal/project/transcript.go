@@ -36,11 +36,18 @@ func (threadStore) SetInterrupted(string)            {}
 // Engine notes the thread view says its own way ("Stopped.") or not at all.
 var quietNotes = []string{"claude code session ", "interrupted; send a message to resume"}
 
-// Append records an entry as a thread event. Only the main conversation is
-// shown: a subagent's own steps stay inside its Agent call, as before.
+// Append records an entry as a thread event. A project thread shows only the
+// main conversation: a subagent's own steps stay inside its Agent call. A
+// folder session keeps everything, tagged with its parent call, because its
+// page draws subagents and background tasks.
 func (s threadStore) Append(sid string, e engine.Entry) {
 	id := s.m.threadOf(sid)
-	if e.Parent != "" {
+	t, err := s.m.store.GetThread(id)
+	if err != nil {
+		return
+	}
+	session := t.ProjectID == ""
+	if e.Parent != "" && !session {
 		return
 	}
 	var ev *db.ThreadEvent
@@ -51,9 +58,9 @@ func (s threadStore) Append(sid string, e engine.Entry) {
 		s.tally(id, func(t *turnTally) { t.text = e.Content })
 		ev = &db.ThreadEvent{Kind: db.EvAssistant, Content: e.Content}
 	case e.Kind == engine.KindToolUse:
-		ev = &db.ThreadEvent{Kind: db.EvToolUse, Content: e.Content, Payload: string(e.Payload)}
+		ev = &db.ThreadEvent{Kind: db.EvToolUse, Content: e.Content, Payload: string(e.Payload), RequestID: e.RequestID}
 	case e.Kind == engine.KindToolResult:
-		ev = &db.ThreadEvent{Kind: db.EvToolResult, Content: e.Content, Payload: string(e.Payload)}
+		ev = &db.ThreadEvent{Kind: db.EvToolResult, Content: e.Content, Payload: string(e.Payload), RequestID: e.RequestID}
 	case e.Kind == engine.KindUsage:
 		var u engine.TurnUsage
 		if json.Unmarshal(e.Payload, &u) == nil {
@@ -65,8 +72,13 @@ func (s threadStore) Append(sid string, e engine.Entry) {
 				}
 			})
 		}
+		if session {
+			ev = &db.ThreadEvent{Kind: db.EvUsage, Payload: string(e.Payload)}
+		}
 	case e.Kind == engine.KindTask:
-		if note := taskNote(e); note != "" {
+		if session {
+			ev = &db.ThreadEvent{Kind: db.EvTask, Payload: string(e.Payload), RequestID: e.RequestID}
+		} else if note := taskNote(e); note != "" {
 			ev = &db.ThreadEvent{Kind: db.EvSystem, Content: note}
 		}
 	case e.Kind == engine.KindError:
@@ -82,10 +94,7 @@ func (s threadStore) Append(sid string, e engine.Entry) {
 	if ev == nil {
 		return
 	}
-	t, err := s.m.store.GetThread(id)
-	if err != nil {
-		return
-	}
+	ev.Parent = e.Parent
 	s.m.addEvent(t, ev)
 }
 
