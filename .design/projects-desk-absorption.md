@@ -130,7 +130,7 @@ until phase 4.
 5. **After.** One waiting signal on the rail (#2063 step 2), hand a session to
    a project, `@cc` visibility if wanted.
 
-## Open decisions (need YZ)
+## Decisions
 
 1. **`@cc` sharing.** Desk sessions live in the same store as IM `@cc` sessions
    (`ChatID="web"`). Projects must own its storage to stand alone. Recommended:
@@ -140,8 +140,6 @@ until phase 4.
    on the web" idea is dropped for now.
 2. **Data model.** Chosen: thread without a project (above). Say if you want
    the one-thread-project alternative instead.
-3. **Flag.** Fold `desk` into `projects` (on if either was on). Alternative:
-   keep a separate "folders" flag; not recommended, it would keep two gates for
-   one place.
+3. **Flag** (decided). The `desk` flag is removed as a whole and everything is under `projects`: a user who had `desk` on gets `projects` on at cutover, and the `desk` key, its gate, its nav entry and its experimental toggle are deleted rather than kept as an alias.
 4. **Cutover timing.** Phase 4 only after phase 3 reaches parity, one release
    with both paths available if you want a fallback.
