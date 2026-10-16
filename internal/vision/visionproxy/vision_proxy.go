@@ -375,10 +375,13 @@ func collectOpenAI(req *openai.ChatCompletionNewParams) []imageRef {
 // `input_image` part with a text part.
 //
 // Shapes handled: ResponseInputItemUnionParam.OfMessage (EasyInputMessageParam,
-// with EasyInputMessageContentUnionParam.OfInputItemContentList) and
+// with EasyInputMessageContentUnionParam.OfInputItemContentList),
 // ResponseInputItemUnionParam.OfInputMessage (ResponseInputItemMessageParam,
-// content list inline). Tool/function/output items don't carry
-// input_image parts in the current SDK union and are left alone.
+// content list inline), and OfFunctionCallOutput, whose output array carries
+// the screenshots a Codex-style client returns from its tools. Missing the
+// tool channel leaves the image to be forwarded verbatim — the same omission
+// collectOpenAI carried on the Chat side until #1609, with the same outcome:
+// text-only providers reject the request instead of describing it.
 func collectResponses(req *responses.ResponseNewParams) []imageRef {
 	items := req.Input.OfInputItemList
 	var refs []imageRef
@@ -388,21 +391,48 @@ func collectResponses(req *responses.ResponseNewParams) []imageRef {
 			return items[i].OfMessage.Role == responses.EasyInputMessageRoleUser
 		case items[i].OfInputMessage != nil:
 			return items[i].OfInputMessage.Role == "user"
+		case items[i].OfFunctionCallOutput != nil:
+			// A tool result is a latest-turn carrier too: in a Codex
+			// conversation the screenshot arrives *after* the user message
+			// that asked for it, so anchoring on user messages alone would
+			// strip the freshest image as history and describe nothing.
+			return true
 		default:
 			return false
 		}
 	})
 	for mi := range items {
+		isLast := mi == lastIdx
+
 		var list responses.ResponseInputMessageContentListParam
 		switch {
 		case items[mi].OfMessage != nil:
 			list = items[mi].OfMessage.Content.OfInputItemContentList
 		case items[mi].OfInputMessage != nil:
 			list = items[mi].OfInputMessage.Content
+		case items[mi].OfFunctionCallOutput != nil:
+			// Tool output is its own content union (text/image/file items),
+			// not the message content list, so it gets its own loop.
+			output := items[mi].OfFunctionCallOutput.Output.OfResponseFunctionCallOutputItemArray
+			for ci := range output {
+				img := output[ci].OfInputImage
+				if img == nil {
+					continue
+				}
+				mediaType, b64, remoteURL := request.ParseImageURLToAnthropicSource(img.ImageURL.Or(""))
+				refs = spliceOrCollect(refs, isLast, imageRef{
+					mediaType: mediaType, b64: b64, remoteURL: remoteURL,
+					splice: func(text string) {
+						output[ci] = responses.ResponseFunctionCallOutputItemUnionParam{
+							OfInputText: &responses.ResponseInputTextContentParam{Text: text},
+						}
+					},
+				})
+			}
+			continue
 		default:
 			continue
 		}
-		isLast := mi == lastIdx
 		for ci := range list {
 			img := list[ci].OfInputImage
 			if img == nil {

@@ -2,6 +2,7 @@ package visionproxy
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -836,4 +838,86 @@ func TestVisionProxy_Responses_MarshalNoImageURL(t *testing.T) {
 	require.NoError(t, err)
 	require.NotContains(t, string(body), `"input_image"`)
 	require.NotContains(t, string(body), `"image_url"`)
+}
+
+// TestVisionProxy_Responses_FunctionCallOutputImage_Described covers the
+// Codex shape that reaches OpenCode: the user asks, the tool answers with a
+// screenshot. The screenshot is the freshest image in the turn, so it must be
+// described rather than stripped as history — and it must not survive the
+// Responses-to-Chat conversion as an image part, which is what a text-only
+// upstream rejects.
+func TestVisionProxy_Responses_FunctionCallOutputImage_Described(t *testing.T) {
+	prov := mkProvider("openai-vision")
+	fake := newFakeVisionClient("a solid red square")
+	p := mkProcessor(t, fake, prov)
+	req := responsesReqWithItems(
+		responses.ResponseInputItemUnionParam{OfMessage: &responses.EasyInputMessageParam{
+			Role: responses.EasyInputMessageRoleUser,
+			Content: responses.EasyInputMessageContentUnionParam{
+				OfInputItemContentList: responses.ResponseInputMessageContentListParam{
+					{OfInputText: &responses.ResponseInputTextParam{Text: "take a screenshot"}},
+				},
+			},
+		}},
+		responses.ResponseInputItemUnionParam{OfFunctionCall: &responses.ResponseFunctionToolCallParam{
+			CallID: "call_1", Name: "screenshot", Arguments: "{}",
+		}},
+		responses.ResponseInputItemUnionParam{OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
+			CallID: param.NewOpt("call_1"),
+			Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
+				OfResponseFunctionCallOutputItemArray: responses.ResponseFunctionCallOutputItemListParam{
+					{OfInputText: &responses.ResponseInputTextContentParam{Text: "screenshot"}},
+					{OfInputImage: &responses.ResponseInputImageContentParam{
+						ImageURL: param.NewOpt("data:" + tinyPNGMediaType + ";base64," + tinyPNGBase64),
+					}},
+				},
+			},
+		}},
+	)
+
+	require.NoError(t, p.Process(context.Background(), req, []*loadbalance.Service{mkService(prov.UUID, true)}))
+	require.Equal(t, 1, fake.callCount(), "the latest image must reach the vision upstream, not be stripped as history")
+
+	body, err := json.Marshal(request.ConvertOpenAIResponsesToChat(req, 1024))
+	require.NoError(t, err)
+	require.NotContains(t, string(body), `"image_url"`)
+	require.Contains(t, string(body), "a solid red square")
+	require.NotContains(t, string(body), imageHistoricalText)
+}
+
+// TestVisionProxy_Responses_OlderFunctionCallOutputImage_Stripped is the other
+// half: a tool screenshot from an earlier turn is history, and history is
+// stripped with the marker rather than paying a vision round-trip.
+func TestVisionProxy_Responses_OlderFunctionCallOutputImage_Stripped(t *testing.T) {
+	prov := mkProvider("openai-vision")
+	fake := newFakeVisionClient("a solid red square")
+	p := mkProcessor(t, fake, prov)
+	req := responsesReqWithItems(
+		responses.ResponseInputItemUnionParam{OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
+			CallID: param.NewOpt("call_1"),
+			Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
+				OfResponseFunctionCallOutputItemArray: responses.ResponseFunctionCallOutputItemListParam{
+					{OfInputImage: &responses.ResponseInputImageContentParam{
+						ImageURL: param.NewOpt("data:" + tinyPNGMediaType + ";base64," + tinyPNGBase64),
+					}},
+				},
+			},
+		}},
+		responses.ResponseInputItemUnionParam{OfMessage: &responses.EasyInputMessageParam{
+			Role: responses.EasyInputMessageRoleUser,
+			Content: responses.EasyInputMessageContentUnionParam{
+				OfInputItemContentList: responses.ResponseInputMessageContentListParam{
+					{OfInputText: &responses.ResponseInputTextParam{Text: "what did you see?"}},
+				},
+			},
+		}},
+	)
+
+	require.NoError(t, p.Process(context.Background(), req, []*loadbalance.Service{mkService(prov.UUID, true)}))
+	require.Equal(t, 0, fake.callCount(), "a historical image must not pay a vision round-trip")
+
+	body, err := json.Marshal(request.ConvertOpenAIResponsesToChat(req, 1024))
+	require.NoError(t, err)
+	require.NotContains(t, string(body), `"image_url"`)
+	require.Contains(t, string(body), imageHistoricalText)
 }
