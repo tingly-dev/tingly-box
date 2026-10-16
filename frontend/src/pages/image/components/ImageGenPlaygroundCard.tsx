@@ -26,7 +26,7 @@ import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { CopyIconButton } from '@/components/CopyIconButton';
-import { AutoAwesome, Cable, Close, DeleteOutline, Description, Edit, OpenInFull, tablerMui } from '@/components/icons';
+import { AutoAwesome, Cable, Close, DeleteOutline, Description, Edit, OpenInFull, Palette, tablerMui } from '@/components/icons';
 import { IconTextPlus } from '@tabler/icons-react';
 import { fetchBlob } from '@tingly/vision';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
@@ -759,26 +759,32 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     )
                 ) : t('playground.imageTitle', { defaultValue: 'Image Playground' })}
                 rightAction={(
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                    // Same shape as the Agent pages' header: small outlined
+                    // buttons with an icon and a word, never a bare icon.
+                    <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                         {/* The way to the same models from code; the Image API
                             page sits last in the sidebar since only someone
                             wiring up a client needs it. */}
                         <Tooltip title={t('playground.useFromAppHint', { defaultValue: 'Call these models from your own app through the Image API' })}>
-                            <Button size="small" startIcon={<Cable />} onClick={() => navigate('/image/api')}>
+                            <Button variant="outlined" size="small" startIcon={<Cable />} onClick={() => navigate('/image/api')}>
                                 {t('playground.useFromApp', { defaultValue: 'Use from your app' })}
                             </Button>
                         </Tooltip>
                         {profile ? (
-                            <Tooltip title={t('imageProfile.delete', { defaultValue: 'Delete profile' })}>
-                                <IconButton onClick={() => setConfirmDeleteProfile(true)} aria-label={t('imageProfile.delete', { defaultValue: 'Delete profile' })}>
-                                    <DeleteOutline />
-                                </IconButton>
-                            </Tooltip>
+                            <Button
+                                variant="outlined"
+                                color="error"
+                                size="small"
+                                startIcon={<DeleteOutline />}
+                                onClick={() => setConfirmDeleteProfile(true)}
+                            >
+                                {t('imageProfile.delete', { defaultValue: 'Delete profile' })}
+                            </Button>
                         ) : canSaveAsProfile && (
                             // Only once there is something to keep: a grey
                             // button that can't say why it is grey is noise.
                             <Tooltip title={t('imageProfile.saveAsHint', { defaultValue: 'Keep these references, prompt and settings as a profile with its own page' })}>
-                                <Button variant="outlined" size="small" onClick={handleSaveAsProfile}>
+                                <Button variant="outlined" size="small" startIcon={<Palette />} onClick={handleSaveAsProfile}>
                                     {t('imageProfile.saveAs', { defaultValue: 'Save as profile' })}
                                 </Button>
                             </Tooltip>
