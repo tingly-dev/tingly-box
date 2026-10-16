@@ -109,6 +109,7 @@ const withText = (prompts: ProfilePrompt[], id: string, text: string) => (
 
 // Pause after the last keystroke before the prompt is saved into the profile.
 const PROMPT_SAVE_DELAY_MS = 600;
+const PROFILE_INTRO_SEEN_KEY = 'tingly.imageProfile.introSeen';
 const HISTORY_STRIP_VISIBLE = 6;
 
 interface ImageGenPlaygroundCardProps {
@@ -170,6 +171,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         pendingCount,
         historyTrackRef,
         clearSession,
+        copyRunToProfile,
         runGeneration,
         handleCancelRun,
         handleRetry,
@@ -614,6 +616,15 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     }), [loadPrompt, syncedPrompts]);
 
     const location = useLocation();
+    // A profile says once what it is, the first time someone lands on one.
+    const [profileIntroSeen, setProfileIntroSeen] = useState(() => {
+        try { return localStorage.getItem(PROFILE_INTRO_SEEN_KEY) === '1'; } catch { return false; }
+    });
+    const showProfileIntro = Boolean(profile) && !profileIntroSeen;
+    const dismissProfileIntro = () => {
+        setProfileIntroSeen(true);
+        try { localStorage.setItem(PROFILE_INTRO_SEEN_KEY, '1'); } catch { /* still hidden for this visit */ }
+    };
     const [renaming, setRenaming] = useState(Boolean((location.state as { rename?: boolean } | null)?.rename));
     const [nameDraft, setNameDraft] = useState(profile?.name ?? '');
     const [confirmDeleteProfile, setConfirmDeleteProfile] = useState(false);
@@ -634,12 +645,37 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             refs: referenceImages,
             prompts: [{ id: 'p1', name: '', text: getPrompt().trim() }],
             activePromptId: 'p1',
-            model: selectedModel,
+            // What the panel is actually using: with nothing picked by hand
+            // `selectedModel` is empty and the profile would start without one.
+            model,
             size,
             quality,
             count,
         });
         navigate(`/image/profile/${created.id}`, { state: { rename: true } });
+    };
+
+    // The other way: keep a run that worked. Its request becomes the profile
+    // (references, prompt, model, settings — what "Edit this request" puts
+    // back), and the run itself goes along so the new page opens on it.
+    const handleSaveRunAsProfile = async (run: GenerationRun) => {
+        try {
+            const sources = await runSourcesToReferences(run);
+            const created = createImageProfile({
+                name: deriveLabel(run.prompt, 12) || t('imageProfile.untitled', { defaultValue: 'Untitled profile' }),
+                refs: sources.slice(0, MAX_EDIT_REFERENCE_IMAGES),
+                prompts: [{ id: 'p1', name: '', text: run.prompt.trim() }],
+                activePromptId: 'p1',
+                model: run.model,
+                size: run.size,
+                quality: run.quality,
+                count: run.count ?? 1,
+            });
+            copyRunToProfile(run, created.id);
+            navigate(`/image/profile/${created.id}`, { state: { rename: true } });
+        } catch {
+            showNotification(t('imageProfile.saveRunFailed', { defaultValue: 'Could not save this request as a profile' }), 'error');
+        }
     };
 
     // Library: picking kept images as references, and inserting snippets.
@@ -738,32 +774,46 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     <DeleteOutline />
                                 </IconButton>
                             </Tooltip>
-                        ) : (
+                        ) : canSaveAsProfile && (
+                            // Only once there is something to keep: a grey
+                            // button that can't say why it is grey is noise.
                             <Tooltip title={t('imageProfile.saveAsHint', { defaultValue: 'Keep these references, prompt and settings as a profile with its own page' })}>
-                                <span>
-                                    <Button variant="outlined" size="small" onClick={handleSaveAsProfile} disabled={!canSaveAsProfile}>
-                                        {t('imageProfile.saveAs', { defaultValue: 'Save as profile' })}
-                                    </Button>
-                                </span>
+                                <Button variant="outlined" size="small" onClick={handleSaveAsProfile}>
+                                    {t('imageProfile.saveAs', { defaultValue: 'Save as profile' })}
+                                </Button>
                             </Tooltip>
                         )}
                     </Stack>
                 )}
-                subtitle={outputDir ? (
-                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                        <Box component="span">
-                            {t('playground.outputDirLabel', { defaultValue: 'Generated images are saved to' })}:
-                        </Box>
-                        <Box component="span" sx={{ fontFamily: fontMono, wordBreak: 'break-all' }}>
-                            {outputDir}
-                        </Box>
-                        <CopyIconButton
-                            value={outputDir}
-                            label={t('common.copy', { defaultValue: 'Copy' })}
-                            copiedLabel={t('common.copied', { defaultValue: 'Copied!' })}
-                            iconSize={14}
-                            sx={{ p: 0.25 }}
-                        />
+                subtitle={(showProfileIntro || outputDir) ? (
+                    <Stack spacing={0.5}>
+                        {showProfileIntro && (
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', color: 'text.primary' }}>
+                                <Box component="span">
+                                    {t('imageProfile.intro', { defaultValue: 'A profile keeps its references, prompts and settings. Changes save as you go.' })}
+                                </Box>
+                                <Button size="small" onClick={dismissProfileIntro} sx={{ minWidth: 0, py: 0 }}>
+                                    {t('imageProfile.introDismiss', { defaultValue: 'Got it' })}
+                                </Button>
+                            </Stack>
+                        )}
+                        {outputDir && (
+                            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                                <Box component="span">
+                                    {t('playground.outputDirLabel', { defaultValue: 'Generated images are saved to' })}:
+                                </Box>
+                                <Box component="span" sx={{ fontFamily: fontMono, wordBreak: 'break-all' }}>
+                                    {outputDir}
+                                </Box>
+                                <CopyIconButton
+                                    value={outputDir}
+                                    label={t('common.copy', { defaultValue: 'Copy' })}
+                                    copiedLabel={t('common.copied', { defaultValue: 'Copied!' })}
+                                    iconSize={14}
+                                    sx={{ p: 0.25 }}
+                                />
+                            </Stack>
+                        )}
                     </Stack>
                 ) : undefined}
             >
@@ -1014,6 +1064,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         onCancelRun={handleCancelRun}
                         onRetryRun={(run) => { void handleRetry(run); }}
                         onReuseRun={(run) => { void handleReuseRun(run); }}
+                        onSaveRunAsProfile={profile ? undefined : (run) => { void handleSaveRunAsProfile(run); }}
                         onOpenRunSource={handleOpenRunSource}
                         onOpenOutput={setSelectedImage}
                         onRemoveRun={handleRemoveRun}

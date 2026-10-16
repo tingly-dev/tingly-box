@@ -12,7 +12,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { CopyIconButton } from '@/components/CopyIconButton';
-import { Close, Edit, ErrorOutline, Refresh, RestartAlt, ZoomIn } from '@/components/icons';
+import { Close, Edit, ErrorOutline, Palette, Refresh, RestartAlt, ZoomIn } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
 import { resultSrc, runGridLayout, runImage, stripCardBasis, STRIP_CARD_HEIGHT, wrapCardSpanSx } from './imageGenSession';
 import RunSourceStrip from './RunSourceStrip';
@@ -24,6 +24,8 @@ interface GenerationRunCardProps {
     onRetry: (run: GenerationRun) => void;
     // Puts the run's whole request back into the panel.
     onReuse: (run: GenerationRun) => void;
+    // Keeps a run that worked as a profile; only offered outside a profile.
+    onSaveAsProfile?: (run: GenerationRun) => void;
     onOpenSource: (run: GenerationRun, index: number) => void;
     onUseAsReference: (src: string) => void;
     onOpenOutput: (image: SelectedImage) => void;
@@ -39,6 +41,7 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
     onCancel,
     onRetry,
     onReuse,
+    onSaveAsProfile,
     onOpenSource,
     onUseAsReference,
     onOpenOutput,
@@ -49,6 +52,7 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
     const copyPromptLabel = t('playground.copyPrompt', { defaultValue: 'Copy prompt' });
     const promptCopiedLabel = t('playground.promptCopied', { defaultValue: 'Copied' });
     const removeRunLabel = t('playground.removeRun', { defaultValue: 'Remove this generation' });
+    const saveAsProfileLabel = t('imageProfile.saveRunAs', { defaultValue: 'Save this request as a profile' });
     // The request as it went over the wire, so the line doubles as the answer
     // to "what do I send to get this": n only when it was more than one.
     const requested = Math.max(run.count ?? 1, 1);
@@ -82,6 +86,21 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
                     <RestartAlt sx={{ fontSize: 16 }} />
                 </IconButton>
             </Tooltip>
+            {/* The moment a setup is worth keeping is when it just worked,
+                so the profile is made from this run, not from the panel. */}
+            {onSaveAsProfile && (runActions.status ?? 'completed') === 'completed' && (
+                <Tooltip title={saveAsProfileLabel}>
+                    <IconButton
+                        size="small"
+                        onClick={() => { onSaveAsProfile(runActions); }}
+                        aria-label={saveAsProfileLabel}
+                        data-testid="imagegen-save-run-as-profile"
+                        sx={{ p: 0.5, color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
+                    >
+                        <Palette sx={{ fontSize: 16 }} />
+                    </IconButton>
+                </Tooltip>
+            )}
             {onRemoveClick && (
                 // A destructive action, so it gets its own hover colour
                 // (error, not the neutral text.primary the other two use) —
