@@ -6,6 +6,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/engine"
+	"github.com/tingly-dev/tingly-box/internal/github"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
@@ -25,7 +26,7 @@ func settingsOf(sess session.Session) turnSettings {
 // has a turn in flight.
 func (s *Service) startTurn(sessionID, projectPath, prompt string, ts turnSettings, resume bool) bool {
 	return s.engine.Start(sessionID, projectPath, prompt, resume, func(ctx context.Context) agentboot.ExecutionOptions {
-		return s.launchOptions(ctx, sessionID, ts)
+		return s.launchOptions(ctx, sessionID, projectPath, ts)
 	})
 }
 
@@ -33,7 +34,7 @@ func (s *Service) startTurn(sessionID, projectPath, prompt string, ts turnSettin
 // file carries its own routing, so it replaces the main scenario's env
 // rather than adding to it (the same either/or @cc's ClaudeCodeExecutor
 // uses).
-func (s *Service) launchOptions(ctx context.Context, sessionID string, ts turnSettings) agentboot.ExecutionOptions {
+func (s *Service) launchOptions(ctx context.Context, sessionID, projectPath string, ts turnSettings) agentboot.ExecutionOptions {
 	var execEnv []string
 	var settingsPath string
 	if s.routing != nil {
@@ -52,12 +53,15 @@ func (s *Service) launchOptions(ctx context.Context, sessionID string, ts turnSe
 			}
 		}
 	}
-	return agentboot.ExecutionOptions{
+	opts := agentboot.ExecutionOptions{
 		PermissionMode: ts.PermissionMode,
 		Model:          ts.Model,
 		Env:            execEnv,
 		SettingsPath:   settingsPath,
 	}
+	// The agent never holds GitHub write access (.design/github.md §6).
+	github.Prepare(ctx, s.github, projectPath, sessionID, &opts)
+	return opts
 }
 
 // deskStore is the engine's view of the session store @cc shares.

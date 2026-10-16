@@ -1026,7 +1026,13 @@ func TestProfile_TurnLaunchesWithTheProfileSettingsInsteadOfEnv(t *testing.T) {
 		t.Fatalf("CreateSession: %v", err)
 	}
 	opts := <-got
-	if opts.SettingsPath != "/profiles/p1/settings.json" || len(opts.Env) != 0 {
+	// The GitHub lockout env is always present; routing env must not be.
+	for _, kv := range opts.Env {
+		if !strings.HasPrefix(kv, "GH_") && !strings.HasPrefix(kv, "GIT_") {
+			t.Fatalf("launch got routing env %q alongside the profile settings", kv)
+		}
+	}
+	if opts.SettingsPath != "/profiles/p1/settings.json" {
 		t.Fatalf("launch got SettingsPath=%q Env=%v; want the profile's settings and no main-scenario env", opts.SettingsPath, opts.Env)
 	}
 	if snap, _ := svc.sessions.Snapshot(sess.ID); snap.Profile != "p1" {
@@ -1531,5 +1537,23 @@ func TestScenario(t *testing.T) {
 	}
 	if got := Scenario("p1"); got != "claude_code:p1" {
 		t.Errorf("Scenario(\"p1\") = %q", got)
+	}
+}
+
+// TestLaunchOptions_AlwaysHardensGitHub: whatever the routing, a turn's
+// launch options carry the GitHub write lockout (.design/github.md §6).
+func TestLaunchOptions_AlwaysHardensGitHub(t *testing.T) {
+	svc, _ := newTestService(t, nil)
+	svc.routing = fakeRouting{}
+	opts := svc.launchOptions(context.Background(), "s1", t.TempDir(), turnSettings{})
+
+	if !slices.Contains(opts.Env, "GIT_TERMINAL_PROMPT=0") || !slices.Contains(opts.Env, "GH_PROMPT_DISABLED=1") {
+		t.Errorf("env = %v", opts.Env)
+	}
+	if !slices.Contains(opts.DisallowedTools, "Bash(git push:*)") {
+		t.Errorf("DisallowedTools = %v", opts.DisallowedTools)
+	}
+	if !strings.Contains(opts.AppendSystemPrompt, "GitHub") {
+		t.Errorf("AppendSystemPrompt = %q", opts.AppendSystemPrompt)
 	}
 }

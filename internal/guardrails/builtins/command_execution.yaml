@@ -22,3 +22,16 @@ policies:
     reason: This policy blocks download-and-execute command patterns.
     match:
       terms: ["curl | sh", "curl|sh", "wget | bash", "wget|bash"]
+
+  # Second layer behind the agent's --disallowedTools (.design/github.md §6):
+  # prefix rules miss `bash -c '...'`, pipes and env-prefixed forms; this
+  # matches on the normalized command text instead.
+  - id: block-github-write-commands
+    name: Block GitHub write commands
+    groups: [default]
+    enabled: false
+    kind: command_execution
+    verdict: block
+    reason: GitHub writes go through the tb_push / tb_pr_* tools, not the agent's own gh or git credentials.
+    match:
+      terms: ["git push", "gh auth", "gh pr merge", "gh repo delete", "gh secret", "gh release", "gh api -X", "gh api --method"]

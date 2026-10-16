@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	desksvc "github.com/tingly-dev/tingly-box/internal/desk"
+	tbgithub "github.com/tingly-dev/tingly-box/internal/github"
 	"log"
 	"net/http"
 	"strings"
@@ -158,6 +159,10 @@ type Server struct {
 	// desk is nil when the store is unavailable; Stop shuts it down
 	// so no resident Claude Code process outlives the server.
 	desk *desksvc.Service
+
+	// github is the GitHub integration (.design/github.md); nil when the
+	// store is unavailable.
+	github *tbgithub.Service
 
 	// projects is nil when it could not open its store; Stop closes it so
 	// no thread's Claude Code process outlives the server.

@@ -39,6 +39,18 @@ func (s *Server) deskEnabled() bool {
 	return s.config.GetScenarioFlag(typ.ScenarioGlobal, constant.ExtensionDesk)
 }
 
+// githubEnabled reports whether the GitHub integration (connect flow, read
+// token for agents, tb_push / tb_pr_* tools; see .design/github.md) is on.
+// Off by default: it holds GitHub credentials and lets agents write through
+// them. The launch hardening that blocks agents' own GitHub writes does not
+// depend on it.
+func (s *Server) githubEnabled() bool {
+	if s.config == nil {
+		return false
+	}
+	return s.config.GetScenarioFlag(typ.ScenarioGlobal, constant.ExtensionGitHub)
+}
+
 // projectsEnabled reports whether Projects (a coordinator conversation
 // running Claude Code threads in git worktrees, see .design/projects.md) is
 // turned on. Off by default for the same reason as Desk.

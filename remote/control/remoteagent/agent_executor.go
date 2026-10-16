@@ -2,7 +2,9 @@ package remoteagent
 
 import (
 	"context"
+	"github.com/tingly-dev/tingly-box/internal/github"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -73,6 +75,29 @@ type ExecutorDependencies struct {
 	SendTextWithReply          func(hCtx HandlerContext, text string, replyTo string)
 	SendFile                   func(hCtx HandlerContext, filePath, caption string) error
 	NewStreamingMessageHandler func(hCtx HandlerContext, sessionID string) *streamingMessageHandler
+	// GitHub supplies per-session GitHub launch options. Nil still applies
+	// the static hardening (.design/github.md §6).
+	GitHub github.Launcher
+}
+
+var (
+	githubLauncherMu sync.RWMutex
+	githubLauncher   github.Launcher
+)
+
+// SetGitHubLauncher installs the process-wide GitHub launcher that bot
+// handlers built afterwards pick up. The server sets it once at startup;
+// the standalone CLI never does and keeps only the static hardening.
+func SetGitHubLauncher(l github.Launcher) {
+	githubLauncherMu.Lock()
+	githubLauncher = l
+	githubLauncherMu.Unlock()
+}
+
+func currentGitHubLauncher() github.Launcher {
+	githubLauncherMu.RLock()
+	defer githubLauncherMu.RUnlock()
+	return githubLauncher
 }
 
 // GetBotSettingOrCache returns the current bot setting.

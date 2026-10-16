@@ -14,6 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	desksvc "github.com/tingly-dev/tingly-box/internal/desk"
+	tbgithub "github.com/tingly-dev/tingly-box/internal/github"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/module"
 	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
@@ -132,7 +133,7 @@ var deskSessionPoolConfig = pool.Config{
 // Only the running server may call this: the service reconciles stored
 // sessions on construction, so building one from schema generation would
 // rewrite a live server's sessions. Returns nil if it cannot be built.
-func newDeskService(sm *db.StoreManager, cfg *config.Config) *desksvc.Service {
+func newDeskService(sm *db.StoreManager, cfg *config.Config, gh tbgithub.Launcher) *desksvc.Service {
 	if sm == nil {
 		return nil
 	}
@@ -145,8 +146,44 @@ func newDeskService(sm *db.StoreManager, cfg *config.Config) *desksvc.Service {
 		Sessions: maCore.Session,
 		Agent:    maCore.Agent,
 		Routing:  tbclient.NewTBClient(cfg),
+		GitHub:   gh,
 		Pool:     pool.New(deskSessionPoolConfig),
 	})
+}
+
+// newGitHubService builds the GitHub integration over the shared store. It
+// is only the host side of .design/github.md: with the `github` flag off it
+// connects to nothing and adds nothing to agent launches. Returns nil when
+// the store is unavailable.
+func (s *Server) newGitHubService(sm *db.StoreManager) *tbgithub.Service {
+	if sm == nil || sm.GitHub() == nil {
+		return nil
+	}
+	return tbgithub.New(tbgithub.Config{
+		Store:   sm.GitHub(),
+		DataDir: s.config.ConfigDir,
+		Enabled: s.githubEnabled,
+		BaseURL: func() string {
+			host := s.config.GetServerHost()
+			if host == "" || host == "0.0.0.0" || host == "::" {
+				host = "127.0.0.1"
+			}
+			port := s.config.GetServerPort()
+			if port == 0 {
+				port = 12580
+			}
+			return fmt.Sprintf("http://%s:%d", host, port)
+		},
+	})
+}
+
+// githubLauncher is s.github as a Launcher, or a true nil interface when
+// there is no service (a typed nil would defeat the nil check in Prepare).
+func (s *Server) githubLauncher() tbgithub.Launcher {
+	if s.github == nil {
+		return nil
+	}
+	return s.github
 }
 
 // RuntimeAuditSink builds the AuditFunc the scenario runtime hands to

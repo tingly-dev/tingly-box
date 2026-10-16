@@ -7,6 +7,7 @@ import React, {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useNavigate} from 'react-router-dom';
 import {api} from '../services/api';
+import GitHubConnect from './GitHubConnect';
 
 const SKILL_FEATURES = [
     {
@@ -21,6 +22,10 @@ const SKILL_FEATURES = [
     },
 ] as const;
 
+// GitHub has no sidebar page to gate, so it is toggled here but is not a
+// requestable ExperimentalFeature.
+type FeatureKey = ExperimentalFeature | 'github';
+
 interface GlobalExperimentalFeaturesProps {
     requestedFeature?: ExperimentalFeature;
     returnTo?: string;
@@ -34,9 +39,10 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
     const [mcpEnabled, setMCPEnabled] = useState(false);
     const [benchEnabled, setBenchEnabled] = useState(false);
     const [deskEnabled, setDeskEnabled] = useState(false);
+    const [githubEnabled, setGitHubEnabled] = useState(false);
     const [projectsEnabled, setProjectsEnabled] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [updatingFeature, setUpdatingFeature] = useState<ExperimentalFeature>();
+    const [updatingFeature, setUpdatingFeature] = useState<FeatureKey>();
     const [actionError, setActionError] = useState(false);
     const {refresh} = useFeatureFlags();
 
@@ -69,6 +75,9 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
             const deskResult = await api.getScenarioFlag('_global', 'desk');
             setDeskEnabled(deskResult?.data?.value || false);
 
+            // Load GitHub flag
+            const githubResult = await api.getScenarioFlag('_global', 'github');
+            setGitHubEnabled(githubResult?.data?.value || false);
             // Load Projects flag
             const projectsResult = await api.getScenarioFlag('_global', 'projects');
             setProjectsEnabled(projectsResult?.data?.value || false);
@@ -81,7 +90,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
     };
 
     const finishUpdate = async (
-        featureKey: ExperimentalFeature,
+        featureKey: FeatureKey,
         newValue: boolean,
         updateLocalState: () => void,
     ) => {
@@ -134,6 +143,11 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
         return finishUpdate('desk', newValue, () => setDeskEnabled(newValue));
     };
 
+    const toggleGitHub = () => {
+        const newValue = !githubEnabled;
+        return finishUpdate('github', newValue, () => setGitHubEnabled(newValue));
+    };
+
     const toggleProjects = () => {
         const newValue = !projectsEnabled;
         return finishUpdate('projects', newValue, () => setProjectsEnabled(newValue));
@@ -162,7 +176,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
     // On/Off chip on the right. The description used to live only in a hover
     // tooltip (and the chip repeated the feature name).
     const featureRow = (
-        featureKey: ExperimentalFeature,
+        featureKey: FeatureKey,
         icon: React.ReactNode,
         name: string,
         description: string,
@@ -313,6 +327,27 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
                         {t('system.experimentalFeatures.deskEnabledInfo', {defaultValue: 'Anyone who can sign in to this tingly-box can now start Claude Code sessions on this machine and approve the tool calls they make.'})}
                     </Typography>
                 </Alert>
+            )}
+
+            {/* GitHub Section */}
+            {featureRow(
+                'github',
+                <IconCode sx={{ fontSize: 16, color: 'text.secondary' }} />,
+                t('system.experimentalFeatures.github', {defaultValue: 'GitHub'}),
+                t('system.experimentalFeatures.enableGitHub', {defaultValue: 'Let agents push branches and open pull requests through a GitHub App only this tingly-box holds.'}),
+                githubEnabled,
+                toggleGitHub,
+            )}
+
+            {githubEnabled && (
+                <>
+                    <Alert severity="info" sx={{ mt: 1 }}>
+                        <Typography variant="body2">
+                            {t('system.experimentalFeatures.githubEnabledInfo', {defaultValue: 'Agents never get GitHub write access themselves: pushes and pull requests go through tingly-box and appear as your GitHub App.'})}
+                        </Typography>
+                    </Alert>
+                    <GitHubConnect />
+                </>
             )}
 
             {/* Projects Section */}

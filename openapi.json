@@ -2785,6 +2785,169 @@
         }
       }
     },
+    "/api/v1/github": {
+      "delete": {
+        "tags": [
+          "github"
+        ],
+        "summary": "Forget the GitHub App, its installations and the fallback token",
+        "description": "Forget the GitHub App, its installations and the fallback token",
+        "operationId": "apiV1GithubDelete",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/github/connect": {
+      "post": {
+        "tags": [
+          "github"
+        ],
+        "summary": "Start creating this Tingly Box's GitHub App; returns the form to post to GitHub",
+        "description": "Start creating this Tingly Box's GitHub App; returns the form to post to GitHub",
+        "operationId": "apiV1GithubConnectPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectPlan"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/github/pat": {
+      "put": {
+        "tags": [
+          "github"
+        ],
+        "summary": "Store a fine-grained personal access token as the fallback",
+        "description": "Store a fine-grained personal access token as the fallback",
+        "operationId": "apiV1GithubPatPut",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PATRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "github"
+        ],
+        "summary": "Remove the fallback token",
+        "description": "Remove the fallback token",
+        "operationId": "apiV1GithubPatDelete",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/github/status": {
+      "get": {
+        "tags": [
+          "github"
+        ],
+        "summary": "The GitHub connection: App, installed accounts, fallback token",
+        "description": "The GitHub connection: App, installed accounts, fallback token",
+        "operationId": "apiV1GithubStatusGet",
+        "parameters": [
+          {
+            "name": "live",
+            "in": "query",
+            "description": "Also ask GitHub for each installation's repository count",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/github/sync": {
+      "post": {
+        "tags": [
+          "github"
+        ],
+        "summary": "Refresh the App's installations from GitHub",
+        "description": "Refresh the App's installations from GitHub",
+        "operationId": "apiV1GithubSyncPost",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/guardrails/builtins": {
       "get": {
         "tags": [
@@ -11435,6 +11598,91 @@
           "data"
         ]
       },
+      "ConnectPlan": {
+        "type": "object",
+        "properties": {
+          "action_url": {
+            "type": "string",
+            "description": "Field action_url"
+          },
+          "manifest": {
+            "type": "string",
+            "description": "Field manifest"
+          },
+          "state": {
+            "type": "string",
+            "description": "Field state"
+          }
+        },
+        "required": [
+          "action_url",
+          "manifest",
+          "state"
+        ]
+      },
+      "ConnectRequest": {
+        "type": "object",
+        "properties": {
+          "base_url": {
+            "type": "string",
+            "description": "Field base_url"
+          },
+          "org": {
+            "type": "string",
+            "description": "Field org"
+          },
+          "owner_type": {
+            "type": "string",
+            "description": "Field owner_type"
+          }
+        },
+        "required": [
+          "owner_type",
+          "org",
+          "base_url"
+        ]
+      },
+      "ConnectionStatus": {
+        "type": "object",
+        "properties": {
+          "app_owner": {
+            "type": "string",
+            "description": "Field app_owner"
+          },
+          "app_slug": {
+            "type": "string",
+            "description": "Field app_slug"
+          },
+          "app_url": {
+            "type": "string",
+            "description": "Field app_url"
+          },
+          "connected": {
+            "type": "boolean",
+            "description": "Field connected"
+          },
+          "has_pat": {
+            "type": "boolean",
+            "description": "Field has_pat"
+          },
+          "install_url": {
+            "type": "string",
+            "description": "Field install_url"
+          },
+          "installations": {
+            "type": "array",
+            "description": "Field installations",
+            "items": {
+              "$ref": "#/components/schemas/InstallationInfo"
+            }
+          }
+        },
+        "required": [
+          "connected",
+          "installations",
+          "has_pat"
+        ]
+      },
       "CreateClientRequest": {
         "type": "object",
         "properties": {
@@ -13652,6 +13900,40 @@
           "success"
         ]
       },
+      "InstallationInfo": {
+        "type": "object",
+        "properties": {
+          "account": {
+            "type": "string",
+            "description": "Field account"
+          },
+          "account_type": {
+            "type": "string",
+            "description": "Field account_type"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field id"
+          },
+          "repositories": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field repositories"
+          },
+          "repository_selection": {
+            "type": "string",
+            "description": "Field repository_selection"
+          }
+        },
+        "required": [
+          "id",
+          "account",
+          "account_type",
+          "repository_selection",
+          "repositories"
+        ]
+      },
       "LatestVersionInfo": {
         "type": "object",
         "properties": {
@@ -15409,6 +15691,18 @@
           "configJson",
           "scriptWindows",
           "scriptUnix"
+        ]
+      },
+      "PATRequest": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Field token"
+          }
+        },
+        "required": [
+          "token"
         ]
       },
       "PairingCodeResponse": {
@@ -21356,6 +21650,10 @@
     {
       "name": "feishu",
       "description": "Operations related to feishu"
+    },
+    {
+      "name": "github",
+      "description": "Operations related to github"
     },
     {
       "name": "guardrails",

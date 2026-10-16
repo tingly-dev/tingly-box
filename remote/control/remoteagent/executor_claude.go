@@ -14,6 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/agentboot/pool"
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/internal/github"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
@@ -184,6 +185,8 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) e
 		Env:                  execEnv,
 		SettingsPath:         settingsPath,
 	}
+	// The agent never holds GitHub write access (.design/github.md §6).
+	github.Prepare(ctx, e.deps.GitHub, projectPath, sessionID, &execOpts)
 
 	startTime := time.Now()
 	var result *agentboot.Result

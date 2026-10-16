@@ -39,6 +39,7 @@ type storeSet struct {
 	remoteChatStore    *RemoteChatStore
 	remoteSessionStore *RemoteSessionStore
 	botAccessStore     *BotAccessStore
+	githubStore        *GitHubStore
 }
 
 // initialized reports, per health-report name, whether each store is set.
@@ -57,6 +58,7 @@ func (s *storeSet) initialized() map[string]bool {
 		"remoteChats":    s.remoteChatStore != nil,
 		"remoteSessions": s.remoteSessionStore != nil,
 		"botAccess":      s.botAccessStore != nil,
+		"github":         s.githubStore != nil,
 	}
 }
 
@@ -167,6 +169,9 @@ func (sm *StoreManager) initStores() error {
 	if sm.apiTokenStore, err = newAPITokenStore(conn, sm.teamStore); err != nil {
 		errs = append(errs, fmt.Errorf("api token store: %w", err))
 	}
+	if sm.githubStore, err = newGitHubStore(conn); err != nil {
+		errs = append(errs, fmt.Errorf("github store: %w", err))
+	}
 	if err = sm.initRemoteStores(); err != nil {
 		errs = append(errs, fmt.Errorf("remote stores: %w", err))
 	}
@@ -222,6 +227,14 @@ func (sm *StoreManager) BotAccess() *BotAccessStore {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 	return sm.botAccessStore
+}
+
+// GitHub returns the GitHub integration store (thread-safe).
+// Returns nil if the store is not initialized or after Close() has been called.
+func (sm *StoreManager) GitHub() *GitHubStore {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.githubStore
 }
 
 // RemoteChats returns the RemoteChatStore (thread-safe).

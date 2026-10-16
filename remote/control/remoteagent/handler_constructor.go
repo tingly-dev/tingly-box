@@ -127,6 +127,7 @@ func NewBotHandler(
 			return handler.SendFile(context.Background(), hCtx, filePath, caption)
 		},
 		NewStreamingMessageHandler: handler.newStreamingMessageHandler,
+		GitHub:                     currentGitHubLauncher(),
 		// GetBotSetting dynamically fetches the current bot settings from the store
 		GetBotSetting: func() (bot2.BotSetting, error) {
 			if store == nil {

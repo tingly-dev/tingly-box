@@ -33,6 +33,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/engine"
 	"github.com/tingly-dev/tingly-box/agentboot/pool"
 	"github.com/tingly-dev/tingly-box/internal/agent"
+	"github.com/tingly-dev/tingly-box/internal/github"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
@@ -63,6 +64,8 @@ type Routing interface {
 type Service struct {
 	sessions *session.Manager
 	routing  Routing
+	// github adds the GitHub launch hardening; nil still applies the static part.
+	github github.Launcher
 	// engine runs the turns: processes, approvals, background tasks.
 	engine *engine.Engine
 	pool   *pool.Pool // the engine's, kept for tests; nil keeps every turn one-shot
@@ -85,6 +88,9 @@ type Config struct {
 	Sessions *session.Manager
 	Agent    *agentboot.AgentService
 	Routing  Routing // optional
+	// GitHub resolves per-session GitHub launch options (optional; nil keeps
+	// only the static hardening, .design/github.md §6).
+	GitHub github.Launcher
 	// Pool, if set, drives turns through a long-lived Claude Code process
 	// per session instead of spawning one per message — the same
 	// agentboot/pool mechanism @cc's ClaudeCodeExecutor uses for its
@@ -103,7 +109,7 @@ type Config struct {
 // every web session still marked running or pending as left over from a
 // previous process (see recoverInterrupted).
 func NewService(cfg Config) *Service {
-	s := &Service{sessions: cfg.Sessions, routing: cfg.Routing, pool: cfg.Pool, model: map[string]string{}}
+	s := &Service{sessions: cfg.Sessions, routing: cfg.Routing, github: cfg.GitHub, pool: cfg.Pool, model: map[string]string{}}
 	s.engine = engine.New(engine.Config{
 		Agent: cfg.Agent,
 		Store: deskStore{s},

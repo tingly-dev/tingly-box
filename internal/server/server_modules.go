@@ -10,6 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
 	debugmodule "github.com/tingly-dev/tingly-box/internal/server/module/debug"
 	deskmodule "github.com/tingly-dev/tingly-box/internal/server/module/desk"
+	githubmodule "github.com/tingly-dev/tingly-box/internal/server/module/github"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
@@ -23,6 +24,7 @@ import (
 	virtualmodelmodule "github.com/tingly-dev/tingly-box/internal/server/module/virtualmodel"
 	"github.com/tingly-dev/tingly-box/remote/access"
 	"github.com/tingly-dev/tingly-box/remote/channel"
+	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 	remotescenario "github.com/tingly-dev/tingly-box/remote/scenario"
 	"github.com/tingly-dev/tingly-box/remote/scenario/builtin/claudecode"
@@ -89,6 +91,15 @@ func (s *Server) apiModules(ctx context.Context, schema bool, status *statusline
 		mods = append(mods, usagemodule.NewHandler(sm.Usage()))
 	}
 
+	// GitHub: built before the IM bots start so @cc picks up its launcher.
+	// Like desk, schema generation gets the handler with no service.
+	if schema {
+		mods = append(mods, githubmodule.NewHandler(nil).WithGate(s.githubEnabled))
+	} else if s.github = s.newGitHubService(sm); s.github != nil {
+		remoteagent.SetGitHubLauncher(s.github)
+		mods = append(mods, githubmodule.NewHandler(s.github).WithGate(s.githubEnabled))
+	}
+
 	// ImBot settings API routes. s.channelRegistry is passed in at
 	// construction (not wired later via SetChannelRegistry) so every bot
 	// NewHandler brings up — including bots enabled before the server
@@ -149,7 +160,7 @@ func (s *Server) apiModules(ctx context.Context, schema bool, status *statusline
 	// when the service could be built.
 	if schema {
 		mods = append(mods, deskmodule.NewHandler(nil, nil).WithGate(s.deskEnabled))
-	} else if s.desk = newDeskService(sm, s.config); s.desk != nil {
+	} else if s.desk = newDeskService(sm, s.config, s.githubLauncher()); s.desk != nil {
 		mods = append(mods, deskmodule.NewHandler(s.desk, status).WithGate(s.deskEnabled))
 	}
 
