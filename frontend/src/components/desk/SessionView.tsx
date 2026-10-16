@@ -11,9 +11,9 @@ import {buildTranscript, pendingRequestId, Trajectory, Transcript} from '@tingly
 import type {TrajectoryAnchor} from '@tingly/projects/transcript';
 import {backgroundTasks, isBusyStatus, sessionTitle} from './deskUtils';
 import FolderChip from './FolderChip';
-import ModelSelect from './ModelSelect';
+import ModelSelect from '@/components/claudeCode/ModelSelect';
 import PermissionModeSelect from './PermissionModeSelect';
-import ProfileSelect from './ProfileSelect';
+import ProfileSelect from '@/components/claudeCode/ProfileSelect';
 import StatusLine from './StatusLine';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import {getReadableAccent} from '@/theme/status';

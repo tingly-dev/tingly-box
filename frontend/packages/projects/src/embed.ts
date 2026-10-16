@@ -3,7 +3,8 @@
 // which fetch carries its authentication. Their strings are in the i18next
 // namespace `projects`: the host adds the bundles from
 // `@tingly/projects/locales/{en,zh}` under that namespace before rendering.
-export { ProjectsHostProvider, type ProjectsHost } from './host/ProjectsHost';
+export { ProjectsHostProvider, type ProjectsHost, type SessionLaunch, type SessionSlots } from './host/ProjectsHost';
+export type { Thread, ThreadEvent } from './client';
 export { default as ProjectsPage } from './pages/ProjectsPage';
 export { default as ProjectPage } from './pages/ProjectPage';
 export { default as WorkdirPage } from './pages/WorkdirPage';

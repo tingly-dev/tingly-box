@@ -129,8 +129,8 @@ const workdirs = [
 ]
 
 const session = (o: Partial<Record<string, unknown>> & { id: string; title: string; status: string; task: string; worktree: string }) => ({
-    project_id: '', origin: 'user', permission_mode: '' as string | undefined, commits_ahead: 0, files_changed: 0, input_tokens: 0, output_tokens: 0, turns: 1,
-    uncommitted: false, model: 'claude-sonnet-4-5', repo_path: '', base_branch: '', branch: '', session_id: o.id,
+    project_id: '', origin: 'user', permission_mode: '' as string | undefined, profile: '' as string | undefined, commits_ahead: 0, files_changed: 0, input_tokens: 0, output_tokens: 0, turns: 1,
+    uncommitted: false, model: '' as string | undefined, repo_path: '', base_branch: '', branch: '', session_id: o.id,
     created_at: ago(120), updated_at: ago(8), ...o,
 })
 
@@ -140,6 +140,8 @@ const sessions = [
     session({ id: 's-readme', title: 'Rewrite the README intro', status: 'idle', worktree: '/Users/me/code/website', task: 'Rewrite the README intro in plain language.', permission_mode: 'plan', input_tokens: 21_000, output_tokens: 1_500, updated_at: ago(50) }),
     session({ id: 's-old', title: 'Rename the config keys', status: 'resolved', worktree: '/Users/me/scratch', task: 'Rename the config keys to snake_case.', resolved_at: ago(60 * 30), updated_at: ago(60 * 30) }),
 ]
+
+const stoppedTasks = new Set<string>()
 
 const sessionEvents = (s: (typeof sessions)[number]) => {
     let n = 0
@@ -160,6 +162,11 @@ const sessionEvents = (s: (typeof sessions)[number]) => {
             ...call('Grep', { pattern: 'prefers-color-scheme' }, 'src/theme/index.ts:14', 10, 'c2', { parent: 'agent-1' }),
             ev('tool_result', 'The theme is applied in src/theme/index.ts and read from localStorage.', 9, { request_id: 'agent-1', payload: '{"is_error":false}' }),
             ...call('Edit', { file_path: 'src/settings/Settings.tsx' }, 'Updated', 6, 'c3'),
+            ev('usage', '', 6, { payload: JSON.stringify({ model: 'tingly/cc', input_tokens: 3200, output_tokens: 1450, cache_read_tokens: 48200, cache_write_tokens: 6100, context_tokens: 57500, context_window: 200000 }) }),
+            ev('tool_use', 'Bash', 5, { request_id: 'c-dev', payload: JSON.stringify({ command: 'npm run dev', description: 'Start the dev server', run_in_background: true }) }),
+            ev('task', '', 5, { request_id: 'c-dev', payload: JSON.stringify({ event: 'task_started', task_id: 'bash-1', task_type: 'local_bash', background: true, description: 'Start the dev server' }) }),
+            ev('task', '', 5, { request_id: 'c-dev', payload: JSON.stringify({ event: 'output_file', task_id: 'bash-1', output_file: '/tmp/bash-1.out' }) }),
+            ev('tool_result', 'Command running in background with ID: bash-1', 5, { request_id: 'c-dev', payload: '{"is_error":false}' }),
             ev('assistant', 'Added the toggle and persisted it. Running the tests to check.', 3),
             ev('tool_use', 'Bash', 2, { request_id: 'c4', payload: JSON.stringify({ command: 'npm test' }) }),
             ev('approval', 'Run npm test', 2, { payload: JSON.stringify({ request_id: 'req-test', tool: 'Bash', input: { command: 'npm test' }, state: 'pending' }) }),
@@ -216,7 +223,31 @@ export const projectsHandlers = [
     http.get('/api/v1/projects/sessions/:sid', ({ params }) => {
         const s = sessions.find((x) => x.id === params.sid)
         if (!s) return HttpResponse.json({ error: 'session not found' }, { status: 404 })
-        return HttpResponse.json({ session: s, running: s.status === 'working' || s.status === 'waiting', events: sessionEvents(s), background_tasks: [] })
+        const background_tasks = s.id === 's-dark' && !stoppedTasks.has('bash-1') ? [{ task_id: 'bash-1', task_type: 'local_bash', description: 'Start the dev server' }] : []
+        return HttpResponse.json({ session: s, running: s.status === 'working' || s.status === 'waiting', events: sessionEvents(s), background_tasks })
+    }),
+    http.put('/api/v1/projects/sessions/:sid/profile', async ({ params, request }) => {
+        const s = sessions.find((x) => x.id === params.sid)
+        if (!s) return HttpResponse.json({ error: 'session not found' }, { status: 404 })
+        s.profile = ((await request.json()) as { profile: string }).profile
+        return HttpResponse.json(s)
+    }),
+    http.put('/api/v1/projects/sessions/:sid/model', async ({ params, request }) => {
+        const s = sessions.find((x) => x.id === params.sid)
+        if (!s) return HttpResponse.json({ error: 'session not found' }, { status: 404 })
+        s.model = ((await request.json()) as { model: string }).model
+        return HttpResponse.json(s)
+    }),
+    http.post('/api/v1/projects/sessions/:sid/handoff', ({ params }) => {
+        const s = sessions.find((x) => x.id === params.sid)
+        if (!s) return HttpResponse.json({ error: 'session not found' }, { status: 404 })
+        return HttpResponse.json({ command: `cd '${s.worktree}' && '/usr/local/bin/tingly-box' cc --resume '${s.session_id}'` })
+    }),
+    http.get('/api/v1/projects/sessions/:sid/tasks/:task_id/output', () =>
+        HttpResponse.json({ content: '> notes-app@1.0.0 dev\n> vite\n\n  VITE v5.4.0  ready in 312 ms\n\n  ➜  Local:   http://localhost:5173/\n', truncated: false, size: 96 })),
+    http.post('/api/v1/projects/sessions/:sid/tasks/:task_id/stop', ({ params }) => {
+        stoppedTasks.add(params.task_id as string)
+        return new HttpResponse(null, { status: 204 })
     }),
     http.put('/api/v1/projects/sessions/:sid/permission-mode', async ({ params, request }) => {
         const s = sessions.find((x) => x.id === params.sid)

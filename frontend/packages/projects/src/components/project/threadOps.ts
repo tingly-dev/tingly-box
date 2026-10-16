@@ -10,6 +10,8 @@ export interface ThreadOps {
     /** Resolve a thread; archive a session. */
     finish: () => Promise<unknown>;
     reopen: () => Promise<unknown>;
+    /** Release a session to a terminal: the command that resumes it. Threads have none. */
+    handoff: () => Promise<string>;
 }
 
 export function projectThreadOps(projectId: string, tid: string): ThreadOps {
@@ -22,6 +24,7 @@ export function projectThreadOps(projectId: string, tid: string): ThreadOps {
         stop: () => unwrap(api.POST('/api/v1/projects/{id}/threads/{tid}/stop', path)),
         finish: () => unwrap(api.POST('/api/v1/projects/{id}/threads/{tid}/resolve', path)),
         reopen: () => unwrap(api.POST('/api/v1/projects/{id}/threads/{tid}/reopen', path)),
+        handoff: () => Promise.reject(new Error('a project thread is continued in its worktree')),
     };
 }
 
@@ -35,5 +38,6 @@ export function sessionOps(sid: string): ThreadOps {
         stop: () => unwrap(api.POST('/api/v1/projects/sessions/{sid}/stop', path)),
         finish: () => unwrap(api.POST('/api/v1/projects/sessions/{sid}/archive', path)),
         reopen: () => unwrap(api.POST('/api/v1/projects/sessions/{sid}/reopen', path)),
+        handoff: async () => (await unwrap(api.POST('/api/v1/projects/sessions/{sid}/handoff', path))).command,
     };
 }

@@ -73,6 +73,15 @@ func TestFolderSessionEndToEnd(t *testing.T) {
 	require.Equal(t, 200, c.do("PUT", "/projects/sessions/"+s.ID+"/permission-mode", map[string]any{"permission_mode": "default"}, &out))
 	assert.Equal(t, "default", out.PermissionMode)
 	assert.Equal(t, 400, c.do("PUT", "/projects/sessions/"+s.ID+"/permission-mode", map[string]any{"permission_mode": "yolo"}, &e))
+	// The standalone server has no launch profiles; a model is free text.
+	assert.Equal(t, 400, c.do("PUT", "/projects/sessions/"+s.ID+"/profile", map[string]any{"profile": "work"}, &e))
+	require.Equal(t, 200, c.do("PUT", "/projects/sessions/"+s.ID+"/model", map[string]any{"model": "haiku"}, &out))
+	assert.Equal(t, "haiku", out.Model)
+	var handoff struct {
+		Command string `json:"command"`
+	}
+	require.Equal(t, 200, c.do("POST", "/projects/sessions/"+s.ID+"/handoff", nil, &handoff))
+	assert.Contains(t, handoff.Command, "claude --resume '"+s.SessionID+"'")
 	assert.Equal(t, 409, c.do("POST", "/projects/sessions/"+s.ID+"/tasks/task1/stop", nil, &e))
 	assert.Equal(t, 400, c.do("GET", "/projects/sessions/"+s.ID+"/tasks/bad.id/output", nil, &e))
 	assert.Equal(t, 200, c.do("POST", "/projects/sessions/"+s.ID+"/archive", nil, &out))

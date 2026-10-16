@@ -53,6 +53,8 @@ type SessionSpec struct {
 	Title          string
 	Model          string
 	PermissionMode string
+	// Profile is the host's launch profile (see Launcher); empty for its default.
+	Profile string
 }
 
 // CleanFolder resolves a folder path the user gave (~ expanded, absolute,
@@ -94,6 +96,14 @@ func (m *Threads) StartSession(spec SessionSpec) (*db.Thread, error) {
 	if !ValidPermissionMode(spec.PermissionMode) {
 		return nil, ErrBadPermission
 	}
+	profile, model := strings.TrimSpace(spec.Profile), strings.TrimSpace(spec.Model)
+	if l, ok := m.env.(Launcher); ok {
+		if err := l.CheckLaunch(context.Background(), profile, model); err != nil {
+			return nil, err
+		}
+	} else if profile != "" {
+		return nil, ErrNoProfiles
+	}
 	title := strings.TrimSpace(spec.Title)
 	if title == "" {
 		title = firstLine(task, 60)
@@ -101,7 +111,7 @@ func (m *Threads) StartSession(spec SessionSpec) (*db.Thread, error) {
 	t := &db.Thread{
 		Title: title, Task: task, Status: db.ThreadWorking, Origin: "user",
 		Worktree: folder, SessionID: uuid.NewString(),
-		Model: spec.Model, PermissionMode: spec.PermissionMode,
+		Model: model, PermissionMode: spec.PermissionMode, Profile: profile,
 	}
 	if err := m.store.CreateThread(t); err != nil {
 		return nil, err
@@ -125,7 +135,11 @@ func (m *Threads) SetPermissionMode(id, mode string) (*db.Thread, error) {
 	if _, err := m.store.GetSession(id); err != nil {
 		return nil, err
 	}
-	return m.update(id, func(t *db.Thread) { t.PermissionMode = mode })
+	out, err := m.update(id, func(t *db.Thread) { t.PermissionMode = mode })
+	if err == nil {
+		m.addEvent(out, &db.ThreadEvent{Kind: db.EvSystem, Content: "permission mode: " + orDefault(mode)})
+	}
+	return out, err
 }
 
 // BackgroundTask is a task a session's Claude Code process reports as running.

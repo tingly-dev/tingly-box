@@ -242,10 +242,14 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) *module.Route
 	module.Mount(rt, ruleHandler)
 
 	// Scenario Management - register from scenario module
-	// Route previews for the model-tier listing; PreviewRoute needs only the
-	// config and the load balancer, never the status line's cache or quota.
+	// Routes for the model-tier listing and a session's status line (which
+	// also reads the routed provider's quota).
+	var quotaMgr statusline.QuotaManager
+	if s.quotaManager != nil {
+		quotaMgr = s.quotaManager
+	}
 	scenarioHandler := scenario.NewHandler(s.config, s).
-		WithRoutePreview(statusline.NewHandler(s.config, s.loadBalancer, statusline.NewCache(), nil))
+		WithRoutePreview(statusline.NewHandler(s.config, s.loadBalancer, statusline.NewCache(), quotaMgr))
 	module.Mount(rt, scenarioHandler)
 
 	// Image generation output directory (authenticated) - lets the frontend

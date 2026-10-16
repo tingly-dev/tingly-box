@@ -29,13 +29,13 @@ type AddWorkdirRequest struct {
 	Path string `json:"path" binding:"required"`
 }
 
-// SessionListResponse lists sessions, most recently updated first.
-type SessionListResponse struct {
+// SessionsResponse lists sessions, most recently updated first.
+type SessionsResponse struct {
 	Sessions []db.Thread `json:"sessions"`
 }
 
-// CreateSessionRequest starts a session in a folder.
-type CreateSessionRequest struct {
+// SessionCreateRequest starts a session in a folder.
+type SessionCreateRequest struct {
 	Folder string `json:"folder" binding:"required"`
 	// Content is the first message.
 	Content string `json:"content" binding:"required"`
@@ -44,6 +44,9 @@ type CreateSessionRequest struct {
 	Model string `json:"model,omitempty"`
 	// PermissionMode is empty to inherit the default (acceptEdits).
 	PermissionMode string `json:"permission_mode,omitempty"`
+	// Profile is the host's launch profile; empty for its default. Only
+	// hosts with profiles (Tingly Box) accept one.
+	Profile string `json:"profile,omitempty"`
 }
 
 // SessionDetailResponse is a session with its transcript.
@@ -59,8 +62,8 @@ type SendRequest struct {
 	Content string `json:"content" binding:"required"`
 }
 
-// RespondRequest answers a pending approval or question.
-type RespondRequest struct {
+// SessionRespondRequest answers a pending approval or question.
+type SessionRespondRequest struct {
 	RequestID string `json:"request_id" binding:"required"`
 	Allow     bool   `json:"allow"`
 	// Scope "thread" also allows later calls of the same tool in this session.
@@ -73,13 +76,28 @@ type PermissionModeRequest struct {
 	PermissionMode string `json:"permission_mode"`
 }
 
-// PermissionModesResponse lists the selectable modes.
-type PermissionModesResponse struct {
+// ProfileRequest sets the launch profile of the session's next turn.
+type ProfileRequest struct {
+	Profile string `json:"profile"`
+}
+
+// ModelRequest sets the model of the session's next turn ("" for the default).
+type ModelRequest struct {
+	Model string `json:"model"`
+}
+
+// SessionHandoffResponse is the command that continues the session in a terminal.
+type SessionHandoffResponse struct {
+	Command string `json:"command"`
+}
+
+// SessionPermissionModesResponse lists the selectable modes.
+type SessionPermissionModesResponse struct {
 	Modes []string `json:"modes"`
 }
 
-// TaskOutputResponse is the end of a background task's output.
-type TaskOutputResponse struct {
+// SessionTaskOutputResponse is the end of a background task's output.
+type SessionTaskOutputResponse struct {
 	Content   string `json:"content"`
 	Truncated bool   `json:"truncated"`
 	Size      int64  `json:"size"`
@@ -111,14 +129,14 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithQuery("path", "string", "The folder"))
 	api.GET("/projects/permission-modes", h.permissionModes, tag,
 		swagger.WithDescription("The Claude Code permission modes a session can run in"),
-		swagger.WithResponseModel(PermissionModesResponse{}))
+		swagger.WithResponseModel(SessionPermissionModesResponse{}))
 	api.GET("/projects/sessions", h.list, tag,
 		swagger.WithDescription("Folder sessions, most recently updated first"),
 		swagger.WithQuery("folder", "string", "Only this folder's sessions"),
-		swagger.WithResponseModel(SessionListResponse{}))
+		swagger.WithResponseModel(SessionsResponse{}))
 	api.POST("/projects/sessions", h.create, tag,
 		swagger.WithDescription("Start a session in a folder"),
-		swagger.WithRequestModel(CreateSessionRequest{}),
+		swagger.WithRequestModel(SessionCreateRequest{}),
 		swagger.WithResponseModel(db.Thread{}))
 	api.GET("/projects/sessions/events", h.events, tag,
 		swagger.WithDescription("Server-sent events for folder sessions (session and transcript changes)"))
@@ -131,7 +149,7 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithResponseModel(db.Thread{}))
 	api.POST("/projects/sessions/:sid/respond", h.respond, tag,
 		swagger.WithDescription("Answer a permission request or question the session is waiting on"),
-		swagger.WithRequestModel(RespondRequest{}),
+		swagger.WithRequestModel(SessionRespondRequest{}),
 		swagger.WithResponseModel(db.Thread{}))
 	api.POST("/projects/sessions/:sid/stop", h.stop, tag,
 		swagger.WithDescription("Interrupt the running turn; the process and its background tasks survive"),
@@ -146,19 +164,30 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithDescription("Set the permission mode of the session's next turn"),
 		swagger.WithRequestModel(PermissionModeRequest{}),
 		swagger.WithResponseModel(db.Thread{}))
+	api.PUT("/projects/sessions/:sid/profile", h.setProfile, tag,
+		swagger.WithDescription("Set the launch profile of the session's next turn (hosts with profiles only)"),
+		swagger.WithRequestModel(ProfileRequest{}),
+		swagger.WithResponseModel(db.Thread{}))
+	api.PUT("/projects/sessions/:sid/model", h.setModel, tag,
+		swagger.WithDescription("Set the model of the session's next turn"),
+		swagger.WithRequestModel(ModelRequest{}),
+		swagger.WithResponseModel(db.Thread{}))
+	api.POST("/projects/sessions/:sid/handoff", h.handoff, tag,
+		swagger.WithDescription("Release the session to a terminal: closes its process and returns the command that resumes it"),
+		swagger.WithResponseModel(SessionHandoffResponse{}))
 	api.POST("/projects/sessions/:sid/tasks/:task_id/stop", h.stopTask, tag,
 		swagger.WithDescription("Stop one background task"))
 	api.GET("/projects/sessions/:sid/tasks/:task_id/output", h.taskOutput, tag,
 		swagger.WithDescription("The end of a background task's output"),
 		swagger.WithQuery("tail", "int", "Bytes from the end (default 8192)"),
-		swagger.WithResponseModel(TaskOutputResponse{}))
+		swagger.WithResponseModel(SessionTaskOutputResponse{}))
 }
 
 func fail(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, db.ErrNotFound):
 		apierr.Store(c, err, "session")
-	case errors.Is(err, rt.ErrResolved), errors.Is(err, rt.ErrNoPrompt), errors.Is(err, rt.ErrTaskNotRunning):
+	case errors.Is(err, rt.ErrResolved), errors.Is(err, rt.ErrNoPrompt), errors.Is(err, rt.ErrTaskNotRunning), errors.Is(err, rt.ErrBusy):
 		apierr.Message(c, http.StatusConflict, err.Error())
 	default:
 		apierr.BadRequest(c, err.Error())
@@ -214,7 +243,7 @@ func (h *Handler) removeWorkdir(c *gin.Context) {
 }
 
 func (h *Handler) permissionModes(c *gin.Context) {
-	c.JSON(http.StatusOK, PermissionModesResponse{Modes: rt.PermissionModes})
+	c.JSON(http.StatusOK, SessionPermissionModesResponse{Modes: rt.PermissionModes})
 }
 
 func (h *Handler) list(c *gin.Context) {
@@ -226,16 +255,16 @@ func (h *Handler) list(c *gin.Context) {
 	if list == nil {
 		list = []db.Thread{}
 	}
-	c.JSON(http.StatusOK, SessionListResponse{Sessions: list})
+	c.JSON(http.StatusOK, SessionsResponse{Sessions: list})
 }
 
 func (h *Handler) create(c *gin.Context) {
-	var req CreateSessionRequest
+	var req SessionCreateRequest
 	if !apierr.Bind(c, &req) {
 		return
 	}
 	t, err := h.svc.Threads.StartSession(rt.SessionSpec{
-		Folder: req.Folder, Task: req.Content, Title: req.Title, Model: req.Model, PermissionMode: req.PermissionMode,
+		Folder: req.Folder, Task: req.Content, Title: req.Title, Model: req.Model, PermissionMode: req.PermissionMode, Profile: req.Profile,
 	})
 	if err != nil {
 		fail(c, err)
@@ -284,7 +313,7 @@ func (h *Handler) send(c *gin.Context) {
 }
 
 func (h *Handler) respond(c *gin.Context) {
-	var req RespondRequest
+	var req SessionRespondRequest
 	if !apierr.Bind(c, &req) {
 		return
 	}
@@ -351,6 +380,41 @@ func (h *Handler) setPermissionMode(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
+func (h *Handler) setProfile(c *gin.Context) {
+	var req ProfileRequest
+	if !apierr.Bind(c, &req) {
+		return
+	}
+	out, err := h.svc.Threads.SetProfile(c.Request.Context(), c.Param("sid"), req.Profile)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *Handler) setModel(c *gin.Context) {
+	var req ModelRequest
+	if !apierr.Bind(c, &req) {
+		return
+	}
+	out, err := h.svc.Threads.SetModel(c.Request.Context(), c.Param("sid"), req.Model)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *Handler) handoff(c *gin.Context) {
+	cmd, err := h.svc.Threads.Handoff(c.Param("sid"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, SessionHandoffResponse{Command: cmd})
+}
+
 func (h *Handler) stopTask(c *gin.Context) {
 	t, ok := h.session(c)
 	if !ok {
@@ -382,7 +446,7 @@ func (h *Handler) taskOutput(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, TaskOutputResponse{Content: out.Content, Truncated: out.Truncated, Size: out.Size})
+	c.JSON(http.StatusOK, SessionTaskOutputResponse{Content: out.Content, Truncated: out.Truncated, Size: out.Size})
 }
 
 // reply answers with the session as it is now.

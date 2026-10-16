@@ -498,7 +498,7 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	prompt := a.current.text
 	m.mu.Unlock()
 
-	env, defModel := m.env.ThreadEnv(ctx)
+	env, defModel, settings := m.launchEnv(ctx, t)
 	model := t.Model
 	if p != nil && p.ThreadModel != "" {
 		model = p.ThreadModel
@@ -509,7 +509,7 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	m.mu.Lock()
 	m.turns[threadID] = &turnTally{launchModel: model}
 	m.mu.Unlock()
-	opts := agentboot.ExecutionOptions{Model: model, PermissionMode: threadPermissionMode(p, t), Env: env}
+	opts := agentboot.ExecutionOptions{Model: model, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings}
 	if p != nil {
 		opts.AppendSystemPrompt = threadSystemPrompt(m.layout, p, t)
 		opts.SettingsPath = m.layout.SettingsFile(p.ID, t.ID)
@@ -525,6 +525,21 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 		<-slot
 		m.next(threadID)
 	}
+}
+
+// launchEnv is how t's turn reaches a model. A folder session on a host
+// with launch profiles runs under its profile, and an unset model is left to
+// that profile; everything else runs in the host's thread environment.
+func (m *Threads) launchEnv(ctx context.Context, t *db.Thread) (env []string, defModel, settings string) {
+	if l, ok := m.env.(Launcher); ok && t.ProjectID == "" {
+		env, settings, err := l.LaunchEnv(ctx, t.Profile)
+		if err == nil {
+			return env, "", settings
+		}
+		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: fmt.Sprintf("profile %s unavailable, running with the default routing: %v", orDefault(t.Profile), err)})
+	}
+	env, defModel = m.env.ThreadEnv(ctx)
+	return env, defModel, ""
 }
 
 // drop forgets a thread's in-flight state after it gave up before a turn.
@@ -623,10 +638,14 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		t.Turns++
 		t.InputTokens += tally.inputTokens
 		t.OutputTokens += tally.outputTokens
-		if tally.model != "" {
-			t.Model = tally.model
-		} else if t.Model == "" {
-			t.Model = tally.launchModel
+		// A session's model is what its owner picked (the turns' own
+		// models are on their usage entries); a thread's is what it ran.
+		if !session {
+			if tally.model != "" {
+				t.Model = tally.model
+			} else if t.Model == "" {
+				t.Model = tally.launchModel
+			}
 		}
 		t.CommitsAhead, t.FilesChanged, t.Uncommitted = stats.CommitsAhead, stats.FilesChanged, stats.Uncommitted
 		if t.Status == db.ThreadResolved {

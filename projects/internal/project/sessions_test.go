@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,9 +28,10 @@ func TestSessionRunsInFolderWithoutProject(t *testing.T) {
 
 	got := waitStatus(t, f.store, s.ID, db.ThreadIdle)
 	assert.EqualValues(t, 7, got.InputTokens)
-	assert.Equal(t, "default-model", got.Model)
+	assert.Empty(t, got.Model, "a session's model is what its owner picked")
 
 	spec := f.agent.Launches()[0]
+	assert.Equal(t, "default-model", spec.Model)
 	assert.Equal(t, folder, spec.ProjectPath)
 	assert.Equal(t, "plan", spec.PermissionMode)
 	assert.Empty(t, spec.AppendSystemPrompt, "no project instructions")
@@ -181,4 +183,106 @@ func TestSessionKeepsSubagentsAndTasksProjectThreadsDoNot(t *testing.T) {
 	assert.Zero(t, n, "a project thread still shows only the main conversation")
 	n, _ = count(th.ID, db.EvTask)
 	assert.Zero(t, n)
+}
+
+// profiles is a host with launch profiles: "work" routes through its own
+// settings file and runs only the tiers it lists.
+type profiles struct{ staticEnv }
+
+func (profiles) LaunchEnv(_ context.Context, profile string) ([]string, string, error) {
+	switch profile {
+	case "":
+		return []string{"ANTHROPIC_BASE_URL=http://gw/main"}, "", nil
+	case "work":
+		return nil, "/settings/work.json", nil
+	}
+	return nil, "", errors.New("no such profile")
+}
+
+func (profiles) CheckLaunch(_ context.Context, profile, model string) error {
+	if profile != "" && profile != "work" {
+		return errors.New("no such profile")
+	}
+	if profile == "work" && model == "opus" {
+		return errors.New("work routes every tier to one model")
+	}
+	return nil
+}
+
+func (profiles) HandoffCommand(folder, sid, profile string) string {
+	return "tb profile " + profile + " --resume " + sid + " in " + folder
+}
+
+func TestSessionWithoutLauncherHasNoProfiles(t *testing.T) {
+	f := newFixture(t, func(*enginetest.Turn) error { return nil })
+	_, err := f.threads.StartSession(SessionSpec{Folder: t.TempDir(), Task: "x", Profile: "work"})
+	assert.ErrorIs(t, err, ErrNoProfiles)
+
+	folder := t.TempDir()
+	s, err := f.threads.StartSession(SessionSpec{Folder: folder, Task: "x"})
+	require.NoError(t, err)
+	waitStatus(t, f.store, s.ID, db.ThreadIdle)
+	_, err = f.threads.SetProfile(context.Background(), s.ID, "work")
+	assert.ErrorIs(t, err, ErrNoProfiles)
+	got, err := f.threads.SetModel(context.Background(), s.ID, "haiku")
+	require.NoError(t, err)
+	assert.Equal(t, "haiku", got.Model)
+
+	cmd, err := f.threads.Handoff(s.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "cd '"+folder+"' && claude --resume '"+s.SessionID+"'", cmd)
+}
+
+func TestSessionLaunchesUnderItsProfile(t *testing.T) {
+	f := newFixture(t, func(*enginetest.Turn) error { return nil })
+	f.threads.env = profiles{}
+	ctx := context.Background()
+
+	_, err := f.threads.StartSession(SessionSpec{Folder: t.TempDir(), Task: "x", Profile: "nope"})
+	assert.Error(t, err)
+	s, err := f.threads.StartSession(SessionSpec{Folder: t.TempDir(), Task: "x", Profile: "work"})
+	require.NoError(t, err)
+	waitStatus(t, f.store, s.ID, db.ThreadIdle)
+	spec := f.agent.Launches()[0]
+	assert.Equal(t, "/settings/work.json", spec.SettingsPath)
+	assert.Empty(t, spec.Env)
+	assert.Empty(t, spec.Model, "the profile decides when no model is picked")
+
+	// Back to the default routing with a tier; a profile that cannot run
+	// the tier clears it.
+	_, err = f.threads.SetProfile(ctx, s.ID, "")
+	require.NoError(t, err)
+	got, err := f.threads.SetModel(ctx, s.ID, "opus")
+	require.NoError(t, err)
+	assert.Equal(t, "opus", got.Model)
+	got, err = f.threads.SetProfile(ctx, s.ID, "work")
+	require.NoError(t, err)
+	assert.Equal(t, "work", got.Profile)
+	assert.Empty(t, got.Model)
+	_, err = f.threads.SetModel(ctx, s.ID, "opus")
+	assert.Error(t, err)
+
+	_, err = f.threads.SetProfile(ctx, s.ID, "")
+	require.NoError(t, err)
+	_, err = f.threads.Send(ctx, s.ID, "again", "user")
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return len(f.agent.Launches()) == 2 }, 5*time.Second, 10*time.Millisecond)
+	spec = f.agent.Launches()[1]
+	assert.Contains(t, spec.Env, "ANTHROPIC_BASE_URL=http://gw/main")
+	assert.Empty(t, spec.SettingsPath)
+
+	events, _ := f.store.ListThreadEvents(s.ID)
+	var notes []string
+	for _, e := range events {
+		if e.Kind == db.EvSystem {
+			notes = append(notes, e.Content)
+		}
+	}
+	assert.Contains(t, notes, "profile: work")
+	assert.Contains(t, notes, "model: opus")
+
+	waitStatus(t, f.store, s.ID, db.ThreadIdle)
+	cmd, err := f.threads.Handoff(s.ID)
+	require.NoError(t, err)
+	assert.Contains(t, cmd, "tb profile  --resume "+s.SessionID)
 }

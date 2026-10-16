@@ -6,10 +6,10 @@ vi.mock('react-i18next', () => ({useTranslation: () => ({t: (key: string, opts?:
 vi.mock('./FolderPicker', () => ({default: ({value, onChange}: {value: string; onChange: (path: string) => void}) => (
     <input aria-label="Folder" value={value} onChange={(e) => onChange(e.target.value)}/>
 )}));
-vi.mock('./ProfileSelect', () => ({default: ({value, onChange}: {value: string; onChange: (profile: string) => void}) => (
+vi.mock('@/components/claudeCode/ProfileSelect', () => ({default: ({value, onChange}: {value: string; onChange: (profile: string) => void}) => (
     <input aria-label="Profile" value={value} onChange={(e) => onChange(e.target.value)}/>
 )}));
-vi.mock('./ModelSelect', () => ({default: ({value, onChange}: {value: string; onChange: (model: string) => void}) => (
+vi.mock('@/components/claudeCode/ModelSelect', () => ({default: ({value, onChange}: {value: string; onChange: (model: string) => void}) => (
     <input aria-label="Model" value={value} onChange={(e) => onChange(e.target.value)}/>
 )}));
 vi.mock('./PermissionModeSelect', () => ({default: ({value, onChange}: {value: string; onChange: (mode: string) => void}) => (

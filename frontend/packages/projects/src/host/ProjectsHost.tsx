@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, type ReactNode } from 'react';
-import { setApiFetch } from '../client';
+import { setApiFetch, type Thread, type ThreadEvent } from '../client';
 import { HostNotifyProvider, type Notify } from '../hooks/useNotify';
 
 /**
@@ -35,6 +35,26 @@ export interface ProjectsHost {
      * back to the project list themselves.
      */
     embedded?: boolean;
+    /** The host's parts of a folder session; none in the standalone app. */
+    session?: SessionSlots;
+}
+
+/** How a folder session launches: a host's profile and the model it asks for ("" is the default). */
+export interface SessionLaunch {
+    profile: string;
+    model: string;
+}
+
+/**
+ * A host's own parts of a folder session. Projects knows a profile only as a
+ * name; a host with profiles (Tingly Box) supplies the pickers and the status
+ * line that understand them.
+ */
+export interface SessionSlots {
+    /** Pickers for how a session launches, in the message box strip of a new session and of an open one. */
+    launchPickers?: (p: { value: SessionLaunch; onChange: (next: SessionLaunch) => void; disabled?: boolean }) => ReactNode;
+    /** Under an open session's message box. */
+    statusLine?: (p: { session: Thread; events: ThreadEvent[] }) => ReactNode;
 }
 
 const Ctx = createContext<ProjectsHost | null>(null);

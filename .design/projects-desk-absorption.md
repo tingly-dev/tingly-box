@@ -103,9 +103,10 @@ creates a thread in a project with the same session id (TEP #2063 step 5).
 - New package pages: working-folder page (session list in `StatusGroups` + new
   session + open session) built on `WorkspaceLayout`; the session view is
   `ThreadPanel` with project-only actions hidden.
-- Slots on the session page and composer for TB: `composerContext` (profile,
-  model, permission pickers, already how #2067 works), `belowComposer` (status
-  line), `headerActions` (handoff). Library code stays free of TB imports.
+- Slots for TB under `ProjectsHost.session`: `launchPickers` (profile and
+  model, in the new-session form and the session composer) and `statusLine`
+  (under the composer). Handoff is a library action; TB only changes the
+  command through `Handoffer`. Library code stays free of TB imports.
 - Delete: `pages/desk`, `components/desk`, `services/deskApi`, `deskHandlers`
   mocks, `desk` i18n.
 
@@ -125,6 +126,19 @@ until phase 4.
 3. **Session parity and TB capabilities.** Background tasks panel, Trajectory,
    handoff, expand-tools, drafts; `Launcher` (profile, tier), status line route
    + slot, handoff override. Parity checklist against Desk (every row above).
+   Status:
+   - [x] Background tasks: header chip with the running count, a panel with
+     each task's output and stop; archive and handoff ask first while tasks run.
+   - [x] Trajectory view and expand/collapse tools, remembered per browser.
+   - [x] Continue in terminal: `POST …/handoff` releases the resident process
+     and returns the command; TB's `Handoffer` uses `tingly-box cc|profile`.
+   - [x] Profile and model per session (`Launcher`; standalone rejects a
+     profile), pickers through the `session.launchPickers` slot.
+   - [x] Status line: `GET /scenario/:scenario/route` resolves the route and
+     quota for a profile and tier; `session.statusLine` slot renders it with
+     the session's token usage.
+   - [ ] Per-session drafts and the send queue: phase 4, with the `desk.status*`
+     strings moving out of the `desk` namespace.
 4. **Cutover.** Import old sessions, redirect `/desk` and `/api/v1/desk`,
    retire the `desk` flag (on → `projects` on), delete `internal/desk`,
    `module/desk` and the Desk frontend, update `desk.md` and

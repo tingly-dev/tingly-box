@@ -1,6 +1,7 @@
 package scenario
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +21,11 @@ type fakePreview struct{ scenarios []string }
 func (f *fakePreview) PreviewRoute(scenario, modelID string) *statusline.Route {
 	f.scenarios = append(f.scenarios, scenario)
 	return &statusline.Route{ProviderName: "Acme", Model: "acme-" + modelID}
+}
+
+func (f *fakePreview) ResolveRoute(_ context.Context, scenario, modelID string) *statusline.Route {
+	f.scenarios = append(f.scenarios, scenario)
+	return &statusline.Route{ProviderName: "Acme", Model: "acme-" + modelID, Quota: []statusline.QuotaSegment{{Type: "session", Text: "60% left", UsedPercent: 40}}}
 }
 
 func getModels(t *testing.T, h *Handler, url string) (int, ClaudeCodeModelsData) {
@@ -96,6 +102,51 @@ func TestGetClaudeCodeModels(t *testing.T) {
 		t.Fatalf("unknown profile: %d, want 404", code)
 	}
 	if code, _ := getModels(t, h, "/scenario/opencode/models"); code != http.StatusBadRequest {
+		t.Fatalf("other scenario: %d, want 400", code)
+	}
+}
+
+func TestGetClaudeCodeRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	separate, err := cfg.CreateProfile(typ.ScenarioClaudeCode, "work", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview := &fakePreview{}
+	h := NewHandler(cfg, &mockRemoteControlController{}).WithRoutePreview(preview)
+	get := func(url string) (int, ClaudeCodeRouteResponse) {
+		router := gin.New()
+		router.GET("/scenario/:scenario/route", h.GetClaudeCodeRoute)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, url, nil))
+		var out ClaudeCodeRouteResponse
+		_ = json.Unmarshal(rec.Body.Bytes(), &out)
+		return rec.Code, out
+	}
+
+	code, main := get("/scenario/claude_code/route")
+	if code != http.StatusOK || main.Scenario != "claude_code" || main.RequestedModel == "" || main.ProviderName != "Acme" || len(main.Quota) != 1 {
+		t.Fatalf("main routing: %d %+v, want the default tier routed with its quota", code, main)
+	}
+	code, opus := get("/scenario/claude_code/route?profile=" + separate.ID + "&tier=opus")
+	if code != http.StatusOK || opus.Scenario != string(typ.ProfiledScenarioName(typ.ScenarioClaudeCode, separate.ID)) || opus.RequestedModel == "" {
+		t.Fatalf("profile tier: %d %+v", code, opus)
+	}
+	_, def := get("/scenario/claude_code/route?profile=" + separate.ID)
+	if def.RequestedModel == opus.RequestedModel {
+		t.Fatalf("tier opus requests %q, the same as the default tier", opus.RequestedModel)
+	}
+	if code, _ := get("/scenario/claude_code/route?profile=nope"); code != http.StatusNotFound {
+		t.Fatalf("unknown profile: %d, want 404", code)
+	}
+	if code, _ := get("/scenario/opencode/route"); code != http.StatusBadRequest {
 		t.Fatalf("other scenario: %d, want 400", code)
 	}
 }

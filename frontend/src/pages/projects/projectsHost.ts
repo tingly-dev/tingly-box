@@ -8,6 +8,7 @@ import { zh as projectsZh } from '@tingly/projects/locales/zh';
 import i18n from '@/i18n';
 import { notify } from '@/utils/notify';
 import { notifyProjectsChanged, projectsFetch } from '@/services/projectsApi';
+import { sessionSlots } from './session/sessionSlots';
 
 // The package's own strings live in the `projects` namespace, apart from
 // Tingly Box's (they share key names such as projects.*, common.*, nav.*).
@@ -34,4 +35,6 @@ export const projectsHost: ProjectsHost = {
         notify.show(severity, message);
     },
     embedded: true,
+    // Folder sessions run through Claude Code profiles and show their route.
+    session: sessionSlots,
 };

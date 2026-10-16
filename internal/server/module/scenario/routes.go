@@ -113,6 +113,15 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 		swagger.WithResponseModel(ClaudeCodeModelsResponse{}),
 	)
 
+	router.GET("/scenario/:scenario/route", h.GetClaudeCodeRoute,
+		swagger.WithDescription("Where a Claude Code session's next request is routed, and the quota it draws on (a session's status line)"),
+		swagger.WithTags("scenarios"),
+		swagger.WithQuery("profile", "string", "Claude Code profile id; empty is the main claude_code routing"),
+		swagger.WithQuery("tier", "string", "Model tier alias the session asks for; empty is the default tier"),
+		swagger.WithQuery("model", "string", "Model the latest turn asked for, used when the tier cannot be read"),
+		swagger.WithResponseModel(ClaudeCodeRouteResponse{}),
+	)
+
 	router.GET("/scenario/:scenario/profiles/:id/claude-config", h.GetProfileClaudeConfig,
 		swagger.WithDescription("Get the effective and inherited Claude Code profile configuration"),
 		swagger.WithTags("scenarios"),

@@ -4,8 +4,8 @@ import {afterEach, describe, expect, it, vi} from 'vitest';
 import SessionView from './SessionView';
 
 vi.mock('react-i18next', () => ({useTranslation: () => ({t: (key: string, opts?: {defaultValue?: string}) => opts?.defaultValue ?? key})}));
-vi.mock('./ProfileSelect', () => ({default: ({disabled, onChange}: {disabled: boolean; onChange: (value: string) => void}) => <button disabled={disabled} onClick={() => onChange('profile')}>Change profile</button>}));
-vi.mock('./ModelSelect', () => ({default: ({disabled, onChange}: {disabled: boolean; onChange: (value: string) => void}) => <button disabled={disabled} onClick={() => onChange('model')}>Change model</button>}));
+vi.mock('@/components/claudeCode/ProfileSelect', () => ({default: ({disabled, onChange}: {disabled: boolean; onChange: (value: string) => void}) => <button disabled={disabled} onClick={() => onChange('profile')}>Change profile</button>}));
+vi.mock('@/components/claudeCode/ModelSelect', () => ({default: ({disabled, onChange}: {disabled: boolean; onChange: (value: string) => void}) => <button disabled={disabled} onClick={() => onChange('model')}>Change model</button>}));
 vi.mock('./PermissionModeSelect', () => ({default: ({disabled, onChange}: {disabled: boolean; onChange: (value: string) => void}) => <button disabled={disabled} onClick={() => onChange('mode')}>Change permissions</button>}));
 vi.mock('./StatusLine', () => ({default: () => null}));
 vi.mock('./Transcript', () => ({default: () => null}));

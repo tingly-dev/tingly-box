@@ -4,9 +4,9 @@ import {Box, Button, Typography} from '@mui/material';
 import {Composer} from '@tingly/projects';
 import {useTranslation} from 'react-i18next';
 import FolderPicker from './FolderPicker';
-import ModelSelect from './ModelSelect';
+import ModelSelect from '@/components/claudeCode/ModelSelect';
 import PermissionModeSelect from './PermissionModeSelect';
-import ProfileSelect from './ProfileSelect';
+import ProfileSelect from '@/components/claudeCode/ProfileSelect';
 import {useDeskDrafts} from './useDeskDrafts';
 
 interface NewSessionViewProps {

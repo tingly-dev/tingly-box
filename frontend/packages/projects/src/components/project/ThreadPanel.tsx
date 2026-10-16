@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Alert, Box, Button, Collapse, Divider, IconButton, Menu, MenuItem,
-    Skeleton, Typography,
+    Popover, Skeleton, Tooltip, Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import type { Thread, ThreadEvent } from '../../client';
-import { buildTranscript, Transcript, type Respond } from '../../transcript';
+import type { BackgroundTask, Thread, ThreadEvent } from '../../client';
+import { buildTranscript, Trajectory, Transcript, type Respond, type TrajectoryAnchor } from '../../transcript';
 import { Composer } from '../Composer';
 import { CodeBlock, Markdown } from '../Markdown';
-import { CopyIconButton } from '@tingly/ui';
-import { ArrowBack, Branch, DiffIcon, FolderOpen, Merge, MoreVert } from '../icons';
+import { ConfirmDialog, CopyIconButton } from '@tingly/ui';
+import { ArrowBack, Branch, DiffIcon, FolderOpen, Merge, MoreVert, Stream, Terminal } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { folderName, formatTokens } from '../../utils/format';
 import { DiffDialog } from './DiffDialog';
 import { ThreadStatusChip, toneColor } from './threadStatus';
 import { threadTranscript } from './threadTranscript';
 import { projectThreadOps, sessionOps } from './threadOps';
+import { BackgroundTasksPanel } from '../workdir/BackgroundTasksPanel';
+import { backgroundTasks } from '../workdir/backgroundTasks';
+import { readLocal, writeLocal } from '../../utils/storage';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
 const mono = { fontFamily: fontMono } as const;
@@ -53,14 +56,45 @@ interface Props {
     composerContext?: React.ReactNode;
     /** Under the message box (a host's status line). */
     belowComposer?: React.ReactNode;
+    /** What a folder session's process runs in the background now. */
+    liveTasks?: BackgroundTask[];
+    /** Re-reads the session, e.g. after a task was stopped. */
+    onRefresh?: () => void;
 }
 
-export function ThreadPanel({ projectId, threadId, thread, events, running, disabled, onBack, hideTitle, actions, composerContext, belowComposer }: Props) {
+type View = 'chat' | 'trajectory';
+
+const anchorSelector = (anchor: TrajectoryAnchor): string => {
+    if ('call' in anchor) return `[data-call-ids~="${CSS.escape(anchor.call)}"]`;
+    if ('request' in anchor) return `[data-request-id="${CSS.escape(anchor.request)}"]`;
+    return `[data-block="${anchor.block}"]`;
+};
+
+export function ThreadPanel({ projectId, threadId, thread, events, running, disabled, onBack, hideTitle, actions, composerContext, belowComposer, liveTasks = [], onRefresh }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const [diffOpen, setDiffOpen] = useState(false);
     const [menu, setMenu] = useState<HTMLElement | null>(null);
     const [taskOpen, setTaskOpen] = useState(false);
+    // Chat and Trajectory read the same transcript; the choice and whether
+    // every tool call starts open are remembered per browser.
+    const [view, setViewState] = useState<View>(() => readLocal('thread.view') === 'trajectory' ? 'trajectory' : 'chat');
+    const setView = (next: View) => {
+        setViewState(next);
+        writeLocal('thread.view', next);
+    };
+    const [expandAll, setExpandAll] = useState(() => readLocal('thread.expandTools') === '1');
+    const toggleExpand = () => {
+        writeLocal('thread.expandTools', expandAll ? '0' : '1');
+        setExpandAll(!expandAll);
+    };
+    const [target, setTarget] = useState<TrajectoryAnchor | null>(null);
+    const [tasksAnchor, setTasksAnchor] = useState<HTMLElement | null>(null);
+    // The handoff command stays on screen with its own copy button, since
+    // copying right after the request can be refused by the browser.
+    const [handoff, setHandoff] = useState<string | null>(null);
+    const [confirm, setConfirm] = useState<'archive' | 'handoff' | null>(null);
+    const [acting, setActing] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
     // A folder session has no project: no branch, review or merge.
@@ -78,6 +112,38 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
         return { blocks: buildTranscript(entries), pendingRequestId };
     }, [events, running, coordinator]);
 
+    const tasks = useMemo(() => session
+        ? backgroundTasks(threadTranscript(events ?? [], running, () => undefined).entries, liveTasks)
+        : [], [session, events, running, liveTasks]);
+
+    // Scroll the conversation to a message and flash it: "where did this
+    // come from" is one click from the trajectory and the tasks panel.
+    const flash = (anchor: TrajectoryAnchor) => {
+        const el = scrollRef.current?.querySelector<HTMLElement>(anchorSelector(anchor));
+        if (!el) return;
+        stick.current = false;
+        el.scrollIntoView({ block: 'center' });
+        el.animate?.([{ outline: '2px solid transparent' }, { outline: '2px solid var(--mui-palette-primary-main, #1976d2)' }, { outline: '2px solid transparent' }], { duration: 1600 });
+    };
+    const openInChat = (anchor: TrajectoryAnchor) => {
+        setTasksAnchor(null);
+        if (view === 'chat') flash(anchor);
+        else {
+            setView('chat');
+            setTarget(anchor);
+        }
+    };
+    useEffect(() => {
+        if (!target || view !== 'chat') return;
+        // After the chat has rendered in place of the trajectory.
+        const frame = requestAnimationFrame(() => {
+            flash(target);
+            setTarget(null);
+        });
+        return () => cancelAnimationFrame(frame);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [target, view]);
+
     const respond: Respond = async (requestId, allow, answer, remember) => {
         try {
             await ops.respond(requestId, allow, !!remember, answer);
@@ -92,9 +158,26 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
     const act = async (run: () => Promise<unknown>) => {
         try {
             await run();
+            return true;
         } catch (e) {
             notify((e as Error).message, 'error');
+            return false;
         }
+    };
+    const runConfirmed = async (what: 'archive' | 'handoff') => {
+        setActing(true);
+        const done = what === 'archive'
+            ? await act(ops.finish)
+            : await act(async () => setHandoff(await ops.handoff()));
+        setActing(false);
+        if (done) setConfirm(null);
+    };
+    // Archiving or handing off ends the process and every background task it
+    // runs: ask first while any is running.
+    const guarded = (what: 'archive' | 'handoff') => {
+        setMenu(null);
+        if (liveTasks.length > 0) setConfirm(what);
+        else void runConfirmed(what);
     };
 
     if (!thread) {
@@ -112,12 +195,28 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
                         ? <Box sx={{ flex: 1 }} />
                         : <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: '0.9375rem', fontWeight: 650, color: 'text.primary' }} title={thread.title}>{thread.title}</Typography>}
                     {canReview && <Button size="small" variant="contained" startIcon={<DiffIcon />} onClick={() => setDiffOpen(true)} sx={{ flexShrink: 0, py: 0.25 }}>{t('thread.review')}</Button>}
+                    {/* While work runs in the background it names itself. */}
+                    {session && liveTasks.length > 0 && (
+                        <Tooltip title={t('session.backgroundTasks')}>
+                            <Button size="small" variant="outlined" color="inherit" startIcon={<Stream sx={{ fontSize: '16px !important' }} />} onClick={(e) => setTasksAnchor(e.currentTarget)}
+                                sx={{ borderRadius: 4, borderColor: 'divider', color: 'text.secondary', py: 0, px: 1.25, minWidth: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                {t('session.tasksRunning', { count: liveTasks.length })}
+                            </Button>
+                        </Tooltip>
+                    )}
                     {actions}
                     <IconButton size="small" onClick={(e) => setMenu(e.currentTarget)} aria-label={t('common.more')}><MoreVert fontSize="small" /></IconButton>
                     <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
                         <MenuItem onClick={() => { setMenu(null); setTaskOpen((v) => !v); }}>{taskOpen ? t('thread.hideTask') : t('thread.showTask')}</MenuItem>
+                        <MenuItem onClick={() => { setMenu(null); setView(view === 'chat' ? 'trajectory' : 'chat'); }}>{view === 'chat' ? t('thread.showTrajectory') : t('thread.showChat')}</MenuItem>
+                        {view === 'chat' && <MenuItem onClick={() => { setMenu(null); toggleExpand(); }}>{expandAll ? t('thread.collapseTools') : t('thread.expandTools')}</MenuItem>}
+                        {/* The panel opens where the menu was, under the More button. */}
+                        {session && <MenuItem onClick={() => { setTasksAnchor(menu); setMenu(null); }}>{t('session.backgroundTasks')}</MenuItem>}
+                        {session && thread.status !== 'resolved' && (
+                            <MenuItem disabled={running || acting} onClick={() => guarded('handoff')}>{running ? t('session.handoffBusy') : t('session.handoff')}</MenuItem>
+                        )}
                         {thread.status !== 'resolved'
-                            ? <MenuItem onClick={() => { setMenu(null); void act(ops.finish); }}>{t(session ? 'session.archive' : 'thread.resolve')}</MenuItem>
+                            ? <MenuItem onClick={() => session ? guarded('archive') : (setMenu(null), void act(ops.finish))}>{t(session ? 'session.archive' : 'thread.resolve')}</MenuItem>
                             : <MenuItem onClick={() => { setMenu(null); void act(ops.reopen); }}>{t(session ? 'session.reopen' : 'thread.reopen')}</MenuItem>}
                         {/* Run details, for when they matter: kept off the header. */}
                         {(thread.model || thread.input_tokens > 0 || thread.output_tokens > 0) && <Divider />}
@@ -166,17 +265,31 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
             }} sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', px: 2, py: 2, overscrollBehavior: 'contain' }}>
                 {events === null
                     ? <Skeleton variant="rounded" height={120} />
-                    : <Transcript blocks={blocks} pendingRequestId={pendingRequestId} working={running} onRespond={respond} codeBlock={CodeBlock} rememberLabel={rememberLabel} />}
+                    : view === 'chat'
+                        ? <Transcript blocks={blocks} pendingRequestId={pendingRequestId} working={running} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} rememberLabel={rememberLabel} />
+                        : <Trajectory blocks={blocks} working={running} pendingRequestId={pendingRequestId} project={thread.worktree} onOpen={openInChat} />}
             </Box>
 
             <Box sx={{ px: 2, pb: 2 }}>
+                {handoff && (
+                    <Alert severity="info" variant="outlined" icon={<Terminal fontSize="small" />} onClose={() => setHandoff(null)}
+                        sx={{ mb: 1, '& .MuiAlert-message': { minWidth: 0, flex: 1 } }}>
+                        <Typography variant="body2" sx={{ color: 'text.primary', mb: 0.5 }}>{t('session.handoffReady')}</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Box component="code" sx={{ ...mono, flex: 1, minWidth: 0, overflowX: 'auto', whiteSpace: 'nowrap', fontSize: fontSizes.md, px: 1, py: 0.5, borderRadius: 1, bgcolor: 'action.hover', color: 'text.primary' }}>
+                                {handoff}
+                            </Box>
+                            <CopyIconButton value={handoff} label={t('common.copy')} copiedLabel={t('common.copied')} />
+                        </Box>
+                    </Alert>
+                )}
                 <Composer
                     context={composerContext}
                     minRows={1}
                     keepUntilSent
                     streaming={running}
                     sendWhileStreaming
-                    onStop={() => act(ops.stop)}
+                    onStop={() => { void act(ops.stop); }}
                     disabled={disabled || thread.status === 'resolved'}
                     placeholder={thread.status === 'resolved' ? t(session ? 'session.archivedPlaceholder' : 'thread.resolvedPlaceholder') : running ? t(session ? 'session.queuePlaceholder' : 'thread.queuePlaceholder') : t(session ? 'session.placeholder' : 'thread.placeholder')}
                     onSend={async (text) => {
@@ -193,6 +306,23 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
                 {belowComposer}
             </Box>
             <DiffDialog thread={thread} open={diffOpen} onClose={() => setDiffOpen(false)} />
+            {session && (
+                <Popover open={!!tasksAnchor} anchorEl={tasksAnchor} onClose={() => setTasksAnchor(null)}
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
+                    <BackgroundTasksPanel sessionId={threadId} tasks={tasks} onChanged={() => onRefresh?.()} onReveal={(call) => openInChat({ call })} />
+                </Popover>
+            )}
+            <ConfirmDialog
+                open={confirm !== null}
+                title={confirm === 'handoff' ? t('session.handoffConfirm') : t('session.archiveConfirm')}
+                description={t('session.tasksWillStop', { count: liveTasks.length })}
+                loading={acting}
+                cancelLabel={t('common.cancel')}
+                confirmLabel={confirm === 'handoff' ? t('session.handoff') : t('session.archive')}
+                confirmColor="warning"
+                onClose={() => setConfirm(null)}
+                onConfirm={() => confirm && void runConfirmed(confirm)}
+            />
         </Box>
     );
 }

@@ -5,6 +5,7 @@ import {controlApi} from './openapi';
 
 export type ClaudeCodeModels = components['schemas']['ClaudeCodeModelsData'];
 export type ClaudeCodeModelTier = components['schemas']['ClaudeCodeModelTier'];
+export type ClaudeCodeRoute = components['schemas']['ClaudeCodeRouteResponse'];
 
 export const profileApi = {
     // Profile API
@@ -67,6 +68,17 @@ export const profileApi = {
             params: {path: {scenario: 'claude_code'}, query: {profile}},
         }));
         return res?.success ? res.data : undefined;
+    },
+
+    // Where a Claude Code session's next request goes under a profile and
+    // tier, with the routed provider's quota: a session's status line.
+    // Resolves undefined on failure.
+    getClaudeCodeRoute: async (q: {profile: string; tier: string; model?: string}): Promise<ClaudeCodeRoute | undefined> => {
+        const res = await controlApi((client, headers) => client.GET('/api/v1/scenario/{scenario}/route', {
+            headers,
+            params: {path: {scenario: 'claude_code'}, query: {profile: q.profile, tier: q.tier, model: q.model}},
+        }));
+        return res && typeof res.scenario === 'string' ? res as ClaudeCodeRoute : undefined;
     },
 
     getClaudeCodeProfileConfig: async (scenario: string, id: string): Promise<any> => {

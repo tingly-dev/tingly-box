@@ -95,6 +95,9 @@ type Thread struct {
 	Turns          int    `json:"turns"`
 	InputTokens    int64  `json:"input_tokens"`
 	OutputTokens   int64  `json:"output_tokens"`
+	// Profile is a folder session's launch profile, named by the host
+	// (Tingly Box: a Claude Code profile); empty for the host's default.
+	Profile string `gorm:"size:100" json:"profile,omitempty"`
 	// MergedAt is set when the branch was merged from the Overview.
 	MergedAt   *time.Time `json:"merged_at,omitempty"`
 	ResolvedAt *time.Time `json:"resolved_at,omitempty"`

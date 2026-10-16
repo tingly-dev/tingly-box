@@ -3818,6 +3818,28 @@ export const handlers = [
         return HttpResponse.json({ success: true, data })
     }),
 
+    // A session's status line: the chosen tier's route and its provider's quota.
+    http.get('/api/v1/scenario/:scenario/route', ({ params, request }) => {
+        if (params.scenario !== 'claude_code') {
+            return HttpResponse.json({ success: false, error: 'routes are only available for claude_code' }, { status: 400 })
+        }
+        const q = new URL(request.url).searchParams
+        const profile = q.get('profile') ?? ''
+        const t = mockClaudeCodeModels[profile] ?? mockClaudeCodeModels['']
+        const tier = t.tiers.find((x) => x.alias === (q.get('tier') ?? '')) ?? t.tiers[0]
+        const hours = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString()
+        const quota = profile
+            ? [{ type: 'balance', balance: true, text: '$12.40', used_percent: 0, limit_reached: false }]
+            : [
+                { type: 'session', balance: false, text: '14% left', used_percent: 86, resets_at: hours(2.2), limit_reached: false },
+                { type: 'weekly', balance: false, text: '81% left', used_percent: 19, resets_at: hours(80), limit_reached: false },
+            ]
+        return HttpResponse.json({
+            scenario: profile ? `claude_code:${profile}` : 'claude_code',
+            requested_model: tier.model, provider_name: tier.provider_name, provider_model: tier.provider_model, quota,
+        })
+    }),
+
     http.post('/api/v1/scenario/:scenario/profiles', async ({ params, request }) => {
         const { scenario } = params as { scenario: string }
         const body = await request.json() as any

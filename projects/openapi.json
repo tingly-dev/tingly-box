@@ -435,7 +435,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PermissionModesResponse"
+                  "$ref": "#/components/schemas/SessionPermissionModesResponse"
                 }
               }
             }
@@ -523,7 +523,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionListResponse"
+                  "$ref": "#/components/schemas/SessionsResponse"
                 }
               }
             }
@@ -543,7 +543,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateSessionRequest"
+                "$ref": "#/components/schemas/SessionCreateRequest"
               }
             }
           }
@@ -650,6 +650,39 @@
         }
       }
     },
+    "/api/v1/projects/sessions/{sid}/handoff": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Release the session to a terminal: closes its process and returns the command that resumes it",
+        "description": "Release the session to a terminal: closes its process and returns the command that resumes it",
+        "operationId": "apiV1ProjectsSessionsSidHandoffPost",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionHandoffResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/sessions/{sid}/messages": {
       "post": {
         "tags": [
@@ -694,6 +727,50 @@
         }
       }
     },
+    "/api/v1/projects/sessions/{sid}/model": {
+      "put": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Set the model of the session's next turn",
+        "description": "Set the model of the session's next turn",
+        "operationId": "apiV1ProjectsSessionsSidModelPut",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/sessions/{sid}/permission-mode": {
       "put": {
         "tags": [
@@ -720,6 +797,50 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PermissionModeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/sessions/{sid}/profile": {
+      "put": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Set the launch profile of the session's next turn (hosts with profiles only)",
+        "description": "Set the launch profile of the session's next turn (hosts with profiles only)",
+        "operationId": "apiV1ProjectsSessionsSidProfilePut",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileRequest"
               }
             }
           }
@@ -796,7 +917,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RespondRequest"
+                "$ref": "#/components/schemas/SessionRespondRequest"
               }
             }
           }
@@ -891,7 +1012,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TaskOutputResponse"
+                  "$ref": "#/components/schemas/SessionTaskOutputResponse"
                 }
               }
             }
@@ -2305,35 +2426,6 @@
           "name"
         ]
       },
-      "CreateSessionRequest": {
-        "type": "object",
-        "properties": {
-          "content": {
-            "type": "string",
-            "description": "Field content"
-          },
-          "folder": {
-            "type": "string",
-            "description": "Field folder"
-          },
-          "model": {
-            "type": "string",
-            "description": "Field model"
-          },
-          "permission_mode": {
-            "type": "string",
-            "description": "Field permission_mode"
-          },
-          "title": {
-            "type": "string",
-            "description": "Field title"
-          }
-        },
-        "required": [
-          "folder",
-          "content"
-        ]
-      },
       "Diff": {
         "type": "object",
         "properties": {
@@ -2664,6 +2756,18 @@
           "display_name"
         ]
       },
+      "ModelRequest": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          }
+        },
+        "required": [
+          "model"
+        ]
+      },
       "ModelUsage": {
         "type": "object",
         "properties": {
@@ -2737,21 +2841,6 @@
           "permission_mode"
         ]
       },
-      "PermissionModesResponse": {
-        "type": "object",
-        "properties": {
-          "modes": {
-            "type": "array",
-            "description": "Field modes",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "modes"
-        ]
-      },
       "PostMessageRequest": {
         "type": "object",
         "properties": {
@@ -2762,6 +2851,18 @@
         },
         "required": [
           "content"
+        ]
+      },
+      "ProfileRequest": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "string",
+            "description": "Field profile"
+          }
+        },
+        "required": [
+          "profile"
         ]
       },
       "Project": {
@@ -3069,35 +3170,6 @@
           "base_branch"
         ]
       },
-      "RespondRequest": {
-        "type": "object",
-        "properties": {
-          "allow": {
-            "type": "boolean",
-            "description": "Field allow"
-          },
-          "answer": {
-            "type": "string",
-            "description": "Field answer"
-          },
-          "request_id": {
-            "type": "string",
-            "description": "Field request_id"
-          },
-          "scope": {
-            "type": "string",
-            "description": "Field scope",
-            "enum": [
-              "once",
-              "thread"
-            ]
-          }
-        },
-        "required": [
-          "request_id",
-          "allow"
-        ]
-      },
       "SendMessageRequest": {
         "type": "object",
         "properties": {
@@ -3123,6 +3195,39 @@
           }
         },
         "required": [
+          "content"
+        ]
+      },
+      "SessionCreateRequest": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Field content"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Field folder"
+          },
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          },
+          "permission_mode": {
+            "type": "string",
+            "description": "Field permission_mode"
+          },
+          "profile": {
+            "type": "string",
+            "description": "Field profile"
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
+          }
+        },
+        "required": [
+          "folder",
           "content"
         ]
       },
@@ -3158,7 +3263,86 @@
           "background_tasks"
         ]
       },
-      "SessionListResponse": {
+      "SessionHandoffResponse": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "Field command"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      },
+      "SessionPermissionModesResponse": {
+        "type": "object",
+        "properties": {
+          "modes": {
+            "type": "array",
+            "description": "Field modes",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "modes"
+        ]
+      },
+      "SessionRespondRequest": {
+        "type": "object",
+        "properties": {
+          "allow": {
+            "type": "boolean",
+            "description": "Field allow"
+          },
+          "answer": {
+            "type": "string",
+            "description": "Field answer"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Field request_id"
+          },
+          "scope": {
+            "type": "string",
+            "description": "Field scope",
+            "enum": [
+              "once",
+              "thread"
+            ]
+          }
+        },
+        "required": [
+          "request_id",
+          "allow"
+        ]
+      },
+      "SessionTaskOutputResponse": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Field content"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field size"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Field truncated"
+          }
+        },
+        "required": [
+          "content",
+          "truncated",
+          "size"
+        ]
+      },
+      "SessionsResponse": {
         "type": "object",
         "properties": {
           "sessions": {
@@ -3269,29 +3453,6 @@
         },
         "required": [
           "type"
-        ]
-      },
-      "TaskOutputResponse": {
-        "type": "object",
-        "properties": {
-          "content": {
-            "type": "string",
-            "description": "Field content"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field size"
-          },
-          "truncated": {
-            "type": "boolean",
-            "description": "Field truncated"
-          }
-        },
-        "required": [
-          "content",
-          "truncated",
-          "size"
         ]
       },
       "TestRequest": {
@@ -3424,6 +3585,10 @@
           "permission_mode": {
             "type": "string",
             "description": "Field permission_mode"
+          },
+          "profile": {
+            "type": "string",
+            "description": "Field profile"
           },
           "project_id": {
             "type": "string",
