@@ -994,18 +994,6 @@ export interface components {
             /** @description Field repos */
             repos?: string[];
         };
-        CreateSessionRequest: {
-            /** @description Field content */
-            content: string;
-            /** @description Field folder */
-            folder: string;
-            /** @description Field model */
-            model?: string;
-            /** @description Field permission_mode */
-            permission_mode?: string;
-            /** @description Field title */
-            title?: string;
-        };
         Diff: {
             /** @description Field base */
             base: string;
@@ -1181,10 +1169,6 @@ export interface components {
             /** @description Field permission_mode */
             permission_mode: string;
         };
-        PermissionModesResponse: {
-            /** @description Field modes */
-            modes: string[];
-        };
         PostMessageRequest: {
             /** @description Field content */
             content: string;
@@ -1317,7 +1301,42 @@ export interface components {
             /** @description Field path */
             path: string;
         };
-        RespondRequest: {
+        SendMessageRequest: {
+            /** @description Field content */
+            content: string;
+            /** @description Field model */
+            model?: string;
+        };
+        SendRequest: {
+            /** @description Field content */
+            content: string;
+        };
+        SessionCreateRequest: {
+            /** @description Field content */
+            content: string;
+            /** @description Field folder */
+            folder: string;
+            /** @description Field model */
+            model?: string;
+            /** @description Field permission_mode */
+            permission_mode?: string;
+            /** @description Field title */
+            title?: string;
+        };
+        SessionDetailResponse: {
+            /** @description Field background_tasks */
+            background_tasks: components["schemas"]["BackgroundTask"][];
+            /** @description Field events */
+            events: components["schemas"]["ThreadEvent"][];
+            /** @description Field running */
+            running: boolean;
+            session: components["schemas"]["Thread"];
+        };
+        SessionPermissionModesResponse: {
+            /** @description Field modes */
+            modes: string[];
+        };
+        SessionRespondRequest: {
             /** @description Field allow */
             allow: boolean;
             /** @description Field answer */
@@ -1330,26 +1349,18 @@ export interface components {
              */
             scope?: "once" | "thread";
         };
-        SendMessageRequest: {
+        SessionTaskOutputResponse: {
             /** @description Field content */
             content: string;
-            /** @description Field model */
-            model?: string;
+            /**
+             * Format: int64
+             * @description Field size
+             */
+            size: number;
+            /** @description Field truncated */
+            truncated: boolean;
         };
-        SendRequest: {
-            /** @description Field content */
-            content: string;
-        };
-        SessionDetailResponse: {
-            /** @description Field background_tasks */
-            background_tasks: components["schemas"]["BackgroundTask"][];
-            /** @description Field events */
-            events: components["schemas"]["ThreadEvent"][];
-            /** @description Field running */
-            running: boolean;
-            session: components["schemas"]["Thread"];
-        };
-        SessionListResponse: {
+        SessionsResponse: {
             /** @description Field sessions */
             sessions: components["schemas"]["Thread"][];
         };
@@ -1399,17 +1410,6 @@ export interface components {
              * @enum {string}
              */
             type: "user_message" | "delta" | "assistant_message" | "title" | "error" | "done";
-        };
-        TaskOutputResponse: {
-            /** @description Field content */
-            content: string;
-            /**
-             * Format: int64
-             * @description Field size
-             */
-            size: number;
-            /** @description Field truncated */
-            truncated: boolean;
         };
         TestRequest: {
             /** @description Field api_key */
@@ -2005,7 +2005,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PermissionModesResponse"];
+                    "application/json": components["schemas"]["SessionPermissionModesResponse"];
                 };
             };
         };
@@ -2073,7 +2073,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionListResponse"];
+                    "application/json": components["schemas"]["SessionsResponse"];
                 };
             };
         };
@@ -2088,7 +2088,7 @@ export interface operations {
         /** @description Request body */
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateSessionRequest"];
+                "application/json": components["schemas"]["SessionCreateRequest"];
             };
         };
         responses: {
@@ -2261,7 +2261,7 @@ export interface operations {
         /** @description Request body */
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RespondRequest"];
+                "application/json": components["schemas"]["SessionRespondRequest"];
             };
         };
         responses: {
@@ -2322,7 +2322,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TaskOutputResponse"];
+                    "application/json": components["schemas"]["SessionTaskOutputResponse"];
                 };
             };
         };

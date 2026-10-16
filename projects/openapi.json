@@ -435,7 +435,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PermissionModesResponse"
+                  "$ref": "#/components/schemas/SessionPermissionModesResponse"
                 }
               }
             }
@@ -523,7 +523,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionListResponse"
+                  "$ref": "#/components/schemas/SessionsResponse"
                 }
               }
             }
@@ -543,7 +543,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateSessionRequest"
+                "$ref": "#/components/schemas/SessionCreateRequest"
               }
             }
           }
@@ -796,7 +796,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RespondRequest"
+                "$ref": "#/components/schemas/SessionRespondRequest"
               }
             }
           }
@@ -891,7 +891,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TaskOutputResponse"
+                  "$ref": "#/components/schemas/SessionTaskOutputResponse"
                 }
               }
             }
@@ -2305,35 +2305,6 @@
           "name"
         ]
       },
-      "CreateSessionRequest": {
-        "type": "object",
-        "properties": {
-          "content": {
-            "type": "string",
-            "description": "Field content"
-          },
-          "folder": {
-            "type": "string",
-            "description": "Field folder"
-          },
-          "model": {
-            "type": "string",
-            "description": "Field model"
-          },
-          "permission_mode": {
-            "type": "string",
-            "description": "Field permission_mode"
-          },
-          "title": {
-            "type": "string",
-            "description": "Field title"
-          }
-        },
-        "required": [
-          "folder",
-          "content"
-        ]
-      },
       "Diff": {
         "type": "object",
         "properties": {
@@ -2737,21 +2708,6 @@
           "permission_mode"
         ]
       },
-      "PermissionModesResponse": {
-        "type": "object",
-        "properties": {
-          "modes": {
-            "type": "array",
-            "description": "Field modes",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "modes"
-        ]
-      },
       "PostMessageRequest": {
         "type": "object",
         "properties": {
@@ -3069,35 +3025,6 @@
           "base_branch"
         ]
       },
-      "RespondRequest": {
-        "type": "object",
-        "properties": {
-          "allow": {
-            "type": "boolean",
-            "description": "Field allow"
-          },
-          "answer": {
-            "type": "string",
-            "description": "Field answer"
-          },
-          "request_id": {
-            "type": "string",
-            "description": "Field request_id"
-          },
-          "scope": {
-            "type": "string",
-            "description": "Field scope",
-            "enum": [
-              "once",
-              "thread"
-            ]
-          }
-        },
-        "required": [
-          "request_id",
-          "allow"
-        ]
-      },
       "SendMessageRequest": {
         "type": "object",
         "properties": {
@@ -3123,6 +3050,35 @@
           }
         },
         "required": [
+          "content"
+        ]
+      },
+      "SessionCreateRequest": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Field content"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Field folder"
+          },
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          },
+          "permission_mode": {
+            "type": "string",
+            "description": "Field permission_mode"
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
+          }
+        },
+        "required": [
+          "folder",
           "content"
         ]
       },
@@ -3158,7 +3114,74 @@
           "background_tasks"
         ]
       },
-      "SessionListResponse": {
+      "SessionPermissionModesResponse": {
+        "type": "object",
+        "properties": {
+          "modes": {
+            "type": "array",
+            "description": "Field modes",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "modes"
+        ]
+      },
+      "SessionRespondRequest": {
+        "type": "object",
+        "properties": {
+          "allow": {
+            "type": "boolean",
+            "description": "Field allow"
+          },
+          "answer": {
+            "type": "string",
+            "description": "Field answer"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Field request_id"
+          },
+          "scope": {
+            "type": "string",
+            "description": "Field scope",
+            "enum": [
+              "once",
+              "thread"
+            ]
+          }
+        },
+        "required": [
+          "request_id",
+          "allow"
+        ]
+      },
+      "SessionTaskOutputResponse": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Field content"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field size"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Field truncated"
+          }
+        },
+        "required": [
+          "content",
+          "truncated",
+          "size"
+        ]
+      },
+      "SessionsResponse": {
         "type": "object",
         "properties": {
           "sessions": {
@@ -3269,29 +3292,6 @@
         },
         "required": [
           "type"
-        ]
-      },
-      "TaskOutputResponse": {
-        "type": "object",
-        "properties": {
-          "content": {
-            "type": "string",
-            "description": "Field content"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field size"
-          },
-          "truncated": {
-            "type": "boolean",
-            "description": "Field truncated"
-          }
-        },
-        "required": [
-          "content",
-          "truncated",
-          "size"
         ]
       },
       "TestRequest": {
