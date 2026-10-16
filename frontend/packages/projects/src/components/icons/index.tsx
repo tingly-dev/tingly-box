@@ -25,7 +25,10 @@ import {
     IconMessage,
     IconMessageCircleQuestion,
     IconMessages,
+    IconMinus,
+    IconLayout2,
     IconPencil,
+    IconPictureInPictureOn,
     IconPlayerStopFilled,
     IconStarFilled,
     IconTextPlus,
@@ -60,3 +63,6 @@ export const Spinner = tablerMui(IconLoader2);
 export const HandStop = tablerMui(IconHandStop);
 export const NewFolder = tablerMui(IconFolderPlus);
 export const CircleDashed = tablerMui(IconCircleDashed);
+export const FloatWindow = tablerMui(IconPictureInPictureOn);
+export const Minimize = tablerMui(IconMinus);
+export const LayoutIcon = tablerMui(IconLayout2);

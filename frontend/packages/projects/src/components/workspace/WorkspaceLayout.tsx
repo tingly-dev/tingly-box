@@ -58,7 +58,14 @@ interface WorkspaceLayoutProps {
     /** Above the main area (a banner). */
     notice?: ReactNode;
     main: ReactNode;
-    side: ReactNode;
+    /** The side pane's content; nothing hides the pane. */
+    side?: ReactNode;
+    /** Under the header, above the main area and the pane: the Overview as a band. */
+    top?: ReactNode;
+    /** The pane shows whenever it has content (the thread under a band, beside a window), not only when toggled open. */
+    sideAlwaysOpen?: boolean;
+    /** Replace the toggle's behaviour when the Overview is not in the pane. */
+    paneToggle?: { onClick: () => void; expanded: boolean };
     /** Left padding of the header on small screens, clear of a host's or the standalone app's menu button. */
     headerInsetXs?: number;
 }
@@ -69,7 +76,7 @@ interface WorkspaceLayoutProps {
  * resizable side pane (what is going on in it). Hosts build their own
  * workspace pages from it.
  */
-export function WorkspaceLayout({ pane, title, actions, paneLabel, paneAttention, notice, main, side, headerInsetXs = 2 }: WorkspaceLayoutProps) {
+export function WorkspaceLayout({ pane, title, actions, paneLabel, paneAttention, notice, main, side, top, sideAlwaysOpen, paneToggle, headerInsetXs = 2 }: WorkspaceLayoutProps) {
     const row = useRef<HTMLDivElement>(null);
     const { storageKey, setWidth } = pane;
 
@@ -88,20 +95,21 @@ export function WorkspaceLayout({ pane, title, actions, paneLabel, paneAttention
                 <Box sx={{ minWidth: 0, flex: 1 }}>{title}</Box>
                 {actions}
                 <Tooltip title={paneLabel}>
-                    <IconButton size="small" onClick={pane.toggle} aria-label={paneLabel} aria-expanded={pane.narrow ? pane.drawerOpen : pane.open}>
+                    <IconButton size="small" onClick={paneToggle?.onClick ?? pane.toggle} aria-label={paneLabel} aria-expanded={paneToggle ? paneToggle.expanded : pane.narrow ? pane.drawerOpen : pane.open}>
                         <Badge color="warning" variant="dot" invisible={!paneAttention}><PaneIcon fontSize="small" /></Badge>
                     </IconButton>
                 </Tooltip>
             </Box>
             {notice}
+            {top}
             <Box ref={row} sx={{ flex: 1, display: 'flex', minHeight: 0 }}>
                 <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>{main}</Box>
-                {pane.narrow ? (
+                {side == null ? null : pane.narrow ? (
                     <Drawer anchor="right" open={pane.drawerOpen} onClose={() => pane.setDrawerOpen(false)}
                         slotProps={{ paper: { sx: { width: { xs: '100%', sm: PANE_DEFAULT } } } }}>
                         {side}
                     </Drawer>
-                ) : pane.open && (
+                ) : (sideAlwaysOpen || pane.open) && (
                     <Box sx={{ position: 'relative', width: pane.width, flexShrink: 0, borderLeft: 1, borderColor: 'divider', bgcolor: 'background.paper', minHeight: 0 }}>
                         <PaneResizer width={pane.width} onWidth={pane.setWidth} onCommit={(w) => writeLocal(`${storageKey}paneWidth`, String(w))} />
                         {side}

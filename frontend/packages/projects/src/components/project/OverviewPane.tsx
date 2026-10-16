@@ -119,9 +119,9 @@ function Library({ projectId, refreshKey }: { projectId: string; refreshKey: num
     );
 }
 
-export function OverviewPane({ projectId, threads, onOpen, libraryKey }: { projectId: string; threads: Thread[]; onOpen: (id: string) => void; libraryKey: number }) {
+export function OverviewPane({ projectId, threads, onOpen, libraryKey, selectedId, initialTab = 'threads' }: { projectId: string; threads: Thread[]; onOpen: (id: string) => void; libraryKey: number; selectedId?: string; initialTab?: 'threads' | 'library' }) {
     const { t } = useTranslation('projects');
-    const [tab, setTab] = useState<'threads' | 'library'>('threads');
+    const [tab, setTab] = useState<'threads' | 'library'>(initialTab);
     const waiting = threads.filter((th) => th.status === 'waiting').length;
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
@@ -130,7 +130,7 @@ export function OverviewPane({ projectId, threads, onOpen, libraryKey }: { proje
                 <Tab value="library" label={t('overview.library')} />
             </Tabs>
             <Box sx={{ flex: 1, overflowY: 'auto' }}>
-                {tab === 'threads' ? <ThreadGroups threads={threads} onOpen={onOpen} /> : <Library projectId={projectId} refreshKey={libraryKey} />}
+                {tab === 'threads' ? <ThreadGroups threads={threads} selectedId={selectedId} onOpen={onOpen} /> : <Library projectId={projectId} refreshKey={libraryKey} />}
             </Box>
         </Box>
     );

@@ -7,11 +7,16 @@ import { ConversationPane } from '../components/project/ConversationPane';
 import { OverviewPane } from '../components/project/OverviewPane';
 import { ProjectSettingsDialog, type SettingsTab } from '../components/project/ProjectSettingsDialog';
 import { ThreadPanel } from '../components/project/ThreadPanel';
+import { FloatingWindow } from '../components/workspace/FloatingWindow';
+import { OverviewBand } from '../components/workspace/OverviewBand';
+import { PlacementMenu } from '../components/workspace/PlacementMenu';
 import { WorkspaceLayout, useWorkspacePane } from '../components/workspace/WorkspaceLayout';
-import { Pause, Settings, Star, StarBorder } from '../components/icons';
+import { FloatWindow, Pause, Settings, Star, StarBorder } from '../components/icons';
 import { useNotify } from '../hooks/useNotify';
 import { useProjectEvents, type ProjectEvent } from '../hooks/useProjectEvents';
+import { usePlacement } from '../hooks/usePlacement';
 import { useProjectsHost } from '../host/ProjectsHost';
+import { readLocal, writeLocal } from '../utils/storage';
 
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
@@ -38,6 +43,20 @@ export default function ProjectPage() {
     const [error, setError] = useState<string | null>(null);
     const [threadEvents, setThreadEvents] = useState<ThreadEvent[] | null>(null);
     const pane = useWorkspacePane();
+    const placement = usePlacement();
+    // The Overview as a window or a band opens and closes with the header button; remembered per browser.
+    const [windowOpen, setWindowOpen] = useState(() => readLocal('overviewWindowOpen') !== '0');
+    const [bandOpen, setBandOpen] = useState(() => readLocal('overviewBandOpen') !== '0');
+    const [libraryWindow, setLibraryWindow] = useState(false);
+    // A narrow screen has one surface: the drawer. With the Overview on top the thread sits below it.
+    const overviewAt = pane.narrow ? 'side' : placement.overview;
+    const threadAt = pane.narrow || overviewAt === 'top' ? 'side' : placement.thread;
+    const remember = (key: string, set: (v: boolean) => void) => (v: boolean) => {
+        writeLocal(key, v ? '1' : '0');
+        set(v);
+    };
+    const setWindow = remember('overviewWindowOpen', setWindowOpen);
+    const setBand = remember('overviewBandOpen', setBandOpen);
     const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
     const [memoryKey, setMemoryKey] = useState(0);
     const [libraryKey, setLibraryKey] = useState(0);
@@ -162,11 +181,40 @@ export default function ProjectPage() {
         <Alert severity="warning" icon={<Pause />} sx={{ mb: 1 }} action={<Button color="inherit" size="small" onClick={() => void patch({ paused: false })}>{t('projectSettings.resume')}</Button>}>{t('project.pausedBanner')}</Alert>
     ) : null;
 
-    const side = threadId ? (
-        <ThreadPanel projectId={id} threadId={threadId} thread={selected} events={threadEvents} running={threadRunning} disabled={blocked} onBack={closeThread} />
-    ) : (
-        <OverviewPane projectId={id} threads={threads} onOpen={openThread} libraryKey={libraryKey} />
+    const canPlace = !pane.narrow;
+    const threadEl = threadId ? (
+        <ThreadPanel
+            projectId={id}
+            threadId={threadId}
+            thread={selected}
+            events={threadEvents}
+            running={threadRunning}
+            disabled={blocked}
+            onBack={closeThread}
+            hideTitle={threadAt === 'float'}
+            actions={canPlace && overviewAt !== 'top' && (
+                <Tooltip title={t(threadAt === 'float' ? 'window.dock' : 'window.float')}>
+                    <IconButton
+                        size="small"
+                        onClick={() => placement.setThread(threadAt === 'float' ? 'side' : 'float')}
+                        aria-label={t(threadAt === 'float' ? 'window.dock' : 'window.float')}
+                    ><FloatWindow fontSize="small" /></IconButton>
+                </Tooltip>
+            )}
+        />
+    ) : null;
+    const overviewEl = (initialTab?: 'threads' | 'library') => (
+        <OverviewPane projectId={id} threads={threads} onOpen={openThread} libraryKey={libraryKey} selectedId={threadId} initialTab={initialTab} />
     );
+    const threadInSide = !!threadEl && threadAt === 'side';
+    // The side pane holds the Overview, or the open thread in its place; with the
+    // Overview elsewhere it holds only the thread.
+    const side = overviewAt === 'side' ? (threadInSide ? threadEl : overviewEl()) : threadInSide ? threadEl : null;
+    const paneToggle = overviewAt === 'window'
+        ? { onClick: () => setWindow(!windowOpen), expanded: windowOpen }
+        : overviewAt === 'top'
+            ? { onClick: () => setBand(!bandOpen), expanded: bandOpen }
+            : undefined;
 
     return (
         <>
@@ -193,6 +241,7 @@ export default function ProjectPage() {
                 ) : <Skeleton width={200} />}
                 actions={project && (
                     <>
+                        {canPlace && <PlacementMenu overview={placement.overview} thread={placement.thread} onOverview={placement.setOverview} onThread={placement.setThread} />}
                         <Tooltip title={project.starred ? t('common.unstar') : t('common.star')}>
                             <IconButton size="small" onClick={() => void patch({ starred: !project.starred })}>{project.starred ? <Star fontSize="small" color="primary" /> : <StarBorder fontSize="small" />}</IconButton>
                         </Tooltip>
@@ -202,6 +251,11 @@ export default function ProjectPage() {
                     </>
                 )}
                 side={side}
+                sideAlwaysOpen={overviewAt !== 'side'}
+                paneToggle={paneToggle}
+                top={overviewAt === 'top' ? (
+                    <OverviewBand threads={threads} selectedId={threadId} open={bandOpen} onToggle={() => setBand(!bandOpen)} onOpen={openThread} onLibrary={() => setLibraryWindow(true)} />
+                ) : undefined}
                 main={messages === null ? (
                     <Box sx={{ flex: 1, p: 3 }}><Skeleton variant="rounded" height={80} /></Box>
                 ) : (
@@ -234,6 +288,38 @@ export default function ProjectPage() {
                     />
                 )}
             />
+
+            <FloatingWindow
+                open={overviewAt === 'window' && windowOpen}
+                title={t('project.overview')}
+                storageKey="overview"
+                defaultSize={{ w: 460, h: 520 }}
+                attention={waiting > 0}
+                onClose={() => setWindow(false)}
+                onDock={() => placement.setOverview('side')}
+            >
+                {overviewEl()}
+            </FloatingWindow>
+            <FloatingWindow
+                open={overviewAt !== 'side' && libraryWindow}
+                title={t('overview.library')}
+                storageKey="library"
+                defaultSize={{ w: 460, h: 480 }}
+                onClose={() => setLibraryWindow(false)}
+            >
+                {overviewEl('library')}
+            </FloatingWindow>
+            <FloatingWindow
+                open={threadAt === 'float' && !!threadEl}
+                title={selected?.title ?? ''}
+                storageKey="thread"
+                defaultSize={{ w: 520, h: 640 }}
+                attention={selected?.status === 'waiting'}
+                onClose={closeThread}
+                onDock={() => placement.setThread('side')}
+            >
+                {threadEl}
+            </FloatingWindow>
 
             {project && settingsTab && (
                 <ProjectSettingsDialog

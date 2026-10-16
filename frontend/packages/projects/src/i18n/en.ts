@@ -62,6 +62,14 @@ export const en = {
         example3: 'From now on, propose threads and wait for my go-ahead before starting them.',
         suggested: 'Suggested threads', start: 'Start', startAll: 'Start all {{count}}',
     },
+    placement: {
+        title: 'Layout', overview: 'Overview', thread: 'Thread', side: 'Side pane', window: 'Window', top: 'Top bar', float: 'Floating window',
+        lockedTop: 'With the Overview on top, a thread opens below it.', remember: 'Remembered in this browser.',
+    },
+    window: {
+        dock: 'Dock to the side pane', float: 'Pop out as a window', minimize: 'Minimize', restore: 'Restore', close: 'Close',
+    },
+    band: { collapse: 'Collapse', expand: 'Expand' },
     overview: {
         threads: 'Threads', threadsWaiting: 'Threads · {{count}} waiting', library: 'Library',
         noThreads: 'No threads yet. Send work in the conversation and they will appear here.',

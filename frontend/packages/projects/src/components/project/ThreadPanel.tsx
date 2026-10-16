@@ -43,9 +43,13 @@ interface Props {
     running: boolean;
     disabled: boolean;
     onBack: () => void;
+    /** In a window the window's title bar names the thread: leave the title and the back arrow out. */
+    hideTitle?: boolean;
+    /** Buttons before the thread's menu: pop out, dock. */
+    actions?: React.ReactNode;
 }
 
-export function ThreadPanel({ projectId, threadId, thread, events, running, disabled, onBack }: Props) {
+export function ThreadPanel({ projectId, threadId, thread, events, running, disabled, onBack, hideTitle, actions }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const [diffOpen, setDiffOpen] = useState(false);
@@ -97,9 +101,12 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
             <Box sx={{ px: 1.5, pt: 1, pb: 1, borderBottom: 1, borderColor: 'divider' }}>
                 {/* One row to name the thread and act on it, one quiet row of facts. */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                    <IconButton size="small" onClick={onBack} aria-label={t('thread.back')}><ArrowBack fontSize="small" /></IconButton>
-                    <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: '0.9375rem', fontWeight: 650, color: 'text.primary' }} title={thread.title}>{thread.title}</Typography>
+                    {!hideTitle && <IconButton size="small" onClick={onBack} aria-label={t('thread.back')}><ArrowBack fontSize="small" /></IconButton>}
+                    {hideTitle
+                        ? <Box sx={{ flex: 1 }} />
+                        : <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: '0.9375rem', fontWeight: 650, color: 'text.primary' }} title={thread.title}>{thread.title}</Typography>}
                     {canReview && <Button size="small" variant="contained" startIcon={<DiffIcon />} onClick={() => setDiffOpen(true)} sx={{ flexShrink: 0, py: 0.25 }}>{t('thread.review')}</Button>}
+                    {actions}
                     <IconButton size="small" onClick={(e) => setMenu(e.currentTarget)} aria-label={t('common.more')}><MoreVert fontSize="small" /></IconButton>
                     <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
                         <MenuItem onClick={() => { setMenu(null); setTaskOpen((v) => !v); }}>{taskOpen ? t('thread.hideTask') : t('thread.showTask')}</MenuItem>
@@ -116,7 +123,7 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
                         )}
                     </Menu>
                 </Box>
-                <Box sx={{ pl: 4.5 }}>
+                <Box sx={{ pl: hideTitle ? 0.5 : 4.5 }}>
                     <MetaLine items={[
                         <ThreadStatusChip thread={thread} />,
                         thread.branch

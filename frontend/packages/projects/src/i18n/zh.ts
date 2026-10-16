@@ -66,6 +66,14 @@ export const zh: Dict<typeof en> = {
         example3: '从现在起，先提议线程，等我确认后再启动。',
         suggested: '建议的线程', start: '启动', startAll: '全部启动（{{count}}）',
     },
+    placement: {
+        title: '布局', overview: 'Overview', thread: '线程', side: '侧栏', window: '独立窗口', top: '顶栏', float: '浮窗',
+        lockedTop: 'Overview 在顶栏时，线程在它下方打开。', remember: '记在这个浏览器里。',
+    },
+    window: {
+        dock: '停靠到侧栏', float: '浮起为窗口', minimize: '最小化', restore: '还原', close: '关闭',
+    },
+    band: { collapse: '折起', expand: '展开' },
     overview: {
         threads: '线程', threadsWaiting: '线程 · {{count}} 个等你处理', library: '文件库',
         noThreads: '还没有线程。在对话里发送工作，线程会出现在这里。',
