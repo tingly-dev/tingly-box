@@ -25,6 +25,7 @@ const ImagePlaygroundPage: React.FC = () => {
     useEffect(() => {
         void loadRules(scenario);
     }, [loadRules]);
+    const reloadRules = useCallback(() => loadRules(scenario), [loadRules]);
 
     const showNotification = useCallback(
         (message: string, severity: 'success' | 'info' | 'warning' | 'error') => { notify(severity, message); },
@@ -36,6 +37,7 @@ const ImagePlaygroundPage: React.FC = () => {
             <ImageGenPlaygroundCard
                 rules={rules}
                 loadingRules={loadingRule}
+                onRulesReload={reloadRules}
                 showNotification={showNotification}
             />
         </Box>

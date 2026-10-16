@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
     Box,
     Button,
     CircularProgress,
@@ -15,6 +14,7 @@ import {
     Menu,
     MenuItem,
     Select,
+    Skeleton,
     Stack,
     TextField,
     Tooltip,
@@ -26,7 +26,7 @@ import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { CopyIconButton } from '@/components/CopyIconButton';
-import { AutoAwesome, Close, DeleteOutline, Description, Edit, OpenInFull, tablerMui } from '@/components/icons';
+import { AutoAwesome, Cable, Close, DeleteOutline, Description, Edit, OpenInFull, tablerMui } from '@/components/icons';
 import { IconTextPlus } from '@tabler/icons-react';
 import { fetchBlob } from '@tingly/vision';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
@@ -43,6 +43,8 @@ import { useImageGenRefs } from './useImageGenRefs';
 import { useImageGenRuns } from './useImageGenRuns';
 import { useImageGenLightbox } from './useImageGenLightbox';
 import { downloadStem, formatBytes, runImage } from './imageGenSession';
+import ImageModelPicker from './ImageModelPicker';
+import { imageModelOptions } from './imageModelRules';
 import MaskEditorDialog from './MaskEditorDialog';
 import SketchCanvasDialog from './SketchCanvasDialog';
 import { createImageProfile, removeImageProfile, updateImageProfile } from '../profiles/imageProfileStore';
@@ -112,6 +114,8 @@ const HISTORY_STRIP_VISIBLE = 6;
 interface ImageGenPlaygroundCardProps {
     rules: Rule[];
     loadingRules: boolean;
+    // Reloads the imagegen rules after the model picker adds one.
+    onRulesReload: () => Promise<void>;
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
     // Set on a profile's page: the panel starts from the profile, and edits
     // to its references and settings save back to it.
@@ -121,17 +125,14 @@ interface ImageGenPlaygroundCardProps {
 const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     rules,
     loadingRules,
+    onRulesReload,
     showNotification,
     profile,
 }) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const models = useMemo(() => {
-        const names = rules
-            .filter((rule) => rule.active !== false && rule.request_model?.trim())
-            .map((rule) => rule.request_model.trim());
-        return Array.from(new Set(names));
-    }, [rules]);
+    // The picker's order, so the default is the first pair it shows.
+    const models = useMemo(() => imageModelOptions(rules).map((option) => option.requestModel), [rules]);
 
     const [selectedModel, setSelectedModel] = useState(profile?.model ?? '');
     const model = models.includes(selectedModel) ? selectedModel : (models[0] ?? '');
@@ -438,7 +439,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             if (run.model && !models.includes(run.model)) {
                 showNotification(
                     t('playground.reuse.modelMissing', {
-                        defaultValue: '{{model}} has no rule any more — pick a model before generating',
+                        defaultValue: '{{model}} is no longer available — pick a model before generating',
                         model: run.model,
                     }),
                     'warning',
@@ -721,20 +722,32 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         </Stack>
                     )
                 ) : t('playground.imageTitle', { defaultValue: 'Image Playground' })}
-                rightAction={profile ? (
-                    <Tooltip title={t('imageProfile.delete', { defaultValue: 'Delete profile' })}>
-                        <IconButton onClick={() => setConfirmDeleteProfile(true)} aria-label={t('imageProfile.delete', { defaultValue: 'Delete profile' })}>
-                            <DeleteOutline />
-                        </IconButton>
-                    </Tooltip>
-                ) : (
-                    <Tooltip title={t('imageProfile.saveAsHint', { defaultValue: 'Keep these references, prompt and settings as a profile with its own page' })}>
-                        <span>
-                            <Button variant="outlined" size="small" onClick={handleSaveAsProfile} disabled={!canSaveAsProfile}>
-                                {t('imageProfile.saveAs', { defaultValue: 'Save as profile' })}
+                rightAction={(
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                        {/* The way to the same models from code; the Image API
+                            page sits last in the sidebar since only someone
+                            wiring up a client needs it. */}
+                        <Tooltip title={t('playground.useFromAppHint', { defaultValue: 'Call these models from your own app through the Image API' })}>
+                            <Button size="small" startIcon={<Cable />} onClick={() => navigate('/image/api')}>
+                                {t('playground.useFromApp', { defaultValue: 'Use from your app' })}
                             </Button>
-                        </span>
-                    </Tooltip>
+                        </Tooltip>
+                        {profile ? (
+                            <Tooltip title={t('imageProfile.delete', { defaultValue: 'Delete profile' })}>
+                                <IconButton onClick={() => setConfirmDeleteProfile(true)} aria-label={t('imageProfile.delete', { defaultValue: 'Delete profile' })}>
+                                    <DeleteOutline />
+                                </IconButton>
+                            </Tooltip>
+                        ) : (
+                            <Tooltip title={t('imageProfile.saveAsHint', { defaultValue: 'Keep these references, prompt and settings as a profile with its own page' })}>
+                                <span>
+                                    <Button variant="outlined" size="small" onClick={handleSaveAsProfile} disabled={!canSaveAsProfile}>
+                                        {t('imageProfile.saveAs', { defaultValue: 'Save as profile' })}
+                                    </Button>
+                                </span>
+                            </Tooltip>
+                        )}
+                    </Stack>
                 )}
                 subtitle={outputDir ? (
                     <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -779,22 +792,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             height: { xs: 'auto', lg: desktopPanelHeight },
                         }}
                     >
-                        {noModels && !loadingRules && (
-                            <Alert
-                                severity="info"
-                                variant="outlined"
-                                action={(
-                                    <Button color="inherit" size="small" onClick={() => navigate('/image/api')}>
-                                        {t('playground.addImageModel', { defaultValue: 'Add a model' })}
-                                    </Button>
-                                )}
-                            >
-                                {t('playground.noImageModels', {
-                                    defaultValue: 'Add an image model rule on the Image API page to start generating images.',
-                                })}
-                            </Alert>
-                        )}
-
                         {/* Reference images are optional input, not a mode. Empty, the
                             row is a one-line invitation; with images it grows into a
                             thumbnail strip. Either way the request below adapts. */}
@@ -819,22 +816,19 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             onDragLeave={(index) => setDragOverReference((current) => (current === index ? null : current))}
                         />
 
-                        <FormControl size="small" fullWidth>
-                            <InputLabel id="image-model-label">
-                                {t('playground.model', { defaultValue: 'Model' })}
-                            </InputLabel>
-                            <Select
-                                labelId="image-model-label"
-                                label={t('playground.model', { defaultValue: 'Model' })}
+                        {/* While the rules load the picker would flash "Choose a
+                            model to start"; hold its place instead. */}
+                        {loadingRules ? (
+                            <Skeleton variant="rounded" height={40} />
+                        ) : (
+                            <ImageModelPicker
+                                rules={rules}
                                 value={model}
-                                onChange={(event) => setSelectedModel(event.target.value)}
-                                disabled={noModels}
-                            >
-                                {models.map((modelName) => (
-                                    <MenuItem key={modelName} value={modelName}>{modelName}</MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
+                                onChange={setSelectedModel}
+                                onRulesReload={onRulesReload}
+                                showNotification={showNotification}
+                            />
+                        )}
 
                         {/* The field takes whatever height the column has left and
                             scrolls inside its own outline — a fixed row count in a
