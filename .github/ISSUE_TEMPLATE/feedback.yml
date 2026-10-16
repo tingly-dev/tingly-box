@@ -1,13 +1,13 @@
 name: Feedback
 description: "A note on how it feels to use (UX, wording, rough edges)"
-title: "feedback: "
+title: "[Feedback] "
 labels: ["feedback"]
 body:
   - type: dropdown
     id: area
     attributes:
       label: Area
-      description: Which part of Tingly-Box is this about? It becomes a label and the scope of the title, such as feedback(gateway).
+      description: Which part of Tingly-Box is this about? It becomes an area/<name> label.
       options:
         - Gateway / Protocol Conversion
         - Load Balancing & Failover

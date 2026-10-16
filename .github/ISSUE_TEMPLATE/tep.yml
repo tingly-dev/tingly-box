@@ -1,6 +1,6 @@
 name: "TEP: Tingly-Box Enhancement Proposal"
 description: Propose a significant enhancement, design change, or new capability for Tingly-Box
-title: "tep: "
+title: "[TEP] "
 labels: ["tep", "enhancement"]
 body:
   - type: markdown
@@ -10,7 +10,7 @@ body:
 
         For simple feature requests, use the [Feature](?template=feature.yml) template instead.
 
-        **Please include the TEP number in the issue title above** (e.g., "tep: 001 Multi-Provider Load Balancing Strategy").
+        Just write the subject after `[TEP]`: the issue number is added for you, so `[TEP] Multi-Provider Load Balancing Strategy` becomes `[TEP-1231] Multi-Provider Load Balancing Strategy`.
 
   - type: input
     id: version
@@ -25,7 +25,7 @@ body:
     id: area
     attributes:
       label: Area
-      description: Which part of Tingly-Box is this about? It becomes a label and the scope of the title, such as tep(gateway).
+      description: Which part of Tingly-Box is this about? It becomes an area/<name> label.
       options:
         - Gateway / Protocol Conversion
         - Load Balancing & Failover

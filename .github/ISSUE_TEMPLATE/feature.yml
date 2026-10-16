@@ -1,13 +1,13 @@
 name: Feature
 description: Suggest something new or a change to how something works
-title: "feat: "
+title: "[Feature] "
 labels: ["enhancement"]
 body:
   - type: dropdown
     id: area
     attributes:
       label: Area
-      description: Which part of Tingly-Box is this about? It becomes a label and the scope of the title, such as feat(gateway).
+      description: Which part of Tingly-Box is this about? It becomes an area/<name> label.
       options:
         - Gateway / Protocol Conversion
         - Load Balancing & Failover

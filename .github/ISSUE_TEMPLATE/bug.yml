@@ -1,13 +1,13 @@
 name: Bug
 description: Something is broken or behaves differently from what you expect
-title: "bug: "
+title: "[BUG] "
 labels: ["bug"]
 body:
   - type: dropdown
     id: area
     attributes:
       label: Area
-      description: Which part of Tingly-Box is this about? It becomes a label and the scope of the title, such as bug(gateway).
+      description: Which part of Tingly-Box is this about? It becomes an area/<name> label.
       options:
         - Gateway / Protocol Conversion
         - Load Balancing & Failover
