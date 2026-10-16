@@ -18,3 +18,11 @@ export function writeLocal(key: string, value: string) {
         // ignore
     }
 }
+
+export function removeLocal(key: string) {
+    try {
+        window.localStorage.removeItem(PREFIX + key);
+    } catch {
+        // ignore
+    }
+}

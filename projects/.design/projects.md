@@ -97,7 +97,7 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 （官方的 Landing 对应"PR 已批准排队合并"，本地合并是同步动作，MVP 不需要该状态。）
 
 ### 4.4 线程运行
-- 线程用 `agentboot/engine` 跑，和 Tingly Box 的 Desk 是同一个会话引擎（`claude` CLI，stream-json，`--resume` 续会话，`PermissionPromptTool: stdio`）。引擎负责进程、转换和后台任务；本仓库只做线程这一层：排队、项目并发上限、线程内审批、每轮汇报。引擎按 Claude 会话 id 认线程（`Thread.SessionID`）。
+- 线程用 `agentboot/engine` 跑，和原来 Tingly Box 的 Desk 是同一个会话引擎（Desk 现已并入 Projects，成为工作目录）（`claude` CLI，stream-json，`--resume` 续会话，`PermissionPromptTool: stdio`）。引擎负责进程、转换和后台任务；本仓库只做线程这一层：排队、项目并发上限、线程内审批、每轮汇报。引擎按 Claude 会话 id 认线程（`Thread.SessionID`）。
 - **常驻进程**：每个线程保留一个常驻 `claude` 进程（池上限 10，空闲 10 分钟回收，之后的轮次带 `--resume` 重开）。后台任务（后台命令、子代理）因此能活过发起它的那一轮；任务结束后 Claude 自己接着跑的那一轮，照常定状态、汇报协调者。Stop 只中断当前轮，不杀进程；Resolve 才关掉进程。
 - **事件**：引擎的对话记录条目转成线程事件（`transcript.go`）：主对话的文字、工具调用和结果照旧；子代理内部步骤不进线程视图；思考不显示；后台任务结束时留一行系统事件。
 - 测试用 `agentboot/engine/enginetest` 的脚本替身，另有一个用 agentboot fixture 跑真实 Claude 驱动的用例。
@@ -196,7 +196,7 @@ MVP 已实现（§2 中标 ✅ 的部分）。验证：
 
 ### 9.5 产品边界
 
-Tingly Box 的 Desk 也驱动 Claude Code，但回答的是不同的问题：Desk 是坐下来和一个 Claude Code 一起干活，Projects 是丢一串任务进来就走开，回来只看“等你处理”。两者并存、不合并。嵌入后项目设置里没有“模型连接”一栏，模型选择器列的是宿主里可用的模型。Chats 只在独立版保留。
+Tingly Box 原来的 Desk 也驱动 Claude Code，回答的是另一个问题：坐下来和一个 Claude Code 一起干活，而项目是丢一串任务进来就走开，回来只看“等你处理”。现在两者合在 Projects 里：项目负责后者，工作目录会话负责前者（见根目录 `.design/projects-desk-absorption.md`）。嵌入后项目设置里没有“模型连接”一栏，模型选择器列的是宿主里可用的模型。Chats 只在独立版保留。
 
 ### 9.6 步骤与风险
 
@@ -211,5 +211,5 @@ Tingly Box 的 Desk 也驱动 Claude Code，但回答的是不同的问题：Des
 |---|---|---|
 | worktree 路径 | git 记录的是绝对路径，直接搬数据目录会断链 | 导入时跑 `git worktree repair`；失败就保留旧目录继续用 |
 | agentboot 版本 | 搬进来以后 `replace ../agentboot`，永远用同一份 | 已解决 |
-| 并发 | Desk 和 Projects 各自拉起 `claude` 进程 | 已共用同一个引擎（`agentboot/engine`）；嵌入后可以让宿主传入同一个 `pool` 统一限流 |
+| 并发 | 项目线程和工作目录会话都拉起 `claude` 进程 | 共用同一个引擎（`agentboot/engine`）和同一个 `pool` |
 | 独立二进制 | 是否继续维护 | 保留：开发调试和离线演示都靠它 |

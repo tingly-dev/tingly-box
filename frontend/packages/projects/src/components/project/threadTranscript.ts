@@ -1,6 +1,6 @@
 // A thread's events as transcript entries, so a thread renders with the
-// transcript Desk uses (@tingly/projects/transcript) instead of a view of its
-// own. Threads record a little less than Desk sessions (no request id on a
+// shared transcript (@tingly/projects/transcript) instead of a view of its
+// own. Threads record a little less than the engine's entries (no request id on a
 // tool call, a request's answer kept on the request itself), so this fills
 // the gaps: calls pair with their results in order, and a settled request
 // gets the answer entry the transcript expects. A folder session also keeps

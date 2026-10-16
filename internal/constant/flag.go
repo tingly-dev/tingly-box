@@ -36,7 +36,6 @@ const (
 	ExtensionSkillUser          = "skill_user"
 	ExtensionSkillIDE           = "skill_ide"
 	ExtensionBench              = "bench"
-	ExtensionDesk               = "desk"
 	ExtensionProjects           = "projects"
 )
 
@@ -68,6 +67,5 @@ var KnownExtensionBoolFlags = map[string]bool{
 	ExtensionSkillUser:  true,
 	ExtensionSkillIDE:   true,
 	ExtensionBench:      true,
-	ExtensionDesk:       true,
 	ExtensionProjects:   true,
 }

@@ -11,7 +11,7 @@ import (
 )
 
 // Agents run thread turns. Turns go through agentboot's session engine, the
-// one Tingly Box's Desk uses: a thread keeps a resident Claude Code process
+// Desk used before it became Projects' working folders: a thread keeps a resident Claude Code process
 // between turns (so background tasks outlive the turn that started them),
 // and falls back to one process per turn without a pool.
 type Agents struct {
@@ -20,7 +20,7 @@ type Agents struct {
 	Pool *pool.Pool
 }
 
-// threadPoolConfig matches Desk's: at most this many resident processes,
+// threadPoolConfig keeps Desk's limits: at most this many resident processes,
 // each closed after sitting idle this long (a later turn resumes it).
 var threadPoolConfig = pool.Config{MaxSessions: 10, IdleTimeout: 10 * time.Minute}
 

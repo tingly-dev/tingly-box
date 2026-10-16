@@ -63,7 +63,7 @@ const DASHBOARD_RANGE_PATH = /^\/dashboard\/(today|yesterday|3d|7d|30d|90d)$/;
 
 export function useActivityItems(): ActivityItem[] {
     const { t } = useTranslation();
-    const { skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableDesk, enableProjects } = useFeatureFlags();
+    const { skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableProjects } = useFeatureFlags();
     const projectsWaiting = useProjectsWaiting(enableProjects);
     const { profiles } = useProfileContext();
     const imageProfiles = useImageProfiles();
@@ -302,26 +302,23 @@ export function useActivityItems(): ActivityItem[] {
                 ],
             }] as ActivityItem[] : []),
             // Projects — every place Claude Code works from the browser:
-            // projects, where a coordinator runs each task as a thread
-            // (.design/projects.md), and Desk's plain working folders
-            // (.design/desk.md). The two keep separate experimental flags;
-            // the item shows with either. Its sidebar lists the projects and
-            // folders themselves (ProjectsNav), not pages. The dot says a
-            // thread waits on you.
-            ...(enableProjects || enableDesk ? [{
+            // projects, where a coordinator runs each task as a thread, and
+            // plain working folders (.design/projects.md). Its sidebar lists
+            // the projects and folders themselves (ProjectsNav), not pages.
+            // The dot says a thread waits on you.
+            ...(enableProjects ? [{
                 key: 'projects',
                 icon: <IconFolder sx={{ fontSize: 22 }} />,
                 label: t('layout.projects'),
-                defaultPath: enableProjects ? '/projects' : '/desk',
+                defaultPath: '/projects',
                 attention: projectsWaiting ? t('layout.projectsWaiting') : undefined,
                 sidebar: (onNavigate: () => void) => (
                     <Suspense fallback={null}>
-                        <ProjectsNav enableProjects={enableProjects} enableDesk={enableDesk} onNavigate={onNavigate} />
+                        <ProjectsNav onNavigate={onNavigate} />
                     </Suspense>
                 ),
                 children: [
-                    ...(enableProjects ? [{ path: '/projects', label: t('layout.projects'), match: (p: string) => p === '/projects' || p.startsWith('/projects/') }] : []),
-                    ...(enableDesk ? [{ path: '/desk', label: t('layout.workingFolders'), match: (p: string) => p.startsWith('/desk') }] : []),
+                    { path: '/projects', label: t('layout.projects'), match: (p: string) => p === '/projects' || p.startsWith('/projects/') },
                 ],
             }] as ActivityItem[] : []),
             // ── Power-ups: what extends an agent beyond plain model routing ──
@@ -330,8 +327,7 @@ export function useActivityItems(): ActivityItem[] {
             // ("Bots"). Bot is the front door (every connected bot, every
             // platform, credentials live there); Remote Control and Notify are
             // the purposes mounted onto those bots. New purposes append here
-            // as new rows — the rail icon never grows. (Desk, which has no
-            // bot, moved to Projects.) See bot-arch.md §10.
+            // as new rows — the rail icon never grows. See bot-arch.md §10.
             // (key stays 'bots' — internal id, not user-visible.)
             // Hidden via the Remote switch in the rail's Power-ups menu (same hidden set as
             // Team/Image) — hides the rail item only, bots keep running.
@@ -437,5 +433,5 @@ export function useActivityItems(): ActivityItem[] {
         ];
 
         return items;
-    }, [t, promptMenuItems, enableGuardrails, enableMCP, enableBench, enableDesk, enableProjects, projectsWaiting, profiles, imageProfiles, teams, botSummary, hiddenScenarios, pinnedScenarios, vmodelOff]);
+    }, [t, promptMenuItems, enableGuardrails, enableMCP, enableBench, enableProjects, projectsWaiting, profiles, imageProfiles, teams, botSummary, hiddenScenarios, pinnedScenarios, vmodelOff]);
 }

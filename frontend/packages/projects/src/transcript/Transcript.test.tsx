@@ -17,7 +17,7 @@ const request = (id = 'r1', kind = 'approval_request'): TranscriptBlock => ({typ
 const show = (respond: (id: string, approved: boolean, answer: string) => Promise<boolean>, block = request()) =>
     render(<Transcript blocks={[block]} pendingRequestId={block.type === 'request' ? block.message.request_id : undefined} working onRespond={respond} drafts={drafts}/>);
 
-describe('Desk pending requests', () => {
+describe('pending requests', () => {
     it('shows the whole command being approved and never resubmits an accepted decision while polling catches up', async () => {
         let finish!: (accepted: boolean) => void;
         const respond = vi.fn(() => new Promise<boolean>((resolve) => {finish = resolve;}));

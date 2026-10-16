@@ -77,7 +77,7 @@ const RouteStatusLine = ({status, usage}: RouteStatusLineProps) => {
             ? <> → {status.provider_model} @ {status.provider_name}</>
             : null;
         segments.push(
-            <Segment key="route" tip={status ? t('desk.statusRoute', {defaultValue: 'Routed by the {{scenario}} rules', scenario: status.scenario}) : undefined}>
+            <Segment key="route" tip={status ? t('claudeSession.statusRoute', {defaultValue: 'Routed by the {{scenario}} rules', scenario: status.scenario}) : undefined}>
                 {model}{routed}
             </Segment>,
         );
@@ -88,7 +88,7 @@ const RouteStatusLine = ({status, usage}: RouteStatusLineProps) => {
             const pct = Math.round((ctx / win) * 100);
             segments.push(
                 <Segment key="ctx" color={pct >= 80 ? getReadableAccent(theme, 'warning') : undefined}
-                    tip={t('desk.statusContext', {defaultValue: 'Context: {{used}} of {{window}} tokens', used: formatTokens(ctx), window: formatTokens(win)})}>
+                    tip={t('claudeSession.statusContext', {defaultValue: 'Context: {{used}} of {{window}} tokens', used: formatTokens(ctx), window: formatTokens(win)})}>
                     {contextBar(pct)} {pct}%
                 </Segment>,
             );
@@ -96,7 +96,7 @@ const RouteStatusLine = ({status, usage}: RouteStatusLineProps) => {
             segments.push(<Segment key="ctx">ctx {formatTokens(ctx)}</Segment>);
         }
         segments.push(
-            <Segment key="tokens" tip={t('desk.statusTokens', {defaultValue: 'This session, as returned through the gateway: input (including cache) ↑, output ↓'})}>
+            <Segment key="tokens" tip={t('claudeSession.statusTokens', {defaultValue: 'This session, as returned through the gateway: input (including cache) ↑, output ↓'})}>
                 ↑{formatTokens(usage.input + usage.cacheRead + usage.cacheWrite)} ↓{formatTokens(usage.output)} · cache {cacheHitPct(usage)}%
             </Segment>,
         );
@@ -106,19 +106,19 @@ const RouteStatusLine = ({status, usage}: RouteStatusLineProps) => {
         const reset = resetsIn(q.resets_at);
         segments.push(
             <Segment key={`q-${q.type}`} color={quotaColor(theme, q)}
-                tip={[`${q.type} ${t('desk.statusQuota', {defaultValue: 'quota'})}`, reset && t('desk.statusResets', {defaultValue: 'resets in {{reset}}', reset})].filter(Boolean).join(' · ')}>
+                tip={[`${q.type} ${t('claudeSession.statusQuota', {defaultValue: 'quota'})}`, reset && t('claudeSession.statusResets', {defaultValue: 'resets in {{reset}}', reset})].filter(Boolean).join(' · ')}>
                 {q.type} {q.text}
             </Segment>,
         );
     }
     const balances = status?.quota.filter((q) => q.balance) ?? [];
     if (balances.length > 0) {
-        segments.push(<Segment key="balance">{t('desk.statusBalance', {defaultValue: 'Balance'})} {balances.map((b) => b.text).join(' · ')}</Segment>);
+        segments.push(<Segment key="balance">{t('claudeSession.statusBalance', {defaultValue: 'Balance'})} {balances.map((b) => b.text).join(' · ')}</Segment>);
     }
     if (quotas.some((q) => q.limit_reached)) {
         segments.push(
             <Segment key="exhausted" color={getReadableAccent(theme, 'error')}>
-                {t('desk.statusExhausted', {defaultValue: 'quota exhausted — pick another profile above'})}
+                {t('claudeSession.statusExhausted', {defaultValue: 'quota exhausted — pick another profile above'})}
             </Segment>,
         );
     }

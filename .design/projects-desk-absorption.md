@@ -1,9 +1,8 @@
 # Projects absorbs Desk
 
-> Status: proposal (研究 / 方案). Nothing here is built. It supersedes the
-> "out of scope: merging the two products" line of TEP #2063 and its steps
-> 3–5. Steps 1–3c of #2063 (panel, shared shell, transcript, message box) are
-> done and are the base for this.
+> Status: 已实施 (phases 1–4). Desk is gone; working in a plain folder is a
+> Projects working-folder session. Phase 5 is still open. This note supersedes
+> the "out of scope: merging the two products" line of TEP #2063.
 
 ## Decision
 
@@ -137,12 +136,26 @@ until phase 4.
    - [x] Status line: `GET /scenario/:scenario/route` resolves the route and
      quota for a profile and tier; `session.statusLine` slot renders it with
      the session's token usage.
-   - [ ] Per-session drafts and the send queue: phase 4, with the `desk.status*`
-     strings moving out of the `desk` namespace.
-4. **Cutover.** Import old sessions, redirect `/desk` and `/api/v1/desk`,
-   retire the `desk` flag (on → `projects` on), delete `internal/desk`,
-   `module/desk` and the Desk frontend, update `desk.md` and
-   `projects-panel.md`, remove the "Desk" wording left in docs.
+   - [x] Drafts: what is typed but not sent is kept per thread in the browser
+     (threads and sessions alike). Messages sent mid-turn are queued by the
+     server, as for threads, so Desk's browser-side send queue is not ported.
+4. **Cutover.** Done:
+   - [x] Import: on Projects' first start, Desk's `ChatID="web"` sessions
+     become working-folder sessions (`App.ImportSessions`, once per source,
+     remembered in Projects' settings). Each keeps its Claude Code session id
+     and transcript (approvals folded with their answers), so the next
+     message resumes it. The originals stay in the remote session store.
+   - [x] The `desk` flag is gone: a config migration turns `projects` on where
+     `desk` was on and drops the key; its toggle, gate and nav entry are
+     deleted.
+   - [x] `/desk` redirects to the working folders (`?folder=` to that folder).
+     `/api/v1/desk` is removed rather than redirected: its only client was
+     the Desk page, which ships in the same build.
+   - [x] Deleted `internal/desk`, `module/desk`, the Desk pages, components,
+     API client, mocks and strings; the profile/model pickers and the status
+     line strings moved to `components/claudeCode` and `claudeSession.*`.
+   - [x] `desk.md` marked retired (its §3 engine behaviour still applies),
+     `projects-panel.md` rewritten to the current panel.
 5. **After.** One waiting signal on the rail (#2063 step 2), hand a session to
    a project, `@cc` visibility if wanted.
 

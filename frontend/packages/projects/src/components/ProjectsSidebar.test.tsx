@@ -48,10 +48,10 @@ describe('ProjectsSidebar', () => {
     it('renders host sections after projects and can leave projects out', async () => {
         const h = host([summary('a', 'Alpha', 0)]);
         const folders: ProjectsSidebarSection = {
-            key: 'folders', title: 'Working folders', to: '/desk',
-            rows: [{ key: '/src/app', label: 'app', title: '/src/app', to: '/desk?folder=app', selected: true }],
+            key: 'folders', title: 'Working folders', to: '/folders',
+            rows: [{ key: '/src/app', label: 'app', title: '/src/app', to: '/folders?folder=app', selected: true }],
         };
-        show(h, '/desk', { showProjects: false, sections: [folders] });
+        show(h, '/folders', { showProjects: false, sections: [folders] });
         const section = screen.getByRole('region', { name: 'Working folders' });
         expect(within(section).getByRole('link', { name: 'app' })).toHaveAttribute('aria-current', 'page');
         expect(screen.queryByRole('region', { name: 'nav.projects' })).not.toBeInTheDocument();

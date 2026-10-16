@@ -47,9 +47,9 @@ func GenerateOpenAPI(cfg *config.Config) (string, error) {
 // starting the server. It mounts the same module set as the running server
 // (see engineModules / apiModules).
 func registerAllAPIRoutes(manager *swagger.RouteManager, s *Server) {
-	engineMods, statusHandler := s.engineModules(true)
+	engineMods := s.engineModules(true)
 	module.Mount(&module.Routes{Engine: s.engine}, engineMods...)
 
 	rt := s.UseWebAPIEndpoints(manager)
-	module.Mount(rt, s.apiModules(context.Background(), true, statusHandler)...)
+	module.Mount(rt, s.apiModules(context.Background(), true)...)
 }

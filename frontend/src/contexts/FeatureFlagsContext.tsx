@@ -9,7 +9,6 @@ interface FeatureFlagsContextType {
     enableGuardrails: boolean;
     enableMCP: boolean;
     enableBench: boolean;
-    enableDesk: boolean;
     enableProjects: boolean;
     loading: boolean;
     refresh: () => Promise<void>;
@@ -36,7 +35,6 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
     const [enableGuardrails, setEnableGuardrails] = useState(false);
     const [enableMCP, setEnableMCP] = useState(false);
     const [enableBench, setEnableBench] = useState(false);
-    const [enableDesk, setEnableDesk] = useState(false);
     const [enableProjects, setEnableProjects] = useState(false);
     const [loading, setLoading] = useState(true);
 
@@ -44,13 +42,12 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
     // memoized context value below can depend on a stable `refresh`).
     const loadFlags = useCallback(async () => {
         try {
-            const [skillUserResult, skillIdeResult, guardrailsResult, mcpResult, benchResult, deskResult, projectsResult] = await Promise.all([
+            const [skillUserResult, skillIdeResult, guardrailsResult, mcpResult, benchResult, projectsResult] = await Promise.all([
                 api.getScenarioFlag('_global', 'skill_user'),
                 api.getScenarioFlag('_global', 'skill_ide'),
                 api.getScenarioFlag('_global', 'guardrails'),
                 api.getScenarioFlag('_global', 'mcp'),
                 api.getScenarioFlag('_global', 'bench'),
-                api.getScenarioFlag('_global', 'desk'),
                 api.getScenarioFlag('_global', 'projects'),
             ]);
             setSkillUser(skillUserResult?.data?.value || false);
@@ -58,7 +55,6 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
             setEnableGuardrails(guardrailsResult?.data?.value || false);
             setEnableMCP(mcpResult?.data?.value || false);
             setEnableBench(benchResult?.data?.value || false);
-            setEnableDesk(deskResult?.data?.value || false);
             setEnableProjects(projectsResult?.data?.value || false);
         } catch (error) {
             // Silently fail - flags will default to false
@@ -79,8 +75,8 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
     const refresh = loadFlags;
 
     const value = useMemo(() => ({
-        skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableDesk, enableProjects, loading, refresh,
-    }), [skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableDesk, enableProjects, loading, refresh]);
+        skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableProjects, loading, refresh,
+    }), [skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableProjects, loading, refresh]);
 
     return (
         <FeatureFlagsContext.Provider value={value}>

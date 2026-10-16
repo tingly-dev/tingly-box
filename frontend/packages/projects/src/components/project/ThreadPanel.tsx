@@ -18,7 +18,7 @@ import { threadTranscript } from './threadTranscript';
 import { projectThreadOps, sessionOps } from './threadOps';
 import { BackgroundTasksPanel } from '../workdir/BackgroundTasksPanel';
 import { backgroundTasks } from '../workdir/backgroundTasks';
-import { readLocal, writeLocal } from '../../utils/storage';
+import { readLocal, removeLocal, writeLocal } from '../../utils/storage';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
 const mono = { fontFamily: fontMono } as const;
@@ -82,6 +82,14 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
     const setView = (next: View) => {
         setViewState(next);
         writeLocal('thread.view', next);
+    };
+    // What is typed but not sent survives leaving the thread or a reload.
+    const draftKey = `draft.${threadId}`;
+    const [draft, setDraftState] = useState(() => readLocal(draftKey) ?? '');
+    const setDraft = (text: string) => {
+        setDraftState(text);
+        if (text) writeLocal(draftKey, text);
+        else removeLocal(draftKey);
     };
     const [expandAll, setExpandAll] = useState(() => readLocal('thread.expandTools') === '1');
     const toggleExpand = () => {
@@ -287,6 +295,14 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
                     context={composerContext}
                     minRows={1}
                     keepUntilSent
+                    text={draft}
+                    onTextChange={setDraft}
+                    // Clear only what was sent: typing may have gone on meanwhile.
+                    onAccepted={(sent) => setDraftState((prev) => {
+                        if (prev !== sent) return prev;
+                        removeLocal(draftKey);
+                        return '';
+                    })}
                     streaming={running}
                     sendWhileStreaming
                     onStop={() => { void act(ops.stop); }}

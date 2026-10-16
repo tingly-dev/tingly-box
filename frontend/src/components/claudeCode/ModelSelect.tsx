@@ -46,7 +46,7 @@ const ModelSelect = ({profile, value, onChange, disabled}: ModelSelectProps) => 
 
     const tierLabel = (alias: string) => (alias
         ? alias.charAt(0).toUpperCase() + alias.slice(1)
-        : t('desk.modelDefault', {defaultValue: 'Default'}));
+        : t('claudeSession.modelDefault', {defaultValue: 'Default'}));
     const route = (tier: ModelTier) => (tier.provider_name ? `${concrete(tier)} @ ${tier.provider_name}` : tier.model);
 
     // A unified profile has one model for every tier: the menu still opens,
@@ -63,7 +63,7 @@ const ModelSelect = ({profile, value, onChange, disabled}: ModelSelectProps) => 
             displayEmpty
             value={selected.alias}
             onChange={(e) => onChange(e.target.value)}
-            inputProps={{'aria-label': t('desk.model', {defaultValue: 'Model'})}}
+            inputProps={{'aria-label': t('claudeSession.model', {defaultValue: 'Model'})}}
             renderValue={() => (
                 <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
                     <AutoAwesome/>
@@ -84,7 +84,7 @@ const ModelSelect = ({profile, value, onChange, disabled}: ModelSelectProps) => 
             ))}
             {data.unified && (
                 <Typography component="li" sx={{px: 2, py: 1, maxWidth: 320, fontSize: fontSizes.sm, color: 'text.secondary'}}>
-                    {t('desk.modelUnifiedHint', {defaultValue: 'This profile uses one model for every tier. Change it in the profile\'s rules.'})}
+                    {t('claudeSession.modelUnifiedHint', {defaultValue: 'This profile uses one model for every tier. Change it in the profile\'s rules.'})}
                 </Typography>
             )}
         </Select>

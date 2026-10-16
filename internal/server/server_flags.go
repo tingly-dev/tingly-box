@@ -27,21 +27,11 @@ func (s *Server) mcpEnabled() bool {
 	return protocolserver.MCPEnabled(s.config)
 }
 
-// deskEnabled reports whether the experimental Desk surface
-// (a web front door onto local Claude Code, see .design/desk.md)
-// is turned on. Off by default: it runs an arbitrary local coding agent on
-// the host, so it opts in the same way guardrails/MCP do rather than being
-// always-on.
-func (s *Server) deskEnabled() bool {
-	if s.config == nil {
-		return false
-	}
-	return s.config.GetScenarioFlag(typ.ScenarioGlobal, constant.ExtensionDesk)
-}
-
 // projectsEnabled reports whether Projects (a coordinator conversation
 // running Claude Code threads in git worktrees, see .design/projects.md) is
-// turned on. Off by default for the same reason as Desk.
+// turned on. Off by default: it runs an arbitrary local coding agent on the
+// host, so it opts in the same way guardrails/MCP do rather than being
+// always-on.
 func (s *Server) projectsEnabled() bool {
 	if s.config == nil {
 		return false

@@ -1,6 +1,6 @@
 // Model tiers per Claude Code routing for mock mode (GET /scenario/claude_code/models):
 // the main routing is unified (one model for every tier), profile p1 routes
-// tiers separately. Shared by the scenario mock and the Desk status mock.
+// tiers separately. Shared by the scenario and route mocks.
 export type MockTier = { alias: string; model: string; provider_name: string; provider_model: string }
 
 export const mockClaudeCodeModels: Record<string, { unified: boolean; tiers: MockTier[] }> = {

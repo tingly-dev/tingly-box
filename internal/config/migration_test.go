@@ -1000,3 +1000,23 @@ func TestBackfillFableRuleOnce_DoesNotResurrectDeletedRule(t *testing.T) {
 		t.Error("a deleted fable rule must not come back")
 	}
 }
+
+func TestMigrateDeskFlagIntoProjects(t *testing.T) {
+	c := &Config{Scenarios: []typ.ScenarioConfig{
+		{Scenario: typ.ScenarioGlobal, Extensions: map[string]interface{}{"desk": true, "mcp": true}},
+		{Scenario: typ.ScenarioClaudeCode, Extensions: map[string]interface{}{"desk": false}},
+	}}
+	if !migrateDeskFlagIntoProjects(c) {
+		t.Fatal("expected a change")
+	}
+	g := c.Scenarios[0].Extensions
+	if g["projects"] != true || g["mcp"] != true || g["desk"] != nil {
+		t.Fatalf("global extensions = %v", g)
+	}
+	if _, ok := c.Scenarios[1].Extensions["projects"]; ok {
+		t.Fatal("desk off must not turn projects on")
+	}
+	if migrateDeskFlagIntoProjects(c) {
+		t.Fatal("second run must be a no-op")
+	}
+}

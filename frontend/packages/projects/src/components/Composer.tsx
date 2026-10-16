@@ -44,7 +44,7 @@ export interface ComposerProps {
 }
 
 /**
- * The message box every Projects and Desk surface writes in. Enter sends on
+ * The message box every Projects surface writes in. Enter sends on
  * desktop; on a phone Enter adds a line and Ctrl/Cmd+Enter sends. An IME's
  * Enter (confirming a candidate) never sends, and a send never runs twice.
  */

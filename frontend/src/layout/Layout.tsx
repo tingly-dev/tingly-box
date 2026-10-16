@@ -67,11 +67,10 @@ const LayoutInner = ({ children }: LayoutProps) => {
     // Layout for auth/context, but the VS Code-like nav would overwhelm its
     // small window and duplicate the hub's own status row.
     const isHubPage = location.pathname === '/hub';
-    const isDeskPage = location.pathname === '/desk';
-    // Projects' pages and Desk are work surfaces that lay out their own
-    // spacing (full-height split views), so they get the content area edge
-    // to edge, clear of the mobile menu bar only.
-    const isProjectsPage = location.pathname === '/projects' || location.pathname.startsWith('/projects/') || isDeskPage;
+    // Projects' pages are work surfaces that lay out their own spacing
+    // (full-height split views), so they get the content area edge to edge,
+    // clear of the mobile menu bar only.
+    const isProjectsPage = location.pathname === '/projects' || location.pathname.startsWith('/projects/');
 
     const isActive = (path: string) => location.pathname === path;
     const isChildActive = (children?: ActivityItem['children']) =>
@@ -268,7 +267,7 @@ const LayoutInner = ({ children }: LayoutProps) => {
     );
 
     return (
-        <Box sx={{ display: 'flex', height: isDeskPage ? '100dvh' : '100vh', overflow: 'hidden', position: 'relative', zIndex: Z_INDEX.main }}>
+        <Box sx={{ display: 'flex', height: isProjectsPage ? '100dvh' : '100vh', overflow: 'hidden', position: 'relative', zIndex: Z_INDEX.main }}>
             {visibilityTip}
             {!isHubPage && <FloatingStatusIndicators />}
 
@@ -304,7 +303,7 @@ const LayoutInner = ({ children }: LayoutProps) => {
             {/* Main content */}
             <Box
                 component="main"
-                sx={{ flexGrow: 1, height: isDeskPage ? '100dvh' : '100vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden', position: 'relative', zIndex: 1 }}
+                sx={{ flexGrow: 1, height: isProjectsPage ? '100dvh' : '100vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden', position: 'relative', zIndex: 1 }}
             >
                 {/* The hub panel is full-bleed: no mobile toolbar exists on
                     /hub (nav is hidden above), so mobileContentSx's xs

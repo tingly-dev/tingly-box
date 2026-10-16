@@ -1,8 +1,7 @@
 // The transcript model: an agent session's flat transcript entries folded
 // into what a page renders (tool calls paired with their results, approvals
 // with their answers, a subagent's work under the call that ran it). It knows
-// nothing about where the entries come from: Desk and Projects' threads both
-// pass in their own.
+// nothing about where the entries come from: each host passes in its own.
 
 // TranscriptEntry is one entry of an agent session's transcript, as the
 // engine writes it (agentboot/engine Entry). Kind "" is a plain chat message
@@ -52,8 +51,8 @@ export interface ToolStep {
     request?: RequestBlock;
 }
 
-// TaskEvent is the payload of a "task" transcript entry (internal/desk/
-// convert.go taskEvent): one lifecycle event of a subagent or background
+// TaskEvent is the payload of a "task" transcript entry (agentboot/engine
+// TaskEvent): one lifecycle event of a subagent or background
 // command, keyed by the tool call that started it (the entry's request_id).
 export interface TaskEvent {
     event: string;
@@ -115,7 +114,7 @@ export type TranscriptBlock =
 
 export type RequestBlock = Extract<TranscriptBlock, {type: 'request'}>;
 
-// Emitted once per turn by the backend's converter (internal/desk/convert.go)
+// Emitted once per turn by agentboot's converter
 // to record the Claude session id; it answers nothing the user asks, so the
 // transcript leaves it out.
 const SESSION_INIT_PREFIX = 'claude code session ';

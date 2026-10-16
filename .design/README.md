@@ -98,8 +98,9 @@
 | [imbot-output.md](./imbot-output.md) | ImBot 输出预估 — Predicted Per-Platform Chat Output, and the Noise Problem | 当前矩阵 + 已标注的修复前推演 |
 | [im-feishu.md](./im-feishu.md) | Feishu/Lark: IM Service Built Directly, Not via the Fat SDK Client | 设计说明；局部实施状态见正文 |
 | [remote-cc-profile.md](./remote-cc-profile.md) | Remote @cc Profile Selection | 设计说明；局部实施状态见正文 |
-| [desk.md](./desk.md) | Desk (MVP) | 设计说明；局部实施状态见正文 |
-| [projects-panel.md](./projects-panel.md) | Projects 面板：Desk 的工作目录和项目共用一个侧边栏（TEP-2063） | 第 1 步已实现 |
+| [desk.md](./desk.md) | Desk (MVP)：已并入 Projects；§3 的会话引擎行为仍然适用 | 已退役 |
+| [projects-panel.md](./projects-panel.md) | Projects 面板：项目和工作目录共用一个侧边栏（TEP-2063） | 已实现 |
+| [projects-desk-absorption.md](./projects-desk-absorption.md) | Desk 并入 Projects：工作目录会话、宿主能力与插槽、切换 | 已实施 |
 | [projects-ui.md](./projects-ui.md) | Projects 面板的 UI 对齐：对照 TB 页面和官方 Projects 的审查与分批计划 | 进行中 |
 | [projects.md](./projects.md) | Projects 接入（宿主侧）：`projects/` 模块、Host 适配器、`projects` 开关、导航与命名；契约见 `projects/.design/projects.md` | 设计说明；代码已搬入，接入未开始 |
 | [smart-guide-on-claude-code.md](./smart-guide-on-claude-code.md) | Smart Guide on Claude Code (retiring tingly-agentscope) | 已废弃方案；现行 runtime 见 afk |

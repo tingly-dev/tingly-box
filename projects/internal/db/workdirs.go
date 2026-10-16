@@ -76,3 +76,10 @@ func (s *Store) SessionCounts() (map[string]map[string]int, error) {
 	}
 	return out, nil
 }
+
+// HasSession reports whether any thread runs Claude Code session sid.
+func (s *Store) HasSession(sid string) (bool, error) {
+	var n int64
+	err := s.db.Model(&Thread{}).Where("session_id = ?", sid).Count(&n).Error
+	return n > 0, err
+}

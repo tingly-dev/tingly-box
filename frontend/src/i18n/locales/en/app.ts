@@ -40,10 +40,6 @@ export default {
     "saved": "Saved"
   },
   "layout": {
-    "workingFolders": "Working folders",
-    "noWorkingFolders": "No working folders yet",
-    "workingFolderWaiting": "{{count}} waiting on you",
-    "desk": "Desk",
     "projects": "Projects",
     "projectsWaiting": "A thread is waiting on you",
     "appTitle": "Tingly Box",
@@ -289,11 +285,8 @@ export default {
     },
     "experimentalFeatures": {
       "projects": "Projects",
-      "enableProjects": "Hand a project its work as it comes up: a coordinator runs each task as a Claude Code thread in its own git worktree.",
-      "projectsEnabledInfo": "Anyone who can sign in to this tingly-box can now run Claude Code threads on this machine, in the repositories their projects name.",
-      "desk": "Desk",
-      "enableDesk": "Run Claude Code on this machine from a browser tab, in a folder you choose.",
-      "deskEnabledInfo": "Anyone who can sign in to this tingly-box can now start Claude Code sessions on this machine and approve the tool calls they make.",
+      "enableProjects": "Hand a project its work as it comes up, or run Claude Code in a folder you choose: a coordinator runs each project task as a thread in its own git worktree.",
+      "projectsEnabledInfo": "Anyone who can sign in to this tingly-box can now run Claude Code on this machine, in the folders and repositories they choose, and approve the tool calls it makes.",
       "title": "Experimental Features",
       "description": "These experimental features apply globally to all scenarios. Individual scenarios can override these settings.",
       "skills": "Skills",

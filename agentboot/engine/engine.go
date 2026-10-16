@@ -6,9 +6,9 @@
 //
 // It owns no storage. A host passes a Store, which receives every
 // transcript entry and status change, and keeps its own session records and
-// settings. Tingly Box's Desk is one host (over remote/session, the store IM
-// `@cc` shares); Projects' threads are meant to be another. The behaviour
-// and the reasons for it are in tingly-box's .design/desk.md §3.
+// settings. Projects' threads and working-folder sessions are its host. The
+// behaviour and the reasons for it are in tingly-box's .design/desk.md §3
+// (Desk, its first host, has since been folded into Projects).
 package engine
 
 import (
