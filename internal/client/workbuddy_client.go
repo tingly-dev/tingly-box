@@ -3,16 +3,19 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 
 	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -54,6 +57,45 @@ func NewWorkBuddyClient(provider *typ.Provider, model string, sessionID typ.Sess
 		httpClient:   httpClient,
 		origin:       strings.TrimSuffix(strings.TrimSuffix(provider.APIBase, "/"), "/v2"),
 	}, nil
+}
+
+// ChatCompletionsNew answers a complete call from a stream: WorkBuddy refuses
+// a chat that is not streamed, so the request is sent with stream: true and
+// the chunks are assembled into the one ChatCompletion the caller expects.
+// This is the same fallback CodexClient.ResponsesNew makes for the ChatGPT
+// backend, kept at the client so every complete-call path (passthrough,
+// cross-protocol, stage, tool engine) gets it. A stream that yields no answer
+// is an EmptyResponseError, so failover can retry it.
+func (c *WorkBuddyClient) ChatCompletionsNew(ctx context.Context, req openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+	// Ask for the closing usage chunk, so the assembled answer carries usage.
+	req.StreamOptions.IncludeUsage = openai.Bool(true)
+	stream := c.OpenAIClient.ChatCompletionsNewStreaming(ctx, req)
+	if stream == nil {
+		return nil, fmt.Errorf("workbuddy: chat stream not started")
+	}
+	defer stream.Close()
+
+	acc := openai.ChatCompletionAccumulator{}
+	for stream.Next() {
+		if !acc.AddChunk(stream.Current()) {
+			return nil, fmt.Errorf("workbuddy: malformed chat stream chunk")
+		}
+	}
+	if err := stream.Err(); err != nil {
+		// An upstream refusal keeps its status; only a stream that broke
+		// before any answer is an empty response.
+		var apiErr *openai.Error
+		if !errors.As(err, &apiErr) && acc.ID == "" && len(acc.Choices) == 0 {
+			return nil, &protocol.EmptyResponseError{Err: err}
+		}
+		return nil, err
+	}
+	if len(acc.Choices) == 0 {
+		return nil, &protocol.EmptyResponseError{Err: fmt.Errorf("workbuddy: chat stream ended without an answer")}
+	}
+	completion := acc.ChatCompletion
+	completion.Object = "chat.completion"
+	return &completion, nil
 }
 
 // ResponsesNew is not served by WorkBuddy; Responses requests are converted to

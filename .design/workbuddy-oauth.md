@@ -112,6 +112,38 @@ generic machinery applies unchanged:
 - `GET /v3/config` answers per client: `CLI/2.0.0 WorkBuddy/5.5.6` gets the
   config with a `cli` agent, a bare `WorkBuddy/…` the IDE's.
 
+### Streaming only
+
+WorkBuddy refuses a chat that is not streamed. `WorkBuddyClient.ChatCompletionsNew`
+sends every complete call as a stream (with `include_usage`) and assembles the
+chunks into one `ChatCompletion` — the same fallback `CodexClient.ResponsesNew`
+makes for the ChatGPT backend. It sits in the client, not in the stage
+endpoint's `StreamOnly`, because complete chat calls also come from the
+passthrough, cross-protocol and tool-engine paths, which never reach a stage.
+An upstream refusal keeps its HTTP status; a stream that breaks before any
+answer is an `EmptyResponseError` (502, failover may retry).
+
+### Request shapes
+
+`workbuddyRoundTripper` rewrites each `/chat/completions` body
+(`internal/client/workbuddy_request.go`) into shapes WorkBuddy takes, meaning
+the same. A body that needs nothing is sent byte for byte.
+
+- `max_completion_tokens` → `max_tokens`; role `developer` → `system`.
+- `tool_choice` objects → WorkBuddy's string form (`auto`, `required`, or the
+  tool's name); `none` drops the tools.
+- Tool names outside `[A-Za-z0-9_-]` are refused: they go out with `_` (kept
+  apart from existing names), the chat's history and `tool_choice` follow, and
+  the model's calls are named back in the response stream, so the client only
+  ever sees its own names.
+- Tool parameter schemas (400, code 11133 otherwise, per model): the root is
+  made an object (allOf merged; anyOf / oneOf object branches merged, a field
+  stays required only if every branch requires it); types are lowercased and
+  unknown ones dropped; a non-list `required` is dropped; an enum gets its
+  values' type, or becomes an anyOf of one typed enum per type, and an empty
+  enum is dropped; boolean sub-schemas become `{}` / `{"not": {}}`; a
+  pattern's `\0` becomes `\u0000`; tuple `items` become one schema.
+
 ### Models
 
 `GET {origin}/v3/config`, not `/models`: the `cli` agent's `models` when
@@ -151,13 +183,6 @@ with WorkBuddy's message.
 ## Not done (follow-ups)
 
 - **A run against a real account** (above).
-- **Chats are streaming-only**: WorkBuddy refuses a non-streamed chat, so a
-  non-stream client request needs stream-and-aggregate.
-- **Request shapes WorkBuddy refuses** (per the cross-check): it wants
-  `max_tokens` not `max_completion_tokens`, `system` not `developer`, a string
-  `tool_choice`, and tool schemas without root unions / typeless enums / dotted
-  tool names (otherwise 400, code 11133). These belong in a WorkBuddy transform
-  stage.
 - **Conversation ids** (`X-Conversation-ID`, `X-Conversation-Request-ID`, …):
   WorkBuddy counts one user turn as one request by them; without them each
   step of a tool loop is counted separately.
