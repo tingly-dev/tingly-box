@@ -57,11 +57,13 @@ func (m *Manager) InitiateServerPollFlow(ctx context.Context, userID string, iss
 		return &ServerPollFlow{
 			AuthorizeURL: flow.AuthorizeURL,
 			FlowID:       flow.State,
-			PollInterval: workbuddyPollInterval,
-			Timeout:      WorkBuddyLoginTimeout,
-			Issuer:       issuer,
-			Name:         name,
-			workbuddy:    flow,
+			PollInterval: flow.PollInterval,
+			// The account lookup runs after the token poll; budget for both
+			// so a late sign-in still gets its account info.
+			Timeout:   WorkBuddyLoginTimeout + workbuddyAccountTimeout,
+			Issuer:    issuer,
+			Name:      name,
+			workbuddy: flow,
 		}, nil
 	default:
 		return nil, fmt.Errorf("%w: %s has no server-mediated login", ErrInvalidProvider, issuer)

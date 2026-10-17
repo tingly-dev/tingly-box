@@ -2,7 +2,6 @@ package oauth
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/ai"
 )
@@ -68,6 +69,9 @@ type WorkBuddyFlow struct {
 	// AuthorizeURL is the URL the user must open.
 	AuthorizeURL string
 
+	// PollInterval is the delay between token polls.
+	PollInterval time.Duration
+
 	// Issuer is the tingly-box issuer that started the flow.
 	Issuer ai.Issuer
 
@@ -119,7 +123,7 @@ func (c *WorkBuddyClient) Start(ctx context.Context) (*WorkBuddyFlow, error) {
 	if data.State == "" || authURL == "" {
 		return nil, fmt.Errorf("workbuddy login state: response missing state or authUrl")
 	}
-	return &WorkBuddyFlow{State: data.State, AuthorizeURL: authURL}, nil
+	return &WorkBuddyFlow{State: data.State, AuthorizeURL: authURL, PollInterval: c.PollInterval}, nil
 }
 
 // workbuddyTokenData is the token payload of auth/token and the refresh
@@ -191,9 +195,15 @@ func (c *WorkBuddyClient) PollAccount(ctx context.Context, flow *WorkBuddyFlow, 
 	endpoint := c.Site.Origin + "/v2/plugin/login/account?state=" + url.QueryEscape(flow.State)
 	headers := http.Header{"Authorization": {"Bearer " + accessToken}}
 	for {
-		var raw map[string]any
-		err := c.envelope(ctx, http.MethodGet, endpoint, nil, headers, &raw)
+		var data json.RawMessage
+		err := c.envelope(ctx, http.MethodGet, endpoint, nil, headers, &data)
 		if err == nil {
+			// UseNumber keeps a numeric uid exact; a float64 would round
+			// ids past 2^53 and send the wrong X-User-Id.
+			var raw map[string]any
+			dec := json.NewDecoder(strings.NewReader(string(data)))
+			dec.UseNumber()
+			_ = dec.Decode(&raw)
 			if account := parseWorkBuddyAccount(raw); account.UserID != "" || account.Nickname != "" {
 				return account, nil
 			}
@@ -212,12 +222,20 @@ func (c *WorkBuddyClient) PollAccount(ctx context.Context, flow *WorkBuddyFlow, 
 }
 
 // Refresh exchanges a refresh token for a new access token.
-func (c *WorkBuddyClient) Refresh(ctx context.Context, refreshToken string) (*Token, error) {
+//
+// extra carries what the caller knows about the credential being refreshed
+// (the current bearer, X-User-Id — see WithWorkBuddyCredential); the official
+// client sends them alongside X-Refresh-Token.
+func (c *WorkBuddyClient) Refresh(ctx context.Context, refreshToken string, extra http.Header) (*Token, error) {
 	if strings.TrimSpace(refreshToken) == "" {
 		return nil, fmt.Errorf("workbuddy refresh: no refresh token; re-authentication required")
 	}
 	var data workbuddyTokenData
-	headers := http.Header{"X-Refresh-Token": {refreshToken}}
+	headers := extra.Clone()
+	if headers == nil {
+		headers = http.Header{}
+	}
+	headers.Set("X-Refresh-Token", refreshToken)
 	if err := c.envelope(ctx, http.MethodPost, c.Site.Origin+"/v2/plugin/auth/token/refresh", strings.NewReader("{}"), headers, &data); err != nil {
 		return nil, fmt.Errorf("workbuddy refresh: %w", err)
 	}
@@ -333,6 +351,8 @@ func stringField(raw map[string]any, keys ...string) string {
 			if strings.TrimSpace(v) != "" {
 				return strings.TrimSpace(v)
 			}
+		case json.Number:
+			return v.String()
 		case float64:
 			return strconv.FormatFloat(v, 'f', -1, 64)
 		}
@@ -392,21 +412,11 @@ func parseWorkBuddyInt(raw json.RawMessage) int64 {
 // jwtExpiry reads the exp claim of a JWT without verifying it. Zero when the
 // token is not a JWT or carries no exp.
 func jwtExpiry(token string) time.Time {
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
+	claims := parseIDToken(token)
+	if claims == nil || claims.ExpiresAt == nil {
 		return time.Time{}
 	}
-	payload, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(parts[1], "="))
-	if err != nil {
-		return time.Time{}
-	}
-	var claims struct {
-		Exp int64 `json:"exp"`
-	}
-	if err := json.Unmarshal(payload, &claims); err != nil || claims.Exp <= 0 {
-		return time.Time{}
-	}
-	return time.Unix(claims.Exp, 0)
+	return claims.ExpiresAt.Time
 }
 
 // =============================================
@@ -468,7 +478,13 @@ func (m *Manager) CompleteWorkBuddyFlow(ctx context.Context, flow *WorkBuddyFlow
 	account, err := client.PollAccount(ctx, flow, token.AccessToken, workbuddyAccountTimeout)
 	if err != nil {
 		// The tokens are good; only the account's name and id are missing.
+		// Say so: without the uid no X-User-Id is sent, and if the upstream
+		// needs it this line is what ties the failure back to the login.
+		logrus.Warnf("[OAuth] WorkBuddy account info unavailable for %s, provider saved without user id: %v", flow.Issuer, err)
 		account = &WorkBuddyAccount{}
+	}
+	if account.EnterpriseDomain != "" {
+		logrus.Warnf("[OAuth] WorkBuddy account reports enterprise domain %q; enterprise endpoints are not supported yet, requests go to the public site", account.EnterpriseDomain)
 	}
 	token.putMetadata(WorkBuddyMetaUserID, account.UserID)
 	token.putMetadata("account_id", account.UserID)
@@ -495,5 +511,5 @@ func (m *Manager) refreshWorkBuddyToken(ctx context.Context, issuer ai.Issuer, r
 	if err != nil {
 		return nil, err
 	}
-	return client.Refresh(ctx, refreshToken)
+	return client.Refresh(ctx, refreshToken, opts.ExtraHeaders)
 }

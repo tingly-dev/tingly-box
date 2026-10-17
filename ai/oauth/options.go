@@ -120,6 +120,21 @@ func WithWorkBuddyEndpoint(origin string, interval time.Duration) Option {
 	}
 }
 
+// WithWorkBuddyCredential adds the credential being refreshed — its current
+// bearer and account id — to a WorkBuddy refresh request, as the official
+// client does. Callers that hold the provider (the background refresher,
+// POST /oauth/refresh) pass it; empty values are skipped.
+func WithWorkBuddyCredential(accessToken, userID string) Option {
+	return func(o *Options) {
+		if accessToken != "" {
+			WithExtraHeader("Authorization", "Bearer "+accessToken)(o)
+		}
+		if userID != "" {
+			WithExtraHeader("X-User-Id", userID)(o)
+		}
+	}
+}
+
 // kimiDeviceIDHeader is the HTTP header Kimi's auth and inference endpoints
 // use to bind a credential to a specific device.
 const kimiDeviceIDHeader = "X-Msh-Device-Id"

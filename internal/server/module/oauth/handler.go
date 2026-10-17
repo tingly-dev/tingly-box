@@ -696,6 +696,10 @@ func (h *Handler) RefreshOAuthToken(c *gin.Context) {
 	if issuer == ai.IssuerKimiCode && provider.OAuthDetail.DeviceID != "" {
 		refreshOpts = append(refreshOpts, oauth.WithKimiDeviceID(provider.OAuthDetail.DeviceID))
 	}
+	if ai.IsWorkBuddyIssuer(issuer) {
+		uid, _ := provider.OAuthDetail.ExtraFields[oauth.WorkBuddyMetaUserID].(string)
+		refreshOpts = append(refreshOpts, oauth.WithWorkBuddyCredential(provider.OAuthDetail.AccessToken, uid))
+	}
 	var token *oauth.Token
 	if oauth.IsZCodeIssuer(issuer) {
 		// ZCode has no refresh grant: the stored "refresh token" is the account

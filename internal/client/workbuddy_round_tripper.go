@@ -30,6 +30,8 @@ func newWorkBuddyRoundTripper(inner http.RoundTripper, provider *typ.Provider) *
 }
 
 func (t *workbuddyRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	// A RoundTripper must not modify the caller's request.
+	req = req.Clone(req.Context())
 	req.Header.Set("User-Agent", ai.WorkBuddyUserAgent)
 	req.Header.Set("X-Domain", t.site.Domain)
 	req.Header.Set("X-Product", ai.WorkBuddyProduct)

@@ -60,11 +60,14 @@ func workbuddyServer(t *testing.T) (*httptest.Server, *atomic.Int32) {
 			writeWorkBuddy(t, w, workbuddyCodeAccountPending, "waiting", nil)
 			return
 		}
-		writeWorkBuddy(t, w, 0, "ok", map[string]any{"uid": "u-42", "nickname": "Alice"})
+		_, _ = w.Write([]byte(`{"code":0,"data":{"uid":100000123456789012,"nickname":"Alice"}}`))
 	})
 	mux.HandleFunc("/v2/plugin/auth/token/refresh", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			t.Errorf("refresh method = %s", r.Method)
+		}
+		if r.Header.Get("Authorization") != "Bearer at-1" || r.Header.Get("X-User-Id") != "u-42" {
+			t.Errorf("refresh: credential headers = %q / %q", r.Header.Get("Authorization"), r.Header.Get("X-User-Id"))
 		}
 		if r.Header.Get("X-Refresh-Token") != "rt-1" {
 			writeWorkBuddy(t, w, 401, "invalid refresh token", nil)
@@ -103,7 +106,8 @@ func TestWorkBuddyLoginFlow(t *testing.T) {
 	if left := time.Until(token.Expiry); left < 59*time.Minute || left > time.Hour {
 		t.Errorf("expiry in %v, want ~1h", left)
 	}
-	if token.Metadata[WorkBuddyMetaUserID] != "u-42" || token.Metadata["account_id"] != "u-42" {
+	// A numeric uid past 2^53 survives exactly.
+	if token.Metadata[WorkBuddyMetaUserID] != "100000123456789012" || token.Metadata["account_id"] != "100000123456789012" {
 		t.Errorf("metadata = %v", token.Metadata)
 	}
 	if token.Name != "Alice" {
@@ -116,7 +120,7 @@ func TestWorkBuddyLoginFlow(t *testing.T) {
 func TestWorkBuddyRefreshViaManager(t *testing.T) {
 	server, _ := workbuddyServer(t)
 	manager := NewManager()
-	opts := []Option{WithHTTPClient(server.Client()), WithWorkBuddyEndpoint(server.URL, time.Millisecond)}
+	opts := []Option{WithHTTPClient(server.Client()), WithWorkBuddyEndpoint(server.URL, time.Millisecond), WithWorkBuddyCredential("at-1", "u-42")}
 
 	token, err := manager.RefreshToken(context.Background(), "user-1", ai.IssuerWorkBuddy, "rt-1", opts...)
 	if err != nil {
@@ -187,7 +191,8 @@ func TestWorkBuddyPollRetriesTransient(t *testing.T) {
 func TestWorkBuddyExpiry(t *testing.T) {
 	abs := time.Now().Add(3 * time.Hour).Truncate(time.Second)
 	payload := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(`{"exp":%d}`, abs.Unix())))
-	jwt := "h." + payload + ".s"
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
+	jwt := header + "." + payload + ".sig"
 
 	cases := map[string]struct {
 		access    string
