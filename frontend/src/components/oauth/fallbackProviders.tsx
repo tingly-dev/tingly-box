@@ -1,5 +1,5 @@
 import {Box} from '@mui/material';
-import {Claude, Gemini, Google, Kimi, OpenAI, Qwen, XAI, Zai, Zhipu} from '../BrandIcons';
+import {Claude, Gemini, Google, Kimi, OpenAI, Qwen, Tencent, XAI, Zai, Zhipu} from '../BrandIcons';
 
 export interface OAuthProvider {
     id: string;
@@ -111,6 +111,27 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         description: 'Sign in with your Z.ai account to use ZCode International',
         icon: <Zai size={32}/>,
         color: '#3859FF',
+        enabled: true,
+    },
+    // WorkBuddy (Tencent). Same login-link flow as ZCode: the site owns the
+    // sign-in, the backend polls for the tokens. One card per account region;
+    // CodeBuddy accounts sign in through the CN card.
+    {
+        id: 'workbuddy_cn',
+        name: 'WorkBuddy CN',
+        displayName: 'WorkBuddy / CodeBuddy CN',
+        description: 'Sign in with your WorkBuddy or CodeBuddy (China) account',
+        icon: <Tencent size={32}/>,
+        color: '#0052D9',
+        enabled: true,
+    },
+    {
+        id: 'workbuddy',
+        name: 'WorkBuddy',
+        displayName: 'WorkBuddy (workbuddy.ai)',
+        description: 'Sign in with your international WorkBuddy account',
+        icon: <Tencent size={32}/>,
+        color: '#0052D9',
         enabled: true,
     },
     {

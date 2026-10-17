@@ -14,6 +14,8 @@ const OAUTH_ISSUER_ICON: Record<string, string> = {
     kimi_code: 'kimi',
     qwen_code: 'qwen',
     antigravity: 'google',
+    workbuddy: 'tencent',
+    workbuddy_cn: 'tencent',
 };
 
 /**
