@@ -17,7 +17,8 @@ function read<T extends string>(key: string, allowed: T[], fallback: T): T {
 /**
  * Where the Overview and an open thread are shown, remembered per browser
  * under `storageKey`. With the Overview on top the thread always sits below
- * it, so `thread` is only a preference then.
+ * it, so `thread` is only a preference then. `overviewFloat` opens a thread
+ * picked in the side-pane Overview as the floating window, leaving the Overview in place.
  */
 export function usePlacement(storageKey = '') {
     const [overview, setOverviewState] = useState<OverviewPlacement>(() => read(`${storageKey}overviewPlacement`, OVERVIEW, 'side'));
@@ -30,5 +31,11 @@ export function usePlacement(storageKey = '') {
         writeLocal(`${storageKey}threadPlacement`, v);
         setThreadState(v);
     }, [storageKey]);
-    return { overview, thread, setOverview, setThread };
+    // Off by default: a thread opened from the Overview replaces it in the side pane.
+    const [overviewFloat, setOverviewFloatState] = useState(() => readLocal(`${storageKey}overviewFloat`) === '1');
+    const setOverviewFloat = useCallback((v: boolean) => {
+        writeLocal(`${storageKey}overviewFloat`, v ? '1' : '0');
+        setOverviewFloatState(v);
+    }, [storageKey]);
+    return { overview, thread, overviewFloat, setOverview, setThread, setOverviewFloat };
 }

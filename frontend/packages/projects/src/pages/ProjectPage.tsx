@@ -50,7 +50,11 @@ export default function ProjectPage() {
     const [libraryWindow, setLibraryWindow] = useState(false);
     // A narrow screen has one surface: the drawer. With the Overview on top the thread sits below it.
     const overviewAt = pane.narrow ? 'side' : placement.overview;
-    const threadAt = pane.narrow || overviewAt === 'top' ? 'side' : placement.thread;
+    // The thread picked in the side-pane Overview while "float from the Overview" is on. It floats over the
+    // Overview; at most one window, since picking another thread only swaps it.
+    const [overviewFloatId, setOverviewFloatId] = useState<string | null>(null);
+    const floatedFromOverview = placement.overviewFloat && overviewAt === 'side' && !!threadId && overviewFloatId === threadId;
+    const threadAt = pane.narrow || overviewAt === 'top' ? 'side' : floatedFromOverview ? 'float' : placement.thread;
     const remember = (key: string, set: (v: boolean) => void) => (v: boolean) => {
         writeLocal(key, v ? '1' : '0');
         set(v);
@@ -153,6 +157,14 @@ export default function ProjectPage() {
         });
         pane.reveal();
     };
+    const openFromOverview = (tid: string) => {
+        setOverviewFloatId(tid);
+        openThread(tid);
+    };
+    const dockThread = () => {
+        setOverviewFloatId(null);
+        placement.setThread('side');
+    };
     const closeThread = () => setParams((p) => {
         p.delete('thread');
         return p;
@@ -198,7 +210,10 @@ export default function ProjectPage() {
                 <Tooltip title={t(threadAt === 'float' ? 'window.dock' : 'window.float')}>
                     <IconButton
                         size="small"
-                        onClick={() => placement.setThread(threadAt === 'float' ? 'side' : 'float')}
+                        onClick={() => {
+                            if (threadAt === 'float') dockThread();
+                            else placement.setThread('float');
+                        }}
                         aria-label={t(threadAt === 'float' ? 'window.dock' : 'window.float')}
                     ><FloatWindow fontSize="small" /></IconButton>
                 </Tooltip>
@@ -206,7 +221,7 @@ export default function ProjectPage() {
         />
     ) : null;
     const overviewEl = (initialTab?: 'threads' | 'library') => (
-        <OverviewPane projectId={id} threads={threads} onOpen={openThread} libraryKey={libraryKey} selectedId={threadId} initialTab={initialTab} />
+        <OverviewPane projectId={id} threads={threads} onOpen={openFromOverview} libraryKey={libraryKey} selectedId={threadId} initialTab={initialTab} />
     );
     const threadInSide = !!threadEl && threadAt === 'side';
     // The side pane holds the Overview, or the open thread in its place; with the
@@ -243,7 +258,7 @@ export default function ProjectPage() {
                 ) : <Skeleton width={200} />}
                 actions={project && (
                     <>
-                        {canPlace && <PlacementMenu overview={placement.overview} thread={placement.thread} onOverview={placement.setOverview} onThread={placement.setThread} />}
+                        {canPlace && <PlacementMenu overview={placement.overview} thread={placement.thread} onOverview={placement.setOverview} onThread={placement.setThread} overviewFloat={placement.overviewFloat} onOverviewFloat={placement.setOverviewFloat} />}
                         <Tooltip title={project.starred ? t('common.unstar') : t('common.star')}>
                             <IconButton size="small" onClick={() => void patch({ starred: !project.starred })}>{project.starred ? <Star fontSize="small" color="primary" /> : <StarBorder fontSize="small" />}</IconButton>
                         </Tooltip>
@@ -314,11 +329,13 @@ export default function ProjectPage() {
             <FloatingWindow
                 open={threadAt === 'float' && !!threadEl}
                 title={selected?.title ?? ''}
-                storageKey="thread"
+                // From the Overview it gets its own spot beside the pane, so the list stays clickable.
+                storageKey={floatedFromOverview ? 'thread-overview' : 'thread'}
                 defaultSize={{ w: 520, h: 640 }}
+                clearRight={floatedFromOverview && pane.open ? pane.width : 0}
                 attention={selected?.status === 'waiting'}
                 onClose={closeThread}
-                onDock={() => placement.setThread('side')}
+                onDock={dockThread}
             >
                 {threadEl}
             </FloatingWindow>

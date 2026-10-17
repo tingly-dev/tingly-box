@@ -19,7 +19,7 @@ export function clampRect(r: Rect, vw: number, vh: number): Rect {
     return { x, y, w, h };
 }
 
-function initialRect(key: string, def: { w: number; h: number }): Rect {
+function initialRect(key: string, def: { w: number; h: number }, clearRight: number): Rect {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     try {
@@ -28,7 +28,7 @@ function initialRect(key: string, def: { w: number; h: number }): Rect {
     } catch {
         // fall through to the default
     }
-    return clampRect({ x: vw - def.w - 32, y: 76, ...def }, vw, vh);
+    return clampRect({ x: vw - clearRight - def.w - 32, y: 76, ...def }, vw, vh);
 }
 
 interface Props {
@@ -37,6 +37,8 @@ interface Props {
     /** Position and size are remembered per browser under this key. */
     storageKey: string;
     defaultSize?: { w: number; h: number };
+    /** Width on the right edge a first-time window keeps free (a pane it should not cover). */
+    clearRight?: number;
     /** Something in the window waits on the user: a dot on its minimised pill. */
     attention?: boolean;
     onClose: () => void;
@@ -57,10 +59,10 @@ export function FloatingWindow(props: Props) {
     return props.open ? <Window {...props} /> : null;
 }
 
-function Window({ title, storageKey, defaultSize = DEFAULT_SIZE, attention, onClose, onDock, dockLabel, children }: Props) {
+function Window({ title, storageKey, defaultSize = DEFAULT_SIZE, clearRight = 0, attention, onClose, onDock, dockLabel, children }: Props) {
     const { t } = useTranslation('projects');
     const key = `${storageKey}.window`;
-    const [rect, setRect] = useState<Rect>(() => initialRect(key, defaultSize));
+    const [rect, setRect] = useState<Rect>(() => initialRect(key, defaultSize, clearRight));
     const [minimized, setMinimized] = useState(false);
     const drag = useRef<{ kind: 'move' | 'size'; px: number; py: number; from: Rect } | null>(null);
     const [active, setActive] = useState(false);

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, IconButton, ListSubheader, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
+import { Box, IconButton, ListSubheader, Menu, MenuItem, Switch, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { Check, LayoutIcon } from '../icons';
@@ -10,10 +10,12 @@ interface Props {
     thread: ThreadPlacement;
     onOverview: (v: OverviewPlacement) => void;
     onThread: (v: ThreadPlacement) => void;
+    overviewFloat: boolean;
+    onOverviewFloat: (v: boolean) => void;
 }
 
 /** Two choices, kept apart: where the Overview lives and where an open thread lives. */
-export function PlacementMenu({ overview, thread, onOverview, onThread }: Props) {
+export function PlacementMenu({ overview, thread, onOverview, onThread, overviewFloat, onOverviewFloat }: Props) {
     const { t } = useTranslation('projects');
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     const item = (selected: boolean, label: string, onClick: () => void, disabled = false) => (
@@ -36,6 +38,10 @@ export function PlacementMenu({ overview, thread, onOverview, onThread }: Props)
                 <ListSubheader sx={{ lineHeight: '32px', bgcolor: 'transparent' }}>{t('placement.thread')}</ListSubheader>
                 {item(!locked && thread === 'side', t('placement.side'), () => onThread('side'), locked)}
                 {item(!locked && thread === 'float', t('placement.float'), () => onThread('float'), locked)}
+                <MenuItem disabled={locked || overview !== 'side'} onClick={() => onOverviewFloat(!overviewFloat)} sx={{ minWidth: 200 }}>
+                    <Box sx={{ flex: 1 }}>{t('placement.overviewFloat')}</Box>
+                    <Switch size="small" edge="end" checked={overviewFloat} tabIndex={-1} />
+                </MenuItem>
                 <Typography sx={{ px: 2, pt: 0.5, pb: 1, fontSize: fontSizes.sm, color: 'text.disabled', maxWidth: 240 }}>
                     {locked ? t('placement.lockedTop') : t('placement.remember')}
                 </Typography>
