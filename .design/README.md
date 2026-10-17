@@ -82,6 +82,7 @@
 | [quota-relay.md](./quota-relay.md) | Quota 中继：端侧看到中央的 quota | 设计说明；局部实施状态见正文 |
 | [team.md](./team.md) | Team and Sharing Key Authorization | 设计说明；局部实施状态见正文 |
 | [security.md](./security.md) | Security: Design Decisions | 设计说明；局部实施状态见正文 |
+| [github.md](./github.md) | GitHub 集成：凭证在宿主、每用户自建 App、写操作走 tb 工具 | 提案；未实现 |
 ## Agent、Bot 与会话
 
 | 文档 | 内容 | 状态 / 阅读边界 |
