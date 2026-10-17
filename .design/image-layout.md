@@ -27,11 +27,12 @@ Playground 长到约 7k 行、5 份专属设计文档之后,仍然是 scenario �
 ## 2. 决定
 
 - activity bar 新增 **Image**,子项按顺序为:
-  - **Image API** — `/image/api`,即原 `/agent/image`(imagegen scenario:Base URL、Quick Start、规则)。
-  - **Library** — `/image/library`,跨 profile 保留下来的图。
-  - (分隔线)
   - **Playground** — `/image/playground`,也是 `/image` 与点击 rail 图标的落点(天天用的那个优先);其后是各 profile 与 "New profile"。
-  - 共享的入口(Image API、Library)排在最上面,工作面(Playground 及其 profile)在下;落点仍是 Playground,不随排序改变。
+  - (分隔线)
+  - **Library** — `/image/library`,跨 profile 保留下来的图。
+  - **Image API** — `/image/api`,即原 `/agent/image`(imagegen scenario:Base URL、Quick Start、规则)。
+  - 工作面在上，共享的东西在下;Image API 排最后：只有给自己的客户端接入的人才需要它，
+    而它排第一时，一个只想出图的人最先看到的是 Base URL 和规则(原则 1、2)。
 - 名字统一为 **Image API**:侧栏、Agent 概览卡、页面标题都是这一个词。
 - Gallery / 草图 / mask / 切分仍是 Playground 内的对话框(原则 12),不升级为子导航。
 
@@ -48,11 +49,26 @@ Playground 长到约 7k 行、5 份专属设计文档之后,仍然是 scenario �
 - **旧路径**:`/agent/image`、`/agent/imagegen` → `/image/api`;
   `/agent/playground` → `/image/playground`。
 
-## 4. 两页之间的物件(原则 11)
+## 4. 选模型:provider · model,规则留在后台
 
-- Image API 页头有 "Try in Playground" 按钮。
-- Playground 没有可用模型时,提示条直接带 "Add a model" 按钮跳到 Image API,
-  而不是一句"去下面添加规则"。
+Playground 原来的模型下拉列的是 imagegen 规则名，没有规则就不能生成，只能先去 Image API
+页建规则。"规则"是路由的概念，对只想出图的人是多余的一步(原则 1、5、6)。
+
+- **选的是 provider · model。** 下拉显示"OpenAI · gpt-image-1"这样的实际值;末尾
+  "选择其他模型…"打开与规则编辑器同一个选模型对话框(`ModelSelectDialog`)。
+- **规则仍然在，只是不用用户去建。** 选中一对 provider · model 时，先找一条只指向它的
+  启用规则(唯一一个启用的 service、没开 smart routing),有就直接用;没有就在 imagegen
+  scenario 下建一条，名字沿用 Image API 页"新建规则"的约定：模型名，重名时加后缀。请求
+  照样以规则名为 `model` 走 `/tingly/imagegen`(原则 7),API 调用方也能用同一个名字。
+- **用户自己搭的规则**(多个 service、smart routing)没有唯一的 provider · model,在下拉
+  里单独一组"我的规则",按规则名显示。
+- 自动建的规则在 Image API 页照常显示、可改、可删，不藏起来(原则 10)。
+- 一条规则都没有时，模型位置是一个"选一个模型开始"按钮，原来那条"去 Image API 添加
+  规则"的提示条随之删除。
+- 逻辑在 `components/imageModelRules.ts`(有单测),界面在 `components/ImageModelPicker.tsx`。
+
+两页之间的物件(原则 11):Playground 页头有"在你的应用里调用",指向 Image API;
+Image API 页头有 "Try in Playground"。
 
 ## 5. 代码位置
 
@@ -60,7 +76,7 @@ Playground 长到约 7k 行、5 份专属设计文档之后,仍然是 scenario �
 |---|---|
 | `frontend/src/pages/image/ImagePlaygroundPage.tsx` | Playground 页:只加载 imagegen 规则,不等 provider,不出 skeleton |
 | `frontend/src/pages/image/ImageApiPage.tsx` | 原 `UseImageGenPage`,去掉 Playground 卡 |
-| `frontend/src/pages/image/components/` | 原 `pages/scenario/components/` 下全部 image 专属组件、hooks 与 `imageGenSession` 测试 |
+| `frontend/src/pages/image/components/` | 原 `pages/scenario/components/` 下全部 image 专属组件、hooks 与 `imageGenSession` 测试;`ImageModelPicker` / `imageModelRules`(§4) |
 | `frontend/src/layout/useActivityItems.tsx` | Image rail 项与 Agent 侧的快捷行 |
 | `frontend/src/App.tsx` | 新路由与旧路径重定向 |
 
