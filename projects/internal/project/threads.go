@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -890,6 +891,9 @@ type Answer struct {
 	// Scope "thread" also allows later calls of the same tool in this thread.
 	Scope  string
 	Answer string
+	// Answers maps each question of an AskUserQuestion call to its answer
+	// (an option's label, several joined by ", ", or the user's own words).
+	Answers map[string]string
 }
 
 type pending struct {
@@ -935,9 +939,10 @@ type requestPayload struct {
 	Input     map[string]any `json:"input,omitempty"`
 	Reason    string         `json:"reason,omitempty"`
 	// State is pending, allowed, denied, answered or expired.
-	State  string `json:"state"`
-	Scope  string `json:"scope,omitempty"`
-	Answer string `json:"answer,omitempty"`
+	State   string            `json:"state"`
+	Scope   string            `json:"scope,omitempty"`
+	Answer  string            `json:"answer,omitempty"`
+	Answers map[string]string `json:"answers,omitempty"`
 }
 
 func (p *threadPrompter) wait(ctx context.Context, kind, tool, question string, payload requestPayload) (Answer, error) {
@@ -970,6 +975,9 @@ func (p *threadPrompter) wait(ctx context.Context, kind, tool, question string, 
 		p.m.hub.Publish(Event{Type: EventThreadEvent, ProjectID: t.ProjectID, Data: ev})
 		return Answer{}, ctx.Err()
 	}
+	if kind == db.EvAsk {
+		ans = settleAsk(question, payload.Input, ans)
+	}
 	switch {
 	case kind == db.EvAsk:
 		payload.State = "answered"
@@ -978,7 +986,7 @@ func (p *threadPrompter) wait(ctx context.Context, kind, tool, question string, 
 	default:
 		payload.State = "denied"
 	}
-	payload.Scope, payload.Answer = ans.Scope, ans.Answer
+	payload.Scope, payload.Answer, payload.Answers = ans.Scope, ans.Answer, ans.Answers
 	ev.Payload = jsonString(payload)
 	_ = p.m.store.UpdateThreadEvent(ev)
 	p.m.hub.Publish(Event{Type: EventThreadEvent, ProjectID: t.ProjectID, Data: ev})
@@ -1026,7 +1034,73 @@ func (p *threadPrompter) OnAsk(ctx context.Context, req agentboot.AskRequestEven
 	if err != nil {
 		return agentboot.AskResponse{Approved: false, Reason: "not answered"}, nil
 	}
-	return agentboot.AskResponse{Approved: true, Response: ans.Answer}, nil
+	if len(ans.Answers) == 0 {
+		return agentboot.AskResponse{Approved: false, Reason: "The user declined to answer."}, nil
+	}
+	// Claude Code reads the answers from the tool's input, keyed by
+	// question; without them the call returns with nothing chosen.
+	updated := make(map[string]any, len(req.Input)+1)
+	maps.Copy(updated, req.Input)
+	updated["answers"] = ans.Answers
+	return agentboot.AskResponse{Approved: true, UpdatedInput: updated, Response: ans.Answer}, nil
+}
+
+// askQuestions lists the question texts of an AskUserQuestion input, in
+// order; fallback stands in when the input carries none.
+func askQuestions(input map[string]any, fallback string) []string {
+	var out []string
+	qs, _ := input["questions"].([]any)
+	for _, q := range qs {
+		if m, ok := q.(map[string]any); ok {
+			if s, ok := m["question"].(string); ok && s != "" {
+				out = append(out, s)
+			}
+		}
+	}
+	if len(out) == 0 && fallback != "" {
+		out = []string{fallback}
+	}
+	return out
+}
+
+// settleAsk completes an answer to a question: a typed answer with no
+// per-question answers goes to the first question, answers to questions
+// that were not asked are dropped, and Answer becomes what the transcript
+// shows (the answer itself, or one "question: answer" line each).
+func settleAsk(question string, input map[string]any, ans Answer) Answer {
+	questions := askQuestions(input, question)
+	answers := map[string]string{}
+	for _, q := range questions {
+		if a := strings.TrimSpace(ans.Answers[q]); a != "" {
+			answers[q] = a
+		}
+	}
+	if len(answers) == 0 && len(questions) > 0 {
+		if a := strings.TrimSpace(ans.Answer); a != "" {
+			answers[questions[0]] = a
+		}
+	}
+	if !ans.Allow && len(ans.Answers) == 0 {
+		// Declined: nothing is chosen, whatever the box held.
+		answers = map[string]string{}
+	}
+	var text []string
+	for _, q := range questions {
+		a, ok := answers[q]
+		if !ok {
+			continue
+		}
+		if len(questions) == 1 {
+			text = append(text, a)
+		} else {
+			text = append(text, q+": "+a)
+		}
+	}
+	ans.Answers, ans.Answer = answers, strings.Join(text, "\n")
+	if len(answers) == 0 {
+		ans.Answers = nil
+	}
+	return ans
 }
 
 func (p *threadPrompter) resolve(requestID string, ans Answer) error {

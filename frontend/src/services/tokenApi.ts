@@ -5,7 +5,7 @@
 //   repo-wide {success,data}/{success,error} convention and get a small
 //   shared wrapper below.
 // - Team endpoints don't follow that convention — callers (UseTeamPage.tsx,
-//   SharingKeysDialog.tsx) read `result.error?.message`, an object. Keep
+//   useSharingKeyActions.tsx) read `result.error?.message`, an object. Keep
 //   teamApiCall's contract rather than forcing it through controlApi()/
 //   unwrap().
 import {
@@ -32,9 +32,15 @@ async function teamApiCall<T>(
 }
 
 // Shared wrap for the plain token endpoints: pass the controlApi error
-// through verbatim, otherwise normalize to {success, data}.
+// through verbatim, otherwise normalize to {success, data}. Enable / disable
+// / delete answer 204 No Content, which openapi-fetch reports as
+// `data: undefined` — indistinguishable from a failure to unwrap() — so a
+// 2xx without a body is mapped to `data: null` first.
 async function tokenWrap(call: (client: Awaited<ReturnType<typeof getClient>>, headers: Record<string, string>) => Promise<any>): Promise<any> {
-    const data = await controlApi(call);
+    const data = await controlApi(async (client, headers) => {
+        const response = await call(client, headers);
+        return response?.data === undefined && response?.response?.ok ? {...response, data: null} : response;
+    });
     if (data?.success === false) {
         return data;
     }

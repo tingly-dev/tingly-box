@@ -48,8 +48,53 @@ describe('pending requests', () => {
         show(respond, request('question', 'ask_request'));
         expect(screen.getByRole('textbox', {name: 'Your answer'})).toHaveValue('Keep this answer');
         await act(async () => fireEvent.click(screen.getByRole('button', {name: 'Answer'})));
-        expect(respond).toHaveBeenLastCalledWith('question', true, 'Keep this answer');
-        expect(drafts.read('requestDraft:question', (saved) => saved)).toMatchObject({answer: ''});
+        // With no structured questions, the summary stands in as the question.
+        expect(respond).toHaveBeenLastCalledWith('question', true, '', undefined, {Bash: 'Keep this answer'});
+        expect(drafts.read('questionDraft:question', (saved) => saved)).toMatchObject({status: 'accepted'});
+    });
+
+    const ask = (questions: unknown[]): TranscriptBlock => ({type: 'request', message: {
+        content: 'Which database?', kind: 'ask_request', request_id: 'q', payload: {questions}, timestamp: '2026-10-04T00:00:00Z',
+    }});
+    const db = {question: 'Which database?', header: 'DB', options: [
+        {label: 'Postgres (Recommended)', description: 'Matches production'}, {label: 'SQLite'},
+    ]};
+
+    it('answers a single choice with one click on an option, marking the suggested one', async () => {
+        const respond = vi.fn().mockResolvedValue(true);
+        show(respond, ask([db]));
+        const postgres = screen.getByRole('radio', {name: /Postgres/});
+        expect(within(postgres).getByText('Recommended')).toBeInTheDocument();
+        expect(within(postgres).queryByText(/\(Recommended\)/)).toBeNull();
+        expect(screen.getByText('Matches production')).toBeInTheDocument();
+        await act(async () => fireEvent.click(postgres));
+        expect(respond).toHaveBeenCalledWith('q', true, '', undefined, {'Which database?': 'Postgres (Recommended)'});
+        expect(postgres).toHaveAttribute('aria-checked', 'true');
+        expect(screen.getByRole('radio', {name: /SQLite/})).toBeDisabled();
+    });
+
+    it('waits for every question, joins several picks and lets typed words stand in', async () => {
+        const respond = vi.fn().mockResolvedValue(true);
+        show(respond, ask([db, {question: 'Which checks?', multiSelect: true, options: [{label: 'Lint'}, {label: 'Tests'}]}]));
+        const send = screen.getByRole('button', {name: 'Answer'});
+        fireEvent.click(screen.getByRole('radio', {name: /SQLite/}));
+        expect(respond).not.toHaveBeenCalled();
+        expect(send).toBeDisabled();
+        fireEvent.click(screen.getByRole('checkbox', {name: /Lint/}));
+        fireEvent.click(screen.getByRole('checkbox', {name: /Tests/}));
+        const [own] = screen.getAllByRole('textbox', {name: 'Or answer in your own words'});
+        fireEvent.change(own, {target: {value: 'DuckDB'}});
+        expect(screen.getByRole('radio', {name: /SQLite/})).toHaveAttribute('aria-checked', 'false');
+        await act(async () => fireEvent.click(send));
+        expect(respond).toHaveBeenCalledWith('q', true, '', undefined, {'Which database?': 'DuckDB', 'Which checks?': 'Lint, Tests'});
+    });
+
+    it('declines with nothing chosen', async () => {
+        const respond = vi.fn().mockResolvedValue(true);
+        show(respond, ask([db, {question: 'Second?', options: [{label: 'A'}]}]));
+        fireEvent.click(screen.getByRole('radio', {name: /SQLite/}));
+        await act(async () => fireEvent.click(screen.getByRole('button', {name: 'Decline'})));
+        expect(respond).toHaveBeenCalledWith('q', false, '', undefined, {});
     });
 
     it('does not carry a submitted decision into a new request in the same transcript slot', async () => {
@@ -199,7 +244,52 @@ describe('tool calls', () => {
         const bash = document.querySelector<HTMLElement>('[data-call-ids="t2"]')!;
         expect(bash.querySelector('.MuiCircularProgress-root')).not.toBeNull();
         expect(document.querySelector('[data-call-ids="t1"] .MuiCircularProgress-root')).toBeNull();
-        expect(screen.queryByText('Working…')).not.toBeInTheDocument();
+        expect(screen.getByRole('status')).toHaveTextContent('Running a command');
+    });
+});
+
+describe('working line', () => {
+    afterEach(() => vi.useRealTimers());
+
+    it('names what the turn does and how long it has run since the ask', () => {
+        vi.useFakeTimers({now: Date.parse('2026-10-04T00:01:05Z'), toFake: ['Date', 'setInterval', 'clearInterval']});
+        renderEntries([
+            msg({role: 'user', content: 'fix it', timestamp: '2026-10-04T00:00:00Z'}),
+            msg({kind: 'tool_use', content: 'Edit', request_id: 't1', payload: {file_path: 'a.go'}, timestamp: '2026-10-04T00:00:30Z'}),
+        ], {working: true});
+        const line = screen.getByRole('status');
+        expect(line).toHaveTextContent('Editing');
+        expect(line).toHaveTextContent('1m 5s');
+    });
+
+    it('gives way to the card a request waits on', () => {
+        renderEntries([msg({kind: 'approval_request', content: 'Bash', request_id: 'r1', payload: {command: 'ls'}})], {pending: 'r1', working: true});
+        expect(document.querySelector('[data-working]')).toBeNull();
+    });
+});
+
+describe('new since last visit', () => {
+    const entries = [
+        msg({role: 'user', content: 'start', timestamp: '2026-10-04T00:00:00Z'}),
+        msg({role: 'assistant', content: 'seen reply', timestamp: '2026-10-04T00:01:00Z'}),
+        msg({role: 'assistant', content: 'unseen reply', timestamp: '2026-10-04T00:05:00Z'}),
+    ];
+    const at = (newSince?: string) => render(<Transcript blocks={buildTranscript(entries)} working={false} onRespond={respondNever} drafts={drafts} newSince={newSince}/>);
+
+    it('draws the divider right above the first unseen message', () => {
+        at('2026-10-04T00:02:00Z');
+        const divider = screen.getByRole('separator');
+        expect(divider).toHaveTextContent('New');
+        expect(divider.compareDocumentPosition(screen.getByText('seen reply')) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+        expect(divider.compareDocumentPosition(screen.getByText('unseen reply')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('draws none on a first visit or when nothing is new', () => {
+        at(undefined);
+        expect(screen.queryByRole('separator')).toBeNull();
+        cleanup();
+        at('2026-10-04T00:05:00Z');
+        expect(screen.queryByRole('separator')).toBeNull();
     });
 });
 

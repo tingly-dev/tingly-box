@@ -49,6 +49,8 @@ export interface ToolStep {
     // The approval asked for right before this call ran: once settled, the
     // call's row says how it ended instead of a second line repeating it.
     request?: RequestBlock;
+    // When the call was made.
+    timestamp?: string;
 }
 
 // TaskEvent is the payload of a "task" transcript entry (agentboot/engine
@@ -96,6 +98,7 @@ export const isAgentTool = (name: string): boolean => name === 'Agent' || name =
 export interface ThinkingStep {
     type: 'thinking';
     text: string;
+    timestamp?: string;
 }
 
 export type ActivityStep = ToolStep | ThinkingStep;
@@ -226,11 +229,11 @@ const buildBlocks = (messages: TranscriptEntry[], byParent: Map<string, Transcri
         if (m.kind !== 'usage' && m.kind !== 'task') previous = m;
         switch (m.kind) {
             case 'thinking':
-                currentActivity().steps.push({type: 'thinking', text: m.content});
+                currentActivity().steps.push({type: 'thinking', text: m.content, timestamp: m.timestamp});
                 continue;
             case 'tool_use': {
                 const id = m.request_id ?? '';
-                const tool: ToolStep = {type: 'tool', id, name: m.content, input: m.payload, isError: false, task: tasks.get(id)};
+                const tool: ToolStep = {type: 'tool', id, name: m.content, input: m.payload, isError: false, task: tasks.get(id), timestamp: m.timestamp};
                 if (id) tools.set(id, tool);
                 if (isAgentTool(m.content)) {
                     // A subagent is a unit of work of its own, not one more
@@ -249,7 +252,7 @@ const buildBlocks = (messages: TranscriptEntry[], byParent: Map<string, Transcri
                     tool.result = m.content;
                     tool.isError = isError;
                 } else {
-                    currentActivity().steps.push({type: 'tool', id: m.request_id ?? '', name: '', input: undefined, result: m.content, isError});
+                    currentActivity().steps.push({type: 'tool', id: m.request_id ?? '', name: '', input: undefined, result: m.content, isError, timestamp: m.timestamp});
                 }
                 continue;
             }
@@ -316,6 +319,66 @@ export const agentReport = (block: Extract<TranscriptBlock, {type: 'agent'}>): s
     return block.task?.summary;
 };
 
+// blockTime is when a block began: its message's time, or its first step's.
+export const blockTime = (block: TranscriptBlock): string | undefined => {
+    switch (block.type) {
+        case 'activity':
+            return block.steps.find((s) => s.timestamp)?.timestamp;
+        case 'agent':
+            return block.call.timestamp;
+        default:
+            return block.message.timestamp;
+    }
+};
+
+// firstNewBlock is the index of the first block that began after seenAt,
+// the place for a "New" divider; -1 when nothing is new or everything is
+// (a divider above the whole transcript says nothing).
+export const firstNewBlock = (blocks: TranscriptBlock[], seenAt?: string): number => {
+    if (!seenAt) return -1;
+    const seen = Date.parse(seenAt);
+    if (Number.isNaN(seen)) return -1;
+    const i = blocks.findIndex((b) => {
+        const at = blockTime(b);
+        return at !== undefined && Date.parse(at) > seen;
+    });
+    return i > 0 ? i : -1;
+};
+
+// WorkingVerb is what the live turn is doing, for the line under it.
+export type WorkingVerb = 'thinking' | 'running' | 'reading' | 'editing' | 'searching' | 'delegating' | 'working';
+
+const VERB_BY_TOOL: Record<string, WorkingVerb> = {
+    Bash: 'running', BashOutput: 'running',
+    Read: 'reading', Grep: 'reading', Glob: 'reading', LS: 'reading', NotebookRead: 'reading',
+    Edit: 'editing', MultiEdit: 'editing', Write: 'editing', NotebookEdit: 'editing',
+    WebFetch: 'searching', WebSearch: 'searching',
+    Agent: 'delegating', Task: 'delegating',
+};
+
+// workingState reads the live turn from the transcript: what it is doing
+// now (its last step that has not finished) and when it began (the last
+// message that started it).
+export const workingState = (blocks: TranscriptBlock[]): {verb: WorkingVerb; since?: string} => {
+    let since: string | undefined;
+    for (let i = blocks.length - 1; i >= 0; i--) {
+        const b = blocks[i];
+        if (b.type === 'user') {
+            since = b.message.timestamp;
+            break;
+        }
+    }
+    const last = blocks.at(-1);
+    let verb: WorkingVerb = 'working';
+    if (last?.type === 'agent') verb = 'delegating';
+    else if (last?.type === 'activity') {
+        const step = last.steps.at(-1);
+        if (step?.type === 'thinking') verb = 'thinking';
+        else if (step?.type === 'tool') verb = step.result === undefined ? VERB_BY_TOOL[step.name] ?? 'working' : 'thinking';
+    } else if (last?.type === 'user') verb = 'thinking';
+    return {verb, since};
+};
+
 // RequestOutcome is how a request ended, or that it still waits.
 export type RequestOutcome = 'pending' | 'allowed' | 'denied' | 'answered' | 'declined' | 'unanswered';
 
@@ -328,6 +391,57 @@ export const requestOutcome = (block: RequestBlock, pending: boolean): RequestOu
     if (!response) return 'unanswered';
     if (message.kind === 'ask_request') return response.content.trim() ? 'answered' : 'declined';
     return response.content === 'approved' ? 'allowed' : 'denied';
+};
+
+// AskQuestion is one question of an AskUserQuestion call: what is asked,
+// its short tag, the options offered and whether several may be picked.
+export interface AskOption {
+    // label is what goes back to the agent; text is how it reads, without
+    // the "(Recommended)" Claude Code appends to the option it suggests.
+    label: string;
+    text: string;
+    description?: string;
+    recommended: boolean;
+}
+export interface AskQuestion {
+    question: string;
+    header?: string;
+    options: AskOption[];
+    multiSelect: boolean;
+}
+
+const RECOMMENDED = /\s*\((recommended|推荐)\)\s*$/i;
+
+// askQuestions reads the questions of an AskUserQuestion input; none when
+// the input carries no structured questions (the card asks for words then).
+export const askQuestions = (input: unknown): AskQuestion[] => {
+    const questions = input && typeof input === 'object' ? (input as Record<string, unknown>).questions : undefined;
+    if (!Array.isArray(questions)) return [];
+    const out: AskQuestion[] = [];
+    for (const q of questions) {
+        if (!q || typeof q !== 'object') continue;
+        const r = q as Record<string, unknown>;
+        if (typeof r.question !== 'string' || !r.question.trim()) continue;
+        const options: AskOption[] = [];
+        for (const o of Array.isArray(r.options) ? r.options : []) {
+            const label = o && typeof o === 'object' ? (o as Record<string, unknown>).label : undefined;
+            if (typeof label !== 'string' || !label.trim()) continue;
+            const description = (o as Record<string, unknown>).description;
+            options.push({
+                label,
+                text: label.replace(RECOMMENDED, '') || label,
+                description: typeof description === 'string' && description.trim() ? description : undefined,
+                recommended: RECOMMENDED.test(label),
+            });
+        }
+        out.push({
+            question: r.question,
+            header: typeof r.header === 'string' && r.header.trim() ? r.header : undefined,
+            options,
+            multiSelect: r.multiSelect === true,
+        });
+    }
+    return out;
 };
 
 const EDIT_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);

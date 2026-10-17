@@ -240,6 +240,13 @@ export default {
     "emptyTeam": "No Team Keys in this Team yet.",
     "loadFailed": "Failed to load Team Keys",
     "createDisabledTeam": "This Team is disabled. Enable it before creating Team Keys.",
+    "overview": {
+      "count_one": "{{count}} key",
+      "count_other": "{{count}} keys",
+      "expand": "Show all keys",
+      "collapse": "Hide keys",
+      "empty": "No keys in this Team yet. Create one for each person you hand the Team to."
+    },
     "table": {
       "name": "Name",
       "user": "User",

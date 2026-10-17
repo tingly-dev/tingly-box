@@ -141,6 +141,18 @@ func (t *Turn) Ask(id, question string) (agentboot.AskResponse, error) {
 	return resp, nil
 }
 
+// AskQuestions asks AskUserQuestion's structured questions (input carries
+// "questions") and waits for the answer.
+func (t *Turn) AskQuestions(id string, input map[string]any) (agentboot.AskResponse, error) {
+	t.send(agentboot.AskRequestEvent{ID: id, AgentType: agentboot.AgentTypeClaude, ToolName: "AskUserQuestion", Input: input})
+	r, err := t.await()
+	if err != nil {
+		return agentboot.AskResponse{}, err
+	}
+	resp, _ := r.(agentboot.AskResponse)
+	return resp, nil
+}
+
 func (t *Turn) await() (agentboot.ControlResponse, error) {
 	select {
 	case r := <-t.resp:

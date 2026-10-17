@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import type {TranscriptEntry} from './model';
-import {agentReport, approvalSubject, buildTranscript, formatTokens, pendingRequestId, requestOutcome, toolSummary} from './model';
+import {agentReport, approvalSubject, buildTranscript, firstNewBlock, formatTokens, pendingRequestId, requestOutcome, toolSummary, workingState} from './model';
 
 const msg = (m: Partial<TranscriptEntry>): TranscriptEntry => ({content: '', timestamp: '2026-01-01T00:00:00Z', ...m});
 
@@ -20,9 +20,9 @@ describe('buildTranscript', () => {
         const activity = blocks[1];
         if (activity.type !== 'activity') throw new Error('expected activity');
         expect(activity.steps).toEqual([
-            {type: 'thinking', text: 'look at main.go'},
-            {type: 'tool', id: 't1', name: 'Read', input: {file_path: 'main.go'}, result: 'package main', isError: false},
-            {type: 'tool', id: 't2', name: 'Bash', input: {command: 'go test'}, result: 'FAIL', isError: true},
+            {type: 'thinking', text: 'look at main.go', timestamp: '2026-01-01T00:00:00Z'},
+            {type: 'tool', id: 't1', name: 'Read', input: {file_path: 'main.go'}, result: 'package main', isError: false, task: undefined, timestamp: '2026-01-01T00:00:00Z'},
+            {type: 'tool', id: 't2', name: 'Bash', input: {command: 'go test'}, result: 'FAIL', isError: true, task: undefined, timestamp: '2026-01-01T00:00:00Z'},
         ]);
     });
 
@@ -201,5 +201,39 @@ describe('approvalSubject', () => {
         expect(approvalSubject('NotebookEdit', {notebook_path: '/a/n.ipynb'})).toEqual({kind: 'path', text: '/a/n.ipynb'});
         expect(approvalSubject('WebFetch', {url: 'https://x.y', prompt: 'read it'})).toEqual({kind: 'url', text: 'https://x.y'});
         expect(approvalSubject('Grep', {pattern: 'TODO'})).toEqual({kind: 'summary', text: 'TODO'});
+    });
+});
+
+describe('firstNewBlock', () => {
+    const blocks = buildTranscript([
+        msg({role: 'user', content: 'a', timestamp: '2026-01-01T00:00:00Z'}),
+        msg({kind: 'tool_use', content: 'Read', request_id: 't1', timestamp: '2026-01-01T00:01:00Z'}),
+        msg({role: 'assistant', content: 'b', timestamp: '2026-01-01T00:02:00Z'}),
+    ]);
+
+    it('is the first block that began after the mark', () => {
+        expect(firstNewBlock(blocks, '2026-01-01T00:00:30Z')).toBe(1);
+        expect(firstNewBlock(blocks, '2026-01-01T00:01:00Z')).toBe(2);
+    });
+
+    it('is none without a mark, with nothing new, or with everything new', () => {
+        expect(firstNewBlock(blocks)).toBe(-1);
+        expect(firstNewBlock(blocks, '2026-01-01T00:02:00Z')).toBe(-1);
+        expect(firstNewBlock(blocks, '2025-12-31T00:00:00Z')).toBe(-1);
+        expect(firstNewBlock(blocks, 'not a time')).toBe(-1);
+    });
+});
+
+describe('workingState', () => {
+    const user = msg({role: 'user', content: 'go', timestamp: '2026-01-01T00:00:10Z'});
+
+    it('reads the verb from the last call and the start from the last ask', () => {
+        const at = (...rest: TranscriptEntry[]) => workingState(buildTranscript([user, ...rest]));
+        expect(at()).toEqual({verb: 'thinking', since: '2026-01-01T00:00:10Z'});
+        expect(at(msg({kind: 'tool_use', content: 'Bash', request_id: 't1'})).verb).toBe('running');
+        expect(at(msg({kind: 'tool_use', content: 'Grep', request_id: 't1'})).verb).toBe('reading');
+        expect(at(msg({kind: 'tool_use', content: 'mcp__x__y', request_id: 't1'})).verb).toBe('working');
+        expect(at(msg({kind: 'tool_use', content: 'Edit', request_id: 't1'}), msg({kind: 'tool_result', content: 'ok', request_id: 't1'})).verb).toBe('thinking');
+        expect(at(msg({kind: 'thinking', content: 'hmm'})).verb).toBe('thinking');
     });
 });

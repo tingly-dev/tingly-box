@@ -3301,6 +3301,13 @@
             "type": "string",
             "description": "Field answer"
           },
+          "answers": {
+            "type": "object",
+            "description": "Field answers",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "request_id": {
             "type": "string",
             "description": "Field request_id"
@@ -3780,6 +3787,13 @@
           "answer": {
             "type": "string",
             "description": "Field answer"
+          },
+          "answers": {
+            "type": "object",
+            "description": "Field answers",
+            "additionalProperties": {
+              "type": "string"
+            }
           },
           "request_id": {
             "type": "string",

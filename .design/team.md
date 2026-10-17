@@ -194,7 +194,7 @@ NULL 的 Sharing Key 自动回填为 `DefaultTeamID`，raw token 不轮换。
 | Control API | `internal/server/module/sharing/` | Key CRUD、过滤和移动 |
 | Frontend | `frontend/src/contexts/TeamContext.tsx` | Shared Team state |
 | Frontend | `frontend/src/pages/scenario/UseTeamPage.tsx` | Team workspace |
-| Frontend | `frontend/src/pages/scenario/components/SharingKeysDialog.tsx` | Team Key management |
+| Frontend | `frontend/src/pages/scenario/components/TeamKeysOverview.tsx` | Team Key management (key card under the Team header) |
 | Frontend | `frontend/src/components/TeamKeyScopeAlert.tsx` | User-visible security contract |
 
 Primary regression coverage:

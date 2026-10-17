@@ -75,6 +75,57 @@ highlighted code.
   `remember: true`.
 - No server change: the API and event format are untouched (TEP step 4).
 
+### Questions (AskUserQuestion)
+
+TEP: [#2098](https://github.com/tingly-dev/tingly-box/issues/2098). Status:
+implemented.
+
+A question the turn waits on is a `QuestionCard`, not a text box: each of the
+call's questions with its header, its options as buttons (label and
+description), a box for other words, then Answer and Decline.
+
+- **One click when it can be.** A single question with a single choice goes
+  out on the option's click; several questions, or a multi-select, wait for
+  Answer, which stays off until every question has an answer.
+- **The suggested option is marked.** Claude Code appends "(Recommended)" to
+  the option it suggests; the card shows the label without it and a
+  "Recommended" tag instead, and sends the label back unchanged.
+- **Typed words stand in.** For a single choice, typing replaces the pick and
+  a pick clears the words; for several, the words are added to the picks
+  (joined by ", ", as Claude Code expects).
+- **The answer reaches Claude.** Claude Code reads answers from the tool's
+  input (`answers`: question text → answer). The respond endpoints take
+  `answers` alongside `answer`; the thread runtime puts them into the input it
+  hands back, and records one readable line per question as the settled
+  answer. A bare `answer` goes to the first question, and declining sends no
+  answers, so Claude sees the question as declined rather than answered
+  with nothing.
+
+Not done here: a card that keeps working on the suggested option while
+unanswered. Claude Code's question blocks the turn, so that needs its own
+mechanism (a timeout, or a thread-level decision outside the tool).
+
+### Reading a thread at a glance
+
+TEP: [#2098](https://github.com/tingly-dev/tingly-box/issues/2098). Status:
+implemented.
+
+- **Done is one click.** The thread header carries a resolve icon (a folder
+  session's is Archive, still asking first while background tasks run); a
+  resolved thread shows Reopen in the same place. The More menu no longer
+  repeats them.
+- **What is new since the last visit.** The panel remembers per browser when
+  each thread was last open (`seen.<thread>`, the newest event's time) and
+  draws a "New" line above the first block that arrived after it. The mark
+  is read once per visit, so the line stays where it was while the reader
+  catches up; a first visit, or nothing new, draws no line.
+- **What the turn is doing, and for how long.** While a turn runs and no
+  request waits, the line under the transcript names the current action from
+  the last call (running a command, reading, editing, searching the web,
+  waiting on a subagent, thinking) and the time since the last message to
+  the agent, ticking each second. A stuck turn reads differently from a slow
+  one without opening anything.
+
 ## Step 3c: one message box
 
 `Composer` in the package is now the only message box: the project

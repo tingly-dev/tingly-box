@@ -387,3 +387,57 @@ func TestResolveDuringATurnStaysResolved(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, db.ThreadResolved, got.Status)
 }
+
+func TestAskAnswersReachClaude(t *testing.T) {
+	got := make(chan agentboot.AskResponse, 1)
+	f := newFixture(t, func(turn *enginetest.Turn) error {
+		resp, err := turn.AskQuestions("q-1", map[string]any{"questions": []any{
+			map[string]any{"question": "Which database?", "header": "DB", "options": []any{
+				map[string]any{"label": "Postgres (Recommended)"}, map[string]any{"label": "SQLite"},
+			}},
+			map[string]any{"question": "Keep the legacy flag?", "header": "Flag"},
+		}})
+		if err != nil {
+			return err
+		}
+		got <- resp
+		turn.Say("ok", 1, 1)
+		return nil
+	})
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "pick"})
+	require.NoError(t, err)
+	w := waitStatus(t, f.store, th.ID, db.ThreadWaiting)
+	assert.Equal(t, "Which database?", w.WaitReason)
+
+	require.NoError(t, f.threads.Respond(th.ID, "q-1", Answer{Allow: true, Answers: map[string]string{
+		"Which database?": "Postgres (Recommended)", "Keep the legacy flag?": " no ", "Not asked": "x",
+	}}))
+	resp := <-got
+	require.True(t, resp.Approved)
+	assert.Equal(t, map[string]string{"Which database?": "Postgres (Recommended)", "Keep the legacy flag?": "no"}, resp.UpdatedInput["answers"])
+	assert.NotNil(t, resp.UpdatedInput["questions"], "the questions go back with the answers")
+	f.report(t)
+
+	events, _ := f.store.ListThreadEvents(th.ID)
+	for _, e := range events {
+		if e.Kind == db.EvAsk {
+			assert.Contains(t, e.Payload, `"state":"answered"`)
+			assert.Contains(t, e.Payload, `"answer":"Which database?: Postgres (Recommended)\nKeep the legacy flag?: no"`)
+		}
+	}
+}
+
+func TestSettleAsk(t *testing.T) {
+	one := map[string]any{"questions": []any{map[string]any{"question": "Q?"}}}
+	// A typed answer goes to the only question.
+	a := settleAsk("Q?", one, Answer{Allow: true, Answer: " use both "})
+	assert.Equal(t, map[string]string{"Q?": "use both"}, a.Answers)
+	assert.Equal(t, "use both", a.Answer)
+	// Declining chooses nothing.
+	a = settleAsk("Q?", one, Answer{Allow: false, Answer: "draft"})
+	assert.Nil(t, a.Answers)
+	assert.Equal(t, "", a.Answer)
+	// A question with no structured input is keyed by its text.
+	a = settleAsk("Proceed?", nil, Answer{Allow: true, Answer: "yes"})
+	assert.Equal(t, map[string]string{"Proceed?": "yes"}, a.Answers)
+}
