@@ -5,10 +5,10 @@
 // into its i18n bundle (import @tingly/projects/transcript/locales/<lang>).
 
 export type {
-    ActivityStep, ApprovalSubject, RequestBlock, RequestOutcome, TaskEvent, TaskState, ThinkingStep, ToolStep, TranscriptBlock, TranscriptEntry,
+    ActivityStep, ApprovalSubject, AskOption, AskQuestion, RequestBlock, RequestOutcome, TaskEvent, TaskState, ThinkingStep, ToolStep, TranscriptBlock, TranscriptEntry,
 } from './model';
 export {
-    agentReport, agentStatus, approvalSubject, buildTranscript, foldTasks, formatTokens, isAgentTool, pendingRequestId, requestOutcome, toolSummary,
+    agentReport, agentStatus, approvalSubject, askQuestions, buildTranscript, foldTasks, formatTokens, isAgentTool, pendingRequestId, requestOutcome, toolSummary,
 } from './model';
 
 export type {TrajectoryAnchor, TrajectoryFilter, TrajectoryKind, TrajectoryRow, TrajectorySummary} from './trajectoryRows';

@@ -48,11 +48,13 @@ const threads = [
     thread({ id: 't-pool', title: 'Tune the DB connection pool', status: 'waiting', task: 'Profile /charge and size the connection pool for peak load.', wait_reason: 'Allow `go test ./... -run Bench` to run against staging?', turns: 9, input_tokens: 182_000, output_tokens: 9_400, commits_ahead: 1, files_changed: 2, updated_at: ago(4) }),
     thread({ id: 't-cache', title: 'Cache idempotency keys in Redis', status: 'ready', task: 'Move idempotency-key lookups from Postgres to Redis with a 24h TTL.', last_report: 'Lookups moved to Redis behind `IDEMPOTENCY_REDIS`. p99 for /charge drops from 410 ms to 260 ms in the load test. Tests pass.', turns: 14, input_tokens: 240_000, output_tokens: 15_100, commits_ahead: 3, files_changed: 6, updated_at: ago(18) }),
     thread({ id: 't-sdk', title: 'Retry budget in the SDK', status: 'working', task: 'Cap client retries with a token bucket so retries cannot amplify an outage.', repo_path: '/Users/me/code/payments-sdk', turns: 5, input_tokens: 64_000, output_tokens: 3_100, files_changed: 1, uncommitted: true, updated_at: ago(1) }),
+    thread({ id: 't-backoff', title: 'Pick a retry backoff', status: 'waiting', task: 'Choose how the SDK backs off between retries and wire it in.', repo_path: '/Users/me/code/payments-sdk', wait_reason: 'Which backoff should retries use?', turns: 3, input_tokens: 38_000, output_tokens: 1_900, updated_at: ago(2) }),
     thread({ id: 't-trace', title: 'Add tracing spans to /charge', status: 'resolved', task: 'Add OpenTelemetry spans around each downstream call in /charge.', turns: 7, input_tokens: 90_000, output_tokens: 6_200, commits_ahead: 2, files_changed: 4, merged_at: ago(60 * 20), resolved_at: ago(60 * 20), updated_at: ago(60 * 20) }),
 ]
 
 // A thread's transcript: the coordinator's brief, then what the thread did.
-// t-pool waits on an approval; t-cache finished with a report.
+// t-pool waits on an approval, t-backoff on a question; t-cache finished
+// with a report.
 const threadEvents = (th: (typeof threads)[number]) => {
     let n = 0
     const ev = (kind: string, content: string, min: number, extra: Record<string, unknown> = {}) =>
@@ -72,6 +74,24 @@ const threadEvents = (th: (typeof threads)[number]) => {
             ev('assistant', 'Raised the pool to 40 open / 10 idle. To confirm under load I need to run the benchmark against staging.', 5),
             ev('tool_use', 'Bash', 4, { payload: JSON.stringify({ command: 'go test ./... -run Bench -staging' }) }),
             ev('approval', 'Run go test ./... -run Bench -staging', 4, { payload: JSON.stringify({ request_id: 'req-pool', tool: 'Bash', input: { command: 'go test ./... -run Bench -staging' }, state: 'pending' }) }),
+        ]
+    }
+    if (th.id === 't-backoff') {
+        const input = { questions: [
+            { question: 'Which backoff should retries use?', header: 'Backoff', multiSelect: false, options: [
+                { label: 'Exponential with jitter (Recommended)', description: 'Spreads retries out so clients do not retry in lockstep after an outage.' },
+                { label: 'Fixed 200 ms', description: 'Simplest; predictable, but retries arrive together.' },
+                { label: 'Linear', description: 'Grows slowly; a middle ground for short outages.' },
+            ] },
+            { question: 'Which errors should be retried?', header: 'Errors', multiSelect: true, options: [
+                { label: '5xx responses' }, { label: 'Timeouts' }, { label: '429 Too Many Requests', description: 'Honours Retry-After when present.' },
+            ] },
+        ] }
+        return [
+            brief,
+            ...call('Read', { file_path: 'client/retry.go' }, 'for attempt := 0; attempt < max; attempt++ {', 6),
+            ev('assistant', 'The client retries immediately today. Before I add a backoff I need two choices from you.', 3),
+            ev('ask', 'Which backoff should retries use?', 2, { payload: JSON.stringify({ request_id: 'req-backoff', tool: 'AskUserQuestion', input, state: 'pending' }) }),
         ]
     }
     if (th.id === 't-cache') {

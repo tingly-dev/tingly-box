@@ -82,7 +82,7 @@ export function threadTranscript(events: ThreadEvent[], running: boolean, author
                 if (!pl) break;
                 const ask = e.kind === 'ask';
                 entries.push(ask
-                    ? { kind: 'ask_request', content: e.content, request_id: pl.request_id, timestamp }
+                    ? { kind: 'ask_request', content: e.content, request_id: pl.request_id, payload: pl.input, timestamp }
                     : { kind: 'approval_request', content: pl.tool || e.content, request_id: pl.request_id, payload: pl.input, timestamp });
                 if (pl.state === 'pending') {
                     if (running) pending = pl.request_id;

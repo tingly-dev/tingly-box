@@ -152,9 +152,9 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [target, view]);
 
-    const respond: Respond = async (requestId, allow, answer, remember) => {
+    const respond: Respond = async (requestId, allow, answer, remember, answers) => {
         try {
-            await ops.respond(requestId, allow, !!remember, answer);
+            await ops.respond(requestId, allow, !!remember, answer, answers);
             return true;
         } catch (e) {
             notify((e as Error).message, 'error');

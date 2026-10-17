@@ -34,6 +34,9 @@ type ThreadRespondRequest struct {
 	// Scope "thread" also allows later calls of the same tool in this thread.
 	Scope  string `json:"scope,omitempty" enum:"once,thread"`
 	Answer string `json:"answer,omitempty"`
+	// Answers answers a question with several parts: question text to
+	// the chosen option's label (several joined by ", ") or typed words.
+	Answers map[string]string `json:"answers,omitempty"`
 }
 
 // MergeBlockedResponse explains why a merge was not done.
@@ -158,7 +161,7 @@ func (h *Handler) respond(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.svc.Threads.Respond(cur.ID, req.RequestID, rt.Answer{Allow: req.Allow, Scope: req.Scope, Answer: req.Answer}); err != nil {
+	if err := h.svc.Threads.Respond(cur.ID, req.RequestID, rt.Answer{Allow: req.Allow, Scope: req.Scope, Answer: req.Answer, Answers: req.Answers}); err != nil {
 		fail(c, err)
 		return
 	}

@@ -1415,6 +1415,10 @@ export interface components {
             allow: boolean;
             /** @description Field answer */
             answer?: string;
+            /** @description Field answers */
+            answers?: {
+                [key: string]: string;
+            };
             /** @description Field request_id */
             request_id: string;
             /**
@@ -1660,6 +1664,10 @@ export interface components {
             allow: boolean;
             /** @description Field answer */
             answer?: string;
+            /** @description Field answers */
+            answers?: {
+                [key: string]: string;
+            };
             /** @description Field request_id */
             request_id: string;
             /**

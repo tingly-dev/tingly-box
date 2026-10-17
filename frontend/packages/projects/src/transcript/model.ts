@@ -330,6 +330,57 @@ export const requestOutcome = (block: RequestBlock, pending: boolean): RequestOu
     return response.content === 'approved' ? 'allowed' : 'denied';
 };
 
+// AskQuestion is one question of an AskUserQuestion call: what is asked,
+// its short tag, the options offered and whether several may be picked.
+export interface AskOption {
+    // label is what goes back to the agent; text is how it reads, without
+    // the "(Recommended)" Claude Code appends to the option it suggests.
+    label: string;
+    text: string;
+    description?: string;
+    recommended: boolean;
+}
+export interface AskQuestion {
+    question: string;
+    header?: string;
+    options: AskOption[];
+    multiSelect: boolean;
+}
+
+const RECOMMENDED = /\s*\((recommended|推荐)\)\s*$/i;
+
+// askQuestions reads the questions of an AskUserQuestion input; none when
+// the input carries no structured questions (the card asks for words then).
+export const askQuestions = (input: unknown): AskQuestion[] => {
+    const questions = input && typeof input === 'object' ? (input as Record<string, unknown>).questions : undefined;
+    if (!Array.isArray(questions)) return [];
+    const out: AskQuestion[] = [];
+    for (const q of questions) {
+        if (!q || typeof q !== 'object') continue;
+        const r = q as Record<string, unknown>;
+        if (typeof r.question !== 'string' || !r.question.trim()) continue;
+        const options: AskOption[] = [];
+        for (const o of Array.isArray(r.options) ? r.options : []) {
+            const label = o && typeof o === 'object' ? (o as Record<string, unknown>).label : undefined;
+            if (typeof label !== 'string' || !label.trim()) continue;
+            const description = (o as Record<string, unknown>).description;
+            options.push({
+                label,
+                text: label.replace(RECOMMENDED, '') || label,
+                description: typeof description === 'string' && description.trim() ? description : undefined,
+                recommended: RECOMMENDED.test(label),
+            });
+        }
+        out.push({
+            question: r.question,
+            header: typeof r.header === 'string' && r.header.trim() ? r.header : undefined,
+            options,
+            multiSelect: r.multiSelect === true,
+        });
+    }
+    return out;
+};
+
 const EDIT_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 
 export interface ApprovalSubject {

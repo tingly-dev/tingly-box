@@ -75,6 +75,36 @@ highlighted code.
   `remember: true`.
 - No server change: the API and event format are untouched (TEP step 4).
 
+### Questions (AskUserQuestion)
+
+TEP: [#2098](https://github.com/tingly-dev/tingly-box/issues/2098). Status:
+implemented.
+
+A question the turn waits on is a `QuestionCard`, not a text box: each of the
+call's questions with its header, its options as buttons (label and
+description), a box for other words, then Answer and Decline.
+
+- **One click when it can be.** A single question with a single choice goes
+  out on the option's click; several questions, or a multi-select, wait for
+  Answer, which stays off until every question has an answer.
+- **The suggested option is marked.** Claude Code appends "(Recommended)" to
+  the option it suggests; the card shows the label without it and a
+  "Recommended" tag instead, and sends the label back unchanged.
+- **Typed words stand in.** For a single choice, typing replaces the pick and
+  a pick clears the words; for several, the words are added to the picks
+  (joined by ", ", as Claude Code expects).
+- **The answer reaches Claude.** Claude Code reads answers from the tool's
+  input (`answers`: question text → answer). The respond endpoints take
+  `answers` alongside `answer`; the thread runtime puts them into the input it
+  hands back, and records one readable line per question as the settled
+  answer. A bare `answer` goes to the first question, and declining sends no
+  answers, so Claude sees the question as declined rather than answered
+  with nothing.
+
+Not done here: a card that keeps working on the suggested option while
+unanswered. Claude Code's question blocks the turn, so that needs its own
+mechanism (a timeout, or a thread-level decision outside the tool).
+
 ## Step 3c: one message box
 
 `Composer` in the package is now the only message box: the project
