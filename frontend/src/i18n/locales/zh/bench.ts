@@ -139,8 +139,15 @@ export default {
   },
   "playground": {
     "imageTitle": "图像实验台",
-    "noImageModels": "先在 Image API 页面添加一条图像模型规则，即可开始生成图像。",
-    "addImageModel": "添加模型",
+    "modelPicker": {
+      "chooseFirst": "选一个模型开始",
+      "chooseAnother": "选择其他模型…",
+      "chooserTitle": "选择图像模型",
+      "yourRules": "我的规则",
+      "addFailed": "无法使用 {{model}}：{{error}}"
+    },
+    "useFromApp": "在你的应用里调用",
+    "useFromAppHint": "通过 Image API 在你自己的应用里调用这些模型",
     "model": "模型",
     "prompt": "提示词",
     "promptPlaceholder": "描述你想生成的图像…",
@@ -214,7 +221,7 @@ export default {
     "reuse": {
       "action": "载入这次请求并编辑",
       "loaded": "已载入到左侧输入区——改完再生成一次",
-      "modelMissing": "{{model}} 已经没有对应规则了——请先选一个模型再生成",
+      "modelMissing": "{{model}} 已不可用——请先选一个模型再生成",
       "failed": "无法载入这次请求"
     },
     "gallery": {

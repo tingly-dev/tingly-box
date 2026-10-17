@@ -8,9 +8,9 @@ body:
       value: |
         A **TEP (Tingly-Box Enhancement Proposal)** is for proposals that require design discussion before implementation — new capabilities, architectural changes, or cross-cutting improvements.
 
-        For simple feature requests, use the [Feature Request](?template=feature_request.yml) template instead.
+        For simple feature requests, use the [Feature](?template=feature.yml) template instead.
 
-        **Please include the TEP number in the issue title above** (e.g., "[TEP] 001: Multi-Provider Load Balancing Strategy").
+        Just write the subject after `[TEP]`: the issue number is added for you, so `[TEP] Multi-Provider Load Balancing Strategy` becomes `[TEP-1231] Multi-Provider Load Balancing Strategy`.
 
   - type: input
     id: version
@@ -22,10 +22,10 @@ body:
       required: false
 
   - type: dropdown
-    id: category
+    id: area
     attributes:
-      label: Category
-      description: Which area does this proposal primarily affect?
+      label: Area
+      description: Which part of Tingly-Box is this about? It becomes an area/<name> label.
       options:
         - Gateway / Protocol Conversion
         - Load Balancing & Failover
@@ -35,10 +35,11 @@ body:
         - Usage / Quota / Observability
         - Agent Management
         - Remote Control / Bot
+        - Projects
         - UI / Frontend
         - Performance
         - Build / Install / Deployment
-        - Other
+        - Not sure
     validations:
       required: true
 

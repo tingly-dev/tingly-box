@@ -1,0 +1,90 @@
+name: Issue area
+
+# The issue forms (.github/ISSUE_TEMPLATE) ask for an area, but a form can only
+# set fixed labels and a fixed title prefix. This reads the area the reporter
+# picked and turns it into an `area/<name>` label (and the bug form's OS &
+# Architecture into an `os/<name>` label), adds the type label that
+# goes with the title prefix (`[BUG]`, `[Feature]`, `[Feedback]`, `[Other]`,
+# `[TEP]`), and numbers a proposal after its issue: `[TEP] Foo` filed as #1231
+# becomes `[TEP-1231] Foo`.
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  area:
+    name: Label by area
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const AREAS = {
+              'Gateway / Protocol Conversion': 'gateway',
+              'Load Balancing & Failover': 'load-balancing',
+              'Smart Routing & Rules': 'routing',
+              'Guard Rails': 'guardrails',
+              'Auth / OAuth': 'auth',
+              'Usage / Quota / Observability': 'usage',
+              'Agent Management': 'agent',
+              'Remote Control / Bot': 'remote-control',
+              'Projects': 'projects',
+              'UI / Frontend': 'ui',
+              'Performance': 'performance',
+              'Build / Install / Deployment': 'build',
+            };
+            const OSES = {
+              'macOS Apple Silicon (M-chip)': 'macos-arm64',
+              'macOS Intel': 'macos-x64',
+              'Windows x86_64': 'windows-x64',
+              'Windows ARM64': 'windows-arm64',
+              'Linux x86_64': 'linux-x64',
+              'Linux ARM64': 'linux-arm64',
+            };
+            const TYPES = { bug: 'bug', feature: 'enhancement', feedback: 'feedback', other: 'other', tep: 'tep' };
+            const { owner, repo } = context.repo;
+            const issue = context.payload.issue;
+
+            const section = /^### Area\s*\n+([^\n]+)/m.exec(issue.body ?? '');
+            const area = section ? AREAS[section[1].trim()] : undefined;
+            const osSection = /^### OS & Architecture\s*\n+([^\n]+)/m.exec(issue.body ?? '');
+            const os = osSection ? OSES[osSection[1].trim()] : undefined;
+            const prefix = /^\[(bug|feature|feedback|other|tep)(?:-\d+)?\]\s*/i.exec(issue.title);
+
+            async function ensure(name, color) {
+              try {
+                await github.rest.issues.createLabel({ owner, repo, name, color });
+              } catch (e) {
+                if (e.status !== 422) throw e; // already exists
+              }
+            }
+
+            const labels = [];
+            if (area) {
+              await ensure(`area/${area}`, '5319e7');
+              labels.push(`area/${area}`);
+            }
+            if (os) {
+              await ensure(`os/${os}`, '0e8a16');
+              labels.push(`os/${os}`);
+            }
+            if (prefix) {
+              const type = TYPES[prefix[1].toLowerCase()];
+              if (type === 'feedback' || type === 'other' || type === 'tep') await ensure(type, 'fbca04');
+              labels.push(type);
+            }
+            if (labels.length) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number: issue.number, labels });
+            }
+
+            if (prefix && prefix[1].toLowerCase() === 'tep') {
+              const title = `[TEP-${issue.number}] ${issue.title.slice(prefix[0].length)}`;
+              if (title !== issue.title) {
+                await github.rest.issues.update({ owner, repo, issue_number: issue.number, title });
+              }
+            }
