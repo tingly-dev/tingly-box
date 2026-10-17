@@ -94,7 +94,15 @@ func (c *Coordinator) Busy(projectID string) bool {
 	return ok && (q.running || q.user || len(q.reports) > 0)
 }
 
+// onReport hears what a thread's turn did. Like the official coordinator,
+// it sees what threads report back, not every step: a turn that answered
+// the user in the thread's own message box stays there (the user is
+// reading it, and the thread's card shows its new status), so it costs no
+// coordinator turn. The thread table and get_thread still show it.
 func (c *Coordinator) onReport(r Report) {
+	if r.From == "user" {
+		return
+	}
 	c.addMessage(&db.ProjectMessage{
 		ProjectID: r.Thread.ProjectID, Role: db.RoleSystem, Kind: db.MsgThreadUpdate,
 		Content: r.Text,
@@ -333,7 +341,7 @@ How to route each message:
 - If the user asks to see a plan first or to confirm before starting, use propose_threads instead of start_thread.
 - When the user states how the project should run (how many threads at once, how much to post, when to propose vs start, models, review rules), follow it and save it with remember so it persists. Respect saved preferences from memory.
 - When the user asks you to remember or forget something, use remember / forget. Use update_instructions only when the user asks to change the project instructions.
-- Threads report back as [Thread update] messages. After an update, tell the user only what matters: what is ready for review, what a thread needs from them (quote its question), what failed and why. Answering a thread's question for the user is not your call unless they told you how; relay it.
+- Threads report back as [Thread update] messages when they finish what you sent them, need input or fail. What the user discusses with a thread in that thread is not reported here; the thread table shows its latest state. After an update, tell the user only what matters: what is ready for review, what a thread needs from them (quote its question), what failed and why. Answering a thread's question for the user is not your call unless they told you how; relay it.
 - Never claim a thread did something it did not report. Use get_thread for details.
 - Keep messages short and concrete. Refer to threads by title. Do not repeat the thread cards the UI already shows.
 

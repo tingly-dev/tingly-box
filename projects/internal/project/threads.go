@@ -54,6 +54,11 @@ type Report struct {
 	// Kind is finished, needs_input or failed.
 	Kind string
 	Text string
+	// From is who the turn answered: "user" when the user wrote in the
+	// thread, "coordinator" for the task and the coordinator's messages. A
+	// turn Claude started by itself (after a background task) counts as
+	// answering whoever sent the thread's last message.
+	From string
 }
 
 // Report kinds.
@@ -87,6 +92,8 @@ type Threads struct {
 	threads         map[string]*sync.Mutex // serializes writes to one thread row
 	// allowed holds tools the user allowed for the rest of a thread.
 	allowed map[string]map[string]bool
+	// lastFrom is who sent each thread's last message that ran.
+	lastFrom map[string]string
 }
 
 // activeThread is a thread with a message in flight: waiting for a slot,
@@ -120,7 +127,8 @@ func NewThreads(store *db.Store, layout Layout, hub *Hub, agents Agents, env Thr
 		active: map[string]*activeThread{}, turns: map[string]*turnTally{}, prompts: map[string]*threadPrompter{},
 		sessionOfThread: map[string]string{}, threadOfSession: map[string]string{},
 		slots: map[string]chan struct{}{}, threads: map[string]*sync.Mutex{},
-		allowed: map[string]map[string]bool{},
+		allowed:  map[string]map[string]bool{},
+		lastFrom: map[string]string{},
 	}
 	m.engine = engine.New(engine.Config{
 		Agent:     agents.Service,
@@ -580,8 +588,12 @@ func (m *Threads) turnEnded(threadID string, end engine.TurnEnd) {
 			// Claude took the turn first; the message goes after it.
 			a.queue = append([]queued{*a.current}, a.queue...)
 		}
+		if !end.NotSent && a.current != nil {
+			m.lastFrom[threadID] = a.current.from
+		}
 		a.current = nil
 	}
+	from := m.lastFrom[threadID]
 	tally := m.turns[threadID]
 	delete(m.turns, threadID)
 	m.mu.Unlock()
@@ -590,7 +602,7 @@ func (m *Threads) turnEnded(threadID string, end engine.TurnEnd) {
 	}
 
 	if !end.NotSent {
-		m.settle(threadID, end, tally)
+		m.settle(threadID, end, tally, from)
 	}
 
 	m.next(threadID)
@@ -628,7 +640,7 @@ func (m *Threads) next(threadID string) {
 }
 
 // settle records a finished turn on the thread and reports it.
-func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) {
+func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally, from string) {
 	if tally == nil {
 		tally = &turnTally{}
 	}
@@ -641,7 +653,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		stats = Stats(context.Background(), t.Worktree, t.BaseBranch)
 	}
 	session := t.ProjectID == ""
-	report := Report{Kind: ReportFinished, Text: strings.TrimSpace(tally.text)}
+	report := Report{Kind: ReportFinished, Text: strings.TrimSpace(tally.text), From: from}
 	t, _ = m.update(threadID, func(t *db.Thread) {
 		t.Turns++
 		t.InputTokens += tally.inputTokens
