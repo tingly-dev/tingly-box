@@ -61,6 +61,7 @@ type StartCmdKong struct {
 	Daemon               bool   `kong:"flag,name='daemon',default='true',negatable,help='Run in the background (default; pass --no-daemon for foreground)'"`
 	LogFile              string `kong:"flag,name='log-file',help='Log file path'"`
 	EnableShortcut       bool   `kong:"flag,name='shortcut',help='Also create/refresh a desktop shortcut for next time'"`
+	HarnessUpstream      bool   `kong:"flag,name='harness-upstream',help='Serve harness-* scenario models and /virtual/captures on /virtual, for testing a third-party gateway against this instance'"`
 }
 
 // resolveOptions converts the parsed Kong flags into resolved server options.
@@ -76,6 +77,7 @@ func (s *StartCmdKong) resolveOptions(appConfig *appconfig.AppConfig, portOverri
 		EnableStyleTransform: s.EnableStyleTransform,
 		Daemon:               s.Daemon,
 		LogFile:              s.LogFile,
+		HarnessUpstream:      s.HarnessUpstream,
 	})
 }
 
@@ -586,6 +588,7 @@ func startServerWithHook(appManager *app.AppManager, opts options.StartServerOpt
 		server.WithRecordDir(opts.RecordDir),
 		server.WithMultiLogger(multiLogger),
 		server.WithLaunchSource(string(source)),
+		server.WithHarnessUpstream(opts.HarnessUpstream),
 	)
 
 	for _, hook := range hooks {

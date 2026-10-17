@@ -9,6 +9,7 @@ import (
 	sharing "github.com/tingly-dev/tingly-box/internal/server/module/sharing"
 	team "github.com/tingly-dev/tingly-box/internal/server/module/team"
 	"github.com/tingly-dev/tingly-box/swagger"
+	"github.com/tingly-dev/tingly-box/vmodel/harnessupstream"
 )
 
 // setupMiddleware configures server middleware
@@ -69,13 +70,31 @@ func (s *Server) UseAIEndpoints() {
 func (s *Server) UseVirtualModelEndpoints() {
 	mw := s.getModelAuthMiddleware()
 
+	var upstream *harnessupstream.Upstream
+	if s.harnessUpstream {
+		upstream = harnessupstream.New()
+	}
+
 	openai := s.engine.Group("/virtual/openai")
 	openai.Use(mw)
+	if upstream != nil {
+		openai.Use(upstream.Intercept("/virtual/openai"))
+	}
 	s.virtualModelService.SetupOpenAIRoutes(openai)
 
 	anthropic := s.engine.Group("/virtual/anthropic")
 	anthropic.Use(mw)
+	if upstream != nil {
+		anthropic.Use(upstream.Intercept("/virtual/anthropic"))
+	}
 	s.virtualModelService.SetupAnthropicRoutes(anthropic)
+
+	if upstream != nil {
+		captures := s.engine.Group("/virtual/captures")
+		captures.Use(mw)
+		captures.GET("", upstream.ListCaptures)
+		captures.DELETE("", upstream.ResetCaptures)
+	}
 }
 
 func (s *Server) UseLoadBalanceEndpoints() {

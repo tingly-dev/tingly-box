@@ -179,6 +179,10 @@ type Server struct {
 	recordDir string
 	recordCAS bool // additionally write content-addressed slim records + blobs
 
+	// harnessUpstream mounts the harness-* scenario models and
+	// /virtual/captures on the /virtual routes (see WithHarnessUpstream).
+	harnessUpstream bool
+
 	// remote control lifecycle management
 	remoteCoderCtx    context.Context
 	remoteCoderCancel context.CancelFunc

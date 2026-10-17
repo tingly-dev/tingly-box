@@ -78,6 +78,14 @@ Both helpers live in each per-protocol sub-package (`anthropic.Register…` and
 `openai.Register…`), source their specs from the root `defaults_shared.go`,
 and are kept out of `RegisterDefaults` so production registries stay clean.
 
+**Relay-test upstream.** `vmodel/harnessupstream` is the one fixture set that
+reaches the production `/virtual` routes, and only behind
+`tingly-box start --harness-upstream`: it answers `harness-<scenario>` models
+with the raw matrix scenario fixtures and exposes `/virtual/captures`. It is
+mounted as middleware rather than registered into the per-protocol registries,
+so `RegisterDefaults` is untouched. See
+[`.design/harness-relay.md`](../.design/harness-relay.md).
+
 ## Design
 
 ### GenericRegistry

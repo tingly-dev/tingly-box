@@ -26,6 +26,7 @@
 | [probe-panel.pencil.md](./probe-panel.pencil.md) | Probe 面板轴、打开状态与 cURL 流程 | [probe.md](./probe.md) |
 | [imbot-output.pencil.md](./imbot-output.pencil.md) | 消息序列及回复归属；历史图与现行降级分开 | [imbot-output.md](./imbot-output.md) |
 | [npm.pencil.md](./npm.pencil.md) | `tb gui` / `tb app` 与 `npx tingly-box-gui` 的启动、取回与缓存流程 | [npm.md](./npm.md) |
+| [harness-relay.pencil.md](./harness-relay.pencil.md) | harness → 被测网关 → tb1 vmodel 的拓扑、tb1 启动注册（已实现）与单条用例走向（提案） | [harness-relay.md](./harness-relay.md) |
 
 ## 架构与持久化
 
@@ -132,6 +133,7 @@
 | [test-infrastructure.md](./test-infrastructure.md) | Test Infrastructure | 设计说明；局部实施状态见正文 |
 | [harness-matrix.md](./harness-matrix.md) | Harness Matrix | 设计说明；局部实施状态见正文 |
 | [harness-duo.md](./harness-duo.md) | Harness Duo — two-process memory & protocol verification | 设计说明；局部实施状态见正文 |
+| [harness-relay.md](./harness-relay.md) | Harness Relay — 用 harness 测任意中转网关 | tb1 侧已实现；harness 侧提案 |
 | [harness-remote.md](./harness-remote.md) | Harness Remote — in-process IM chat e2e for remote/control/remoteagent | 设计说明；局部实施状态见正文 |
 | [harness-agent-testing.md](./harness-agent-testing.md) | Runbook — tingly-box 阶段验收基线 | 设计说明；局部实施状态见正文 |
 | [harness-npm.md](./harness-npm.md) | Harness npm — 用本地 registry 和虚拟版本号，从当前源码演练整条 npm 发布与安装链路 | 脚本 `build/npx/harness-npm.sh`；CI 里只有手动触发的 `harness-npm.yml`（Linux、macOS、Windows 三平台） |

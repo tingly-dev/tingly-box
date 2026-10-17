@@ -68,6 +68,16 @@ func WithRecordDir(dir string) ServerOption {
 	}
 }
 
+// WithHarnessUpstream makes this instance the upstream of a relay test: the
+// /virtual routes also answer harness-<scenario> models from the matrix
+// scenario fixtures, and /virtual/captures exposes what they received. Off by
+// default, so production instances never expose either (.design/harness-relay.md).
+func WithHarnessUpstream(enabled bool) ServerOption {
+	return func(s *Server) {
+		s.harnessUpstream = enabled
+	}
+}
+
 // WithRecordingCAS toggles content-addressed dedup alongside the default
 // gzip recording. When enabled, each session is written twice: once as a
 // gzip JSONL.gz (default), and once as content-addressed slim JSONL plus a

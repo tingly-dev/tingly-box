@@ -16,6 +16,7 @@ type StartFlags struct {
 	EnableStyleTransform bool
 	Daemon               bool
 	LogFile              string
+	HarnessUpstream      bool
 }
 
 // StartServerOptions contains resolved options for starting the server
@@ -31,6 +32,9 @@ type StartServerOptions struct {
 	// recording_v2 flag enables recording. Always the config-dir default —
 	// recording enablement is flag-driven, not a CLI concern.
 	RecordDir string
+	// HarnessUpstream serves the harness-* scenario models and
+	// /virtual/captures on the /virtual routes (.design/harness-relay.md).
+	HarnessUpstream bool
 }
 
 // AddStartFlags adds all start-related flags to a command
@@ -71,5 +75,6 @@ func ResolveStartOptions(cmd *cobra.Command, flags StartFlags, appConfig *appcon
 		Daemon:            flags.Daemon,
 		LogFile:           flags.LogFile,
 		RecordDir:         appConfig.ConfigDir() + "/record",
+		HarnessUpstream:   flags.HarnessUpstream,
 	}
 }
