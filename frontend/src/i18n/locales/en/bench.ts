@@ -139,8 +139,15 @@ export default {
   },
   "playground": {
     "imageTitle": "Image Playground",
-    "noImageModels": "Add an image model rule on the Image API page to start generating images.",
-    "addImageModel": "Add a model",
+    "modelPicker": {
+      "chooseFirst": "Choose a model to start",
+      "chooseAnother": "Choose another model…",
+      "chooserTitle": "Choose an image model",
+      "yourRules": "Your rules",
+      "addFailed": "Could not use {{model}}: {{error}}"
+    },
+    "useFromApp": "Use from your app",
+    "useFromAppHint": "Call these models from your own app through the Image API",
     "model": "Model",
     "prompt": "Prompt",
     "promptPlaceholder": "Describe the image you want to generate…",
@@ -214,7 +221,7 @@ export default {
     "reuse": {
       "action": "Edit this request",
       "loaded": "Request loaded into the panel — edit it and generate again",
-      "modelMissing": "{{model}} has no rule any more — pick a model before generating",
+      "modelMissing": "{{model}} is no longer available — pick a model before generating",
       "failed": "Could not load this request"
     },
     "gallery": {

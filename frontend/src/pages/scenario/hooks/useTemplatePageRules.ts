@@ -26,7 +26,7 @@ export interface UseTemplatePageRulesReturn {
     handleCreateRule: (options?: CreateRuleOptions) => Promise<string | null>;
 }
 
-const resolveRuleName = (desiredName: string, existingNames: Set<string>): string => {
+export const resolveRuleName = (desiredName: string, existingNames: Set<string>): string => {
     if (!existingNames.has(desiredName)) return desiredName;
     return `${desiredName}-${uuidv4().slice(0, 6)}`;
 };

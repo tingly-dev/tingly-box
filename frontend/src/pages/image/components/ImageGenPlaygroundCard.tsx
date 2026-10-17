@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
     Box,
     Button,
     CircularProgress,
@@ -15,6 +14,7 @@ import {
     Menu,
     MenuItem,
     Select,
+    Skeleton,
     Stack,
     TextField,
     Tooltip,
@@ -26,7 +26,7 @@ import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { CopyIconButton } from '@/components/CopyIconButton';
-import { AutoAwesome, Close, DeleteOutline, Description, Edit, OpenInFull, tablerMui } from '@/components/icons';
+import { AutoAwesome, Cable, Close, DeleteOutline, Description, Edit, OpenInFull, Palette, tablerMui } from '@/components/icons';
 import { IconTextPlus } from '@tabler/icons-react';
 import { fetchBlob } from '@tingly/vision';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
@@ -43,6 +43,8 @@ import { useImageGenRefs } from './useImageGenRefs';
 import { useImageGenRuns } from './useImageGenRuns';
 import { useImageGenLightbox } from './useImageGenLightbox';
 import { downloadStem, formatBytes, runImage } from './imageGenSession';
+import ImageModelPicker from './ImageModelPicker';
+import { imageModelOptions } from './imageModelRules';
 import MaskEditorDialog from './MaskEditorDialog';
 import SketchCanvasDialog from './SketchCanvasDialog';
 import { createImageProfile, removeImageProfile, updateImageProfile } from '../profiles/imageProfileStore';
@@ -107,11 +109,14 @@ const withText = (prompts: ProfilePrompt[], id: string, text: string) => (
 
 // Pause after the last keystroke before the prompt is saved into the profile.
 const PROMPT_SAVE_DELAY_MS = 600;
+const PROFILE_INTRO_SEEN_KEY = 'tingly.imageProfile.introSeen';
 const HISTORY_STRIP_VISIBLE = 6;
 
 interface ImageGenPlaygroundCardProps {
     rules: Rule[];
     loadingRules: boolean;
+    // Reloads the imagegen rules after the model picker adds one.
+    onRulesReload: () => Promise<void>;
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
     // Set on a profile's page: the panel starts from the profile, and edits
     // to its references and settings save back to it.
@@ -121,17 +126,14 @@ interface ImageGenPlaygroundCardProps {
 const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     rules,
     loadingRules,
+    onRulesReload,
     showNotification,
     profile,
 }) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const models = useMemo(() => {
-        const names = rules
-            .filter((rule) => rule.active !== false && rule.request_model?.trim())
-            .map((rule) => rule.request_model.trim());
-        return Array.from(new Set(names));
-    }, [rules]);
+    // The picker's order, so the default is the first pair it shows.
+    const models = useMemo(() => imageModelOptions(rules).map((option) => option.requestModel), [rules]);
 
     const [selectedModel, setSelectedModel] = useState(profile?.model ?? '');
     const model = models.includes(selectedModel) ? selectedModel : (models[0] ?? '');
@@ -169,6 +171,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         pendingCount,
         historyTrackRef,
         clearSession,
+        copyRunToProfile,
         runGeneration,
         handleCancelRun,
         handleRetry,
@@ -438,7 +441,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             if (run.model && !models.includes(run.model)) {
                 showNotification(
                     t('playground.reuse.modelMissing', {
-                        defaultValue: '{{model}} has no rule any more — pick a model before generating',
+                        defaultValue: '{{model}} is no longer available — pick a model before generating',
                         model: run.model,
                     }),
                     'warning',
@@ -613,6 +616,15 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     }), [loadPrompt, syncedPrompts]);
 
     const location = useLocation();
+    // A profile says once what it is, the first time someone lands on one.
+    const [profileIntroSeen, setProfileIntroSeen] = useState(() => {
+        try { return localStorage.getItem(PROFILE_INTRO_SEEN_KEY) === '1'; } catch { return false; }
+    });
+    const showProfileIntro = Boolean(profile) && !profileIntroSeen;
+    const dismissProfileIntro = () => {
+        setProfileIntroSeen(true);
+        try { localStorage.setItem(PROFILE_INTRO_SEEN_KEY, '1'); } catch { /* still hidden for this visit */ }
+    };
     const [renaming, setRenaming] = useState(Boolean((location.state as { rename?: boolean } | null)?.rename));
     const [nameDraft, setNameDraft] = useState(profile?.name ?? '');
     const [confirmDeleteProfile, setConfirmDeleteProfile] = useState(false);
@@ -633,12 +645,37 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             refs: referenceImages,
             prompts: [{ id: 'p1', name: '', text: getPrompt().trim() }],
             activePromptId: 'p1',
-            model: selectedModel,
+            // What the panel is actually using: with nothing picked by hand
+            // `selectedModel` is empty and the profile would start without one.
+            model,
             size,
             quality,
             count,
         });
         navigate(`/image/profile/${created.id}`, { state: { rename: true } });
+    };
+
+    // The other way: keep a run that worked. Its request becomes the profile
+    // (references, prompt, model, settings — what "Edit this request" puts
+    // back), and the run itself goes along so the new page opens on it.
+    const handleSaveRunAsProfile = async (run: GenerationRun) => {
+        try {
+            const sources = await runSourcesToReferences(run);
+            const created = createImageProfile({
+                name: deriveLabel(run.prompt, 12) || t('imageProfile.untitled', { defaultValue: 'Untitled profile' }),
+                refs: sources.slice(0, MAX_EDIT_REFERENCE_IMAGES),
+                prompts: [{ id: 'p1', name: '', text: run.prompt.trim() }],
+                activePromptId: 'p1',
+                model: run.model,
+                size: run.size,
+                quality: run.quality,
+                count: run.count ?? 1,
+            });
+            copyRunToProfile(run, created.id);
+            navigate(`/image/profile/${created.id}`, { state: { rename: true } });
+        } catch {
+            showNotification(t('imageProfile.saveRunFailed', { defaultValue: 'Could not save this request as a profile' }), 'error');
+        }
     };
 
     // Library: picking kept images as references, and inserting snippets.
@@ -721,36 +758,68 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         </Stack>
                     )
                 ) : t('playground.imageTitle', { defaultValue: 'Image Playground' })}
-                rightAction={profile ? (
-                    <Tooltip title={t('imageProfile.delete', { defaultValue: 'Delete profile' })}>
-                        <IconButton onClick={() => setConfirmDeleteProfile(true)} aria-label={t('imageProfile.delete', { defaultValue: 'Delete profile' })}>
-                            <DeleteOutline />
-                        </IconButton>
-                    </Tooltip>
-                ) : (
-                    <Tooltip title={t('imageProfile.saveAsHint', { defaultValue: 'Keep these references, prompt and settings as a profile with its own page' })}>
-                        <span>
-                            <Button variant="outlined" size="small" onClick={handleSaveAsProfile} disabled={!canSaveAsProfile}>
-                                {t('imageProfile.saveAs', { defaultValue: 'Save as profile' })}
+                rightAction={(
+                    // Same shape as the Agent pages' header: small outlined
+                    // buttons with an icon and a word, never a bare icon.
+                    <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                        {/* The way to the same models from code; the Image API
+                            page sits last in the sidebar since only someone
+                            wiring up a client needs it. */}
+                        <Tooltip title={t('playground.useFromAppHint', { defaultValue: 'Call these models from your own app through the Image API' })}>
+                            <Button variant="outlined" size="small" startIcon={<Cable />} onClick={() => navigate('/image/api')}>
+                                {t('playground.useFromApp', { defaultValue: 'Use from your app' })}
                             </Button>
-                        </span>
-                    </Tooltip>
+                        </Tooltip>
+                        {profile ? (
+                            <Button
+                                variant="outlined"
+                                color="error"
+                                size="small"
+                                startIcon={<DeleteOutline />}
+                                onClick={() => setConfirmDeleteProfile(true)}
+                            >
+                                {t('imageProfile.delete', { defaultValue: 'Delete profile' })}
+                            </Button>
+                        ) : canSaveAsProfile && (
+                            // Only once there is something to keep: a grey
+                            // button that can't say why it is grey is noise.
+                            <Tooltip title={t('imageProfile.saveAsHint', { defaultValue: 'Keep these references, prompt and settings as a profile with its own page' })}>
+                                <Button variant="outlined" size="small" startIcon={<Palette />} onClick={handleSaveAsProfile}>
+                                    {t('imageProfile.saveAs', { defaultValue: 'Save as profile' })}
+                                </Button>
+                            </Tooltip>
+                        )}
+                    </Stack>
                 )}
-                subtitle={outputDir ? (
-                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                        <Box component="span">
-                            {t('playground.outputDirLabel', { defaultValue: 'Generated images are saved to' })}:
-                        </Box>
-                        <Box component="span" sx={{ fontFamily: fontMono, wordBreak: 'break-all' }}>
-                            {outputDir}
-                        </Box>
-                        <CopyIconButton
-                            value={outputDir}
-                            label={t('common.copy', { defaultValue: 'Copy' })}
-                            copiedLabel={t('common.copied', { defaultValue: 'Copied!' })}
-                            iconSize={14}
-                            sx={{ p: 0.25 }}
-                        />
+                subtitle={(showProfileIntro || outputDir) ? (
+                    <Stack spacing={0.5}>
+                        {showProfileIntro && (
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', color: 'text.primary' }}>
+                                <Box component="span">
+                                    {t('imageProfile.intro', { defaultValue: 'A profile keeps its references, prompts and settings. Changes save as you go.' })}
+                                </Box>
+                                <Button size="small" onClick={dismissProfileIntro} sx={{ minWidth: 0, py: 0 }}>
+                                    {t('imageProfile.introDismiss', { defaultValue: 'Got it' })}
+                                </Button>
+                            </Stack>
+                        )}
+                        {outputDir && (
+                            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                                <Box component="span">
+                                    {t('playground.outputDirLabel', { defaultValue: 'Generated images are saved to' })}:
+                                </Box>
+                                <Box component="span" sx={{ fontFamily: fontMono, wordBreak: 'break-all' }}>
+                                    {outputDir}
+                                </Box>
+                                <CopyIconButton
+                                    value={outputDir}
+                                    label={t('common.copy', { defaultValue: 'Copy' })}
+                                    copiedLabel={t('common.copied', { defaultValue: 'Copied!' })}
+                                    iconSize={14}
+                                    sx={{ p: 0.25 }}
+                                />
+                            </Stack>
+                        )}
                     </Stack>
                 ) : undefined}
             >
@@ -779,22 +848,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             height: { xs: 'auto', lg: desktopPanelHeight },
                         }}
                     >
-                        {noModels && !loadingRules && (
-                            <Alert
-                                severity="info"
-                                variant="outlined"
-                                action={(
-                                    <Button color="inherit" size="small" onClick={() => navigate('/image/api')}>
-                                        {t('playground.addImageModel', { defaultValue: 'Add a model' })}
-                                    </Button>
-                                )}
-                            >
-                                {t('playground.noImageModels', {
-                                    defaultValue: 'Add an image model rule on the Image API page to start generating images.',
-                                })}
-                            </Alert>
-                        )}
-
                         {/* Reference images are optional input, not a mode. Empty, the
                             row is a one-line invitation; with images it grows into a
                             thumbnail strip. Either way the request below adapts. */}
@@ -819,22 +872,19 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             onDragLeave={(index) => setDragOverReference((current) => (current === index ? null : current))}
                         />
 
-                        <FormControl size="small" fullWidth>
-                            <InputLabel id="image-model-label">
-                                {t('playground.model', { defaultValue: 'Model' })}
-                            </InputLabel>
-                            <Select
-                                labelId="image-model-label"
-                                label={t('playground.model', { defaultValue: 'Model' })}
+                        {/* While the rules load the picker would flash "Choose a
+                            model to start"; hold its place instead. */}
+                        {loadingRules ? (
+                            <Skeleton variant="rounded" height={40} />
+                        ) : (
+                            <ImageModelPicker
+                                rules={rules}
                                 value={model}
-                                onChange={(event) => setSelectedModel(event.target.value)}
-                                disabled={noModels}
-                            >
-                                {models.map((modelName) => (
-                                    <MenuItem key={modelName} value={modelName}>{modelName}</MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
+                                onChange={setSelectedModel}
+                                onRulesReload={onRulesReload}
+                                showNotification={showNotification}
+                            />
+                        )}
 
                         {/* The field takes whatever height the column has left and
                             scrolls inside its own outline — a fixed row count in a
@@ -1020,6 +1070,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         onCancelRun={handleCancelRun}
                         onRetryRun={(run) => { void handleRetry(run); }}
                         onReuseRun={(run) => { void handleReuseRun(run); }}
+                        onSaveRunAsProfile={profile ? undefined : (run) => { void handleSaveRunAsProfile(run); }}
                         onOpenRunSource={handleOpenRunSource}
                         onOpenOutput={setSelectedImage}
                         onRemoveRun={handleRemoveRun}
