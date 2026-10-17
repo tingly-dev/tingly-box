@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Divider, IconButton, ListSubheader, Menu, MenuItem, Switch, Tooltip, Typography } from '@mui/material';
+import { Box, Divider, IconButton, ListSubheader, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { Check, LayoutIcon } from '../icons';
@@ -37,13 +37,9 @@ export function PlacementMenu({ overview, thread, onOverview, onThread, overview
                 {item(overview === 'top', t('placement.top'), () => onOverview('top'))}
                 <Divider />
                 <ListSubheader sx={{ lineHeight: '32px', bgcolor: 'transparent', fontWeight: 600, color: 'text.primary', fontSize: fontSizes.sm }}>{t('placement.thread')}</ListSubheader>
-                {item(!locked && thread === 'side', t('placement.side'), () => onThread('side'), locked)}
-                {item(!locked && thread === 'float', t('placement.float'), () => onThread('float'), locked)}
-                <Divider />
-                <MenuItem disabled={locked || overview !== 'side'} onClick={() => onOverviewFloat(!overviewFloat)} sx={{ minWidth: 200 }}>
-                    <Box sx={{ flex: 1 }}>{t('placement.overviewFloat')}</Box>
-                    <Switch size="small" edge="end" checked={overviewFloat} tabIndex={-1} />
-                </MenuItem>
+                {item(!locked && !overviewFloat && thread === 'side', t('placement.side'), () => { onOverviewFloat(false); onThread('side'); }, locked)}
+                {item(!locked && !overviewFloat && thread === 'float', t('placement.float'), () => { onOverviewFloat(false); onThread('float'); }, locked)}
+                {item(!locked && overviewFloat, t('placement.overviewFloat'), () => { onThread('side'); onOverviewFloat(true); }, locked || overview !== 'side')}
                 <Typography sx={{ px: 2, pt: 0.5, pb: 1, fontSize: fontSizes.sm, color: 'text.disabled', maxWidth: 240 }}>
                     {locked ? t('placement.lockedTop') : t('placement.remember')}
                 </Typography>

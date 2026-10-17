@@ -96,7 +96,7 @@ export const en = {
         suggested: 'Suggested threads', start: 'Start', startAll: 'Start all {{count}}',
     },
     placement: {
-        title: 'Layout', overview: 'Overview sits in', thread: 'Threads open in', side: 'Side pane', window: 'Window', top: 'Top bar', float: 'Floating window', overviewFloat: 'Float threads from the Overview',
+        title: 'Layout', overview: 'Overview sits in', thread: 'Threads open in', side: 'Side pane', window: 'Window', top: 'Top bar', float: 'Floating window', overviewFloat: 'Floating, from the Overview',
         lockedTop: 'With the Overview on top, a thread opens below it.', remember: 'Remembered in this browser.',
     },
     window: {

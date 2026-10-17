@@ -100,7 +100,7 @@ export const zh: Dict<typeof en> = {
         suggested: '建议的线程', start: '启动', startAll: '全部启动（{{count}}）',
     },
     placement: {
-        title: '布局', overview: 'Overview 放在', thread: '线程打开在', side: '侧栏', window: '独立窗口', top: '顶栏', float: '浮窗', overviewFloat: '从 Overview 点开时浮动',
+        title: '布局', overview: 'Overview 放在', thread: '线程打开在', side: '侧栏', window: '独立窗口', top: '顶栏', float: '浮窗', overviewFloat: '浮窗（从 Overview 点开时）',
         lockedTop: 'Overview 在顶栏时，线程在它下方打开。', remember: '记在这个浏览器里。',
     },
     window: {
