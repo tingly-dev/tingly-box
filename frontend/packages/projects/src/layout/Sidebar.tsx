@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Badge, Box, Button, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Tooltip, Typography, useTheme } from '@mui/material';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Add, Check, Folder, Forum, MoreHoriz, Settings, SidebarCollapse } from '../components/icons';
+import { Add, Check, Folder, FolderOpen, Forum, MoreHoriz, Settings, SidebarCollapse } from '../components/icons';
 import { useAppData } from '../contexts/AppDataContext';
 import { useThemeMode } from '../contexts/ThemeModeContext';
 import { ChatActionsMenu } from '../components/ChatActionsMenu';
@@ -74,6 +74,7 @@ export function Sidebar({ onCollapse, onNavigate }: { onCollapse?: () => void; o
 
     const nav = [
         { to: '/', label: t('nav.projects'), icon: <Folder fontSize="small" /> },
+        { to: '/folder', label: t('workdir.title'), icon: <FolderOpen fontSize="small" /> },
         { to: '/chats', label: t('nav.chats'), icon: <Forum fontSize="small" /> },
     ];
     // Starred first, then the most recently active; waiting counts make the
