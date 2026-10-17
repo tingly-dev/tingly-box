@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { maskToken } from '@/utils/sharingKey';
 
 export interface SharingKey {
     token_id: string;
@@ -27,12 +28,6 @@ export interface SharingKey {
     created_at: string;
     created_by?: string;
 }
-
-const maskToken = (token: string): string => {
-    if (!token) return '';
-    if (token.length <= 16) return `${token.slice(0, 8)}...${token.slice(-4)}`;
-    return `${token.slice(0, 12)}...${token.slice(-4)}`;
-};
 
 const formatDate = (dateStr?: string) => {
     if (!dateStr) return '-';

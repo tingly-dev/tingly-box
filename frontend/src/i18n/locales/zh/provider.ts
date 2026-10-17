@@ -239,6 +239,12 @@ export default {
     "emptyTeam": "该 Team 还没有 Team 密钥。",
     "loadFailed": "加载 Team 密钥失败",
     "createDisabledTeam": "该 Team 已停用，请先启用再创建 Team 密钥。",
+    "overview": {
+      "count_other": "{{count}} 个 Key",
+      "expand": "展开全部 Key",
+      "collapse": "收起 Key",
+      "empty": "该 Team 还没有 Key，为每位要分发的人创建一个。"
+    },
     "table": {
       "name": "名称",
       "user": "用户",
