@@ -1,5 +1,7 @@
 # Projects absorbs Desk
 
+Diagrams: [projects-desk-absorption.pencil.md](./projects-desk-absorption.pencil.md).
+
 > Status: 已实施 (phases 1–4). Desk is gone; working in a plain folder is a
 > Projects working-folder session. Phase 5 is still open. This note supersedes
 > the "out of scope: merging the two products" line of TEP #2063.
@@ -85,11 +87,13 @@ creates a thread in a project with the same session id (TEP #2063 step 5).
   thread routes with the project prefix dropped; handlers share code.
 - `project.Host` gains **optional** capabilities (type-asserted, so existing
   hosts and the standalone binary keep compiling):
-  - `Launcher`: per-session routing (`Profiles()`, `Launch(profile, tier)` →
-    env and `--settings`). Opaque strings to Projects.
+  - `Launcher`: per-session routing. `LaunchEnv(profile)` gives the env and
+    `--settings` path, `CheckLaunch(profile, model)` validates a choice.
+    Profiles are opaque strings to Projects.
   - `Handoffer`: the terminal command for a session.
-  - `Statuser`: nothing for Projects to call; the status line is a TB route.
-  - `LegacySessions`: one-time import (below).
+  - No status capability: the status line is a TB route drawn in a UI slot.
+  - The one-time import is not a capability: the host calls
+    `App.ImportSessions` with what it has (Tingly Box: Desk's `web` sessions).
 - The pool is shared: threads and folder sessions run in one `pool.Pool`, so
   the 10-process limit is global, not per surface.
 - Standalone: no capabilities, so no profile/model/status UI, and the handoff

@@ -26,6 +26,7 @@
 | [probe-panel.pencil.md](./probe-panel.pencil.md) | Probe 面板轴、打开状态与 cURL 流程 | [probe.md](./probe.md) |
 | [imbot-output.pencil.md](./imbot-output.pencil.md) | 消息序列及回复归属；历史图与现行降级分开 | [imbot-output.md](./imbot-output.md) |
 | [npm.pencil.md](./npm.pencil.md) | `tb gui` / `tb app` 与 `npx tingly-box-gui` 的启动、取回与缓存流程 | [npm.md](./npm.md) |
+| [projects-desk-absorption.pencil.md](./projects-desk-absorption.pencil.md) | Desk 并入 Projects：前后对比、数据模型、宿主能力与插槽、切换流程、等待信号、文件去向 | [projects-desk-absorption.md](./projects-desk-absorption.md) |
 
 ## 架构与持久化
 
