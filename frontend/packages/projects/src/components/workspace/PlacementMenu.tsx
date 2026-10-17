@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, IconButton, ListSubheader, Menu, MenuItem, Switch, Tooltip, Typography } from '@mui/material';
+import { Box, Divider, IconButton, ListSubheader, Menu, MenuItem, Switch, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { Check, LayoutIcon } from '../icons';
@@ -31,13 +31,15 @@ export function PlacementMenu({ overview, thread, onOverview, onThread, overview
                 <IconButton size="small" onClick={(e) => setAnchor(e.currentTarget)} aria-label={t('placement.title')} aria-haspopup="menu"><LayoutIcon fontSize="small" /></IconButton>
             </Tooltip>
             <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
-                <ListSubheader sx={{ lineHeight: '32px', bgcolor: 'transparent' }}>{t('placement.overview')}</ListSubheader>
+                <ListSubheader sx={{ lineHeight: '32px', bgcolor: 'transparent', fontWeight: 600, color: 'text.primary', fontSize: fontSizes.sm }}>{t('placement.overview')}</ListSubheader>
                 {item(overview === 'side', t('placement.side'), () => onOverview('side'))}
                 {item(overview === 'window', t('placement.window'), () => onOverview('window'))}
                 {item(overview === 'top', t('placement.top'), () => onOverview('top'))}
-                <ListSubheader sx={{ lineHeight: '32px', bgcolor: 'transparent' }}>{t('placement.thread')}</ListSubheader>
+                <Divider />
+                <ListSubheader sx={{ lineHeight: '32px', bgcolor: 'transparent', fontWeight: 600, color: 'text.primary', fontSize: fontSizes.sm }}>{t('placement.thread')}</ListSubheader>
                 {item(!locked && thread === 'side', t('placement.side'), () => onThread('side'), locked)}
                 {item(!locked && thread === 'float', t('placement.float'), () => onThread('float'), locked)}
+                <Divider />
                 <MenuItem disabled={locked || overview !== 'side'} onClick={() => onOverviewFloat(!overviewFloat)} sx={{ minWidth: 200 }}>
                     <Box sx={{ flex: 1 }}>{t('placement.overviewFloat')}</Box>
                     <Switch size="small" edge="end" checked={overviewFloat} tabIndex={-1} />
