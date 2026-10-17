@@ -9,7 +9,7 @@ import { buildTranscript, Trajectory, Transcript, type Respond, type TrajectoryA
 import { Composer } from '../Composer';
 import { CodeBlock, Markdown } from '../Markdown';
 import { ConfirmDialog, CopyIconButton } from '@tingly/ui';
-import { ArrowBack, Branch, DiffIcon, FolderOpen, Merge, MoreVert, Stream, Terminal } from '../icons';
+import { ArrowBack, Branch, CheckCircle, DiffIcon, FolderOpen, Merge, MoreVert, Stream, Terminal, Undo } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { folderName, formatTokens } from '../../utils/format';
 import { DiffDialog } from './DiffDialog';
@@ -96,6 +96,16 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
         writeLocal('thread.expandTools', expandAll ? '0' : '1');
         setExpandAll(!expandAll);
     };
+    // What came in since the last visit sits under a "New" line. The mark is
+    // read once per visit and moved to the latest event while the thread is
+    // open, so the line stays put while the user reads.
+    const seenKey = `seen.${threadId}`;
+    const [newSince, setNewSince] = useState(() => ({ threadId, at: readLocal(seenKey) ?? undefined }));
+    if (newSince.threadId !== threadId) setNewSince({ threadId, at: readLocal(seenKey) ?? undefined });
+    const latestAt = events?.at(-1)?.created_at;
+    useEffect(() => {
+        if (latestAt) writeLocal(seenKey, latestAt);
+    }, [seenKey, latestAt]);
     const [target, setTarget] = useState<TrajectoryAnchor | null>(null);
     const [tasksAnchor, setTasksAnchor] = useState<HTMLElement | null>(null);
     // The handoff command stays on screen with its own copy button, since
@@ -213,6 +223,18 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
                         </Tooltip>
                     )}
                     {actions}
+                    {/* Done with it is one click; reopening is the same place. */}
+                    {thread.status !== 'resolved'
+                        ? (
+                            <Tooltip title={t(session ? 'session.archive' : 'thread.resolve')}>
+                                <IconButton size="small" disabled={acting} onClick={() => session ? guarded('archive') : void act(ops.finish)} aria-label={t(session ? 'session.archive' : 'thread.resolve')}><CheckCircle fontSize="small" /></IconButton>
+                            </Tooltip>
+                        )
+                        : (
+                            <Tooltip title={t(session ? 'session.reopen' : 'thread.reopen')}>
+                                <IconButton size="small" disabled={acting} onClick={() => void act(ops.reopen)} aria-label={t(session ? 'session.reopen' : 'thread.reopen')}><Undo fontSize="small" /></IconButton>
+                            </Tooltip>
+                        )}
                     <IconButton size="small" onClick={(e) => setMenu(e.currentTarget)} aria-label={t('common.more')}><MoreVert fontSize="small" /></IconButton>
                     <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
                         <MenuItem onClick={() => { setMenu(null); setTaskOpen((v) => !v); }}>{taskOpen ? t('thread.hideTask') : t('thread.showTask')}</MenuItem>
@@ -223,9 +245,6 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
                         {session && thread.status !== 'resolved' && (
                             <MenuItem disabled={running || acting} onClick={() => guarded('handoff')}>{running ? t('session.handoffBusy') : t('session.handoff')}</MenuItem>
                         )}
-                        {thread.status !== 'resolved'
-                            ? <MenuItem onClick={() => session ? guarded('archive') : (setMenu(null), void act(ops.finish))}>{t(session ? 'session.archive' : 'thread.resolve')}</MenuItem>
-                            : <MenuItem onClick={() => { setMenu(null); void act(ops.reopen); }}>{t(session ? 'session.reopen' : 'thread.reopen')}</MenuItem>}
                         {/* Run details, for when they matter: kept off the header. */}
                         {(thread.model || thread.input_tokens > 0 || thread.output_tokens > 0) && <Divider />}
                         {(thread.model || thread.input_tokens > 0 || thread.output_tokens > 0) && (
@@ -274,7 +293,7 @@ export function ThreadPanel({ projectId, threadId, thread, events, running, disa
                 {events === null
                     ? <Skeleton variant="rounded" height={120} />
                     : view === 'chat'
-                        ? <Transcript blocks={blocks} pendingRequestId={pendingRequestId} working={running} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} rememberLabel={rememberLabel} />
+                        ? <Transcript blocks={blocks} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} rememberLabel={rememberLabel} />
                         : <Trajectory blocks={blocks} working={running} pendingRequestId={pendingRequestId} project={thread.worktree} onOpen={openInChat} />}
             </Box>
 

@@ -53,8 +53,8 @@ const threads = [
 ]
 
 // A thread's transcript: the coordinator's brief, then what the thread did.
-// t-pool waits on an approval, t-backoff on a question; t-cache finished
-// with a report.
+// t-pool waits on an approval, t-backoff on a question, t-sdk is running
+// its tests; t-cache finished with a report.
 const threadEvents = (th: (typeof threads)[number]) => {
     let n = 0
     const ev = (kind: string, content: string, min: number, extra: Record<string, unknown> = {}) =>
@@ -92,6 +92,15 @@ const threadEvents = (th: (typeof threads)[number]) => {
             ...call('Read', { file_path: 'client/retry.go' }, 'for attempt := 0; attempt < max; attempt++ {', 6),
             ev('assistant', 'The client retries immediately today. Before I add a backoff I need two choices from you.', 3),
             ev('ask', 'Which backoff should retries use?', 2, { payload: JSON.stringify({ request_id: 'req-backoff', tool: 'AskUserQuestion', input, state: 'pending' }) }),
+        ]
+    }
+    if (th.id === 't-sdk') {
+        return [
+            ev('user', th.task, 3, { from: 'coordinator' }),
+            ...call('Read', { file_path: 'client/retry.go' }, 'for attempt := 0; attempt < max; attempt++ {', 3),
+            ev('assistant', 'Adding a token bucket in front of the retry loop; refills at 10% of the request rate.', 2),
+            ...call('Edit', { file_path: 'client/budget.go' }, 'Created budget.go', 2),
+            ev('tool_use', 'Bash', 1, { payload: JSON.stringify({ command: 'go test ./client/...' }) }),
         ]
     }
     if (th.id === 't-cache') {

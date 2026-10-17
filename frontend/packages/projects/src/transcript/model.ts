@@ -49,6 +49,8 @@ export interface ToolStep {
     // The approval asked for right before this call ran: once settled, the
     // call's row says how it ended instead of a second line repeating it.
     request?: RequestBlock;
+    // When the call was made.
+    timestamp?: string;
 }
 
 // TaskEvent is the payload of a "task" transcript entry (agentboot/engine
@@ -96,6 +98,7 @@ export const isAgentTool = (name: string): boolean => name === 'Agent' || name =
 export interface ThinkingStep {
     type: 'thinking';
     text: string;
+    timestamp?: string;
 }
 
 export type ActivityStep = ToolStep | ThinkingStep;
@@ -226,11 +229,11 @@ const buildBlocks = (messages: TranscriptEntry[], byParent: Map<string, Transcri
         if (m.kind !== 'usage' && m.kind !== 'task') previous = m;
         switch (m.kind) {
             case 'thinking':
-                currentActivity().steps.push({type: 'thinking', text: m.content});
+                currentActivity().steps.push({type: 'thinking', text: m.content, timestamp: m.timestamp});
                 continue;
             case 'tool_use': {
                 const id = m.request_id ?? '';
-                const tool: ToolStep = {type: 'tool', id, name: m.content, input: m.payload, isError: false, task: tasks.get(id)};
+                const tool: ToolStep = {type: 'tool', id, name: m.content, input: m.payload, isError: false, task: tasks.get(id), timestamp: m.timestamp};
                 if (id) tools.set(id, tool);
                 if (isAgentTool(m.content)) {
                     // A subagent is a unit of work of its own, not one more
@@ -249,7 +252,7 @@ const buildBlocks = (messages: TranscriptEntry[], byParent: Map<string, Transcri
                     tool.result = m.content;
                     tool.isError = isError;
                 } else {
-                    currentActivity().steps.push({type: 'tool', id: m.request_id ?? '', name: '', input: undefined, result: m.content, isError});
+                    currentActivity().steps.push({type: 'tool', id: m.request_id ?? '', name: '', input: undefined, result: m.content, isError, timestamp: m.timestamp});
                 }
                 continue;
             }
@@ -314,6 +317,66 @@ export const agentReport = (block: Extract<TranscriptBlock, {type: 'agent'}>): s
         if (c.type === 'assistant' && c.message.content.trim()) return c.message.content;
     }
     return block.task?.summary;
+};
+
+// blockTime is when a block began: its message's time, or its first step's.
+export const blockTime = (block: TranscriptBlock): string | undefined => {
+    switch (block.type) {
+        case 'activity':
+            return block.steps.find((s) => s.timestamp)?.timestamp;
+        case 'agent':
+            return block.call.timestamp;
+        default:
+            return block.message.timestamp;
+    }
+};
+
+// firstNewBlock is the index of the first block that began after seenAt,
+// the place for a "New" divider; -1 when nothing is new or everything is
+// (a divider above the whole transcript says nothing).
+export const firstNewBlock = (blocks: TranscriptBlock[], seenAt?: string): number => {
+    if (!seenAt) return -1;
+    const seen = Date.parse(seenAt);
+    if (Number.isNaN(seen)) return -1;
+    const i = blocks.findIndex((b) => {
+        const at = blockTime(b);
+        return at !== undefined && Date.parse(at) > seen;
+    });
+    return i > 0 ? i : -1;
+};
+
+// WorkingVerb is what the live turn is doing, for the line under it.
+export type WorkingVerb = 'thinking' | 'running' | 'reading' | 'editing' | 'searching' | 'delegating' | 'working';
+
+const VERB_BY_TOOL: Record<string, WorkingVerb> = {
+    Bash: 'running', BashOutput: 'running',
+    Read: 'reading', Grep: 'reading', Glob: 'reading', LS: 'reading', NotebookRead: 'reading',
+    Edit: 'editing', MultiEdit: 'editing', Write: 'editing', NotebookEdit: 'editing',
+    WebFetch: 'searching', WebSearch: 'searching',
+    Agent: 'delegating', Task: 'delegating',
+};
+
+// workingState reads the live turn from the transcript: what it is doing
+// now (its last step that has not finished) and when it began (the last
+// message that started it).
+export const workingState = (blocks: TranscriptBlock[]): {verb: WorkingVerb; since?: string} => {
+    let since: string | undefined;
+    for (let i = blocks.length - 1; i >= 0; i--) {
+        const b = blocks[i];
+        if (b.type === 'user') {
+            since = b.message.timestamp;
+            break;
+        }
+    }
+    const last = blocks.at(-1);
+    let verb: WorkingVerb = 'working';
+    if (last?.type === 'agent') verb = 'delegating';
+    else if (last?.type === 'activity') {
+        const step = last.steps.at(-1);
+        if (step?.type === 'thinking') verb = 'thinking';
+        else if (step?.type === 'tool') verb = step.result === undefined ? VERB_BY_TOOL[step.name] ?? 'working' : 'thinking';
+    } else if (last?.type === 'user') verb = 'thinking';
+    return {verb, since};
 };
 
 // RequestOutcome is how a request ended, or that it still waits.

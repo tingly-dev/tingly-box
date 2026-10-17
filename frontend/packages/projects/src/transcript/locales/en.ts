@@ -16,6 +16,7 @@ export default {
       "deny": "Deny",
       "details": "Details",
       "input": "Input",
+      "newSinceVisit": "New",
       "noAnswer": "(no answer)",
       "outcomeAllowed": "Allowed",
       "outcomeAnswered": "Answered",
@@ -57,6 +58,13 @@ export default {
       "trajectoryTurn": "Turn {{turn}}",
       "trajectoryWaiting": "waiting for you",
       "unanswered": "not answered",
+      "verb_delegating": "Waiting on a subagent",
+      "verb_editing": "Editing",
+      "verb_reading": "Reading",
+      "verb_running": "Running a command",
+      "verb_searching": "Searching the web",
+      "verb_thinking": "Thinking",
+      "verb_working": "Working",
       "viewTrajectory": "Trajectory",
       "working": "Working…"
     }

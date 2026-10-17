@@ -244,7 +244,52 @@ describe('tool calls', () => {
         const bash = document.querySelector<HTMLElement>('[data-call-ids="t2"]')!;
         expect(bash.querySelector('.MuiCircularProgress-root')).not.toBeNull();
         expect(document.querySelector('[data-call-ids="t1"] .MuiCircularProgress-root')).toBeNull();
-        expect(screen.queryByText('Working…')).not.toBeInTheDocument();
+        expect(screen.getByRole('status')).toHaveTextContent('Running a command');
+    });
+});
+
+describe('working line', () => {
+    afterEach(() => vi.useRealTimers());
+
+    it('names what the turn does and how long it has run since the ask', () => {
+        vi.useFakeTimers({now: Date.parse('2026-10-04T00:01:05Z'), toFake: ['Date', 'setInterval', 'clearInterval']});
+        renderEntries([
+            msg({role: 'user', content: 'fix it', timestamp: '2026-10-04T00:00:00Z'}),
+            msg({kind: 'tool_use', content: 'Edit', request_id: 't1', payload: {file_path: 'a.go'}, timestamp: '2026-10-04T00:00:30Z'}),
+        ], {working: true});
+        const line = screen.getByRole('status');
+        expect(line).toHaveTextContent('Editing');
+        expect(line).toHaveTextContent('1m 5s');
+    });
+
+    it('gives way to the card a request waits on', () => {
+        renderEntries([msg({kind: 'approval_request', content: 'Bash', request_id: 'r1', payload: {command: 'ls'}})], {pending: 'r1', working: true});
+        expect(document.querySelector('[data-working]')).toBeNull();
+    });
+});
+
+describe('new since last visit', () => {
+    const entries = [
+        msg({role: 'user', content: 'start', timestamp: '2026-10-04T00:00:00Z'}),
+        msg({role: 'assistant', content: 'seen reply', timestamp: '2026-10-04T00:01:00Z'}),
+        msg({role: 'assistant', content: 'unseen reply', timestamp: '2026-10-04T00:05:00Z'}),
+    ];
+    const at = (newSince?: string) => render(<Transcript blocks={buildTranscript(entries)} working={false} onRespond={respondNever} drafts={drafts} newSince={newSince}/>);
+
+    it('draws the divider right above the first unseen message', () => {
+        at('2026-10-04T00:02:00Z');
+        const divider = screen.getByRole('separator');
+        expect(divider).toHaveTextContent('New');
+        expect(divider.compareDocumentPosition(screen.getByText('seen reply')) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+        expect(divider.compareDocumentPosition(screen.getByText('unseen reply')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('draws none on a first visit or when nothing is new', () => {
+        at(undefined);
+        expect(screen.queryByRole('separator')).toBeNull();
+        cleanup();
+        at('2026-10-04T00:05:00Z');
+        expect(screen.queryByRole('separator')).toBeNull();
     });
 });
 

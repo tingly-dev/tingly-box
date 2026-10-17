@@ -16,6 +16,7 @@ export default {
       "deny": "Запретить",
       "details": "Подробности",
       "input": "Ввод",
+      "newSinceVisit": "Новое",
       "noAnswer": "(нет ответа)",
       "outcomeAllowed": "Разрешено",
       "outcomeAnswered": "Отвечено",
@@ -59,6 +60,13 @@ export default {
       "trajectoryTurn": "Ход {{turn}}",
       "trajectoryWaiting": "ждёт вашего ответа",
       "unanswered": "без ответа",
+      "verb_delegating": "Ждёт субагента",
+      "verb_editing": "Редактирует",
+      "verb_reading": "Читает",
+      "verb_running": "Выполняет команду",
+      "verb_searching": "Ищет в интернете",
+      "verb_thinking": "Думает",
+      "verb_working": "Работает",
       "viewTrajectory": "Траектория",
       "working": "Выполняется…"
     }

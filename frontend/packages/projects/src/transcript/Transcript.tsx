@@ -5,12 +5,12 @@ import {getReadableAccent} from '@tingly/ui/theme/status';
 import {fontMono, fontSizes} from '@tingly/ui/theme/fonts';
 import type {TFunction} from 'i18next';
 import type {ReactNode} from 'react';
-import {useState} from 'react';
+import {Fragment, useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import type {CodeBlockComponent, DraftStorage} from './context';
 import {TranscriptHostProvider, useDraft, useTranscriptHost} from './context';
-import type {ActivityStep, RequestBlock, RequestOutcome, TaskState, ThinkingStep, ToolStep, TranscriptBlock, TranscriptEntry} from './model';
-import {agentReport, agentStatus, approvalSubject, askQuestions, formatTokens, requestOutcome, toolSummary} from './model';
+import type {ActivityStep, RequestBlock, RequestOutcome, TaskState, ThinkingStep, ToolStep, TranscriptBlock, TranscriptEntry, WorkingVerb} from './model';
+import {agentReport, agentStatus, approvalSubject, askQuestions, firstNewBlock, formatTokens, requestOutcome, toolSummary, workingState} from './model';
 import Markdown from './Markdown';
 import QuestionCard from './QuestionCard';
 
@@ -34,6 +34,9 @@ interface TranscriptProps {
     // The label of a second "allow" on an approval card that also allows the
     // tool from now on ("Allow Bash in this thread"); none unless passed.
     rememberLabel?: (tool: string) => string;
+    // When the reader last saw this transcript: a "New" divider marks what
+    // arrived since. None on a first visit.
+    newSince?: string;
 }
 
 const mono = {fontFamily: fontMono, fontSize: fontSizes.md};
@@ -406,6 +409,9 @@ interface BlockListProps {
     // Marks each top-level message with its block index, so the trajectory
     // can lead back to it (calls and requests carry their own ids).
     anchored?: boolean;
+    // The block index where what is new since the last visit begins; a
+    // divider marks it. -1 for none.
+    newFrom?: number;
 }
 
 // shownBlocks is what a list renders: a settled approval that its call's row
@@ -432,9 +438,12 @@ const shownBlocks = (blocks: TranscriptBlock[], pendingRequestId?: string): {blo
 
 // BlockList renders a run of blocks: the conversation, or a subagent's own
 // work inside its card.
-const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anchored = false}: BlockListProps) => (
-    <>
-        {shownBlocks(blocks, pendingRequestId).map(({block: b, index: i, last}) => {
+const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anchored = false, newFrom = -1}: BlockListProps) => {
+    const items = shownBlocks(blocks, pendingRequestId);
+    // A merged run of calls keeps its first index, so the divider goes
+    // before the first item at or past newFrom.
+    const dividerAt = newFrom >= 0 ? items.find((x) => x.index >= newFrom)?.index : undefined;
+    const render = ({block: b, index: i, last}: (typeof items)[number]) => {
             const anchor = anchored ? {'data-block': i} : {};
             switch (b.type) {
                 case 'user':
@@ -478,9 +487,27 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anc
                         </Typography>
                     );
             }
-        })}
-    </>
-);
+    };
+    return (
+        <>
+            {items.map((item) => item.index === dividerAt
+                ? <Fragment key={`new-${item.index}`}><NewDivider/>{render(item)}</Fragment>
+                : render(item))}
+        </>
+    );
+};
+
+// NewDivider marks where what arrived since the last visit begins.
+const NewDivider = () => {
+    const {t} = useTranslation();
+    return (
+        <Stack role="separator" data-new-divider direction="row" spacing={1} sx={{alignItems: 'center', color: (theme) => getReadableAccent(theme, 'warning')}}>
+            <Box sx={{flex: 1, borderTop: 1, borderColor: 'currentColor', opacity: 0.4}}/>
+            <Typography variant="caption" sx={{color: 'inherit', fontWeight: 600}}>{t('projects.transcript.newSinceVisit', {defaultValue: 'New'})}</Typography>
+            <Box sx={{flex: 1, borderTop: 1, borderColor: 'currentColor', opacity: 0.4}}/>
+        </Stack>
+    );
+};
 
 // AgentCard is one subagent run: what it was asked, how it is going (its
 // current action, tools, tokens, time), and — expanded — everything it did
@@ -583,23 +610,42 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
     );
 };
 
-const Transcript = ({blocks, pendingRequestId, working, expandAll = false, onRespond, drafts, codeBlock, rememberLabel}: TranscriptProps) => {
+// WorkingLine says the live turn is still going: what it is doing and for
+// how long, so a stuck turn is told apart from a slow one.
+const WorkingLine = ({blocks}: {blocks: TranscriptBlock[]}) => {
     const {t} = useTranslation();
-    const last = shownBlocks(blocks, pendingRequestId).at(-1)?.block;
-    // The spinner rides on the last activity line while a turn runs; if the
-    // turn hasn't produced any activity yet, it gets a line of its own.
-    const showWorking = working && !pendingRequestId && last?.type !== 'activity';
+    const {verb, since} = workingState(blocks);
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        const timer = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+    const start = since ? Date.parse(since) : NaN;
+    const elapsed = Number.isNaN(start) ? '' : formatDuration(Math.max(0, now - start));
+    return (
+        <Stack role="status" data-working direction="row" spacing={1} sx={{alignItems: 'center', color: 'text.secondary'}}>
+            <CircularProgress size={12}/>
+            <Typography variant="body2" sx={{color: 'inherit'}}>{t(`projects.transcript.verb_${verb}`, {defaultValue: VERB_DEFAULTS[verb]})}</Typography>
+            {elapsed && <Typography variant="body2" sx={{color: 'text.disabled', fontVariantNumeric: 'tabular-nums'}}>{elapsed}</Typography>}
+        </Stack>
+    );
+};
+
+const VERB_DEFAULTS: Record<WorkingVerb, string> = {
+    thinking: 'Thinking', running: 'Running a command', reading: 'Reading', editing: 'Editing',
+    searching: 'Searching the web', delegating: 'Waiting on a subagent', working: 'Working',
+};
+
+const Transcript = ({blocks, pendingRequestId, working, expandAll = false, onRespond, drafts, codeBlock, rememberLabel, newSince}: TranscriptProps) => {
+    // While a request waits, its card is the live part; otherwise the turn
+    // gets a line saying what it does and for how long.
+    const showWorking = working && !pendingRequestId;
 
     return (
         <TranscriptHostProvider drafts={drafts} codeBlock={codeBlock} rememberLabel={rememberLabel}>
             <Stack spacing={2.5}>
-                <BlockList anchored blocks={blocks} pendingRequestId={pendingRequestId} working={working} expandAll={expandAll} onRespond={onRespond}/>
-                {showWorking && (
-                    <Stack direction="row" spacing={1} sx={{alignItems: 'center', color: 'text.secondary'}}>
-                        <CircularProgress size={12}/>
-                        <Typography variant="body2">{t('projects.transcript.working', {defaultValue: 'Working…'})}</Typography>
-                    </Stack>
-                )}
+                <BlockList anchored blocks={blocks} pendingRequestId={pendingRequestId} working={working} expandAll={expandAll} onRespond={onRespond} newFrom={firstNewBlock(blocks, newSince)}/>
+                {showWorking && <WorkingLine blocks={blocks}/>}
             </Stack>
         </TranscriptHostProvider>
     );

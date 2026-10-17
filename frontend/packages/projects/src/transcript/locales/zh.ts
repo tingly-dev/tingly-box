@@ -16,6 +16,7 @@ export default {
       "deny": "不允许",
       "details": "详情",
       "input": "输入",
+      "newSinceVisit": "新消息",
       "noAnswer": "（未回答）",
       "outcomeAllowed": "已允许",
       "outcomeAnswered": "已回答",
@@ -57,6 +58,13 @@ export default {
       "trajectoryTurn": "第 {{turn}} 轮",
       "trajectoryWaiting": "等待你处理",
       "unanswered": "未回答",
+      "verb_delegating": "等待子代理",
+      "verb_editing": "正在编辑",
+      "verb_reading": "正在阅读",
+      "verb_running": "正在运行命令",
+      "verb_searching": "正在搜索网页",
+      "verb_thinking": "正在思考",
+      "verb_working": "正在工作",
       "viewTrajectory": "轨迹",
       "working": "处理中…"
     }

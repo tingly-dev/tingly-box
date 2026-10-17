@@ -105,6 +105,27 @@ Not done here: a card that keeps working on the suggested option while
 unanswered. Claude Code's question blocks the turn, so that needs its own
 mechanism (a timeout, or a thread-level decision outside the tool).
 
+### Reading a thread at a glance
+
+TEP: [#2098](https://github.com/tingly-dev/tingly-box/issues/2098). Status:
+implemented.
+
+- **Done is one click.** The thread header carries a resolve icon (a folder
+  session's is Archive, still asking first while background tasks run); a
+  resolved thread shows Reopen in the same place. The More menu no longer
+  repeats them.
+- **What is new since the last visit.** The panel remembers per browser when
+  each thread was last open (`seen.<thread>`, the newest event's time) and
+  draws a "New" line above the first block that arrived after it. The mark
+  is read once per visit, so the line stays where it was while the reader
+  catches up; a first visit, or nothing new, draws no line.
+- **What the turn is doing, and for how long.** While a turn runs and no
+  request waits, the line under the transcript names the current action from
+  the last call (running a command, reading, editing, searching the web,
+  waiting on a subagent, thinking) and the time since the last message to
+  the agent, ticking each second. A stuck turn reads differently from a slow
+  one without opening anything.
+
 ## Step 3c: one message box
 
 `Composer` in the package is now the only message box: the project
