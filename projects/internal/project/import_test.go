@@ -3,6 +3,7 @@ package project
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -75,4 +76,40 @@ func TestImportSessionsOnceAndResume(t *testing.T) {
 	spec := f.agent.Launches()[0]
 	assert.True(t, spec.Resume)
 	assert.Equal(t, "cc-1", spec.SessionID)
+}
+
+func TestImportSessionsRetriesUnreadableAndKeepsTheRest(t *testing.T) {
+	f := newFixture(t, func(*enginetest.Turn) error { return nil })
+	folder, other := t.TempDir(), t.TempDir()
+	old := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	q, _ := json.Marshal(map[string]any{"questions": []any{map[string]any{"question": "Which suite?"}}})
+	in := []ImportedSession{
+		// Newest first, as the host lists them.
+		{SessionID: "cc-new", Folder: other, UpdatedAt: old.Add(time.Hour), Entries: []engine.Entry{
+			{Role: "user", Content: "hi"},
+			{Kind: engine.KindAskRequest, RequestID: "r1", Payload: q},
+		}},
+		{SessionID: "cc-old", Folder: folder, Task: "no transcript", UpdatedAt: old},
+		{SessionID: "cc-bad", Folder: folder, Err: errors.New("disk")},
+	}
+	n, err := f.threads.ImportSessions("desk", in)
+	assert.Error(t, err)
+	assert.Equal(t, 2, n)
+
+	got, err := f.store.GetThread("cc-old")
+	require.NoError(t, err, "a session keeps its id")
+	assert.Equal(t, 1, got.Turns, "resumes even without a transcript")
+	events, _ := f.store.ListThreadEvents("cc-new")
+	require.Len(t, events, 2)
+	assert.Equal(t, "Which suite?", events[1].Content)
+
+	workdirs, _ := f.store.ListWorkdirs()
+	require.Len(t, workdirs, 2)
+	assert.Equal(t, other, workdirs[0].Path, "the folder used last comes first")
+
+	// Next start: the unreadable one comes in, the others are skipped.
+	in[2].Err = nil
+	n, err = f.threads.ImportSessions("desk", in)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
 }

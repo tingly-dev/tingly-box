@@ -29,10 +29,10 @@ func importDeskSessions(sm *db.StoreManager, app *projectsapp.App) {
 	in := make([]projectsapp.ImportedSession, 0, len(list))
 	for _, s := range list {
 		msgs, err := store.Messages(s.ID)
-		if err != nil {
-			logrus.WithError(err).WithField("session", s.ID).Warn("Projects: could not read a Desk session's transcript")
-		}
-		in = append(in, deskSession(s, msgs))
+		d := deskSession(s, msgs)
+		// Unreadable: skipped now, tried again next start.
+		d.Err = err
+		in = append(in, d)
 	}
 	n, err := app.ImportSessions("desk", in)
 	if err != nil {
