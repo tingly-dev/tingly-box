@@ -40,7 +40,7 @@ export function FolderPicker({ value, onChange, folders, onAddFolder }: Props) {
                     setAnchor(e.currentTarget);
                 }}
                 title={value || undefined}
-                aria-label={t('session.folder')}
+                aria-label={`${t('session.folder')}: ${label}`}
                 aria-haspopup="menu"
                 sx={{ ...composerPickerSx, display: 'inline-flex', alignItems: 'center', gap: 0.5, py: { xs: 0.75, md: 0.5 }, color: value ? 'text.primary' : 'warning.main', fontWeight: 500 }}
             >

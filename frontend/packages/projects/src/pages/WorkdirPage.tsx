@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Box, Button, IconButton, Skeleton, Tooltip, Typography } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -52,7 +52,8 @@ export default function WorkdirPage() {
     const [sessions, setSessions] = useState<Thread[] | null>(null);
     const [events, setEvents] = useState<ThreadEvent[] | null>(null);
     const [modes, setModes] = useState<string[]>([]);
-    const [adding, setAdding] = useState(params.get('add') === '1');
+    // The add dialog lives in the URL, so a link (the sidebar's "add") opens it.
+    const adding = params.get('add') === '1';
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -61,25 +62,42 @@ export default function WorkdirPage() {
         });
     }, []);
 
+    // Only the latest request lands: switching folders or sessions quickly
+    // must not leave an older answer on screen.
+    const sessionsReq = useRef(0);
+    const sessionReq = useRef(0);
+
     const loadSessions = useCallback(async () => {
+        const n = ++sessionsReq.current;
         try {
             const r = await unwrap(api.GET('/api/v1/projects/sessions', { params: { query: { folder: scope || undefined } } }));
+            if (n !== sessionsReq.current) return;
             setSessions(r.sessions);
             setError(null);
         } catch (e) {
-            setError((e as Error).message);
+            if (n === sessionsReq.current) setError((e as Error).message);
         }
     }, [scope]);
 
     const loadSession = useCallback(async (sid: string) => {
+        const n = ++sessionReq.current;
         try {
             const d: SessionDetail = await unwrap(api.GET('/api/v1/projects/sessions/{sid}', { params: { path: { sid } } }));
+            if (n !== sessionReq.current) return;
             setEvents(d.events);
             setSessions((list) => upsert(list ?? [], d.session));
         } catch (e) {
+            if (n !== sessionReq.current) return;
             notify((e as Error).message, 'error');
+            // Gone or unreadable: back to the folder's new-session prompt
+            // rather than a panel that never loads.
+            setParams((p) => {
+                const next = new URLSearchParams(p);
+                next.delete('session');
+                return next;
+            }, { replace: true });
         }
-    }, [notify]);
+    }, [notify, setParams]);
 
     useEffect(() => {
         setSessions(null);
@@ -89,6 +107,7 @@ export default function WorkdirPage() {
     useEffect(() => {
         setEvents(null);
         if (sessionId) void loadSession(sessionId);
+        else sessionReq.current++;
     }, [sessionId, loadSession]);
 
     useSessionEvents((ev: ProjectEvent) => {
@@ -116,14 +135,25 @@ export default function WorkdirPage() {
         pane.setDrawerOpen(false);
     };
     const openNew = (folder = scope) => go(folder ? { path: folder, new: '1' } : { new: '1' });
+    const setAdding = (open: boolean) => setParams((p) => {
+        const next = new URLSearchParams(p);
+        if (open) next.set('add', '1');
+        else next.delete('add');
+        return next;
+    });
     const known = workdirs?.find((w) => w.path === scope);
     const removable = !!known?.saved;
 
     const create = async (folder: string, content: string, permission_mode: string): Promise<boolean> => {
         try {
             const s = await unwrap(api.POST('/api/v1/projects/sessions', { body: { folder, content, permission_mode: permission_mode || undefined } }));
-            setSessions((list) => upsert(list ?? [], s));
-            go({ ...(scope && { path: scope }), session: s.id });
+            // Picked another folder than the one open: go to that folder.
+            if (scope && s.worktree !== scope) {
+                go({ path: s.worktree, session: s.id });
+            } else {
+                setSessions((list) => upsert(list ?? [], s));
+                go({ ...(scope && { path: scope }), session: s.id });
+            }
             refresh();
             reloadWorkdirs();
             return true;
@@ -236,7 +266,6 @@ export default function WorkdirPage() {
                 <AddWorkdirDialog
                     onClose={() => setAdding(false)}
                     onAdded={(w) => {
-                        setAdding(false);
                         refresh();
                         reloadWorkdirs();
                         go({ path: w.path, new: '1' });
