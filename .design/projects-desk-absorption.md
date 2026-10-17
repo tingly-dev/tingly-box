@@ -88,7 +88,10 @@ creates a thread in a project with the same session id (TEP #2063 step 5).
   hosts and the standalone binary keep compiling):
   - `Launcher`: per-session routing (`Profiles()`, `Launch(profile, tier)` →
     env and `--settings`). Opaque strings to Projects.
-  - `Handoffer`: the terminal command for a session.
+  - `Handoffer`: the program that continues a session in a terminal
+    (`HandoffLaunch(profile)` → argv). Projects adds `--resume`, the
+    session's `--model` and the folder, quoted for PowerShell on Windows and
+    a POSIX shell elsewhere.
   - `Statuser`: nothing for Projects to call; the status line is a TB route.
   - `LegacySessions`: one-time import (below).
 - The pool is shared: threads and folder sessions run in one `pool.Pool`, so
@@ -131,7 +134,7 @@ until phase 4.
      each task's output and stop; archive and handoff ask first while tasks run.
    - [x] Trajectory view and expand/collapse tools, remembered per browser.
    - [x] Continue in terminal: `POST …/handoff` releases the resident process
-     and returns the command; TB's `Handoffer` uses `tingly-box cc|profile`.
+     and returns the command; TB's `Handoffer` launches `tingly-box cc|profile`.
    - [x] Profile and model per session (`Launcher`; standalone rejects a
      profile), pickers through the `session.launchPickers` slot.
    - [x] Status line: `GET /scenario/:scenario/route` resolves the route and

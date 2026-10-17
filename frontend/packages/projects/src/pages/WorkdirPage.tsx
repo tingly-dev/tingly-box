@@ -26,6 +26,16 @@ function upsert<T extends { id: string }>(list: T[], item: T, last = false): T[]
     return next;
 }
 
+/** Whether a task event changes the set of running background tasks (progress does not). */
+function changesLiveTasks(e: ThreadEvent): boolean {
+    try {
+        const ev = (JSON.parse(e.payload ?? '{}') as { event?: string }).event;
+        return ev === 'background_tasks_changed' || ev === 'task_notification' || ev === 'task_completed';
+    } catch {
+        return false;
+    }
+}
+
 const GROUPS: { key: string; color: StatusGroup['color']; collapsed?: boolean }[] = [
     { key: 'waiting', color: 'warning' },
     { key: 'working', color: 'info' },
@@ -123,8 +133,8 @@ export default function WorkdirPage() {
             const e = ev.data as ThreadEvent;
             if (e.thread_id !== sessionId) return;
             setEvents((list) => (list ? upsert(list, e, true) : list));
-            // A task started or ended: the live set comes with the session.
-            if (e.kind === 'task') void loadSession(sessionId);
+            // The live set changed: it comes with the session.
+            if (e.kind === 'task' && changesLiveTasks(e)) void loadSession(sessionId);
         }
     }, () => {
         void loadSessions();
@@ -187,9 +197,15 @@ export default function WorkdirPage() {
         const path = { params: { path: { sid: selected.id } } };
         try {
             let s = selected;
-            if (next.profile !== (s.profile ?? '')) s = await unwrap(api.PUT('/api/v1/projects/sessions/{sid}/profile', { ...path, body: { profile: next.profile } }));
-            if (next.model !== (s.model ?? '')) s = await unwrap(api.PUT('/api/v1/projects/sessions/{sid}/model', { ...path, body: { model: next.model } }));
-            setSessions((list) => upsert(list ?? [], s));
+            if (next.profile !== (s.profile ?? '')) {
+                // The server resets the model with the profile.
+                s = await unwrap(api.PUT('/api/v1/projects/sessions/{sid}/profile', { ...path, body: { profile: next.profile } }));
+                setSessions((list) => upsert(list ?? [], s));
+            }
+            if (next.model !== (s.model ?? '')) {
+                s = await unwrap(api.PUT('/api/v1/projects/sessions/{sid}/model', { ...path, body: { model: next.model } }));
+                setSessions((list) => upsert(list ?? [], s));
+            }
         } catch (e) {
             notify((e as Error).message, 'error');
         }

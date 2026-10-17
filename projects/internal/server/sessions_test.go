@@ -81,7 +81,7 @@ func TestFolderSessionEndToEnd(t *testing.T) {
 		Command string `json:"command"`
 	}
 	require.Equal(t, 200, c.do("POST", "/projects/sessions/"+s.ID+"/handoff", nil, &handoff))
-	assert.Contains(t, handoff.Command, "claude --resume '"+s.SessionID+"'")
+	assert.Contains(t, handoff.Command, "claude --resume "+s.SessionID)
 	assert.Equal(t, 409, c.do("POST", "/projects/sessions/"+s.ID+"/tasks/task1/stop", nil, &e))
 	assert.Equal(t, 400, c.do("GET", "/projects/sessions/"+s.ID+"/tasks/bad.id/output", nil, &e))
 	assert.Equal(t, 200, c.do("POST", "/projects/sessions/"+s.ID+"/archive", nil, &out))

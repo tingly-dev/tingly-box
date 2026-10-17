@@ -209,8 +209,11 @@ func (profiles) CheckLaunch(_ context.Context, profile, model string) error {
 	return nil
 }
 
-func (profiles) HandoffCommand(folder, sid, profile string) string {
-	return "tb profile " + profile + " --resume " + sid + " in " + folder
+func (profiles) HandoffLaunch(profile string) []string {
+	if profile == "" {
+		return []string{"tb", "cc"}
+	}
+	return []string{"tb", "profile", profile}
 }
 
 func TestSessionWithoutLauncherHasNoProfiles(t *testing.T) {
@@ -230,7 +233,7 @@ func TestSessionWithoutLauncherHasNoProfiles(t *testing.T) {
 
 	cmd, err := f.threads.Handoff(s.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "cd '"+folder+"' && claude --resume '"+s.SessionID+"'", cmd)
+	assert.Equal(t, "cd '"+folder+"' && claude --resume "+s.SessionID+" --model haiku", cmd)
 }
 
 func TestSessionLaunchesUnderItsProfile(t *testing.T) {
@@ -284,5 +287,11 @@ func TestSessionLaunchesUnderItsProfile(t *testing.T) {
 	waitStatus(t, f.store, s.ID, db.ThreadIdle)
 	cmd, err := f.threads.Handoff(s.ID)
 	require.NoError(t, err)
-	assert.Contains(t, cmd, "tb profile  --resume "+s.SessionID)
+	assert.Equal(t, "cd '"+s.Worktree+"' && tb cc --resume "+s.SessionID, cmd)
+}
+
+func TestTerminalCommandQuotesForTheShell(t *testing.T) {
+	argv := []string{"/opt/tingly box/tb", "profile", "it's", "--resume", "sid-1"}
+	assert.Equal(t, `cd '/w/it'\''s' && '/opt/tingly box/tb' profile 'it'\''s' --resume sid-1`, terminalCommand("linux", "/w/it's", argv))
+	assert.Equal(t, `Set-Location -LiteralPath 'C:\w\it''s'; & '/opt/tingly box/tb' 'profile' 'it''s' '--resume' 'sid-1'`, terminalCommand("windows", `C:\w\it's`, argv))
 }

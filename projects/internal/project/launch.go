@@ -3,7 +3,7 @@ package project
 import (
 	"context"
 	"errors"
-	"fmt"
+	"runtime"
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/agentboot/engine"
@@ -25,10 +25,11 @@ type Launcher interface {
 	CheckLaunch(ctx context.Context, profile, model string) error
 }
 
-// Handoffer gives the terminal command that continues a session, when the
-// host has a better one than plain `claude --resume`.
+// Handoffer names the program that starts Claude Code in a terminal the way
+// the host's turns do under profile, when that is not plain `claude`. Projects
+// adds the session, its model and the folder, quoted for the user's shell.
 type Handoffer interface {
-	HandoffCommand(folder, claudeSessionID, profile string) string
+	HandoffLaunch(profile string) []string
 }
 
 // Errors for launch settings and handoff.
@@ -90,6 +91,8 @@ func (m *Threads) SetModel(ctx context.Context, id, model string) (*db.Thread, e
 // writing one Claude session file corrupt it. A turn in flight is refused
 // rather than killed; a message sent here afterwards starts it again.
 func (m *Threads) Handoff(id string) (string, error) {
+	// A message sent while the process was closing waited for it.
+	defer m.next(id)
 	t, err := m.store.GetSession(id)
 	if err != nil {
 		return "", err
@@ -102,15 +105,49 @@ func (m *Threads) Handoff(id string) (string, error) {
 	} else if err != nil {
 		return "", err
 	}
+	argv := []string{"claude"}
 	if h, ok := m.env.(Handoffer); ok {
-		return h.HandoffCommand(t.Worktree, t.SessionID, t.Profile), nil
+		argv = h.HandoffLaunch(t.Profile)
 	}
-	return fmt.Sprintf("cd %s && claude --resume %s", ShellQuote(t.Worktree), ShellQuote(t.SessionID)), nil
+	argv = append(argv, "--resume", t.SessionID)
+	if t.Model != "" {
+		argv = append(argv, "--model", t.Model)
+	}
+	return terminalCommand(runtime.GOOS, t.Worktree, argv), nil
+}
+
+// terminalCommand runs argv in dir, written for the shell a person pastes
+// into: PowerShell on Windows, a POSIX shell elsewhere.
+func terminalCommand(goos, dir string, argv []string) string {
+	words := make([]string, len(argv))
+	if goos == "windows" {
+		for i, a := range argv {
+			words[i] = powerShellQuote(a)
+		}
+		return "Set-Location -LiteralPath " + powerShellQuote(dir) + "; & " + strings.Join(words, " ")
+	}
+	for i, a := range argv {
+		words[i] = shellWord(a)
+	}
+	return "cd " + ShellQuote(dir) + " && " + strings.Join(words, " ")
 }
 
 // ShellQuote single-quotes s for a POSIX shell.
 func ShellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// shellWord leaves plain words (flags, subcommands) bare and quotes the rest.
+func shellWord(s string) string {
+	if s != "" && strings.Trim(s, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_./:=@") == "" {
+		return s
+	}
+	return ShellQuote(s)
+}
+
+// powerShellQuote single-quotes s for PowerShell, where a quote doubles.
+func powerShellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
 
 func orDefault(s string) string {
