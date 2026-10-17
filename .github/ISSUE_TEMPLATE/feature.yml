@@ -1,0 +1,42 @@
+name: Feature
+description: Suggest something new or a change to how something works
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of Tingly-Box is this about? It becomes an area/<name> label.
+      options:
+        - Gateway / Protocol Conversion
+        - Load Balancing & Failover
+        - Smart Routing & Rules
+        - Guard Rails
+        - Auth / OAuth
+        - Usage / Quota / Observability
+        - Agent Management
+        - Remote Control / Bot
+        - Projects
+        - UI / Frontend
+        - Performance
+        - Build / Install / Deployment
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What do you want to do?
+      description: The task you are trying to get done, before any solution. Add the agent, provider or model if they matter.
+      placeholder: When I ..., I want to ... because ...
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What could it look like?
+      description: Optional. A sketch, a reference or how another tool does it.
+  - type: markdown
+    attributes:
+      value: For a larger change that needs design discussion first, use the [TEP](?template=tep.yml) form instead.

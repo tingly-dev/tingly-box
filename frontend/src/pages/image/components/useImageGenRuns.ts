@@ -272,6 +272,14 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
         updateImports((current) => current.filter((item) => item.id !== id));
     }, [updateImports]);
 
+    // Puts a copy of a run into another surface's history — the run a profile
+    // was saved from, so the profile's page opens on the result that made it
+    // worth keeping. The images are shared, not duplicated in memory.
+    const copyRunToProfile = useCallback((run: GenerationRun, targetProfileId: string) => {
+        const copy: GenerationRun = { ...run, id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, profileId: targetProfileId };
+        updateRuns((current) => [...current, copy]);
+    }, [updateRuns]);
+
     // Empties this surface's history only — clearing a profile's page must
     // not take the default Playground's (or another profile's) work with it.
     const clearSession = useCallback(() => {
@@ -287,6 +295,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
         historyTrackRef,
         inFlightRef,
         clearSession,
+        copyRunToProfile,
         runGeneration,
         handleCancelRun,
         handleRetry,

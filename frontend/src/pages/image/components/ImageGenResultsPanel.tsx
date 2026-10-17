@@ -35,6 +35,7 @@ interface ImageGenResultsPanelProps {
     onCancelRun: (id: string) => void;
     onRetryRun: (run: GenerationRun) => void;
     onReuseRun: (run: GenerationRun) => void;
+    onSaveRunAsProfile?: (run: GenerationRun) => void;
     onOpenRunSource: (run: GenerationRun, index: number) => void;
     onOpenOutput: (image: SelectedImage) => void;
     onRemoveRun: (id: string) => void;
@@ -63,6 +64,7 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
     onCancelRun,
     onRetryRun,
     onReuseRun,
+    onSaveRunAsProfile,
     onOpenRunSource,
     onOpenOutput,
     onRemoveRun,
@@ -283,6 +285,7 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                                 onCancel={onCancelRun}
                                 onRetry={onRetryRun}
                                 onReuse={onReuseRun}
+                                onSaveAsProfile={onSaveRunAsProfile}
                                 onOpenSource={onOpenRunSource}
                                 onUseAsReference={onUseAsReference}
                                 onOpenOutput={onOpenOutput}
