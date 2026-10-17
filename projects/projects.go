@@ -50,10 +50,6 @@ type (
 	Handoffer = project.Handoffer
 )
 
-// ImportedSession is a Claude Code session another host ran in a folder,
-// for ImportSessions.
-type ImportedSession = project.ImportedSession
-
 // Options configure an App.
 type Options struct {
 	// DataDir holds the database and each project's memory, library and
@@ -103,13 +99,6 @@ func (a *App) Register(api *swagger.RouteGroup) {
 // feature is switched on.
 func (a *App) Start(ctx context.Context) {
 	a.start.Do(func() { a.svc.Start(ctx) })
-}
-
-// ImportSessions brings a host's own folder sessions into Projects, once per
-// source (later calls with the same source do nothing). Each keeps its Claude
-// Code session id, so its next turn resumes the conversation.
-func (a *App) ImportSessions(source string, sessions []ImportedSession) (int, error) {
-	return a.svc.Threads.ImportSessions(source, sessions)
 }
 
 // Close stops every thread's turn and Claude Code process, then closes the

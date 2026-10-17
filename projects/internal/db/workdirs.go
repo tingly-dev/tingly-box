@@ -3,7 +3,6 @@ package db
 import (
 	"time"
 
-	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
@@ -16,16 +15,6 @@ func (s *Store) SaveWorkdir(path string) error {
 	return s.db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "path"}},
 		DoUpdates: clause.Assignments(map[string]any{"last_used_at": now}),
-	}).Create(&w).Error
-}
-
-// SaveWorkdirAt keeps a folder in the sidebar as last used at (an import's
-// own time), never moving a later use back.
-func (s *Store) SaveWorkdirAt(path string, at time.Time) error {
-	w := Workdir{Path: path, CreatedAt: at, LastUsedAt: at}
-	return s.db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "path"}},
-		DoUpdates: clause.Assignments(map[string]any{"last_used_at": gorm.Expr("MAX(last_used_at, excluded.last_used_at)")}),
 	}).Create(&w).Error
 }
 
@@ -86,31 +75,4 @@ func (s *Store) SessionCounts() (map[string]map[string]int, error) {
 		out[r.Worktree][r.Status] = r.N
 	}
 	return out, nil
-}
-
-// HasSession reports whether any thread runs Claude Code session sid.
-func (s *Store) HasSession(sid string) (bool, error) {
-	var n int64
-	err := s.db.Model(&Thread{}).Where("session_id = ?", sid).Count(&n).Error
-	return n > 0, err
-}
-
-// ImportThread creates a thread with its whole transcript, or nothing. A
-// thread that already carries an id keeps it.
-func (s *Store) ImportThread(t *Thread, events []*ThreadEvent) error {
-	if t.ID == "" {
-		t.ID = newID()
-	}
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(t).Error; err != nil {
-			return err
-		}
-		for _, e := range events {
-			e.ID, e.ThreadID = newID(), t.ID
-			if err := tx.Create(e).Error; err != nil {
-				return err
-			}
-		}
-		return nil
-	})
 }

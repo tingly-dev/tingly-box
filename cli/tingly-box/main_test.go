@@ -501,7 +501,7 @@ func isHelpErr(err error) bool {
 	return strings.Contains(msg, "help") || strings.Contains(msg, "usage")
 }
 
-// TestCCPassesResumeThrough pins the command Desk's "Continue in terminal"
+// TestCCPassesResumeThrough pins the command a folder session's "Continue in terminal"
 // hands out: `cc --resume <id>` and `profile <id> --resume <id>` must reach
 // Claude Code as passthrough args, not be rejected as unknown flags.
 func TestCCPassesResumeThrough(t *testing.T) {

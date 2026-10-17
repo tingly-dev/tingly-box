@@ -13,7 +13,7 @@ import (
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
 )
 
-// Folder sessions (what Desk was) run through Tingly Box's Claude Code
+// Folder sessions run through Tingly Box's Claude Code
 // profiles, pick a model tier, and hand off to `tingly-box cc --resume`.
 // Projects sees a profile only as a name; these are the Tingly Box halves of
 // its optional Launcher and Handoffer.
@@ -23,7 +23,7 @@ var (
 	_ projectsapp.Handoffer = (*Host)(nil)
 )
 
-// LaunchEnv routes a session's turn like Desk and @cc do: the main
+// LaunchEnv routes a session's turn like @cc does: the main
 // claude_code scenario's env, or a profile's settings file, which carries
 // its own routing and so replaces the env rather than adding to it.
 func (h *Host) LaunchEnv(ctx context.Context, profile string) ([]string, string, error) {

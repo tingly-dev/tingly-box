@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -148,13 +147,7 @@ func (s *Server) apiModules(ctx context.Context, schema bool) []module.Module {
 	// starts when the flag is on: at boot, or on the first request after the
 	// flag is switched on.
 	if app := newProjectsApp(s.config, schema); app != nil {
-		var once sync.Once
-		start := func() {
-			// Desk's sessions become working-folder sessions before the
-			// first start (once; see importDeskSessions).
-			once.Do(func() { importDeskSessions(sm, app) })
-			app.Start(ctx)
-		}
+		start := func() { app.Start(ctx) }
 		mods = append(mods, projectsmodule.NewHandler(app, s.projectsEnabled, start))
 		if !schema {
 			s.projects = app

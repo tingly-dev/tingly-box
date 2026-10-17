@@ -60,7 +60,6 @@ var migrationSteps = []migrationStep{
 	{"20260712-drop-unsupported-smart-routing", kindDated, "2026-07-12", migrate20260712},
 	{"20260606-xcode-skip-usage", kindOnce, "2026-06-06", defaultXcodeSkipUsageOnce},
 	{"20260610-builtin-rule-flags", kindOnce, "2026-06-10", defaultBuiltinRuleFlagsOnce},
-	{"20261016-desk-flag-into-projects", kindDated, "2026-10-16", migrateDeskFlagIntoProjects},
 }
 
 // Migrate runs every registered migration step in order and persists the
@@ -797,29 +796,4 @@ func (c *Config) backfillFableRule() bool {
 	c.Rules = append(c.Rules, fable)
 	logrus.Info("Added Claude Code fable built-in rule")
 	return true
-}
-
-// migrateDeskFlagIntoProjects retires the "desk" flag: Desk is now the
-// working folders of Projects, so a config that had Desk on gets Projects on,
-// and the old key is dropped wherever it is stored. Idempotent (nothing to do
-// once no scenario carries the key), so it is a dated step.
-func migrateDeskFlagIntoProjects(c *Config) bool {
-	const desk = "desk"
-	changed := false
-	for i := range c.Scenarios {
-		ext := c.Scenarios[i].Extensions
-		v, ok := ext[desk]
-		if !ok {
-			continue
-		}
-		if on, _ := v.(bool); on {
-			ext[constant.ExtensionProjects] = true
-		}
-		delete(ext, desk)
-		changed = true
-	}
-	if changed {
-		logrus.Info("Migration 2026-10-16 completed: the desk flag is now part of projects")
-	}
-	return changed
 }

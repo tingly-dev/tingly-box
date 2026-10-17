@@ -66,7 +66,7 @@ func (h *Host) Models(context.Context) ([]llm.Model, error) {
 }
 
 // ThreadEnv points each thread's Claude Code at the gateway the same way
-// Desk and @cc do.
+// @cc does.
 func (h *Host) ThreadEnv(ctx context.Context) ([]string, string) {
 	env, err := h.cc.GetClaudeCodeEnv(ctx)
 	if err != nil {

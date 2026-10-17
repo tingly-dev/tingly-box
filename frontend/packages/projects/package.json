@@ -2,7 +2,7 @@
   "name": "@tingly/projects",
   "version": "0.1.0",
   "private": true,
-  "description": "Projects' frontend: the standalone tingly-project app and the pages Tingly Box embeds (.), and the agent-session transcript Desk and Projects' thread page share (./transcript).",
+  "description": "Projects' frontend: the standalone tingly-project app and the pages Tingly Box embeds (.), and the agent-session transcript its thread and session pages share (./transcript).",
   "type": "module",
   "exports": {
     ".": "./src/embed.ts",

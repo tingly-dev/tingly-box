@@ -2,7 +2,7 @@
 
 > 已退役。Desk 已并入 Projects，成为它的工作目录（见
 > [projects-desk-absorption.md](./projects-desk-absorption.md)）：`internal/desk`、
-> `module/desk`、Desk 前端和 `desk` 开关都已删除，旧会话在 Projects 首次启动时导入一次。
+> `module/desk`、Desk 前端、`/desk` 路由和 `desk` 开关都已删除，旧会话不迁移。
 > §3.1–3.9 讲的是 agentboot 会话引擎的行为（常驻进程、后台任务、子代理、交接），
 > Projects 的线程和工作目录会话仍然按这些规则运行；其余各节只作历史记录。
 

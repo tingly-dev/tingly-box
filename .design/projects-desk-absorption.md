@@ -50,7 +50,7 @@ worktrees or merging.
 | Status line (routed model, context, tokens, quota) | `StatusLine`, `/desk/sessions/:id/status` | **TB** slot below the box, TB route keyed by session id |
 | Handoff to a terminal | `POST …/handoff` | generic `claude --resume` command in Projects; **TB** overrides with `tingly-box cc --resume` through the host |
 | Sessions shared with IM `@cc` (`ChatID="web"`, same store) | `remote/session` | **decision needed**, see below |
-| `desk` flag, `/desk` route, rail placement, `desk` i18n | TB | folded into `projects`; `/desk` redirects; strings move to the `projects` namespace |
+| `desk` flag, `/desk` route, rail placement, `desk` i18n | TB | removed; everything sits under the `projects` flag and namespace |
 
 ## Data model
 
@@ -85,14 +85,14 @@ creates a thread in a project with the same session id (TEP #2063 step 5).
   thread routes with the project prefix dropped; handlers share code.
 - `project.Host` gains **optional** capabilities (type-asserted, so existing
   hosts and the standalone binary keep compiling):
-  - `Launcher`: per-session routing (`Profiles()`, `Launch(profile, tier)` →
-    env and `--settings`). Opaque strings to Projects.
+  - `Launcher`: per-session routing. `LaunchEnv(profile)` gives the env and
+    `--settings` path, `CheckLaunch(profile, model)` validates a choice.
+    Profiles are opaque strings to Projects.
   - `Handoffer`: the program that continues a session in a terminal
     (`HandoffLaunch(profile)` → argv). Projects adds `--resume`, the
     session's `--model` and the folder, quoted for PowerShell on Windows and
     a POSIX shell elsewhere.
-  - `Statuser`: nothing for Projects to call; the status line is a TB route.
-  - `LegacySessions`: one-time import (below).
+  - No status capability: the status line is a TB route drawn in a UI slot.
 - The pool is shared: threads and folder sessions run in one `pool.Pool`, so
   the 10-process limit is global, not per surface.
 - Standalone: no capabilities, so no profile/model/status UI, and the handoff
@@ -142,18 +142,13 @@ until phase 4.
    - [x] Drafts: what is typed but not sent is kept per thread in the browser
      (threads and sessions alike). Messages sent mid-turn are queued by the
      server, as for threads, so Desk's browser-side send queue is not ported.
-4. **Cutover.** Done:
-   - [x] Import: on Projects' first start, Desk's `ChatID="web"` sessions
-     become working-folder sessions (`App.ImportSessions`, once per source,
-     remembered in Projects' settings). Each keeps its Claude Code session id
-     and transcript (approvals folded with their answers), so the next
-     message resumes it. The originals stay in the remote session store.
-   - [x] The `desk` flag is gone: a config migration turns `projects` on where
-     `desk` was on and drops the key; its toggle, gate and nav entry are
-     deleted.
-   - [x] `/desk` redirects to the working folders (`?folder=` to that folder).
-     `/api/v1/desk` is removed rather than redirected: its only client was
-     the Desk page, which ships in the same build.
+4. **Cutover.** Done. Desk was an unreleased experiment, so nothing is
+   carried over:
+   - [x] No import: Desk's sessions stay in the remote session store and are
+     not shown in Projects.
+   - [x] The `desk` flag is gone with no migration: its toggle, gate and nav
+     entry are deleted, and a leftover `desk` key in a config is ignored.
+   - [x] `/desk` and `/api/v1/desk` are removed, not redirected.
    - [x] Deleted `internal/desk`, `module/desk`, the Desk pages, components,
      API client, mocks and strings; the profile/model pickers and the status
      line strings moved to `components/claudeCode` and `claudeSession.*`.
@@ -164,14 +159,12 @@ until phase 4.
 
 ## Decisions
 
-1. **`@cc` sharing.** Desk sessions live in the same store as IM `@cc` sessions
-   (`ChatID="web"`). Projects must own its storage to stand alone. Recommended:
-   a one-time import of the `web` sessions into Projects at cutover, and no
-   live sharing afterwards; showing IM sessions in the panel can come back as
-   a TB-only section later. The cost is that the old "continue an IM session
-   on the web" idea is dropped for now.
+1. **`@cc` sharing** (decided). Desk sessions lived in the same store as IM
+   `@cc` sessions (`ChatID="web"`). Projects owns its storage to stand alone,
+   with no live sharing and no import; showing IM sessions in the panel can
+   come back as a TB-only section later.
 2. **Data model.** Chosen: thread without a project (above). Say if you want
    the one-thread-project alternative instead.
-3. **Flag** (decided). The `desk` flag is removed as a whole and everything is under `projects`: a user who had `desk` on gets `projects` on at cutover, and the `desk` key, its gate, its nav entry and its experimental toggle are deleted rather than kept as an alias.
+3. **Flag** (decided). The `desk` flag is removed as a whole and everything is under `projects`: no migration and no alias, since Desk never shipped. Its gate, nav entry and experimental toggle are deleted.
 4. **Cutover timing.** Phase 4 only after phase 3 reaches parity, one release
    with both paths available if you want a fallback.
