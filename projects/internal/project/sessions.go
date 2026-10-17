@@ -43,7 +43,7 @@ var (
 	ErrBadPermission   = errors.New("unknown permission mode")
 	errFolderRequired  = errors.New("folder is required")
 	errBadTaskID       = errors.New("bad task id")
-	errTaskOutputUnset = errors.New("no output recorded for that task")
+	ErrTaskOutputUnset = errors.New("no output recorded for that task")
 )
 
 // SessionSpec describes a new folder session.
@@ -172,7 +172,7 @@ func (m *Threads) TaskOutput(threadID, taskID string, tail int) (engine.TaskOutp
 		}
 	}
 	if path == "" {
-		return engine.TaskOutput{}, errTaskOutputUnset
+		return engine.TaskOutput{}, ErrTaskOutputUnset
 	}
 	return engine.ReadTaskOutput(path, taskID, tail)
 }
