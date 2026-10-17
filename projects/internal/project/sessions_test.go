@@ -27,9 +27,10 @@ func TestSessionRunsInFolderWithoutProject(t *testing.T) {
 
 	got := waitStatus(t, f.store, s.ID, db.ThreadIdle)
 	assert.EqualValues(t, 7, got.InputTokens)
-	assert.Equal(t, "default-model", got.Model)
+	assert.Equal(t, "", got.Model, "a session keeps its owner's pick, not the model that answered")
 
 	spec := f.agent.Launches()[0]
+	assert.Equal(t, "default-model", spec.Model)
 	assert.Equal(t, folder, spec.ProjectPath)
 	assert.Equal(t, "plan", spec.PermissionMode)
 	assert.Empty(t, spec.AppendSystemPrompt, "no project instructions")
