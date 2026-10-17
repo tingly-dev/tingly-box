@@ -3,6 +3,7 @@ package oauth
 import (
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -31,6 +32,11 @@ type Options struct {
 	// a server-poll flow has no callback whose BaseURL could stand in for them.
 	ZCodeAPIBase string
 	ZCodeBizHost string
+
+	// WorkBuddyOrigin / WorkBuddyPollInterval override the WorkBuddy site
+	// origin and login poll interval. Test-only, like the ZCode hosts.
+	WorkBuddyOrigin       string
+	WorkBuddyPollInterval time.Duration
 }
 
 // WithProxyURL sets a proxy URL for the request
@@ -101,6 +107,16 @@ func WithZCodeEndpoints(apiBase, bizHost string) Option {
 	return func(o *Options) {
 		o.ZCodeAPIBase = apiBase
 		o.ZCodeBizHost = bizHost
+	}
+}
+
+// WithWorkBuddyEndpoint points the WorkBuddy login and refresh at origin and
+// polls every interval. Test-only: it lets the whole login run against an
+// httptest server without waiting a real second per poll.
+func WithWorkBuddyEndpoint(origin string, interval time.Duration) Option {
+	return func(o *Options) {
+		o.WorkBuddyOrigin = origin
+		o.WorkBuddyPollInterval = interval
 	}
 }
 

@@ -190,14 +190,14 @@ func runAddFlow(appConfig *appconfig.AppConfig, config *ProviderOAuthConfig, cus
 }
 
 // runServerPollFlow handles the server-mediated poll flow (ZCode / GLM Coding
-// Plan). There is no user code and no local callback: the URL is the whole
+// Plan, WorkBuddy). There is no user code and no local callback: the URL is the whole
 // handshake, so it can be opened on any device — a phone works for a headless
 // server.
 func runServerPollFlow(ctx context.Context, manager *oauth2.Manager, appConfig *appconfig.AppConfig, config *ProviderOAuthConfig, providerName string) error {
 	issuer := ai.Issuer(config.Type)
 
 	fmt.Println("\n🌐 Initiating login...")
-	flow, err := manager.InitiateZCodeFlow(ctx, "cli-user", issuer, "", providerName)
+	flow, err := manager.InitiateServerPollFlow(ctx, "cli-user", issuer, "", providerName)
 	if err != nil {
 		return fmt.Errorf("failed to initiate login: %w", err)
 	}
@@ -209,9 +209,9 @@ func runServerPollFlow(ctx context.Context, manager *oauth2.Manager, appConfig *
 	fmt.Println("\n📝 Instructions:")
 	fmt.Println("1. Open the URL above in a browser and sign in")
 	fmt.Println("2. Approve the authorization — nothing needs to come back to this machine")
-	fmt.Println("\n⏳ Waiting for authorization and resolving the plan credential...")
+	fmt.Println("\n⏳ Waiting for authorization...")
 
-	token, err := manager.CompleteZCodeFlow(ctx, flow)
+	token, err := manager.CompleteServerPollFlow(ctx, flow)
 	if err != nil {
 		return fmt.Errorf("login failed: %w", err)
 	}
@@ -589,6 +589,10 @@ func getProviderConfig(issuer string) (*ProviderOAuthConfig, error) {
 		// attached as the dual URL in createProviderFromToken.
 		apiBase, _ = ai.ZCodeEndpoints(ai.Issuer(issuer))
 		apiStyle = "anthropic"
+	case ai.IssuerWorkBuddy, ai.IssuerWorkBuddyCN:
+		site, _ := ai.WorkBuddySiteFor(ai.Issuer(issuer))
+		apiBase = site.APIBase()
+		apiStyle = "openai"
 	default:
 		// For other providers, use a default
 		apiBase = "https://api.example.com/v1"

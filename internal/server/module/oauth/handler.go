@@ -421,13 +421,17 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 		return
 	}
 
-	// Server-mediated poll flow (ZCode): the provider's server owns the
-	// callback, so the browser never comes back to us. We hand the frontend an
-	// auth URL exactly like the auth-code flow does and poll upstream in the
+	// Server-mediated poll flow (ZCode, WorkBuddy): the provider's server owns
+	// the callback, so the browser never comes back to us. We hand the frontend
+	// an auth URL exactly like the auth-code flow does and poll upstream in the
 	// background; the frontend already polls /oauth/status for the outcome, so
 	// it needs no flow-specific handling.
 	if config.OAuthMethod == oauth.OAuthMethodServerPoll {
-		flow, err := h.oauthManager.InitiateZCodeFlow(c.Request.Context(), userID, issuer, req.Redirect, zcodeProviderName(config.DisplayName, req.Name), OAuthOptions(proxyURL, "")...)
+		name := req.Name
+		if oauth.IsZCodeIssuer(issuer) {
+			name = zcodeProviderName(config.DisplayName, req.Name)
+		}
+		flow, err := h.oauthManager.InitiateServerPollFlow(c.Request.Context(), userID, issuer, req.Redirect, name, OAuthOptions(proxyURL, "")...)
 		if err != nil {
 			_ = h.oauthManager.UpdateSessionStatus(sessionID, oauth.SessionStatusFailed, "", err.Error())
 			c.JSON(http.StatusBadGateway, OAuthErrorResponse{
@@ -437,7 +441,7 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 			return
 		}
 
-		go h.pollForZCodeToken(flow, sessionID, proxyURL)
+		go h.pollForServerPollToken(flow, sessionID, proxyURL)
 
 		resp := OAuthAuthorizeResponse{
 			Success: true,
@@ -507,18 +511,18 @@ func (h *Handler) pollForDeviceCodeToken(ctx context.Context, deviceCodeData *oa
 	_ = h.oauthManager.UpdateSessionStatus(sessionID, oauth.SessionStatusSuccess, providerUUID, "")
 }
 
-// pollForZCodeToken waits for the ZCode authorization in the background,
-// resolves the plan credential, and completes the session. It mirrors
+// pollForServerPollToken waits for a server-mediated authorization (ZCode,
+// WorkBuddy) in the background and completes the session. It mirrors
 // pollForDeviceCodeToken: both flows end in createProviderFromToken, so create
-// and re-auth behave identically for ZCode.
-func (h *Handler) pollForZCodeToken(flow *oauth.ZCodeFlow, sessionID, proxyURL string) {
-	logrus.Infof("[OAuth] Waiting for ZCode authorization (%s) in background", flow.Issuer)
-	ctx, cancel := context.WithTimeout(context.Background(), oauth.ZCodeLoginTimeout)
+// and re-auth behave identically for every issuer.
+func (h *Handler) pollForServerPollToken(flow *oauth.ServerPollFlow, sessionID, proxyURL string) {
+	logrus.Infof("[OAuth] Waiting for %s authorization in background", flow.Issuer)
+	ctx, cancel := context.WithTimeout(context.Background(), flow.Timeout)
 	defer cancel()
 
-	token, err := h.oauthManager.CompleteZCodeFlow(ctx, flow, OAuthOptions(proxyURL, "")...)
+	token, err := h.oauthManager.CompleteServerPollFlow(ctx, flow, OAuthOptions(proxyURL, "")...)
 	if err != nil {
-		logrus.Warnf("[OAuth] ZCode login failed for %s: %v", flow.Issuer, err)
+		logrus.Warnf("[OAuth] %s login failed: %v", flow.Issuer, err)
 		_ = h.oauthManager.UpdateSessionStatus(sessionID, oauth.SessionStatusFailed, "", err.Error())
 		return
 	}
@@ -528,13 +532,13 @@ func (h *Handler) pollForZCodeToken(flow *oauth.ZCodeFlow, sessionID, proxyURL s
 	// that, so check the session is still pending before a provider appears
 	// that the user thought they had abandoned.
 	if session, err := h.oauthManager.GetSession(sessionID); err != nil || session == nil || session.Status != oauth.SessionStatusPending {
-		logrus.Infof("[OAuth] ZCode authorization for %s completed after the session ended; discarding", flow.Issuer)
+		logrus.Infof("[OAuth] %s authorization completed after the session ended; discarding", flow.Issuer)
 		return
 	}
 
-	providerUUID, err := h.createProviderFromToken(token, flow.Issuer, flow.Name, sessionID, "")
+	providerUUID, err := h.createProviderFromToken(token, flow.Issuer, token.Name, sessionID, "")
 	if err != nil {
-		logrus.Errorf("[OAuth] Failed to create ZCode provider for %s: %v", flow.Issuer, err)
+		logrus.Errorf("[OAuth] Failed to create %s provider: %v", flow.Issuer, err)
 		_ = h.oauthManager.UpdateSessionStatus(sessionID, oauth.SessionStatusFailed, "", err.Error())
 		return
 	}
@@ -1256,6 +1260,12 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 			// the dual URL below so OpenAI/Codex clients are served natively.
 			apiBase, _ = ai.ZCodeEndpoints(issuer)
 			apiStyle = protocol.APIStyleAnthropic
+		case ai.IssuerWorkBuddy, ai.IssuerWorkBuddyCN:
+			// OpenAI chat completions under /v2; Anthropic and Responses
+			// clients reach it through protocol conversion.
+			site, _ := ai.WorkBuddySiteFor(issuer)
+			apiBase = site.APIBase()
+			apiStyle = protocol.APIStyleOpenAI
 		default:
 			apiBase = "mock"
 			apiStyle = protocol.APIStyleOpenAI

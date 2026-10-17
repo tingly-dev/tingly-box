@@ -649,6 +649,12 @@ func (m *Manager) GetToken(ctx context.Context, userID string, issuer ai.Issuer,
 
 // refreshToken refreshes an access token using a refresh token
 func (m *Manager) refreshToken(ctx context.Context, issuer ai.Issuer, refreshToken string, opts *Options) (*Token, error) {
+	// WorkBuddy has no OAuth refresh grant; its refresh is a plugin API call.
+	// Dispatching here covers the background refresher and POST /oauth/refresh.
+	if ai.IsWorkBuddyIssuer(issuer) {
+		return m.refreshWorkBuddyToken(ctx, issuer, refreshToken, opts)
+	}
+
 	config, ok := m.registry.Get(issuer)
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, issuer)

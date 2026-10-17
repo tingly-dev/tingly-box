@@ -220,6 +220,34 @@ func DefaultRegistry() *Registry {
 		Hook:        &NoopHook{},
 	})
 
+	// WorkBuddy (Tencent WorkBuddy / CodeBuddy) — server-mediated login.
+	//
+	// Not an OAuth 2.0 client either: the site's plugin API mints a login
+	// state and URL, and the flow itself (state → browser → poll) lives in
+	// workbuddy.go. AuthURL/TokenURL are informational. One issuer per
+	// account region.
+	registry.Register(&ProviderConfig{
+		Type:        ai.IssuerWorkBuddy,
+		DisplayName: "WorkBuddy",
+		AuthURL:     "https://www.workbuddy.ai/v2/plugin/auth/state",
+		TokenURL:    "https://www.workbuddy.ai/v2/plugin/auth/token",
+		AuthStyle:   AuthStyleInNone,
+		OAuthMethod: OAuthMethodServerPoll,
+		ConsoleURL:  "https://www.workbuddy.ai",
+		Hook:        &NoopHook{},
+	})
+
+	registry.Register(&ProviderConfig{
+		Type:        ai.IssuerWorkBuddyCN,
+		DisplayName: "WorkBuddy / CodeBuddy CN",
+		AuthURL:     "https://copilot.tencent.com/v2/plugin/auth/state",
+		TokenURL:    "https://copilot.tencent.com/v2/plugin/auth/token",
+		AuthStyle:   AuthStyleInNone,
+		OAuthMethod: OAuthMethodServerPoll,
+		ConsoleURL:  "https://www.codebuddy.cn",
+		Hook:        &NoopHook{},
+	})
+
 	// xAI (Grok) OAuth — "Grok Build" / SuperGrok / X Premium+ login.
 	// Not officially documented by xAI; client ID and endpoints are the ones
 	// shared publicly by third-party CLI integrations (e.g. hermes-agent,
