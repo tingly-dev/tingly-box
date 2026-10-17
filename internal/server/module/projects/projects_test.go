@@ -134,11 +134,8 @@ func TestGate(t *testing.T) {
 // the terminal routes the way the web turns did.
 func TestHostHandoffGoesThroughTinglyBox(t *testing.T) {
 	h := NewHost(newConfig(t))
-	cmd := h.HandoffCommand("/work/it's here", "sid-1", "")
-	assert.Contains(t, cmd, `cd '/work/it'\''s here' && '`)
-	assert.True(t, strings.HasSuffix(cmd, "' cc --resume 'sid-1'"), cmd)
-	cmd = h.HandoffCommand("/w", "sid-1", "p1")
-	assert.True(t, strings.HasSuffix(cmd, "' profile 'p1' --resume 'sid-1'"), cmd)
+	assert.Equal(t, []string{selfExecutable(), "cc"}, h.HandoffLaunch(""))
+	assert.Equal(t, []string{selfExecutable(), "profile", "p1"}, h.HandoffLaunch("p1"))
 }
 
 func TestHostChecksModelTiers(t *testing.T) {

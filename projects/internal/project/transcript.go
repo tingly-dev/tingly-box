@@ -55,7 +55,10 @@ func (s threadStore) Append(sid string, e engine.Entry) {
 	case e.Role == "user":
 		// The thread recorded it, with who sent it, when it was queued.
 	case e.Role == "assistant":
-		s.tally(id, func(t *turnTally) { t.text = e.Content })
+		if e.Parent == "" {
+			// A subagent's text is not the thread's reply.
+			s.tally(id, func(t *turnTally) { t.text = e.Content })
+		}
 		ev = &db.ThreadEvent{Kind: db.EvAssistant, Content: e.Content}
 	case e.Kind == engine.KindToolUse:
 		ev = &db.ThreadEvent{Kind: db.EvToolUse, Content: e.Content, Payload: string(e.Payload), RequestID: e.RequestID}

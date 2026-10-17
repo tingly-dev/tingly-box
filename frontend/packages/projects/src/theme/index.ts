@@ -5,6 +5,6 @@ import createTinglyTheme, { type ResolvedThemeMode } from '@tingly/ui/theme';
 
 export type { ResolvedThemeMode, ThemeMode } from '@tingly/ui/theme';
 
-export function createAppTheme(mode: ResolvedThemeMode, language: string) {
-    return createTinglyTheme(mode, language.startsWith('zh') ? 'zh' : 'en');
+export function createAppTheme(mode: ResolvedThemeMode, language: string | undefined) {
+    return createTinglyTheme(mode, language?.startsWith('zh') ? 'zh' : 'en');
 }
