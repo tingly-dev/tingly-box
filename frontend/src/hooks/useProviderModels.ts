@@ -237,10 +237,11 @@ export const useProviderModels = () => {
         return cleanup;
     }, []);
 
-    // Bust in-memory cache when tab regains focus after ≥30s so the next
-    // fetchModels call re-fetches from the server instead of serving stale data.
+    // Mark the in-memory cache stale when the tab regains focus after ≥30s so
+    // the next fetchModels call re-fetches from the server instead of serving
+    // stale data. The models themselves stay until that fetch replaces them:
+    // clearing them would empty an open model list until something refetches.
     usePageVisibility(useCallback(() => {
-        setProviderModels(prev => Object.keys(prev).length === 0 ? prev : {});
         setCacheMeta(prev => Object.keys(prev).length === 0 ? prev : {});
     }, []));
 

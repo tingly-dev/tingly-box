@@ -5,6 +5,7 @@ import ModelSelectDialog, { type ProviderSelectTabOption } from '@/components/Mo
 import type { ConfigRecord, Rule } from '@/components/RoutingGraphTypes.ts';
 import { v4 as uuidv4 } from 'uuid';
 import api from "@/services/api.ts";
+import { useStableComponent } from '@/hooks/useStableComponent';
 import { buildRuleUpdatePayload } from '@/components/rule-card/ruleUpdatePayload';
 
 export interface ModelSelectOptions {
@@ -282,8 +283,10 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
         editingServiceContextRef.current = null;
     }, []);
 
-    // Dialog component
-    const WrappedModelSelectDialog: React.FC<ModelSelectDialogProps> = ({ open: dialogOpen, onClose }) => (
+    // Dialog component. Kept as one stable component type: an inline React.FC
+    // would be a new type on every render of the host page, remounting the
+    // dialog (and emptying its model list) whenever the page re-renders.
+    const WrappedModelSelectDialog = useStableComponent<ModelSelectDialogProps>(({ open: dialogOpen, onClose }) => (
         <Dialog
             open={dialogOpen}
             onClose={() => {
@@ -316,7 +319,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
                 />
             </DialogContent>
         </Dialog>
-    );
+    ));
 
     return {
         openModelSelect,

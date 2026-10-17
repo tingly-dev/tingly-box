@@ -1,4 +1,3 @@
-import { AddCircleOutline as AddCircleOutlineIcon } from '@/components/icons';
 import { NavigateBefore as NavigateBeforeIcon } from '@/components/icons';
 import { NavigateNext as NavigateNextIcon } from '@/components/icons';
 import { Refresh as RefreshIcon } from '@/components/icons';
@@ -32,6 +31,7 @@ import { useNewModels } from '@/hooks/useNewModels';
 import { useModelDescriptions } from '@/hooks/useModelDescriptions';
 import { notify } from '@/utils/notify';
 import { fetchUIAPI } from '@/services/api';
+import AddCustomModelCard from './AddCustomModelCard';
 import CustomModelCard from './CustomModelCard';
 import ModelCard from './ModelCard';
 import RecentModelsSection from './RecentModelsSection';
@@ -67,6 +67,9 @@ export interface ModelsPanelProps {
     selectedModel?: string;
     columns: number;
     modelsPerPage: number;
+    // True until this provider's model list first arrives: the panel shows a
+    // loading state instead of flashing "0 models" / a partial list.
+    modelsLoading?: boolean;
     onModelSelect: (provider: Provider, model: string) => void;
     onCustomModelEdit: (provider: Provider, value?: string) => void;
     onCustomModelDelete: (provider: Provider, customModel: string) => void;
@@ -81,6 +84,7 @@ export function ModelsPanel({
     selectedModel,
     columns,
     modelsPerPage,
+    modelsLoading = false,
     onModelSelect,
     onCustomModelEdit,
     onCustomModelDelete,
@@ -165,10 +169,13 @@ export function ModelsPanel({
         ...standardModelsForDisplay.map(model => ({ model, type: 'standard' as const })),
     ];
 
+    // The "Custom Model" card takes the first cell of every page.
+    const modelsPerGridPage = Math.max(1, modelsPerPage - 1);
+
     // Pagination and search
     const { searchTerms, handleSearchChange, getPaginatedData, setCurrentPage } = usePagination(
         [provider.uuid],
-        modelsPerPage
+        modelsPerGridPage
     );
 
     // Filter by search term
@@ -188,8 +195,8 @@ export function ModelsPanel({
 
     const pagination = getPaginatedData(filteredModels.map(m => m.model), provider.uuid);
     const paginatedItems = filteredModels.slice(
-        (pagination.currentPage - 1) * modelsPerPage,
-        pagination.currentPage * modelsPerPage
+        (pagination.currentPage - 1) * modelsPerGridPage,
+        pagination.currentPage * modelsPerGridPage
     );
 
     const handlePageChange = useCallback((newPage: number) => {
@@ -259,21 +266,13 @@ export function ModelsPanel({
                         <Button
                             variant="outlined"
                             size="small"
-                            startIcon={<AddCircleOutlineIcon />}
-                            onClick={() => onCustomModelEdit(provider)}
-                            sx={{ minWidth: 100 }}
-                        >
-                            Custom Model
-                        </Button>
-                        <Button
-                            variant="outlined"
-                            size="small"
                             startIcon={isRefreshing ? <CircularProgress size={16} /> : <RefreshIcon />}
                             onClick={() => refreshModels(provider.uuid)}
                             disabled={isRefreshing}
+                            title="Fetch the latest model list from the provider"
                             sx={{ minWidth: 100 }}
                         >
-                            {isRefreshing ? 'Fetching...' : 'Refresh'}
+                            {isRefreshing ? 'Refreshing models…' : 'Refresh models'}
                         </Button>
                         {onProviderEdit && (
                             <Button
@@ -331,6 +330,19 @@ export function ModelsPanel({
                     </Stack>
                 )}
 
+                {modelsLoading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+                        {/* Fade in only if loading is slow, so a quick fetch shows no spinner blink */}
+                        <CircularProgress
+                            size={24}
+                            sx={{
+                                opacity: 0,
+                                animation: 'modelsPanelSpinnerIn 0.2s ease 0.4s forwards',
+                                '@keyframes modelsPanelSpinnerIn': { to: { opacity: 1 } },
+                            }}
+                        />
+                    </Box>
+                ) : (<>
                 {/* Model count */}
                 <Typography
                     variant="caption"
@@ -389,6 +401,7 @@ export function ModelsPanel({
                 {/* All Models Section */}
                 <Box sx={{ minHeight: 200 }}>
                     <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: 0.8 }}>
+                        <AddCustomModelCard onClick={() => onCustomModelEdit(provider)} />
                         {paginatedItems.map(({ model, type }) => {
                             const isModelSelected = isProviderSelected && selectedModel === model;
 
@@ -431,7 +444,7 @@ export function ModelsPanel({
                     </Box>
 
                     {/* Empty state */}
-                    {paginatedItems.length === 0 && (
+                    {paginatedItems.length === 0 && searchTerm && (
                         <Box sx={{ textAlign: 'center', py: 4 }}>
                             <Typography variant="body2" sx={{
                                 color: "text.secondary"
@@ -468,6 +481,7 @@ export function ModelsPanel({
                         </Stack>
                     </Box>
                 )}
+                </>)}
             </Stack>
             </Box>
             {/* Provider Quota Bars - fixed at the bottom */}

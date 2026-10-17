@@ -5,6 +5,7 @@ import type { Provider } from '@/types/provider';
 import type { ProviderSelectTabOption } from '@/components/ModelSelectDialog';
 import ModelSelectDialog from '@/components/ModelSelectDialog';
 import api from '@/services/api';
+import { useStableComponent } from '@/hooks/useStableComponent';
 import type { BotSettings } from '@/types/bot';
 
 interface BotModelDialogOptions {
@@ -58,8 +59,9 @@ export const useBotModelDialog = (options: BotModelDialogOptions) => {
     const selectedProvider = bot?.smartguide_provider;
     const selectedModel = bot?.smartguide_model;
 
-    // Dialog component - using the same pattern as useModelSelectDialog
-    const BotModelDialog: React.FC<{ open: boolean }> = ({ open: dialogOpen }) => {
+    // Dialog component - a stable component type (see useStableComponent), so a
+    // re-render of the host page doesn't remount the open dialog.
+    const BotModelDialog = useStableComponent<{ open: boolean }>(({ open: dialogOpen }) => {
         if (!dialogOpen) return null;
 
         return (
@@ -88,7 +90,7 @@ export const useBotModelDialog = (options: BotModelDialogOptions) => {
                 </DialogContent>
             </Dialog>
         );
-    };
+    });
 
     return {
         openDialog,

@@ -42,7 +42,17 @@ function ModelSelectTabInner({
     singleProvider,
 }: ModelSelectTabProps) {
     const { customModels, removeCustomModel, saveCustomModel, updateCustomModel } = useCustomModels();
-    const { providerModels, refreshingProviders, fetchModels, refreshModels } = useProviderModels();
+    const { providerModels, refreshingProviders, fetchModels: fetchProviderModels } = useProviderModels();
+    // Providers whose first fetch has settled, so the panel can tell "still
+    // loading" apart from "loaded, nothing here" and not flash an empty list.
+    const [fetchedProviders, setFetchedProviders] = useState<ReadonlySet<string>>(() => new Set());
+    const fetchModels = useCallback(async (providerUuid: string) => {
+        try {
+            return await fetchProviderModels(providerUuid);
+        } finally {
+            setFetchedProviders(prev => prev.has(providerUuid) ? prev : new Set(prev).add(providerUuid));
+        }
+    }, [fetchProviderModels]);
     const gridLayout = useGridLayout();
     const {
         internalCurrentTab,
@@ -227,9 +237,13 @@ function ModelSelectTabInner({
                 const currentProvider = flattenedProviders.find(p => p.uuid === currentTab);
                 if (!currentProvider) return null;
 
+                const modelsLoading = !providerModels[currentTab]
+                    && (refreshingProviders.includes(currentTab) || !fetchedProviders.has(currentTab));
+
                 return (
                     <ModelsPanel
                         provider={currentProvider}
+                        modelsLoading={modelsLoading}
                         selectedProvider={selectedProvider}
                         selectedModel={selectedModel}
                         columns={gridLayout.columns}
