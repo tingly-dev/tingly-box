@@ -38,7 +38,7 @@
  *
  *   theme-preview/{light,dark,claude}-dashboard.png
  *
- * Experimental features (guardrails, mcp, bench, desk, prompt skills) are
+ * Experimental features (guardrails, mcp, bench, prompt skills) are
  * mocked always-on in mocks/handlers.ts; this script forces their flags off
  * so they neither get their own shot nor clutter the sidebar in the others.
  * The GitHub star banner is dismissed for the same reason.

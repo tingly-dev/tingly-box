@@ -15,7 +15,7 @@ import (
 )
 
 // Folder sessions: Claude Code working in a plain folder, with no project,
-// coordinator, worktree or merge (Desk's model, now part of Projects). A
+// coordinator, worktree or merge. A
 // session is a thread with an empty ProjectID whose Worktree is the folder,
 // so it shares the thread runtime and its page. See
 // .design/projects-desk-absorption.md.

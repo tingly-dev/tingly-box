@@ -12,7 +12,7 @@ Contents:
 - One runtime for threads and sessions
 - Host capabilities: what Projects asks the host, and the standalone answer
 - UI slots: where Tingly Box draws inside the library
-- Cutover: first start after the upgrade
+- Cutover
 - The rail's waiting dot
 - What moved where (file map)
 - PR chain
@@ -141,44 +141,16 @@ standalone: both slots empty → permission picker only, no status line
 in `pages/projects/session/sessionSlots.tsx`. The status line reads
 `GET /scenario/:scenario/route?profile&tier` plus the session's usage events.
 
-## Cutover: first start after the upgrade
+## Cutover
+
+Desk never shipped, so nothing is carried over.
 
 ```
-config load
-  └─ migration 20261016-desk-flag-into-projects (every scenario's extensions)
-       desk:true  → projects:true, delete desk
-       desk:false → delete desk
-       no desk    → nothing (idempotent)
-
-server start, projects flag on (at boot or first request after switching on)
-  └─ once: importDeskSessions
-        remote session store, ChatID = "web"   (IM @cc sessions untouched)
-              │  each session + its transcript
-              ▼
-        App.ImportSessions("desk", …)
-              │  setting "import.desk" already true? → stop
-              ▼
-        per session, skip if a thread already has this SessionID
-                     skip if its transcript could not be read (retried)
-          Thread{ID = SessionID = Desk's id, ProjectID:"", Worktree: folder,
-                 Turns: user turns (at least 1), Profile, Model, PermissionMode,
-                 Status: idle | resolved (closed/expired),
-                 CreatedAt/UpdatedAt: kept}
-          events: user, assistant, tool_use/result, task, usage, system, error
-                  approval_request + response → one approval (allowed/denied/expired)
-                  ask_request + response      → one ask (answered/expired)
-                  thinking                    → dropped (live turns drop it too)
-          thread + events in one transaction; folder last used = session's time
-              │  all ok → put "import.desk" = true
-              │  any error → keep going, retry next start (imported ones are skipped)
-              ▼
-        Desk originals stay in the remote store (nothing deleted)
-
-browser
-  /desk                 → /projects/folder
-  /desk?folder=<path>   → /projects/folder?path=<path>
-  /desk?session=<id>    → /projects/folder?session=<id>  (same id)
-  /api/v1/desk/*        → removed; its only client was the Desk page
+config        a leftover `desk` key is ignored; only `projects` turns the panel on
+sessions      Desk's sessions stay in the remote session store, not shown
+browser       /desk and /api/v1/desk are gone (404), no redirect
+code          internal/desk, module/desk, the Desk pages, API client, mocks
+              and desk.* strings deleted
 ```
 
 ## The rail's waiting dot
@@ -214,7 +186,7 @@ components/desk/SessionView                      @tingly/projects ThreadPanel (s
   useDeskDrafts                                  ThreadPanel draft per thread (utils/storage)
   useDeskQueues                                  server queue (messages sent mid-turn wait for the turn)
 desk i18n (desk.*)                               projects.* (library) + claudeSession.* (TB)
-flag desk                                        flag projects (migrated)
+flag desk                                        removed (flag projects)
 ```
 
 ## PR chain

@@ -863,7 +863,7 @@ func (m *Threads) AutoResolve(maxIdle time.Duration) {
 		return
 	}
 	for _, t := range threads {
-		// Folder sessions are archived by hand, as Desk's were.
+		// Folder sessions are archived by hand.
 		if t.ProjectID != "" && time.Since(t.UpdatedAt) > maxIdle {
 			_, _ = m.Resolve(t.ID)
 		}

@@ -91,19 +91,6 @@ const LegacyRemoteCoderRedirect = () => {
     return <Navigate to={`/remote-agent${location.search}`} replace />;
 };
 
-// Desk is now Projects' working folders: /desk?folder=… opens that folder.
-// Imported Desk sessions keep their id, so a session link still opens it.
-const DeskRedirect = () => {
-    const from = new URLSearchParams(useLocation().search);
-    const to = new URLSearchParams();
-    const folder = from.get('folder');
-    const session = from.get('session');
-    if (folder) to.set('path', folder);
-    if (session) to.set('session', session);
-    const q = to.toString();
-    return <Navigate to={q ? `/projects/folder?${q}` : '/projects/folder'} replace />;
-};
-
 export const appRoutes = (
     <>
         <Route path="/login" element={<Login />} />
@@ -205,8 +192,6 @@ export const appRoutes = (
             <Route path="/bots/qq" element={<QQPage />} />
             {/* IM Notify — the other purpose mounted on a bot's channel. */}
             <Route path="/notify" element={<NotifyPage />} />
-            {/* Desk became Projects' working folders; old links land there. */}
-            <Route path="/desk" element={<DeskRedirect />} />
             {/* Projects — a coordinator running Claude Code threads; its own
                 rail item (useActivityItems). */}
             <Route path="/projects" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="list" /></ExperimentalFeatureGate>} />

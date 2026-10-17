@@ -17,8 +17,7 @@ sidebar lists *places*, not pages:
   every folder's sessions; "+" adds a folder.
 
 Opening a folder shows that folder's sessions, and "New session" starts there.
-One flag, `projects`, turns the whole panel on; old `/desk` links redirect to
-the working folders (`/desk?folder=…` to that folder).
+One flag, `projects`, turns the whole panel on.
 
 ## How it is built
 

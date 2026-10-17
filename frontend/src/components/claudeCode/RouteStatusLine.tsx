@@ -8,8 +8,7 @@ import {cacheHitPct, type SessionUsage} from './sessionUsage';
 import { fontMono, fontSizes } from '@/theme/fonts';
 
 // Where a session's requests are routed and the quota they draw on: the
-// Tingly Box half of the line (GET /scenario/claude_code/route, or Desk's own
-// status route, which answers the same).
+// Tingly Box half of the line (GET /scenario/:scenario/route).
 export interface RouteQuota {
     type: string;
     balance: boolean;

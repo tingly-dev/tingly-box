@@ -8,7 +8,7 @@
 // transcript entry and status change, and keeps its own session records and
 // settings. Projects' threads and working-folder sessions are its host. The
 // behaviour and the reasons for it are in tingly-box's .design/desk.md §3
-// (Desk, its first host, has since been folded into Projects).
+// (written for its first host).
 package engine
 
 import (
