@@ -148,7 +148,7 @@ Desk never shipped, so nothing is carried over.
 ```
 config        a leftover `desk` key is ignored; only `projects` turns the panel on
 sessions      Desk's sessions stay in the remote session store, not shown
-browser       /desk and /api/v1/desk are gone (404), no redirect
+browser       /desk and /api/v1/desk are gone, no redirect
 code          internal/desk, module/desk, the Desk pages, API client, mocks
               and desk.* strings deleted
 ```
