@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -37,7 +38,8 @@ func workbuddyServer(t *testing.T) (*httptest.Server, *atomic.Int32) {
 		if r.Method != http.MethodPost || r.URL.Query().Get("platform") != "workbuddy-ai" {
 			t.Errorf("state: %s platform=%q", r.Method, r.URL.Query().Get("platform"))
 		}
-		if r.Header.Get("X-Domain") != "www.workbuddy.ai" || r.Header.Get("X-Product-Code") != "workbuddy" {
+		if r.Header.Get("X-Domain") != "www.workbuddy.ai" || r.Header.Get("User-Agent") != ai.WorkBuddyUserAgent ||
+			r.Header.Get("X-No-Authorization") != "true" {
 			t.Errorf("state: identification headers missing: %v", r.Header)
 		}
 		writeWorkBuddy(t, w, 0, "ok", map[string]string{"state": "st-1", "authUrl": "https://www.workbuddy.ai/login?state=st-1"})
@@ -89,8 +91,13 @@ func TestWorkBuddyLoginFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InitiateServerPollFlow: %v", err)
 	}
-	if flow.AuthorizeURL != "https://www.workbuddy.ai/login?state=st-1" || flow.FlowID != "st-1" {
+	authURL, err := url.Parse(flow.AuthorizeURL)
+	if err != nil || authURL.Host != "www.workbuddy.ai" || authURL.Query().Get("state") != "st-1" || flow.FlowID != "st-1" {
 		t.Errorf("flow = %+v", flow)
+	}
+	// The sign-in page is opened as the desktop client opens it.
+	if authURL.Query().Get("version") != ai.WorkBuddyLoginVersion || len(authURL.Query().Get("loginSessionId")) != 32 {
+		t.Errorf("sign-in URL = %s, want version and loginSessionId", flow.AuthorizeURL)
 	}
 
 	token, err := manager.CompleteServerPollFlow(context.Background(), flow, opts...)

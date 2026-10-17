@@ -1,5 +1,5 @@
 import {Box} from '@mui/material';
-import {Claude, Gemini, Google, Kimi, OpenAI, Qwen, Tencent, XAI, Zai, Zhipu} from '../BrandIcons';
+import {Claude, Gemini, Google, Kimi, OpenAI, Qwen, WorkBuddy, XAI, ZCode} from '../BrandIcons';
 
 export interface OAuthProvider {
     id: string;
@@ -100,7 +100,7 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         name: 'ZCode CN',
         displayName: 'ZCode CN (智谱 BigModel)',
         description: 'Sign in with your BigModel account to use ZCode CN',
-        icon: <Zhipu size={32}/>,
+        icon: <ZCode size={32}/>,
         color: '#3859FF',
         enabled: true,
     },
@@ -109,7 +109,7 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         name: 'ZCode International',
         displayName: 'ZCode International (Z.ai)',
         description: 'Sign in with your Z.ai account to use ZCode International',
-        icon: <Zai size={32}/>,
+        icon: <ZCode size={32}/>,
         color: '#3859FF',
         enabled: true,
     },
@@ -121,8 +121,8 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         name: 'WorkBuddy CN',
         displayName: 'WorkBuddy / CodeBuddy CN',
         description: 'Sign in with your WorkBuddy or CodeBuddy (China) account',
-        icon: <Tencent size={32}/>,
-        color: '#0052D9',
+        icon: <WorkBuddy size={32}/>,
+        color: '#14C38E',
         enabled: true,
     },
     {
@@ -130,8 +130,8 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         name: 'WorkBuddy',
         displayName: 'WorkBuddy (workbuddy.ai)',
         description: 'Sign in with your international WorkBuddy account',
-        icon: <Tencent size={32}/>,
-        color: '#0052D9',
+        icon: <WorkBuddy size={32}/>,
+        color: '#14C38E',
         enabled: true,
     },
     {

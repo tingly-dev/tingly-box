@@ -348,6 +348,8 @@ func inferProviderType(provider *typ.Provider) ProviderType {
 		return ProviderTypeCodex
 	case typ.IssuerKimiCode:
 		return ProviderTypeKimiCode
+	case typ.IssuerWorkBuddy, typ.IssuerWorkBuddyCN:
+		return ProviderTypeWorkBuddy
 	}
 
 	// Another tingly-box. Checked before the host rules: an edge reaches its

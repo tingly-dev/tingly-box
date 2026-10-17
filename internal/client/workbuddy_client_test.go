@@ -33,6 +33,7 @@ func TestWorkBuddyClientWire(t *testing.T) {
 	})
 	mux.HandleFunc("/v3/config", func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "Bearer at-1", r.Header.Get("Authorization"))
+		assert.Equal(t, ai.WorkBuddyConfigUserAgent, r.Header.Get("User-Agent"))
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"code":0,"data":{"models":[{"id":"deepseek-v3"},{"name":"glm-4.6"},{"id":"deepseek-v3"},{}]}}`))
 	})
@@ -65,13 +66,21 @@ func TestWorkBuddyClientWire(t *testing.T) {
 	assert.Equal(t, "Bearer at-1", chatHeaders.Get("Authorization"))
 	assert.Equal(t, "copilot.tencent.com", chatHeaders.Get("X-Domain"))
 	assert.Equal(t, ai.WorkBuddyProduct, chatHeaders.Get("X-Product"))
-	assert.Equal(t, "codebuddy", chatHeaders.Get("X-Product-Code"))
+	assert.Equal(t, "WorkBuddy", chatHeaders.Get("X-IDE-Type"))
+	assert.Equal(t, "conversation", chatHeaders.Get("X-Agent-Purpose"))
+	assert.Empty(t, chatHeaders.Get("X-Agent-Type"), "only the international build sends X-Agent-Type")
 	assert.Equal(t, "u-42", chatHeaders.Get("X-User-Id"))
 	assert.Equal(t, ai.WorkBuddyUserAgent, chatHeaders.Get("User-Agent"))
 
 	models, err := c.ListModels(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, []string{"deepseek-v3", "glm-4.6"}, models.Models)
+}
+
+func TestParseWorkBuddyModelsPrefersCLIAgent(t *testing.T) {
+	got, err := parseWorkBuddyModels([]byte(`{"code":0,"data":{"models":[{"id":"a"},{"id":"b"},{"id":"c"}],"agents":[{"name":"craft","models":["a"]},{"name":"cli","models":["b","c","b",""]}]}}`))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"b", "c"}, got)
 }
 
 func TestParseWorkBuddyModelsError(t *testing.T) {

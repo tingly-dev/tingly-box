@@ -30,6 +30,8 @@ import {
     Xiaomimimo,
     Baidu,
     Tencent,
+    WorkBuddy,
+    ZCode,
     IflytekCloud,
     Baichuan,
     Yi,
@@ -69,6 +71,8 @@ const iconMap: Record<string, React.FC<BrandIconProps>> = {
     'opencode': OpenCode,
     'codex': Codex,
     'tinglybox': TinglyBox,
+    'zcode': ZCode,
+    'workbuddy': WorkBuddy,
 
     // Additional providers
     'groq': Groq,

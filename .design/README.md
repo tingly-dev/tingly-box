@@ -70,7 +70,7 @@
 | [third-party-credentials.md](./third-party-credentials.md) | Third-Party Cloud Credentials (AWS Bedrock / GCP Vertex / Azure OpenAI) | 设计说明；局部实施状态见正文 |
 | [kimi-config.md](./kimi-config.md) | Kimi Code OAuth & Client Round Trip: Design and Decisions | 设计说明；局部实施状态见正文 |
 | [zcode-oauth.md](./zcode-oauth.md) | ZCode OAuth (GLM Coding Plan) | 设计说明；局部实施状态见正文 |
-| [workbuddy-oauth.md](./workbuddy-oauth.md) | WorkBuddy OAuth (Tencent WorkBuddy / CodeBuddy) | 已实现；上游协议未经官方客户端核验，见正文 |
+| [workbuddy-oauth.md](./workbuddy-oauth.md) | WorkBuddy OAuth、额度 (Tencent WorkBuddy / CodeBuddy) | 已实现；与第三方实测实现对齐，尚未用真实账号验证，见正文 |
 | [deepseek.md](./deepseek.md) | DeepSeek | 设计说明；局部实施状态见正文 |
 | [codex.md](./codex.md) | Codex as a Client | 设计说明；局部实施状态见正文 |
 | [codex-auth.md](./codex-auth.md) | Codex Auth Modes: gateway, direct ChatGPT, and hybrid | 设计说明；局部实施状态见正文 |

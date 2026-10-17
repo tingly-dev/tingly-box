@@ -57,6 +57,10 @@ import WeComSvg from '@/assets/icons/wecom.svg?url';
 import WeixinSvg from '@/assets/icons/weixin.svg?url';
 import XcodeSvg from '@/assets/icons/xcode.svg?url';
 import VSCodeSvg from '@/assets/icons/vscode.svg?url';
+// Not in @lobehub/icons yet; taken from @zenmux/icons (MIT, brand artwork
+// belongs to its owners).
+import WorkBuddySvg from '@/assets/icons/workbuddy.svg?url';
+import ZCodeSvg from '@/assets/icons/zcode.svg?url';
 
 interface BrandIconProps {
     size?: number;
@@ -128,6 +132,8 @@ export const DeepSeek = createBrandIcon(DeepSeekSvg, 'DeepSeek', false, true);
 export const Minimax = createBrandIcon(MinimaxSvg, 'Minimax', false, true);
 export const Zhipu = createBrandIcon(ZhipuSvg, 'Zhipu', false, true);
 export const Zai = createBrandIcon(ZaiSvg, 'Z.ai', false, true);
+export const ZCode = createBrandIcon(ZCodeSvg, 'ZCode', false, true);
+export const WorkBuddy = createBrandIcon(WorkBuddySvg, 'WorkBuddy');
 export const XAI = createBrandIcon(XAISvg, 'xAI', false, true);
 export const Mistral = createBrandIcon(MistralSvg, 'Mistral', false, true);
 export const OpenRouter = createBrandIcon(OpenRouterSvg, 'OpenRouter', false, true);

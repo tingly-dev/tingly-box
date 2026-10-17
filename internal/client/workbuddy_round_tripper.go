@@ -2,6 +2,7 @@ package client
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/oauth"
@@ -9,7 +10,8 @@ import (
 )
 
 // workbuddyRoundTripper layers the WorkBuddy client identification on an
-// inner transport. The Authorization Bearer is set by the OpenAI SDK. The
+// inner transport. The Authorization Bearer is set by the OpenAI SDK (and by
+// ListModels for /v3/config). The
 // values come from ai.WorkBuddySiteFor, the same table the login uses, so
 // login and inference always present the same client.
 type workbuddyRoundTripper struct {
@@ -32,10 +34,14 @@ func newWorkBuddyRoundTripper(inner http.RoundTripper, provider *typ.Provider) *
 func (t *workbuddyRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	// A RoundTripper must not modify the caller's request.
 	req = req.Clone(req.Context())
-	req.Header.Set("User-Agent", ai.WorkBuddyUserAgent)
-	req.Header.Set("X-Domain", t.site.Domain)
-	req.Header.Set("X-Product", ai.WorkBuddyProduct)
-	req.Header.Set("X-Product-Code", t.site.ProductCode)
+	for k, v := range t.site.ClientHeaders() {
+		req.Header.Set(k, v)
+	}
+	// The product config answers per client: the CLI agent's model list
+	// only comes back to the CLI User-Agent.
+	if strings.HasSuffix(req.URL.Path, "/v3/config") {
+		req.Header.Set("User-Agent", ai.WorkBuddyConfigUserAgent)
+	}
 	if t.userID != "" {
 		req.Header.Set("X-User-Id", t.userID)
 	}

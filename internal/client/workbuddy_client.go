@@ -108,6 +108,12 @@ func parseWorkBuddyModels(raw []byte) ([]string, error) {
 				Name  string `json:"name"`
 				Model string `json:"model"`
 			} `json:"models"`
+			// Agents name the models each client agent may use; the CLI
+			// agent's are the ones chats are served for.
+			Agents []struct {
+				Name   string   `json:"name"`
+				Models []string `json:"models"`
+			} `json:"agents"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(raw, &env); err != nil {
@@ -115,6 +121,11 @@ func parseWorkBuddyModels(raw []byte) ([]string, error) {
 	}
 	if env.Code != nil && *env.Code != 0 {
 		return nil, fmt.Errorf("workbuddy models: code=%d msg=%s", *env.Code, env.Msg)
+	}
+	for _, agent := range env.Data.Agents {
+		if agent.Name == "cli" && len(agent.Models) > 0 {
+			return dedupeNonEmpty(agent.Models), nil
+		}
 	}
 	seen := make(map[string]bool, len(env.Data.Models))
 	models := make([]string, 0, len(env.Data.Models))
@@ -133,4 +144,17 @@ func parseWorkBuddyModels(raw []byte) ([]string, error) {
 		models = append(models, id)
 	}
 	return models, nil
+}
+
+func dedupeNonEmpty(ids []string) []string {
+	seen := make(map[string]bool, len(ids))
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out
 }

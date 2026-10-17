@@ -150,6 +150,24 @@ func TestInferProviderTypeKimiCodeOAuth(t *testing.T) {
 	}
 }
 
+// The CN WorkBuddy login serves inference from copilot.tencent.com, which the
+// host fallback would read as GitHub Copilot; the issuer must win.
+func TestInferProviderTypeWorkBuddyOAuth(t *testing.T) {
+	t.Parallel()
+
+	for _, issuer := range []typ.Issuer{typ.IssuerWorkBuddy, typ.IssuerWorkBuddyCN} {
+		site, _ := typ.WorkBuddySiteFor(issuer)
+		provider := &typ.Provider{
+			APIBase:     site.APIBase(),
+			AuthType:    typ.AuthTypeOAuth,
+			OAuthDetail: &typ.OAuthDetail{Issuer: issuer},
+		}
+		if got := inferProviderType(provider); got != ProviderTypeWorkBuddy {
+			t.Errorf("%s: inferProviderType() = %q, want %q", issuer, got, ProviderTypeWorkBuddy)
+		}
+	}
+}
+
 func BenchmarkInferProviderType(b *testing.B) {
 	provider := &typ.Provider{APIBase: "https://gateway.example.com/proxy/OPENROUTER.AI/api/v1"}
 	b.ReportAllocs()

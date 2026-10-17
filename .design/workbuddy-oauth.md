@@ -6,17 +6,21 @@ it fresh, and serves it to any OpenAI / Anthropic / Responses client. Generic
 OAuth mechanics (sessions, re-auth, refresher) are in `oauth.md`; this file
 covers only what WorkBuddy does differently. Proposal: TEP-2097.
 
-## Status of the protocol: unverified
+## Status of the protocol: third-party, cross-checked
 
-WorkBuddy publishes no API for third-party login. Everything below follows
-public third-party integrations that agree on routes and codes
-(`elavita/dsh-codearts-auth`, `pilciw/codebuddy2api`, OmniRoute's CodeBuddy CN
-gateway). It has **not** been checked against a real round trip from the
-official client. The code is written to make that check cheap:
+WorkBuddy publishes no API for third-party login. The routes first came from
+integrations that agree on them (`elavita/dsh-codearts-auth`,
+`pilciw/codebuddy2api`, OmniRoute's CodeBuddy CN gateway). The client
+identification and the billing meter were then aligned with
+`@magpie-community/opencode-workbuddy-auth` (MIT, npm), which runs against real
+accounts on both builds and records what WorkBuddy refuses, and with CodexBar's
+WorkBuddy provider (steipete/CodexBar#4227), which reads the same meter with
+website cookies. Tingly-Box itself has still not been run against a real
+account. To keep a correction cheap:
 
-- every value the upstream may police (host, `platform`, `X-Product-Code`,
-  `User-Agent`) lives in one table, `ai.WorkBuddySiteFor` / `ai.WorkBuddy*`
-  constants (`ai/issuer.go`), read by both login and inference;
+- every value the upstream polices (host, `platform`, `User-Agent`, client
+  headers) lives in one table, `ai.WorkBuddySiteFor` / `ai.WorkBuddy*`
+  constants (`ai/issuer.go`), read by login, inference and quota;
 - response fields are parsed tolerantly (camelCase and snake_case, expiry as a
   lifetime, unix s/ms, RFC 3339, or the JWT `exp`), so a spelling difference
   does not fail a login.
@@ -37,8 +41,11 @@ GET  {origin}/v2/plugin/login/account?state=…   best-effort, 15 s
      code 12151 = pending … → {uid, nickname, enterprise domain}
 ```
 
-Every request carries `X-Domain`, `X-Product: SaaS`, `X-Product-Code` and the
-client `User-Agent`.
+Every login request carries `X-Domain`, `X-Product: SaaS` and the client
+`User-Agent`; the state request also carries the desktop client's
+`X-No-Authorization` / `X-No-User-Id` / `X-No-Enterprise-Id` /
+`X-No-Department-Info: true`. The sign-in URL is opened with `version=2.0.0`
+and a fresh 32-hex `loginSessionId`, as the desktop client opens it.
 
 - **Poll semantics** match ZCode: the pending code, transport errors, 5xx,
   408/429 and a non-envelope body are one more round; any other code ends the
@@ -53,10 +60,14 @@ client `User-Agent`.
 
 ## Issuers: one per account region
 
-| issuer | origin / `X-Domain` | `platform` | `X-Product-Code` |
+| issuer | origin / `X-Domain` | `platform` | `X-Agent-Type` |
 |---|---|---|---|
-| `workbuddy` | `https://www.workbuddy.ai` | `workbuddy-ai` | `workbuddy` |
-| `workbuddy_cn` | `https://copilot.tencent.com` | `ide` | `codebuddy` |
+| `workbuddy` | `https://www.workbuddy.ai` | `workbuddy-ai` | `main` |
+| `workbuddy_cn` | `https://copilot.tencent.com` | `workbuddy` | — |
+
+The CN `platform` was `ide` (CodeBuddy IDE's) until the cross-check above;
+`workbuddy` is what the WorkBuddy desktop client asks for. `X-Product-Code` was
+dropped for the same reason: the desktop client does not send it.
 
 Two issuers, not a region switch: they are different accounts on different
 hosts, and re-auth's issuer check must never let one overwrite the other
@@ -85,20 +96,73 @@ generic machinery applies unchanged:
   through the existing protocol conversion (endpoint mode chat); there is no
   known native Anthropic endpoint, so the provider is not dual.
 - `WorkBuddyClient` (`internal/client/workbuddy_client.go`) is the OpenAI
-  client plus `workbuddyRoundTripper`, which adds the same identification
-  headers as the login and `X-User-Id`.
-- **Models** come from `GET {origin}/v3/config` (`data.models[].id`), not
-  `/models`. There is no embedded catalog entry: model ids are account- and
-  region-specific and unverified, so a failed fetch shows an empty list rather
-  than invented ids.
+  client plus `workbuddyRoundTripper`, which adds `WorkBuddySite.ClientHeaders`
+  and `X-User-Id`.
+
+### Client identification
+
+- **`User-Agent: WorkBuddy/5.5.6` is required on chats**: any other is refused
+  with error 10085. The first version sent `CLI/2.108.1 CodeBuddy/2.108.1`,
+  which would have had every chat refused.
+- The desktop client also sends `X-IDE-Type` / `X-IDE-Name: WorkBuddy`,
+  `X-IDE-Version`, `X-Requested-With: XMLHttpRequest`, `X-Agent-Intent: craft`,
+  `X-Agent-Purpose: conversation` (and `X-Agent-Type: main` on the
+  international build). WorkBuddy's usage list attributes a request to a
+  client by them; without them it shows under no client.
+- `GET /v3/config` answers per client: `CLI/2.0.0 WorkBuddy/5.5.6` gets the
+  config with a `cli` agent, a bare `WorkBuddy/…` the IDE's.
+
+### Models
+
+`GET {origin}/v3/config`, not `/models`: the `cli` agent's `models` when
+present, else every `data.models[].id`. There is no embedded catalog entry:
+model ids are account- and region-specific, so a failed fetch shows an empty
+list rather than invented ids.
+
+## Quota
+
+`ProviderTypeWorkBuddy` (`ai/quota/fetcher/workbuddy.go`), one fetcher for both
+issuers. The billing meter lives on the same origin as the rest of the API —
+`copilot.tencent.com` / `www.workbuddy.ai` — under `/billing/meter/...` with no
+`/v2`, and takes the plugin bearer plus the client headers. (CodexBar reads it
+on `www.workbuddy.cn` with website cookies, which is the same backend behind
+the website.) Every reply is `{code, msg, data}`; a non-zero code is an error
+with WorkBuddy's message.
+
+- **`POST get-user-resource-summary`** `{}` → `data.Packages[]` with
+  `CycleTotalCapacity` / `CycleRemainCapacity` / `CycleUsedCapacity` /
+  `CycleFrozenCapacity` (decimal strings) and `CapacityUnit`, plus
+  `SubscriptionPackageName` and `IsPaidUser`. The `credits` packages are summed
+  into one **Credits** window, as WorkBuddy's own usage page shows them; frozen
+  credits (held by running requests) go in the description. Plan: the
+  subscription name, else Pro / Free from `IsPaidUser`.
+- **Reset time** (optional, 5 s budget): `get-user-resource-paid-packages` and
+  `get-user-resource-free-packages` list `Accounts[].CycleEndTime`. They refuse
+  a request without `PackageCodes` (code 10001), so the desktop client's codes
+  are sent. The earliest future end among the packages the summary counted,
+  read as UTC+8 and plus one second (the end is inclusive), makes the window a
+  monthly limit. The daily slice package (`…001…`, `CapacityType` 4) refills
+  every midnight and is skipped. A failed listing leaves the credits as a
+  balance with no reset; it never drops the balance.
+- **Enterprise accounts** have no packages in the summary; their credits are
+  `get-enterprise-user-usage` (`limitNum`, `credit`, `cycleStartTime`,
+  `cycleResetTime`). A personal account's refusal of it is ignored.
 
 ## Not done (follow-ups)
 
-- **Verification against the official client** (above). Open points: the
-  international chat path, token lifetime, how strictly `User-Agent` /
-  `X-Product-Code` are enforced, and the reported streaming-only behaviour of
-  chat completions (a non-stream request may need stream-and-aggregate).
-- Quota / credits panel.
-- Enterprise (dedicated / self-hosted, `*.copilot.qq.com`) accounts: the domain
-  is recorded but requests still go to the public origin.
+- **A run against a real account** (above).
+- **Chats are streaming-only**: WorkBuddy refuses a non-streamed chat, so a
+  non-stream client request needs stream-and-aggregate.
+- **Request shapes WorkBuddy refuses** (per the cross-check): it wants
+  `max_tokens` not `max_completion_tokens`, `system` not `developer`, a string
+  `tool_choice`, and tool schemas without root unions / typeless enums / dotted
+  tool names (otherwise 400, code 11133). These belong in a WorkBuddy transform
+  stage.
+- **Conversation ids** (`X-Conversation-ID`, `X-Conversation-Request-ID`, …):
+  WorkBuddy counts one user turn as one request by them; without them each
+  step of a tool loop is counted separately.
+- Enterprise (team) accounts: the desktop client sends `X-Enterprise-Id` /
+  `X-Tenant-Id` (the account's `enterpriseId`), without which WorkBuddy
+  answers as the personal account. Dedicated / self-hosted domains
+  (`*.copilot.qq.com`) are recorded but requests still go to the public origin.
 - Importing the desktop app's existing login state; API-key CodeBuddy.

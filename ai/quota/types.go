@@ -28,6 +28,7 @@ const (
 	ProviderTypeCursor     ProviderType = "cursor"
 	ProviderTypeCodex      ProviderType = "codex"
 	ProviderTypeOpenCode   ProviderType = "opencode"
+	ProviderTypeWorkBuddy  ProviderType = "workbuddy"  // both regions; the issuer picks the host
 	ProviderTypeTinglyBox  ProviderType = "tingly_box" // another tingly-box gateway (see gateway.go)
 )
 

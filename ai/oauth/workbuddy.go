@@ -2,6 +2,8 @@ package oauth
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -116,14 +118,21 @@ func (c *WorkBuddyClient) Start(ctx context.Context) (*WorkBuddyFlow, error) {
 		URL     string `json:"url"`
 	}
 	endpoint := c.Site.Origin + "/v2/plugin/auth/state?platform=" + url.QueryEscape(c.Site.Platform)
-	if err := c.envelope(ctx, http.MethodPost, endpoint, strings.NewReader("{}"), nil, &data); err != nil {
+	// The desktop client marks this one request as carrying no account.
+	noAccount := http.Header{
+		"X-No-Authorization":   {"true"},
+		"X-No-User-Id":         {"true"},
+		"X-No-Enterprise-Id":   {"true"},
+		"X-No-Department-Info": {"true"},
+	}
+	if err := c.envelope(ctx, http.MethodPost, endpoint, strings.NewReader("{}"), noAccount, &data); err != nil {
 		return nil, fmt.Errorf("workbuddy login state: %w", err)
 	}
 	authURL := firstNonEmpty(data.AuthURL, data.URL)
 	if data.State == "" || authURL == "" {
 		return nil, fmt.Errorf("workbuddy login state: response missing state or authUrl")
 	}
-	return &WorkBuddyFlow{State: data.State, AuthorizeURL: authURL, PollInterval: c.PollInterval}, nil
+	return &WorkBuddyFlow{State: data.State, AuthorizeURL: workbuddySignInURL(authURL), PollInterval: c.PollInterval}, nil
 }
 
 // workbuddyTokenData is the token payload of auth/token and the refresh
@@ -286,7 +295,6 @@ func (c *WorkBuddyClient) envelope(ctx context.Context, method, endpoint string,
 	req.Header.Set("User-Agent", ai.WorkBuddyUserAgent)
 	req.Header.Set("X-Domain", c.Site.Domain)
 	req.Header.Set("X-Product", ai.WorkBuddyProduct)
-	req.Header.Set("X-Product-Code", c.Site.ProductCode)
 	for k, vs := range headers {
 		for _, v := range vs {
 			req.Header.Set(k, v)
@@ -512,4 +520,22 @@ func (m *Manager) refreshWorkBuddyToken(ctx context.Context, issuer ai.Issuer, r
 		return nil, err
 	}
 	return client.Refresh(ctx, refreshToken, opts.ExtraHeaders)
+}
+
+// workbuddySignInURL adds what the desktop client opens the sign-in page
+// with: the login version and a fresh login session id. A URL that does not
+// parse is returned as given.
+func workbuddySignInURL(authURL string) string {
+	u, err := url.Parse(authURL)
+	if err != nil {
+		return authURL
+	}
+	q := u.Query()
+	q.Set("version", ai.WorkBuddyLoginVersion)
+	session := make([]byte, 16)
+	if _, err := rand.Read(session); err == nil {
+		q.Set("loginSessionId", hex.EncodeToString(session))
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
 }
