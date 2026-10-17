@@ -497,10 +497,18 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	a.slot = slot
 	prompt := a.current.text
 	m.mu.Unlock()
+	// Waiting for the slot can take a while: launch with what the owner
+	// picked since (profile, model, permission mode).
+	if fresh, err := m.store.GetThread(threadID); err == nil {
+		t = fresh
+	}
 
 	env, defModel, settings := m.launchEnv(ctx, t)
+	// A project thread runs the project's model. A session runs the one its
+	// owner picked; a project thread's Model is only what the API reported,
+	// and launching with it would restart the resident process each turn.
 	model := t.Model
-	if p != nil && p.ThreadModel != "" {
+	if p != nil {
 		model = p.ThreadModel
 	}
 	if model == "" {
@@ -638,14 +646,14 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		t.Turns++
 		t.InputTokens += tally.inputTokens
 		t.OutputTokens += tally.outputTokens
-		// A session's model is what its owner picked (the turns' own
-		// models are on their usage entries); a thread's is what it ran.
-		if !session {
-			if tally.model != "" {
-				t.Model = tally.model
-			} else if t.Model == "" {
-				t.Model = tally.launchModel
-			}
+		// A session's Model is the owner's pick; a project thread shows the
+		// model that answered.
+		switch {
+		case session:
+		case tally.model != "":
+			t.Model = tally.model
+		case t.Model == "":
+			t.Model = tally.launchModel
 		}
 		t.CommitsAhead, t.FilesChanged, t.Uncommitted = stats.CommitsAhead, stats.FilesChanged, stats.Uncommitted
 		if t.Status == db.ThreadResolved {

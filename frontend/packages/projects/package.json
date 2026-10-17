@@ -12,7 +12,9 @@
     "./transcript/locales/*": "./src/transcript/locales/*.ts"
   },
   "types": "./src/embed.ts",
-  "sideEffects": false,
+  "sideEffects": [
+    "./src/i18n/index.ts"
+  ],
   "scripts": {
     "dev": "vite --port 3010",
     "build": "vite build",

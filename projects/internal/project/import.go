@@ -25,6 +25,9 @@ type ImportedSession struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	Entries        []engine.Entry
+	// Err is set when the host could not read the session: it is skipped,
+	// and the import runs again next start.
+	Err error
 }
 
 // ImportSessions brings sessions in once per source: a later call with the
@@ -42,6 +45,10 @@ func (m *Threads) ImportSessions(source string, in []ImportedSession) (int, erro
 	n := 0
 	var errs []error
 	for _, s := range in {
+		if s.Err != nil {
+			errs = append(errs, fmt.Errorf("session %s: %w", s.SessionID, s.Err))
+			continue
+		}
 		ok, err := m.importSession(s)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("session %s: %w", s.SessionID, err))
@@ -52,7 +59,7 @@ func (m *Threads) ImportSessions(source string, in []ImportedSession) (int, erro
 		}
 	}
 	if len(errs) > 0 {
-		// Try again next start; what got in is skipped then.
+		// Try again next start; what got in (whole) is skipped then.
 		return n, errors.Join(errs...)
 	}
 	return n, m.store.PutSetting(key, true)
@@ -75,7 +82,12 @@ func (m *Threads) importSession(s ImportedSession) (bool, error) {
 			}
 		}
 	}
+	// Every Desk session ran its first turn when it was created, so the next
+	// message resumes it even when its transcript is gone.
+	turns = max(turns, 1)
 	t := &db.Thread{
+		// The thread keeps the session's id, so old links still find it.
+		ID:    s.SessionID,
 		Title: firstLine(task, 60), Task: task, Status: db.ThreadIdle, Origin: "user",
 		Worktree: s.Folder, SessionID: s.SessionID, Turns: turns,
 		Model: s.Model, PermissionMode: s.PermissionMode, Profile: s.Profile,
@@ -88,16 +100,10 @@ func (m *Threads) importSession(s ImportedSession) (bool, error) {
 		at := s.UpdatedAt
 		t.Status, t.ResolvedAt = db.ThreadResolved, &at
 	}
-	if err := m.store.CreateThread(t); err != nil {
+	if err := m.store.ImportThread(t, events); err != nil {
 		return false, err
 	}
-	for _, e := range events {
-		e.ThreadID = t.ID
-		if err := m.store.AddThreadEvent(e); err != nil {
-			return true, err
-		}
-	}
-	_ = m.store.SaveWorkdir(s.Folder)
+	_ = m.store.SaveWorkdirAt(s.Folder, s.UpdatedAt)
 	return true, nil
 }
 
@@ -144,11 +150,16 @@ func importEvents(entries []engine.Entry) ([]*db.ThreadEvent, int) {
 		case e.Kind == engine.KindAskRequest:
 			var input map[string]any
 			_ = json.Unmarshal(e.Payload, &input)
-			p := requestPayload{RequestID: e.RequestID, Input: input, State: "expired"}
+			p := requestPayload{RequestID: e.RequestID, Tool: "AskUserQuestion", Input: input, State: "expired"}
 			if a, ok := answers[e.RequestID]; ok {
 				p.State, p.Answer = "answered", a.Content
 			}
-			ev = &db.ThreadEvent{Kind: db.EvAsk, Content: e.Content, Payload: jsonString(p)}
+			// Desk kept a question only in its input, as a live ask does.
+			q := e.Content
+			if q == "" {
+				q = describeQuestion(input)
+			}
+			ev = &db.ThreadEvent{Kind: db.EvAsk, Content: q, Payload: jsonString(p)}
 		}
 		if ev == nil {
 			continue

@@ -184,6 +184,8 @@ export default function ProjectPage() {
     const canPlace = !pane.narrow;
     const threadEl = threadId ? (
         <ThreadPanel
+            // Per thread: its draft and menus start fresh.
+            key={threadId}
             projectId={id}
             threadId={threadId}
             thread={selected}

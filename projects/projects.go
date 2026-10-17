@@ -46,16 +46,13 @@ var _ project.Host = Host(nil)
 type (
 	// Launcher routes a session's turns by a profile the host names.
 	Launcher = project.Launcher
-	// Handoffer gives the terminal command that continues a session.
+	// Handoffer names the program that continues a session in a terminal.
 	Handoffer = project.Handoffer
 )
 
 // ImportedSession is a Claude Code session another host ran in a folder,
 // for ImportSessions.
 type ImportedSession = project.ImportedSession
-
-// ShellQuote single-quotes s for a POSIX shell, for a Handoffer's command.
-func ShellQuote(s string) string { return project.ShellQuote(s) }
 
 // Options configure an App.
 type Options struct {

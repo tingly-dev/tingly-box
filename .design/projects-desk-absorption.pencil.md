@@ -98,15 +98,18 @@ building and running unchanged.
          ┌──────────────────┼───────────────────────┐
          ▼                                          ▼
    Launcher (optional)                         Handoffer (optional)
-   LaunchEnv(profile)  → env, --settings       HandoffCommand(folder, sid, profile)
+   LaunchEnv(profile)  → env, --settings       HandoffLaunch(profile) → argv
    CheckLaunch(profile, model) → error
          │                                          │
  ┌───────┴────────────┐                   ┌─────────┴──────────────┐
  Tingly Box            standalone          Tingly Box               standalone
- profile → its CC      profile ≠ "" →      cd '<f>' &&              cd '<f>' &&
- settings file;        ErrNoProfiles       '<tingly-box>' cc        claude --resume
- model ∈ tier aliases  (400); model        |profile '<p>'            '<sid>'
-                       passed as is        --resume '<sid>'
+ profile → its CC      profile ≠ "" →      ['<tingly-box>', 'cc']   ['claude']
+ settings file;        ErrNoProfiles       or [.., 'profile', p]
+ model ∈ tier aliases  (400); model
+                       passed as is        Projects adds --resume <sid>,
+                                           --model <m>, the folder, and quotes
+                                           for the shell: cd … && …  (POSIX)
+                                           Set-Location …; & …   (Windows)
 ```
 
 Handoff always releases the resident process first (two processes on one
@@ -156,14 +159,16 @@ server start, projects flag on (at boot or first request after switching on)
               │  setting "import.desk" already true? → stop
               ▼
         per session, skip if a thread already has this SessionID
-          Thread{ProjectID:"", Worktree: folder, SessionID: same id,
-                 Turns: user turns, Profile, Model, PermissionMode,
+                     skip if its transcript could not be read (retried)
+          Thread{ID = SessionID = Desk's id, ProjectID:"", Worktree: folder,
+                 Turns: user turns (at least 1), Profile, Model, PermissionMode,
                  Status: idle | resolved (closed/expired),
                  CreatedAt/UpdatedAt: kept}
           events: user, assistant, tool_use/result, task, usage, system, error
                   approval_request + response → one approval (allowed/denied/expired)
                   ask_request + response      → one ask (answered/expired)
                   thinking                    → dropped (live turns drop it too)
+          thread + events in one transaction; folder last used = session's time
               │  all ok → put "import.desk" = true
               │  any error → keep going, retry next start (imported ones are skipped)
               ▼
@@ -172,6 +177,7 @@ server start, projects flag on (at boot or first request after switching on)
 browser
   /desk                 → /projects/folder
   /desk?folder=<path>   → /projects/folder?path=<path>
+  /desk?session=<id>    → /projects/folder?session=<id>  (same id)
   /api/v1/desk/*        → removed; its only client was the Desk page
 ```
 

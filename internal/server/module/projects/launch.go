@@ -78,15 +78,14 @@ func (h *Host) claudeEnv(ctx context.Context, profile string) (map[string]string
 	return agent.ReadClaudeCodeSettingsEnv(path)
 }
 
-// HandoffCommand goes through tingly-box (`cc`, or `profile <id>`), by
+// HandoffLaunch goes through tingly-box (`cc`, or `profile <id>`), by
 // absolute path, so the terminal routes through the same gateway and
 // settings the web turns used, with no token in the command.
-func (h *Host) HandoffCommand(folder, claudeSessionID, profile string) string {
-	launch := projectsapp.ShellQuote(selfExecutable()) + " cc"
+func (h *Host) HandoffLaunch(profile string) []string {
 	if profile != "" {
-		launch = projectsapp.ShellQuote(selfExecutable()) + " profile " + projectsapp.ShellQuote(profile)
+		return []string{selfExecutable(), "profile", profile}
 	}
-	return "cd " + projectsapp.ShellQuote(folder) + " && " + launch + " --resume " + projectsapp.ShellQuote(claudeSessionID)
+	return []string{selfExecutable(), "cc"}
 }
 
 // selfExecutable works whether tingly-box is on PATH, run through npx, or

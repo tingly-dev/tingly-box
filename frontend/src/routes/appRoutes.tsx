@@ -92,9 +92,16 @@ const LegacyRemoteCoderRedirect = () => {
 };
 
 // Desk is now Projects' working folders: /desk?folder=… opens that folder.
+// Imported Desk sessions keep their id, so a session link still opens it.
 const DeskRedirect = () => {
-    const folder = new URLSearchParams(useLocation().search).get('folder');
-    return <Navigate to={folder ? `/projects/folder?path=${encodeURIComponent(folder)}` : '/projects/folder'} replace />;
+    const from = new URLSearchParams(useLocation().search);
+    const to = new URLSearchParams();
+    const folder = from.get('folder');
+    const session = from.get('session');
+    if (folder) to.set('path', folder);
+    if (session) to.set('session', session);
+    const q = to.toString();
+    return <Navigate to={q ? `/projects/folder?${q}` : '/projects/folder'} replace />;
 };
 
 export const appRoutes = (

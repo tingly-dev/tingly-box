@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -189,6 +190,9 @@ func fail(c *gin.Context, err error) {
 		apierr.Store(c, err, "session")
 	case errors.Is(err, rt.ErrResolved), errors.Is(err, rt.ErrNoPrompt), errors.Is(err, rt.ErrTaskNotRunning), errors.Is(err, rt.ErrBusy):
 		apierr.Message(c, http.StatusConflict, err.Error())
+	case errors.Is(err, rt.ErrTaskOutputUnset), errors.Is(err, os.ErrNotExist):
+		// The output file may be gone; never echo its path.
+		apierr.Message(c, http.StatusNotFound, rt.ErrTaskOutputUnset.Error())
 	default:
 		apierr.BadRequest(c, err.Error())
 	}
