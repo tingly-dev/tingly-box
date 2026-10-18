@@ -60,6 +60,11 @@ type Config struct {
 	ServerHost  string                   `json:"-"` // Server host address (e.g., "localhost", "0.0.0.0", "192.168.1.100")
 	JWTSecret   string                   `json:"jwt_secret"`
 
+	// ProjectsDir is the Projects data directory chosen with --projects-dir,
+	// remembered so a later start or restart without the flag keeps using it.
+	// Empty means "<config dir>-project".
+	ProjectsDir string `json:"projects_dir,omitempty"`
+
 	// Server settings
 	DefaultMaxTokens int  `json:"default_max_tokens"` // Default max_tokens for anthropic API requests
 	Verbose          bool `json:"verbose"`            // Verbose mode for detailed logging

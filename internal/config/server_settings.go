@@ -277,3 +277,21 @@ func (c *Config) ApplyHTTPTransportConfig() {
 	}
 	client.SetTransportConfig(config)
 }
+
+// GetProjectsDir returns the Projects data directory chosen with
+// --projects-dir, or "" for the default.
+func (c *Config) GetProjectsDir() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.ProjectsDir
+}
+
+// SetProjectsDir remembers the Projects data directory.
+func (c *Config) SetProjectsDir(dir string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.ProjectsDir = dir
+	return c.Save()
+}

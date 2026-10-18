@@ -40,7 +40,7 @@ type ServerFlagsKong struct {
 	EnableUI    bool   `kong:"flag,name='ui',short='u',default='true',help='Enable web UI'"`
 	EnableDebug bool   `kong:"flag,name='debug',help='Enable debug mode'"`
 	// ProjectsDir is where Projects keeps its database and thread worktrees.
-	ProjectsDir string `kong:"flag,name='projects-dir',help='Projects data directory (default: <config-dir>-project)'"`
+	ProjectsDir string `kong:"flag,name='projects-dir',help='Projects data directory, remembered for later starts (default: <config-dir>-project)'"`
 }
 
 // Resolve merges these flags into rest (the caller's own flags, e.g. daemon

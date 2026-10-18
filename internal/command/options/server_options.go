@@ -3,6 +3,7 @@ package options
 import (
 	"path/filepath"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/tingly-dev/tingly-box/internal/appconfig"
@@ -68,8 +69,13 @@ func ResolveStartOptions(cmd *cobra.Command, flags StartFlags, appConfig *appcon
 		appConfig.SetServerPort(flags.Port)
 	}
 
+	// Priority: --projects-dir (remembered) > remembered value > default
 	resolvedProjectsDir := flags.ProjectsDir
-	if resolvedProjectsDir == "" {
+	if resolvedProjectsDir != "" {
+		if err := appConfig.SetProjectsDir(resolvedProjectsDir); err != nil {
+			logrus.Warnf("Failed to remember --projects-dir: %v", err)
+		}
+	} else if resolvedProjectsDir = appConfig.GetProjectsDir(); resolvedProjectsDir == "" {
 		resolvedProjectsDir = DefaultProjectsDir(appConfig.ConfigDir())
 	}
 

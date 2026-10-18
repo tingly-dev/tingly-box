@@ -56,7 +56,7 @@ threads, review a diff, merge.
 
 Everything is stored in `~/.tingly-project` (override with `--data-dir` or
 `$TINGLY_PROJECT_HOME`). Each project's memory, library and thread worktrees
-sit under `projects/<id>/`. Embedded in Tingly Box it keeps the same layout in `<config dir>-project` (or `--projects-dir`)
+sit under `projects/<id>/`. Embedded in Tingly Box it keeps the same layout in `<config dir>-project` (or `--projects-dir`, remembered for later starts)
 (`~/.tingly-box-project` by default), beside the config directory and never inside
 it, so threads do not start next to its credentials and instances do not share data.
 
