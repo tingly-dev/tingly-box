@@ -50,6 +50,12 @@ type (
 	Handoffer = project.Handoffer
 )
 
+// DefaultDataDir is where Projects keeps its data when the host does not say
+// otherwise: $TINGLY_PROJECT_HOME, else ~/.tingly-project. It is deliberately
+// outside any host's config directory, so a thread's working directory and its
+// parents never hold the host's secrets.
+func DefaultDataDir() string { return config.DefaultDataDir() }
+
 // Options configure an App.
 type Options struct {
 	// DataDir holds the database and each project's memory, library and

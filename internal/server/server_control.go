@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -15,7 +14,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module"
 	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 	projectsmodule "github.com/tingly-dev/tingly-box/internal/server/module/projects"
-	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
 	remotescenario "github.com/tingly-dev/tingly-box/remote/scenario"
 	"github.com/tingly-dev/tingly-box/swagger"
@@ -122,13 +120,13 @@ func RuntimeAuditSink() remotescenario.AuditFunc {
 
 // newProjectsApp builds Projects with model access through this gateway.
 // Schema generation gets an in-memory app (nothing on disk, never started);
-// the running server keeps Projects' own database and project folders under
-// <data dir>/projects, separate from the main store, so turning the feature
-// off and deleting that folder removes it entirely.
+// the running server keeps Projects' own database and project folders in
+// Projects' data home (~/.tingly-project), outside the config dir, so a
+// thread's working directory never sits next to Tingly Box's credentials.
 func newProjectsApp(cfg *config.Config, schema bool) *projectsapp.App {
 	opts := projectsapp.Options{Host: projectsmodule.NewHost(cfg)}
 	if !schema {
-		opts.DataDir = filepath.Join(tbclient.NewTBClient(cfg).GetDataDir(), "projects")
+		opts.DataDir = projectsapp.DefaultDataDir()
 	}
 	app, err := projectsapp.New(opts)
 	if err != nil {

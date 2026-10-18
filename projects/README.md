@@ -56,7 +56,8 @@ threads, review a diff, merge.
 
 Everything is stored in `~/.tingly-project` (override with `--data-dir` or
 `$TINGLY_PROJECT_HOME`). Each project's memory, library and thread worktrees
-sit under `projects/<id>/`.
+sit under `projects/<id>/`. Embedded in Tingly Box it uses the same folder, never
+Tingly Box's own config directory, so threads do not start next to its credentials.
 
 The server binds to `127.0.0.1` and has no login, so keep it on a machine you
 trust and do not expose the port.
