@@ -122,8 +122,9 @@ func RuntimeAuditSink() remotescenario.AuditFunc {
 // newProjectsApp builds Projects with model access through this gateway.
 // Schema generation gets an in-memory app (nothing on disk, never started);
 // the running server keeps Projects' own database and project folders in
-// dataDir (--projects-dir, default "<config dir>-project"), never inside the config dir, so
-// a thread's working directory does not sit next to Tingly Box's credentials.
+// dataDir (--projects-dir, default "<config dir>-project"), never inside the
+// config dir, so a thread's working directory does not sit next to Tingly
+// Box's credentials.
 func newProjectsApp(cfg *config.Config, dataDir string, schema bool) *projectsapp.App {
 	opts := projectsapp.Options{Host: projectsmodule.NewHost(cfg)}
 	if !schema {
