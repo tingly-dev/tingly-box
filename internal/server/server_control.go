@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/module"
 	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
@@ -118,15 +121,31 @@ func RuntimeAuditSink() remotescenario.AuditFunc {
 	}
 }
 
+// projectsDataDir is where an instance keeps Projects' data. The default
+// instance (~/.tingly-box) shares Projects' own home with standalone
+// tingly-project; an instance started with another config dir gets
+// "<config dir>-project", so instances never share a database. The
+// $TINGLY_PROJECT_HOME override applies to all of them.
+func projectsDataDir(configDir string) string {
+	def := projectsapp.DefaultDataDir()
+	if os.Getenv("TINGLY_PROJECT_HOME") != "" || configDir == "" {
+		return def
+	}
+	if home, err := os.UserHomeDir(); err == nil && filepath.Clean(configDir) == filepath.Join(home, constant.ConfigDirName) {
+		return def
+	}
+	return filepath.Clean(configDir) + "-project"
+}
+
 // newProjectsApp builds Projects with model access through this gateway.
 // Schema generation gets an in-memory app (nothing on disk, never started);
 // the running server keeps Projects' own database and project folders in
-// Projects' data home (~/.tingly-project), outside the config dir, so a
-// thread's working directory never sits next to Tingly Box's credentials.
+// a data dir beside the config dir (see projectsDataDir), never inside it, so
+// a thread's working directory does not sit next to Tingly Box's credentials.
 func newProjectsApp(cfg *config.Config, schema bool) *projectsapp.App {
 	opts := projectsapp.Options{Host: projectsmodule.NewHost(cfg)}
 	if !schema {
-		opts.DataDir = projectsapp.DefaultDataDir()
+		opts.DataDir = projectsDataDir(cfg.ConfigDir)
 	}
 	app, err := projectsapp.New(opts)
 	if err != nil {
