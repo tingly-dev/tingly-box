@@ -39,6 +39,8 @@ type ServerFlagsKong struct {
 	Host        string `kong:"flag,name='host',help='Server host'"`
 	EnableUI    bool   `kong:"flag,name='ui',short='u',default='true',help='Enable web UI'"`
 	EnableDebug bool   `kong:"flag,name='debug',help='Enable debug mode'"`
+	// ProjectsDir is where Projects keeps its database and thread worktrees.
+	ProjectsDir string `kong:"flag,name='projects-dir',help='Projects data directory (default: <config-dir>-project)'"`
 }
 
 // Resolve merges these flags into rest (the caller's own flags, e.g. daemon
@@ -50,6 +52,7 @@ func (f ServerFlagsKong) Resolve(appConfig *appconfig.AppConfig, rest options.St
 	rest.Host = f.Host
 	rest.EnableUI = f.EnableUI
 	rest.EnableDebug = f.EnableDebug
+	rest.ProjectsDir = f.ProjectsDir
 	return options.ResolveStartOptions(newKongShimCmd(f.EnableDebug), rest, appConfig)
 }
 
@@ -584,6 +587,7 @@ func startServerWithHook(appManager *app.AppManager, opts options.StartServerOpt
 		server.WithOpenBrowser(opts.EnableOpenBrowser),
 		server.WithHost(opts.Host),
 		server.WithRecordDir(opts.RecordDir),
+		server.WithProjectsDir(opts.ProjectsDir),
 		server.WithMultiLogger(multiLogger),
 		server.WithLaunchSource(string(source)),
 	)

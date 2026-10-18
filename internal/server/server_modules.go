@@ -146,7 +146,7 @@ func (s *Server) apiModules(ctx context.Context, schema bool) []module.Module {
 	// At runtime it keeps its own database under <data dir>/projects and
 	// starts when the flag is on: at boot, or on the first request after the
 	// flag is switched on.
-	if app := newProjectsApp(s.config, schema); app != nil {
+	if app := newProjectsApp(s.config, s.projectsDir, schema); app != nil {
 		start := func() { app.Start(ctx) }
 		mods = append(mods, projectsmodule.NewHandler(app, s.projectsEnabled, start))
 		if !schema {

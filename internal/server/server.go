@@ -172,7 +172,10 @@ type Server struct {
 	// record options (recording enablement is flag-driven per scenario —
 	// see GetScenarioRecordMode; these only configure where/how sinks write)
 	recordDir string
-	recordCAS bool // additionally write content-addressed slim records + blobs
+	// projectsDir is where embedded Projects keeps its data; empty falls back
+	// to "<config dir>-project".
+	projectsDir string
+	recordCAS   bool // additionally write content-addressed slim records + blobs
 
 	// remote control lifecycle management
 	remoteCoderCtx    context.Context

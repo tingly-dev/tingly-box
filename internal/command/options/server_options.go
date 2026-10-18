@@ -1,6 +1,8 @@
 package options
 
 import (
+	"path/filepath"
+
 	"github.com/spf13/cobra"
 
 	"github.com/tingly-dev/tingly-box/internal/appconfig"
@@ -16,6 +18,7 @@ type StartFlags struct {
 	EnableStyleTransform bool
 	Daemon               bool
 	LogFile              string
+	ProjectsDir          string
 }
 
 // StartServerOptions contains resolved options for starting the server
@@ -31,6 +34,9 @@ type StartServerOptions struct {
 	// recording_v2 flag enables recording. Always the config-dir default —
 	// recording enablement is flag-driven, not a CLI concern.
 	RecordDir string
+	// ProjectsDir is where Projects keeps its data: --projects-dir, else
+	// "<config dir>-project", beside the config dir and never inside it.
+	ProjectsDir string
 }
 
 // AddStartFlags adds all start-related flags to a command
@@ -62,6 +68,11 @@ func ResolveStartOptions(cmd *cobra.Command, flags StartFlags, appConfig *appcon
 		appConfig.SetServerPort(flags.Port)
 	}
 
+	resolvedProjectsDir := flags.ProjectsDir
+	if resolvedProjectsDir == "" {
+		resolvedProjectsDir = DefaultProjectsDir(appConfig.ConfigDir())
+	}
+
 	return StartServerOptions{
 		Host:              flags.Host,
 		Port:              resolvedPort,
@@ -71,5 +82,14 @@ func ResolveStartOptions(cmd *cobra.Command, flags StartFlags, appConfig *appcon
 		Daemon:            flags.Daemon,
 		LogFile:           flags.LogFile,
 		RecordDir:         appConfig.ConfigDir() + "/record",
+		ProjectsDir:       resolvedProjectsDir,
 	}
+}
+
+// DefaultProjectsDir is the Projects data directory of the instance whose
+// config directory is configDir: a sibling named "<config dir>-project"
+// (~/.tingly-box-project by default), so instances never share a database
+// and a thread's working directory never sits next to the config.
+func DefaultProjectsDir(configDir string) string {
+	return filepath.Clean(configDir) + "-project"
 }

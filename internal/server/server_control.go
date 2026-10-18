@@ -4,15 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/command/options"
 	"github.com/tingly-dev/tingly-box/internal/config"
-	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/module"
 	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
@@ -121,31 +119,18 @@ func RuntimeAuditSink() remotescenario.AuditFunc {
 	}
 }
 
-// projectsDataDir is where an instance keeps Projects' data. The default
-// instance (~/.tingly-box) shares Projects' own home with standalone
-// tingly-project; an instance started with another config dir gets
-// "<config dir>-project", so instances never share a database. The
-// $TINGLY_PROJECT_HOME override applies to all of them.
-func projectsDataDir(configDir string) string {
-	def := projectsapp.DefaultDataDir()
-	if os.Getenv("TINGLY_PROJECT_HOME") != "" || configDir == "" {
-		return def
-	}
-	if home, err := os.UserHomeDir(); err == nil && filepath.Clean(configDir) == filepath.Join(home, constant.ConfigDirName) {
-		return def
-	}
-	return filepath.Clean(configDir) + "-project"
-}
-
 // newProjectsApp builds Projects with model access through this gateway.
 // Schema generation gets an in-memory app (nothing on disk, never started);
 // the running server keeps Projects' own database and project folders in
-// a data dir beside the config dir (see projectsDataDir), never inside it, so
+// dataDir (--projects-dir, default "<config dir>-project"), never inside the config dir, so
 // a thread's working directory does not sit next to Tingly Box's credentials.
-func newProjectsApp(cfg *config.Config, schema bool) *projectsapp.App {
+func newProjectsApp(cfg *config.Config, dataDir string, schema bool) *projectsapp.App {
 	opts := projectsapp.Options{Host: projectsmodule.NewHost(cfg)}
 	if !schema {
-		opts.DataDir = projectsDataDir(cfg.ConfigDir)
+		if dataDir == "" {
+			dataDir = options.DefaultProjectsDir(cfg.ConfigDir)
+		}
+		opts.DataDir = dataDir
 	}
 	app, err := projectsapp.New(opts)
 	if err != nil {

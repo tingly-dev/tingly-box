@@ -68,6 +68,14 @@ func WithRecordDir(dir string) ServerOption {
 	}
 }
 
+// WithProjectsDir sets the directory embedded Projects keeps its database and
+// thread worktrees in.
+func WithProjectsDir(dir string) ServerOption {
+	return func(s *Server) {
+		s.projectsDir = dir
+	}
+}
+
 // WithRecordingCAS toggles content-addressed dedup alongside the default
 // gzip recording. When enabled, each session is written twice: once as a
 // gzip JSONL.gz (default), and once as content-addressed slim JSONL plus a
