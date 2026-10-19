@@ -251,12 +251,18 @@ adds/removes Step 3 and the `model_catalog_json` line.
 ## Context-window headroom defaults (2026-10-19)
 
 The managed model catalog (`tingly-model-catalog.json`) sets
-`effective_context_window_percent = 85` (was 92; Codex's own default is 95)
-and `auto_compact_token_limit = 80%` of the window (was 85%). Tingly-routed
+`effective_context_window_percent = 82` (was 92; Codex's own default is 95)
+and `auto_compact_token_limit = 75%` of the window (was 85%). Tingly-routed
 third-party models spend more of the window on system prompt, tool overhead and
 output than Codex's first-party models assume, so we reserve more headroom and
-compact earlier. Keep the compaction threshold below the effective percent so
-compaction fires before the usable window is exhausted.
+compact earlier. Compaction is always clamped to the effective percent so it
+fires before the usable window is exhausted.
+
+Both numbers are user-tunable in Auto Config (Quick tab, "Usable window" and
+"Auto-compact at"). They ride in `CodexPrefs` as `effective_context_window_percent`
+and `auto_compact_percent` (decimal strings, range 50–100, `""` = default) but are
+**catalog-only**: `toConfig()` never writes them to `config.toml`. On reopen,
+`ReadCodexConfig` restores non-default values from the applied catalog.
 
 `model_reasoning_effort` accepts `max` and `ultra` in addition to the older
 tiers — current Codex models advertise them in `supported_reasoning_levels`.

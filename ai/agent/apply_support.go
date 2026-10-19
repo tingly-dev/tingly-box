@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -690,6 +691,40 @@ type CodexPrefs struct {
 	ModelReasoningSummary           string `json:"model_reasoning_summary,omitempty"`
 	ModelVerbosity                  string `json:"model_verbosity,omitempty"`
 	ModelSupportsReasoningSummaries string `json:"model_supports_reasoning_summaries,omitempty"`
+
+	// Catalog-only tunables: they are not config.toml keys (toConfig skips
+	// them) but shape the generated tingly-model-catalog.json. Decimal percent
+	// strings; "" or an out-of-range value means the built-in default.
+	EffectiveContextWindowPercent string `json:"effective_context_window_percent,omitempty"`
+	AutoCompactPercent            string `json:"auto_compact_percent,omitempty"`
+}
+
+// Bounds for the catalog headroom percentages. Below the floor a session would
+// compact almost immediately; above 100 is meaningless.
+const (
+	codexMinContextPercent = 50
+	codexMaxContextPercent = 100
+)
+
+// contextHeadroom resolves the effective-window and auto-compact percentages,
+// falling back to the defaults for empty or out-of-range input. Compaction is
+// clamped to the effective window so it always fires before the usable window
+// is exhausted.
+func (p *CodexPrefs) contextHeadroom() (effective, compact int) {
+	effective, compact = codexEffectiveContextWindowPercent, codexDefaultAutoCompactTokenLimitPct
+	if p != nil {
+		effective = codexParsePercent(p.EffectiveContextWindowPercent, effective)
+		compact = codexParsePercent(p.AutoCompactPercent, compact)
+	}
+	return effective, min(compact, effective)
+}
+
+func codexParsePercent(raw string, fallback int) int {
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n < codexMinContextPercent || n > codexMaxContextPercent {
+		return fallback
+	}
+	return n
 }
 
 // codexEnumValues lists the valid values for each enum-typed CodexPrefs field.
@@ -832,7 +867,9 @@ func ReadCodexConfig() (prefs *CodexPrefs, writeCatalog bool, exists bool, err e
 	}
 
 	_, hasCatalog := cfg["model_catalog_json"]
-	return CodexPrefsFromConfig(cfg), hasCatalog, isTinglyManagedCodexConfig(cfg), nil
+	prefs = CodexPrefsFromConfig(cfg)
+	restoreCodexCatalogHeadroom(prefs, cfg)
+	return prefs, hasCatalog, isTinglyManagedCodexConfig(cfg), nil
 }
 
 // ApplyCodexConfig merges tingly-box Codex settings into ~/.codex/config.toml
@@ -923,7 +960,7 @@ func ApplyCodexConfigWithContextWindows(baseURL string, models []string, prefs *
 				return result, nil
 			}
 		}
-		catalogBytes, err := RenderCodexModelCatalog(models, contextWindows)
+		catalogBytes, err := RenderCodexModelCatalogWithPrefs(models, contextWindows, prefs)
 		if err != nil {
 			result.Message = fmt.Sprintf("Failed to render model catalog: %v", err)
 			return result, nil
@@ -1042,8 +1079,8 @@ const (
 	// internally consistent until richer per-model metadata is available.
 	codexDefaultContextWindow            = 200000
 	codexDefaultMaxContextWindow         = 200000
-	codexEffectiveContextWindowPercent   = 85
-	codexDefaultAutoCompactTokenLimitPct = 80
+	codexEffectiveContextWindowPercent   = 82
+	codexDefaultAutoCompactTokenLimitPct = 75
 )
 
 // RenderCodexModelCatalog produces the JSON payload for
@@ -1057,6 +1094,13 @@ const (
 // The contextWindows parameter allows overriding the default context window
 // for specific models (e.g., 1M context window models). If nil, uses default.
 func RenderCodexModelCatalog(models []string, contextWindows map[string]int) ([]byte, error) {
+	return RenderCodexModelCatalogWithPrefs(models, contextWindows, nil)
+}
+
+// RenderCodexModelCatalogWithPrefs is RenderCodexModelCatalog with the
+// effective-window and auto-compact percentages taken from prefs (nil = defaults).
+func RenderCodexModelCatalogWithPrefs(models []string, contextWindows map[string]int, prefs *CodexPrefs) ([]byte, error) {
+	effectivePct, compactPct := prefs.contextHeadroom()
 	// supported_reasoning_levels is Vec<ReasoningEffortPreset>, not a bare
 	// string list — each element is an {effort, description} object. Values
 	// mirror Codex's bundled catalog for GPT-5 so /model shows the familiar
@@ -1095,8 +1139,8 @@ func RenderCodexModelCatalog(models []string, contextWindows map[string]int) ([]
 			"supports_parallel_tool_calls":     true,
 			"context_window":                   contextWindow,
 			"max_context_window":               maxContextWindow,
-			"auto_compact_token_limit":         codexAutoCompactTokenLimit(contextWindow),
-			"effective_context_window_percent": codexEffectiveContextWindowPercent,
+			"auto_compact_token_limit":         contextWindow * compactPct / 100,
+			"effective_context_window_percent": effectivePct,
 			"experimental_supported_tools":     []string{},
 			"input_modalities":                 []string{"text", "image"},
 			"apply_patch_tool_type":            "freeform",
@@ -1107,6 +1151,40 @@ func RenderCodexModelCatalog(models []string, contextWindows map[string]int) ([]
 		"models":  entries,
 	}
 	return json.MarshalIndent(payload, "", "  ")
+}
+
+// restoreCodexCatalogHeadroom reads the headroom percentages back from the
+// applied catalog so the form shows what was written. Values equal to the
+// defaults stay empty (= follow the default).
+func restoreCodexCatalogHeadroom(prefs *CodexPrefs, cfg map[string]interface{}) {
+	path, _ := cfg["model_catalog_json"].(string)
+	if path == "" {
+		return
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var catalog struct {
+		Models []struct {
+			ContextWindow    int `json:"context_window"`
+			AutoCompactLimit int `json:"auto_compact_token_limit"`
+			EffectivePercent int `json:"effective_context_window_percent"`
+		} `json:"models"`
+	}
+	if json.Unmarshal(raw, &catalog) != nil || len(catalog.Models) == 0 {
+		return
+	}
+	m := catalog.Models[0]
+	if m.EffectivePercent != codexEffectiveContextWindowPercent && m.EffectivePercent >= codexMinContextPercent && m.EffectivePercent <= codexMaxContextPercent {
+		prefs.EffectiveContextWindowPercent = strconv.Itoa(m.EffectivePercent)
+	}
+	if m.ContextWindow > 0 {
+		compact := m.AutoCompactLimit * 100 / m.ContextWindow
+		if compact != codexDefaultAutoCompactTokenLimitPct && compact >= codexMinContextPercent && compact <= codexMaxContextPercent {
+			prefs.AutoCompactPercent = strconv.Itoa(compact)
+		}
+	}
 }
 
 func codexAutoCompactTokenLimit(contextWindow int) int {

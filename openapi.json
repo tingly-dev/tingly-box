@@ -11617,6 +11617,14 @@
       "CodexPrefs": {
         "type": "object",
         "properties": {
+          "auto_compact_percent": {
+            "type": "string",
+            "description": "Field auto_compact_percent"
+          },
+          "effective_context_window_percent": {
+            "type": "string",
+            "description": "Field effective_context_window_percent"
+          },
           "model_reasoning_effort": {
             "type": "string",
             "description": "Field model_reasoning_effort"

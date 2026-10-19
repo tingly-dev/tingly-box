@@ -872,3 +872,64 @@ func TestApplyCodexAuth_HybridWithTokens_WritesChatGPTLogin(t *testing.T) {
 		t.Errorf("tokens block wrong: %#v", tok)
 	}
 }
+
+// The catalog's headroom percentages are user-tunable via prefs; empty or
+// out-of-range values fall back to the defaults, and compaction is clamped to
+// the effective window.
+func TestRenderCodexModelCatalog_HeadroomFromPrefs(t *testing.T) {
+	render := func(p *CodexPrefs) (effective, compactLimit, window int) {
+		raw, err := RenderCodexModelCatalogWithPrefs([]string{"m"}, nil, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var c struct {
+			Models []struct {
+				ContextWindow int `json:"context_window"`
+				Compact       int `json:"auto_compact_token_limit"`
+				Effective     int `json:"effective_context_window_percent"`
+			} `json:"models"`
+		}
+		if err := json.Unmarshal(raw, &c); err != nil {
+			t.Fatal(err)
+		}
+		return c.Models[0].Effective, c.Models[0].Compact, c.Models[0].ContextWindow
+	}
+
+	eff, compact, win := render(nil)
+	assert.Equal(t, 82, eff)
+	assert.Equal(t, win*75/100, compact)
+
+	eff, compact, win = render(&CodexPrefs{EffectiveContextWindowPercent: "90", AutoCompactPercent: "70"})
+	assert.Equal(t, 90, eff)
+	assert.Equal(t, win*70/100, compact)
+
+	// out of range / non-numeric → defaults
+	eff, compact, win = render(&CodexPrefs{EffectiveContextWindowPercent: "5", AutoCompactPercent: "abc"})
+	assert.Equal(t, 82, eff)
+	assert.Equal(t, win*75/100, compact)
+
+	// compact above effective is clamped down to it
+	eff, compact, win = render(&CodexPrefs{EffectiveContextWindowPercent: "60", AutoCompactPercent: "95"})
+	assert.Equal(t, 60, eff)
+	assert.Equal(t, win*60/100, compact)
+}
+
+// ReadCodexConfig restores non-default headroom percentages from the catalog.
+func TestReadCodexConfig_RestoresCatalogHeadroom(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+	_, err := ApplyCodexConfig("http://h/tingly/codex", []string{"m"}, &CodexPrefs{EffectiveContextWindowPercent: "90", AutoCompactPercent: "70"}, true)
+	require.NoError(t, err)
+	prefs, _, _, err := ReadCodexConfig()
+	require.NoError(t, err)
+	assert.Equal(t, "90", prefs.EffectiveContextWindowPercent)
+	assert.Equal(t, "70", prefs.AutoCompactPercent)
+
+	// defaults stay empty
+	_, err = ApplyCodexConfig("http://h/tingly/codex", []string{"m"}, DefaultCodexPrefs(), true)
+	require.NoError(t, err)
+	prefs, _, _, err = ReadCodexConfig()
+	require.NoError(t, err)
+	assert.Empty(t, prefs.EffectiveContextWindowPercent)
+	assert.Empty(t, prefs.AutoCompactPercent)
+}

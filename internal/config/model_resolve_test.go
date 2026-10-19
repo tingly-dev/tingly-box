@@ -50,7 +50,7 @@ func TestResolveProviderModels_Codex_TemplateFallback(t *testing.T) {
 	got, err := cfg.ResolveProviderModels(true, false, p.UUID)
 	require.NoError(t, err)
 	assert.Equal(t, ModelListSourceTemplate, got.Source)
-	assert.Contains(t, got.Models, "gpt-5.5")
+	assert.Contains(t, got.Models, "gpt-6-sol")
 }
 
 // A non-empty DB cache is served verbatim (source=db) and the upstream API is
@@ -80,7 +80,7 @@ func TestResolveProviderModels_ForceRefresh_BypassesCache(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, ModelListSourceTemplate, got.Source)
 	assert.NotContains(t, got.Models, "stale-cached")
-	assert.Contains(t, got.Models, "gpt-5.5")
+	assert.Contains(t, got.Models, "gpt-6-sol")
 }
 
 // A provider that does not exist yields an error (used by the refresh path to

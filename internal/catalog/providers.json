@@ -965,27 +965,6 @@
           "created": "2026-07-09",
           "note": "轻量模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
           "openai_endpoints": ["responses"]
-        },
-        {
-          "id": "gpt-5.5",
-          "context": 272000,
-          "max_output": 128000,
-          "deprecated": "retired 2026-10-14 from Codex with ChatGPT sign-in (does not apply to API-key sessions or the OpenAI API); switch to gpt-6.1-sol (Plus/Pro/Business/Enterprise/Edu) or gpt-6-luna (Free/Go)",
-          "note": "旧版编码模型（Codex 模型目录标注 Legacy）；2026-10-14 起已从 Codex ChatGPT 登录中退役，API Key 会话与 OpenAI API 不受影响；Codex 窗口固定 272000，无 1M 扩展（max_context_window 同为 272000）；max_output 取自 API 模型页",
-          "openai_endpoints": ["responses"],
-          "sources": [
-            "https://learn.chatgpt.com/docs/changelog?type=codex-cli",
-            "https://developers.openai.com/api/docs/models/gpt-5.5",
-            "https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"
-          ]
-        },
-        {
-          "id": "gpt-5.3-codex-spark",
-          "context": 128000,
-          "note": "纯文本研究预览模型，优化近实时编码迭代",
-          "deprecated": "retired 2026-09-14 per Codex CLI changelog; switch to one of the recommended models",
-          "openai_endpoints": ["responses"],
-          "sources": ["https://learn.chatgpt.com/docs/changelog?type=codex-cli"]
         }
       ],
       "supports_models_endpoint": false,

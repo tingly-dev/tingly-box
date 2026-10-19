@@ -770,7 +770,7 @@ func (h *Handler) GetCodexConfigPreview(c *gin.Context) {
 		Models:     models,
 	}
 	if writeCatalog && len(models) > 0 {
-		catalogBytes, err := config.RenderCodexModelCatalog(models, contextWindows)
+		catalogBytes, err := config.RenderCodexModelCatalogWithPrefs(models, contextWindows, prefs)
 		if err == nil {
 			resp.CatalogJson = string(catalogBytes)
 		}
