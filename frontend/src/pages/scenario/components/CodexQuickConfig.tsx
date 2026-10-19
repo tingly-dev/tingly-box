@@ -78,7 +78,7 @@ interface FieldStruct {
 const UNSET = '';
 
 const FIELD_STRUCT: FieldStruct[] = [
-    { key: 'model_reasoning_effort', kind: 'enum', enumValues: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] },
+    { key: 'model_reasoning_effort', kind: 'enum', enumValues: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'] },
     { key: 'model_reasoning_summary', kind: 'enum', enumValues: ['auto', 'concise', 'detailed', 'none'] },
     { key: 'model_verbosity', kind: 'enum', enumValues: ['low', 'medium', 'high'] },
     { key: 'model_supports_reasoning_summaries', kind: 'bool' },

@@ -245,3 +245,23 @@ confirms — Quick form opens at safe defaults (all `(default)`, force-summary
 off, catalog on); changing reasoning effort reflects in the Manual TOML at
 both top level and in every `[profiles.*]`; toggling the catalog switch
 adds/removes Step 3 and the `model_catalog_json` line.
+
+---
+
+## Context-window headroom defaults (2026-10-19)
+
+The managed model catalog (`tingly-model-catalog.json`) sets
+`effective_context_window_percent = 85` (was 92; Codex's own default is 95)
+and `auto_compact_token_limit = 80%` of the window (was 85%). Tingly-routed
+third-party models spend more of the window on system prompt, tool overhead and
+output than Codex's first-party models assume, so we reserve more headroom and
+compact earlier. Keep the compaction threshold below the effective percent so
+compaction fires before the usable window is exhausted.
+
+`model_reasoning_effort` accepts `max` and `ultra` in addition to the older
+tiers — current Codex models advertise them in `supported_reasoning_levels`.
+
+Open schema finding: the current upstream `config.schema.json` no longer lists
+`model_supports_reasoning_summaries` at the root or under profiles (it lives on
+the per-model catalog entry as `supports_reasoning_summaries`). We still emit
+the key; Codex ignores unknown keys at runtime but schema validators flag it.

@@ -626,7 +626,7 @@ func TestCodexPrefsFromConfig(t *testing.T) {
 // injection-safe) — they do not surface as an invalid option in the form.
 func TestCodexPrefsFromConfig_DropsInvalidEnum(t *testing.T) {
 	cfg := map[string]interface{}{
-		"model_reasoning_effort":  "ultra", // not a valid effort
+		"model_reasoning_effort":  "bogus", // not a valid effort
 		"model_reasoning_summary": "concise",
 		"model_verbosity":         7, // wrong type
 		// false / non-"true" → empty (not opted in)
@@ -637,6 +637,15 @@ func TestCodexPrefsFromConfig_DropsInvalidEnum(t *testing.T) {
 	assert.Equal(t, "concise", prefs.ModelReasoningSummary)
 	assert.Empty(t, prefs.ModelVerbosity)
 	assert.Empty(t, prefs.ModelSupportsReasoningSummaries)
+}
+
+// max / ultra are advertised by current Codex models (models.json
+// supported_reasoning_levels), so they must round-trip through the prefs.
+func TestCodexPrefsFromConfig_AcceptsMaxUltraEffort(t *testing.T) {
+	for _, effort := range []string{"max", "ultra"} {
+		prefs := CodexPrefsFromConfig(map[string]interface{}{"model_reasoning_effort": effort})
+		assert.Equal(t, effort, prefs.ModelReasoningEffort)
+	}
 }
 
 func TestCodexPrefsFromConfig_Empty(t *testing.T) {

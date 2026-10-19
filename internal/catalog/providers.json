@@ -835,7 +835,7 @@
           "context": 272000,
           "max_output": 128000,
           "created": "2026-09-29",
-          "note": "接近 gpt-6-astra 性能的模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
+          "note": "接近 gpt-6-astra 性能的模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持（Codex 模型目录 priority 档位标注 2x speed, increased usage）；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
           "openai_endpoints": ["responses"],
           "sources": ["https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"]
         },
@@ -844,7 +844,7 @@
           "context": 272000,
           "max_output": 128000,
           "created": "2026-09-22",
-          "note": "推荐用于复杂编码和长程 Agent 工作流；按账户套餐、灰度进度和工作区设置开放；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
+          "note": "上一代主力模型（Codex 模型目录描述为 Previous generation workhorse model，最新主力为 gpt-6.1-sol），适合复杂编码和长程 Agent 工作流；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
           "openai_endpoints": ["responses"],
           "sources": [
             "https://learn.chatgpt.com/docs/models",
@@ -866,7 +866,7 @@
           "context": 272000,
           "max_output": 128000,
           "created": "2026-09-22",
-          "note": "推荐用于专注、高吞吐量的编码任务；按账户套餐、灰度进度和工作区设置开放；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
+          "note": "快速且经济，适合专注、高吞吐量的较简单编码任务；Free / Go 套餐也可选用；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
           "openai_endpoints": ["responses"],
           "sources": [
             "https://learn.chatgpt.com/docs/models",
@@ -969,11 +969,13 @@
         {
           "id": "gpt-5.5",
           "context": 272000,
-          "deprecated": "shutdown scheduled 2026-10-14 from ChatGPT/ChatGPT Work/Codex on all plans (does not apply to the OpenAI API); switch to gpt-6-sol or gpt-5.6-sol",
-          "note": "旧版编码模型（Codex 模型目录标注 Legacy）；ChatGPT/Codex 内将于 2026-10-14 退役，不影响 OpenAI API",
+          "max_output": 128000,
+          "deprecated": "retired 2026-10-14 from Codex with ChatGPT sign-in (does not apply to API-key sessions or the OpenAI API); switch to gpt-6.1-sol (Plus/Pro/Business/Enterprise/Edu) or gpt-6-luna (Free/Go)",
+          "note": "旧版编码模型（Codex 模型目录标注 Legacy）；2026-10-14 起已从 Codex ChatGPT 登录中退役，API Key 会话与 OpenAI API 不受影响；Codex 窗口固定 272000，无 1M 扩展（max_context_window 同为 272000）；max_output 取自 API 模型页",
           "openai_endpoints": ["responses"],
           "sources": [
             "https://learn.chatgpt.com/docs/changelog?type=codex-cli",
+            "https://developers.openai.com/api/docs/models/gpt-5.5",
             "https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"
           ]
         },
@@ -981,7 +983,7 @@
           "id": "gpt-5.3-codex-spark",
           "context": 128000,
           "note": "纯文本研究预览模型，优化近实时编码迭代",
-          "deprecated": "shutdown 2026-09-14 per Codex CLI changelog; switch to one of the recommended models",
+          "deprecated": "retired 2026-09-14 per Codex CLI changelog; switch to one of the recommended models",
           "openai_endpoints": ["responses"],
           "sources": ["https://learn.chatgpt.com/docs/changelog?type=codex-cli"]
         }
@@ -990,10 +992,11 @@
       "oauth_provider": "codex",
       "icon": "opencode",
       "openai_endpoint_mode": "responses",
-      "last_updated": "2026-10-08",
+      "last_updated": "2026-10-19",
       "sources": [
         "https://learn.chatgpt.com/docs/models",
         "https://learn.chatgpt.com/docs/changelog?type=codex-cli",
+        "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
         "https://openai.com/index/gpt-6-astra/",
         "https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"
       ]

@@ -58,7 +58,7 @@ type CodexPrefs struct {
 // Values outside the set are dropped during conversion (forward-compatible,
 // injection-safe).
 var codexEnumValues = map[string][]string{
-	"model_reasoning_effort":  {"none", "minimal", "low", "medium", "high", "xhigh"},
+	"model_reasoning_effort":  {"none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"},
 	"model_reasoning_summary": {"auto", "concise", "detailed", "none"},
 	"model_verbosity":         {"low", "medium", "high"},
 }
@@ -436,8 +436,8 @@ const (
 	// internally consistent until richer per-model metadata is available.
 	codexDefaultContextWindow            = 200000
 	codexDefaultMaxContextWindow         = 200000
-	codexEffectiveContextWindowPercent   = 92
-	codexDefaultAutoCompactTokenLimitPct = 85
+	codexEffectiveContextWindowPercent   = 85
+	codexDefaultAutoCompactTokenLimitPct = 80
 
 	// 1M context window for models that support it (Sonnet 4.6+, Opus 4.6+)
 	codex1MContextWindow = 1000000
