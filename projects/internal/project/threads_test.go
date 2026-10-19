@@ -212,6 +212,7 @@ func TestNeedsInputAndFollowUpResumes(t *testing.T) {
 	require.NoError(t, err)
 	rep := f.report(t)
 	assert.Equal(t, ReportNeedsInput, rep.Kind)
+	assert.Equal(t, "coordinator", rep.From)
 	got := waitStatus(t, f.store, th.ID, db.ThreadWaiting)
 	assert.Equal(t, "Should I use Postgres or SQLite?", got.WaitReason)
 
@@ -219,6 +220,7 @@ func TestNeedsInputAndFollowUpResumes(t *testing.T) {
 	require.NoError(t, err)
 	rep = f.report(t)
 	assert.Equal(t, "Used SQLite", rep.Text)
+	assert.Equal(t, "user", rep.From)
 	specs := f.agent.Launches()
 	require.Len(t, specs, 2)
 	assert.True(t, specs[1].Resume)

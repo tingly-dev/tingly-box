@@ -223,3 +223,45 @@ func TestRenderHistoryAlternates(t *testing.T) {
 	assert.Contains(t, msgs[1].Content, "01234567")
 	assert.Contains(t, msgs[2].Content, "[Thread update]")
 }
+
+// A turn that answered the user in the thread itself stays in the thread:
+// no thread update in the conversation and no coordinator turn.
+func TestUserTurnInAThreadDoesNotWakeTheCoordinator(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error {
+		turn.Say("did "+turn.Prompt, 1, 1)
+		return nil
+	})
+	ai := &fakeLLM{fn: func(req llm.Request) llm.Result {
+		switch last := lastUserText(req); {
+		case hasToolResults(req):
+			return llm.Result{Text: "Started it."}
+		case strings.Contains(last, "Coordinator check-in"):
+			return llm.Result{Text: noUpdate}
+		default:
+			return llm.Result{ToolCalls: []llm.ToolCall{call("c1", "start_thread", map[string]string{"title": "Docs", "task": "update the docs"})}}
+		}
+	}}
+	coord := NewCoordinator(f.store, f.threads.layout, f.threads.hub, f.threads, ai)
+
+	_, err := coord.Post(f.project.ID, "Update the docs.")
+	require.NoError(t, err)
+	waitMessages(t, f.store, f.project.ID, func(m []db.ProjectMessage) bool { return countKind(m, db.MsgThreadUpdate) == 1 })
+	assert.Eventually(t, func() bool { return !coord.Busy(f.project.ID) }, 5*time.Second, 10*time.Millisecond)
+	before := len(ai.requests())
+
+	threads, _ := f.store.ListThreads(f.project.ID)
+	require.Len(t, threads, 1)
+	_, err = f.threads.Send(context.Background(), threads[0].ID, "also fix the typo", "user")
+	require.NoError(t, err)
+	assert.Eventually(t, func() bool {
+		got, _ := f.store.GetThread(threads[0].ID)
+		return got.Turns == 2 && !f.threads.Running(got.ID)
+	}, 5*time.Second, 10*time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
+
+	msgs, _ := f.store.ListProjectMessages(f.project.ID, 0)
+	assert.Equal(t, 1, countKind(msgs, db.MsgThreadUpdate))
+	assert.Len(t, ai.requests(), before)
+	got, _ := f.store.GetThread(threads[0].ID)
+	assert.Equal(t, "did also fix the typo", got.LastReport)
+}
