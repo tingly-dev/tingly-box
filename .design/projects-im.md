@@ -2,7 +2,7 @@
 
 > 状态：提案（TEP #2143）。承接 [projects-desk-absorption.md](./projects-desk-absorption.md)：Desk 已并入，
 > 这里把 Remote 的 IM 聊天（`@cc`）也并进来，并**重新打开**那篇 Decisions §1“`@cc` 不共享、不导入”。
-> 本文里的 schema、API 和阶段都是提案，不是现状。图见 [projects-im.pencil.md](./projects-im.pencil.md)。
+> 本文里的 schema、API 和里程碑都是提案，不是现状。图见 [projects-im.pencil.md](./projects-im.pencil.md)。
 
 ## 决定
 
@@ -81,7 +81,7 @@ project 绑定的 chat 默认在跟 coordinator 说话；要对某个线程说�
 - 优先级：引用回复 > 行首 `@N` > 聚焦 > coordinator。
 - working folder 绑定只有一个当前会话，不需要这些。
 
-`@` 的另一个用法是 coordinator 路由（`@opus`、`@codex` 之类，决定模型、profile、agent，阶段 6）。两者不冲突：
+`@` 的另一个用法是 coordinator 路由（`@opus`、`@codex` 之类，决定模型、profile、agent，M6）。两者不冲突：
 纯数字是线程编号，其余名字交给 coordinator 解析；名字不唯一或认不出时 coordinator 回问，不猜。
 
 ## 审批与排队
