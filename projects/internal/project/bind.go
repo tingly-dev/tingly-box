@@ -3,6 +3,7 @@ package project
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
@@ -61,6 +62,10 @@ func (s *Service) BindChannel(platform, chatID, title, threadID, projectID strin
 // bound to, as a message with source im, exactly as the web would send it
 // (Send). handled is false when the chat has no binding, and the caller
 // carries on as before. The reply arrives in the chat through the Relay.
+//
+// A folder chat that asked for a new session (/new), or whose thread is done
+// (resolved by hand or after idling), starts a new thread in the folder with
+// this message instead, and the chat moves to it.
 func (s *Service) PostFromChannel(platform, chatID, text string) (handled bool, err error) {
 	b, err := s.Store.GetChannelBinding(platform, chatID)
 	if err != nil {
@@ -69,6 +74,118 @@ func (s *Service) PostFromChannel(platform, chatID, text string) (handled bool, 
 		}
 		return false, err
 	}
-	_, err = s.Send(context.Background(), b.ThreadID, text, nil, Source{Kind: db.SourceIM, Platform: platform, ChatID: chatID})
+	src := Source{Kind: db.SourceIM, Platform: platform, ChatID: chatID}
+	t, p, err := s.boundThread(b)
+	if err != nil {
+		return true, err
+	}
+	if p.Type == db.ProjectFolder && (b.NewThread || t.Status == db.ThreadResolved) {
+		_, err = s.startFromChannel(b, t, text, src)
+		return true, err
+	}
+	_, err = s.Send(context.Background(), b.ThreadID, text, nil, src)
 	return true, err
+}
+
+func (s *Service) boundThread(b *db.ChannelBinding) (*db.Thread, *db.Project, error) {
+	t, err := s.Store.GetThread(b.ThreadID)
+	if err != nil {
+		return nil, nil, err
+	}
+	p, err := s.Store.GetProject(t.ProjectID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return t, p, nil
+}
+
+// startFromChannel starts a thread in the folder of prev, with prev's model,
+// profile and permission mode, and moves the chat to it.
+func (s *Service) startFromChannel(b *db.ChannelBinding, prev *db.Thread, task string, src Source) (*db.Thread, error) {
+	t, err := s.Threads.StartFolderThread(FolderThreadSpec{
+		ProjectID: prev.ProjectID, Task: task, Source: src,
+		Model: prev.Model, PermissionMode: prev.PermissionMode, Profile: prev.Profile,
+	})
+	if err != nil {
+		return nil, err
+	}
+	nb := &db.ChannelBinding{Platform: b.Platform, ChatID: b.ChatID, ThreadID: t.ID}
+	if err := s.Store.UpsertChannelBinding(nb); err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+// Chat commands a bound chat sends instead of a message.
+const (
+	ChatNew   = "new"   // a new session in the chat's folder: now with a task, else on the next message
+	ChatStop  = "stop"  // interrupt the bound thread's turn
+	ChatClear = "clear" // stop, and the next message starts a new session
+)
+
+// ChannelCommand runs a chat command (ChatNew, ChatStop, ChatClear) for a bound
+// chat; arg is the text after it. handled is false when the chat has no
+// binding or the command is not one of these, and the caller carries on as
+// before. reply is what to tell the chat.
+func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bool, reply string, err error) {
+	if name != ChatNew && name != ChatStop && name != ChatClear {
+		return false, "", nil
+	}
+	b, err := s.Store.GetChannelBinding(platform, chatID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return false, "", nil
+		}
+		return false, "", err
+	}
+	t, p, err := s.boundThread(b)
+	if err != nil {
+		return true, "", err
+	}
+	tag := threadTag(t.Seq, t.Title)
+	if t.Agent == db.AgentLLM {
+		switch name {
+		case ChatStop:
+			return true, "The project conversation cannot be stopped. Stop a thread in Projects on the web.", nil
+		default:
+			return true, "This chat talks to the project conversation; ask it to start a thread.", nil
+		}
+	}
+	folder := p.Type == db.ProjectFolder
+	switch name {
+	case ChatNew:
+		if !folder {
+			return true, fmt.Sprintf("/new works in a chat bound to a folder; this chat is on [%s] of %s.", tag, p.Name), nil
+		}
+		if task := strings.TrimSpace(arg); task != "" {
+			nt, err := s.startFromChannel(b, t, task, Source{Kind: db.SourceIM, Platform: platform, ChatID: chatID})
+			if err != nil {
+				return true, "", err
+			}
+			return true, fmt.Sprintf("Started [%s] in %s.", threadTag(nt.Seq, nt.Title), p.Name), nil
+		}
+		if err := s.Store.SetChannelBindingNewThread(b.ID, true); err != nil {
+			return true, "", err
+		}
+		return true, fmt.Sprintf("Your next message starts a new session in %s.", p.Name), nil
+	case ChatClear:
+		if !folder {
+			return true, fmt.Sprintf("/clear works in a chat bound to a folder; this chat is on [%s] of %s. Use /stop to stop it.", tag, p.Name), nil
+		}
+		stopped := s.Threads.Running(t.ID)
+		s.Threads.Stop(t.ID)
+		if err := s.Store.SetChannelBindingNewThread(b.ID, true); err != nil {
+			return true, "", err
+		}
+		if stopped {
+			return true, fmt.Sprintf("Stopped [%s]. Your next message starts a new session in %s.", tag, p.Name), nil
+		}
+		return true, fmt.Sprintf("Your next message starts a new session in %s.", p.Name), nil
+	default:
+		if !s.Threads.Running(t.ID) {
+			return true, fmt.Sprintf("[%s] is not running.", tag), nil
+		}
+		s.Threads.Stop(t.ID)
+		return true, fmt.Sprintf("Stopped [%s].", tag), nil
+	}
 }

@@ -219,6 +219,9 @@ type ChannelBinding struct {
 	// ChatTitle is a display name for the chat, when the caller knows one.
 	ChatTitle string `gorm:"size:300" json:"chat_title"`
 	ThreadID  string `gorm:"size:36;index" json:"thread_id"`
+	// NewThread makes the chat's next message start a new thread in the
+	// folder of ThreadID instead of continuing it (/new in a folder chat).
+	NewThread bool `gorm:"not null;default:false" json:"-"`
 	// ProjectID is the thread's project, filled in when read.
 	ProjectID string    `gorm:"->;-:migration" json:"project_id"`
 	CreatedAt time.Time `json:"created_at"`

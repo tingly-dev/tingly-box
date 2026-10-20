@@ -102,6 +102,12 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 		return
 	}
 
+	// A chat bound to a Projects thread stops, clears and starts sessions
+	// there (/stop, /clear, /new), not in the old @cc session.
+	if h.routeProjectCommand(hCtx, text) {
+		return
+	}
+
 	// Check for stop commands FIRST (highest priority)
 	// Supports: /stop, stop, /clear (stop+clear)
 	if isStopCommand(text) {

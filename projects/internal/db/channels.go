@@ -82,7 +82,7 @@ func (s *Store) UpsertChannelBinding(b *ChannelBinding) error {
 		case err != nil:
 			return err
 		}
-		cur.ThreadID = b.ThreadID
+		cur.ThreadID, cur.NewThread = b.ThreadID, b.NewThread
 		if t := strings.TrimSpace(b.ChatTitle); t != "" {
 			cur.ChatTitle = t
 		}
@@ -120,4 +120,11 @@ func (s *Store) DeleteProjectChannelBindings(projectID string) (int64, error) {
 	res := s.db.Where("thread_id IN (?)", s.db.Model(&Thread{}).Select("id").Where("project_id = ?", projectID)).
 		Delete(&ChannelBinding{})
 	return res.RowsAffected, res.Error
+}
+
+// SetChannelBindingNewThread sets whether a chat's next message starts a new
+// thread (see ChannelBinding.NewThread).
+func (s *Store) SetChannelBindingNewThread(id string, on bool) error {
+	return s.db.Model(&ChannelBinding{}).Where("id = ?", id).
+		Updates(map[string]any{"new_thread": on, "updated_at": time.Now()}).Error
 }

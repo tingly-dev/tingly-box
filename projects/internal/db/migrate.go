@@ -151,6 +151,7 @@ func migrate(g *gorm.DB, o openOptions) (err error) {
 		"UPDATE thread_events SET source_ref = '' WHERE source_ref IS NULL",
 		"UPDATE thread_events SET source_platform = '' WHERE source_platform IS NULL",
 		"UPDATE thread_events SET source_chat_id = '' WHERE source_chat_id IS NULL",
+		"UPDATE channel_bindings SET new_thread = false WHERE new_thread IS NULL",
 		"CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_path ON projects(path) WHERE path <> ''",
 	} {
 		if err = tx.Exec(q).Error; err != nil {

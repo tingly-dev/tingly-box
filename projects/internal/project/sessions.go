@@ -59,6 +59,8 @@ type FolderThreadSpec struct {
 	PermissionMode string
 	// Profile is the host's launch profile (see Launcher); empty for its default.
 	Profile string
+	// Source is where the first message came from; zero for the web.
+	Source Source
 }
 
 // CleanFolder resolves a folder path the user gave (~ expanded, absolute,
@@ -143,7 +145,7 @@ func (m *Threads) StartFolderThread(spec FolderThreadSpec) (*db.Thread, error) {
 	}
 	_ = m.store.TouchProject(p.ID)
 	m.hub.Publish(Event{Type: EventThread, ProjectID: p.ID, Data: t})
-	m.enqueue(t.ID, queued{text: task, atts: spec.Attachments})
+	m.enqueue(t.ID, queued{text: task, src: spec.Source, atts: spec.Attachments})
 	return t, nil
 }
 

@@ -2,6 +2,7 @@ package remoteagent
 
 import (
 	"context"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 )
@@ -21,6 +22,11 @@ type ProjectRouter interface {
 	// is why the message could not be delivered (for example a paused
 	// project) and is shown to the chat.
 	RouteInbound(ctx context.Context, in ProjectInbound) (handled bool, err error)
+	// RouteCommand runs a chat command of a bound chat ("new", "stop",
+	// "clear"); in.Text is the text after the command. handled is false when
+	// the chat is not bound, and the caller carries on as before. reply is
+	// what to tell the chat; err, if set, is why the command failed.
+	RouteCommand(ctx context.Context, name string, in ProjectInbound) (handled bool, reply string, err error)
 }
 
 // ProjectInbound is one message from a chat.
@@ -62,4 +68,56 @@ func (h *BotHandler) routeToProject(hCtx HandlerContext, text string) bool {
 // chatBoundToProject reports whether the chat talks to a project.
 func (h *BotHandler) chatBoundToProject(hCtx HandlerContext) bool {
 	return h.projectRouter != nil && h.projectRouter.Bound(string(hCtx.Platform), hCtx.ChatID)
+}
+
+// projectCommand reads a chat command a bound chat sends to its project: the
+// stop words the old routing knew (/stop, stop, /interrupt, /clear) and /new
+// with an optional first message. ok is false for anything else.
+func projectCommand(text string) (name, arg string, ok bool) {
+	trimmed := strings.TrimSpace(text)
+	head, rest, _ := strings.Cut(trimmed, " ")
+	switch strings.ToLower(head) {
+	case "/stop", "stop", "/interrupt":
+		if rest == "" {
+			return "stop", "", true
+		}
+	case "/clear":
+		if rest == "" {
+			return "clear", "", true
+		}
+	case "/new":
+		return "new", strings.TrimSpace(rest), true
+	}
+	return "", "", false
+}
+
+// routeProjectCommand runs a chat command in a bound chat. It reports whether
+// the command was taken; an unbound chat's commands keep their old meaning.
+func (h *BotHandler) routeProjectCommand(hCtx HandlerContext, text string) bool {
+	if h.projectRouter == nil {
+		return false
+	}
+	name, arg, ok := projectCommand(text)
+	if !ok {
+		return false
+	}
+	handled, reply, err := h.projectRouter.RouteCommand(h.ctx, name, ProjectInbound{
+		Platform: string(hCtx.Platform),
+		BotUUID:  hCtx.BotUUID,
+		ChatID:   hCtx.ChatID,
+		SenderID: hCtx.SenderID,
+		Text:     arg,
+	})
+	if !handled {
+		return false
+	}
+	if err != nil {
+		logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to run a chat command in its project")
+		h.SendText(hCtx, "Could not do that in the project: "+err.Error())
+		return true
+	}
+	if reply != "" {
+		h.SendText(hCtx, reply)
+	}
+	return true
 }

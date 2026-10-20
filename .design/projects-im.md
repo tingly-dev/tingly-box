@@ -137,7 +137,7 @@ project 绑定的 chat 默认在跟 coordinator 说话；要对某个线程说�
 |---|---|---|---|
 | **M1 只到 coordinator**（先做） | `ChannelBinding`（只支持 project）、消息来源字段、绑定的增删查接口；绑了项目的 chat 的消息进项目对话，coordinator 的回复和折叠后的线程汇报发回 chat；前端：侧栏 IM 入口、项目页头标签、绑定弹窗、对话里的来源图标 | working folder 绑定、IM 里的审批/提问（只发一行“有线程等你，请到 Web 处理”）、点名线程、下线旧路径 | 已实施（#2147） |
 | **统一模型** | 见 [projects-sessions.md](./projects-sessions.md) 的交付：一次变更，后端和前端两个叠放的 PR | IM 路由、前端新功能 | 已实施（#2151、#2154）；绑定文件夹里的线程、弹窗列项目和文件夹随之可用 |
-| **M2b 文件夹绑定** | 绑定已是 `thread_id`；`/new`、`/stop`；已绑定 chat 的斜杠命令不再落到旧 `@cc` | 同 M1 | |
+| **M2b 文件夹绑定** | 绑定已是 `thread_id`；`/new`、`/stop`；已绑定 chat 的斜杠命令不再落到旧 `@cc` | 同 M1 | 已实施（见下“M2b 的落地”） |
 | **M3 审批与提问进 IM** | 线程审批/提问发到所有绑定的 chat，按钮，先答为准，另一边改写为“已处理” | | |
 | **M4 点名线程** | `Thread.Seq`、`@N`、引用回复、`/threads`、`/focus` | | |
 | **M5 收尾** | 未绑定走 coordinator；删 SmartGuide、Remote 页面、`remote/session`；旧绑定转换 | | |
@@ -157,6 +157,21 @@ M3 之前，需要审批的线程在 IM 里只有提示，靠 Web 处理，这�
 - **出站**：Projects 的可选 Host 能力 `ChannelSink.SendChannelText(platform, chatID, text)`（类型断言，独立版没有，不发送）。`Relay` 在 `Coordinator.OnFinal`（主线程的助手回复、线程汇报、出错）、`Threads.OnReply`（非主线程每轮结束的文本或错误，只发给绑在该线程自己上的 chat）和 `Threads.OnWait`（线程要审批/提问）上挂钩，**按完成顺序逐条**发给项目绑定的**所有** chat，前缀是消息来自的地方：项目对话 `[项目名] `，其他线程 `[#N 标题] `（线程汇报的事件载荷带 `seq`）；线程汇报折成一行（`[#2 修登录] Finished: 首行`，最多 240 字）；审批/提问只发一行“`[#2 修登录] Needs you`，请到 Web 处理”，同一线程 5 分钟内只提醒一次。用户自己发的消息不回显。
 - **Tingly Box 一侧**：`internal/server/module/projects.ChatBridge` 同时实现 `ProjectRouter` 和 `ChannelSink`，经 bot 的 `remote/channel.Channel.Send` 发送（与通知同一条路径，微信的 `context_token` 等照常）。哪个 bot 发：优先该 chat 最近一次入站所用的 bot；重启后还没收到过消息时，依次试该平台的 bot。被屏蔽（disabled）的 chat 不发。Projects 开关关闭时桥不接任何消息。
 - **没做**：文件夹 chat 的 `/new`、`/stop`（M2b）、IM 里审批（M3）、`@N`、聚焦、媒体入站、`chat_title` 的自动获取（现在只有显式传入）。
+
+## M2b 的落地
+
+- **命令**：已绑定的 chat 里 `/stop`（及 `stop`、`/interrupt`）、`/clear`、`/new [第一条消息]` 交给 Projects
+  （`ProjectRouter.RouteCommand` → `Service.ChannelCommand`），在旧的 stop 检测**之前**，所以不会再落到旧 `@cc` 会话上。
+  其他斜杠命令（`/help`、`/bind`、`/cd`…）照旧；没绑定的 chat 完全不变。
+- **文件夹 chat**：`/new 任务` 立刻在同一文件夹开新线程并把绑定移过去，模型、profile、权限模式沿用当前线程，第一条消息记为 `im` 来源；
+  `/new` 不带文字只记下“下一条消息开新会话”（`channel_bindings.new_thread`，重绑时清除），不开空线程（文件夹线程不能没有第一条消息）。
+  `/clear` = 停止当前回合 + 同上。旧线程保留在文件夹里。
+- **结束的会话不拒收**：文件夹 chat 绑定的线程已 resolve（手动归档或空闲自动 resolve）时，下一条消息直接开新线程，
+  而不是回“线程已结束，请先 reopen”。回复前缀 `[#N 标题]` 变了，用户就知道换了会话。
+- **项目对话的 chat**：协调者不能被停止，也不由 chat 开线程；`/stop`、`/clear`、`/new` 回一句说明，不做任何事。
+  子线程的 chat（只能经 API 绑）`/stop` 停它，`/new`、`/clear` 说明只对文件夹有效。
+- **回复**：命令的结果（`Stopped [#2 …].`、`Started [#3 …] in billing.`）由 handler 直接回给 chat；之后线程的回复照常经 Relay。
+- **没做**：`/help` 在已绑定的 chat 里还列旧命令（M5 下线旧路径时一起改）；`/stop #N` 点名停止属于 M4。
 
 ## 待定
 

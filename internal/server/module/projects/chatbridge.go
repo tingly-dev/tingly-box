@@ -91,6 +91,22 @@ func (b *ChatBridge) RouteInbound(_ context.Context, in remoteagent.ProjectInbou
 	return app.PostFromChannel(in.Platform, in.ChatID, in.Text)
 }
 
+// RouteCommand implements remoteagent.ProjectRouter.
+func (b *ChatBridge) RouteCommand(_ context.Context, name string, in remoteagent.ProjectInbound) (bool, string, error) {
+	app := b.live()
+	if app == nil || !app.ChannelBound(in.Platform, in.ChatID) {
+		return false, "", nil
+	}
+	b.mu.Lock()
+	b.bots[chatKey(in.Platform, in.ChatID)] = in.BotUUID
+	start := b.start
+	b.mu.Unlock()
+	if start != nil {
+		start()
+	}
+	return app.ChannelCommand(in.Platform, in.ChatID, name, in.Text)
+}
+
 var _ projectsapp.ChannelSink = (*Host)(nil)
 
 // SetChatBridge gives the host the bridge it sends chat messages through.

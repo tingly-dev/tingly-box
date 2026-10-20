@@ -36,6 +36,7 @@ type fakeRouter struct {
 	bound map[string]bool
 	err   error
 	got   []remoteagent.ProjectInbound
+	cmds  []string
 }
 
 func (f *fakeRouter) bind(chatID string) {
@@ -64,6 +65,22 @@ func (f *fakeRouter) RouteInbound(_ context.Context, in remoteagent.ProjectInbou
 	}
 	f.got = append(f.got, in)
 	return true, f.err
+}
+
+func (f *fakeRouter) RouteCommand(_ context.Context, name string, in remoteagent.ProjectInbound) (bool, string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !f.bound[in.ChatID] {
+		return false, "", nil
+	}
+	f.cmds = append(f.cmds, name+":"+in.Text)
+	return true, "project did " + name, nil
+}
+
+func (f *fakeRouter) commands() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.cmds...)
 }
 
 func (f *fakeRouter) inbound() []remoteagent.ProjectInbound {
@@ -128,4 +145,34 @@ func Test_NoRouterNoChange(t *testing.T) {
 	chat := alice.OpenDM(harness.Setting.UUID)
 	chat.SendText("/help")
 	chat.WaitText(3*time.Second).AssertContains(t, "@cc")
+}
+
+// In a bound chat /stop, stop, /clear and /new act on the project's thread,
+// not on an old @cc session; other commands keep their meaning, and an
+// unbound chat's /stop never reaches the project.
+func Test_BoundChatCommandsGoToItsProject(t *testing.T) {
+	env, harness, alice := bootHelperNotStarted(t)
+	router := &fakeRouter{bound: map[string]bool{}}
+	harness.Handler.SetProjectRouter(router)
+	require.NoError(t, env.Manager().Start(env.Context()))
+
+	free := alice.OpenDM(harness.Setting.UUID)
+	free.SendText("/stop")
+	free.WaitAnySend(3 * time.Second)
+	assert.Empty(t, router.commands(), "an unbound chat keeps the old /stop")
+
+	chat := alice.OpenDM(harness.Setting.UUID)
+	router.bind(chat.ChatID)
+	for _, text := range []string{"/stop", "stop", "/clear", "/new", "/new fix the login bug"} {
+		chat.Drain()
+		chat.SendText(text)
+		chat.WaitText(3*time.Second).AssertContains(t, "project did ")
+	}
+	assert.Equal(t, []string{"stop:", "stop:", "clear:", "new:", "new:fix the login bug"}, router.commands())
+	assert.Empty(t, router.inbound(), "commands are not sent as messages")
+
+	chat.Drain()
+	chat.SendText("/help")
+	chat.WaitText(3*time.Second).AssertContains(t, "Your ID:")
+	assert.Len(t, router.commands(), 5, "other commands keep their meaning")
 }
