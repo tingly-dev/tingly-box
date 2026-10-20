@@ -219,17 +219,17 @@ audit, rate limits                        gone
                                           SmartGuide history     → dropped
 ```
 
-## Phases and what runs in parallel
+## Milestones and what runs in parallel
 
 ```
-1 data model ──────────────┐
-  ChannelBinding, source   │
-  fields, routes, Host cap │
-                           ├──▶ 3 inbound routing ──▶ 4 coordinator for unbound ──▶ 5 retire ──▶ 6 @xxx routing
-2 frontend skeleton ───────┘     @cc → threads         drop SmartGuide                Remote page,
-  IM entry, header tags,         approvals both ways                                 remote/session,
-  bind dialog (mock API)                                                            old bindings
-         │
-         └── 1 and 2 touch different trees (projects/ + module vs frontend/), so they run in parallel;
-             2 uses placeholder API functions until `task codegen` runs after 1.
+M1 coordinator only ──▶ M2 working folder ──▶ M3 approvals in IM ──▶ M4 address a thread ──▶ M5 retire legacy ──▶ M6 @route
+ │                                                                                           (unbound → coordinator,
+ ├─ backend PR   ChannelBinding (project), source fields, routes, IM→coordinator, coordinator→IM     Remote page, remote/session)
+ └─ frontend PR  IM sidebar entry, header tags, bind dialog, source icon   (placeholder API → task codegen)
+
+rule for every milestone: a chat WITH a binding uses the new path; a chat WITHOUT one keeps today's @cc/@tb
+until M5, so nothing breaks while the milestones land one by one.
+
+M1 deliberately leaves out: folder binding, approvals in IM (IM gets one line "a thread needs you, open the web"),
+thread addressing, removing the old path.
 ```

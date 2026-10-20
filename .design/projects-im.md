@@ -99,15 +99,22 @@ project 绑定的 chat 默认在跟 coordinator 说话；要对某个线程说�
 - 导航：rail 上的 Remote 入口去掉；等待信号（小红点）已覆盖 IM 来的审批，无需新增。
 - 先放 API 占位函数（`ChannelBinding` 的 swagger 没生成前），按 CLAUDE.md 约定，之后跑 `task codegen`。
 
-## 阶段（每阶段一个或几个 PR；前两阶段可并行）
+## 里程碑（逐步做，每个都能单独上线；IM 交互复杂，不要求一次到位）
 
-1. **数据模型**：`ChannelBinding`、来源字段、Projects 路由（list/create/delete binding）、`Host` 的可选 IM 能力。
-   不动 UI 和 Remote。
-2. **前端骨架**（与 1 并行）：Projects 侧栏“IM”入口、页头标签、绑定管理弹窗，先接占位 API 和 mock。
-3. **入站路由**：`remoteagent` 按 binding 路由到线程/项目对话；`@cc` 执行器换成线程调用；审批双端同步。
-4. **未绑定走 coordinator**，删 SmartGuide。
-5. **退役**：删 Remote 页面和 `remote/session` 存储，迁移旧绑定（见待定），更新 `.design`。
-6. **coordinator 的 `@xxx` 路由**（模型/profile/agent）。
+原则：**绑定了才走新路径，没绑定的 chat 保持今天的行为**（`@cc`、`@tb` 照旧），所以每个里程碑都不破坏现有用法，
+最后才下线旧路径。每个里程碑拆成后端和前端两个 PR，互不依赖，可并行；前端先接占位 API，后端合并后跑 `task codegen` 再接。
+
+| | 范围 | 不做 | 状态 |
+|---|---|---|---|
+| **M1 只到 coordinator**（先做） | `ChannelBinding`（只支持 project）、消息来源字段、绑定的增删查接口；绑了项目的 chat 的消息进项目对话，coordinator 的回复和折叠后的线程汇报发回 chat；前端：侧栏 IM 入口、项目页头标签、绑定弹窗、对话里的来源图标 | working folder 绑定、IM 里的审批/提问（只发一行“有线程等你，请到 Web 处理”）、点名线程、下线旧路径 | 未开始 |
+| **M2 working folder 绑定** | 绑定到文件夹，消息进当前会话（取代 `@cc`）；`/new`、`/stop`；目录浏览器改为新建 working folder | 同 M1 | |
+| **M3 审批与提问进 IM** | 线程审批/提问发到所有绑定的 chat，按钮，先答为准，另一边改写为“已处理” | | |
+| **M4 点名线程** | `Thread.Seq`、`@N`、引用回复、`/threads`、`/focus` | | |
+| **M5 收尾** | 未绑定走 coordinator；删 SmartGuide、Remote 页面、`remote/session`；旧绑定转换 | | |
+| **M6 coordinator 路由** | `@opus`/`@codex` 决定模型、profile、agent | | |
+
+优先级：M1 > M2 > M3 > M4 > M5 > M6。M1 是验证“IM 与项目对话合一”的最小闭环；M2 让旧 `@cc` 用户有地方迁；
+M3 之前，需要审批的线程在 IM 里只有提示，靠 Web 处理，这是 M1/M2 刻意接受的限制。
 
 ## 待定
 
