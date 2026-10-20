@@ -105,6 +105,7 @@
 | [projects-attachments.md](./projects-attachments.md) | Projects 附件：文件、图片、长文本作为输入，统一落盘在项目 uploads（TEP-2107） | 进行中 |
 | [projects-panel.md](./projects-panel.md) | Projects 面板：项目和工作目录共用一个侧边栏（TEP-2063） | 已实现 |
 | [projects-desk-absorption.md](./projects-desk-absorption.md) | Desk 并入 Projects：工作目录会话、宿主能力与插槽、切换 | 已实施 |
+| [projects-im.md](./projects-im.md) | IM 聊天并入 Projects：chat 绑定落点、Projects 为唯一数据源、取消 SmartGuide、Remote 页并入（TEP-2143） | 提案 |
 | [projects-ui.md](./projects-ui.md) | Projects 面板的 UI 对齐：对照 TB 页面和官方 Projects 的审查与分批计划 | 进行中 |
 | [projects.md](./projects.md) | Projects 接入（宿主侧）：`projects/` 模块、Host 适配器、`projects` 开关、导航与命名；契约见 `projects/.design/projects.md` | 设计说明；代码已搬入，接入未开始 |
 | [smart-guide-on-claude-code.md](./smart-guide-on-claude-code.md) | Smart Guide on Claude Code (retiring tingly-agentscope) | 已废弃方案；现行 runtime 见 afk |
