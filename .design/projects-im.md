@@ -36,6 +36,7 @@ ChannelBinding            -- 一个 IM chat 当前绑在哪
   target_kind                    project | workdir
   project_id / workdir_id        二选一
   thread_id                      workdir 绑定时的“当前会话”；project 绑定为空
+  focus_thread_id                project 绑定时可选的“聚焦线程”；空 = 跟 coordinator 说话
   created_at, updated_at
 
 Thread / project_messages        新增来源字段（可空，空 = Web）
@@ -63,6 +64,25 @@ Projects 事件 ──▶ 订阅了该落点的 binding ──▶ 渲染到 chat
 
 - 回复前缀：已绑定时每条回复带落点短名（例：`[tingly-box] …`），避免用户忘了自己在哪。
 - 一个 chat 同一时刻只绑一个落点；一个落点可以被多个 chat 绑定（手机和群各一个），出站按 binding 广播。
+
+## 在 IM 里点名线程
+
+project 绑定的 chat 默认在跟 coordinator 说话；要对某个线程说话，需要能“点名”。点名是一次 `@`：
+
+- **线程编号**：每个线程在项目内有稳定的短编号 `#1`、`#2`（新增 `Thread.Seq`，项目内自增，不复用）。线程的通知、
+  汇报、审批、提问消息都带 `[#2 标题]` 前缀。
+- **主路径 `@2 补上边界用例`**：行首 `@` 加编号，整条消息去给线程 2，不改变 chat 的状态，每次显式，不会发错。
+- **顺手路径：引用回复**线程的某条消息，消息去给那个线程。不需要记编号，但容易忘记，所以它只是快捷方式，不是唯一入口。
+  平台不支持引用回复时，这条路径不存在，`@` 仍可用。
+- **兜底 `/focus #2`**：之后的普通消息都进线程 2，回复前缀 `[#2 …]`；`/back` 或该线程结束后退回 coordinator。
+  聚焦只存在绑定上，不改线程本身，用于长时间只盯一个线程的场景。
+- **`/threads`**：列出项目的线程（“等你处理”排前），每行带按钮：聚焦、停止、查看最近一条回复。
+- 审批和提问始终直接发到对应线程，按钮带编号，不受聚焦影响。
+- 优先级：引用回复 > 行首 `@N` > 聚焦 > coordinator。
+- working folder 绑定只有一个当前会话，不需要这些。
+
+`@` 的另一个用法是 coordinator 路由（`@opus`、`@codex` 之类，决定模型、profile、agent，阶段 6）。两者不冲突：
+纯数字是线程编号，其余名字交给 coordinator 解析；名字不唯一或认不出时 coordinator 回问，不猜。
 
 ## 审批与排队
 

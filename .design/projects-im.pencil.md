@@ -10,6 +10,7 @@ Contents:
 - What a chat binds to
 - Inbound: from a message to a thread
 - Outbound: from thread events to chats
+- Addressing a thread from a project-bound chat
 - Approval with two surfaces open
 - UI: where each Remote piece goes
 - UI: bind from either side
@@ -109,6 +110,31 @@ chat
 
 coordinator thread_update  ──▶  one folded line in IM ("2 thread updates")
 approval / ask             ──▶  an interactive message (buttons) in every bound chat
+```
+
+## Addressing a thread from a project-bound chat
+
+```
+chat message
+   │
+   ▼
+ quoted a thread message? ── yes ──▶ that thread                      (stateless)
+   │ no
+   ▼
+ starts with "@<number>"?  ── yes ──▶ thread #<number>, rest is text  (stateless)
+   │ no                                (@name, not a number → coordinator resolves; ambiguous → asks back)
+   ▼
+ binding.focus_thread_id set? ─ yes ─▶ that thread                    (sticky, /focus #2 … /back)
+   │ no
+   ▼
+ coordinator
+
+every thread message in the chat is prefixed  [#2 退款测试补幂等校验]
+approvals / asks always go to their own thread, whatever the focus is
+
+/threads  ─▶  #1 docs 链接检查         运行中        [聚焦] [停止]
+              #2 退款测试补幂等校验    等你处理 ●    [聚焦] [停止]
+              #3 清理旧 migration      待审查        [聚焦] [停止]
 ```
 
 ## Approval with two surfaces open
