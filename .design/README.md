@@ -27,6 +27,7 @@
 | [imbot-output.pencil.md](./imbot-output.pencil.md) | 消息序列及回复归属；历史图与现行降级分开 | [imbot-output.md](./imbot-output.md) |
 | [npm.pencil.md](./npm.pencil.md) | `tb gui` / `tb app` 与 `npx tingly-box-gui` 的启动、取回与缓存流程 | [npm.md](./npm.md) |
 | [projects-desk-absorption.pencil.md](./projects-desk-absorption.pencil.md) | Desk 并入 Projects：前后对比、数据模型、宿主能力与插槽、切换流程、等待信号、文件去向 | [projects-desk-absorption.md](./projects-desk-absorption.md) |
+| [projects-im.pencil.md](./projects-im.pencil.md) | IM 并入 Projects：绑定模型、入站/出站路由、双端审批、页面去向与绑定入口、阶段并行关系 | [projects-im.md](./projects-im.md) |
 
 ## 架构与持久化
 

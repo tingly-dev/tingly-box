@@ -2,7 +2,7 @@
 
 > 状态：提案（TEP #2143）。承接 [projects-desk-absorption.md](./projects-desk-absorption.md)：Desk 已并入，
 > 这里把 Remote 的 IM 聊天（`@cc`）也并进来，并**重新打开**那篇 Decisions §1“`@cc` 不共享、不导入”。
-> 本文里的 schema、API 和阶段都是提案，不是现状。
+> 本文里的 schema、API 和阶段都是提案，不是现状。图见 [projects-im.pencil.md](./projects-im.pencil.md)。
 
 ## 决定
 
