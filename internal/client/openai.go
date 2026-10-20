@@ -81,6 +81,9 @@ func providerTransportChain(base http.RoundTripper, provider *typ.Provider) http
 // base URL (e.g. vmodel) call this directly.
 func newOpenAIClientWithTransport(provider *typ.Provider, baseURL string, transport http.RoundTripper, extraOptions ...option.RequestOption) (*OpenAIClient, error) {
 	options := []option.RequestOption{
+		// Provider credentials come only from the provider record; the gateway's
+		// own OPENAI_* environment must never be sent upstream.
+		option.WithoutEnvironmentDefaults(),
 		option.WithBaseURL(baseURL),
 		option.WithMaxRetries(0), // Disable automatic retries for 429 errors in test environments
 	}

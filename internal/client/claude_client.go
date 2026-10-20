@@ -48,6 +48,8 @@ func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, 
 
 	// Build base SDK options
 	options := []anthropicOption.RequestOption{
+		// The gateway's own ANTHROPIC_* environment must never be sent upstream.
+		anthropicOption.WithoutEnvironmentDefaults(),
 		anthropicOption.WithBaseURL(apiBase),
 		anthropicOption.WithMaxRetries(0), // Disable automatic retries for 429 errors
 	}
