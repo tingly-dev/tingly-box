@@ -2,7 +2,8 @@
 
 How Tingly-Box signs a user into **WorkBuddy** (Tencent; CodeBuddy is the same
 CN account behind another entry point), turns the login into a provider, keeps
-it fresh, and serves it to any OpenAI / Anthropic / Responses client. Generic
+it fresh, and routes compatible OpenAI / Anthropic / Responses calls subject to
+WorkBuddy's account and client-channel permissions. Generic
 OAuth mechanics (sessions, re-auth, refresher) are in `oauth.md`; this file
 covers only what WorkBuddy does differently. Proposal: TEP-2097.
 
@@ -143,6 +144,14 @@ answer is an `EmptyResponseError` (502, failover may retry).
 (`internal/client/workbuddy_request.go`) into shapes WorkBuddy takes, meaning
 the same. A body that needs nothing is sent byte for byte.
 
+The transport then ensures a leading system message (preserving an existing
+system/developer prompt). A `400/11153` reply whose message says the conversation
+must end with a user message permits one message-order retry, only when the
+request ends with a complete matched tool-result batch followed by user input.
+An empty assistant reply separates the batch from that input. User text and
+images keep their role and content; incomplete batches and assistant prefills
+are not repaired. Channel/account refusals do not trigger this retry.
+
 - `max_completion_tokens` → `max_tokens`; role `developer` → `system`.
 - `tool_choice` objects → WorkBuddy's string form (`auto`, `required`, or the
   tool's name); `none` drops the tools.
@@ -164,6 +173,24 @@ the same. A body that needs nothing is sent byte for byte.
 present, else every `data.models[].id`. There is no embedded catalog entry:
 model ids are account- and region-specific, so a failed fetch shows an empty
 list rather than invented ids.
+
+### Conversation and user-turn IDs
+
+Chat requests carry `X-Conversation-ID`, `X-Conversation-Request-ID`,
+`X-Conversation-Message-ID` and `X-Request-ID`. A real Tingly session (not an IP
+fallback), scoped to the provider, identifies a conversation. The latest user
+contribution and its ordinal identify a turn, so appending assistant/tool steps
+keeps the turn ID while another identical "continue" starts a new turn. Image
+parts participate; explicit `tool_result` parts do not. The transport's
+message-order retry keeps the turn and conversation but gets a new request ID.
+
+Identifiers are opaque, process-salted 32-hex digests; no raw session, prompt or
+client IP appears in the headers. Caller-supplied correlation IDs are preserved.
+Without a stable session/conversation the transport does not merge chats by IP
+or a shared greeting, and generates a per-request turn ID. Rewriting/compacting
+the user history can change a derived turn ID; explicit caller turn IDs are the
+way to retain that identity across history changes. This is correlation, not a
+promise about upstream billing or credits.
 
 ## Quota
 
@@ -197,9 +224,6 @@ with WorkBuddy's message.
 ## Not done (follow-ups)
 
 - **A run against a real account** (above).
-- **Conversation ids** (`X-Conversation-ID`, `X-Conversation-Request-ID`, …):
-  WorkBuddy counts one user turn as one request by them; without them each
-  step of a tool loop is counted separately.
 - Enterprise (team) accounts: the desktop client sends `X-Enterprise-Id` /
   `X-Tenant-Id` (the account's `enterpriseId`), without which WorkBuddy
   answers as the personal account. Dedicated / self-hosted domains

@@ -20,12 +20,16 @@ import (
 // login and inference always present the same client.
 type workbuddyRoundTripper struct {
 	http.RoundTripper
-	site   ai.WorkBuddySite
-	userID string
+	site         ai.WorkBuddySite
+	userID       string
+	sessionScope string
 }
 
-func newWorkBuddyRoundTripper(inner http.RoundTripper, provider *typ.Provider) *workbuddyRoundTripper {
+func newWorkBuddyRoundTripper(inner http.RoundTripper, provider *typ.Provider, session typ.SessionID) *workbuddyRoundTripper {
 	t := &workbuddyRoundTripper{RoundTripper: inner}
+	if provider != nil && !session.IsEmpty() && !session.IsIPFallback() {
+		t.sessionScope = provider.UUID + "|" + string(session.Source) + "|" + session.Value
+	}
 	if provider != nil && provider.OAuthDetail != nil {
 		t.site, _ = ai.WorkBuddySiteFor(provider.OAuthDetail.GetIssuer())
 		if uid, ok := provider.OAuthDetail.ExtraFields[oauth.WorkBuddyMetaUserID].(string); ok {
@@ -50,6 +54,8 @@ func (t *workbuddyRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 		req.Header.Set("X-User-Id", t.userID)
 	}
 	var names map[string]string
+	var chatBody []byte
+	preserveRequestIDs := req.Header.Get("X-Conversation-Message-ID") != "" || req.Header.Get("X-Request-ID") != ""
 	if req.Method == http.MethodPost && strings.HasSuffix(req.URL.Path, "/chat/completions") && req.Body != nil {
 		body, err := io.ReadAll(req.Body)
 		_ = req.Body.Close()
@@ -57,11 +63,33 @@ func (t *workbuddyRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 			return nil, err
 		}
 		body, names = workbuddyFitChat(body)
-		req.Body = io.NopCloser(bytes.NewReader(body))
-		req.ContentLength = int64(len(body))
-		req.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(body)), nil }
+		chatBody = workbuddyWithSystem(body)
+		setWorkBuddyBody(req, chatBody)
+		t.setChatIDs(req.Header, chatBody)
 	}
 	resp, err := t.RoundTripper.RoundTrip(req)
+	if err == nil && resp != nil && resp.StatusCode == http.StatusBadRequest && resp.Body != nil && len(chatBody) > 0 {
+		// This is a rejected request, before any stream bytes reach the SDK.
+		// Retry one specific message-order repair at most once. Channel and
+		// account refusals never enter this path.
+		raw, readErr := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
+		resp.Body = io.NopCloser(bytes.NewReader(raw))
+		if repaired, ok := workbuddyReplyAfterTools(chatBody); ok && workbuddyAfterToolsRefused(raw) {
+			_ = resp.Body.Close()
+			retry := req.Clone(req.Context())
+			setWorkBuddyBody(retry, repaired)
+			if !preserveRequestIDs {
+				retry.Header.Del("X-Conversation-Message-ID")
+				retry.Header.Del("X-Request-ID")
+				workbuddyRequestIDs(retry.Header)
+			}
+			resp, err = t.RoundTripper.RoundTrip(retry)
+		}
+	}
 	if err == nil {
 		if normalizeErr := workbuddyNormalizeError(resp); normalizeErr != nil {
 			return nil, normalizeErr
@@ -76,6 +104,13 @@ func (t *workbuddyRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 	resp.ContentLength = -1
 	resp.Header.Del("Content-Length")
 	return resp, nil
+}
+
+func setWorkBuddyBody(req *http.Request, body []byte) {
+	req.Body = io.NopCloser(bytes.NewReader(body))
+	req.ContentLength = int64(len(body))
+	req.Header.Del("Content-Length") // net/http derives it from ContentLength
+	req.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(body)), nil }
 }
 
 // workbuddyNameBackBody rewrites a chat answer as it is read: each SSE
