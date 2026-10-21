@@ -19,6 +19,7 @@
    **改为（2026-10-21，YZ）**：Remote 与 Projects 仍是两个功能。没绑定到 Projects 的 chat 照旧走 `@cc` / `@tb`；
    Remote 页面、SmartGuide、`remote/session` 保留，bot 仍在 Remote 里配置（没开 Remote 就没有 IM）。
    绑定仍只在 Projects 的 Web 上做（见“M5 的落地”）。下面第 5 条同样作废。
+   之后 YZ 要求把 Remote 的原有行为也迁过来、不留两套：见 [remote-into-projects.md](./remote-into-projects.md)（讨论中）。
    以后 `@xxx` 让 coordinator 决定用哪个模型、profile、agent 去跟进（建立在 `Launcher` 和 `Thread.Model` 上），
    第一期只做“提示用户选”。
 4. **Web 与 IM 可同时操作同一线程**：一个线程一个进程，审批和排队统一。
