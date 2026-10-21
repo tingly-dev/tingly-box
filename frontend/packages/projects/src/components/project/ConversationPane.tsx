@@ -11,6 +11,7 @@ import { Markdown } from '../Markdown';
 import { readLocal, writeLocal } from '../../utils/storage';
 import { ChevronRight, DiffIcon, ExpandMore, PlayArrow } from '../icons';
 import { DiffDialog } from './DiffDialog';
+import { LoadEarlier } from './LoadEarlier';
 import { StatusIcon, statusColor, ThreadBadges, ThreadSubtitle, toneColor } from './threadStatus';
 
 const REPORTS_KEY = 'conversation.threadReports';
@@ -192,6 +193,9 @@ const EXAMPLES = ['conversation.example1', 'conversation.example2', 'conversatio
 interface Props {
     projectId: string;
     messages: ThreadEvent[];
+    /** Older messages exist than the loaded ones. */
+    more?: boolean;
+    onLoadEarlier?: () => Promise<void>;
     threads: Map<string, Thread>;
     busy: boolean;
     disabled: boolean;
@@ -203,7 +207,7 @@ interface Props {
     chatTitle?: (platform: string, chatId: string) => string | undefined;
 }
 
-export function ConversationPane({ projectId, messages, threads, busy, disabled, disabledReason, onSend, onOpenThread, onStartSuggestions, chatTitle }: Props) {
+export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, disabled, disabledReason, onSend, onOpenThread, onStartSuggestions, chatTitle }: Props) {
     const { t } = useTranslation('projects');
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
@@ -228,6 +232,7 @@ export function ConversationPane({ projectId, messages, threads, busy, disabled,
                 sx={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain' }}
             >
                 <Box sx={{ ...COLUMN, pt: 2, pb: 3 }}>
+                    {more && onLoadEarlier && <LoadEarlier scrollRef={scrollRef} onLoad={onLoadEarlier} />}
                     {messages.length === 0 && (
                         <Box sx={{ py: { xs: 3, md: 6 } }}>
                             <Typography variant="h3" sx={{ mb: 2 }}>{t('conversation.emptyTitle')}</Typography>

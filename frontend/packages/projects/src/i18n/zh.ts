@@ -158,7 +158,7 @@ export const zh: Dict<typeof en> = {
         copyCd: '复制进入 worktree 的 cd 命令', back: '返回 Overview',
         review: 'Review 改动', resolve: '标记为已解决', reopen: '重新打开', showTask: '查看任务', hideTask: '收起任务',
         showTrajectory: '查看轨迹', showChat: '查看对话', expandTools: '展开所有工具调用', collapseTools: '折叠工具调用',
-        fromCoordinator: '协调者', allowThread: '本线程都允许 {{tool}}',
+        fromCoordinator: '协调者', allowThread: '本线程都允许 {{tool}}', loadEarlier: '显示更早的消息',
         placeholder: '直接给这个线程发消息…', queuePlaceholder: '给这个线程发消息——它会在当前这轮结束后读到…',
         resolvedPlaceholder: '重新打开线程才能继续发送工作',
         mergeIt: '合并', mergedInto: '已合并进 {{base}}', merged: '已把 {{branch}} 合并进 {{base}}', mergeBlocked: '未合并', mergedBadge: '已合并',

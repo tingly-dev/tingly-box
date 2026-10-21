@@ -1,0 +1,62 @@
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ThreadEvent } from '../client';
+import { forgetTranscripts, mergeEvents, TAIL, useTranscript } from './useTranscript';
+
+const m = vi.hoisted(() => ({ get: vi.fn() }));
+vi.mock('../client', async (actual) => ({ ...(await actual<typeof import('../client')>()), api: { GET: m.get } }));
+
+const ev = (id: string, minute: number, thread = 't1', content = id): ThreadEvent => {
+    const at = new Date(Date.UTC(2026, 9, 21, 0, minute)).toISOString();
+    return { id, thread_id: thread, kind: 'user', content, created_at: at, updated_at: at };
+};
+const answer = (events: ThreadEvent[], more = false) => ({ data: { events, more }, response: new Response() });
+const queries = () => m.get.mock.calls.map(([, o]) => (o as { params: { query: Record<string, unknown> } }).params.query);
+
+beforeEach(() => m.get.mockReset());
+afterEach(() => forgetTranscripts());
+
+describe('mergeEvents', () => {
+    it('replaces by id, adds new ones in created order, and never adds one older than the window', () => {
+        const list = [ev('b', 2), ev('c', 3)];
+        const out = mergeEvents(list, [ev('a', 1), { ...ev('c', 3), content: 'changed' }, ev('d', 4), ev('bb', 2.5)]);
+        expect(out.map((e) => e.id)).toEqual(['b', 'bb', 'c', 'd']);
+        expect(out[2].content).toBe('changed');
+    });
+});
+
+describe('useTranscript', () => {
+    it('opens on the latest page, loads earlier ones on request, and on return reads only what changed', async () => {
+        m.get.mockResolvedValueOnce(answer([ev('c', 3), ev('d', 4)], true));
+        const { result, rerender } = renderHook(({ id }) => useTranscript(id), { initialProps: { id: 't1' } });
+        await waitFor(() => expect(result.current.events?.map((e) => e.id)).toEqual(['c', 'd']));
+        expect(result.current.more).toBe(true);
+        expect(queries()[0]).toEqual({ limit: TAIL });
+
+        m.get.mockResolvedValueOnce(answer([ev('a', 1), ev('b', 2)], false));
+        await act(() => result.current.loadEarlier());
+        expect(result.current.events?.map((e) => e.id)).toEqual(['a', 'b', 'c', 'd']);
+        expect(result.current.more).toBe(false);
+        expect(queries()[1]).toEqual({ limit: TAIL, before: 'c' });
+
+        // Away and back: the cached transcript shows at once, then only what changed is read.
+        m.get.mockResolvedValueOnce(answer([], false));
+        rerender({ id: 't2' });
+        await waitFor(() => expect(m.get).toHaveBeenCalledTimes(3));
+        m.get.mockResolvedValueOnce(answer([{ ...ev('b', 2), content: 'answered', updated_at: ev('x', 9).created_at }, ev('e', 5)]));
+        rerender({ id: 't1' });
+        expect(result.current.events?.map((e) => e.id)).toEqual(['a', 'b', 'c', 'd']);
+        await waitFor(() => expect(result.current.events?.map((e) => e.id)).toEqual(['a', 'b', 'c', 'd', 'e']));
+        expect(result.current.events?.[1].content).toBe('answered');
+        expect(queries()[3]).toEqual({ since: ev('d', 4).updated_at });
+    });
+
+    it('keeps a live entry that arrives before the first read lands', async () => {
+        let land: (v: unknown) => void = () => undefined;
+        m.get.mockReturnValueOnce(new Promise((r) => (land = r)));
+        const { result } = renderHook(() => useTranscript('t1'));
+        act(() => result.current.apply(ev('live', 5)));
+        await act(async () => land(answer([ev('a', 1)])));
+        expect(result.current.events?.map((e) => e.id)).toEqual(['a', 'live']);
+    });
+});

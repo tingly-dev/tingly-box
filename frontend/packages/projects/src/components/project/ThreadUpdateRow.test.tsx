@@ -9,7 +9,7 @@ vi.mock('../Markdown', () => ({ Markdown: ({ text }: { text: string }) => <div d
 afterEach(cleanup);
 
 const update = (content: string): ThreadEvent => ({
-    id: 'u', kind: 'thread_update', content, thread_id: 'main', created_at: '',
+    id: 'u', kind: 'thread_update', content, thread_id: 'main', created_at: '', updated_at: '',
     payload: JSON.stringify({ thread_id: 't', title: 'Fix login', kind: 'finished', status: 'ready' }),
 });
 

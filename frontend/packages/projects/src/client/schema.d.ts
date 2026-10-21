@@ -1133,6 +1133,8 @@ export interface components {
         EventsResponse: {
             /** @description Field events */
             events: components["schemas"]["ThreadEvent"][];
+            /** @description Field more */
+            more: boolean;
         };
         HandoffResponse: {
             /** @description Field command */
@@ -1678,6 +1680,11 @@ export interface components {
             source_ref?: string;
             /** @description Field thread_id */
             thread_id: string;
+            /**
+             * Format: date-time
+             * @description Field updated_at
+             */
+            updated_at: string;
         };
         ThreadRespondRequest: {
             /** @description Field allow */
@@ -2870,8 +2877,12 @@ export interface operations {
     apiV1ThreadsIdEventsGet: {
         parameters: {
             query?: {
-                /** @description Latest N events */
+                /** @description Latest N events (of those before `before`) */
                 limit?: number;
+                /** @description An event id: only events older than it */
+                before?: string;
+                /** @description RFC 3339 time: every event added or changed at or after it (its updated_at); limit and before do not apply */
+                since?: string;
             };
             header?: never;
             path: {

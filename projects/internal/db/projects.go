@@ -264,14 +264,66 @@ func (s *Store) AddThreadEvent(e *ThreadEvent) error {
 	if e.CreatedAt.IsZero() {
 		e.CreatedAt = time.Now()
 	}
+	e.UpdatedAt = time.Now().UTC()
 	return s.db.Create(e).Error
 }
 
 // UpdateThreadEvent rewrites an event's kind, content and payload (e.g. an
 // approval once answered).
 func (s *Store) UpdateThreadEvent(e *ThreadEvent) error {
+	e.UpdatedAt = time.Now().UTC()
 	return s.db.Model(&ThreadEvent{}).Where("id = ?", e.ID).
-		UpdateColumns(map[string]any{"kind": e.Kind, "content": e.Content, "payload": e.Payload}).Error
+		UpdateColumns(map[string]any{"kind": e.Kind, "content": e.Content, "payload": e.Payload, "updated_at": e.UpdatedAt}).Error
+}
+
+// EventPage asks for part of a thread's transcript.
+type EventPage struct {
+	// Limit keeps the latest Limit events (of those before Before); 0 is all.
+	Limit int
+	// Before, an event id, keeps the events older than it.
+	Before string
+	// Since keeps the events written (added or changed) at or after it, all
+	// of them; Limit and Before do not apply.
+	Since time.Time
+}
+
+// PageThreadEvents returns part of a thread's transcript in order, and
+// whether older events were left out.
+func (s *Store) PageThreadEvents(threadID string, p EventPage) ([]ThreadEvent, bool, error) {
+	var out []ThreadEvent
+	if !p.Since.IsZero() {
+		err := s.db.Where("thread_id = ? AND updated_at >= ?", threadID, p.Since.UTC()).Order("created_at ASC, rowid ASC").Find(&out).Error
+		return out, false, err
+	}
+	q := s.db.Where("thread_id = ?", threadID)
+	if p.Before != "" {
+		var anchor struct {
+			CreatedAt time.Time
+			Rowid     int64
+		}
+		if err := s.db.Raw("SELECT created_at, rowid FROM thread_events WHERE id = ? AND thread_id = ?", p.Before, threadID).Scan(&anchor).Error; err != nil {
+			return nil, false, err
+		}
+		if anchor.Rowid == 0 {
+			return nil, false, ErrNotFound
+		}
+		q = q.Where("created_at < ? OR (created_at = ? AND rowid < ?)", anchor.CreatedAt, anchor.CreatedAt, anchor.Rowid)
+	}
+	if p.Limit <= 0 {
+		err := q.Order("created_at ASC, rowid ASC").Find(&out).Error
+		return out, false, err
+	}
+	if err := q.Order("created_at DESC, rowid DESC").Limit(p.Limit + 1).Find(&out).Error; err != nil {
+		return nil, false, err
+	}
+	more := len(out) > p.Limit
+	if more {
+		out = out[:p.Limit]
+	}
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out, more, nil
 }
 
 // GetThreadEvent loads one event.

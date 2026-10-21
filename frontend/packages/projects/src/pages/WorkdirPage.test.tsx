@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectsHostProvider, type ProjectsHost } from '../host/ProjectsHost';
+import { forgetTranscripts } from '../hooks/useTranscript';
 import WorkdirPage from './WorkdirPage';
 
 type Frame = { type: string; data: unknown };
@@ -48,6 +49,7 @@ beforeEach(() => {
 });
 afterEach(() => {
     cleanup();
+    forgetTranscripts();
     for (const f of [m.get, m.del, m.post, m.reload]) f.mockReset();
 });
 

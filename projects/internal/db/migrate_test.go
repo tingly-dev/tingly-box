@@ -307,6 +307,7 @@ func TestMigrationCarriesAnOldDatabaseToThreads(t *testing.T) {
 		assert.Equal(t, "m"+string(rune('1'+i)), e.ID)
 		assert.Equal(t, wantKinds[i], e.Kind, e.ID)
 		assert.True(t, e.CreatedAt.Equal(at(10+i)), e.ID)
+		assert.True(t, e.UpdatedAt.Equal(e.CreatedAt), "an old event was last written when created: %s", e.ID)
 	}
 	assert.Equal(t, RoleUser, EventRole(evs[0].Kind))
 	assert.Equal(t, RoleSystem, EventRole(evs[3].Kind))

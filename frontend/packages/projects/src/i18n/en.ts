@@ -153,7 +153,7 @@ export const en = {
         copyCd: 'Copy cd command to the worktree', back: 'Back to Overview',
         review: 'Review changes', resolve: 'Mark resolved', reopen: 'Reopen', showTask: 'Show task', hideTask: 'Hide task',
         showTrajectory: 'Show trajectory', showChat: 'Show conversation', expandTools: 'Expand all tool calls', collapseTools: 'Collapse tool calls',
-        fromCoordinator: 'Coordinator', allowThread: 'Always allow {{tool}} here',
+        fromCoordinator: 'Coordinator', allowThread: 'Always allow {{tool}} here', loadEarlier: 'Show earlier messages',
         placeholder: 'Message this thread directly…', queuePlaceholder: 'Message this thread — it reads it after its current turn…',
         resolvedPlaceholder: 'Reopen the thread to send it more work',
         mergeIt: 'Merge it', mergedInto: 'Merged into {{base}}', merged: 'Merged {{branch}} into {{base}}', mergeBlocked: 'Not merged', mergedBadge: 'Merged',

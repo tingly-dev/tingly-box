@@ -7512,10 +7512,28 @@
           {
             "name": "limit",
             "in": "query",
-            "description": "Latest N events",
+            "description": "Latest N events (of those before `before`)",
             "required": false,
             "schema": {
               "type": "integer"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "An event id: only events older than it",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "RFC 3339 time: every event added or changed at or after it (its updated_at); limit and before do not apply",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -12774,10 +12792,15 @@
             "items": {
               "$ref": "#/components/schemas/ThreadEvent"
             }
+          },
+          "more": {
+            "type": "boolean",
+            "description": "Field more"
           }
         },
         "required": [
-          "events"
+          "events",
+          "more"
         ]
       },
       "ExecuteToolRequest": {
@@ -19063,6 +19086,11 @@
           "thread_id": {
             "type": "string",
             "description": "Field thread_id"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field updated_at"
           }
         },
         "required": [
@@ -19070,7 +19098,8 @@
           "thread_id",
           "kind",
           "content",
-          "created_at"
+          "created_at",
+          "updated_at"
         ]
       },
       "ThreadRespondRequest": {

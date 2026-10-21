@@ -15,6 +15,7 @@ import { useNotify } from '../../hooks/useNotify';
 import { formatTokens } from '../../utils/format';
 import { DiffDialog } from './DiffDialog';
 import { ComposerStrip } from './ComposerStrip';
+import { LoadEarlier } from './LoadEarlier';
 import { ThreadStatusChip, toneColor } from './threadStatus';
 import { threadTranscript } from './threadTranscript';
 import { threadOps } from './threadOps';
@@ -49,6 +50,9 @@ interface Props {
     threadId: string;
     thread?: Thread;
     events: ThreadEvent[] | null;
+    /** Older entries exist than the loaded ones. */
+    more?: boolean;
+    onLoadEarlier?: () => Promise<void>;
     running: boolean;
     disabled: boolean;
     onBack: () => void;
@@ -74,7 +78,7 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
     return `[data-block="${anchor.block}"]`;
 };
 
-export function ThreadPanel({ projectId, folder = false, threadId, thread, events, running, disabled, onBack, hideTitle, actions, composerContext, belowComposer, liveTasks = [], onRefresh }: Props) {
+export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, running, disabled, onBack, hideTitle, actions, composerContext, belowComposer, liveTasks = [], onRefresh }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const [diffOpen, setDiffOpen] = useState(false);
@@ -291,6 +295,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 const el = scrollRef.current;
                 if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
             }} sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', px: 2, py: 2, overscrollBehavior: 'contain' }}>
+                {events !== null && more && onLoadEarlier && <LoadEarlier scrollRef={scrollRef} onLoad={onLoadEarlier} />}
                 {events === null
                     ? <Skeleton variant="rounded" height={120} />
                     : view === 'chat'

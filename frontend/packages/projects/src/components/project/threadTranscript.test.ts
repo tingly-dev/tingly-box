@@ -5,7 +5,7 @@ import { threadTranscript } from './threadTranscript';
 
 let n = 0;
 const ev = (kind: string, content: string, extra: Partial<ThreadEvent> = {}): ThreadEvent => ({
-    id: `e${++n}`, thread_id: 't', kind, content, created_at: '2026-10-15T00:00:00Z', ...extra,
+    id: `e${++n}`, thread_id: 't', kind, content, created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z', ...extra,
 });
 const request = (state: string, extra: Record<string, unknown> = {}) => JSON.stringify({ request_id: `r${n}`, tool: 'Bash', input: { command: 'make test' }, state, ...extra });
 const author = (e: ThreadEvent) => e.source === 'thread' ? 'Coordinator' : undefined;
@@ -71,7 +71,7 @@ describe('threadTranscript attachments', () => {
     it('carries the files of a user message', () => {
         const file = { name: 'a.png', path: 'uploads/x/a.png', type: 'image/png', size: 4 };
         const { entries } = threadTranscript([
-            { id: '1', thread_id: 't', kind: 'user', content: '', payload: JSON.stringify({ attachments: [file] }), created_at: '2026-10-18T00:00:00Z' },
+            { id: '1', thread_id: 't', kind: 'user', content: '', payload: JSON.stringify({ attachments: [file] }), created_at: '2026-10-18T00:00:00Z', updated_at: '2026-10-18T00:00:00Z' },
         ], false, () => undefined);
         expect(entries[0].attachments).toEqual([file]);
     });

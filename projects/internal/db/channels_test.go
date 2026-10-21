@@ -2,6 +2,7 @@ package db
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -155,4 +156,51 @@ func TestOpenFolderIsOneProjectPerFolder(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, a.ID, c.ID)
 	assert.Nil(t, c.ArchivedAt)
+}
+
+func TestPageThreadEvents(t *testing.T) {
+	s := newStore(t)
+	_, main := newProject(t, s, "P")
+	var ids []string
+	for i := range 5 {
+		e := &ThreadEvent{ThreadID: main.ID, Kind: EvUser, Content: string(rune('a' + i))}
+		require.NoError(t, s.AddThreadEvent(e))
+		ids = append(ids, e.ID)
+	}
+	contents := func(evs []ThreadEvent) string {
+		out := ""
+		for _, e := range evs {
+			out += e.Content
+		}
+		return out
+	}
+
+	tail, more, err := s.PageThreadEvents(main.ID, EventPage{Limit: 2})
+	require.NoError(t, err)
+	assert.Equal(t, "de", contents(tail), "the latest N, oldest first")
+	assert.True(t, more)
+
+	earlier, more, err := s.PageThreadEvents(main.ID, EventPage{Limit: 2, Before: tail[0].ID})
+	require.NoError(t, err)
+	assert.Equal(t, "bc", contents(earlier))
+	assert.True(t, more)
+	first, more, err := s.PageThreadEvents(main.ID, EventPage{Limit: 2, Before: earlier[0].ID})
+	require.NoError(t, err)
+	assert.Equal(t, "a", contents(first))
+	assert.False(t, more, "nothing older")
+
+	_, _, err = s.PageThreadEvents(main.ID, EventPage{Before: "missing"})
+	assert.ErrorIs(t, err, ErrNotFound)
+
+	// Since: what was added or changed at or after it, an old event changed in place included.
+	mark := time.Now()
+	old := mustEvent(t, s, ids[0])
+	old.Content = "A"
+	require.NoError(t, s.UpdateThreadEvent(old))
+	require.NoError(t, s.AddThreadEvent(&ThreadEvent{ThreadID: main.ID, Kind: EvUser, Content: "f"}))
+	since, more, err := s.PageThreadEvents(main.ID, EventPage{Since: mark, Limit: 1})
+	require.NoError(t, err)
+	assert.Equal(t, "Af", contents(since), "since ignores limit")
+	assert.False(t, more)
+	assert.False(t, mustEvent(t, s, ids[0]).UpdatedAt.Before(mark))
 }

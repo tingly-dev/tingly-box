@@ -170,6 +170,10 @@ func migrate(g *gorm.DB, o openOptions) (err error) {
 			return err
 		}
 	}
+	// Events written before updated_at existed (or moved in above) were last written when created.
+	if err = tx.Exec("UPDATE thread_events SET updated_at = created_at WHERE updated_at IS NULL").Error; err != nil {
+		return err
+	}
 	return tx.Commit().Error
 }
 
@@ -475,7 +479,7 @@ func migrateMessages(tx *gorm.DB) (int64, error) {
 		}
 		ev := ThreadEvent{
 			ID: m.ID, ThreadID: main, Kind: kind, Content: m.Content, Payload: m.Payload,
-			Source: m.Source, SourcePlatform: m.SourcePlatform, SourceChatID: m.SourceChatID, CreatedAt: m.CreatedAt,
+			Source: m.Source, SourcePlatform: m.SourcePlatform, SourceChatID: m.SourceChatID, CreatedAt: m.CreatedAt, UpdatedAt: m.CreatedAt,
 		}
 		if err := tx.Create(&ev).Error; err != nil {
 			return 0, err
