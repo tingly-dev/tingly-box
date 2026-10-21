@@ -59,6 +59,6 @@ const (
 // Limits for what the relay says in a chat.
 const (
 	// relayLineMax caps a folded thread report, which is one line in a chat.
-	relayLineMax = 240
+	relayLineMax     = 240
 	relaySendTimeout = 30 * time.Second
 )
