@@ -2,8 +2,10 @@ package project
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
@@ -15,6 +17,9 @@ var (
 	// ErrBindFolder is for binding a folder by project id: a folder has no
 	// main thread, so the chat is bound to one of its threads.
 	ErrBindFolder = errors.New("a folder has no main thread; bind one of its threads (thread_id)")
+	// ErrNotThisChat is for a chat answering a thread it is not bound to,
+	// directly or through an ancestor.
+	ErrNotThisChat = errors.New("this chat is not bound to that thread")
 )
 
 // BindChannel binds an IM chat to a thread; a chat that is already bound
@@ -188,4 +193,60 @@ func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bo
 		s.Threads.Stop(t.ID)
 		return true, fmt.Sprintf("Stopped [%s].", tag), nil
 	}
+}
+
+// AnswerFromChannel answers a thread's pending approval or question with the
+// button a chat pressed (a ChannelChoice value). The chat must be bound to
+// the thread or to one of its ancestors, the chats the request was sent to.
+// reply is what to tell the chat when there is nothing to answer any more;
+// on success the prompt is restated through the Relay instead.
+func (s *Service) AnswerFromChannel(platform, chatID, threadID, requestID, value string) (reply string, err error) {
+	b, err := s.Store.GetChannelBinding(platform, chatID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return "", ErrNotThisChat
+		}
+		return "", err
+	}
+	lineage, err := s.Store.Lineage(threadID)
+	if err != nil {
+		return "", err
+	}
+	bound := false
+	for _, t := range lineage {
+		bound = bound || t.ID == b.ThreadID
+	}
+	if !bound {
+		return "", ErrNotThisChat
+	}
+	ev, ok := s.Threads.PendingRequest(threadID, requestID)
+	if !ok {
+		return "This was already answered.", nil
+	}
+	ans := Answer{Via: db.SourceIM}
+	switch {
+	case value == ChoiceAllow && ev.Kind == db.EvApproval:
+		ans.Allow = true
+	case value == ChoiceAllowThread && ev.Kind == db.EvApproval:
+		ans.Allow, ans.Scope = true, "thread"
+	case value == ChoiceDeny && ev.Kind == db.EvApproval:
+	case strings.HasPrefix(value, "o") && ev.Kind == db.EvAsk:
+		var p requestPayload
+		_ = json.Unmarshal([]byte(ev.Payload), &p)
+		q, ok := singleChoice(p.Input)
+		i, err := strconv.Atoi(strings.TrimPrefix(value, "o"))
+		if !ok || err != nil || i < 0 || i >= len(q.options) {
+			return "", fmt.Errorf("unknown choice %q", value)
+		}
+		ans.Allow, ans.Answers = true, map[string]string{q.question: q.options[i].label}
+	default:
+		return "", fmt.Errorf("unknown choice %q", value)
+	}
+	if err := s.Threads.Respond(threadID, requestID, ans); err != nil {
+		if errors.Is(err, ErrNoPrompt) {
+			return "This was already answered.", nil
+		}
+		return "", err
+	}
+	return "", nil
 }

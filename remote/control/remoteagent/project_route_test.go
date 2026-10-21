@@ -32,11 +32,12 @@ func bootHelperNotStarted(t *testing.T) (*testenv.TestEnv, *remoteagent.TestHarn
 
 // fakeRouter binds the chats in bound and records what it was handed.
 type fakeRouter struct {
-	mu    sync.Mutex
-	bound map[string]bool
-	err   error
-	got   []remoteagent.ProjectInbound
-	cmds  []string
+	mu      sync.Mutex
+	bound   map[string]bool
+	err     error
+	got     []remoteagent.ProjectInbound
+	cmds    []string
+	answers []string
 }
 
 func (f *fakeRouter) bind(chatID string) {
@@ -75,6 +76,22 @@ func (f *fakeRouter) RouteCommand(_ context.Context, name string, in remoteagent
 	}
 	f.cmds = append(f.cmds, name+":"+in.Text)
 	return true, "project did " + name, nil
+}
+
+func (f *fakeRouter) RouteAnswer(_ context.Context, in remoteagent.ProjectInbound, threadID, requestID, choice string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.answers = append(f.answers, in.ChatID+":"+threadID+":"+requestID+":"+choice)
+	if choice == "late" {
+		return "This was already answered.", nil
+	}
+	return "", f.err
+}
+
+func (f *fakeRouter) answered() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.answers...)
 }
 
 func (f *fakeRouter) commands() []string {
@@ -175,4 +192,26 @@ func Test_BoundChatCommandsGoToItsProject(t *testing.T) {
 	chat.SendText("/help")
 	chat.WaitText(3*time.Second).AssertContains(t, "Your ID:")
 	assert.Len(t, router.commands(), 5, "other commands keep their meaning")
+}
+
+// A press on a Projects prompt's button goes to the project with the chat it
+// came from; whatever the project says back is shown, and nothing else is.
+func Test_ProjectPromptButtonsGoToTheProject(t *testing.T) {
+	env, harness, alice := bootHelperNotStarted(t)
+	router := &fakeRouter{bound: map[string]bool{}}
+	harness.Handler.SetProjectRouter(router)
+	require.NoError(t, env.Manager().Start(env.Context()))
+
+	chat := alice.OpenDM(harness.Setting.UUID)
+	chat.SendCallback("m1", remoteagent.ProjectAnswerPayload+":t1:r1:allow")
+	require.Eventually(t, func() bool { return len(router.answered()) == 1 }, 3*time.Second, 10*time.Millisecond)
+	assert.Equal(t, chat.ChatID+":t1:r1:allow", router.answered()[0])
+	chat.ExpectNoEvent(500*time.Millisecond, tingly.EventSend)
+
+	chat.SendCallback("m1", remoteagent.ProjectAnswerPayload+":t1:r1:late")
+	chat.WaitText(3*time.Second).AssertContains(t, "already answered")
+
+	router.setErr(errors.New("this chat is not bound to that thread"))
+	chat.SendCallback("m1", remoteagent.ProjectAnswerPayload+":t2:r2:deny")
+	chat.WaitText(3*time.Second).AssertContains(t, "Could not answer").AssertContains(t, "not bound")
 }

@@ -52,7 +52,18 @@ type (
 	// coordinator's replies and thread reports through it to the chats bound
 	// to a project; a host without IM (the standalone binary) has none.
 	ChannelSink = project.ChannelSink
+	// ChannelPrompter is a ChannelSink that can also send a thread's
+	// approvals and questions with buttons and restate them once settled.
+	ChannelPrompter = project.ChannelPrompter
+	// ChannelPrompt is an approval or a question as a chat shows it.
+	ChannelPrompt = project.ChannelPrompt
+	// ChannelChoice is one button of a ChannelPrompt.
+	ChannelChoice = project.ChannelChoice
 )
+
+// ErrNoButtons is what a ChannelPrompter returns for a chat that cannot show
+// buttons; the chat gets a line of text instead.
+var ErrNoButtons = project.ErrNoButtons
 
 // DefaultDataDir is where Projects keeps its data when the host does not say
 // otherwise: $TINGLY_PROJECT_HOME, else ~/.tingly-project. It is deliberately
@@ -117,6 +128,13 @@ func (a *App) PostFromChannel(platform, chatID, text string) (handled bool, err 
 // not one of these. reply is what to tell the chat.
 func (a *App) ChannelCommand(platform, chatID, name, arg string) (handled bool, reply string, err error) {
 	return a.svc.ChannelCommand(platform, chatID, name, arg)
+}
+
+// AnswerFromChannel answers a thread's approval or question with the button an
+// IM chat pressed (see ChannelPrompter). reply, when set, is what to tell the
+// chat; otherwise the prompt is restated with the outcome.
+func (a *App) AnswerFromChannel(platform, chatID, threadID, requestID, value string) (reply string, err error) {
+	return a.svc.AnswerFromChannel(platform, chatID, threadID, requestID, value)
 }
 
 // ChannelBound reports whether an IM chat is bound to a thread.

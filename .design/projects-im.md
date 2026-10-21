@@ -138,7 +138,7 @@ project 绑定的 chat 默认在跟 coordinator 说话；要对某个线程说�
 | **M1 只到 coordinator**（先做） | `ChannelBinding`（只支持 project）、消息来源字段、绑定的增删查接口；绑了项目的 chat 的消息进项目对话，coordinator 的回复和折叠后的线程汇报发回 chat；前端：侧栏 IM 入口、项目页头标签、绑定弹窗、对话里的来源图标 | working folder 绑定、IM 里的审批/提问（只发一行“有线程等你，请到 Web 处理”）、点名线程、下线旧路径 | 已实施（#2147） |
 | **统一模型** | 见 [projects-sessions.md](./projects-sessions.md) 的交付：一次变更，后端和前端两个叠放的 PR | IM 路由、前端新功能 | 已实施（#2151、#2154）；绑定文件夹里的线程、弹窗列项目和文件夹随之可用 |
 | **M2b 文件夹绑定** | 绑定已是 `thread_id`；`/new`、`/stop`；已绑定 chat 的斜杠命令不再落到旧 `@cc` | 同 M1 | 已实施（见下“M2b 的落地”） |
-| **M3 审批与提问进 IM** | 线程审批/提问发到所有绑定的 chat，按钮，先答为准，另一边改写为“已处理” | | |
+| **M3 审批与提问进 IM** | 线程审批/提问发到所有绑定的 chat，按钮，先答为准，另一边改写为“已处理” | 没有按钮的平台用文字回答 | 已实施（见下“M3 的落地”） |
 | **M4 点名线程** | `Thread.Seq`、`@N`、引用回复、`/threads`、`/focus` | | |
 | **M5 收尾** | 未绑定走 coordinator；删 SmartGuide、Remote 页面、`remote/session`；旧绑定转换 | | |
 | **M6 coordinator 路由** | `@opus`/`@codex` 决定模型、profile、agent | | |
@@ -172,6 +172,24 @@ M3 之前，需要审批的线程在 IM 里只有提示，靠 Web 处理，这�
   子线程的 chat（只能经 API 绑）`/stop` 停它，`/new`、`/clear` 说明只对文件夹有效。
 - **回复**：命令的结果（`Stopped [#2 …].`、`Started [#3 …] in billing.`）由 handler 直接回给 chat；之后线程的回复照常经 Relay。
 - **没做**：`/help` 在已绑定的 chat 里还列旧命令（M5 下线旧路径时一起改）；`/stop #N` 点名停止属于 M4。
+
+## M3 的落地
+
+- **发给谁**：线程停下来要审批或提问时（`Threads.OnWait`，带请求事件），发给绑在该线程**及其祖先**上的所有 chat，
+  与以前那句“需要你”同一批人；前缀 `[#N 标题]`。
+- **按钮**：Host 可选能力 `ChannelPrompter`（`SendChannelPrompt` / `RestateChannelPrompt`）。审批是“允许 / 本线程都允许 / 拒绝”；
+  提问只有**一个单选问题、1 到 8 个选项**时每个选项一个按钮（选项说明列在正文里）。多问题、多选、没有选项的提问，
+  以及没有按钮的平台（今天：微信、企业微信、Slack、钉钉、Discord、WhatsApp、QQ）仍发一行“Needs you: …，请到 Web 处理”，同一线程同一 chat 5 分钟一次。
+- **按下去**：按钮负载是 `pj, 线程 id, 请求 id, 选择`（Telegram 的 64 字节限制由平台的负载编码处理）。`remoteagent` 的回调分派把它交给
+  `ProjectRouter.RouteAnswer` → `Service.AnswerFromChannel`：chat 必须绑在该线程或它的祖先上，否则拒绝（`ErrNotThisChat`）；
+  然后就是 Web 用的同一个 `Threads.Respond`，答案带 `Via = im`，事件载荷里记 `via`。授权上，`pj` 与 `@cc` 的 `perm` 一样要求
+  `remote_control.approve`。
+- **先答为准**：请求结束（任一边回答、建议答案自动作答、回合被停掉）时 `Threads.OnSettled` 触发，Relay 把发出去的每条按钮消息**改写**为原文加结果
+  （“Allowed in a chat.” / “Denied on the web.” / “Answered in a chat: SQLite” / “No longer waiting: the turn ended.”），按钮随之消失；
+  不能改写的平台补发一条结果。晚到的按钮回 “This was already answered.”。两条路都走 Relay 的同一个有序队列，所以改写总在发送之后。
+- **不用 `IMPrompter`**：它为 `@cc` 设计，找不到 bot 时自动批准、有全局“总是允许”白名单、超时自己作答，而且阻塞等待。Projects 的请求
+  没有超时、只在线程里作答，所以按钮消息只是“发出去 + 之后改写”，回答走普通回调。
+- **没做**：用文字回答（引用回复或编号）给没有按钮的平台；`/threads` 列表。
 
 ## 待定
 

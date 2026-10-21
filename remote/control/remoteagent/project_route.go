@@ -27,7 +27,15 @@ type ProjectRouter interface {
 	// the chat is not bound, and the caller carries on as before. reply is
 	// what to tell the chat; err, if set, is why the command failed.
 	RouteCommand(ctx context.Context, name string, in ProjectInbound) (handled bool, reply string, err error)
+	// RouteAnswer answers a Projects thread's approval or question with the
+	// button a chat pressed (payload ProjectAnswerPayload, thread id, request
+	// id, choice). reply, when set, is what to tell the chat; the prompt
+	// itself is restated by the project.
+	RouteAnswer(ctx context.Context, in ProjectInbound, threadID, requestID, choice string) (reply string, err error)
 }
+
+// ProjectAnswerPayload names the callbacks of a Projects prompt's buttons.
+const ProjectAnswerPayload = "pj"
 
 // ProjectInbound is one message from a chat.
 type ProjectInbound struct {
@@ -120,4 +128,25 @@ func (h *BotHandler) routeProjectCommand(hCtx HandlerContext, text string) bool 
 		h.SendText(hCtx, reply)
 	}
 	return true
+}
+
+// routeProjectAnswer hands a press on a Projects prompt to the project.
+func (h *BotHandler) routeProjectAnswer(hCtx HandlerContext, threadID, requestID, choice string) {
+	if h.projectRouter == nil || threadID == "" || requestID == "" || choice == "" {
+		return
+	}
+	reply, err := h.projectRouter.RouteAnswer(h.ctx, ProjectInbound{
+		Platform: string(hCtx.Platform),
+		BotUUID:  hCtx.BotUUID,
+		ChatID:   hCtx.ChatID,
+		SenderID: hCtx.SenderID,
+	}, threadID, requestID, choice)
+	if err != nil {
+		logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to answer a project's request")
+		h.SendText(hCtx, "Could not answer: "+err.Error())
+		return
+	}
+	if reply != "" {
+		h.SendText(hCtx, reply)
+	}
 }

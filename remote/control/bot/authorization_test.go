@@ -118,3 +118,28 @@ func TestAuthorizationGateDeniedPromptReplyNotifiesUser(t *testing.T) {
 	require.False(t, gate(reply, imbot.Platform(setting.Platform), setting.UUID))
 	require.Equal(t, 1, notified)
 }
+
+// A press on a Projects prompt's button ("pj") answers an approval, so it
+// needs remote_control.approve like an @cc prompt's ("perm"), even when no
+// @cc prompt is pending in the chat.
+func TestAuthorizationGateProjectPromptNeedsApprove(t *testing.T) {
+	sm, setting, msg := directAuthorizationFixture(t)
+	pendingNone := func(string) (access.CapabilityName, access.ActionName) { return "", "" }
+	gate := bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), false, pendingNone, nil)
+	require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID))
+	chats, err := sm.BotAccess().ListDirectChats(context.Background(), setting.UUID)
+	require.NoError(t, err)
+	require.Len(t, chats, 1)
+	require.NoError(t, sm.BotAccess().SetDirectChatPermission(context.Background(),
+		setting.UUID, chats[0].ID, access.CapabilityRemoteControl, access.ActionRemoteControlApprove, access.EffectDeny))
+
+	press := msg
+	press.Payload = imbot.NewPayload("pj", "thread-1", "req-1", "allow")
+	require.True(t, press.IsCallback())
+	require.True(t, gate(press, imbot.Platform(setting.Platform), setting.UUID), "a chat that may not approve cannot press it")
+	require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID), "it may still talk")
+
+	require.NoError(t, sm.BotAccess().SetDirectChatPermission(context.Background(),
+		setting.UUID, chats[0].ID, access.CapabilityRemoteControl, access.ActionRemoteControlApprove, access.EffectAllow))
+	require.False(t, gate(press, imbot.Platform(setting.Platform), setting.UUID))
+}

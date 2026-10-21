@@ -47,6 +47,7 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 	relay := NewRelay(store, sink)
 	coord.OnFinal = relay.Message
 	threads.OnWait = relay.NeedsUser
+	threads.OnSettled = relay.Settled
 	threads.OnReply = relay.ThreadReply
 	return &Service{
 		Store: store, Layout: layout, Hub: hub, Threads: threads,

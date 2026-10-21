@@ -29,7 +29,9 @@ func isPairingBootstrap(msg imbot.Message) bool {
 }
 
 func inboundAction(msg imbot.Message, pendingCapability access.CapabilityName, pendingAction access.ActionName) (access.CapabilityName, access.ActionName) {
-	if msg.IsCallback() && msg.Payload.Name() == "perm" || pendingAction != "" {
+	// "pj" answers a Projects thread's approval or question: the same act as
+	// answering an @cc prompt ("perm").
+	if msg.IsCallback() && (msg.Payload.Name() == "perm" || msg.Payload.Name() == "pj") || pendingAction != "" {
 		if pendingCapability == "" {
 			pendingCapability = access.CapabilityRemoteControl
 		}

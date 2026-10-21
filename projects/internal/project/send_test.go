@@ -140,7 +140,7 @@ func TestNeedsYouReachesChatsOfTheThreadAndItsAncestors(t *testing.T) {
 	_, err = svc.BindChannel("telegram", "own", "", th.ID, "")
 	require.NoError(t, err)
 
-	svc.Relay.NeedsUser(*th)
+	svc.Relay.NeedsUser(*th, approvalEvent("r1"))
 	first, second := sink.next(t), sink.next(t)
 	assert.ElementsMatch(t, []string{"up", "own"}, []string{first.chatID, second.chatID})
 	sink.none(t)

@@ -91,6 +91,7 @@ func channelFixtureWith(t *testing.T, script func(turn *enginetest.Turn) error) 
 	relay := NewRelay(f.store, sink)
 	coord.OnFinal = relay.Message
 	f.threads.OnWait = relay.NeedsUser
+	f.threads.OnSettled = relay.Settled
 	f.threads.OnReply = relay.ThreadReply
 	return f, &Service{Store: f.store, Layout: f.threads.layout, Hub: f.threads.hub, Threads: f.threads, Coordinator: coord, Relay: relay}, sink
 }
@@ -238,20 +239,20 @@ func TestApprovalsAndAsksSendOneLineAndOnlyOnce(t *testing.T) {
 	worker := &db.Thread{ProjectID: f.project.ID, ParentID: f.project.MainThreadID, Title: "Fix login"}
 	require.NoError(t, f.store.CreateThread(worker))
 	th := *worker
-	svc.Relay.NeedsUser(th)
-	assert.Equal(t, fmt.Sprintf("[#%d Fix login] Needs you. Open Projects in the web UI to answer.", th.Seq), sink.next(t).text)
+	svc.Relay.NeedsUser(th, approvalEvent("r1"))
+	assert.Equal(t, fmt.Sprintf("[#%d Fix login] Needs you: Run `ls`. Open Projects in the web UI to answer.", th.Seq), sink.next(t).text)
 
-	svc.Relay.NeedsUser(th) // the next approval of the same thread, right after
+	svc.Relay.NeedsUser(th, approvalEvent("r2")) // the next approval of the same thread, right after
 	sink.none(t)
 
 	now = now.Add(relayNeedsUserEvery + time.Second)
-	svc.Relay.NeedsUser(th)
+	svc.Relay.NeedsUser(th, approvalEvent("r3"))
 	sink.next(t)
 
 	// A folder thread nobody bound hears nothing, whoever is bound elsewhere.
 	folderThread := &db.Thread{ProjectID: mkProject(t, f.store, &db.Project{Name: "F"}).ID, Title: "folder"}
 	require.NoError(t, f.store.CreateThread(folderThread))
-	svc.Relay.NeedsUser(*folderThread)
+	svc.Relay.NeedsUser(*folderThread, approvalEvent("r4"))
 	sink.none(t)
 }
 
@@ -272,7 +273,7 @@ func TestWithoutASinkNothingIsRelayed(t *testing.T) {
 	_, err := (&Service{Store: f.store}).BindChannel("telegram", "1", "", "", f.project.ID)
 	require.NoError(t, err)
 	relay.Message(db.ThreadEvent{ThreadID: f.project.MainThreadID, Kind: db.EvAssistant, Content: "hi"})
-	relay.NeedsUser(db.Thread{ID: "t", ProjectID: f.project.ID})
+	relay.NeedsUser(db.Thread{ID: "t", ProjectID: f.project.ID}, approvalEvent("r"))
 	relay.mu.Lock()
 	defer relay.mu.Unlock()
 	assert.Empty(t, relay.queue)
@@ -383,15 +384,21 @@ func TestArchivingAProjectUnbindsItsChats(t *testing.T) {
 }
 
 func TestNeedsUserDoesNotGrowWithoutBound(t *testing.T) {
-	f, svc, _ := channelFixture(t)
+	_, svc, _ := channelFixture(t)
 	now := time.Now()
 	svc.Relay.now = func() time.Time { return now }
 	for _, id := range []string{"a", "b", "c"} {
-		svc.Relay.NeedsUser(db.Thread{ID: id, ProjectID: f.project.ID})
+		assert.True(t, svc.Relay.nudge(id, "telegram", "1"))
 	}
+	assert.False(t, svc.Relay.nudge("a", "telegram", "1"), "the same thread and chat, right after")
 	now = now.Add(relayNeedsUserEvery + time.Second)
-	svc.Relay.NeedsUser(db.Thread{ID: "d", ProjectID: f.project.ID})
+	assert.True(t, svc.Relay.nudge("d", "telegram", "1"))
 	svc.Relay.mu.Lock()
 	defer svc.Relay.mu.Unlock()
 	assert.Len(t, svc.Relay.notified, 1, "entries past the window are dropped")
+}
+
+// approvalEvent is a pending approval of `ls` as the transcript has it.
+func approvalEvent(requestID string) db.ThreadEvent {
+	return db.ThreadEvent{Kind: db.EvApproval, Content: "Run `ls`", Payload: `{"request_id":"` + requestID + `","tool":"Bash","state":"pending"}`}
 }

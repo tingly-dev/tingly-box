@@ -13,7 +13,7 @@ import (
 )
 
 // handleCallbackQuery handles callback queries from inline keyboards
-func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot.Message) {
+func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, botUUID, chatID string, msg imbot.Message) {
 	// The payload arrives as segments, already decoded by the platform. What
 	// those segments looked like on the wire — a colon-joined string, a token
 	// standing in for an oversized one, a JSON array in a card button value —
@@ -26,6 +26,7 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 	// Create a minimal handler context for callbacks
 	hCtx := HandlerContext{
 		Bot:       bot,
+		BotUUID:   botUUID,
 		ChatID:    chatID,
 		SenderID:  msg.Sender.ID,
 		MessageID: msg.ID,
@@ -33,6 +34,10 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 	}
 
 	switch payload.Name() {
+	case ProjectAnswerPayload:
+		// A button of a Projects thread's approval or question.
+		h.routeProjectAnswer(hCtx, payload.Arg(1), payload.Arg(2), payload.Arg(3))
+
 	case "perm":
 		// Handle permission request response
 		h.handlePermissionCallback(hCtx, payload)

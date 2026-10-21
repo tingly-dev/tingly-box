@@ -84,8 +84,12 @@ type Threads struct {
 	// text or error. The chats bound to that thread hear it. It must not block.
 	OnReply func(Report)
 	// OnWait is called when a thread stops to ask the user for an approval
-	// or an answer. It must not block.
-	OnWait func(db.Thread)
+	// or an answer, with the request's transcript event. It must not block.
+	OnWait func(t db.Thread, request db.ThreadEvent)
+	// OnSettled is called when such a request is answered (by the user or
+	// its suggestion) or given up, with the event as it ends. It must not
+	// block.
+	OnSettled func(t db.Thread, request db.ThreadEvent)
 
 	mu sync.Mutex
 	// folders caches which projects are folders (a project's type never changes).
@@ -852,6 +856,12 @@ func (m *Threads) StopProject(projectID string) {
 	}
 }
 
+// PendingRequest returns the transcript event of a request the thread is
+// still waiting on; ok is false once it is answered or given up.
+func (m *Threads) PendingRequest(threadID, requestID string) (db.ThreadEvent, bool) {
+	return m.prompter(threadID).request(requestID)
+}
+
 // Respond answers a pending approval or question in a thread.
 func (m *Threads) Respond(threadID, requestID string, ans Answer) error {
 	return m.prompter(threadID).resolve(requestID, ans)
@@ -987,6 +997,9 @@ type Answer struct {
 	// Answers maps each question of an AskUserQuestion call to its answer
 	// (an option's label, several joined by ", ", or the user's own words).
 	Answers map[string]string
+	// Via is where the answer came from: db.SourceIM for a chat, empty for
+	// the web.
+	Via string
 }
 
 // Auto-answer settings: when a question with a suggested answer is answered
@@ -1110,6 +1123,8 @@ type requestPayload struct {
 	AutoAt *time.Time `json:"auto_at,omitempty"`
 	// Auto says the suggestion answered it, not the user.
 	Auto bool `json:"auto,omitempty"`
+	// Via is where the answer came from (db.SourceIM), empty for the web.
+	Via string `json:"via,omitempty"`
 }
 
 // retime makes every waiting question read the auto-answer setting again.
@@ -1170,7 +1185,16 @@ func (p *threadPrompter) wait(ctx context.Context, kind, tool, question string, 
 	}
 	waiting, _ := p.m.update(p.threadID, func(t *db.Thread) { t.Status, t.WaitReason = db.ThreadWaiting, reason })
 	if waiting != nil && p.m.OnWait != nil {
-		p.m.OnWait(*waiting)
+		p.m.OnWait(*waiting, *ev)
+	}
+	settled := func() {
+		if p.m.OnSettled != nil {
+			cur := *t
+			if latest, err := p.m.store.GetThread(p.threadID); err == nil {
+				cur = *latest
+			}
+			p.m.OnSettled(cur, *ev)
+		}
 	}
 
 	var ans Answer
@@ -1223,6 +1247,7 @@ wait:
 			ev.Payload = jsonString(payload)
 			_ = p.m.store.UpdateThreadEvent(ev)
 			p.m.hub.Publish(Event{Type: EventThreadEvent, ProjectID: t.ProjectID, Data: ev})
+			settled()
 			return Answer{}, ctx.Err()
 		}
 	}
@@ -1238,11 +1263,12 @@ wait:
 	default:
 		payload.State = "denied"
 	}
-	payload.Scope, payload.Answer, payload.Answers = ans.Scope, ans.Answer, ans.Answers
+	payload.Scope, payload.Answer, payload.Answers, payload.Via = ans.Scope, ans.Answer, ans.Answers, ans.Via
 	ev.Payload = jsonString(payload)
 	_ = p.m.store.UpdateThreadEvent(ev)
 	p.m.hub.Publish(Event{Type: EventThreadEvent, ProjectID: t.ProjectID, Data: ev})
 	_, _ = p.m.update(p.threadID, func(t *db.Thread) { t.Status, t.WaitReason = db.ThreadWorking, "" })
+	settled()
 	return ans, nil
 }
 
@@ -1367,6 +1393,17 @@ func (p *threadPrompter) resolve(requestID string, ans Answer) error {
 	}
 	pd.ch <- ans
 	return nil
+}
+
+// request returns the transcript event of a pending request.
+func (p *threadPrompter) request(requestID string) (db.ThreadEvent, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	pd, ok := p.pending[requestID]
+	if !ok {
+		return db.ThreadEvent{}, false
+	}
+	return *pd.event, true
 }
 
 func (p *threadPrompter) cancelAll() {

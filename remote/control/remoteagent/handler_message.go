@@ -44,7 +44,7 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	// An action firing (a button press) dispatches on its payload, not on
 	// message text.
 	if msg.IsCallback() {
-		h.handleCallbackQuery(b, chatID, msg)
+		h.handleCallbackQuery(b, botUUID, chatID, msg)
 		return
 	}
 
