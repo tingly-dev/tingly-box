@@ -8,7 +8,8 @@ covers only what WorkBuddy does differently. Proposal: TEP-2097.
 
 ## Status of the protocol: third-party, cross-checked
 
-WorkBuddy publishes no API for third-party login. The routes first came from
+This integration uses WorkBuddy's undocumented desktop login routes, rather
+than the OAuth 2.1 application flow of its Open Platform. The routes first came from
 integrations that agree on them (`elavita/dsh-codearts-auth`,
 `pilciw/codebuddy2api`, OmniRoute's CodeBuddy CN gateway). The client
 identification and the billing meter were then aligned with
@@ -26,6 +27,19 @@ account. To keep a correction cheap:
   does not fail a login.
 
 When a real capture disagrees, fix the table / parser and record it here.
+
+### Upstream refusals (2026-10-21)
+
+The WorkBuddy transport normalizes `{code,msg,displayMsg}` into an OpenAI
+error envelope, preserving the HTTP status, vendor code and original body.
+Only `11128` with an `unapproved channel` message, or client-identification
+code `10085`, marks a channel refusal. Such a 400 may use the existing fallback
+before response commitment, without counting as a transient service failure.
+Other 400s remain terminal; `403/11140` includes an account-restriction message
+and follows the existing 403 handling. No new health state or cooldown is added.
+
+References: [channel refusals](https://github.com/magpie-community/plugins/issues/279),
+[account restrictions](https://github.com/yetone/magpie/issues/1849).
 
 ## Login: server-mediated poll (`OAuthMethodServerPoll`)
 

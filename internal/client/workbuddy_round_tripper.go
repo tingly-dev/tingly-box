@@ -62,6 +62,11 @@ func (t *workbuddyRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 		req.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(body)), nil }
 	}
 	resp, err := t.RoundTripper.RoundTrip(req)
+	if err == nil {
+		if normalizeErr := workbuddyNormalizeError(resp); normalizeErr != nil {
+			return nil, normalizeErr
+		}
+	}
 	if err != nil || len(names) == 0 || resp.Body == nil {
 		return resp, err
 	}
