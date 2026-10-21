@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -168,7 +169,8 @@ func GetCacheHit(c *gin.Context) (bool, bool) {
 // For non-streaming requests or when TTFT is not available, returns 0.
 //
 // TPS is the inverse of time per output token (TPOT):
-// (outputTokens - 1) / (currentTime - firstTokenTime).
+// (outputTokens - 1) / (currentTime - firstTokenTime), and 0 when that window
+// is shorter than db.MinDecodeWindowMs.
 //
 // Parameters:
 //   - c: Gin context containing timing information
@@ -193,9 +195,10 @@ func CalculateTPS(c *gin.Context, outputTokens int, streamed bool) float64 {
 		return 0
 	}
 
+	// Windows below db.MinDecodeWindowMs measure burst delivery, not decode speed.
 	duration := time.Since(firstTokenTime).Seconds()
-	if duration <= 0 {
-		return 0 // Invalid duration
+	if duration*1000 < db.MinDecodeWindowMs {
+		return 0
 	}
 
 	return float64(outputTokens-1) / duration

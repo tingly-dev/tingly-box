@@ -400,16 +400,17 @@ func TestGetPerformanceSummary(t *testing.T) {
 }
 
 func TestTokensPerSecondRejectsInvalidIntervals(t *testing.T) {
-	// Mirrors the dashboard case: 33 output tokens have 32 decode intervals
-	// between TTFT=2.8s and latency=3.0s, yielding 160 TPS.
-	if got := TokensPerSecond(33, 3000, 2800); got != 160 {
-		t.Fatalf("TokensPerSecond = %v, want 160", got)
+	// 33 output tokens have 32 decode intervals between TTFT=2.5s and
+	// latency=3.0s, yielding 64 TPS.
+	if got := TokensPerSecond(33, 3000, 2500); got != 64 {
+		t.Fatalf("TokensPerSecond = %v, want 64", got)
 	}
 	for _, got := range []float64{
 		TokensPerSecond(0, 1200, 200),
 		TokensPerSecond(1, 1200, 200),
 		TokensPerSecond(50, 1200, 0),
 		TokensPerSecond(50, 200, 200),
+		TokensPerSecond(33, 3000, 2800), // 200ms window < MinDecodeWindowMs
 	} {
 		if got != 0 {
 			t.Fatalf("invalid TokensPerSecond = %v, want 0", got)
