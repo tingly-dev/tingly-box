@@ -2510,6 +2510,9 @@
             "type": "string",
             "description": "Field project_id"
           },
+          "threads": {
+            "$ref": "#/components/schemas/ThreadCounts"
+          },
           "type": {
             "type": "string",
             "description": "Field type"

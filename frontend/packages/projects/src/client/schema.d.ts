@@ -1126,6 +1126,7 @@ export interface components {
             data: unknown;
             /** @description Field project_id */
             project_id: string;
+            threads?: components["schemas"]["ThreadCounts"];
             /** @description Field type */
             type: string;
         };

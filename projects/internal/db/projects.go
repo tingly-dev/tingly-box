@@ -83,6 +83,36 @@ func (s *Store) TouchProject(id string) error {
 	return s.db.Model(&Project{}).Where("id = ?", id).UpdateColumn("updated_at", time.Now()).Error
 }
 
+// ThreadCounts is how many threads a project has in each Overview group.
+type ThreadCounts struct {
+	Working  int `json:"working"`
+	Waiting  int `json:"waiting"`
+	Ready    int `json:"ready"`
+	Idle     int `json:"idle"`
+	Resolved int `json:"resolved"`
+}
+
+// CountsOf turns a status → count map into ThreadCounts.
+func CountsOf(m map[string]int) ThreadCounts {
+	return ThreadCounts{Working: m[ThreadWorking], Waiting: m[ThreadWaiting], Ready: m[ThreadReady], Idle: m[ThreadIdle], Resolved: m[ThreadResolved]}
+}
+
+// ProjectThreadCounts is ThreadCounts for one project.
+func (s *Store) ProjectThreadCounts(projectID string) (ThreadCounts, error) {
+	var rows []struct {
+		Status string
+		N      int
+	}
+	if err := s.db.Model(&Thread{}).Select("status, COUNT(*) AS n").Where("project_id = ? AND agent <> ?", projectID, AgentLLM).Group("status").Scan(&rows).Error; err != nil {
+		return ThreadCounts{}, err
+	}
+	m := map[string]int{}
+	for _, r := range rows {
+		m[r.Status] = r.N
+	}
+	return CountsOf(m), nil
+}
+
 // ThreadCounts maps project ID → thread status → count. A main thread is the
 // project's conversation, not one of its threads, and is not counted.
 func (s *Store) ThreadCounts() (map[string]map[string]int, error) {

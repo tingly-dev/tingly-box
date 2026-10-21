@@ -22,19 +22,10 @@ import (
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
-// ThreadCounts is how many threads a project has in each Overview group.
-type ThreadCounts struct {
-	Working  int `json:"working"`
-	Waiting  int `json:"waiting"`
-	Ready    int `json:"ready"`
-	Idle     int `json:"idle"`
-	Resolved int `json:"resolved"`
-}
-
 // ProjectSummary is a project card.
 type ProjectSummary struct {
 	db.Project
-	Threads ThreadCounts `json:"threads"`
+	Threads db.ThreadCounts `json:"threads"`
 }
 
 // ProjectListResponse lists projects.
@@ -44,9 +35,9 @@ type ProjectListResponse struct {
 
 // ProjectDetailResponse is everything the project page needs at load.
 type ProjectDetailResponse struct {
-	Project db.Project   `json:"project"`
-	Threads []db.Thread  `json:"threads"`
-	Counts  ThreadCounts `json:"counts"`
+	Project db.Project      `json:"project"`
+	Threads []db.Thread     `json:"threads"`
+	Counts  db.ThreadCounts `json:"counts"`
 	// CoordinatorBusy is true while the coordinator is working on a turn.
 	CoordinatorBusy bool `json:"coordinator_busy"`
 }
@@ -243,10 +234,6 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithResponseModel(UsageResponse{}))
 }
 
-func counts(m map[string]int) ThreadCounts {
-	return ThreadCounts{Working: m[db.ThreadWorking], Waiting: m[db.ThreadWaiting], Ready: m[db.ThreadReady], Idle: m[db.ThreadIdle], Resolved: m[db.ThreadResolved]}
-}
-
 // storeErr maps runtime errors to statuses.
 func storeErr(c *gin.Context, err error, what string) {
 	switch {
@@ -281,7 +268,7 @@ func (h *Handler) list(c *gin.Context) {
 	}
 	out := make([]ProjectSummary, 0, len(projects))
 	for _, p := range projects {
-		out = append(out, ProjectSummary{Project: p, Threads: counts(all[p.ID])})
+		out = append(out, ProjectSummary{Project: p, Threads: db.CountsOf(all[p.ID])})
 	}
 	c.JSON(http.StatusOK, ProjectListResponse{Projects: out})
 }
@@ -362,7 +349,7 @@ func (h *Handler) get(c *gin.Context) {
 	if threads == nil {
 		threads = []db.Thread{}
 	}
-	c.JSON(http.StatusOK, ProjectDetailResponse{Project: *p, Threads: threads, Counts: counts(m), CoordinatorBusy: h.svc.Coordinator.Busy(p.ID)})
+	c.JSON(http.StatusOK, ProjectDetailResponse{Project: *p, Threads: threads, Counts: db.CountsOf(m), CoordinatorBusy: h.svc.Coordinator.Busy(p.ID)})
 }
 
 func (h *Handler) update(c *gin.Context) {
@@ -462,6 +449,9 @@ func (h *Handler) stream(c *gin.Context, key string) {
 	ch, cancel := h.svc.Hub.Subscribe(key)
 	defer cancel()
 	w := c.Writer
+	// A stream outlives the server's WriteTimeout; cut at it, every page
+	// would reconnect and re-fetch everything it shows.
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("X-Accel-Buffering", "no")

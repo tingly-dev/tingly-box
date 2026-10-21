@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -393,4 +394,35 @@ func TestSessionsDoNotShareUploads(t *testing.T) {
 	require.NoError(t, err)
 	_, err = f.threads.layout.ResolveAttachments(SessionOwner("s2"), []string{a.Path})
 	assert.Error(t, err, "another session's files cannot be attached")
+}
+
+// A thread event carries its project's counts after the change, so the
+// project list updates that row from the stream instead of re-fetching.
+func TestThreadEventCarriesProjectCounts(t *testing.T) {
+	f := newFixture(t, func(*enginetest.Turn) error { return nil })
+	ch, cancel := f.threads.hub.Subscribe(AllProjects)
+	defer cancel()
+	folder := t.TempDir()
+	s, err := f.startFolder(folder, FolderThreadSpec{Task: "x"})
+	require.NoError(t, err)
+	waitStatus(t, f.store, s.ID, db.ThreadIdle)
+
+	var last Event
+	for {
+		select {
+		case b := <-ch:
+			var ev Event
+			require.NoError(t, json.Unmarshal(b, &ev))
+			if ev.Type != EventThread {
+				continue
+			}
+			require.NotNil(t, ev.Threads, "every thread event has counts")
+			last = ev
+			continue
+		case <-time.After(200 * time.Millisecond):
+		}
+		break
+	}
+	assert.Equal(t, s.ProjectID, last.ProjectID)
+	assert.Equal(t, db.ThreadCounts{Idle: 1}, *last.Threads, "the last event's counts are the settled state")
 }

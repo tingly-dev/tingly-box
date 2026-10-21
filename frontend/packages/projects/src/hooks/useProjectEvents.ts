@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react';
-import { apiFetch } from '../client';
+import { apiFetch, type ThreadCounts } from '../client';
 
 export interface ProjectEvent {
     type: 'message_delta' | 'thread' | 'thread_event' | 'project' | 'coordinator';
     project_id: string;
     data: unknown;
+    /** On a thread event: the project's thread counts after the change. */
+    threads?: ThreadCounts;
 }
 
 const RETRY_MS = 2000;
