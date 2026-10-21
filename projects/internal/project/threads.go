@@ -878,10 +878,26 @@ func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
 	}
 	// A resolved thread's process has nothing left to do.
 	m.engine.Evict(m.sessionOf(threadID))
-	return m.update(threadID, func(t *db.Thread) {
+	t, err := m.update(threadID, func(t *db.Thread) {
 		now := time.Now()
 		t.Status, t.WaitReason, t.ResolvedAt = db.ThreadResolved, "", &now
 	})
+	if err == nil {
+		m.releaseChats(t)
+	}
+	return t, err
+}
+
+// releaseChats hands the chats focused on a finished thread back to its
+// parent, so they do not keep writing to something that is done. A folder
+// thread has no parent: its chat starts a new session instead (PostFromChannel).
+func (m *Threads) releaseChats(t *db.Thread) {
+	if t.ParentID == "" {
+		return
+	}
+	if _, err := m.store.MoveChannelBindings(t.ID, t.ParentID); err != nil {
+		logrus.WithError(err).WithField("thread_id", t.ID).Warn("move chats of a resolved thread to its parent")
+	}
 }
 
 // Reopen brings a resolved thread back.
@@ -917,6 +933,7 @@ func (m *Threads) Merge(ctx context.Context, threadID string) (*db.Thread, error
 	})
 	if err == nil {
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: fmt.Sprintf("Merged %s into %s.", t.Branch, t.BaseBranch)})
+		m.releaseChats(t)
 	}
 	return t, err
 }

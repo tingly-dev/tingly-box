@@ -79,22 +79,27 @@ func (h *BotHandler) chatBoundToProject(hCtx HandlerContext) bool {
 }
 
 // projectCommand reads a chat command a bound chat sends to its project: the
-// stop words the old routing knew (/stop, stop, /interrupt, /clear) and /new
-// with an optional first message. ok is false for anything else.
+// stop words the old routing knew (/stop, stop, /interrupt, /clear; /stop
+// may name a thread, "/stop #2"), /new with an optional first message, and
+// the thread addressing commands /focus N, /back and /threads. ok is false for
+// anything else.
 func projectCommand(text string) (name, arg string, ok bool) {
 	trimmed := strings.TrimSpace(text)
 	head, rest, _ := strings.Cut(trimmed, " ")
+	rest = strings.TrimSpace(rest)
 	switch strings.ToLower(head) {
-	case "/stop", "stop", "/interrupt":
+	case "/stop":
+		return "stop", rest, true
+	case "stop", "/interrupt":
 		if rest == "" {
 			return "stop", "", true
 		}
-	case "/clear":
+	case "/clear", "/back", "/threads":
 		if rest == "" {
-			return "clear", "", true
+			return strings.TrimPrefix(strings.ToLower(head), "/"), "", true
 		}
-	case "/new":
-		return "new", strings.TrimSpace(rest), true
+	case "/focus", "/new":
+		return strings.TrimPrefix(strings.ToLower(head), "/"), rest, true
 	}
 	return "", "", false
 }

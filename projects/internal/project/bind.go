@@ -84,6 +84,15 @@ func (s *Service) PostFromChannel(platform, chatID, text string) (handled bool, 
 	if err != nil {
 		return true, err
 	}
+	// "@2 ..." talks to thread #2 of the project for this message only.
+	if n, rest, ok := parseMention(text); ok {
+		target, err := s.threadBySeq(p.ID, n)
+		if err != nil {
+			return true, err
+		}
+		_, err = s.Send(context.Background(), target.ID, rest, nil, src)
+		return true, err
+	}
 	if p.Type == db.ProjectFolder && (b.NewThread || t.Status == db.ThreadResolved) {
 		_, err = s.startFromChannel(b, t, text, src)
 		return true, err
@@ -126,14 +135,23 @@ const (
 	ChatNew   = "new"   // a new session in the chat's folder: now with a task, else on the next message
 	ChatStop  = "stop"  // interrupt the bound thread's turn
 	ChatClear = "clear" // stop, and the next message starts a new session
+	// ChatFocus binds the chat to thread #N of its project (arg "N" or "#N").
+	ChatFocus = "focus"
+	// ChatBack binds the chat to the parent of the thread it is on.
+	ChatBack = "back"
+	// ChatThreads lists the project's threads.
+	ChatThreads = "threads"
 )
 
-// ChannelCommand runs a chat command (ChatNew, ChatStop, ChatClear) for a bound
-// chat; arg is the text after it. handled is false when the chat has no
+// ChannelCommand runs a chat command (ChatNew, ChatStop, ChatClear, ChatFocus,
+// ChatBack, ChatThreads) for a bound chat; arg is the text after it (for
+// ChatStop, an optional "#N" naming another thread of the project). handled is false when the chat has no
 // binding or the command is not one of these, and the caller carries on as
 // before. reply is what to tell the chat.
 func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bool, reply string, err error) {
-	if name != ChatNew && name != ChatStop && name != ChatClear {
+	switch name {
+	case ChatNew, ChatStop, ChatClear, ChatFocus, ChatBack, ChatThreads:
+	default:
 		return false, "", nil
 	}
 	b, err := s.Store.GetChannelBinding(platform, chatID)
@@ -146,6 +164,25 @@ func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bo
 	t, p, err := s.boundThread(b)
 	if err != nil {
 		return true, "", err
+	}
+	switch name {
+	case ChatFocus:
+		reply, err := s.focus(b, p, arg)
+		return true, reply, err
+	case ChatBack:
+		reply, err := s.back(b, t, p)
+		return true, reply, err
+	case ChatThreads:
+		reply, err := s.threadList(t, p)
+		return true, reply, err
+	case ChatStop:
+		if strings.TrimSpace(arg) != "" {
+			target, err := s.threadByRef(p.ID, arg)
+			if err != nil {
+				return true, "", err
+			}
+			t = target
+		}
 	}
 	tag := threadTag(t.Seq, t.Title)
 	if t.Agent == db.AgentLLM {

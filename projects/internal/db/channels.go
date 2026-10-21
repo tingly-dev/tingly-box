@@ -128,3 +128,11 @@ func (s *Store) SetChannelBindingNewThread(id string, on bool) error {
 	return s.db.Model(&ChannelBinding{}).Where("id = ?", id).
 		Updates(map[string]any{"new_thread": on, "updated_at": time.Now()}).Error
 }
+
+// MoveChannelBindings moves every chat bound to one thread to another, and
+// reports how many moved.
+func (s *Store) MoveChannelBindings(fromThreadID, toThreadID string) (int64, error) {
+	res := s.db.Model(&ChannelBinding{}).Where("thread_id = ?", fromThreadID).
+		Updates(map[string]any{"thread_id": toThreadID, "new_thread": false, "updated_at": time.Now()})
+	return res.RowsAffected, res.Error
+}

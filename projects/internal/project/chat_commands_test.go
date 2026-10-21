@@ -133,8 +133,8 @@ func TestCommandsInAProjectChatExplainInsteadOfActing(t *testing.T) {
 	f, svc, _ := channelFixture(t)
 	_, err := svc.BindChannel("telegram", "1", "", "", f.project.ID)
 	require.NoError(t, err)
-	for _, name := range []string{ChatStop, ChatClear, ChatNew} {
-		handled, reply, err := svc.ChannelCommand("telegram", "1", name, "x")
+	for name, arg := range map[string]string{ChatStop: "", ChatClear: "", ChatNew: "x"} {
+		handled, reply, err := svc.ChannelCommand("telegram", "1", name, arg)
 		require.NoError(t, err)
 		assert.True(t, handled, name)
 		assert.Contains(t, reply, "project conversation", name)
