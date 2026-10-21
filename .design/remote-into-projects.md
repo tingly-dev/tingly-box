@@ -98,13 +98,15 @@ YZ（2026-10-21）：Remote 原有的行为迁到 Projects 的**项目**或**文
   保留了 `@tb`，但 Projects 要多一种 agent 运行时和一种文件夹形态，用户要分清“跟向导说”和“跟 Claude Code 说”。
 - **C. 保留 `@tb` 在 Remote**：与“不再留两套”相悖，只作为过渡。
 
-## 开关
+## 开关（已定：合并）
 
-Projects 今天是实验开关（`projects`，默认关）。迁移后 IM 的会话层就是 Projects，所以：
+YZ（2026-10-21）：两个开关合成一个，一起开、一起关。今天 Remote 只是 Power-ups 里一个**隐藏侧栏图标**的开关（bot 照常跑），
+Projects 是后端实验开关（`projects`）。合并后只留 `projects` 这一个后端开关，Power-ups 里一行：
 
-- **Remote 开着，Projects 的运行时就要跑**（文件夹线程、Relay），不论 Projects 页面是否显示。没开 Remote 就没有 IM，与 YZ 的
-  “没开 remote 就不会有 projects remote 的功能”一致。
-- Projects 页面关着时，用户在 Web 上看不到这些线程，但 IM 里一切可用；打开 Projects 就能看到并接着用。（见“待定”。）
+- **开**：Projects 与 IM（原 Remote）两个侧栏项都出现；所有 IM 聊天走 Projects。
+- **关**：两个侧栏项都隐藏；chat 里的聊天控制关闭，回一句去设置里打开；bot 仍在运行，hook 驱动的通知（Flow A）照常，
+  因为通知与聊天控制本来正交（bot-arch.md）。
+- 名字（建议，第 4 期定）：开关叫 Projects，说明“在 Web 和 IM 里使用 Claude Code”；侧栏的 Remote 改名 IM（只剩 bot 连接与访问控制）。
 
 ## 要补的能力
 
@@ -139,8 +141,3 @@ Remote 页面保留，只去掉 SmartGuide 模型和“常驻会话”这类作�
 4. 运行中再发消息：排队（Projects 现状）。
 5. 审批与提问：只有权限审批是按钮，其余都在聊天里回答（见“要补的能力”①）。
 
-## 待定
-
-- **开了 Remote 是否等于开了 Projects**：只需要 Projects 的**后台运行时**（数据库、线程、Relay）跟着跑，
-  Projects **页面**不必打开；页面关着时 IM 照常可用，只是 Web 上看不到这些线程（今天 Remote 页面也看不到聊天内容）。
-  另一种是开 Remote 时一并打开 Projects 页面，让 IM 里的会话在 Web 上可见、可接手。
