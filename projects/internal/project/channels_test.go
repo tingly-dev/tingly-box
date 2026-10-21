@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -104,7 +106,7 @@ func TestChannelMessageReachesTheCoordinatorAndTheReplyComesBack(t *testing.T) {
 	assert.Equal(t, f.project.MainThreadID, b.ThreadID, "a project is bound through its main thread")
 	assert.Equal(t, f.project.ID, b.ProjectID)
 
-	handled, err := svc.PostFromChannel("telegram", "42", "How is it going?")
+	handled, err := svc.PostFromChannel("telegram", "42", "How is it going?", nil)
 	require.NoError(t, err)
 	require.True(t, handled)
 
@@ -133,7 +135,7 @@ func TestChannelMessageReachesTheCoordinatorAndTheReplyComesBack(t *testing.T) {
 
 func TestUnboundChatIsNotHandled(t *testing.T) {
 	f, svc, sink := channelFixture(t)
-	handled, err := svc.PostFromChannel("telegram", "nobody", "hello")
+	handled, err := svc.PostFromChannel("telegram", "nobody", "hello", nil)
 	require.NoError(t, err)
 	assert.False(t, handled)
 	sink.none(t)
@@ -148,7 +150,7 @@ func TestBoundPausedProjectReportsTheErrorToTheCaller(t *testing.T) {
 	p, _ := f.store.GetProject(f.project.ID)
 	require.NoError(t, svc.SetPaused(p, true))
 
-	handled, err := svc.PostFromChannel("telegram", "1", "hi")
+	handled, err := svc.PostFromChannel("telegram", "1", "hi", nil)
 	assert.True(t, handled, "a bound chat is never passed on to @cc, even when the project cannot answer")
 	assert.ErrorIs(t, err, ErrPaused)
 }
@@ -159,7 +161,7 @@ func TestRepliesGoToEveryBoundChat(t *testing.T) {
 		_, err := svc.BindChannel("telegram", c, "", "", f.project.ID)
 		require.NoError(t, err)
 	}
-	_, err := svc.PostFromChannel("telegram", "phone", "ping")
+	_, err := svc.PostFromChannel("telegram", "phone", "ping", nil)
 	require.NoError(t, err)
 	first, second := sink.next(t), sink.next(t)
 	assert.ElementsMatch(t, []string{"phone", "group"}, []string{first.chatID, second.chatID})
@@ -176,7 +178,7 @@ func TestMovingAChatChangesWhereRepliesGo(t *testing.T) {
 	_, err = svc.BindChannel("telegram", "1", "", "", other.ID)
 	require.NoError(t, err)
 
-	_, err = svc.PostFromChannel("telegram", "1", "hi")
+	_, err = svc.PostFromChannel("telegram", "1", "hi", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "[Other] Echo: hi", sink.next(t).text)
 	none := convo(t, f.store, f.project.ID)
@@ -370,7 +372,7 @@ func TestArchivingAProjectUnbindsItsChats(t *testing.T) {
 	require.NoError(t, svc.SetArchived(p, true))
 
 	for _, chat := range []string{"main", "worker"} {
-		handled, err := svc.PostFromChannel("telegram", chat, "hi")
+		handled, err := svc.PostFromChannel("telegram", chat, "hi", nil)
 		assert.False(t, handled, "%s falls back to what an unbound chat does", chat)
 		assert.NoError(t, err)
 	}
@@ -441,4 +443,37 @@ func TestVerboseChatsSeeEachStepOthersOnlyTheReply(t *testing.T) {
 	_, reply, err = svc.ChannelCommand("telegram", "loud", ChatVerbose, "loud")
 	require.NoError(t, err)
 	assert.Equal(t, "Usage: /verbose on|off", reply)
+}
+
+func TestFilesAChatSendsReachTheThreadAsAttachments(t *testing.T) {
+	f, svc, sink := channelFixture(t)
+	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "go"})
+	require.NoError(t, err)
+	waitQuiet(t, f, svc, s.ID)
+	_, err = svc.BindChannel("telegram", "fold", "", s.ID, "")
+	require.NoError(t, err)
+
+	sent := filepath.Join(t.TempDir(), "AgACAgUAAx.jpg")
+	require.NoError(t, os.WriteFile(sent, []byte("not really a photo"), 0o644))
+	handled, err := svc.PostFromChannel("telegram", "fold", "what is this", []ChannelFile{{Name: "photo.jpg", Path: sent}})
+	require.NoError(t, err)
+	require.True(t, handled)
+	sink.next(t)
+	waitQuiet(t, f, svc, s.ID)
+
+	evs, err := f.store.ListThreadEvents(s.ID)
+	require.NoError(t, err)
+	var atts []Attachment
+	for _, e := range evs {
+		if e.Kind == db.EvUser && e.Content == "what is this" {
+			atts = ParseAttachments(e.Payload)
+		}
+	}
+	require.Len(t, atts, 1)
+	assert.Equal(t, "photo.jpg", atts[0].Name, "named as the chat named it")
+	abs, err := f.threads.layout.LibraryPath(SessionOwner(s.ID), atts[0].Path)
+	require.NoError(t, err)
+	body, err := os.ReadFile(abs)
+	require.NoError(t, err)
+	assert.Equal(t, "not really a photo", string(body), "a copy the thread owns, so the host may remove its own")
 }

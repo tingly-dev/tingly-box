@@ -64,7 +64,7 @@ func TestNewWithoutATaskStartsOnTheNextMessage(t *testing.T) {
 	assert.Contains(t, reply, "next message starts a new session")
 	assert.Equal(t, old.ID, boundTo(t, f).ID, "nothing starts yet")
 
-	handled, err := svc.PostFromChannel("telegram", "fold", "hello again")
+	handled, err := svc.PostFromChannel("telegram", "fold", "hello again", nil)
 	require.NoError(t, err)
 	require.True(t, handled)
 	cur := boundTo(t, f)
@@ -74,7 +74,7 @@ func TestNewWithoutATaskStartsOnTheNextMessage(t *testing.T) {
 
 	// The one after continues the new session.
 	waitQuiet(t, f, svc, cur.ID)
-	_, err = svc.PostFromChannel("telegram", "fold", "and more")
+	_, err = svc.PostFromChannel("telegram", "fold", "and more", nil)
 	require.NoError(t, err)
 	assert.Equal(t, cur.ID, boundTo(t, f).ID)
 	sink.next(t)
@@ -86,7 +86,7 @@ func TestAResolvedFolderSessionGivesWayToANewOne(t *testing.T) {
 	_, err := f.threads.Resolve(old.ID)
 	require.NoError(t, err)
 
-	_, err = svc.PostFromChannel("telegram", "fold", "next task")
+	_, err = svc.PostFromChannel("telegram", "fold", "next task", nil)
 	require.NoError(t, err)
 	assert.NotEqual(t, old.ID, boundTo(t, f).ID, "a done session does not refuse the chat")
 	sink.next(t)
@@ -109,7 +109,7 @@ func TestStopAndClearInAFolderChat(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "[#1 go] is not running.", reply)
 
-	_, err = svc.PostFromChannel("telegram", "fold", "long job")
+	_, err = svc.PostFromChannel("telegram", "fold", "long job", nil)
 	require.NoError(t, err)
 	<-started
 	_, reply, err = svc.ChannelCommand("telegram", "fold", ChatStop, "")
@@ -117,7 +117,7 @@ func TestStopAndClearInAFolderChat(t *testing.T) {
 	assert.Equal(t, "Stopped [#1 go].", reply)
 	waitStatus(t, f.store, th.ID, db.ThreadIdle)
 
-	_, err = svc.PostFromChannel("telegram", "fold", "long again")
+	_, err = svc.PostFromChannel("telegram", "fold", "long again", nil)
 	require.NoError(t, err)
 	<-started
 	_, reply, err = svc.ChannelCommand("telegram", "fold", ChatClear, "")

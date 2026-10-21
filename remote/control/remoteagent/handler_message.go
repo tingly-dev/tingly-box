@@ -71,9 +71,9 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	// Handle media content (with or without text)
 	if msg.IsMediaContent() {
 		if h.chatBoundToProject(hCtx) {
-			// Attachments are not carried into a project conversation yet;
-			// say so rather than quietly sending them to @cc.
-			h.SendText(hCtx, "This chat talks to a project; attachments are not supported there yet. Send text, or unbind the chat in Projects.")
+			// A bound chat's files go to its thread as attachments.
+			mc, _ := msg.Content.(*imbot.MediaContent)
+			h.routeMediaToProject(hCtx, mc)
 			return
 		}
 		media := msg.GetMedia()

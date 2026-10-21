@@ -90,7 +90,11 @@ func (b *ChatBridge) RouteInbound(_ context.Context, in remoteagent.ProjectInbou
 	if start != nil {
 		start()
 	}
-	return app.PostFromChannel(in.Platform, in.ChatID, in.Text)
+	files := make([]projectsapp.ChannelFile, 0, len(in.Files))
+	for _, f := range in.Files {
+		files = append(files, projectsapp.ChannelFile{Name: f.Name, Path: f.Path})
+	}
+	return app.PostFromChannel(in.Platform, in.ChatID, in.Text, files)
 }
 
 // RouteCommand implements remoteagent.ProjectRouter.

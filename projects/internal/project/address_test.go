@@ -47,7 +47,7 @@ func TestMentionSendsOneMessageToThatThread(t *testing.T) {
 	_, err := svc.BindChannel("telegram", "1", "", "", f.project.ID)
 	require.NoError(t, err)
 
-	handled, err := svc.PostFromChannel("telegram", "1", "@1 add the edge case")
+	handled, err := svc.PostFromChannel("telegram", "1", "@1 add the edge case", nil)
 	require.NoError(t, err)
 	require.True(t, handled)
 	evs := userEvents(t, f.store, th.ID)
@@ -56,7 +56,7 @@ func TestMentionSendsOneMessageToThatThread(t *testing.T) {
 	assert.Equal(t, f.project.MainThreadID, boundOf(t, f, "1"), "the chat stays where it was")
 	assert.Contains(t, sink.next(t).text, "[#1 Worker] Finished: ok", "the reply comes back as the thread's report")
 
-	_, err = svc.PostFromChannel("telegram", "1", "@9 hello")
+	_, err = svc.PostFromChannel("telegram", "1", "@9 hello", nil)
 	assert.ErrorIs(t, err, ErrNoSuchThread)
 }
 
@@ -77,7 +77,7 @@ func TestFocusBackAndThreads(t *testing.T) {
 	assert.Equal(t, th.ID, boundOf(t, f, "1"))
 
 	// A plain message now goes to the worker, and its reply to this chat.
-	_, err = svc.PostFromChannel("telegram", "1", "keep going")
+	_, err = svc.PostFromChannel("telegram", "1", "keep going", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "[#1 Worker] ok", sink.next(t).text)
 	waitQuiet(t, f, svc, th.ID)

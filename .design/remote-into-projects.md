@@ -125,6 +125,9 @@ Projects 是后端实验开关（`projects`）。合并后只留 `projects` 这�
    最后一段话后面没有工具调用，就是回复，照旧由 `ThreadReply` 发给所有 chat，所以开 verbose 也不会重复。
    没有复用 `remote/control/render`：Projects 不能 import 根模块，而且一行一条已经够读，以后真嫌吵再做聚合。
 ③ **附件**：IM 的图片和文件下载到文件夹后作为 `Send` 的附件。
+   **落地（第 2 期）**：Remote 照旧按 `FileStore` 的类型和大小限制下载，但放到临时目录，通过 `ProjectInbound.Files` 交给 Projects，返回后删掉。
+   Projects 把文件复制进上传区（和 Web 附件同一个地方：项目的 library，或者会话自己的区；`/new` 后的第一条先放草稿区，开线程时搬过去），
+   不往用户的文件夹里写，标题（caption）就是消息正文。带文件的消息不当作对待答请求的回复。
 ④ **`/status`、`/resume`、`/yolo`、`/bash`、`/dir`、`/cd`** 改为作用在绑定上（`ChannelCommand` 加命令）。
 
 ## 删除清单（迁移完成后）

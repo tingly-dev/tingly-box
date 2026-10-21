@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
@@ -70,7 +72,7 @@ func (s *Service) BindChannel(platform, chatID, title, threadID, projectID strin
 // A folder chat that asked for a new session (/new), or whose thread is done
 // (resolved by hand or after idling), starts a new thread in the folder with
 // this message instead, and the chat moves to it.
-func (s *Service) PostFromChannel(platform, chatID, text string) (handled bool, err error) {
+func (s *Service) PostFromChannel(platform, chatID, text string, files []ChannelFile) (handled bool, err error) {
 	b, err := s.Store.GetChannelBinding(platform, chatID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -89,22 +91,72 @@ func (s *Service) PostFromChannel(platform, chatID, text string) (handled bool, 
 		if err != nil {
 			return true, err
 		}
-		_, err = s.Send(context.Background(), target.ID, rest, nil, src)
+		atts, err := s.adoptChannelFiles(UploadOwner(p, target), files)
+		if err != nil {
+			return true, err
+		}
+		_, err = s.Send(context.Background(), target.ID, rest, atts, src)
 		return true, err
 	}
 	// A chat that was asked something answers it with its next message
-	// (other than an @N one).
-	if threadID, requestID, ok := s.Relay.Awaiting(platform, chatID); ok {
+	// (other than an @N one, or one with files).
+	if threadID, requestID, ok := s.Relay.Awaiting(platform, chatID); ok && len(files) == 0 {
 		if done, err := s.answerFromText(threadID, requestID, text); done {
 			return true, err
 		}
 	}
 	if p.Type == db.ProjectFolder && (b.NewThread || t.Status == db.ThreadResolved) {
-		_, err = s.startFromChannel(b, t, text, src)
+		atts, err := s.adoptChannelFiles(DraftOwner, files)
+		if err != nil {
+			return true, err
+		}
+		_, err = s.startFromChannel(b, t, text, atts, src)
 		return true, err
 	}
-	_, err = s.Send(context.Background(), b.ThreadID, text, nil, src)
+	atts, err := s.adoptChannelFiles(UploadOwner(p, t), files)
+	if err != nil {
+		return true, err
+	}
+	_, err = s.Send(context.Background(), b.ThreadID, text, atts, src)
 	return true, err
+}
+
+// ChannelFile is a file a chat sent with a message, on local disk until
+// PostFromChannel returns.
+type ChannelFile struct {
+	// Name is the file's name as the chat gave it.
+	Name string
+	// Path is where the host saved it.
+	Path string
+}
+
+// maxChannelFile caps one file a chat sends, as the web caps an upload.
+const maxChannelFile = 200 << 20
+
+// adoptChannelFiles copies a chat's files into owner's uploads, where the
+// thread reads them as it reads files attached on the web.
+func (s *Service) adoptChannelFiles(owner string, files []ChannelFile) ([]Attachment, error) {
+	if len(files) > MaxAttachments {
+		return nil, fmt.Errorf("at most %d files per message", MaxAttachments)
+	}
+	var atts []Attachment
+	for _, f := range files {
+		src, err := os.Open(f.Path)
+		if err != nil {
+			return nil, err
+		}
+		name := f.Name
+		if strings.TrimSpace(name) == "" {
+			name = filepath.Base(f.Path)
+		}
+		a, err := s.Layout.SaveAttachment(owner, name, src, maxChannelFile)
+		src.Close()
+		if err != nil {
+			return nil, err
+		}
+		atts = append(atts, a)
+	}
+	return atts, nil
 }
 
 func (s *Service) boundThread(b *db.ChannelBinding) (*db.Thread, *db.Project, error) {
@@ -121,9 +173,9 @@ func (s *Service) boundThread(b *db.ChannelBinding) (*db.Thread, *db.Project, er
 
 // startFromChannel starts a thread in the folder of prev, with prev's model,
 // profile and permission mode, and moves the chat to it.
-func (s *Service) startFromChannel(b *db.ChannelBinding, prev *db.Thread, task string, src Source) (*db.Thread, error) {
+func (s *Service) startFromChannel(b *db.ChannelBinding, prev *db.Thread, task string, atts []Attachment, src Source) (*db.Thread, error) {
 	t, err := s.Threads.StartFolderThread(FolderThreadSpec{
-		ProjectID: prev.ProjectID, Task: task, Source: src,
+		ProjectID: prev.ProjectID, Task: task, Source: src, Attachments: atts,
 		Model: prev.Model, PermissionMode: prev.PermissionMode, Profile: prev.Profile,
 	})
 	if err != nil {
@@ -213,7 +265,7 @@ func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bo
 			return true, fmt.Sprintf("/new works in a chat bound to a folder; this chat is on [%s] of %s.", tag, p.Name), nil
 		}
 		if task := strings.TrimSpace(arg); task != "" {
-			nt, err := s.startFromChannel(b, t, task, Source{Kind: db.SourceIM, Platform: platform, ChatID: chatID})
+			nt, err := s.startFromChannel(b, t, task, nil, Source{Kind: db.SourceIM, Platform: platform, ChatID: chatID})
 			if err != nil {
 				return true, "", err
 			}

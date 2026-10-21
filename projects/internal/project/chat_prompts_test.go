@@ -213,7 +213,7 @@ func TestAQuestionIsAnsweredByReplying(t *testing.T) {
 	assert.Equal(t, "[#1 DB] Which database?\n  1. Postgres: for production\n  2. SQLite\nReply with a number or your own answer.", asked.text,
 		"a question has no buttons, even where the chat could show them")
 
-	handled, err := svc.PostFromChannel("telegram", "own", "2")
+	handled, err := svc.PostFromChannel("telegram", "own", "2", nil)
 	require.NoError(t, err)
 	require.True(t, handled)
 	assert.Equal(t, "[#1 DB] chose SQLite", sink.next(t).text)
@@ -230,7 +230,7 @@ func TestAChatWithoutButtonsAnswersAnApprovalByReplying(t *testing.T) {
 	assert.Equal(t, "own", asked.chatID)
 	assert.Equal(t, "[#1 Ship] Approve: Run `make deploy`\nReply y to allow, always to allow it for this thread, n to deny, or say what to do instead.", asked.text)
 
-	handled, err := svc.PostFromChannel("telegram", "own", "y")
+	handled, err := svc.PostFromChannel("telegram", "own", "y", nil)
 	require.NoError(t, err)
 	require.True(t, handled)
 	assert.Equal(t, "up", sink.nextRestate(t).chatID, "only prompts with buttons are restated")
@@ -255,7 +255,7 @@ func TestOtherWordsDenyAnApprovalAndSayWhy(t *testing.T) {
 	startDeploy(t, f, svc)
 	sink.nextPrompt(t)
 	sink.nextPrompt(t)
-	handled, err := svc.PostFromChannel("telegram", "own", "not on a Friday")
+	handled, err := svc.PostFromChannel("telegram", "own", "not on a Friday", nil)
 	require.NoError(t, err)
 	require.True(t, handled)
 	assert.Equal(t, "[#1 Ship] stopped", sink.next(t).text)

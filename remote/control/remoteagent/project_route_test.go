@@ -3,6 +3,9 @@ package remoteagent_test
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -10,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly/testenv"
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
@@ -38,6 +42,8 @@ type fakeRouter struct {
 	got     []remoteagent.ProjectInbound
 	cmds    []string
 	answers []string
+	// files are the bodies of the files handed over, read while they exist.
+	files map[string]string
 }
 
 func (f *fakeRouter) bind(chatID string) {
@@ -65,6 +71,13 @@ func (f *fakeRouter) RouteInbound(_ context.Context, in remoteagent.ProjectInbou
 		return false, nil
 	}
 	f.got = append(f.got, in)
+	for _, file := range in.Files {
+		if f.files == nil {
+			f.files = map[string]string{}
+		}
+		b, _ := os.ReadFile(file.Path)
+		f.files[file.Name] = string(b)
+	}
 	return true, f.err
 }
 
@@ -139,6 +152,37 @@ func Test_BoundChatGoesToItsProject(t *testing.T) {
 	help := chat.WaitText(3*time.Second).AssertContains(t, "Your ID:").AssertContains(t, "/threads")
 	assert.NotContains(t, help.Text, "@cc", "a bound chat no longer reaches @cc")
 	assert.Len(t, router.inbound(), 2, "commands are not sent to the project")
+}
+
+// A bound chat's files go to its project with the message, downloaded first
+// and removed once handed over.
+func Test_BoundChatFilesGoToItsProject(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("png bytes"))
+	}))
+	defer srv.Close()
+	env, harness, alice := bootHelperNotStarted(t)
+	router := &fakeRouter{bound: map[string]bool{}}
+	harness.Handler.SetProjectRouter(router)
+	require.NoError(t, env.Manager().Start(env.Context()))
+
+	chat := alice.OpenDM(harness.Setting.UUID)
+	router.bind(chat.ChatID)
+	chat.SendMedia([]imbot.MediaAttachment{{Type: "image", URL: srv.URL + "/AgAC.png", MimeType: "image/png", Filename: "screen.png"}})
+	require.Eventually(t, func() bool { return len(router.inbound()) == 1 }, 3*time.Second, 10*time.Millisecond)
+	in := router.inbound()[0]
+	require.Len(t, in.Files, 1)
+	assert.Equal(t, "screen.png", in.Files[0].Name)
+	router.mu.Lock()
+	assert.Equal(t, "png bytes", router.files["screen.png"])
+	router.mu.Unlock()
+	_, err := os.Stat(in.Files[0].Path)
+	assert.True(t, os.IsNotExist(err), "the download is removed once handed over")
+
+	chat.Drain()
+	chat.SendMedia([]imbot.MediaAttachment{{Type: "video", URL: srv.URL + "/v.mp4", MimeType: "video/mp4"}})
+	chat.WaitText(3*time.Second).AssertContains(t, "File type not supported")
+	assert.Len(t, router.inbound(), 1, "nothing is sent when a file cannot be taken")
 }
 
 // A chat without a binding behaves exactly as before: the router is asked,

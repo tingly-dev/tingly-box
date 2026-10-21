@@ -57,6 +57,8 @@ type (
 	ChannelPrompter = project.ChannelPrompter
 	// ChannelPrompt is an approval or a question as a chat shows it.
 	ChannelPrompt = project.ChannelPrompt
+	// ChannelFile is a file a chat sent with a message.
+	ChannelFile = project.ChannelFile
 	// ChannelChoice is one button of a ChannelPrompt.
 	ChannelChoice = project.ChannelChoice
 )
@@ -118,9 +120,11 @@ func (a *App) Register(api *swagger.RouteGroup) {
 // PostFromChannel hands a message typed in an IM chat to the thread the chat
 // is bound to (a project's main thread is its coordinator), as Send does (replies come back
 // through the host's ChannelSink). handled is false when the chat is not
-// bound, so the host carries on as it did before.
-func (a *App) PostFromChannel(platform, chatID, text string) (handled bool, err error) {
-	return a.svc.PostFromChannel(platform, chatID, text)
+// bound, so the host carries on as it did before. files, which the host
+// saved, go with the message as its attachments; the host may remove them
+// once this returns.
+func (a *App) PostFromChannel(platform, chatID, text string, files []ChannelFile) (handled bool, err error) {
+	return a.svc.PostFromChannel(platform, chatID, text, files)
 }
 
 // ChannelCommand runs a chat command ("new", "stop", "clear", "focus",

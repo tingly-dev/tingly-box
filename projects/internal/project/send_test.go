@@ -116,7 +116,7 @@ func TestChatBoundToAThreadTalksToThatThread(t *testing.T) {
 	assert.Equal(t, th.ID, b.ThreadID)
 	assert.Equal(t, f.project.ID, b.ProjectID)
 
-	handled, err := svc.PostFromChannel("telegram", "w", "from the chat")
+	handled, err := svc.PostFromChannel("telegram", "w", "from the chat", nil)
 	require.NoError(t, err)
 	require.True(t, handled)
 	waitStatus(t, f.store, th.ID, db.ThreadIdle)

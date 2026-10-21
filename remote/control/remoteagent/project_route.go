@@ -2,9 +2,12 @@ package remoteagent
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/imbot"
 )
 
 // ProjectRouter is the optional seam through which a chat that was bound to a
@@ -44,6 +47,15 @@ type ProjectInbound struct {
 	ChatID   string
 	SenderID string
 	Text     string
+	// Files are what the chat sent with the message, saved on local disk;
+	// they are removed once RouteInbound returns.
+	Files []ProjectFile
+}
+
+// ProjectFile is a file a chat sent, saved at Path under its own Name.
+type ProjectFile struct {
+	Name string
+	Path string
 }
 
 // SetProjectRouter plugs in the router; nil turns it off.
@@ -56,12 +68,19 @@ func (h *BotHandler) routeToProject(hCtx HandlerContext, text string) bool {
 	if h.projectRouter == nil {
 		return false
 	}
+	return h.deliverToProject(hCtx, text, nil)
+}
+
+// deliverToProject hands a message to the chat's project and says why when
+// it could not be delivered; it reports whether the chat is bound.
+func (h *BotHandler) deliverToProject(hCtx HandlerContext, text string, files []ProjectFile) bool {
 	handled, err := h.projectRouter.RouteInbound(h.ctx, ProjectInbound{
 		Platform: string(hCtx.Platform),
 		BotUUID:  hCtx.BotUUID,
 		ChatID:   hCtx.ChatID,
 		SenderID: hCtx.SenderID,
 		Text:     text,
+		Files:    files,
 	})
 	if !handled {
 		return false
@@ -71,6 +90,46 @@ func (h *BotHandler) routeToProject(hCtx HandlerContext, text string) bool {
 		h.SendText(hCtx, "Could not send this to the project: "+err.Error())
 	}
 	return true
+}
+
+// routeMediaToProject sends a bound chat's files, with their caption, to its
+// project: each is downloaded as the @cc path would (same types and sizes),
+// handed over, then removed. Nothing is sent when one cannot be taken.
+func (h *BotHandler) routeMediaToProject(hCtx HandlerContext, mc *imbot.MediaContent) {
+	if len(mc.Media) == 0 {
+		h.SendText(hCtx, "This message has no file in it.")
+		return
+	}
+	if strings.HasPrefix(mc.Media[0].URL, "tgfile://") {
+		if token := h.botSetting.Auth["token"]; token != "" {
+			h.fileStore.SetTelegramToken(token)
+		}
+	}
+	dir, err := os.MkdirTemp("", "tb-chat-files-")
+	if err != nil {
+		h.SendText(hCtx, "Could not save the files: "+err.Error())
+		return
+	}
+	defer os.RemoveAll(dir)
+	files := make([]ProjectFile, 0, len(mc.Media))
+	for _, m := range mc.Media {
+		if !h.fileStore.IsAllowedType(m.MimeType) {
+			h.SendText(hCtx, fmt.Sprintf("File type not supported: %s", m.MimeType))
+			return
+		}
+		stored, err := h.fileStore.DownloadFile(h.ctx, dir, m.URL, m.MimeType)
+		if err != nil {
+			h.SendText(hCtx, fmt.Sprintf("Failed to download file: %v", err))
+			return
+		}
+		name := m.Filename
+		if name == "" {
+			name = stored.Filename
+		}
+		files = append(files, ProjectFile{Name: name, Path: stored.Path})
+	}
+	h.reactReceived(hCtx)
+	h.deliverToProject(hCtx, strings.TrimSpace(mc.Caption), files)
 }
 
 // chatBoundToProject reports whether the chat talks to a project.
