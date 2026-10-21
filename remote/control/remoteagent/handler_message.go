@@ -107,8 +107,8 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	if h.routeProjectCommand(hCtx, text) {
 		return
 	}
-	// /connect, and /help in a bound chat, belong to Projects while it is on.
-	if h.routeProjectsChat(hCtx, text) {
+	// A bound chat's /help lists what it can do in Projects.
+	if h.routeProjectHelp(hCtx, text) {
 		return
 	}
 

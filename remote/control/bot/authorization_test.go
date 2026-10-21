@@ -143,28 +143,3 @@ func TestAuthorizationGateProjectPromptNeedsApprove(t *testing.T) {
 		setting.UUID, chats[0].ID, access.CapabilityRemoteControl, access.ActionRemoteControlApprove, access.EffectAllow))
 	require.False(t, gate(press, imbot.Platform(setting.Platform), setting.UUID))
 }
-
-// Connecting a chat to a Projects project (/connect N, or its button "pjc")
-// changes where the chat works, so it needs remote_control.privileged like
-// /cd; listing the choices (/connect) does not.
-func TestAuthorizationGateConnectNeedsPrivileged(t *testing.T) {
-	sm, setting, msg := directAuthorizationFixture(t)
-	pendingNone := func(string) (access.CapabilityName, access.ActionName) { return "", "" }
-	gate := bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), false, pendingNone, nil)
-	require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID))
-	chats, err := sm.BotAccess().ListDirectChats(context.Background(), setting.UUID)
-	require.NoError(t, err)
-	require.Len(t, chats, 1)
-	require.NoError(t, sm.BotAccess().SetDirectChatPermission(context.Background(),
-		setting.UUID, chats[0].ID, access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged, access.EffectDeny))
-
-	press := msg
-	press.Payload = imbot.NewPayload("pjc", "project-1")
-	require.True(t, gate(press, imbot.Platform(setting.Platform), setting.UUID), "a chat that may not change where it works cannot press it")
-
-	list, pick := msg, msg
-	list.Content = imbot.NewTextContent("/connect")
-	pick.Content = imbot.NewTextContent("/connect 2")
-	require.False(t, gate(list, imbot.Platform(setting.Platform), setting.UUID), "listing is allowed")
-	require.True(t, gate(pick, imbot.Platform(setting.Platform), setting.UUID))
-}

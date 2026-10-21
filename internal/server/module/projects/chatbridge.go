@@ -121,54 +121,6 @@ func (b *ChatBridge) RouteAnswer(_ context.Context, in remoteagent.ProjectInboun
 	return app.AnswerFromChannel(in.Platform, in.ChatID, threadID, requestID, choice)
 }
 
-// Enabled implements remoteagent.ProjectRouter.
-func (b *ChatBridge) Enabled() bool { return b.live() != nil }
-
-// Targets implements remoteagent.ProjectRouter.
-func (b *ChatBridge) Targets(context.Context) ([]remoteagent.ProjectTarget, error) {
-	app := b.live()
-	if app == nil {
-		return nil, errProjectsOff
-	}
-	ts, err := app.ChannelTargets()
-	if err != nil {
-		return nil, err
-	}
-	out := make([]remoteagent.ProjectTarget, len(ts))
-	for i, t := range ts {
-		out[i] = remoteagent.ProjectTarget{ID: t.ProjectID, Name: t.Name, Folder: t.Folder, Path: t.Path}
-	}
-	return out, nil
-}
-
-// Connect implements remoteagent.ProjectRouter.
-func (b *ChatBridge) Connect(_ context.Context, in remoteagent.ProjectInbound, projectID string) (string, error) {
-	app := b.inbound(in)
-	if app == nil {
-		return "", errProjectsOff
-	}
-	return app.ConnectChannel(in.Platform, in.ChatID, projectID)
-}
-
-// inbound returns the app when Projects is on, after remembering the bot the
-// chat wrote through and bringing the runtime up.
-func (b *ChatBridge) inbound(in remoteagent.ProjectInbound) *projectsapp.App {
-	app := b.live()
-	if app == nil {
-		return nil
-	}
-	b.mu.Lock()
-	b.bots[chatKey(in.Platform, in.ChatID)] = in.BotUUID
-	start := b.start
-	b.mu.Unlock()
-	if start != nil {
-		start()
-	}
-	return app
-}
-
-var errProjectsOff = errors.New("projects is switched off")
-
 var (
 	_ projectsapp.ChannelSink     = (*Host)(nil)
 	_ projectsapp.ChannelPrompter = (*Host)(nil)

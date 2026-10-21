@@ -1,7 +1,7 @@
 # IM 聊天并入 Projects
 
 > 状态：部分实施（TEP #2143）。M1（#2147）和统一模型（#2151、#2154）已落地：chat 绑到线程（项目对话或文件夹里的线程），
-> 消息走 Web 同一条路径，回复和线程汇报发回 chat。M2b–M5（`/new`、`/stop`、IM 里审批、点名线程、`/connect`）已落地；
+> 消息走 Web 同一条路径，回复和线程汇报发回 chat。M2b–M5（`/new`、`/stop`、IM 里审批、点名线程、已绑定 chat 的 `/help`）已落地；
 > 旧的 `@cc` / `@tb` 路径保留给没绑定的 chat（决定 3 已修改）；M6 路由仍是提案，见“里程碑”。承接 [projects-desk-absorption.md](./projects-desk-absorption.md)：Desk 已并入，
 > 这里把 Remote 的 IM 聊天（`@cc`）也并进来，并**重新打开**那篇 Decisions §1“`@cc` 不共享、不导入”。
 > 图见 [projects-im.pencil.md](./projects-im.pencil.md)（其中按 `target_kind`/`workdir_id`/`focus_thread_id` 画的图已被取代）。
@@ -18,7 +18,7 @@
 3. ~~**取消 `@tb` / SmartGuide**。没绑定落点的 chat，说话的对象就是 coordinator，由它帮用户选落点。~~
    **改为（2026-10-21，YZ）**：Remote 与 Projects 仍是两个功能。没绑定到 Projects 的 chat 照旧走 `@cc` / `@tb`；
    Remote 页面、SmartGuide、`remote/session` 保留，bot 仍在 Remote 里配置（没开 Remote 就没有 IM）。
-   chat 想进 Projects 时用 `/connect` 自己绑定（见“M5 的落地”）。下面第 5 条同样作废。
+   绑定仍只在 Projects 的 Web 上做（见“M5 的落地”）。下面第 5 条同样作废。
    以后 `@xxx` 让 coordinator 决定用哪个模型、profile、agent 去跟进（建立在 `Launcher` 和 `Thread.Model` 上），
    第一期只做“提示用户选”。
 4. **Web 与 IM 可同时操作同一线程**：一个线程一个进程，审批和排队统一。
@@ -143,7 +143,7 @@ project 绑定的 chat 默认在跟 coordinator 说话；要对某个线程说�
 | **M2b 文件夹绑定** | 绑定已是 `thread_id`；`/new`、`/stop`；已绑定 chat 的斜杠命令不再落到旧 `@cc` | 同 M1 | 已实施（见下“M2b 的落地”） |
 | **M3 审批与提问进 IM** | 线程审批/提问发到所有绑定的 chat，按钮，先答为准，另一边改写为“已处理” | 没有按钮的平台用文字回答 | 已实施（见下“M3 的落地”） |
 | **M4 点名线程** | `Thread.Seq`、`@N`、引用回复、`/threads`、`/focus` | 引用回复 | 已实施（见下“M4 的落地”），引用回复未做 |
-| **M5 收尾** | ~~未绑定走 coordinator；删 SmartGuide、Remote 页面、`remote/session`；旧绑定转换~~ 改为：chat 里 `/connect` 绑定；已绑定 chat 的 `/help` 只列 Projects 命令 | 下线旧路径（保留，见决定 3） | 已实施（见下“M5 的落地”） |
+| **M5 收尾** | ~~未绑定走 coordinator；删 SmartGuide、Remote 页面、`remote/session`；旧绑定转换~~ 改为：已绑定 chat 的 `/help` 只列 Projects 命令 | 下线旧路径（保留，见决定 3） | 已实施（见下“M5 的落地”） |
 | **M6 coordinator 路由** | `@opus`/`@codex` 决定模型、profile、agent | | |
 
 优先级：M1 > M2 > M3 > M4 > M5 > M6。M1 是验证“IM 与项目对话合一”的最小闭环；M2 让旧 `@cc` 用户有地方迁；
@@ -212,15 +212,10 @@ M3 之前，需要审批的线程在 IM 里只有提示，靠 Web 处理，这�
 ## M5 的落地
 
 - **不下线旧路径**（决定 3 的修改）：没绑定的 chat 一切照旧，Projects 只接管绑定了的 chat。
-- **`/connect`**：Projects 开着时，任何 chat 发 `/connect` 得到项目和文件夹的列表（未归档，加星和最近的在前，最多 10 个）；
-  有按钮的平台每项一个按钮（负载 `pjc, 项目 id`），没有按钮的平台是编号列表，回 `/connect N`。选项目绑到项目对话；
-  选文件夹绑到它最近的线程并置 `new_thread`，下一条消息开新会话（同 `/new`），而不是接着别人的会话说。
-  还没有任何线程的文件夹不列出（绑定总是指向线程）。已绑定的 chat 也可以 `/connect` 换绑。
-  授权上，`/connect N` 和按钮与 `/cd` 一样要求 `remote_control.privileged`；只列出不需要。
-  名字不用 `/project`：那是 `@cc` 列最近目录的旧命令，两者同名会混。
-- **`/help`**：已绑定的 chat 里列 Projects 的命令（`@N`、`/threads`、`/focus`、`/back`、`/new`、`/stop`、`/clear`、`/connect`）
-  和 Your ID / Chat ID；没绑定的 chat 仍是旧帮助。
-- **Projects 关闭时**：`/connect` 不存在，`/help` 照旧。
+- **绑定只有一个入口**：Projects 的 IM 弹窗（Web）。曾做过 chat 里的 `/connect`（列项目和文件夹、点选绑定），
+  YZ 否掉了：同一件事在两个地方都能配会让用户更乱，而 Remote 的用量还不清楚。等确有需要再加。
+- **`/help`**：已绑定的 chat 里只列 Projects 的命令（`@N`、`/threads`、`/focus`、`/back`、`/new`、`/stop`、`/clear`）
+  和 Your ID / Chat ID，并说明绑定在 Web 上改；没绑定的 chat 仍是旧帮助（含 `@cc` / `@tb`）。
 
 ## 待定
 
