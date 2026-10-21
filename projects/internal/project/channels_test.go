@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -233,8 +234,10 @@ func TestApprovalsAndAsksSendOneLineAndOnlyOnce(t *testing.T) {
 	f, svc, sink := channelFixture(t)
 	_, err := svc.BindChannel("telegram", "1", "", "", f.project.ID)
 	require.NoError(t, err)
-	now := time.Now()
-	svc.Relay.now = func() time.Time { return now }
+	// The relay reads the clock on its own goroutine.
+	var clock atomic.Int64
+	clock.Store(time.Now().UnixNano())
+	svc.Relay.now = func() time.Time { return time.Unix(0, clock.Load()) }
 
 	worker := &db.Thread{ProjectID: f.project.ID, ParentID: f.project.MainThreadID, Title: "Fix login"}
 	require.NoError(t, f.store.CreateThread(worker))
@@ -245,7 +248,7 @@ func TestApprovalsAndAsksSendOneLineAndOnlyOnce(t *testing.T) {
 	svc.Relay.NeedsUser(th, approvalEvent("r2")) // the next approval of the same thread, right after
 	sink.none(t)
 
-	now = now.Add(relayNeedsUserEvery + time.Second)
+	clock.Add(int64(relayNeedsUserEvery + time.Second))
 	svc.Relay.NeedsUser(th, approvalEvent("r3"))
 	sink.next(t)
 
