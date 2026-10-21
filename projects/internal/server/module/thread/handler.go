@@ -163,9 +163,10 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithResponseModel(ThreadDetailResponse{}))
 	api.GET("/threads/:id/events", h.events, tag,
 		swagger.WithDescription("A thread's events, oldest first; for a main thread, the project conversation"),
-		swagger.WithQuery("limit", "integer", "Latest N events (of those before `before`)"),
+		swagger.WithQuery("parent", "string", "An Agent call's request id: page through that subagent's steps instead of the thread's own conversation"),
+		swagger.WithQuery("limit", "integer", "Latest N events (of those before `before`); on the conversation, every older usage event comes too"),
 		swagger.WithQuery("before", "string", "An event id: only events older than it"),
-		swagger.WithQuery("since", "string", "RFC 3339 time: every event added or changed at or after it (its updated_at); limit and before do not apply"),
+		swagger.WithQuery("since", "string", "RFC 3339 time: every event added or changed at or after it (its updated_at), subagent steps included; parent, limit and before do not apply"),
 		swagger.WithResponseModel(EventsResponse{}))
 	api.POST("/threads/:id/messages", h.send, tag,
 		swagger.WithDescription("Send a message to the thread (runs after its current turn); to a main thread it goes to the coordinator, whose reply arrives on the event stream"),
@@ -333,7 +334,7 @@ func (h *Handler) events(c *gin.Context) {
 	if !ok {
 		return
 	}
-	page := db.EventPage{Before: c.Query("before")}
+	page := db.EventPage{Parent: c.Query("parent"), Before: c.Query("before")}
 	page.Limit, _ = strconv.Atoi(c.Query("limit"))
 	if v := c.Query("since"); v != "" {
 		since, err := time.Parse(time.RFC3339Nano, v)

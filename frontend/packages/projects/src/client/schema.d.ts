@@ -2877,11 +2877,13 @@ export interface operations {
     apiV1ThreadsIdEventsGet: {
         parameters: {
             query?: {
-                /** @description Latest N events (of those before `before`) */
+                /** @description An Agent call's request id: page through that subagent's steps instead of the thread's own conversation */
+                parent?: string;
+                /** @description Latest N events (of those before `before`); on the conversation, every older usage event comes too */
                 limit?: number;
                 /** @description An event id: only events older than it */
                 before?: string;
-                /** @description RFC 3339 time: every event added or changed at or after it (its updated_at); limit and before do not apply */
+                /** @description RFC 3339 time: every event added or changed at or after it (its updated_at), subagent steps included; parent, limit and before do not apply */
                 since?: string;
             };
             header?: never;

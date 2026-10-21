@@ -7510,9 +7510,18 @@
             }
           },
           {
+            "name": "parent",
+            "in": "query",
+            "description": "An Agent call's request id: page through that subagent's steps instead of the thread's own conversation",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
-            "description": "Latest N events (of those before `before`)",
+            "description": "Latest N events (of those before `before`); on the conversation, every older usage event comes too",
             "required": false,
             "schema": {
               "type": "integer"
@@ -7530,7 +7539,7 @@
           {
             "name": "since",
             "in": "query",
-            "description": "RFC 3339 time: every event added or changed at or after it (its updated_at); limit and before do not apply",
+            "description": "RFC 3339 time: every event added or changed at or after it (its updated_at), subagent steps included; parent, limit and before do not apply",
             "required": false,
             "schema": {
               "type": "string"

@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Attachment, BackgroundTask, Thread, ThreadEvent } from '../../client';
-import { buildTranscript, Trajectory, Transcript, type Respond, type TrajectoryAnchor } from '../../transcript';
+import { buildTranscript, Trajectory, Transcript, type Respond, type SubagentSteps, type TrajectoryAnchor } from '../../transcript';
 import { Composer } from '../Composer';
 import { AttachmentChips, uploadAttachments, type AttachOwner } from '../attachments';
 import { CodeBlock, Markdown } from '../Markdown';
@@ -53,6 +53,8 @@ interface Props {
     /** Older entries exist than the loaded ones. */
     more?: boolean;
     onLoadEarlier?: () => Promise<void>;
+    /** Reads a subagent's steps when its card opens (they are not in a page of the transcript). */
+    subagents?: SubagentSteps;
     running: boolean;
     disabled: boolean;
     onBack: () => void;
@@ -78,7 +80,7 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
     return `[data-block="${anchor.block}"]`;
 };
 
-export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, running, disabled, onBack, hideTitle, actions, composerContext, belowComposer, liveTasks = [], onRefresh }: Props) {
+export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, belowComposer, liveTasks = [], onRefresh }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const [diffOpen, setDiffOpen] = useState(false);
@@ -299,7 +301,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 {events === null
                     ? <Skeleton variant="rounded" height={120} />
                     : view === 'chat'
-                        ? <Transcript blocks={blocks} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} />
+                        ? <Transcript blocks={blocks} subagents={subagents} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} />
                         : <Trajectory blocks={blocks} working={running} pendingRequestId={pendingRequestId} project={thread.cwd} onOpen={openInChat} />}
             </Box>
 

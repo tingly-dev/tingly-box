@@ -366,3 +366,26 @@ describe('run of calls', () => {
         expect(screen.getByText('go test')).toBeInTheDocument();
     });
 });
+
+describe('subagent steps read on open', () => {
+    const entries = (withSteps: boolean): TranscriptEntry[] => [
+        {kind: 'tool_use', content: 'Agent', request_id: 'a1', payload: {description: 'Scan repo'}, timestamp: '2026-10-04T00:00:00Z'},
+        ...(withSteps ? [{role: 'assistant', content: 'step two', parent: 'a1', timestamp: '2026-10-04T00:00:01Z'} as TranscriptEntry] : []),
+        {kind: 'tool_result', content: 'done', request_id: 'a1', timestamp: '2026-10-04T00:00:02Z'},
+    ];
+
+    it('reads the steps the first time the card opens, and offers earlier ones while more exist', async () => {
+        const load = vi.fn(() => Promise.resolve());
+        const subagents = {steps: () => ({loaded: false} as const), load};
+        const view = render(<Transcript blocks={buildTranscript(entries(false))} working={false} onRespond={vi.fn()} drafts={drafts} subagents={subagents}/>);
+        expect(load).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', {name: /Scan repo/}));
+        await waitFor(() => expect(load).toHaveBeenCalledWith('a1', false));
+
+        const loaded = {steps: () => ({loaded: true, more: true} as const), load};
+        view.rerender(<Transcript blocks={buildTranscript(entries(true))} working={false} onRespond={vi.fn()} drafts={drafts} subagents={loaded}/>);
+        expect(load).toHaveBeenCalledTimes(1);
+        fireEvent.click(screen.getByRole('button', {name: 'Show earlier steps'}));
+        expect(load).toHaveBeenLastCalledWith('a1', true);
+    });
+});

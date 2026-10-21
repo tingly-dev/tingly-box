@@ -204,3 +204,63 @@ func TestPageThreadEvents(t *testing.T) {
 	assert.False(t, more)
 	assert.False(t, mustEvent(t, s, ids[0]).UpdatedAt.Before(mark))
 }
+
+// A subagent's steps are a line of their own: the conversation pages
+// without them, and they page by their Agent call.
+func TestPageThreadEventsBySubagent(t *testing.T) {
+	s := newStore(t)
+	_, main := newProject(t, s, "P")
+	add := func(content, parent string) {
+		require.NoError(t, s.AddThreadEvent(&ThreadEvent{ThreadID: main.ID, Kind: EvAssistant, Content: content, Parent: parent}))
+	}
+	add("ask", "")
+	add("call", "")
+	for i := range 5 {
+		add(string(rune('1'+i)), "a1")
+	}
+	add("report", "")
+	contents := func(evs []ThreadEvent) (out string) {
+		for _, e := range evs {
+			out += e.Content + ","
+		}
+		return
+	}
+
+	conv, more, err := s.PageThreadEvents(main.ID, EventPage{Limit: 2})
+	require.NoError(t, err)
+	assert.Equal(t, "call,report,", contents(conv), "the subagent's steps do not use up the page")
+	assert.True(t, more)
+
+	steps, more, err := s.PageThreadEvents(main.ID, EventPage{Parent: "a1", Limit: 3})
+	require.NoError(t, err)
+	assert.Equal(t, "3,4,5,", contents(steps))
+	assert.True(t, more)
+	steps, more, err = s.PageThreadEvents(main.ID, EventPage{Parent: "a1", Limit: 3, Before: steps[0].ID})
+	require.NoError(t, err)
+	assert.Equal(t, "1,2,", contents(steps))
+	assert.False(t, more)
+}
+
+// The status line totals every turn, so a page of the conversation brings
+// the usage events before it.
+func TestConversationPageBringsEveryUsageEvent(t *testing.T) {
+	s := newStore(t)
+	_, main := newProject(t, s, "P")
+	add := func(kind, content string) {
+		require.NoError(t, s.AddThreadEvent(&ThreadEvent{ThreadID: main.ID, Kind: kind, Content: content}))
+	}
+	add(EvUser, "a")
+	add(EvUsage, "u1")
+	add(EvUser, "b")
+	add(EvUsage, "u2")
+	add(EvUser, "c")
+	add(EvUser, "d")
+	page, more, err := s.PageThreadEvents(main.ID, EventPage{Limit: 2})
+	require.NoError(t, err)
+	assert.True(t, more)
+	var got []string
+	for _, e := range page {
+		got = append(got, e.Content)
+	}
+	assert.Equal(t, []string{"u1", "u2", "c", "d"}, got)
+}

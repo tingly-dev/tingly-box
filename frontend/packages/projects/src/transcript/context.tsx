@@ -45,8 +45,22 @@ export type CodeBlockComponent = ComponentType<{code: string; language: string}>
 // passes its own (thumbnails fetched with its auth); without one, names only.
 export type AttachmentsComponent = ComponentType<{items: {name: string; path: string; type: string; size: number}[]}>;
 
+/** Where a subagent's steps stand: not read yet, or read with or without older ones left. */
+export type AgentSteps = {loaded: false} | {loaded: true; more: boolean};
+
+// SubagentSteps reads a subagent's own steps when its card is opened: a
+// transcript read a page at a time leaves them out (one subagent can run
+// hundreds of steps). Without it, the steps are expected to be in the
+// transcript already.
+export interface SubagentSteps {
+    steps: (call: string) => AgentSteps;
+    // load reads the latest steps, or with earlier the page before the first loaded one.
+    load: (call: string, earlier?: boolean) => Promise<void>;
+}
+
 interface TranscriptHost {
     drafts: DraftStorage;
+    subagents?: SubagentSteps;
     codeBlock?: CodeBlockComponent;
     attachments?: AttachmentsComponent;
     rememberLabel?: (tool: string) => string;
@@ -54,14 +68,15 @@ interface TranscriptHost {
 
 const HostContext = createContext<TranscriptHost>({drafts: memoryDrafts});
 
-export const TranscriptHostProvider = ({drafts, codeBlock, attachments, rememberLabel, children}: {
+export const TranscriptHostProvider = ({drafts, subagents, codeBlock, attachments, rememberLabel, children}: {
     drafts?: DraftStorage;
+    subagents?: SubagentSteps;
     codeBlock?: CodeBlockComponent;
     attachments?: AttachmentsComponent;
     rememberLabel?: (tool: string) => string;
     children: ReactNode;
 }) => {
-    const value = useMemo(() => ({drafts: drafts ?? memoryDrafts, codeBlock, attachments, rememberLabel}), [drafts, codeBlock, attachments, rememberLabel]);
+    const value = useMemo(() => ({drafts: drafts ?? memoryDrafts, subagents, codeBlock, attachments, rememberLabel}), [drafts, subagents, codeBlock, attachments, rememberLabel]);
     return <HostContext.Provider value={value}>{children}</HostContext.Provider>;
 };
 

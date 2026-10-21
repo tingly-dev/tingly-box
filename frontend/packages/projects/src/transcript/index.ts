@@ -14,7 +14,7 @@ export {
 export type {TrajectoryAnchor, TrajectoryFilter, TrajectoryKind, TrajectoryRow, TrajectorySummary} from './trajectoryRows';
 export {matchesFilter, plainLine, trajectoryRows, trajectorySummary} from './trajectoryRows';
 
-export type {AttachmentsComponent, CodeBlockComponent, DraftStorage} from './context';
+export type {AgentSteps, AttachmentsComponent, CodeBlockComponent, DraftStorage, SubagentSteps} from './context';
 export {createMemoryDraftStorage} from './context';
 
 export {default as Transcript} from './Transcript';

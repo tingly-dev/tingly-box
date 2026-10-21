@@ -225,6 +225,7 @@ export default function ProjectPage() {
             events={threadEvents}
             more={opened.more}
             onLoadEarlier={opened.loadEarlier}
+            subagents={opened.subagents}
             running={threadRunning}
             disabled={blocked}
             onBack={closeThread}

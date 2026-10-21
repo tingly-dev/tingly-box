@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, unwrap, type ThreadEvent } from '../client';
+import type { SubagentSteps } from '../transcript';
 
 /** How many of the latest events a thread opens with; older ones load on request. */
 export const TAIL = 200;
@@ -7,10 +8,17 @@ export const TAIL = 200;
 const CACHE_MAX = 20;
 
 interface Transcript {
+    /**
+     * The loaded part of the conversation, every usage event (the status
+     * line totals them), and the steps of the subagents that were opened.
+     */
     events: ThreadEvent[];
-    /** Older events exist that are not loaded. */
+    /** Older conversation events exist that are not loaded. */
     more: boolean;
+    /** Subagents (by Agent call) whose steps were read, and whether older steps exist. */
+    agents: Record<string, { more: boolean }>;
 }
+
 
 /** The transcripts seen on this page, by thread, most recent last. */
 const cache = new Map<string, Transcript>();
@@ -27,6 +35,13 @@ export const forgetTranscripts = () => cache.clear();
 const time = (s: string) => new Date(s).getTime();
 
 /**
+ * The first loaded event of the conversation itself: what the window starts
+ * at, and what the page before it is read from (usage events and subagent
+ * steps are loaded apart from the window).
+ */
+const windowFirst = (list: ThreadEvent[]) => list.find((e) => !e.parent && e.kind !== 'usage');
+
+/**
  * Adds or replaces events by id, in created order. An event older than the
  * loaded window (an old approval answered) is only replaced, never added: it
  * would sit at the top with a gap above it.
@@ -35,7 +50,8 @@ export function mergeEvents(list: ThreadEvent[], incoming: ThreadEvent[]): Threa
     if (incoming.length === 0) return list;
     const index = new Map(list.map((e, i) => [e.id, i]));
     const next = list.slice();
-    const start = list.length ? time(list[0].created_at) : -Infinity;
+    const first = windowFirst(list);
+    const start = first ? time(first.created_at) : -Infinity;
     let added = false;
     for (const e of incoming) {
         const i = index.get(e.id);
@@ -58,7 +74,13 @@ function cursor(events: ThreadEvent[]): string | undefined {
     return Number.isFinite(max) ? new Date(max).toISOString() : undefined;
 }
 
-const fetchEvents = (id: string, query: { limit?: number; before?: string; since?: string }) =>
+/** Events read in pages that may overlap what is loaded: added once each, in created order. */
+const prepend = (list: ThreadEvent[], older: ThreadEvent[]) => {
+    const have = new Set(list.map((e) => e.id));
+    return [...older.filter((e) => !have.has(e.id)), ...list].sort((a, b) => time(a.created_at) - time(b.created_at));
+};
+
+const fetchEvents = (id: string, query: { parent?: string; limit?: number; before?: string; since?: string }) =>
     unwrap(api.GET('/api/v1/threads/{id}/events', { params: { path: { id }, query } }));
 
 /**
@@ -99,18 +121,27 @@ export function useTranscript(threadId: string) {
             const r = await fetchEvents(id, { limit: TAIL });
             const pending = early.current.filter((e) => e.thread_id === id);
             early.current = [];
-            update(id, (t) => ({ events: mergeEvents(mergeEvents(r.events, t?.events ?? []), pending), more: r.more }));
+            update(id, (t) => ({ events: mergeEvents(mergeEvents(r.events, t?.events ?? []), pending), more: r.more, agents: t?.agents ?? {} }));
         }
     }, [update]);
 
     /** Loads the page before the first loaded event. */
     const loadEarlier = useCallback(async () => {
         const id = current.current;
-        const first = cache.get(id)?.events[0];
+        const first = windowFirst(cache.get(id)?.events ?? []);
         if (!first) return;
         const r = await fetchEvents(id, { limit: TAIL, before: first.id });
-        update(id, (t) => t && { events: [...r.events.filter((e) => !t.events.some((x) => x.id === e.id)), ...t.events], more: r.more });
+        update(id, (t) => t && { ...t, events: prepend(t.events, r.events), more: r.more });
     }, [update]);
+
+    /** Reads a subagent's latest steps, or (earlier) the page before its first loaded one. */
+    const loadAgent = useCallback(async (call: string, earlier = false) => {
+        const id = current.current;
+        const firstStep = cache.get(id)?.events.find((e) => e.parent === call);
+        const r = await fetchEvents(id, { parent: call, limit: TAIL, ...(earlier && firstStep && { before: firstStep.id }) });
+        update(id, (t) => t && { ...t, events: prepend(t.events, r.events), agents: { ...t.agents, [call]: { more: r.more } } });
+    }, [update]);
+
 
     /** A live entry from the event stream. */
     const apply = useCallback((e: ThreadEvent) => {
@@ -129,5 +160,13 @@ export function useTranscript(threadId: string) {
     }, [threadId, catchUp]);
 
     const t = state.threadId === threadId ? state.t : null;
-    return { events: t?.events ?? null, more: t?.more ?? false, catchUp, loadEarlier, apply, edit };
+    const agents = t?.agents;
+    const subagents = useMemo<SubagentSteps>(() => ({
+        steps: (call) => {
+            const a = agents?.[call];
+            return a ? { loaded: true, more: a.more } : { loaded: false };
+        },
+        load: loadAgent,
+    }), [agents, loadAgent]);
+    return { events: t?.events ?? null, more: t?.more ?? false, catchUp, loadEarlier, apply, edit, subagents };
 }

@@ -379,6 +379,7 @@ export default function WorkdirPage() {
                         liveTasks={liveTasks}
                         more={transcript.more}
                         onLoadEarlier={transcript.loadEarlier}
+                        subagents={transcript.subagents}
                         onRefresh={() => {
                             void loadSession(sessionId);
                             transcript.catchUp().catch(() => undefined);

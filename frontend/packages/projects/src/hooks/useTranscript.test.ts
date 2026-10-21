@@ -59,4 +59,26 @@ describe('useTranscript', () => {
         await act(async () => land(answer([ev('a', 1)])));
         expect(result.current.events?.map((e) => e.id)).toEqual(['a', 'live']);
     });
+    it('pages the conversation from its own first event, not a usage event before it, and reads a subagent\'s steps on request', async () => {
+        const usage = { ...ev('u0', 0), kind: 'usage' };
+        m.get.mockResolvedValueOnce(answer([usage, ev('c', 3), { ...ev('call', 4), kind: 'tool_use', request_id: 'a1' }], true));
+        const { result } = renderHook(() => useTranscript('t1'));
+        await waitFor(() => expect(result.current.events).toHaveLength(3));
+
+        m.get.mockResolvedValueOnce(answer([usage, ev('b', 2)], false));
+        await act(() => result.current.loadEarlier());
+        expect(queries()[1]).toEqual({ limit: TAIL, before: 'c' });
+        expect(result.current.events?.map((e) => e.id)).toEqual(['u0', 'b', 'c', 'call']);
+
+        expect(result.current.subagents.steps('a1')).toEqual({ loaded: false });
+        m.get.mockResolvedValueOnce(answer([{ ...ev('s2', 6), parent: 'a1' }], true));
+        await act(() => result.current.subagents.load('a1'));
+        expect(queries()[2]).toEqual({ parent: 'a1', limit: TAIL });
+        expect(result.current.subagents.steps('a1')).toEqual({ loaded: true, more: true });
+        m.get.mockResolvedValueOnce(answer([{ ...ev('s1', 5), parent: 'a1' }], false));
+        await act(() => result.current.subagents.load('a1', true));
+        expect(queries()[3]).toEqual({ parent: 'a1', limit: TAIL, before: 's2' });
+        expect(result.current.events?.map((e) => e.id)).toEqual(['u0', 'b', 'c', 'call', 's1', 's2']);
+        expect(result.current.subagents.steps('a1')).toEqual({ loaded: true, more: false });
+    });
 });

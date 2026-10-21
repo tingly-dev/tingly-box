@@ -5,9 +5,9 @@ import {getReadableAccent} from '@tingly/ui/theme/status';
 import {fontMono, fontSizes} from '@tingly/ui/theme/fonts';
 import type {TFunction} from 'i18next';
 import type {ReactNode} from 'react';
-import {Fragment, useEffect, useMemo, useState} from 'react';
+import {Fragment, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import type {AttachmentsComponent, CodeBlockComponent, DraftStorage} from './context';
+import type {AttachmentsComponent, CodeBlockComponent, DraftStorage, SubagentSteps} from './context';
 import {TranscriptHostProvider, useDraft, useTranscriptHost} from './context';
 import type {ActivityStep, RequestBlock, RequestOutcome, TaskState, ThinkingStep, Todo, ToolStep, TranscriptBlock, TranscriptEntry, WorkingVerb} from './model';
 import {CHECKLIST_TOOL, FOLD_MIN_CALLS, agentReport, agentStatus, approvalSubject, askQuestions, firstNewBlock, formatTokens, latestTodos, requestOutcome, summarizeRun, toolSummary, workingState} from './model';
@@ -29,6 +29,9 @@ interface TranscriptProps {
     onRespond: Respond;
     // Where request-card drafts live; in memory unless the host passes a store.
     drafts?: DraftStorage;
+    // Reads a subagent's steps when its card opens, for a transcript read a
+    // page at a time; without it they are expected in blocks already.
+    subagents?: SubagentSteps;
     // Renders fenced code in replies; plain monospace unless the host passes one.
     codeBlock?: CodeBlockComponent;
     // Renders a user message's files; just their names unless the host passes one.
@@ -594,6 +597,7 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
 }) => {
     const {t} = useTranslation();
     const [open, toggle] = useExpanded(expandAll);
+    const steps = useSubagentSteps(block.call.id, open);
     const input = (block.call.input ?? {}) as {description?: string; prompt?: string; subagent_type?: string};
     const task = block.task;
     const status = agentStatus(block, turnLive);
@@ -658,6 +662,14 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
                             </Typography>
                         </Box>
                     )}
+                    {steps.more && (
+                        <Button size="small" onClick={steps.loadEarlier} disabled={steps.loading} sx={{alignSelf: 'flex-start'}}>
+                            {t('projects.transcript.earlierSteps', {defaultValue: 'Show earlier steps'})}
+                        </Button>
+                    )}
+                    {steps.loading && block.children.length === 0 && (
+                        <Typography variant="body2" sx={{color: 'text.secondary'}}>{t('projects.transcript.loadingSteps', {defaultValue: 'Loading steps…'})}</Typography>
+                    )}
                     {/* The report is its last reply, shown below; the run
                         above it is everything before. */}
                     <BlockList
@@ -680,6 +692,26 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
             </Collapse>
         </Paper>
     );
+};
+
+// useSubagentSteps reads a subagent's steps the first time its card opens,
+// when the host reads them apart from the transcript (SubagentSteps).
+const useSubagentSteps = (call: string, open: boolean) => {
+    const {subagents} = useTranscriptHost();
+    const state = subagents?.steps(call);
+    const [loading, setLoading] = useState(false);
+    const tried = useRef(false);
+    const load = useCallback((earlier: boolean) => {
+        if (!subagents) return;
+        setLoading(true);
+        subagents.load(call, earlier).catch(() => undefined).finally(() => setLoading(false));
+    }, [subagents, call]);
+    useEffect(() => {
+        if (!open || !state || state.loaded || tried.current) return;
+        tried.current = true;
+        load(false);
+    }, [open, state, load]);
+    return {loading, more: !!state?.loaded && state.more, loadEarlier: () => load(true)};
 };
 
 // WorkingLine says the live turn is still going: what it is doing and for
@@ -760,14 +792,14 @@ const VERB_DEFAULTS: Record<WorkingVerb, string> = {
     searching: 'Searching the web', delegating: 'Waiting on a subagent', working: 'Working',
 };
 
-const Transcript = ({blocks, pendingRequestId, working, expandAll = false, onRespond, drafts, codeBlock, attachments, rememberLabel, newSince}: TranscriptProps) => {
+const Transcript = ({blocks, pendingRequestId, working, expandAll = false, onRespond, drafts, subagents, codeBlock, attachments, rememberLabel, newSince}: TranscriptProps) => {
     // While a request waits, its card is the live part; otherwise the turn
     // gets a line saying what it does and for how long.
     const showWorking = working && !pendingRequestId;
     const todos = latestTodos(blocks);
 
     return (
-        <TranscriptHostProvider drafts={drafts} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel}>
+        <TranscriptHostProvider drafts={drafts} subagents={subagents} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel}>
             <Stack spacing={2.5}>
                 {todos && <Box sx={{position: 'sticky', top: 0, zIndex: 1}}><ChecklistCard todos={todos} working={working}/></Box>}
                 <BlockList anchored blocks={blocks} pendingRequestId={pendingRequestId} working={working} expandAll={expandAll} onRespond={onRespond} newFrom={firstNewBlock(blocks, newSince)}/>

@@ -46,6 +46,17 @@ describe('buildTranscript', () => {
         expect(blocks[0]).toMatchObject({steps: [{type: 'tool', name: 'Bash', result: 'ok'}]});
     });
 
+    it('leaves out steps of a call that is not loaded, and keeps output under a call that is not a subagent', () => {
+        const blocks = buildTranscript([
+            msg({role: 'user', content: 'go'}),
+            msg({kind: 'tool_use', content: 'Grep', request_id: 's9', parent: 'gone'}),
+            msg({kind: 'tool_use', content: 'Bash', request_id: 'b1'}),
+            msg({role: 'assistant', content: 'from under Bash', parent: 'b1'}),
+        ]);
+        expect(blocks.map((b) => b.type)).toEqual(['user', 'activity', 'assistant']);
+        expect(JSON.stringify(blocks)).not.toContain('s9');
+    });
+
     it('nests a subagent\'s own work under the Agent call and folds its task state', () => {
         const blocks = buildTranscript([
             msg({kind: 'tool_use', content: 'Read', request_id: 't0'}),
