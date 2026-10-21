@@ -129,6 +129,13 @@ func (s *Store) SetChannelBindingNewThread(id string, on bool) error {
 		Updates(map[string]any{"new_thread": on, "updated_at": time.Now()}).Error
 }
 
+// SetChannelBindingVerbose sets whether a chat hears each step of its
+// thread's turns (see ChannelBinding.Verbose).
+func (s *Store) SetChannelBindingVerbose(id string, on bool) error {
+	return s.db.Model(&ChannelBinding{}).Where("id = ?", id).
+		Updates(map[string]any{"verbose": on, "updated_at": time.Now()}).Error
+}
+
 // MoveChannelBindings moves every chat bound to one thread to another, and
 // reports how many moved.
 func (s *Store) MoveChannelBindings(fromThreadID, toThreadID string) (int64, error) {

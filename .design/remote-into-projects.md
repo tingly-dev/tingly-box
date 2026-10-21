@@ -120,6 +120,10 @@ Projects 是后端实验开关（`projects`）。合并后只留 `projects` 这�
    提问：一个问题时整条回复就是答案；多个问题时一行一个；数字取选项（多选用逗号），否则原话作答。
    有按钮的审批消息正文不带回复提示（按钮自明），但照样能回 `y`；按钮消息结束后照旧改写。线程汇报里的 “Needs you” 改为提示 `@N 回答`。
 ② **verbose 中间输出**：Relay 在 chat 开了 verbose 时，把线程的工具调用按 `stream.go` 的聚合规则发出去（复用 `remote/control/render`）。
+   **落地（第 2 期）**：开关存在绑定上（`ChannelBinding.Verbose`，默认关），`/verbose on|off` 设置，`/quiet` 等于 `/verbose off`，换线程（`/focus`）不变，解绑即清。
+   只发给绑在这个线程本身的 chat。每次工具调用发一条：前面那段话（如果有）+ `→ ` 加 `describeTool` 的一行（和审批同一种说法）；
+   最后一段话后面没有工具调用，就是回复，照旧由 `ThreadReply` 发给所有 chat，所以开 verbose 也不会重复。
+   没有复用 `remote/control/render`：Projects 不能 import 根模块，而且一行一条已经够读，以后真嫌吵再做聚合。
 ③ **附件**：IM 的图片和文件下载到文件夹后作为 `Send` 的附件。
 ④ **`/status`、`/resume`、`/yolo`、`/bash`、`/dir`、`/cd`** 改为作用在绑定上（`ChannelCommand` 加命令）。
 

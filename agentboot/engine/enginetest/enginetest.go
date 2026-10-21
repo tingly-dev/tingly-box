@@ -116,6 +116,11 @@ func (t *Turn) Say(text string, inputTokens, outputTokens int64) {
 	}})
 }
 
+// Use emits a tool call, as Claude Code reports one it makes.
+func (t *Turn) Use(id, tool string, input map[string]any) {
+	t.send(&claude.ToolUseMessage{Type: "tool_use", Name: tool, Input: input, ToolUseID: id})
+}
+
 // ErrNoAnswer is returned by Approve and Ask when the turn ended first.
 var ErrNoAnswer = errors.New("enginetest: the turn ended before an answer")
 

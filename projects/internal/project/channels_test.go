@@ -93,6 +93,7 @@ func channelFixtureWith(t *testing.T, script func(turn *enginetest.Turn) error) 
 	f.threads.OnWait = relay.NeedsUser
 	f.threads.OnSettled = relay.Settled
 	f.threads.OnReply = relay.ThreadReply
+	f.threads.OnStep = relay.Step
 	return f, &Service{Store: f.store, Layout: f.threads.layout, Hub: f.threads.hub, Threads: f.threads, Coordinator: coord, Relay: relay}, sink
 }
 
@@ -386,4 +387,58 @@ func TestArchivingAProjectUnbindsItsChats(t *testing.T) {
 // approvalEvent is a pending approval of `ls` as the transcript has it.
 func approvalEvent(requestID string) db.ThreadEvent {
 	return db.ThreadEvent{Kind: db.EvApproval, Content: "Run `ls`", Payload: `{"request_id":"` + requestID + `","tool":"Bash","state":"pending"}`}
+}
+
+func TestVerboseChatsSeeEachStepOthersOnlyTheReply(t *testing.T) {
+	f, svc, sink := channelFixtureWith(t, func(turn *enginetest.Turn) error {
+		turn.Say("Looking around.", 1, 1)
+		turn.Use("tu1", "Bash", map[string]any{"command": "ls"})
+		turn.Use("tu2", "Read", map[string]any{"file_path": "go.mod"})
+		turn.Say("done", 1, 1)
+		return nil
+	})
+	th := startWorker(t, f)
+	waitQuiet(t, f, svc, th.ID)
+	for _, chat := range []string{"loud", "quiet"} {
+		_, err := svc.BindChannel("telegram", chat, "", th.ID, "")
+		require.NoError(t, err)
+	}
+	handled, reply, err := svc.ChannelCommand("telegram", "loud", ChatVerbose, "on")
+	require.NoError(t, err)
+	require.True(t, handled)
+	assert.Contains(t, reply, "Verbose is on")
+
+	_, err = svc.Send(context.Background(), th.ID, "again", nil, Source{})
+	require.NoError(t, err)
+	byChat := map[string][]string{}
+	deadline := time.After(5 * time.Second)
+	for len(byChat["loud"]) < 3 || len(byChat["quiet"]) < 1 {
+		select {
+		case m := <-sink.ch:
+			byChat[m.chatID] = append(byChat[m.chatID], m.text)
+		case <-deadline:
+			t.Fatalf("got only %v", byChat)
+		}
+	}
+	sink.none(t)
+	tag := fmt.Sprintf("[#%d Worker] ", th.Seq)
+	assert.Equal(t, []string{
+		tag + "Looking around.\n→ Run `ls`",
+		tag + "→ Read: go.mod",
+		tag + "done",
+	}, byChat["loud"], "each tool call with what was said before it, then the reply once")
+	assert.Equal(t, []string{tag + "done"}, byChat["quiet"])
+
+	_, reply, err = svc.ChannelCommand("telegram", "loud", ChatVerbose, "")
+	require.NoError(t, err)
+	assert.Contains(t, reply, "Verbose is on")
+	_, reply, err = svc.ChannelCommand("telegram", "loud", ChatVerbose, "off")
+	require.NoError(t, err)
+	assert.Contains(t, reply, "Verbose is off")
+	b, err := f.store.GetChannelBinding("telegram", "loud")
+	require.NoError(t, err)
+	assert.False(t, b.Verbose)
+	_, reply, err = svc.ChannelCommand("telegram", "loud", ChatVerbose, "loud")
+	require.NoError(t, err)
+	assert.Equal(t, "Usage: /verbose on|off", reply)
 }

@@ -123,9 +123,9 @@ func (a *App) PostFromChannel(platform, chatID, text string) (handled bool, err 
 	return a.svc.PostFromChannel(platform, chatID, text)
 }
 
-// ChannelCommand runs a chat command ("new", "stop" or "clear") for a bound
-// IM chat; handled is false when the chat has no binding or the command is
-// not one of these. reply is what to tell the chat.
+// ChannelCommand runs a chat command ("new", "stop", "clear", "focus",
+// "back", "threads" or "verbose") for a bound IM chat; handled is false when
+// the chat has no binding or the command is not one of these. reply is what to tell the chat.
 func (a *App) ChannelCommand(platform, chatID, name, arg string) (handled bool, reply string, err error) {
 	return a.svc.ChannelCommand(platform, chatID, name, arg)
 }

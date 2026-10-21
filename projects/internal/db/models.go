@@ -222,6 +222,9 @@ type ChannelBinding struct {
 	// NewThread makes the chat's next message start a new thread in the
 	// folder of ThreadID instead of continuing it (/new in a folder chat).
 	NewThread bool `gorm:"not null;default:false" json:"-"`
+	// Verbose makes the chat also hear each step of its thread's turns (what
+	// it says between tool calls, and each call), not only the reply.
+	Verbose bool `gorm:"not null;default:false" json:"verbose"`
 	// ProjectID is the thread's project, filled in when read.
 	ProjectID string    `gorm:"->;-:migration" json:"project_id"`
 	CreatedAt time.Time `json:"created_at"`

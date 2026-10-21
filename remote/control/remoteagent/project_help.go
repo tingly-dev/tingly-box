@@ -28,6 +28,7 @@ func projectsHelp(hCtx HandlerContext) string {
 		"/new [message]: start a new session (in a folder)",
 		"/stop [#N]: stop the running turn",
 		"/clear: stop, and start a new session with the next message (in a folder)",
+		"/verbose on|off: also see each step a session takes, not only its reply",
 		"Bind or unbind this chat in Projects on the web.",
 		"",
 		"Your ID: " + hCtx.SenderID,

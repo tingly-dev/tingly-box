@@ -147,16 +147,19 @@ const (
 	ChatBack = "back"
 	// ChatThreads lists the project's threads.
 	ChatThreads = "threads"
+	// ChatVerbose turns on ("on") or off ("off") hearing each step of the
+	// thread's turns; with no arg it says which.
+	ChatVerbose = "verbose"
 )
 
 // ChannelCommand runs a chat command (ChatNew, ChatStop, ChatClear, ChatFocus,
-// ChatBack, ChatThreads) for a bound chat; arg is the text after it (for
+// ChatBack, ChatThreads, ChatVerbose) for a bound chat; arg is the text after it (for
 // ChatStop, an optional "#N" naming another thread of the project). handled is false when the chat has no
 // binding or the command is not one of these, and the caller carries on as
 // before. reply is what to tell the chat.
 func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bool, reply string, err error) {
 	switch name {
-	case ChatNew, ChatStop, ChatClear, ChatFocus, ChatBack, ChatThreads:
+	case ChatNew, ChatStop, ChatClear, ChatFocus, ChatBack, ChatThreads, ChatVerbose:
 	default:
 		return false, "", nil
 	}
@@ -166,6 +169,10 @@ func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bo
 			return false, "", nil
 		}
 		return false, "", err
+	}
+	if name == ChatVerbose {
+		reply, err := s.verbose(b, arg)
+		return true, reply, err
 	}
 	t, p, err := s.boundThread(b)
 	if err != nil {
@@ -265,6 +272,29 @@ func (s *Service) answerFromText(threadID, requestID, text string) (done bool, e
 		return true, err
 	}
 	return true, nil
+}
+
+// verbose sets or tells whether the chat hears each step of its thread.
+func (s *Service) verbose(b *db.ChannelBinding, arg string) (string, error) {
+	on := b.Verbose
+	switch strings.ToLower(strings.TrimSpace(arg)) {
+	case "":
+	case "on":
+		on = true
+	case "off":
+		on = false
+	default:
+		return "Usage: /verbose on|off", nil
+	}
+	if on != b.Verbose {
+		if err := s.Store.SetChannelBindingVerbose(b.ID, on); err != nil {
+			return "", err
+		}
+	}
+	if on {
+		return "Verbose is on: this chat sees each step a session takes, not only its reply. /verbose off to stop.", nil
+	}
+	return "Verbose is off: this chat sees each reply. /verbose on to also see each step.", nil
 }
 
 // AnswerFromChannel answers a thread's pending approval with the button a

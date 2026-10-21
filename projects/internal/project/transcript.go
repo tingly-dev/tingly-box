@@ -99,6 +99,9 @@ func (s threadStore) Append(sid string, e engine.Entry) {
 	}
 	ev.Parent = e.Parent
 	s.m.addEvent(t, ev)
+	if ev.Parent == "" && (ev.Kind == db.EvAssistant || ev.Kind == db.EvToolUse) && s.m.OnStep != nil {
+		s.m.OnStep(*t, *ev)
+	}
 }
 
 func (s threadStore) tally(id string, fn func(*turnTally)) {

@@ -181,18 +181,18 @@ func Test_BoundChatCommandsGoToItsProject(t *testing.T) {
 
 	chat := alice.OpenDM(harness.Setting.UUID)
 	router.bind(chat.ChatID)
-	for _, text := range []string{"/stop", "stop", "/clear", "/new", "/new fix the login bug", "/stop #2", "/focus 3", "/back", "/threads"} {
+	for _, text := range []string{"/stop", "stop", "/clear", "/new", "/new fix the login bug", "/stop #2", "/focus 3", "/back", "/threads", "/verbose on", "/quiet"} {
 		chat.Drain()
 		chat.SendText(text)
 		chat.WaitText(3*time.Second).AssertContains(t, "project did ")
 	}
-	assert.Equal(t, []string{"stop:", "stop:", "clear:", "new:", "new:fix the login bug", "stop:#2", "focus:3", "back:", "threads:"}, router.commands())
+	assert.Equal(t, []string{"stop:", "stop:", "clear:", "new:", "new:fix the login bug", "stop:#2", "focus:3", "back:", "threads:", "verbose:on", "verbose:off"}, router.commands())
 	assert.Empty(t, router.inbound(), "commands are not sent as messages")
 
 	chat.Drain()
 	chat.SendText("/help")
 	chat.WaitText(3*time.Second).AssertContains(t, "Your ID:")
-	assert.Len(t, router.commands(), 9, "other commands keep their meaning")
+	assert.Len(t, router.commands(), 11, "other commands keep their meaning")
 }
 
 // A press on a Projects prompt's button goes to the project with the chat it

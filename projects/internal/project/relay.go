@@ -19,7 +19,8 @@ import (
 // where the host can show them, ChannelPrompter, restated once the request is
 // settled wherever it was answered). Messages go out one at a time, in the order
 // they finished. Each starts with where it comes from: `[project name]` for a
-// project conversation, `[#N title]` for any other thread.
+// project conversation, `[#N title]` for any other thread. A chat that turned
+// on /verbose also hears each step of its own thread's turns (Step).
 type Relay struct {
 	store    *db.Store
 	sink     ChannelSink
@@ -35,6 +36,9 @@ type Relay struct {
 	// settled, oldest first, by chatKey: the chat's next message answers
 	// the first.
 	awaiting map[string][]pendingRequest
+	// steps holds, by thread, what the thread said last in its turn: a step
+	// once a tool call follows it, the reply (sent by ThreadReply) if not.
+	steps map[string]string
 }
 
 // pendingRequest is a request a chat was asked.
@@ -59,6 +63,8 @@ type relayJob struct {
 	// chats that can show them.
 	request *pendingRequest
 	prompt  *ChannelPrompt
+	// verbose sends it only to the chats that asked for each step.
+	verbose bool
 	// settle, when set, is a request id: the prompts sent for it are
 	// restated with text added, and nothing new is sent.
 	settle string
@@ -67,7 +73,7 @@ type relayJob struct {
 // NewRelay builds the relay; sink may be nil, which makes every call a no-op.
 func NewRelay(store *db.Store, sink ChannelSink) *Relay {
 	prompter, _ := sink.(ChannelPrompter)
-	return &Relay{store: store, sink: sink, prompter: prompter, sent: map[string][]sentPrompt{}, awaiting: map[string][]pendingRequest{}}
+	return &Relay{store: store, sink: sink, prompter: prompter, sent: map[string][]sentPrompt{}, awaiting: map[string][]pendingRequest{}, steps: map[string]string{}}
 }
 
 // Message relays a finished event of a main thread. User events, which the
@@ -100,6 +106,9 @@ func (r *Relay) ThreadReply(rep Report) {
 	if r == nil || r.sink == nil {
 		return
 	}
+	r.mu.Lock()
+	delete(r.steps, rep.Thread.ID)
+	r.mu.Unlock()
 	text := strings.TrimSpace(rep.Text)
 	if text == "" {
 		return
@@ -108,6 +117,35 @@ func (r *Relay) ThreadReply(rep Report) {
 		text = "Error: " + text
 	}
 	r.enqueue([]string{rep.Thread.ID}, threadTag(rep.Thread.Seq, rep.Thread.Title), text)
+}
+
+// Step relays a step of a thread's turn to the chats bound to that thread
+// that asked for every step (/verbose on): each tool call, with what the
+// thread said before it. Text a tool call does not follow is the turn's
+// reply, which ThreadReply sends to every chat.
+func (r *Relay) Step(t db.Thread, e db.ThreadEvent) {
+	if r == nil || r.sink == nil {
+		return
+	}
+	r.mu.Lock()
+	said := r.steps[t.ID]
+	switch e.Kind {
+	case db.EvAssistant:
+		r.steps[t.ID] = strings.TrimSpace(e.Content)
+	case db.EvToolUse:
+		delete(r.steps, t.ID)
+	}
+	r.mu.Unlock()
+	if e.Kind != db.EvToolUse {
+		return
+	}
+	var input map[string]any
+	_ = json.Unmarshal([]byte(e.Payload), &input)
+	text := "→ " + describeTool(e.Content, input)
+	if said != "" {
+		text = said + "\n" + text
+	}
+	r.enqueueJob(relayJob{threadIDs: []string{t.ID}, tag: threadTag(t.Seq, t.Title), text: text, verbose: true})
 }
 
 // NeedsUser asks the chats of a thread, and of its ancestors, to answer the
@@ -324,7 +362,13 @@ func (r *Relay) deliver(job relayJob) {
 		return
 	}
 	bindings, err := r.store.ListChannelBindingsOf(job.threadIDs)
-	if err != nil || len(bindings) == 0 {
+	if err != nil {
+		return
+	}
+	if job.verbose {
+		bindings = verboseOnly(bindings)
+	}
+	if len(bindings) == 0 {
 		return
 	}
 	tag := job.tag
@@ -352,6 +396,16 @@ func (r *Relay) deliver(job relayJob) {
 		}
 		cancel()
 	}
+}
+
+func verboseOnly(bindings []db.ChannelBinding) []db.ChannelBinding {
+	var out []db.ChannelBinding
+	for _, b := range bindings {
+		if b.Verbose {
+			out = append(out, b)
+		}
+	}
+	return out
 }
 
 // await records that a chat was asked a request, before the chat can see it,

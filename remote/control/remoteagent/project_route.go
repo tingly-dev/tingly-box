@@ -98,7 +98,11 @@ func projectCommand(text string) (name, arg string, ok bool) {
 		if rest == "" {
 			return strings.TrimPrefix(strings.ToLower(head), "/"), "", true
 		}
-	case "/focus", "/new":
+	case "/quiet", "/noverbose":
+		if rest == "" {
+			return "verbose", "off", true
+		}
+	case "/focus", "/new", "/verbose":
 		return strings.TrimPrefix(strings.ToLower(head), "/"), rest, true
 	}
 	return "", "", false

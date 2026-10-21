@@ -90,6 +90,9 @@ type Threads struct {
 	// its suggestion) or given up, with the event as it ends. It must not
 	// block.
 	OnSettled func(t db.Thread, request db.ThreadEvent)
+	// OnStep is called with each text and tool call of a thread's own turn
+	// (not a subagent's), as it is recorded. It must not block.
+	OnStep func(t db.Thread, e db.ThreadEvent)
 
 	mu sync.Mutex
 	// folders caches which projects are folders (a project's type never changes).
