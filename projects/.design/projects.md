@@ -131,7 +131,7 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 ### 4.6 实时
 `GET /api/v1/projects/:id/events`（SSE）：`message`（新增 / 更新，协调者流式文本）、`thread`（状态变化）、`thread_event`（线程过程新增）。前端进入项目页订阅，其余数据走 REST。
 
-`GET /api/v1/projects/events`（全部项目，不含流式文本和 `thread_event`）驱动侧栏和文件夹页共用的项目列表。`thread` 事件带上该项目变化后的线程计数（`threads`），列表据此就地更新那一行；`project` 事件就地合并（归档即移除）。只有遇到列表里没有的项目、流重连、标签页回到前台、页面报告变化时才重新拉 `GET /projects`，另有 5 分钟的兜底轮询（#2182：原来每个线程状态变化都全量拉一次列表）。事件流不受服务器 `WriteTimeout` 限制，否则每 10 分钟断开一次，每个打开的页面重连后全量重拉。
+`GET /api/v1/projects/events`（全部项目，不含流式文本和 `thread_event`）驱动侧栏和文件夹页共用的项目列表。`thread` 事件带上该项目变化后的线程计数（`threads`），列表据此就地更新那一行；`project` 事件就地合并（归档即移除）。只有遇到列表里没有的项目、流重连、标签页回到前台、页面报告变化时才重新拉 `GET /projects`，另有 5 分钟的兜底轮询。事件流不受服务器 `WriteTimeout` 限制。原因、不变量和被否决的做法见 `live-updates.md`。
 
 ### 4.7 Review 与合并（本地版 PR）
 - `GET /projects/:id/threads/:tid/diff`：`git diff <base>...<branch>`（+ 未提交改动提示）。
