@@ -137,6 +137,21 @@ func (a *App) AnswerFromChannel(platform, chatID, threadID, requestID, value str
 	return a.svc.AnswerFromChannel(platform, chatID, threadID, requestID, value)
 }
 
+// ChannelTarget is a project or folder an IM chat may be connected to.
+type ChannelTarget = project.ChannelTarget
+
+// ChannelTargets lists the projects and folders an IM chat may be connected
+// to, starred and recent first.
+func (a *App) ChannelTargets() ([]ChannelTarget, error) {
+	return a.svc.ChannelTargets()
+}
+
+// ConnectChannel binds an IM chat to the project or folder it picked; reply
+// is what to tell the chat.
+func (a *App) ConnectChannel(platform, chatID, projectID string) (reply string, err error) {
+	return a.svc.ConnectChannel(platform, chatID, projectID)
+}
+
 // ChannelBound reports whether an IM chat is bound to a thread.
 func (a *App) ChannelBound(platform, chatID string) bool {
 	b, err := a.store.GetChannelBinding(platform, chatID)

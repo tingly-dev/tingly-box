@@ -38,6 +38,36 @@ type fakeRouter struct {
 	got     []remoteagent.ProjectInbound
 	cmds    []string
 	answers []string
+	// on is Projects switched on; connected records /connect picks.
+	on        bool
+	connected []string
+}
+
+func (f *fakeRouter) Enabled() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.on
+}
+
+func (f *fakeRouter) Targets(context.Context) ([]remoteagent.ProjectTarget, error) {
+	return []remoteagent.ProjectTarget{
+		{ID: "p1", Name: "Billing"},
+		{ID: "f1", Name: "app", Folder: true, Path: "/srv/app"},
+	}, nil
+}
+
+func (f *fakeRouter) Connect(_ context.Context, in remoteagent.ProjectInbound, projectID string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.connected = append(f.connected, in.ChatID+":"+projectID)
+	f.bound[in.ChatID] = true
+	return "connected to " + projectID, nil
+}
+
+func (f *fakeRouter) connections() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.connected...)
 }
 
 func (f *fakeRouter) bind(chatID string) {
@@ -214,4 +244,53 @@ func Test_ProjectPromptButtonsGoToTheProject(t *testing.T) {
 	router.setErr(errors.New("this chat is not bound to that thread"))
 	chat.SendCallback("m1", remoteagent.ProjectAnswerPayload+":t2:r2:deny")
 	chat.WaitText(3*time.Second).AssertContains(t, "Could not answer").AssertContains(t, "not bound")
+}
+
+// With Projects on, /connect offers the projects and folders; a press binds
+// the chat, which then talks to the project and gets the Projects /help. A
+// chat that never connects keeps @cc / @tb.
+func Test_ConnectBindsAChatFromTheChat(t *testing.T) {
+	env, harness, alice := bootHelperNotStarted(t)
+	router := &fakeRouter{bound: map[string]bool{}, on: true}
+	harness.Handler.SetProjectRouter(router)
+	require.NoError(t, env.Manager().Start(env.Context()))
+
+	free := alice.OpenDM(harness.Setting.UUID)
+	free.SendText("/help")
+	free.WaitText(3*time.Second).AssertContains(t, "@cc")
+
+	chat := alice.OpenDM(harness.Setting.UUID)
+	chat.SendText("/connect")
+	picker := chat.WaitText(3 * time.Second)
+	picker.AssertHasButton(t, "Project: Billing").AssertHasButton(t, "Folder: /srv/app")
+	b, _ := picker.ButtonByLabel("Project: Billing")
+	b.Click()
+	chat.WaitText(3*time.Second).AssertContains(t, "connected to p1")
+	assert.Equal(t, []string{chat.ChatID + ":p1"}, router.connections())
+
+	chat.Drain()
+	chat.SendText("/help")
+	chat.WaitText(3*time.Second).AssertContains(t, "/threads").AssertContains(t, "/connect")
+	chat.SendText("hello")
+	require.Eventually(t, func() bool { return len(router.inbound()) == 1 }, 3*time.Second, 10*time.Millisecond)
+
+	// /connect N picks from the same list, for platforms without buttons.
+	chat.Drain()
+	chat.SendText("/connect 2")
+	chat.WaitText(3*time.Second).AssertContains(t, "connected to f1")
+	chat.SendText("/connect 9")
+	chat.WaitText(3*time.Second).AssertContains(t, "has 2 entries")
+}
+
+// With Projects off, /connect is not a command of this bot.
+func Test_ConnectNeedsProjects(t *testing.T) {
+	env, harness, alice := bootHelperNotStarted(t)
+	router := &fakeRouter{bound: map[string]bool{}}
+	harness.Handler.SetProjectRouter(router)
+	require.NoError(t, env.Manager().Start(env.Context()))
+
+	chat := alice.OpenDM(harness.Setting.UUID)
+	chat.SendText("/connect")
+	chat.WaitAnySend(3 * time.Second)
+	assert.Empty(t, router.connections())
 }

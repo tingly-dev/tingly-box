@@ -38,6 +38,10 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, botUUID, chatID string, 
 		// A button of a Projects thread's approval or question.
 		h.routeProjectAnswer(hCtx, payload.Arg(1), payload.Arg(2), payload.Arg(3))
 
+	case ProjectConnectPayload:
+		// A button of the project picker an unbound chat was sent.
+		h.connectProject(hCtx, payload.Arg(1))
+
 	case "perm":
 		// Handle permission request response
 		h.handlePermissionCallback(hCtx, payload)

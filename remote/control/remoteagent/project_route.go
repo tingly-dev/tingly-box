@@ -32,6 +32,14 @@ type ProjectRouter interface {
 	// id, choice). reply, when set, is what to tell the chat; the prompt
 	// itself is restated by the project.
 	RouteAnswer(ctx context.Context, in ProjectInbound, threadID, requestID, choice string) (reply string, err error)
+
+	// Enabled reports whether Projects is on: then any chat may /connect.
+	Enabled() bool
+	// Targets lists the projects and folders a chat may be connected to.
+	Targets(ctx context.Context) ([]ProjectTarget, error)
+	// Connect binds a chat to a project or folder it picked; reply is what
+	// to tell the chat.
+	Connect(ctx context.Context, in ProjectInbound, projectID string) (reply string, err error)
 }
 
 // ProjectAnswerPayload names the callbacks of a Projects prompt's buttons.

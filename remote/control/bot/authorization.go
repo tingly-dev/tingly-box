@@ -43,7 +43,17 @@ func inboundAction(msg imbot.Message, pendingCapability access.CapabilityName, p
 	if msg.IsMediaContent() {
 		return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
 	}
+	// "pjc" connects the chat to a Projects project or folder (/connect):
+	// like /cd, it changes where the chat works.
+	if msg.IsCallback() && msg.Payload.Name() == "pjc" {
+		return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
+	}
 	text := strings.ToLower(strings.TrimSpace(msg.GetText()))
+	// "/connect N" binds the chat to a Projects project or folder; a bare
+	// /connect only lists them.
+	if strings.HasPrefix(text, "/connect ") {
+		return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
+	}
 	for _, prefix := range []string{"/cd", "/bind-project", "/project switch", "/shell", "/bash"} {
 		if text == prefix || strings.HasPrefix(text, prefix+" ") {
 			return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged

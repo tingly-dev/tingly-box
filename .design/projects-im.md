@@ -1,8 +1,8 @@
 # IM 聊天并入 Projects
 
 > 状态：部分实施（TEP #2143）。M1（#2147）和统一模型（#2151、#2154）已落地：chat 绑到线程（项目对话或文件夹里的线程），
-> 消息走 Web 同一条路径，回复和线程汇报发回 chat。M2b 起（`/new`、`/stop`、IM 里审批、点名线程、下线旧路径、路由）仍是提案，
-> 见“里程碑”。承接 [projects-desk-absorption.md](./projects-desk-absorption.md)：Desk 已并入，
+> 消息走 Web 同一条路径，回复和线程汇报发回 chat。M2b–M5（`/new`、`/stop`、IM 里审批、点名线程、`/connect`）已落地；
+> 旧的 `@cc` / `@tb` 路径保留给没绑定的 chat（决定 3 已修改）；M6 路由仍是提案，见“里程碑”。承接 [projects-desk-absorption.md](./projects-desk-absorption.md)：Desk 已并入，
 > 这里把 Remote 的 IM 聊天（`@cc`）也并进来，并**重新打开**那篇 Decisions §1“`@cc` 不共享、不导入”。
 > 图见 [projects-im.pencil.md](./projects-im.pencil.md)（其中按 `target_kind`/`workdir_id`/`focus_thread_id` 画的图已被取代）。
 >
@@ -15,7 +15,10 @@
    不再有第二个会话存储。
 2. **IM chat 绑定一个落点**：Project（对话对象是 coordinator）或 working folder（对话对象是那个文件夹里的会话，
    即今天的 `@cc`）。绑定属于 chat，不属于会话；换绑要显式，旧线程保留。
-3. **取消 `@tb` / SmartGuide**。没绑定落点的 chat，说话的对象就是 coordinator，由它帮用户选落点。
+3. ~~**取消 `@tb` / SmartGuide**。没绑定落点的 chat，说话的对象就是 coordinator，由它帮用户选落点。~~
+   **改为（2026-10-21，YZ）**：Remote 与 Projects 仍是两个功能。没绑定到 Projects 的 chat 照旧走 `@cc` / `@tb`；
+   Remote 页面、SmartGuide、`remote/session` 保留，bot 仍在 Remote 里配置（没开 Remote 就没有 IM）。
+   chat 想进 Projects 时用 `/connect` 自己绑定（见“M5 的落地”）。下面第 5 条同样作废。
    以后 `@xxx` 让 coordinator 决定用哪个模型、profile、agent 去跟进（建立在 `Launcher` 和 `Thread.Model` 上），
    第一期只做“提示用户选”。
 4. **Web 与 IM 可同时操作同一线程**：一个线程一个进程，审批和排队统一。
@@ -140,7 +143,7 @@ project 绑定的 chat 默认在跟 coordinator 说话；要对某个线程说�
 | **M2b 文件夹绑定** | 绑定已是 `thread_id`；`/new`、`/stop`；已绑定 chat 的斜杠命令不再落到旧 `@cc` | 同 M1 | 已实施（见下“M2b 的落地”） |
 | **M3 审批与提问进 IM** | 线程审批/提问发到所有绑定的 chat，按钮，先答为准，另一边改写为“已处理” | 没有按钮的平台用文字回答 | 已实施（见下“M3 的落地”） |
 | **M4 点名线程** | `Thread.Seq`、`@N`、引用回复、`/threads`、`/focus` | 引用回复 | 已实施（见下“M4 的落地”），引用回复未做 |
-| **M5 收尾** | 未绑定走 coordinator；删 SmartGuide、Remote 页面、`remote/session`；旧绑定转换 | | |
+| **M5 收尾** | ~~未绑定走 coordinator；删 SmartGuide、Remote 页面、`remote/session`；旧绑定转换~~ 改为：chat 里 `/connect` 绑定；已绑定 chat 的 `/help` 只列 Projects 命令 | 下线旧路径（保留，见决定 3） | 已实施（见下“M5 的落地”） |
 | **M6 coordinator 路由** | `@opus`/`@codex` 决定模型、profile、agent | | |
 
 优先级：M1 > M2 > M3 > M4 > M5 > M6。M1 是验证“IM 与项目对话合一”的最小闭环；M2 让旧 `@cc` 用户有地方迁；
@@ -171,7 +174,7 @@ M3 之前，需要审批的线程在 IM 里只有提示，靠 Web 处理，这�
 - **项目对话的 chat**：协调者不能被停止，也不由 chat 开线程；`/stop`、`/clear`、`/new` 回一句说明，不做任何事。
   子线程的 chat（只能经 API 绑）`/stop` 停它，`/new`、`/clear` 说明只对文件夹有效。
 - **回复**：命令的结果（`Stopped [#2 …].`、`Started [#3 …] in billing.`）由 handler 直接回给 chat；之后线程的回复照常经 Relay。
-- **没做**：`/help` 在已绑定的 chat 里还列旧命令（M5 下线旧路径时一起改）；`/stop #N` 点名停止属于 M4。
+- **没做**：`/help` 在已绑定的 chat 里还列旧命令（M5 已改）；`/stop #N` 点名停止属于 M4。
 
 ## M3 的落地
 
@@ -206,10 +209,22 @@ M3 之前，需要审批的线程在 IM 里只有提示，靠 Web 处理，这�
 - **没做**：引用回复。要知道被引用的消息来自哪个线程，Relay 得记下每条发出消息的平台 id；今天 `ChannelSink.SendChannelText` 不返回 id，
   而 `@N` 已经覆盖同样的需要，所以先不做。
 
+## M5 的落地
+
+- **不下线旧路径**（决定 3 的修改）：没绑定的 chat 一切照旧，Projects 只接管绑定了的 chat。
+- **`/connect`**：Projects 开着时，任何 chat 发 `/connect` 得到项目和文件夹的列表（未归档，加星和最近的在前，最多 10 个）；
+  有按钮的平台每项一个按钮（负载 `pjc, 项目 id`），没有按钮的平台是编号列表，回 `/connect N`。选项目绑到项目对话；
+  选文件夹绑到它最近的线程并置 `new_thread`，下一条消息开新会话（同 `/new`），而不是接着别人的会话说。
+  还没有任何线程的文件夹不列出（绑定总是指向线程）。已绑定的 chat 也可以 `/connect` 换绑。
+  授权上，`/connect N` 和按钮与 `/cd` 一样要求 `remote_control.privileged`；只列出不需要。
+  名字不用 `/project`：那是 `@cc` 列最近目录的旧命令，两者同名会混。
+- **`/help`**：已绑定的 chat 里列 Projects 的命令（`@N`、`/threads`、`/focus`、`/back`、`/new`、`/stop`、`/clear`、`/connect`）
+  和 Your ID / Chat ID；没绑定的 chat 仍是旧帮助。
+- **Projects 关闭时**：`/connect` 不存在，`/help` 照旧。
+
 ## 待定
 
-- **旧数据**：已有 chat 的 `ProjectPath` 可一次性转成 workdir 绑定（路径即 working folder）；
-  旧 `remote/session` 历史是导入还是丢弃。倾向：绑定转换，历史不导入（Desk 切换时同样没有导入）。
+- **旧数据**：旧路径保留后不再需要转换；`@cc` 的 `ProjectPath` 和 `remote/session` 照旧归 Remote。
 - **群聊**（TEP-487）：一个群一条绑定，谁能操作沿用现在的白名单；群里的审批由谁回答没有定。
 - **独立版 Projects 是否带 IM**：现在倾向不带，只留表和接口。
 - **离线 chat 的出站**：chat 失去 `ContextToken`（微信）时，线程的通知如何降级。
