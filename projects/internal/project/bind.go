@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
@@ -92,6 +91,13 @@ func (s *Service) PostFromChannel(platform, chatID, text string) (handled bool, 
 		}
 		_, err = s.Send(context.Background(), target.ID, rest, nil, src)
 		return true, err
+	}
+	// A chat that was asked something answers it with its next message
+	// (other than an @N one).
+	if threadID, requestID, ok := s.Relay.Awaiting(platform, chatID); ok {
+		if done, err := s.answerFromText(threadID, requestID, text); done {
+			return true, err
+		}
 	}
 	if p.Type == db.ProjectFolder && (b.NewThread || t.Status == db.ThreadResolved) {
 		_, err = s.startFromChannel(b, t, text, src)
@@ -232,8 +238,37 @@ func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bo
 	}
 }
 
-// AnswerFromChannel answers a thread's pending approval or question with the
-// button a chat pressed (a ChannelChoice value). The chat must be bound to
+// answerFromText answers a request a chat was asked with the chat's reply
+// (chat_answer.go). done is false when the request is no longer waiting, and
+// the message is then an ordinary one.
+func (s *Service) answerFromText(threadID, requestID, text string) (done bool, err error) {
+	ev, ok := s.Threads.PendingRequest(threadID, requestID)
+	if !ok {
+		s.Relay.forget(requestID)
+		return false, nil
+	}
+	var ans Answer
+	switch ev.Kind {
+	case db.EvApproval:
+		ans = approvalReply(text)
+	case db.EvAsk:
+		var p requestPayload
+		_ = json.Unmarshal([]byte(ev.Payload), &p)
+		ans = askReply(askItems(p.Input, ev.Content), text)
+	default:
+		return false, nil
+	}
+	if err := s.Threads.Respond(threadID, requestID, ans); err != nil {
+		if errors.Is(err, ErrNoPrompt) {
+			return false, nil
+		}
+		return true, err
+	}
+	return true, nil
+}
+
+// AnswerFromChannel answers a thread's pending approval with the button a
+// chat pressed (a ChannelChoice value). The chat must be bound to
 // the thread or to one of its ancestors, the chats the request was sent to.
 // reply is what to tell the chat when there is nothing to answer any more;
 // on success the prompt is restated through the Relay instead.
@@ -267,15 +302,6 @@ func (s *Service) AnswerFromChannel(platform, chatID, threadID, requestID, value
 	case value == ChoiceAllowThread && ev.Kind == db.EvApproval:
 		ans.Allow, ans.Scope = true, "thread"
 	case value == ChoiceDeny && ev.Kind == db.EvApproval:
-	case strings.HasPrefix(value, "o") && ev.Kind == db.EvAsk:
-		var p requestPayload
-		_ = json.Unmarshal([]byte(ev.Payload), &p)
-		q, ok := singleChoice(p.Input)
-		i, err := strconv.Atoi(strings.TrimPrefix(value, "o"))
-		if !ok || err != nil || i < 0 || i >= len(q.options) {
-			return "", fmt.Errorf("unknown choice %q", value)
-		}
-		ans.Allow, ans.Answers = true, map[string]string{q.question: q.options[i].label}
 	default:
 		return "", fmt.Errorf("unknown choice %q", value)
 	}

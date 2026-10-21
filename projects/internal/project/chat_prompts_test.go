@@ -185,7 +185,7 @@ func TestOnlyChatsOfTheThreadOrItsAncestorsMayAnswer(t *testing.T) {
 	require.NoError(t, f.threads.Respond(th.ID, "req-1", Answer{Allow: true}))
 }
 
-func TestAQuestionIsAnsweredWithAnOption(t *testing.T) {
+func TestAQuestionIsAnsweredByReplying(t *testing.T) {
 	f, svc, sink := promptFixture(t, func(turn *enginetest.Turn) error {
 		if !strings.Contains(turn.Prompt, "pick") {
 			turn.Say("ok", 1, 1)
@@ -209,26 +209,77 @@ func TestAQuestionIsAnsweredWithAnOption(t *testing.T) {
 	_, err = svc.BindChannel("telegram", "own", "", th.ID, "")
 	require.NoError(t, err)
 
-	p := sink.nextPrompt(t).p
-	assert.Equal(t, "[#1 DB] Which database?\n- Postgres: for production", p.Text)
-	assert.Equal(t, []ChannelChoice{{Value: "o0", Label: "Postgres"}, {Value: "o1", Label: "SQLite"}}, p.Choices)
+	asked := sink.next(t)
+	assert.Equal(t, "[#1 DB] Which database?\n  1. Postgres: for production\n  2. SQLite\nReply with a number or your own answer.", asked.text,
+		"a question has no buttons, even where the chat could show them")
 
-	_, err = svc.AnswerFromChannel("telegram", "own", th.ID, "q-1", "o1")
+	handled, err := svc.PostFromChannel("telegram", "own", "2")
 	require.NoError(t, err)
-	assert.True(t, strings.HasSuffix(sink.nextRestate(t).text, "Answered in a chat: SQLite"))
+	require.True(t, handled)
 	assert.Equal(t, "[#1 DB] chose SQLite", sink.next(t).text)
+	_, _, waiting := svc.Relay.Awaiting("telegram", "own")
+	assert.False(t, waiting, "answered: the next message is a message again")
 }
 
-func TestAChatWithoutButtonsGetsTheLine(t *testing.T) {
+func TestAChatWithoutButtonsAnswersAnApprovalByReplying(t *testing.T) {
 	f, svc, sink := promptFixture(t, approveScript)
 	sink.plain["own"] = true
-	th := startDeploy(t, f, svc)
+	startDeploy(t, f, svc)
 	assert.Equal(t, "up", sink.nextPrompt(t).chatID)
-	line := sink.next(t)
-	assert.Equal(t, "own", line.chatID)
-	assert.Equal(t, "[#1 Ship] Needs you: Run `make deploy`. Open Projects in the web UI to answer.", line.text)
-	require.NoError(t, f.threads.Respond(th.ID, "req-1", Answer{Allow: true}))
+	asked := sink.next(t)
+	assert.Equal(t, "own", asked.chatID)
+	assert.Equal(t, "[#1 Ship] Approve: Run `make deploy`\nReply y to allow, always to allow it for this thread, n to deny, or say what to do instead.", asked.text)
+
+	handled, err := svc.PostFromChannel("telegram", "own", "y")
+	require.NoError(t, err)
+	require.True(t, handled)
 	assert.Equal(t, "up", sink.nextRestate(t).chatID, "only prompts with buttons are restated")
+	assert.Equal(t, "[#1 Ship] deployed", sink.next(t).text)
+}
+
+func TestOtherWordsDenyAnApprovalAndSayWhy(t *testing.T) {
+	var reason string
+	f, svc, sink := promptFixture(t, func(turn *enginetest.Turn) error {
+		if !strings.Contains(turn.Prompt, "deploy") {
+			turn.Say("ok", 1, 1)
+			return nil
+		}
+		resp, err := turn.Approve("req-1", "Bash", map[string]any{"command": "make deploy"})
+		if err != nil {
+			return err
+		}
+		reason = resp.Reason
+		turn.Say("stopped", 1, 1)
+		return nil
+	})
+	startDeploy(t, f, svc)
+	sink.nextPrompt(t)
+	sink.nextPrompt(t)
+	handled, err := svc.PostFromChannel("telegram", "own", "not on a Friday")
+	require.NoError(t, err)
+	require.True(t, handled)
+	assert.Equal(t, "[#1 Ship] stopped", sink.next(t).text)
+	assert.Contains(t, reason, "not on a Friday")
+}
+
+func TestRepliesReadNumbersLinesAndWords(t *testing.T) {
+	qs := askItems(map[string]any{"questions": []any{
+		map[string]any{"question": "DB?", "options": []any{map[string]any{"label": "Postgres"}, map[string]any{"label": "SQLite"}}},
+		map[string]any{"question": "Extras?", "multiSelect": true, "options": []any{map[string]any{"label": "Cache"}, map[string]any{"label": "Queue"}, map[string]any{"label": "Search"}}},
+	}}, "")
+	ans := askReply(qs, "2\n1, 3")
+	assert.Equal(t, map[string]string{"DB?": "SQLite", "Extras?": "Cache, Search"}, ans.Answers)
+	ans = askReply(qs, "whatever is cheapest")
+	assert.Equal(t, "whatever is cheapest", ans.Answer, "not one line per question: it answers the first")
+	assert.Equal(t, "1 3", pickOptions(qs[0], "1 3"), "several numbers for a single choice are words")
+	assert.Equal(t, "9", pickOptions(qs[0], "9"))
+
+	assert.True(t, approvalReply("Y").Allow)
+	assert.Equal(t, "thread", approvalReply("always").Scope)
+	assert.False(t, approvalReply("n").Allow)
+	deny := approvalReply("use staging")
+	assert.False(t, deny.Allow)
+	assert.Equal(t, "use staging", deny.Answer)
 }
 
 func TestAStoppedTurnRestatesItsPrompts(t *testing.T) {

@@ -16,11 +16,11 @@ type ChannelSink interface {
 }
 
 // ChannelPrompter is an optional ChannelSink capability: a message with
-// buttons that answer a thread's approval or question, and a way to restate
-// it once the request is settled. A press comes back to Service.AnswerFromChannel
+// buttons that answer a thread's permission approval, and a way to restate it
+// once the request is settled. A press comes back to Service.AnswerFromChannel
 // with the prompt's thread and request and the chosen value. Hosts without it,
-// and chats whose platform has no buttons (ErrNoButtons), get one line of text
-// pointing to the web instead.
+// and chats whose platform has no buttons (ErrNoButtons), get the approval as
+// text to answer by replying, as every question is.
 type ChannelPrompter interface {
 	// SendChannelPrompt sends p to a chat and returns a reference to the
 	// message for RestateChannelPrompt.
@@ -34,7 +34,7 @@ type ChannelPrompter interface {
 // buttons.
 var ErrNoButtons = errors.New("this chat cannot show buttons")
 
-// ChannelPrompt is an approval or a question as a chat shows it.
+// ChannelPrompt is an approval as a chat shows it with buttons.
 type ChannelPrompt struct {
 	ThreadID  string
 	RequestID string
@@ -49,7 +49,7 @@ type ChannelChoice struct {
 	Label string
 }
 
-// Values of the buttons of an approval; a question's options are "o0", "o1", ...
+// Values of the buttons of an approval (questions are answered by replying).
 const (
 	ChoiceAllow       = "allow"
 	ChoiceAllowThread = "always"
@@ -60,11 +60,5 @@ const (
 const (
 	// relayLineMax caps a folded thread report, which is one line in a chat.
 	relayLineMax = 240
-	// relayNeedsUserEvery is how often a thread may ping the same chats for
-	// "needs you"; a run of approvals in one thread is one nudge.
-	relayNeedsUserEvery = 5 * time.Minute
-	relaySendTimeout    = 30 * time.Second
-	// relayChoicesMax is the most options a question may have to be asked
-	// with buttons; a longer one points to the web.
-	relayChoicesMax = 8
+	relaySendTimeout = 30 * time.Second
 )

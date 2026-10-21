@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -214,7 +213,7 @@ func TestThreadReportsAreFoldedToOneLine(t *testing.T) {
 	svc.Relay.Message(update(ReportNeedsInput, "Keep the legacy flag?"))
 	got := sink.next(t).text
 	assert.True(t, strings.HasPrefix(got, `[#2 Fix login] Needs you: Keep the legacy flag?`), got)
-	assert.Contains(t, got, "web UI")
+	assert.Contains(t, got, "Reply with @2 and your answer.", "a thread waiting on the user is answered with @N")
 
 	long := strings.Repeat("x", 1000)
 	svc.Relay.Message(update(ReportFinished, long))
@@ -230,27 +229,25 @@ func TestThreadReportsAreFoldedToOneLine(t *testing.T) {
 	assert.Equal(t, "[Demo] Error: coordinator unavailable", sink.next(t).text)
 }
 
-func TestApprovalsAndAsksSendOneLineAndOnlyOnce(t *testing.T) {
+func TestEveryApprovalIsAskedInTheChat(t *testing.T) {
 	f, svc, sink := channelFixture(t)
 	_, err := svc.BindChannel("telegram", "1", "", "", f.project.ID)
 	require.NoError(t, err)
-	// The relay reads the clock on its own goroutine.
-	var clock atomic.Int64
-	clock.Store(time.Now().UnixNano())
-	svc.Relay.now = func() time.Time { return time.Unix(0, clock.Load()) }
 
 	worker := &db.Thread{ProjectID: f.project.ID, ParentID: f.project.MainThreadID, Title: "Fix login"}
 	require.NoError(t, f.store.CreateThread(worker))
 	th := *worker
 	svc.Relay.NeedsUser(th, approvalEvent("r1"))
-	assert.Equal(t, fmt.Sprintf("[#%d Fix login] Needs you: Run `ls`. Open Projects in the web UI to answer.", th.Seq), sink.next(t).text)
-
-	svc.Relay.NeedsUser(th, approvalEvent("r2")) // the next approval of the same thread, right after
-	sink.none(t)
-
-	clock.Add(int64(relayNeedsUserEvery + time.Second))
-	svc.Relay.NeedsUser(th, approvalEvent("r3"))
+	assert.Equal(t, fmt.Sprintf("[#%d Fix login] Approve: Run `ls`\nReply y to allow, always to allow it for this thread, n to deny, or say what to do instead.", th.Seq), sink.next(t).text)
+	svc.Relay.NeedsUser(th, approvalEvent("r2")) // each one needs its answer
 	sink.next(t)
+	threadID, requestID, ok := svc.Relay.Awaiting("telegram", "1")
+	require.True(t, ok)
+	assert.Equal(t, [2]string{th.ID, "r1"}, [2]string{threadID, requestID}, "the oldest is answered first")
+
+	// A request without an id cannot be answered from a chat.
+	svc.Relay.NeedsUser(th, db.ThreadEvent{Kind: db.EvApproval, Content: "Run `ls`"})
+	assert.Contains(t, sink.next(t).text, "Open Projects in the web UI to answer.")
 
 	// A folder thread nobody bound hears nothing, whoever is bound elsewhere.
 	folderThread := &db.Thread{ProjectID: mkProject(t, f.store, &db.Project{Name: "F"}).ID, Title: "folder"}
@@ -384,21 +381,6 @@ func TestArchivingAProjectUnbindsItsChats(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, left, "unarchiving does not bind chats again")
 	sink.none(t)
-}
-
-func TestNeedsUserDoesNotGrowWithoutBound(t *testing.T) {
-	_, svc, _ := channelFixture(t)
-	now := time.Now()
-	svc.Relay.now = func() time.Time { return now }
-	for _, id := range []string{"a", "b", "c"} {
-		assert.True(t, svc.Relay.nudge(id, "telegram", "1"))
-	}
-	assert.False(t, svc.Relay.nudge("a", "telegram", "1"), "the same thread and chat, right after")
-	now = now.Add(relayNeedsUserEvery + time.Second)
-	assert.True(t, svc.Relay.nudge("d", "telegram", "1"))
-	svc.Relay.mu.Lock()
-	defer svc.Relay.mu.Unlock()
-	assert.Len(t, svc.Relay.notified, 1, "entries past the window are dropped")
 }
 
 // approvalEvent is a pending approval of `ls` as the transcript has it.
