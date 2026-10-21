@@ -286,7 +286,7 @@ export default {
     },
     "experimentalFeatures": {
       "projects": "Projects",
-      "enableProjects": "Hand a project its work as it comes up, or run Claude Code in a folder you choose: a coordinator runs each project task as a thread in its own git worktree.",
+      "enableProjects": "Hand a project its work as it comes up, or run Claude Code in a folder you choose: a coordinator runs each project task as a thread in its own git worktree. Your IM chats talk to Claude Code here too (Remote).",
       "projectsEnabledInfo": "Anyone who can sign in to this tingly-box can now run Claude Code on this machine, in the folders and repositories they choose, and approve the tool calls it makes.",
       "title": "Experimental Features",
       "description": "These experimental features apply globally to all scenarios. Individual scenarios can override these settings.",

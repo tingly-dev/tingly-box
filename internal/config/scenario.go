@@ -130,6 +130,19 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 	}
 }
 
+// HasScenarioFlag reports whether an extension flag was ever set for the
+// scenario, on or off (GetScenarioFlag reads an unset flag as off).
+func (c *Config) HasScenarioFlag(scenario typ.RuleScenario, flagName string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	config := c.scenarioConfigLocked(scenario)
+	if config == nil || config.Extensions == nil {
+		return false
+	}
+	_, ok := config.Extensions[flagName].(bool)
+	return ok
+}
+
 // findOrCreateScenarioConfigLocked returns the scenario config to mutate for a
 // Set*Flag call. If an exact-match entry doesn't exist yet, seeds a new one:
 // for a profiled scenario (e.g. "claude_code:p1") it copies Flags/Extensions

@@ -81,6 +81,16 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 		return false, err
 	}
 	src := Source{Kind: db.SourceIM, Platform: platform, ChatID: chatID}
+	// A chat that moved to a folder, or talks for the first time, starts a
+	// thread there with this message.
+	if b.Folder != "" {
+		atts, err := s.adoptChannelFiles(DraftOwner, files)
+		if err != nil {
+			return true, err
+		}
+		_, err = s.startInChannelFolder(b, text, atts, src)
+		return true, err
+	}
 	t, p, err := s.boundThread(b)
 	if err != nil {
 		return true, err
@@ -110,7 +120,7 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 		if err != nil {
 			return true, err
 		}
-		_, err = s.startFromChannel(b, t, text, atts, src)
+		_, err = s.startFromChannel(b, t, t.ProjectID, text, atts, src)
 		return true, err
 	}
 	atts, err := s.adoptChannelFiles(UploadOwner(p, t), files)
@@ -171,13 +181,29 @@ func (s *Service) boundThread(b *db.ChannelBinding) (*db.Thread, *db.Project, er
 	return t, p, nil
 }
 
-// startFromChannel starts a thread in the folder of prev, with prev's model,
-// profile and permission mode, and moves the chat to it.
-func (s *Service) startFromChannel(b *db.ChannelBinding, prev *db.Thread, task string, atts []Attachment, src Source) (*db.Thread, error) {
-	t, err := s.Threads.StartFolderThread(FolderThreadSpec{
-		ProjectID: prev.ProjectID, Task: task, Source: src, Attachments: atts,
-		Model: prev.Model, PermissionMode: prev.PermissionMode, Profile: prev.Profile,
-	})
+// startInChannelFolder starts a thread in the chat's Folder (opening the
+// folder in Projects when it is new) and moves the chat to it.
+func (s *Service) startInChannelFolder(b *db.ChannelBinding, task string, atts []Attachment, src Source) (*db.Thread, error) {
+	p, err := s.Store.OpenFolder(b.Folder, "")
+	if err != nil {
+		return nil, err
+	}
+	var prev *db.Thread
+	if b.ThreadID != "" {
+		prev, _ = s.Store.GetThread(b.ThreadID)
+	}
+	return s.startFromChannel(b, prev, p.ID, task, atts, src)
+}
+
+// startFromChannel starts a thread in the folder projectID, with the model,
+// profile and permission mode of prev (the thread the chat was on; nil for
+// a chat that never talked), and moves the chat to it.
+func (s *Service) startFromChannel(b *db.ChannelBinding, prev *db.Thread, projectID, task string, atts []Attachment, src Source) (*db.Thread, error) {
+	spec := FolderThreadSpec{ProjectID: projectID, Task: task, Source: src, Attachments: atts}
+	if prev != nil {
+		spec.Model, spec.PermissionMode, spec.Profile = prev.Model, prev.PermissionMode, prev.Profile
+	}
+	t, err := s.Threads.StartFolderThread(spec)
 	if err != nil {
 		return nil, err
 	}
@@ -226,6 +252,11 @@ func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bo
 		reply, err := s.verbose(b, arg)
 		return true, reply, err
 	}
+	if b.Folder != "" {
+		if handled, reply, err := s.folderCommand(b, name, arg); handled {
+			return true, reply, err
+		}
+	}
 	t, p, err := s.boundThread(b)
 	if err != nil {
 		return true, "", err
@@ -265,7 +296,7 @@ func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bo
 			return true, fmt.Sprintf("/new works in a chat bound to a folder; this chat is on [%s] of %s.", tag, p.Name), nil
 		}
 		if task := strings.TrimSpace(arg); task != "" {
-			nt, err := s.startFromChannel(b, t, task, nil, Source{Kind: db.SourceIM, Platform: platform, ChatID: chatID})
+			nt, err := s.startFromChannel(b, t, t.ProjectID, task, nil, Source{Kind: db.SourceIM, Platform: platform, ChatID: chatID})
 			if err != nil {
 				return true, "", err
 			}
@@ -324,6 +355,55 @@ func (s *Service) answerFromText(threadID, requestID, text string) (done bool, e
 		return true, err
 	}
 	return true, nil
+}
+
+// folderCommand runs the commands that mean something else while a chat
+// waits to start in its Folder: /new starts there, /clear and /stop stop the
+// thread it was on (if any). handled is false for a command that acts on that
+// thread as usual.
+func (s *Service) folderCommand(b *db.ChannelBinding, name, arg string) (handled bool, reply string, err error) {
+	where := db.FolderName(b.Folder)
+	next := fmt.Sprintf("Your next message starts a new session in %s.", where)
+	if name == ChatNew && strings.TrimSpace(arg) != "" {
+		t, err := s.startInChannelFolder(b, strings.TrimSpace(arg), nil, Source{Kind: db.SourceIM, Platform: b.Platform, ChatID: b.ChatID})
+		if err != nil {
+			return true, "", err
+		}
+		return true, fmt.Sprintf("Started [%s] in %s.", threadTag(t.Seq, t.Title), where), nil
+	}
+	if b.ThreadID != "" && (name == ChatClear || name == ChatStop) && s.Threads.Running(b.ThreadID) {
+		s.Threads.Stop(b.ThreadID)
+		if t, err := s.Store.GetThread(b.ThreadID); err == nil {
+			return true, fmt.Sprintf("Stopped [%s]. %s", threadTag(t.Seq, t.Title), next), nil
+		}
+	}
+	switch name {
+	case ChatNew, ChatClear, ChatStop:
+		return true, next, nil
+	}
+	if b.ThreadID == "" {
+		return true, "Nothing has started in this chat yet. " + next, nil
+	}
+	return false, "", nil
+}
+
+// ChannelToFolder moves a chat to a folder (an absolute path, which must
+// exist): its next message starts a new thread there. With ifNew, a chat
+// that already has a binding is left as it is, which is how a chat that
+// never talked gets its first folder.
+func (s *Service) ChannelToFolder(platform, chatID, title, folder string, ifNew bool) error {
+	path, err := CleanFolder(folder)
+	if err != nil {
+		return err
+	}
+	if ifNew {
+		if _, err := s.Store.GetChannelBinding(platform, chatID); err == nil {
+			return nil
+		} else if !errors.Is(err, db.ErrNotFound) {
+			return err
+		}
+	}
+	return s.Store.SetChannelBindingFolder(platform, chatID, title, path)
 }
 
 // verbose sets or tells whether the chat hears each step of its thread.

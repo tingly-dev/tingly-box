@@ -15,7 +15,6 @@ import {
     Bolt as IconBolt,
     Folder as IconFolder,
     Send as IconSend,
-    RemoteControl as IconRemote,
     Shield as IconShield,
     TestPipe as IconTestPipe,
     Handyman as IconTools,
@@ -100,21 +99,6 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
                 onToggle: () => toggleHidden(id),
             }] : [];
         }),
-        // Remote leads: the established power-up (drive agents from IM). Not
-        // flag-gated — its switch hides/shows the rail item via the same
-        // hidden set as Team/Image; connected bots keep running.
-        {
-            key: 'remote',
-            icon: <IconRemote sx={iconSx} />,
-            name: t('layout.remote'),
-            description: t('scenarioOverview.powerUps.remoteDesc', { defaultValue: 'Drive your agents from IM — connect bots for remote control and notifications.' }),
-            path: '/bots/overview',
-            enabled: !isHidden('remote'),
-            onToggle: () => toggleHidden('remote'),
-            status: botTotals.total > 0
-                ? t('bots.activeCount', { defaultValue: 'active {{active}} / {{total}}', active: botTotals.active, total: botTotals.total })
-                : undefined,
-        },
         // VModel — the built-in synthetic providers (onboarding, demos,
         // dry-runs). On by default: it only hides/shows the Credentials
         // sidebar row, the providers themselves keep working.
@@ -147,6 +131,10 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             stage: 'beta' as const,
             enabled: enableProjects,
             enabledNotice: t('system.experimentalFeatures.projectsEnabledInfo'),
+            // The same switch turns on IM chats (the Remote rail item).
+            status: botTotals.total > 0
+                ? t('bots.activeCount', { defaultValue: 'active {{active}} / {{total}}', active: botTotals.active, total: botTotals.total })
+                : undefined,
         },
         {
             key: 'mcp',

@@ -3,9 +3,11 @@ package remoteagent_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -44,6 +46,34 @@ type fakeRouter struct {
 	answers []string
 	// files are the bodies of the files handed over, read while they exist.
 	files map[string]string
+	// off switches Projects off; adopts makes ToFolder give a chat a place.
+	off, adopts bool
+	folders     []string
+}
+
+func (f *fakeRouter) Enabled() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return !f.off
+}
+
+func (f *fakeRouter) ToFolder(_ context.Context, in remoteagent.ProjectInbound, folder string, ifNew bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if ifNew && f.bound[in.ChatID] {
+		return nil
+	}
+	f.folders = append(f.folders, fmt.Sprintf("%s:%v", folder, ifNew))
+	if f.adopts {
+		f.bound[in.ChatID] = true
+	}
+	return nil
+}
+
+func (f *fakeRouter) movedTo() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.folders...)
 }
 
 func (f *fakeRouter) bind(chatID string) {
@@ -133,7 +163,7 @@ func Test_BoundChatGoesToItsProject(t *testing.T) {
 	chat.SendText("@cc fix the login bug")
 	require.Eventually(t, func() bool { return len(router.inbound()) == 1 }, 3*time.Second, 10*time.Millisecond)
 	in := router.inbound()[0]
-	assert.Equal(t, "@cc fix the login bug", in.Text)
+	assert.Equal(t, "fix the login bug", in.Text, "the old agent word is dropped")
 	assert.Equal(t, "tingly", in.Platform)
 	assert.Equal(t, chat.ChatID, in.ChatID)
 	assert.Equal(t, harness.Setting.UUID, in.BotUUID)
@@ -259,4 +289,51 @@ func Test_ProjectPromptButtonsGoToTheProject(t *testing.T) {
 	router.setErr(errors.New("this chat is not bound to that thread"))
 	chat.SendCallback("m1", remoteagent.ProjectAnswerPayload+":t2:r2:deny")
 	chat.WaitText(3*time.Second).AssertContains(t, "Could not answer").AssertContains(t, "not bound")
+}
+
+// With Projects on, a chat that never talked gets a folder first (the bot's
+// default here) and then talks to it; /cd moves it.
+func Test_EveryChatGetsAFolderInProjects(t *testing.T) {
+	env, harness, alice := bootHelperNotStarted(t)
+	router := &fakeRouter{bound: map[string]bool{}, adopts: true}
+	harness.Handler.SetProjectRouter(router)
+	require.NoError(t, env.Manager().Start(env.Context()))
+
+	chat := alice.OpenDM(harness.Setting.UUID)
+	chat.SendText("/tb hello")
+	require.Eventually(t, func() bool { return len(router.inbound()) == 1 }, 3*time.Second, 10*time.Millisecond)
+	assert.Equal(t, "hello", router.inbound()[0].Text)
+	moved := router.movedTo()
+	require.Len(t, moved, 1)
+	assert.True(t, strings.HasSuffix(moved[0], ":true"), "the first folder only applies to a chat without one: %v", moved)
+
+	dir := t.TempDir()
+	chat.Drain()
+	chat.SendText("/cd " + dir)
+	chat.WaitText(3 * time.Second)
+	require.Eventually(t, func() bool { return len(router.movedTo()) == 2 }, 3*time.Second, 10*time.Millisecond)
+	assert.Equal(t, dir+":false", router.movedTo()[1])
+
+	chat.SendText("@cc")
+	for ev := chat.WaitText(3 * time.Second); !strings.Contains(ev.Text, "just send your message"); ev = chat.WaitText(3 * time.Second) {
+	}
+	assert.Len(t, router.inbound(), 1)
+}
+
+// With Projects off, a chat hears that chatting is off; pairing still works.
+func Test_ProjectsOffTurnsChatOff(t *testing.T) {
+	env, harness, alice := bootHelperNotStarted(t)
+	router := &fakeRouter{bound: map[string]bool{}, off: true}
+	harness.Handler.SetProjectRouter(router)
+	require.NoError(t, env.Manager().Start(env.Context()))
+
+	chat := alice.OpenDM(harness.Setting.UUID)
+	chat.SendText("@cc fix it")
+	chat.WaitText(3*time.Second).AssertContains(t, "Turn on Projects")
+	chat.Drain()
+	chat.SendText("/bind 123456")
+	ev := chat.WaitText(3 * time.Second)
+	assert.NotContains(t, ev.Text, "Turn on Projects", "pairing is not chat control")
+	assert.Empty(t, router.inbound())
+	assert.Empty(t, router.movedTo())
 }

@@ -77,6 +77,19 @@ func (b *ChatBridge) Bound(platform, chatID string) bool {
 	return app != nil && app.ChannelBound(platform, chatID)
 }
 
+// Enabled implements remoteagent.ProjectRouter: chats follow the Projects
+// switch.
+func (b *ChatBridge) Enabled() bool { return b.live() != nil }
+
+// ToFolder implements remoteagent.ProjectRouter.
+func (b *ChatBridge) ToFolder(_ context.Context, in remoteagent.ProjectInbound, folder string, ifNew bool) error {
+	app := b.live()
+	if app == nil {
+		return errors.New("Projects is switched off")
+	}
+	return app.ChannelToFolder(in.Platform, in.ChatID, "", folder, ifNew)
+}
+
 // RouteInbound implements remoteagent.ProjectRouter.
 func (b *ChatBridge) RouteInbound(_ context.Context, in remoteagent.ProjectInbound) (bool, error) {
 	app := b.live()

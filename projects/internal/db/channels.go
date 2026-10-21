@@ -26,10 +26,12 @@ type BindingFilter struct {
 	ThreadID string
 }
 
-// ListChannelBindings returns bindings, newest first.
+// ListChannelBindings returns bindings, newest first. A chat that has not
+// reached a thread yet (only a Folder) is not listed.
 func (s *Store) ListChannelBindings(f BindingFilter) ([]ChannelBinding, error) {
 	out := []ChannelBinding{}
-	q := s.bindings().Order("channel_bindings.created_at DESC, channel_bindings.rowid DESC")
+	q := s.bindings().Where("channel_bindings.thread_id <> ''").
+		Order("channel_bindings.created_at DESC, channel_bindings.rowid DESC")
 	if f.ProjectID != "" {
 		q = q.Where("threads.project_id = ?", f.ProjectID)
 	}
@@ -82,7 +84,7 @@ func (s *Store) UpsertChannelBinding(b *ChannelBinding) error {
 		case err != nil:
 			return err
 		}
-		cur.ThreadID, cur.NewThread = b.ThreadID, b.NewThread
+		cur.ThreadID, cur.NewThread, cur.Folder = b.ThreadID, b.NewThread, b.Folder
 		if t := strings.TrimSpace(b.ChatTitle); t != "" {
 			cur.ChatTitle = t
 		}
@@ -120,6 +122,25 @@ func (s *Store) DeleteProjectChannelBindings(projectID string) (int64, error) {
 	res := s.db.Where("thread_id IN (?)", s.db.Model(&Thread{}).Select("id").Where("project_id = ?", projectID)).
 		Delete(&ChannelBinding{})
 	return res.RowsAffected, res.Error
+}
+
+// SetChannelBindingFolder makes a chat's next message start a new thread in
+// folder (see ChannelBinding.Folder); a chat with no binding gets one that
+// has only the folder.
+func (s *Store) SetChannelBindingFolder(platform, chatID, title, folder string) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		now := time.Now()
+		var cur ChannelBinding
+		err := tx.First(&cur, "platform = ? AND chat_id = ?", platform, chatID).Error
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			return tx.Create(&ChannelBinding{ID: newID(), Platform: platform, ChatID: chatID,
+				ChatTitle: strings.TrimSpace(title), Folder: folder, CreatedAt: now, UpdatedAt: now}).Error
+		case err != nil:
+			return err
+		}
+		return tx.Model(&cur).Updates(map[string]any{"folder": folder, "new_thread": false, "updated_at": now}).Error
+	})
 }
 
 // SetChannelBindingNewThread sets whether a chat's next message starts a new

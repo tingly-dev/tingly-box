@@ -35,6 +35,13 @@ type ProjectRouter interface {
 	// id, choice). reply, when set, is what to tell the chat; the prompt
 	// itself is restated by the project.
 	RouteAnswer(ctx context.Context, in ProjectInbound, threadID, requestID, choice string) (reply string, err error)
+	// Enabled reports whether chats are handled by Projects at all (its
+	// switch). When it is off a chat gets no Claude Code, only pairing and
+	// notifications.
+	Enabled() bool
+	// ToFolder moves the chat to a folder: its next message starts a new
+	// session there. With ifNew a chat that already has a place is left alone.
+	ToFolder(ctx context.Context, in ProjectInbound, folder string, ifNew bool) error
 }
 
 // ProjectAnswerPayload names the callbacks of a Projects prompt's buttons.
@@ -61,6 +68,77 @@ type ProjectFile struct {
 // SetProjectRouter plugs in the router; nil turns it off.
 func (h *BotHandler) SetProjectRouter(r ProjectRouter) { h.projectRouter = r }
 
+// chatControlOff is what a chat hears while Projects is switched off.
+const chatControlOff = "Chatting with Claude Code from here is off. Turn on Projects in Tingly Box to use it."
+
+// adoptChat runs before anything else a chat sends when the host has
+// Projects. With Projects off it answers that chat control is off and takes
+// the message (pairing and /join still work). With it on, a chat that has no
+// place in Projects yet gets one, its folder (/cd) or the bot's default
+// folder, so everything after this treats it as a bound chat. It reports
+// whether the message was taken.
+func (h *BotHandler) adoptChat(hCtx HandlerContext) bool {
+	if h.projectRouter == nil {
+		return false
+	}
+	if !h.projectRouter.Enabled() {
+		if text := hCtx.Text(); isBindCommand(text) || isJoinCommand(text) {
+			return false
+		}
+		h.SendText(hCtx, chatControlOff)
+		return true
+	}
+	in := h.projectInbound(hCtx, "")
+	folder, ok := h.getProjectPath(hCtx)
+	if ok {
+		if err := h.projectRouter.ToFolder(h.ctx, in, folder, true); err == nil {
+			return false
+		} else {
+			logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("The chat's folder cannot be used; trying the default")
+		}
+	}
+	if err := h.projectRouter.ToFolder(h.ctx, in, h.defaultProjectPath(), true); err != nil {
+		logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to give the chat a folder in Projects")
+	}
+	return false
+}
+
+// moveChatToFolder moves a chat that changed folder (/cd, /dir) there in
+// Projects, so its next message starts a session in it.
+func (h *BotHandler) moveChatToFolder(hCtx HandlerContext, folder string) {
+	if h.projectRouter == nil || !h.projectRouter.Enabled() {
+		return
+	}
+	if err := h.projectRouter.ToFolder(h.ctx, h.projectInbound(hCtx, ""), folder, false); err != nil {
+		h.SendText(hCtx, fmt.Sprintf("Could not move this chat to %s: %v", folder, err))
+	}
+}
+
+func (h *BotHandler) projectInbound(hCtx HandlerContext, text string) ProjectInbound {
+	return ProjectInbound{
+		Platform: string(hCtx.Platform),
+		BotUUID:  hCtx.BotUUID,
+		ChatID:   hCtx.ChatID,
+		SenderID: hCtx.SenderID,
+		Text:     text,
+	}
+}
+
+// stripAgentPrefix drops the old agent words ("@cc fix it", "/tb hi"): every
+// chat now talks to Claude Code in its folder.
+func stripAgentPrefix(text string) string {
+	t := strings.TrimSpace(text)
+	for _, p := range []string{"@cc", "/cc", "@tb", "/tb"} {
+		if t == p {
+			return ""
+		}
+		if rest, ok := strings.CutPrefix(t, p+" "); ok {
+			return strings.TrimSpace(rest)
+		}
+	}
+	return text
+}
+
 // routeToProject sends a chat's text to its bound project. It reports whether
 // the message was taken; only a chat with a binding is ever taken, so every
 // other chat keeps the @cc / @tb routing untouched.
@@ -68,20 +146,22 @@ func (h *BotHandler) routeToProject(hCtx HandlerContext, text string) bool {
 	if h.projectRouter == nil {
 		return false
 	}
+	if text = stripAgentPrefix(text); text == "" {
+		if !h.projectRouter.Bound(string(hCtx.Platform), hCtx.ChatID) {
+			return false
+		}
+		h.SendText(hCtx, "This chat talks to Claude Code; just send your message.")
+		return true
+	}
 	return h.deliverToProject(hCtx, text, nil)
 }
 
 // deliverToProject hands a message to the chat's project and says why when
 // it could not be delivered; it reports whether the chat is bound.
 func (h *BotHandler) deliverToProject(hCtx HandlerContext, text string, files []ProjectFile) bool {
-	handled, err := h.projectRouter.RouteInbound(h.ctx, ProjectInbound{
-		Platform: string(hCtx.Platform),
-		BotUUID:  hCtx.BotUUID,
-		ChatID:   hCtx.ChatID,
-		SenderID: hCtx.SenderID,
-		Text:     text,
-		Files:    files,
-	})
+	in := h.projectInbound(hCtx, text)
+	in.Files = files
+	handled, err := h.projectRouter.RouteInbound(h.ctx, in)
 	if !handled {
 		return false
 	}

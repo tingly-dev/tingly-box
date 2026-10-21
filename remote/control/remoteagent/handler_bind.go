@@ -40,6 +40,7 @@ func (h *BotHandler) handleProjectSwitch(hCtx HandlerContext, projectPath string
 		}
 	}
 
+	h.moveChatToFolder(hCtx, projectPath)
 	logrus.Infof("Project switched: chat=%s path=%s agent=%s", hCtx.ChatID, projectPath, agentType)
 	h.SendText(hCtx, fmt.Sprintf("✅ Switched to: %s", projectPath))
 }
@@ -99,6 +100,8 @@ func (h *BotHandler) completeBind(hCtx HandlerContext, projectPath string) {
 	if err := h.chatStore.SetBashCwd(hCtx.ChatID, expandedPath); err != nil {
 		logrus.WithError(err).Warn("Failed to update bash cwd after project bind")
 	}
+
+	h.moveChatToFolder(hCtx, expandedPath)
 
 	// With new design, sessions are created on-demand when agent processes a message
 	// No need to create session here

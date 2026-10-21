@@ -68,6 +68,12 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 		return
 	}
 
+	// With Projects, every chat talks to Claude Code there (or hears that it
+	// is switched off).
+	if h.adoptChat(hCtx) {
+		return
+	}
+
 	// Handle media content (with or without text)
 	if msg.IsMediaContent() {
 		if h.chatBoundToProject(hCtx) {
@@ -123,10 +129,11 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	h.reactReceived(hCtx)
 
 	// A chat bound to a Projects project talks to that project's coordinator,
-	// ahead of the @cc / @tb handoff words ("@cc fix it", "guide"). Slash
-	// commands stay commands, and a chat in the middle of typing a /cd path is
-	// left to that flow. Chats without a binding are not touched at all.
-	if !strings.HasPrefix(text, "/") && !h.directoryBrowser.IsWaitingInput(hCtx.ChatID) {
+	// ahead of the @cc / @tb handoff words, which are dropped ("@cc fix it"
+	// sends "fix it"). Slash commands stay commands, and a chat in the middle
+	// of typing a /cd path is left to that flow. Chats without a binding are
+	// not touched at all.
+	if (!strings.HasPrefix(text, "/") || stripAgentPrefix(text) != text) && !h.directoryBrowser.IsWaitingInput(hCtx.ChatID) {
 		if h.routeToProject(hCtx, text) {
 			return
 		}

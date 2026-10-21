@@ -1,6 +1,6 @@
 # Remote 的聊天控制并入 Projects
 
-> 状态：**设计讨论**（未实施）。承接 [projects-im.md](./projects-im.md)（M1–M5 已落地：绑定了的 chat 走 Projects）
+> 状态：**实施中**（第 2 期能力、第 3 期 a 切换已提 PR）。承接 [projects-im.md](./projects-im.md)（M1–M5 已落地：绑定了的 chat 走 Projects）
 > 和 [projects-desk-absorption.md](./projects-desk-absorption.md)（Desk 并入 Projects 的先例，本文沿用它的做法）。
 
 ## 目标
@@ -143,6 +143,22 @@ Remote 页面保留，只去掉 SmartGuide 模型和“常驻会话”这类作�
 2. **切换**：所有 chat 都走 Projects（自动文件夹绑定、`/cd`、`/dir`、`/status`、`/resume`、`/yolo`、`/bash`、`@cc` 前缀、`@tb` 下线），
    bot 级设置接到线程上。旧执行器还在但不再被调用。
 3. **删除**：上面的删除清单。
+
+### 第 3 期 a 的落地：每个 chat 都有“落点”
+
+- **绑定可以只有文件夹**：`ChannelBinding.Folder`（路径）。有它时，chat 的下一条消息在这个文件夹里开新线程并绑上（文件夹不在
+  Projects 里就 `OpenFolder` 建一个），然后清掉。从没说过话的 chat 绑定行只有 `Folder`、没有 `ThreadID`；
+  这种行不在 Web 的绑定列表里出现（还没有线程可看）。`/cd` 是同一件事：线程还绑着，`Folder` 指向新目录，
+  `/stop`、`/clear` 停的是旧线程，`/new <话>` 直接在新目录开，`/session`（`/focus`）换线程会清掉 `Folder`。
+- **Remote 侧只做一件事**：开关开着时，任何消息先 `ToFolder(ifNew)`：chat 自己的 `ProjectPath`（旧数据或 `/cd`），
+  不能用就退到 bot 的 `DefaultCwd`。之后整条路径就是“已绑定的 chat”，M1–M5 的路由不变。`/cd`、目录浏览器、`/project` 选择
+  最后都落到 `chatStore.BindProject`，那里再调一次 `ToFolder`。
+- **`@cc` / `@tb` / `/cc` / `/tb` 前缀**直接去掉；只有前缀没有话时回一句“直接发消息就行”。
+- **开关关着**：除了 `/bind`、`/join`（接入层）之外，chat 收到一句“去打开 Projects”。没有 router 的 BotHandler（独立 CLI、测试 harness）完全不变。
+- **升级迁移**：`projects` 开关从没被设置过、且有已启用的 bot，就在启动时打开一次；设过（开或关）就不动。
+  否则在用 Remote 的人升级后会被切断，与“原来的用法照样能用”冲突。
+- 前端：Power-ups 里 Remote 那一行去掉，Projects 那一行显示 bot 数；Remote 侧栏跟着 Projects 开关出现。
+- 本期**没做**：`/status`、`/resume`、`/yolo`、`/bash`、`/dir`、`/session` 仍是旧实现（第 3 期 b）；`DefaultAgent` 还没接到新线程的 profile 上。
 
 ## 已定（YZ，2026-10-21）
 

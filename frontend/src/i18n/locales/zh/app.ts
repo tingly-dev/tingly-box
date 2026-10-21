@@ -286,7 +286,7 @@ export default {
     },
     "experimentalFeatures": {
       "projects": "项目",
-      "enableProjects": "工作一冒出来就丢给项目，或在你选择的目录里直接运行 Claude Code：协调者为项目的每个任务开一个线程，各自在独立的 git worktree 里运行。",
+      "enableProjects": "工作一冒出来就丢给项目，或在你选择的目录里直接运行 Claude Code：协调者为项目的每个任务开一个线程，各自在独立的 git worktree 里运行。IM 聊天也通过这里使用 Claude Code（Remote）。",
       "projectsEnabledInfo": "现在，任何能登录这个 tingly-box 的人都可以在这台机器上、在其选择的目录和仓库里运行 Claude Code，并批准它的工具调用。",
       "title": "实验性功能",
       "description": "这些实验性功能适用于所有场景。各个场景可以覆盖这些设置。",

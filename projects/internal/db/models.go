@@ -222,6 +222,10 @@ type ChannelBinding struct {
 	// NewThread makes the chat's next message start a new thread in the
 	// folder of ThreadID instead of continuing it (/new in a folder chat).
 	NewThread bool `gorm:"not null;default:false" json:"-"`
+	// Folder, when set, is a folder (an absolute path) the chat's next
+	// message starts a new thread in, the chat moving there: a chat that never
+	// talked yet (ThreadID empty) or one that changed folder (/cd).
+	Folder string `gorm:"size:1000" json:"-"`
 	// Verbose makes the chat also hear each step of its thread's turns (what
 	// it says between tool calls, and each call), not only the reply.
 	Verbose bool `gorm:"not null;default:false" json:"verbose"`

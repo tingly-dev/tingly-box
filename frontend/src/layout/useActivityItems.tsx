@@ -349,9 +349,10 @@ export function useActivityItems(): ActivityItem[] {
             // the purposes mounted onto those bots. New purposes append here
             // as new rows — the rail icon never grows. See bot-arch.md §10.
             // (key stays 'bots' — internal id, not user-visible.)
-            // Hidden via the Remote switch in the rail's Power-ups menu (same hidden set as
-            // Team/Image) — hides the rail item only, bots keep running.
-            ...(!hiddenScenarios.has('remote') ? [{
+            // Shown with Projects: one switch turns on Projects and chatting
+            // with Claude Code from IM (.design/remote-into-projects.md); bots
+            // keep running and notifying while it is off.
+            ...(enableProjects ? [{
                 key: 'bots' as const,
                 icon: <IconRemote sx={{ fontSize: 22 }} />,
                 label: t('layout.remote'),

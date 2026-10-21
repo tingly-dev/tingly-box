@@ -17,6 +17,12 @@ func isBindCommand(text string) bool {
 	return strings.HasPrefix(t, "/bind ") || strings.HasPrefix(t, "/bind\t")
 }
 
+// isJoinCommand reports whether text is a /join invocation.
+func isJoinCommand(text string) bool {
+	head, _, _ := strings.Cut(strings.TrimSpace(text), " ")
+	return head == cmdJoinPrimary
+}
+
 // pairingHintMessage returns the user-facing prompt sent when an unpaired
 // chat tries to talk to a bot that requires pairing.
 func pairingHintMessage() string {

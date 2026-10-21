@@ -141,10 +141,19 @@ func (a *App) AnswerFromChannel(platform, chatID, threadID, requestID, value str
 	return a.svc.AnswerFromChannel(platform, chatID, threadID, requestID, value)
 }
 
-// ChannelBound reports whether an IM chat is bound to a thread.
+// ChannelBound reports whether an IM chat has a place in Projects: a thread,
+// or a folder its next message starts one in.
 func (a *App) ChannelBound(platform, chatID string) bool {
-	b, err := a.store.GetChannelBinding(platform, chatID)
-	return err == nil && b.ThreadID != ""
+	_, err := a.store.GetChannelBinding(platform, chatID)
+	return err == nil
+}
+
+// ChannelToFolder moves an IM chat to a folder on this machine (an absolute
+// path that exists): its next message starts a new session there, in Projects.
+// With ifNew a chat that already has a place is left alone, which is how a
+// chat gets its first folder. title names the chat, when known.
+func (a *App) ChannelToFolder(platform, chatID, title, folder string, ifNew bool) error {
+	return a.svc.ChannelToFolder(platform, chatID, title, folder, ifNew)
 }
 
 // Start recovers threads interrupted by a restart and runs housekeeping

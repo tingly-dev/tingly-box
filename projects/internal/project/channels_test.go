@@ -477,3 +477,70 @@ func TestFilesAChatSendsReachTheThreadAsAttachments(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "not really a photo", string(body), "a copy the thread owns, so the host may remove its own")
 }
+
+func TestAChatThatNeverTalkedStartsInItsFolder(t *testing.T) {
+	f, svc, sink := channelFixture(t)
+	dir := t.TempDir()
+	require.NoError(t, svc.ChannelToFolder("telegram", "new", "Alice", dir, true))
+
+	handled, reply, err := svc.ChannelCommand("telegram", "new", ChatStop, "")
+	require.NoError(t, err)
+	require.True(t, handled)
+	assert.Contains(t, reply, "starts a new session in "+db.FolderName(dir))
+	list, err := f.store.ListChannelBindings(db.BindingFilter{})
+	require.NoError(t, err)
+	assert.Empty(t, list, "a chat with only a folder is not listed on the web")
+
+	handled, err = svc.PostFromChannel("telegram", "new", "hello", nil)
+	require.NoError(t, err)
+	require.True(t, handled)
+	got := sink.next(t)
+	assert.Equal(t, "new", got.chatID)
+	b, err := f.store.GetChannelBinding("telegram", "new")
+	require.NoError(t, err)
+	assert.Empty(t, b.Folder)
+	th, err := f.store.GetThread(b.ThreadID)
+	require.NoError(t, err)
+	p, err := f.store.GetProject(th.ProjectID)
+	require.NoError(t, err)
+	assert.Equal(t, db.ProjectFolder, p.Type)
+	assert.Equal(t, db.PathKey(dir), db.PathKey(p.Path))
+	assert.Equal(t, "["+threadTag(th.Seq, th.Title)+"] ok", got.text)
+	waitQuiet(t, f, svc, th.ID)
+
+	// Once it has a place, ifNew leaves it there.
+	require.NoError(t, svc.ChannelToFolder("telegram", "new", "", t.TempDir(), true))
+	b, err = f.store.GetChannelBinding("telegram", "new")
+	require.NoError(t, err)
+	assert.Empty(t, b.Folder)
+}
+
+func TestMovingAChatToAnotherFolderStartsThereNext(t *testing.T) {
+	f, svc, sink := channelFixture(t)
+	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "go"})
+	require.NoError(t, err)
+	waitQuiet(t, f, svc, s.ID)
+	_, err = svc.BindChannel("telegram", "c", "", s.ID, "")
+	require.NoError(t, err)
+
+	other := t.TempDir()
+	require.NoError(t, svc.ChannelToFolder("telegram", "c", "", other, false))
+	assert.ErrorIs(t, svc.ChannelToFolder("telegram", "c", "", filepath.Join(other, "missing"), false), ErrNotFolder)
+	_, reply, err := svc.ChannelCommand("telegram", "c", ChatThreads, "")
+	require.NoError(t, err)
+	assert.Contains(t, reply, "#1", "other commands still act on the thread it is on")
+
+	_, err = svc.PostFromChannel("telegram", "c", "over here", nil)
+	require.NoError(t, err)
+	sink.next(t)
+	b, err := f.store.GetChannelBinding("telegram", "c")
+	require.NoError(t, err)
+	assert.NotEqual(t, s.ID, b.ThreadID)
+	th, err := f.store.GetThread(b.ThreadID)
+	require.NoError(t, err)
+	assert.Equal(t, "over here", th.Task)
+	p, err := f.store.GetProject(th.ProjectID)
+	require.NoError(t, err)
+	assert.Equal(t, db.PathKey(other), db.PathKey(p.Path))
+	waitQuiet(t, f, svc, th.ID)
+}

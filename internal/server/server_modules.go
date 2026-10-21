@@ -151,6 +151,9 @@ func (s *Server) apiModules(ctx context.Context, schema bool) []module.Module {
 	// At runtime it keeps its own database in the Projects data dir (--projects-dir) and
 	// starts when the flag is on: at boot, or on the first request after the
 	// flag is switched on.
+	if !schema {
+		s.adoptProjectsForRemote()
+	}
 	if app := newProjectsApp(s.config, s.projectsDir, schema, chatBridge); app != nil {
 		start := func() { app.Start(ctx) }
 		var chatDisabled func(string) bool
