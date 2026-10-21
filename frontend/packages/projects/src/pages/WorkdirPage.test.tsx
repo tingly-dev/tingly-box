@@ -109,4 +109,15 @@ describe('WorkdirPage live transcript', () => {
         act(() => m.projectCb?.({ type: 'thread_event', data: entry('e1', 'live hello') }));
         expect(await screen.findByText('live hello')).toBeInTheDocument();
     });
+    it('re-reads only the thread, not its transcript, when the live background tasks change', async () => {
+        show('/?path=%2Fhome%2Fme%2Fapp&session=t1');
+        await waitFor(() => expect(m.projectCb).not.toBeNull());
+        const calls = (url: string) => m.get.mock.calls.filter(([u]) => u === url).length;
+        await waitFor(() => expect(calls('/api/v1/threads/{id}/events')).toBe(1));
+        const thread0 = calls('/api/v1/threads/{id}');
+
+        act(() => m.projectCb?.({ type: 'thread_event', data: { ...entry('e2', ''), kind: 'task', payload: '{"event":"background_tasks_changed"}' } }));
+        await waitFor(() => expect(calls('/api/v1/threads/{id}')).toBe(thread0 + 1));
+        expect(calls('/api/v1/threads/{id}/events')).toBe(1);
+    });
 });

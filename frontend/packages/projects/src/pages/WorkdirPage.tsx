@@ -133,6 +133,19 @@ export default function WorkdirPage() {
         }
     }, [notify, setParams]);
 
+    // The live background tasks come with the thread, not its transcript (the stream carries that).
+    const loadTasks = useCallback(async (sid: string) => {
+        const n = sessionReq.current;
+        try {
+            const d = await unwrap(api.GET('/api/v1/threads/{id}', { params: { path: { id: sid } } }));
+            if (n !== sessionReq.current) return;
+            setLiveTasks(d.background_tasks ?? []);
+            setSessions((list) => upsert(list ?? [], d.thread));
+        } catch {
+            // Keep what the panel shows; the next change or reconnect reads it again.
+        }
+    }, []);
+
     // Another folder starts from an empty list; the same folder (or all of them) keeps what it shows while it refreshes.
     useEffect(() => {
         setSessions(null);
@@ -165,8 +178,7 @@ export default function WorkdirPage() {
             const e = ev.data as ThreadEvent;
             if (e.thread_id !== sessionId) return;
             setEvents((list) => (list ? upsert(list, e, true) : list));
-            // The live set changed: it comes with the session.
-            if (e.kind === 'task' && changesLiveTasks(e)) void loadSession(sessionId);
+            if (e.kind === 'task' && changesLiveTasks(e)) void loadTasks(sessionId);
         };
         onOpen.current = () => {
             void loadSessions();
