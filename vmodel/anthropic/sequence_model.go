@@ -42,7 +42,9 @@ var (
 	_ Snapshotter  = (*SequenceModel)(nil)
 )
 
-// NewSequenceModel constructs an Anthropic-protocol sequence model from cfg.
+// NewSequenceModel constructs an Anthropic-protocol sequence model from cfg. It
+// owns its cursor: the same script registered for the other protocol is an
+// independent run, so requests on one wire never consume steps of the other.
 func NewSequenceModel(cfg *vmodel.SequenceConfig) *SequenceModel {
 	description := cfg.Description
 	if description == "" {
@@ -78,13 +80,23 @@ func NewStatusSequence(id, name string, statuses ...int) *SequenceModel {
 // request. This is the single point at which the cursor advances.
 func (m *SequenceModel) Snapshot() VirtualModel {
 	step := m.seq.Next()
+	// Anthropic's word for "finished answering" is end_turn; MockModel's
+	// generic default ("stop") is not an Anthropic stop_reason, and agent
+	// clients key their loop on it.
+	if step.StopReason == "" && step.Tool == nil {
+		step.StopReason = "end_turn"
+	}
 	return NewMockModel(&MockModelConfig{
-		ID:          m.ID,
-		Name:        m.Name,
-		Description: m.Description,
-		Content:     step.Content,
-		Delay:       m.Delay,
-		Error:       step.Error,
+		ID:           m.ID,
+		Name:         m.Name,
+		Description:  m.Description,
+		Content:      step.Content,
+		ToolCall:     step.Tool,
+		ScriptedText: true,
+		StopReason:   step.StopReason,
+		Usage:        step.Usage,
+		Delay:        m.Delay,
+		Error:        step.Error,
 	})
 }
 

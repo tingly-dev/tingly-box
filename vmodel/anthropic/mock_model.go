@@ -26,6 +26,11 @@ type MockModelConfig struct {
 	// tool-type: if set, the response includes a tool_use block.
 	ToolCall *vmodel.ToolCallConfig
 
+	// ScriptedText makes Content the whole lead-in text of a tool step: empty
+	// means none. Unset (the legacy mocks), empty Content falls back to a
+	// display text derived from the tool arguments.
+	ScriptedText bool
+
 	// Usage, when set, is emitted as a UsageEvent immediately before
 	// DoneEvent (rendered by virtualserver inside message_delta.usage).
 	Usage *vmodel.MockUsage
@@ -105,20 +110,31 @@ func (m *MockModel) staticResponse() VModelResponse {
 
 func (m *MockModel) toolResponse() VModelResponse {
 	tc := m.cfg.ToolCall
-	displayText := vmodel.ToolCallDisplayContent(tc.Arguments)
-	inputJSON, _ := json.Marshal(tc.Arguments)
-
-	return VModelResponse{
-		Content: []sdk.BetaContentBlockParamUnion{
-			{OfText: &sdk.BetaTextBlockParam{Text: displayText}},
-			{OfToolUse: &sdk.BetaToolUseBlockParam{
-				ID:    "toolu_virtual",
-				Name:  tc.Name,
-				Input: json.RawMessage(inputJSON),
-			}},
-		},
-		StopReason: "tool_use",
+	// Lead-in text: an explicit Content wins (scripted "say"), otherwise the
+	// legacy display text derived from the tool arguments.
+	text := m.cfg.Content
+	if text == "" && !m.cfg.ScriptedText {
+		text = vmodel.ToolCallDisplayContent(tc.Arguments)
 	}
+	inputJSON, _ := json.Marshal(tc.Arguments)
+	id := tc.ID
+	if id == "" {
+		id = "toolu_virtual"
+	}
+
+	var blocks []sdk.BetaContentBlockParamUnion
+	// A real Anthropic response never carries an empty text block, and
+	// clients that read block.text choke on one — so a bare tool call is just
+	// the tool_use block.
+	if text != "" {
+		blocks = append(blocks, sdk.BetaContentBlockParamUnion{OfText: &sdk.BetaTextBlockParam{Text: text}})
+	}
+	blocks = append(blocks, sdk.BetaContentBlockParamUnion{OfToolUse: &sdk.BetaToolUseBlockParam{
+		ID:    id,
+		Name:  tc.Name,
+		Input: json.RawMessage(inputJSON),
+	}})
+	return VModelResponse{Content: blocks, StopReason: sdk.BetaStopReason(m.cfg.StopReason)}
 }
 
 // HandleAnthropicStream streams fixed content using configured chunks with simulated delay.
