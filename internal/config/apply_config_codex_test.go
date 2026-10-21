@@ -1014,3 +1014,48 @@ func TestApplyCodexConfig_SupportsSummariesMovesToCatalog(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "true", prefs.SupportsReasoningSummaries)
 }
+
+func TestCodexConfigDefaultsToV2ForGatewayAndHybrid(t *testing.T) {
+	for _, bearer := range []string{"", "scoped-token"} {
+		raw, err := RenderCodexConfigTOML("http://localhost:12580/tingly/codex", []string{"mixed-providers"}, DefaultCodexPrefs(), false, bearer)
+		require.NoError(t, err)
+		var cfg map[string]interface{}
+		require.NoError(t, toml.Unmarshal(raw, &cfg))
+		providers := cfg["model_providers"].(map[string]interface{})
+		provider := providers[codexGatewayProviderName].(map[string]interface{})
+		require.Equal(t, "v2", provider["capabilities"].(map[string]interface{})["remote_compaction"])
+		require.Equal(t, "responses", provider["wire_api"])
+		require.Equal(t, true, provider["requires_openai_auth"])
+		if bearer != "" {
+			require.Equal(t, bearer, provider["experimental_bearer_token"])
+		}
+		require.NotContains(t, string(raw), "remote_compaction_v2")
+	}
+}
+
+func TestCodexConfigReapplyPreservesCapabilityOverrides(t *testing.T) {
+	for _, override := range []string{"", "unsupported", "v2"} {
+		caps := map[string]interface{}{"external_web_access": false}
+		if override != "" {
+			caps["remote_compaction"] = override
+		}
+		cfg := map[string]interface{}{"model_providers": map[string]interface{}{
+			codexGatewayProviderName: map[string]interface{}{"base_url": "http://old", "capabilities": caps},
+			"other":                  map[string]interface{}{"name": "other", "capabilities": map[string]interface{}{"remote_compaction": "unsupported"}},
+		}}
+		for range 2 {
+			mergeCodexConfig(cfg, "http://new/tingly/codex", []string{"mixed"}, "", DefaultCodexPrefs(), "")
+		}
+		providers := cfg["model_providers"].(map[string]interface{})
+		provider := providers[codexGatewayProviderName].(map[string]interface{})
+		got := provider["capabilities"].(map[string]interface{})
+		want := override
+		if want == "" {
+			want = "v2"
+		}
+		require.Equal(t, want, got["remote_compaction"])
+		require.Equal(t, false, got["external_web_access"])
+		require.Equal(t, "http://new/tingly/codex", provider["base_url"])
+		require.Equal(t, "unsupported", providers["other"].(map[string]interface{})["capabilities"].(map[string]interface{})["remote_compaction"])
+	}
+}

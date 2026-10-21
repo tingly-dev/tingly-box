@@ -450,10 +450,24 @@ func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []strin
 	if providers == nil {
 		providers = map[string]interface{}{}
 	}
+	// V2 is a gateway capability: Codex OAuth passes through natively, while
+	// other supported Responses routes use TB's ordinary-inference adapter.
+	// Keep explicit user capability choices, including "unsupported" (local
+	// compaction), across Quick Config reapplication.
+	capabilities := map[string]interface{}{}
+	if existing, ok := providers[codexGatewayProviderName].(map[string]interface{}); ok {
+		if previous, ok := existing["capabilities"].(map[string]interface{}); ok {
+			maps.Copy(capabilities, previous)
+		}
+	}
+	if _, configured := capabilities["remote_compaction"]; !configured {
+		capabilities["remote_compaction"] = "v2"
+	}
 	providerStanza := map[string]interface{}{
-		"name":     "OpenAI using Tingly Box",
-		"base_url": baseURL,
-		"wire_api": "responses",
+		"name":         "OpenAI using Tingly Box",
+		"base_url":     baseURL,
+		"wire_api":     "responses",
+		"capabilities": capabilities,
 	}
 	if bearerToken != "" {
 		// Hybrid: provider-scoped credential keeps the gateway token out of

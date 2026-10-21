@@ -73,9 +73,9 @@ Desktop applications can bundle a different core version.
   providers to remote V2, and other configured providers to local compaction.
   `is_openai()` compares the provider name exactly with `OpenAI`; requiring
   OpenAI auth does not select the native provider's compaction capabilities.
-- TB's generated provider is named `OpenAI using Tingly Box` and has no explicit
-  compaction capability override. Its ordinary non-Azure gateway URL therefore
-  selects local compaction unless the effective config is changed separately.
+- TB's generated provider is named `OpenAI using Tingly Box`. This held rollout
+  draft adds an explicit V2 capability by default, preserving explicit overrides.
+  It must wait for mixed-provider compatibility before deployment.
 - `core/src/session/turn.rs::run_auto_compact` chooses the branch. Both branches
   use `POST /responses` in this release. Local compaction asks the model for a
   textual summary; remote V2 appends `compaction_trigger` and expects a completed
@@ -95,9 +95,10 @@ Desktop applications can bundle a different core version.
 - The old `features.remote_compaction_v2` switch is removed and ignored. The
   supported custom-provider override is
   `[model_providers.tingly-box.capabilities] remote_compaction = "v2"`.
-  Use it only when every routed backend supports V2, not for mixed chat/Anthropic
-  backends. TB's current Quick Config rebuilds its managed provider stanza, so
-  reapplying Quick Config also replaces a manually added capability override.
+  Use it only when every routed backend supports V2. This draft preserves explicit
+  capability overrides when Quick Config is reapplied, including `unsupported`
+  for local summarization. Generic summary/translation support is deferred, so
+  native-only acceptance does not justify enabling V2 for mixed providers.
 
 The standalone `POST /responses/compact` JSON endpoint remains a supported public
 OpenAI contract and is separate from either audited CLI branch. The gateway
