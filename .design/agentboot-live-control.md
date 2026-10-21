@@ -97,15 +97,38 @@ One composer, no mode setting:
   `GET` / `PATCH` / `DELETE` queue items. A Codex backend maps `send` while
   running to `turn/steer` (`expectedTurnId`; on a race or on review / compact
   turns fall back to a held chip).
+- Stop discards held chips and the page puts their text back in the box, so
+  nothing typed is lost and nothing is sent behind a Stop (revised from "chips
+  survive Stop": sending queued messages right after the user pressed Stop
+  would be a surprise).
 - Gap to close in the engine: between a turn's `result` and the CLI's own next
   turn's `init` the session reads Idle, so a host `Send` in that instant could
   start a second turn. `Inject`-then-`Send` fallback must tolerate
   `ErrTurnInFlight` (it already surfaces as `NotSent`).
 
+### As built (Projects)
+
+- `POST /threads/{id}/messages` takes `mode` (`send` default, `queue`,
+  `stop_and_send`); `DELETE /threads/{id}/queue/{qid}` takes a held message
+  back. Every thread is addressed the same way; a main thread's messages go to
+  the coordinator, which ignores the mode.
+- A held message is a thread event of kind `queued` (state `held`, then `sent`
+  or `removed`), so it streams and reloads like the rest of the transcript. It
+  becomes an ordinary `user` event only when its turn starts. Chips left over
+  from a previous run are marked removed at startup (`Recover`).
+- A message that joined a running turn is a `user` event with `injected: true`;
+  the page shows "Claude will read this at its next step" on it until a later
+  tool result or reply of the main conversation appears, or the turn ends.
+- `send` falls back to a held message when the engine cannot inject: a
+  one-shot turn, a turn still waiting for a project slot, or a failed write
+  (the last also leaves a note in the transcript).
+- Composer: Enter = default send; a menu on the send button and Alt+Enter give
+  "after this turn" and "stop and send"; `mode` is only passed when chosen.
+- Not covered by an automated browser run: the page was checked with component
+  tests, not a screenshot.
+
 ## Not done
 
-- No host (Desk, Projects) calls `Engine.Inject` yet; their HTTP routes and UI
-  decide how a busy session's composer behaves.
 - Directories chosen outside a permission prompt still restart.
 - `set_max_thinking_tokens`, MCP control requests: the CLI has them, nothing
   in AgentBoot needs them yet.

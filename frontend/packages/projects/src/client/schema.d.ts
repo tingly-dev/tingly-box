@@ -786,8 +786,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Send a message to the thread (runs after its current turn); to a main thread it goes to the coordinator, whose reply arrives on the event stream
-         * @description Send a message to the thread (runs after its current turn); to a main thread it goes to the coordinator, whose reply arrives on the event stream
+         * Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream
+         * @description Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream
          */
         post: operations["apiV1ThreadsIdMessagesPost"];
         delete?: never;
@@ -851,6 +851,26 @@ export interface paths {
         put: operations["apiV1ThreadsIdProfilePut"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{id}/queue/{qid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Take back a message held for after the running turn
+         * @description Take back a message held for after the running turn
+         */
+        delete: operations["apiV1ThreadsIdQueueQidDelete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1455,6 +1475,8 @@ export interface components {
             attachments?: string[];
             /** @description Field content */
             content: string;
+            /** @description Field mode */
+            mode?: string;
         };
         SettingsResponse: {
             /**
@@ -3150,6 +3172,31 @@ export interface operations {
                 "application/json": components["schemas"]["ProfileRequest"];
             };
         };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdQueueQidDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+                /** @description Resource ID */
+                qid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful response */
             200: {

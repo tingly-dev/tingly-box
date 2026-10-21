@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Box, CircularProgress, IconButton, InputBase, Paper, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Box, CircularProgress, IconButton, InputBase, ListItemText, Menu, MenuItem, Paper, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Attachment } from '../client';
 import { isLongText, lineCount, pastedTextFile } from './attachments';
-import { ArrowUpward, Attach, Close, Description, Stop } from './icons';
+import { ArrowUpward, Attach, Close, Description, ExpandMore, Stop } from './icons';
 import { ModelPicker } from './ModelPicker';
 import { radius } from '@tingly/ui/theme/radius';
 import { fontSizes } from '@tingly/ui/theme/fonts';
@@ -19,9 +19,18 @@ interface Pending {
     done?: Attachment;
 }
 
+/**
+ * How a message meets a running turn. The default (no mode) joins the turn,
+ * as in Claude Code; the other two are picked per message from the send menu.
+ */
+export type SendMode = 'queue' | 'stop_and_send';
+
 export interface ComposerProps {
-    /** Returns false to keep the text in the box (e.g. the send failed). */
-    onSend: (text: string, attachments: Attachment[]) => Promise<boolean | void> | boolean | void;
+    /**
+     * Returns false to keep the text in the box (e.g. the send failed). The
+     * mode is only passed when the user chose one from the send menu.
+     */
+    onSend: (text: string, attachments: Attachment[], mode?: SendMode) => Promise<boolean | void> | boolean | void;
     /**
      * Stores files for the message and returns what to send with it. Setting
      * it turns on the attach button, dropping files and pasting (a long
@@ -33,8 +42,14 @@ export interface ComposerProps {
     /** A turn runs: Stop shows when onStop is set, and Send waits unless sendWhileStreaming. */
     streaming?: boolean;
     onStop?: () => void | Promise<void>;
-    /** Send stays available while a turn runs (the host queues or delivers it after the turn). */
+    /** Send stays available while a turn runs (the host adds it to the turn, or queues it). */
     sendWhileStreaming?: boolean;
+    /**
+     * While a turn runs, the send button gets a menu to send "after this turn"
+     * or "stop and send" instead (Alt+Enter is "after this turn"). The host
+     * must honour the mode passed to onSend.
+     */
+    sendModes?: boolean;
     disabled?: boolean;
     /** False holds Send while the text can still be edited (e.g. no folder picked yet). */
     canSubmit?: boolean;
@@ -74,7 +89,7 @@ export interface ComposerProps {
  * Enter (confirming a candidate) never sends, and a send never runs twice.
  */
 export function Composer({
-    onSend, attach, attachBlocked, streaming, onStop, sendWhileStreaming, disabled, canSubmit = true, placeholder, autoFocus, model, onModelChange, modelLabel,
+    onSend, attach, attachBlocked, streaming, onStop, sendWhileStreaming, sendModes, disabled, canSubmit = true, placeholder, autoFocus, model, onModelChange, modelLabel,
     context, leftSlot, minRows = 1, seed, keepUntilSent, text: controlled, onTextChange, onAccepted, keysHint,
 }: ComposerProps) {
     const { t } = useTranslation('projects');
@@ -150,14 +165,14 @@ export function Composer({
     const hasContent = text.trim() !== '' || ready.length > 0;
     const canSend = hasContent && !uploading && canSubmit && !blockedByTurn && !sending && !disabled;
 
-    const submit = async () => {
+    const submit = async (mode?: SendMode) => {
         if (!canSend || sendingRef.current) return;
         const value = text;
         sendingRef.current = true;
         setSending(true);
         if (!keepUntilSent) setText('');
         try {
-            const ok = (await onSend(value.trim(), ready)) !== false;
+            const ok = (await (mode ? onSend(value.trim(), ready, mode) : onSend(value.trim(), ready))) !== false;
             if (ok) setFiles([]);
             if (ok && keepUntilSent) {
                 if (onAccepted) onAccepted(value);
@@ -186,6 +201,7 @@ export function Composer({
         }
     };
 
+    const [modeMenu, setModeMenu] = useState<HTMLElement | null>(null);
     const showStop = streaming && onStop;
     // While a turn runs, Send shows next to Stop once there is something to send.
     const showSend = !showStop || (sendWhileStreaming && hasContent);
@@ -209,6 +225,33 @@ export function Composer({
                 </IconButton>
             </span>
         </Tooltip>
+    );
+    const modesAvailable = sendModes && streaming && sendWhileStreaming && showSend;
+    const modeButton = modesAvailable && (
+        <>
+            <Tooltip title={t('composer.sendOptions')}>
+                <span>
+                    <IconButton
+                        onClick={(e) => setModeMenu(e.currentTarget)}
+                        disabled={!canSend}
+                        size="small"
+                        aria-label={t('composer.sendOptions')}
+                        aria-haspopup="menu"
+                        sx={{ color: 'text.secondary', ml: -0.5 }}
+                    >
+                        <ExpandMore fontSize="small" />
+                    </IconButton>
+                </span>
+            </Tooltip>
+            <Menu anchorEl={modeMenu} open={!!modeMenu} onClose={() => setModeMenu(null)} anchorOrigin={{ vertical: 'top', horizontal: 'right' }} transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
+                <MenuItem onClick={() => { setModeMenu(null); void submit('queue'); }}>
+                    <ListItemText primary={t('composer.sendQueue')} secondary={t('composer.sendQueueHint')} />
+                </MenuItem>
+                <MenuItem onClick={() => { setModeMenu(null); void submit('stop_and_send'); }}>
+                    <ListItemText primary={t('composer.sendStop')} secondary={t('composer.sendStopHint')} />
+                </MenuItem>
+            </Menu>
+        </>
     );
     const stopButton = showStop && (
         <Tooltip title={t('composer.stopTurn')}>
@@ -304,7 +347,7 @@ export function Composer({
             onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && (!mobile || e.ctrlKey || e.metaKey)) {
                     e.preventDefault();
-                    void submit();
+                    void submit(e.altKey && modesAvailable ? 'queue' : undefined);
                 }
             }}
             sx={{ fontSize: fontSizes.base, lineHeight: 1.65, color: 'text.primary', ...(inline && { py: 0.5 }) }}
@@ -346,6 +389,7 @@ export function Composer({
                     {attachButton}
                     {input}
                     {sendButton}
+                    {modeButton}
                     {stopButton}
                 </Box>
             ) : (
@@ -359,6 +403,7 @@ export function Composer({
                         </Box>
                         {onModelChange && <ModelPicker value={model ?? ''} onChange={onModelChange} label={modelLabel} />}
                         {sendButton}
+                        {modeButton}
                         {stopButton}
                     </Box>
                 </>

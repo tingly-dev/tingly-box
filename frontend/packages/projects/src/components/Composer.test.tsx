@@ -85,6 +85,41 @@ describe('Composer', () => {
     });
 });
 
+describe('Composer send modes', () => {
+    const running = (onSend = vi.fn().mockResolvedValue(true), sendModes = true) => {
+        render(<Composer placeholder="Reply" streaming sendWhileStreaming sendModes={sendModes} onStop={vi.fn()} onSend={onSend} />);
+        fireEvent.change(screen.getByPlaceholderText('Reply'), { target: { value: 'change course' } });
+        return onSend;
+    };
+
+    it('sends with no mode by default, so the host joins the running turn', async () => {
+        const send = running();
+        await act(async () => fireEvent.keyDown(screen.getByPlaceholderText('Reply'), { key: 'Enter' }));
+        expect(send).toHaveBeenCalledExactlyOnceWith('change course', []);
+    });
+
+    it('sends after the turn on Alt+Enter, and offers both choices in the menu', async () => {
+        const send = running();
+        await act(async () => fireEvent.keyDown(screen.getByPlaceholderText('Reply'), { key: 'Enter', altKey: true }));
+        expect(send).toHaveBeenCalledExactlyOnceWith('change course', [], 'queue');
+    });
+
+    it('stops and sends from the menu', async () => {
+        const send = running();
+        fireEvent.click(screen.getByRole('button', { name: 'composer.sendOptions' }));
+        expect(screen.getByText('composer.sendQueue')).toBeInTheDocument();
+        await act(async () => fireEvent.click(screen.getByText('composer.sendStop')));
+        expect(send).toHaveBeenCalledExactlyOnceWith('change course', [], 'stop_and_send');
+    });
+
+    it('shows no menu, and ignores Alt+Enter, when no turn runs or the host did not opt in', async () => {
+        const send = running(undefined, false);
+        expect(screen.queryByRole('button', { name: 'composer.sendOptions' })).not.toBeInTheDocument();
+        await act(async () => fireEvent.keyDown(screen.getByPlaceholderText('Reply'), { key: 'Enter', altKey: true }));
+        expect(send).toHaveBeenCalledExactlyOnceWith('change course', []);
+    });
+});
+
 describe('Composer attachments', () => {
     const stored = (name: string) => ({ name, path: `uploads/x/${name}`, type: 'text/plain', size: 3 });
 

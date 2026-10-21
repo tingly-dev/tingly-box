@@ -46,15 +46,33 @@ export function threadTranscript(events: ThreadEvent[], running: boolean, author
     // latest of them, as the engine writes one right after its call.
     const open: string[] = [];
     let pending: string | undefined;
+    // Messages added to a running turn, until Claude's next step shows it
+    // read them.
+    let unread: TranscriptEntry[] = [];
+    const markRead = () => {
+        for (const m of unread) m.pending = false;
+        unread = [];
+    };
 
     for (const e of events) {
         const timestamp = e.created_at;
         const first = entries.length;
         switch (e.kind) {
-            case 'user':
-                entries.push({ role: 'user', content: e.content, author: author(e), attachments: parse<{ attachments?: TranscriptEntry['attachments'] }>(e.payload)?.attachments, timestamp });
+            case 'user': {
+                const pl = parse<{ attachments?: TranscriptEntry['attachments']; injected?: boolean }>(e.payload);
+                const entry: TranscriptEntry = { role: 'user', content: e.content, author: author(e), attachments: pl?.attachments, timestamp };
+                if (pl?.injected) {
+                    entry.pending = true;
+                    unread.push(entry);
+                }
+                entries.push(entry);
+                break;
+            }
+            case 'queued':
+                // A held message shows above the composer until it is sent.
                 break;
             case 'assistant':
+                if (!e.parent) markRead();
                 entries.push({ role: 'assistant', content: e.content, timestamp });
                 break;
             case 'report': {
@@ -71,6 +89,7 @@ export function threadTranscript(events: ThreadEvent[], running: boolean, author
                 break;
             }
             case 'tool_result':
+                if (!e.parent) markRead();
                 entries.push({ kind: 'tool_result', content: e.content, request_id: e.request_id || open.pop(), payload: parse(e.payload), timestamp });
                 break;
             case 'task':
@@ -110,5 +129,7 @@ export function threadTranscript(events: ThreadEvent[], running: boolean, author
         }
         if (e.parent) for (let i = first; i < entries.length; i++) entries[i].parent = e.parent;
     }
+    // With no turn running there is nothing left to wait for.
+    if (!running) markRead();
     return { entries, pendingRequestId: pending };
 }

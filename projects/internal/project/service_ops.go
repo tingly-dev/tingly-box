@@ -101,3 +101,17 @@ func (s *Service) Send(ctx context.Context, threadID, text string, atts []Attach
 	}
 	return s.Threads.Send(ctx, threadID, text, src, atts)
 }
+
+// SendWith is Send for a user in the web: while a turn runs, mode says
+// whether the message joins it, waits for it or replaces it. The coordinator
+// takes every message the same way.
+func (s *Service) SendWith(ctx context.Context, threadID, text string, atts []Attachment, src Source, mode SendMode) (*db.Thread, error) {
+	t, err := s.Store.GetThread(threadID)
+	if err != nil {
+		return nil, err
+	}
+	if t.Agent == db.AgentLLM {
+		return s.Send(ctx, threadID, text, atts, src)
+	}
+	return s.Threads.SendWith(ctx, threadID, text, atts, src, mode)
+}

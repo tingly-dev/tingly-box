@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { forwardRef, useImperativeHandle, useState } from 'react';
 import { Composer, type ComposerProps } from './Composer';
 import { readLocal, removeLocal, writeLocal } from '../utils/storage';
 
@@ -7,13 +7,18 @@ type Props = Omit<ComposerProps, 'text' | 'onTextChange' | 'onAccepted' | 'keepU
     draftKey: string;
 };
 
+export interface ThreadComposerHandle {
+    /** Puts text back in the box after what is typed, e.g. messages that were held and then dropped. */
+    addToDraft: (text: string) => void;
+}
+
 /**
  * The message box of a conversation with an agent, a project's own or a
  * thread's: the same draft, the same "send while a turn runs" and the same
  * rules for when the text leaves the box, so every surface behaves alike.
  * Mount it with a key per conversation so its draft starts fresh.
  */
-export function ThreadComposer({ draftKey, ...rest }: Props) {
+export const ThreadComposer = forwardRef<ThreadComposerHandle, Props>(function ThreadComposer({ draftKey, ...rest }, ref) {
     const key = `draft.${draftKey}`;
     const [draft, setDraftState] = useState(() => readLocal(key) ?? '');
     const setDraft = (text: string) => {
@@ -21,6 +26,9 @@ export function ThreadComposer({ draftKey, ...rest }: Props) {
         if (text) writeLocal(key, text);
         else removeLocal(key);
     };
+    useImperativeHandle(ref, () => ({
+        addToDraft: (text) => setDraft(draft.trim() === '' ? text : `${draft}\n\n${text}`),
+    }));
     return (
         <Composer
             {...rest}
@@ -36,4 +44,4 @@ export function ThreadComposer({ draftKey, ...rest }: Props) {
             })}
         />
     );
-}
+});
