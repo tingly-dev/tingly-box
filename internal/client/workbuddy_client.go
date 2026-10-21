@@ -16,6 +16,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -98,15 +99,90 @@ func (c *WorkBuddyClient) ChatCompletionsNew(ctx context.Context, req openai.Cha
 	return &completion, nil
 }
 
-// ResponsesNew is not served by WorkBuddy; Responses requests are converted to
-// chat completions upstream of the client (endpoint mode chat).
+// ResponsesNew sends a Responses request upstream. WorkBuddy is a mixed
+// gateway: some models are served on /responses, the rest only on chat
+// completions, and the model list does not say which. So the request goes to
+// /responses first, and a refusal that means "no such endpoint for this model"
+// (404/405/501) is answered over chat completions instead: the request is
+// converted to chat, served through ChatCompletionsNew (stream and accumulate)
+// and the completion mapped back to a Response.
 func (c *WorkBuddyClient) ResponsesNew(ctx context.Context, req responses.ResponseNewParams) (*responses.Response, error) {
-	return nil, fmt.Errorf("workbuddy: /responses endpoint is not supported")
+	resp, err := c.OpenAIClient.ResponsesNew(ctx, req)
+	if err == nil || !workbuddyNoResponsesEndpoint(err) {
+		return resp, err
+	}
+	chatReq := request.ConvertOpenAIResponsesToChat(&req, 0)
+	completion, err := c.ChatCompletionsNew(ctx, *chatReq)
+	if err != nil {
+		return nil, err
+	}
+	return workbuddyChatToResponse(completion)
 }
 
-// ResponsesNewStreaming is not served by WorkBuddy.
+// ResponsesNewStreaming streams from the upstream /responses endpoint. Gateway
+// traffic for models without one never gets here: endpoint resolution routes
+// WorkBuddy providers to Chat unless the rule forces Responses.
 func (c *WorkBuddyClient) ResponsesNewStreaming(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion] {
-	return nil
+	return c.OpenAIClient.ResponsesNewStreaming(ctx, req)
+}
+
+// workbuddyNoResponsesEndpoint reports whether err says the upstream does not
+// serve /responses for the model, as opposed to a real failure of the call.
+func workbuddyNoResponsesEndpoint(err error) bool {
+	var apiErr *openai.Error
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	switch apiErr.StatusCode {
+	case http.StatusNotFound, http.StatusMethodNotAllowed, http.StatusNotImplemented:
+		return true
+	}
+	return false
+}
+
+// workbuddyChatToResponse maps a chat completion to a Responses object: the
+// message text becomes one output_text message item, each tool call a
+// function_call item.
+func workbuddyChatToResponse(cc *openai.ChatCompletion) (*responses.Response, error) {
+	output := []map[string]any{}
+	status, incomplete := "completed", map[string]any(nil)
+	if len(cc.Choices) > 0 {
+		ch := cc.Choices[0]
+		if ch.Message.Content != "" {
+			output = append(output, map[string]any{
+				"type": "message", "id": "msg_" + cc.ID, "status": "completed", "role": "assistant",
+				"content": []map[string]any{{"type": "output_text", "text": ch.Message.Content, "annotations": []any{}}},
+			})
+		}
+		for _, tc := range ch.Message.ToolCalls {
+			output = append(output, map[string]any{
+				"type": "function_call", "id": "fc_" + tc.ID, "call_id": tc.ID, "status": "completed",
+				"name": tc.Function.Name, "arguments": tc.Function.Arguments,
+			})
+		}
+		if ch.FinishReason == "length" {
+			status, incomplete = "incomplete", map[string]any{"reason": "max_output_tokens"}
+		}
+	}
+	raw, err := json.Marshal(map[string]any{
+		"id": "resp_" + cc.ID, "object": "response", "created_at": cc.Created, "model": cc.Model,
+		"status": status, "incomplete_details": incomplete, "output": output,
+		"parallel_tool_calls": true, "tool_choice": "auto", "tools": []any{},
+		"usage": map[string]any{
+			"input_tokens": cc.Usage.PromptTokens, "output_tokens": cc.Usage.CompletionTokens,
+			"total_tokens":          cc.Usage.TotalTokens,
+			"input_tokens_details":  map[string]any{"cached_tokens": cc.Usage.PromptTokensDetails.CachedTokens},
+			"output_tokens_details": map[string]any{"reasoning_tokens": cc.Usage.CompletionTokensDetails.ReasoningTokens},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	var resp responses.Response
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("workbuddy: build responses object: %w", err)
+	}
+	return &resp, nil
 }
 
 // ListModels reads the account's model list from GET {origin}/v3/config.
