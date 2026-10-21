@@ -50,7 +50,7 @@ YZ（2026-10-21）：Remote 原有的行为迁到 Projects 的**项目**或**文
 | `@cc …` / `/cc …` | 切到 Claude Code 并发送 | 前缀被去掉，后面的话照常发送 | 无（已经是 Claude Code） |
 | `@tb …` / `/tb …` | 切到 SmartGuide | 前缀去掉，后面的话照常发给绑定的线程（`@tb` 下线） | 无向导 |
 | `/cd <路径>`、目录浏览器 | 设 `ProjectPath` | 换到该文件夹，下一条开新会话 | 无 |
-| `/project`（`/p`） | 列本 chat 用过的目录，点选切换 | 改名 `/dir`（YZ：它本来就是“列出”；project、folders 都不是好词，命令名不用复数）：列本 chat 用过的目录，点选 = `/cd`；`/project`、`/p` 留作别名 | 只列文件夹，不列项目 |
+| `/project`（`/p`） | 列本 chat 用过的目录，点选切换 | 改名 `/dir`（YZ：project、folders 都不是好词，命令名不用复数）：不带参数列出本 chat 用过的目录，`/dir N` 或 `/dir <路径>` 切过去（= `/cd`）；`/project`、`/p` 留作别名 | 只列文件夹，不列项目 |
 | `/clear`、`/stop`、`/interrupt` | 清会话 / 停 | 已在 M2b 接管：`/clear` = 停 + 下一条开新会话 | 无 |
 | `/new` | 无 | M2b | 新增 |
 | `/status` | 当前 agent、会话、目录 | 绑在哪（项目或文件夹）、线程 `#N`、状态、模型、权限模式 | 内容换成 Projects 的 |
@@ -61,7 +61,7 @@ YZ（2026-10-21）：Remote 原有的行为迁到 Projects 的**项目**或**文
 | `/help` | 旧命令 | M5 的 Projects 帮助加上上面这些 | 一份帮助 |
 | `/bind <code>`、`/join` | 配对、群白名单 | 不变（接入层） | 无 |
 | `/mock` | 测试用假 agent | 删除 | 只用于测试 |
-| `/threads`、`/focus`、`/back`、`@N` | 无 | M4，文件夹里同样可用；`/threads` 改名 `/session`（列出本项目或本目录的会话），`/threads` 留作别名 | 新增 |
+| `/threads`、`/focus`、`/back`、`@N` | 无 | M4，文件夹里同样可用；`/threads` 改名 `/session`：不带参数列出本项目或本目录的会话，`/session N` 切到 #N（替代 `/focus N`）；`/threads`、`/focus` 留作别名 | 新增 |
 
 ### 行为
 
@@ -132,7 +132,8 @@ Remote 页面保留，只去掉 SmartGuide 模型和“常驻会话”这类作�
 
 ## 已定（YZ，2026-10-21）
 
-1. `/cd` 保留；`/project` 实际是列表，改名 `/dir`；`/threads` 改名 `/session`（旧名都留作别名）。命令名不用 project、folder，也不用复数。项目仍只在 Web 绑。
+1. 命令名：`/cd` 保留；`/dir`（替代 `/project`）和 `/session`（替代 `/threads`、`/focus`）。规则是**名词命令不带参数就列出，带参数就切换**，
+   所以只记两个词。旧名都留作别名。命令名不用 project、folder，也不用复数；`/list`、`/ls` 不用（不说列什么，`/ls` 会被当成列文件）。项目仍只在 Web 绑。
 2. `@tb` 下线（做法 A）。
 3. 中间输出默认关，`/verbose on` 打开。
 4. 运行中再发消息：排队（Projects 现状）。
