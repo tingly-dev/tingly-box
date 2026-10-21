@@ -21,6 +21,7 @@ export default {
       "deny": "Deny",
       "details": "Details",
       "earlierSteps": "Show earlier steps",
+      "focusAgent": "Open on its own",
       "input": "Input",
       "loadingSteps": "Loading steps…",
       "newSinceVisit": "New",

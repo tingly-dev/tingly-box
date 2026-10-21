@@ -66,6 +66,11 @@ export const en = {
             default: 'Ask for everything', acceptEdits: 'Accept edits', auto: 'Auto', plan: 'Plan only', dontAsk: 'Don’t ask', bypassPermissions: 'Never ask',
         },
     },
+    subagents: {
+        title: 'Subagents', none: 'No subagents in this session yet',
+        hint: 'Every subagent this session ran, oldest first. Open one to read its steps on their own.',
+        steps_one: '{{count}} step', steps_other: '{{count}} steps', earlier: 'Show earlier steps', back: 'Conversation', show: 'Show in conversation', loading: 'Loading…',
+    },
     tasks: {
         none: 'No background tasks', hint: 'Commands and subagents Claude runs in the background show up here, and keep running after its reply.',
         running: 'Running', finished: 'Finished', nothingRunning: 'Nothing running now.',

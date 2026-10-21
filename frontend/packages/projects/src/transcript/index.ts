@@ -17,7 +17,7 @@ export {matchesFilter, plainLine, trajectoryRows, trajectorySummary} from './tra
 export type {AgentSteps, AttachmentsComponent, CodeBlockComponent, DraftStorage, SubagentSteps} from './context';
 export {createMemoryDraftStorage} from './context';
 
-export {default as Transcript} from './Transcript';
+export {default as Transcript, SubagentFocus} from './Transcript';
 export type {Respond} from './Transcript';
 export {default as Trajectory} from './Trajectory';
 export {default as Markdown} from './Markdown';

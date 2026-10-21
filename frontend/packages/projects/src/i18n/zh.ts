@@ -71,6 +71,11 @@ export const zh: Dict<typeof en> = {
             default: '全部询问', acceptEdits: '自动接受编辑', auto: '自动', plan: '仅规划', dontAsk: '不再询问', bypassPermissions: '从不询问',
         },
     },
+    subagents: {
+        title: '子代理', none: '这个会话还没有子代理',
+        hint: '这个会话运行过的所有子代理，按时间先后排列。打开一个即可单独查看它的步骤。',
+        steps_one: '{{count}} 步', steps_other: '{{count}} 步', earlier: '显示更早的步骤', back: '对话', show: '在对话中查看', loading: '加载中…',
+    },
     tasks: {
         none: '暂无后台任务', hint: 'Claude 在后台运行的命令和子代理会显示在这里，回复后仍会继续运行。',
         running: '运行中', finished: '已结束', nothingRunning: '目前没有正在运行的任务。',

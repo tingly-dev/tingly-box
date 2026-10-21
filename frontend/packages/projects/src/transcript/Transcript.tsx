@@ -1,5 +1,5 @@
-import {Block, Build, Cancel, Check, CheckCircle, ChevronRight, Close, ErrorOutline, ExpandMore, Help, Info, Psychology, Robot, Terminal} from '@tingly/ui/icons';
-import {Alert, Box, Button, Chip, CircularProgress, Collapse, Paper, Stack, Typography} from '@mui/material';
+import {Block, Build, Cancel, Check, CheckCircle, ChevronRight, Close, ErrorOutline, ExpandMore, Help, Info, OpenInFull, Psychology, Robot, Terminal} from '@tingly/ui/icons';
+import {Alert, Box, Button, Chip, CircularProgress, Collapse, IconButton, Paper, Stack, Tooltip, Typography} from '@mui/material';
 import type {Theme} from '@mui/material/styles';
 import {getReadableAccent} from '@tingly/ui/theme/status';
 import {fontMono, fontSizes} from '@tingly/ui/theme/fonts';
@@ -598,6 +598,7 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
     const {t} = useTranslation();
     const [open, toggle] = useExpanded(expandAll);
     const steps = useSubagentSteps(block.call.id, open);
+    const {subagents} = useTranscriptHost();
     const input = (block.call.input ?? {}) as {description?: string; prompt?: string; subagent_type?: string};
     const task = block.task;
     const status = agentStatus(block, turnLive);
@@ -644,6 +645,18 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
                     <Stack direction="row" spacing={0.5} sx={{alignItems: 'center', flexShrink: 0}} title={statusLabel(t, status)}>
                         {statusIcon}
                     </Stack>
+                    {subagents?.focus && (
+                        <Tooltip title={t('projects.transcript.focusAgent', {defaultValue: 'Open on its own'})}>
+                            <IconButton
+                                size="small"
+                                aria-label={t('projects.transcript.focusAgent', {defaultValue: 'Open on its own'})}
+                                onClick={(e) => { e.stopPropagation(); subagents.focus?.(block.call.id); }}
+                                sx={{p: 0.25, color: 'text.secondary'}}
+                            >
+                                <OpenInFull sx={{fontSize: 14}}/>
+                            </IconButton>
+                        </Tooltip>
+                    )}
                     {open ? <ExpandMore sx={{fontSize: 16, color: 'text.secondary'}}/> : <ChevronRight sx={{fontSize: 16, color: 'text.secondary'}}/>}
                 </Stack>
                 {(running && task?.activity) || meta ? (
@@ -654,43 +667,66 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
             </Box>
             <Collapse in={open} unmountOnExit>
                 <Stack spacing={1.5} sx={{px: 1.5, pb: 1.5, pt: 0.5, borderTop: 1, borderColor: 'divider'}}>
-                    {input.prompt && (
-                        <Box>
-                            <Typography variant="caption" sx={{color: 'text.secondary'}}>{t('projects.transcript.agentPrompt', {defaultValue: 'Asked to'})}</Typography>
-                            <Typography variant="body2" sx={{color: 'text.primary', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 160, overflow: 'auto'}}>
-                                {input.prompt}
-                            </Typography>
-                        </Box>
-                    )}
-                    {steps.more && (
-                        <Button size="small" onClick={steps.loadEarlier} disabled={steps.loading} sx={{alignSelf: 'flex-start'}}>
-                            {t('projects.transcript.earlierSteps', {defaultValue: 'Show earlier steps'})}
-                        </Button>
-                    )}
-                    {steps.loading && block.children.length === 0 && (
-                        <Typography variant="body2" sx={{color: 'text.secondary'}}>{t('projects.transcript.loadingSteps', {defaultValue: 'Loading steps…'})}</Typography>
-                    )}
-                    {/* The report is its last reply, shown below; the run
-                        above it is everything before. */}
-                    <BlockList
-                        blocks={report && block.children[block.children.length - 1]?.type === 'assistant' ? block.children.slice(0, -1) : block.children}
-                        pendingRequestId={pendingRequestId}
-                        working={running}
-                        expandAll={expandAll}
-                        onRespond={onRespond}
-                    />
-                    {report && (
-                        <Box>
-                            <Typography variant="caption" sx={{color: 'text.secondary'}}>{t('projects.transcript.agentReport', {defaultValue: 'Report'})}</Typography>
-                            <Markdown content={report}/>
-                        </Box>
-                    )}
-                    {running && block.children.length === 0 && (
-                        <Typography variant="body2" sx={{color: 'text.secondary'}}>{t('projects.transcript.working', {defaultValue: 'Working…'})}</Typography>
-                    )}
+                    <AgentBody block={block} running={running} report={report} steps={steps} expandAll={expandAll} pendingRequestId={pendingRequestId} onRespond={onRespond}/>
                 </Stack>
             </Collapse>
         </Paper>
+    );
+};
+
+// AgentBody is what a subagent did: what it was asked, its steps (read when
+// first shown) and the report it handed back. The card shows it opened, and
+// so does the subagent opened on its own.
+const AgentBody = ({block, running, report, steps, expandAll, pendingRequestId, onRespond, showEarlier = true}: {
+    block: Extract<TranscriptBlock, {type: 'agent'}>;
+    running: boolean;
+    report: string | undefined;
+    steps: ReturnType<typeof useSubagentSteps>;
+    expandAll: boolean;
+    pendingRequestId?: string;
+    onRespond: Respond;
+    // Off where the host offers older steps itself (keeping the reading position).
+    showEarlier?: boolean;
+}) => {
+    const {t} = useTranslation();
+    const input = (block.call.input ?? {}) as {prompt?: string};
+    return (
+        <>
+            {input.prompt && (
+                <Box>
+                    <Typography variant="caption" sx={{color: 'text.secondary'}}>{t('projects.transcript.agentPrompt', {defaultValue: 'Asked to'})}</Typography>
+                    <Typography variant="body2" sx={{color: 'text.primary', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 160, overflow: 'auto'}}>
+                        {input.prompt}
+                    </Typography>
+                </Box>
+            )}
+            {showEarlier && steps.more && (
+                <Button size="small" onClick={steps.loadEarlier} disabled={steps.loading} sx={{alignSelf: 'flex-start'}}>
+                    {t('projects.transcript.earlierSteps', {defaultValue: 'Show earlier steps'})}
+                </Button>
+            )}
+            {steps.loading && block.children.length === 0 && (
+                <Typography variant="body2" sx={{color: 'text.secondary'}}>{t('projects.transcript.loadingSteps', {defaultValue: 'Loading steps…'})}</Typography>
+            )}
+            {/* The report is its last reply, shown below; the run
+                above it is everything before. */}
+            <BlockList
+                blocks={report && block.children[block.children.length - 1]?.type === 'assistant' ? block.children.slice(0, -1) : block.children}
+                pendingRequestId={pendingRequestId}
+                working={running}
+                expandAll={expandAll}
+                onRespond={onRespond}
+            />
+            {report && (
+                <Box>
+                    <Typography variant="caption" sx={{color: 'text.secondary'}}>{t('projects.transcript.agentReport', {defaultValue: 'Report'})}</Typography>
+                    <Markdown content={report}/>
+                </Box>
+            )}
+            {running && block.children.length === 0 && (
+                <Typography variant="body2" sx={{color: 'text.secondary'}}>{t('projects.transcript.working', {defaultValue: 'Working…'})}</Typography>
+            )}
+        </>
     );
 };
 
@@ -790,6 +826,45 @@ const ChecklistCard = ({todos, working}: {todos: Todo[]; working: boolean}) => {
 const VERB_DEFAULTS: Record<WorkingVerb, string> = {
     thinking: 'Thinking', running: 'Running a command', reading: 'Reading', editing: 'Editing',
     searching: 'Searching the web', delegating: 'Waiting on a subagent', working: 'Working',
+};
+
+// SubagentFocus is one subagent opened on its own: the same body its card
+// shows, with the room of the whole pane. The host shows older steps above
+// it (SubagentSteps.load with earlier) and says where it sits in the
+// conversation.
+export const SubagentFocus = ({block, working, expandAll = false, onRespond, pendingRequestId, drafts, subagents, codeBlock, attachments, rememberLabel}: {
+    block: Extract<TranscriptBlock, {type: 'agent'}>;
+    // The thread's turn runs (a foreground subagent left running without it was cut off).
+    working: boolean;
+    expandAll?: boolean;
+    onRespond: Respond;
+    pendingRequestId?: string;
+    drafts?: DraftStorage;
+    subagents?: SubagentSteps;
+    codeBlock?: CodeBlockComponent;
+    attachments?: AttachmentsComponent;
+    rememberLabel?: (tool: string) => string;
+}) => (
+    <TranscriptHostProvider drafts={drafts} subagents={subagents} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel}>
+        <FocusBody block={block} working={working} expandAll={expandAll} onRespond={onRespond} pendingRequestId={pendingRequestId}/>
+    </TranscriptHostProvider>
+);
+
+const FocusBody = ({block, working, expandAll, onRespond, pendingRequestId}: {
+    block: Extract<TranscriptBlock, {type: 'agent'}>;
+    working: boolean;
+    expandAll: boolean;
+    onRespond: Respond;
+    pendingRequestId?: string;
+}) => {
+    const steps = useSubagentSteps(block.call.id, true);
+    const running = agentStatus(block, working) === 'running';
+    return (
+        <Stack spacing={2.5}>
+            <AgentBody block={block} running={running} report={agentReport(block)} steps={steps} expandAll={expandAll} pendingRequestId={pendingRequestId} onRespond={onRespond} showEarlier={false}/>
+            {running && block.children.length > 0 && <WorkingLine blocks={block.children}/>}
+        </Stack>
+    );
 };
 
 const Transcript = ({blocks, pendingRequestId, working, expandAll = false, onRespond, drafts, subagents, codeBlock, attachments, rememberLabel, newSince}: TranscriptProps) => {

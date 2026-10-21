@@ -56,6 +56,9 @@ export interface SubagentSteps {
     steps: (call: string) => AgentSteps;
     // load reads the latest steps, or with earlier the page before the first loaded one.
     load: (call: string, earlier?: boolean) => Promise<void>;
+    // focus opens a subagent on its own, out of the conversation; without
+    // it, a card has no way there.
+    focus?: (call: string) => void;
 }
 
 interface TranscriptHost {

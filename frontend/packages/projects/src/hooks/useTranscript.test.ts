@@ -81,4 +81,23 @@ describe('useTranscript', () => {
         expect(result.current.events?.map((e) => e.id)).toEqual(['u0', 'b', 'c', 'call', 's1', 's2']);
         expect(result.current.subagents.steps('a1')).toEqual({ loaded: true, more: false });
     });
+
+    it('loads the conversation back to a call in one read, finding the call first when its event is not known', async () => {
+        m.get.mockResolvedValueOnce(answer([ev('d', 4), ev('e', 5)], true));
+        const { result } = renderHook(() => useTranscript('t1'));
+        await waitFor(() => expect(result.current.events).not.toBeNull());
+
+        const call = { ...ev('b', 2), kind: 'tool_use', content: 'Agent', request_id: 'a1' };
+        m.get.mockResolvedValueOnce(answer([call]));
+        m.get.mockResolvedValueOnce(answer([call, ev('c', 3)], true));
+        await act(() => result.current.subagents.locate('a1'));
+        expect(queries().slice(1)).toEqual([{ call: 'a1' }, { from: 'b', before: 'd' }]);
+        expect(result.current.events?.map((e) => e.id)).toEqual(['b', 'c', 'd', 'e']);
+        expect(result.current.more).toBe(true);
+
+        // Loaded now: nothing more to read.
+        await act(() => result.current.subagents.locate('a1', 'b'));
+        expect(m.get).toHaveBeenCalledTimes(3);
+    });
 });
+

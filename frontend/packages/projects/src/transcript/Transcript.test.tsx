@@ -2,7 +2,7 @@ import {act, cleanup, fireEvent, render, screen, waitFor, within} from '@testing
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {DraftStorage} from './context';
 import {createMemoryDraftStorage} from './context';
-import Transcript from './Transcript';
+import Transcript, {SubagentFocus} from './Transcript';
 import type {ActivityStep, TranscriptBlock, TranscriptEntry} from './model';
 import {buildTranscript} from './model';
 
@@ -388,4 +388,24 @@ describe('subagent steps read on open', () => {
         fireEvent.click(screen.getByRole('button', {name: 'Show earlier steps'}));
         expect(load).toHaveBeenLastCalledWith('a1', true);
     });
+
+    it('opens a subagent on its own from its card without folding the card', () => {
+        const focus = vi.fn();
+        const subagents = {steps: () => ({loaded: true, more: false} as const), load: vi.fn(() => Promise.resolve()), focus};
+        render(<Transcript blocks={buildTranscript(entries(true))} working={false} onRespond={vi.fn()} drafts={drafts} subagents={subagents}/>);
+        fireEvent.click(screen.getByRole('button', {name: 'Open on its own'}));
+        expect(focus).toHaveBeenCalledWith('a1');
+        expect(screen.getByRole('button', {name: /Scan repo/})).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('shows an opened subagent whole and reads its steps, leaving older ones to the host', async () => {
+        const load = vi.fn(() => Promise.resolve());
+        const block = buildTranscript(entries(true))[0];
+        if (block.type !== 'agent') throw new Error('not an agent');
+        render(<SubagentFocus block={block} working={false} onRespond={vi.fn()} drafts={drafts} subagents={{steps: () => ({loaded: false} as const), load}}/>);
+        await waitFor(() => expect(load).toHaveBeenCalledWith('a1', false));
+        expect(screen.getByText('step two')).toBeInTheDocument();
+        expect(screen.queryByRole('button', {name: 'Show earlier steps'})).toBeNull();
+    });
 });
+

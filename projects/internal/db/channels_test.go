@@ -264,3 +264,50 @@ func TestConversationPageBringsEveryUsageEvent(t *testing.T) {
 	}
 	assert.Equal(t, []string{"u1", "u2", "c", "d"}, got)
 }
+
+// A subagent found in the list is reached without paging: its own events by
+// call, and the conversation from its call to the loaded page in one read.
+func TestLocateSubagent(t *testing.T) {
+	s := newStore(t)
+	_, main := newProject(t, s, "P")
+	add := func(e ThreadEvent) *ThreadEvent {
+		e.ThreadID = main.ID
+		require.NoError(t, s.AddThreadEvent(&e))
+		return &e
+	}
+	add(ThreadEvent{Kind: EvUser, Content: "first"})
+	call := add(ThreadEvent{Kind: EvToolUse, Content: "Agent", RequestID: "a1", Payload: `{"description":"Scan","subagent_type":"Explore"}`})
+	for range 3 {
+		add(ThreadEvent{Kind: EvAssistant, Content: "step", Parent: "a1"})
+	}
+	add(ThreadEvent{Kind: EvToolResult, Content: "report", RequestID: "a1"})
+	add(ThreadEvent{Kind: EvToolUse, Content: "Agent", RequestID: "a2", Payload: `{"description":"Watch"}`})
+	add(ThreadEvent{Kind: EvTask, RequestID: "a2", Payload: `{"event":"task_started","background":true}`})
+	add(ThreadEvent{Kind: EvToolUse, Content: "Agent", RequestID: "a3", Payload: `{"description":"Fail"}`})
+	add(ThreadEvent{Kind: EvTask, RequestID: "a3", Payload: `{"event":"task_notification","status":"failed"}`})
+	add(ThreadEvent{Kind: EvToolUse, Content: "Bash", RequestID: "b1"})
+	add(ThreadEvent{Kind: EvAssistant, Content: "mid"})
+	last := add(ThreadEvent{Kind: EvAssistant, Content: "last"})
+
+	list, err := s.ThreadSubagents(main.ID)
+	require.NoError(t, err)
+	require.Len(t, list, 3)
+	assert.Equal(t, Subagent{Call: "a1", EventID: call.ID, Description: "Scan", SubagentType: "Explore", Status: "completed", Steps: 3, CreatedAt: list[0].CreatedAt}, list[0])
+	assert.Equal(t, "running", list[1].Status)
+	assert.True(t, list[1].Background)
+	assert.Equal(t, "failed", list[2].Status)
+
+	own, _, err := s.PageThreadEvents(main.ID, EventPage{Call: "a1"})
+	require.NoError(t, err)
+	require.Len(t, own, 2)
+	assert.Equal(t, []string{EvToolUse, EvToolResult}, []string{own[0].Kind, own[1].Kind})
+
+	span, more, err := s.PageThreadEvents(main.ID, EventPage{From: call.ID, Before: last.ID})
+	require.NoError(t, err)
+	assert.True(t, more, "the first message is still before it")
+	assert.Equal(t, call.ID, span[0].ID)
+	assert.Equal(t, "mid", span[len(span)-1].Content)
+	for _, e := range span {
+		assert.Empty(t, e.Parent, "steps stay with their subagent")
+	}
+}

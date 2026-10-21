@@ -21,6 +21,7 @@ export default {
       "deny": "不允许",
       "details": "详情",
       "earlierSteps": "显示更早的步骤",
+      "focusAgent": "单独查看",
       "input": "输入",
       "loadingSteps": "正在加载步骤…",
       "newSinceVisit": "新消息",

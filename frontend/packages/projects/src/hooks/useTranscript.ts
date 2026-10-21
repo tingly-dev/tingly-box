@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, unwrap, type ThreadEvent } from '../client';
+import { api, unwrap, type Subagent, type ThreadEvent } from '../client';
 import type { SubagentSteps } from '../transcript';
 
 /** How many of the latest events a thread opens with; older ones load on request. */
@@ -19,6 +19,23 @@ interface Transcript {
     agents: Record<string, { more: boolean }>;
 }
 
+
+/**
+ * Reads a subagent's steps when its card opens, and finds a subagent in a
+ * transcript read a page at a time: the whole list, one subagent's own
+ * events, and the conversation back to where it was called.
+ */
+export interface TranscriptSubagents extends SubagentSteps {
+    /** Every subagent of the thread, oldest first. */
+    list: () => Promise<Subagent[]>;
+    /** A call's own events (the call, its result, its task events), whether or not they are loaded. */
+    own: (call: string) => Promise<ThreadEvent[]>;
+    /**
+     * Loads the conversation back to a tool call, so it can be shown in
+     * place. eventId is the call's event when known (a subagent's list row).
+     */
+    locate: (call: string, eventId?: string) => Promise<void>;
+}
 
 /** The transcripts seen on this page, by thread, most recent last. */
 const cache = new Map<string, Transcript>();
@@ -80,7 +97,7 @@ const prepend = (list: ThreadEvent[], older: ThreadEvent[]) => {
     return [...older.filter((e) => !have.has(e.id)), ...list].sort((a, b) => time(a.created_at) - time(b.created_at));
 };
 
-const fetchEvents = (id: string, query: { parent?: string; limit?: number; before?: string; since?: string }) =>
+const fetchEvents = (id: string, query: { parent?: string; call?: string; limit?: number; before?: string; from?: string; since?: string }) =>
     unwrap(api.GET('/api/v1/threads/{id}/events', { params: { path: { id }, query } }));
 
 /**
@@ -142,6 +159,20 @@ export function useTranscript(threadId: string) {
         update(id, (t) => t && { ...t, events: prepend(t.events, r.events), agents: { ...t.agents, [call]: { more: r.more } } });
     }, [update]);
 
+    const listAgents = useCallback(async () => (await unwrap(api.GET('/api/v1/threads/{id}/subagents', { params: { path: { id: current.current } } }))).subagents, []);
+    const ownEvents = useCallback(async (call: string) => (await fetchEvents(current.current, { call })).events, []);
+
+    /** Extends the loaded window back to a call (one read: the window stays contiguous). */
+    const locate = useCallback(async (call: string, eventId?: string) => {
+        const id = current.current;
+        const isCall = (e: ThreadEvent) => !e.parent && e.kind === 'tool_use' && e.request_id === call;
+        if ((cache.get(id)?.events ?? []).some(isCall)) return;
+        const from = eventId ?? (await fetchEvents(id, { call })).events.find(isCall)?.id;
+        if (!from) return;
+        const first = windowFirst(cache.get(id)?.events ?? []);
+        const r = await fetchEvents(id, { from, ...(first && { before: first.id }) });
+        update(id, (t) => t && { ...t, events: prepend(t.events, r.events), more: r.more });
+    }, [update]);
 
     /** A live entry from the event stream. */
     const apply = useCallback((e: ThreadEvent) => {
@@ -161,12 +192,15 @@ export function useTranscript(threadId: string) {
 
     const t = state.threadId === threadId ? state.t : null;
     const agents = t?.agents;
-    const subagents = useMemo<SubagentSteps>(() => ({
+    const subagents = useMemo<TranscriptSubagents>(() => ({
         steps: (call) => {
             const a = agents?.[call];
             return a ? { loaded: true, more: a.more } : { loaded: false };
         },
         load: loadAgent,
-    }), [agents, loadAgent]);
+        list: listAgents,
+        own: ownEvents,
+        locate,
+    }), [agents, loadAgent, listAgents, ownEvents, locate]);
     return { events: t?.events ?? null, more: t?.more ?? false, catchUp, loadEarlier, apply, edit, subagents };
 }

@@ -21,6 +21,7 @@ export default {
       "deny": "Запретить",
       "details": "Подробности",
       "earlierSteps": "Показать более ранние шаги",
+      "focusAgent": "Открыть отдельно",
       "input": "Ввод",
       "loadingSteps": "Загрузка шагов…",
       "newSinceVisit": "Новое",

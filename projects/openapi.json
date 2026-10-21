@@ -1601,9 +1601,27 @@
             }
           },
           {
+            "name": "from",
+            "in": "query",
+            "description": "An event id: every event from it on (up to `before`), to extend a loaded page back to it in one read; limit does not apply",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "call",
+            "in": "query",
+            "description": "A tool call's request id: that call's own events on the conversation (the call, its result, its task events); nothing else applies",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "since",
             "in": "query",
-            "description": "RFC 3339 time: every event added or changed at or after it (its updated_at), subagent steps included; parent, limit and before do not apply",
+            "description": "RFC 3339 time: every event added or changed at or after it (its updated_at), subagent steps included; parent, limit, before and from do not apply",
             "required": false,
             "schema": {
               "type": "string"
@@ -2032,6 +2050,39 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/subagents": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "A thread's subagents (its Agent calls), oldest first: to find one in a long transcript without reading it",
+        "description": "A thread's subagents (its Agent calls), oldest first: to find one in a long transcript without reading it",
+        "operationId": "apiV1ThreadsIdSubagentsGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubagentsResponse"
                 }
               }
             }
@@ -3372,6 +3423,69 @@
         },
         "required": [
           "type"
+        ]
+      },
+      "Subagent": {
+        "type": "object",
+        "properties": {
+          "background": {
+            "type": "boolean",
+            "description": "Field background"
+          },
+          "call": {
+            "type": "string",
+            "description": "Field call"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field created_at"
+          },
+          "description": {
+            "type": "string",
+            "description": "Field description"
+          },
+          "event_id": {
+            "type": "string",
+            "description": "Field event_id"
+          },
+          "status": {
+            "type": "string",
+            "description": "Field status"
+          },
+          "steps": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field steps"
+          },
+          "subagent_type": {
+            "type": "string",
+            "description": "Field subagent_type"
+          }
+        },
+        "required": [
+          "call",
+          "event_id",
+          "description",
+          "background",
+          "status",
+          "steps",
+          "created_at"
+        ]
+      },
+      "SubagentsResponse": {
+        "type": "object",
+        "properties": {
+          "subagents": {
+            "type": "array",
+            "description": "Field subagents",
+            "items": {
+              "$ref": "#/components/schemas/Subagent"
+            }
+          }
+        },
+        "required": [
+          "subagents"
         ]
       },
       "TaskOutputResponse": {

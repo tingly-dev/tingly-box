@@ -7,7 +7,7 @@ import { useNotify } from '../../hooks/useNotify';
  * At the top of a transcript that opened on its latest entries: loads the
  * page before them and keeps what the user was reading where it was.
  */
-export function LoadEarlier({ scrollRef, onLoad }: { scrollRef: RefObject<HTMLDivElement | null>; onLoad: () => Promise<void> }) {
+export function LoadEarlier({ scrollRef, onLoad, label }: { scrollRef: RefObject<HTMLDivElement | null>; onLoad: () => Promise<void>; label?: string }) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const [busy, setBusy] = useState(false);
@@ -28,7 +28,7 @@ export function LoadEarlier({ scrollRef, onLoad }: { scrollRef: RefObject<HTMLDi
     };
     return (
         <Box sx={{ display: 'flex', justifyContent: 'center', pb: 1 }}>
-            <Button size="small" onClick={() => void load()} disabled={busy}>{t('thread.loadEarlier')}</Button>
+            <Button size="small" onClick={() => void load()} disabled={busy}>{label ?? t('thread.loadEarlier')}</Button>
         </Box>
     );
 }

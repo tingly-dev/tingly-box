@@ -287,8 +287,17 @@ type EventPage struct {
 	Limit int
 	// Before, an event id, keeps the events older than it.
 	Before string
+	// Call, a tool call's request id, picks that call's own events on the
+	// conversation (the call, its result, its task events), all of them;
+	// nothing else applies. A subagent opened on its own reads them when its
+	// call is not on a loaded page.
+	Call string
+	// From, an event id, keeps the events from it on (up to Before);
+	// Limit does not apply. It extends a loaded page back to an event at
+	// once, so the window stays contiguous.
+	From string
 	// Since keeps the events written (added or changed) at or after it, all
-	// of them and of every line; Parent, Limit and Before do not apply.
+	// of them and of every line; Parent, Limit, Before and From do not apply.
 	Since time.Time
 }
 
@@ -300,35 +309,64 @@ func (s *Store) PageThreadEvents(threadID string, p EventPage) ([]ThreadEvent, b
 		err := s.db.Where("thread_id = ? AND updated_at >= ?", threadID, p.Since.UTC()).Order("created_at ASC, rowid ASC").Find(&out).Error
 		return out, false, err
 	}
-	q := s.db.Where("thread_id = ? AND parent = ?", threadID, p.Parent)
-	if p.Before != "" {
-		var anchor struct {
-			CreatedAt time.Time
-			Rowid     int64
-		}
-		if err := s.db.Raw("SELECT created_at, rowid FROM thread_events WHERE id = ? AND thread_id = ?", p.Before, threadID).Scan(&anchor).Error; err != nil {
-			return nil, false, err
-		}
-		if anchor.Rowid == 0 {
-			return nil, false, ErrNotFound
-		}
-		q = q.Where("created_at < ? OR (created_at = ? AND rowid < ?)", anchor.CreatedAt, anchor.CreatedAt, anchor.Rowid)
+	type position struct {
+		CreatedAt time.Time
+		Rowid     int64
 	}
-	if p.Limit <= 0 {
-		err := q.Order("created_at ASC, rowid ASC").Find(&out).Error
+	at := func(id string) (position, error) {
+		var pos position
+		if err := s.db.Raw("SELECT created_at, rowid FROM thread_events WHERE id = ? AND thread_id = ?", id, threadID).Scan(&pos).Error; err != nil {
+			return pos, err
+		}
+		if pos.Rowid == 0 {
+			return pos, ErrNotFound
+		}
+		return pos, nil
+	}
+	if p.Call != "" {
+		err := s.db.Where("thread_id = ? AND parent = '' AND request_id = ?", threadID, p.Call).Order("created_at ASC, rowid ASC").Find(&out).Error
 		return out, false, err
 	}
-	if err := q.Order("created_at DESC, rowid DESC").Limit(p.Limit + 1).Find(&out).Error; err != nil {
-		return nil, false, err
+	q := s.db.Where("thread_id = ? AND parent = ?", threadID, p.Parent)
+	if p.Before != "" {
+		pos, err := at(p.Before)
+		if err != nil {
+			return nil, false, err
+		}
+		q = q.Where("created_at < ? OR (created_at = ? AND rowid < ?)", pos.CreatedAt, pos.CreatedAt, pos.Rowid)
 	}
-	more := len(out) > p.Limit
-	if more {
-		out = out[:p.Limit]
+	var more bool
+	switch {
+	case p.From != "":
+		pos, err := at(p.From)
+		if err != nil {
+			return nil, false, err
+		}
+		if err := q.Where("created_at > ? OR (created_at = ? AND rowid >= ?)", pos.CreatedAt, pos.CreatedAt, pos.Rowid).Order("created_at ASC, rowid ASC").Find(&out).Error; err != nil {
+			return nil, false, err
+		}
+		var older int64
+		if err := s.db.Model(&ThreadEvent{}).Where("thread_id = ? AND parent = ? AND (created_at < ? OR (created_at = ? AND rowid < ?))",
+			threadID, p.Parent, pos.CreatedAt, pos.CreatedAt, pos.Rowid).Limit(1).Count(&older).Error; err != nil {
+			return nil, false, err
+		}
+		more = older > 0
+	case p.Limit <= 0:
+		err := q.Order("created_at ASC, rowid ASC").Find(&out).Error
+		return out, false, err
+	default:
+		if err := q.Order("created_at DESC, rowid DESC").Limit(p.Limit + 1).Find(&out).Error; err != nil {
+			return nil, false, err
+		}
+		more = len(out) > p.Limit
+		if more {
+			out = out[:p.Limit]
+		}
+		for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+			out[i], out[j] = out[j], out[i]
+		}
 	}
-	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
-		out[i], out[j] = out[j], out[i]
-	}
-	if more && p.Parent == "" {
+	if more && p.Parent == "" && len(out) > 0 {
 		// The usage events before the page come too (one small event per
 		// turn): the status line totals every turn, not the ones on the page.
 		var usage []ThreadEvent

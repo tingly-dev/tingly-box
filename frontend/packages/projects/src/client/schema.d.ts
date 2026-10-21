@@ -916,6 +916,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{id}/subagents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A thread's subagents (its Agent calls), oldest first: to find one in a long transcript without reading it
+         * @description A thread's subagents (its Agent calls), oldest first: to find one in a long transcript without reading it
+         */
+        get: operations["apiV1ThreadsIdSubagentsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{id}/tasks/{task_id}/output": {
         parameters: {
             query?: never;
@@ -1480,6 +1500,34 @@ export interface components {
              * @enum {string}
              */
             type: "user_message" | "delta" | "assistant_message" | "title" | "error" | "done";
+        };
+        Subagent: {
+            /** @description Field background */
+            background: boolean;
+            /** @description Field call */
+            call: string;
+            /**
+             * Format: date-time
+             * @description Field created_at
+             */
+            created_at: string;
+            /** @description Field description */
+            description: string;
+            /** @description Field event_id */
+            event_id: string;
+            /** @description Field status */
+            status: string;
+            /**
+             * Format: int64
+             * @description Field steps
+             */
+            steps: number;
+            /** @description Field subagent_type */
+            subagent_type?: string;
+        };
+        SubagentsResponse: {
+            /** @description Field subagents */
+            subagents: components["schemas"]["Subagent"][];
         };
         TaskOutputResponse: {
             /** @description Field content */
@@ -2883,7 +2931,11 @@ export interface operations {
                 limit?: number;
                 /** @description An event id: only events older than it */
                 before?: string;
-                /** @description RFC 3339 time: every event added or changed at or after it (its updated_at), subagent steps included; parent, limit and before do not apply */
+                /** @description An event id: every event from it on (up to `before`), to extend a loaded page back to it in one read; limit does not apply */
+                from?: string;
+                /** @description A tool call's request id: that call's own events on the conversation (the call, its result, its task events); nothing else applies */
+                call?: string;
+                /** @description RFC 3339 time: every event added or changed at or after it (its updated_at), subagent steps included; parent, limit, before and from do not apply */
                 since?: string;
             };
             header?: never;
@@ -3173,6 +3225,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Thread"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdSubagentsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubagentsResponse"];
                 };
             };
         };

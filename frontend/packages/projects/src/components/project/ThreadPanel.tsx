@@ -4,13 +4,14 @@ import {
     Popover, Skeleton, Tooltip, Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import type { Attachment, BackgroundTask, Thread, ThreadEvent } from '../../client';
-import { buildTranscript, Trajectory, Transcript, type Respond, type SubagentSteps, type TrajectoryAnchor } from '../../transcript';
+import type { Attachment, BackgroundTask, Subagent, Thread, ThreadEvent } from '../../client';
+import { buildTranscript, SubagentFocus, Trajectory, Transcript, type Respond, type TrajectoryAnchor } from '../../transcript';
+import type { TranscriptSubagents } from '../../hooks/useTranscript';
 import { Composer } from '../Composer';
 import { AttachmentChips, uploadAttachments, type AttachOwner } from '../attachments';
 import { CodeBlock, Markdown } from '../Markdown';
 import { ConfirmDialog, CopyIconButton } from '@tingly/ui';
-import { ArrowBack, CheckCircle, DiffIcon, Merge, MoreVert, Stream, Terminal, Undo } from '../icons';
+import { ArrowBack, CheckCircle, DiffIcon, Merge, MoreVert, Robot, Stream, Terminal, Undo } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { formatTokens } from '../../utils/format';
 import { DiffDialog } from './DiffDialog';
@@ -21,6 +22,7 @@ import { threadTranscript } from './threadTranscript';
 import { threadOps } from './threadOps';
 import { BackgroundTasksPanel } from '../workdir/BackgroundTasksPanel';
 import { backgroundTasks } from '../workdir/backgroundTasks';
+import { SubagentsPanel } from '../workdir/SubagentsPanel';
 import { readLocal, removeLocal, writeLocal } from '../../utils/storage';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
@@ -53,8 +55,8 @@ interface Props {
     /** Older entries exist than the loaded ones. */
     more?: boolean;
     onLoadEarlier?: () => Promise<void>;
-    /** Reads a subagent's steps when its card opens (they are not in a page of the transcript). */
-    subagents?: SubagentSteps;
+    /** Reads a subagent's steps when its card opens (they are not in a page of the transcript), and finds subagents. */
+    subagents?: TranscriptSubagents;
     running: boolean;
     disabled: boolean;
     onBack: () => void;
@@ -117,6 +119,12 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
         if (latestAt) writeLocal(seenKey, latestAt);
     }, [seenKey, latestAt]);
     const [target, setTarget] = useState<TrajectoryAnchor | null>(null);
+    // A subagent opened on its own, in place of the conversation.
+    const [focus, setFocus] = useState<{ threadId: string; call: string } | null>(null);
+    const focused = focus?.threadId === threadId ? focus.call : null;
+    const [agentsAnchor, setAgentsAnchor] = useState<HTMLElement | null>(null);
+    // The opened subagent's call and result, read when they are not on a loaded page.
+    const [own, setOwn] = useState<{ call: string; events: ThreadEvent[] } | null>(null);
     const [tasksAnchor, setTasksAnchor] = useState<HTMLElement | null>(null);
     // The handoff command stays on screen with its own copy button, since
     // copying right after the request can be refused by the browser.
@@ -136,11 +144,44 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
         if (el && stick.current) el.scrollTop = el.scrollHeight;
     }, [events]);
 
+    // Only a folder session keeps a subagent's steps, so only there can one be opened on its own.
+    const host = useMemo(() => subagents && session
+        ? { ...subagents, focus: (call: string) => setFocus({ threadId, call }) }
+        : subagents, [subagents, session, threadId]);
+
     const coordinator = t('thread.fromCoordinator');
     const { blocks, pendingRequestId } = useMemo(() => {
         const { entries, pendingRequestId } = threadTranscript(events ?? [], running, (e) => e.source === 'thread' ? coordinator : undefined);
         return { blocks: buildTranscript(entries), pendingRequestId };
     }, [events, running, coordinator]);
+
+    const focusCallLoaded = !!focused && !!events?.some((e) => !e.parent && e.kind === 'tool_use' && e.request_id === focused);
+    useEffect(() => {
+        if (!focused || focusCallLoaded || !subagents || own?.call === focused) return;
+        subagents.own(focused).then((evs) => setOwn({ call: focused, events: evs })).catch((e: Error) => notify(e.message, 'error'));
+    }, [focused, focusCallLoaded, subagents, own, notify]);
+    // The opened subagent as its card would show it: its call and result
+    // (loaded, or read on their own) and its loaded steps.
+    const focusBlock = useMemo(() => {
+        if (!focused) return null;
+        const all = events ?? [];
+        const loaded = all.filter((e) => !e.parent && e.request_id === focused);
+        const ids = new Set(loaded.map((e) => e.id));
+        const extra = focusCallLoaded || own?.call !== focused ? [] : own.events.filter((e) => !ids.has(e.id));
+        if (!focusCallLoaded && extra.length === 0) return null;
+        const list = [...extra, ...loaded, ...all.filter((e) => e.parent === focused)]
+            .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        const b = buildTranscript(threadTranscript(list, running, () => undefined).entries).find((x) => x.type === 'agent' && x.call.id === focused);
+        return b?.type === 'agent' ? b : null;
+    }, [focused, events, own, focusCallLoaded, running]);
+    useEffect(() => {
+        // An opened subagent starts at what it was asked.
+        if (!focused || !scrollRef.current) return;
+        stick.current = false;
+        scrollRef.current.scrollTop = 0;
+    }, [focused]);
+    const focusSteps = focused ? host?.steps(focused) : undefined;
+    const focusType = focusBlock?.task?.subagentType || (focusBlock?.call.input as { subagent_type?: string } | undefined)?.subagent_type;
 
     // The waiting question's own deadline, for the strip's folded line.
     const pendingAutoAt = useMemo(() => {
@@ -161,13 +202,30 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
         el.scrollIntoView({ block: 'center' });
         el.animate?.([{ outline: '2px solid transparent' }, { outline: '2px solid var(--mui-palette-primary-main, #1976d2)' }, { outline: '2px solid transparent' }], { duration: 1600 });
     };
-    const openInChat = (anchor: TrajectoryAnchor) => {
+    // Shows a message in the conversation, reading the conversation back to
+    // it first when it is older than the loaded page.
+    const openInChat = async (anchor: TrajectoryAnchor, eventId?: string) => {
         setTasksAnchor(null);
-        if (view === 'chat') flash(anchor);
-        else {
-            setView('chat');
-            setTarget(anchor);
+        setAgentsAnchor(null);
+        if (!focused && view === 'chat' && scrollRef.current?.querySelector(anchorSelector(anchor))) {
+            flash(anchor);
+            return;
         }
+        if ('call' in anchor && subagents) {
+            try {
+                await subagents.locate(anchor.call, eventId);
+            } catch (e) {
+                notify((e as Error).message, 'error');
+            }
+        }
+        setFocus(null);
+        setView('chat');
+        setTarget(anchor);
+    };
+    const openAgent = (agent: Subagent) => {
+        setAgentsAnchor(null);
+        setView('chat');
+        setFocus({ threadId, call: agent.call });
     };
     useEffect(() => {
         if (!target || view !== 'chat') return;
@@ -256,10 +314,11 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     <IconButton size="small" onClick={(e) => setMenu(e.currentTarget)} aria-label={t('common.more')}><MoreVert fontSize="small" /></IconButton>
                     <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
                         <MenuItem onClick={() => { setMenu(null); setTaskOpen((v) => !v); }}>{taskOpen ? t('thread.hideTask') : t('thread.showTask')}</MenuItem>
-                        <MenuItem onClick={() => { setMenu(null); setView(view === 'chat' ? 'trajectory' : 'chat'); }}>{view === 'chat' ? t('thread.showTrajectory') : t('thread.showChat')}</MenuItem>
+                        <MenuItem onClick={() => { setMenu(null); setFocus(null); setView(view === 'chat' ? 'trajectory' : 'chat'); }}>{view === 'chat' ? t('thread.showTrajectory') : t('thread.showChat')}</MenuItem>
                         {view === 'chat' && <MenuItem onClick={() => { setMenu(null); toggleExpand(); }}>{expandAll ? t('thread.collapseTools') : t('thread.expandTools')}</MenuItem>}
                         {/* The panel opens where the menu was, under the More button. */}
                         {session && <MenuItem onClick={() => { setTasksAnchor(menu); setMenu(null); }}>{t('session.backgroundTasks')}</MenuItem>}
+                        {session && subagents && <MenuItem onClick={() => { setAgentsAnchor(menu); setMenu(null); }}>{t('subagents.title')}</MenuItem>}
                         {session && thread.status !== 'resolved' && (
                             <MenuItem disabled={running || acting} onClick={() => guarded('handoff')}>{running ? t('session.handoffBusy') : t('session.handoff')}</MenuItem>
                         )}
@@ -293,16 +352,32 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 )}
             </Box>
 
+            {focused && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
+                    <Button size="small" color="inherit" startIcon={<ArrowBack sx={{ fontSize: '16px !important' }} />} onClick={() => setFocus(null)} sx={{ color: 'text.secondary', flexShrink: 0 }}>
+                        {t('subagents.back')}
+                    </Button>
+                    <Robot sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} />
+                    <Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 0, fontWeight: 600, color: 'text.primary' }}>
+                        {(focusBlock?.call.input as { description?: string } | undefined)?.description || t('subagents.title')}
+                    </Typography>
+                    {focusType && <Typography variant="caption" sx={{ color: 'text.secondary', flexShrink: 0 }}>{focusType}</Typography>}
+                    <Button size="small" onClick={() => void openInChat({ call: focused }, own?.call === focused ? own.events.find((e) => e.kind === 'tool_use')?.id : undefined)} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>{t('subagents.show')}</Button>
+                </Box>
+            )}
             <Box ref={scrollRef} onScroll={() => {
                 const el = scrollRef.current;
                 if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
             }} sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', px: 2, py: 2, overscrollBehavior: 'contain' }}>
-                {events !== null && more && onLoadEarlier && <LoadEarlier scrollRef={scrollRef} onLoad={onLoadEarlier} />}
-                {events === null
+                {!focused && events !== null && more && onLoadEarlier && <LoadEarlier scrollRef={scrollRef} onLoad={onLoadEarlier} />}
+                {focused && focusSteps?.loaded && focusSteps.more && host && <LoadEarlier scrollRef={scrollRef} label={t('subagents.earlier')} onLoad={() => host.load(focused, true)} />}
+                {events === null || (focused && !focusBlock)
                     ? <Skeleton variant="rounded" height={120} />
+                    : focused && focusBlock
+                        ? <SubagentFocus block={focusBlock} subagents={host} working={running} pendingRequestId={pendingRequestId} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} />
                     : view === 'chat'
-                        ? <Transcript blocks={blocks} subagents={subagents} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} />
-                        : <Trajectory blocks={blocks} working={running} pendingRequestId={pendingRequestId} project={thread.cwd} onOpen={openInChat} />}
+                        ? <Transcript blocks={blocks} subagents={host} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} />
+                        : <Trajectory blocks={blocks} working={running} pendingRequestId={pendingRequestId} project={thread.cwd} onOpen={(anchor) => void openInChat(anchor)} />}
             </Box>
 
             <Box sx={{ px: 2, pb: 2 }}>
@@ -354,7 +429,13 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
             {session && (
                 <Popover open={!!tasksAnchor} anchorEl={tasksAnchor} onClose={() => setTasksAnchor(null)}
                     anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
-                    <BackgroundTasksPanel sessionId={threadId} tasks={tasks} onChanged={() => onRefresh?.()} onReveal={(call) => openInChat({ call })} />
+                    <BackgroundTasksPanel sessionId={threadId} tasks={tasks} onChanged={() => onRefresh?.()} onReveal={(call) => void openInChat({ call })} />
+                </Popover>
+            )}
+            {session && subagents && (
+                <Popover open={!!agentsAnchor} anchorEl={agentsAnchor} onClose={() => setAgentsAnchor(null)}
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
+                    <SubagentsPanel load={subagents.list} turnLive={running} onOpen={openAgent} onShow={(agent) => void openInChat({ call: agent.call }, agent.event_id)} />
                 </Popover>
             )}
             <ConfirmDialog
