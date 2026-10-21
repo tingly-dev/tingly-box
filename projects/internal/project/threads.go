@@ -1071,7 +1071,9 @@ func suggestedAnswers(input map[string]any) (map[string]string, bool) {
 }
 
 type pending struct {
-	event *db.ThreadEvent
+	// event is the request as it was asked; the waiting turn keeps updating
+	// its own copy.
+	event db.ThreadEvent
 	tool  string
 	// retime wakes a waiting question when the auto-answer setting changed.
 	retime chan struct{}
@@ -1175,7 +1177,7 @@ func (p *threadPrompter) wait(ctx context.Context, kind, tool, question string, 
 	payload.AutoAt = p.autoDeadline(asked, suggested != nil)
 	ev := &db.ThreadEvent{Kind: kind, Content: question, Payload: jsonString(payload)}
 	p.m.addEvent(t, ev)
-	pd := &pending{event: ev, tool: tool, ch: make(chan Answer, 1), retime: make(chan struct{}, 1)}
+	pd := &pending{event: *ev, tool: tool, ch: make(chan Answer, 1), retime: make(chan struct{}, 1)}
 	p.mu.Lock()
 	p.pending[payload.RequestID] = pd
 	p.mu.Unlock()
@@ -1403,7 +1405,7 @@ func (p *threadPrompter) request(requestID string) (db.ThreadEvent, bool) {
 	if !ok {
 		return db.ThreadEvent{}, false
 	}
-	return *pd.event, true
+	return pd.event, true
 }
 
 func (p *threadPrompter) cancelAll() {
