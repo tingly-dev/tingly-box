@@ -144,10 +144,8 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
         if (el && stick.current) el.scrollTop = el.scrollHeight;
     }, [events]);
 
-    // Only a folder session keeps a subagent's steps, so only there can one be opened on its own.
-    const host = useMemo(() => subagents && session
-        ? { ...subagents, focus: (call: string) => setFocus({ threadId, call }) }
-        : subagents, [subagents, session, threadId]);
+    // Any thread's subagent can be opened on its own: its steps are read apart.
+    const host = useMemo(() => subagents && { ...subagents, focus: (call: string) => setFocus({ threadId, call }) }, [subagents, threadId]);
 
     const coordinator = t('thread.fromCoordinator');
     const { blocks, pendingRequestId } = useMemo(() => {
@@ -318,7 +316,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         {view === 'chat' && <MenuItem onClick={() => { setMenu(null); toggleExpand(); }}>{expandAll ? t('thread.collapseTools') : t('thread.expandTools')}</MenuItem>}
                         {/* The panel opens where the menu was, under the More button. */}
                         {session && <MenuItem onClick={() => { setTasksAnchor(menu); setMenu(null); }}>{t('session.backgroundTasks')}</MenuItem>}
-                        {session && subagents && <MenuItem onClick={() => { setAgentsAnchor(menu); setMenu(null); }}>{t('subagents.title')}</MenuItem>}
+                        {subagents && <MenuItem onClick={() => { setAgentsAnchor(menu); setMenu(null); }}>{t('subagents.title')}</MenuItem>}
                         {session && thread.status !== 'resolved' && (
                             <MenuItem disabled={running || acting} onClick={() => guarded('handoff')}>{running ? t('session.handoffBusy') : t('session.handoff')}</MenuItem>
                         )}
@@ -432,7 +430,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     <BackgroundTasksPanel sessionId={threadId} tasks={tasks} onChanged={() => onRefresh?.()} onReveal={(call) => void openInChat({ call })} />
                 </Popover>
             )}
-            {session && subagents && (
+            {subagents && (
                 <Popover open={!!agentsAnchor} anchorEl={agentsAnchor} onClose={() => setAgentsAnchor(null)}
                     anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
                     <SubagentsPanel load={subagents.list} turnLive={running} onOpen={openAgent} onShow={(agent) => void openInChat({ call: agent.call }, agent.event_id)} />

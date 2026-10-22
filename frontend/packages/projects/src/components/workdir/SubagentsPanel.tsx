@@ -38,19 +38,21 @@ export function SubagentsPanel({ load, turnLive, onOpen, onShow }: Props) {
         });
     }, [load, notify]);
 
+    // One width whatever the state: the popover is placed once, from its first size.
+    const frame = { width: 480, maxWidth: '92vw' };
     if (list === null) {
-        return <Stack direction="row" spacing={1} sx={{ p: 2, alignItems: 'center', color: 'text.secondary' }}><CircularProgress size={14} /><Typography variant="body2" sx={{ color: 'inherit' }}>{t('subagents.loading')}</Typography></Stack>;
+        return <Stack direction="row" spacing={1} sx={{ ...frame, p: 2, alignItems: 'center', color: 'text.secondary' }}><CircularProgress size={14} /><Typography variant="body2" sx={{ color: 'inherit' }}>{t('subagents.loading')}</Typography></Stack>;
     }
     if (list.length === 0) {
         return (
-            <Box sx={{ p: 2, maxWidth: 360 }}>
+            <Box sx={{ ...frame, p: 2 }}>
                 <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 600, mb: 0.5 }}>{t('subagents.none')}</Typography>
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('subagents.hint')}</Typography>
             </Box>
         );
     }
     return (
-        <Box sx={{ width: 480, maxWidth: '92vw', maxHeight: '75vh', overflowY: 'auto', py: 0.5 }}>
+        <Box sx={{ ...frame, maxHeight: '75vh', overflowY: 'auto', py: 0.5 }}>
             {list.map((agent) => {
                 const status = subagentStatus(agent, turnLive);
                 const label = { running: t('tasks.statusRunning'), completed: t('tasks.statusDone'), stopped: t('tasks.statusStopped'), failed: t('tasks.statusFailed') }[status] ?? status;

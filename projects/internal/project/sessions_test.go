@@ -195,7 +195,7 @@ func TestProjectsAreCreatedWithAMainThreadAndFoldersWithout(t *testing.T) {
 	assert.ErrorIs(t, err, ErrMainThread)
 }
 
-func TestSessionKeepsSubagentsAndTasksProjectThreadsDoNot(t *testing.T) {
+func TestEveryThreadKeepsSubagentStepsAndTasks(t *testing.T) {
 	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("ok", 1, 1); return nil })
 	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "go"})
 	require.NoError(t, err)
@@ -226,10 +226,11 @@ func TestSessionKeepsSubagentsAndTasksProjectThreadsDoNot(t *testing.T) {
 	assert.Equal(t, "agent-1", parent)
 	n, _ = count(s.ID, db.EvTask)
 	assert.Equal(t, 1, n)
-	n, _ = count(th.ID, db.EvToolUse)
-	assert.Zero(t, n, "a project thread still shows only the main conversation")
+	n, parent = count(th.ID, db.EvToolUse)
+	assert.Equal(t, 1, n, "a project thread keeps the steps too: they are read when the subagent is opened")
+	assert.Equal(t, "agent-1", parent)
 	n, _ = count(th.ID, db.EvTask)
-	assert.Zero(t, n)
+	assert.Equal(t, 1, n, "a subagent's card reads its state from them")
 }
 
 // profiles is a host with launch profiles: "work" routes through its own

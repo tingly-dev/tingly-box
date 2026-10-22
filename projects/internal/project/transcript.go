@@ -36,10 +36,11 @@ func (threadStore) SetInterrupted(string)            {}
 // Engine notes the thread view says its own way ("Stopped.") or not at all.
 var quietNotes = []string{"claude code session ", "interrupted; send a message to resume"}
 
-// Append records an entry as a thread event. A project thread shows only the
-// main conversation: a subagent's own steps stay inside its Agent call. A
-// folder session keeps everything, tagged with its parent call, because its
-// page draws subagents and background tasks.
+// Append records an entry as a thread event. A subagent's own steps are kept
+// on every thread, tagged with their parent call: the page reads them apart
+// from the conversation, when the subagent is opened. So are task events,
+// which say how a subagent stands. A folder session also keeps usage events,
+// because its page draws them.
 func (s threadStore) Append(sid string, e engine.Entry) {
 	id := s.m.threadOf(sid)
 	t, err := s.m.store.GetThread(id)
@@ -47,9 +48,6 @@ func (s threadStore) Append(sid string, e engine.Entry) {
 		return
 	}
 	session := s.m.isFolder(t.ProjectID)
-	if e.Parent != "" && !session {
-		return
-	}
 	var ev *db.ThreadEvent
 	switch {
 	case e.Role == "user":
@@ -79,9 +77,10 @@ func (s threadStore) Append(sid string, e engine.Entry) {
 			ev = &db.ThreadEvent{Kind: db.EvUsage, Payload: string(e.Payload)}
 		}
 	case e.Kind == engine.KindTask:
-		if session {
-			ev = &db.ThreadEvent{Kind: db.EvTask, Payload: string(e.Payload), RequestID: e.RequestID}
-		} else if note := taskNote(e); note != "" {
+		// Every thread keeps task events: a subagent's card reads its state
+		// from them. A project thread also gets a line when one ends.
+		s.m.addEvent(t, &db.ThreadEvent{Kind: db.EvTask, Payload: string(e.Payload), RequestID: e.RequestID, Parent: e.Parent})
+		if note := taskNote(e); note != "" && !session {
 			ev = &db.ThreadEvent{Kind: db.EvSystem, Content: note}
 		}
 	case e.Kind == engine.KindError:

@@ -67,8 +67,8 @@ export const en = {
         },
     },
     subagents: {
-        title: 'Subagents', none: 'No subagents in this session yet',
-        hint: 'Every subagent this session ran, oldest first. Open one to read its steps on their own.',
+        title: 'Subagents', none: 'No subagents here yet',
+        hint: 'Every subagent run here, oldest first. Open one to read its steps on their own.',
         steps_one: '{{count}} step', steps_other: '{{count}} steps', earlier: 'Show earlier steps', back: 'Conversation', show: 'Show in conversation', loading: 'Loading…',
     },
     tasks: {
