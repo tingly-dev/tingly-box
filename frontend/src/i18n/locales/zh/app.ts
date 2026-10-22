@@ -98,7 +98,7 @@ export default {
       },
       "powerUps": {
         "title": "扩展功能的开关移到了这里",
-        "text": "Team、Image、Remote、Bench 等可选项，现在在这个菜单的「扩展」里开启或关闭。"
+        "text": "Team、Image、项目、Bench 等可选项，现在在这个菜单的「扩展」里开启或关闭。"
       }
     },
     "activityBar": {

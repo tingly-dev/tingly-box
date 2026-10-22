@@ -98,7 +98,7 @@ export default {
       },
       "powerUps": {
         "title": "Power-ups moved here",
-        "text": "Team, Image, Remote, Bench and the other optional items are now switched on and off from this menu, under Power-ups."
+        "text": "Team, Image, Projects, Bench and the other optional items are now switched on and off from this menu, under Power-ups."
       }
     },
     "activityBar": {
