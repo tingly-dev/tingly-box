@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, IconButton, Link, Skeleton, Tooltip, Typography } from '@mui/material';
 import { Link as RouterLink, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { api, isFolder, unwrap, type Project, type Thread, type ThreadEvent } from '../client';
+import { api, isFolder, type components, unwrap, type Project, type Thread, type ThreadEvent } from '../client';
 import { ConversationPane } from '../components/project/ConversationPane';
 import { OverviewPane } from '../components/project/OverviewPane';
+import { PermissionModeSelect } from '../components/workdir/PermissionModeSelect';
 import { ProjectSettingsDialog, type SettingsTab } from '../components/project/ProjectSettingsDialog';
 import { ProjectImTags, useProjectIm } from '../components/im/ProjectImBindings';
 import { IM_BINDINGS_CHANGED } from '../components/im/useImBindings';
@@ -20,6 +21,10 @@ import { usePlacement } from '../hooks/usePlacement';
 import { useProjectsHost } from '../host/ProjectsHost';
 import { readLocal, writeLocal } from '../utils/storage';
 
+
+// The permission modes a project can give its threads (the server refuses others).
+type ThreadMode = NonNullable<components['schemas']['UpdateProjectRequest']['thread_permission_mode']>;
+const THREAD_MODES = ['default', 'acceptEdits', 'auto', 'bypassPermissions'];
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
     const i = list.findIndex((x) => x.id === item.id);
@@ -189,7 +194,7 @@ export default function ProjectPage() {
         p.delete('thread');
         return p;
     });
-    const patch = async (body: { starred?: boolean; paused?: boolean; archived?: boolean; coordinator_model?: string }) => {
+    const patch = async (body: Pick<components['schemas']['UpdateProjectRequest'], 'starred' | 'paused' | 'archived' | 'coordinator_model' | 'thread_permission_mode'>) => {
         try {
             setProject(await unwrap(api.PATCH('/api/v1/projects/{id}', { params: { path: { id } }, body })));
             // Archiving unbinds the project's IM chats.
@@ -321,6 +326,15 @@ export default function ProjectPage() {
                         threadId={mainThreadId}
                         model={project?.coordinator_model}
                         onModelChange={(m) => void patch({ coordinator_model: m })}
+                        composerContext={project && (
+                            // What the threads it starts run with; the coordinator's own model sits beside Send.
+                            <PermissionModeSelect
+                                value={project.thread_permission_mode || 'acceptEdits'}
+                                modes={THREAD_MODES}
+                                disabled={blocked}
+                                onChange={(m) => void patch({ thread_permission_mode: m as ThreadMode })}
+                            />
+                        )}
                         onOpenThread={openThread}
                         chatTitle={im?.chatTitle}
                         onSend={async (text, attachments) => {

@@ -202,13 +202,15 @@ interface Props {
     /** The coordinator's model, switched from the message box; the picker is left out without onModelChange. */
     model?: string;
     onModelChange?: (model: string) => void;
+    /** Pickers above the message box (what the project's threads start with). */
+    composerContext?: React.ReactNode;
     onOpenThread: (id: string) => void;
     onStartSuggestions: (messageId: string, indexes: number[]) => Promise<void>;
     /** A bound IM chat's name for a message's source line; unknown chats show their id. */
     chatTitle?: (platform: string, chatId: string) => string | undefined;
 }
 
-export function ConversationPane({ projectId, messages, threads, busy, disabled, disabledReason, onSend, threadId, model, onModelChange, onOpenThread, onStartSuggestions, chatTitle }: Props) {
+export function ConversationPane({ projectId, messages, threads, busy, disabled, disabledReason, onSend, threadId, model, onModelChange, composerContext, onOpenThread, onStartSuggestions, chatTitle }: Props) {
     const { t } = useTranslation('projects');
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
@@ -327,6 +329,7 @@ export function ConversationPane({ projectId, messages, threads, busy, disabled,
                     autoFocus
                     disabled={disabled}
                     seed={seed}
+                    context={composerContext}
                     streaming={busy}
                     model={model}
                     onModelChange={onModelChange}
