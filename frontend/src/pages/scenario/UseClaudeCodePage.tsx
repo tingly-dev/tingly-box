@@ -39,8 +39,8 @@ const applyClaudeConfig = async (
 
 // One-click apply uses prefs derived from the current rules and slot mode —
 // the same defaults the dialog seeds with.
-const derivedPrefs = ({ rules, slotMode }: AgentApplyContext) =>
-    derivePrefsFromRules({ rules, mode: slotMode ?? 'unified' }) as Record<string, string>;
+const derivedPrefs = ({ rules, slotMode, slots }: AgentApplyContext) =>
+    derivePrefsFromRules({ rules, mode: slotMode ?? 'unified', slots }) as Record<string, string>;
 
 // A rule's 1M toggle re-applies the config the user already has: the model slots
 // and the auto-compact window follow the toggle, every other applied setting
@@ -82,6 +82,7 @@ const ClaudeCodeSetupDialog: React.FC<{ slot: AgentPageSlot }> = ({ slot }) => {
             open={slot.dialogOpen}
             onClose={slot.closeDialog}
             configMode={slot.slotMode ?? 'unified'}
+            slots={slot.slots}
             baseUrl={slot.baseUrl}
             rules={slot.rules}
             copyToClipboard={slot.copyToClipboard}

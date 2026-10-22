@@ -12,6 +12,7 @@ import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import { SCENARIO_HEADER_CONTENT_MAX_WIDTH, agentPageHeaderSx } from './components/ScenarioCardHeader';
 import AgentPluginsCard from './components/AgentPluginsCard';
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
+import { useSlotRouting } from "@/pages/scenario/hooks/useSlotRouting";
 import ConfigRow from "@/components/ConfigRow.tsx";
 import { ChoiceToggle } from "@/components/ChoiceToggle";
 import { useProfileContext } from '@/contexts/ProfileContext';
@@ -84,7 +85,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
         copyToClipboard,
         baseUrl,
         isLoading,
-    } = useScenarioPageInternal(scenario);
+    } = useScenarioPageInternal(scenario, { skipRules: true });
     const { launchSource } = useVersion();
 
     // Profile state
@@ -99,6 +100,9 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     const [isProfileMutating, setIsProfileMutating] = useState(false);
     const [appVersion, setAppVersion] = useState('');
     const [unifiedMode, setUnifiedMode] = useState(currentProfile?.unified || false);
+    // The profile's rules (and, in unified mode, its Slots row). Its mode is
+    // fixed at creation, so there is no switch.
+    const slots = useSlotRouting(scenario, `builtin:${scenario}:cc`, !!currentProfile, unifiedMode ? 'unified' : 'separate');
     // npx matches the primary installation path and does not assume that the
     // package has also installed a permanent executable on PATH. Keep the
     // global command available as an explicit alternative for those who have.
@@ -204,7 +208,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     const accessUrl = `${baseUrl}/tingly/${scenario}`;
 
     return (
-        <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
+        <PageLayout loading={isLoading || slots.loading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
             <Stack spacing={2}>
             <PageHeader
                 // The profile's alias is its name: "Claude Code - ds". Rename / delete act on
@@ -385,6 +389,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                         showBaseUrlRow={true}
                         compact={true}
                         showPlugins={false}
+                        extraContent={slots.slotsRow}
                     />
                   </Box>
                 </AgentAccessSection>
@@ -401,6 +406,8 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
 
                 <TemplatePage
                     scenario={scenario}
+                    rules={slots.rules}
+                    onRulesChange={slots.setRules}
                     collapsible={true}
                     allowToggleRule={false}
                     allowAddRule={false}

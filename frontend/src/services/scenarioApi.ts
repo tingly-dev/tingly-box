@@ -48,6 +48,24 @@ export const scenarioApi = {
         }));
     },
 
+    // Claude Code model slots with a rule of their own in unified mode.
+    // `scenario` is claude_code or a profile (claude_code:<id>).
+    getClaudeCodeSlots: async (scenario: string): Promise<any> => {
+        return controlApi((client, headers) => client.GET('/api/v1/scenario/{scenario}/claude-code/slots', {
+            headers,
+            params: {path: {scenario}},
+        }));
+    },
+
+    // Give a slot a rule of its own (enabled), or hand it back to the main rule.
+    setClaudeCodeSlot: async (scenario: string, slot: string, enabled: boolean): Promise<any> => {
+        return controlApi((client, headers) => client.PUT('/api/v1/scenario/{scenario}/claude-code/slots/{slot}', {
+            headers,
+            params: {path: {scenario, slot}},
+            body: {enabled},
+        }));
+    },
+
     // Scenario descriptors (includes supports_profiles flag)
     getScenarioDescriptors: async (): Promise<any> => {
         return controlApi((client, headers) => client.GET('/api/v1/scenario-descriptors', {headers}));
