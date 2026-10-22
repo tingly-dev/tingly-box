@@ -40,7 +40,7 @@ func TestImBotSettingsStore_ReadsLegacyJSONStringRows(t *testing.T) {
 	}
 	defer store.Close()
 
-	t.Run("decodes legacy auth and allowlist", func(t *testing.T) {
+	t.Run("decodes legacy auth", func(t *testing.T) {
 		got, err := store.GetSettingsByUUID("full")
 		if err != nil {
 			t.Fatalf("GetSettingsByUUID: %v", err)
@@ -51,9 +51,6 @@ func TestImBotSettingsStore_ReadsLegacyJSONStringRows(t *testing.T) {
 		// Token is mirrored out of Auth for backward compatibility.
 		if got.Token != "legacy-token" {
 			t.Errorf("Token = %q, want legacy-token", got.Token)
-		}
-		if len(got.BashAllowlist) != 2 || got.BashAllowlist[0] != "ls" {
-			t.Errorf("BashAllowlist = %v, want [ls cat]", got.BashAllowlist)
 		}
 	})
 
@@ -67,9 +64,6 @@ func TestImBotSettingsStore_ReadsLegacyJSONStringRows(t *testing.T) {
 		}
 		if len(got.Auth) != 0 {
 			t.Errorf("Auth = %v, want empty", got.Auth)
-		}
-		if len(got.BashAllowlist) != 0 {
-			t.Errorf("BashAllowlist = %v, want empty", got.BashAllowlist)
 		}
 	})
 
@@ -98,9 +92,8 @@ func TestImBotSettingsStore_RoundTrip(t *testing.T) {
 
 	created, err := store.CreateSettings(Settings{
 		Name: "rt", Platform: "telegram", AuthType: "token",
-		Auth:          map[string]string{"token": "abc"},
-		BashAllowlist: []string{"ls"},
-		Enabled:       true,
+		Auth:    map[string]string{"token": "abc"},
+		Enabled: true,
 	})
 	if err != nil {
 		t.Fatalf("CreateSettings: %v", err)
@@ -112,9 +105,6 @@ func TestImBotSettingsStore_RoundTrip(t *testing.T) {
 	}
 	if got.Auth["token"] != "abc" {
 		t.Errorf("Auth = %v, want token=abc", got.Auth)
-	}
-	if len(got.BashAllowlist) != 1 || got.BashAllowlist[0] != "ls" {
-		t.Errorf("BashAllowlist = %v, want [ls]", got.BashAllowlist)
 	}
 
 	if err := store.UpdateSettings("no-such-uuid", Settings{Name: "x"}); err == nil {
@@ -134,15 +124,12 @@ func TestImBotSettingsStore_UpdateIsPartial(t *testing.T) {
 
 	created, err := store.CreateSettings(Settings{
 		Name: "orig", Platform: "telegram", AuthType: "token",
-		Auth:               map[string]string{"token": "orig-token"},
-		BashAllowlist:      []string{"ls", "cat"},
-		ProxyURL:           "http://proxy:8080",
-		DefaultCwd:         "/orig",
-		DefaultAgent:       "agent-1",
-		SmartGuideProvider: "prov-1",
-		SmartGuideModel:    "model-1",
-		Scenarios:          `[{"scenario":"a"}]`,
-		Enabled:            true,
+		Auth:         map[string]string{"token": "orig-token"},
+		ProxyURL:     "http://proxy:8080",
+		DefaultCwd:   "/orig",
+		DefaultAgent: "agent-1",
+		Scenarios:    `[{"scenario":"a"}]`,
+		Enabled:      true,
 	})
 	if err != nil {
 		t.Fatalf("CreateSettings: %v", err)
@@ -163,17 +150,11 @@ func TestImBotSettingsStore_UpdateIsPartial(t *testing.T) {
 	if got.Auth["token"] != "orig-token" {
 		t.Errorf("Auth = %v, want the original token preserved", got.Auth)
 	}
-	if len(got.BashAllowlist) != 2 {
-		t.Errorf("BashAllowlist = %v, want the original 2 entries preserved", got.BashAllowlist)
-	}
 	if got.ProxyURL != "http://proxy:8080" {
 		t.Errorf("ProxyURL = %q, want preserved", got.ProxyURL)
 	}
 	if got.DefaultCwd != "/orig" || got.DefaultAgent != "agent-1" {
 		t.Errorf("defaults not preserved: cwd=%q agent=%q", got.DefaultCwd, got.DefaultAgent)
-	}
-	if got.SmartGuideProvider != "prov-1" || got.SmartGuideModel != "model-1" {
-		t.Errorf("smartguide not preserved: %q/%q", got.SmartGuideProvider, got.SmartGuideModel)
 	}
 	if got.Platform != "telegram" || got.AuthType != "token" {
 		t.Errorf("platform/authtype not preserved: %q/%q", got.Platform, got.AuthType)
@@ -192,11 +173,10 @@ func TestImBotSettingsStore_UpdateIsPartial(t *testing.T) {
 		}
 	})
 
-	t.Run("replacing auth and allowlist works", func(t *testing.T) {
+	t.Run("replacing auth works", func(t *testing.T) {
 		if err := store.UpdateSettings(created.UUID, Settings{
-			Auth:          map[string]string{"token": "new-token"},
-			BashAllowlist: []string{"echo"},
-			Enabled:       true,
+			Auth:    map[string]string{"token": "new-token"},
+			Enabled: true,
 		}); err != nil {
 			t.Fatalf("UpdateSettings: %v", err)
 		}
@@ -207,19 +187,16 @@ func TestImBotSettingsStore_UpdateIsPartial(t *testing.T) {
 		if got.Auth["token"] != "new-token" {
 			t.Errorf("Auth = %v, want new-token", got.Auth)
 		}
-		if len(got.BashAllowlist) != 1 || got.BashAllowlist[0] != "echo" {
-			t.Errorf("BashAllowlist = %v, want [echo]", got.BashAllowlist)
-		}
 	})
 
 	t.Run("columns Settings does not model survive an update", func(t *testing.T) {
-		// debug/verbose exist on the record but not on Settings. The old
-		// Updates(map) path never mentioned them; read-modify-write must not
-		// reset them either.
+		// debug exists on the record but not on Settings. The old
+		// Updates(map) path never mentioned it; read-modify-write must not
+		// reset it either.
 		if err := store.db.Exec(
-			"UPDATE imbot_settings SET debug = 1, verbose = 0 WHERE bot_uuid = ?",
+			"UPDATE imbot_settings SET debug = 1 WHERE bot_uuid = ?",
 			created.UUID).Error; err != nil {
-			t.Fatalf("seed debug/verbose: %v", err)
+			t.Fatalf("seed debug: %v", err)
 		}
 		if err := store.UpdateSettings(created.UUID, Settings{Name: "again", Enabled: true}); err != nil {
 			t.Fatalf("UpdateSettings: %v", err)
@@ -230,9 +207,6 @@ func TestImBotSettingsStore_UpdateIsPartial(t *testing.T) {
 		}
 		if !rec.Debug {
 			t.Error("debug was reset by UpdateSettings, want preserved")
-		}
-		if rec.Verbose == nil || *rec.Verbose {
-			t.Errorf("verbose = %v, want preserved false", rec.Verbose)
 		}
 	})
 }

@@ -25,42 +25,34 @@ type SettingsResponse struct {
 
 // CreateRequest represents the request to create ImBot settings
 type CreateRequest struct {
-	UUID               string                                            `json:"uuid,omitempty"`
-	Name               string                                            `json:"name,omitempty"`
-	Platform           string                                            `json:"platform"`
-	AuthType           string                                            `json:"auth_type"`
-	Auth               map[string]string                                 `json:"auth"`
-	ProxyURL           string                                            `json:"proxy_url,omitempty"`
-	ChatID             string                                            `json:"chat_id_lock,omitempty"`
-	BashAllowlist      []string                                          `json:"bash_allowlist,omitempty"`
-	DefaultCwd         string                                            `json:"default_cwd,omitempty"`   // Default working directory
-	DefaultAgent       string                                            `json:"default_agent,omitempty"` // Default Agent UUID
-	Enabled            bool                                              `json:"enabled"`
-	Token              string                                            `json:"token,omitempty"`               // Legacy field
-	SmartGuideProvider string                                            `json:"smartguide_provider,omitempty"` // Provider UUID
-	SmartGuideModel    string                                            `json:"smartguide_model,omitempty"`    // Model identifier
-	RequirePairing     *bool                                             `json:"require_pairing,omitempty"`     // TOFU pairing gate; nil → platform default
-	PersistentSession  *bool                                             `json:"persistent_session,omitempty"`  // Keep a Claude Code process warm across @cc turns; nil → false default
-	Capabilities       map[access.CapabilityName]CapabilityUpdateRequest `json:"capabilities,omitempty"`
+	UUID           string                                            `json:"uuid,omitempty"`
+	Name           string                                            `json:"name,omitempty"`
+	Platform       string                                            `json:"platform"`
+	AuthType       string                                            `json:"auth_type"`
+	Auth           map[string]string                                 `json:"auth"`
+	ProxyURL       string                                            `json:"proxy_url,omitempty"`
+	ChatID         string                                            `json:"chat_id_lock,omitempty"`
+	DefaultCwd     string                                            `json:"default_cwd,omitempty"`   // Default working directory
+	DefaultAgent   string                                            `json:"default_agent,omitempty"` // Default Agent UUID
+	Enabled        bool                                              `json:"enabled"`
+	Token          string                                            `json:"token,omitempty"`           // Legacy field
+	RequirePairing *bool                                             `json:"require_pairing,omitempty"` // TOFU pairing gate; nil → platform default
+	Capabilities   map[access.CapabilityName]CapabilityUpdateRequest `json:"capabilities,omitempty"`
 }
 
 // UpdateRequest represents the request to update ImBot settings
 type UpdateRequest struct {
-	Name               string            `json:"name,omitempty"`
-	Platform           string            `json:"platform,omitempty"`
-	AuthType           string            `json:"auth_type,omitempty"`
-	Auth               map[string]string `json:"auth,omitempty"`
-	ProxyURL           string            `json:"proxy_url,omitempty"`
-	ChatID             string            `json:"chat_id_lock,omitempty"`
-	BashAllowlist      []string          `json:"bash_allowlist,omitempty"`
-	DefaultCwd         *string           `json:"default_cwd,omitempty"`         // Pointer for partial update
-	DefaultAgent       *string           `json:"default_agent,omitempty"`       // Pointer for partial update
-	Enabled            *bool             `json:"enabled,omitempty"`             // Pointer to allow partial update
-	Token              string            `json:"token,omitempty"`               // Legacy field
-	SmartGuideProvider *string           `json:"smartguide_provider,omitempty"` // Provider UUID
-	SmartGuideModel    *string           `json:"smartguide_model,omitempty"`    // Model identifier
-	RequirePairing     *bool             `json:"require_pairing,omitempty"`     // TOFU pairing gate; nil → unchanged
-	PersistentSession  *bool             `json:"persistent_session,omitempty"`  // Keep a Claude Code process warm across @cc turns; nil → unchanged
+	Name           string            `json:"name,omitempty"`
+	Platform       string            `json:"platform,omitempty"`
+	AuthType       string            `json:"auth_type,omitempty"`
+	Auth           map[string]string `json:"auth,omitempty"`
+	ProxyURL       string            `json:"proxy_url,omitempty"`
+	ChatID         string            `json:"chat_id_lock,omitempty"`
+	DefaultCwd     *string           `json:"default_cwd,omitempty"`     // Pointer for partial update
+	DefaultAgent   *string           `json:"default_agent,omitempty"`   // Pointer for partial update
+	Enabled        *bool             `json:"enabled,omitempty"`         // Pointer to allow partial update
+	Token          string            `json:"token,omitempty"`           // Legacy field
+	RequirePairing *bool             `json:"require_pairing,omitempty"` // TOFU pairing gate; nil → unchanged
 }
 
 // PairingCodeResponse represents the response for pairing-code reveal/rotate.

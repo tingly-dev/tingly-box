@@ -131,7 +131,7 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             stage: 'beta' as const,
             enabled: enableProjects,
             enabledNotice: t('system.experimentalFeatures.projectsEnabledInfo'),
-            // The same switch turns on IM chats (the Remote rail item).
+            // The same switch turns on IM chats (the IM rail item).
             status: botTotals.total > 0
                 ? t('bots.activeCount', { defaultValue: 'active {{active}} / {{total}}', active: botTotals.active, total: botTotals.total })
                 : undefined,

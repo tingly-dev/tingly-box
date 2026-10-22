@@ -52,7 +52,7 @@ type BotAddCmdKong struct{}
 
 func (r *BotAddCmdKong) Run(appManager *app.AppManager) error {
 	// No flag form exists — it's always interactive.
-	if err := requireTTY("add a bot via the Web UI's Remote page instead"); err != nil {
+	if err := requireTTY("add a bot on the Web UI's IM > Bots page instead"); err != nil {
 		return err
 	}
 	return runBotAdd(appManager)

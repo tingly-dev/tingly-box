@@ -9,9 +9,7 @@ export * from './SmartOpNode';
 export * from './styles';
 
 // Remote Graph nodes
-export { default as AtNode } from './AtNode';
 export { default as AgentNode } from './AgentNode';
-export { default as BotModelNode } from './BotModelNode';
 
 // Notify Graph nodes
 export { default as ApiEntryNode } from './ApiEntryNode';

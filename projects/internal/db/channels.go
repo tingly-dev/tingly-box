@@ -127,7 +127,7 @@ func (s *Store) DeleteProjectChannelBindings(projectID string) (int64, error) {
 // SetChannelBindingFolder makes a chat's next message start a new thread in
 // folder (see ChannelBinding.Folder); a chat with no binding gets one that
 // has only the folder.
-func (s *Store) SetChannelBindingFolder(platform, chatID, title, folder string) error {
+func (s *Store) SetChannelBindingFolder(platform, chatID, title, folder, profile string) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		now := time.Now()
 		var cur ChannelBinding
@@ -135,11 +135,11 @@ func (s *Store) SetChannelBindingFolder(platform, chatID, title, folder string) 
 		switch {
 		case errors.Is(err, gorm.ErrRecordNotFound):
 			return tx.Create(&ChannelBinding{ID: newID(), Platform: platform, ChatID: chatID,
-				ChatTitle: strings.TrimSpace(title), Folder: folder, CreatedAt: now, UpdatedAt: now}).Error
+				ChatTitle: strings.TrimSpace(title), Folder: folder, Profile: profile, CreatedAt: now, UpdatedAt: now}).Error
 		case err != nil:
 			return err
 		}
-		return tx.Model(&cur).Updates(map[string]any{"folder": folder, "new_thread": false, "updated_at": now}).Error
+		return tx.Model(&cur).Updates(map[string]any{"folder": folder, "profile": profile, "new_thread": false, "updated_at": now}).Error
 	})
 }
 

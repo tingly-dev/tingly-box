@@ -29,14 +29,8 @@ type RemoteChatRecord struct {
 	IsWhitelisted bool   `gorm:"column:is_whitelisted;index:idx_remote_chats_whitelisted"`
 	WhitelistedBy string `gorm:"column:whitelisted_by"`
 
-	BashCwd string `gorm:"column:bash_cwd"`
-
 	// ContextToken mirrors bot.Chat.ContextToken (WeChat ilink reply context).
 	ContextToken string `gorm:"column:context_token"`
-
-	CurrentAgent string `gorm:"column:current_agent"`
-
-	Verbose *bool `gorm:"column:verbose"`
 
 	Disabled   bool      `gorm:"column:disabled;index:idx_remote_chats_disabled"`
 	DisabledAt time.Time `gorm:"column:disabled_at"`

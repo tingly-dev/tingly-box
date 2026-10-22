@@ -142,7 +142,7 @@ export function defaultAgentForCCProfile(profileId: string): string {
 }
 
 // REMOTE_AGENT_SCENARIO is the mount name for the remote-agent purpose
-// (control Claude Code / SmartGuide from chat). Mirrors the backend constant.
+// (use Claude Code from chat). Mirrors the backend constant.
 export const REMOTE_AGENT_SCENARIO = 'remote_agent';
 
 // PLATFORM_DEFAULT_REQUIRE_PAIRING lists the token-DM platforms that default to

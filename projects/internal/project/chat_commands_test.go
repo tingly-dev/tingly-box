@@ -206,7 +206,7 @@ func TestStatusAndYoloInAFolderChat(t *testing.T) {
 
 	// A chat waiting to start in another folder says so.
 	other := t.TempDir()
-	require.NoError(t, svc.ChannelToFolder("telegram", "c", "", other, false))
+	require.NoError(t, svc.ChannelToFolder("telegram", "c", "", other, "", false))
 	_, reply, err = svc.ChannelCommand("telegram", "c", ChatStatus, "")
 	require.NoError(t, err)
 	assert.Contains(t, reply, "Next message: a new session in ")

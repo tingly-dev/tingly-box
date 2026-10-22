@@ -148,37 +148,6 @@ func TestUpdateChatMissingIsNoop(t *testing.T) {
 	}
 }
 
-// TestSetCurrentAgentCreatesChat covers the auto-create: handoff state must
-// persist on chats that were never bound or paired first.
-func TestSetCurrentAgentCreatesChat(t *testing.T) {
-	store := newChatStore(t)
-
-	if err := store.SetCurrentAgent("fresh-chat", "telegram", "claude"); err != nil {
-		t.Fatalf("set agent: %v", err)
-	}
-	got, err := store.GetCurrentAgent("fresh-chat")
-	if err != nil {
-		t.Fatalf("get agent: %v", err)
-	}
-	if got != "claude" {
-		t.Errorf("current agent = %q, want claude", got)
-	}
-}
-
-// TestGetCurrentAgentDefaults checks Smart Guide stays the entry point for an
-// unknown chat.
-func TestGetCurrentAgentDefaults(t *testing.T) {
-	store := newChatStore(t)
-
-	got, err := store.GetCurrentAgent("unknown")
-	if err != nil {
-		t.Fatalf("get agent: %v", err)
-	}
-	if got != DefaultChatAgent {
-		t.Errorf("current agent = %q, want %q", got, DefaultChatAgent)
-	}
-}
-
 // TestListChatsByOwnerFiltersUnbound checks the owner listing only surfaces
 // chats that actually have a project bound.
 func TestListChatsByOwnerFiltersUnbound(t *testing.T) {

@@ -38,7 +38,6 @@ func TestUpdateChatPersistsImmediately(t *testing.T) {
 		ChatID:      chatID,
 		Platform:    "telegram",
 		ProjectPath: "",
-		BashCwd:     "",
 		CreatedAt:   time.Now().UTC(),
 		UpdatedAt:   time.Now().UTC(),
 	}
@@ -48,7 +47,6 @@ func TestUpdateChatPersistsImmediately(t *testing.T) {
 
 	if err := store.UpdateChat(chatID, func(c *bot.Chat) {
 		c.ProjectPath = projectPath
-		c.BashCwd = projectPath
 	}); err != nil {
 		t.Fatalf("Failed to update chat: %v", err)
 	}
@@ -66,9 +64,6 @@ func TestUpdateChatPersistsImmediately(t *testing.T) {
 	if got.ProjectPath != projectPath {
 		t.Errorf("ProjectPath = %q, want %q", got.ProjectPath, projectPath)
 	}
-	if got.BashCwd != projectPath {
-		t.Errorf("BashCwd = %q, want %q", got.BashCwd, projectPath)
-	}
 	if got.ChatID != chatID {
 		t.Errorf("ChatID = %q, want %q", got.ChatID, chatID)
 	}
@@ -85,11 +80,9 @@ func TestUpsertChatPersistsImmediately(t *testing.T) {
 	)
 
 	if err := store.UpsertChat(&bot.Chat{
-		ChatID:       chatID,
-		Platform:     "telegram",
-		ProjectPath:  projectPath,
-		BashCwd:      projectPath,
-		CurrentAgent: "claude",
+		ChatID:      chatID,
+		Platform:    "telegram",
+		ProjectPath: projectPath,
 	}); err != nil {
 		t.Fatalf("Failed to upsert chat: %v", err)
 	}
@@ -106,69 +99,5 @@ func TestUpsertChatPersistsImmediately(t *testing.T) {
 	}
 	if got.ProjectPath != projectPath {
 		t.Errorf("ProjectPath = %q, want %q", got.ProjectPath, projectPath)
-	}
-	if got.CurrentAgent != "claude" {
-		t.Errorf("CurrentAgent = %q, want %q", got.CurrentAgent, "claude")
-	}
-}
-
-// TestSetCurrentAgentPersistsImmediately verifies SetCurrentAgent is durable
-// on return.
-func TestSetCurrentAgentPersistsImmediately(t *testing.T) {
-	dir := t.TempDir()
-	store := openStore(t, dir)
-
-	const chatID = "test-chat-789"
-
-	if err := store.UpsertChat(&bot.Chat{
-		ChatID:    chatID,
-		Platform:  "telegram",
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
-	}); err != nil {
-		t.Fatalf("Failed to upsert chat: %v", err)
-	}
-	if err := store.SetCurrentAgent(chatID, "telegram", "claude"); err != nil {
-		t.Fatalf("Failed to set current agent: %v", err)
-	}
-	// A second store manager over the same directory is a genuinely separate
-	// connection, so reading back through it proves the write reached disk.
-	reopened := openStore(t, dir)
-
-	got, err := reopened.GetCurrentAgent(chatID)
-	if err != nil {
-		t.Fatalf("Failed to read current agent back: %v", err)
-	}
-	if got != "claude" {
-		t.Errorf("CurrentAgent = %q, want %q", got, "claude")
-	}
-}
-
-// TestSetCurrentAgentCreatesMissingChat covers the @cc/@tb handoff-on-fresh-chat
-// case: a chat that has not been bound (/cd) or paired (/bind) yet must still
-// have its current-agent persisted on the first handoff. Previously
-// SetCurrentAgent silently no-op'd because UpdateChat skips missing rows.
-func TestSetCurrentAgentCreatesMissingChat(t *testing.T) {
-	store := openStore(t, t.TempDir())
-
-	const chatID = "tg-fresh-chat-1"
-	if err := store.SetCurrentAgent(chatID, "telegram", "claude"); err != nil {
-		t.Fatalf("SetCurrentAgent on missing chat: %v", err)
-	}
-
-	got, err := store.GetCurrentAgent(chatID)
-	if err != nil {
-		t.Fatalf("GetCurrentAgent: %v", err)
-	}
-	if got != "claude" {
-		t.Fatalf("current agent not persisted: got %q, want \"claude\"", got)
-	}
-
-	chat, err := store.GetChat(chatID)
-	if err != nil || chat == nil {
-		t.Fatalf("chat row not created: chat=%v err=%v", chat, err)
-	}
-	if chat.Platform != "telegram" {
-		t.Errorf("platform not set on auto-created chat: got %q, want \"telegram\"", chat.Platform)
 	}
 }

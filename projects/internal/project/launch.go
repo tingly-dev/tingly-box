@@ -51,6 +51,16 @@ func (m *Threads) folderThread(id string) (*db.Thread, error) {
 	return t, nil
 }
 
+// Launchable reports whether a session can launch under profile: the
+// default always, a named one when the host has it.
+func (m *Threads) Launchable(profile string) bool {
+	if profile == "" {
+		return true
+	}
+	l, ok := m.env.(Launcher)
+	return ok && l.CheckLaunch(context.Background(), profile, "") == nil
+}
+
 // SetProfile sets the profile the session's next turn launches with. A model
 // the new profile cannot run is cleared rather than refused.
 func (m *Threads) SetProfile(ctx context.Context, id, profile string) (*db.Thread, error) {

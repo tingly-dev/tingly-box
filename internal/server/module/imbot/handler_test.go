@@ -148,13 +148,11 @@ func TestCreateRequestStructure(t *testing.T) {
 
 func TestUpdateRequestStructure(t *testing.T) {
 	enabled := true
-	smartGuideProvider := "provider-uuid"
 
 	request := UpdateRequest{
-		Name:               "Updated Bot",
-		Platform:           "discord",
-		Enabled:            &enabled,
-		SmartGuideProvider: &smartGuideProvider,
+		Name:     "Updated Bot",
+		Platform: "discord",
+		Enabled:  &enabled,
 	}
 
 	if request.Name != "Updated Bot" {
@@ -167,10 +165,6 @@ func TestUpdateRequestStructure(t *testing.T) {
 
 	if *request.Enabled != true {
 		t.Error("expected Enabled to be true")
-	}
-
-	if *request.SmartGuideProvider != "provider-uuid" {
-		t.Errorf("expected Provider 'provider-uuid', got %q", *request.SmartGuideProvider)
 	}
 }
 

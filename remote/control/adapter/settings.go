@@ -53,21 +53,17 @@ var _ bot.SettingsStore = (*SettingsStore)(nil)
 // both the host wiring and the adapter go through it.
 func BotSettingFromRecord(record db.Settings) bot.BotSetting {
 	return bot.BotSetting{
-		UUID:               record.UUID,
-		Name:               record.Name,
-		Platform:           record.Platform,
-		AuthType:           record.AuthType,
-		Auth:               record.Auth,
-		ProxyURL:           record.ProxyURL,
-		ChatIDLock:         record.ChatIDLock,
-		BashAllowlist:      record.BashAllowlist,
-		DefaultCwd:         record.DefaultCwd,
-		DefaultAgent:       record.DefaultAgent,
-		Enabled:            record.Enabled,
-		Scenarios:          record.Scenarios,
-		SmartGuideProvider: record.SmartGuideProvider,
-		SmartGuideModel:    record.SmartGuideModel,
-		RequirePairing:     record.RequirePairing,
-		PersistentSession:  record.PersistentSession,
+		UUID:           record.UUID,
+		Name:           record.Name,
+		Platform:       record.Platform,
+		AuthType:       record.AuthType,
+		Auth:           record.Auth,
+		ProxyURL:       record.ProxyURL,
+		ChatIDLock:     record.ChatIDLock,
+		DefaultCwd:     record.DefaultCwd,
+		DefaultAgent:   record.DefaultAgent,
+		Enabled:        record.Enabled,
+		Scenarios:      record.Scenarios,
+		RequirePairing: record.RequirePairing,
 	}
 }

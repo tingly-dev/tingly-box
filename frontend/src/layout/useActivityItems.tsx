@@ -342,9 +342,9 @@ export function useActivityItems(): ActivityItem[] {
                 ],
             }] as ActivityItem[] : []),
             // ── Power-ups: what extends an agent beyond plain model routing ──
-            // Remote — one rail icon for the whole domain, named after the
-            // product pillar (remote control) rather than the implementation
-            // ("Bots"). Bot is the front door (every connected bot, every
+            // IM — one rail icon for the whole domain, named after where the
+            // user is (their chats) rather than the implementation ("Bots").
+            // Bot is the front door (every connected bot, every
             // platform, credentials live there); Remote Control and Notify are
             // the purposes mounted onto those bots. New purposes append here
             // as new rows — the rail icon never grows. See bot-arch.md §10.

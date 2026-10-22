@@ -95,8 +95,8 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatS
 	prompter := imchannel.NewIMPrompter(manager)
 
 	// Bind the bot's behavior through the injected consumers. This is the
-	// decoupling seam: the lifecycle here knows nothing about the agent /
-	// SmartGuide machinery — each consumer owns its own.
+	// decoupling seam: the lifecycle here knows nothing about what a
+	// consumer does with chats — each consumer owns its own machinery.
 	attachedList := make([]*Attached, 0, len(consumers))
 	for _, consumer := range consumers {
 		attached, err := consumer.Attach(ctx, setting, manager, prompter, chatStore, pairing)
@@ -449,10 +449,6 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 		return nil
 	}
 
-	// SmartGuide routing-rule sync is a remote_agent concern and now lives in
-	// the inbound consumer (NewBotHandler ensures the rule when it builds the
-	// handler), so the lifecycle no longer touches the TBClient here.
-	//
 	// Every bot shares the manager's one chat store; opening a per-bot store
 	// here is what used to make concurrent bots erase each other's writes.
 	chatStore := m.chatStore
@@ -532,9 +528,8 @@ func (m *Manager) Stop(uuid string) {
 		logrus.WithField("uuid", uuid).Info("Stopping bot")
 		rb.stopped = true // Mark as stopping
 		rb.cancel()
-		// SmartGuide routing-rule cleanup is a remote_agent concern and runs
-		// via the inbound consumer's Cleanup when the bot goroutine exits on
-		// ctx cancel. Don't delete from map yet — let the goroutine clean up.
+		// Don't delete from map yet — let the goroutine clean up when it
+		// exits on ctx cancel.
 	}
 }
 

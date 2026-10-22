@@ -6,36 +6,24 @@ import (
 
 // ImBotSettingsRecord is the GORM model for persisting ImBot credentials
 type ImBotSettingsRecord struct {
-	BotUUID       string            `gorm:"primaryKey;column:bot_uuid"`
-	Name          string            `gorm:"column:name"`
-	Platform      string            `gorm:"column:platform;index:idx_platform"`
-	AuthType      string            `gorm:"column:auth_type"`
-	AuthConfig    map[string]string `gorm:"column:auth_config;type:text;serializer:json"`
-	ProxyURL      string            `gorm:"column:proxy_url"`
-	ChatIDLock    string            `gorm:"column:chat_id_lock"`
-	BashAllowlist []string          `gorm:"column:bash_allowlist;type:text;serializer:json"`
-	DefaultCwd    string            `gorm:"column:default_cwd"`   // Default working directory
-	DefaultAgent  string            `gorm:"column:default_agent"` // Default Agent UUID
-	Enabled       bool              `gorm:"column:enabled;index:idx_enabled"`
+	BotUUID      string            `gorm:"primaryKey;column:bot_uuid"`
+	Name         string            `gorm:"column:name"`
+	Platform     string            `gorm:"column:platform;index:idx_platform"`
+	AuthType     string            `gorm:"column:auth_type"`
+	AuthConfig   map[string]string `gorm:"column:auth_config;type:text;serializer:json"`
+	ProxyURL     string            `gorm:"column:proxy_url"`
+	ChatIDLock   string            `gorm:"column:chat_id_lock"`
+	DefaultCwd   string            `gorm:"column:default_cwd"`   // Default working directory
+	DefaultAgent string            `gorm:"column:default_agent"` // Default Agent UUID
+	Enabled      bool              `gorm:"column:enabled;index:idx_enabled"`
 
-	// Output behavior settings
-	Debug   bool  `gorm:"column:debug;default:false"`  // Show message IDs in output
-	Verbose *bool `gorm:"column:verbose;default:true"` // Send intermediate messages (nil = true)
-
-	// SmartGuide model configuration (required for @tb agent)
-	SmartGuideProvider string `gorm:"column:smartguide_provider"` // Provider UUID
-	SmartGuideModel    string `gorm:"column:smartguide_model"`    // Model identifier
+	// Debug shows message IDs in output.
+	Debug bool `gorm:"column:debug;default:false"`
 
 	// RequirePairing enforces TOFU pairing-code binding for direct messages.
 	// Nil for legacy rows is treated as false (opt-in migration); the bot
 	// create wizard sets this to true for newly created bots.
 	RequirePairing *bool `gorm:"column:require_pairing"`
-
-	// PersistentSession opts @cc into a long-lived Claude Code process kept
-	// warm across chat turns (agentboot.PersistentSession / agentboot/pool)
-	// instead of spawning a fresh process per message. Nil/false is the
-	// default — see .design/claude-code-session.md for the rollout rationale.
-	PersistentSession *bool `gorm:"column:persistent_session"`
 
 	// Scenarios is a JSON-encoded list of scenario bindings declaring
 	// which Claude Code hook scenarios this bot serves and the IM target.
@@ -49,17 +37,4 @@ type ImBotSettingsRecord struct {
 // TableName specifies the table name for GORM
 func (ImBotSettingsRecord) TableName() string {
 	return "imbot_settings"
-}
-
-// GetVerbose returns verbose setting with default true
-func (r *ImBotSettingsRecord) GetVerbose() bool {
-	if r.Verbose == nil {
-		return true // default
-	}
-	return *r.Verbose
-}
-
-// GetPersistentSession returns the persistent-session setting with default false.
-func (r *ImBotSettingsRecord) GetPersistentSession() bool {
-	return r.PersistentSession != nil && *r.PersistentSession
 }

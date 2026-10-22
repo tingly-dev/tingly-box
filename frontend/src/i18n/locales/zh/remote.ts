@@ -19,16 +19,12 @@ export default {
       "proxyUrlHelper": "可选的 HTTP/HTTPS 代理，用于 Bot 的 API 请求。",
       "chatIdLock": "Chat ID 锁定",
       "chatIdLockHelper": "可选：设置后，仅该 Chat ID 可以使用此 Bot。",
-      "bashAllowlist": "Bash 命令白名单",
-      "bashAllowlistHelper": "允许执行的 /bash 子命令。默认：cd、ls、pwd。",
       "cancel": "取消",
       "save": "保存配置",
       "saving": "保存中...",
       "addSubtitle": "选择一个消息平台，并填写连接所需的凭据。",
       "editSubtitle": "更新此连接。能力与人员在「访问权限」中管理。",
       "connect": "连接 Bot",
-      "advancedAgentPolicy": "高级 Agent 策略",
-      "advancedAgentPolicyHelper": "限制已授权控制者可以执行的操作；它本身不授予访问权限。"
     },
     "card": {
       "disableBot": "停用 Bot",
@@ -66,8 +62,6 @@ export default {
       "deleteFailed": "删除 Bot 失败：{{error}}",
       "deleteFailedGeneric": "删除 Bot 失败",
       "cwdUpdateFailed": "更新工作目录失败",
-      "modelUpdated": "Bot 模型配置已更新",
-      "modelUpdateFailed": "更新 Bot 配置失败",
       "remoteAgentOff": "远程控制已停用",
       "remoteAgentOn": "远程控制已启用"
     },
@@ -100,9 +94,6 @@ export default {
         "lark": "Lark 开发者文档",
         "wecom": "企业微信管理后台"
       }
-    },
-    "modelDialog": {
-      "title": "配置 SmartGuide 模型"
     },
     "pairing": {
       "label": "配对码：",
@@ -252,6 +243,7 @@ export default {
   },
   "remoteAgent": {
     "card": {
+      "claudeCode": "Claude Code",
       "manageAccess": "管理访问",
       "messageHint": "还没有人能遥控这个 bot。先私聊 bot 发一条消息，再给该会话开通遥控权限。",
       "pairHint": "还没有人能遥控这个 bot。在私聊中把下面这条发给 bot：",
@@ -263,7 +255,6 @@ export default {
       "hideSettings": "收起设置",
       "showSettings": "设置",
       "statusError": "无法检查谁能遥控",
-      "statusNoModel": "@tb 还没有配置模型"
     },
     "title": "{{platform}} 远程控制",
     "subtitle": "把 {{platform}} Bot 挂载给远程控制，通过聊天操控 Claude Code / SmartGuide，并配置 Agent 行为。Bot 连接本身在机器人页面管理。",
@@ -271,28 +262,25 @@ export default {
       "agentSettingsSaved": "Agent 设置已保存",
       "ccProfileUpdated": "Claude Code 配置方案已更新",
       "ccProfileUpdateFailed": "更新 Claude Code 配置方案失败",
-      "persistentSessionUpdateFailed": "更新常驻会话设置失败"
     },
     "pageTitle": "远程控制",
     "ccProfile": {
       "default": "默认",
       "defaultSecondary": "主 claude_code 场景",
-      "dialogTitle": "@cc 使用的 Claude Code 配置方案",
-      "dialogSubtitle": "远程 @cc 会话会走所选方案 —— 包括它的规则、模型映射与设置覆盖。",
+      "dialogTitle": "Claude Code 配置方案",
+      "dialogSubtitle": "这个 bot 的聊天新开的会话会用这个配置方案：包括它的规则、模型映射与设置覆盖。",
       "empty": "还没有 Claude Code 配置方案。请先在 Claude Code 场景页创建一个。",
-      "persistentSession": "在消息之间保持进程常驻",
-      "persistentSessionCaption": "实验性功能：复用同一个 Claude Code 进程处理同一会话的多轮消息，省去每条消息的进程启动开销。",
       "separate": "分离",
       "unified": "统一",
       "chip": "方案",
-      "defaultTooltip": "使用主 claude_code 场景。点击可让 @cc 走某个 Claude Code 配置方案。",
-      "missingTooltip": "方案「{{id}}」已不存在 —— @cc 回退到默认 claude_code 场景。点击可另选一个。",
+      "defaultTooltip": "使用主 claude_code 场景。点击可改用某个 Claude Code 配置方案。",
+      "missingTooltip": "方案「{{id}}」已不存在，新会话会用默认 claude_code 场景。点击可另选一个。",
       "profileTooltip": "Claude Code 配置方案",
       "scenario": "场景"
     },
     "emptyTitle": "还没有 bot",
-    "emptyDescription": "连接一个 Telegram、飞书、钉钉等聊天 bot，然后就能在聊天里驱动 Claude Code 和 SmartGuide。",
-    "pageSubtitle": "每个 bot 谁能遥控，以及 @tb 和 @cc 消息发往哪里。"
+    "emptyDescription": "连接一个 Telegram、飞书、钉钉等聊天 bot，然后就能在聊天里使用 Claude Code。",
+    "pageSubtitle": "每个 bot 的聊天里谁能使用 Claude Code，以及它用哪个配置方案。"
   },
   "bots": {
     "activeCount": "启用 {{active}} / {{total}}",

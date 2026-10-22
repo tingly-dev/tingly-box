@@ -33,7 +33,7 @@ type Attached struct {
 // connection resource; its channel — the send/prompt surface plus the shared
 // prompter and reply routing — is host infrastructure that exists whenever the
 // bot runs. Consumers are the channel's users: remote_agent (control Claude
-// Code / SmartGuide from chat) and notify (scenario notifications routed via
+// Code from chat) and notify (scenario notifications routed via
 // /tingly/:scenario/notify) today; future consumers implement the same
 // interface and are injected the same way.
 //
@@ -43,7 +43,7 @@ type Attached struct {
 // The bot host owns the generic pieces (imbot.Manager, chat store, pairing,
 // channel registry, the shared channel prompter) and passes them to
 // Attach; a consumer owns only its purpose-specific dependencies (agent
-// service, sessions, SmartGuide) captured at construction. None of Attach's
+// service, sessions) captured at construction. None of Attach's
 // parameters reference a purpose's machinery, which is what keeps the
 // lifecycle decoupled.
 type Consumer interface {

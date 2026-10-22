@@ -196,12 +196,15 @@ func (s *Service) startInChannelFolder(b *db.ChannelBinding, task string, atts [
 }
 
 // startFromChannel starts a thread in the folder projectID, with the model,
-// profile and permission mode of prev (the thread the chat was on; nil for
-// a chat that never talked), and moves the chat to it.
+// profile and permission mode of prev (the thread the chat was on), or the
+// chat's profile when it never talked (the default when that profile is
+// gone), and moves the chat to it.
 func (s *Service) startFromChannel(b *db.ChannelBinding, prev *db.Thread, projectID, task string, atts []Attachment, src Source) (*db.Thread, error) {
 	spec := FolderThreadSpec{ProjectID: projectID, Task: task, Source: src, Attachments: atts}
 	if prev != nil {
 		spec.Model, spec.PermissionMode, spec.Profile = prev.Model, prev.PermissionMode, prev.Profile
+	} else if s.Threads.Launchable(b.Profile) {
+		spec.Profile = b.Profile
 	}
 	t, err := s.Threads.StartFolderThread(spec)
 	if err != nil {
@@ -246,8 +249,9 @@ func (s *Service) answerFromText(threadID, requestID, text string) (done bool, e
 // ChannelToFolder moves a chat to a folder (an absolute path, which must
 // exist): its next message starts a new thread there. With ifNew, a chat
 // that already has a binding is left as it is, which is how a chat that
-// never talked gets its first folder.
-func (s *Service) ChannelToFolder(platform, chatID, title, folder string, ifNew bool) error {
+// never talked gets its first folder. profile is the launch profile a chat
+// that never talked starts its first thread under.
+func (s *Service) ChannelToFolder(platform, chatID, title, folder, profile string, ifNew bool) error {
 	path, err := CleanFolder(folder)
 	if err != nil {
 		return err
@@ -259,7 +263,7 @@ func (s *Service) ChannelToFolder(platform, chatID, title, folder string, ifNew 
 			return err
 		}
 	}
-	return s.Store.SetChannelBindingFolder(platform, chatID, title, path)
+	return s.Store.SetChannelBindingFolder(platform, chatID, title, path, strings.TrimSpace(profile))
 }
 
 // AnswerFromChannel answers a thread's pending approval with the button a

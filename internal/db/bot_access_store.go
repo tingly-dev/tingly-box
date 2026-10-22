@@ -55,9 +55,6 @@ type remoteDirectChatRecord struct {
 	Blocked        bool       `gorm:"column:blocked;not null"`
 	PairedAt       *time.Time `gorm:"column:paired_at"`
 	ProjectPath    string     `gorm:"column:project_path"`
-	BashCwd        string     `gorm:"column:bash_cwd"`
-	CurrentAgent   string     `gorm:"column:current_agent"`
-	Verbose        *bool      `gorm:"column:verbose"`
 	CreatedAt      time.Time  `gorm:"column:created_at;not null"`
 	UpdatedAt      time.Time  `gorm:"column:updated_at;not null"`
 }
@@ -82,9 +79,6 @@ type remoteGroupRecord struct {
 	Name            string    `gorm:"column:name"`
 	Blocked         bool      `gorm:"column:blocked;not null"`
 	ProjectPath     string    `gorm:"column:project_path"`
-	BashCwd         string    `gorm:"column:bash_cwd"`
-	CurrentAgent    string    `gorm:"column:current_agent"`
-	Verbose         *bool     `gorm:"column:verbose"`
 	CreatedAt       time.Time `gorm:"column:created_at;not null"`
 	UpdatedAt       time.Time `gorm:"column:updated_at;not null"`
 }
@@ -299,7 +293,7 @@ func (s *BotAccessStore) DiscoverDirectChat(ctx context.Context, botUUID, platfo
 			return err
 		}
 		now := time.Now().UTC()
-		row = remoteDirectChatRecord{ID: uuid.NewString(), BotUUID: botUUID, Platform: platform, ExternalChatID: externalChatID, CurrentAgent: DefaultChatAgent, CreatedAt: now, UpdatedAt: now}
+		row = remoteDirectChatRecord{ID: uuid.NewString(), BotUUID: botUUID, Platform: platform, ExternalChatID: externalChatID, CreatedAt: now, UpdatedAt: now}
 		if err := tx.Create(&row).Error; err != nil {
 			return err
 		}
@@ -316,7 +310,7 @@ func directFromRecord(r remoteDirectChatRecord) access.DirectChat {
 	if r.PeerActorID != nil {
 		peer = *r.PeerActorID
 	}
-	return access.DirectChat{ID: r.ID, BotUUID: r.BotUUID, Platform: r.Platform, ExternalChatID: r.ExternalChatID, PeerActorID: peer, Blocked: r.Blocked, PairedAt: r.PairedAt, ProjectPath: r.ProjectPath, BashCwd: r.BashCwd, CurrentAgent: r.CurrentAgent, Verbose: r.Verbose, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	return access.DirectChat{ID: r.ID, BotUUID: r.BotUUID, Platform: r.Platform, ExternalChatID: r.ExternalChatID, PeerActorID: peer, Blocked: r.Blocked, PairedAt: r.PairedAt, ProjectPath: r.ProjectPath, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 
 func (s *BotAccessStore) PairDirectChat(ctx context.Context, chatID, externalActorID, displayName string) error {
@@ -413,6 +407,7 @@ func (s *BotAccessStore) SetDirectChatBlocked(ctx context.Context, botUUID, id s
 	}
 	return nil
 }
+
 // SetDirectChatPermissions writes a set of explicit permission rows for one
 // Direct Chat in a single transaction. Presets use it so a partial network
 // failure can never leave a half-applied permission state (e.g. start=allow
@@ -479,7 +474,7 @@ func (s *BotAccessStore) DiscoverGroup(ctx context.Context, botUUID, platform, e
 			return err
 		}
 		now := time.Now().UTC()
-		row = remoteGroupRecord{ID: uuid.NewString(), BotUUID: botUUID, Platform: platform, ExternalGroupID: externalGroupID, Name: name, CurrentAgent: DefaultChatAgent, CreatedAt: now, UpdatedAt: now}
+		row = remoteGroupRecord{ID: uuid.NewString(), BotUUID: botUUID, Platform: platform, ExternalGroupID: externalGroupID, Name: name, CreatedAt: now, UpdatedAt: now}
 		if err := tx.Create(&row).Error; err != nil {
 			return err
 		}
@@ -497,7 +492,7 @@ func (s *BotAccessStore) DiscoverGroup(ctx context.Context, botUUID, platform, e
 	return groupFromRecord(row), nil
 }
 func groupFromRecord(r remoteGroupRecord) access.Group {
-	return access.Group{ID: r.ID, BotUUID: r.BotUUID, Platform: r.Platform, ExternalGroupID: r.ExternalGroupID, Name: r.Name, Blocked: r.Blocked, ProjectPath: r.ProjectPath, BashCwd: r.BashCwd, CurrentAgent: r.CurrentAgent, Verbose: r.Verbose, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	return access.Group{ID: r.ID, BotUUID: r.BotUUID, Platform: r.Platform, ExternalGroupID: r.ExternalGroupID, Name: r.Name, Blocked: r.Blocked, ProjectPath: r.ProjectPath, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 func (s *BotAccessStore) ListGroups(ctx context.Context, botUUID string) ([]access.Group, error) {
 	var rows []remoteGroupRecord

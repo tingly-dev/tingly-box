@@ -19,16 +19,12 @@ export default {
       "proxyUrlHelper": "Необязательный HTTP/HTTPS-прокси для запросов к API бота.",
       "chatIdLock": "Привязка к Chat ID",
       "chatIdLockHelper": "Необязательно: если задано, бот будет доступен только с этого Chat ID.",
-      "bashAllowlist": "Белый список команд Bash",
-      "bashAllowlistHelper": "Разрешённые подкоманды /bash. По умолчанию: cd, ls, pwd.",
       "cancel": "Отмена",
       "save": "Сохранить конфигурацию",
       "saving": "Сохранение...",
       "addSubtitle": "Выберите мессенджер и укажите учётные данные, нужные для подключения.",
       "editSubtitle": "Обновите это подключение. Возможности и люди настраиваются в разделе «Доступ».",
       "connect": "Подключить бота",
-      "advancedAgentPolicy": "Расширенная политика агента",
-      "advancedAgentPolicyHelper": "Ограничивает, что может выполнять авторизованный оператор; сама по себе доступа не даёт."
     },
     "card": {
       "disableBot": "Отключить бота",
@@ -66,8 +62,6 @@ export default {
       "deleteFailed": "Не удалось удалить бота: {{error}}",
       "deleteFailedGeneric": "Не удалось удалить бота",
       "cwdUpdateFailed": "Не удалось обновить рабочий каталог",
-      "modelUpdated": "Настройка модели бота обновлена",
-      "modelUpdateFailed": "Не удалось обновить конфигурацию бота",
       "remoteAgentOff": "Удалённое управление отключено",
       "remoteAgentOn": "Удалённое управление включено"
     },
@@ -100,9 +94,6 @@ export default {
         "lark": "Документация для разработчиков Lark",
         "wecom": "Панель администратора WeCom"
       }
-    },
-    "modelDialog": {
-      "title": "Настройка модели SmartGuide"
     },
     "pairing": {
       "label": "Код сопряжения:",
@@ -252,6 +243,7 @@ export default {
   },
   "remoteAgent": {
     "card": {
+      "claudeCode": "Claude Code",
       "manageAccess": "Управлять доступом",
       "messageHint": "Пока никто не может управлять этим ботом. Напишите боту в личные сообщения, затем выдайте этому чату доступ к удалённому управлению.",
       "pairHint": "Пока никто не может управлять этим ботом. Отправьте это боту в личные сообщения:",
@@ -269,7 +261,6 @@ export default {
       "hideSettings": "Скрыть настройки",
       "showSettings": "Настройки",
       "statusError": "Не удалось проверить, кто может управлять",
-      "statusNoModel": "У @tb пока нет модели"
     },
     "title": "Удалённое управление · {{platform}}",
     "subtitle": "Подключите бота {{platform}} к удалённому управлению, чтобы работать с Claude Code / SmartGuide из чата и настраивать поведение агента. Само подключение бота настраивается на странице «Боты».",
@@ -277,28 +268,25 @@ export default {
       "agentSettingsSaved": "Настройки агента сохранены",
       "ccProfileUpdated": "Профиль Claude Code обновлён",
       "ccProfileUpdateFailed": "Не удалось обновить профиль Claude Code",
-      "persistentSessionUpdateFailed": "Не удалось обновить настройку постоянной сессии"
     },
     "pageTitle": "Удалённое управление",
     "ccProfile": {
       "default": "По умолчанию",
       "defaultSecondary": "Основной сценарий claude_code",
-      "dialogTitle": "Профиль Claude Code для @cc",
-      "dialogSubtitle": "Удалённые сессии @cc идут через выбранный профиль — его правила, сопоставление моделей и переопределения настроек.",
+      "dialogTitle": "Профиль Claude Code",
+      "dialogSubtitle": "Новые сессии из чатов этого бота работают с этим профилем: его правилами, сопоставлением моделей и переопределениями настроек.",
       "empty": "Профилей Claude Code пока нет. Сначала создайте профиль на странице сценария Claude Code.",
-      "persistentSession": "Держать процесс прогретым между сообщениями",
-      "persistentSessionCaption": "Экспериментально: переиспользует один процесс Claude Code для всех ходов чата, избегая затрат на запуск процесса при каждом сообщении @cc.",
       "separate": "раздельный",
       "unified": "единый",
       "chip": "Профиль",
-      "defaultTooltip": "Используется основной сценарий claude_code. Нажмите, чтобы направить @cc через профиль Claude Code.",
-      "missingTooltip": "Профиль «{{id}}» больше не существует — @cc возвращается к сценарию claude_code по умолчанию. Нажмите, чтобы выбрать другой.",
+      "defaultTooltip": "Используется основной сценарий claude_code. Нажмите, чтобы выбрать профиль Claude Code.",
+      "missingTooltip": "Профиль «{{id}}» больше не существует, поэтому новые сессии используют сценарий claude_code по умолчанию. Нажмите, чтобы выбрать другой.",
       "profileTooltip": "Профиль Claude Code",
       "scenario": "Сценарий"
     },
     "emptyTitle": "Ботов пока нет",
-    "emptyDescription": "Подключите бота Telegram, Feishu, DingTalk или другого мессенджера и управляйте Claude Code и SmartGuide прямо из чата.",
-    "pageSubtitle": "Кто может управлять каждым ботом и куда уходят сообщения @tb и @cc."
+    "emptyDescription": "Подключите бота Telegram, Feishu, DingTalk или другого мессенджера и работайте с Claude Code прямо из чата.",
+    "pageSubtitle": "Кто может работать с Claude Code из чатов каждого бота и с каким профилем."
   },
   "bots": {
     "activeCount": "активных {{active}} / {{total}}",

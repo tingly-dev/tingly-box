@@ -37,12 +37,8 @@ export default {
     "dialog": {
       "addSubtitle": "Choose a messaging platform and provide the credentials needed to connect it.",
       "addTitle": "Connect a bot",
-      "advancedAgentPolicy": "Advanced agent policy",
-      "advancedAgentPolicyHelper": "Limits what an authorized controller may execute; it does not grant access.",
       "alias": "Alias",
       "aliasHelper": "Optional: a friendly name for this bot configuration.",
-      "bashAllowlist": "Bash Allowlist",
-      "bashAllowlistHelper": "Allowlisted /bash subcommands. Default: cd, ls, pwd.",
       "cancel": "Cancel",
       "connect": "Connect bot",
       "editSubtitle": "Update this connection. Capabilities and people are managed from Access.",
@@ -170,9 +166,6 @@ export default {
         "step2Text": "Select \"Connect a bot\" and scan the QR code with Weixin to bind your account."
       }
     },
-    "modelDialog": {
-      "title": "Configure SmartGuide Model"
-    },
     "notify": {
       "botCreated": "Bot created successfully.",
       "botDeleted": "Bot deleted successfully",
@@ -182,8 +175,6 @@ export default {
       "deleteFailedGeneric": "Failed to delete bot",
       "loadFailed": "Failed to load bot settings",
       "missingFields": "Missing required fields: {{fields}}",
-      "modelUpdateFailed": "Failed to update bot configuration",
-      "modelUpdated": "Bot model configuration updated",
       "qrBindRequired": "Please complete WeChat QR binding before saving",
       "remoteAgentOff": "Remote Control disabled",
       "remoteAgentOn": "Remote Control enabled",
@@ -233,6 +224,7 @@ export default {
   },
   "remoteAgent": {
     "card": {
+      "claudeCode": "Claude Code",
       "manageAccess": "Manage access",
       "messageHint": "Nobody can control this bot yet. Message the bot directly, then grant Remote Control to that chat.",
       "pairHint": "Nobody can control this bot yet. Send this to the bot in a direct message:",
@@ -246,33 +238,29 @@ export default {
       "hideSettings": "Hide settings",
       "showSettings": "Settings",
       "statusError": "Couldn't check who can control",
-      "statusNoModel": "@tb has no model yet"
     },
     "ccProfile": {
       "default": "Default",
       "defaultSecondary": "Main claude_code scenario",
-      "dialogSubtitle": "Remote @cc sessions route through the selected profile — its rules, model mapping, and settings overrides.",
-      "dialogTitle": "Claude Code Profile for @cc",
+      "dialogSubtitle": "New sessions from this bot's chats run under this profile: its rules, model mapping and settings overrides.",
+      "dialogTitle": "Claude Code profile",
       "empty": "No Claude Code profiles yet. Create one on the Claude Code scenario page first.",
-      "persistentSession": "Keep the process warm between messages",
-      "persistentSessionCaption": "Experimental: skips process startup cost on every @cc message by reusing one Claude Code process across a chat's turns.",
       "separate": "separate",
       "unified": "unified",
       "chip": "Profile",
-      "defaultTooltip": "Uses the main claude_code scenario. Click to route @cc through a Claude Code profile.",
-      "missingTooltip": "Profile \"{{id}}\" no longer exists — @cc falls back to the default claude_code scenario. Click to pick another.",
+      "defaultTooltip": "Uses the main claude_code scenario. Click to pick a Claude Code profile instead.",
+      "missingTooltip": "Profile \"{{id}}\" no longer exists, so new sessions use the default claude_code scenario. Click to pick another.",
       "profileTooltip": "Claude Code profile",
       "scenario": "Scenario"
     },
     "notify": {
       "ccProfileUpdateFailed": "Failed to update Claude Code profile",
       "ccProfileUpdated": "Claude Code profile updated",
-      "persistentSessionUpdateFailed": "Failed to update persistent-session setting"
     },
     "pageTitle": "Remote Control",
     "emptyTitle": "No bots yet",
-    "emptyDescription": "Connect a Telegram, Feishu, DingTalk or other chat bot, then drive Claude Code and SmartGuide from that chat.",
-    "pageSubtitle": "Who can control each bot, and where @tb and @cc messages go."
+    "emptyDescription": "Connect a Telegram, Feishu, DingTalk or other chat bot, then use Claude Code from that chat.",
+    "pageSubtitle": "Who can use Claude Code from each bot's chats, and the profile it runs under."
   },
   "bots": {
     "activeCount": "active {{active}} / {{total}}",

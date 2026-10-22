@@ -78,10 +78,10 @@ YZ（2026-10-21）：Remote 原有的行为迁到 Projects 的**项目**或**文
 
 | 设置 | 今天作用于 | 迁移后 |
 |---|---|---|
-| `DefaultAgent`（Claude Code profile） | 该 bot 所有 `@cc` | 该 bot 的 chat **新开**的文件夹线程用这个 profile（`FolderThreadSpec.Profile`）；已有线程不变，Web 上可改 |
+| `DefaultAgent`（Claude Code profile） | 该 bot 所有 `@cc` | 该 bot 的 chat **第一个**会话用这个 profile；之后的会话沿用上一个会话的（Web 上可改）。profile 被删了就回到默认 |
 | `DefaultCwd` | 没绑定目录时的 `@cc` 目录 | 没有绑定的 chat 第一次说话时的文件夹 |
-| `Verbose` | 默认中间消息开关（默认开） | 同，但默认关（chat 级 `/verbose` 覆盖） |
-| `BashAllowlist` | `/bash` | 同 |
+| `Verbose` | 默认中间消息开关（默认开） | 作废：只剩 chat 级 `/verbose`，默认关 |
+| `BashAllowlist` | `/bash` | 作废（`/bash` 已删） |
 | `SmartGuideProvider/Model` | `@tb` 的模型 | 作废 |
 | `PersistentSession` | `@cc` 进程是否常驻 | 作废（Projects 总是常驻） |
 | `RequirePairing`、访问控制、平台凭据 | 接入 | 不变 |
@@ -156,6 +156,23 @@ Remote 页面保留，只去掉 SmartGuide 模型和“常驻会话”这类作�
 - **没动（第 4 期 b）**：bot 设置里作废的字段（`SmartGuideProvider/Model`、`PersistentSession`、`BashAllowlist`、`Verbose`）
   和它们的 API、前端对话框、SmartGuide 路由规则（`tbclient`）；`ChatStore` 里不再用的列（当前 agent、bash cwd、verbose）；
   文案（Projects 开关说明、Remote 侧栏改名）；`DefaultAgent` 接到线程 profile。
+
+### 第 4 期 b 的落地：作废的设置和文案
+
+- **bot 的 profile 接上了**：remoteagent 把 bot 的 `DefaultAgent`（`claude_code:<id>`）解析成 profile id，随 `ToFolder`
+  交给 Projects，存在 `ChannelBinding.Profile`。只有 chat 的**第一个**会话用它；之后 `/new`、`/cd` 开的会话沿用上一个会话的
+  profile、模型和权限模式（和 Web 上新开会话一致），所以改 bot 的 profile 不会打断已经在聊的 chat。
+  profile 被删了（`Launchable` 为假）就用默认，而不是让第一条消息失败：Profile 节点的提示一直是这么说的。
+- **删掉的设置**：`SmartGuideProvider/Model`、`PersistentSession`、`BashAllowlist`、bot 级 `Verbose`，从 db 记录、
+  `bot.BotSetting`、API 请求和前端一起删；SmartGuide 路由规则的增删（`config/smart_guide_rule.go`、`tbclient`）也删了。
+  chat 上的 `BashCwd`、`CurrentAgent`、`Verbose`（`remote_chats` 和访问模型的两张表）同样只删代码不删列：
+  老库里这些列还在，没人读写。
+- **没删**：`_smart_guide` 这个场景类型和老配置里已生成的 `_internal_smart_guide_<bot>` 规则。它们是用户配置的一部分，
+  删场景会让老配置读不出来；留着不影响任何东西。
+- **页面**：Remote Control 卡片的路线图从 `@tb`/`@cc` 两条分叉变成一条：谁能用 → bot → Claude Code → profile；
+  模型对话框、“常驻会话”开关、bash 白名单都去掉了。
+- **文案**：侧栏的 Remote 改叫 IM（里面还是 Bots、Remote Control、IM Notify 三页）；Projects 开关的说明改成
+  “在 Web 和 IM 聊天里使用 Claude Code”，打开后的提醒加上“能通过 bot 使用远程控制的人”也能在这台机器上跑 Claude Code。
 
 ## 分期（每期一个 PR）
 

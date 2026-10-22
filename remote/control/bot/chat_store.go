@@ -8,31 +8,22 @@ import (
 
 // BotSetting represents bot configuration with platform-specific auth
 type BotSetting struct {
-	UUID          string            `json:"uuid,omitempty"`           // UUID for bot identification
-	Name          string            `json:"name,omitempty"`           // User-defined name for the bot
-	Platform      string            `json:"platform"`                 // Platform identifier
-	AuthType      string            `json:"auth_type"`                // Auth type: token, oauth, qr
-	Auth          map[string]string `json:"auth"`                     // Dynamic auth fields based on platform
-	ProxyURL      string            `json:"proxy_url,omitempty"`      // Optional proxy URL
-	ChatIDLock    string            `json:"chat_id_lock,omitempty"`   // Deprecated: retained for settings compatibility; access policy supersedes it.
-	BashAllowlist []string          `json:"bash_allowlist,omitempty"` // Optional bash command allowlist
-	DefaultCwd    string            `json:"default_cwd,omitempty"`    // Default working directory if no project bound
-	Enabled       bool              `json:"enabled"`                  // Whether this bot is enabled
-	Scenarios     string            `json:"scenarios,omitempty"`      // Raw scenario/mount list (JSON, see remote/binding)
+	UUID       string            `json:"uuid,omitempty"`         // UUID for bot identification
+	Name       string            `json:"name,omitempty"`         // User-defined name for the bot
+	Platform   string            `json:"platform"`               // Platform identifier
+	AuthType   string            `json:"auth_type"`              // Auth type: token, oauth, qr
+	Auth       map[string]string `json:"auth"`                   // Dynamic auth fields based on platform
+	ProxyURL   string            `json:"proxy_url,omitempty"`    // Optional proxy URL
+	ChatIDLock string            `json:"chat_id_lock,omitempty"` // Deprecated: retained for settings compatibility; access policy supersedes it.
+	DefaultCwd string            `json:"default_cwd,omitempty"`  // Default working directory if no project bound
+	Enabled    bool              `json:"enabled"`                // Whether this bot is enabled
+	Scenarios  string            `json:"scenarios,omitempty"`    // Raw scenario/mount list (JSON, see remote/binding)
 
-	// DefaultAgent selects which agent configuration serves @cc for this bot:
-	// ""/"claude_code" = the main claude_code scenario, "claude_code:<id>" = a
-	// Claude Code profile — @cc then routes through the profiled scenario with
-	// the profile's unified/separate mode and env overrides, exactly like a
-	// local `tingly-box cc --profile <id>` launch.
+	// DefaultAgent is the Claude Code profile the bot's chats run under:
+	// ""/"claude_code" = the main claude_code scenario, "claude_code:<id>" =
+	// profile <id>, as a local `tingly-box cc --profile <id>` launch. A chat's
+	// first session in Projects takes it; later sessions keep their own.
 	DefaultAgent string `json:"default_agent,omitempty"`
-
-	// Output behavior settings
-	Verbose *bool `json:"verbose,omitempty"` // Send intermediate messages (nil = true default)
-
-	// SmartGuide model configuration (required for @tb agent)
-	SmartGuideProvider string `json:"smartguide_provider,omitempty"` // Provider UUID
-	SmartGuideModel    string `json:"smartguide_model,omitempty"`    // Model identifier
 
 	// RequirePairing enforces a TOFU pairing-code handshake before any DM is
 	// processed. Tri-state: explicit true/false wins; nil means "platform
@@ -41,19 +32,8 @@ type BotSetting struct {
 	// elsewhere. Operators opt out by setting this to false explicitly.
 	RequirePairing *bool `json:"require_pairing,omitempty"`
 
-	// PersistentSession opts @cc into a long-lived Claude Code process kept
-	// warm across chat turns instead of one process per message. Nil/false
-	// is the default — see .design/claude-code-session.md.
-	PersistentSession *bool `json:"persistent_session,omitempty"`
-
 	CreatedAt string `json:"created_at,omitempty"`
 	UpdatedAt string `json:"updated_at,omitempty"`
-}
-
-// IsPersistentSession reports whether @cc should keep a Claude Code process
-// warm across chat turns for this bot. Nil (unset) defaults to false.
-func (b BotSetting) IsPersistentSession() bool {
-	return b.PersistentSession != nil && *b.PersistentSession
 }
 
 // IsRequirePairing reports whether this bot requires per-chat pairing.
@@ -78,21 +58,19 @@ func PlatformDefaultsRequirePairing(platform string) bool {
 }
 
 // ProjectHistoryCap bounds the per-chat MRU list so storage stays bounded and
-// the /project list stays readable.
+// the /dir list stays readable.
 const ProjectHistoryCap = 20
 
 // Chat is all state associated with an IM chat (direct or group): which
-// project it is bound to, whether it is paired or whitelisted, and which
-// agent is currently driving it.
+// folder it picked and whether it is paired or whitelisted.
 //
-// This is the remote-owned domain type. The SQLite store in internal/data/db
+// This is the remote-owned domain type. The SQLite store in internal/db
 // implements ChatStoreInterface against it directly (converting to/from its
-// own GORM RemoteChatRecord) — same pattern as remote/session, where db
-// imports the remote package that owns the domain type. Callers write
-// bot.Chat everywhere.
+// own GORM RemoteChatRecord), where db imports the remote package that owns
+// the domain type. Callers write bot.Chat everywhere.
 //
-// Sessions are not part of a Chat: they are managed by SessionManager, keyed
-// by the (ChatID, Agent, Project) binding.
+// Sessions are not part of a Chat: they live in Projects, which binds the
+// chat to its current session.
 type Chat struct {
 	ChatID         string   `json:"chat_id"`
 	Platform       string   `json:"platform"`
@@ -112,21 +90,12 @@ type Chat struct {
 	IsWhitelisted bool   `json:"is_whitelisted"`
 	WhitelistedBy string `json:"whitelisted_by,omitempty"`
 
-	// Bash state
-	BashCwd string `json:"bash_cwd,omitempty"`
-
 	// ContextToken is the most recent reply-context token seen from this chat
 	// (WeChat ilink). Proactive notifications reuse it so the server's prepare
 	// step succeeds without an inbound message in the same turn; without it the
 	// send fails with ret=-2 / "prepare failed". Refreshed by every inbound
 	// message; day-scale lifetime, so persisting it survives bot restarts.
 	ContextToken string `json:"context_token,omitempty"`
-
-	// CurrentAgent is which agent is driving the chat ("tingly-box" or "claude").
-	CurrentAgent string `json:"current_agent,omitempty"`
-
-	// Chat-level settings
-	Verbose *bool `json:"verbose,omitempty"` // Verbose mode: nil=use bot default, true=verbose, false=quiet
 
 	// Disabled is the inbound blocklist flag: a disabled chat's messages are
 	// dropped before any handler runs and the chat is excluded from the
@@ -213,22 +182,6 @@ type ChatStoreInterface interface {
 
 	// IsWhitelisted checks if a chat is whitelisted
 	IsWhitelisted(chatID string) bool
-
-	// SetBashCwd sets the bash working directory for a chat
-	SetBashCwd(chatID, cwd string) error
-
-	// GetBashCwd retrieves the bash working directory for a chat
-	GetBashCwd(chatID string) (string, bool, error)
-
-	// SetCurrentAgent sets the current agent for a chat. Creates the chat
-	// row if it doesn't yet exist so that @cc/@tb handoff state persists
-	// even on fresh chats that haven't been bound (/cd) or paired (/bind)
-	// yet. Pass an empty platform when the caller doesn't have one — the
-	// field will be filled in later by BindProject/SetPaired.
-	SetCurrentAgent(chatID, platform, agentType string) error
-
-	// GetCurrentAgent retrieves the current agent for a chat
-	GetCurrentAgent(chatID string) (string, error)
 
 	// SetPaired marks a chat as paired with a specific bot UUID and sender.
 	// The chat is created if it does not yet exist.

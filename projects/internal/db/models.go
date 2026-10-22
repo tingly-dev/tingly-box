@@ -226,6 +226,10 @@ type ChannelBinding struct {
 	// message starts a new thread in, the chat moving there: a chat that never
 	// talked yet (ThreadID empty) or one that changed folder (/cd).
 	Folder string `gorm:"size:1000" json:"-"`
+	// Profile is the launch profile a chat that never talked starts its
+	// first thread under: the profile of the bot that brought it in. Later
+	// threads keep the profile of the one before.
+	Profile string `gorm:"size:100" json:"-"`
 	// Verbose makes the chat also hear each step of its thread's turns (what
 	// it says between tool calls, and each call), not only the reply.
 	Verbose bool `gorm:"not null;default:false" json:"verbose"`

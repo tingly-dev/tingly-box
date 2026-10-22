@@ -59,11 +59,6 @@ func TestHTTPTBClient_EmptyProfileID(t *testing.T) {
 	assert.Empty(t, path)
 }
 
-func TestSmartGuideRuleUUID(t *testing.T) {
-	uuid := serverconfig.SmartGuideRuleUUID("bot-123")
-	assert.Equal(t, "_internal_smart_guide_bot-123", uuid)
-}
-
 // ccRule builds an active claude_code rule with the given UUID and request model.
 func ccRule(uuid, requestModel string) typ.Rule {
 	return typ.Rule{

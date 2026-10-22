@@ -124,9 +124,6 @@ func TestDisabledSurvivesStateWrites(t *testing.T) {
 	if err := store.BindProject("chat-1", "telegram", "/proj", "owner"); err != nil {
 		t.Fatalf("bind: %v", err)
 	}
-	if err := store.SetCurrentAgent("chat-1", "telegram", "claude"); err != nil {
-		t.Fatalf("agent: %v", err)
-	}
 
 	if !store.IsChatDisabled("chat-1") {
 		t.Error("disable flag was cleared by a state write")

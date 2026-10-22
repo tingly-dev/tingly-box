@@ -151,9 +151,10 @@ func (a *App) ChannelBound(platform, chatID string) bool {
 // ChannelToFolder moves an IM chat to a folder on this machine (an absolute
 // path that exists): its next message starts a new session there, in Projects.
 // With ifNew a chat that already has a place is left alone, which is how a
-// chat gets its first folder. title names the chat, when known.
-func (a *App) ChannelToFolder(platform, chatID, title, folder string, ifNew bool) error {
-	return a.svc.ChannelToFolder(platform, chatID, title, folder, ifNew)
+// chat gets its first folder. title names the chat, when known; profile is
+// the launch profile the chat's first session runs under ("" the default).
+func (a *App) ChannelToFolder(platform, chatID, title, folder, profile string, ifNew bool) error {
+	return a.svc.ChannelToFolder(platform, chatID, title, folder, profile, ifNew)
 }
 
 // Start recovers threads interrupted by a restart and runs housekeeping

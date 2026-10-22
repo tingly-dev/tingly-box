@@ -12,9 +12,6 @@ import (
 	"strings"
 	"time"
 
-	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
-
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -100,55 +97,6 @@ func (c *HTTPTBClient) GetHTTPEndpointForScenario(_ context.Context, scenario ty
 		BaseURL: c.baseURL + scenarioPath,
 		APIKey:  c.modelToken,
 	}, nil
-}
-
-func (c *HTTPTBClient) EnsureSmartGuideRuleForBot(ctx context.Context, botUUID, botName, providerUUID, modelID string) error {
-	ruleUUID := serverconfig.SmartGuideRuleUUID(botUUID)
-
-	displayName := botName
-	if displayName == "" {
-		displayName = botUUID
-	}
-
-	rule := typ.Rule{
-		UUID:          ruleUUID,
-		Scenario:      typ.ScenarioSmartGuide,
-		RequestModel:  botUUID,
-		ResponseModel: modelID,
-		Description:   fmt.Sprintf("Auto-generated rule for SmartGuide bot '%s' (DO NOT EDIT)", displayName),
-		Services: []*loadbalance.Service{
-			{Provider: providerUUID, Model: modelID, Active: true},
-		},
-		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticRandom,
-			Params: typ.DefaultRandomParams(),
-		},
-		Active:       true,
-		SmartEnabled: false,
-	}
-
-	body, err := json.Marshal(rule)
-	if err != nil {
-		return fmt.Errorf("marshal rule: %w", err)
-	}
-
-	path := fmt.Sprintf("/api/v1/rule/%s", ruleUUID)
-	var resp apiResponse
-	if err := c.doJSON(ctx, http.MethodPost, path, body, &resp); err != nil {
-		return fmt.Errorf("ensure smart guide rule: %w", err)
-	}
-	return resp.err("ensure smart guide rule")
-}
-
-func (c *HTTPTBClient) DeleteSmartGuideRuleForBot(ctx context.Context, botUUID string) error {
-	ruleUUID := serverconfig.SmartGuideRuleUUID(botUUID)
-	path := fmt.Sprintf("/api/v1/rule/%s", ruleUUID)
-
-	var resp apiResponse
-	if err := c.doJSON(ctx, http.MethodDelete, path, nil, &resp); err != nil {
-		return fmt.Errorf("delete smart guide rule: %w", err)
-	}
-	return resp.err("delete smart guide rule")
 }
 
 func (c *HTTPTBClient) GetDataDir() string {

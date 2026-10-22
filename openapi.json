@@ -4924,8 +4924,8 @@
         "tags": [
           "projects"
         ],
-        "summary": "Archive a project or folder (the same as PATCH archived=true): its threads stop and stay readable, nothing is deleted",
-        "description": "Archive a project or folder (the same as PATCH archived=true): its threads stop and stay readable, nothing is deleted",
+        "summary": "Archive a project or folder (the same as PATCH archived=true): its threads stop and stay readable, its IM chats are unbound, nothing is deleted",
+        "description": "Archive a project or folder (the same as PATCH archived=true): its threads stop and stay readable, its IM chats are unbound, nothing is deleted",
         "operationId": "apiV1ProjectsIdDelete",
         "parameters": [
           {
@@ -11166,6 +11166,10 @@
             "type": "string",
             "format": "date-time",
             "description": "Field updated_at"
+          },
+          "verbose": {
+            "type": "boolean",
+            "description": "Field verbose"
           }
         },
         "required": [
@@ -11174,6 +11178,7 @@
           "chat_id",
           "chat_title",
           "thread_id",
+          "verbose",
           "project_id",
           "created_at",
           "updated_at"
@@ -12314,10 +12319,6 @@
       "DirectChat": {
         "type": "object",
         "properties": {
-          "bash_cwd": {
-            "type": "string",
-            "description": "Field bash_cwd"
-          },
           "blocked": {
             "type": "boolean",
             "description": "Field blocked"
@@ -12330,10 +12331,6 @@
             "type": "string",
             "format": "date-time",
             "description": "Field created_at"
-          },
-          "current_agent": {
-            "type": "string",
-            "description": "Field current_agent"
           },
           "external_chat_id": {
             "type": "string",
@@ -12364,10 +12361,6 @@
             "type": "string",
             "format": "date-time",
             "description": "Field updated_at"
-          },
-          "verbose": {
-            "type": "boolean",
-            "description": "Field verbose"
           }
         },
         "required": [
@@ -13170,10 +13163,6 @@
       "Group": {
         "type": "object",
         "properties": {
-          "bash_cwd": {
-            "type": "string",
-            "description": "Field bash_cwd"
-          },
           "blocked": {
             "type": "boolean",
             "description": "Field blocked"
@@ -13186,10 +13175,6 @@
             "type": "string",
             "format": "date-time",
             "description": "Field created_at"
-          },
-          "current_agent": {
-            "type": "string",
-            "description": "Field current_agent"
           },
           "external_group_id": {
             "type": "string",
@@ -13215,10 +13200,6 @@
             "type": "string",
             "format": "date-time",
             "description": "Field updated_at"
-          },
-          "verbose": {
-            "type": "boolean",
-            "description": "Field verbose"
           }
         },
         "required": [
@@ -13474,13 +13455,6 @@
             "type": "string",
             "description": "Field auth_type"
           },
-          "bash_allowlist": {
-            "type": "array",
-            "description": "Field bash_allowlist",
-            "items": {
-              "type": "string"
-            }
-          },
           "capabilities": {
             "type": "object",
             "description": "Field capabilities",
@@ -13508,10 +13482,6 @@
             "type": "string",
             "description": "Field name"
           },
-          "persistent_session": {
-            "type": "boolean",
-            "description": "Field persistent_session"
-          },
           "platform": {
             "type": "string",
             "description": "Field platform"
@@ -13523,14 +13493,6 @@
           "require_pairing": {
             "type": "boolean",
             "description": "Field require_pairing"
-          },
-          "smartguide_model": {
-            "type": "string",
-            "description": "Field smartguide_model"
-          },
-          "smartguide_provider": {
-            "type": "string",
-            "description": "Field smartguide_provider"
           },
           "token": {
             "type": "string",
@@ -13582,13 +13544,6 @@
             "type": "string",
             "description": "Field auth_type"
           },
-          "bash_allowlist": {
-            "type": "array",
-            "description": "Field bash_allowlist",
-            "items": {
-              "type": "string"
-            }
-          },
           "chat_id_lock": {
             "type": "string",
             "description": "Field chat_id_lock"
@@ -13609,10 +13564,6 @@
             "type": "string",
             "description": "Field name"
           },
-          "persistent_session": {
-            "type": "boolean",
-            "description": "Field persistent_session"
-          },
           "platform": {
             "type": "string",
             "description": "Field platform"
@@ -13624,14 +13575,6 @@
           "require_pairing": {
             "type": "boolean",
             "description": "Field require_pairing"
-          },
-          "smartguide_model": {
-            "type": "string",
-            "description": "Field smartguide_model"
-          },
-          "smartguide_provider": {
-            "type": "string",
-            "description": "Field smartguide_provider"
           },
           "token": {
             "type": "string",
@@ -18106,13 +18049,6 @@
             "type": "string",
             "description": "Field auth_type"
           },
-          "bash_allowlist": {
-            "type": "array",
-            "description": "Field bash_allowlist",
-            "items": {
-              "type": "string"
-            }
-          },
           "chat_id_lock": {
             "type": "string",
             "description": "Field chat_id_lock"
@@ -18138,10 +18074,6 @@
             "type": "string",
             "description": "Field name"
           },
-          "persistent_session": {
-            "type": "boolean",
-            "description": "Field persistent_session"
-          },
           "platform": {
             "type": "string",
             "description": "Field platform"
@@ -18157,14 +18089,6 @@
           "scenarios": {
             "type": "string",
             "description": "Field scenarios"
-          },
-          "smartguide_model": {
-            "type": "string",
-            "description": "Field smartguide_model"
-          },
-          "smartguide_provider": {
-            "type": "string",
-            "description": "Field smartguide_provider"
           },
           "token": {
             "type": "string",
@@ -19614,6 +19538,10 @@
             "type": "integer",
             "format": "int64",
             "description": "Field reasoning_tokens"
+          },
+          "speed": {
+            "type": "string",
+            "description": "Field speed"
           },
           "system_tokens": {
             "type": "integer",

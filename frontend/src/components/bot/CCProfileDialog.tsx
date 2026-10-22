@@ -4,14 +4,11 @@ import {
     Dialog,
     DialogContent,
     DialogTitle,
-    Divider,
-    FormControlLabel,
     List,
     ListItemButton,
     ListItemIcon,
     ListItemText,
     Radio,
-    Switch,
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
@@ -26,30 +23,22 @@ interface CCProfileDialogProps {
     profiles: ProfileInfo[];
     /** Persists the selection; profileId '' = default (main claude_code scenario). */
     onSelect: (uuid: string, profileId: string) => Promise<void>;
-    /**
-     * Persists the persistent-session toggle. Independent of profile
-     * selection — which profile runs and whether its process stays warm
-     * between messages are orthogonal settings.
-     */
-    onTogglePersistentSession: (uuid: string, enabled: boolean) => Promise<void>;
     onClose: () => void;
 }
 
-// CCProfileDialog picks which Claude Code configuration serves @cc for a bot:
-// the default claude_code scenario or one of the configured profiles. The
-// selection routes remote @cc executions through the profiled scenario with
-// the profile's models and env overrides — same as `tingly-box cc --profile`.
+// CCProfileDialog picks which Claude Code configuration a bot's chats run
+// under: the default claude_code scenario or one of the configured profiles,
+// with the profile's models and env overrides — same as `tingly-box cc
+// --profile`. A chat's first session takes it; later ones keep their own.
 const CCProfileDialog: React.FC<CCProfileDialogProps> = ({
     open,
     bot,
     profiles,
     onSelect,
-    onTogglePersistentSession,
     onClose,
 }) => {
     const { t } = useTranslation();
     const [saving, setSaving] = useState(false);
-    const [togglingPersistentSession, setTogglingPersistentSession] = useState(false);
 
     const currentId = ccProfileIdFromDefaultAgent(bot?.default_agent);
 
@@ -64,27 +53,17 @@ const CCProfileDialog: React.FC<CCProfileDialogProps> = ({
         }
     }, [bot, saving, onSelect, onClose]);
 
-    const handleTogglePersistentSession = useCallback(async (enabled: boolean) => {
-        if (!bot?.uuid || togglingPersistentSession) return;
-        setTogglingPersistentSession(true);
-        try {
-            await onTogglePersistentSession(bot.uuid, enabled);
-        } finally {
-            setTogglingPersistentSession(false);
-        }
-    }, [bot, togglingPersistentSession, onTogglePersistentSession]);
-
     if (!open) return null;
 
     return (
         <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="xs" fullWidth>
             <DialogTitle sx={{ textAlign: 'center' }}>
                 <Typography variant="h6">
-                    {t('remoteAgent.ccProfile.dialogTitle', { defaultValue: 'Claude Code Profile for @cc' })}
+                    {t('remoteAgent.ccProfile.dialogTitle', { defaultValue: 'Claude Code profile' })}
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                     {t('remoteAgent.ccProfile.dialogSubtitle', {
-                        defaultValue: 'Remote @cc sessions route through the selected profile — its rules, model mapping, and settings overrides.',
+                        defaultValue: 'New sessions from this bot\'s chats run under this profile: its rules, model mapping and settings overrides.',
                     })}
                 </Typography>
             </DialogTitle>
@@ -135,30 +114,6 @@ const CCProfileDialog: React.FC<CCProfileDialogProps> = ({
                         })}
                     </Typography>
                 )}
-                <Divider sx={{ my: 1.5 }} />
-                <FormControlLabel
-                    sx={{ mx: 0, alignItems: 'flex-start' }}
-                    control={
-                        <Switch
-                            checked={Boolean(bot?.persistent_session)}
-                            disabled={togglingPersistentSession}
-                            onChange={(e) => handleTogglePersistentSession(e.target.checked)}
-                            sx={{ mt: -0.5 }}
-                        />
-                    }
-                    label={
-                        <>
-                            <Typography variant="body2">
-                                {t('remoteAgent.ccProfile.persistentSession', { defaultValue: 'Keep the process warm between messages' })}
-                            </Typography>
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                {t('remoteAgent.ccProfile.persistentSessionCaption', {
-                                    defaultValue: 'Experimental: skips process startup cost on every @cc message by reusing one Claude Code process across a chat’s turns.',
-                                })}
-                            </Typography>
-                        </>
-                    }
-                />
             </DialogContent>
         </Dialog>
     );

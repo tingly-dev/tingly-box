@@ -481,7 +481,7 @@ func TestFilesAChatSendsReachTheThreadAsAttachments(t *testing.T) {
 func TestAChatThatNeverTalkedStartsInItsFolder(t *testing.T) {
 	f, svc, sink := channelFixture(t)
 	dir := t.TempDir()
-	require.NoError(t, svc.ChannelToFolder("telegram", "new", "Alice", dir, true))
+	require.NoError(t, svc.ChannelToFolder("telegram", "new", "Alice", dir, "", true))
 
 	handled, reply, err := svc.ChannelCommand("telegram", "new", ChatStop, "")
 	require.NoError(t, err)
@@ -509,10 +509,52 @@ func TestAChatThatNeverTalkedStartsInItsFolder(t *testing.T) {
 	waitQuiet(t, f, svc, th.ID)
 
 	// Once it has a place, ifNew leaves it there.
-	require.NoError(t, svc.ChannelToFolder("telegram", "new", "", t.TempDir(), true))
+	require.NoError(t, svc.ChannelToFolder("telegram", "new", "", t.TempDir(), "", true))
 	b, err = f.store.GetChannelBinding("telegram", "new")
 	require.NoError(t, err)
 	assert.Empty(t, b.Folder)
+}
+
+func TestAChatThatNeverTalkedStartsUnderItsBotsProfile(t *testing.T) {
+	f, svc, sink := channelFixture(t)
+	work := filepath.Join(t.TempDir(), "work.json")
+	require.NoError(t, os.WriteFile(work, []byte(`{"env":{"X":"1"}}`), 0o644))
+	f.threads.env = profiles{settings: work}
+	require.NoError(t, svc.ChannelToFolder("telegram", "new", "", t.TempDir(), "work", true))
+
+	handled, err := svc.PostFromChannel("telegram", "new", "hello", nil)
+	require.NoError(t, err)
+	require.True(t, handled)
+	sink.next(t)
+	b, err := f.store.GetChannelBinding("telegram", "new")
+	require.NoError(t, err)
+	first, err := f.store.GetThread(b.ThreadID)
+	require.NoError(t, err)
+	assert.Equal(t, "work", first.Profile)
+	waitQuiet(t, f, svc, first.ID)
+
+	// The next session keeps the profile of the one before.
+	_, _, err = svc.ChannelCommand("telegram", "new", ChatNew, "again")
+	require.NoError(t, err)
+	b, err = f.store.GetChannelBinding("telegram", "new")
+	require.NoError(t, err)
+	require.NotEqual(t, first.ID, b.ThreadID)
+	next, err := f.store.GetThread(b.ThreadID)
+	require.NoError(t, err)
+	assert.Equal(t, "work", next.Profile)
+	waitQuiet(t, f, svc, next.ID)
+
+	// A profile that is gone falls back to the default.
+	require.NoError(t, svc.ChannelToFolder("telegram", "other", "", t.TempDir(), "gone", true))
+	_, err = svc.PostFromChannel("telegram", "other", "hello", nil)
+	require.NoError(t, err)
+	sink.next(t)
+	b, err = f.store.GetChannelBinding("telegram", "other")
+	require.NoError(t, err)
+	other, err := f.store.GetThread(b.ThreadID)
+	require.NoError(t, err)
+	assert.Empty(t, other.Profile)
+	waitQuiet(t, f, svc, other.ID)
 }
 
 func TestMovingAChatToAnotherFolderStartsThereNext(t *testing.T) {
@@ -524,8 +566,8 @@ func TestMovingAChatToAnotherFolderStartsThereNext(t *testing.T) {
 	require.NoError(t, err)
 
 	other := t.TempDir()
-	require.NoError(t, svc.ChannelToFolder("telegram", "c", "", other, false))
-	assert.ErrorIs(t, svc.ChannelToFolder("telegram", "c", "", filepath.Join(other, "missing"), false), ErrNotFolder)
+	require.NoError(t, svc.ChannelToFolder("telegram", "c", "", other, "", false))
+	assert.ErrorIs(t, svc.ChannelToFolder("telegram", "c", "", filepath.Join(other, "missing"), "", false), ErrNotFolder)
 	_, reply, err := svc.ChannelCommand("telegram", "c", ChatSession, "")
 	require.NoError(t, err)
 	assert.Contains(t, reply, "#1", "other commands still act on the thread it is on")

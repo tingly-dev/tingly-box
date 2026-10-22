@@ -35,9 +35,6 @@ type DirectChat struct {
 	Blocked        bool       `json:"blocked"`
 	PairedAt       *time.Time `json:"paired_at,omitempty"`
 	ProjectPath    string     `json:"project_path,omitempty"`
-	BashCwd        string     `json:"bash_cwd,omitempty"`
-	CurrentAgent   string     `json:"current_agent,omitempty"`
-	Verbose        *bool      `json:"verbose,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
@@ -50,9 +47,6 @@ type Group struct {
 	Name            string    `json:"name,omitempty"`
 	Blocked         bool      `json:"blocked"`
 	ProjectPath     string    `json:"project_path,omitempty"`
-	BashCwd         string    `json:"bash_cwd,omitempty"`
-	CurrentAgent    string    `json:"current_agent,omitempty"`
-	Verbose         *bool     `json:"verbose,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }

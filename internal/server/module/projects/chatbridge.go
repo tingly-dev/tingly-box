@@ -87,7 +87,7 @@ func (b *ChatBridge) ToFolder(_ context.Context, in remoteagent.ProjectInbound, 
 	if app == nil {
 		return errors.New("Projects is switched off")
 	}
-	return app.ChannelToFolder(in.Platform, in.ChatID, "", folder, ifNew)
+	return app.ChannelToFolder(in.Platform, in.ChatID, "", folder, in.Profile, ifNew)
 }
 
 // RouteInbound implements remoteagent.ProjectRouter.

@@ -17,7 +17,7 @@ import (
 )
 
 // RemoteAgentScenario is the mount name for the remote-agent purpose
-// (controlling Claude Code / SmartGuide from chat). Unlike outbound scenarios
+// (using Claude Code from chat). Unlike outbound scenarios
 // (e.g. claude_code hooks) it has no registered plugin — it is an inbound
 // mount stored in the same per-bot Scenarios list so a bot's purposes all
 // live in one place. See ScenarioMounted for the on/off semantics.

@@ -28,13 +28,11 @@ export const imbotApi = {
         auth?: Record<string, string>;
         proxy_url?: string;
         chat_id_lock?: string;
-        bash_allowlist?: string[];
         default_agent?: string;
         agent_type?: string;
         default_cwd?: string;
         enabled?: boolean;
         require_pairing?: boolean;
-        persistent_session?: boolean;
     }): Promise<any> =>
         controlApi((client, headers) => client.POST('/api/v1/imbot-settings', {
             headers,
@@ -49,14 +47,10 @@ export const imbotApi = {
         auth?: Record<string, string>;
         proxy_url?: string;
         chat_id_lock?: string;
-        bash_allowlist?: string[];
         enabled?: boolean;
         default_agent?: string;
         default_cwd?: string;
         require_pairing?: boolean;
-        persistent_session?: boolean;
-        smartguide_provider?: string;
-        smartguide_model?: string;
         remote_agent?: boolean;
     }): Promise<any> =>
         controlApi((client, headers) => client.PUT('/api/v1/imbot-settings/{uuid}', {

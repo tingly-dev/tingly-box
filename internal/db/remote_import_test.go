@@ -60,8 +60,6 @@ func TestImportMovesChats(t *testing.T) {
 			PairedSenderID: "sender-1",
 			IsWhitelisted:  true,
 			WhitelistedBy:  "admin",
-			BashCwd:        "/proj",
-			CurrentAgent:   "claude",
 		},
 	})
 	if err := importLegacyRemoteJSON(dir, chatStore); err != nil {
@@ -87,10 +85,6 @@ func TestImportMovesChats(t *testing.T) {
 	if len(chat.ProjectHistory) != 2 {
 		t.Errorf("project history = %v, want 2 entries", chat.ProjectHistory)
 	}
-	if chat.CurrentAgent != "claude" {
-		t.Errorf("current agent = %q, want claude", chat.CurrentAgent)
-	}
-
 }
 
 // TestImportRenamesFiles checks the files are moved aside — not deleted, so a

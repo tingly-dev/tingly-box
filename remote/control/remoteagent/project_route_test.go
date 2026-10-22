@@ -49,6 +49,7 @@ type fakeRouter struct {
 	// off switches Projects off; adopts makes ToFolder give a chat a place.
 	off, adopts bool
 	folders     []string
+	profiles    []string
 }
 
 func (f *fakeRouter) Enabled() bool {
@@ -64,6 +65,7 @@ func (f *fakeRouter) ToFolder(_ context.Context, in remoteagent.ProjectInbound, 
 		return nil
 	}
 	f.folders = append(f.folders, fmt.Sprintf("%s:%v", folder, ifNew))
+	f.profiles = append(f.profiles, in.Profile)
 	if f.adopts {
 		f.bound[in.ChatID] = true
 	}
@@ -318,6 +320,28 @@ func Test_EveryChatGetsAFolderInProjects(t *testing.T) {
 	for ev := chat.WaitText(3 * time.Second); !strings.Contains(ev.Text, "just send your message"); ev = chat.WaitText(3 * time.Second) {
 	}
 	assert.Len(t, router.inbound(), 1)
+}
+
+// A chat moves to a folder under its bot's Claude Code profile, so its first
+// session there runs under it.
+func Test_ChatsMoveUnderTheBotsProfile(t *testing.T) {
+	for agent, want := range map[string]string{"": "", "claude_code": "", "claude_code:p1": "p1"} {
+		env := testenv.NewTestEnv(t)
+		rp := false
+		harness := remoteagent.BootForTest(t, env.Manager(), bot.BotSetting{
+			UUID: env.BotUUID(), Name: "tingly-test", Platform: "tingly", AuthType: "none",
+			Auth: map[string]string{}, Enabled: true, RequirePairing: &rp, DefaultAgent: agent,
+		})
+		router := &fakeRouter{bound: map[string]bool{}, adopts: true}
+		harness.Handler.SetProjectRouter(router)
+		require.NoError(t, env.Manager().Start(env.Context()))
+
+		env.NewUser("alice").OpenDM(harness.Setting.UUID).SendText("hello")
+		require.Eventually(t, func() bool { return len(router.inbound()) == 1 }, 3*time.Second, 10*time.Millisecond)
+		router.mu.Lock()
+		assert.Equal(t, []string{want}, router.profiles, "default agent %q", agent)
+		router.mu.Unlock()
+	}
 }
 
 // With Projects off, a chat hears that chatting is off; pairing still works.

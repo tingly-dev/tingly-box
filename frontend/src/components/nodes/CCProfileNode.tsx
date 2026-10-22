@@ -15,7 +15,7 @@ interface CCProfileNodeProps {
     onClick?: () => void;
 }
 
-// CCProfileNode shows which Claude Code profile serves @cc for this bot:
+// CCProfileNode shows which Claude Code profile this bot's chats run under:
 // "Default" (main claude_code scenario) or a named profile
 // ("claude_code:<id>" scenario). Click to switch.
 const CCProfileNode: React.FC<CCProfileNodeProps> = ({
@@ -28,7 +28,7 @@ const CCProfileNode: React.FC<CCProfileNodeProps> = ({
     const clickable = !!onClick;
     const hasProfile = !!profileId;
     // Selected profile no longer exists — surface it instead of hiding it;
-    // execution falls back to the default scenario until re-picked.
+    // new sessions fall back to the default scenario until re-picked.
     const missing = hasProfile && !profileName;
 
     const handleClick = useCallback((event: React.MouseEvent) => {
@@ -42,12 +42,12 @@ const CCProfileNode: React.FC<CCProfileNodeProps> = ({
 
     const tooltip = missing
         ? t('remoteAgent.ccProfile.missingTooltip', {
-            defaultValue: 'Profile "{{id}}" no longer exists — @cc falls back to the default claude_code scenario. Click to pick another.',
+            defaultValue: 'Profile "{{id}}" no longer exists, so new sessions use the default claude_code scenario. Click to pick another.',
             id: profileId,
         })
         : hasProfile
             ? <>{t('remoteAgent.ccProfile.profileTooltip', { defaultValue: 'Claude Code profile' })}: {profileName} ({profileId})<br/>{t('remoteAgent.ccProfile.scenario', { defaultValue: 'Scenario' })}: claude_code:{profileId}</>
-            : t('remoteAgent.ccProfile.defaultTooltip', { defaultValue: 'Uses the main claude_code scenario. Click to route @cc through a Claude Code profile.' });
+            : t('remoteAgent.ccProfile.defaultTooltip', { defaultValue: 'Uses the main claude_code scenario. Click to pick a Claude Code profile instead.' });
 
     return (
         <StyledBotGraphNode active={active} clickable={clickable} warn={missing} onClick={handleClick}>

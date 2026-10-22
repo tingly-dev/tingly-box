@@ -54,6 +54,9 @@ type ProjectInbound struct {
 	// Files are what the chat sent with the message, saved on local disk;
 	// they are removed once RouteInbound returns.
 	Files []ProjectFile
+	// Profile is the bot's Claude Code profile (its default agent), which a
+	// chat's first session in Projects runs under; empty for the default.
+	Profile string
 }
 
 // ProjectFile is a file a chat sent, saved at Path under its own Name.
@@ -80,7 +83,7 @@ func (h *BotHandler) projectsOn() bool {
 // adoptChat gives a chat that has no place in Projects yet one: its folder
 // (/cd) or the bot's default folder.
 func (h *BotHandler) adoptChat(hCtx HandlerContext) {
-	in := h.projectInbound(hCtx, "")
+	in := h.folderInbound(hCtx)
 	if folder, ok := h.getProjectPath(hCtx); ok {
 		err := h.projectRouter.ToFolder(h.ctx, in, folder, true)
 		if err == nil {
@@ -101,7 +104,7 @@ func (h *BotHandler) moveChatToFolder(hCtx HandlerContext, folder string) bool {
 		h.SendText(hCtx, chatControlOff)
 		return false
 	}
-	if err := h.projectRouter.ToFolder(h.ctx, h.projectInbound(hCtx, ""), folder, false); err != nil {
+	if err := h.projectRouter.ToFolder(h.ctx, h.folderInbound(hCtx), folder, false); err != nil {
 		h.SendText(hCtx, fmt.Sprintf("Could not move this chat to %s: %v", folder, err))
 		return false
 	}
@@ -116,6 +119,23 @@ func (h *BotHandler) projectInbound(hCtx HandlerContext, text string) ProjectInb
 		SenderID: hCtx.SenderID,
 		Text:     text,
 	}
+}
+
+// folderInbound is the chat moving to a folder, with the bot's profile.
+func (h *BotHandler) folderInbound(hCtx HandlerContext) ProjectInbound {
+	in := h.projectInbound(hCtx, "")
+	in.Profile = botProfile(h.currentSetting().DefaultAgent)
+	return in
+}
+
+// botProfile is the Claude Code profile a bot's default agent names:
+// "claude_code:<id>" is profile <id>; "" and "claude_code" are the default.
+func botProfile(defaultAgent string) string {
+	id, _ := strings.CutPrefix(strings.TrimSpace(defaultAgent), "claude_code:")
+	if id == "claude_code" {
+		return ""
+	}
+	return id
 }
 
 // stripAgentPrefix drops the old agent words ("@cc fix it", "/tb hi"): every

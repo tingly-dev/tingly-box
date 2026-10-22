@@ -33,16 +33,6 @@ func (m *MockTBClient) GetHTTPEndpointForScenario(ctx context.Context, scenario 
 	return args.Get(0).(*HTTPEndpointConfig), args.Error(1)
 }
 
-func (m *MockTBClient) EnsureSmartGuideRuleForBot(ctx context.Context, botUUID, botName, providerUUID, modelID string) error {
-	args := m.Called(ctx, botUUID, botName, providerUUID, modelID)
-	return args.Error(0)
-}
-
-func (m *MockTBClient) DeleteSmartGuideRuleForBot(ctx context.Context, botUUID string) error {
-	args := m.Called(ctx, botUUID)
-	return args.Error(0)
-}
-
 func (m *MockTBClient) GetDataDir() string {
 	args := m.Called()
 	return args.String(0)

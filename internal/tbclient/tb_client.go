@@ -28,12 +28,6 @@ type TBClient interface {
 	// GetHTTPEndpointForScenario returns HTTP endpoint configuration for a scenario.
 	GetHTTPEndpointForScenario(ctx context.Context, scenario typ.RuleScenario) (*HTTPEndpointConfig, error)
 
-	// EnsureSmartGuideRuleForBot ensures the _smart_guide rule exists for a specific bot.
-	EnsureSmartGuideRuleForBot(ctx context.Context, botUUID, botName, providerUUID, modelID string) error
-
-	// DeleteSmartGuideRuleForBot removes the _smart_guide rule for a specific bot.
-	DeleteSmartGuideRuleForBot(ctx context.Context, botUUID string) error
-
 	// GetDataDir returns the data directory path for storing sessions and other data.
 	GetDataDir() string
 }
@@ -145,17 +139,6 @@ func (c *TBClientImpl) GetHTTPEndpointForScenario(ctx context.Context, scenario 
 		BaseURL: baseURL,
 		APIKey:  apiKey,
 	}, nil
-}
-
-// EnsureSmartGuideRuleForBot ensures the _smart_guide rule exists for a specific bot.
-func (c *TBClientImpl) EnsureSmartGuideRuleForBot(ctx context.Context, botUUID, botName, providerUUID, modelID string) error {
-	return c.config.EnsureSmartGuideRuleForBot(botUUID, botName, providerUUID, modelID)
-}
-
-// DeleteSmartGuideRuleForBot removes the _smart_guide rule for a specific bot.
-func (c *TBClientImpl) DeleteSmartGuideRuleForBot(ctx context.Context, botUUID string) error {
-	ruleUUID := serverconfig.SmartGuideRuleUUID(botUUID)
-	return c.config.DeleteRule(ruleUUID)
 }
 
 // GetDataDir returns the data directory path for storing sessions and other data.
