@@ -246,43 +246,48 @@ func newBindCommand(adapter BotHandlerAdapter) imbot.Command {
 			if !ok {
 				return sendCommandText(adapter, ctx, usageBind)
 			}
-
-			// Numeric index → resolve from this chat's project history.
-			if idx, ok := parsePositiveInt(input); ok {
-				paths, err := adapter.ListChatProjectPaths(ctx.ChatID)
-				if err != nil {
-					return sendCommandTextf(adapter, ctx, "Failed to list projects: %v", err)
-				}
-				if idx < 1 || idx > len(paths) {
-					return sendCommandTextf(adapter, ctx, "Invalid project number: %d (have %d). Use /project to see the list.", idx, len(paths))
-				}
-				selected := paths[idx-1]
-				if err := adapter.SetProjectPath(ctx.ChatID, selected); err != nil {
-					return sendCommandTextf(adapter, ctx, "Failed to bind project: %v", err)
-				}
-				return sendCommandTextf(adapter, ctx, "✅ Switched to project: %s", ShortenPath(selected))
-			}
-
-			// Path argument: expand relative to the chat's currently-bound project.
-			currentPath, _ := adapter.GetProjectPath(ctx.ChatID)
-			expandedPath, err := ExpandPathFrom(input, currentPath)
-			if err != nil {
-				return sendCommandTextf(adapter, ctx, "Invalid path: %v", err)
-			}
-
-			if err := ValidateProjectPath(expandedPath); err != nil {
-				return sendCommandTextf(adapter, ctx, "Path validation failed: %v", err)
-			}
-
-			if err := adapter.SetProjectPath(ctx.ChatID, expandedPath); err != nil {
-				return sendCommandTextf(adapter, ctx, "Failed to bind project: %v", err)
-			}
-
-			return sendCommandTextf(adapter, ctx, "✅ Bound to project: %s", ShortenPath(expandedPath))
+			return changeDir(adapter, ctx, input)
 		}).
 		WithCategory("project").
 		WithPriority(90).
 		MustBuild()
+}
+
+// changeDir moves the chat to a folder: input is a path (relative to the
+// current one) or the number of a folder /dir listed.
+func changeDir(adapter BotHandlerAdapter, ctx *imbot.HandlerContext, input string) error {
+	// Numeric index → resolve from this chat's project history.
+	if idx, ok := parsePositiveInt(input); ok {
+		paths, err := adapter.ListChatProjectPaths(ctx.ChatID)
+		if err != nil {
+			return sendCommandTextf(adapter, ctx, "Failed to list projects: %v", err)
+		}
+		if idx < 1 || idx > len(paths) {
+			return sendCommandTextf(adapter, ctx, "Invalid project number: %d (have %d). Use /dir to see the list.", idx, len(paths))
+		}
+		selected := paths[idx-1]
+		if err := adapter.SetProjectPath(ctx.ChatID, selected); err != nil {
+			return sendCommandTextf(adapter, ctx, "Failed to bind project: %v", err)
+		}
+		return sendCommandTextf(adapter, ctx, "✅ Switched to project: %s", ShortenPath(selected))
+	}
+
+	// Path argument: expand relative to the chat's currently-bound project.
+	currentPath, _ := adapter.GetProjectPath(ctx.ChatID)
+	expandedPath, err := ExpandPathFrom(input, currentPath)
+	if err != nil {
+		return sendCommandTextf(adapter, ctx, "Invalid path: %v", err)
+	}
+
+	if err := ValidateProjectPath(expandedPath); err != nil {
+		return sendCommandTextf(adapter, ctx, "Path validation failed: %v", err)
+	}
+
+	if err := adapter.SetProjectPath(ctx.ChatID, expandedPath); err != nil {
+		return sendCommandTextf(adapter, ctx, "Failed to bind project: %v", err)
+	}
+
+	return sendCommandTextf(adapter, ctx, "✅ Bound to project: %s", ShortenPath(expandedPath))
 }
 
 // parsePositiveInt parses a string into a positive integer (>= 1). Returns
@@ -337,9 +342,11 @@ func newInterruptCommand(adapter BotHandlerAdapter) imbot.Command {
 }
 
 func newProjectCommand(adapter BotHandlerAdapter) imbot.Command {
-	return imbot.NewCommand("cmd-project", "project", "Show and switch between projects").
-		WithAliases("p").
+	return imbot.NewCommand("cmd-project", "dir", "List the folders this chat used, or switch to one").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
+			if input, ok := joinedArgs(args); ok {
+				return changeDir(adapter, ctx, input)
+			}
 			currentPath := resolveProjectPath(adapter, ctx.ChatID)
 			projectPaths, _ := adapter.ListChatProjectPaths(ctx.ChatID)
 
@@ -719,7 +726,7 @@ func newResumeCommand(adapter BotHandlerAdapter) imbot.Command {
 			projectPath := resolveProjectPath(adapter, ctx.ChatID)
 			if projectPath == "" {
 				return sendCommandText(adapter, ctx,
-					"No project bound. Use /cd <path> or /project to bind one first.")
+					"No project bound. Use /cd <path> or /dir to bind one first.")
 			}
 
 			// /resume <n>: pick from the previously displayed listing.
@@ -753,7 +760,7 @@ func newResumeCommand(adapter BotHandlerAdapter) imbot.Command {
 			}
 			if len(sessions) == 0 {
 				return sendCommandText(adapter, ctx, fmt.Sprintf(
-					"No prior sessions in %s.\nSwitch project with /p (list) + /cd <n>, or just send a message to start a new one.",
+					"No prior sessions in %s.\nSwitch project with /dir (list) + /dir <n>, or just send a message to start a new one.",
 					ShortenPath(projectPath)))
 			}
 
@@ -836,7 +843,7 @@ func buildResumeListText(projectPath string, sessions []ResumableSession) string
 			statusGlyph(s.Status),
 		)
 	}
-	buf.WriteString("\nUse /resume <number> to resume. Switch project with /p + /cd.")
+	buf.WriteString("\nUse /resume <number> to resume. Switch project with /dir <n>.")
 	return buf.String()
 }
 

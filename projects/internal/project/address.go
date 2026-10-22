@@ -12,8 +12,8 @@ import (
 )
 
 // Addressing a thread from an IM chat (.design/projects-im.md, "在 IM 里点名线程"):
-// "@N text" sends one message to thread #N, /focus N binds the chat to it,
-// /back binds it to the parent again, /threads lists them.
+// "@N text" sends one message to thread #N, /session N binds the chat to it
+// (#0: the project conversation), /session lists them.
 
 // ErrNoSuchThread is for a thread number the project does not have.
 var ErrNoSuchThread = errors.New("no such thread in this project")
@@ -48,12 +48,20 @@ func (s *Service) threadBySeq(projectID string, n int) (*db.Thread, error) {
 	return nil, fmt.Errorf("%w: #%d", ErrNoSuchThread, n)
 }
 
-// threadByRef finds the thread a command argument names: "2" or "#2".
+// threadByRef finds the thread a command argument names: "2" or "#2"; "0"
+// is a project's conversation.
 func (s *Service) threadByRef(projectID, ref string) (*db.Thread, error) {
 	ref = strings.TrimPrefix(strings.TrimSpace(ref), "#")
 	n, err := strconv.Atoi(ref)
-	if err != nil || n <= 0 {
-		return nil, fmt.Errorf("name a thread by its number, like #2")
+	if err != nil || n < 0 {
+		return nil, fmt.Errorf("name a session by its number, like #2")
+	}
+	if n == 0 {
+		t, err := s.Store.GetMainThread(projectID)
+		if errors.Is(err, db.ErrNotFound) {
+			return nil, fmt.Errorf("%w: #0 (a folder has no project conversation)", ErrNoSuchThread)
+		}
+		return t, err
 	}
 	return s.threadBySeq(projectID, n)
 }
@@ -81,32 +89,18 @@ func (s *Service) focus(b *db.ChannelBinding, p *db.Project, ref string) (string
 	reply := "This chat now talks to " + placeName(t, p) + "."
 	if t.ParentID != "" {
 		if parent, err := s.Store.GetThread(t.ParentID); err == nil {
-			reply += " /back returns to " + placeName(parent, p) + "."
+			reply += fmt.Sprintf(" /session %d returns to %s.", parent.Seq, placeName(parent, p))
 		}
 	}
 	return reply, nil
 }
 
-// back binds a chat to the parent of the thread it is on.
-func (s *Service) back(b *db.ChannelBinding, t *db.Thread, p *db.Project) (string, error) {
-	if t.ParentID == "" {
-		return "This chat already talks to " + placeName(t, p) + "; there is nothing above it.", nil
-	}
-	parent, err := s.Store.GetThread(t.ParentID)
-	if err != nil {
-		return "", err
-	}
-	if err := s.Store.UpsertChannelBinding(&db.ChannelBinding{Platform: b.Platform, ChatID: b.ChatID, ThreadID: parent.ID}); err != nil {
-		return "", err
-	}
-	return "Back to " + placeName(parent, p) + ".", nil
-}
-
-// threadListMax caps /threads; what waits on the user comes first.
+// threadListMax caps /session; what waits on the user comes first.
 const threadListMax = 15
 
-// threadList lists the project's open threads, the ones waiting on the user
-// first, and marks the one the chat is on.
+// threadList lists the open sessions of the chat's project or folder, the
+// ones waiting on the user first (a project's conversation, #0, leads), and
+// marks the one the chat is on.
 func (s *Service) threadList(cur *db.Thread, p *db.Project) (string, error) {
 	threads, err := s.Store.ListThreads(p.ID)
 	if err != nil {
@@ -136,10 +130,18 @@ func (s *Service) threadList(cur *db.Thread, p *db.Project) (string, error) {
 		}
 		return open[i].Seq < open[j].Seq
 	})
-	if len(open) == 0 {
-		return fmt.Sprintf("%s has no open threads (%d done).", p.Name, done), nil
-	}
 	var lines []string
+	if p.Type != db.ProjectFolder {
+		line := "#0 the project conversation"
+		if cur.Agent == db.AgentLLM {
+			line += " (this chat)"
+		}
+		lines = append(lines, line)
+	}
+	if len(open) == 0 {
+		lines = append(lines, fmt.Sprintf("%s has no open sessions (%d done).", p.Name, done))
+		return strings.Join(lines, "\n"), nil
+	}
 	for i, t := range open {
 		if i == threadListMax {
 			lines = append(lines, fmt.Sprintf("… and %d more on the web", len(open)-threadListMax))
@@ -154,7 +156,7 @@ func (s *Service) threadList(cur *db.Thread, p *db.Project) (string, error) {
 	if done > 0 {
 		lines = append(lines, fmt.Sprintf("(%d done)", done))
 	}
-	lines = append(lines, "@N <message> talks to one; /focus N stays with it.")
+	lines = append(lines, "/session N switches to one; @N <message> talks to it once.")
 	return strings.Join(lines, "\n"), nil
 }
 

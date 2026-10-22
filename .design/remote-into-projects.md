@@ -158,7 +158,28 @@ Remote 页面保留，只去掉 SmartGuide 模型和“常驻会话”这类作�
 - **升级迁移**：`projects` 开关从没被设置过、且有已启用的 bot，就在启动时打开一次；设过（开或关）就不动。
   否则在用 Remote 的人升级后会被切断，与“原来的用法照样能用”冲突。
 - 前端：Power-ups 里 Remote 那一行去掉，Projects 那一行显示 bot 数；Remote 侧栏跟着 Projects 开关出现。
-- 本期**没做**：`/status`、`/resume`、`/yolo`、`/bash`、`/dir`、`/session` 仍是旧实现（第 3 期 b）；`DefaultAgent` 还没接到新线程的 profile 上。
+- 本期**没做**：`/status`、`/resume`、`/yolo`、`/bash`、`/dir`、`/session` 仍是旧实现（第 3 期 b，见“命令精简”）；`DefaultAgent` 还没接到新线程的 profile 上
+  （bot 设置里存的是 Tingly Box 的 Claude Code profile，和 Projects 线程的 profile 是不是同一套 id 要先确认，放到第 4 期）。
+
+## 命令精简（已定，YZ 2026-10-22）
+
+新模式下聊天只做三件事：选在哪干（目录、会话）、控制当前会话、看状态。`/help` 只列这 9 个，**旧名字一律不留**（不做隐藏别名，用到了回“Unknown command”）：
+
+| 命令 | 由谁执行 | 说明 |
+|---|---|---|
+| `/cd <路径>` | Remote → `ToFolder` | 换文件夹，下一条开新会话 |
+| `/dir [N\|路径]` | Remote → `ToFolder` | 不带参数列出本 chat 用过的目录（原 `/project`），带参数 = `/cd` |
+| `/session [N]` | Projects | 不带参数列出会话（项目的对话是 `#0`），带参数切过去；替代 `/threads`、`/focus`、`/back`、`/resume` |
+| `/new [话]` | Projects | 下一条（或这句话）开新会话，正在跑的不受影响 |
+| `/stop [#N]` | Projects | 停 |
+| `/clear` | Projects | 停 + 下一条开新会话（YZ：保留） |
+| `/status` | Projects | 文件夹或项目、会话 `#N`、状态、模型、权限模式、verbose |
+| `/verbose on\|off` | Projects | 见“要补的能力”② |
+| `/yolo` | Projects | 当前会话在 `bypassPermissions` 和继承的模式之间切换（YZ：保留）；`/new`、`/cd` 开的新会话沿用它 |
+
+`@N <话>` 保留（不是命令）。`/bind`、`/join`（接入层）照旧，不进帮助。删掉：`/bash`（Claude Code 自己能跑命令）、`/mock`、
+`/resume`（并入 `/session`；在 Projects 外开的 CLI 会话不列）、`/project` `/p`、`/threads`、`/focus`、`/back`、`/interrupt` `/s` `/i`、
+`/quiet` `/noverbose`、`/h`，以及裸词 `stop`（现在是普通消息）。
 
 ## 已定（YZ，2026-10-21）
 

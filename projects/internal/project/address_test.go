@@ -60,20 +60,20 @@ func TestMentionSendsOneMessageToThatThread(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoSuchThread)
 }
 
-func TestFocusBackAndThreads(t *testing.T) {
+func TestSessionListsAndSwitches(t *testing.T) {
 	f, svc, sink := channelFixture(t)
 	th := startWorker(t, f)
 	waitQuiet(t, f, svc, th.ID)
 	_, err := svc.BindChannel("telegram", "1", "", "", f.project.ID)
 	require.NoError(t, err)
 
-	_, reply, err := svc.ChannelCommand("telegram", "1", ChatThreads, "")
+	_, reply, err := svc.ChannelCommand("telegram", "1", ChatSession, "")
 	require.NoError(t, err)
-	assert.True(t, strings.HasPrefix(reply, "#1 Worker: idle\n"), reply)
+	assert.True(t, strings.HasPrefix(reply, "#0 the project conversation (this chat)\n#1 Worker: idle\n"), reply)
 
-	_, reply, err = svc.ChannelCommand("telegram", "1", ChatFocus, "#1")
+	_, reply, err = svc.ChannelCommand("telegram", "1", ChatSession, "#1")
 	require.NoError(t, err)
-	assert.Equal(t, "This chat now talks to [#1 Worker]. /back returns to the project conversation of Demo.", reply)
+	assert.Equal(t, "This chat now talks to [#1 Worker]. /session 0 returns to the project conversation of Demo.", reply)
 	assert.Equal(t, th.ID, boundOf(t, f, "1"))
 
 	// A plain message now goes to the worker, and its reply to this chat.
@@ -82,21 +82,18 @@ func TestFocusBackAndThreads(t *testing.T) {
 	assert.Equal(t, "[#1 Worker] ok", sink.next(t).text)
 	waitQuiet(t, f, svc, th.ID)
 
-	_, reply, err = svc.ChannelCommand("telegram", "1", ChatThreads, "")
+	_, reply, err = svc.ChannelCommand("telegram", "1", ChatSession, "")
 	require.NoError(t, err)
 	assert.Contains(t, reply, "#1 Worker: idle (this chat)")
 
-	_, reply, err = svc.ChannelCommand("telegram", "1", ChatBack, "")
+	_, reply, err = svc.ChannelCommand("telegram", "1", ChatSession, "0")
 	require.NoError(t, err)
-	assert.Equal(t, "Back to the project conversation of Demo.", reply)
+	assert.Equal(t, "This chat now talks to the project conversation of Demo.", reply)
 	assert.Equal(t, f.project.MainThreadID, boundOf(t, f, "1"))
-	_, reply, err = svc.ChannelCommand("telegram", "1", ChatBack, "")
-	require.NoError(t, err)
-	assert.Contains(t, reply, "nothing above it")
 
-	_, _, err = svc.ChannelCommand("telegram", "1", ChatFocus, "7")
+	_, _, err = svc.ChannelCommand("telegram", "1", ChatSession, "7")
 	assert.ErrorIs(t, err, ErrNoSuchThread)
-	_, _, err = svc.ChannelCommand("telegram", "1", ChatFocus, "Worker")
+	_, _, err = svc.ChannelCommand("telegram", "1", ChatSession, "Worker")
 	assert.Error(t, err)
 }
 
@@ -111,7 +108,7 @@ func TestAResolvedThreadHandsItsChatsBackToItsParent(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, f.project.MainThreadID, boundOf(t, f, "1"))
 
-	_, reply, err := svc.ChannelCommand("telegram", "1", ChatFocus, "1")
+	_, reply, err := svc.ChannelCommand("telegram", "1", ChatSession, "1")
 	require.NoError(t, err)
 	assert.Contains(t, reply, "is done")
 	assert.Equal(t, f.project.MainThreadID, boundOf(t, f, "1"), "a done thread is not focused")

@@ -179,7 +179,7 @@ func Test_BoundChatGoesToItsProject(t *testing.T) {
 	// Commands still work in a bound chat; /help lists the Projects ones.
 	chat.Drain()
 	chat.SendText("/help")
-	help := chat.WaitText(3*time.Second).AssertContains(t, "Your ID:").AssertContains(t, "/threads")
+	help := chat.WaitText(3*time.Second).AssertContains(t, "Your ID:").AssertContains(t, "/session")
 	assert.NotContains(t, help.Text, "@cc", "a bound chat no longer reaches @cc")
 	assert.Len(t, router.inbound(), 2, "commands are not sent to the project")
 }
@@ -255,18 +255,29 @@ func Test_BoundChatCommandsGoToItsProject(t *testing.T) {
 
 	chat := alice.OpenDM(harness.Setting.UUID)
 	router.bind(chat.ChatID)
-	for _, text := range []string{"/stop", "stop", "/clear", "/new", "/new fix the login bug", "/stop #2", "/focus 3", "/back", "/threads", "/verbose on", "/quiet"} {
+	for _, text := range []string{"/stop", "/clear", "/new", "/new fix the login bug", "/stop #2", "/session", "/session 3", "/status", "/verbose on", "/yolo"} {
 		chat.Drain()
 		chat.SendText(text)
 		chat.WaitText(3*time.Second).AssertContains(t, "project did ")
 	}
-	assert.Equal(t, []string{"stop:", "stop:", "clear:", "new:", "new:fix the login bug", "stop:#2", "focus:3", "back:", "threads:", "verbose:on", "verbose:off"}, router.commands())
+	assert.Equal(t, []string{"stop:", "clear:", "new:", "new:fix the login bug", "stop:#2", "session:", "session:3", "status:", "verbose:on", "yolo:"}, router.commands())
 	assert.Empty(t, router.inbound(), "commands are not sent as messages")
 
 	chat.Drain()
 	chat.SendText("/help")
-	chat.WaitText(3*time.Second).AssertContains(t, "Your ID:")
-	assert.Len(t, router.commands(), 11, "other commands keep their meaning")
+	help := chat.WaitText(3*time.Second).AssertContains(t, "Your ID:").AssertContains(t, "/session [N]")
+	assert.NotContains(t, help.Text, "/threads")
+
+	// The old commands are gone, and a bare "stop" is a message.
+	for _, text := range []string{"/bash ls", "/resume", "/project", "/threads", "/focus 2", "/back", "/quiet", "/interrupt", "/mock"} {
+		chat.Drain()
+		chat.SendText(text)
+		chat.WaitText(3*time.Second).AssertContains(t, "Unknown command")
+	}
+	chat.SendText("stop")
+	require.Eventually(t, func() bool { return len(router.inbound()) == 1 }, 3*time.Second, 10*time.Millisecond)
+	assert.Equal(t, "stop", router.inbound()[0].Text)
+	assert.Len(t, router.commands(), 10, "nothing else ran a command")
 }
 
 // A press on a Projects prompt's button goes to the project with the chat it

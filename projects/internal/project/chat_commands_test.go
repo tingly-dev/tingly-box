@@ -174,3 +174,40 @@ func TestRebindingClearsAPendingNew(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, b.NewThread)
 }
+
+func TestStatusAndYoloInAFolderChat(t *testing.T) {
+	f, svc, _ := channelFixture(t)
+	dir := t.TempDir()
+	s, err := f.startFolder(dir, FolderThreadSpec{Task: "go"})
+	require.NoError(t, err)
+	waitQuiet(t, f, svc, s.ID)
+	_, err = svc.BindChannel("telegram", "c", "", s.ID, "")
+	require.NoError(t, err)
+
+	_, reply, err := svc.ChannelCommand("telegram", "c", ChatStatus, "")
+	require.NoError(t, err)
+	assert.Contains(t, reply, "Folder: ")
+	assert.Contains(t, reply, "Session: [#1 ")
+	assert.Contains(t, reply, "Permissions: "+DefaultPermissionMode)
+	assert.Contains(t, reply, "Verbose: off")
+
+	_, reply, err = svc.ChannelCommand("telegram", "c", ChatYolo, "")
+	require.NoError(t, err)
+	assert.Contains(t, reply, "Yolo is on")
+	cur, err := f.store.GetThread(s.ID)
+	require.NoError(t, err)
+	assert.Equal(t, yoloMode, cur.PermissionMode)
+	_, reply, err = svc.ChannelCommand("telegram", "c", ChatYolo, "")
+	require.NoError(t, err)
+	assert.Contains(t, reply, "Yolo is off")
+	cur, err = f.store.GetThread(s.ID)
+	require.NoError(t, err)
+	assert.Empty(t, cur.PermissionMode, "back to what it inherits")
+
+	// A chat waiting to start in another folder says so.
+	other := t.TempDir()
+	require.NoError(t, svc.ChannelToFolder("telegram", "c", "", other, false))
+	_, reply, err = svc.ChannelCommand("telegram", "c", ChatStatus, "")
+	require.NoError(t, err)
+	assert.Contains(t, reply, "Next message: a new session in ")
+}

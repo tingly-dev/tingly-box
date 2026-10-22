@@ -214,120 +214,6 @@ func (s *Service) startFromChannel(b *db.ChannelBinding, prev *db.Thread, projec
 	return t, nil
 }
 
-// Chat commands a bound chat sends instead of a message.
-const (
-	ChatNew   = "new"   // a new session in the chat's folder: now with a task, else on the next message
-	ChatStop  = "stop"  // interrupt the bound thread's turn
-	ChatClear = "clear" // stop, and the next message starts a new session
-	// ChatFocus binds the chat to thread #N of its project (arg "N" or "#N").
-	ChatFocus = "focus"
-	// ChatBack binds the chat to the parent of the thread it is on.
-	ChatBack = "back"
-	// ChatThreads lists the project's threads.
-	ChatThreads = "threads"
-	// ChatVerbose turns on ("on") or off ("off") hearing each step of the
-	// thread's turns; with no arg it says which.
-	ChatVerbose = "verbose"
-)
-
-// ChannelCommand runs a chat command (ChatNew, ChatStop, ChatClear, ChatFocus,
-// ChatBack, ChatThreads, ChatVerbose) for a bound chat; arg is the text after it (for
-// ChatStop, an optional "#N" naming another thread of the project). handled is false when the chat has no
-// binding or the command is not one of these, and the caller carries on as
-// before. reply is what to tell the chat.
-func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bool, reply string, err error) {
-	switch name {
-	case ChatNew, ChatStop, ChatClear, ChatFocus, ChatBack, ChatThreads, ChatVerbose:
-	default:
-		return false, "", nil
-	}
-	b, err := s.Store.GetChannelBinding(platform, chatID)
-	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
-			return false, "", nil
-		}
-		return false, "", err
-	}
-	if name == ChatVerbose {
-		reply, err := s.verbose(b, arg)
-		return true, reply, err
-	}
-	if b.Folder != "" {
-		if handled, reply, err := s.folderCommand(b, name, arg); handled {
-			return true, reply, err
-		}
-	}
-	t, p, err := s.boundThread(b)
-	if err != nil {
-		return true, "", err
-	}
-	switch name {
-	case ChatFocus:
-		reply, err := s.focus(b, p, arg)
-		return true, reply, err
-	case ChatBack:
-		reply, err := s.back(b, t, p)
-		return true, reply, err
-	case ChatThreads:
-		reply, err := s.threadList(t, p)
-		return true, reply, err
-	case ChatStop:
-		if strings.TrimSpace(arg) != "" {
-			target, err := s.threadByRef(p.ID, arg)
-			if err != nil {
-				return true, "", err
-			}
-			t = target
-		}
-	}
-	tag := threadTag(t.Seq, t.Title)
-	if t.Agent == db.AgentLLM {
-		switch name {
-		case ChatStop:
-			return true, "The project conversation cannot be stopped. Stop a thread in Projects on the web.", nil
-		default:
-			return true, "This chat talks to the project conversation; ask it to start a thread.", nil
-		}
-	}
-	folder := p.Type == db.ProjectFolder
-	switch name {
-	case ChatNew:
-		if !folder {
-			return true, fmt.Sprintf("/new works in a chat bound to a folder; this chat is on [%s] of %s.", tag, p.Name), nil
-		}
-		if task := strings.TrimSpace(arg); task != "" {
-			nt, err := s.startFromChannel(b, t, t.ProjectID, task, nil, Source{Kind: db.SourceIM, Platform: platform, ChatID: chatID})
-			if err != nil {
-				return true, "", err
-			}
-			return true, fmt.Sprintf("Started [%s] in %s.", threadTag(nt.Seq, nt.Title), p.Name), nil
-		}
-		if err := s.Store.SetChannelBindingNewThread(b.ID, true); err != nil {
-			return true, "", err
-		}
-		return true, fmt.Sprintf("Your next message starts a new session in %s.", p.Name), nil
-	case ChatClear:
-		if !folder {
-			return true, fmt.Sprintf("/clear works in a chat bound to a folder; this chat is on [%s] of %s. Use /stop to stop it.", tag, p.Name), nil
-		}
-		stopped := s.Threads.Running(t.ID)
-		s.Threads.Stop(t.ID)
-		if err := s.Store.SetChannelBindingNewThread(b.ID, true); err != nil {
-			return true, "", err
-		}
-		if stopped {
-			return true, fmt.Sprintf("Stopped [%s]. Your next message starts a new session in %s.", tag, p.Name), nil
-		}
-		return true, fmt.Sprintf("Your next message starts a new session in %s.", p.Name), nil
-	default:
-		if !s.Threads.Running(t.ID) {
-			return true, fmt.Sprintf("[%s] is not running.", tag), nil
-		}
-		s.Threads.Stop(t.ID)
-		return true, fmt.Sprintf("Stopped [%s].", tag), nil
-	}
-}
-
 // answerFromText answers a request a chat was asked with the chat's reply
 // (chat_answer.go). done is false when the request is no longer waiting, and
 // the message is then an ordinary one.
@@ -357,36 +243,6 @@ func (s *Service) answerFromText(threadID, requestID, text string) (done bool, e
 	return true, nil
 }
 
-// folderCommand runs the commands that mean something else while a chat
-// waits to start in its Folder: /new starts there, /clear and /stop stop the
-// thread it was on (if any). handled is false for a command that acts on that
-// thread as usual.
-func (s *Service) folderCommand(b *db.ChannelBinding, name, arg string) (handled bool, reply string, err error) {
-	where := db.FolderName(b.Folder)
-	next := fmt.Sprintf("Your next message starts a new session in %s.", where)
-	if name == ChatNew && strings.TrimSpace(arg) != "" {
-		t, err := s.startInChannelFolder(b, strings.TrimSpace(arg), nil, Source{Kind: db.SourceIM, Platform: b.Platform, ChatID: b.ChatID})
-		if err != nil {
-			return true, "", err
-		}
-		return true, fmt.Sprintf("Started [%s] in %s.", threadTag(t.Seq, t.Title), where), nil
-	}
-	if b.ThreadID != "" && (name == ChatClear || name == ChatStop) && s.Threads.Running(b.ThreadID) {
-		s.Threads.Stop(b.ThreadID)
-		if t, err := s.Store.GetThread(b.ThreadID); err == nil {
-			return true, fmt.Sprintf("Stopped [%s]. %s", threadTag(t.Seq, t.Title), next), nil
-		}
-	}
-	switch name {
-	case ChatNew, ChatClear, ChatStop:
-		return true, next, nil
-	}
-	if b.ThreadID == "" {
-		return true, "Nothing has started in this chat yet. " + next, nil
-	}
-	return false, "", nil
-}
-
 // ChannelToFolder moves a chat to a folder (an absolute path, which must
 // exist): its next message starts a new thread there. With ifNew, a chat
 // that already has a binding is left as it is, which is how a chat that
@@ -404,29 +260,6 @@ func (s *Service) ChannelToFolder(platform, chatID, title, folder string, ifNew 
 		}
 	}
 	return s.Store.SetChannelBindingFolder(platform, chatID, title, path)
-}
-
-// verbose sets or tells whether the chat hears each step of its thread.
-func (s *Service) verbose(b *db.ChannelBinding, arg string) (string, error) {
-	on := b.Verbose
-	switch strings.ToLower(strings.TrimSpace(arg)) {
-	case "":
-	case "on":
-		on = true
-	case "off":
-		on = false
-	default:
-		return "Usage: /verbose on|off", nil
-	}
-	if on != b.Verbose {
-		if err := s.Store.SetChannelBindingVerbose(b.ID, on); err != nil {
-			return "", err
-		}
-	}
-	if on {
-		return "Verbose is on: this chat sees each step a session takes, not only its reply. /verbose off to stop.", nil
-	}
-	return "Verbose is off: this chat sees each reply. /verbose on to also see each step.", nil
 }
 
 // AnswerFromChannel answers a thread's pending approval with the button a

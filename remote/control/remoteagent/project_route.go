@@ -217,34 +217,45 @@ func (h *BotHandler) chatBoundToProject(hCtx HandlerContext) bool {
 	return h.projectRouter != nil && h.projectRouter.Bound(string(hCtx.Platform), hCtx.ChatID)
 }
 
-// projectCommand reads a chat command a bound chat sends to its project: the
-// stop words the old routing knew (/stop, stop, /interrupt, /clear; /stop
-// may name a thread, "/stop #2"), /new with an optional first message, and
-// the thread addressing commands /focus N, /back and /threads. ok is false for
-// anything else.
+// projectCommand reads a chat command that Projects runs: /new and /stop
+// (with an optional argument), /clear, /session [N], /status, /verbose
+// [on|off] and /yolo. ok is false for anything else.
 func projectCommand(text string) (name, arg string, ok bool) {
-	trimmed := strings.TrimSpace(text)
-	head, rest, _ := strings.Cut(trimmed, " ")
+	head, rest, _ := strings.Cut(strings.TrimSpace(text), " ")
 	rest = strings.TrimSpace(rest)
-	switch strings.ToLower(head) {
-	case "/stop":
-		return "stop", rest, true
-	case "stop", "/interrupt":
+	switch head = strings.ToLower(head); head {
+	case "/new", "/stop", "/session", "/verbose":
+		return strings.TrimPrefix(head, "/"), rest, true
+	case "/clear", "/status", "/yolo":
 		if rest == "" {
-			return "stop", "", true
+			return strings.TrimPrefix(head, "/"), "", true
 		}
-	case "/clear", "/back", "/threads":
-		if rest == "" {
-			return strings.TrimPrefix(strings.ToLower(head), "/"), "", true
-		}
-	case "/quiet", "/noverbose":
-		if rest == "" {
-			return "verbose", "off", true
-		}
-	case "/focus", "/new", "/verbose":
-		return strings.TrimPrefix(strings.ToLower(head), "/"), rest, true
 	}
 	return "", "", false
+}
+
+// hostCommands are the commands a chat keeps outside Projects: which folder
+// (/cd, /dir) and access (/bind, /join). /help and /start are answered with
+// the Projects help.
+var hostCommands = map[string]bool{"/cd": true, "/dir": true, "/bind": true, "/join": true, "/help": true, "/start": true}
+
+// projectsOn reports whether chats are handled by Projects.
+func (h *BotHandler) projectsOn() bool {
+	return h.projectRouter != nil && h.projectRouter.Enabled()
+}
+
+// unknownCommand answers a slash command Projects mode does not have (the old
+// /bash, /resume, /project, ...). It reports whether it did.
+func (h *BotHandler) unknownCommand(hCtx HandlerContext, text string) bool {
+	if !h.projectsOn() || !strings.HasPrefix(text, "/") || stripAgentPrefix(text) != text || h.directoryBrowser.IsWaitingInput(hCtx.ChatID) {
+		return false
+	}
+	head, _, _ := strings.Cut(strings.TrimSpace(text), " ")
+	if hostCommands[strings.ToLower(head)] {
+		return false
+	}
+	h.SendText(hCtx, "Unknown command "+head+". /help lists what works here.")
+	return true
 }
 
 // routeProjectCommand runs a chat command in a bound chat. It reports whether

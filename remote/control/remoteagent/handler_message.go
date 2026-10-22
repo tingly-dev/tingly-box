@@ -118,9 +118,16 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 		return
 	}
 
+	// With Projects, what is not one of its commands, /cd, /dir or access is
+	// not a command.
+	if h.unknownCommand(hCtx, text) {
+		return
+	}
+
 	// Check for stop commands FIRST (highest priority)
-	// Supports: /stop, stop, /clear (stop+clear)
-	if isStopCommand(text) {
+	// Supports: /stop, stop, /clear (stop+clear). With Projects they are its
+	// commands, and a bare "stop" is a message.
+	if !h.projectsOn() && isStopCommand(text) {
 		h.handleStopCommand(hCtx, text == "/clear")
 		return
 	}

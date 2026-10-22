@@ -133,7 +133,7 @@ func (h *BotHandler) handleClearCommand(hCtx HandlerContext) {
 	}
 }
 
-// buildProjectText builds the plain-text body for /project replies. The same
+// buildProjectText builds the plain-text body for /dir replies. The same
 // string is used by every platform so the information shown is always identical.
 func buildProjectText(currentPath string, projectPaths []string) string {
 	var buf strings.Builder
@@ -151,7 +151,7 @@ func buildProjectText(currentPath string, projectPaths []string) string {
 			}
 			buf.WriteString(fmt.Sprintf("  %d. %s%s\n", i+1, path, marker))
 		}
-		buf.WriteString("\nUse /cd <number> or /cd <path> to switch.")
+		buf.WriteString("\nUse /dir <number> or /cd <path> to switch.")
 	} else {
 		buf.WriteString("Use /cd <path> to bind a project.")
 	}

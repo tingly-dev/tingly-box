@@ -102,8 +102,8 @@ func Test_Cd_And_Project(t *testing.T) {
 	// — match on the common substring.
 	chat.WaitText(3*time.Second).AssertContains(t, "ound to project")
 
-	// /project shows the bound path.
-	chat.SendText("/project")
+	// /dir shows the bound path.
+	chat.SendText("/dir")
 	chat.WaitText(3*time.Second).AssertContains(t, "roject")
 
 	_ = harness
@@ -233,7 +233,7 @@ func Test_ReactionReceived(t *testing.T) {
 }
 
 // Test_ProjectPick exercises the inline-keyboard project-switch flow.
-// /project lists projects with a Bind New keyboard.
+// /dir lists the folders with a Bind New keyboard.
 //
 // The production registry adapter constructs a HandlerContext without a
 // SenderID when calling SetProjectPath, so the chat ends up bound with
@@ -246,7 +246,7 @@ func Test_ProjectPick(t *testing.T) {
 	tmp := t.TempDir()
 	require.NoError(t, harness.ChatStore.BindProject(chat.ChatID, "tingly", tmp, alice.ID))
 
-	chat.SendText("/project")
+	chat.SendText("/dir")
 	evt := chat.WaitText(3 * time.Second)
 	evt.AssertContains(t, "Current Project")
 	evt.AssertHasButton(t, "Bind New Project")
