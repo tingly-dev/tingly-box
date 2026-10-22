@@ -119,6 +119,7 @@ export const en = {
     },
     conversation: {
         placeholder: 'Describe work, paste a bug report or stack trace, or ask a question…',
+        queuePlaceholder: 'Message the project — it reads it after its current turn…',
         emptyTitle: 'Send this project its first piece of work',
         step1: 'Describe what needs doing here — one task, a list, a bug report or a stack trace.',
         step2: 'The coordinator starts a thread for each task. Each thread is a Claude Code session working on its own branch.',

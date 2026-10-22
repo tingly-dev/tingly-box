@@ -189,7 +189,7 @@ export default function ProjectPage() {
         p.delete('thread');
         return p;
     });
-    const patch = async (body: { starred?: boolean; paused?: boolean; archived?: boolean }) => {
+    const patch = async (body: { starred?: boolean; paused?: boolean; archived?: boolean; coordinator_model?: string }) => {
         try {
             setProject(await unwrap(api.PATCH('/api/v1/projects/{id}', { params: { path: { id } }, body })));
             // Archiving unbinds the project's IM chats.
@@ -318,6 +318,9 @@ export default function ProjectPage() {
                         busy={busy}
                         disabled={blocked || !project}
                         disabledReason={banner}
+                        threadId={mainThreadId}
+                        model={project?.coordinator_model}
+                        onModelChange={(m) => void patch({ coordinator_model: m })}
                         onOpenThread={openThread}
                         chatTitle={im?.chatTitle}
                         onSend={async (text, attachments) => {

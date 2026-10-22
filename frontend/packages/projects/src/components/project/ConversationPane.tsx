@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import type { Attachment, Thread, ThreadEvent } from '../../client';
 import { ImSourceBadge } from '../im/ImSourceBadge';
 import { AttachmentChips, uploadAttachments } from '../attachments';
-import { Composer } from '../Composer';
+import { ThreadComposer } from '../ThreadComposer';
 import { Markdown } from '../Markdown';
 import { readLocal, writeLocal } from '../../utils/storage';
 import { ChevronRight, DiffIcon, ExpandMore, PlayArrow } from '../icons';
@@ -197,13 +197,18 @@ interface Props {
     disabled: boolean;
     disabledReason?: React.ReactNode;
     onSend: (text: string, attachments: Attachment[]) => Promise<boolean>;
+    /** The conversation's own thread: its draft is kept under this id. */
+    threadId: string;
+    /** The coordinator's model, switched from the message box; the picker is left out without onModelChange. */
+    model?: string;
+    onModelChange?: (model: string) => void;
     onOpenThread: (id: string) => void;
     onStartSuggestions: (messageId: string, indexes: number[]) => Promise<void>;
     /** A bound IM chat's name for a message's source line; unknown chats show their id. */
     chatTitle?: (platform: string, chatId: string) => string | undefined;
 }
 
-export function ConversationPane({ projectId, messages, threads, busy, disabled, disabledReason, onSend, onOpenThread, onStartSuggestions, chatTitle }: Props) {
+export function ConversationPane({ projectId, messages, threads, busy, disabled, disabledReason, onSend, threadId, model, onModelChange, onOpenThread, onStartSuggestions, chatTitle }: Props) {
     const { t } = useTranslation('projects');
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
@@ -315,11 +320,17 @@ export function ConversationPane({ projectId, messages, threads, busy, disabled,
                         </Button>
                     </Box>
                 )}
-                <Composer
+                <ThreadComposer
+                    // Per conversation: its draft starts fresh.
+                    key={threadId}
+                    draftKey={threadId}
                     autoFocus
                     disabled={disabled}
                     seed={seed}
-                    placeholder={t('conversation.placeholder')}
+                    streaming={busy}
+                    model={model}
+                    onModelChange={onModelChange}
+                    placeholder={t(busy ? 'conversation.queuePlaceholder' : 'conversation.placeholder')}
                     attach={(files) => uploadAttachments({ projectId }, files)}
                     onSend={async (text, attachments) => {
                         stick.current = true;
