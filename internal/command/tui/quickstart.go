@@ -10,6 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/catalog"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -41,11 +42,13 @@ type quickstartState struct {
 	apiToken         string
 	proxyURL         string
 	model            string
+	models           []string // the provider's models, as fetched by qsModel
 	startServer      bool
 
 	// Apply-agent sub-flow
 	selectedAgents      []agent.AgentType
 	ccUnified           bool
+	ccSubagentModel     string // unified mode: subagent model, "" = same as the default
 	ccInstallStatusLine bool
 	agentResults        []*agent.ApplyAgentResult
 }
@@ -458,6 +461,7 @@ func qsModel(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 		}
 		return res.Models, nil
 	})
+	s.models = models
 
 	if len(models) == 0 {
 		r, err := Input("Couldn't fetch models - enter a model name:", InputOptions{
@@ -688,21 +692,37 @@ func qsAgent(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 	hasClaudeCode := slices.Contains(s.selectedAgents, agent.AgentTypeClaudeCode)
 
 	if hasClaudeCode {
-		uni, err := Confirm("Use unified mode for Claude Code? (single config for all models)", ConfirmOptions{
-			Header:     ctx.Header,
-			DefaultYes: true,
-			CanGoBack:  true,
-		})
-		if err != nil {
-			return s, StepCancel, err
+		// Back on the subagent question returns to the unified question.
+		for {
+			uni, err := Confirm("Use unified mode for Claude Code? (single config for all models)", ConfirmOptions{
+				Header:     ctx.Header,
+				DefaultYes: true,
+				CanGoBack:  true,
+			})
+			if err != nil {
+				return s, StepCancel, err
+			}
+			if uni.IsBack() {
+				return s, StepBack, nil
+			}
+			if uni.IsCancel() {
+				return s, StepCancel, nil
+			}
+			s.ccUnified = uni.Value
+			s.ccSubagentModel = ""
+			if !s.ccUnified {
+				break
+			}
+			var res StepResult
+			s, res, err = qsSubagentModel(ctx, s)
+			if res == StepBack {
+				continue
+			}
+			if res != StepContinue {
+				return s, res, err
+			}
+			break
 		}
-		if uni.IsBack() {
-			return s, StepBack, nil
-		}
-		if uni.IsCancel() {
-			return s, StepCancel, nil
-		}
-		s.ccUnified = uni.Value
 
 		sl, err := Confirm("Install Claude Code status line script?", ConfirmOptions{
 			Header:     ctx.Header,
@@ -719,6 +739,13 @@ func qsAgent(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 			return s, StepCancel, nil
 		}
 		s.ccInstallStatusLine = sl.Value
+	}
+
+	// Before applying, so the Claude Code env written below matches.
+	if hasClaudeCode {
+		if err := applyClaudeCodeChoice(s.mgr.GetGlobalConfig(), s.ccUnified, s.provider.UUID, s.ccSubagentModel); err != nil {
+			fmt.Println(errorStyle.Render(fmt.Sprintf("  ✗ Claude Code mode / subagent model: %v", err)))
+		}
 	}
 
 	agentUC := usecase.NewAgentUseCase(s.mgr.GetGlobalConfig(), "localhost")
@@ -748,6 +775,91 @@ func qsAgent(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 		}
 	}
 	return s, StepContinue, nil
+}
+
+// qsSubagentModel asks which model Claude Code's subagents use in unified
+// mode: the default model, or one of their own (the most common reason to
+// split a slot off the unified rule).
+func qsSubagentModel(ctx StepContext, s quickstartState) (quickstartState, StepResult, error) {
+	const other = "\x00other"
+	items := []SelectItem[string]{
+		{Title: "Same as the default model", Description: s.model, Value: ""},
+	}
+	for _, m := range s.models {
+		if m != s.model {
+			items = append(items, SelectItem[string]{Title: m, Value: m})
+		}
+	}
+	items = append(items, SelectItem[string]{Title: "Other…", Description: "Enter a model name manually", Value: other})
+	r, err := Select("Model for Claude Code subagents:", items, SelectOptions{
+		Header:    ctx.Header,
+		CanGoBack: true,
+		PageSize:  12,
+	})
+	if err != nil {
+		return s, StepCancel, err
+	}
+	switch {
+	case r.IsBack():
+		return s, StepBack, nil
+	case r.IsCancel():
+		return s, StepCancel, nil
+	}
+	if r.Value != other {
+		s.ccSubagentModel = r.Value
+		return s, StepContinue, nil
+	}
+	in, err := Input("Subagent model name:", InputOptions{Header: ctx.Header, Required: true, CanGoBack: true})
+	if err != nil {
+		return s, StepCancel, err
+	}
+	if in.IsBack() {
+		return s, StepBack, nil
+	}
+	if in.IsCancel() {
+		return s, StepCancel, nil
+	}
+	if in.Value != s.model {
+		s.ccSubagentModel = in.Value
+	}
+	return s, StepContinue, nil
+}
+
+// applyClaudeCodeChoice makes the claude_code scenario match the quickstart
+// answers: its mode, and in unified mode whether subagents use their own model
+// (subagentModel, routed to providerUUID) or the default one ("" — undoing an
+// earlier split).
+func applyClaudeCodeChoice(cfg *serverconfig.Config, unified bool, providerUUID, subagentModel string) error {
+	if separate := cfg.GetScenarioFlag(typ.ScenarioClaudeCode, constant.FlagSeparate); separate == unified {
+		flag := constant.FlagSeparate
+		if unified {
+			flag = constant.FlagUnified
+		}
+		if err := cfg.SetScenarioFlag(typ.ScenarioClaudeCode, flag, true); err != nil {
+			return err
+		}
+	}
+	if !unified {
+		return nil
+	}
+	if subagentModel == "" {
+		if slices.Contains(cfg.ClaudeCodeSlots(typ.ScenarioClaudeCode), "subagent") {
+			_, err := cfg.SetClaudeCodeSlot(typ.ScenarioClaudeCode, "subagent", false)
+			return err
+		}
+		return nil
+	}
+	rule, err := cfg.SetClaudeCodeSlot(typ.ScenarioClaudeCode, "subagent", true)
+	if err != nil {
+		return err
+	}
+	// Exactly the chosen model: nothing inherited from the main rule may
+	// route around it (smart routing) or advertise a context it lacks (1M).
+	rule.Services = []*loadbalance.Service{{Active: true, Provider: providerUUID, Model: subagentModel}}
+	rule.SmartEnabled = false
+	rule.SmartRouting = nil
+	rule.Flags.Context1M = false
+	return cfg.UpdateRule(rule.UUID, rule)
 }
 
 // agentItemDescription returns a one-line summary of where the agent writes
