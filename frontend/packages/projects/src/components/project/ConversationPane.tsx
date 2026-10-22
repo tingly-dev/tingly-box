@@ -333,6 +333,7 @@ export function ConversationPane({ projectId, messages, threads, busy, disabled,
                     streaming={busy}
                     model={model}
                     onModelChange={onModelChange}
+                    modelLabel={t('conversation.coordinatorModel')}
                     placeholder={t(busy ? 'conversation.queuePlaceholder' : 'conversation.placeholder')}
                     attach={(files) => uploadAttachments({ projectId }, files)}
                     onSend={async (text, attachments) => {

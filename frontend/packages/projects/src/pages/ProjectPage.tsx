@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { api, isFolder, type components, unwrap, type Project, type Thread, type ThreadEvent } from '../client';
 import { ConversationPane } from '../components/project/ConversationPane';
 import { OverviewPane } from '../components/project/OverviewPane';
+import { ModelPicker } from '../components/ModelPicker';
 import { PermissionModeSelect } from '../components/workdir/PermissionModeSelect';
 import { ProjectSettingsDialog, type SettingsTab } from '../components/project/ProjectSettingsDialog';
 import { ProjectImTags, useProjectIm } from '../components/im/ProjectImBindings';
@@ -194,7 +195,7 @@ export default function ProjectPage() {
         p.delete('thread');
         return p;
     });
-    const patch = async (body: Pick<components['schemas']['UpdateProjectRequest'], 'starred' | 'paused' | 'archived' | 'coordinator_model' | 'thread_permission_mode'>) => {
+    const patch = async (body: Pick<components['schemas']['UpdateProjectRequest'], 'starred' | 'paused' | 'archived' | 'coordinator_model' | 'thread_model' | 'thread_permission_mode'>) => {
         try {
             setProject(await unwrap(api.PATCH('/api/v1/projects/{id}', { params: { path: { id } }, body })));
             // Archiving unbinds the project's IM chats.
@@ -328,12 +329,20 @@ export default function ProjectPage() {
                         onModelChange={(m) => void patch({ coordinator_model: m })}
                         composerContext={project && (
                             // What the threads it starts run with; the coordinator's own model sits beside Send.
-                            <PermissionModeSelect
-                                value={project.thread_permission_mode || 'acceptEdits'}
-                                modes={THREAD_MODES}
-                                disabled={blocked}
-                                onChange={(m) => void patch({ thread_permission_mode: m as ThreadMode })}
-                            />
+                            <>
+                                <PermissionModeSelect
+                                    value={project.thread_permission_mode || 'acceptEdits'}
+                                    modes={THREAD_MODES}
+                                    disabled={blocked}
+                                    onChange={(m) => void patch({ thread_permission_mode: m as ThreadMode })}
+                                />
+                                <ModelPicker
+                                    label={t('conversation.threadModel')}
+                                    value={project.thread_model}
+                                    disabled={blocked}
+                                    onChange={(m) => void patch({ thread_model: m })}
+                                />
+                            </>
                         )}
                         onOpenThread={openThread}
                         chatTitle={im?.chatTitle}

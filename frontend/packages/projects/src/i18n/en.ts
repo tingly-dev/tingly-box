@@ -119,6 +119,8 @@ export const en = {
     },
     conversation: {
         placeholder: 'Describe work, paste a bug report or stack trace, or ask a question…',
+        coordinatorModel: 'Coordinator model',
+        threadModel: 'Thread model',
         queuePlaceholder: 'Message the project — it reads it after its current turn…',
         emptyTitle: 'Send this project its first piece of work',
         step1: 'Describe what needs doing here — one task, a list, a bug report or a stack trace.',

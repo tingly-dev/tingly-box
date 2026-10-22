@@ -9,6 +9,8 @@ interface Props {
     value: string;
     onChange: (model: string) => void;
     disabled?: boolean;
+    /** What the model is for, shown before it when a box holds more than one picker. */
+    label?: string;
 }
 
 /**
@@ -16,7 +18,7 @@ interface Props {
  * user switch. When the endpoint cannot list models, a free-text field takes
  * over so chatting is never blocked on discovery.
  */
-export function ModelPicker({ value, onChange, disabled }: Props) {
+export function ModelPicker({ value, onChange, disabled, label }: Props) {
     const { t } = useTranslation('projects');
     const { models, error } = useModels();
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -34,7 +36,7 @@ export function ModelPicker({ value, onChange, disabled }: Props) {
                 sx={{ color: 'text.secondary', fontWeight: 500, fontSize: fontSizes.sm, maxWidth: 260, px: 0.75, minWidth: 0, borderRadius: 1 }}
             >
                 <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {value || t('model.auto')}
+                    {label ? `${label} · ` : ''}{value || t('model.auto')}
                 </Box>
             </Button>
             <Menu

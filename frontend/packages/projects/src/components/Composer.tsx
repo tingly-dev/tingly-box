@@ -41,6 +41,8 @@ export interface ComposerProps {
     /** Shows the model picker when onModelChange is set. */
     model?: string;
     onModelChange?: (m: string) => void;
+    /** What `model` is for, when other model pickers share the box. */
+    modelLabel?: string;
     /** Controls above the text (a host's profile, model and permission pickers). */
     context?: ReactNode;
     /** Controls shown at the bottom-left (project / memory chips). */
@@ -70,7 +72,7 @@ export interface ComposerProps {
  * Enter (confirming a candidate) never sends, and a send never runs twice.
  */
 export function Composer({
-    onSend, attach, attachBlocked, streaming, onStop, sendWhileStreaming, disabled, canSubmit = true, placeholder, autoFocus, model, onModelChange,
+    onSend, attach, attachBlocked, streaming, onStop, sendWhileStreaming, disabled, canSubmit = true, placeholder, autoFocus, model, onModelChange, modelLabel,
     context, leftSlot, minRows = 1, seed, keepUntilSent, text: controlled, onTextChange, onAccepted, keysHint,
 }: ComposerProps) {
     const { t } = useTranslation('projects');
@@ -353,7 +355,7 @@ export function Composer({
                             {leftSlot}
                             {hint && <Typography variant="caption" color="text.secondary">{t('composer.keys')}</Typography>}
                         </Box>
-                        {onModelChange && <ModelPicker value={model ?? ''} onChange={onModelChange} />}
+                        {onModelChange && <ModelPicker value={model ?? ''} onChange={onModelChange} label={modelLabel} />}
                         {sendButton}
                         {stopButton}
                     </Box>
