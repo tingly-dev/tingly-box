@@ -57,6 +57,7 @@ var migrationSteps = []migrationStep{
 	{"agent-scenario-to-custom", kindBaseline, "", migrateAgentScenarioToCustom},
 	{"ensure-current-builtin-rules", kindBaseline, "", ensureCurrentBuiltinRules},
 	{"20261004-claude-code-fable-rule", kindOnce, "2026-10-04", backfillFableRuleOnce},
+	{"20261022-claude-code-unified-slot-rules", kindOnce, "2026-10-22", resetUnifiedSlotRulesOnce},
 	{"20260712-drop-unsupported-smart-routing", kindDated, "2026-07-12", migrate20260712},
 	{"20260606-xcode-skip-usage", kindOnce, "2026-06-06", defaultXcodeSkipUsageOnce},
 	{"20260610-builtin-rule-flags", kindOnce, "2026-06-10", defaultBuiltinRuleFlagsOnce},
@@ -795,5 +796,22 @@ func (c *Config) backfillFableRule() bool {
 	fable.LBTactic = opus.LBTactic
 	c.Rules = append(c.Rules, fable)
 	logrus.Info("Added Claude Code fable built-in rule")
+	return true
+}
+
+// resetUnifiedSlotRulesOnce hands every slot back to the main rule when
+// claude_code is in unified mode. A switched-on slot rule means "this slot has
+// its own rule" from now on (cc_slots.go), but before that agent apply
+// switched every tier rule on regardless of mode, so those rules carry no
+// such intent.
+func resetUnifiedSlotRulesOnce(c *Config) bool {
+	const marker = "20261022"
+	if c.hasMigrationCompleted(marker) {
+		return false
+	}
+	if sc := c.scenarioConfigLocked(typ.ScenarioClaudeCode); sc == nil || !sc.GetDefaultFlags().Separate {
+		c.setClaudeCodeModeRulesActiveLocked(true, false)
+	}
+	c.markMigrationCompleted(marker)
 	return true
 }

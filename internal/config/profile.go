@@ -94,37 +94,38 @@ func (c *Config) UpdateClaudeCodeProfileConfig(baseScenario typ.RuleScenario, pr
 // (e.g. "builtin:claude_code:p1:haiku"), so profile rules stay addressable by
 // a deterministic identity just like the main scenario's built-ins.
 func newCCProfileRules(profiledScenario typ.RuleScenario, unified bool) []typ.Rule {
-	newRule := func(requestModel, description string) typ.Rule {
-		return typ.Rule{
-			UUID:         BuiltinRuleUUID(profiledScenario, requestModel),
-			Scenario:     profiledScenario,
-			RequestModel: requestModel,
-			Description:  description,
-			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticRandom,
-				Params: typ.DefaultRandomParams(),
-			},
-			// Claude Code profiles inherit the built-in CC defaults: normalize the
-			// mid-conversation system role (ClaudeCodeCompat) so third-party
-			// providers accept the request, and strip the billing header
-			// (CleanHeader) so it never leaks to external providers.
-			Flags:  typ.RuleFlags{ClaudeCodeCompat: true, CleanHeader: true, SessionAffinity: defaultSessionAffinitySeconds},
-			Active: true,
-		}
-	}
-
 	if unified {
 		return []typ.Rule{
-			newRule("cc", "Claude Code profile - unified mode"),
+			newCCProfileRule(profiledScenario, "cc", "Claude Code profile - unified mode"),
 		}
 	}
 	return []typ.Rule{
-		newRule("default", "Claude Code profile - default model"),
-		newRule("haiku", "Claude Code profile - haiku model"),
-		newRule("sonnet", "Claude Code profile - sonnet model"),
-		newRule("opus", "Claude Code profile - opus model"),
-		newRule("subagent", "Claude Code profile - subagent model"),
-		newRule("fable", "Claude Code profile - fable model"),
+		newCCProfileRule(profiledScenario, "default", "Claude Code profile - default model"),
+		newCCProfileRule(profiledScenario, "haiku", "Claude Code profile - haiku model"),
+		newCCProfileRule(profiledScenario, "sonnet", "Claude Code profile - sonnet model"),
+		newCCProfileRule(profiledScenario, "opus", "Claude Code profile - opus model"),
+		newCCProfileRule(profiledScenario, "subagent", "Claude Code profile - subagent model"),
+		newCCProfileRule(profiledScenario, "fable", "Claude Code profile - fable model"),
+	}
+}
+
+// newCCProfileRule builds one empty, active claude_code profile rule.
+func newCCProfileRule(profiledScenario typ.RuleScenario, requestModel, description string) typ.Rule {
+	return typ.Rule{
+		UUID:         BuiltinRuleUUID(profiledScenario, requestModel),
+		Scenario:     profiledScenario,
+		RequestModel: requestModel,
+		Description:  description,
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticRandom,
+			Params: typ.DefaultRandomParams(),
+		},
+		// Claude Code profiles inherit the built-in CC defaults: normalize the
+		// mid-conversation system role (ClaudeCodeCompat) so third-party
+		// providers accept the request, and strip the billing header
+		// (CleanHeader) so it never leaks to external providers.
+		Flags:  typ.RuleFlags{ClaudeCodeCompat: true, CleanHeader: true, SessionAffinity: defaultSessionAffinitySeconds},
+		Active: true,
 	}
 }
 

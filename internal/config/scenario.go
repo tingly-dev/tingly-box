@@ -63,24 +63,33 @@ func (c *Config) SetScenarioConfig(config typ.ScenarioConfig) error {
 	// Check if scenario already exists and update it
 	for i := range c.Scenarios {
 		if c.Scenarios[i].Scenario == config.Scenario {
+			prev := c.Scenarios[i]
 			c.Scenarios[i] = config
-			c.syncClaudeCodeRuleModeLocked(config)
+			c.syncClaudeCodeRuleModeLocked(&prev, config)
 			return c.Save()
 		}
 	}
 
 	// Add new scenario config
 	c.Scenarios = append(c.Scenarios, config)
-	c.syncClaudeCodeRuleModeLocked(config)
+	c.syncClaudeCodeRuleModeLocked(nil, config)
 	return c.Save()
 }
 
-func (c *Config) syncClaudeCodeRuleModeLocked(config typ.ScenarioConfig) {
+// syncClaudeCodeRuleModeLocked applies the main Claude Code scenario's mode to
+// its rules after a whole-record write. Only a mode change touches the rules:
+// in unified mode the rules a user switched on for single slots stay as they
+// are (see cc_slots.go).
+func (c *Config) syncClaudeCodeRuleModeLocked(prev *typ.ScenarioConfig, config typ.ScenarioConfig) {
 	if config.Scenario != typ.ScenarioClaudeCode {
 		return
 	}
 
 	flags := config.GetDefaultFlags()
+	// No record yet reads as unified, the default.
+	if wasSeparate := prev != nil && prev.GetDefaultFlags().Separate; wasSeparate == flags.Separate {
+		return
+	}
 	if flags.Separate {
 		c.setClaudeCodeModeRulesActiveLocked(false, true)
 		return
@@ -185,8 +194,11 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 	case constant.FlagUnified:
 		config.Flags.Unified = value
 		if scenario == typ.ScenarioClaudeCode && value {
+			wasSeparate := config.Flags.Separate
 			config.Flags.Separate = false
-			c.setClaudeCodeModeRulesActiveLocked(true, false)
+			if wasSeparate {
+				c.setClaudeCodeModeRulesActiveLocked(true, false)
+			}
 		}
 	case constant.FlagSeparate:
 		config.Flags.Separate = value

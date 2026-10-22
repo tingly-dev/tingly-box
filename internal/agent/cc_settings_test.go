@@ -731,3 +731,69 @@ func TestReadClaudeCodeSettings_CoAuthoredBy(t *testing.T) {
 }
 
 func boolPtr(v bool) *bool { return &v }
+
+func TestGenerateCCEnv_UnifiedWithSubagentOnItsOwnRule(t *testing.T) {
+	cfg := &serverconfig.Config{
+		Rules: []typ.Rule{
+			{UUID: serverconfig.RuleUUIDCC, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc", Active: true},
+			{UUID: serverconfig.RuleUUIDCCSubagent, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-subagent", Active: true},
+			// Off: a slot handed back to the main rule.
+			{UUID: serverconfig.RuleUUIDCCOpus, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-opus", Active: false},
+		},
+	}
+
+	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code", true, false)
+
+	for key, want := range map[string]string{
+		"ANTHROPIC_MODEL":                "tingly/cc",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL":  "tingly/cc",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL": "tingly/cc",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL":   "tingly/cc",
+		"ANTHROPIC_DEFAULT_FABLE_MODEL":  "tingly/cc",
+		"CLAUDE_CODE_SUBAGENT_MODEL":     "tingly/cc-subagent",
+	} {
+		if env[key] != want {
+			t.Errorf("env[%q] = %q, want %q", key, env[key], want)
+		}
+	}
+}
+
+func TestGenerateCCEnv_UnifiedProfileSlot(t *testing.T) {
+	cfg := &serverconfig.Config{
+		Rules: []typ.Rule{
+			{UUID: "builtin:claude_code:p1:cc", Scenario: "claude_code:p1", RequestModel: "cc", Active: true},
+			{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "fast", Active: true},
+			// The main scenario's slot rules never leak into a profile.
+			{UUID: serverconfig.RuleUUIDCCOpus, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-opus", Active: true},
+		},
+	}
+
+	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code:p1", true, true)
+
+	if got := env["ANTHROPIC_DEFAULT_HAIKU_MODEL"]; got != "fast" {
+		t.Errorf("haiku = %q, want fast", got)
+	}
+	// No rule of its own: the main rule, never a bare tier name.
+	if got := env["CLAUDE_CODE_SUBAGENT_MODEL"]; got != "cc" {
+		t.Errorf("subagent = %q, want cc", got)
+	}
+	if got := env["ANTHROPIC_DEFAULT_OPUS_MODEL"]; got != "cc" {
+		t.Errorf("opus = %q, want cc", got)
+	}
+}
+
+func TestBuildClaudeCodeModelConfig_UnifiedFollowsSplitSlots(t *testing.T) {
+	cfg := &serverconfig.Config{
+		Rules: []typ.Rule{
+			{UUID: serverconfig.RuleUUIDCC, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc", Active: true},
+			{UUID: serverconfig.RuleUUIDCCSubagent, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-subagent", Active: true},
+		},
+	}
+	mc := BuildClaudeCodeModelConfig(cfg, true)
+	if mc.Default != "tingly/cc" || mc.SubAgent != "tingly/cc-subagent" || mc.Haiku != "" {
+		t.Errorf("model config = %+v, want default tingly/cc, subagent tingly/cc-subagent, the rest following default", mc)
+	}
+	if got := BuildClaudeCodeModelConfig(nil, true); got.Default != "tingly/cc" || got.SubAgent != "" {
+		t.Errorf("without config = %+v", got)
+	}
+}
