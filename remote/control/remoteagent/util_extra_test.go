@@ -80,32 +80,3 @@ func TestParsePositiveInt(t *testing.T) {
 		}
 	}
 }
-
-func TestBuildFooter_BothFields(t *testing.T) {
-	got := BuildFooter(AgentNameClaude, "/home/me/proj")
-	if !strings.Contains(got, SeparatorLine) {
-		t.Errorf("missing separator: %q", got)
-	}
-	if !strings.Contains(got, AgentNameCC) {
-		t.Errorf("missing agent name: %q", got)
-	}
-	if !strings.Contains(got, "proj") {
-		t.Errorf("missing project path: %q", got)
-	}
-}
-
-func TestBuildFooter_EmptyReturnsEmpty(t *testing.T) {
-	if got := BuildFooter("", ""); got != "" {
-		t.Errorf("expected empty footer, got %q", got)
-	}
-}
-
-func TestBuildFooter_OnlyProject(t *testing.T) {
-	got := BuildFooter("", "/home/me/proj")
-	if !strings.Contains(got, "proj") {
-		t.Errorf("missing project: %q", got)
-	}
-	if strings.Contains(got, AgentNameCC) || strings.Contains(got, AgentNameTB) {
-		t.Errorf("agent line should not appear: %q", got)
-	}
-}

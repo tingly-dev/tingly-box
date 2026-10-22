@@ -14,8 +14,8 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
 )
 
-// runRemoteAddInteractive runs the interactive flow for adding a new bot
-func runRemoteAddInteractive(reader *bufio.Reader, appManager *app.AppManager) error {
+// runBotAddInteractive runs the interactive flow for adding a new bot
+func runBotAddInteractive(reader *bufio.Reader, appManager *app.AppManager) error {
 	fmt.Println()
 	fmt.Println("╔═══════════════════════════════════════════════════════════════╗")
 	fmt.Println("║                    Add New Remote Bot                         ║")
@@ -77,22 +77,6 @@ func runRemoteAddInteractive(reader *bufio.Reader, appManager *app.AppManager) e
 		Enabled:  true,
 	}
 
-	// Ask if user wants to configure SmartGuide
-	fmt.Println()
-	fmt.Print("Configure SmartGuide for this bot? (y/N): ")
-	input, _ := reader.ReadString('\n')
-	input = strings.TrimSpace(strings.ToLower(input))
-
-	if input == "y" || input == "yes" {
-		provider, model, err := promptForSmartGuideModel(reader, appManager)
-		if err != nil {
-			fmt.Printf("Warning: failed to configure SmartGuide: %v\n", err)
-		} else {
-			setting.SmartGuideProvider = provider
-			setting.SmartGuideModel = model
-		}
-	}
-
 	// Ask if user wants to enable pairing. Token-DM platforms (telegram,
 	// discord, slack) recommend it strongly: anyone with the bot token can
 	// otherwise DM and run commands. OAuth/QR platforms don't have that
@@ -103,13 +87,13 @@ func runRemoteAddInteractive(reader *bufio.Reader, appManager *app.AppManager) e
 		fmt.Println("and run commands. TOFU pairing requires a one-time `/bind <code>`")
 		fmt.Println("from the operator before the bot accepts any other DM.")
 		fmt.Print("Require TOFU pairing for this bot? (Y/n): ")
-		input, _ = reader.ReadString('\n')
+		input, _ := reader.ReadString('\n')
 		input = strings.TrimSpace(strings.ToLower(input))
 		require := !(input == "n" || input == "no")
 		setting.RequirePairing = &require
 	} else {
 		fmt.Print("Require TOFU pairing for this bot? (y/N): ")
-		input, _ = reader.ReadString('\n')
+		input, _ := reader.ReadString('\n')
 		input = strings.TrimSpace(strings.ToLower(input))
 		if input == "y" || input == "yes" {
 			require := true
@@ -136,8 +120,8 @@ func runRemoteAddInteractive(reader *bufio.Reader, appManager *app.AppManager) e
 			fmt.Println("Server was notified, but the bot is not running — check `tingly-box log` for startup errors.")
 		}
 	} else {
-		fmt.Println("To start this bot, run:")
-		fmt.Printf("  tingly-box remote start %s\n", created.UUID)
+		fmt.Println("The bot runs with the server; start it with:")
+		fmt.Println("  tingly-box start")
 	}
 	fmt.Println()
 

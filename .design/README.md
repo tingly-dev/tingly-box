@@ -42,7 +42,7 @@
 | [config-migration.md](./config-migration.md) | Config Migration Pipeline | 设计说明；局部实施状态见正文 |
 | [rule-storage.md](./rule-storage.md) | Rule 存储迁移：config.json → SQLite | 设计说明；局部实施状态见正文 |
 | [rule-uuid.md](./rule-uuid.md) | Rule UUID Conventions | 设计说明；局部实施状态见正文 |
-| [remote-storage.md](./remote-storage.md) | Remote 存储重设计 | 设计说明；局部实施状态见正文 |
+| [remote-storage.md](./remote-storage.md) | Remote 存储重设计 | chat 表仍在用；session 存储随旧路径删除（remote-into-projects.md 第 4 期） |
 ## 协议、路由与请求能力
 
 | 文档 | 内容 | 状态 / 阅读边界 |
@@ -92,7 +92,7 @@
 |---|---|---|
 | [afk.md](./afk.md) | AFK — Agent Framework Kit | 设计说明；局部实施状态见正文 |
 | [agentboot-refactor.md](./agentboot-refactor.md) | Agentboot Refactor | 已完成的重构记录；后续决定见附录 |
-| [claude-code-session.md](./claude-code-session.md) | Claude Code: from one-shot processes to a persistent stream session | P0–P2 完成；默认关闭；P3 待做 |
+| [claude-code-session.md](./claude-code-session.md) | Claude Code: from one-shot processes to a persistent stream session | 已退役：Remote 的 `@cc` 执行路径已删除，聊天走 Projects（remote-into-projects.md） |
 | [claude-code-oauth-compat.md](./claude-code-oauth-compat.md) | Claude Code OAuth compatibility — wire identity and version profiles | 已实现 profile；限制见 §B7 |
 | [bot-arch.md](./bot-arch.md) | Bot Architecture — resource, channel, consumers (+ naming) | 设计说明；局部实施状态见正文 |
 | [bot-capability-access-control.md](./bot-capability-access-control.md) | Bot Capability Access Control — Bot、Direct Chat、Group 与 Actor | 资源/授权核心已实现；验收项按正文核对 |
@@ -101,7 +101,7 @@
 | [imbot-sync.md](./imbot-sync.md) | ImBot State Sync: Event-Driven with a Reconcile Backstop | 设计说明；局部实施状态见正文 |
 | [imbot-output.md](./imbot-output.md) | ImBot 输出预估 — Predicted Per-Platform Chat Output, and the Noise Problem | 当前矩阵 + 已标注的修复前推演 |
 | [im-feishu.md](./im-feishu.md) | Feishu/Lark: IM Service Built Directly, Not via the Fat SDK Client | 设计说明；局部实施状态见正文 |
-| [remote-cc-profile.md](./remote-cc-profile.md) | Remote @cc Profile Selection | 设计说明；局部实施状态见正文 |
+| [remote-cc-profile.md](./remote-cc-profile.md) | Remote @cc Profile Selection | `@cc` 已退役；bot 的 profile 如何用于 Projects 线程见 remote-into-projects.md |
 | [desk.md](./desk.md) | Desk (MVP)：已并入 Projects；§3 的会话引擎行为仍然适用 | 已退役 |
 | [projects-attachments.md](./projects-attachments.md) | Projects 附件：文件、图片、长文本作为输入，统一落盘在项目 uploads（TEP-2107） | 进行中 |
 | [projects-panel.md](./projects-panel.md) | Projects 面板：项目和工作目录共用一个侧边栏（TEP-2063） | 已实现 |
@@ -111,8 +111,8 @@
 | [projects-sessions.md](./projects-sessions.md) | Projects 的统一模型：一切会话都是 Thread（项目对话、线程、文件夹会话、IM 聊天同构），Claude 调研、命名收拾、迁移与交付 | 提案 |
 | [projects-ui.md](./projects-ui.md) | Projects 面板的 UI 对齐：对照 TB 页面和官方 Projects 的审查与分批计划 | 进行中 |
 | [projects.md](./projects.md) | Projects 接入（宿主侧）：`projects/` 模块、Host 适配器、`projects` 开关、导航与命名；契约见 `projects/.design/projects.md` | 设计说明；代码已搬入，接入未开始 |
-| [smart-guide-on-claude-code.md](./smart-guide-on-claude-code.md) | Smart Guide on Claude Code (retiring tingly-agentscope) | 已废弃方案；现行 runtime 见 afk |
-| [smart-guide-react-anthropic-sdk.md](./smart-guide-react-anthropic-sdk.md) | Smart Guide: in-house ReAct loop on the official Anthropic SDK | 已交付的起源记录；现行设计见 afk |
+| [smart-guide-on-claude-code.md](./smart-guide-on-claude-code.md) | Smart Guide on Claude Code (retiring tingly-agentscope) | 已废弃方案；`@tb` 已下线（remote-into-projects.md） |
+| [smart-guide-react-anthropic-sdk.md](./smart-guide-react-anthropic-sdk.md) | Smart Guide: in-house ReAct loop on the official Anthropic SDK | 起源记录；`@tb` 已下线（remote-into-projects.md） |
 ## Image 与图形工具
 
 | 文档 | 内容 | 状态 / 阅读边界 |

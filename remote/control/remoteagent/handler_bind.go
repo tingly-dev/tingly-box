@@ -10,39 +10,9 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/control/feature"
 )
 
-// handleProjectSwitch handles switching to a different project
+// handleProjectSwitch moves the chat to a folder it picked from /dir.
 func (h *BotHandler) handleProjectSwitch(hCtx HandlerContext, projectPath string) {
-	if h.chatStore == nil {
-		h.SendText(hCtx, "Store not available")
-		return
-
-	}
-
-	// Bind the project to this chat
-	if err := h.chatStore.BindProject(hCtx.ChatID, string(hCtx.Platform), projectPath, hCtx.SenderID); err != nil {
-		h.SendText(hCtx, "Failed to switch project")
-		return
-	}
-
-	// Get current agent and close old session
-	currentAgent, _ := h.getCurrentAgent(hCtx.ChatID)
-	agentType := string(currentAgent)
-
-	// Close old session for this (chat, agent) with different project
-	// Find any session for this (chat, agent) and close it
-	// Note: We need to close all sessions for this (chat, agent) since project changed
-	if agentType != "tingly-box" {
-		sessions := h.sessionMgr.ListByChat(hCtx.ChatID)
-		for _, sess := range sessions {
-			if sess.Agent == agentType && sess.Project != projectPath {
-				h.sessionMgr.Close(sess.ID)
-			}
-		}
-	}
-
-	h.moveChatToFolder(hCtx, projectPath)
-	logrus.Infof("Project switched: chat=%s path=%s agent=%s", hCtx.ChatID, projectPath, agentType)
-	h.SendText(hCtx, fmt.Sprintf("✅ Switched to: %s", projectPath))
+	h.completeBind(hCtx, projectPath)
 }
 
 // handleBindInteractive starts an interactive directory browser for binding
@@ -70,7 +40,7 @@ func (h *BotHandler) handleBindInteractive(hCtx HandlerContext) {
 	}
 }
 
-// completeBind completes the project binding process
+// completeBind moves the chat to a folder (/cd, /dir, the directory browser)
 func (h *BotHandler) completeBind(hCtx HandlerContext, projectPath string) {
 	// Expand path (handles ~, etc.)
 	expandedPath, err := ExpandPath(projectPath)
@@ -88,31 +58,15 @@ func (h *BotHandler) completeBind(hCtx HandlerContext, projectPath string) {
 		}
 	}
 
-	platform := string(hCtx.Platform)
-
-	// Bind project to chat using ChatStore
-	if err := h.chatStore.BindProject(hCtx.ChatID, platform, expandedPath, hCtx.SenderID); err != nil {
-		h.SendText(hCtx, fmt.Sprintf("Failed to bind project: %v", err))
+	if !h.moveChatToFolder(hCtx, expandedPath) {
 		return
 	}
-
-	// Also update bash cwd to match the new project path
-	if err := h.chatStore.SetBashCwd(hCtx.ChatID, expandedPath); err != nil {
-		logrus.WithError(err).Warn("Failed to update bash cwd after project bind")
+	// Remember it for /dir, and as the chat's folder after a restart.
+	if err := h.chatStore.BindProject(hCtx.ChatID, string(hCtx.Platform), expandedPath, hCtx.SenderID); err != nil {
+		logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to remember the chat's folder")
 	}
-
-	h.moveChatToFolder(hCtx, expandedPath)
-
-	// With new design, sessions are created on-demand when agent processes a message
-	// No need to create session here
-
-	logrus.Infof("Project bound: chat=%s path=%s", hCtx.ChatID, expandedPath)
-
-	if hCtx.IsDirect() {
-		h.SendText(hCtx, fmt.Sprintf("✅ Project bound: %s\n\nYou can now send messages directly.", expandedPath))
-	} else {
-		h.SendText(hCtx, fmt.Sprintf("✅ Group bound to project: %s", expandedPath))
-	}
+	logrus.Infof("Chat moved to a folder: chat=%s path=%s", hCtx.ChatID, expandedPath)
+	h.SendText(hCtx, fmt.Sprintf("📁 %s\nYour next message starts a new session here.", expandedPath))
 }
 
 // handleCustomPathInput handles the user's custom path input

@@ -331,7 +331,7 @@ CLI 的 `remote run`（`internal/command/remote.go` 的 standalone 路径，单�
 代码评审后的修正：
 - **迁移下沉到 `StoreManager.initRemoteStores`。** 原来挂在 `NewBotManager` 上，
   于是只有 server 路径会迁移 —— 用户在启动 server 之前跑
-  `tingly-box remote pair revoke`，会读到一张空表而 `bot_chats.json` 就在旁边。
+  `tingly-box bot pair revoke`，会读到一张空表而 `bot_chats.json` 就在旁边。
   存储生命周期的拥有者才该触发迁移。（这也是 importer 从 `migrations` 包
   移进 `db` 包的原因：`migrations` import `db`，反向会成环。）
 - **迁移对崩溃可重放。** 先写 transcript、最后写索引行 —— 索引行才是

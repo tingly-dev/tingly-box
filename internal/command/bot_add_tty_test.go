@@ -14,7 +14,7 @@ import (
 func TestRemoteAdd_NoTTY_ClearError(t *testing.T) {
 	withNonTTYStdin(t)
 
-	err := (&RemoteAddCmdKong{}).Run(nil)
+	err := (&BotAddCmdKong{}).Run(nil)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}

@@ -40,28 +40,3 @@ func (h *BotHandler) botFromCtx(hCtx HandlerContext) imbot.Bot {
 	}
 	return h.manager.GetBotByUUID(h.botSetting.UUID)
 }
-
-// sendTextWithReply sends a text message as a reply to another message
-// Note: Platform handles chunking internally via BaseBot.ChunkText()
-func (h *BotHandler) sendTextWithReply(hCtx HandlerContext, text string, replyTo string) {
-	b := h.botFromCtx(hCtx)
-	if b == nil {
-		logrus.WithField("chatID", hCtx.ChatID).Warn("sendTextWithReply: no bot available")
-		return
-	}
-	opts := &imbot.SendMessageOptions{
-		Text:      text,
-		ParseMode: imbot.ParseModeMarkdown,
-		ReplyTo:   replyTo,
-	}
-	bot.ForwardReplyContext(opts, hCtx.Message)
-	_, err := b.SendMessage(context.Background(), hCtx.ChatID, opts)
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to send message")
-	}
-}
-
-// newStreamingMessageHandler creates the per-execution streaming chat writer.
-func (h *BotHandler) newStreamingMessageHandler(hCtx HandlerContext, sessionID string) *streamingMessageHandler {
-	return newStreamingMessageHandler(hCtx.Bot, hCtx.ChatID, hCtx.MessageID, sessionID, h.GetVerbose(hCtx.ChatID))
-}

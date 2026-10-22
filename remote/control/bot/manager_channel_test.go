@@ -10,13 +10,11 @@ import (
 	bot2 "github.com/tingly-dev/tingly-box/remote/control/bot"
 	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
 
-	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
-	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
 // newChannelTestManager builds a bot.Manager wired like production: notify
@@ -44,17 +42,10 @@ func newChannelTestManager(t *testing.T, uuid, scenarios string) (*bot2.Manager,
 		},
 	}
 
-	sessionMgr := session.NewManager(session.Config{
-		Timeout:          10 * time.Minute,
-		MessageRetention: time.Hour,
-	}, nil)
-	svc, err := agentboot.NewAgentService(agentboot.Config{})
-	require.NoError(t, err)
-
 	registry := channel.NewRegistry()
 	m := bot2.NewManager(store,
 		bot2.NewNotifyConsumer(),
-		remoteagent.NewConsumer(sessionMgr, svc, nil, nil, store))
+		remoteagent.NewConsumer(store))
 	sm, err := db.NewStoreManager(t.TempDir())
 	if err != nil {
 		t.Fatalf("open store manager: %v", err)
@@ -186,7 +177,9 @@ waitHelp:
 		case evt := <-events:
 			// Skip reactions/edits; the help reply is the first text send.
 			if evt.Kind == tingly.EventSend && evt.Text != "" {
-				require.Contains(t, evt.Text, "@cc", "expected the remote-agent help reply")
+				// No Projects router here, so the remote agent answers that
+				// chatting is off.
+				require.Contains(t, evt.Text, "Turn on Projects", "expected the remote-agent reply")
 				break waitHelp
 			}
 		case <-deadline:

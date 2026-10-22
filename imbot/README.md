@@ -156,7 +156,7 @@ When a bot has pairing enabled:
    operator who whitelists a group must themselves be paired.
 
 ```bash
-tingly-box remote pair enable|disable|status|revoke <bot-uuid> [<chat-id>]
+tingly-box bot pair enable|disable|status|revoke <bot-uuid> [<chat-id>]
 ```
 
 Restart the bot to rotate the code. The CLI commands and tri-state default

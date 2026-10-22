@@ -10,9 +10,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/db"
 )
 
-// RemotePairEnable enables or disables RequirePairing for a bot.
+// BotPairEnable enables or disables RequirePairing for a bot.
 // Takes effect at next bot start.
-func RemotePairEnable(appManager *app.AppManager, botUUID string, enable bool) error {
+func BotPairEnable(appManager *app.AppManager, botUUID string, enable bool) error {
 	store, err := openSettingsStore(appManager)
 	if err != nil {
 		return err
@@ -42,9 +42,9 @@ func RemotePairEnable(appManager *app.AppManager, botUUID string, enable bool) e
 	return nil
 }
 
-// RemotePairRevoke forgets the pairing for a specific chat.
+// BotPairRevoke forgets the pairing for a specific chat.
 // The chat will need to re-bind to issue commands.
-func RemotePairRevoke(appManager *app.AppManager, botUUID, chatID string) error {
+func BotPairRevoke(appManager *app.AppManager, botUUID, chatID string) error {
 	cfg := appManager.AppConfig().GetGlobalConfig()
 	if cfg == nil {
 		return fmt.Errorf("global config not available")
@@ -74,8 +74,8 @@ func RemotePairRevoke(appManager *app.AppManager, botUUID, chatID string) error 
 	return nil
 }
 
-// RemotePairStatus shows whether RequirePairing is on and where to find the code.
-func RemotePairStatus(appManager *app.AppManager, botUUID string) error {
+// BotPairStatus shows whether RequirePairing is on and where to find the code.
+func BotPairStatus(appManager *app.AppManager, botUUID string) error {
 	store, err := openSettingsStore(appManager)
 	if err != nil {
 		return err
@@ -104,11 +104,11 @@ func RemotePairStatus(appManager *app.AppManager, botUUID string) error {
 		fmt.Println("on the server's stderr/log. Restart the bot to mint a new code.")
 		if source == "platform default" {
 			fmt.Println("\nThis is the platform default. To pin it explicitly, run:")
-			fmt.Printf("    remote pair enable %s\n", setting.UUID)
+			fmt.Printf("    bot pair enable %s\n", setting.UUID)
 		}
 	} else {
 		fmt.Println("\nThis bot does not require pairing — any chat that knows the bot")
-		fmt.Println("token can issue commands. Run `remote pair enable` to harden it.")
+		fmt.Println("token can issue commands. Run `tingly-box bot pair enable` to harden it.")
 	}
 	return nil
 }

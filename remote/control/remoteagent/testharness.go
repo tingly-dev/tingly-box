@@ -1,5 +1,5 @@
 // testharness.go is TEST INFRASTRUCTURE, not runtime code: it stands up a real
-// db-backed environment (chat store, session manager, agentboot) so the
+// db-backed environment (chat store, pairing) so the
 // remoteagent tests can drive the production BotHandler end-to-end. The
 // internal/data/db import is intentional here — building a real store manager
 // is host-side wiring that does not belong on the runtime path, and this file
@@ -10,24 +10,18 @@ package remoteagent
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/agentboot/claude"
-	"github.com/tingly-dev/tingly-box/agentboot/claude/fixture"
-	"github.com/tingly-dev/tingly-box/agentboot/pool"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
 	"github.com/tingly-dev/tingly-box/remote/control/feature"
-	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
 // TestHarness wires the production BotHandler against a test imbot.Manager
 // (typically backed by the tingly platform). It owns the support
-// infrastructure — chat store, session manager, agentboot, pairing — and
+// infrastructure — chat store, pairing — and
 // exposes them so tests can drive state directly.
 //
 // Construction:
@@ -43,15 +37,12 @@ import (
 //
 // Tests then drive the bot through the testenv chat helpers.
 type TestHarness struct {
-	Setting      bot.BotSetting
-	Handler      *BotHandler
-	ChatStore    bot.ChatStoreInterface
-	SessionMgr   *session.Manager
-	AgentService *agentboot.AgentService
-	SessionPool  *pool.Pool
-	Pairing      *bot.PairingManager
-	DataDir      string
-	Manager      *imbot.Manager
+	Setting   bot.BotSetting
+	Handler   *BotHandler
+	ChatStore bot.ChatStoreInterface
+	Pairing   *bot.PairingManager
+	DataDir   string
+	Manager   *imbot.Manager
 
 	cleanup func()
 }
@@ -61,21 +52,10 @@ type TestBootOptions struct {
 	// DataDir overrides the chat-store directory (default: t.TempDir()).
 	DataDir string
 
-	// FixtureScript, when non-nil, registers a Claude agent backed by a
-	// fixture.Factory(script). The fixture replaces the legacy mockagent —
-	// tests now drive the real claude.Driver + claude.Transport + Runner
-	// pipeline against scripted wire-format output.
-	//
-	// When nil (default), no Claude agent is registered and tests that
-	// depend on agent execution must register their own.
-	FixtureScript fixture.Script
-
-	// SessionPool, when non-nil, is threaded into the BotHandler exactly
-	// like the production wiring — tests exercising persistent @cc sessions
-	// (BotSetting.PersistentSession) need a real *pool.Pool here. Nil
-	// (default) disables persistent sessions, matching every other harness
-	// user.
-	SessionPool *pool.Pool
+	// Router hands chats to Projects (see ProjectRouter); nil leaves chat
+	// control off. A test may also set it later with SetProjectRouter,
+	// before messages flow.
+	Router ProjectRouter
 }
 
 // BootForTest spins up a production BotHandler against the given
@@ -104,62 +84,24 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting bot.BotSetting, o
 	t.Cleanup(func() { _ = sm.Close() })
 	chatStore := sm.RemoteChats()
 
-	sessionMgr := session.NewManager(session.Config{
-		Timeout:          10 * time.Minute,
-		MessageRetention: time.Hour,
-	}, nil)
-
-	agentCfg := agentboot.Config{}
-	agentService, err := claude.NewService(
-		agentCfg,
-		claude.WithProjectsDir(filepath.Join(opt.DataDir, "claude-projects")),
-	)
-	if err != nil {
-		// Custom history initialization failed; fall back to Claude's default.
-		agentService, err = claude.NewService(agentboot.Config{})
-		if err != nil {
-			t.Fatalf("BootForTest: agent service: %v", err)
-		}
-	}
-	if opt.FixtureScript != nil {
-		fixtureAgent := claude.NewAgentWithFactory(claude.Config{}, fixture.Factory(opt.FixtureScript))
-		agentService.RegisterAgent(agentboot.AgentTypeClaude, fixtureAgent)
-		if err := agentService.SetDefaultAgent(agentboot.AgentTypeClaude); err != nil {
-			t.Fatalf("BootForTest: set default agent: %v", err)
-		}
-	}
-
 	pairing := bot.NewPairingManager()
 	dirBrowser := feature.NewDirectoryBrowser()
 
 	ctx := t.Context()
-	handler := NewBotHandler(
-		ctx,
-		setting,
-		chatStore,
-		sessionMgr,
-		agentService,
-		opt.SessionPool,
-		dirBrowser,
-		manager,
-		nil, // prompter — standalone: the handler creates (and routes) its own
-		nil, // tbClient — SmartGuide path not exercised by tests; falls back to mock/claude as configured
-		pairing,
-		nil, // store — not needed in test harness
-	)
+	handler := NewBotHandler(ctx, setting, chatStore, dirBrowser, manager, pairing, nil)
+	if opt.Router != nil {
+		handler.SetProjectRouter(opt.Router)
+	}
 
 	manager.OnMessage(handler.HandleMessage)
 
 	h := &TestHarness{
-		Setting:      setting,
-		Handler:      handler,
-		ChatStore:    chatStore,
-		SessionMgr:   sessionMgr,
-		AgentService: agentService,
-		SessionPool:  opt.SessionPool,
-		Pairing:      pairing,
-		DataDir:      opt.DataDir,
-		Manager:      manager,
+		Setting:   setting,
+		Handler:   handler,
+		ChatStore: chatStore,
+		Pairing:   pairing,
+		DataDir:   opt.DataDir,
+		Manager:   manager,
 	}
 	if h.cleanup != nil {
 		t.Cleanup(h.cleanup)
@@ -194,17 +136,6 @@ func (h *TestHarness) WhitelistGroup(chatID, ownerID string) {
 	chat.IsWhitelisted = true
 	chat.WhitelistedBy = ownerID
 	if err := h.ChatStore.UpsertChat(chat); err != nil {
-		panic(err)
-	}
-}
-
-// SetCurrentAgent updates the current-agent binding for a chat through the
-// same production path the @cc/@tb handoff uses. Going through
-// chatStore.SetCurrentAgent (rather than mutating Chat directly) keeps
-// the harness honest: any regression in the persistence path — e.g. a
-// silent no-op on a missing chat row — surfaces as a test failure.
-func (h *TestHarness) SetCurrentAgent(chatID, agentType string) {
-	if err := h.ChatStore.SetCurrentAgent(chatID, h.Setting.Platform, agentType); err != nil {
 		panic(err)
 	}
 }

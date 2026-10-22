@@ -88,12 +88,6 @@ func (f *fakeRouter) setErr(err error) {
 	f.err = err
 }
 
-func (f *fakeRouter) Bound(_, chatID string) bool {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.bound[chatID]
-}
-
 func (f *fakeRouter) RouteInbound(_ context.Context, in remoteagent.ProjectInbound) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -215,43 +209,38 @@ func Test_BoundChatFilesGoToItsProject(t *testing.T) {
 	assert.Len(t, router.inbound(), 1, "nothing is sent when a file cannot be taken")
 }
 
-// A chat without a binding behaves exactly as before: the router is asked,
-// declines, and the usual routing answers.
-func Test_UnboundChatKeepsTheUsualRouting(t *testing.T) {
+// A chat with no place in Projects (no folder could be used) is told how to
+// pick one, and nothing reaches Projects.
+func Test_ChatWithoutAPlaceIsTold(t *testing.T) {
 	env, harness, alice := bootHelperNotStarted(t)
 	router := &fakeRouter{bound: map[string]bool{}}
 	harness.Handler.SetProjectRouter(router)
 	require.NoError(t, env.Manager().Start(env.Context()))
 
 	chat := alice.OpenDM(harness.Setting.UUID)
-	chat.SendText("/help")
-	chat.WaitText(3*time.Second).AssertContains(t, "@cc")
 	chat.SendText("hello there")
-	chat.WaitAnySend(5 * time.Second)
-	assert.Empty(t, router.inbound(), "an unbound chat is never handed to a project")
+	chat.WaitText(3*time.Second).AssertContains(t, "/cd <path> picks one")
+	chat.SendText("/stop")
+	chat.WaitText(3*time.Second).AssertContains(t, "/cd <path> picks one")
+	assert.Empty(t, router.inbound())
+	assert.Empty(t, router.commands())
 }
 
-// Without a router (the CLI, the harness) nothing changes at all.
-func Test_NoRouterNoChange(t *testing.T) {
-	_, harness, alice := bootHelper(t, false)
+// Without a router chat control is off; access still works.
+func Test_NoRouterNoChatControl(t *testing.T) {
+	env, harness, alice := bootHelperNotStarted(t)
+	require.NoError(t, env.Manager().Start(env.Context()))
 	chat := alice.OpenDM(harness.Setting.UUID)
 	chat.SendText("/help")
-	chat.WaitText(3*time.Second).AssertContains(t, "@cc")
+	chat.WaitText(3*time.Second).AssertContains(t, "Turn on Projects")
 }
 
-// In a bound chat /stop, stop, /clear and /new act on the project's thread,
-// not on an old @cc session; other commands keep their meaning, and an
-// unbound chat's /stop never reaches the project.
+// The session commands go to Projects; the old commands are gone.
 func Test_BoundChatCommandsGoToItsProject(t *testing.T) {
 	env, harness, alice := bootHelperNotStarted(t)
 	router := &fakeRouter{bound: map[string]bool{}}
 	harness.Handler.SetProjectRouter(router)
 	require.NoError(t, env.Manager().Start(env.Context()))
-
-	free := alice.OpenDM(harness.Setting.UUID)
-	free.SendText("/stop")
-	free.WaitAnySend(3 * time.Second)
-	assert.Empty(t, router.commands(), "an unbound chat keeps the old /stop")
 
 	chat := alice.OpenDM(harness.Setting.UUID)
 	router.bind(chat.ChatID)

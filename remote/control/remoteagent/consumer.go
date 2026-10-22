@@ -3,68 +3,35 @@ package remoteagent
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
 	bot2 "github.com/tingly-dev/tingly-box/remote/control/bot"
 	"github.com/tingly-dev/tingly-box/remote/control/feature"
 
-	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/agentboot/pool"
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	"github.com/tingly-dev/tingly-box/remote/binding"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
-	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
-// consumer is the bot.Consumer for the "remote_agent" purpose: controlling
-// Claude Code (@cc) and the SmartGuide agent (@tb) from a chat. It owns the
-// purpose-specific dependencies (agent service, session manager, SmartGuide
-// TBClient, settings store) so the bot lifecycle does not have to. It sends
-// its approval/ask prompts through the bot's shared channel prompter
-// (host-owned), like every other user of the channel.
+// consumer is the bot.Consumer for the "remote_agent" purpose: talking to
+// Claude Code from a chat, through Projects (ProjectRouter).
 type consumer struct {
-	sessionMgr   *session.Manager
-	agentService *agentboot.AgentService
-	// sessionPool is shared across every bot this process runs — it caps
-	// resident Claude Code processes process-wide, not per bot. May be nil
-	// (standalone/test use), which disables persistent sessions regardless
-	// of any bot's setting. See .design/claude-code-session.md.
-	sessionPool *pool.Pool
-	tbClient    tbclient.TBClient
-	store       bot2.SettingsStore
-	// projectRouter sends chats bound to a project to its coordinator; nil
-	// leaves every chat on @cc / @tb.
+	store bot2.SettingsStore
+	// projectRouter hands chats to Projects; nil leaves chats with access
+	// and notifications only.
 	projectRouter ProjectRouter
 }
 
 // ConsumerOption customises NewConsumer.
 type ConsumerOption func(*consumer)
 
-// WithProjectRouter lets chats bound to a Projects project talk to that
-// project instead of @cc / @tb (see ProjectRouter).
+// WithProjectRouter hands chats to Projects (see ProjectRouter).
 func WithProjectRouter(r ProjectRouter) ConsumerOption {
 	return func(c *consumer) { c.projectRouter = r }
 }
 
 // NewConsumer builds the consumer that binds a bot to the remote-agent
-// purpose. tbClient and store may be nil (standalone / test use): SmartGuide
-// falls back to Claude Code and dynamic settings refresh is skipped.
-// sessionPool may also be nil to disable persistent @cc sessions entirely.
-func NewConsumer(
-	sessionMgr *session.Manager,
-	agentService *agentboot.AgentService,
-	sessionPool *pool.Pool,
-	tbClient tbclient.TBClient,
-	store bot2.SettingsStore,
-	opts ...ConsumerOption,
-) bot2.Consumer {
-	c := &consumer{
-		sessionMgr:   sessionMgr,
-		agentService: agentService,
-		sessionPool:  sessionPool,
-		tbClient:     tbClient,
-		store:        store,
-	}
+// purpose. store may be nil (test use): settings are then read once.
+func NewConsumer(store bot2.SettingsStore, opts ...ConsumerOption) bot2.Consumer {
+	c := &consumer{store: store}
 	for _, opt := range opts {
 		opt(c)
 	}
@@ -92,20 +59,7 @@ func (c *consumer) Attach(
 ) (*bot2.Attached, error) {
 	directoryBrowser := feature.NewDirectoryBrowser()
 
-	handler := NewBotHandler(
-		ctx,
-		setting,
-		chatStore,
-		c.sessionMgr,
-		c.agentService,
-		c.sessionPool,
-		directoryBrowser,
-		mgr,
-		prompter,
-		c.tbClient,
-		pairing,
-		c.store,
-	)
+	handler := NewBotHandler(ctx, setting, chatStore, directoryBrowser, mgr, pairing, c.store)
 	if c.projectRouter != nil {
 		handler.SetProjectRouter(c.projectRouter)
 	}
@@ -119,21 +73,6 @@ func (c *consumer) Attach(
 			return true
 		},
 		CommandRegistry: handler.GetCommandRegistry(),
-	}
-
-	uuid := setting.UUID
-
-	// On stop (ctx cancel → goroutine exit): drop the bot's SmartGuide routing
-	// rule. A remote_agent concern, kept here so the bot lifecycle stays free
-	// of agent/SmartGuide machinery.
-	attached.Cleanup = func() {
-		if c.tbClient != nil {
-			if err := c.tbClient.DeleteSmartGuideRuleForBot(context.Background(), uuid); err != nil {
-				logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to delete SmartGuide routing rule")
-			} else {
-				logrus.WithField("uuid", uuid).Info("SmartGuide routing rule deleted")
-			}
-		}
 	}
 
 	return attached, nil

@@ -8,20 +8,19 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
-	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
 // stores opens the shared database in dir. Note initRemoteStores already runs
 // the legacy import, so tests that seed legacy files must write them BEFORE
 // calling this — which is what makes the "already migrated" assertions real.
-func stores(t *testing.T, dir string) (*RemoteChatStore, *RemoteSessionStore) {
+func stores(t *testing.T, dir string) *RemoteChatStore {
 	t.Helper()
 	sm, err := NewStoreManager(dir)
 	if err != nil {
 		t.Fatalf("open store manager: %v", err)
 	}
 	t.Cleanup(func() { _ = sm.Close() })
-	return sm.RemoteChats(), sm.RemoteSessions()
+	return sm.RemoteChats()
 }
 
 func writeJSON(t *testing.T, path string, v any) {
@@ -35,10 +34,7 @@ func writeJSON(t *testing.T, path string, v any) {
 	}
 }
 
-// legacy envelopes, written the way pkg/jsonstore used to write them. The
-// session keys are capitalized on purpose: the old Session struct carried no
-// json tags, so the Go field names went to disk verbatim. Getting this wrong
-// would silently import empty sessions.
+// legacy envelopes, written the way pkg/jsonstore used to write them.
 func writeLegacyChats(t *testing.T, dir string, chats map[string]*bot.Chat) {
 	t.Helper()
 	writeJSON(t, filepath.Join(dir, "bot_chats.json"), map[string]any{
@@ -48,18 +44,10 @@ func writeLegacyChats(t *testing.T, dir string, chats map[string]*bot.Chat) {
 	})
 }
 
-func writeLegacySessions(t *testing.T, dir string, raw string) {
-	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, "bot_sessions.json"), []byte(raw), 0o600); err != nil {
-		t.Fatalf("write sessions: %v", err)
-	}
-}
-
-func TestImportMovesChatsAndSessions(t *testing.T) {
+func TestImportMovesChats(t *testing.T) {
 	dir := t.TempDir()
-	chatStore, sessionStore := stores(t, dir)
+	chatStore := stores(t, dir)
 
-	dormant := time.Now().UTC().Add(-30 * 24 * time.Hour).Truncate(time.Second)
 	writeLegacyChats(t, dir, map[string]*bot.Chat{
 		"chat-1": {
 			ChatID:         "chat-1",
@@ -76,30 +64,7 @@ func TestImportMovesChatsAndSessions(t *testing.T) {
 			CurrentAgent:   "claude",
 		},
 	})
-	writeLegacySessions(t, dir, `{
-      "version": 1,
-      "items": {
-        "sess-1": {
-          "ID": "sess-1",
-          "ChatID": "chat-1",
-          "Agent": "claude",
-          "Project": "/proj",
-          "Status": "completed",
-          "Request": "do it",
-          "Response": "done",
-          "PermissionMode": "plan",
-          "CreatedAt": "`+dormant.Format(time.RFC3339)+`",
-          "LastActivity": "`+dormant.Format(time.RFC3339)+`",
-          "Context": {"project_path": "/proj"},
-          "Messages": [
-            {"Role": "user", "Content": "hi", "Timestamp": "`+dormant.Format(time.RFC3339)+`"},
-            {"Role": "assistant", "Content": "hello", "Summary": "greeting", "Timestamp": "`+dormant.Format(time.RFC3339)+`"}
-          ]
-        }
-      }
-    }`)
-
-	if err := importLegacyRemoteJSON(dir, chatStore, sessionStore); err != nil {
+	if err := importLegacyRemoteJSON(dir, chatStore); err != nil {
 		t.Fatalf("import: %v", err)
 	}
 
@@ -126,48 +91,21 @@ func TestImportMovesChatsAndSessions(t *testing.T) {
 		t.Errorf("current agent = %q, want claude", chat.CurrentAgent)
 	}
 
-	sess, err := sessionStore.Get("sess-1")
-	if err != nil {
-		t.Fatalf("get session: %v", err)
-	}
-	if sess == nil {
-		t.Fatal("session was not imported")
-	}
-	if sess.Status != session.StatusCompleted || sess.Response != "done" || sess.Request != "do it" {
-		t.Errorf("session fields lost: %+v", sess)
-	}
-	if sess.PermissionMode != "plan" {
-		t.Errorf("permission mode = %q, want plan", sess.PermissionMode)
-	}
-	// History lands in the transcript, not on the index record.
-	msgs, err := sessionStore.Messages("sess-1")
-	if err != nil {
-		t.Fatalf("messages: %v", err)
-	}
-	if len(msgs) != 2 || msgs[0].Content != "hi" || msgs[1].Summary != "greeting" {
-		t.Errorf("messages lost: %+v", msgs)
-	}
-	// The dormant timestamp must survive: it orders the binding lookup and
-	// drives retention.
-	if !sess.LastActivity.Truncate(time.Second).Equal(dormant) {
-		t.Errorf("LastActivity = %s, want %s (import must not restamp)", sess.LastActivity, dormant)
-	}
 }
 
 // TestImportRenamesFiles checks the files are moved aside — not deleted, so a
 // bad import can still be recovered from.
 func TestImportRenamesFiles(t *testing.T) {
 	dir := t.TempDir()
-	chatStore, sessionStore := stores(t, dir)
+	chatStore := stores(t, dir)
 
 	writeLegacyChats(t, dir, map[string]*bot.Chat{"chat-1": {ChatID: "chat-1"}})
-	writeLegacySessions(t, dir, `{"version":1,"items":{}}`)
 
-	if err := importLegacyRemoteJSON(dir, chatStore, sessionStore); err != nil {
+	if err := importLegacyRemoteJSON(dir, chatStore); err != nil {
 		t.Fatalf("import: %v", err)
 	}
 
-	for _, name := range []string{"bot_chats.json", "bot_sessions.json"} {
+	for _, name := range []string{"bot_chats.json"} {
 		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
 			t.Errorf("%s still in place after import", name)
 		}
@@ -182,12 +120,12 @@ func TestImportRenamesFiles(t *testing.T) {
 // running system has since written.
 func TestImportIsIdempotent(t *testing.T) {
 	dir := t.TempDir()
-	chatStore, sessionStore := stores(t, dir)
+	chatStore := stores(t, dir)
 
 	writeLegacyChats(t, dir, map[string]*bot.Chat{
 		"chat-1": {ChatID: "chat-1", Platform: "telegram", ProjectPath: "/stale"},
 	})
-	if err := importLegacyRemoteJSON(dir, chatStore, sessionStore); err != nil {
+	if err := importLegacyRemoteJSON(dir, chatStore); err != nil {
 		t.Fatalf("first import: %v", err)
 	}
 
@@ -201,7 +139,7 @@ func TestImportIsIdempotent(t *testing.T) {
 	writeLegacyChats(t, dir, map[string]*bot.Chat{
 		"chat-1": {ChatID: "chat-1", Platform: "telegram", ProjectPath: "/stale"},
 	})
-	if err := importLegacyRemoteJSON(dir, chatStore, sessionStore); err != nil {
+	if err := importLegacyRemoteJSON(dir, chatStore); err != nil {
 		t.Fatalf("second import: %v", err)
 	}
 
@@ -218,9 +156,9 @@ func TestImportIsIdempotent(t *testing.T) {
 // first one.
 func TestImportNoFilesIsNotAnError(t *testing.T) {
 	dir := t.TempDir()
-	chatStore, sessionStore := stores(t, dir)
+	chatStore := stores(t, dir)
 
-	if err := importLegacyRemoteJSON(dir, chatStore, sessionStore); err != nil {
+	if err := importLegacyRemoteJSON(dir, chatStore); err != nil {
 		t.Fatalf("import with no files: %v", err)
 	}
 }
@@ -229,59 +167,16 @@ func TestImportNoFilesIsNotAnError(t *testing.T) {
 // and is left in place for a retry rather than being renamed away.
 func TestImportCorruptFileIsReported(t *testing.T) {
 	dir := t.TempDir()
-	chatStore, sessionStore := stores(t, dir)
+	chatStore := stores(t, dir)
 
 	if err := os.WriteFile(filepath.Join(dir, "bot_chats.json"), []byte("{not json"), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
-	if err := importLegacyRemoteJSON(dir, chatStore, sessionStore); err == nil {
+	if err := importLegacyRemoteJSON(dir, chatStore); err == nil {
 		t.Error("expected an error for a corrupt file")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "bot_chats.json")); err != nil {
 		t.Error("corrupt file was renamed away; it should be kept for a retry")
-	}
-}
-
-// TestImportSessionIsReplayable covers a crash partway through a session's
-// import. The index row is written last, so a session whose transcript is
-// incomplete has no row — and the next run redoes both halves rather than
-// leaving a session flagged as imported with a truncated history.
-func TestImportSessionIsReplayable(t *testing.T) {
-	dir := t.TempDir()
-	_, sessionStore := stores(t, dir)
-
-	// Simulate the wreckage of an interrupted run: a partial transcript with
-	// no index row to match.
-	if err := sessionStore.AppendMessage("sess-1", session.Message{Role: "user", Content: "partial"}); err != nil {
-		t.Fatalf("seed partial transcript: %v", err)
-	}
-
-	writeLegacySessions(t, dir, `{
-      "version": 1,
-      "items": {
-        "sess-1": {
-          "ID": "sess-1",
-          "ChatID": "chat-1",
-          "Status": "completed",
-          "Messages": [
-            {"Role": "user", "Content": "one"},
-            {"Role": "assistant", "Content": "two"}
-          ]
-        }
-      }
-    }`)
-
-	if err := importLegacyRemoteJSON(dir, nil, sessionStore); err != nil {
-		t.Fatalf("import: %v", err)
-	}
-
-	msgs, err := sessionStore.Messages("sess-1")
-	if err != nil {
-		t.Fatalf("messages: %v", err)
-	}
-	if len(msgs) != 2 || msgs[0].Content != "one" || msgs[1].Content != "two" {
-		t.Errorf("transcript = %+v, want exactly the two imported messages "+
-			"(the partial one must be replaced, not appended to)", msgs)
 	}
 }

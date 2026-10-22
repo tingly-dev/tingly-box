@@ -3,61 +3,34 @@ package remoteagent
 import (
 	"context"
 	"strings"
-	"sync"
 
-	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/internal/tbclient"
-	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
 	bot2 "github.com/tingly-dev/tingly-box/remote/control/bot"
 	"github.com/tingly-dev/tingly-box/remote/control/feature"
-	smart_guide2 "github.com/tingly-dev/tingly-box/remote/control/smart_guide"
-	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
-// BotHandler encapsulates all bot message handling logic and dependencies
+// BotHandler handles what a chat sends a bot: access (pairing, group
+// whitelist), which folder it works in (/cd, /dir, the directory browser),
+// and everything else, which goes to Claude Code through Projects
+// (project_route.go).
 type BotHandler struct {
 	ctx              context.Context
 	botSetting       bot2.BotSetting
 	chatStore        bot2.ChatStoreInterface // Use interface for flexibility
-	sessionMgr       *session.Manager
-	agentService     *agentboot.AgentService
 	directoryBrowser *feature.DirectoryBrowser
 	manager          *imbot.Manager
-	imPrompter       *imchannel.IMPrompter
 	fileStore        *FileStore
-	tbClient         tbclient.TBClient // TB Client for model configuration
-
-	// Agent router for delegating execution to agent executors
-	agentRouter *AgentRouter
-
-	// Handoff manager for agent switching
-	handoffManager *smart_guide2.HandoffManager
-
-	// SmartGuide session store for conversation history
-	tbSessionStore *smart_guide2.SessionStore
-
-	// executions tracks the one running execution per chat; shared with the
-	// AgentRouter (duplicate-run guard) and the /stop paths (cancel).
-	executions *executionRegistry
-
-	// resumeListings caches the session-id list most recently shown by /resume
-	// per chat, so /resume <n> can resolve N back to a session_id without
-	// re-reading the on-disk store. Best-effort, no persistence.
-	resumeListings   map[string][]string
-	resumeListingsMu sync.RWMutex
+	// store reads the bot's current settings (nil: botSetting as built).
+	store bot2.SettingsStore
 
 	// commandRegistry holds the strongly-typed command registry
 	commandRegistry *imbot.CommandRegistry
 
-	// commandAdapter bridges BotHandler to the command system
-	commandAdapter BotHandlerAdapter
-
 	// pairing handles TOFU pairing-code verification for direct messages.
 	pairing *bot2.PairingManager
 
-	// projectRouter, when set, takes the messages of chats bound to a
-	// project before @cc / @tb routing. See project_route.go.
+	// projectRouter hands chats to Projects; nil, or switched off, leaves
+	// chats with access and notifications only. See project_route.go.
 	projectRouter ProjectRouter
 }
 

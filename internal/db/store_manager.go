@@ -9,7 +9,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
 // StoreManager manages all database stores with a shared GORM DB instance.
@@ -37,7 +36,6 @@ type storeSet struct {
 	teamStore          *TeamStore
 	apiTokenStore      *APITokenStore
 	remoteChatStore    *RemoteChatStore
-	remoteSessionStore *RemoteSessionStore
 	botAccessStore     *BotAccessStore
 }
 
@@ -46,17 +44,16 @@ type storeSet struct {
 // typed-nil-in-interface trap a map[string]any would reintroduce.
 func (s *storeSet) initialized() map[string]bool {
 	return map[string]bool{
-		"stats":          s.statsStore != nil,
-		"usage":          s.usageStore != nil,
-		"provider":       s.providerStore != nil,
-		"rule":           s.ruleStore != nil,
-		"imbotSettings":  s.imbotSettingsStore != nil,
-		"model":          s.modelStore != nil,
-		"team":           s.teamStore != nil,
-		"apiToken":       s.apiTokenStore != nil,
-		"remoteChats":    s.remoteChatStore != nil,
-		"remoteSessions": s.remoteSessionStore != nil,
-		"botAccess":      s.botAccessStore != nil,
+		"stats":         s.statsStore != nil,
+		"usage":         s.usageStore != nil,
+		"provider":      s.providerStore != nil,
+		"rule":          s.ruleStore != nil,
+		"imbotSettings": s.imbotSettingsStore != nil,
+		"model":         s.modelStore != nil,
+		"team":          s.teamStore != nil,
+		"apiToken":      s.apiTokenStore != nil,
+		"remoteChats":   s.remoteChatStore != nil,
+		"botAccess":     s.botAccessStore != nil,
 	}
 }
 
@@ -185,7 +182,7 @@ func (sm *StoreManager) dropDeprecatedModelCapabilities() error {
 	return sm.db.Exec("DROP TABLE IF EXISTS model_capabilities").Error
 }
 
-// initRemoteStores initializes the remote-control chat and session stores.
+// initRemoteStores initializes the remote-control chat store.
 // These replace the JSON files the remote subsystem used to keep beside the
 // database; see .design/remote-storage.md.
 func (sm *StoreManager) initRemoteStores() error {
@@ -194,23 +191,16 @@ func (sm *StoreManager) initRemoteStores() error {
 	}
 	if err := sm.db.AutoMigrate(
 		&RemoteChatRecord{},
-		&RemoteSessionRecord{},
 	); err != nil {
 		return err
 	}
-	// Session transcripts are files, not rows — see session.Transcript.
-	transcript, err := session.NewTranscript(constant.GetRemoteTranscriptDir(sm.baseDir))
-	if err != nil {
-		return fmt.Errorf("open transcript store: %w", err)
-	}
 	sm.remoteChatStore = NewRemoteChatStore(sm.db)
-	sm.remoteSessionStore = NewRemoteSessionStore(sm.db, transcript)
 	sm.botAccessStore = NewBotAccessStore(sm.db)
 
 	// Migrating here, rather than from whichever feature happens to construct
 	// a store first, is what makes every entry point — server, standalone CLI
-	// bot, `remote pair revoke` — see the same migrated data.
-	if err := importLegacyRemoteJSON(sm.baseDir, sm.remoteChatStore, sm.remoteSessionStore); err != nil {
+	// bot, `bot pair revoke` — see the same migrated data.
+	if err := importLegacyRemoteJSON(sm.baseDir, sm.remoteChatStore); err != nil {
 		// Best effort: the legacy files are left in place for the next start.
 		logrus.WithError(err).Error("Failed to import legacy remote JSON stores; leaving files in place")
 	}
@@ -230,14 +220,6 @@ func (sm *StoreManager) RemoteChats() *RemoteChatStore {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 	return sm.remoteChatStore
-}
-
-// RemoteSessions returns the RemoteSessionStore (thread-safe).
-// Returns nil if the store is not initialized or after Close() has been called.
-func (sm *StoreManager) RemoteSessions() *RemoteSessionStore {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	return sm.remoteSessionStore
 }
 
 // Stats returns the StatsStore (thread-safe).

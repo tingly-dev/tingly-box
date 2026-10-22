@@ -141,11 +141,10 @@ func TestKongAllTopLevelSubcommandsRecognized(t *testing.T) {
 		{"quota-get", []string{"quota", "get", "--help"}},
 		{"quota-refresh", []string{"quota", "refresh", "--help"}},
 		{"quota-summary", []string{"quota", "summary", "--help"}},
-		{"remote-list", []string{"remote", "list", "--help"}},
-		{"remote-start", []string{"remote", "start", "--help"}},
-		{"remote-config", []string{"remote", "config", "--help"}},
-		{"remote-add", []string{"remote", "add", "--help"}},
-		{"remote-pair-enable", []string{"remote", "pair", "enable", "bot-uuid", "--help"}},
+		{"bot-list", []string{"bot", "list", "--help"}},
+		{"bot-add", []string{"bot", "add", "--help"}},
+		{"bot-config", []string{"bot", "config", "1", "--help"}},
+		{"bot-pair-enable", []string{"bot", "pair", "enable", "bot-uuid", "--help"}},
 		{"tui", []string{"tui", "--help"}},
 		{"quickstart-alias", []string{"quickstart", "--help"}},
 		{"version", []string{"version", "--help"}},
@@ -288,38 +287,8 @@ func TestTUICommandAndQuickstartAlias(t *testing.T) {
 // it, but the original Kong version was missing it entirely).
 func TestRemoteAddSubcommandExists(t *testing.T) {
 	_, parser := newTestParser(t)
-	if _, err := parser.Parse([]string{"remote", "add", "--help"}); err != nil && !isHelpErr(err) {
+	if _, err := parser.Parse([]string{"bot", "add", "--help"}); err != nil && !isHelpErr(err) {
 		t.Fatalf("remote add should parse: %v", err)
-	}
-}
-
-// TestRemoteStartFlagsParse ensures the start subcommand exposes the
-// --data-path/--provider/--model/--force flags that legacy supports.
-func TestRemoteStartFlagsParse(t *testing.T) {
-	cli, parser := newTestParser(t)
-	if _, err := parser.Parse([]string{
-		"remote", "start", "abc",
-		"--data-path", "/tmp/d",
-		"--provider", "p",
-		"--model", "m",
-		"--force",
-	}); err != nil {
-		t.Fatalf("remote start with all flags should parse: %v", err)
-	}
-	if cli.Remote.Start.UUID != "abc" {
-		t.Errorf("UUID: %q", cli.Remote.Start.UUID)
-	}
-	if cli.Remote.Start.DataPath != "/tmp/d" {
-		t.Errorf("DataPath: %q", cli.Remote.Start.DataPath)
-	}
-	if cli.Remote.Start.Provider != "p" {
-		t.Errorf("Provider: %q", cli.Remote.Start.Provider)
-	}
-	if cli.Remote.Start.Model != "m" {
-		t.Errorf("Model: %q", cli.Remote.Start.Model)
-	}
-	if !cli.Remote.Start.Force {
-		t.Error("Force should be true")
 	}
 }
 
@@ -432,10 +401,10 @@ func TestRemotePairCommands(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"pair-enable", []string{"remote", "pair", "enable", "bot-uuid"}},
-		{"pair-disable", []string{"remote", "pair", "disable", "bot-uuid"}},
-		{"pair-revoke", []string{"remote", "pair", "revoke", "bot-uuid", "chat-id"}},
-		{"pair-status", []string{"remote", "pair", "status", "bot-uuid"}},
+		{"pair-enable", []string{"bot", "pair", "enable", "bot-uuid"}},
+		{"pair-disable", []string{"bot", "pair", "disable", "bot-uuid"}},
+		{"pair-revoke", []string{"bot", "pair", "revoke", "bot-uuid", "chat-id"}},
+		{"pair-status", []string{"bot", "pair", "status", "bot-uuid"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

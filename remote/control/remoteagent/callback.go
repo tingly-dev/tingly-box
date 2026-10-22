@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/remote/control/bot"
 	feature2 "github.com/tingly-dev/tingly-box/remote/control/feature"
 
 	"github.com/tingly-dev/tingly-box/imbot"
@@ -38,22 +37,16 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, botUUID, chatID string, 
 		// A button of a Projects thread's approval or question.
 		h.routeProjectAnswer(hCtx, payload.Arg(1), payload.Arg(2), payload.Arg(3))
 
-	case "perm":
-		// Handle permission request response
-		h.handlePermissionCallback(hCtx, payload)
-
 	case "action":
 		subAction := payload.Arg(1)
 		if subAction == "" {
 			return
 		}
 		switch subAction {
-		case "clear":
-			h.handleClearCommand(hCtx)
 		case "bind":
 			h.handleBindInteractive(hCtx)
 		case "project":
-			h.handleBotProjectCommand(hCtx)
+			h.handleDirMenu(hCtx)
 		}
 
 	case "project":
@@ -61,22 +54,6 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, botUUID, chatID string, 
 			if projectID := payload.Arg(2); projectID != "" {
 				h.handleProjectSwitch(hCtx, projectID)
 			}
-		}
-
-	case "resume":
-		subAction := payload.Arg(1)
-		if subAction == "" {
-			return
-		}
-		switch subAction {
-		case "pick":
-			sessionID := payload.Arg(2)
-			if sessionID == "" {
-				return
-			}
-			h.handleResumePick(hCtx, sessionID, msg)
-		case "cancel":
-			h.handleResumeCancel(hCtx, msg)
 		}
 
 	case "bind":
@@ -212,14 +189,6 @@ func (h *BotHandler) handleCustomPathPrompt(hCtx HandlerContext) {
 
 	// Store prompt message ID
 	h.directoryBrowser.SetWaitingInput(hCtx.ChatID, true, result.MessageID)
-}
-
-// handlePermissionCallback handles permission request callback responses.
-// Only reachable in standalone (host-less) mode: the managed path's host
-// router claims "perm" callbacks first. Mechanics shared via prompt_reply.go;
-// as the terminal handler it claims unknown request IDs and reports expired.
-func (h *BotHandler) handlePermissionCallback(hCtx HandlerContext, payload imbot.Payload) {
-	bot.HandlePromptCallback(h.imPrompter, func(text string) { h.SendText(hCtx, text) }, hCtx.SenderID, payload, true)
 }
 
 // handleCreateConfirm sends a confirmation prompt for creating a directory

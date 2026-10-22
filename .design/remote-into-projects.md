@@ -137,6 +137,26 @@ Projects 是后端实验开关（`projects`）。合并后只留 `projects` 这�
 选 A 时再加 `executor_smartguide.go`、`remote/control/smart_guide/`、SmartGuide 配置与模型对话框。
 Remote 页面保留，只去掉 SmartGuide 模型和“常驻会话”这类作废项。
 
+### 第 4 期 a 的落地：删掉旧的聊天执行路径
+
+- **删了**：`remote/session`、`remote/control/smart_guide`、`remote/control/render`（只有 `stream.go` 用）、
+  `remote/control/service.go`（`Core`）、`remoteagent` 的执行器 / `AgentRouter` / `stream.go` / `handoff.go` /
+  `exec_registry` / 常驻会话池接线、`internal/db` 的 `RemoteSessionStore` 和旧 `bot_sessions.json` 导入
+  （表 `remote_sessions` 不再 AutoMigrate，旧数据留在库里不动；`bot_chats.json` 的导入保留，chat 的目录和配对还在用）。
+- **`remoteagent` 现在只做三件事**：接入（配对、群白名单、`/bind`、`/join`）、选目录（`/cd`、`/dir`、目录浏览器）、
+  其余一律交给 Projects（`ProjectRouter`）。没有 router 或开关关着，chat 只有接入和通知。
+- **命令注册表就是这 9 个命令加 `/help`**（`/bind`、`/join` 隐藏）：平台的命令菜单（Telegram 的 `/` 菜单）从注册表生成，
+  所以菜单里不再有旧命令；会话类命令的处理函数直接转给 Projects。
+- **`/cd` 只回一句**：`📁 <路径>` + “下一条消息在这里开新会话”。先在 Projects 里换目录，成功了才记进 chat 的目录历史（`/dir` 列的就是它）。
+- **命令行改名 `tingly-box bot`**（YZ 2026-10-22：它管的是 bot，不是“remote”；不留 `remote` 别名）。
+  `start` 删掉：它不经过服务端，跑的是旧路径，而 Projects 只在服务里运行；bot 随服务（`tingly-box start`）运行。
+  `list`、`add`、`pair` 保留，`add` 不再问 SmartGuide 模型。`config` 保留但换了内容：原来只设 SmartGuide 模型，
+  现在不带参数显示 bot 的设置（名称、平台、启用、配对、默认目录），`--name`、`--default-cwd`、`--enable`/`--disable` 修改，
+  改完通知正在跑的服务重载；bot 可以用 UUID 或 `bot list` 里的序号指定。
+- **没动（第 4 期 b）**：bot 设置里作废的字段（`SmartGuideProvider/Model`、`PersistentSession`、`BashAllowlist`、`Verbose`）
+  和它们的 API、前端对话框、SmartGuide 路由规则（`tbclient`）；`ChatStore` 里不再用的列（当前 agent、bash cwd、verbose）；
+  文案（Projects 开关说明、Remote 侧栏改名）；`DefaultAgent` 接到线程 profile。
+
 ## 分期（每期一个 PR）
 
 1. **补能力**：①文字回答审批、②verbose 输出、③附件。只影响已绑定的 chat，可以先上。

@@ -12,13 +12,11 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
 	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
 
-	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
-	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
 // fakeSettingsStore is the minimum SettingsStore implementation needed to
@@ -87,15 +85,7 @@ func newLifecycleManager(t *testing.T) (*bot.Manager, string, *tingly.InProcessT
 		},
 	}
 
-	sessionMgr := session.NewManager(session.Config{
-		Timeout:          10 * time.Minute,
-		MessageRetention: time.Hour,
-	}, nil)
-
-	svc, err := agentboot.NewAgentService(agentboot.Config{})
-	require.NoError(t, err)
-
-	consumer := remoteagent.NewConsumer(sessionMgr, svc, nil, nil, store)
+	consumer := remoteagent.NewConsumer(store)
 	m := bot.NewManager(store, consumer)
 	sm, err := db.NewStoreManager(t.TempDir())
 	if err != nil {
@@ -178,14 +168,7 @@ func TestManager_StopOneBotDoesNotAffectOthers(t *testing.T) {
 		},
 	}
 
-	sessionMgr := session.NewManager(session.Config{
-		Timeout:          10 * time.Minute,
-		MessageRetention: time.Hour,
-	}, nil)
-	svc, err := agentboot.NewAgentService(agentboot.Config{})
-	require.NoError(t, err)
-
-	consumer := remoteagent.NewConsumer(sessionMgr, svc, nil, nil, store)
+	consumer := remoteagent.NewConsumer(store)
 	m := bot.NewManager(store, consumer)
 	sm, err := db.NewStoreManager(t.TempDir())
 	if err != nil {
@@ -246,14 +229,7 @@ func TestManager_MountGate_Tingly(t *testing.T) {
 		},
 	}
 
-	sessionMgr := session.NewManager(session.Config{
-		Timeout:          10 * time.Minute,
-		MessageRetention: time.Hour,
-	}, nil)
-	svc, err := agentboot.NewAgentService(agentboot.Config{})
-	require.NoError(t, err)
-
-	consumer := remoteagent.NewConsumer(sessionMgr, svc, nil, nil, store)
+	consumer := remoteagent.NewConsumer(store)
 	m := bot.NewManager(store, consumer)
 	sm, err := db.NewStoreManager(t.TempDir())
 	if err != nil {

@@ -6,8 +6,6 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/remote/control/bot"
-	"github.com/tingly-dev/tingly-box/remote/control/smart_guide"
 
 	"github.com/tingly-dev/tingly-box/imbot"
 )
@@ -17,7 +15,6 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	if b == nil {
 		return
 	}
-
 	chatID := msg.GetReplyTarget()
 	if chatID == "" {
 		return
@@ -32,8 +29,8 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	// purpose: that gate runs at the host level, ahead of every consumer
 	// (including promptReplyRouter), and is what stops a disabled chat with a
 	// pending permission prompt from being answered in managed mode. This
-	// copy is the standalone / host-less path (the CLI and the test harness —
-	// see remoteagent.BootForTest), which never enters manager.go's dispatch
+	// copy is the host-less path (the test harness — see
+	// remoteagent.BootForTest), which never enters manager.go's dispatch
 	// chain. Two paths into the handler → two gates; see the spec
 	// (bot-chat-lifecycle-collapse §3b).
 	if h.chatStore.IsChatDisabled(chatID) {
@@ -68,120 +65,57 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 		return
 	}
 
-	// With Projects, every chat talks to Claude Code there (or hears that it
-	// is switched off).
-	if h.adoptChat(hCtx) {
-		return
-	}
-
-	// Handle media content (with or without text)
-	if msg.IsMediaContent() {
-		if h.chatBoundToProject(hCtx) {
-			// A bound chat's files go to its thread as attachments.
-			mc, _ := msg.Content.(*imbot.MediaContent)
-			h.routeMediaToProject(hCtx, mc)
+	// Without Projects a chat has access only: pairing and /join (and the
+	// notifications the host sends).
+	text := hCtx.Text()
+	if !h.projectsOn() {
+		if isBindCommand(text) || isJoinCommand(text) {
+			h.handleSlashCommand(hCtx, text)
 			return
 		}
-		media := msg.GetMedia()
-		if len(media) > 0 {
-			h.reactReceived(hCtx)
-			h.handleMediaMessage(hCtx, media)
-		} else {
-			h.SendText(hCtx, fmt.Sprintf("Empty media from %s %s.", msg.ChatType, chatID))
-		}
+		h.SendText(hCtx, chatControlOff)
 		return
 	}
+	// Every chat has a place in Projects: its folder, or the bot's default.
+	h.adoptChat(hCtx)
 
-	// HandleMediaContent checks if message is media content
-	// Handle text-only messages
-	logrus.Debugf("Message content check: IsMediaContent=%v, IsTextContent=%v",
-		msg.IsMediaContent(), msg.IsTextContent())
+	// Files go to the chat's session as attachments, with their caption.
+	if msg.IsMediaContent() {
+		mc, _ := msg.Content.(*imbot.MediaContent)
+		h.routeMediaToProject(hCtx, mc)
+		return
+	}
 	if !msg.IsTextContent() {
 		h.SendText(hCtx, "Only text and media messages are supported.")
 		return
 	}
-
-	text := hCtx.Text()
-	logrus.Debugf("Text content: text_len=%d, text=%q", len(text), text)
 	if text == "" {
-		logrus.Warn("Text content is empty, returning")
 		return
 	}
 
-	// A chat bound to a Projects thread stops, clears and starts sessions
-	// there (/stop, /clear, /new), not in the old @cc session.
-	if h.routeProjectCommand(hCtx, text) {
-		return
-	}
-	// A bound chat's /help lists what it can do in Projects.
-	if h.routeProjectHelp(hCtx, text) {
-		return
-	}
-
-	// With Projects, what is not one of its commands, /cd, /dir or access is
-	// not a command.
-	if h.unknownCommand(hCtx, text) {
-		return
-	}
-
-	// Check for stop commands FIRST (highest priority)
-	// Supports: /stop, stop, /clear (stop+clear). With Projects they are its
-	// commands, and a bare "stop" is a message.
-	if !h.projectsOn() && isStopCommand(text) {
-		h.handleStopCommand(hCtx, text == "/clear")
-		return
-	}
-
-	// React to indicate the message is being processed (after stop check, before all other handling)
-	h.reactReceived(hCtx)
-
-	// A chat bound to a Projects project talks to that project's coordinator,
-	// ahead of the @cc / @tb handoff words, which are dropped ("@cc fix it"
-	// sends "fix it"). Slash commands stay commands, and a chat in the middle
-	// of typing a /cd path is left to that flow. Chats without a binding are
-	// not touched at all.
-	if (!strings.HasPrefix(text, "/") || stripAgentPrefix(text) != text) && !h.directoryBrowser.IsWaitingInput(hCtx.ChatID) {
-		if h.routeToProject(hCtx, text) {
-			return
-		}
-	}
-
-	// Handoff commands take precedence over the slash dispatcher: /cc, /tb
-	// look like slash commands but they're really handoff sugar. Without
-	// this check they'd fall to handleSlashCommands → "Unknown command"
-	// since the registry doesn't (and shouldn't) own them.
-	if _, isHandoff, _ := smart_guide.DetectHandoffCommand(text); isHandoff {
-		if routeErr := h.routeToAgent(hCtx, text); routeErr != nil {
-			logrus.WithError(routeErr).Error("Failed to route handoff command")
-			h.SendText(hCtx, executionErrorMessage(routeErr))
-		}
-		return
-	}
-
-	// Handle commands
-	if strings.HasPrefix(text, "/") {
-		h.handleSlashCommands(hCtx)
-		return
-	}
-
-	// Check if waiting for custom path input
-	if h.directoryBrowser.IsWaitingInput(hCtx.ChatID) {
+	// A chat typing a path for the directory browser.
+	if h.directoryBrowser.IsWaitingInput(hCtx.ChatID) && !strings.HasPrefix(text, "/") {
 		h.handleCustomPathInput(hCtx)
 		return
 	}
 
-	// Check if there's a pending permission request and user is responding
-	if h.handlePermissionTextResponse(hCtx) {
+	// Commands: Projects runs the session ones; /cd, /dir, /help and access
+	// are the registry's; nothing else is a command. The old agent words
+	// ("@cc fix it", "/tb hi") are not commands: they go on as messages.
+	if strings.HasPrefix(text, "/") && stripAgentPrefix(text) == text {
+		if name, arg, ok := projectCommand(text); ok {
+			h.runProjectCommand(hCtx, name, arg)
+			return
+		}
+		if !h.handleSlashCommand(hCtx, text) {
+			head, _, _ := strings.Cut(text, " ")
+			h.SendText(hCtx, "Unknown command "+head+". /help lists what works here.")
+		}
 		return
 	}
 
-	// NEW: Route all messages through agent router
-	// The router now defaults to @tb (Smart Guide) for new users
-	// Smart Guide can help with navigation, project setup, and handoff to @cc
-	if routeErr := h.routeToAgent(hCtx, text); routeErr != nil {
-		logrus.WithError(routeErr).Error("Failed to route to agent")
-		h.SendText(hCtx, executionErrorMessage(routeErr))
-	}
+	h.reactReceived(hCtx)
+	h.routeToProject(hCtx, text)
 }
 
 // handleInboundGate runs the message-shape-specific compatibility gate before
@@ -265,78 +199,7 @@ func (h *BotHandler) handleWhitelistGate(hCtx HandlerContext) bool {
 	return false
 }
 
-// handleMediaMessage handles messages with media attachments
-func (h *BotHandler) handleMediaMessage(hCtx HandlerContext, media []imbot.MediaAttachment) {
-	// Get project path for storage, use default if not bound
-	projectPath, ok := h.getProjectPath(hCtx)
-	if !ok {
-		projectPath = h.defaultProjectPath()
-	}
-
-	// Set platform-specific token on FileStore if needed
-	if len(media) > 0 && strings.HasPrefix(media[0].URL, "tgfile://") {
-		if token := h.botSetting.Auth["token"]; token != "" {
-			h.fileStore.SetTelegramToken(token)
-		}
-	}
-
-	// 1. Download and store media files
-	var fileTags []string
-	for _, attachment := range media {
-		// Check file type
-		if !h.fileStore.IsAllowedType(attachment.MimeType) {
-			h.SendText(hCtx, fmt.Sprintf("File type not supported: %s", attachment.MimeType))
-			return
-		}
-
-		// Check file size
-		if attachment.Size > 0 && !h.fileStore.IsAllowedSize(attachment.MimeType, attachment.Size) {
-			maxSize := h.fileStore.maxImageSize
-			if attachment.Type == "document" {
-				maxSize = h.fileStore.maxDocSize
-			}
-			h.SendText(hCtx, fmt.Sprintf("File too large. Max size: %d MB", maxSize/1024/1024))
-			return
-		}
-
-		// Download file to project's .download directory
-		storedFile, err := h.fileStore.DownloadFile(h.ctx, projectPath, attachment.URL, attachment.MimeType)
-		if err != nil {
-			h.SendText(hCtx, fmt.Sprintf("Failed to download file: %v", err))
-			return
-
-		}
-
-		// Add file tag to message
-		fileTags = append(fileTags, fmt.Sprintf("<upload_file>%s</upload_file>", storedFile.RelPath))
-	}
-
-	// 2. Construct message with file tags
-	message := hCtx.Text()
-	if len(fileTags) > 0 {
-		if message == "" {
-			message = strings.Join(fileTags, " ")
-		} else {
-			message = message + " " + strings.Join(fileTags, " ")
-		}
-	}
-
-	// 3. Execute with augmented message (using Claude Code)
-	h.handleAgentMessage(hCtx, agentClaudeCode, message, projectPath)
-}
-
-// handlePermissionTextResponse handles text-based permission responses.
-// Returns true if the message was a valid permission response, false otherwise.
-// Only reachable in standalone (host-less) mode: the managed path's host
-// router claims prompt replies first. Mechanics shared via prompt_reply.go.
-func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
-	return bot.HandlePromptTextReply(h.imPrompter,
-		func(text string) { h.SendText(hCtx, text) },
-		hCtx.ChatID, hCtx.SenderID, hCtx.Text(), bot.ReplyToMessageID(hCtx.Message))
-}
-
-// SendText sends a plain text message
-// Note: Platform handles chunking internally via BaseBot.ChunkText()
+// reactReceived marks the user's message as taken.
 func (h *BotHandler) reactReceived(hCtx HandlerContext) {
 	if hCtx.MessageID == "" {
 		return
@@ -344,18 +207,6 @@ func (h *BotHandler) reactReceived(hCtx HandlerContext) {
 	emoji := imbot.ResolveReaction(hCtx.Platform, imbot.ReactionToken(imbot.ReactionReceived))
 	if err := hCtx.Bot.React(context.Background(), hCtx.MessageID, emoji); err != nil {
 		logrus.WithError(err).WithField("messageID", hCtx.MessageID).Warn("React received failed")
-	}
-}
-
-// reactDone sends a "done" reaction on the user's message to indicate processing is complete.
-// Errors are silently ignored — platforms that don't support reactions degrade gracefully.
-func (h *BotHandler) reactDone(hCtx HandlerContext) {
-	if hCtx.MessageID == "" {
-		return
-	}
-	emoji := imbot.ResolveReaction(hCtx.Platform, imbot.ReactionToken(imbot.ReactionDone))
-	if err := hCtx.Bot.React(context.Background(), hCtx.MessageID, emoji); err != nil {
-		logrus.WithError(err).WithField("messageID", hCtx.MessageID).Warn("React done failed")
 	}
 }
 

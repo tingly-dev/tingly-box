@@ -14,7 +14,8 @@ import (
 )
 
 // bootHelper wires a fresh testenv.TestEnv together with a BotHandler in a
-// known-good configuration. Most subtests start with it.
+// known-good configuration: Projects on, and every chat given a folder
+// (fakeRouter). Most subtests start with it.
 func bootHelper(t *testing.T, requirePairing bool) (*testenv.TestEnv, *remoteagent.TestHarness, *testenv.User) {
 	t.Helper()
 
@@ -31,29 +32,27 @@ func bootHelper(t *testing.T, requirePairing bool) (*testenv.TestEnv, *remoteage
 		Enabled:        true,
 		RequirePairing: &rp,
 	}
-	harness := remoteagent.BootForTest(t, env.Manager(), setting)
+	harness := remoteagent.BootForTest(t, env.Manager(), setting, remoteagent.TestBootOptions{
+		Router: &fakeRouter{bound: map[string]bool{}, adopts: true},
+	})
 
 	require.NoError(t, env.Manager().Start(env.Context()))
 
 	return env, harness, env.NewUser("alice")
 }
 
-// Test_Help drives the bot with /help and asserts a help-style reply.
+// Test_Help drives the bot with /help and asserts it lists the commands and
+// the ids.
 func Test_Help(t *testing.T) {
-	env, harness, alice := bootHelper(t, false)
+	_, harness, alice := bootHelper(t, false)
 	chat := alice.OpenDM(harness.Setting.UUID)
 
 	chat.SendText("/help")
 
-	evt := chat.WaitText(3 * time.Second)
-	// BuildHelpText lists each command with its description; "/help" is
-	// always present. The /cc and /tb hints are unconditionally appended
-	// (bot_command.go:83-84).
-	evt.AssertContains(t, "@cc")
-	evt.AssertContains(t, "Your ID:")
-
-	// Sanity: the env wired the bot through tingly correctly.
-	_ = env
+	chat.WaitText(3*time.Second).
+		AssertContains(t, "/session").
+		AssertContains(t, "/cd").
+		AssertContains(t, "Your ID:")
 }
 
 // Test_UnknownCommand confirms unknown slash commands fall through to the
@@ -86,107 +85,23 @@ func Test_PairingGate(t *testing.T) {
 
 	// Now /help works.
 	chat.SendText("/help")
-	chat.WaitText(3*time.Second).AssertContains(t, "@cc")
+	chat.WaitText(3*time.Second).AssertContains(t, "/session")
 }
 
-// Test_Cd_And_Project covers the project binding command and the
-// follow-up /project listing.
-func Test_Cd_And_Project(t *testing.T) {
+// Test_Cd_And_Dir moves the chat to a folder with /cd, then lists it with /dir.
+func Test_Cd_And_Dir(t *testing.T) {
 	_, harness, alice := bootHelper(t, false)
 	chat := alice.OpenDM(harness.Setting.UUID)
 
 	tmp := t.TempDir()
 	chat.SendText("/cd " + tmp)
-	// completeBind sends "Project bound" (DM) or "Group bound to project"
-	// (group); the registry handler additionally sends "Bound to project"
-	// — match on the common substring.
-	chat.WaitText(3*time.Second).AssertContains(t, "ound to project")
+	chat.WaitText(3*time.Second).
+		AssertContains(t, tmp).
+		AssertContains(t, "Your next message starts a new session here")
 
-	// /dir shows the bound path.
+	// /dir shows the folder.
 	chat.SendText("/dir")
-	chat.WaitText(3*time.Second).AssertContains(t, "roject")
-
-	_ = harness
-}
-
-// Test_Bash_Allowlist exercises the /bash allowlist gate. pwd is allowed
-// by default; rm is not.
-func Test_Bash_Allowlist(t *testing.T) {
-	_, harness, alice := bootHelper(t, false)
-	chat := alice.OpenDM(harness.Setting.UUID)
-
-	chat.SendText("/bash pwd")
-	chat.WaitText(3 * time.Second) // pwd outputs whatever cwd the bot has
-
-	chat.SendText("/bash rm -rf /")
-	chat.WaitText(3*time.Second).AssertContains(t, "not allowed")
-
-	_ = harness
-}
-
-// Test_Verbose_Quiet toggles verbose mode on and off.
-func Test_Verbose_Quiet(t *testing.T) {
-	_, harness, alice := bootHelper(t, false)
-	chat := alice.OpenDM(harness.Setting.UUID)
-
-	chat.SendText("/verbose off")
-	chat.WaitText(3 * time.Second)
-
-	chat.SendText("/quiet")
-	chat.WaitText(3 * time.Second)
-
-	chat.SendText("/verbose on")
-	chat.WaitText(3 * time.Second)
-
-	_ = harness
-}
-
-// Test_Interrupt_NoTask verifies /interrupt produces the "no running task"
-// reply when nothing is running.
-func Test_Interrupt_NoTask(t *testing.T) {
-	_, harness, alice := bootHelper(t, false)
-	chat := alice.OpenDM(harness.Setting.UUID)
-
-	chat.SendText("/interrupt")
-	chat.WaitText(3*time.Second).AssertContains(t, "No running task")
-
-	_ = harness
-}
-
-// Test_Clear binds a project, switches the current agent to "mock", and
-// then verifies /clear emits a confirmation. The default current-agent is
-// "tingly-box", whose clear path requires a SmartGuide session store we
-// don't construct here — so we explicitly route through the mock branch.
-func Test_Clear(t *testing.T) {
-	_, harness, alice := bootHelper(t, false)
-	chat := alice.OpenDM(harness.Setting.UUID)
-
-	tmp := t.TempDir()
-	chat.SendText("/cd " + tmp)
-	// /cd produces two replies — completeBind sends "...bound to project"
-	// and the registry handler echoes "Bound to project". Drain both.
-	chat.WaitText(3*time.Second).AssertContains(t, "ound to project")
-	chat.WaitText(3*time.Second).AssertContains(t, "ound to project")
-
-	harness.SetCurrentAgent(chat.ChatID, "mock")
-
-	chat.SendText("/clear")
-	// With the mock agent and no active session, the bot responds with
-	// "No active Mock Agent (@mock) session found." — that confirms the
-	// /clear command reached the mock-branch and produced a reply.
-	evt := chat.WaitText(3 * time.Second)
-	if !contains(evt.Text, "cleared") && !contains(evt.Text, "No active") {
-		t.Fatalf("expected /clear reply, got %q", evt.Text)
-	}
-}
-
-func contains(s, sub string) bool {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
+	chat.WaitText(3*time.Second).AssertContains(t, "Current folder").AssertContains(t, tmp)
 }
 
 // Test_GroupWhitelistGate confirms a non-whitelisted group receives the
@@ -206,7 +121,7 @@ func Test_GroupWhitelistGate(t *testing.T) {
 	// Whitelist and try again — now /help works.
 	harness.WhitelistGroup(chat.ChatID, alice.ID)
 	chat.SendText("/help")
-	chat.WaitText(3*time.Second).AssertContains(t, "@cc")
+	chat.WaitText(3*time.Second).AssertContains(t, "/session")
 }
 
 // Test_PairingResetCleanup tickles a corner of the harness: the bot
@@ -232,14 +147,9 @@ func Test_ReactionReceived(t *testing.T) {
 	}
 }
 
-// Test_ProjectPick exercises the inline-keyboard project-switch flow.
-// /dir lists the folders with a Bind New keyboard.
-//
-// The production registry adapter constructs a HandlerContext without a
-// SenderID when calling SetProjectPath, so the chat ends up bound with
-// owner="". To get a project that ListProjectPaths can find, we bind
-// directly through the chat store with the alice owner id.
-func Test_ProjectPick(t *testing.T) {
+// Test_DirPick exercises the inline-keyboard folder-switch flow: /dir lists
+// the folders the chat used, with a button for another one.
+func Test_DirPick(t *testing.T) {
 	_, harness, alice := bootHelper(t, false)
 	chat := alice.OpenDM(harness.Setting.UUID)
 
@@ -248,8 +158,8 @@ func Test_ProjectPick(t *testing.T) {
 
 	chat.SendText("/dir")
 	evt := chat.WaitText(3 * time.Second)
-	evt.AssertContains(t, "Current Project")
-	evt.AssertHasButton(t, "Bind New Project")
+	evt.AssertContains(t, "Current folder")
+	evt.AssertHasButton(t, "Another folder")
 }
 
 // Test_StreamedTransport_NoLeakOnDisconnect verifies disconnecting the
