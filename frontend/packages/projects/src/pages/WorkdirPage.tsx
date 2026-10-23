@@ -21,6 +21,7 @@ import { useProjectList } from '../hooks/useProjectList';
 import { useTranscript } from '../hooks/useTranscript';
 import { useProjectsHost, type SessionLaunch } from '../host/ProjectsHost';
 import { folderName, timeAgo } from '../utils/format';
+import { needsUser } from '../components/project/threadStatus';
 
 /** Replace the session with the same id, else add it first (newest first). */
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
@@ -309,11 +310,11 @@ export default function WorkdirPage() {
         id: s.id,
         group: s.status === 'ready' ? 'idle' : s.status,
         title: s.title,
-        subtitle: [scope ? '' : folderName(s.cwd), s.status === 'waiting' ? s.wait_reason : ''].filter(Boolean).join(' · ') || undefined,
+        subtitle: [scope ? '' : folderName(s.cwd), needsUser(s.status) ? s.wait_reason : ''].filter(Boolean).join(' · ') || undefined,
         meta: timeAgo(s.updated_at, i18n.language),
         selected: s.id === sessionId,
     })), [sessions, scope, sessionId, i18n.language]);
-    const waitingHere = (sessions ?? []).some((s) => s.status === 'waiting');
+    const waitingHere = (sessions ?? []).some((s) => needsUser(s.status));
     // With a session open on a wide screen the list becomes the first card of the thread's info rail, so the page has one right column.
     const merged = !!sessionId && !pane.narrow;
     const sessionList = sessions === null
