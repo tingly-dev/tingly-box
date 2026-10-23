@@ -6,6 +6,7 @@ import { STATUS_ORDER, ThreadBadges, ThreadSubtitle } from '../project/threadSta
 import { StatusHeading } from './StatusGroups';
 import { timeAgo } from '../../utils/format';
 import { fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface Props {
     threads: Thread[];
@@ -32,7 +33,7 @@ export function OverviewBand({ threads, selectedId, open, onToggle, onOpen, onLi
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, px: 2, minHeight: 36 }}>
                 {/* Closed: the counts stand in for the columns. */}
                 <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 2, overflow: 'hidden' }}>
-                    {groups.length === 0 && <Typography sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>{t('overview.noThreads')}</Typography>}
+                    {groups.length === 0 && <Typography sx={{ fontSize: fontSizes.base, color: 'text.secondary' }}>{t('overview.noThreads')}</Typography>}
                     {!open && groups.map((g) => <StatusHeading key={g.key} label={t(`overview.group.${g.key}`)} status={g.key} count={g.list.length} />)}
                 </Box>
                 <Button size="small" onClick={onLibrary}>{t('overview.library')}</Button>
@@ -57,18 +58,18 @@ export function OverviewBand({ threads, selectedId, open, onToggle, onOpen, onLi
                                         onClick={() => onOpen(th.id)}
                                         onKeyDown={(e) => e.key === 'Enter' && onOpen(th.id)}
                                         sx={{
-                                            px: 1.25, py: 0.75, borderRadius: 1, border: 1, borderColor: 'divider', cursor: 'pointer', outline: 'none',
+                                            px: 1.25, py: 0.75, borderRadius: radius.row, border: 1, borderColor: 'divider', cursor: 'pointer', outline: 'none',
                                             bgcolor: th.id === selectedId ? 'action.selected' : undefined,
                                             '&:hover': { bgcolor: th.id === selectedId ? 'action.selected' : 'action.hover' },
                                             '&:focus-visible': { boxShadow: (theme) => `inset 0 0 0 2px ${theme.palette.primary.main}` },
                                         }}
                                     >
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: '0.875rem', fontWeight: 500 }}>{th.title}</Typography>
+                                            <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.base, fontWeight: 500 }}>{th.title}</Typography>
                                             <ThreadBadges thread={th} />
                                             <Typography component="span" sx={{ flexShrink: 0, fontSize: fontSizes.sm, color: 'text.disabled' }}>{timeAgo(th.updated_at, i18n.language)}</Typography>
                                         </Box>
-                                        <Typography noWrap component="div" sx={{ fontSize: fontSizes.md, color: 'text.secondary' }}><ThreadSubtitle thread={th} /></Typography>
+                                        <Typography noWrap component="div" sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}><ThreadSubtitle thread={th} /></Typography>
                                     </Box>
                                 ))}
                             </Box>

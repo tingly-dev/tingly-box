@@ -13,6 +13,7 @@ import { ChevronRight, DiffIcon, ExpandMore, PlayArrow } from '../icons';
 import { DiffDialog } from './DiffDialog';
 import { LoadEarlier } from './LoadEarlier';
 import { ThreadStateMark, ThreadBadges, ThreadSubtitle, stateColor } from './threadStatus';
+import { radius } from '@tingly/ui/theme/radius';
 
 const REPORTS_KEY = 'conversation.threadReports';
 const COLUMN = { maxWidth: 760, mx: 'auto', width: '100%', px: { xs: 2, md: 3 } } as const;
@@ -44,7 +45,7 @@ export function ThreadCard({ thread, onOpen }: { thread: Thread; onOpen: (id: st
                 onClick={() => onOpen(thread.id)}
                 onKeyDown={(e) => e.key === 'Enter' && onOpen(thread.id)}
                 sx={{
-                    display: 'flex', alignItems: 'center', gap: 1, minHeight: 40, px: 1.25, py: 0.5, borderRadius: 1, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 1, minHeight: 40, px: 1.25, py: 0.5, borderRadius: radius.row, cursor: 'pointer',
                     border: 1, borderColor: 'divider', bgcolor: 'background.paper', outline: 'none',
                     '&:hover': { borderColor: 'text.disabled' },
                     '&:focus-visible': { boxShadow: (th) => `inset 0 0 0 2px ${th.palette.primary.main}` },
@@ -53,9 +54,9 @@ export function ThreadCard({ thread, onOpen }: { thread: Thread; onOpen: (id: st
                 <Box component="span" title={t(`thread.status.${thread.status}`)} sx={{ display: 'inline-flex', flexShrink: 0 }}>
                     <ThreadStateMark status={thread.status} />
                 </Box>
-                <Typography noWrap sx={{ flex: { xs: 1, sm: '0 1 auto' }, minWidth: 0, maxWidth: { sm: '45%' }, fontSize: '0.875rem', fontWeight: 600, color: 'text.primary' }}>{thread.title}</Typography>
+                <Typography noWrap sx={{ flex: { xs: 1, sm: '0 1 auto' }, minWidth: 0, maxWidth: { sm: '45%' }, fontSize: fontSizes.base, fontWeight: 600, color: 'text.primary' }}>{thread.title}</Typography>
                 {/* On a phone the line keeps the title; the thread holds the rest. */}
-                <Typography noWrap component="div" sx={{ display: { xs: 'none', sm: 'block' }, flex: 1, minWidth: 0, fontSize: fontSizes.md, color: thread.status === 'waiting' ? stateColor('waiting') : 'text.secondary' }}>
+                <Typography noWrap component="div" sx={{ display: { xs: 'none', sm: 'block' }, flex: 1, minWidth: 0, fontSize: fontSizes.sm, color: thread.status === 'waiting' ? stateColor('waiting') : 'text.secondary' }}>
                     <ThreadSubtitle thread={thread} />
                 </Typography>
                 <ThreadBadges thread={thread} />
@@ -107,8 +108,8 @@ export function ThreadUpdateRow({ message, onOpen }: { message: ThreadEvent; onO
                     }
                 }}
                 sx={{
-                    display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, py: 0.25, px: 0.5, mx: -0.5, borderRadius: 1,
-                    cursor: 'default', userSelect: 'none', color: 'text.secondary', fontSize: fontSizes.md, outline: 'none',
+                    display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, py: 0.25, px: 0.5, mx: -0.5, borderRadius: radius.row,
+                    cursor: 'default', userSelect: 'none', color: 'text.secondary', fontSize: fontSizes.sm, outline: 'none',
                     '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
                     '&:focus-visible': { boxShadow: (th) => `inset 0 0 0 2px ${th.palette.primary.main}` },
                 }}
@@ -126,7 +127,7 @@ export function ThreadUpdateRow({ message, onOpen }: { message: ThreadEvent; onO
                 </Box>
             </Box>
             <Collapse in={open} unmountOnExit>
-                <Box sx={{ mt: 0.5, ml: 0.5, pl: 1.5, borderLeft: 2, borderColor: 'divider', color: 'text.secondary', fontSize: fontSizes.md }}>
+                <Box sx={{ mt: 0.5, ml: 0.5, pl: 1.5, borderLeft: 2, borderColor: 'divider', color: 'text.secondary', fontSize: fontSizes.sm }}>
                     <Markdown text={message.content} />
                 </Box>
             </Collapse>
@@ -161,16 +162,16 @@ function SuggestionsCard({ message, threads, onStart, onOpen, disabled }: {
         }
     };
     return (
-        <Paper variant="outlined" sx={{ borderRadius: 1.5, p: 1.5, my: 1.5 }}>
+        <Paper variant="outlined" sx={{ borderRadius: radius.card, p: 1.5, my: 1.5 }}>
             <Typography variant="overline" color="text.secondary">{t('conversation.suggested')}</Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 0.5 }}>
                 {suggestions.map((s, i) => {
                     const th = s.thread_id ? threads.get(s.thread_id) : undefined;
                     if (th) return <ThreadCard key={i} thread={th} onOpen={onOpen} />;
                     return (
-                        <Box key={i} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, p: 1.25, borderRadius: 1, bgcolor: 'action.hover' }}>
+                        <Box key={i} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, p: 1.25, borderRadius: radius.row, bgcolor: 'action.hover' }}>
                             <Box sx={{ flex: 1, minWidth: 0 }}>
-                                <Typography sx={{ fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>{s.title}</Typography>
+                                <Typography sx={{ fontWeight: 600, fontSize: fontSizes.base, color: 'text.primary' }}>{s.title}</Typography>
                                 <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{s.task}</Typography>
                             </Box>
                             <Button size="small" startIcon={<PlayArrow />} disabled={busy || disabled} onClick={() => void start([i])}>{t('conversation.start')}</Button>
@@ -264,7 +265,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                                         <Box sx={{ maxWidth: '85%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                                             <AttachmentChips owner={{ projectId }} items={parse<{ attachments?: Attachment[] }>(m.payload)?.attachments ?? []} />
                                             {m.content.trim() !== '' && (
-                                                <Box sx={{ bgcolor: 'action.hover', borderRadius: 1.5, px: 1.75, py: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'text.primary', fontSize: '0.875rem', lineHeight: 1.65 }}>{m.content}</Box>
+                                                <Box sx={{ bgcolor: 'action.hover', borderRadius: radius.card, px: 1.75, py: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'text.primary', fontSize: fontSizes.base, lineHeight: 1.65 }}>{m.content}</Box>
                                             )}
                                             {m.source === 'im' && m.source_platform
                                                 ? <ImSourceBadge platform={m.source_platform} chat={chatTitle?.(m.source_platform, m.source_chat_id ?? '') ?? m.source_chat_id ?? ''} />

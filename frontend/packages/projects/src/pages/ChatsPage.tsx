@@ -8,6 +8,8 @@ import { Add, ChatBubble, MoreHoriz, Search, Star } from '../components/icons';
 import { useNotify } from '../hooks/useNotify';
 import { timeAgo } from '../utils/format';
 import { EmptyState, PageHeader } from '@tingly/ui';
+import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 function Row({ chat, onChanged }: { chat: Conversation; onChanged: () => void }) {
     const { t, i18n } = useTranslation('projects');
@@ -19,7 +21,7 @@ function Row({ chat, onChanged }: { chat: Conversation; onChanged: () => void })
             sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1.5, textDecoration: 'none', color: 'inherit', borderTop: 1, borderColor: 'divider', '&:hover': { bgcolor: 'action.hover' }, '& .row-menu': { opacity: anchor ? 1 : 0 }, '&:hover .row-menu': { opacity: 1 } }}
         >
             <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography noWrap sx={{ color: 'text.primary', fontWeight: 500, fontSize: '0.875rem' }}>
+                <Typography noWrap sx={{ color: 'text.primary', fontWeight: 500, fontSize: fontSizes.base }}>
                     {chat.title || t('chat.untitled')}
                     {chat.starred && <Star sx={{ fontSize: 14, ml: 0.75, verticalAlign: '-2px' }} color="primary" />}
                 </Typography>
@@ -92,7 +94,7 @@ export default function ChatsPage() {
                 ) : (
                     <>
                         <Typography variant="caption" color="text.secondary">{t('chats.count', { count: chats.length })}</Typography>
-                        <Box sx={{ mt: 1, border: 1, borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden', '& > a:first-of-type': { borderTop: 0 } }}>
+                        <Box sx={{ mt: 1, border: 1, borderColor: 'divider', borderRadius: radius.card, overflow: 'hidden', '& > a:first-of-type': { borderTop: 0 } }}>
                             {chats.map((c) => <Row key={c.id} chat={c} onChanged={() => setTick((x) => x + 1)} />)}
                         </Box>
                     </>

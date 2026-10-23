@@ -10,6 +10,7 @@ import { formatTokens } from '../../utils/format';
 import { readLocal, writeLocal } from '../../utils/storage';
 import { formatDuration, useNow } from '../workdir/BackgroundTasksPanel';
 import type { BackgroundTaskRow } from '../workdir/backgroundTasks';
+import { radius } from '@tingly/ui/theme/radius';
 
 /** How wide a thread panel must be to carry the rail beside the conversation. */
 export const RAIL_MIN_PANEL = 880;
@@ -26,10 +27,10 @@ function RailCard({ id, title, aside, defaultOpen = true, children }: { id: stri
         setOpen(!open);
     };
     return (
-        <Box component="section" aria-label={title} sx={{ border: 1, borderColor: 'divider', borderRadius: 2, bgcolor: 'background.paper' }}>
+        <Box component="section" aria-label={title} sx={{ border: 1, borderColor: 'divider', borderRadius: radius.card, bgcolor: 'background.paper' }}>
             <Box role="button" tabIndex={0} aria-expanded={open} onClick={toggle} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
                 sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1.5, py: 1, cursor: 'pointer', userSelect: 'none' }}>
-                <Typography sx={{ fontSize: fontSizes.md, fontWeight: 600, color: 'text.primary' }}>{title}</Typography>
+                <Typography sx={{ fontSize: fontSizes.sm, fontWeight: 600, color: 'text.primary' }}>{title}</Typography>
                 {open ? <ExpandMore sx={{ fontSize: 16, color: 'text.secondary' }} /> : <ChevronRight sx={{ fontSize: 16, color: 'text.secondary' }} />}
                 <Box sx={{ flex: 1 }} />
                 {aside != null && <Typography component="span" sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{aside}</Typography>}
@@ -43,7 +44,7 @@ function RailCard({ id, title, aside, defaultOpen = true, children }: { id: stri
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
     return (
-        <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1.5, py: 0.25, fontSize: fontSizes.md }}>
+        <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1.5, py: 0.25, fontSize: fontSizes.sm }}>
             <Box component="span" sx={{ color: 'text.secondary', flexShrink: 0 }}>{label}</Box>
             <Box component="span" sx={{ ...mono, color: 'text.primary', minWidth: 0, textAlign: 'right', overflowWrap: 'anywhere' }}>{children}</Box>
         </Box>
@@ -88,7 +89,7 @@ function TaskLine({ threadId, task, onChanged, onReveal }: { threadId: string; t
         <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0, py: 0.5, borderTop: 1, borderColor: 'divider' }}>
             {task.taskType === 'local_agent' ? <Robot sx={{ fontSize: 16, color: 'text.secondary' }} /> : <Terminal sx={{ fontSize: 16, color: 'text.secondary' }} />}
             <Typography noWrap title={label} onClick={() => task.callId && onReveal(task.callId)}
-                sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.md, color: 'text.primary', cursor: task.callId ? 'pointer' : 'default', '&:hover': task.callId ? { textDecoration: 'underline' } : {} }}>
+                sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.sm, color: 'text.primary', cursor: task.callId ? 'pointer' : 'default', '&:hover': task.callId ? { textDecoration: 'underline' } : {} }}>
                 {label}
             </Typography>
             {elapsed !== undefined && <Typography component="span" sx={{ fontSize: fontSizes.sm, color: 'text.secondary', flexShrink: 0 }}>{formatDuration(elapsed)}</Typography>}
@@ -150,23 +151,23 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
             {hasChanges && (
                 <RailCard id="changes" title={t('rail.changes')}>
                     {thread.merged_at
-                        ? <Typography sx={{ fontSize: fontSizes.md, color: 'text.secondary' }}>{t('thread.mergedInto', { base: thread.base_branch })}</Typography>
+                        ? <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{t('thread.mergedInto', { base: thread.base_branch })}</Typography>
                         : thread.commits_ahead > 0
-                            ? <Typography sx={{ fontSize: fontSizes.md, color: 'text.primary' }}>{t('thread.commits', { count: thread.commits_ahead })} · {t('thread.files', { count: thread.files_changed })}</Typography>
-                            : <Typography sx={{ fontSize: fontSizes.md, color: 'text.secondary' }}>{t('rail.noCommits')}</Typography>}
-                    {thread.uncommitted && <Typography sx={{ fontSize: fontSizes.md, color: 'text.primary' }}>{t('thread.uncommitted')}</Typography>}
+                            ? <Typography sx={{ fontSize: fontSizes.sm, color: 'text.primary' }}>{t('thread.commits', { count: thread.commits_ahead })} · {t('thread.files', { count: thread.files_changed })}</Typography>
+                            : <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{t('rail.noCommits')}</Typography>}
+                    {thread.uncommitted && <Typography sx={{ fontSize: fontSizes.sm, color: 'text.primary' }}>{t('thread.uncommitted')}</Typography>}
                     {canReview && <Button size="small" variant="contained" startIcon={<DiffIcon />} onClick={onReview} sx={{ mt: 0.75 }}>{t('thread.review')}</Button>}
                 </RailCard>
             )}
             {folder && (
                 <RailCard id="tasks" title={t('session.backgroundTasks')} aside={running.length > 0 ? t('session.tasksRunning', { count: running.length }) : undefined}>
-                    {tasks.length === 0 && <Typography sx={{ fontSize: fontSizes.md, color: 'text.secondary' }}>{t('tasks.none')}</Typography>}
+                    {tasks.length === 0 && <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{t('tasks.none')}</Typography>}
                     {running.map((x) => <TaskLine key={x.taskId} threadId={thread.id} task={x} onChanged={onChanged} onReveal={onReveal} />)}
                     {finished.length > 0 && (
                         <>
                             <Box role="button" tabIndex={0} aria-expanded={showFinished} onClick={() => setShowFinished(!showFinished)}
                                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowFinished(!showFinished); } }}
-                                sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.5, borderTop: running.length > 0 ? 1 : 0, borderColor: 'divider', fontSize: fontSizes.md, color: 'text.secondary', cursor: 'pointer', userSelect: 'none' }}>
+                                sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.5, borderTop: running.length > 0 ? 1 : 0, borderColor: 'divider', fontSize: fontSizes.sm, color: 'text.secondary', cursor: 'pointer', userSelect: 'none' }}>
                                 {showFinished ? <ExpandMore sx={{ fontSize: 16 }} /> : <ChevronRight sx={{ fontSize: 16 }} />}
                                 {t('rail.finished', { count: finished.length })}
                             </Box>

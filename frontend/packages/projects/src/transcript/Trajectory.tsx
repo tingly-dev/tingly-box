@@ -7,6 +7,7 @@ import {getReadableAccent} from '@tingly/ui/theme/status';
 import type {TranscriptBlock} from './model';
 import type {TrajectoryAnchor, TrajectoryFilter, TrajectoryKind} from './trajectoryRows';
 import {matchesFilter, trajectoryRows, trajectorySummary} from './trajectoryRows';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface TrajectoryProps {
     blocks: TranscriptBlock[];
@@ -133,7 +134,7 @@ const Trajectory = ({blocks, working, pendingRequestId, project, onOpen}: Trajec
                                 aria-label={`${kindLabel[r.kind]}: ${r.title}${r.detail ? ` ${r.detail}` : ''} — ${t('projects.transcript.trajectoryOpen', {defaultValue: 'show in chat'})}`}
                                 sx={{
                                     display: 'grid', gridTemplateColumns: '72px minmax(0, 1fr) auto', columnGap: 1.5, alignItems: 'baseline',
-                                    width: '100%', textAlign: 'left', px: 1, py: 0.625, pl: 1 + r.depth * 2.5, borderRadius: 1,
+                                    width: '100%', textAlign: 'left', px: 1, py: 0.625, pl: 1 + r.depth * 2.5, borderRadius: radius.row,
                                     '&:hover': {bgcolor: 'action.hover'},
                                 }}
                             >

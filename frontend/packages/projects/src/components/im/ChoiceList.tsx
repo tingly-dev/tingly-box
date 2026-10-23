@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Box, ButtonBase, Typography } from '@mui/material';
 import { fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface Choice {
     key: string;
@@ -31,7 +32,7 @@ export function ChoiceList({ items, value, onChange, label }: { items: Choice[];
                         onClick={() => onChange(c.key)}
                         sx={{
                             display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 1.25, width: '100%', textAlign: 'left',
-                            px: 1.25, py: 1, borderRadius: 1, border: 1, borderColor: selected ? 'primary.main' : 'divider',
+                            px: 1.25, py: 1, borderRadius: radius.row, border: 1, borderColor: selected ? 'primary.main' : 'divider',
                             bgcolor: selected ? 'action.selected' : 'transparent', opacity: c.disabled ? 0.55 : 1,
                             '&:hover': { borderColor: selected ? 'primary.main' : 'text.disabled' },
                             '&.Mui-focusVisible': { outline: 2, outlineColor: 'primary.main', outlineStyle: 'solid', outlineOffset: 1 },
@@ -42,11 +43,11 @@ export function ChoiceList({ items, value, onChange, label }: { items: Choice[];
                         </Box>
                         {c.lead}
                         <Box sx={{ minWidth: 0, flex: 1 }}>
-                            <Typography noWrap sx={{ fontWeight: 600, fontSize: '0.875rem', lineHeight: 1.35 }}>{c.title}</Typography>
+                            <Typography noWrap sx={{ fontWeight: 600, fontSize: fontSizes.base, lineHeight: 1.35 }}>{c.title}</Typography>
                             {c.subtitle && <Typography noWrap color="text.secondary" sx={{ fontSize: fontSizes.sm, lineHeight: 1.4 }}>{c.subtitle}</Typography>}
                         </Box>
                         {c.chip && (
-                            <Box component="span" sx={{ flexShrink: 0, px: 0.9, py: 0.15, borderRadius: '6px', fontSize: fontSizes.xs, fontWeight: 600, color: 'warning.main', border: 1, borderColor: 'warning.main' }}>
+                            <Box component="span" sx={{ flexShrink: 0, px: 0.9, py: 0.15, borderRadius: radius.chip, fontSize: fontSizes.xs, fontWeight: 600, color: 'warning.main', border: 1, borderColor: 'warning.main' }}>
                                 {c.chip}
                             </Box>
                         )}

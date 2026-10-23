@@ -6,6 +6,7 @@ import { api, ApiError, unwrap, type Diff, type Thread } from '../../client';
 import { DiffIcon, Merge } from '../icons';
 import { useCopyFeedback } from '../../hooks/useCopyFeedback';
 import { useNotify } from '../../hooks/useNotify';
+import { radius } from '@tingly/ui/theme/radius';
 
 const mono = { fontFamily: fontMono } as const;
 
@@ -49,7 +50,7 @@ export function DiffDialog({ thread, open, onClose }: { thread: Thread; open: bo
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <DiffIcon />
                 <Box component="span" sx={{ flex: 1 }}>{thread.title}</Box>
-                <Typography component="span" sx={{ ...mono, fontSize: fontSizes.lg, color: 'text.secondary' }}>{thread.base_branch}…{thread.branch}</Typography>
+                <Typography component="span" sx={{ ...mono, fontSize: fontSizes.base, color: 'text.secondary' }}>{thread.base_branch}…{thread.branch}</Typography>
             </DialogTitle>
             <DialogContent dividers>
                 {error && <Alert severity="error">{error}</Alert>}
@@ -57,8 +58,8 @@ export function DiffDialog({ thread, open, onClose }: { thread: Thread; open: bo
                 {diff && (
                     <>
                         {diff.uncommitted && <Alert severity="warning" sx={{ mb: 1.5 }}>{t('thread.uncommittedWarn')}<Box component="pre" sx={{ ...mono, fontSize: fontSizes.sm, m: 0, mt: 0.5 }}>{diff.uncommitted}</Box></Alert>}
-                        <Box component="pre" sx={{ ...mono, fontSize: fontSizes.md, m: 0, mb: 1.5, color: 'text.secondary', whiteSpace: 'pre-wrap' }}>{diff.stat || t('thread.noChanges')}</Box>
-                        <Box component="pre" sx={{ ...mono, fontSize: fontSizes.md, m: 0, p: 1.5, bgcolor: 'action.hover', borderRadius: 1, overflow: 'auto', maxHeight: '55vh' }}>
+                        <Box component="pre" sx={{ ...mono, fontSize: fontSizes.sm, m: 0, mb: 1.5, color: 'text.secondary', whiteSpace: 'pre-wrap' }}>{diff.stat || t('thread.noChanges')}</Box>
+                        <Box component="pre" sx={{ ...mono, fontSize: fontSizes.sm, m: 0, p: 1.5, bgcolor: 'action.hover', borderRadius: radius.row, overflow: 'auto', maxHeight: '55vh' }}>
                             {diff.patch.split('\n').map((line, i) => (
                                 <Box key={i} component="div" sx={{
                                     color: line.startsWith('+') && !line.startsWith('+++') ? 'success.main' : line.startsWith('-') && !line.startsWith('---') ? 'error.main' : line.startsWith('@@') ? 'info.main' : 'text.primary',
@@ -72,8 +73,8 @@ export function DiffDialog({ thread, open, onClose }: { thread: Thread; open: bo
                 {blocked && (
                     <Alert severity="warning" sx={{ mt: 1.5, '& .MuiAlert-message': { width: '100%' } }}>
                         <Typography variant="body2" sx={{ color: 'inherit', fontWeight: 600 }}>{t('thread.mergeBlocked')}: {blocked.error}</Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1, p: 1, bgcolor: 'background.paper', borderRadius: 1 }}>
-                            <Box component="code" sx={{ ...mono, fontSize: fontSizes.md, flex: 1, wordBreak: 'break-all' }}>{blocked.command}</Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1, p: 1, bgcolor: 'background.paper', borderRadius: radius.row }}>
+                            <Box component="code" sx={{ ...mono, fontSize: fontSizes.sm, flex: 1, wordBreak: 'break-all' }}>{blocked.command}</Box>
                             <Button size="small" onClick={() => copy(blocked.command)}>{copied ? t('common.copied') : t('common.copy')}</Button>
                         </Box>
                     </Alert>

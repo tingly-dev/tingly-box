@@ -84,7 +84,7 @@ export default function ImSettingsPage() {
                                         )}
                                     </Box>
                                     {rows.length === 0 ? (
-                                        <Typography color="text.secondary" sx={{ px: 2, py: 2, fontSize: fontSizes.lg }}>{t('im.settings.noChats')}</Typography>
+                                        <Typography color="text.secondary" sx={{ px: 2, py: 2, fontSize: fontSizes.base }}>{t('im.settings.noChats')}</Typography>
                                     ) : (
                                         <TableContainer>
                                             <Table size="small" sx={{ tableLayout: 'fixed', minWidth: 560, '& td, & th': { borderColor: 'divider' }, '& tbody tr:last-of-type td': { borderBottom: 0 } }}>
@@ -105,20 +105,20 @@ export default function ImSettingsPage() {
                                                         return (
                                                             <TableRow key={chatKey(c.platform, c.chatId)}>
                                                                 <TableCell sx={{ pl: 2 }}>
-                                                                    <Typography noWrap sx={{ fontWeight: 500, fontSize: '0.875rem' }}>{c.title}</Typography>
+                                                                    <Typography noWrap sx={{ fontWeight: 500, fontSize: fontSizes.base }}>{c.title}</Typography>
                                                                     <Typography noWrap sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{t(`im.chatKind.${c.kind}`)}</Typography>
                                                                 </TableCell>
                                                                 <TableCell>
                                                                     {b?.project_id ? (
-                                                                        <Link component={RouterLink} to={`${paths.project(b.project_id)}${thread}`} underline="hover" color="text.primary" noWrap sx={{ display: 'block', fontSize: '0.875rem' }}>
+                                                                        <Link component={RouterLink} to={`${paths.project(b.project_id)}${thread}`} underline="hover" color="text.primary" noWrap sx={{ display: 'block', fontSize: fontSizes.base }}>
                                                                             {place?.name ?? t('im.place.elsewhere')}
                                                                         </Link>
                                                                     ) : (
-                                                                        <Typography color="text.disabled" sx={{ fontSize: '0.875rem' }}>{t('im.settings.notBound')}</Typography>
+                                                                        <Typography color="text.disabled" sx={{ fontSize: fontSizes.base }}>{t('im.settings.notBound')}</Typography>
                                                                     )}
                                                                 </TableCell>
                                                                 <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                                                                    <Typography component="span" sx={{ fontSize: fontSizes.lg, display: 'inline-flex', alignItems: 'center', gap: 0.75, color: 'text.secondary' }}>
+                                                                    <Typography component="span" sx={{ fontSize: fontSizes.base, display: 'inline-flex', alignItems: 'center', gap: 0.75, color: 'text.secondary' }}>
                                                                         <Dot color={STATE_COLOR[c.state]} />
                                                                         {t(c.state === 'ok' ? 'im.settings.statusOk' : c.state === 'blocked' ? 'im.settings.statusBlocked' : 'im.settings.statusUnpaired')}
                                                                     </Typography>

@@ -3,6 +3,7 @@ import { Box, ButtonBase, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { apiFetch, type Attachment } from '../client';
 import { Description } from './icons';
+import { radius } from '@tingly/ui/theme/radius';
 
 /** A paste longer than this becomes a file instead of filling the box. */
 export const PASTE_AS_FILE_CHARS = 4000;
@@ -74,7 +75,7 @@ function AttachmentChip({ owner, item }: { owner: AttachOwner; item: Attachment 
     };
     if (image && src) {
         return (
-            <ButtonBase onClick={() => void open()} aria-label={item.name} sx={{ borderRadius: 1, overflow: 'hidden', border: 1, borderColor: 'divider' }}>
+            <ButtonBase onClick={() => void open()} aria-label={item.name} sx={{ borderRadius: radius.row, overflow: 'hidden', border: 1, borderColor: 'divider' }}>
                 <Box component="img" src={src} alt={item.name} sx={{ display: 'block', maxHeight: 120, maxWidth: 200, objectFit: 'cover' }} />
             </ButtonBase>
         );
@@ -84,7 +85,7 @@ function AttachmentChip({ owner, item }: { owner: AttachOwner; item: Attachment 
         <ButtonBase
             onClick={() => void open()}
             disabled={gone}
-            sx={{ display: 'flex', alignItems: 'center', gap: 0.75, px: 1, py: 0.5, borderRadius: 1, border: 1, borderColor: 'divider', maxWidth: 240, textAlign: 'left' }}
+            sx={{ display: 'flex', alignItems: 'center', gap: 0.75, px: 1, py: 0.5, borderRadius: radius.row, border: 1, borderColor: 'divider', maxWidth: 240, textAlign: 'left' }}
         >
             <Description fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
             <Typography variant="caption" noWrap sx={{ minWidth: 0 }}>{gone ? t('attachments.removed', { name: item.name }) : item.name}</Typography>

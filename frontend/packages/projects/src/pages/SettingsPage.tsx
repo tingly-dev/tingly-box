@@ -14,6 +14,7 @@ import { THEME_MODE_VALUES, ThemeModeIcon } from '../theme/modes';
 import { LANGUAGES } from '../i18n';
 import { PageHeader } from '@tingly/ui';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 type Style = 'anthropic' | 'openai';
 
@@ -31,11 +32,11 @@ function endpointFor(style: Style, base: string) {
     return style === 'openai' ? `${b}/chat/completions` : `${b}/v1/messages`;
 }
 
-const mono = { fontFamily: fontMono, fontSize: fontSizes.lg } as const;
+const mono = { fontFamily: fontMono, fontSize: fontSizes.base } as const;
 
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
     return (
-        <Paper variant="outlined" sx={{ borderRadius: 1.5, p: { xs: 2, md: 3 }, mb: 3 }}>
+        <Paper variant="outlined" sx={{ borderRadius: radius.card, p: { xs: 2, md: 3 }, mb: 3 }}>
             <Typography variant="h4">{title}</Typography>
             {subtitle && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{subtitle}</Typography>}
             <Box sx={{ mt: 2.5 }}>{children}</Box>
@@ -252,7 +253,7 @@ export default function SettingsPage() {
                                     <Typography variant="body2" sx={{ fontWeight: 600, color: 'inherit' }}>
                                         {test.ok ? t('settings.testOk', { ms: test.latency_ms }) : t('settings.testFailed')}
                                     </Typography>
-                                    <Box component="dl" sx={{ m: 0, mt: 0.75, display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 1.5, rowGap: 0.25, fontSize: fontSizes.md, '& dt': { color: 'text.secondary' }, '& dd': { m: 0, ...mono, fontSize: fontSizes.md, wordBreak: 'break-all' } }}>
+                                    <Box component="dl" sx={{ m: 0, mt: 0.75, display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 1.5, rowGap: 0.25, fontSize: fontSizes.sm, '& dt': { color: 'text.secondary' }, '& dd': { m: 0, ...mono, fontSize: fontSizes.sm, wordBreak: 'break-all' } }}>
                                         <dt>{t('settings.testEndpoint')}</dt><dd>{test.endpoint}</dd>
                                         {test.model && (<><dt>{t('settings.testModel')}</dt><dd>{test.model}</dd></>)}
                                         {test.reply && (<><dt>{t('settings.testReply')}</dt><dd>{test.reply}</dd></>)}

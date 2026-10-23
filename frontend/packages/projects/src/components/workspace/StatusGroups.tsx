@@ -3,6 +3,7 @@ import { Box, Collapse, Typography } from '@mui/material';
 import { ExpandMore } from '../icons';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { stateColor, ThreadStateMark } from '../project/threadStatus';
+import { radius } from '@tingly/ui/theme/radius';
 
 /** One group of the list: what needs the user comes first. */
 export interface StatusGroup {
@@ -49,7 +50,7 @@ function Row({ row, onOpen }: { row: StatusRow; onOpen: (id: string) => void }) 
             onClick={() => onOpen(row.id)}
             onKeyDown={(e) => e.key === 'Enter' && onOpen(row.id)}
             sx={{
-                px: 1.5, py: 1, borderRadius: 1, outline: 'none', cursor: 'pointer',
+                px: 1.5, py: 1, borderRadius: radius.row, outline: 'none', cursor: 'pointer',
                 bgcolor: row.selected ? 'action.selected' : undefined,
                 '&:hover': { bgcolor: row.selected ? 'action.selected' : 'action.hover' },
                 '&:focus-visible': { boxShadow: (t) => `inset 0 0 0 2px ${t.palette.primary.main}` },
@@ -57,8 +58,8 @@ function Row({ row, onOpen }: { row: StatusRow; onOpen: (id: string) => void }) 
         >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography noWrap sx={{ fontSize: '0.875rem', fontWeight: row.unseen ? 650 : 500, color: 'text.primary' }}>{row.title}</Typography>
-                    {row.subtitle != null && <Typography noWrap component="div" sx={{ fontSize: fontSizes.md, color: 'text.secondary' }}>{row.subtitle}</Typography>}
+                    <Typography noWrap sx={{ fontSize: fontSizes.base, fontWeight: row.unseen ? 650 : 500, color: 'text.primary' }}>{row.title}</Typography>
+                    {row.subtitle != null && <Typography noWrap component="div" sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{row.subtitle}</Typography>}
                 </Box>
                 {row.badges}
                 {row.meta != null && <Typography component="span" sx={{ flexShrink: 0, fontSize: fontSizes.sm, color: 'text.disabled', minWidth: 28, textAlign: 'right' }}>{row.meta}</Typography>}

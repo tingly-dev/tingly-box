@@ -13,6 +13,7 @@ import type {ActivityStep, RequestBlock, RequestOutcome, TaskState, ThinkingStep
 import {CHECKLIST_TOOL, FOLD_MIN_CALLS, agentReport, agentStatus, approvalSubject, askQuestions, firstNewBlock, formatTokens, latestTodos, requestOutcome, summarizeRun, toolSummary, workingState} from './model';
 import Markdown from './Markdown';
 import QuestionCard from './QuestionCard';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Respond answers a request. remember asks to allow the tool from now on
 // without asking (offered only when the host passes rememberLabel); answers
@@ -44,18 +45,18 @@ interface TranscriptProps {
     newSince?: string;
 }
 
-const mono = {fontFamily: fontMono, fontSize: fontSizes.md};
+const mono = {fontFamily: fontMono, fontSize: fontSizes.sm};
 
 // The theme's body variants default to the secondary text color, which suits
 // metadata. The conversation itself is the subject of this page, so it uses
 // the primary color at reading size; labels, notes and tool detail stay
 // secondary so they recede.
 const conversationText = {
-    color: 'text.primary', fontSize: '0.875rem', lineHeight: 1.65, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+    color: 'text.primary', fontSize: fontSizes.base, lineHeight: 1.65, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
 } as const;
 
 const preBox = {
-    ...mono, m: 0, p: 1, borderRadius: 1, maxHeight: 220, overflow: 'auto',
+    ...mono, m: 0, p: 1, borderRadius: radius.row, maxHeight: 220, overflow: 'auto',
     whiteSpace: 'pre-wrap', wordBreak: 'break-word', bgcolor: 'action.hover', color: 'text.secondary',
 } as const;
 
@@ -69,7 +70,7 @@ const UserBubble = ({message}: {message: TranscriptEntry}) => {
                 ? <Box sx={{maxWidth: '80%'}}><Attachments items={files}/></Box>
                 : <Typography variant="caption" sx={{color: 'text.secondary', mb: 0.5}}>{files.map((f) => f.name).join(', ')}</Typography>)}
             {message.content.trim() !== '' && (
-                <Box sx={{maxWidth: '80%', bgcolor: 'action.hover', px: 1.75, py: 1, borderRadius: 1.5}}>
+                <Box sx={{maxWidth: '80%', bgcolor: 'action.hover', px: 1.75, py: 1, borderRadius: radius.card}}>
                     <Typography variant="body1" sx={conversationText}>{message.content}</Typography>
                 </Box>
             )}
@@ -171,7 +172,7 @@ const RowLine = ({open, onToggle, children, error = false}: {open: boolean; onTo
             }
         }}
         sx={{
-            display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, py: 0.25, px: 0.5, mx: -0.5, borderRadius: 1,
+            display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, py: 0.25, px: 0.5, mx: -0.5, borderRadius: radius.row,
             cursor: 'default', userSelect: 'none',
             color: (theme) => error ? getReadableAccent(theme, 'error') : theme.palette.text.secondary,
             '&:hover': {bgcolor: 'action.hover', color: (theme) => error ? getReadableAccent(theme, 'error') : theme.palette.text.primary},
@@ -342,7 +343,7 @@ const Subject = ({tool, input, inline = false}: {tool: string; input: unknown; i
         <Box
             component="pre"
             data-subject={subject.kind}
-            sx={{...mono, m: 0, p: 1, borderRadius: 1, bgcolor: 'action.hover', color: 'text.primary', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 200, overflow: 'auto'}}
+            sx={{...mono, m: 0, p: 1, borderRadius: radius.row, bgcolor: 'action.hover', color: 'text.primary', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 200, overflow: 'auto'}}
         >
             {subject.text}
         </Box>
@@ -420,10 +421,10 @@ const RequestCard = ({block, onRespond}: {
     };
 
     return (
-        <Paper data-request-id={message.request_id} variant="outlined" sx={{p: 1.5, borderRadius: 1.5, borderColor: 'primary.main'}}>
+        <Paper data-request-id={message.request_id} variant="outlined" sx={{p: 1.5, borderRadius: radius.card, borderColor: 'primary.main'}}>
             <Stack direction="row" spacing={1} sx={{alignItems: 'center', mb: 1}}>
                 <Terminal sx={{fontSize: 16, color: 'primary.main'}}/>
-                <Typography variant="body2" sx={{fontWeight: 600, color: 'text.primary', fontSize: '0.875rem', wordBreak: 'break-word'}}>
+                <Typography variant="body2" sx={{fontWeight: 600, color: 'text.primary', fontSize: fontSizes.base, wordBreak: 'break-word'}}>
                     {t('projects.transcript.approvalTitle', {defaultValue: 'Allow {{tool}}?', tool: message.content})}
                 </Typography>
             </Stack>
@@ -621,7 +622,7 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
     }[status];
 
     return (
-        <Paper variant="outlined" data-call-ids={block.call.id} sx={{borderRadius: 1.5, overflow: 'hidden'}}>
+        <Paper variant="outlined" data-call-ids={block.call.id} sx={{borderRadius: radius.card, overflow: 'hidden'}}>
             <Box
                 role="button"
                 aria-expanded={open}
@@ -782,7 +783,7 @@ const ChecklistCard = ({todos, working}: {todos: Todo[]; working: boolean}) => {
     const open = choice ?? !finished;
     const current = todos.find((x) => x.status === 'in_progress');
     return (
-        <Paper variant="outlined" data-checklist sx={{borderRadius: 1.5, overflow: 'hidden', bgcolor: 'background.paper'}}>
+        <Paper variant="outlined" data-checklist sx={{borderRadius: radius.card, overflow: 'hidden', bgcolor: 'background.paper'}}>
             <Stack
                 direction="row" spacing={1} role="button" aria-expanded={open} onClick={() => setChoice(!open)}
                 sx={{alignItems: 'center', px: 1.5, py: 0.75, cursor: 'default', userSelect: 'none', '&:hover': {bgcolor: 'action.hover'}}}

@@ -14,14 +14,15 @@ import type { PendingFirstMessage } from '../hooks/useStartChat';
 import { useChosenModel } from '../hooks/useStartChat';
 import { useAppData } from '../contexts/AppDataContext';
 import { formatTokens } from '../utils/format';
-import { fontMono } from '@tingly/ui/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 const COLUMN = { maxWidth: 780, mx: 'auto', width: '100%', px: { xs: 2, md: 3 } } as const;
 
 function UserBubble({ text }: { text: string }) {
     return (
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', my: 2 }}>
-            <Box sx={{ maxWidth: '85%', bgcolor: 'action.hover', borderRadius: 1.5, px: 1.75, py: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'text.primary', fontSize: '0.875rem', lineHeight: 1.65 }}>
+            <Box sx={{ maxWidth: '85%', bgcolor: 'action.hover', borderRadius: radius.card, px: 1.75, py: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'text.primary', fontSize: fontSizes.base, lineHeight: 1.65 }}>
                 {text}
             </Box>
         </Box>
@@ -221,7 +222,7 @@ export default function ChatPage() {
                             size="small"
                             endIcon={<ExpandMore fontSize="small" />}
                             onClick={(e) => setMenuAnchor(e.currentTarget)}
-                            sx={{ fontWeight: 600, fontSize: '0.875rem', maxWidth: { xs: 200, md: 420 }, color: 'text.primary' }}
+                            sx={{ fontWeight: 600, fontSize: fontSizes.base, maxWidth: { xs: 200, md: 420 }, color: 'text.primary' }}
                         >
                             <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {conv.title || t('chat.untitled')}

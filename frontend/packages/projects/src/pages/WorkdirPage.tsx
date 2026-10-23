@@ -348,7 +348,7 @@ export default function WorkdirPage() {
                         {error && (
                             <Alert severity="warning" action={<Button color="inherit" size="small" onClick={() => void loadSessions()}>{t('common.retry')}</Button>}>
                                 {t('session.refreshFailed')}
-                                <Box component="span" sx={{ display: 'block', fontSize: fontSizes.md }}>{error}</Box>
+                                <Box component="span" sx={{ display: 'block', fontSize: fontSizes.sm }}>{error}</Box>
                             </Alert>
                         )}
                         {im && (

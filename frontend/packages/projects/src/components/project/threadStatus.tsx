@@ -4,6 +4,7 @@ import { getReadableAccent } from '@tingly/ui/theme/status';
 import { useTranslation } from 'react-i18next';
 import { Branch, CheckCircle, CircleDashed, Merge, Spinner } from '../icons';
 import type { Thread } from '../../client';
+import { radius } from '@tingly/ui/theme/radius';
 
 /** Overview groups, in the order the Overview shows them: what needs the
  * user first. */
@@ -83,7 +84,7 @@ export function InlineCode({ text }: { text: string }) {
     return (
         <>
             {parts.map((p, i) => (i % 2 === 1
-                ? <Box key={i} component="code" sx={{ ...mono, fontSize: '0.95em', px: 0.5, borderRadius: 0.75, bgcolor: 'action.hover', color: 'text.primary' }}>{p}</Box>
+                ? <Box key={i} component="code" sx={{ ...mono, fontSize: '0.95em', px: 0.5, borderRadius: radius.chip, bgcolor: 'action.hover', color: 'text.primary' }}>{p}</Box>
                 : p))}
         </>
     );
@@ -101,7 +102,7 @@ export function ThreadSubtitle({ thread }: { thread: Thread }) {
 }
 
 const pill = {
-    display: 'inline-flex', alignItems: 'center', gap: 0.5, height: 22, px: 0.875, borderRadius: 0.75, flexShrink: 0,
+    display: 'inline-flex', alignItems: 'center', gap: 0.5, height: 22, px: 0.875, borderRadius: radius.chip, flexShrink: 0,
     fontSize: fontSizes.sm, fontWeight: 500, whiteSpace: 'nowrap', border: 1, borderColor: 'divider', color: 'text.secondary',
     '& svg': { fontSize: 13 },
 } as const;

@@ -8,6 +8,7 @@ import { Block, Cancel, CheckCircle, ChevronRight, ExpandMore, PlayerStop, Robot
 import { useNotify } from '../../hooks/useNotify';
 import { formatBytes, formatTokens, timeAgo } from '../../utils/format';
 import type { BackgroundTaskRow } from './backgroundTasks';
+import { radius } from '@tingly/ui/theme/radius';
 
 type TaskOutput = components['schemas']['TaskOutputResponse'];
 
@@ -184,7 +185,7 @@ function Label({ children }: { children: string }) {
     return <Typography variant="caption" component="div" sx={{ color: 'text.secondary', mb: 0.25 }}>{children}</Typography>;
 }
 
-const pre = { ...mono, m: 0, p: 1, borderRadius: 1, bgcolor: 'action.hover', color: 'text.primary', whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflow: 'auto' } as const;
+const pre = { ...mono, m: 0, p: 1, borderRadius: radius.row, bgcolor: 'action.hover', color: 'text.primary', whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflow: 'auto' } as const;
 
 /** The command and its output: loaded on open, refreshed while it runs. */
 function CommandDetail({ sessionId, task, running }: { sessionId: string; task: BackgroundTaskRow; running: boolean }) {

@@ -10,6 +10,7 @@ import { Add, Close } from '../icons';
 import { BindChatDialog } from './BindChatDialog';
 import { PlatformMark } from './PlatformMark';
 import { chatKey, useChannelBindings, useImChats, useProjectDirectory } from './useImBindings';
+import { radius } from '@tingly/ui/theme/radius';
 
 /**
  * What a header binds chats to: a thread, named for the dialog. A project's
@@ -106,9 +107,9 @@ function Tag({ binding, onUnbind }: { binding: ChannelBinding; onUnbind: () => v
     const { t } = useTranslation('projects');
     const title = tagTitle(binding);
     return (
-        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, height: 26, pl: 1, pr: 0.25, borderRadius: 999, border: 1, borderColor: 'divider', bgcolor: 'action.hover', minWidth: 0, maxWidth: 180 }}>
+        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, height: 26, pl: 1, pr: 0.25, borderRadius: radius.pill, border: 1, borderColor: 'divider', bgcolor: 'action.hover', minWidth: 0, maxWidth: 180 }}>
             <PlatformMark platform={binding.platform} size={14} />
-            <Typography noWrap title={title} sx={{ fontSize: fontSizes.md, fontWeight: 500, minWidth: 0 }}>{title}</Typography>
+            <Typography noWrap title={title} sx={{ fontSize: fontSizes.sm, fontWeight: 500, minWidth: 0 }}>{title}</Typography>
             <Tooltip title={t('im.tags.unbind', { chat: title })}>
                 <IconButton size="small" onClick={onUnbind} aria-label={t('im.tags.unbind', { chat: title })} sx={{ p: 0.25, color: 'text.secondary', '&:hover': { color: 'error.main' } }}>
                     <Close sx={{ fontSize: 14 }} />
@@ -125,7 +126,7 @@ function MoreTags({ bindings, onUnbind }: { bindings: ChannelBinding[]; onUnbind
     return (
         <>
             <Button size="small" color="inherit" onClick={(e) => setAnchor(e.currentTarget)} aria-haspopup="menu" aria-label={t('im.tags.label')}
-                sx={{ minWidth: 0, height: 26, px: 1, borderRadius: 999, border: 1, borderColor: 'divider', color: 'text.secondary', fontSize: fontSizes.md }}>
+                sx={{ minWidth: 0, height: 26, px: 1, borderRadius: radius.pill, border: 1, borderColor: 'divider', color: 'text.secondary', fontSize: fontSizes.sm }}>
                 {t('im.tags.more', { count: bindings.length })}
             </Button>
             <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
@@ -152,11 +153,11 @@ export function ProjectImTags({ im, maxVisible = 2, showLabel = false }: { im: P
     const rest = mine.slice(maxVisible);
     return (
         <Box role="group" aria-label={t('im.tags.label')} sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap', minWidth: 0 }}>
-            {showLabel && <Typography sx={{ fontSize: fontSizes.md, color: 'text.secondary', mr: 0.25 }}>{t('im.tags.label')}</Typography>}
+            {showLabel && <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary', mr: 0.25 }}>{t('im.tags.label')}</Typography>}
             {shown.map((b) => <Tag key={b.id} binding={b} onUnbind={() => void im.unbind(b)} />)}
             {rest.length > 0 && <MoreTags bindings={rest} onUnbind={(b) => void im.unbind(b)} />}
             <Button size="small" color="inherit" startIcon={<Add sx={{ fontSize: 14 }} />} onClick={im.open}
-                sx={{ height: 26, px: 1.25, borderRadius: 999, border: 1, borderStyle: 'dashed', borderColor: 'text.disabled', color: 'text.secondary', fontSize: fontSizes.md, whiteSpace: 'nowrap', '&:hover': { borderColor: 'text.secondary', color: 'text.primary', bgcolor: 'action.hover' }, '& .MuiButton-startIcon': { mr: 0.5, ml: 0 } }}>
+                sx={{ height: 26, px: 1.25, borderRadius: radius.pill, border: 1, borderStyle: 'dashed', borderColor: 'text.disabled', color: 'text.secondary', fontSize: fontSizes.sm, whiteSpace: 'nowrap', '&:hover': { borderColor: 'text.secondary', color: 'text.primary', bgcolor: 'action.hover' }, '& .MuiButton-startIcon': { mr: 0.5, ml: 0 } }}>
                 {t('im.tags.bind')}
             </Button>
         </Box>

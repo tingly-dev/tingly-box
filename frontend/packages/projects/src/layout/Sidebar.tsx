@@ -11,6 +11,7 @@ import { ChatActionsMenu } from '../components/ChatActionsMenu';
 import type { Conversation } from '../client';
 import { THEME_MODE_VALUES, ThemeModeIcon } from '../theme/modes';
 import { fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 export const SIDEBAR_WIDTH = 272;
 
@@ -33,11 +34,11 @@ function ChatRow({ chat, selected }: { chat: Conversation; selected: boolean }) 
                 selected={selected}
                 component={NavLink}
                 to={`/chat/${chat.id}`}
-                sx={{ mx: 1, borderRadius: 1.5, py: 0.5, pr: 0.5, '& .row-menu': { opacity: anchor ? 1 : 0 }, '&:hover .row-menu': { opacity: 1 } }}
+                sx={{ mx: 1, borderRadius: radius.card, py: 0.5, pr: 0.5, '& .row-menu': { opacity: anchor ? 1 : 0 }, '&:hover .row-menu': { opacity: 1 } }}
             >
                 <ListItemText
                     primary={chat.title || t('chat.untitled')}
-                    slotProps={{ primary: { noWrap: true, sx: { fontSize: fontSizes.lg, color: 'text.primary' } } }}
+                    slotProps={{ primary: { noWrap: true, sx: { fontSize: fontSizes.base, color: 'text.primary' } } }}
                 />
                 <IconButton
                     className="row-menu"
@@ -96,7 +97,7 @@ export function Sidebar({ onCollapse, onNavigate }: { onCollapse?: () => void; o
             <Box sx={{ display: 'flex', alignItems: 'center', px: 2, pt: 1.5, pb: 1 }}>
                 <Box component={NavLink} to="/" sx={{ display: 'flex', alignItems: 'center', gap: 1, textDecoration: 'none', color: 'text.primary', flex: 1 }}>
                     <Box component="img" src="/icon.svg" alt="" sx={{ width: 22, height: 22 }} />
-                    <Typography sx={{ fontWeight: 650, fontSize: '0.9375rem' }}>Tingly Project</Typography>
+                    <Typography sx={{ fontWeight: 650, fontSize: fontSizes.base }}>Tingly Project</Typography>
                 </Box>
                 {onCollapse && (
                     <Tooltip title={t('nav.collapse')}>
@@ -122,9 +123,9 @@ export function Sidebar({ onCollapse, onNavigate }: { onCollapse?: () => void; o
             </Box>
             <List dense disablePadding sx={{ mt: 0.5 }}>
                 {nav.map((n) => (
-                    <ListItemButton key={n.to} component={NavLink} to={n.to} selected={location.pathname === n.to} sx={{ mx: 1, borderRadius: 1.5 }}>
+                    <ListItemButton key={n.to} component={NavLink} to={n.to} selected={location.pathname === n.to} sx={{ mx: 1, borderRadius: radius.card }}>
                         <ListItemIcon sx={{ minWidth: 32 }}>{n.icon}</ListItemIcon>
-                        <ListItemText primary={n.label} slotProps={{ primary: { sx: { fontSize: '0.875rem', color: 'text.primary' } } }} />
+                        <ListItemText primary={n.label} slotProps={{ primary: { sx: { fontSize: fontSizes.base, color: 'text.primary' } } }} />
                     </ListItemButton>
                 ))}
             </List>
@@ -133,11 +134,11 @@ export function Sidebar({ onCollapse, onNavigate }: { onCollapse?: () => void; o
                 {sideProjects.length > 0 && (
                     <Section title={t('nav.projects')}>
                         {sideProjects.map((p) => (
-                            <ListItemButton key={p.id} component={NavLink} to={`/project/${p.id}`} selected={location.pathname === `/project/${p.id}`} sx={{ mx: 1, borderRadius: 1.5, py: 0.5 }}>
+                            <ListItemButton key={p.id} component={NavLink} to={`/project/${p.id}`} selected={location.pathname === `/project/${p.id}`} sx={{ mx: 1, borderRadius: radius.card, py: 0.5 }}>
                                 <ListItemIcon sx={{ minWidth: 28 }}>
                                     <Badge color="warning" variant="dot" invisible={p.threads.waiting === 0}><Folder sx={{ fontSize: 16 }} /></Badge>
                                 </ListItemIcon>
-                                <ListItemText primary={p.name} slotProps={{ primary: { noWrap: true, sx: { fontSize: fontSizes.lg, color: 'text.primary' } } }} />
+                                <ListItemText primary={p.name} slotProps={{ primary: { noWrap: true, sx: { fontSize: fontSizes.base, color: 'text.primary' } } }} />
                                 {p.threads.waiting > 0 && <Typography variant="caption" color="warning.main" sx={{ fontWeight: 600 }}>{p.threads.waiting}</Typography>}
                             </ListItemButton>
                         ))}
@@ -148,11 +149,11 @@ export function Sidebar({ onCollapse, onNavigate }: { onCollapse?: () => void; o
                         {sideFolders.map((f) => {
                             const path = f.path ?? '';
                             return (
-                                <ListItemButton key={f.id} component={NavLink} to={`/folder?path=${encodeURIComponent(path)}`} title={path} selected={folderScope === path} sx={{ mx: 1, borderRadius: 1.5, py: 0.5 }}>
+                                <ListItemButton key={f.id} component={NavLink} to={`/folder?path=${encodeURIComponent(path)}`} title={path} selected={folderScope === path} sx={{ mx: 1, borderRadius: radius.card, py: 0.5 }}>
                                     <ListItemIcon sx={{ minWidth: 28 }}>
                                         <Badge color="warning" variant="dot" invisible={f.threads.waiting === 0}><FolderOpen sx={{ fontSize: 16 }} /></Badge>
                                     </ListItemIcon>
-                                    <ListItemText primary={folderName(path)} slotProps={{ primary: { noWrap: true, sx: { fontSize: fontSizes.lg, color: 'text.primary' } } }} />
+                                    <ListItemText primary={folderName(path)} slotProps={{ primary: { noWrap: true, sx: { fontSize: fontSizes.base, color: 'text.primary' } } }} />
                                     {f.threads.waiting > 0 && <Typography variant="caption" color="warning.main" sx={{ fontWeight: 600 }}>{f.threads.waiting}</Typography>}
                                 </ListItemButton>
                             );
@@ -170,9 +171,9 @@ export function Sidebar({ onCollapse, onNavigate }: { onCollapse?: () => void; o
             </Box>
 
             <Box sx={{ display: 'flex', alignItems: 'center', px: 1, py: 1, borderTop: 1, borderColor: 'divider', gap: 0.5 }}>
-                <ListItemButton component={NavLink} to="/settings" selected={location.pathname === '/settings'} sx={{ borderRadius: 1.5, flex: 1 }}>
+                <ListItemButton component={NavLink} to="/settings" selected={location.pathname === '/settings'} sx={{ borderRadius: radius.card, flex: 1 }}>
                     <ListItemIcon sx={{ minWidth: 32 }}><Settings fontSize="small" /></ListItemIcon>
-                    <ListItemText primary={t('nav.settings')} slotProps={{ primary: { sx: { fontSize: '0.875rem', color: 'text.primary' } } }} />
+                    <ListItemText primary={t('nav.settings')} slotProps={{ primary: { sx: { fontSize: fontSizes.base, color: 'text.primary' } } }} />
                 </ListItemButton>
                 <Tooltip title={`${t('settings.theme')}: ${t(`theme.${mode}`)}`}>
                     <IconButton size="small" onClick={(e) => setThemeAnchor(e.currentTarget)} aria-label={t('settings.theme')} sx={{ color: theme.palette.text.secondary }}>

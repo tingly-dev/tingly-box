@@ -7,6 +7,7 @@ import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { AutoFixHigh, Branch, Check, ExpandLess, ExpandMore, FolderOpen } from '../icons';
 import { folderName } from '../../utils/format';
 import { readLocal, writeLocal } from '../../utils/storage';
+import { radius } from '@tingly/ui/theme/radius';
 
 export type AutoAnswer = 'off' | 'delay' | 'now';
 const AUTO_ANSWERS: AutoAnswer[] = ['off', 'delay', 'now'];
@@ -91,7 +92,7 @@ export function ComposerStrip({ thread, folder = false, onAutoAnswer, autoAt }: 
     );
 
     return (
-        <Box data-testid="composer-strip" sx={{ mb: 0.75, borderRadius: 1.5, bgcolor: 'action.hover', fontSize: fontSizes.sm, lineHeight: 1.4, color: 'text.secondary', overflow: 'hidden' }}>
+        <Box data-testid="composer-strip" sx={{ mb: 0.75, borderRadius: radius.card, bgcolor: 'action.hover', fontSize: fontSizes.sm, lineHeight: 1.4, color: 'text.secondary', overflow: 'hidden' }}>
             {/* Folded: the one fact that matters now; the whole line unfolds it. */}
             <ButtonBase
                 onClick={() => setOpen(!open)}
@@ -124,7 +125,7 @@ export function ComposerStrip({ thread, folder = false, onAutoAnswer, autoAt }: 
                         <Row icon={<AutoFixHigh sx={{ color: mode === 'off' ? undefined : 'primary.main' }} />} name={t('strip.autoAnswer.title')}>
                             <Tooltip title={t(`strip.autoAnswer.${mode}Help`)}>
                                 <ButtonBase onClick={(e) => setMenu(e.currentTarget)} aria-label={t('strip.autoAnswer.change')}
-                                    sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25, px: 0.75, ml: -0.75, py: 0.25, borderRadius: 1, font: 'inherit', color: 'text.primary', '&:hover': { bgcolor: 'action.selected' } }}>
+                                    sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25, px: 0.75, ml: -0.75, py: 0.25, borderRadius: radius.row, font: 'inherit', color: 'text.primary', '&:hover': { bgcolor: 'action.selected' } }}>
                                     {t(`strip.autoAnswer.${mode}`)}
                                     <ExpandMore sx={{ fontSize: 15, color: 'text.secondary' }} />
                                 </ButtonBase>
@@ -142,7 +143,7 @@ export function ComposerStrip({ thread, folder = false, onAutoAnswer, autoAt }: 
                         <MenuItem key={m} selected={m === mode} onClick={() => { setMenu(null); if (m !== mode || !own) onAutoAnswer(m); }} sx={{ alignItems: 'flex-start', gap: 1 }}>
                             <Box sx={{ width: 16, pt: 0.25, flexShrink: 0 }}>{m === mode && <Check sx={{ fontSize: 16 }} />}</Box>
                             <ListItemText primary={t(`strip.autoAnswer.${m}`)} secondary={t(`strip.autoAnswer.${m}Help`)}
-                                slotProps={{ primary: { sx: { fontSize: '0.875rem' } }, secondary: { sx: { whiteSpace: 'normal', fontSize: fontSizes.sm } } }} />
+                                slotProps={{ primary: { sx: { fontSize: fontSizes.base } }, secondary: { sx: { whiteSpace: 'normal', fontSize: fontSizes.sm } } }} />
                         </MenuItem>
                     ))}
                 </Menu>

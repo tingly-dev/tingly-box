@@ -6,6 +6,8 @@ import {useTranslation} from 'react-i18next';
 import type {TFunction} from 'i18next';
 import {useDraft} from './context';
 import type {AskOption, AskQuestion} from './model';
+import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 // QuestionDraft is a question card's state: what is picked and typed for
 // each question (by index), and whether the answer went out.
@@ -46,7 +48,7 @@ const OptionButton = ({option, selected, multi, disabled, onClick}: {
             onClick={onClick}
             sx={{
                 display: 'flex', alignItems: 'flex-start', gap: 1, width: '100%', textAlign: 'left',
-                px: 1.25, py: 0.875, borderRadius: 1, border: 1, font: 'inherit', cursor: disabled ? 'default' : 'pointer',
+                px: 1.25, py: 0.875, borderRadius: radius.row, border: 1, font: 'inherit', cursor: disabled ? 'default' : 'pointer',
                 borderColor: selected ? 'primary.main' : 'divider',
                 bgcolor: (theme) => selected ? alpha(theme.palette.primary.main, 0.08) : 'transparent',
                 color: 'text.primary',
@@ -56,9 +58,9 @@ const OptionButton = ({option, selected, multi, disabled, onClick}: {
         >
             <Box sx={{flex: 1, minWidth: 0}}>
                 <Stack direction="row" spacing={0.75} sx={{alignItems: 'center', minWidth: 0}}>
-                    <Typography variant="body2" sx={{fontWeight: 600, color: 'inherit', fontSize: '0.875rem', wordBreak: 'break-word'}}>{option.text}</Typography>
+                    <Typography variant="body2" sx={{fontWeight: 600, color: 'inherit', fontSize: fontSizes.base, wordBreak: 'break-word'}}>{option.text}</Typography>
                     {option.recommended && (
-                        <Chip size="small" color="primary" variant="outlined" label={t('projects.transcript.recommended', {defaultValue: 'Recommended'})} sx={{height: 18, fontSize: '0.6875rem'}}/>
+                        <Chip size="small" color="primary" variant="outlined" label={t('projects.transcript.recommended', {defaultValue: 'Recommended'})} sx={{height: 18, fontSize: fontSizes.xs}}/>
                     )}
                 </Stack>
                 {option.description && (
@@ -154,7 +156,7 @@ const QuestionCard = ({requestId, title, questions, autoAt, onRespond}: {
     });
 
     return (
-        <Paper data-request-id={requestId} variant="outlined" sx={{p: 1.5, borderRadius: 1.5, borderColor: 'primary.main'}}>
+        <Paper data-request-id={requestId} variant="outlined" sx={{p: 1.5, borderRadius: radius.card, borderColor: 'primary.main'}}>
             <Stack spacing={1.75}>
                 {shown.map((q, qi) => (
                     <Box key={qi} role="group" aria-label={q.question}>
@@ -162,7 +164,7 @@ const QuestionCard = ({requestId, title, questions, autoAt, onRespond}: {
                             <Help sx={{fontSize: 16, color: 'primary.main', mt: 0.25, flexShrink: 0}}/>
                             <Box sx={{minWidth: 0}}>
                                 {q.header && <Typography variant="caption" sx={{color: 'text.secondary', display: 'block'}}>{q.header}</Typography>}
-                                <Typography variant="body2" sx={{fontWeight: 600, color: 'text.primary', fontSize: '0.875rem', wordBreak: 'break-word'}}>{q.question}</Typography>
+                                <Typography variant="body2" sx={{fontWeight: 600, color: 'text.primary', fontSize: fontSizes.base, wordBreak: 'break-word'}}>{q.question}</Typography>
                                 {q.multiSelect && (
                                     <Typography variant="caption" sx={{color: 'text.secondary'}}>{t('projects.transcript.pickSeveral', {defaultValue: 'Pick any that apply'})}</Typography>
                                 )}

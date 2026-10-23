@@ -5,6 +5,7 @@ import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { folderName } from '../../utils/format';
 import { composerPickerLabelSx, composerPickerSx } from '../composerPicker';
 import { Add, ExpandMore, FolderOpen } from '../icons';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface Props {
     value: string;
@@ -76,7 +77,7 @@ export function FolderPicker({ value, onChange, folders, onAddFolder }: Props) {
                         }}
                         placeholder={t('session.folderPlaceholder')}
                         inputProps={{ 'aria-label': t('session.folderPlaceholder'), spellCheck: false }}
-                        sx={{ fontFamily: fontMono, fontSize: fontSizes.md, px: 1, py: 0.25, border: 1, borderColor: 'divider', borderRadius: 1 }}
+                        sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, px: 1, py: 0.25, border: 1, borderColor: 'divider', borderRadius: radius.row }}
                     />
                 </Box>
                 {onAddFolder && (

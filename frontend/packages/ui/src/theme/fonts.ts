@@ -21,4 +21,5 @@ export const fontSizes = {
   sm: '0.75rem', //  12px   — captions, helper text
   md: '0.8rem', //   12.8px — compact body (matches theme body2)
   lg: '0.85rem', //  13.6px — compact emphasis
+  base: '0.875rem', // 14px — titles and body in Projects (one size for both)
 } as const;

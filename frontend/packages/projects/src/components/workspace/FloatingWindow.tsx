@@ -4,6 +4,8 @@ import { Badge, Box, IconButton, Paper, Tooltip, Typography } from '@mui/materia
 import { useTranslation } from 'react-i18next';
 import { Close, FloatWindow, Minimize, OverviewPane as DockIcon } from '../icons';
 import { readLocal, writeLocal } from '../../utils/storage';
+import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 export interface Rect { x: number; y: number; w: number; h: number }
 
@@ -107,10 +109,10 @@ function Window({ title, storageKey, defaultSize = DEFAULT_SIZE, clearRight = 0,
             aria-label={t('window.restore')}
             onClick={() => setMinimized(false)}
             onKeyDown={(e) => e.key === 'Enter' && setMinimized(false)}
-            sx={{ position: 'fixed', right: 24, bottom: 24, zIndex: 1250, display: 'flex', alignItems: 'center', gap: 1, pl: 1.5, pr: 2, height: 36, maxWidth: 280, borderRadius: 4.5, cursor: 'pointer', border: 1, borderColor: 'divider' }}
+            sx={{ position: 'fixed', right: 24, bottom: 24, zIndex: 1250, display: 'flex', alignItems: 'center', gap: 1, pl: 1.5, pr: 2, height: 36, maxWidth: 280, borderRadius: radius.pill, cursor: 'pointer', border: 1, borderColor: 'divider' }}
         >
             <Badge color="warning" variant="dot" invisible={!attention}><FloatWindow sx={{ fontSize: 16 }} /></Badge>
-            <Typography noWrap sx={{ fontSize: '0.875rem', fontWeight: 500 }}>{title}</Typography>
+            <Typography noWrap sx={{ fontSize: fontSizes.base, fontWeight: 500 }}>{title}</Typography>
         </Paper>
     ) : (
         <Paper
@@ -119,7 +121,7 @@ function Window({ title, storageKey, defaultSize = DEFAULT_SIZE, clearRight = 0,
             elevation={8}
             sx={{
                 position: 'fixed', left: rect.x, top: rect.y, width: rect.w, height: rect.h, zIndex: 1250,
-                display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 1.5, border: 1, borderColor: 'divider',
+                display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: radius.card, border: 1, borderColor: 'divider',
                 userSelect: active ? 'none' : undefined,
             }}
         >
@@ -127,7 +129,7 @@ function Window({ title, storageKey, defaultSize = DEFAULT_SIZE, clearRight = 0,
                 onPointerDown={begin('move')} onPointerMove={move} onPointerUp={end} onPointerCancel={end}
                 sx={{ display: 'flex', alignItems: 'center', gap: 0.5, height: TITLEBAR, flexShrink: 0, pl: 1.5, pr: 0.5, bgcolor: 'action.hover', borderBottom: 1, borderColor: 'divider', cursor: active ? 'grabbing' : 'grab', touchAction: 'none' }}
             >
-                <Typography noWrap component="div" sx={{ flex: 1, minWidth: 0, fontSize: '0.875rem', fontWeight: 650 }}>{title}</Typography>
+                <Typography noWrap component="div" sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.base, fontWeight: 650 }}>{title}</Typography>
                 {onDock && (
                     <Tooltip title={dockLabel ?? t('window.dock')}>
                         <IconButton size="small" onClick={onDock} aria-label={dockLabel ?? t('window.dock')}><DockIcon fontSize="small" /></IconButton>

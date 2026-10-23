@@ -5,6 +5,8 @@ import type { Attachment } from '../client';
 import { isLongText, lineCount, pastedTextFile } from './attachments';
 import { ArrowUpward, Attach, Close, Description, Stop } from './icons';
 import { ModelPicker } from './ModelPicker';
+import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 /** A file on its way into the message: uploading, ready, or refused. */
 interface Pending {
@@ -255,10 +257,10 @@ export function Composer({
                     {files.map((f) => (
                         <Box
                             key={f.key}
-                            sx={{ display: 'flex', alignItems: 'center', gap: 0.75, pl: f.preview ? 0.5 : 1, pr: 0.5, py: 0.5, borderRadius: 1, border: 1, borderColor: 'divider', maxWidth: 240 }}
+                            sx={{ display: 'flex', alignItems: 'center', gap: 0.75, pl: f.preview ? 0.5 : 1, pr: 0.5, py: 0.5, borderRadius: radius.row, border: 1, borderColor: 'divider', maxWidth: 240 }}
                         >
                             {f.preview
-                                ? <Box component="img" src={f.preview} alt="" sx={{ width: 28, height: 28, borderRadius: 0.5, objectFit: 'cover' }} />
+                                ? <Box component="img" src={f.preview} alt="" sx={{ width: 28, height: 28, borderRadius: radius.chip, objectFit: 'cover' }} />
                                 : <Description fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />}
                             <Typography variant="caption" noWrap sx={{ minWidth: 0 }}>
                                 {f.lines !== undefined ? t('composer.pastedText', { count: f.lines }) : f.name}
@@ -305,7 +307,7 @@ export function Composer({
                     void submit();
                 }
             }}
-            sx={{ fontSize: '0.875rem', lineHeight: 1.65, color: 'text.primary', ...(inline && { py: 0.5 }) }}
+            sx={{ fontSize: fontSizes.base, lineHeight: 1.65, color: 'text.primary', ...(inline && { py: 0.5 }) }}
         />
     );
 
@@ -313,7 +315,7 @@ export function Composer({
         <Paper
             variant="outlined"
             sx={{
-                borderRadius: 1.5,
+                borderRadius: radius.card,
                 px: inline ? 1.5 : 1.75,
                 pt: inline ? 0.75 : 1.25,
                 pb: 0.75,

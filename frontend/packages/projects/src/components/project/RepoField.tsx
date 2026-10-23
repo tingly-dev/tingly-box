@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { api, unwrap } from '../../client';
 import { Branch, Close, Warning } from '../icons';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface RepoEntry {
     root: string;
@@ -49,8 +50,8 @@ export function RepoField({ value, onChange }: { value: RepoEntry[]; onChange: (
     return (
         <Box>
             {value.map((r, i) => (
-                <Box key={r.root} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.75, px: 1.25, mb: 0.75, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                    <Typography sx={{ ...mono, fontSize: fontSizes.lg, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'text.primary' }} title={r.root}>
+                <Box key={r.root} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.75, px: 1.25, mb: 0.75, border: 1, borderColor: 'divider', borderRadius: radius.row }}>
+                    <Typography sx={{ ...mono, fontSize: fontSizes.base, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'text.primary' }} title={r.root}>
                         {r.root}
                     </Typography>
                     <Tooltip title={t('repo.baseHint')}>
@@ -81,7 +82,7 @@ export function RepoField({ value, onChange }: { value: RepoEntry[]; onChange: (
                     placeholder={t('repo.placeholder')}
                     error={!!error}
                     helperText={error ?? undefined}
-                    slotProps={{ htmlInput: { style: { ...mono, fontSize: fontSizes.lg }, spellCheck: false } }}
+                    slotProps={{ htmlInput: { style: { ...mono, fontSize: fontSizes.base }, spellCheck: false } }}
                 />
                 <Button variant="outlined" onClick={() => void add()} disabled={!path.trim() || busy} sx={{ flexShrink: 0, height: 40 }}>
                     {t('repo.add')}

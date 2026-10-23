@@ -1,9 +1,10 @@
 import XMarkdown, {type ComponentProps} from '@ant-design/x-markdown';
 import {Box} from '@mui/material';
-import {fontMono} from '@tingly/ui/theme/fonts';
+import {fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import type {ReactNode} from 'react';
 import {Children, isValidElement} from 'react';
 import {useTranscriptHost} from './context';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Plain text of a rendered node tree: a fenced block's code reaches the code
 // component as parsed children, but a code block takes a string.
@@ -18,7 +19,7 @@ const textOf = (node: ReactNode): string => {
 const PlainCode = ({code}: {code: string; language: string}) => (
     <Box
         component="pre"
-        sx={{fontFamily: fontMono, fontSize: '0.85em', m: 0, my: 1.5, p: 1.5, borderRadius: 1, bgcolor: 'action.hover', overflow: 'auto', maxHeight: 480}}
+        sx={{fontFamily: fontMono, fontSize: '0.85em', m: 0, my: 1.5, p: 1.5, borderRadius: radius.row, bgcolor: 'action.hover', overflow: 'auto', maxHeight: 480}}
     >
         {code}
     </Box>
@@ -33,7 +34,7 @@ const Code = ({block, lang, children}: ComponentProps) => {
     return (
         <Box
             component="code"
-            sx={{fontFamily: fontMono, fontSize: '0.85em', px: 0.5, py: 0.125, borderRadius: 0.5, bgcolor: 'action.hover'}}
+            sx={{fontFamily: fontMono, fontSize: '0.85em', px: 0.5, py: 0.125, borderRadius: radius.chip, bgcolor: 'action.hover'}}
         >
             {children}
         </Box>
@@ -52,7 +53,7 @@ const Markdown = ({content}: {content: string}) => (
     <Box
         sx={{
             color: 'text.primary',
-            fontSize: '0.875rem',
+            fontSize: fontSizes.base,
             lineHeight: 1.65,
             wordBreak: 'break-word',
             '& p': {m: 0, mb: 1.25},
@@ -66,7 +67,7 @@ const Markdown = ({content}: {content: string}) => (
             '& a': {color: 'primary.main'},
             '& blockquote': {m: 0, mb: 1.25, pl: 1.5, borderLeft: 3, borderColor: 'divider', color: 'text.secondary'},
             '& hr': {border: 0, borderTop: 1, borderColor: 'divider', my: 2},
-            '& table': {borderCollapse: 'collapse', mb: 1.25, fontSize: '0.875rem', display: 'block', overflowX: 'auto'},
+            '& table': {borderCollapse: 'collapse', mb: 1.25, fontSize: fontSizes.base, display: 'block', overflowX: 'auto'},
             '& th, & td': {border: 1, borderColor: 'divider', px: 1.25, py: 0.5, textAlign: 'left'},
             '& th': {bgcolor: 'action.hover', fontWeight: 600},
         }}

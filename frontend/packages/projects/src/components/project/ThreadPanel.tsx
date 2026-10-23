@@ -26,6 +26,7 @@ import { backgroundTasks } from '../workdir/backgroundTasks';
 import { SubagentsPanel } from '../workdir/SubagentsPanel';
 import { readLocal, writeLocal } from '../../utils/storage';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 const mono = { fontFamily: fontMono } as const;
 
@@ -34,7 +35,7 @@ function MetaLine({ items }: { items: React.ReactNode[] }) {
     const shown = items.filter(Boolean);
     if (shown.length === 0) return null;
     return (
-        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 0.75, rowGap: 0.25, color: 'text.secondary', fontSize: fontSizes.md }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 0.75, rowGap: 0.25, color: 'text.secondary', fontSize: fontSizes.sm }}>
             {shown.map((x, i) => (
                 <Box key={i} component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
                     {i > 0 && <Box component="span" sx={{ color: 'text.disabled' }}>·</Box>}
@@ -299,13 +300,13 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     {!hideTitle && <IconButton size="small" onClick={onBack} aria-label={t('thread.back')}><ArrowBack fontSize="small" /></IconButton>}
                     {hideTitle
                         ? <Box sx={{ flex: 1 }} />
-                        : <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: '0.9375rem', fontWeight: 650, color: 'text.primary' }} title={thread.title}>{thread.title}</Typography>}
+                        : <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.base, fontWeight: 650, color: 'text.primary' }} title={thread.title}>{thread.title}</Typography>}
                     {canReview && <Button size="small" variant="contained" startIcon={<DiffIcon />} onClick={() => setDiffOpen(true)} sx={{ flexShrink: 0, py: 0.25 }}>{t('thread.review')}</Button>}
                     {/* While work runs in the background it names itself. */}
                     {session && liveTasks.length > 0 && !rail && (
                         <Tooltip title={t('session.backgroundTasks')}>
                             <Button size="small" variant="outlined" color="inherit" startIcon={<Stream sx={{ fontSize: '16px !important' }} />} onClick={(e) => setTasksAnchor(e.currentTarget)}
-                                sx={{ borderRadius: 4, borderColor: 'divider', color: 'text.secondary', py: 0, px: 1.25, minWidth: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                sx={{ borderRadius: radius.pill, borderColor: 'divider', color: 'text.secondary', py: 0, px: 1.25, minWidth: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>
                                 {t('session.tasksRunning', { count: liveTasks.length })}
                             </Button>
                         </Tooltip>
@@ -358,7 +359,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     ]} />
                 </Box>
                 <Collapse in={taskOpen}>
-                    <Box sx={{ mt: 1, p: 1.25, bgcolor: 'action.hover', borderRadius: 1, maxHeight: 220, overflow: 'auto' }}><Markdown text={thread.task} /></Box>
+                    <Box sx={{ mt: 1, p: 1.25, bgcolor: 'action.hover', borderRadius: radius.row, maxHeight: 220, overflow: 'auto' }}><Markdown text={thread.task} /></Box>
                 </Collapse>
                 {/* A pending request card is already the call to action. */}
                 {thread.status === 'waiting' && thread.wait_reason && !pendingRequestId && (
@@ -400,7 +401,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         sx={{ mb: 1, '& .MuiAlert-message': { minWidth: 0, flex: 1 } }}>
                         <Typography variant="body2" sx={{ color: 'text.primary', mb: 0.5 }}>{t('session.handoffReady')}</Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <Box component="code" sx={{ ...mono, flex: 1, minWidth: 0, overflowX: 'auto', whiteSpace: 'nowrap', fontSize: fontSizes.md, px: 1, py: 0.5, borderRadius: 1, bgcolor: 'action.hover', color: 'text.primary' }}>
+                            <Box component="code" sx={{ ...mono, flex: 1, minWidth: 0, overflowX: 'auto', whiteSpace: 'nowrap', fontSize: fontSizes.sm, px: 1, py: 0.5, borderRadius: radius.row, bgcolor: 'action.hover', color: 'text.primary' }}>
                                 {handoff}
                             </Box>
                             <CopyIconButton value={handoff} label={t('common.copy')} copiedLabel={t('common.copied')} />

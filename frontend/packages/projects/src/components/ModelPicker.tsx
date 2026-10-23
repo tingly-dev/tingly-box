@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Check, ExpandMore } from './icons';
 import { useModels } from '../hooks/useModels';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface Props {
     value: string;
@@ -33,7 +34,7 @@ export function ModelPicker({ value, onChange, disabled, label }: Props) {
                 disabled={disabled}
                 onClick={(e) => setAnchor(e.currentTarget)}
                 endIcon={<ExpandMore fontSize="small" />}
-                sx={{ color: 'text.secondary', fontWeight: 500, fontSize: fontSizes.sm, maxWidth: 260, px: 0.75, minWidth: 0, borderRadius: 1 }}
+                sx={{ color: 'text.secondary', fontWeight: 500, fontSize: fontSizes.sm, maxWidth: 260, px: 0.75, minWidth: 0, borderRadius: radius.row }}
             >
                 <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {label ? `${label} · ` : ''}{value || t('model.auto')}
@@ -52,7 +53,7 @@ export function ModelPicker({ value, onChange, disabled, label }: Props) {
                         <ListItemText
                             primary={m.id}
                             secondary={m.display_name && m.display_name !== m.id ? m.display_name : undefined}
-                            slotProps={{ primary: { sx: { fontFamily: fontMono, fontSize: fontSizes.lg } } }}
+                            slotProps={{ primary: { sx: { fontFamily: fontMono, fontSize: fontSizes.base } } }}
                         />
                         {m.id === value && <Check fontSize="small" color="primary" sx={{ ml: 1 }} />}
                     </MenuItem>
@@ -87,7 +88,7 @@ export function ModelPicker({ value, onChange, disabled, label }: Props) {
                         placeholder={t('model.customPlaceholder')}
                         value={custom}
                         onChange={(e) => setCustom(e.target.value)}
-                        slotProps={{ htmlInput: { style: { fontFamily: fontMono, fontSize: fontSizes.lg } } }}
+                        slotProps={{ htmlInput: { style: { fontFamily: fontMono, fontSize: fontSizes.base } } }}
                     />
                 </Box>
             </Menu>

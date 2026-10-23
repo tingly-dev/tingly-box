@@ -3,6 +3,7 @@ import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, 
 import { useTranslation } from 'react-i18next';
 import { formatTokens } from '../utils/format';
 import { estimateTokens } from '../utils/tokens';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface Props {
     open: boolean;
@@ -63,7 +64,7 @@ export function TextEditDialog({ open, title, intro, initialText, nameField, pla
                         maxRows={28}
                         fullWidth
                         autoFocus={!nameField}
-                        slotProps={{ input: { readOnly }, htmlInput: { style: { fontSize: '0.875rem', lineHeight: 1.6 } } }}
+                        slotProps={{ input: { readOnly }, htmlInput: { style: { fontSize: fontSizes.base, lineHeight: 1.6 } } }}
                     />
                 </Stack>
             </DialogContent>
