@@ -156,7 +156,7 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
                             ? <Typography sx={{ fontSize: fontSizes.sm, color: 'text.primary' }}>{t('thread.commits', { count: thread.commits_ahead })} · {t('thread.files', { count: thread.files_changed })}</Typography>
                             : <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{t('rail.noCommits')}</Typography>}
                     {thread.uncommitted && <Typography sx={{ fontSize: fontSizes.sm, color: 'text.primary' }}>{t('thread.uncommitted')}</Typography>}
-                    {canReview && <Button size="small" variant="contained" startIcon={<DiffIcon />} onClick={onReview} sx={{ mt: 0.75 }}>{t('thread.review')}</Button>}
+                    {canReview && <Button size="small" variant="outlined" startIcon={<DiffIcon />} onClick={onReview} sx={{ mt: 0.75 }}>{t('thread.review')}</Button>}
                 </RailCard>
             )}
             {folder && (
