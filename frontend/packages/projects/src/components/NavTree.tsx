@@ -6,13 +6,15 @@ import { useTranslation } from 'react-i18next';
 import { api, unwrap, type ProjectSummary, type Thread } from '../client';
 import { folderName, timeAgo } from '../utils/format';
 import { readLocal, writeLocal } from '../utils/storage';
-import { ChevronRight, ExpandMore, Terminal } from './icons';
+import { ChevronRight, ExpandMore, Folder, Stack, Star, Terminal } from './icons';
 import { needsUser, stateColor, ThreadStateMark } from './project/threadStatus';
 
 /** Sessions shown per open folder before "Show older"; running and waiting ones always show. */
 const VISIBLE = 5;
 
-const LABEL_SX = { fontSize: fontSizes.sm, fontWeight: 600, lineHeight: 1.3 } as const;
+const LABEL_SX = { fontSize: fontSizes.md, fontWeight: 600, lineHeight: 1.3 } as const;
+/** Sessions line up with the node's name: icon column plus its gap. */
+const SESSION_INDENT = 4.5;
 const ROW_SX = {
     display: 'flex', alignItems: 'center', gap: 1, mx: 1, pl: 2, pr: 1.5, minHeight: 32, borderRadius: 1,
     textDecoration: 'none', color: 'text.primary',
@@ -78,7 +80,7 @@ function SessionRow({ thread, to, selected, onNavigate }: { thread: Thread; to: 
                 onClick={onNavigate}
                 title={thread.title}
                 aria-current={selected ? 'page' : undefined}
-                sx={{ ...ROW_SX, ...(selected && { backgroundColor: 'action.selected' }) }}
+                sx={{ ...ROW_SX, pl: SESSION_INDENT, ...(selected && { backgroundColor: 'action.selected' }) }}
             >
                 <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.base, fontWeight: 500, color: 'inherit' }}>{thread.title}</Typography>
                 <Typography component="span" sx={{ flexShrink: 0, fontSize: fontSizes.xs, color: 'text.disabled' }}>{timeAgo(thread.updated_at, i18n.language, true)}</Typography>
@@ -87,7 +89,7 @@ function SessionRow({ thread, to, selected, onNavigate }: { thread: Thread; to: 
                 </Box>
             </Box>
             {tasks.map((task) => (
-                <Box key={task.task_id} title={task.description} sx={{ ...ROW_SX, minHeight: 24, color: 'text.secondary' }}>
+                <Box key={task.task_id} title={task.description} sx={{ ...ROW_SX, pl: SESSION_INDENT, minHeight: 24, color: 'text.secondary' }}>
                     <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.sm, color: 'inherit' }}>{task.description}</Typography>
                     <Box sx={{ width: 14, flexShrink: 0, display: 'flex', justifyContent: 'center' }}><Terminal sx={{ fontSize: 14 }} /></Box>
                 </Box>
@@ -111,17 +113,21 @@ function Rollup({ folder }: { folder: ProjectSummary }) {
     );
 }
 
-function FolderNode({ folder, scope, openSession, to, sessionTo, onNavigate }: {
+function TreeNode({ folder, isFolder, active, openSession, to, sessionTo, onNavigate }: {
     folder: ProjectSummary;
-    scope?: string;
+    /** A working folder (else a project): only the icon and the name differ. */
+    isFolder: boolean;
+    /** The page open is this node's. */
+    active: boolean;
     openSession: string | null;
     to: string;
     sessionTo: (id: string) => string;
     onNavigate?: () => void;
 }) {
     const { t } = useTranslation('projects');
+    const label = isFolder ? folderName(folder.path ?? '') : folder.name;
     const path = folder.path ?? '';
-    const isOpenFolder = scope === path;
+    const isOpenFolder = active;
     const key = `nav.folder.${folder.id}`;
     // Remembered per browser; a folder the user is in starts open.
     const [folded, setFolded] = useState(() => {
@@ -143,18 +149,21 @@ function FolderNode({ folder, scope, openSession, to, sessionTo, onNavigate }: {
     const selected = isOpenFolder && !openSession;
     return (
         <Box>
-            <Box sx={{ ...ROW_SX, minHeight: 30, mt: 0.5, pl: 2, color: selected ? 'text.primary' : 'text.secondary', ...(selected && { backgroundColor: 'action.selected' }) }}>
+            <Box sx={{ ...ROW_SX, minHeight: 32, mt: 0.5, color: selected ? 'text.primary' : 'text.secondary', ...(selected && { backgroundColor: 'action.selected' }) }}>
+                <Box component="span" aria-hidden sx={{ width: 16, flexShrink: 0, display: 'flex', justifyContent: 'center', color: 'text.secondary', '& svg': { fontSize: 16 } }}>
+                    {isFolder ? <Folder /> : folder.starred ? <Star /> : <Stack />}
+                </Box>
                 <Box
                     component={NavLink}
                     to={to}
                     onClick={onNavigate}
-                    title={path}
+                    title={isFolder ? path : label}
                     aria-current={selected ? 'page' : undefined}
                     sx={{ ...LABEL_SX, minWidth: 0, color: 'inherit', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', '&:hover': { color: 'text.primary' } }}
                 >
-                    {folderName(path)}
+                    {label}
                 </Box>
-                <IconButton size="small" aria-label={t(folded ? 'sidebar.unfold' : 'sidebar.fold', { name: folderName(path) })} aria-expanded={open} onClick={toggle} sx={{ p: 0, color: 'text.disabled', '&:hover': { color: 'text.primary' } }}>
+                <IconButton size="small" aria-label={t(folded ? 'sidebar.unfold' : 'sidebar.fold', { name: label })} aria-expanded={open} onClick={toggle} sx={{ p: 0, color: 'text.disabled', '&:hover': { color: 'text.primary' } }}>
                     {folded ? <ChevronRight sx={{ fontSize: 14 }} /> : <ExpandMore sx={{ fontSize: 14 }} />}
                 </IconButton>
                 <Box sx={{ flex: 1 }} />
@@ -164,7 +173,7 @@ function FolderNode({ folder, scope, openSession, to, sessionTo, onNavigate }: {
                 <SessionRow key={th.id} thread={th} to={sessionTo(th.id)} selected={th.id === openSession} onNavigate={onNavigate} />
             ))}
             {open && older > 0 && !all && (
-                <ButtonBase onClick={() => setAll(true)} sx={{ ...ROW_SX, width: 'calc(100% - 16px)', minHeight: 28, justifyContent: 'flex-start', color: 'text.secondary', fontSize: fontSizes.sm }}>
+                <ButtonBase onClick={() => setAll(true)} sx={{ ...ROW_SX, pl: SESSION_INDENT, width: 'calc(100% - 16px)', minHeight: 28, justifyContent: 'flex-start', color: 'text.secondary', fontSize: fontSizes.sm }}>
                     {t('sidebar.showOlder', { count: older })}
                 </ButtonBase>
             )}
@@ -176,29 +185,35 @@ function FolderNode({ folder, scope, openSession, to, sessionTo, onNavigate }: {
 }
 
 /**
- * The working folders as a tree. A folder is a small label with a fold caret;
- * its sessions sit flush-left beneath it with the time and state mark at the
- * end of the row. Folded, the folder shows one dot for the most urgent state.
+ * Projects and working folders as one tree. A node is an icon (project or
+ * folder), a name and a fold caret; its sessions sit beneath it, lined up with
+ * the name, with the time and state mark at the end of the row. Folded, the
+ * node shows one dot for the most urgent state.
  */
-export function FolderTree({ folders, scope, openSession, folderTo, onNavigate }: {
-    folders: ProjectSummary[];
-    scope?: string;
+export function NavTree({ items, isFolder, activeId, openSession, openParam, to, onNavigate }: {
+    items: ProjectSummary[];
+    isFolder: boolean;
+    /** Id of the node whose page is open. */
+    activeId?: string;
     openSession: string | null;
-    folderTo: (path: string) => string;
+    /** Query key a session opens under ("session" for folders, "thread" for projects). */
+    openParam: string;
+    to: (item: ProjectSummary) => string;
     onNavigate?: () => void;
 }) {
     return (
         <Box>
-            {folders.map((f) => {
-                const to = folderTo(f.path ?? '');
+            {items.map((f) => {
+                const href = to(f);
                 return (
-                    <FolderNode
+                    <TreeNode
                         key={f.id}
                         folder={f}
-                        scope={scope}
+                        isFolder={isFolder}
+                        active={activeId === f.id}
                         openSession={openSession}
-                        to={to}
-                        sessionTo={(id) => `${to}${to.includes('?') ? '&' : '?'}session=${encodeURIComponent(id)}`}
+                        to={href}
+                        sessionTo={(id) => `${href}${href.includes('?') ? '&' : '?'}${openParam}=${encodeURIComponent(id)}`}
                         onNavigate={onNavigate}
                     />
                 );

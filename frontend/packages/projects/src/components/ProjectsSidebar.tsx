@@ -5,10 +5,9 @@ import { fontSizes } from '@tingly/ui/theme/fonts';
 import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useProjectList } from '../hooks/useProjectList';
-import type { ProjectSummary } from '../client';
-import { Add, ChatBubble, Folder, Star } from './icons';
+import { Add, ChatBubble, Folder } from './icons';
 import { useProjectsHost } from '../host/ProjectsHost';
-import { FolderTree } from './FolderTree';
+import { NavTree } from './NavTree';
 
 /** One row of a sidebar section: a place the user can open. */
 export interface ProjectsSidebarRow {
@@ -78,18 +77,6 @@ function useImBotCount(enabled: boolean): number | null {
     return count;
 }
 
-/** What a project or folder row says about its threads: running and waiting, else what waits. */
-function useActivity() {
-    const { t } = useTranslation('projects');
-    return (p: ProjectSummary, waitingKey: 'sidebar.waiting' | 'sidebar.sessionsWaiting') => {
-        const { working } = p.threads;
-        const waiting = p.threads.waiting + p.threads.failed;
-        if (working > 0 && waiting > 0) return t('sidebar.activity', { running: working, waiting });
-        if (working > 0) return t('sidebar.running', { count: working });
-        return waiting > 0 ? t(waitingKey, { count: waiting }) : undefined;
-    };
-}
-
 function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection; onNavigate?: () => void }) {
     const title = (
         <Typography noWrap sx={{ flex: 1, fontSize: fontSizes.sm, fontWeight: 600, color: 'text.secondary' }}>
@@ -114,7 +101,7 @@ function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection;
             </Box>}
             <List disablePadding>
                 {section.content}
-                {section.rows.length === 0 && section.empty && (
+                {section.rows.length === 0 && !section.content && section.empty && (
                     <Typography variant="body2" color="text.secondary" sx={{ px: 3, py: 1 }}>{section.empty}</Typography>
                 )}
                 {section.rows.map((row) => (
@@ -163,7 +150,6 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
     const { projects, folders } = useProjectList(showProjects || showWorkdirs);
     const [params] = useSearchParams();
     const scope = location.pathname === paths.folder().split('?')[0] ? params.get('path') ?? '' : undefined;
-    const activity = useActivity();
     const openSession = params.get('session');
 
     const projectSection: ProjectsSidebarSection | null = showProjects ? {
@@ -177,19 +163,18 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
                 onNavigate?.();
             },
         },
-        rows: (projects ?? []).map((p) => {
-            const to = paths.project(p.id);
-            return {
-                key: p.id,
-                label: p.name,
-                to,
-                selected: location.pathname === to,
-                attention: p.threads.waiting + p.threads.failed > 0,
-                running: p.threads.working > 0,
-                icon: p.starred ? <Star /> : undefined,
-                subtitle: activity(p, 'sidebar.waiting'),
-            };
-        }),
+        rows: [],
+        content: projects?.length ? (
+            <NavTree
+                items={projects}
+                isFolder={false}
+                activeId={projects?.find((p) => location.pathname === paths.project(p.id))?.id}
+                openSession={params.get('thread')}
+                openParam="thread"
+                to={(p) => paths.project(p.id)}
+                onNavigate={onNavigate}
+            />
+        ) : undefined,
         empty: projects ? t('sidebar.noProjects') : undefined,
     } : null;
 
@@ -205,9 +190,17 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
             },
         },
         rows: [],
-        content: (
-            <FolderTree folders={folders ?? []} scope={scope} openSession={openSession} folderTo={paths.folder} onNavigate={onNavigate} />
-        ),
+        content: folders?.length ? (
+            <NavTree
+                items={folders}
+                isFolder
+                activeId={folders.find((f) => f.path === scope)?.id}
+                openSession={openSession}
+                openParam="session"
+                to={(f) => paths.folder(f.path ?? '')}
+                onNavigate={onNavigate}
+            />
+        ) : undefined,
         empty: folders ? t('sidebar.noWorkdirs') : undefined,
     } : null;
 
