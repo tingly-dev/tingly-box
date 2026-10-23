@@ -59,7 +59,7 @@ export function SubagentsPanel({ load, turnLive, onOpen, onShow }: Props) {
                 const icon = status === 'running'
                     ? <CircularProgress size={14} />
                     : status === 'completed'
-                        ? <CheckCircle sx={{ fontSize: 16, color: (theme) => getReadableAccent(theme, 'success') }} />
+                        ? <CheckCircle sx={{ fontSize: 16, color: 'text.secondary' }} />
                         : status === 'failed'
                             ? <Cancel sx={{ fontSize: 16, color: (theme) => getReadableAccent(theme, 'error') }} />
                             : <Block sx={{ fontSize: 16, color: 'text.secondary' }} />;

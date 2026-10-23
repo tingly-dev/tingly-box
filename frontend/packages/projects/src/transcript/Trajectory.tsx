@@ -26,7 +26,7 @@ const kindColor = (theme: Theme, kind: TrajectoryKind): string => {
         case 'user':
             return theme.palette.primary.main;
         case 'agent':
-            return getReadableAccent(theme, 'info');
+            return theme.palette.text.primary;
         case 'approval':
         case 'ask':
             return getReadableAccent(theme, 'warning');

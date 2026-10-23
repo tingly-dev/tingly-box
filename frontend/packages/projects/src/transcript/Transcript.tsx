@@ -122,7 +122,7 @@ const outcomeColor = (theme: Theme, outcome: RequestOutcome): string => {
     switch (outcome) {
         case 'allowed':
         case 'answered':
-            return getReadableAccent(theme, 'success');
+            return theme.palette.text.secondary;
         case 'denied':
         case 'declined':
             return getReadableAccent(theme, 'error');
@@ -615,7 +615,7 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
 
     const statusIcon = {
         running: <CircularProgress size={14}/>,
-        completed: <CheckCircle sx={{fontSize: 16, color: (theme) => getReadableAccent(theme, 'success')}}/>,
+        completed: <CheckCircle sx={{fontSize: 16, color: 'text.secondary'}}/>,
         stopped: <Block sx={{fontSize: 16, color: 'text.secondary'}}/>,
         failed: <Cancel sx={{fontSize: 16, color: (theme) => getReadableAccent(theme, 'error')}}/>,
     }[status];
@@ -801,7 +801,7 @@ const ChecklistCard = ({todos, working}: {todos: Todo[]; working: boolean}) => {
                         <Stack component="li" key={i} direction="row" spacing={1} sx={{alignItems: 'flex-start'}}>
                             <Box sx={{width: 16, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
                                 {x.status === 'completed'
-                                    ? <CheckCircle sx={{fontSize: 16, color: 'success.main'}}/>
+                                    ? <CheckCircle sx={{fontSize: 16, color: 'text.secondary'}}/>
                                     : x.status === 'in_progress' && working
                                         ? <CircularProgress size={12}/>
                                         : <Box sx={{width: 12, height: 12, borderRadius: '50%', border: 1.5, borderColor: x.status === 'in_progress' ? 'primary.main' : 'text.disabled'}}/>}

@@ -18,7 +18,7 @@ import { DiffDialog } from './DiffDialog';
 import { ComposerStrip } from './ComposerStrip';
 import { RAIL_MIN_PANEL, ThreadInfoRail } from './ThreadInfoRail';
 import { LoadEarlier } from './LoadEarlier';
-import { ThreadState, toneColor } from './threadStatus';
+import { ThreadState } from './threadStatus';
 import { threadTranscript } from './threadTranscript';
 import { threadOps } from './threadOps';
 import { BackgroundTasksPanel } from '../workdir/BackgroundTasksPanel';
@@ -352,9 +352,9 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         !thread.branch && !session && t('thread.noRepo'),
                         // The rail's Changes card carries these.
                         !rail && (thread.merged_at
-                            ? <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: toneColor('success') }}><Merge sx={{ fontSize: 13 }} />{t('thread.mergedInto', { base: thread.base_branch })}</Box>
+                            ? <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}><Merge sx={{ fontSize: 13 }} />{t('thread.mergedInto', { base: thread.base_branch })}</Box>
                             : thread.commits_ahead > 0 && <>{t('thread.commits', { count: thread.commits_ahead })} · {t('thread.files', { count: thread.files_changed })}</>),
-                        !rail && thread.uncommitted && <Box component="span" sx={{ color: toneColor('warning') }}>{t('thread.uncommitted')}</Box>,
+                        !rail && thread.uncommitted && t('thread.uncommitted'),
                     ]} />
                 </Box>
                 <Collapse in={taskOpen}>

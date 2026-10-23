@@ -1,4 +1,4 @@
-import { alpha, Box, type ChipProps } from '@mui/material';
+import { Box } from '@mui/material';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { getReadableAccent } from '@tingly/ui/theme/status';
 import { useTranslation } from 'react-i18next';
@@ -55,12 +55,6 @@ export function ThreadStateMark({ status }: { status: string }) {
         </Box>
     );
 }
-
-/** A tone's readable text colour, or the secondary text colour for none. */
-export const toneColor = (color: ChipProps['color']) => (theme: Parameters<typeof getReadableAccent>[0]) =>
-    color === 'default' || color === 'primary' || color === 'secondary' || !color
-        ? theme.palette.text.secondary
-        : getReadableAccent(theme, color);
 
 /** One state, one look, wherever a thread's status shows: its mark, and its
  * word unless `compact` (the word then sits in the title attribute). */
@@ -119,7 +113,7 @@ export function ThreadBadges({ thread }: { thread: Thread }) {
     if (thread.merged_at) {
         return (
             <Box component="span" title={t('thread.mergedInto', { base: thread.base_branch })}
-                sx={{ ...pill, borderColor: 'transparent', color: toneColor('success'), bgcolor: (th) => alpha(th.palette.success.main, 0.1) }}>
+                sx={pill}>
                 <Merge />{t('thread.mergedBadge')}
             </Box>
         );

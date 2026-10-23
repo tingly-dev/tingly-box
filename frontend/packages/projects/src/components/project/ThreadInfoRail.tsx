@@ -10,7 +10,6 @@ import { formatTokens } from '../../utils/format';
 import { readLocal, writeLocal } from '../../utils/storage';
 import { formatDuration, useNow } from '../workdir/BackgroundTasksPanel';
 import type { BackgroundTaskRow } from '../workdir/backgroundTasks';
-import { toneColor } from './threadStatus';
 
 /** How wide a thread panel must be to carry the rail beside the conversation. */
 export const RAIL_MIN_PANEL = 880;
@@ -83,7 +82,7 @@ function TaskLine({ threadId, task, onChanged, onReveal }: { threadId: string; t
             </Tooltip>
         )
         : task.status === 'completed'
-            ? <CheckCircle sx={{ fontSize: 16, color: (theme) => getReadableAccent(theme, 'success') }} />
+            ? <CheckCircle sx={{ fontSize: 16, color: 'text.secondary' }} />
             : <Cancel sx={{ fontSize: 16, color: (theme) => (task.status === 'failed' ? getReadableAccent(theme, 'error') : theme.palette.text.secondary) }} />;
     return (
         <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0, py: 0.5, borderTop: 1, borderColor: 'divider' }}>
@@ -151,11 +150,11 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
             {hasChanges && (
                 <RailCard id="changes" title={t('rail.changes')}>
                     {thread.merged_at
-                        ? <Typography sx={{ fontSize: fontSizes.md, color: (theme) => getReadableAccent(theme, 'success') }}>{t('thread.mergedInto', { base: thread.base_branch })}</Typography>
+                        ? <Typography sx={{ fontSize: fontSizes.md, color: 'text.secondary' }}>{t('thread.mergedInto', { base: thread.base_branch })}</Typography>
                         : thread.commits_ahead > 0
                             ? <Typography sx={{ fontSize: fontSizes.md, color: 'text.primary' }}>{t('thread.commits', { count: thread.commits_ahead })} · {t('thread.files', { count: thread.files_changed })}</Typography>
                             : <Typography sx={{ fontSize: fontSizes.md, color: 'text.secondary' }}>{t('rail.noCommits')}</Typography>}
-                    {thread.uncommitted && <Typography sx={{ fontSize: fontSizes.md, color: toneColor('warning') }}>{t('thread.uncommitted')}</Typography>}
+                    {thread.uncommitted && <Typography sx={{ fontSize: fontSizes.md, color: 'text.primary' }}>{t('thread.uncommitted')}</Typography>}
                     {canReview && <Button size="small" variant="contained" startIcon={<DiffIcon />} onClick={onReview} sx={{ mt: 0.75 }}>{t('thread.review')}</Button>}
                 </RailCard>
             )}

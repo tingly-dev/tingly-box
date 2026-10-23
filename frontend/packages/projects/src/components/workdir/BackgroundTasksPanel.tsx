@@ -135,7 +135,7 @@ function TaskRow({ sessionId, task, open, onToggle, onChanged, onReveal }: {
     const icon = running
         ? <CircularProgress size={14} />
         : task.status === 'completed'
-            ? <CheckCircle sx={{ fontSize: 16, color: (theme) => getReadableAccent(theme, 'success') }} />
+            ? <CheckCircle sx={{ fontSize: 16, color: 'text.secondary' }} />
             : task.status === 'failed'
                 ? <Cancel sx={{ fontSize: 16, color: (theme) => getReadableAccent(theme, 'error') }} />
                 : <Block sx={{ fontSize: 16, color: 'text.secondary' }} />;
