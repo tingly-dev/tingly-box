@@ -233,6 +233,7 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 	// targets the correct tingly-box port.  The env section is replaced on
 	// every apply, so this must be set unconditionally to survive re-applies.
 	env["TINGLY_API_URL"] = baseURL
+	agent.OmitFollowedDefaultModel(env)
 
 	// Install status line script if requested (before applying settings)
 	var err error

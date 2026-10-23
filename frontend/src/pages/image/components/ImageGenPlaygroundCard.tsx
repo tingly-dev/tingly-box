@@ -53,6 +53,7 @@ import ProfilePromptTabs from '../profiles/ProfilePromptTabs';
 import { deriveLabel } from '../profiles/promptLabel';
 import { dropProfileSession } from './useImageGenRuns';
 import AssetPickerDialog from '../library/AssetPickerDialog';
+import { readClipboardImages } from './clipboardImages';
 import { useSnippets } from '../library/assetStore';
 import type { ImageAsset } from '../library/assetTypes';
 import type { ReferenceImage } from './ImageGenReferenceImages';
@@ -141,10 +142,18 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const [activePromptId, setActivePromptId] = useState(profile?.activePromptId ?? '');
     // The prompt text lives in its own store (usePromptStore.ts): keeping it in
     // this card's state would re-render the whole card on every keystroke.
+    const location = useLocation();
+    // A prompt handed over by another page (Image to Prompt's "Use in
+    // Playground") fills the free-text field; a profile keeps its own.
+    const handedPrompt = profile ? undefined : (location.state as { prompt?: string } | null)?.prompt;
     const promptStore = usePromptStore(
-        profile?.prompts.find((item) => item.id === profile.activePromptId)?.text ?? '',
+        profile?.prompts.find((item) => item.id === profile.activePromptId)?.text ?? handedPrompt ?? '',
     );
     const { set: setPrompt, get: getPrompt } = promptStore;
+    // Taken once: a reload should not put it back over what was typed since.
+    useEffect(() => {
+        if (handedPrompt !== undefined) navigate(location.pathname, { replace: true, state: null });
+    }, [handedPrompt, location.pathname, navigate]);
     const hasPrompt = usePromptFilled(promptStore);
     // The prompt in a dialog-sized editor: the panel's field is one column of a
     // fixed-height panel, which is the wrong place to read or rework a long one.
@@ -284,23 +293,12 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             t('playground.pasteHint', { defaultValue: 'Copy an image first, then press Ctrl+V / ⌘V here' }),
             'info',
         );
-        try {
-            const items = await navigator.clipboard.read();
-            const files: File[] = [];
-            for (const item of items) {
-                const type = item.types.find((candidate) => candidate.startsWith('image/'));
-                if (!type) continue;
-                const blob = await item.getType(type);
-                files.push(new File([blob], `pasted-${Date.now()}.${type.split('/')[1] ?? 'png'}`, { type }));
-            }
-            if (files.length === 0) {
-                nothingPasted();
-                return;
-            }
-            await handleImportImages(files);
-        } catch {
+        const files = await readClipboardImages();
+        if (files.length === 0) {
             nothingPasted();
+            return;
         }
+        await handleImportImages(files);
     }, [handleImportImages, showNotification, t]);
 
     // A text file — .txt, .md, a JSON or YAML template — is a prompt kept
@@ -360,23 +358,12 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             t('playground.pasteHint', { defaultValue: 'Copy an image first, then press Ctrl+V / ⌘V here' }),
             'info',
         );
-        try {
-            const items = await navigator.clipboard.read();
-            const files: File[] = [];
-            for (const item of items) {
-                const type = item.types.find((candidate) => candidate.startsWith('image/'));
-                if (!type) continue;
-                const blob = await item.getType(type);
-                files.push(new File([blob], `pasted-${Date.now()}.${type.split('/')[1] ?? 'png'}`, { type }));
-            }
-            if (files.length === 0) {
-                nothingPasted();
-                return;
-            }
-            await handleAddReferenceImages(files);
-        } catch {
+        const files = await readClipboardImages();
+        if (files.length === 0) {
             nothingPasted();
+            return;
         }
+        await handleAddReferenceImages(files);
     }, [handleAddReferenceImages, showNotification, t]);
 
     const handleOpenReference = useCallback((index: number) => {
@@ -613,7 +600,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         rename: (id: string, name: string) => setProfilePrompts((current) => current.map((item) => (item.id === id ? { ...item, name } : item))),
     }), [loadPrompt, syncedPrompts]);
 
-    const location = useLocation();
     // A profile says once what it is, the first time someone lands on one.
     const [profileIntroSeen, setProfileIntroSeen] = useState(() => {
         try { return localStorage.getItem(PROFILE_INTRO_SEEN_KEY) === '1'; } catch { return false; }

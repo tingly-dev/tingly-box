@@ -11,18 +11,21 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { Brush, Check, Close, ContentCopy, Create, Download, Edit, GridView, RestartAlt, tablerMui } from '@/components/icons';
-import { IconBookmarkPlus } from '@tabler/icons-react';
+import { IconBookmarkPlus, IconPhotoScan } from '@tabler/icons-react';
 import { fullBleedDialogPaperSx, overlayPlateSx } from './ImageGenPlayground.chrome';
 import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
 import type { LightboxFrame } from './useImageGenLightbox';
 import type { ReferenceImage } from './ImageGenReferenceImages';
 import { keepImage, useAssets } from '../library/assetStore';
 import { deriveLabel } from '../profiles/promptLabel';
+import { handOffPicture } from '../prompt/pictureHandoff';
 
 // Kept shows as a check: Tabler's filled bookmark loses its fill through
 // tablerMui and would render as nothing.
 const BookmarkPlus = tablerMui(IconBookmarkPlus);
+const PhotoScan = tablerMui(IconPhotoScan);
 
 // Shared by the lightbox's overlay buttons — restyling the bar should be one edit.
 const overlayIconSx = {
@@ -74,6 +77,7 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
     onUseAsReference,
 }) => {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     // "Keep" puts any image on the panel — a result, an import, a reference —
     // into the library. The only way in: nothing is added behind the user's back.
     const assets = useAssets();
@@ -317,6 +321,22 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                                     {kept ? <Check fontSize="small" /> : <BookmarkPlus fontSize="small" />}
                                 </IconButton>
                             </span>
+                        </Tooltip>
+                    )}
+                    {/* Any picture on the panel can become text: the Image to
+                        Prompt page opens with it loaded. */}
+                    {selectedImage && (
+                        <Tooltip title={t('imagePrompt.getPrompt', { defaultValue: 'Get a prompt from this image' })}>
+                            <IconButton
+                                onClick={() => {
+                                    handOffPicture(selectedImage.src, selectedImage.label ?? `image-${selectedImage.index + 1}.png`);
+                                    navigate('/image/to-prompt');
+                                }}
+                                aria-label={t('imagePrompt.getPrompt', { defaultValue: 'Get a prompt from this image' })}
+                                sx={overlayIconSx}
+                            >
+                                <PhotoScan fontSize="small" />
+                            </IconButton>
                         </Tooltip>
                     )}
                     <Tooltip title={t('playground.slice.action', { defaultValue: 'Split into tiles' })}>
