@@ -51,5 +51,5 @@ export async function anythingWaiting(signal?: AbortSignal): Promise<boolean> {
     const res = await projectsFetch('/api/v1/projects', { signal });
     if (!res.ok) return false;
     const body = (await res.json()) as { projects?: ProjectSummaryLite[] };
-    return (body.projects ?? []).some((p) => (p.threads?.waiting ?? 0) > 0);
+    return (body.projects ?? []).some((p) => (p.threads?.waiting ?? 0) + (p.threads?.failed ?? 0) > 0);
 }
