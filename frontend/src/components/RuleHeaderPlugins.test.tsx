@@ -20,7 +20,7 @@ describe('rule header plugins', () => {
     it('keeps the Endpoint chip (and its menu) even without an OpenAI-compatible upstream', () => {
         const onEndpointSelect = vi.fn();
         render(<ModelRequestHeader modelName="m" onEndpointSelect={onEndpointSelect} endpointApplicable={false} />);
-        const chip = screen.getByRole('button', { name: 'OpenAI endpoint: auto' });
+        const chip = screen.getByRole('button', { name: 'Upstream endpoint: auto' });
         expect(chip).toBeEnabled();
         fireEvent.click(chip);
         fireEvent.click(screen.getByRole('menuitem', { name: /^Chat Always/ }));

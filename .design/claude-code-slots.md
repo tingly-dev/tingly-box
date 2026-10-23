@@ -26,6 +26,8 @@ UI: a **Slots** row under Base URL / API Key, for the main scenario and for prof
 - TUI quickstart asks only for the subagent model: another model splits the subagent slot (routed to exactly that model — no inherited smart routing or 1M), "same as the default" undoes an earlier split. It never switches tier rules on.
 - `agent apply --unified` is accepted and ignored.
 
+- `ANTHROPIC_MODEL` is written only when the sonnet slot is split (`agent.OmitFollowedDefaultModel`, also in `ai/agent` `BuildEnv`). With `ANTHROPIC_MODEL=cc` and `ANTHROPIC_DEFAULT_SONNET_MODEL=cc`, Claude Code's `/model` picker (checked on 2.1.309) ticks **Sonnet**, the first tier resolving to `cc`, never **Default**; with no `ANTHROPIC_MODEL` it ticks Default, and Default *is* the sonnet tier, i.e. the same model. A split sonnet slot keeps `ANTHROPIC_MODEL=cc` (Default must stay the main rule) and the picker shows it as the custom model "cc". `ClaudeCodeTiersFromEnv` falls back to the sonnet tier when the key is absent; the internal resolver (`ClaudeCodeSlotModels`) still returns the default slot. Files written earlier show as outdated in the config status until applied again; profile settings drop a stale `ANTHROPIC_MODEL` inherited from the main file.
+
 ## Migration
 
 Both are one-time and idempotent through `MigrationsCompleted` markers.
