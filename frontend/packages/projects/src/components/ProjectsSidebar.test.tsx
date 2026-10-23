@@ -5,7 +5,7 @@ import { ProjectsHostProvider, type ProjectsHost } from '../host/ProjectsHost';
 import { ProjectsSidebar, type ProjectsSidebarSection } from './ProjectsSidebar';
 
 const { list } = vi.hoisted(() => ({ list: vi.fn() }));
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
 vi.mock('../client', async (actual) => ({
     ...(await actual<typeof import('../client')>()),
     api: { GET: list },
@@ -62,10 +62,29 @@ describe('ProjectsSidebar', () => {
     it('lists working folders (the other type of the same list) with what waits there and marks the open one', async () => {
         show(host([summary('a', 'Alpha', 0), ...folders]), '/f?path=%2Fhome%2Fme%2Fnotes', { showProjects: false, showWorkdirs: true });
         const region = await screen.findByRole('region', { name: 'workdir.title' });
-        await waitFor(() => expect(within(region).getAllByRole('link').map((l) => l.textContent)).toEqual(['workdir.title', 'appsidebar.sessionsWaiting', 'notes~']));
+        await waitFor(() => expect(within(region).getAllByRole('link').map((l) => l.textContent)).toEqual(['workdir.title', 'appsidebar.sessionsWaiting', 'notessidebar.running']));
         const notes = within(region).getByTitle('/home/me/notes');
         expect(notes.getAttribute('aria-current')).toBe('page');
         expect(within(region).getByTitle('/home/me/app').getAttribute('href')).toBe('/f?path=%2Fhome%2Fme%2Fapp');
+    });
+    it('says what runs and waits on a folder, and lists the open folder\'s live sessions under it', async () => {
+        const h = host([folder('f-app', '/home/me/app', 1, 2)]);
+        list.mockImplementation((path: string) => Promise.resolve({
+            data: path.endsWith('/threads')
+                ? { threads: [
+                    { id: 't-old', title: 'Old idle', status: 'idle', updated_at: '2026-10-01T00:00:00Z' },
+                    { id: 't-done', title: 'Archived', status: 'resolved', updated_at: '2026-10-23T00:00:00Z' },
+                    { id: 't-run', title: 'Running one', status: 'working', updated_at: '2026-10-22T00:00:00Z' },
+                    { id: 't-wait', title: 'Waiting one', status: 'waiting', updated_at: '2026-10-21T00:00:00Z' },
+                ] }
+                : { projects: [folder('f-app', '/home/me/app', 1, 2)] },
+            response: new Response(),
+        }));
+        show(h, '/f?path=%2Fhome%2Fme%2Fapp&session=t-run', { showProjects: false, showWorkdirs: true });
+        const region = await screen.findByRole('region', { name: 'workdir.title' });
+        await waitFor(() => expect(within(region).getAllByRole('link').map((l) => l.textContent?.replace(/ago$|\d.*$/, '').trim())).toEqual(['workdir.title', 'appsidebar.activity', 'Waiting one', 'Running one', 'Old idle']));
+        expect(within(region).getByRole('link', { name: /Running one/ })).toHaveAttribute('aria-current', 'page');
+        expect(within(region).getByRole('link', { name: /Running one/ })).toHaveAttribute('href', '/f?path=%2Fhome%2Fme%2Fapp&session=t-run');
     });
     it('pins an IM row with the bot count when the host has IM, and leaves it out otherwise', async () => {
         const h = host([summary('a', 'Alpha', 0)]);

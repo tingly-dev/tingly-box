@@ -82,7 +82,7 @@ function GroupHeader({ label, count }: { label: string; count: number }) {
     );
 }
 
-function formatDuration(ms: number): string {
+export function formatDuration(ms: number): string {
     const sec = Math.max(0, Math.round(ms / 1000));
     if (sec < 60) return `${sec}s`;
     if (sec < 3600) return `${Math.floor(sec / 60)}m ${sec % 60}s`;
@@ -90,7 +90,7 @@ function formatDuration(ms: number): string {
 }
 
 /** The current time, ticking every second while on, so a running task's elapsed time moves. */
-function useNow(on: boolean): number {
+export function useNow(on: boolean): number {
     const [now, setNow] = useState(() => Date.now());
     useEffect(() => {
         if (!on) return;

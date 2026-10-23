@@ -8,7 +8,8 @@ export const en = {
         newChat: 'New chat', chats: 'Chats', projects: 'Projects', recentChats: 'Recent chats',
         settings: 'Settings', noChats: 'No chats yet', collapse: 'Close sidebar', expand: 'Open sidebar',
     },
-    sidebar: { noWorkdirs: 'No working folders yet', sessionsWaiting_one: '{{count}} session waits on you', sessionsWaiting_other: '{{count}} sessions wait on you', noProjects: 'No projects yet', waiting_one: '{{count}} thread waits on you', waiting_other: '{{count}} threads wait on you' },
+    rail: { title: 'Thread details', environment: 'Environment', folder: 'Folder', branch: 'Branch', model: 'Model', permissions: 'Permissions', usage: 'Usage', tokens: 'Tokens in / out', turns: 'Turns', changes: 'Changes', noCommits: 'No commits yet', finished_one: '{{count}} finished', finished_other: '{{count}} finished', hide: 'Hide details', show: 'Show details' },
+    sidebar: { activity: '{{running}} running · {{waiting}} waiting', running_one: '{{count}} running', running_other: '{{count}} running', recent: 'Recent sessions', noWorkdirs: 'No working folders yet', sessionsWaiting_one: '{{count}} session waits on you', sessionsWaiting_other: '{{count}} sessions wait on you', noProjects: 'No projects yet', waiting_one: '{{count}} thread waits on you', waiting_other: '{{count}} threads wait on you' },
     // IM chats bound to projects (TEP #2143, .design/projects-im.md).
     im: {
         title: 'IM',

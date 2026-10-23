@@ -12,7 +12,8 @@ export const zh: Dict<typeof en> = {
         newChat: '新对话', chats: '对话', projects: '项目', recentChats: '最近对话',
         settings: '设置', noChats: '还没有对话', collapse: '收起侧栏', expand: '展开侧栏',
     },
-    sidebar: { noWorkdirs: '还没有工作目录', sessionsWaiting_one: '{{count}} 个会话在等你', sessionsWaiting_other: '{{count}} 个会话在等你', noProjects: '还没有项目', waiting_one: '{{count}} 个线程在等你', waiting_other: '{{count}} 个线程在等你' },
+    rail: { title: '线程详情', environment: '环境', folder: '目录', branch: '分支', model: '模型', permissions: '权限', usage: '用量', tokens: 'Token 输入 / 输出', turns: '轮数', changes: '改动', noCommits: '还没有提交', finished_one: '{{count}} 个已完成', finished_other: '{{count}} 个已完成', hide: '隐藏详情', show: '显示详情' },
+    sidebar: { activity: '{{running}} 个运行中 · {{waiting}} 个在等你', running_one: '{{count}} 个运行中', running_other: '{{count}} 个运行中', recent: '最近的会话', noWorkdirs: '还没有工作目录', sessionsWaiting_one: '{{count}} 个会话在等你', sessionsWaiting_other: '{{count}} 个会话在等你', noProjects: '还没有项目', waiting_one: '{{count}} 个线程在等你', waiting_other: '{{count}} 个线程在等你' },
     // IM 聊天绑定到项目（TEP #2143，.design/projects-im.md）。
     im: {
         title: 'IM',
