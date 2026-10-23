@@ -52,18 +52,23 @@ Background tasks; see `projects-thread-rail.md`) uses the same card, row and
 type scale, and its task rows use the same marks (`ThreadState`). The rail
 adds no colours of its own: only "needs you" is amber, a failed task is red.
 
-## Folder tree in the left nav (board G)
+## Left nav tree (boards G and H)
 
-Working folders are a tree without indentation. Three drawings are on board G:
-A (a folder row with its fold arrow first), B (Claude's: a quiet folder label
-with the arrow after the name, state marks at the row end) and C (B's label,
-A's mark slot on the left, so rows match every other list). Common to all: a
-folded folder still rolls up needs-you (amber), failed (red) or running;
-sessions sort needs-you, running, latest; the latest few show, the rest sit
-behind "Show N older" and include archived ones; background tasks appear only
-while they run, in the same `ListRow` (mark `›_`); fold state is remembered per
-browser and the open session's folder starts open. No tree/flat toggle.
-Recommended: C. Decision pending.
+Decided (YZ, 2026-10-23): Projects and working folders are one tree, drawn
+with the same node: an icon that tells the type (stack for a project, folder for
+a folder), the name, a fold caret after the name, and a rollup dot at the right
+when folded (amber needs you, red failed, neutral running). Sessions sit under
+the node lined up with its name, title 14/500, time and state mark at the end
+(idle shows no mark). Sort needs-you, running, latest; the latest five (plus
+anything running, waiting or open) show, the rest and archived ones sit behind
+"Show N older…". Background tasks appear only while they run, under their
+session. Fold state is remembered per browser and the open node starts open.
+No tree/flat toggle.
+
+Rejected: folder as a heavy two-line row (A), unindented sessions (B, first
+choice, dropped once folders and projects had to look alike: without an icon
+the folder level was hard to read), and removing the section titles (the "+"
+entry points need them).
 
 ## Rollout (one PR per step, each with screenshots)
 
