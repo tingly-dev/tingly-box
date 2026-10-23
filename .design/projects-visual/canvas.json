@@ -51,6 +51,13 @@
       "w": 1440,
       "h": 860,
       "title": "5 · 统一后的 Folder 会话页"
+    },
+    "G-FolderTree.dc.html": {
+      "x": 0,
+      "y": 5500,
+      "w": 1440,
+      "h": 760,
+      "title": "6 · 左侧 Folder 树"
     }
   },
   "order": [
@@ -59,7 +66,8 @@
     "C-Language.dc.html",
     "D-Primitives.dc.html",
     "E-ProjectPage.dc.html",
-    "F-FolderRail.dc.html"
+    "F-FolderRail.dc.html",
+    "G-FolderTree.dc.html"
   ],
   "notes": {}
 }

@@ -52,6 +52,16 @@ Background tasks; see `projects-thread-rail.md`) uses the same card, row and
 type scale, and its task rows use the same marks (`ThreadState`). The rail
 adds no colours of its own: only "needs you" is amber, a failed task is red.
 
+## Folder tree in the left nav (board G)
+
+Working folders are a tree: folder, then its sessions, then the background
+tasks a running session has. Each folder folds (state remembered per browser,
+the open session's folder starts open) and a folded folder still rolls up what
+needs the user (amber), failed (red) or runs. Sessions sort needs-you, running,
+latest; the latest few show, the rest sit behind "Show N older" and include
+archived ones. Background tasks appear only while they run, as a child row in
+the same `ListRow`. No tree/flat toggle: the tree is the only layout.
+
 ## Rollout (one PR per step, each with screenshots)
 
 1. A single `ThreadState` component (mark + word, `compact` for dots only) in
