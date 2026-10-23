@@ -18,7 +18,7 @@ import { DiffDialog } from './DiffDialog';
 import { ComposerStrip } from './ComposerStrip';
 import { RAIL_MIN_PANEL, ThreadInfoRail } from './ThreadInfoRail';
 import { LoadEarlier } from './LoadEarlier';
-import { ThreadState, ThreadStateMark } from './threadStatus';
+import { needsUser, ThreadState, ThreadStateMark } from './threadStatus';
 import { threadTranscript } from './threadTranscript';
 import { threadOps } from './threadOps';
 import { BackgroundTasksPanel } from '../workdir/BackgroundTasksPanel';
@@ -355,9 +355,9 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     <Box sx={{ mt: 1, p: 1.25, bgcolor: 'action.hover', borderRadius: radius.row, maxHeight: 220, overflow: 'auto' }}><Markdown text={thread.task} /></Box>
                 </Collapse>
                 {/* A pending request card is already the call to action. */}
-                {thread.status === 'waiting' && thread.wait_reason && !pendingRequestId && (
+                {needsUser(thread.status) && thread.wait_reason && !pendingRequestId && (
                     <Box sx={{ mt: 1, display: 'flex', alignItems: 'flex-start', gap: 1, px: 1.25, py: 0.75, borderRadius: radius.row, bgcolor: 'action.hover', fontSize: fontSizes.md, color: 'text.primary', overflowWrap: 'anywhere' }}>
-                        <Box sx={{ pt: '3px' }}><ThreadStateMark status="waiting" /></Box>
+                        <Box sx={{ pt: '3px' }}><ThreadStateMark status={thread.status} /></Box>
                         <Box>{thread.wait_reason}</Box>
                     </Box>
                 )}

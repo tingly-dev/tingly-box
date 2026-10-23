@@ -1051,6 +1051,8 @@ export interface components {
              * @description Field updated_at
              */
             updated_at: string;
+            /** @description Field verbose */
+            verbose: boolean;
         };
         ConnectionDraft: {
             /** @description Field api_key */
@@ -1667,6 +1669,11 @@ export interface components {
             wait_reason?: string;
         };
         ThreadCounts: {
+            /**
+             * Format: int64
+             * @description Field failed
+             */
+            failed: number;
             /**
              * Format: int64
              * @description Field idle

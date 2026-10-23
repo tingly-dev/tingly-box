@@ -8,12 +8,15 @@ import { radius } from '@tingly/ui/theme/radius';
 
 /** Overview groups, in the order the Overview shows them: what needs the
  * user first. */
-export const STATUS_ORDER = ['waiting', 'ready', 'working', 'idle', 'resolved'] as const;
+export const STATUS_ORDER = ['waiting', 'failed', 'ready', 'working', 'idle', 'resolved'] as const;
 export type ThreadStatus = (typeof STATUS_ORDER)[number];
 
 /** How a state reads: amber when it needs the user, red when it failed,
  * otherwise neutral, told apart by its mark and word. */
 export type StateTone = 'attention' | 'failed' | 'neutral';
+
+/** A thread that needs the user: it waits on an answer, or its turn failed and a message continues it. */
+export const needsUser = (status: string) => status === 'waiting' || status === 'failed';
 
 export function stateTone(status: string): StateTone {
     return status === 'waiting' ? 'attention' : status === 'failed' ? 'failed' : 'neutral';
@@ -95,7 +98,7 @@ export function InlineCode({ text }: { text: string }) {
  * reported, else where it works. Branch and merge state live in its badges. */
 export function ThreadSubtitle({ thread }: { thread: Thread }) {
     const { t } = useTranslation('projects');
-    if (thread.status === 'waiting' && thread.wait_reason) return <InlineCode text={thread.wait_reason} />;
+    if (needsUser(thread.status) && thread.wait_reason) return <InlineCode text={thread.wait_reason} />;
     const report = (thread.last_report || '').split('\n').find((l) => l.trim() !== '');
     if (report) return <InlineCode text={report.replace(/^#+\s*/, '')} />;
     if (thread.branch) return <>{thread.branch}</>;

@@ -43,6 +43,7 @@ function changesLiveTasks(e: ThreadEvent): boolean {
 
 const GROUPS: { key: string; collapsed?: boolean }[] = [
     { key: 'waiting' },
+    { key: 'failed' },
     { key: 'working' },
     { key: 'idle' },
     { key: 'resolved', collapsed: true },

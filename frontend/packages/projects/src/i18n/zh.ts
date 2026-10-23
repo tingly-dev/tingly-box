@@ -60,7 +60,7 @@ export const zh: Dict<typeof en> = {
         placeholder: '给这个会话发消息…', queuePlaceholder: '给这个会话发消息——它会在当前一轮结束后读到…',
         archivedPlaceholder: '重新打开会话后才能继续发消息', archive: '归档会话', reopen: '重新打开会话',
         refreshFailed: '无法刷新会话列表，显示的是上次加载的内容，正在自动重连。',
-        group: { waiting: '等你处理', working: '进行中', idle: '已完成', resolved: '已归档' },
+        group: { waiting: '等你处理', failed: '失败', working: '进行中', idle: '已完成', resolved: '已归档' },
         permissions: '权限', permissionDefault: '默认权限',
         backgroundTasks: '后台任务', tasksRunning_one: '{{count}} 个运行中', tasksRunning_other: '{{count}} 个运行中',
         handoff: '在终端中继续', handoffBusy: '在终端中继续（当前轮次结束后）',
@@ -157,7 +157,7 @@ export const zh: Dict<typeof en> = {
     overview: {
         threads: '线程', threadsWaiting: '线程 · {{count}} 个等你处理', library: '文件库',
         noThreads: '还没有线程。在对话里发送工作，线程会出现在这里。',
-        group: { waiting: '等你处理', ready: '可以 review', working: '进行中', idle: '空闲', resolved: '已解决' },
+        group: { waiting: '等你处理', failed: '失败', ready: '可以 review', working: '进行中', idle: '空闲', resolved: '已解决' },
     },
     thread: {
         status: { waiting: '等你处理', ready: '可以 review', working: '进行中', idle: '空闲', resolved: '已解决', failed: '失败' },

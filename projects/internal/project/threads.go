@@ -782,7 +782,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 			t.Status = db.ThreadIdle
 			report.Kind = ""
 		case end.Err != nil:
-			t.Status, t.WaitReason = db.ThreadWaiting, "Failed: "+end.Err.Error()
+			t.Status, t.WaitReason = db.ThreadFailed, "Failed: "+end.Err.Error()
 			report.Kind, report.Text = ReportFailed, end.Err.Error()
 		default:
 			if mm := needsInputRe.FindStringSubmatch(report.Text); mm != nil && !session {
@@ -974,8 +974,15 @@ func (m *Threads) Recover() {
 			t.Status, t.WaitReason = db.ThreadWaiting, "Interrupted when tingly-project stopped. Send a message to continue."
 		})
 	}
-	// Approvals pending at shutdown can no longer be answered.
+	// Failures were recorded as waiting before failed was a status.
 	waiting, _ := m.store.ListThreadsByStatus(db.ThreadWaiting)
+	for _, t := range waiting {
+		if strings.HasPrefix(t.WaitReason, "Failed: ") {
+			_, _ = m.update(t.ID, func(t *db.Thread) { t.Status = db.ThreadFailed })
+		}
+	}
+	// Approvals pending at shutdown can no longer be answered.
+	waiting, _ = m.store.ListThreadsByStatus(db.ThreadWaiting)
 	for _, t := range waiting {
 		events, _ := m.store.ListThreadEvents(t.ID)
 		for i := range events {

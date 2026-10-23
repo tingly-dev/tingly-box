@@ -55,7 +55,7 @@ export const en = {
         placeholder: 'Message this session…', queuePlaceholder: 'Message this session — it reads it after its current turn…',
         archivedPlaceholder: 'Reopen the session to send it more work', archive: 'Archive session', reopen: 'Reopen session',
         refreshFailed: 'Could not refresh the sessions. What is shown is the last loaded; reconnecting automatically.',
-        group: { waiting: 'Waiting on you', working: 'Working', idle: 'Done', resolved: 'Archived' },
+        group: { waiting: 'Waiting on you', failed: 'Failed', working: 'Working', idle: 'Done', resolved: 'Archived' },
         permissions: 'Permissions', permissionDefault: 'Default permissions',
         backgroundTasks: 'Background tasks', tasksRunning_one: '{{count}} running', tasksRunning_other: '{{count}} running',
         handoff: 'Continue in terminal', handoffBusy: 'Continue in terminal (after the current turn)',
@@ -152,7 +152,7 @@ export const en = {
     overview: {
         threads: 'Threads', threadsWaiting: 'Threads · {{count}} waiting', library: 'Library',
         noThreads: 'No threads yet. Send work in the conversation and they will appear here.',
-        group: { waiting: 'Waiting on you', ready: 'Ready for review', working: 'Working', idle: 'Idle', resolved: 'Resolved' },
+        group: { waiting: 'Waiting on you', failed: 'Failed', ready: 'Ready for review', working: 'Working', idle: 'Idle', resolved: 'Resolved' },
     },
     thread: {
         status: { waiting: 'Waiting on you', ready: 'Ready for review', working: 'Working', idle: 'Idle', resolved: 'Resolved', failed: 'Failed' },

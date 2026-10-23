@@ -136,10 +136,10 @@ export function Sidebar({ onCollapse, onNavigate }: { onCollapse?: () => void; o
                         {sideProjects.map((p) => (
                             <ListItemButton key={p.id} component={NavLink} to={`/project/${p.id}`} selected={location.pathname === `/project/${p.id}`} sx={{ mx: 1, borderRadius: radius.card, py: 0.5 }}>
                                 <ListItemIcon sx={{ minWidth: 28 }}>
-                                    <Badge color="warning" variant="dot" invisible={p.threads.waiting === 0}><Folder sx={{ fontSize: 16 }} /></Badge>
+                                    <Badge color="warning" variant="dot" invisible={p.threads.waiting + p.threads.failed === 0}><Folder sx={{ fontSize: 16 }} /></Badge>
                                 </ListItemIcon>
                                 <ListItemText primary={p.name} slotProps={{ primary: { noWrap: true, sx: { fontSize: fontSizes.base, color: 'text.primary' } } }} />
-                                {p.threads.waiting > 0 && <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>{p.threads.waiting}</Typography>}
+                                {p.threads.waiting + p.threads.failed > 0 && <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>{p.threads.waiting + p.threads.failed}</Typography>}
                             </ListItemButton>
                         ))}
                     </Section>
@@ -151,10 +151,10 @@ export function Sidebar({ onCollapse, onNavigate }: { onCollapse?: () => void; o
                             return (
                                 <ListItemButton key={f.id} component={NavLink} to={`/folder?path=${encodeURIComponent(path)}`} title={path} selected={folderScope === path} sx={{ mx: 1, borderRadius: radius.card, py: 0.5 }}>
                                     <ListItemIcon sx={{ minWidth: 28 }}>
-                                        <Badge color="warning" variant="dot" invisible={f.threads.waiting === 0}><FolderOpen sx={{ fontSize: 16 }} /></Badge>
+                                        <Badge color="warning" variant="dot" invisible={f.threads.waiting + f.threads.failed === 0}><FolderOpen sx={{ fontSize: 16 }} /></Badge>
                                     </ListItemIcon>
                                     <ListItemText primary={folderName(path)} slotProps={{ primary: { noWrap: true, sx: { fontSize: fontSizes.base, color: 'text.primary' } } }} />
-                                    {f.threads.waiting > 0 && <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>{f.threads.waiting}</Typography>}
+                                    {f.threads.waiting + f.threads.failed > 0 && <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>{f.threads.waiting + f.threads.failed}</Typography>}
                                 </ListItemButton>
                             );
                         })}

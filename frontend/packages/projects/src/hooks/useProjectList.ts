@@ -18,7 +18,7 @@ export interface ProjectList {
 }
 
 /** Threads waiting on the user across a list of projects. */
-export const waitingCount = (list: ProjectSummary[] | null): number => (list ?? []).reduce((n, p) => n + p.threads.waiting, 0);
+export const waitingCount = (list: ProjectSummary[] | null): number => (list ?? []).reduce((n, p) => n + p.threads.waiting + p.threads.failed, 0);
 
 /**
  * `GET /projects` (projects and folders together). Every instance reads the

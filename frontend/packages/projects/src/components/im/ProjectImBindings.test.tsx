@@ -12,7 +12,7 @@ vi.mock('../../client', async (actual) => ({ ...(await actual<typeof import('../
 
 // A project's chats are bound to its main thread, named m<project>.
 const binding = (id: string, chat_id: string, chat_title: string, project_id: string): ChannelBinding => ({
-    id, platform: 'telegram', chat_id, chat_title, project_id, thread_id: `m${project_id}`, created_at: '', updated_at: '',
+    id, platform: 'telegram', chat_id, chat_title, project_id, thread_id: `m${project_id}`, created_at: '', updated_at: '', verbose: false,
 });
 
 const summary = (id: string, name: string, over: Record<string, unknown> = {}) => ({ id, name, type: 'project', main_thread_id: `m${id}`, threads: { waiting: 0, working: 0, ready: 0, idle: 0, resolved: 0 }, ...over });

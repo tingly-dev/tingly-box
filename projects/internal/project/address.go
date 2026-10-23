@@ -106,7 +106,7 @@ func (s *Service) threadList(cur *db.Thread, p *db.Project) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	rank := map[string]int{db.ThreadWaiting: 0, db.ThreadWorking: 1}
+	rank := map[string]int{db.ThreadWaiting: 0, db.ThreadFailed: 0, db.ThreadWorking: 1}
 	var open []db.Thread
 	done := 0
 	for _, t := range threads {
@@ -164,6 +164,8 @@ func threadStatusWord(status string) string {
 	switch status {
 	case db.ThreadWaiting:
 		return "needs you"
+	case db.ThreadFailed:
+		return "failed"
 	case db.ThreadWorking:
 		return "working"
 	case db.ThreadReady:

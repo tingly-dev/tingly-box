@@ -9,6 +9,7 @@ import { api, unwrap, type ProjectSummary, type Thread } from '../client';
 import { folderName, timeAgo } from '../utils/format';
 import { Add, ChatBubble, Folder, FolderOpen, Star } from './icons';
 import { useProjectsHost } from '../host/ProjectsHost';
+import { needsUser } from './project/threadStatus';
 
 /** One row of a sidebar section: a place the user can open. */
 export interface ProjectsSidebarRow {
@@ -85,7 +86,8 @@ function useImBotCount(enabled: boolean): number | null {
 function useActivity() {
     const { t } = useTranslation('projects');
     return (p: ProjectSummary, waitingKey: 'sidebar.waiting' | 'sidebar.sessionsWaiting') => {
-        const { working, waiting } = p.threads;
+        const { working } = p.threads;
+        const waiting = p.threads.waiting + p.threads.failed;
         if (working > 0 && waiting > 0) return t('sidebar.activity', { running: working, waiting });
         if (working > 0) return t('sidebar.running', { count: working });
         return waiting > 0 ? t(waitingKey, { count: waiting }) : undefined;
@@ -103,7 +105,7 @@ function useRecentSessions(folder: ProjectSummary | undefined): Thread[] {
     const [threads, setThreads] = useState<Thread[]>([]);
     const id = folder?.id;
     const c = folder?.threads;
-    const signature = c ? `${c.working}/${c.waiting}/${c.idle}/${c.ready}` : '';
+    const signature = c ? `${c.working}/${c.waiting}/${c.failed}/${c.idle}/${c.ready}` : '';
     useEffect(() => {
         if (!id) {
             setThreads([]);
@@ -238,7 +240,7 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
                 label: p.name,
                 to,
                 selected: location.pathname === to,
-                attention: p.threads.waiting > 0,
+                attention: p.threads.waiting + p.threads.failed > 0,
                 running: p.threads.working > 0,
                 icon: p.starred ? <Star /> : undefined,
                 subtitle: activity(p, 'sidebar.waiting'),
@@ -248,7 +250,7 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
     } : null;
 
     // The open folder's sessions that run or wait come first, then the latest; archived ones stay out.
-    const rank = (th: Thread) => (th.status === 'waiting' ? 0 : th.status === 'working' ? 1 : 2);
+    const rank = (th: Thread) => (needsUser(th.status) ? 0 : th.status === 'working' ? 1 : 2);
     const recentRows = (path: string): ProjectsSidebarRow[] => recent
         .filter((th) => th.status !== 'resolved')
         .sort((a, b) => rank(a) - rank(b) || b.updated_at.localeCompare(a.updated_at))
@@ -259,9 +261,9 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
             title: th.title,
             to: `${paths.folder(path)}${paths.folder(path).includes('?') ? '&' : '?'}session=${encodeURIComponent(th.id)}`,
             selected: th.id === openSession,
-            attention: th.status === 'waiting',
+            attention: needsUser(th.status),
             running: th.status === 'working',
-            end: th.status === 'working' || th.status === 'waiting' ? undefined : timeAgo(th.updated_at, i18n.language),
+            end: th.status === 'working' || needsUser(th.status) ? undefined : timeAgo(th.updated_at, i18n.language),
         }));
 
     const workdirSection: ProjectsSidebarSection | null = showWorkdirs ? {
@@ -286,7 +288,7 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
                 subtitle: activity(f, 'sidebar.sessionsWaiting') ?? parentPath(path),
                 to: paths.folder(path),
                 selected: scope === path && !openSession,
-                attention: f.threads.waiting > 0,
+                attention: f.threads.waiting + f.threads.failed > 0,
                 running: f.threads.working > 0,
                 children: f.id === openFolder?.id ? recentRows(path) : undefined,
             };

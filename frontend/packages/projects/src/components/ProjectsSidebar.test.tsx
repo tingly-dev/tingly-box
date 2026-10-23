@@ -16,12 +16,12 @@ afterEach(() => {
 });
 
 const summary = (id: string, name: string, waiting: number, starred = false) => ({
-    id, name, starred, type: 'project', threads: { waiting, ready: 0, working: 0 },
+    id, name, starred, type: 'project', threads: { waiting, ready: 0, working: 0, failed: 0 },
 });
 
 // A folder is a project of type folder, in the same list.
 const folder = (id: string, path: string, waiting: number, working = 0) => ({
-    id, name: path.split('/').pop(), path, starred: false, type: 'folder', threads: { waiting, ready: 0, working },
+    id, name: path.split('/').pop(), path, starred: false, type: 'folder', threads: { waiting, ready: 0, working, failed: 0 },
 });
 
 const folders = [folder('f-app', '/home/me/app', 2), folder('f-notes', '/home/me/notes', 0, 1)];

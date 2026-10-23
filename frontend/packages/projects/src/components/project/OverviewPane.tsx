@@ -6,7 +6,7 @@ import { api, apiFetch, unwrap, type LibraryFile, type Thread } from '../../clie
 import { Delete, Description, Download, UploadFile } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { formatBytes, timeAgo } from '../../utils/format';
-import { STATUS_ORDER, ThreadBadges, ThreadSubtitle } from './threadStatus';
+import { STATUS_ORDER, ThreadBadges, ThreadSubtitle, needsUser } from './threadStatus';
 import { StatusGroups } from '../workspace/StatusGroups';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
@@ -123,7 +123,7 @@ function Library({ projectId, refreshKey }: { projectId: string; refreshKey: num
 export function OverviewPane({ projectId, threads, onOpen, libraryKey, selectedId, initialTab = 'threads' }: { projectId: string; threads: Thread[]; onOpen: (id: string) => void; libraryKey: number; selectedId?: string; initialTab?: 'threads' | 'library' }) {
     const { t } = useTranslation('projects');
     const [tab, setTab] = useState<'threads' | 'library'>(initialTab);
-    const waiting = threads.filter((th) => th.status === 'waiting').length;
+    const waiting = threads.filter((th) => needsUser(th.status)).length;
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
             <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ px: 1, minHeight: 44, borderBottom: 1, borderColor: 'divider', '& .MuiTab-root': { minHeight: 44 } }}>

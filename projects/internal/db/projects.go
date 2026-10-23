@@ -87,6 +87,7 @@ func (s *Store) TouchProject(id string) error {
 type ThreadCounts struct {
 	Working  int `json:"working"`
 	Waiting  int `json:"waiting"`
+	Failed   int `json:"failed"`
 	Ready    int `json:"ready"`
 	Idle     int `json:"idle"`
 	Resolved int `json:"resolved"`
@@ -94,7 +95,7 @@ type ThreadCounts struct {
 
 // CountsOf turns a status → count map into ThreadCounts.
 func CountsOf(m map[string]int) ThreadCounts {
-	return ThreadCounts{Working: m[ThreadWorking], Waiting: m[ThreadWaiting], Ready: m[ThreadReady], Idle: m[ThreadIdle], Resolved: m[ThreadResolved]}
+	return ThreadCounts{Working: m[ThreadWorking], Waiting: m[ThreadWaiting], Failed: m[ThreadFailed], Ready: m[ThreadReady], Idle: m[ThreadIdle], Resolved: m[ThreadResolved]}
 }
 
 // ProjectThreadCounts is ThreadCounts for one project.

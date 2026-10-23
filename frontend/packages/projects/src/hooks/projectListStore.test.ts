@@ -65,7 +65,7 @@ describe('shared project list', () => {
         leaveA();
         leaveB();
     });
-    const counts = (waiting: number) => ({ working: 0, waiting, ready: 0, idle: 0, resolved: 0 });
+    const counts = (waiting: number) => ({ working: 0, waiting, ready: 0, idle: 0, resolved: 0, failed: 0 });
     const row = (id: string, waiting = 0) => ({ id, type: 'folder', name: id, threads: counts(waiting) });
     const listed = async (...rows: ReturnType<typeof row>[]) => {
         m.get.mockResolvedValue({ data: { projects: rows }, response: new Response() });

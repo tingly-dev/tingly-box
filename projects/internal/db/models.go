@@ -65,8 +65,11 @@ const (
 
 // Thread statuses, matching the Overview groups.
 const (
-	ThreadWorking  = "working"
-	ThreadWaiting  = "waiting"
+	ThreadWorking = "working"
+	ThreadWaiting = "waiting"
+	// ThreadFailed: the last turn ended in an error; the user can send a
+	// message to continue. WaitReason holds the error.
+	ThreadFailed   = "failed"
 	ThreadReady    = "ready"
 	ThreadIdle     = "idle"
 	ThreadResolved = "resolved"

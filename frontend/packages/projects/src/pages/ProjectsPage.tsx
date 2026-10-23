@@ -20,6 +20,7 @@ function ProjectCard({ p }: { p: ProjectSummary }) {
     const c = p.threads;
     const counts = [
         { key: 'waiting', n: c.waiting },
+        { key: 'failed', n: c.failed },
         { key: 'ready', n: c.ready },
         { key: 'working', n: c.working },
     ];

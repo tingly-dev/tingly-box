@@ -29,7 +29,7 @@ const summary = (id: string, name: string, over: Record<string, unknown> = {}) =
 const show = (h: ProjectsHost) => render(<MemoryRouter><ProjectsHostProvider host={h}><ImSettingsPage /></ProjectsHostProvider></MemoryRouter>);
 
 beforeEach(() => {
-    m.list.mockResolvedValue([{ id: 'cb1', platform: 'telegram', chat_id: 'tg:1', chat_title: 'yz', project_id: 'p1', thread_id: 'mp1', created_at: '', updated_at: '' } satisfies ChannelBinding]);
+    m.list.mockResolvedValue([{ id: 'cb1', platform: 'telegram', chat_id: 'tg:1', chat_title: 'yz', project_id: 'p1', thread_id: 'mp1', created_at: '', updated_at: '', verbose: false } satisfies ChannelBinding]);
     m.bind.mockResolvedValue({});
     m.get.mockResolvedValue({ data: { projects: [summary('p1', 'Alpha'), summary('p2', 'Docs'), summary('f1', 'notes', { type: 'folder', main_thread_id: undefined, path: '/home/me/notes' })] }, response: new Response() });
 });

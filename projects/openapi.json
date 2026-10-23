@@ -2349,6 +2349,10 @@
             "type": "string",
             "format": "date-time",
             "description": "Field updated_at"
+          },
+          "verbose": {
+            "type": "boolean",
+            "description": "Field verbose"
           }
         },
         "required": [
@@ -2357,6 +2361,7 @@
           "chat_id",
           "chat_title",
           "thread_id",
+          "verbose",
           "project_id",
           "created_at",
           "updated_at"
@@ -3742,6 +3747,11 @@
       "ThreadCounts": {
         "type": "object",
         "properties": {
+          "failed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field failed"
+          },
           "idle": {
             "type": "integer",
             "format": "int64",
@@ -3771,6 +3781,7 @@
         "required": [
           "working",
           "waiting",
+          "failed",
           "ready",
           "idle",
           "resolved"

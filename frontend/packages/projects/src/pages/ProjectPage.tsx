@@ -22,6 +22,7 @@ import { useTranscript } from '../hooks/useTranscript';
 import { usePlacement } from '../hooks/usePlacement';
 import { useProjectsHost } from '../host/ProjectsHost';
 import { readLocal, writeLocal } from '../utils/storage';
+import { needsUser } from '../components/project/threadStatus';
 
 
 // The permission modes a project can give its threads (the server refuses others).
@@ -167,7 +168,7 @@ export default function ProjectPage() {
         || (selected?.status === 'waiting' && !!threadEvents?.some((e) => (e.kind === 'approval' || e.kind === 'ask') && e.payload?.includes('"state":"pending"')));
 
     const threadMap = useMemo(() => new Map(threads.map((th) => [th.id, th])), [threads]);
-    const waiting = threads.filter((th) => th.status === 'waiting').length;
+    const waiting = threads.filter((th) => needsUser(th.status)).length;
 
     const openThread = (tid: string) => {
         setParams((p) => {
@@ -395,7 +396,7 @@ export default function ProjectPage() {
                 storageKey={floatedFromOverview ? 'thread-overview' : 'thread'}
                 defaultSize={{ w: 520, h: 640 }}
                 clearRight={floatedFromOverview && pane.open ? pane.width : 0}
-                attention={selected?.status === 'waiting'}
+                attention={!!selected && needsUser(selected.status)}
                 onClose={closeThread}
                 onDock={dockThread}
             >

@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -533,4 +534,18 @@ func TestSessionQuestionsWaitByDefault(t *testing.T) {
 			assert.NotContains(t, e.Payload, `"auto_at"`)
 		}
 	}
+}
+
+func TestFailedTurnMarksThreadFailedNotWaiting(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error {
+		return errors.New("boom")
+	})
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "break"})
+	require.NoError(t, err)
+	got := waitStatus(t, f.store, th.ID, db.ThreadFailed)
+	assert.Contains(t, got.WaitReason, "Failed: ")
+	counts, err := f.store.ProjectThreadCounts(f.project.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, counts.Failed)
+	assert.Equal(t, 0, counts.Waiting)
 }
