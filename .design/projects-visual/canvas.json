@@ -44,6 +44,13 @@
       "w": 1440,
       "h": 860,
       "title": "4 · 统一后的 Project 页"
+    },
+    "F-FolderRail.dc.html": {
+      "x": 0,
+      "y": 4520,
+      "w": 1440,
+      "h": 860,
+      "title": "5 · 统一后的 Folder 会话页"
     }
   },
   "order": [
@@ -51,7 +58,8 @@
     "B-Now.dc.html",
     "C-Language.dc.html",
     "D-Primitives.dc.html",
-    "E-ProjectPage.dc.html"
+    "E-ProjectPage.dc.html",
+    "F-FolderRail.dc.html"
   ],
   "notes": {}
 }

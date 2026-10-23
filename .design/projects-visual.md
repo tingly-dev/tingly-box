@@ -22,7 +22,7 @@ the page carries more hues than it has things to say (board B).
   `0.9375rem`), 6 border-radius values, status colours picked per call site
   (`getReadableAccent`, `toneColor`, `success.main`, `alpha(...)`).
 
-## Direction (boards A, C, D, E)
+## Direction (boards A, C, D, E, F)
 
 1. **Quiet workbench.** Neutral by default; title, conversation and diff lead.
 2. **Colour is for "needs you" and "failed".** Amber = blocked on the user, red =
@@ -41,6 +41,14 @@ the page carries more hues than it has things to say (board B).
 Type: title 14/500, body 14/400, meta 12, micro 11.5, code 12 mono. Radius: 12
 (cards, panels, inputs), 8 (rows, buttons, selectors, tabs), 6 (pills), circle
 (dots only). One list row everywhere: mark slot, title/subtitle, right meta.
+
+## Folder page and info rail (board F)
+
+The folder session page uses the same language as the thread page: the left nav
+carries the state marks, the right info rail (Sessions, Environment, Changes,
+Background tasks; see `projects-thread-rail.md`) uses the same card, row and
+type scale, and its task rows use the same marks (`ThreadState`). The rail
+adds no colours of its own: only "needs you" is amber, a failed task is red.
 
 ## Rollout (one PR per step, each with screenshots)
 
