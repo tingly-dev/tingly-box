@@ -11,7 +11,7 @@ import { ThreadComposer } from '../ThreadComposer';
 import { AttachmentChips, uploadAttachments, type AttachOwner } from '../attachments';
 import { CodeBlock, Markdown } from '../Markdown';
 import { ConfirmDialog, CopyIconButton } from '@tingly/ui';
-import { ArrowBack, CheckCircle, DiffIcon, Merge, MoreVert, Robot, Stream, Terminal, Undo } from '../icons';
+import { ArrowBack, DiffIcon, Merge, MoreVert, Robot, Stream, Terminal } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { formatTokens } from '../../utils/format';
 import { DiffDialog } from './DiffDialog';
@@ -312,18 +312,6 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         </Tooltip>
                     )}
                     {actions}
-                    {/* Done with it is one click; reopening is the same place. */}
-                    {thread.status !== 'resolved'
-                        ? (
-                            <Tooltip title={t(session ? 'session.archive' : 'thread.resolve')}>
-                                <IconButton size="small" disabled={acting} onClick={() => session ? guarded('archive') : void act(ops.finish)} aria-label={t(session ? 'session.archive' : 'thread.resolve')}><CheckCircle fontSize="small" /></IconButton>
-                            </Tooltip>
-                        )
-                        : (
-                            <Tooltip title={t(session ? 'session.reopen' : 'thread.reopen')}>
-                                <IconButton size="small" disabled={acting} onClick={() => void act(ops.reopen)} aria-label={t(session ? 'session.reopen' : 'thread.reopen')}><Undo fontSize="small" /></IconButton>
-                            </Tooltip>
-                        )}
                     <IconButton size="small" onClick={(e) => setMenu(e.currentTarget)} aria-label={t('common.more')}><MoreVert fontSize="small" /></IconButton>
                     <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
                         <MenuItem onClick={() => { setMenu(null); setTaskOpen((v) => !v); }}>{taskOpen ? t('thread.hideTask') : t('thread.showTask')}</MenuItem>
@@ -336,6 +324,11 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         {session && thread.status !== 'resolved' && (
                             <MenuItem disabled={running || acting} onClick={() => guarded('handoff')}>{running ? t('session.handoffBusy') : t('session.handoff')}</MenuItem>
                         )}
+                        {/* Finishing sits in the menu, apart from the buttons used all the time: a stray click cannot archive. */}
+                        <Divider />
+                        {thread.status !== 'resolved'
+                            ? <MenuItem disabled={acting} onClick={() => { setMenu(null); if (session) guarded('archive'); else void act(ops.finish); }}>{t(session ? 'session.archive' : 'thread.resolve')}</MenuItem>
+                            : <MenuItem disabled={acting} onClick={() => { setMenu(null); void act(ops.reopen); }}>{t(session ? 'session.reopen' : 'thread.reopen')}</MenuItem>}
                         {/* Run details, for when they matter: kept off the header. */}
                         {(thread.model || thread.input_tokens > 0 || thread.output_tokens > 0) && <Divider />}
                         {(thread.model || thread.input_tokens > 0 || thread.output_tokens > 0) && (
