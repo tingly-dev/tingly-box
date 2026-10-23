@@ -8,8 +8,6 @@ export interface IdeaPromptRun extends PromptRunBase {
     description: string;
 }
 
-export type IdeaPromptInputs = Pick<IdeaPromptRun, 'description' | 'model' | 'instructions'>;
-
 const store = createPromptRunStore<IdeaPromptRun>(
     'ideaPrompts',
     USE_MOCK ? () => import('./mockIdeaPrompts').then((module) => module.mockIdeaPromptRuns) : null,
@@ -20,4 +18,4 @@ export const useIdeaPromptRuns = store.useRuns;
 export const updateIdeaPromptRun = store.update;
 export const removeIdeaPromptRun = store.remove;
 export const clearIdeaPromptRuns = store.clear;
-export const startIdeaPromptRun = (inputs: IdeaPromptInputs, id?: string) => store.start(inputs, id);
+export const startIdeaPromptRun = store.start;

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_INSTRUCTIONS, INSTRUCTION_STARTERS, cleanPromptReply, matchingStarter } from './imagePromptTemplates';
+import { DEFAULT_INSTRUCTIONS, INSTRUCTION_STARTERS, cleanPromptReply } from './imagePromptTemplates';
+import { matchStarter } from './instructionStarters';
+
+const matchingStarter = (text: string) => matchStarter(INSTRUCTION_STARTERS, text);
 
 describe('cleanPromptReply', () => {
     it('keeps a plain reply as it is', () => {

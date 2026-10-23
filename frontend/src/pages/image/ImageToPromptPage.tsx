@@ -26,7 +26,6 @@ import AssetPickerDialog from './library/AssetPickerDialog';
 import { saveSnippet } from './library/assetStore';
 import { deriveLabel } from './profiles/promptLabel';
 import {
-    IMAGE_PROMPT_SCENARIO as SCENARIO,
     clearImagePromptRuns,
     removeImagePromptRun,
     startImagePromptRun,
@@ -38,6 +37,7 @@ import { DEFAULT_INSTRUCTIONS, INSTRUCTION_STARTERS } from './prompt/imagePrompt
 import InstructionsField from './prompt/InstructionsField';
 import PromptRunCard from './prompt/PromptRunCard';
 import { useInstructions, useRememberedModel } from './prompt/instructionStarters';
+import { PROMPT_TOOLS_SCENARIO as SCENARIO } from './prompt/promptRunStore';
 import { takeHandedPicture } from './prompt/pictureHandoff';
 import { preparePicture, type Picture } from './prompt/preparePicture';
 
