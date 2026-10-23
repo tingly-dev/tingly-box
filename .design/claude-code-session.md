@@ -585,3 +585,24 @@ core efficiency win (skip process-spawn/startup cost per message).
   change; a future reader of §P3 should land here.
 
 ---
+
+## Launch entrypoint and the `/resume` picker
+
+Claude Code records how a session started (`entrypoint`) in its transcript.
+For `-p` / stream-json launches it is `sdk-cli` unless
+`CLAUDE_CODE_ENTRYPOINT` holds another value (`cli` is folded into `sdk-cli`
+too), and the interactive `/resume` picker lists none of the `sdk-cli`
+sessions. `buildCleanEnv` strips the inherited value on purpose (a parent
+session's kind must not leak into the child), so every AgentBoot session was
+hidden from a `claude --resume` opened in the same directory. Verified with
+Claude Code 2.1.309 in a real TTY: the same stdio argv with
+`CLAUDE_CODE_ENTRYPOINT=tingly-box` shows up in the picker.
+
+`Driver.Prepare` therefore sets `CLAUDE_CODE_ENTRYPOINT=tingly-box`
+(`DefaultEntrypoint`) after the clean env, before `CustomEnv` / per-run `Env`,
+so a caller can still override it. `claude agents` lists a live process
+whatever its entrypoint; it only shows sessions while their process runs.
+
+Tool approvals answered over stdio are still per call: the CLI offers
+`permission_suggestions` and a reply may carry `updatedPermissions` to write a
+rule to `.claude/settings.local.json`, but that is deliberately not used.
