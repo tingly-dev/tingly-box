@@ -598,10 +598,15 @@ hidden from a `claude --resume` opened in the same directory. Verified with
 Claude Code 2.1.309 in a real TTY: the same stdio argv with
 `CLAUDE_CODE_ENTRYPOINT=tingly-box` shows up in the picker.
 
-`Driver.Prepare` therefore sets `CLAUDE_CODE_ENTRYPOINT=tingly-box`
-(`DefaultEntrypoint`) after the clean env, before `CustomEnv` / per-run `Env`,
-so a caller can still override it. `claude agents` lists a live process
-whatever its entrypoint; it only shows sessions while their process runs.
+AgentBoot is a general layer, so this is an option and not a default:
+`ExecutionOptions.Entrypoint` (empty = leave the CLI default, as before).
+`Driver.Prepare` writes it as `CLAUDE_CODE_ENTRYPOINT` after the clean env and
+before `CustomEnv` / `Env`, so an explicit env entry still wins. It is part of
+`launchSignature`, since a resident process cannot change it. Projects (which
+also serves the IM channels) passes `tingly-box`, because its threads are meant
+to be picked up in a terminal; headless callers that do not want to show up in
+`/resume` pass nothing. `claude agents` lists a live process whatever its
+entrypoint; it only shows sessions while their process runs.
 
 Tool approvals answered over stdio are still per call: the CLI offers
 `permission_suggestions` and a reply may carry `updatedPermissions` to write a

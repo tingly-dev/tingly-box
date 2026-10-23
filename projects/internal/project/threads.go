@@ -592,7 +592,7 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	m.mu.Lock()
 	m.turns[threadID] = &turnTally{launchModel: model}
 	m.mu.Unlock()
-	opts := agentboot.ExecutionOptions{Model: model, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings}
+	opts := agentboot.ExecutionOptions{Model: model, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings, Entrypoint: sessionEntrypoint}
 	if !folder {
 		opts.AppendSystemPrompt = threadSystemPrompt(m.layout, p, t)
 		opts.SettingsPath = m.layout.SettingsFile(p.ID, t.ID)
@@ -643,6 +643,12 @@ func (m *Threads) sessionSettings(p *db.Project, t *db.Thread, host string) (str
 	}
 	return path, os.WriteFile(path, out, 0o644)
 }
+
+// sessionEntrypoint is what Claude Code records as the way a session was
+// started. A headless launch defaults to "sdk-cli", which the interactive
+// /resume picker hides; this keeps a thread's session resumable from a
+// terminal opened in its folder.
+const sessionEntrypoint = "tingly-box"
 
 // launchEnv is how t's turn reaches a model. A folder thread on a host
 // with launch profiles runs under its profile, and an unset model is left to

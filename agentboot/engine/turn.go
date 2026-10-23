@@ -245,5 +245,5 @@ func launchSignature(opts agentboot.ExecutionOptions) string {
 			settings += "@" + hex.EncodeToString(sum[:])
 		}
 	}
-	return opts.PermissionMode + "\x00" + opts.Model + "\x00" + settings + "\x00" + strings.Join(env, "\x00")
+	return opts.PermissionMode + "\x00" + opts.Entrypoint + "\x00" + opts.Model + "\x00" + settings + "\x00" + strings.Join(env, "\x00")
 }

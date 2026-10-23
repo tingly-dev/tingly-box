@@ -52,6 +52,13 @@ type ExecutionOptions struct {
 	// a negative value explicitly disables the default timeout.
 	Timeout time.Duration
 	Env     []string
+	// Entrypoint is how the session reports it was started
+	// (CLAUDE_CODE_ENTRYPOINT for Claude Code). Empty leaves the CLI's own
+	// default, which for headless launches is "sdk-cli": such sessions are
+	// hidden from the interactive /resume picker. Set it when a person is
+	// meant to pick the session up in a terminal later; any value other
+	// than "cli" or "sdk-*" does. An Env entry for the same variable wins.
+	Entrypoint string
 	// SessionID is the session ID to use or resume
 	// If Resume is true, --resume <session_id> is used to continue an existing session
 	// If Resume is false, --session-id <session_id> is used to create a new session with specific ID

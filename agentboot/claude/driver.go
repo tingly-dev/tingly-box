@@ -128,10 +128,10 @@ func (d *Driver) Prepare(ctx context.Context, prompt string, opts agentboot.Exec
 		logrus.Debugf("Failed to get clean env: %v", envErr)
 		cleanEnv = os.Environ()
 	}
-	// -p / stream-json sessions are recorded with entrypoint "sdk-cli", which
-	// the interactive /resume picker hides. Any other value keeps them
-	// resumable from a terminal opened in the same directory.
-	env := MergeEnv(cleanEnv, []string{FormatEnv(EnvClaudeEntrypoint, DefaultEntrypoint)})
+	env := cleanEnv
+	if opts.Entrypoint != "" {
+		env = MergeEnv(env, []string{FormatEnv(EnvClaudeEntrypoint, opts.Entrypoint)})
+	}
 	if len(config.CustomEnv) > 0 {
 		env = MergeEnv(env, config.CustomEnv)
 	}
