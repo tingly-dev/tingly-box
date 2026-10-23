@@ -17,6 +17,11 @@ behind a popover.
   window size), Changes (commits, files, uncommitted, Review), Background tasks
   (folder sessions: running rows with elapsed time and a stop button, finished
   ones behind a count). A card's fold state is remembered (`thread.rail.<id>`).
+- On a folder page with a session open (viewport above the `lg` breakpoint), the
+  Sessions list is the rail's first card (`railTop`, rail on from 640px wide and
+  not hideable) and the separate side pane and its header toggle are gone: one
+  right column. Narrow screens keep the drawer. Project thread panes are
+  unchanged.
 - Data is only what `Thread` and the transcript already give; no new API.
 - With the rail on, the header's "N running" chip, the menu's Background tasks
   entry and the commits/uncommitted facts of the meta line drop out so nothing

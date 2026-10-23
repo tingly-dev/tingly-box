@@ -111,6 +111,8 @@ interface Props {
     onReveal: (callId: string) => void;
     /** The permission mode's display name (the picker sits at the message box). */
     permission?: string;
+    /** A card above the rest, folded into the rail from the page (a folder's sessions). */
+    top?: ReactNode;
 }
 
 /**
@@ -119,7 +121,7 @@ interface Props {
  * answers one question and folds; the numbers are the ones the thread
  * already carries.
  */
-export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onChanged, onReveal, permission }: Props) {
+export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onChanged, onReveal, permission, top }: Props) {
     const { t } = useTranslation('projects');
     const [showFinished, setShowFinished] = useState(false);
     const running = tasks.filter(isRunning);
@@ -129,6 +131,11 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
     const branch = thread.branch && (thread.base_branch ? `${thread.base_branch} → ${thread.branch}` : thread.branch);
     return (
         <Box component="aside" aria-label={t('rail.title')} sx={{ width: RAIL_WIDTH, flexShrink: 0, borderLeft: 1, borderColor: 'divider', bgcolor: 'background.default', p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.25, overflowY: 'auto', minHeight: 0 }}>
+            {top != null && (
+                <RailCard id="sessions" title={t('session.sessions')}>
+                    <Box sx={{ mx: -0.75, maxHeight: 320, overflowY: 'auto' }}>{top}</Box>
+                </RailCard>
+            )}
             <RailCard id="env" title={t('rail.environment')}>
                 <Fact label={t('rail.folder')}>{thread.cwd}</Fact>
                 {branch && <Fact label={t('rail.branch')}>{branch}</Fact>}

@@ -73,6 +73,9 @@ interface Props {
     liveTasks?: BackgroundTask[];
     /** Re-reads the session, e.g. after a task was stopped. */
     onRefresh?: () => void;
+    /** A card the rail carries above its own (a folder's session list); the rail then stays on, from `railMinPanel` wide. */
+    railTop?: React.ReactNode;
+    railMinPanel?: number;
 }
 
 type View = 'chat' | 'trajectory';
@@ -83,7 +86,7 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
     return `[data-block="${anchor.block}"]`;
 };
 
-export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, belowComposer, liveTasks = [], onRefresh }: Props) {
+export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, belowComposer, liveTasks = [], onRefresh, railTop, railMinPanel = RAIL_MIN_PANEL }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const [diffOpen, setDiffOpen] = useState(false);
@@ -96,16 +99,16 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     useEffect(() => {
         const el = panelRef.current;
         if (!el || typeof ResizeObserver === 'undefined') return;
-        const ro = new ResizeObserver(([entry]) => setWide(entry.contentRect.width >= RAIL_MIN_PANEL));
+        const ro = new ResizeObserver(([entry]) => setWide(entry.contentRect.width >= railMinPanel));
         ro.observe(el);
         return () => ro.disconnect();
         // The panel's box exists once the thread has loaded.
-    }, [!!thread]);
+    }, [!!thread, railMinPanel]);
     const toggleRail = () => {
         writeLocal('thread.rail', railOn ? '0' : '1');
         setRailOn(!railOn);
     };
-    const rail = wide && railOn;
+    const rail = wide && (railOn || railTop != null);
     // Chat and Trajectory read the same transcript; the choice and whether
     // every tool call starts open are remembered per browser.
     const [view, setViewState] = useState<View>(() => readLocal('thread.view') === 'trajectory' ? 'trajectory' : 'chat');
@@ -327,7 +330,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         {view === 'chat' && <MenuItem onClick={() => { setMenu(null); toggleExpand(); }}>{expandAll ? t('thread.collapseTools') : t('thread.expandTools')}</MenuItem>}
                         {/* The panel opens where the menu was, under the More button. */}
                         {session && !rail && <MenuItem onClick={() => { setTasksAnchor(menu); setMenu(null); }}>{t('session.backgroundTasks')}</MenuItem>}
-                        {wide && <MenuItem onClick={() => { setMenu(null); toggleRail(); }}>{railOn ? t('rail.hide') : t('rail.show')}</MenuItem>}
+                        {wide && railTop == null && <MenuItem onClick={() => { setMenu(null); toggleRail(); }}>{railOn ? t('rail.hide') : t('rail.show')}</MenuItem>}
                         {subagents && <MenuItem onClick={() => { setAgentsAnchor(menu); setMenu(null); }}>{t('subagents.title')}</MenuItem>}
                         {session && thread.status !== 'resolved' && (
                             <MenuItem disabled={running || acting} onClick={() => guarded('handoff')}>{running ? t('session.handoffBusy') : t('session.handoff')}</MenuItem>
@@ -460,6 +463,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 onReview={() => setDiffOpen(true)}
                 onChanged={() => onRefresh?.()}
                 onReveal={(call) => void openInChat({ call })}
+                top={railTop}
                 permission={session ? (thread.permission_mode || t('session.permissionDefault')) : undefined}
             />
         )}

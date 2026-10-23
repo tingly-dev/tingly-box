@@ -66,6 +66,8 @@ interface WorkspaceLayoutProps {
     sideAlwaysOpen?: boolean;
     /** Replace the toggle's behaviour when the Overview is not in the pane. */
     paneToggle?: { onClick: () => void; expanded: boolean };
+    /** Leave the pane toggle out: the pane's content lives elsewhere (a thread's info rail). */
+    hidePaneToggle?: boolean;
     /** Left padding of the header on small screens, clear of a host's or the standalone app's menu button. */
     headerInsetXs?: number;
 }
@@ -76,7 +78,7 @@ interface WorkspaceLayoutProps {
  * resizable side pane (what is going on in it). Hosts build their own
  * workspace pages from it.
  */
-export function WorkspaceLayout({ pane, title, actions, paneLabel, paneAttention, notice, main, side, top, sideAlwaysOpen, paneToggle, headerInsetXs = 2 }: WorkspaceLayoutProps) {
+export function WorkspaceLayout({ pane, title, actions, paneLabel, paneAttention, notice, main, side, top, sideAlwaysOpen, paneToggle, hidePaneToggle, headerInsetXs = 2 }: WorkspaceLayoutProps) {
     const row = useRef<HTMLDivElement>(null);
     const { storageKey, setWidth } = pane;
 
@@ -94,11 +96,13 @@ export function WorkspaceLayout({ pane, title, actions, paneLabel, paneAttention
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: { xs: headerInsetXs, md: 3 }, py: 1, minHeight: 52, borderBottom: 1, borderColor: 'divider' }}>
                 <Box sx={{ minWidth: 0, flex: 1 }}>{title}</Box>
                 {actions}
-                <Tooltip title={paneLabel}>
-                    <IconButton size="small" onClick={paneToggle?.onClick ?? pane.toggle} aria-label={paneLabel} aria-expanded={paneToggle ? paneToggle.expanded : pane.narrow ? pane.drawerOpen : pane.open}>
-                        <Badge color="warning" variant="dot" invisible={!paneAttention}><PaneIcon fontSize="small" /></Badge>
-                    </IconButton>
-                </Tooltip>
+                {!hidePaneToggle && (
+                    <Tooltip title={paneLabel}>
+                        <IconButton size="small" onClick={paneToggle?.onClick ?? pane.toggle} aria-label={paneLabel} aria-expanded={paneToggle ? paneToggle.expanded : pane.narrow ? pane.drawerOpen : pane.open}>
+                            <Badge color="warning" variant="dot" invisible={!paneAttention}><PaneIcon fontSize="small" /></Badge>
+                        </IconButton>
+                    </Tooltip>
+                )}
             </Box>
             {notice}
             {top}

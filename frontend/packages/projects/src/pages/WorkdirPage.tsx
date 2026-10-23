@@ -313,6 +313,11 @@ export default function WorkdirPage() {
         selected: s.id === sessionId,
     })), [sessions, scope, sessionId, i18n.language]);
     const waitingHere = (sessions ?? []).some((s) => s.status === 'waiting');
+    // With a session open on a wide screen the list becomes the first card of the thread's info rail, so the page has one right column.
+    const merged = !!sessionId && !pane.narrow;
+    const sessionList = sessions === null
+        ? <Box sx={{ p: 2 }}><Skeleton height={36} /><Skeleton height={36} /></Box>
+        : <StatusGroups groups={groups} rows={rows} onOpen={openSession} empty={t('session.none')} />;
 
     return (
         <>
@@ -353,15 +358,14 @@ export default function WorkdirPage() {
                         )}
                     </>
                 )}
-                side={(
+                hidePaneToggle={merged}
+                side={merged ? undefined : (
                     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', px: 2, minHeight: 44, borderBottom: 1, borderColor: 'divider' }}>
                             <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('session.sessions')}</Typography>
                         </Box>
                         <Box sx={{ flex: 1, overflowY: 'auto', px: 0.5 }}>
-                            {sessions === null
-                                ? <Box sx={{ p: 2 }}><Skeleton height={36} /><Skeleton height={36} /></Box>
-                                : <StatusGroups groups={groups} rows={rows} onOpen={openSession} empty={t('session.none')} />}
+                            {sessionList}
                         </Box>
                     </Box>
                 )}
@@ -377,6 +381,8 @@ export default function WorkdirPage() {
                         disabled={false}
                         onBack={() => openNew()}
                         liveTasks={liveTasks}
+                        railTop={merged ? sessionList : undefined}
+                        railMinPanel={merged ? 640 : undefined}
                         more={transcript.more}
                         onLoadEarlier={transcript.loadEarlier}
                         subagents={transcript.subagents}
