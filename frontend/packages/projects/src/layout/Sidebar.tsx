@@ -139,7 +139,7 @@ export function Sidebar({ onCollapse, onNavigate }: { onCollapse?: () => void; o
                                     <Badge color="warning" variant="dot" invisible={p.threads.waiting === 0}><Folder sx={{ fontSize: 16 }} /></Badge>
                                 </ListItemIcon>
                                 <ListItemText primary={p.name} slotProps={{ primary: { noWrap: true, sx: { fontSize: fontSizes.base, color: 'text.primary' } } }} />
-                                {p.threads.waiting > 0 && <Typography variant="caption" color="warning.main" sx={{ fontWeight: 600 }}>{p.threads.waiting}</Typography>}
+                                {p.threads.waiting > 0 && <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>{p.threads.waiting}</Typography>}
                             </ListItemButton>
                         ))}
                     </Section>
@@ -154,7 +154,7 @@ export function Sidebar({ onCollapse, onNavigate }: { onCollapse?: () => void; o
                                         <Badge color="warning" variant="dot" invisible={f.threads.waiting === 0}><FolderOpen sx={{ fontSize: 16 }} /></Badge>
                                     </ListItemIcon>
                                     <ListItemText primary={folderName(path)} slotProps={{ primary: { noWrap: true, sx: { fontSize: fontSizes.base, color: 'text.primary' } } }} />
-                                    {f.threads.waiting > 0 && <Typography variant="caption" color="warning.main" sx={{ fontWeight: 600 }}>{f.threads.waiting}</Typography>}
+                                    {f.threads.waiting > 0 && <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>{f.threads.waiting}</Typography>}
                                 </ListItemButton>
                             );
                         })}

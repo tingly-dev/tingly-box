@@ -147,7 +147,7 @@ const Trajectory = ({blocks, working, pendingRequestId, project, onOpen}: Trajec
                                         <Box component="span" sx={{fontFamily: fontMono, fontSize: fontSizes.sm, color: 'text.secondary', ml: 1}}>{relative(r.detail, project)}</Box>
                                     )}
                                 </Typography>
-                                <Typography component="span" variant="caption" noWrap sx={{maxWidth: 200, color: (theme) => r.failed ? getReadableAccent(theme, 'error') : theme.palette.text.secondary}}>
+                                <Typography component="span" variant="caption" noWrap sx={{maxWidth: 200, color: 'text.secondary'}}>
                                     {r.kind === 'approval' || r.kind === 'ask'
                                         ? `→ ${r.outcome ?? ('request' in r.anchor && r.anchor.request === pendingRequestId
                                             ? t('projects.transcript.trajectoryWaiting', {defaultValue: 'waiting for you'})

@@ -147,7 +147,7 @@ function TaskRow({ sessionId, task, open, onToggle, onChanged, onReveal }: {
             <ListRow aria-expanded={open} onClick={onToggle}
                 mark={isAgent ? <Robot sx={{ fontSize: 16 }} /> : <Terminal sx={{ fontSize: 16 }} />}
                 title={task.description || task.input?.description || task.taskId}
-                subtitle={<Box component="span" sx={{ color: (theme) => task.status === 'failed' ? getReadableAccent(theme, 'error') : undefined }}>{[state, elapsed !== undefined ? formatDuration(elapsed) : ''].filter(Boolean).join(' · ')}</Box>}
+                subtitle={[state, elapsed !== undefined ? formatDuration(elapsed) : ''].filter(Boolean).join(' · ')}
                 end={<>
                     <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }} title={state}>{icon}</Box>
                     {open ? <ExpandMore sx={{ fontSize: 16, color: 'text.secondary' }} /> : <ChevronRight sx={{ fontSize: 16, color: 'text.secondary' }} />}

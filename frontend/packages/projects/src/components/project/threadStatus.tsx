@@ -57,8 +57,9 @@ export function ThreadStateMark({ status }: { status: string }) {
     );
 }
 
-/** One state, one look, wherever a thread's status shows: its mark, and its
- * word unless `compact` (the word then sits in the title attribute). */
+/** One state, one look, wherever a thread's status shows: its mark (the only
+ * coloured part) and its word unless `compact` (the word then sits in the
+ * title attribute). */
 export function ThreadState({ status, compact }: { status: string; compact?: boolean }) {
     const { t } = useTranslation('projects');
     const word = t(`thread.status.${status}`);
@@ -67,7 +68,7 @@ export function ThreadState({ status, compact }: { status: string; compact?: boo
             component="span"
             data-status={status}
             title={compact ? word : undefined}
-            sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, flexShrink: 0, fontSize: fontSizes.sm, fontWeight: 500, whiteSpace: 'nowrap', color: stateColor(status) }}
+            sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, flexShrink: 0, fontSize: fontSizes.sm, fontWeight: 500, whiteSpace: 'nowrap', color: status === 'waiting' ? 'text.primary' : 'text.secondary' }}
         >
             <ThreadStateMark status={status} />
             {!compact && word}

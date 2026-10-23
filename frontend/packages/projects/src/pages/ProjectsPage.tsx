@@ -10,7 +10,7 @@ import { useProjectsHost } from '../host/ProjectsHost';
 import { timeAgo } from '../utils/format';
 import { EmptyState, PageHeader } from '@tingly/ui';
 import { fontSizes } from '@tingly/ui/theme/fonts';
-import { stateColor, ThreadStateMark } from '../components/project/threadStatus';
+import { ThreadStateMark } from '../components/project/threadStatus';
 import { radius } from '@tingly/ui/theme/radius';
 
 function ProjectCard({ p }: { p: ProjectSummary }) {
@@ -37,7 +37,7 @@ function ProjectCard({ p }: { p: ProjectSummary }) {
                 {/* What needs you, in one quiet line: a dot per state that has threads. */}
                 <Box sx={{ display: 'flex', columnGap: 1.5, rowGap: 0.5, flexWrap: 'wrap', mt: 1.5, minHeight: 20, fontSize: fontSizes.sm }}>
                     {counts.filter((x) => x.n > 0).map((x) => (
-                        <Box key={x.key} component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, color: stateColor(x.key), fontWeight: x.key === 'waiting' ? 600 : 400 }}>
+                        <Box key={x.key} component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, color: x.key === 'waiting' ? 'text.primary' : 'text.secondary', fontWeight: x.key === 'waiting' ? 600 : 400 }}>
                             <ThreadStateMark status={x.key} />
                             {x.n} {t(`overview.group.${x.key}`)}
                         </Box>

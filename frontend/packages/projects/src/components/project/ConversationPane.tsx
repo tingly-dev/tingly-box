@@ -12,7 +12,7 @@ import { readLocal, writeLocal } from '../../utils/storage';
 import { ChevronRight, DiffIcon, ExpandMore, PlayArrow } from '../icons';
 import { DiffDialog } from './DiffDialog';
 import { LoadEarlier } from './LoadEarlier';
-import { ThreadStateMark, ThreadBadges, ThreadSubtitle, stateColor } from './threadStatus';
+import { ThreadStateMark, ThreadBadges, ThreadSubtitle } from './threadStatus';
 import { radius } from '@tingly/ui/theme/radius';
 
 const REPORTS_KEY = 'conversation.threadReports';
@@ -56,7 +56,7 @@ export function ThreadCard({ thread, onOpen }: { thread: Thread; onOpen: (id: st
                 </Box>
                 <Typography noWrap sx={{ flex: { xs: 1, sm: '0 1 auto' }, minWidth: 0, maxWidth: { sm: '45%' }, fontSize: fontSizes.base, fontWeight: 600, color: 'text.primary' }}>{thread.title}</Typography>
                 {/* On a phone the line keeps the title; the thread holds the rest. */}
-                <Typography noWrap component="div" sx={{ display: { xs: 'none', sm: 'block' }, flex: 1, minWidth: 0, fontSize: fontSizes.sm, color: thread.status === 'waiting' ? stateColor('waiting') : 'text.secondary' }}>
+                <Typography noWrap component="div" sx={{ display: { xs: 'none', sm: 'block' }, flex: 1, minWidth: 0, fontSize: fontSizes.sm, color: 'text.secondary' }}>
                     <ThreadSubtitle thread={thread} />
                 </Typography>
                 <ThreadBadges thread={thread} />

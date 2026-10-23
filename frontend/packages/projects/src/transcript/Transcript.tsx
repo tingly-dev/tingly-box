@@ -111,10 +111,9 @@ const TaskTag = ({task}: {task: TaskState}) => {
         <Chip
             size="small"
             variant="outlined"
-            color={task.status === 'failed' ? 'error' : 'default'}
             icon={task.status === 'running' ? <CircularProgress size={10} sx={{ml: '6px !important'}}/> : undefined}
             label={`${t('projects.transcript.background', {defaultValue: 'background'})} · ${statusLabel(t, task.status)}`}
-            sx={{height: 20, flexShrink: 0, color: (theme) => task.status === 'failed' ? getReadableAccent(theme, 'error') : undefined, borderColor: (theme) => task.status === 'failed' ? getReadableAccent(theme, 'error') : undefined, '& .MuiChip-label': {px: 0.75, fontSize: fontSizes.xs}}}
+            sx={{height: 20, flexShrink: 0, color: 'text.secondary', '& .MuiChip-label': {px: 0.75, fontSize: fontSizes.xs}}}
         />
     );
 };

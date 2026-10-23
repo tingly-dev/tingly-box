@@ -3,7 +3,7 @@ import { Box, Collapse, Typography } from '@mui/material';
 import { ExpandMore } from '../icons';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { ListRow } from '../ListRow';
-import { stateColor, ThreadStateMark } from '../project/threadStatus';
+import { ThreadStateMark } from '../project/threadStatus';
 
 /** One group of the list: what needs the user comes first. */
 export interface StatusGroup {
@@ -35,7 +35,7 @@ export function StatusHeading({ label, status, count }: { label: string; status:
     return (
         <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
             <ThreadStateMark status={status} />
-            <Box component="span" sx={{ fontSize: fontSizes.sm, fontWeight: 600, color: stateColor(status) }}>{label}</Box>
+            <Box component="span" sx={{ fontSize: fontSizes.sm, fontWeight: 600, color: status === 'waiting' ? 'text.primary' : 'text.secondary' }}>{label}</Box>
             <Box component="span" sx={{ fontSize: fontSizes.sm, color: 'text.disabled' }}>{count}</Box>
         </Box>
     );
