@@ -7,7 +7,6 @@ import { ListRow } from '../ListRow';
 import { StatusHeading } from './StatusGroups';
 import { timeAgo } from '../../utils/format';
 import { fontSizes } from '@tingly/ui/theme/fonts';
-import { radius } from '@tingly/ui/theme/radius';
 
 interface Props {
     threads: Thread[];
