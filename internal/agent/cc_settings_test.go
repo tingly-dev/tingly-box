@@ -109,7 +109,6 @@ func TestGenerateCCEnv_ProfileUnified_ResolvesCCRule(t *testing.T) {
 	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code:p2", true)
 
 	for _, k := range []string{
-		"ANTHROPIC_MODEL",
 		"ANTHROPIC_DEFAULT_HAIKU_MODEL",
 		"ANTHROPIC_DEFAULT_OPUS_MODEL",
 		"ANTHROPIC_DEFAULT_SONNET_MODEL",
@@ -118,6 +117,11 @@ func TestGenerateCCEnv_ProfileUnified_ResolvesCCRule(t *testing.T) {
 		if env[k] != "renamed-cc" {
 			t.Errorf("env[%q] = %q, want %q", k, env[k], "renamed-cc")
 		}
+	}
+	// The sonnet slot follows the default, so ANTHROPIC_MODEL stays unset and
+	// Claude Code's /model picker ticks "Default".
+	if v, ok := env["ANTHROPIC_MODEL"]; ok {
+		t.Errorf("env[ANTHROPIC_MODEL] = %q, want it unset", v)
 	}
 }
 
@@ -174,9 +178,10 @@ func TestGenerateCCEnv_MainScenario_ResolvesLegacyBuiltins(t *testing.T) {
 	if got := env["ANTHROPIC_DEFAULT_HAIKU_MODEL"]; got != "vendor/fast" {
 		t.Errorf("haiku model = %q, want %q", got, "vendor/fast")
 	}
-	// Missing rules keep the canonical tingly/* fallback.
-	if got := env["ANTHROPIC_MODEL"]; got != "cc" {
-		t.Errorf("default model = %q, want %q", got, "cc")
+	// Missing rules keep the canonical fallback; ANTHROPIC_MODEL is left unset
+	// because the sonnet slot follows it.
+	if got := env["ANTHROPIC_DEFAULT_SONNET_MODEL"]; got != "cc" {
+		t.Errorf("sonnet model = %q, want %q", got, "cc")
 	}
 }
 
@@ -745,7 +750,6 @@ func TestGenerateCCEnv_UnifiedWithSubagentOnItsOwnRule(t *testing.T) {
 	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code", false)
 
 	for key, want := range map[string]string{
-		"ANTHROPIC_MODEL":                "cc",
 		"ANTHROPIC_DEFAULT_HAIKU_MODEL":  "cc",
 		"ANTHROPIC_DEFAULT_SONNET_MODEL": "cc",
 		"ANTHROPIC_DEFAULT_OPUS_MODEL":   "cc",
@@ -755,6 +759,22 @@ func TestGenerateCCEnv_UnifiedWithSubagentOnItsOwnRule(t *testing.T) {
 		if env[key] != want {
 			t.Errorf("env[%q] = %q, want %q", key, env[key], want)
 		}
+	}
+	if v, ok := env["ANTHROPIC_MODEL"]; ok {
+		t.Errorf("env[ANTHROPIC_MODEL] = %q, want it unset (sonnet follows the default)", v)
+	}
+}
+
+func TestGenerateCCEnv_SplitSonnetKeepsDefaultModel(t *testing.T) {
+	cfg := &serverconfig.Config{Rules: []typ.Rule{
+		{UUID: "builtin:claude_code:cc", Scenario: typ.ScenarioClaudeCode, RequestModel: "cc", Active: true},
+		{UUID: "builtin:claude_code:sonnet", Scenario: typ.ScenarioClaudeCode, RequestModel: "sonnet", Active: true},
+	}}
+
+	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code", false)
+
+	if env["ANTHROPIC_MODEL"] != "cc" || env["ANTHROPIC_DEFAULT_SONNET_MODEL"] != "sonnet" {
+		t.Errorf("default/sonnet = %q/%q, want cc/sonnet", env["ANTHROPIC_MODEL"], env["ANTHROPIC_DEFAULT_SONNET_MODEL"])
 	}
 }
 

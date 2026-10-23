@@ -164,8 +164,13 @@ func GetCacheHit(c *gin.Context) (bool, bool) {
 	return false, false
 }
 
+// MinTPSDecodeWindow is the shortest (latency - TTFT) window for which TPS is
+// reported; below it TPS is unreliable and no sample is recorded.
+const MinTPSDecodeWindow = time.Second
+
 // CalculateTPS calculates Tokens Per Second for streaming requests.
-// For non-streaming requests or when TTFT is not available, returns 0.
+// For non-streaming requests, when TTFT is not available, or when the decode
+// window (latency - TTFT) is shorter than MinTPSDecodeWindow, returns 0.
 //
 // TPS is the inverse of time per output token (TPOT):
 // (outputTokens - 1) / (currentTime - firstTokenTime).
@@ -193,12 +198,14 @@ func CalculateTPS(c *gin.Context, outputTokens int, streamed bool) float64 {
 		return 0
 	}
 
-	duration := time.Since(firstTokenTime).Seconds()
-	if duration <= 0 {
-		return 0 // Invalid duration
+	duration := time.Since(firstTokenTime)
+	if duration < MinTPSDecodeWindow {
+		// The first chunk may carry a large batch of tokens whose generation
+		// time is not in the window, so a short window inflates TPS.
+		return 0
 	}
 
-	return float64(outputTokens-1) / duration
+	return float64(outputTokens-1) / duration.Seconds()
 }
 
 // DetectCacheHit determines if a request was served from cache based on TokenUsage.

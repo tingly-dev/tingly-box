@@ -149,6 +149,7 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 
 	models, context1M := ClaudeCodeSlotModels(cfg, scenarioPath, isProfile)
 	maps.Copy(env, models)
+	OmitFollowedDefaultModel(env)
 
 	// Mirror the frontend quick-config: when any resolved model rule has the
 	// 1M context flag, adjust the auto-compact window to match so Claude Code
@@ -322,6 +323,10 @@ func ResolveCCProfileSettings(cfg *serverconfig.Config, baseURL, apiKey, scenari
 
 	generated := GenerateCCEnv(cfg, baseURL, apiKey, scenarioPath, true)
 	maps.Copy(baseEnv, generated)
+	if _, ok := generated["ANTHROPIC_MODEL"]; !ok {
+		// An earlier apply may have left it in the main settings file.
+		delete(baseEnv, "ANTHROPIC_MODEL")
+	}
 	basePreferences, err := ClaudeCodePrefsFromEnv(baseEnv)
 	if err != nil {
 		return CCProfileSettingsResolution{}, err
