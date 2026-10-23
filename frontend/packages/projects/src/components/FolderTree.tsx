@@ -1,0 +1,208 @@
+import { useEffect, useState } from 'react';
+import { Box, ButtonBase, IconButton, Typography } from '@mui/material';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { NavLink } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { api, unwrap, type ProjectSummary, type Thread } from '../client';
+import { folderName, timeAgo } from '../utils/format';
+import { readLocal, writeLocal } from '../utils/storage';
+import { ChevronRight, ExpandMore, Terminal } from './icons';
+import { needsUser, stateColor, ThreadStateMark } from './project/threadStatus';
+
+/** Sessions shown per open folder before "Show older"; running and waiting ones always show. */
+const VISIBLE = 5;
+
+const LABEL_SX = { fontSize: fontSizes.sm, fontWeight: 600, lineHeight: 1.3 } as const;
+const ROW_SX = {
+    display: 'flex', alignItems: 'center', gap: 1, mx: 1, pl: 2, pr: 1.5, minHeight: 32, borderRadius: 1,
+    textDecoration: 'none', color: 'text.primary',
+    '&:hover': { backgroundColor: 'action.hover' },
+} as const;
+
+const rank = (th: Thread) => (needsUser(th.status) ? 0 : th.status === 'working' ? 1 : th.status === 'resolved' ? 3 : 2);
+
+/** Needs-you first, then running, then the latest; archived ones last. */
+export const sortSessions = (threads: Thread[]) =>
+    [...threads].sort((a, b) => rank(a) - rank(b) || b.updated_at.localeCompare(a.updated_at));
+
+/** A folder's sessions, read again when its counts change. Only while the folder is open. */
+function useFolderSessions(folder: ProjectSummary, open: boolean): Thread[] {
+    const [threads, setThreads] = useState<Thread[]>([]);
+    const c = folder.threads;
+    const signature = `${c.working}/${c.waiting}/${c.failed}/${c.idle}/${c.ready}`;
+    useEffect(() => {
+        if (!open) return;
+        let alive = true;
+        unwrap(api.GET('/api/v1/projects/{id}/threads', { params: { path: { id: folder.id } } }))
+            .then((r) => alive && setThreads(r.threads ?? []))
+            .catch(() => {
+                // The folder row still works without its sessions.
+            });
+        return () => {
+            alive = false;
+        };
+    }, [folder.id, open, signature]);
+    return threads;
+}
+
+/** The background tasks a running session has, only while it runs. */
+function useBackgroundTasks(thread: Thread): { task_id: string; description: string }[] {
+    const [tasks, setTasks] = useState<{ task_id: string; description: string }[]>([]);
+    const running = thread.status === 'working';
+    useEffect(() => {
+        if (!running) {
+            setTasks([]);
+            return;
+        }
+        let alive = true;
+        unwrap(api.GET('/api/v1/threads/{id}', { params: { path: { id: thread.id } } }))
+            .then((d) => alive && setTasks(d.background_tasks ?? []))
+            .catch(() => {
+                // Without the tasks the session row is still right.
+            });
+        return () => {
+            alive = false;
+        };
+    }, [thread.id, running, thread.updated_at]);
+    return tasks;
+}
+
+function SessionRow({ thread, to, selected, onNavigate }: { thread: Thread; to: string; selected: boolean; onNavigate?: () => void }) {
+    const { i18n } = useTranslation('projects');
+    const tasks = useBackgroundTasks(thread);
+    return (
+        <>
+            <Box
+                component={NavLink}
+                to={to}
+                onClick={onNavigate}
+                title={thread.title}
+                aria-current={selected ? 'page' : undefined}
+                sx={{ ...ROW_SX, ...(selected && { backgroundColor: 'action.selected' }) }}
+            >
+                <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.base, fontWeight: 500, color: 'inherit' }}>{thread.title}</Typography>
+                <Typography component="span" sx={{ flexShrink: 0, fontSize: fontSizes.xs, color: 'text.disabled' }}>{timeAgo(thread.updated_at, i18n.language, true)}</Typography>
+                <Box sx={{ width: 14, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
+                    {thread.status !== 'idle' && <ThreadStateMark status={thread.status} />}
+                </Box>
+            </Box>
+            {tasks.map((task) => (
+                <Box key={task.task_id} title={task.description} sx={{ ...ROW_SX, minHeight: 24, color: 'text.secondary' }}>
+                    <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.sm, color: 'inherit' }}>{task.description}</Typography>
+                    <Box sx={{ width: 14, flexShrink: 0, display: 'flex', justifyContent: 'center' }}><Terminal sx={{ fontSize: 14 }} /></Box>
+                </Box>
+            ))}
+        </>
+    );
+}
+
+/** What a folded folder says about its sessions: one dot, the most urgent first. */
+function Rollup({ folder }: { folder: ProjectSummary }) {
+    const { working, waiting, failed } = folder.threads;
+    const status = failed > 0 ? 'failed' : waiting > 0 ? 'waiting' : working > 0 ? 'working' : null;
+    if (!status) return null;
+    return (
+        <Box
+            aria-hidden
+            data-testid="rollup"
+            data-status={status}
+            sx={(theme) => ({ width: 8, height: 8, mr: '3px', borderRadius: '50%', flexShrink: 0, bgcolor: status === 'working' ? 'text.secondary' : stateColor(status)(theme) })}
+        />
+    );
+}
+
+function FolderNode({ folder, scope, openSession, to, sessionTo, onNavigate }: {
+    folder: ProjectSummary;
+    scope?: string;
+    openSession: string | null;
+    to: string;
+    sessionTo: (id: string) => string;
+    onNavigate?: () => void;
+}) {
+    const { t } = useTranslation('projects');
+    const path = folder.path ?? '';
+    const isOpenFolder = scope === path;
+    const key = `nav.folder.${folder.id}`;
+    // Remembered per browser; a folder the user is in starts open.
+    const [folded, setFolded] = useState(() => {
+        const saved = readLocal(key);
+        return saved ? saved === 'folded' : !isOpenFolder;
+    });
+    const [all, setAll] = useState(false);
+    useEffect(() => {
+        if (isOpenFolder && readLocal(key) == null) setFolded(false);
+    }, [isOpenFolder, key]);
+    const open = !folded;
+    const sessions = sortSessions(useFolderSessions(folder, open));
+    const shown = sessions.filter((th, i) => (i < VISIBLE && th.status !== 'resolved') || rank(th) < 2 || th.id === openSession);
+    const older = sessions.length - shown.length;
+    const toggle = () => {
+        writeLocal(key, folded ? 'open' : 'folded');
+        setFolded(!folded);
+    };
+    const selected = isOpenFolder && !openSession;
+    return (
+        <Box>
+            <Box sx={{ ...ROW_SX, minHeight: 30, mt: 0.5, pl: 2, color: selected ? 'text.primary' : 'text.secondary', ...(selected && { backgroundColor: 'action.selected' }) }}>
+                <Box
+                    component={NavLink}
+                    to={to}
+                    onClick={onNavigate}
+                    title={path}
+                    aria-current={selected ? 'page' : undefined}
+                    sx={{ ...LABEL_SX, minWidth: 0, color: 'inherit', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', '&:hover': { color: 'text.primary' } }}
+                >
+                    {folderName(path)}
+                </Box>
+                <IconButton size="small" aria-label={t(folded ? 'sidebar.unfold' : 'sidebar.fold', { name: folderName(path) })} aria-expanded={open} onClick={toggle} sx={{ p: 0, color: 'text.disabled', '&:hover': { color: 'text.primary' } }}>
+                    {folded ? <ChevronRight sx={{ fontSize: 14 }} /> : <ExpandMore sx={{ fontSize: 14 }} />}
+                </IconButton>
+                <Box sx={{ flex: 1 }} />
+                {folded && <Rollup folder={folder} />}
+            </Box>
+            {open && shown.map((th) => (
+                <SessionRow key={th.id} thread={th} to={sessionTo(th.id)} selected={th.id === openSession} onNavigate={onNavigate} />
+            ))}
+            {open && older > 0 && !all && (
+                <ButtonBase onClick={() => setAll(true)} sx={{ ...ROW_SX, width: 'calc(100% - 16px)', minHeight: 28, justifyContent: 'flex-start', color: 'text.secondary', fontSize: fontSizes.sm }}>
+                    {t('sidebar.showOlder', { count: older })}
+                </ButtonBase>
+            )}
+            {open && all && sessions.filter((th) => !shown.includes(th)).map((th) => (
+                <SessionRow key={th.id} thread={th} to={sessionTo(th.id)} selected={th.id === openSession} onNavigate={onNavigate} />
+            ))}
+        </Box>
+    );
+}
+
+/**
+ * The working folders as a tree. A folder is a small label with a fold caret;
+ * its sessions sit flush-left beneath it with the time and state mark at the
+ * end of the row. Folded, the folder shows one dot for the most urgent state.
+ */
+export function FolderTree({ folders, scope, openSession, folderTo, onNavigate }: {
+    folders: ProjectSummary[];
+    scope?: string;
+    openSession: string | null;
+    folderTo: (path: string) => string;
+    onNavigate?: () => void;
+}) {
+    return (
+        <Box>
+            {folders.map((f) => {
+                const to = folderTo(f.path ?? '');
+                return (
+                    <FolderNode
+                        key={f.id}
+                        folder={f}
+                        scope={scope}
+                        openSession={openSession}
+                        to={to}
+                        sessionTo={(id) => `${to}${to.includes('?') ? '&' : '?'}session=${encodeURIComponent(id)}`}
+                        onNavigate={onNavigate}
+                    />
+                );
+            })}
+        </Box>
+    );
+}

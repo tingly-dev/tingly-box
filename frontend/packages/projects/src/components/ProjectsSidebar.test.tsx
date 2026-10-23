@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProjectsHostProvider, type ProjectsHost } from '../host/ProjectsHost';
@@ -59,16 +59,8 @@ describe('ProjectsSidebar', () => {
         expect(list).not.toHaveBeenCalled();
     });
 
-    it('lists working folders (the other type of the same list) with what waits there and marks the open one', async () => {
-        show(host([summary('a', 'Alpha', 0), ...folders]), '/f?path=%2Fhome%2Fme%2Fnotes', { showProjects: false, showWorkdirs: true });
-        const region = await screen.findByRole('region', { name: 'workdir.title' });
-        await waitFor(() => expect(within(region).getAllByRole('link').map((l) => l.textContent)).toEqual(['workdir.title', 'appsidebar.sessionsWaiting', 'notessidebar.running']));
-        const notes = within(region).getByTitle('/home/me/notes');
-        expect(notes.getAttribute('aria-current')).toBe('page');
-        expect(within(region).getByTitle('/home/me/app').getAttribute('href')).toBe('/f?path=%2Fhome%2Fme%2Fapp');
-    });
-    it('says what runs and waits on a folder, and lists the open folder\'s live sessions under it', async () => {
-        const h = host([folder('f-app', '/home/me/app', 1, 2)]);
+    it('lists working folders as a tree: the open one unfolded, the others folded with a rollup dot', async () => {
+        const h = host([folder('f-app', '/home/me/app', 1, 0), folder('f-notes', '/home/me/notes', 0, 1)]);
         list.mockImplementation((path: string) => Promise.resolve({
             data: path.endsWith('/threads')
                 ? { threads: [
@@ -77,14 +69,27 @@ describe('ProjectsSidebar', () => {
                     { id: 't-run', title: 'Running one', status: 'working', updated_at: '2026-10-22T00:00:00Z' },
                     { id: 't-wait', title: 'Waiting one', status: 'waiting', updated_at: '2026-10-21T00:00:00Z' },
                 ] }
-                : { projects: [folder('f-app', '/home/me/app', 1, 2)] },
+                : { projects: [folder('f-app', '/home/me/app', 1, 0), folder('f-notes', '/home/me/notes', 0, 1)] },
             response: new Response(),
         }));
         show(h, '/f?path=%2Fhome%2Fme%2Fapp&session=t-run', { showProjects: false, showWorkdirs: true });
         const region = await screen.findByRole('region', { name: 'workdir.title' });
-        await waitFor(() => expect(within(region).getAllByRole('link').map((l) => l.textContent?.replace(/ago$|\d.*$/, '').trim())).toEqual(['workdir.title', 'appsidebar.activity', 'Waiting one', 'Running one', 'Old idle']));
+        await waitFor(() => expect(within(region).getAllByRole('link').map((l) => l.textContent?.replace(/ago$|\d.*$/, '').trim())).toEqual(['workdir.title', 'app', 'Waiting one', 'Running one', 'Old idle', 'notes']));
         expect(within(region).getByRole('link', { name: /Running one/ })).toHaveAttribute('aria-current', 'page');
         expect(within(region).getByRole('link', { name: /Running one/ })).toHaveAttribute('href', '/f?path=%2Fhome%2Fme%2Fapp&session=t-run');
+        // The archived session sits behind "Show older"; the folded folder shows what runs in it.
+        expect(within(region).getByText('sidebar.showOlder')).toBeInTheDocument();
+        expect(within(region).getByTestId('rollup')).toHaveAttribute('data-status', 'working');
+    });
+    it('remembers a folded folder per browser and unfolds on click', async () => {
+        window.localStorage.clear();
+        const h = host([folder('f-app', '/home/me/app', 0, 0), folder('f-notes', '/home/me/notes', 0, 0)]);
+        show(h, '/f?path=%2Fhome%2Fme%2Fapp', { showProjects: false, showWorkdirs: true });
+        const region = await screen.findByRole('region', { name: 'workdir.title' });
+        const notes = await within(region).findByRole('button', { name: 'sidebar.unfold' });
+        expect(notes).toHaveAttribute('aria-expanded', 'false');
+        fireEvent.click(notes);
+        expect(window.localStorage.getItem('tingly-project.nav.folder.f-notes')).toBe('open');
     });
     it('pins an IM row with the bot count when the host has IM, and leaves it out otherwise', async () => {
         const h = host([summary('a', 'Alpha', 0)]);
