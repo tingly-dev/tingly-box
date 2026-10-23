@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
 // Durable copy of what the user builds on the image pages — profiles, kept
-// images, prompt snippets — so a reload does not throw it away.
+// images, prompt snippets, Image to Prompt runs — so a reload does not throw it away.
 //
 // IndexedDB for the same reason as the run history (utils/playgroundSession.ts):
 // the values carry images, far past what localStorage holds. One record per
@@ -18,11 +18,12 @@ import { useSyncExternalStore } from 'react';
 // Browser-local until the backend store lands (.design/image-profile.md §4).
 
 const DB_NAME = 'tingly-image-workspace';
-const VERSION = 1;
+// 2 added imagePrompts; onupgradeneeded only creates the stores that are missing.
+const VERSION = 2;
 const ORDER = 'order';
 
-export type Collection = 'profiles' | 'assets' | 'snippets';
-const COLLECTIONS: Collection[] = ['profiles', 'assets', 'snippets'];
+export type Collection = 'profiles' | 'assets' | 'snippets' | 'imagePrompts';
+const COLLECTIONS: Collection[] = ['profiles', 'assets', 'snippets', 'imagePrompts'];
 
 interface Identified { id: string }
 
@@ -77,7 +78,7 @@ const read = <T>(db: IDBDatabase, store: string, key: string): Promise<T | undef
 
 // What each collection's store holds right now, by id, as the very objects
 // written. `null` = unknown: the next save rewrites the collection whole.
-const stored: Record<Collection, Map<string, unknown> | null> = { profiles: null, assets: null, snippets: null };
+const stored: Record<Collection, Map<string, unknown> | null> = { profiles: null, assets: null, snippets: null, imagePrompts: null };
 
 /** The collection as the last session left it, in order; empty when nothing was kept. */
 export const loadCollection = async <T extends Identified>(name: Collection): Promise<T[]> => {
@@ -190,9 +191,13 @@ export interface WorkspaceCollection<T extends Identified> {
 
 // A module-level store over one collection: starts empty, fills from
 // IndexedDB (or the mock seed), and writes every change back.
+// `revive` maps each stored item as it is read back: what a previous session
+// left half-done (a request the reload cut off) is settled once, here, before
+// anything renders it.
 export const createWorkspaceCollection = <T extends Identified>(
     name: Collection,
     seed: (() => Promise<T[]>) | null,
+    revive?: (item: T) => T,
 ): WorkspaceCollection<T> => {
     let items: T[] = [];
     let ready = false;
@@ -204,13 +209,15 @@ export const createWorkspaceCollection = <T extends Identified>(
     };
     const persist = seed === null;
 
-    const hydrate = (loaded: T[]) => {
+    const hydrate = (stored: T[]) => {
+        const loaded = revive ? stored.map(revive) : stored;
+        const revived = loaded.some((item, index) => item !== stored[index]);
         // Anything created before the read finished stays, after what was stored.
         const loadedIds = new Set(loaded.map((item) => item.id));
         const local = items.filter((item) => !loadedIds.has(item.id));
         items = [...loaded, ...local];
         ready = true;
-        if (persist && local.length > 0) saveCollection(name, items);
+        if (persist && (local.length > 0 || revived)) saveCollection(name, items);
         emit();
     };
     void (seed ?? (() => loadCollection<T>(name)))().then(hydrate, () => hydrate([]));

@@ -75,11 +75,16 @@ func (p *ClaudeCodeParams) BuildEnv() map[string]string {
 	// Model configuration
 	defaultModel := cmp.Or(p.ModelConfig.Default, "tingly/cc")
 
-	env["ANTHROPIC_MODEL"] = defaultModel
+	// The default model is left unset when the sonnet tier is the same model:
+	// Claude Code's /model picker then ticks "Default" instead of "Sonnet".
+	sonnetModel := cmp.Or(p.ModelConfig.Sonnet, defaultModel)
+	if sonnetModel != defaultModel {
+		env["ANTHROPIC_MODEL"] = defaultModel
+	}
 	env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = cmp.Or(p.ModelConfig.Haiku, defaultModel)
 	env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = cmp.Or(p.ModelConfig.Opus, defaultModel)
 	env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = cmp.Or(p.ModelConfig.Fable, defaultModel)
-	env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = cmp.Or(p.ModelConfig.Sonnet, defaultModel)
+	env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = sonnetModel
 	env["CLAUDE_CODE_SUBAGENT_MODEL"] = cmp.Or(p.ModelConfig.SubAgent, defaultModel)
 
 	// Add extra env vars
