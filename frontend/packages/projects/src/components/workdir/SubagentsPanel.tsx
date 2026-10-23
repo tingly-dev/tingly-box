@@ -6,6 +6,8 @@ import type { Subagent } from '../../client';
 import { Block, Cancel, CheckCircle, Robot } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { timeAgo } from '../../utils/format';
+import { ListRow } from '../ListRow';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface Props {
     /** Reads the session's subagents (every one, not only those on a loaded page). */
@@ -64,24 +66,18 @@ export function SubagentsPanel({ load, turnLive, onOpen, onShow }: Props) {
                             ? <Cancel sx={{ fontSize: 16, color: (theme) => getReadableAccent(theme, 'error') }} />
                             : <Block sx={{ fontSize: 16, color: 'text.secondary' }} />;
                 return (
-                    <Box key={agent.call} role="button" data-subagent={agent.call} onClick={() => onOpen(agent)}
-                        sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.75, cursor: 'default', '&:hover': { bgcolor: 'action.hover' }, '&:hover .show': { visibility: 'visible' } }}>
-                        <Robot sx={{ fontSize: 18, color: 'text.secondary', flexShrink: 0 }} />
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'baseline', minWidth: 0 }}>
-                                <Typography variant="body2" noWrap sx={{ fontWeight: 600, color: 'text.primary', minWidth: 0 }}>{agent.description || t('subagents.title')}</Typography>
-                                {agent.subagent_type && <Typography variant="caption" sx={{ color: 'text.secondary', flexShrink: 0 }}>{agent.subagent_type}</Typography>}
-                            </Stack>
-                            <Typography variant="caption" component="div" noWrap sx={{ color: 'text.secondary' }}>
-                                {[label, t('subagents.steps', { count: agent.steps }), timeAgo(agent.created_at, i18n.language)].join(' · ')}
-                            </Typography>
-                        </Box>
-                        <Button className="show" size="small" onClick={(e) => { e.stopPropagation(); onShow(agent); }}
-                            sx={{ visibility: 'hidden', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                            {t('subagents.show')}
-                        </Button>
-                        <Box sx={{ width: 16, display: 'flex', justifyContent: 'center', flexShrink: 0 }} title={label}>{icon}</Box>
-                    </Box>
+                    <ListRow key={agent.call} data-subagent={agent.call} onClick={() => onOpen(agent)}
+                        sx={{ '&:hover .show': { visibility: 'visible' } }}
+                        mark={<Robot sx={{ fontSize: 16 }} />}
+                        title={<>{agent.description || t('subagents.title')}{agent.subagent_type && <Typography component="span" sx={{ ml: 0.75, fontSize: fontSizes.sm, fontWeight: 400, color: 'text.secondary' }}>{agent.subagent_type}</Typography>}</>}
+                        subtitle={[label, t('subagents.steps', { count: agent.steps }), timeAgo(agent.created_at, i18n.language)].join(' · ')}
+                        end={<>
+                            <Button className="show" size="small" onClick={(e) => { e.stopPropagation(); onShow(agent); }}
+                                sx={{ visibility: 'hidden', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                                {t('subagents.show')}
+                            </Button>
+                            <Box sx={{ width: 16, display: 'flex', justifyContent: 'center', flexShrink: 0 }} title={label}>{icon}</Box>
+                        </>} />
                 );
             })}
         </Box>

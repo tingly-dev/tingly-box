@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next';
 import type { Thread } from '../../client';
 import { ExpandLess, ExpandMore } from '../icons';
 import { STATUS_ORDER, ThreadBadges, ThreadSubtitle } from '../project/threadStatus';
+import { ListRow } from '../ListRow';
 import { StatusHeading } from './StatusGroups';
 import { timeAgo } from '../../utils/format';
 import { fontSizes } from '@tingly/ui/theme/fonts';
-import { radius } from '@tingly/ui/theme/radius';
 
 interface Props {
     threads: Thread[];
@@ -50,27 +50,8 @@ export function OverviewBand({ threads, selectedId, open, onToggle, onOpen, onLi
                             <Box sx={{ mb: 0.75 }}><StatusHeading label={t(`overview.group.${g.key}`)} status={g.key} count={g.list.length} /></Box>
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, maxHeight: 152, overflowY: 'auto' }}>
                                 {g.list.map((th) => (
-                                    <Box
-                                        key={th.id}
-                                        role="button"
-                                        tabIndex={0}
-                                        aria-current={th.id === selectedId ? 'page' : undefined}
-                                        onClick={() => onOpen(th.id)}
-                                        onKeyDown={(e) => e.key === 'Enter' && onOpen(th.id)}
-                                        sx={{
-                                            px: 1.25, py: 0.75, borderRadius: radius.row, border: 1, borderColor: 'divider', cursor: 'pointer', outline: 'none',
-                                            bgcolor: th.id === selectedId ? 'action.selected' : undefined,
-                                            '&:hover': { bgcolor: th.id === selectedId ? 'action.selected' : 'action.hover' },
-                                            '&:focus-visible': { boxShadow: (theme) => `inset 0 0 0 2px ${theme.palette.primary.main}` },
-                                        }}
-                                    >
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.base, fontWeight: 500 }}>{th.title}</Typography>
-                                            <ThreadBadges thread={th} />
-                                            <Typography component="span" sx={{ flexShrink: 0, fontSize: fontSizes.sm, color: 'text.disabled' }}>{timeAgo(th.updated_at, i18n.language)}</Typography>
-                                        </Box>
-                                        <Typography noWrap component="div" sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}><ThreadSubtitle thread={th} /></Typography>
-                                    </Box>
+                                    <ListRow key={th.id} outlined selected={th.id === selectedId} onClick={() => onOpen(th.id)}
+                                        title={th.title} subtitle={<ThreadSubtitle thread={th} />} badges={<ThreadBadges thread={th} />} meta={timeAgo(th.updated_at, i18n.language)} />
                                 ))}
                             </Box>
                         </Box>

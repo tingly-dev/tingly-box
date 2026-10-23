@@ -2,8 +2,8 @@ import { useState, type ReactNode } from 'react';
 import { Box, Collapse, Typography } from '@mui/material';
 import { ExpandMore } from '../icons';
 import { fontSizes } from '@tingly/ui/theme/fonts';
+import { ListRow } from '../ListRow';
 import { stateColor, ThreadStateMark } from '../project/threadStatus';
-import { radius } from '@tingly/ui/theme/radius';
 
 /** One group of the list: what needs the user comes first. */
 export interface StatusGroup {
@@ -42,30 +42,7 @@ export function StatusHeading({ label, status, count }: { label: string; status:
 }
 
 function Row({ row, onOpen }: { row: StatusRow; onOpen: (id: string) => void }) {
-    return (
-        <Box
-            role="button"
-            tabIndex={0}
-            aria-current={row.selected ? 'page' : undefined}
-            onClick={() => onOpen(row.id)}
-            onKeyDown={(e) => e.key === 'Enter' && onOpen(row.id)}
-            sx={{
-                px: 1.5, py: 1, borderRadius: radius.row, outline: 'none', cursor: 'pointer',
-                bgcolor: row.selected ? 'action.selected' : undefined,
-                '&:hover': { bgcolor: row.selected ? 'action.selected' : 'action.hover' },
-                '&:focus-visible': { boxShadow: (t) => `inset 0 0 0 2px ${t.palette.primary.main}` },
-            }}
-        >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography noWrap sx={{ fontSize: fontSizes.base, fontWeight: row.unseen ? 650 : 500, color: 'text.primary' }}>{row.title}</Typography>
-                    {row.subtitle != null && <Typography noWrap component="div" sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{row.subtitle}</Typography>}
-                </Box>
-                {row.badges}
-                {row.meta != null && <Typography component="span" sx={{ flexShrink: 0, fontSize: fontSizes.sm, color: 'text.disabled', minWidth: 28, textAlign: 'right' }}>{row.meta}</Typography>}
-            </Box>
-        </Box>
-    );
+    return <ListRow title={row.title} subtitle={row.subtitle} badges={row.badges} meta={row.meta} selected={row.selected} unseen={row.unseen} onClick={() => onOpen(row.id)} />;
 }
 
 /**

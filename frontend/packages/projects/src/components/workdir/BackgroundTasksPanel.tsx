@@ -9,6 +9,7 @@ import { useNotify } from '../../hooks/useNotify';
 import { formatBytes, formatTokens, timeAgo } from '../../utils/format';
 import type { BackgroundTaskRow } from './backgroundTasks';
 import { radius } from '@tingly/ui/theme/radius';
+import { ListRow } from '../ListRow';
 
 type TaskOutput = components['schemas']['TaskOutputResponse'];
 
@@ -143,20 +144,14 @@ function TaskRow({ sessionId, task, open, onToggle, onChanged, onReveal }: {
 
     return (
         <Box>
-            <Stack direction="row" spacing={1} role="button" aria-expanded={open} onClick={onToggle}
-                sx={{ alignItems: 'center', minWidth: 0, px: 1.5, py: 1, cursor: 'default', '&:hover': { bgcolor: 'action.hover' } }}>
-                {isAgent ? <Robot sx={{ fontSize: 16, color: 'text.secondary' }} /> : <Terminal sx={{ fontSize: 16, color: 'text.secondary' }} />}
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="body2" noWrap sx={{ color: 'text.primary', fontWeight: 500 }}>
-                        {task.description || task.input?.description || task.taskId}
-                    </Typography>
-                    <Typography variant="caption" noWrap component="div" sx={{ color: (theme) => task.status === 'failed' ? getReadableAccent(theme, 'error') : theme.palette.text.secondary }}>
-                        {[state, elapsed !== undefined ? formatDuration(elapsed) : ''].filter(Boolean).join(' · ')}
-                    </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }} title={state}>{icon}</Box>
-                {open ? <ExpandMore sx={{ fontSize: 16, color: 'text.secondary' }} /> : <ChevronRight sx={{ fontSize: 16, color: 'text.secondary' }} />}
-            </Stack>
+            <ListRow aria-expanded={open} onClick={onToggle}
+                mark={isAgent ? <Robot sx={{ fontSize: 16 }} /> : <Terminal sx={{ fontSize: 16 }} />}
+                title={task.description || task.input?.description || task.taskId}
+                subtitle={<Box component="span" sx={{ color: (theme) => task.status === 'failed' ? getReadableAccent(theme, 'error') : undefined }}>{[state, elapsed !== undefined ? formatDuration(elapsed) : ''].filter(Boolean).join(' · ')}</Box>}
+                end={<>
+                    <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }} title={state}>{icon}</Box>
+                    {open ? <ExpandMore sx={{ fontSize: 16, color: 'text.secondary' }} /> : <ChevronRight sx={{ fontSize: 16, color: 'text.secondary' }} />}
+                </>} />
             <Collapse in={open} unmountOnExit>
                 <Stack spacing={1.25} sx={{ px: 1.5, pb: 1.5, pl: 4.5 }}>
                     {isAgent ? <AgentDetail task={task} running={running} /> : <CommandDetail sessionId={sessionId} task={task} running={running} />}
