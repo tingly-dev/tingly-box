@@ -29,6 +29,7 @@ Playground 长到约 7k 行、5 份专属设计文档之后,仍然是 scenario �
 - activity bar 新增 **Image**,子项按顺序为:
   - **Playground** — `/image/playground`,也是 `/image` 与点击 rail 图标的落点(天天用的那个优先);其后是各 profile 与 "New profile"。
   - (分隔线)
+  - **Image to Prompt**(反推提示词) — `/image/to-prompt`,偶尔用的工具：一张图进去，一段提示词出来(`image-to-prompt.md`)。
   - **Library** — `/image/library`,跨 profile 保留下来的图。
   - **Image API** — `/image/api`,即原 `/agent/image`(imagegen scenario:Base URL、Quick Start、规则)。
   - 工作面在上，共享的东西在下;Image API 排最后：只有给自己的客户端接入的人才需要它，

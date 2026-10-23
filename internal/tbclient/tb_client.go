@@ -76,6 +76,7 @@ func (c *TBClientImpl) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("build claude code env: %w", err)
 	}
+	tbagent.OmitFollowedDefaultModel(envMap)
 
 	env := make([]string, 0, len(envMap))
 	for k, v := range envMap {
