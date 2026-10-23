@@ -22,7 +22,6 @@ import type { Provider } from '@/types/provider';
 import { resolveRuleName } from '@/pages/scenario/hooks/useTemplatePageRules';
 import { findDirectRule, imageModelOptions, type ImageModelOption } from './imageModelRules';
 
-const SCENARIO = 'imagegen';
 const CHOOSE_ANOTHER = '__choose_another_model__';
 
 interface ImageModelPickerProps {
@@ -33,6 +32,11 @@ interface ImageModelPickerProps {
     // Reloads the imagegen rules after the picker adds one.
     onRulesReload: () => Promise<void>;
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
+    // The scenario whose rules these are; the Image to Prompt page picks a
+    // vision model the same way, from its own scenario.
+    scenario?: string;
+    label?: string;
+    chooserTitle?: string;
 }
 
 // Picks a provider · model, the way a service is picked in a rule. Behind it
@@ -46,6 +50,9 @@ const ImageModelPicker: React.FC<ImageModelPickerProps> = ({
     onChange,
     onRulesReload,
     showNotification,
+    scenario = 'imagegen',
+    label,
+    chooserTitle,
 }) => {
     const { t } = useTranslation();
     const [providers, setProviders] = useState<Provider[]>([]);
@@ -98,7 +105,7 @@ const ImageModelPicker: React.FC<ImageModelPickerProps> = ({
         try {
             const existingNames = new Set(rules.map((rule) => rule.request_model).filter(Boolean));
             const body = {
-                scenario: SCENARIO,
+                scenario,
                 request_model: resolveRuleName(model, existingNames),
                 response_model: '',
                 active: true,
@@ -122,7 +129,7 @@ const ImageModelPicker: React.FC<ImageModelPickerProps> = ({
         } finally {
             setSaving(false);
         }
-    }, [rules, onChange, onRulesReload, showNotification, t]);
+    }, [rules, onChange, onRulesReload, scenario, showNotification, t]);
 
     const chooser = (
         <Dialog
@@ -133,7 +140,7 @@ const ImageModelPicker: React.FC<ImageModelPickerProps> = ({
             slotProps={{ paper: { sx: { height: '80vh' } } }}
         >
             <DialogTitle sx={{ textAlign: 'center' }}>
-                {t('playground.modelPicker.chooserTitle', { defaultValue: 'Choose an image model' })}
+                {chooserTitle ?? t('playground.modelPicker.chooserTitle', { defaultValue: 'Choose an image model' })}
             </DialogTitle>
             <DialogContent>
                 {chooserOpen && (
@@ -164,16 +171,18 @@ const ImageModelPicker: React.FC<ImageModelPickerProps> = ({
     }
 
     const selected = options.find((option) => option.requestModel === value);
+    const fieldLabel = label ?? t('playground.model', { defaultValue: 'Model' });
+    const labelId = `${scenario}-model-label`;
 
     return (
         <>
             <FormControl size="small" fullWidth>
-                <InputLabel id="image-model-label">
-                    {t('playground.model', { defaultValue: 'Model' })}
+                <InputLabel id={labelId}>
+                    {fieldLabel}
                 </InputLabel>
                 <Select
-                    labelId="image-model-label"
-                    label={t('playground.model', { defaultValue: 'Model' })}
+                    labelId={labelId}
+                    label={fieldLabel}
                     value={selected ? value : ''}
                     disabled={saving}
                     renderValue={() => (selected ? pairLabel(selected) : '')}
