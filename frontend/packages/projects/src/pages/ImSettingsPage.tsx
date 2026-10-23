@@ -12,7 +12,7 @@ import { ChatBubble } from '../components/icons';
 import { useNotify } from '../hooks/useNotify';
 import { useProjectsHost, type ImBot, type ImChat } from '../host/ProjectsHost';
 
-const STATE_COLOR = { ok: 'success.main', blocked: 'text.disabled', unpaired: 'warning.main' } as const;
+const STATE_COLOR = { ok: 'text.secondary', blocked: 'text.disabled', unpaired: 'warning.main' } as const;
 
 function Dot({ color }: { color: string }) {
     return <Box component="span" aria-hidden="true" sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />;
@@ -75,7 +75,7 @@ export default function ImSettingsPage() {
                                         <Box sx={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'baseline', columnGap: 1.5, rowGap: 0.25, flexWrap: 'wrap' }}>
                                             <Typography noWrap sx={{ fontWeight: 600 }}>{bot.name}</Typography>
                                             <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary', display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
-                                                <Dot color={bot.online ? 'success.main' : 'text.disabled'} />
+                                                <Dot color={bot.online ? 'text.secondary' : 'text.disabled'} />
                                                 {platformLabel(bot.platform)} · {bot.online ? t('im.settings.online') : t('im.settings.offline')}
                                             </Typography>
                                         </Box>
