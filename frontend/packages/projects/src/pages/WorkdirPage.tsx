@@ -84,6 +84,9 @@ export default function WorkdirPage() {
     const transcript = useTranscript(sessionId);
     const events = transcript.events;
     const [liveTasks, setLiveTasks] = useState<BackgroundTask[]>([]);
+    // A turn is in flight. The status alone cannot say: a session whose process only runs background tasks is working too.
+    const [turnRunning, setTurnRunning] = useState(false);
+    const openStatus = useRef<string | undefined>(undefined);
     const [modes, setModes] = useState<string[]>([]);
     // The add dialog lives in the URL, so a link (the sidebar's "add") opens it.
     const adding = params.get('add') === '1';
@@ -119,6 +122,7 @@ export default function WorkdirPage() {
             const d = await unwrap(api.GET('/api/v1/threads/{id}', { params: { path: { id: sid } } }));
             if (n !== sessionReq.current) return;
             setLiveTasks(d.background_tasks ?? []);
+            setTurnRunning(d.running);
             setSessions((list) => upsert(list ?? [], d.thread));
         } catch (e) {
             if (n !== sessionReq.current) return;
@@ -157,6 +161,7 @@ export default function WorkdirPage() {
 
     useEffect(() => {
         setLiveTasks([]);
+        setTurnRunning(false);
         if (sessionId) void loadSession(sessionId);
         else sessionReq.current++;
     }, [sessionId, loadSession]);
@@ -170,6 +175,8 @@ export default function WorkdirPage() {
                 const mine = scope ? th.project_id === folder?.id : !!folders?.some((f) => f.id === th.project_id);
                 // The list stream already refreshes the folder list for this event.
                 if (mine) setSessions((list) => upsert(list ?? [], th));
+                // A turn starting or ending moves the status; read whether one is in flight.
+                if (th.id === sessionId && th.status !== openStatus.current) void loadSession(th.id);
             }
         };
         onThreadEvent.current = (ev: ProjectEvent) => {
@@ -197,7 +204,10 @@ export default function WorkdirPage() {
             transcript.catchUp().catch(() => undefined);
         }
     });
-    const running = selected?.status === 'working'
+    useEffect(() => {
+        openStatus.current = selected?.status;
+    });
+    const running = (selected?.status === 'working' && turnRunning)
         || (selected?.status === 'waiting' && !!events?.some((e) => (e.kind === 'approval' || e.kind === 'ask') && e.payload?.includes('"state":"pending"')));
 
     // IM chats bound to the open thread: a folder is bound by one of its threads, never as a project.

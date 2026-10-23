@@ -788,6 +788,9 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 			if mm := needsInputRe.FindStringSubmatch(report.Text); mm != nil && !session {
 				t.Status, t.WaitReason = db.ThreadWaiting, strings.TrimSpace(mm[1])
 				report.Kind = ReportNeedsInput
+			} else if session && len(m.engine.BackgroundTasks(m.sessionOf(threadID))) > 0 {
+				// The turn is over but its process still runs background tasks.
+				t.Status = db.ThreadWorking
 			} else if stats.CommitsAhead > 0 {
 				t.Status = db.ThreadReady
 			} else {

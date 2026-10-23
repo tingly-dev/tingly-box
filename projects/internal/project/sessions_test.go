@@ -427,3 +427,27 @@ func TestThreadEventCarriesProjectCounts(t *testing.T) {
 	assert.Equal(t, s.ProjectID, last.ProjectID)
 	assert.Equal(t, db.ThreadCounts{Idle: 1}, *last.Threads, "the last event's counts are the settled state")
 }
+
+func TestSessionWithBackgroundTasksIsNotDone(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error {
+		turn.Say("started a server", 1, 1)
+		return nil
+	})
+	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "serve"})
+	require.NoError(t, err)
+	waitStatus(t, f.store, s.ID, db.ThreadIdle)
+	require.Eventually(t, func() bool { return !f.threads.Running(s.ID) }, 5*time.Second, 10*time.Millisecond)
+
+	changed := func(tasks ...map[string]string) engine.Entry {
+		payload, _ := json.Marshal(map[string]any{"event": "background_tasks_changed", "tasks": tasks})
+		return engine.Entry{Kind: engine.KindTask, Payload: payload}
+	}
+	store := threadStore{f.threads}
+	sid := f.threads.sessionOf(s.ID)
+
+	store.Append(sid, changed(map[string]string{"task_id": "b1", "task_type": "local_bash", "description": "dev server"}))
+	waitStatus(t, f.store, s.ID, db.ThreadWorking)
+
+	store.Append(sid, changed())
+	waitStatus(t, f.store, s.ID, db.ThreadIdle)
+}

@@ -80,6 +80,9 @@ func (s threadStore) Append(sid string, e engine.Entry) {
 		// Every thread keeps task events: a subagent's card reads its state
 		// from them. A project thread also gets a line when one ends.
 		s.m.addEvent(t, &db.ThreadEvent{Kind: db.EvTask, Payload: string(e.Payload), RequestID: e.RequestID, Parent: e.Parent})
+		if session {
+			s.m.syncBackground(t, e)
+		}
 		if note := taskNote(e); note != "" && !session {
 			ev = &db.ThreadEvent{Kind: db.EvSystem, Content: note}
 		}
@@ -127,4 +130,33 @@ func taskNote(e engine.Entry) string {
 		note += " · " + firstLine(ev.Summary, 160)
 	}
 	return note
+}
+
+// syncBackground keeps a session from reading as done while its process still
+// runs background tasks: a task event that leaves some running turns an idle
+// session back to working, and the one that clears them settles it again.
+// A turn in flight decides its own end (settle), and a session waiting on the
+// user, failed or archived keeps that status.
+func (m *Threads) syncBackground(t *db.Thread, e engine.Entry) {
+	var ev engine.TaskEvent
+	if json.Unmarshal(e.Payload, &ev) != nil || ev.Event != "background_tasks_changed" {
+		return
+	}
+	m.mu.Lock()
+	_, turn := m.active[t.ID]
+	m.mu.Unlock()
+	if turn {
+		return
+	}
+	_, _ = m.update(t.ID, func(t *db.Thread) {
+		switch {
+		case len(ev.Tasks) > 0 && (t.Status == db.ThreadIdle || t.Status == db.ThreadReady):
+			t.Status = db.ThreadWorking
+		case len(ev.Tasks) == 0 && t.Status == db.ThreadWorking:
+			t.Status = db.ThreadIdle
+			if t.CommitsAhead > 0 {
+				t.Status = db.ThreadReady
+			}
+		}
+	})
 }
