@@ -46,7 +46,7 @@ export function ChoiceList({ items, value, onChange, label }: { items: Choice[];
                             {c.subtitle && <Typography noWrap color="text.secondary" sx={{ fontSize: fontSizes.sm, lineHeight: 1.4 }}>{c.subtitle}</Typography>}
                         </Box>
                         {c.chip && (
-                            <Box component="span" sx={{ flexShrink: 0, px: 0.9, py: 0.15, borderRadius: '6px', fontSize: fontSizes.xs, fontWeight: 600, color: 'warning.main', border: 1, borderColor: 'warning.main' }}>
+                            <Box component="span" sx={{ flexShrink: 0, px: 0.9, py: 0.15, borderRadius: '6px', fontSize: fontSizes.xs, fontWeight: 600, color: 'text.secondary', border: 1, borderColor: 'divider' }}>
                                 {c.chip}
                             </Box>
                         )}

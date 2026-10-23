@@ -59,7 +59,7 @@ export function ModelPicker({ value, onChange, disabled, label }: Props) {
                 ))}
                 {error && (
                     <Box sx={{ px: 2, py: 1, maxWidth: 320 }}>
-                        <Typography variant="caption" color="warning.main" sx={{ display: 'block' }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                             {t('model.listFailed')}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word' }}>

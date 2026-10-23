@@ -54,7 +54,7 @@ function AssistantActions({ msg, isLast, onRegenerate, disabled }: { msg: Messag
             )}
             {msg.stop_reason === 'cancelled' && <Typography variant="caption">{t('chat.stopped')}</Typography>}
             {(msg.stop_reason === 'max_tokens' || msg.stop_reason === 'length') && (
-                <Typography variant="caption" color="warning.main">{t('chat.truncated')}</Typography>
+                <Typography variant="caption" color="text.secondary">{t('chat.truncated')}</Typography>
             )}
             <Typography className="meta" variant="caption" sx={{ ml: 1, fontFamily: fontMono, transition: 'opacity .15s' }}>
                 {meta}

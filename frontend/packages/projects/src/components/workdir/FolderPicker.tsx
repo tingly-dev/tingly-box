@@ -42,7 +42,7 @@ export function FolderPicker({ value, onChange, folders, onAddFolder }: Props) {
                 title={value || undefined}
                 aria-label={`${t('session.folder')}: ${label}`}
                 aria-haspopup="menu"
-                sx={{ ...composerPickerSx, display: 'inline-flex', alignItems: 'center', gap: 0.5, py: { xs: 0.75, md: 0.5 }, color: value ? 'text.primary' : 'warning.main', fontWeight: 500 }}
+                sx={{ ...composerPickerSx, display: 'inline-flex', alignItems: 'center', gap: 0.5, py: { xs: 0.75, md: 0.5 }, color: value ? 'text.primary' : 'text.secondary', fontWeight: 500 }}
             >
                 <FolderOpen />
                 <Typography noWrap sx={{ ...composerPickerLabelSx, fontWeight: 'inherit', maxWidth: 220 }}>{label}</Typography>

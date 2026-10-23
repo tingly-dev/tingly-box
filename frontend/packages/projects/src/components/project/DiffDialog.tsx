@@ -61,7 +61,7 @@ export function DiffDialog({ thread, open, onClose }: { thread: Thread; open: bo
                         <Box component="pre" sx={{ ...mono, fontSize: fontSizes.md, m: 0, p: 1.5, bgcolor: 'action.hover', borderRadius: 1, overflow: 'auto', maxHeight: '55vh' }}>
                             {diff.patch.split('\n').map((line, i) => (
                                 <Box key={i} component="div" sx={{
-                                    color: line.startsWith('+') && !line.startsWith('+++') ? 'success.main' : line.startsWith('-') && !line.startsWith('---') ? 'error.main' : line.startsWith('@@') ? 'info.main' : 'text.primary',
+                                    color: line.startsWith('+') && !line.startsWith('+++') ? 'success.main' : line.startsWith('-') && !line.startsWith('---') ? 'error.main' : line.startsWith('@@') ? 'text.secondary' : 'text.primary',
                                     fontWeight: line.startsWith('diff --git') ? 700 : 400,
                                 }}>{line || ' '}</Box>
                             ))}
