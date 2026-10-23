@@ -54,13 +54,16 @@ adds no colours of its own: only "needs you" is amber, a failed task is red.
 
 ## Folder tree in the left nav (board G)
 
-Working folders are a tree without indentation: a folder row starts with its
-fold arrow, session rows start with their state mark, and the background
-tasks a running session has follow it on the same left edge (mark `›_`). Each folder folds (state remembered per browser,
-the open session's folder starts open) and a folded folder still rolls up what
-needs the user (amber), failed (red) or runs. Sessions sort needs-you, running,
-latest; the latest few show, the rest sit behind "Show N older" and include
-archived ones. Background tasks appear only while they run, in the same `ListRow`. No tree/flat toggle: the tree is the only layout.
+Working folders are a tree without indentation. Three drawings are on board G:
+A (a folder row with its fold arrow first), B (Claude's: a quiet folder label
+with the arrow after the name, state marks at the row end) and C (B's label,
+A's mark slot on the left, so rows match every other list). Common to all: a
+folded folder still rolls up needs-you (amber), failed (red) or running;
+sessions sort needs-you, running, latest; the latest few show, the rest sit
+behind "Show N older" and include archived ones; background tasks appear only
+while they run, in the same `ListRow` (mark `›_`); fold state is remembered per
+browser and the open session's folder starts open. No tree/flat toggle.
+Recommended: C. Decision pending.
 
 ## Rollout (one PR per step, each with screenshots)
 
