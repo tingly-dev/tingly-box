@@ -27,6 +27,8 @@ the page carries more hues than it has things to say (board B).
 1. **Quiet workbench.** Neutral by default; title, conversation and diff lead.
 2. **Colour is for "needs you" and "failed".** Amber = blocked on the user, red =
    failed. Running, ready, done, merged are neutral and differ by mark and word.
+   Colour sits on the mark (dot or icon) only; the word next to it, subtitles and
+   banners stay neutral text, so a header or row never carries coloured text.
 3. **Brand blue = selection + one primary action per region.** Never a status.
 4. **One state, one look**, in every surface: sidebar, list, card, header, task.
 
