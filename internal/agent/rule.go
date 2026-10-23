@@ -3,9 +3,8 @@ package agent
 import (
 	"fmt"
 
-	"github.com/tingly-dev/tingly-box/internal/constant"
-
 	"github.com/google/uuid"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )

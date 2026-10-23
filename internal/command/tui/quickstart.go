@@ -523,6 +523,12 @@ func qsModel(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 	return s, StepContinue, nil
 }
 
+// isClaudeCodeTierRule reports whether rule is a Claude Code rule other than
+// the unified one (default, haiku, sonnet, opus, fable, subagent).
+func isClaudeCodeTierRule(rule *typ.Rule) bool {
+	return rule.GetScenario().Is(typ.ScenarioClaudeCode) && rule.UUID != serverconfig.RuleUUIDCC
+}
+
 func qsRules(ctx StepContext, s quickstartState) (quickstartState, StepResult, error) {
 	cfg := s.mgr.GetGlobalConfig()
 	if cfg == nil {
@@ -596,7 +602,11 @@ func qsRules(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 			continue
 		}
 		rule.Services = []*loadbalance.Service{svc}
-		rule.Active = true
+		// A Claude Code tier rule being on means its slot has a rule of its
+		// own in unified mode; the mode decides which tier rules are on.
+		if !isClaudeCodeTierRule(rule) {
+			rule.Active = true
+		}
 		if err := cfg.UpdateRule(sel.uuid, *rule); err != nil {
 			fmt.Println(errorStyle.Render(fmt.Sprintf("  ✗ %s: %v", sel.desc, err)))
 			continue

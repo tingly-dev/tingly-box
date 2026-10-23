@@ -63,3 +63,13 @@ func TestApplyClaudeCodeChoice_AlignsMode(t *testing.T) {
 	require.NoError(t, applyClaudeCodeChoice(cfg, false, "p", ""))
 	assert.True(t, cfg.GetScenarioFlag(typ.ScenarioClaudeCode, constant.FlagSeparate))
 }
+
+func TestIsClaudeCodeTierRule(t *testing.T) {
+	cfg := newQuickstartTestConfig(t)
+	// Wiring up a tier rule must not switch it on: in unified mode that would
+	// give its slot a rule of its own.
+	assert.True(t, isClaudeCodeTierRule(cfg.GetRuleByUUID(serverconfig.RuleUUIDCCSubagent)))
+	assert.True(t, isClaudeCodeTierRule(cfg.GetRuleByUUID(serverconfig.RuleUUIDCCDefault)))
+	assert.False(t, isClaudeCodeTierRule(cfg.GetRuleByUUID(serverconfig.RuleUUIDCC)))
+	assert.False(t, isClaudeCodeTierRule(cfg.GetRuleByUUID(serverconfig.RuleUUIDOpenCode)))
+}
