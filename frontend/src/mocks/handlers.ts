@@ -2870,11 +2870,24 @@ export const handlers = [
 
     // Image to Prompt: answers in the shape the instructions ask for, so the
     // starters can be told apart against the mock backend.
+    // Idea to Prompt shares the scenario: a text-only user turn is a
+    // description to expand.
     http.post('*/tingly/imageprompt/v1/chat/completions', async ({ request }) => {
         const body = (await request.json()) as any
         const system = String(body?.messages?.find((m: any) => m.role === 'system')?.content ?? '')
+        const user = body?.messages?.find((m: any) => m.role === 'user')?.content
         await new Promise((r) => setTimeout(r, 900))
-        const content = /comma-separated list of tags/i.test(system)
+        // A description that is not English gets a canned English subject, so
+        // the answer reads like a real expansion in the screenshots.
+        const described = typeof user === 'string' ? user.replace(/^Description:\s*/, '') : null
+        const idea = described === null ? null : /^[\x00-\x7f]*$/.test(described) ? described : 'a girl holding a red umbrella in a neon-lit alley on a rainy night'
+        const content = idea !== null
+            ? /comma-separated list of tags/i.test(system)
+                ? `digital illustration, ${idea}, centered composition, soft rim light, muted teal and amber palette, fine grain, detailed background`
+                : /light touch/i.test(system)
+                    ? `${idea}, digital illustration, medium shot, soft evening light, muted palette`
+                    : `Digital illustration of ${idea}, shown as a medium-wide shot from eye level with a gentle depth of field. The setting is quiet and uncluttered so the subject reads first; soft evening light comes from the left and leaves a warm rim along its edges. A muted palette of teal, slate and amber, fine paper grain, calm editorial mood.`
+            : /comma-separated list of tags/i.test(system)
             ? 'flat illustration, young woman, short black hair, cream sweater, head and shoulders, centered, night, rain, convenience store, warm window light, navy and beige palette, clean shapes, editorial poster'
             : /only how it is made/i.test(system)
                 ? 'flat vector illustration, no outlines, soft geometric shapes, muted navy and warm beige palette, gentle rim light, centered composition, generous negative space, quiet editorial poster style'

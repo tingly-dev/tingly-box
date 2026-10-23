@@ -1,3 +1,5 @@
+import { matchStarter } from './instructionStarters';
+
 // The instructions the vision model gets on the Image to Prompt page
 // (.design/image-to-prompt.md). They are model-facing, so English, and they
 // are the user's to edit: the page starts from DEFAULT_INSTRUCTIONS and the
@@ -32,10 +34,8 @@ export const INSTRUCTION_STARTERS = {
 };
 
 export type InstructionStarter = keyof typeof INSTRUCTION_STARTERS;
-export const STARTERS = Object.keys(INSTRUCTION_STARTERS) as InstructionStarter[];
 
 export const DEFAULT_INSTRUCTIONS = INSTRUCTION_STARTERS.natural;
-export const isDefaultInstructions = (instructions: string) => instructions.trim() === DEFAULT_INSTRUCTIONS;
 
 // The user turn that travels with the picture. The instructions carry the
 // how; this only says which picture.
@@ -54,9 +54,5 @@ export const cleanPromptReply = (reply: string): string => {
     return text;
 };
 
-// Which starter the field still matches, so the menu can mark it and the page
-// can tell an edited instruction from an untouched one.
-export const matchingStarter = (instructions: string): InstructionStarter | null => {
-    const text = instructions.trim();
-    return STARTERS.find((key) => INSTRUCTION_STARTERS[key] === text) ?? null;
-};
+// Which starter the field still matches (see instructionStarters.ts).
+export const matchingStarter = (instructions: string): InstructionStarter | null => matchStarter(INSTRUCTION_STARTERS, instructions);

@@ -2,7 +2,8 @@
 
 > 状态:**v1 已实施**(TEP-2206)。页面、可编辑指令、Playground 交接、灯箱入口已上线;
 > 历史在浏览器 IndexedDB(`imageWorkspaceDb.ts` 的 `imagePrompts`),和方案、素材库一样未接后端。
-> 关联:`image-layout.md`(Image 入口)、`image-library.md`(描述片段)、`vision-proxy.md`(同样是"把图交给视觉模型",但目的不同)。
+> 关联:`image-layout.md`(Image 入口)、`image-library.md`(描述片段)、`vision-proxy.md`(同样是"把图交给视觉模型",但目的不同)、
+> `idea-to-prompt.md`(兄弟页面：文字进去，提示词出来;两页共用指令框、结果卡片、运行 store 和 `imageprompt` 场景，在 `prompt/` 下)。
 
 ## 1. 它回答的问题
 

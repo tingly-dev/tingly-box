@@ -94,9 +94,10 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}
-	// ScenarioImagePrompt: the Image to Prompt page's vision chat model
-	// (.design/image-to-prompt.md), its own scenario so the rules the page's
-	// picker creates stay out of openai's.
+	// ScenarioImagePrompt: the chat model of the Image rail's prompt tools,
+	// Image to Prompt and Idea to Prompt (.design/image-to-prompt.md,
+	// .design/idea-to-prompt.md), its own scenario so the rules their
+	// pickers create stay out of openai's.
 	case ScenarioCustom, ScenarioClaudeDesktop, ScenarioSmartGuide, ScenarioImagePrompt:
 		return ScenarioDescriptor{
 			ID:                 scenario,

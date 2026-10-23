@@ -26,7 +26,7 @@ import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { AutoAwesome, Cable, Close, DeleteOutline, Description, Edit, OpenInFull, Palette, tablerMui } from '@/components/icons';
-import { IconTextPlus } from '@tabler/icons-react';
+import { IconTextPlus, IconWriting } from '@tabler/icons-react';
 import { fetchBlob } from '@tingly/vision';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { api } from '@/services/api';
@@ -57,8 +57,10 @@ import { readClipboardImages } from './clipboardImages';
 import { useSnippets } from '../library/assetStore';
 import type { ImageAsset } from '../library/assetTypes';
 import type { ReferenceImage } from './ImageGenReferenceImages';
+import type { IdeaHandoff } from '../prompt/ideaPromptTemplates';
 
 const TextPlus = tablerMui(IconTextPlus);
+const Writing = tablerMui(IconWriting);
 import type {
     GenerationRun,
     ImportedImage,
@@ -892,6 +894,23 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             sx={PROMPT_FIELD_SX}
                             actions={(
                                 <>
+                                    {/* Idea to Prompt hands its result back to the
+                                        Playground, not to a profile tab, so the
+                                        way there is offered outside profiles only. */}
+                                    {!profile && (
+                                        <Tooltip title={t('ideaPrompt.fromPlayground', { defaultValue: 'Write a full prompt from this' })}>
+                                            <span>
+                                                <IconButton
+                                                    size="small"
+                                                    disabled={!hasPrompt}
+                                                    onClick={() => navigate('/image/idea-to-prompt', { state: { description: getPrompt() } satisfies IdeaHandoff })}
+                                                    aria-label={t('ideaPrompt.fromPlayground', { defaultValue: 'Write a full prompt from this' })}
+                                                >
+                                                    <Writing sx={{ fontSize: 16 }} />
+                                                </IconButton>
+                                            </span>
+                                        </Tooltip>
+                                    )}
                                     <Tooltip title={t('imageLibrary.insertSnippet', { defaultValue: 'Insert a snippet' })}>
                                         <IconButton
                                             size="small"

@@ -42,6 +42,7 @@ const ImagePlaygroundPage = lazy(() => import('@/pages/image/ImagePlaygroundPage
 const ImageProfilePage = lazy(() => import('@/pages/image/ImageProfilePage'));
 const ImageLibraryPage = lazy(() => import('@/pages/image/ImageLibraryPage'));
 const ImageToPromptPage = lazy(() => import('@/pages/image/ImageToPromptPage'));
+const IdeaToPromptPage = lazy(() => import('@/pages/image/IdeaToPromptPage'));
 const CredentialPage = lazy(() => import('@/pages/CredentialPage'));
 const System = lazy(() => import('@/pages/system/System'));
 const AccessControl = lazy(() => import('@/pages/system/AccessControl'));
@@ -144,6 +145,7 @@ export const appRoutes = (
             <Route path="/image" element={<Navigate to="/image/playground" replace />} />
             <Route path="/image/playground" element={<ImagePlaygroundPage />} />
             <Route path="/image/profile/:profileId" element={<ImageProfilePage />} />
+            <Route path="/image/idea-to-prompt" element={<IdeaToPromptPage />} />
             <Route path="/image/to-prompt" element={<ImageToPromptPage />} />
             <Route path="/image/library" element={<ImageLibraryPage />} />
             <Route path="/image/api" element={<ImageApiPage />} />

@@ -75,7 +75,7 @@ const (
 	ScenarioGlobal        RuleScenario = "_global"     // Global flags that apply to all scenarios
 	ScenarioEmbed         RuleScenario = "embed"       // Embedding application scenario; only serves /embeddings
 	ScenarioImageGen      RuleScenario = "imagegen"    // Image generation scenario; only serves /images/generations
-	ScenarioImagePrompt   RuleScenario = "imageprompt" // Image to Prompt page: a vision chat model over /chat/completions
+	ScenarioImagePrompt   RuleScenario = "imageprompt" // Image to Prompt / Idea to Prompt pages: a chat model over /chat/completions
 	ScenarioDecisions     RuleScenario = "decisions"   // Decisions application scenario; only serves /decisions
 )
 

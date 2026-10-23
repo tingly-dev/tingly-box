@@ -127,6 +127,7 @@
 | [sketch-canvas.md](./sketch-canvas.md) | Sketch Canvas(生图 Playground 的草图与人偶输入) | 设计说明；局部实施状态见正文 |
 | [mannequin-standard.md](./mannequin-standard.md) | 人偶标准(Mannequin Standard) | 设计说明；局部实施状态见正文 |
 | [image-to-prompt.md](./image-to-prompt.md) | Image to Prompt(反推提示词):图片 → 可编辑的提示词，指令可改（TEP-2206） | 已实施(v1) |
+| [idea-to-prompt.md](./idea-to-prompt.md) | Idea to Prompt(扩写提示词):几个词 → 完整的生图提示词，与反推共用场景和部件（TEP-2226） | 已实施(v1) |
 | [pose-from-image.md](./pose-from-image.md) | 从一张图片得到姿势 | 关键点换算已实现；模型接入/交付待决定 |
 ## 观测与测试
 

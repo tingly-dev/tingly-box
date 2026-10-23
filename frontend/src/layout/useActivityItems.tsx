@@ -39,7 +39,7 @@ import {
     Folder as IconFolder,
     tablerMui,
 } from '@/components/icons';
-import { IconLibraryPhoto as TablerLibraryPhoto, IconPhotoScan as TablerPhotoScan } from '@tabler/icons-react';
+import { IconLibraryPhoto as TablerLibraryPhoto, IconPhotoScan as TablerPhotoScan, IconWriting as TablerWriting } from '@tabler/icons-react';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { useImageProfiles } from '@/pages/image/profiles/imageProfileStore';
@@ -55,6 +55,7 @@ const ProjectsNav = lazy(() => import('@/pages/projects/ProjectsNav'));
 
 const IconLibraryPhoto = tablerMui(TablerLibraryPhoto);
 const IconPhotoScan = tablerMui(TablerPhotoScan);
+const IconWriting = tablerMui(TablerWriting);
 
 const VMODEL_PATH = '/credentials/virtual-models';
 
@@ -303,7 +304,8 @@ export function useActivityItems(): ActivityItem[] {
                 defaultPath: '/image/playground',
                 // The work surface first (the same shape as Claude Code's
                 // profiles: the default Playground, one row per profile, "New
-                // profile"), then the occasional tool (Image to Prompt), then
+                // profile"), then the occasional tools (Idea to Prompt, the
+                // more common of the two, and Image to Prompt), then
                 // what is shared: the Library and, last, the Image API, which
                 // only someone wiring up a client needs.
                 children: [
@@ -319,6 +321,7 @@ export function useActivityItems(): ActivityItem[] {
                     })),
                     { path: '/image/profile/new', label: t('imageProfile.new', { defaultValue: 'New profile' }), icon: <IconPlus sx={{ fontSize: 20 }} /> },
                     { type: 'divider' },
+                    { path: '/image/idea-to-prompt', label: t('ideaPrompt.title', { defaultValue: 'Idea to Prompt' }), icon: <IconWriting sx={{ fontSize: 20 }} /> },
                     { path: '/image/to-prompt', label: t('imagePrompt.title', { defaultValue: 'Image to Prompt' }), icon: <IconPhotoScan sx={{ fontSize: 20 }} /> },
                     { path: '/image/library', label: t('imageLibrary.title', { defaultValue: 'Library' }), icon: <IconLibraryPhoto sx={{ fontSize: 20 }} /> },
                     { path: '/image/api', label: t('layout.nav.useImageGen', { defaultValue: 'Image API' }), icon: <IconPlug sx={{ fontSize: 20 }} /> },

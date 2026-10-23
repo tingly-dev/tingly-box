@@ -100,5 +100,30 @@ export default {
     "reuse": "Put this picture and its instructions back in the panel",
     "retry": "Retry",
     "remove": "Remove"
+  },
+  "ideaPrompt": {
+    "title": "Idea to Prompt",
+    "subtitle": "Write a few words and get a full prompt for an image model.",
+    "fromPlayground": "Write a full prompt from this",
+    "description": "Description",
+    "descriptionHint": "a few words, any language",
+    "descriptionPlaceholder": "e.g. a cat on the Moon looking at the Earth",
+    "model": "Model",
+    "chooseModel": "Choose a chat model to write the prompt",
+    "starters": {
+      "rich": "Rich",
+      "richHint": "One detailed paragraph in English, subject first. For gpt-image, Imagen, Flux, Seedream and most newer models.",
+      "light": "Light touch",
+      "lightHint": "Keeps your words and language, only adds what is missing: medium, shot, lighting, style.",
+      "tags": "Tag list",
+      "tagsHint": "Comma-separated tags, most important first. For Stable Diffusion-style models."
+    },
+    "submitShortcut": "⌘/Ctrl + Enter in the description or the instructions",
+    "run": "Write prompt",
+    "empty": "Prompts you write appear here.",
+    "emptyHint": "Edit one, then use it in the Playground or keep it as a snippet. “Write a full prompt from this” in the Playground prompt box brings its text here too.",
+    "pending": "Writing the prompt…",
+    "failedHint": "Retry, or choose another model.",
+    "reuse": "Put this description and its instructions back in the panel"
   }
 };

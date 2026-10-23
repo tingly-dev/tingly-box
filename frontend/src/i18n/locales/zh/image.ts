@@ -100,5 +100,30 @@ export default {
     "reuse": "把这张图和它的指令放回面板",
     "retry": "重试",
     "remove": "移除"
+  },
+  "ideaPrompt": {
+    "title": "扩写提示词",
+    "subtitle": "写几个词，扩写成一段完整的生图提示词。",
+    "fromPlayground": "把这段描述扩写成完整提示词",
+    "description": "描述",
+    "descriptionHint": "几个词就行，中英文都可以",
+    "descriptionPlaceholder": "例如：一只猫在月球上看地球",
+    "model": "模型",
+    "chooseModel": "选择一个用来写提示词的对话模型",
+    "starters": {
+      "rich": "详细",
+      "richHint": "一段详细的英文，主体在前。适合 gpt-image、Imagen、Flux、Seedream 等大多数新模型。",
+      "light": "轻度润色",
+      "lightHint": "保留你的措辞和语言，只补上缺的：媒介、镜头、光线、风格。",
+      "tags": "标签列表",
+      "tagsHint": "逗号分隔的标签，重要的在前。适合 Stable Diffusion 类模型。"
+    },
+    "submitShortcut": "在描述或指令框里按 ⌘/Ctrl + Enter",
+    "run": "扩写",
+    "empty": "扩写得到的提示词会出现在这里。",
+    "emptyHint": "可以直接修改，再拿去 Playground 使用，或者留作描述片段。在 Playground 的提示词框里点「把这段描述扩写成完整提示词」也会带着文字来到这里。",
+    "pending": "正在扩写…",
+    "failedHint": "重试，或者换一个模型。",
+    "reuse": "把这段描述和它的指令放回面板"
   }
 };

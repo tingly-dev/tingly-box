@@ -5,21 +5,16 @@ import {
     ButtonBase,
     CircularProgress,
     IconButton,
-    ListItemText,
-    Menu,
-    MenuItem,
     Skeleton,
     Stack,
-    TextField,
     Tooltip,
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { IconLibraryPhoto, IconPhotoScan, IconTextPlus } from '@tabler/icons-react';
+import { IconLibraryPhoto, IconPhotoScan } from '@tabler/icons-react';
 import UnifiedCard from '@/components/UnifiedCard';
-import { CopyIconButton } from '@/components/CopyIconButton';
-import { Check, Close, ContentPaste, DeleteOutline, FileUpload, Palette, Refresh, RestartAlt, tablerMui } from '@/components/icons';
+import { Close, ContentPaste, FileUpload, Palette, tablerMui } from '@/components/icons';
 import { useNotify } from '@/hooks/useNotify';
 import { useRuleManagement } from '@/pages/scenario/hooks/useRuleManagement';
 import ImageModelPicker from './components/ImageModelPicker';
@@ -39,18 +34,14 @@ import {
     useImagePromptRuns,
     type ImagePromptRun,
 } from './prompt/imagePromptStore';
-import {
-    DEFAULT_INSTRUCTIONS,
-    INSTRUCTION_STARTERS,
-    STARTERS,
-    isDefaultInstructions,
-    matchingStarter,
-} from './prompt/imagePromptTemplates';
+import { DEFAULT_INSTRUCTIONS, INSTRUCTION_STARTERS } from './prompt/imagePromptTemplates';
+import InstructionsField from './prompt/InstructionsField';
+import PromptRunCard from './prompt/PromptRunCard';
+import { useInstructions, useRememberedModel } from './prompt/instructionStarters';
 import { takeHandedPicture } from './prompt/pictureHandoff';
 import { preparePicture, type Picture } from './prompt/preparePicture';
 
 const PhotoScan = tablerMui(IconPhotoScan);
-const TextPlus = tablerMui(IconTextPlus);
 const LibraryPhoto = tablerMui(IconLibraryPhoto);
 
 const INSTRUCTIONS_KEY = 'image.prompt.instructions';
@@ -58,16 +49,6 @@ const MODEL_KEY = 'image.prompt.model';
 const WORKBENCH_MIN_HEIGHT = 600;
 // The picture's corner buttons sit over any image, light or dark.
 const overlayButtonSx = { bgcolor: 'background.paper', '&:hover': { bgcolor: 'background.paper' } } as const;
-
-const readLocal = (key: string): string | null => {
-    try { return localStorage.getItem(key); } catch { return null; }
-};
-const writeLocal = (key: string, value: string | null) => {
-    try {
-        if (value === null) localStorage.removeItem(key);
-        else localStorage.setItem(key, value);
-    } catch { /* kept for this visit only */ }
-};
 
 // Image to Prompt (反推提示词): a picture in, an editable prompt out, handed
 // on to the Playground or the Library. Like the Playground it has no route
@@ -88,23 +69,8 @@ const ImageToPromptPage: React.FC = () => {
     useEffect(() => { void loadRules(SCENARIO); }, [loadRules]);
     const reloadRules = useCallback(() => loadRules(SCENARIO), [loadRules]);
     const models = useMemo(() => imageModelOptions(rules).map((option) => option.requestModel), [rules]);
-    const [selectedModel, setSelectedModel] = useState(() => readLocal(MODEL_KEY) ?? '');
-    const model = models.includes(selectedModel) ? selectedModel : (models[0] ?? '');
-    const chooseModel = (next: string) => {
-        setSelectedModel(next);
-        writeLocal(MODEL_KEY, next);
-    };
-
-    // Saved only once it differs from the default, so a later, better default
-    // still reaches everyone who never touched it.
-    const [instructions, setInstructions] = useState(() => readLocal(INSTRUCTIONS_KEY) ?? DEFAULT_INSTRUCTIONS);
-    const changeInstructions = (next: string) => {
-        setInstructions(next);
-        writeLocal(INSTRUCTIONS_KEY, isDefaultInstructions(next) ? null : next);
-    };
-    const starter = matchingStarter(instructions);
-    const isDefault = isDefaultInstructions(instructions);
-    const [starterAnchor, setStarterAnchor] = useState<HTMLElement | null>(null);
+    const [model, chooseModel] = useRememberedModel(MODEL_KEY, models);
+    const [instructions, changeInstructions] = useInstructions(INSTRUCTIONS_KEY, DEFAULT_INSTRUCTIONS);
 
     const [picture, setPicture] = useState<Picture | null>(null);
     const [preparing, setPreparing] = useState(false);
@@ -306,62 +272,15 @@ const ImageToPromptPage: React.FC = () => {
                             />
                         )}
 
-                        {/* The instructions are the one thing here worth tuning,
-                            so they are an open field, not a setting behind a
-                            dialog. The starters fill it; they are not a mode. */}
-                        <Stack spacing={0.5} sx={{ flex: { lg: 1 }, minHeight: 0 }}>
-                            <Stack direction="row" sx={{ alignItems: 'center', minHeight: 28 }}>
-                                <Typography variant="caption" sx={{ color: 'text.secondary', mr: 'auto' }}>
-                                    {t('imagePrompt.instructions', { defaultValue: 'Instructions for the model' })}
-                                    {starter === null && ` · ${t('imagePrompt.edited', { defaultValue: 'edited' })}`}
-                                </Typography>
-                                <Button size="small" onClick={(event) => setStarterAnchor(event.currentTarget)} sx={{ py: 0, minWidth: 0 }}>
-                                    {t('imagePrompt.startFrom', { defaultValue: 'Start from…' })}
-                                </Button>
-                                {!isDefault && (
-                                    <Button size="small" color="inherit" startIcon={<RestartAlt sx={{ fontSize: 16 }} />} onClick={() => changeInstructions(DEFAULT_INSTRUCTIONS)} sx={{ py: 0, ml: 0.5, color: 'text.secondary' }}>
-                                        {t('imagePrompt.resetInstructions', { defaultValue: 'Default' })}
-                                    </Button>
-                                )}
-                            </Stack>
-                            <TextField
-                                multiline
-                                fullWidth
-                                value={instructions}
-                                onChange={(event) => changeInstructions(event.target.value)}
-                                onKeyDown={(event) => {
-                                    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && canRun) {
-                                        event.preventDefault();
-                                        getPrompt();
-                                    }
-                                }}
-                                minRows={8}
-                                slotProps={{ htmlInput: { 'aria-label': t('imagePrompt.instructions', { defaultValue: 'Instructions for the model' }) } }}
-                                sx={{
-                                    flex: { lg: 1 },
-                                    minHeight: 0,
-                                    display: 'flex',
-                                    '& .MuiInputBase-root': { flex: 1, alignItems: 'flex-start', overflow: 'auto', fontSize: 13, lineHeight: 1.55 },
-                                }}
-                            />
-                            <Menu anchorEl={starterAnchor} open={Boolean(starterAnchor)} onClose={() => setStarterAnchor(null)}>
-                                {STARTERS.map((key) => (
-                                    <MenuItem
-                                        key={key}
-                                        selected={starter === key}
-                                        onClick={() => { setStarterAnchor(null); changeInstructions(INSTRUCTION_STARTERS[key]); }}
-                                        sx={{ maxWidth: 360 }}
-                                    >
-                                        <ListItemText
-                                            primary={t(`imagePrompt.starters.${key}`)}
-                                            secondary={t(`imagePrompt.starters.${key}Hint`)}
-                                            slotProps={{ secondary: { sx: { whiteSpace: 'normal' } } }}
-                                        />
-                                        {starter === key && <Check sx={{ fontSize: 16, ml: 1, color: 'primary.main' }} />}
-                                    </MenuItem>
-                                ))}
-                            </Menu>
-                        </Stack>
+                        <InstructionsField
+                            value={instructions}
+                            onChange={changeInstructions}
+                            starters={INSTRUCTION_STARTERS}
+                            defaultText={DEFAULT_INSTRUCTIONS}
+                            i18nGroup="imagePrompt"
+                            onSubmit={getPrompt}
+                            canSubmit={canRun}
+                        />
 
                         <Tooltip title={t('imagePrompt.submitShortcut', { defaultValue: '⌘/Ctrl + Enter in the instructions' })} placement="top">
                             <span>
@@ -407,7 +326,7 @@ const ImageToPromptPage: React.FC = () => {
                             ) : (
                                 <Stack spacing={1.5}>
                                     {runs.map((run) => (
-                                        <PromptRunCard
+                                        <ImagePromptRunCard
                                             key={run.id}
                                             run={run}
                                             onReuse={reuseRun}
@@ -434,103 +353,41 @@ const ImageToPromptPage: React.FC = () => {
     );
 };
 
-interface PromptRunCardProps {
+interface ImagePromptRunCardProps {
     run: ImagePromptRun;
     onReuse: (run: ImagePromptRun) => void;
     onUse: (prompt: string) => void;
     onSaveSnippet: (prompt: string) => void;
 }
 
-// Runs are kept across days: anything not from today says which day.
-const runTimeLabel = (createdAt: number): string => {
-    const created = new Date(createdAt);
-    return created.toDateString() === new Date().toDateString()
-        ? created.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        : created.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-};
+const commitPrompt = (id: string, prompt: string) => updateImagePromptRun(id, { prompt });
 
-// One run: the picture, and the prompt as an editable draft with the ways
-// to hand it on. Memoised: the page re-renders on every keystroke in the
-// instructions, and the list keeps runs across days.
-const PromptRunCard = memo(({ run, onReuse, onUse, onSaveSnippet }: PromptRunCardProps) => {
+// One run: the picture beside its prompt. Memoised: the page re-renders on
+// every keystroke in the instructions, and the list keeps runs across days.
+const ImagePromptRunCard = memo(({ run, onReuse, onUse, onSaveSnippet }: ImagePromptRunCardProps) => {
     const { t } = useTranslation();
-    const [draft, setDraft] = useState(run.prompt);
-    useEffect(() => { setDraft(run.prompt); }, [run.prompt]);
-    const commit = () => { if (draft !== run.prompt) updateImagePromptRun(run.id, { prompt: draft }); };
-    const time = runTimeLabel(run.createdAt);
-
     return (
-        <Box sx={{ display: 'flex', gap: 1.5, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1.5, bgcolor: 'background.paper' }}>
-            <ButtonBase
-                onClick={() => onReuse(run)}
-                aria-label={t('imagePrompt.reuse', { defaultValue: 'Put this picture and its instructions back in the panel' })}
-                sx={{ flexShrink: 0, width: 96, height: 96, borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover', alignSelf: 'flex-start' }}
-            >
-                <ThumbImage src={run.image} alt={run.imageName} edge={THUMB_EDGE_TILE} />
-            </ButtonBase>
-            <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
-                {run.status === 'pending' ? (
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minHeight: 72, color: 'text.secondary' }}>
-                        <CircularProgress size={16} />
-                        <Typography variant="body2">{t('imagePrompt.pending', { defaultValue: 'Looking at the picture…' })}</Typography>
-                    </Stack>
-                ) : run.status === 'failed' ? (
-                    <Box sx={{ minHeight: 72 }}>
-                        <Typography variant="body2" color="error" sx={{ wordBreak: 'break-word' }}>{run.error}</Typography>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            {t('imagePrompt.failedHint', { defaultValue: 'Check that the model accepts images, or choose another vision model.' })}
-                        </Typography>
-                    </Box>
-                ) : (
-                    <TextField
-                        multiline
-                        fullWidth
-                        size="small"
-                        value={draft}
-                        onChange={(event) => setDraft(event.target.value)}
-                        onBlur={commit}
-                        slotProps={{ htmlInput: { 'aria-label': t('imagePrompt.promptField', { defaultValue: 'Prompt' }) } }}
-                        sx={{ '& .MuiInputBase-root': { fontSize: 13, lineHeight: 1.55 } }}
-                    />
-                )}
-                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', mr: 'auto', minWidth: 0 }} noWrap>
-                        {run.model} · {time}
-                    </Typography>
-                    {run.status === 'completed' && (
-                        <>
-                            <CopyIconButton
-                                value={draft}
-                                size="small"
-                                iconSize={16}
-                                label={t('playground.copyPrompt', { defaultValue: 'Copy prompt' })}
-                                copiedLabel={t('common.copied', { defaultValue: 'Copied' })}
-                            />
-                            <Tooltip title={t('imagePrompt.saveSnippet', { defaultValue: 'Keep as a snippet' })}>
-                                <IconButton size="small" onClick={() => onSaveSnippet(draft)} aria-label={t('imagePrompt.saveSnippet', { defaultValue: 'Keep as a snippet' })}>
-                                    <TextPlus sx={{ fontSize: 16 }} />
-                                </IconButton>
-                            </Tooltip>
-                            <Button size="small" variant="outlined" startIcon={<Palette sx={{ fontSize: 16 }} />} onClick={() => onUse(draft)} sx={{ ml: 0.5 }}>
-                                {t('imagePrompt.usePlayground', { defaultValue: 'Use in Playground' })}
-                            </Button>
-                        </>
-                    )}
-                    {run.status === 'failed' && (
-                        <Button size="small" startIcon={<Refresh sx={{ fontSize: 16 }} />} onClick={() => { void startImagePromptRun(run, run.id); }}>
-                            {t('imagePrompt.retry', { defaultValue: 'Retry' })}
-                        </Button>
-                    )}
-                    <Tooltip title={t('imagePrompt.remove', { defaultValue: 'Remove' })}>
-                        <IconButton size="small" onClick={() => removeImagePromptRun(run.id)} aria-label={t('imagePrompt.remove', { defaultValue: 'Remove' })}>
-                            <DeleteOutline sx={{ fontSize: 16 }} />
-                        </IconButton>
-                    </Tooltip>
-                </Stack>
-            </Stack>
-        </Box>
+        <PromptRunCard
+            run={run}
+            aside={(
+                <ButtonBase
+                    onClick={() => onReuse(run)}
+                    aria-label={t('imagePrompt.reuse', { defaultValue: 'Put this picture and its instructions back in the panel' })}
+                    sx={{ flexShrink: 0, width: 96, height: 96, borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover', alignSelf: 'flex-start' }}
+                >
+                    <ThumbImage src={run.image} alt={run.imageName} edge={THUMB_EDGE_TILE} />
+                </ButtonBase>
+            )}
+            pendingLabel={t('imagePrompt.pending', { defaultValue: 'Looking at the picture…' })}
+            failedHint={t('imagePrompt.failedHint', { defaultValue: 'Check that the model accepts images, or choose another vision model.' })}
+            onCommit={commitPrompt}
+            onUse={onUse}
+            onSaveSnippet={onSaveSnippet}
+            onRetry={() => { void startImagePromptRun(run, run.id); }}
+            onRemove={removeImagePromptRun}
+        />
     );
 });
-PromptRunCard.displayName = 'PromptRunCard';
+ImagePromptRunCard.displayName = 'ImagePromptRunCard';
 
 export default ImageToPromptPage;
