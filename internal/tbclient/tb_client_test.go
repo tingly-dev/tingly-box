@@ -185,7 +185,10 @@ func TestGetClaudeCodeEnv_RoutesThroughGateway(t *testing.T) {
 	}
 
 	assert.Equal(t, "http://localhost:9000/tingly/claude_code", kv["ANTHROPIC_BASE_URL"])
-	assert.Equal(t, "cc", kv["ANTHROPIC_MODEL"])
+	// The sonnet slot follows the default, so ANTHROPIC_MODEL stays unset and
+	// Claude Code's /model picker ticks "Default".
+	assert.NotContains(t, kv, "ANTHROPIC_MODEL")
+	assert.Equal(t, "cc", kv["ANTHROPIC_DEFAULT_SONNET_MODEL"])
 	assert.Equal(t, "cc", kv["ANTHROPIC_DEFAULT_OPUS_MODEL"])
 	_, hasToken := kv["ANTHROPIC_AUTH_TOKEN"]
 	assert.True(t, hasToken)
@@ -238,7 +241,8 @@ func TestGetClaudeCodeSettingsPathForProfile_MaterializesProfileSettings(t *test
 	require.NoError(t, json.Unmarshal(data, &written))
 
 	assert.Equal(t, "http://localhost:9000/tingly/claude_code:p1", written.Env["ANTHROPIC_BASE_URL"])
-	assert.Equal(t, "team/coder", written.Env["ANTHROPIC_MODEL"])
+	assert.Equal(t, "team/coder", written.Env["ANTHROPIC_DEFAULT_SONNET_MODEL"])
+	assert.NotContains(t, written.Env, "ANTHROPIC_MODEL")
 }
 
 func TestGetScenarioEndpointPath(t *testing.T) {
@@ -297,7 +301,12 @@ func TestResolveClaudeCodeModels_MatchesSettingsFile(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			env := tbagent.GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code", false)
 			m := NewTBClient(cfg).resolveClaudeCodeModels()
-			assert.Equal(t, env["ANTHROPIC_MODEL"], m.def)
+			// An unset ANTHROPIC_MODEL means the default is the sonnet slot.
+			wantDef := env["ANTHROPIC_MODEL"]
+			if wantDef == "" {
+				wantDef = env["ANTHROPIC_DEFAULT_SONNET_MODEL"]
+			}
+			assert.Equal(t, wantDef, m.def)
 			assert.Equal(t, env["ANTHROPIC_DEFAULT_HAIKU_MODEL"], m.haiku)
 			assert.Equal(t, env["ANTHROPIC_DEFAULT_SONNET_MODEL"], m.sonnet)
 			assert.Equal(t, env["ANTHROPIC_DEFAULT_OPUS_MODEL"], m.opus)
