@@ -889,6 +889,19 @@ const mockV1Rules: Record<string, any[]> = {
             ],
         },
     ],
+    imageprompt: [
+        {
+            uuid: 'mock-rule-imageprompt-claude',
+            scenario: 'imageprompt',
+            request_model: 'claude-sonnet-5',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [
+                { uuid: 'svc-imageprompt-claude', provider: 'mock-provider-anthropic', model: 'claude-sonnet-5', weight: 1, active: true },
+            ],
+        },
+    ],
     vscode: [
         {
             uuid: 'mock-rule-vsc-1',
@@ -2853,6 +2866,26 @@ export const handlers = [
 
     http.get('/api/v1/mcp/clients', () => {
         return HttpResponse.json({ success: true, data: [] })
+    }),
+
+    // Image to Prompt: answers in the shape the instructions ask for, so the
+    // starters can be told apart against the mock backend.
+    http.post('*/tingly/imageprompt/v1/chat/completions', async ({ request }) => {
+        const body = (await request.json()) as any
+        const system = String(body?.messages?.find((m: any) => m.role === 'system')?.content ?? '')
+        await new Promise((r) => setTimeout(r, 900))
+        const content = /comma-separated list of tags/i.test(system)
+            ? 'flat illustration, young woman, short black hair, cream sweater, head and shoulders, centered, night, rain, convenience store, warm window light, navy and beige palette, clean shapes, editorial poster'
+            : /only how it is made/i.test(system)
+                ? 'flat vector illustration, no outlines, soft geometric shapes, muted navy and warm beige palette, gentle rim light, centered composition, generous negative space, quiet editorial poster style'
+                : 'Flat vector illustration of a young woman with short black hair and a cream sweater, head-and-shoulders portrait, centered, straight-on eye-level view. A rainy night street behind her, warm light from a shop window on her face, muted palette of navy, warm beige and charcoal, clean shapes with no outlines, quiet editorial poster style.'
+        return HttpResponse.json({
+            id: `chatcmpl-mock-${Date.now()}`,
+            object: 'chat.completion',
+            created: Math.floor(Date.now() / 1000),
+            model: body?.model ?? 'claude-sonnet-5',
+            choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content } }],
+        })
     }),
 
     http.post('*/tingly/imagegen/v1/images/generations', async ({ request }) => {
