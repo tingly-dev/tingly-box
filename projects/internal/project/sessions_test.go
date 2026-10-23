@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -194,7 +195,7 @@ func TestProjectsAreCreatedWithAMainThreadAndFoldersWithout(t *testing.T) {
 	assert.ErrorIs(t, err, ErrMainThread)
 }
 
-func TestSessionKeepsSubagentsAndTasksProjectThreadsDoNot(t *testing.T) {
+func TestEveryThreadKeepsSubagentStepsAndTasks(t *testing.T) {
 	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("ok", 1, 1); return nil })
 	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "go"})
 	require.NoError(t, err)
@@ -225,10 +226,11 @@ func TestSessionKeepsSubagentsAndTasksProjectThreadsDoNot(t *testing.T) {
 	assert.Equal(t, "agent-1", parent)
 	n, _ = count(s.ID, db.EvTask)
 	assert.Equal(t, 1, n)
-	n, _ = count(th.ID, db.EvToolUse)
-	assert.Zero(t, n, "a project thread still shows only the main conversation")
+	n, parent = count(th.ID, db.EvToolUse)
+	assert.Equal(t, 1, n, "a project thread keeps the steps too: they are read when the subagent is opened")
+	assert.Equal(t, "agent-1", parent)
 	n, _ = count(th.ID, db.EvTask)
-	assert.Zero(t, n)
+	assert.Equal(t, 1, n, "a subagent's card reads its state from them")
 }
 
 // profiles is a host with launch profiles: "work" routes through its own
@@ -393,4 +395,35 @@ func TestSessionsDoNotShareUploads(t *testing.T) {
 	require.NoError(t, err)
 	_, err = f.threads.layout.ResolveAttachments(SessionOwner("s2"), []string{a.Path})
 	assert.Error(t, err, "another session's files cannot be attached")
+}
+
+// A thread event carries its project's counts after the change, so the
+// project list updates that row from the stream instead of re-fetching.
+func TestThreadEventCarriesProjectCounts(t *testing.T) {
+	f := newFixture(t, func(*enginetest.Turn) error { return nil })
+	ch, cancel := f.threads.hub.Subscribe(AllProjects)
+	defer cancel()
+	folder := t.TempDir()
+	s, err := f.startFolder(folder, FolderThreadSpec{Task: "x"})
+	require.NoError(t, err)
+	waitStatus(t, f.store, s.ID, db.ThreadIdle)
+
+	var last Event
+	for {
+		select {
+		case b := <-ch:
+			var ev Event
+			require.NoError(t, json.Unmarshal(b, &ev))
+			if ev.Type != EventThread {
+				continue
+			}
+			require.NotNil(t, ev.Threads, "every thread event has counts")
+			last = ev
+			continue
+		case <-time.After(200 * time.Millisecond):
+		}
+		break
+	}
+	assert.Equal(t, s.ProjectID, last.ProjectID)
+	assert.Equal(t, db.ThreadCounts{Idle: 1}, *last.Threads, "the last event's counts are the settled state")
 }

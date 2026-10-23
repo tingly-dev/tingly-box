@@ -390,3 +390,47 @@ func TestProjectEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	assert.DirExists(t, th.Cwd)
 }
+
+// The events stream outlives the server's WriteTimeout: cut at it, every open
+// page reconnects and re-fetches everything it shows.
+func TestEventStreamOutlivesWriteTimeout(t *testing.T) {
+	store, err := db.Open(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { store.Close() })
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	srv := httptest.NewUnstartedServer(New(ctx, Deps{Store: store, Layout: project.Layout{Root: t.TempDir()}, Agents: commitAgents()}))
+	srv.Config.WriteTimeout = 200 * time.Millisecond
+	srv.Start()
+	t.Cleanup(srv.Close)
+	c := client{t: t, base: srv.URL + "/api/v1"}
+
+	resp, err := http.Get(c.base + "/projects/events")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	lines := make(chan string)
+	go func() {
+		sc := bufio.NewScanner(resp.Body)
+		for sc.Scan() {
+			lines <- sc.Text()
+		}
+		close(lines)
+	}()
+
+	time.Sleep(500 * time.Millisecond)
+	var p db.Project
+	require.Equal(t, http.StatusCreated, c.do("POST", "/projects", map[string]any{"name": "late"}, &p))
+	require.Equal(t, http.StatusOK, c.do("PATCH", "/projects/"+p.ID, map[string]any{"starred": true}, nil))
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case line, ok := <-lines:
+			require.True(t, ok, "the stream was cut")
+			if strings.HasPrefix(line, "data: ") && strings.Contains(line, p.ID) {
+				return
+			}
+		case <-deadline:
+			t.Fatal("no event after the write timeout")
+		}
+	}
+}

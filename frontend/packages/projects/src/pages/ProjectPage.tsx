@@ -18,6 +18,7 @@ import { WorkspaceLayout, useWorkspacePane } from '../components/workspace/Works
 import { FloatWindow, Pause, Settings, Star, StarBorder } from '../components/icons';
 import { useNotify } from '../hooks/useNotify';
 import { useProjectEvents, type ProjectEvent } from '../hooks/useProjectEvents';
+import { useTranscript } from '../hooks/useTranscript';
 import { usePlacement } from '../hooks/usePlacement';
 import { useProjectsHost } from '../host/ProjectsHost';
 import { readLocal, writeLocal } from '../utils/storage';
@@ -47,10 +48,8 @@ export default function ProjectPage() {
     const [project, setProject] = useState<Project | null>(null);
     const [threads, setThreads] = useState<Thread[]>([]);
     // The project conversation: the main thread's events.
-    const [messages, setMessages] = useState<ThreadEvent[] | null>(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [threadEvents, setThreadEvents] = useState<ThreadEvent[] | null>(null);
     const pane = useWorkspacePane();
     // IM chats bound to this project (null when the host has no IM).
     const im = useProjectIm(project?.main_thread_id ? { threadId: project.main_thread_id, projectId: project.id, name: project.name } : null);
@@ -77,15 +76,14 @@ export default function ProjectPage() {
     const [libraryKey, setLibraryKey] = useState(0);
 
     const mainThreadId = project?.main_thread_id ?? '';
-
-    const loadMessages = useCallback(async (main: string) => {
-        const m = await unwrap(api.GET('/api/v1/threads/{id}/events', { params: { path: { id: main }, query: { limit: 200 } } }));
-        // Merge, not replace: a thread_event that arrived after the snapshot was taken stays.
-        setMessages((list) => {
-            const ids = new Set(m.events.map((e) => e.id));
-            return [...m.events, ...(list ?? []).filter((e) => !ids.has(e.id))];
-        });
-    }, []);
+    // The conversation (the main thread) and the open thread: their latest
+    // entries, then only what changes (useTranscript).
+    const conversation = useTranscript(mainThreadId);
+    const { apply: applyMain, edit: editMain } = conversation;
+    const messages = conversation.events;
+    const opened = useTranscript(threadId);
+    const { apply: applyOpened } = opened;
+    const threadEvents = opened.events;
 
     const load = useCallback(async () => {
         try {
@@ -93,21 +91,15 @@ export default function ProjectPage() {
             setProject(d.project);
             setThreads(d.threads);
             setBusy(d.coordinator_busy);
-            // A folder has no conversation: its page is the folder page.
-            if (d.project.main_thread_id) await loadMessages(d.project.main_thread_id);
             setError(null);
         } catch (e) {
             setError((e as Error).message);
         }
-    }, [id, loadMessages]);
+    }, [id]);
 
     const loadThread = useCallback(async (tid: string) => {
         try {
-            const [d, ev] = await Promise.all([
-                unwrap(api.GET('/api/v1/threads/{id}', { params: { path: { id: tid } } })),
-                unwrap(api.GET('/api/v1/threads/{id}/events', { params: { path: { id: tid } } })),
-            ]);
-            setThreadEvents(ev.events);
+            const d = await unwrap(api.GET('/api/v1/threads/{id}', { params: { path: { id: tid } } }));
             setThreads((list) => upsert(list, d.thread));
         } catch (e) {
             notify((e as Error).message, 'error');
@@ -116,15 +108,12 @@ export default function ProjectPage() {
 
     useEffect(() => {
         setProject(null);
-        setMessages(null);
         setThreads([]);
-        setThreadEvents(null);
         setBusy(false);
         void load();
     }, [load]);
 
     useEffect(() => {
-        setThreadEvents(null);
         if (threadId) void loadThread(threadId);
     }, [threadId, loadThread]);
 
@@ -132,7 +121,7 @@ export default function ProjectPage() {
         switch (ev.type) {
             case 'message_delta': {
                 const d = ev.data as { id: string; text: string };
-                setMessages((list) => list?.map((m) => (m.id === d.id ? { ...m, content: m.content + d.text } : m)) ?? list);
+                editMain((list) => list.map((m) => (m.id === d.id ? { ...m, content: m.content + d.text } : m)));
                 break;
             }
             case 'thread': {
@@ -146,8 +135,8 @@ export default function ProjectPage() {
             }
             case 'thread_event': {
                 const e = ev.data as ThreadEvent;
-                if (e.thread_id === mainThreadId) setMessages((list) => (list ? upsert(list, e) : list));
-                else if (e.thread_id === threadId) setThreadEvents((list) => (list ? upsert(list, e) : list));
+                if (e.thread_id === mainThreadId) applyMain(e);
+                else if (e.thread_id === threadId) applyOpened(e);
                 break;
             }
             case 'coordinator':
@@ -160,11 +149,15 @@ export default function ProjectPage() {
                 break;
             }
         }
-    }, [threadId, mainThreadId]);
+    }, [threadId, mainThreadId, applyMain, editMain, applyOpened]);
 
     useProjectEvents(id, onEvent, () => {
         void load();
-        if (threadId) void loadThread(threadId);
+        conversation.catchUp().catch(() => undefined);
+        if (threadId) {
+            void loadThread(threadId);
+            opened.catchUp().catch(() => undefined);
+        }
     });
 
     const selected = threads.find((th) => th.id === threadId);
@@ -236,6 +229,9 @@ export default function ProjectPage() {
             threadId={threadId}
             thread={selected}
             events={threadEvents}
+            more={opened.more}
+            onLoadEarlier={opened.loadEarlier}
+            subagents={opened.subagents}
             running={threadRunning}
             disabled={blocked}
             onBack={closeThread}
@@ -320,6 +316,8 @@ export default function ProjectPage() {
                     <ConversationPane
                         projectId={id}
                         messages={messages}
+                        more={conversation.more}
+                        onLoadEarlier={conversation.loadEarlier}
                         threads={threadMap}
                         busy={busy}
                         disabled={blocked || !project}
@@ -351,7 +349,7 @@ export default function ProjectPage() {
                                 await unwrap(api.POST('/api/v1/threads/{id}/messages', { params: { path: { id: mainThreadId } }, body: { content: text, attachments: attachments.map((a) => a.path) } }));
                                 setBusy(true);
                                 // The message shows at once; the reply streams in over the event stream.
-                                await loadMessages(mainThreadId).catch(() => undefined);
+                                await conversation.catchUp().catch(() => undefined);
                                 return true;
                             } catch (e) {
                                 notify((e as Error).message, 'error');
@@ -361,7 +359,7 @@ export default function ProjectPage() {
                         onStartSuggestions={async (mid, indexes) => {
                             try {
                                 const m = await unwrap(api.POST('/api/v1/threads/{id}/events/{eid}/start', { params: { path: { id: mainThreadId, eid: mid } }, body: { indexes } }));
-                                setMessages((list) => (list ? upsert(list, m) : list));
+                                conversation.apply(m);
                             } catch (e) {
                                 notify((e as Error).message, 'error');
                             }

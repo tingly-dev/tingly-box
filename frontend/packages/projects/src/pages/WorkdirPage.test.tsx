@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectsHostProvider, type ProjectsHost } from '../host/ProjectsHost';
+import { forgetTranscripts } from '../hooks/useTranscript';
 import WorkdirPage from './WorkdirPage';
 
 type Frame = { type: string; data: unknown };
@@ -48,6 +49,7 @@ beforeEach(() => {
 });
 afterEach(() => {
     cleanup();
+    forgetTranscripts();
     for (const f of [m.get, m.del, m.post, m.reload]) f.mockReset();
 });
 
@@ -108,5 +110,16 @@ describe('WorkdirPage live transcript', () => {
 
         act(() => m.projectCb?.({ type: 'thread_event', data: entry('e1', 'live hello') }));
         expect(await screen.findByText('live hello')).toBeInTheDocument();
+    });
+    it('re-reads only the thread, not its transcript, when the live background tasks change', async () => {
+        show('/?path=%2Fhome%2Fme%2Fapp&session=t1');
+        await waitFor(() => expect(m.projectCb).not.toBeNull());
+        const calls = (url: string) => m.get.mock.calls.filter(([u]) => u === url).length;
+        await waitFor(() => expect(calls('/api/v1/threads/{id}/events')).toBe(1));
+        const thread0 = calls('/api/v1/threads/{id}');
+
+        act(() => m.projectCb?.({ type: 'thread_event', data: { ...entry('e2', ''), kind: 'task', payload: '{"event":"background_tasks_changed"}' } }));
+        await waitFor(() => expect(calls('/api/v1/threads/{id}')).toBe(thread0 + 1));
+        expect(calls('/api/v1/threads/{id}/events')).toBe(1);
     });
 });

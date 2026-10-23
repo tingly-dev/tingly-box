@@ -3,6 +3,8 @@ package project
 import (
 	"encoding/json"
 	"sync"
+
+	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
 
 // AllProjects subscribes to every project's events (the sidebar's stream); it
@@ -27,6 +29,9 @@ type Event struct {
 	// Data is the created/changed object (message, thread, thread event,
 	// project) or, for message_delta, {"id", "text"}.
 	Data any `json:"data"`
+	// Threads is, on a thread event, its project's thread counts after the
+	// change, so a project list can update its row without re-fetching.
+	Threads *db.ThreadCounts `json:"threads,omitempty"`
 }
 
 // Hub fans project events out to subscribers (open project pages).

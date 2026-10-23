@@ -71,6 +71,11 @@ export const zh: Dict<typeof en> = {
             default: '全部询问', acceptEdits: '自动接受编辑', auto: '自动', plan: '仅规划', dontAsk: '不再询问', bypassPermissions: '从不询问',
         },
     },
+    subagents: {
+        title: '子代理', none: '这里还没有子代理',
+        hint: '这里运行过的所有子代理，按时间先后排列。打开一个即可单独查看它的步骤。',
+        steps_one: '{{count}} 步', steps_other: '{{count}} 步', earlier: '显示更早的步骤', back: '对话', show: '在对话中查看', loading: '加载中…',
+    },
     tasks: {
         none: '暂无后台任务', hint: 'Claude 在后台运行的命令和子代理会显示在这里，回复后仍会继续运行。',
         running: '运行中', finished: '已结束', nothingRunning: '目前没有正在运行的任务。',
@@ -161,7 +166,7 @@ export const zh: Dict<typeof en> = {
         copyCd: '复制进入 worktree 的 cd 命令', back: '返回 Overview',
         review: 'Review 改动', resolve: '标记为已解决', reopen: '重新打开', showTask: '查看任务', hideTask: '收起任务',
         showTrajectory: '查看轨迹', showChat: '查看对话', expandTools: '展开所有工具调用', collapseTools: '折叠工具调用',
-        fromCoordinator: '协调者', allowThread: '本线程都允许 {{tool}}',
+        fromCoordinator: '协调者', allowThread: '本线程都允许 {{tool}}', loadEarlier: '显示更早的消息',
         placeholder: '直接给这个线程发消息…', queuePlaceholder: '给这个线程发消息——它会在当前这轮结束后读到…',
         resolvedPlaceholder: '重新打开线程才能继续发送工作',
         mergeIt: '合并', mergedInto: '已合并进 {{base}}', merged: '已把 {{branch}} 合并进 {{base}}', mergeBlocked: '未合并', mergedBadge: '已合并',

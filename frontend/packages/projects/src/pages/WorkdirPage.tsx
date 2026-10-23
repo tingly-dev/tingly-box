@@ -18,13 +18,14 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useNotify } from '../hooks/useNotify';
 import { useProjectEvents, type ProjectEvent } from '../hooks/useProjectEvents';
 import { useProjectList } from '../hooks/useProjectList';
+import { useTranscript } from '../hooks/useTranscript';
 import { useProjectsHost, type SessionLaunch } from '../host/ProjectsHost';
 import { folderName, timeAgo } from '../utils/format';
 
-/** Replace the item with the same id, else add it (sessions newest first, transcript entries last). */
-function upsert<T extends { id: string }>(list: T[], item: T, last = false): T[] {
+/** Replace the session with the same id, else add it first (newest first). */
+function upsert<T extends { id: string }>(list: T[], item: T): T[] {
     const i = list.findIndex((x) => x.id === item.id);
-    if (i < 0) return last ? [...list, item] : [item, ...list];
+    if (i < 0) return [item, ...list];
     const next = list.slice();
     next[i] = item;
     return next;
@@ -78,7 +79,9 @@ export default function WorkdirPage() {
     const listedKey = listed?.join(',') ?? null;
 
     const [sessions, setSessions] = useState<Thread[] | null>(null);
-    const [events, setEvents] = useState<ThreadEvent[] | null>(null);
+    // The open session's transcript: its latest entries, then only what changes (useTranscript).
+    const transcript = useTranscript(sessionId);
+    const events = transcript.events;
     const [liveTasks, setLiveTasks] = useState<BackgroundTask[]>([]);
     const [modes, setModes] = useState<string[]>([]);
     // The add dialog lives in the URL, so a link (the sidebar's "add") opens it.
@@ -112,12 +115,8 @@ export default function WorkdirPage() {
     const loadSession = useCallback(async (sid: string) => {
         const n = ++sessionReq.current;
         try {
-            const [d, ev] = await Promise.all([
-                unwrap(api.GET('/api/v1/threads/{id}', { params: { path: { id: sid } } })),
-                unwrap(api.GET('/api/v1/threads/{id}/events', { params: { path: { id: sid } } })),
-            ]);
+            const d = await unwrap(api.GET('/api/v1/threads/{id}', { params: { path: { id: sid } } }));
             if (n !== sessionReq.current) return;
-            setEvents(ev.events);
             setLiveTasks(d.background_tasks ?? []);
             setSessions((list) => upsert(list ?? [], d.thread));
         } catch (e) {
@@ -133,6 +132,19 @@ export default function WorkdirPage() {
         }
     }, [notify, setParams]);
 
+    // The live background tasks come with the thread, not its transcript (the stream carries that).
+    const loadTasks = useCallback(async (sid: string) => {
+        const n = sessionReq.current;
+        try {
+            const d = await unwrap(api.GET('/api/v1/threads/{id}', { params: { path: { id: sid } } }));
+            if (n !== sessionReq.current) return;
+            setLiveTasks(d.background_tasks ?? []);
+            setSessions((list) => upsert(list ?? [], d.thread));
+        } catch {
+            // Keep what the panel shows; the next change or reconnect reads it again.
+        }
+    }, []);
+
     // Another folder starts from an empty list; the same folder (or all of them) keeps what it shows while it refreshes.
     useEffect(() => {
         setSessions(null);
@@ -143,7 +155,6 @@ export default function WorkdirPage() {
     }, [loadSessions]);
 
     useEffect(() => {
-        setEvents(null);
         setLiveTasks([]);
         if (sessionId) void loadSession(sessionId);
         else sessionReq.current++;
@@ -164,13 +175,15 @@ export default function WorkdirPage() {
             if (ev.type !== 'thread_event') return;
             const e = ev.data as ThreadEvent;
             if (e.thread_id !== sessionId) return;
-            setEvents((list) => (list ? upsert(list, e, true) : list));
-            // The live set changed: it comes with the session.
-            if (e.kind === 'task' && changesLiveTasks(e)) void loadSession(sessionId);
+            transcript.apply(e);
+            if (e.kind === 'task' && changesLiveTasks(e)) void loadTasks(sessionId);
         };
         onOpen.current = () => {
             void loadSessions();
-            if (sessionId) void loadSession(sessionId);
+            if (sessionId) {
+                void loadSession(sessionId);
+                transcript.catchUp().catch(() => undefined);
+            }
         };
     });
 
@@ -178,7 +191,10 @@ export default function WorkdirPage() {
     // The open thread's project stream (the all-projects one never carries thread_event). It reconnects on its own;
     // on a reconnect the thread is re-read for anything missed.
     useProjectEvents(sessionId ? (selected?.project_id ?? folder?.id ?? '') : '', (ev) => onThreadEvent.current(ev), () => {
-        if (sessionId) void loadSession(sessionId);
+        if (sessionId) {
+            void loadSession(sessionId);
+            transcript.catchUp().catch(() => undefined);
+        }
     });
     const running = selected?.status === 'working'
         || (selected?.status === 'waiting' && !!events?.some((e) => (e.kind === 'approval' || e.kind === 'ask') && e.payload?.includes('"state":"pending"')));
@@ -361,7 +377,13 @@ export default function WorkdirPage() {
                         disabled={false}
                         onBack={() => openNew()}
                         liveTasks={liveTasks}
-                        onRefresh={() => void loadSession(sessionId)}
+                        more={transcript.more}
+                        onLoadEarlier={transcript.loadEarlier}
+                        subagents={transcript.subagents}
+                        onRefresh={() => {
+                            void loadSession(sessionId);
+                            transcript.catchUp().catch(() => undefined);
+                        }}
                         composerContext={selected && (
                             <>
                                 {slots?.launchPickers?.({ value: { profile: selected.profile ?? '', model: selected.model ?? '' }, onChange: (n) => void setLaunch(n) })}

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
@@ -54,6 +55,13 @@ type ThreadDetailResponse struct {
 // are the project conversation.
 type EventsResponse struct {
 	Events []db.ThreadEvent `json:"events"`
+	// More says older events were left out (with limit).
+	More bool `json:"more"`
+}
+
+// SubagentsResponse lists a thread's subagents.
+type SubagentsResponse struct {
+	Subagents []db.Subagent `json:"subagents"`
 }
 
 // SendRequest is a message to the thread.
@@ -160,8 +168,16 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithResponseModel(ThreadDetailResponse{}))
 	api.GET("/threads/:id/events", h.events, tag,
 		swagger.WithDescription("A thread's events, oldest first; for a main thread, the project conversation"),
-		swagger.WithQuery("limit", "integer", "Latest N events"),
+		swagger.WithQuery("parent", "string", "An Agent call's request id: page through that subagent's steps instead of the thread's own conversation"),
+		swagger.WithQuery("limit", "integer", "Latest N events (of those before `before`); on the conversation, every older usage event comes too"),
+		swagger.WithQuery("before", "string", "An event id: only events older than it"),
+		swagger.WithQuery("from", "string", "An event id: every event from it on (up to `before`), to extend a loaded page back to it in one read; limit does not apply"),
+		swagger.WithQuery("call", "string", "A tool call's request id: that call's own events on the conversation (the call, its result, its task events); nothing else applies"),
+		swagger.WithQuery("since", "string", "RFC 3339 time: every event added or changed at or after it (its updated_at), subagent steps included; parent, limit, before and from do not apply"),
 		swagger.WithResponseModel(EventsResponse{}))
+	api.GET("/threads/:id/subagents", h.subagents, tag,
+		swagger.WithDescription("A thread's subagents (its Agent calls), oldest first: to find one in a long transcript without reading it"),
+		swagger.WithResponseModel(SubagentsResponse{}))
 	api.POST("/threads/:id/messages", h.send, tag,
 		swagger.WithDescription("Send a message to the thread (runs after its current turn); to a main thread it goes to the coordinator, whose reply arrives on the event stream"),
 		swagger.WithRequestModel(SendRequest{}),
@@ -328,8 +344,21 @@ func (h *Handler) events(c *gin.Context) {
 	if !ok {
 		return
 	}
-	limit, _ := strconv.Atoi(c.Query("limit"))
-	events, err := h.svc.Store.ListRecentThreadEvents(t.ID, limit)
+	page := db.EventPage{Parent: c.Query("parent"), Before: c.Query("before"), From: c.Query("from"), Call: c.Query("call")}
+	page.Limit, _ = strconv.Atoi(c.Query("limit"))
+	if v := c.Query("since"); v != "" {
+		since, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			apierr.BadRequest(c, "since must be an RFC 3339 time")
+			return
+		}
+		page.Since = since
+	}
+	events, more, err := h.svc.Store.PageThreadEvents(t.ID, page)
+	if errors.Is(err, db.ErrNotFound) {
+		apierr.Store(c, err, "event")
+		return
+	}
 	if err != nil {
 		fail(c, err)
 		return
@@ -337,7 +366,20 @@ func (h *Handler) events(c *gin.Context) {
 	if events == nil {
 		events = []db.ThreadEvent{}
 	}
-	c.JSON(http.StatusOK, EventsResponse{Events: events})
+	c.JSON(http.StatusOK, EventsResponse{Events: events, More: more})
+}
+
+func (h *Handler) subagents(c *gin.Context) {
+	t, ok := h.thread(c)
+	if !ok {
+		return
+	}
+	list, err := h.svc.Store.ThreadSubagents(t.ID)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, SubagentsResponse{Subagents: list})
 }
 
 func (h *Handler) send(c *gin.Context) {

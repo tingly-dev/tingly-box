@@ -66,6 +66,11 @@ export const en = {
             default: 'Ask for everything', acceptEdits: 'Accept edits', auto: 'Auto', plan: 'Plan only', dontAsk: 'Don’t ask', bypassPermissions: 'Never ask',
         },
     },
+    subagents: {
+        title: 'Subagents', none: 'No subagents here yet',
+        hint: 'Every subagent run here, oldest first. Open one to read its steps on their own.',
+        steps_one: '{{count}} step', steps_other: '{{count}} steps', earlier: 'Show earlier steps', back: 'Conversation', show: 'Show in conversation', loading: 'Loading…',
+    },
     tasks: {
         none: 'No background tasks', hint: 'Commands and subagents Claude runs in the background show up here, and keep running after its reply.',
         running: 'Running', finished: 'Finished', nothingRunning: 'Nothing running now.',
@@ -156,7 +161,7 @@ export const en = {
         copyCd: 'Copy cd command to the worktree', back: 'Back to Overview',
         review: 'Review changes', resolve: 'Mark resolved', reopen: 'Reopen', showTask: 'Show task', hideTask: 'Hide task',
         showTrajectory: 'Show trajectory', showChat: 'Show conversation', expandTools: 'Expand all tool calls', collapseTools: 'Collapse tool calls',
-        fromCoordinator: 'Coordinator', allowThread: 'Always allow {{tool}} here',
+        fromCoordinator: 'Coordinator', allowThread: 'Always allow {{tool}} here', loadEarlier: 'Show earlier messages',
         placeholder: 'Message this thread directly…', queuePlaceholder: 'Message this thread — it reads it after its current turn…',
         resolvedPlaceholder: 'Reopen the thread to send it more work',
         mergeIt: 'Merge it', mergedInto: 'Merged into {{base}}', merged: 'Merged {{branch}} into {{base}}', mergeBlocked: 'Not merged', mergedBadge: 'Merged',

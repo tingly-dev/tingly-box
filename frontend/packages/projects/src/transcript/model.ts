@@ -204,15 +204,21 @@ export const buildTranscript = (messages: TranscriptEntry[]): TranscriptBlock[] 
     const tasks = foldTasks(messages);
     const byParent = new Map<string, TranscriptEntry[]>();
     const main: TranscriptEntry[] = [];
-    const agentCalls = new Set(messages.filter((m) => m.kind === 'tool_use' && isAgentTool(m.content) && m.request_id).map((m) => m.request_id));
+    const calls = messages.filter((m) => m.kind === 'tool_use' && m.request_id);
+    const agentCalls = new Set(calls.filter((m) => isAgentTool(m.content)).map((m) => m.request_id));
+    const loadedCalls = new Set(calls.map((m) => m.request_id));
     for (const m of messages) {
-        // Output whose subagent call isn't in the transcript stays visible
-        // in the conversation rather than disappearing.
         if (m.parent && agentCalls.has(m.parent)) {
             const list = byParent.get(m.parent) ?? [];
             list.push(m);
             byParent.set(m.parent, list);
+        } else if (m.parent && !loadedCalls.has(m.parent)) {
+            // The call is in a part of the transcript that is not loaded (it
+            // is read a page at a time): its steps show when that part does.
+            continue;
         } else {
+            // Output under a call that is not a subagent's stays visible
+            // in the conversation rather than disappearing.
             main.push(m);
         }
     }

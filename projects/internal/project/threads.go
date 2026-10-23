@@ -294,6 +294,15 @@ func (m *Threads) rowLock(threadID string) *sync.Mutex {
 	return l
 }
 
+// publish tells open pages a thread changed, with its project's fresh counts.
+func (m *Threads) publish(t *db.Thread) {
+	ev := Event{Type: EventThread, ProjectID: t.ProjectID, Data: t}
+	if c, err := m.store.ProjectThreadCounts(t.ProjectID); err == nil {
+		ev.Threads = &c
+	}
+	m.hub.Publish(ev)
+}
+
 // update applies fn to the stored thread under its lock, saves and publishes.
 func (m *Threads) update(threadID string, fn func(t *db.Thread)) (*db.Thread, error) {
 	l := m.rowLock(threadID)
@@ -307,7 +316,7 @@ func (m *Threads) update(threadID string, fn func(t *db.Thread)) (*db.Thread, er
 	if err := m.store.SaveThread(t); err != nil {
 		return nil, err
 	}
-	m.hub.Publish(Event{Type: EventThread, ProjectID: t.ProjectID, Data: t})
+	m.publish(t)
 	return t, nil
 }
 
@@ -393,7 +402,7 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 		if err := AddWorktree(ctx, repo.Path, t.Cwd, t.Branch, repo.BaseBranch); err != nil {
 			t.Status, t.WaitReason = db.ThreadWaiting, "Could not create the worktree: "+err.Error()
 			_ = m.store.SaveThread(t)
-			m.hub.Publish(Event{Type: EventThread, ProjectID: p.ID, Data: t})
+			m.publish(t)
 			return t, nil
 		}
 	} else if err := os.MkdirAll(t.Cwd, 0o755); err != nil {
@@ -405,7 +414,7 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 	if err := m.store.SaveThread(t); err != nil {
 		return nil, err
 	}
-	m.hub.Publish(Event{Type: EventThread, ProjectID: p.ID, Data: t})
+	m.publish(t)
 	src := fromThread(p.MainThreadID)
 	if spec.Origin == "user" {
 		src = Source{}

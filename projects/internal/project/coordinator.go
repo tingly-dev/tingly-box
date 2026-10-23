@@ -506,10 +506,13 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, call llm.ToolC
 		if err != nil {
 			return fail(err)
 		}
-		events, _ := c.store.ListThreadEvents(t.ID)
+		// The thread's own conversation: a subagent's steps stay out.
+		events, _, _ := c.store.PageThreadEvents(t.ID, db.EventPage{Limit: 15})
 		var lines []string
-		for i := max(0, len(events)-15); i < len(events); i++ {
-			e := events[i]
+		for _, e := range events {
+			if e.Kind == db.EvUsage || e.Kind == db.EvTask {
+				continue
+			}
 			lines = append(lines, fmt.Sprintf("[%s] %s", e.Kind, clip(e.Content, 300)))
 		}
 		return fmt.Sprintf("thread %s %q status=%s branch=%s base=%s commits_ahead=%d files_changed=%d waiting_on=%q\ntask: %s\nlast report: %s\nrecent transcript:\n%s",

@@ -103,7 +103,7 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 ### 4.4 线程运行
 - 线程用 `agentboot/engine` 跑，和原来 Tingly Box 的 Desk 是同一个会话引擎（Desk 现已并入 Projects，成为工作目录）（`claude` CLI，stream-json，`--resume` 续会话，`PermissionPromptTool: stdio`）。引擎负责进程、转换和后台任务；本仓库只做线程这一层：排队、项目并发上限、线程内审批、每轮汇报。引擎按 Claude 会话 id 认线程（`Thread.SessionID`）。
 - **常驻进程**：每个线程保留一个常驻 `claude` 进程（池上限 10，空闲 10 分钟回收，之后的轮次带 `--resume` 重开）。后台任务（后台命令、子代理）因此能活过发起它的那一轮；任务结束后 Claude 自己接着跑的那一轮，照常定状态、汇报协调者。Stop 只中断当前轮，不杀进程；Resolve 才关掉进程。
-- **事件**：引擎的对话记录条目转成线程事件（`transcript.go`）：主对话的文字、工具调用和结果照旧；子代理内部步骤不进线程视图；思考不显示；后台任务结束时留一行系统事件。
+- **事件**：引擎的对话记录条目转成线程事件（`transcript.go`）：主对话的文字、工具调用和结果照旧；子代理内部步骤带上所属的 Agent 调用（`parent`）一起存下，主对话分页不含它们，打开子代理时再读；思考不显示；后台任务结束时留一行系统事件。
 - 测试用 `agentboot/engine/enginetest` 的脚本替身，另有一个用 agentboot fixture 跑真实 Claude 驱动的用例。
 - **工作区**：项目有仓库 → `git worktree add -b tp/<slug>-<id6> <worktree> <base>`；没有仓库 → 空目录。
 - **上下文注入**（`--append-system-prompt`）：项目名、Goal、Instructions、`MEMORY.md` 内容、记忆/文件库目录说明、线程规则：
@@ -130,6 +130,8 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 
 ### 4.6 实时
 `GET /api/v1/projects/:id/events`（SSE）：`message`（新增 / 更新，协调者流式文本）、`thread`（状态变化）、`thread_event`（线程过程新增）。前端进入项目页订阅，其余数据走 REST。
+
+`GET /api/v1/projects/events`（全部项目，不含流式文本和 `thread_event`）驱动侧栏和文件夹页共用的项目列表。`thread` 事件带上该项目变化后的线程计数（`threads`），列表据此就地更新那一行；`project` 事件就地合并（归档即移除）。只有遇到列表里没有的项目、流重连、标签页回到前台、页面报告变化时才重新拉 `GET /projects`，另有 5 分钟的兜底轮询。事件流不受服务器 `WriteTimeout` 限制。原因、不变量和被否决的做法见 `live-updates.md`。
 
 ### 4.7 Review 与合并（本地版 PR）
 - `GET /projects/:id/threads/:tid/diff`：`git diff <base>...<branch>`（+ 未提交改动提示）。

@@ -144,7 +144,7 @@ func (m *Threads) StartFolderThread(spec FolderThreadSpec) (*db.Thread, error) {
 		logrus.WithError(err).Warn("move folder thread uploads")
 	}
 	_ = m.store.TouchProject(p.ID)
-	m.hub.Publish(Event{Type: EventThread, ProjectID: p.ID, Data: t})
+	m.publish(t)
 	m.enqueue(t.ID, queued{text: task, src: spec.Source, atts: spec.Attachments})
 	return t, nil
 }

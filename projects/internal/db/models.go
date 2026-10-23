@@ -167,8 +167,11 @@ type ThreadEvent struct {
 	RequestID string `gorm:"size:100" json:"request_id,omitempty"`
 	// Parent is the Agent call whose subagent produced this event; empty for
 	// the main conversation.
-	Parent    string    `gorm:"size:100" json:"parent,omitempty"`
+	Parent    string    `gorm:"size:100;index" json:"parent,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+	// UpdatedAt moves on every write (an approval answered changes an old
+	// event), in UTC; a page catches up with ?since= on it.
+	UpdatedAt time.Time `gorm:"index" json:"updated_at"`
 }
 
 // Conversation is a standalone chat, outside any project.
