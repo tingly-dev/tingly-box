@@ -45,8 +45,10 @@ describe('independent connection and client access edits', () => {
         expect(toggleClientSource(original, 'a', false, ['a', 'b'])).toEqual({ ...original, sources: ['b'] });
         expect(original.sources).toEqual(['*']);
     });
-    it('creates sequential IDs that never depend on the display name', () => {
-        expect(nextMCPId('src', [])).toBe('src1');
-        expect(nextMCPId('src', ['src1', 'src3', 'webtools'])).toBe('src2');
+    it('creates random prefixed IDs that are unique, name-independent and fit tool-name limits', () => {
+        const id = nextMCPId('src', ['src-00000000']);
+        expect(id).toMatch(/^src-[0-9a-f]{8}$/);
+        expect(nextMCPId('src', [])).not.toBe(nextMCPId('src', []));
+        expect(`tingly_box_mcp__${id}__a_tool_name_of_thirty_chars`.length).toBeLessThanOrEqual(64);
     });
 });

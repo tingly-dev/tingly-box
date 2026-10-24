@@ -188,7 +188,7 @@ describe('MCP secondary layouts', () => {
         await waitFor(() =>
             expect(mocks.create).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    id: 'src1',
+                    id: expect.stringMatching(/^src-[0-9a-f]{8}$/),
                     name: 'Team docs',
                     endpoint: 'https://team.test/mcp',
                     usage: { client: false, gateway: false },

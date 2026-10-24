@@ -1,11 +1,15 @@
 import { formValueToSource, type MCPClientProfile, type MCPSourceConfig, type MCPSourceFormValue } from './types';
 
-// IDs are addressing, not naming: never derived from user input. Sequential
-// like profile IDs (p1, p2), so they are short and cannot collide with a route.
+// IDs are addressing, not naming: random, never derived from user input, and
+// never reused after a delete (a sequence would re-point old commands and
+// grants at a new object). Kept short because the ID is embedded in the
+// normalized tool name (tingly_box_mcp__<id>__<tool>), which models cap at 64.
 export function nextMCPId(prefix: string, existing: string[]) {
-    let n = 1;
-    while (existing.includes(`${prefix}${n}`)) n++;
-    return `${prefix}${n}`;
+    for (;;) {
+        const bytes = crypto.getRandomValues(new Uint8Array(4));
+        const id = `${prefix}-${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
+        if (!existing.includes(id)) return id;
+    }
 }
 
 // Saving a connection must not restore the usages or policies captured when

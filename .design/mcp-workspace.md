@@ -62,7 +62,11 @@ previous review packages and previews remain available as historical evidence.
 ## Identifiers
 
 Source and client-profile IDs are addressing, not naming. They are never typed
-by the user and never derived from the display name: new ones are sequential
-(`src1`, `cli1`), like profile IDs (`p1`). The name can change freely, and no ID
-can collide with a management route under `/mcp/`, so no reserved-word list is
-needed. Existing IDs are left as they are.
+by the user and never derived from the display name: new ones are random with a
+kind prefix (`src-3f2a9c1e`, `cli-9b41d07a`). A sequence (`src1`) was rejected
+because deleting and re-creating would reuse an ID and silently re-point saved
+commands and grants at a new object. The suffix is 8 hex characters rather than
+a full UUID because the ID is embedded in the normalized tool name
+(`tingly_box_mcp__<id>__<tool>`), which models cap at 64 characters. The prefix
+also keeps IDs from colliding with management routes under `/mcp/`. Existing IDs
+are left as they are.
