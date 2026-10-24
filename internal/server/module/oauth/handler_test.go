@@ -547,3 +547,50 @@ func TestOAuthUserIDFromToken(t *testing.T) {
 		assert.NoError(t, err, "%s: fallback must be a random uuid, got %q", name, got)
 	}
 }
+
+// A fresh Kimi Code login is dual: the OpenAI endpoint is primary and each
+// platform (kimi.com mainland, kimi.ai overseas) gets its own pair of bases.
+func TestHandler_CreateKimiCodeProvider_IsDualPerPlatform(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	for issuer, host := range map[ai.Issuer]string{
+		ai.IssuerKimiCode:     "https://api.kimi.com/coding",
+		ai.IssuerKimiCodeIntl: "https://api.kimi.ai/coding",
+	} {
+		t.Run(string(issuer), func(t *testing.T) {
+			cfg, err := config.NewConfigWithDir(t.TempDir(), config.WithDisableMigration(), config.WithDisableBuiltIn())
+			require.NoError(t, err)
+			oauthManager := oauth.NewManager(oauth.WithConfig(oauth.DefaultConfig()), oauth.WithRegistry(oauth.DefaultRegistry()))
+			handler := NewHandler(oauthManager, cfg)
+
+			sessionID := uuid.New().String()
+			now := time.Now()
+			oauthManager.StoreSession(&oauth.SessionState{
+				SessionID: sessionID,
+				Status:    oauth.SessionStatusPending,
+				Issuer:    issuer,
+				CreatedAt: now,
+				ExpiresAt: now.Add(oauth.DefaultSessionExpiry),
+			})
+
+			id, err := handler.createProviderFromToken(&oauth.Token{
+				AccessToken:  "access",
+				RefreshToken: "refresh",
+				Expiry:       now.Add(time.Hour),
+				Issuer:       issuer,
+			}, issuer, "kimi", sessionID, "device-1")
+			require.NoError(t, err)
+
+			p, err := cfg.GetProviderByUUID(id)
+			require.NoError(t, err)
+			assert.Equal(t, host+"/v1", p.APIBase)
+			assert.Equal(t, protocol.APIStyleOpenAI, p.APIStyle)
+			assert.Equal(t, host+"/v1", p.APIBaseOpenAI)
+			assert.Equal(t, host, p.APIBaseAnthropic)
+			assert.True(t, p.IsDual())
+			base, style := p.ResolveEndpoint(protocol.APIStyleAnthropic)
+			assert.Equal(t, host, base)
+			assert.Equal(t, protocol.APIStyleAnthropic, style)
+		})
+	}
+}
