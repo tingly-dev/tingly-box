@@ -22,6 +22,11 @@ import AgentInstallCard from './AgentInstallCard';
 import { nextMCPId, toggleClientSource } from './workspaceState';
 import type { MCPClientProfile, MCPRoutingSnapshot, MCPRuntimeConfig } from './types';
 
+// The name a client registers this connection under on the user's machine. It is
+// display-derived on purpose (the ID is addressing) and must differ per profile.
+const clientServerName = (profile: MCPClientProfile) =>
+    `tb-${(profile.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || profile.id}`;
+
 export default function MCPClientWorkspace({
     profile,
     config,
@@ -311,6 +316,7 @@ export default function MCPClientWorkspace({
                                   : 'claude'
                         }
                         clientId={profile.id}
+                        serverName={clientServerName(profile)}
                         heading={label('copyClientCommand', 'Copy this command into your client setup')}
                     />
                     <Button

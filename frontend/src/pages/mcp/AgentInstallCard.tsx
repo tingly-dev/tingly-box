@@ -169,6 +169,8 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ filename, runtimeLabel, command }
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export interface AgentInstallCardProps {
+    /** Name the client registers this server under; must differ per profile so installs do not overwrite each other. */
+    serverName?: string;
     /** Initial command format; users can still choose any supported client. */
     defaultRuntime?: AgentRuntime;
     /** Overrides the default runtime options (commands/filenames) */
@@ -189,23 +191,23 @@ export interface AgentInstallCardProps {
 // bound — which is why the endpoint is built from the resolved API base URL
 // (buildDefaultRuntimeOptions) rather than hardcoded, so it stays correct
 // when the server isn't on the default port.
-const buildDefaultRuntimeOptions = (baseUrl: string, clientId: string): RuntimeOptions => {
+const buildDefaultRuntimeOptions = (baseUrl: string, clientId: string, serverName: string): RuntimeOptions => {
     const endpoint = `${baseUrl}/api/v1/mcp/${encodeURIComponent(clientId)}`;
     return {
         claude: {
             label: 'Claude Code',
             filename: 'register-tb.sh',
-            command: `claude mcp add --transport http tb "${endpoint}" --header "Authorization: Bearer $(cat ~/.tingly-box/config.json | jq -r '.user_token')"`,
+            command: `claude mcp add --transport http ${serverName} "${endpoint}" --header "Authorization: Bearer $(cat ~/.tingly-box/config.json | jq -r '.user_token')"`,
         },
         codex: {
             label: 'Codex',
             filename: 'register-tb.sh',
-            command: `codex mcp add tb --url "${endpoint}" --bearer-token-env-var TINGLY_MCP_TOKEN`,
+            command: `codex mcp add ${serverName} --url "${endpoint}" --bearer-token-env-var TINGLY_MCP_TOKEN`,
         },
         opencode: {
             label: 'OpenCode',
             filename: '~/.config/opencode/opencode.json',
-            command: `"mcp": {\n  "${endpoint}": {\n    "type": "remote",\n    "url": "${endpoint}",\n    "oauth": false,\n    "headers": {\n      "Authorization": "Bearer {env:MY_API_KEY}"\n    }\n  }\n}`,
+            command: `"mcp": {\n  "${serverName}": {\n    "type": "remote",\n    "url": "${endpoint}",\n    "oauth": false,\n    "headers": {\n      "Authorization": "Bearer {env:MY_API_KEY}"\n    }\n  }\n}`,
         },
     };
 };
@@ -219,6 +221,7 @@ export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
     defaultRuntime = 'claude',
     runtimeOptions,
     clientId = 'tb',
+    serverName = 'tb',
     sectionNumber = '01',
     heading,
     subtitle,
@@ -241,7 +244,7 @@ export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
         };
     }, [runtimeOptions]);
 
-    const resolvedOptions = runtimeOptions ?? buildDefaultRuntimeOptions(baseUrl, clientId);
+    const resolvedOptions = runtimeOptions ?? buildDefaultRuntimeOptions(baseUrl, clientId, serverName);
     const config = resolvedOptions[runtime];
 
     return (
