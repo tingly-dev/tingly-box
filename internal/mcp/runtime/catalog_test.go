@@ -137,3 +137,15 @@ func TestStdioCatalogResultAndHotUpdate(t *testing.T) {
 	_, err = r.CallTool(context.Background(), status.Tools[0].NormalizedName, `{}`)
 	require.Error(t, err)
 }
+
+func TestGatewayInjectionDoesNotRediscoverEveryRequest(t *testing.T) {
+	remote := catalogRemote(t, "http", "gw", "")
+	cfg := &typ.MCPRuntimeConfig{RequestTimeout: 1, Sources: []typ.MCPSourceConfig{{ID: "gw", Transport: "http", Endpoint: remote.URL, Usage: &typ.MCPToolUsage{Gateway: true}}}}
+	r := NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })
+	defer r.Close()
+	require.Len(t, r.ListServerToolsForInjection(context.Background()), 1)
+	remote.Close() // an unreachable upstream must not be probed again within the TTL
+	require.Len(t, r.ListServerToolsForInjection(context.Background()), 1)
+	r.Reconcile(context.Background())
+	require.Empty(t, r.ListServerToolsForInjection(context.Background()), "config changes invalidate the cache")
+}

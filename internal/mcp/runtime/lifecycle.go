@@ -48,6 +48,7 @@ func (r *Runtime) detachSource(ctx context.Context, id string) {
 	r.sc.remove(id)
 	r.enabledNamesMu.Lock()
 	r.enabledNamesCache = nil
+	r.remoteToolsCache = nil
 	r.enabledNamesMu.Unlock()
 }
 
@@ -122,6 +123,7 @@ func (r *Runtime) Reconcile(ctx context.Context) {
 	}
 	r.enabledNamesMu.Lock()
 	r.enabledNamesCache = nil
+	r.remoteToolsCache = nil
 	r.enabledNamesMu.Unlock()
 }
 

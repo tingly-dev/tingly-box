@@ -39,6 +39,8 @@ type Runtime struct {
 	enabledNamesCache   map[string]struct{}
 	enabledNamesExpires time.Time
 	enabledNamesMu      sync.RWMutex
+	remoteToolsCache    []openai.ChatCompletionToolUnionParam
+	remoteToolsExpires  time.Time
 
 	// envRefWarnedOnce ensures unresolved environment reference warnings
 	// are only logged once per runtime instance to avoid log spam.
@@ -216,6 +218,20 @@ func (r *Runtime) ListServerToolsForInjection(ctx context.Context) []openai.Chat
 			out = append(out, openai.ChatCompletionFunctionTool(def))
 		}
 	}
+	return append(out, r.remoteGatewayTools(ctx)...)
+}
+
+// remoteGatewayTools discovers gateway-eligible tools from external sources.
+// Discovery is a network round trip per source, so the result is cached.
+func (r *Runtime) remoteGatewayTools(ctx context.Context) []openai.ChatCompletionToolUnionParam {
+	r.enabledNamesMu.RLock()
+	if r.remoteToolsCache != nil && time.Now().Before(r.remoteToolsExpires) {
+		cached := r.remoteToolsCache
+		r.enabledNamesMu.RUnlock()
+		return cached
+	}
+	r.enabledNamesMu.RUnlock()
+	remote := make([]openai.ChatCompletionToolUnionParam, 0)
 	for _, status := range r.Catalog(ctx, "gateway") {
 		for _, tool := range status.Tools {
 			if !tool.Enabled || !tool.Usage.Gateway || tool.Implementation == typ.ToolImplementationVirtual {
@@ -229,10 +245,14 @@ func (r *Runtime) ListServerToolsForInjection(ctx context.Context) []openai.Chat
 			if tool.Description != "" {
 				def.Description = param.NewOpt(tool.Description)
 			}
-			out = append(out, openai.ChatCompletionFunctionTool(def))
+			remote = append(remote, openai.ChatCompletionFunctionTool(def))
 		}
 	}
-	return out
+	r.enabledNamesMu.Lock()
+	r.remoteToolsCache = remote
+	r.remoteToolsExpires = time.Now().Add(remoteToolsCacheTTL)
+	r.enabledNamesMu.Unlock()
+	return remote
 }
 
 func (r *Runtime) isVirtualServerToolInjectable(vt coretool.VirtualTool) bool {
@@ -610,6 +630,10 @@ func (r *Runtime) HasServerTools() bool {
 }
 
 const enabledNamesCacheTTL = 5 * time.Second
+
+// remoteToolsCacheTTL bounds how often model requests trigger upstream
+// tools/list round trips; config changes invalidate it immediately.
+const remoteToolsCacheTTL = 30 * time.Second
 
 func (r *Runtime) ListClientVisibleMCPToolNames(ctx context.Context) map[string]struct{} {
 	out := make(map[string]struct{})
