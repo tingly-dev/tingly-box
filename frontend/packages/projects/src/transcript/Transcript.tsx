@@ -76,7 +76,7 @@ const UserBubble = ({message}: {message: TranscriptEntry}) => {
                 </Box>
             )}
             {message.pending && (
-                <Typography variant="caption" sx={{color: 'text.secondary', mt: 0.25}}>
+                <Typography sx={{color: 'text.secondary', fontSize: fontSizes.sm, mt: 0.25}}>
                     {t('projects.transcript.readsNext', {defaultValue: 'Claude will read this at its next step'})}
                 </Typography>
             )}

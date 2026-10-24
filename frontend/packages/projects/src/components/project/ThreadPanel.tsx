@@ -8,10 +8,11 @@ import type { Attachment, BackgroundTask, Subagent, Thread, ThreadEvent } from '
 import { buildTranscript, SubagentFocus, Trajectory, Transcript, type Respond, type TrajectoryAnchor } from '../../transcript';
 import type { TranscriptSubagents } from '../../hooks/useTranscript';
 import { ThreadComposer, type ThreadComposerHandle } from '../ThreadComposer';
+import { HeldMessages, heldMessages } from './HeldMessages';
 import { AttachmentChips, uploadAttachments, type AttachOwner } from '../attachments';
 import { CodeBlock, Markdown } from '../Markdown';
 import { ConfirmDialog, CopyIconButton } from '@tingly/ui';
-import { ArrowBack, Close, DiffIcon, Merge, MoreVert, Pencil, Robot, Stream, Terminal } from '../icons';
+import { ArrowBack, DiffIcon, Merge, MoreVert, Robot, Stream, Terminal } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { formatTokens } from '../../utils/format';
 import { DiffDialog } from './DiffDialog';
@@ -154,14 +155,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     const ops = useMemo(() => threadOps(threadId), [threadId]);
     const composer = useRef<ThreadComposerHandle>(null);
     // Messages held for after the running turn.
-    const held = useMemo(() => (events ?? []).flatMap((e) => {
-        if (e.kind !== 'queued') return [];
-        try {
-            return (JSON.parse(e.payload ?? '{}') as { state?: string }).state === 'held' ? [e] : [];
-        } catch {
-            return [];
-        }
-    }), [events]);
+    const held = useMemo(() => heldMessages(events), [events]);
     // Taking a held message back puts its text in the box to edit; the draft
     // keeps whatever was typed meanwhile.
     const takeBack = async (ids: string[], intoDraft: boolean) => {
@@ -424,23 +418,8 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         </Box>
                     </Alert>
                 )}
-                {held.length > 0 && (
-                    <Box sx={{ mb: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }} aria-label={t('queue.heading')}>
-                        <Typography variant="caption" color="text.secondary">{t('queue.heading')}</Typography>
-                        {held.map((h) => (
-                            <Box key={h.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, pl: 1.25, pr: 0.5, py: 0.25, borderRadius: 1, border: 1, borderColor: 'divider', borderStyle: 'dashed' }}>
-                                <Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 0 }} title={h.content}>{h.content || t('queue.attachmentsOnly')}</Typography>
-                                <Tooltip title={t('queue.edit')}>
-                                    <IconButton size="small" onClick={() => void takeBack([h.id], true)} aria-label={t('queue.edit')}><Pencil sx={{ fontSize: 16 }} /></IconButton>
-                                </Tooltip>
-                                <Tooltip title={t('queue.remove')}>
-                                    <IconButton size="small" onClick={() => void takeBack([h.id], false)} aria-label={t('queue.remove')}><Close sx={{ fontSize: 16 }} /></IconButton>
-                                </Tooltip>
-                            </Box>
-                        ))}
-                    </Box>
-                )}
                 <ComposerStrip thread={thread} folder={session} autoAt={pendingAutoAt} onAutoAnswer={(mode) => { void act(() => ops.setAutoAnswer(mode)).then((ok) => ok && onRefresh?.()); }} />
+                <HeldMessages held={held} onEdit={(h) => void takeBack([h.id], true)} onRemove={(h) => void takeBack([h.id], false)} />
                 <ThreadComposer
                     ref={composer}
                     draftKey={threadId}

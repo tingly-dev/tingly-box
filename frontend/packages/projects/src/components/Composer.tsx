@@ -245,10 +245,10 @@ export function Composer({
             </Tooltip>
             <Menu anchorEl={modeMenu} open={!!modeMenu} onClose={() => setModeMenu(null)} anchorOrigin={{ vertical: 'top', horizontal: 'right' }} transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
                 <MenuItem onClick={() => { setModeMenu(null); void submit('queue'); }}>
-                    <ListItemText primary={t('composer.sendQueue')} secondary={t('composer.sendQueueHint')} />
+                    <ListItemText primary={t('composer.sendQueue')} secondary={t('composer.sendQueueHint')} slotProps={{ primary: { sx: { fontSize: fontSizes.base } }, secondary: { sx: { fontSize: fontSizes.sm } } }} />
                 </MenuItem>
                 <MenuItem onClick={() => { setModeMenu(null); void submit('stop_and_send'); }}>
-                    <ListItemText primary={t('composer.sendStop')} secondary={t('composer.sendStopHint')} />
+                    <ListItemText primary={t('composer.sendStop')} secondary={t('composer.sendStopHint')} slotProps={{ primary: { sx: { fontSize: fontSizes.base } }, secondary: { sx: { fontSize: fontSizes.sm } } }} />
                 </MenuItem>
             </Menu>
         </>
