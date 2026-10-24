@@ -25,7 +25,19 @@ func invalid(format string, args ...any) error { return &validationError{fmt.Spr
 var validID = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 var errMissing = errors.New("MCP entry not found")
 
-func validateConfig(cfg *typ.MCPRuntimeConfig) error {
+// reservedIDs are path segments owned by management routes under /mcp/; a
+// source or client profile with one of these IDs would be shadowed by them.
+var reservedIDs = map[string]bool{
+	"builtin": true, "sources": true, "catalog": true, "config": true, "clients": true, "client": true,
+	"install": true, "execute": true, "tools": true, "client-profiles": true, "routing": true,
+}
+
+func validateConfig(cfg *typ.MCPRuntimeConfig) error { return validateConfigChange(nil, cfg) }
+
+// validateConfigChange validates cfg. Environment references are only checked
+// for sources that differ from prev, so an unrelated edit is not blocked by a
+// pre-existing source whose variable is missing.
+func validateConfigChange(prev, cfg *typ.MCPRuntimeConfig) error {
 	if cfg.RequestTimeout < 0 || cfg.RequestTimeout > 600 {
 		return invalid("request_timeout must be between 0 and 600 seconds")
 	}
@@ -39,7 +51,7 @@ func validateConfig(cfg *typ.MCPRuntimeConfig) error {
 		if s.Origin != "" && s.Origin != "builtin" && s.Origin != "external" {
 			return invalid("unsupported source origin: %s", s.Origin)
 		}
-		if !validID.MatchString(s.ID) || strings.Contains(s.ID, "__") || s.ID == "builtin" {
+		if !validID.MatchString(s.ID) || strings.Contains(s.ID, "__") || reservedIDs[s.ID] {
 			return invalid("invalid source ID: %s", s.ID)
 		}
 		if seen[s.ID] {
@@ -84,7 +96,21 @@ func validateConfig(cfg *typ.MCPRuntimeConfig) error {
 			}
 		}
 	}
-	if issues := mcpruntime.ValidateEnabledMCPSourceEnvRefs(cfg.Sources); len(issues) > 0 {
+	checked := cfg.Sources
+	if prev != nil {
+		before := map[string][]byte{}
+		for _, old := range prev.Sources {
+			raw, _ := json.Marshal(old)
+			before[old.ID] = raw
+		}
+		checked = nil
+		for _, source := range cfg.Sources {
+			if raw, _ := json.Marshal(source); string(raw) != string(before[source.ID]) {
+				checked = append(checked, source)
+			}
+		}
+	}
+	if issues := mcpruntime.ValidateEnabledMCPSourceEnvRefs(checked); len(issues) > 0 {
 		return invalid("source %s: missing environment variable %s for %s", issues[0].SourceID, issues[0].VarName, issues[0].FieldPath)
 	}
 	seen = map[string]bool{}
@@ -96,7 +122,7 @@ func validateConfig(cfg *typ.MCPRuntimeConfig) error {
 		if p.Tools == nil {
 			p.Tools = []string{}
 		}
-		if !validID.MatchString(p.ID) || strings.Contains(p.ID, "__") {
+		if !validID.MatchString(p.ID) || strings.Contains(p.ID, "__") || reservedIDs[p.ID] {
 			return invalid("invalid client profile ID: %s", p.ID)
 		}
 		if seen[p.ID] {
@@ -142,10 +168,13 @@ func (h *Handler) mutate(c *gin.Context, change func(*typ.MCPRuntimeConfig) erro
 		return
 	}
 	next, err := h.cfg.UpdateMCPRuntimeConfig(func(cfg *typ.MCPRuntimeConfig) error {
+		var prev typ.MCPRuntimeConfig
+		raw, _ := json.Marshal(cfg)
+		_ = json.Unmarshal(raw, &prev)
 		if err := change(cfg); err != nil {
 			return err
 		}
-		return validateConfig(cfg)
+		return validateConfigChange(&prev, cfg)
 	})
 	if err != nil {
 		code := http.StatusInternalServerError
