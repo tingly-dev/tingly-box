@@ -142,13 +142,7 @@ func TestDownstreamBridgePreservesSchemasResultsAndRevokesAccess(t *testing.T) {
 	managementRequest(t, r, "POST", "/transport/typo", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}`, 404)
 }
 
-func TestValidateConfigReservesRouteWordsAndScopesEnvChecks(t *testing.T) {
-	for _, id := range []string{"sources", "catalog", "routing"} {
-		err := validateConfig(&typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{{ID: id, Transport: "http", Endpoint: "http://127.0.0.1:1"}}})
-		require.Error(t, err, id)
-		err = validateConfig(&typ.MCPRuntimeConfig{ClientProfiles: []typ.MCPClientProfile{{ID: id}}})
-		require.Error(t, err, id)
-	}
+func TestValidateConfigScopesEnvChecksToChangedSources(t *testing.T) {
 	broken := typ.MCPSourceConfig{ID: "broken", Transport: "http", Endpoint: "http://127.0.0.1:1", Headers: map[string]string{"Authorization": "${TB_TEST_MISSING_VAR_XYZ}"}}
 	prev := &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{broken}}
 	next := &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{broken}, ClientProfiles: []typ.MCPClientProfile{{ID: "reader", Sources: []string{"broken"}, Tools: []string{}}}}

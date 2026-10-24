@@ -25,13 +25,6 @@ func invalid(format string, args ...any) error { return &validationError{fmt.Spr
 var validID = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 var errMissing = errors.New("MCP entry not found")
 
-// reservedIDs are path segments owned by management routes under /mcp/; a
-// source or client profile with one of these IDs would be shadowed by them.
-var reservedIDs = map[string]bool{
-	"builtin": true, "sources": true, "catalog": true, "config": true, "clients": true, "client": true,
-	"install": true, "execute": true, "tools": true, "client-profiles": true, "routing": true,
-}
-
 func validateConfig(cfg *typ.MCPRuntimeConfig) error { return validateConfigChange(nil, cfg) }
 
 // validateConfigChange validates cfg. Environment references are only checked
@@ -51,7 +44,7 @@ func validateConfigChange(prev, cfg *typ.MCPRuntimeConfig) error {
 		if s.Origin != "" && s.Origin != "builtin" && s.Origin != "external" {
 			return invalid("unsupported source origin: %s", s.Origin)
 		}
-		if !validID.MatchString(s.ID) || strings.Contains(s.ID, "__") || reservedIDs[s.ID] {
+		if !validID.MatchString(s.ID) || strings.Contains(s.ID, "__") || s.ID == "builtin" {
 			return invalid("invalid source ID: %s", s.ID)
 		}
 		if seen[s.ID] {
@@ -122,7 +115,7 @@ func validateConfigChange(prev, cfg *typ.MCPRuntimeConfig) error {
 		if p.Tools == nil {
 			p.Tools = []string{}
 		}
-		if !validID.MatchString(p.ID) || strings.Contains(p.ID, "__") || reservedIDs[p.ID] {
+		if !validID.MatchString(p.ID) || strings.Contains(p.ID, "__") {
 			return invalid("invalid client profile ID: %s", p.ID)
 		}
 		if seen[p.ID] {
