@@ -856,7 +856,8 @@ export default {
       "saving": "Сохранение…",
       "save": "Сохранить",
       "experimental": "Экспериментальная функция",
-      "closeModel": "Закрыть"
+      "closeModel": "Закрыть",
+      "noAdditionalTools": "Других доступных инструментов для добавления нет."
     }
   }
 };

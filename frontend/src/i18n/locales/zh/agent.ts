@@ -826,7 +826,8 @@ export default {
       "saving": "正在保存…",
       "save": "保存",
       "experimental": "实验性功能",
-      "closeModel": "关闭"
+      "closeModel": "关闭",
+      "noAdditionalTools": "没有其他可用工具可加入。"
     }
   }
 };

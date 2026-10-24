@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MCPRegisteredServers from './MCPRegisteredServers';
@@ -31,8 +31,22 @@ vi.mock('./MCPRoutingPanel', () => ({
     default: ({ focusSource }: { focusSource?: string }) => <div>Routing panel {focusSource}</div>,
 }));
 vi.mock('./MCPToolsPanel', () => ({
-    default: ({ usage, assetsOnly }: { usage: string; assetsOnly?: boolean }) => (
-        <div>Capabilities panel: {assetsOnly ? 'assets' : usage}</div>
+    default: ({
+        mode,
+        routes,
+        onConfigureSource,
+    }: {
+        mode: string;
+        routes: { id: string; state: string; tools: unknown[] }[];
+        onConfigureSource: (id: string) => void;
+    }) => (
+        <div>
+            Capabilities panel: {mode === 'asset' ? 'assets' : mode}
+            <div data-testid="catalog-snapshot">{routes.map((r) => `${r.state}:${r.tools.length}`).join(',')}</div>
+            {mode === 'asset' && routes.some((r) => r.id === 'remote') && (
+                <button onClick={() => onConfigureSource('remote')}>Configure tools</button>
+            )}
+        </div>
     ),
 }));
 vi.mock('react-i18next', () => ({
@@ -125,6 +139,7 @@ describe('MCP secondary layouts', () => {
         expect(await screen.findByRole('heading', { name: 'Tool', level: 1 })).toBeInTheDocument();
         expect(screen.getByText('Capabilities panel: assets')).toBeInTheDocument();
         expect(screen.getByRole('region', { name: 'Connected tools' })).toBeInTheDocument();
+        expect(screen.getAllByRole('button', { name: 'Connect tools' })).toHaveLength(1);
         expect(screen.queryByRole('button', { name: 'Access & setup' })).toBeNull();
         expect(screen.queryByText('Codex work')).toBeNull();
         expect(screen.queryByRole('button', { name: /Usage relationships/ })).toBeNull();
@@ -255,5 +270,38 @@ describe('MCP secondary layouts', () => {
         expect(await screen.findByText('0 tools available through MCP · Remote docs')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Access & setup' })).toBeInTheDocument();
         expect(mocks.saveClient).not.toHaveBeenCalled();
+    });
+    it('ignores an old discovery response after a shared source change, keeping catalog and graph on the newer snapshot', async () => {
+        let completeOld!: (value: unknown) => void;
+        const oldResponse = new Promise((resolve) => {
+            completeOld = resolve;
+        });
+        mocks.routing
+            .mockReturnValueOnce(oldResponse)
+            .mockResolvedValueOnce({
+                success: true,
+                enabled: true,
+                routing: { sources: [{ ...routeSource, state: 'disabled', tools: [] }], clients: [], server_tools: [] },
+            });
+        mocks.patch.mockResolvedValue({
+            success: true,
+            enabled: true,
+            config: { ...config, sources: [{ ...source, enabled: false }] },
+        });
+        open('/mcp/tools?source=remote');
+        fireEvent.click(
+            await screen.findByRole('switch', { name: 'Enable shared connection (affects MCP and Server Tool)' })
+        );
+        await waitFor(() => expect(screen.getByTestId('catalog-snapshot')).toHaveTextContent('disabled:0'));
+        await act(async () => {
+            completeOld({
+                success: true,
+                enabled: true,
+                routing: { sources: [routeSource], clients: [], server_tools: [routeSource] },
+            });
+            await oldResponse;
+        });
+        await waitFor(() => expect(screen.getByTestId('catalog-snapshot')).toHaveTextContent('disabled:0'));
+        expect(mocks.patch).toHaveBeenCalledWith('remote', { id: 'remote', enabled: false });
     });
 });
