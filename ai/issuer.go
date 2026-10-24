@@ -28,14 +28,27 @@ func ZCodeEndpoints(issuer Issuer) (anthropicBase, openaiBase string) {
 	}
 }
 
+// Kimi Code serves one gateway behind both protocols: the OpenAI-compatible
+// base ends in /coding/v1, the Anthropic-compatible base is /coding (the
+// Anthropic SDK appends /v1/messages itself). Per Kimi Code's model
+// configuration docs (www.kimi.com/code/docs/en/kimi-code/models.html).
+const (
+	KimiCodeAnthropicBase = "https://api.kimi.com/coding"
+	KimiCodeOpenAIBase    = "https://api.kimi.com/coding/v1"
+)
+
 // DualEndpoints returns the (anthropic, openai) bases of an OAuth issuer whose
-// credential is accepted natively on both protocols. Both are empty for every
+// credential is served natively on both protocols. Both are empty for every
 // issuer bound to a single endpoint. This is the one table behind
 // IssuerSupportsDual and the OAuth create paths (web and CLI): an issuer joins
-// by getting a row here once its native second endpoint is verified to accept
-// the OAuth bearer.
+// by getting a row here once its second native endpoint is verified.
 func DualEndpoints(issuer Issuer) (anthropicBase, openaiBase string) {
-	return ZCodeEndpoints(issuer)
+	switch issuer {
+	case IssuerKimiCode:
+		return KimiCodeAnthropicBase, KimiCodeOpenAIBase
+	default:
+		return ZCodeEndpoints(issuer)
+	}
 }
 
 // WorkBuddySite is everything that differs between the two WorkBuddy account

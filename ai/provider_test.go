@@ -717,10 +717,10 @@ func TestProvider_IsDual(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "both dual URLs set, non-ZCode oauth issuer",
+			name: "both dual URLs set, single-endpoint oauth issuer",
 			provider: &Provider{
 				AuthType:         AuthTypeOAuth,
-				OAuthDetail:      &OAuthDetail{Issuer: IssuerKimiCode},
+				OAuthDetail:      &OAuthDetail{Issuer: IssuerCodex},
 				APIBaseOpenAI:    "https://oai.example.com/v1",
 				APIBaseAnthropic: "https://ant.example.com",
 			},
@@ -763,7 +763,7 @@ func findSubstring(s, substr string) bool {
 }
 
 func TestIssuerSupportsDualFollowsDualEndpoints(t *testing.T) {
-	for _, issuer := range []Issuer{IssuerZCode, IssuerZCodeCN} {
+	for _, issuer := range []Issuer{IssuerZCode, IssuerZCodeCN, IssuerKimiCode} {
 		if !IssuerSupportsDual(issuer) {
 			t.Errorf("%s should support dual", issuer)
 		}

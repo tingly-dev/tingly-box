@@ -161,6 +161,10 @@ func (p *ClientPool) GetAnthropicClient(ctx context.Context, provider *typ.Provi
 	case provider.AuthType == typ.AuthTypeGCPVertex:
 		// Claude on GCP Vertex AI (service-account OAuth2).
 		client, err = NewVertexAnthropicClient(provider, model, sessionID)
+	case provider.IsOAuth() && provider.OAuthDetail != nil && provider.OAuthDetail.GetIssuer() == ai.IssuerKimiCode:
+		// Anthropic side of a dual Kimi Code provider (the kimi-cli headers
+		// the OpenAI side sends are required here too).
+		client, err = NewKimiAnthropicClient(provider, model, sessionID)
 	case IsOpenCodeZen(provider.APIBase):
 		// OpenCode Zen's Anthropic-style base needs the same vendor session
 		// header as its OpenAI-style one (#1713).

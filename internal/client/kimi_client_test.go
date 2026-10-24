@@ -154,3 +154,10 @@ func TestKimiRoundTripperConstruction(t *testing.T) {
 		})
 	}
 }
+
+func TestNewKimiAnthropicClientRejectsOtherIssuers(t *testing.T) {
+	_, err := NewKimiAnthropicClient(&typ.Provider{AuthType: typ.AuthTypeOAuth, OAuthDetail: &typ.OAuthDetail{ProviderType: "zcode"}}, "m", typ.SessionID{})
+	if err == nil {
+		t.Fatal("expected an error for a non-Kimi issuer")
+	}
+}
