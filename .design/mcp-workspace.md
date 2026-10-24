@@ -58,3 +58,11 @@ refresh after a source-panel edit, real SDK grants/calls/revocation, Advisor con
 failed/disabled/empty states, legacy links and mobile navigation. Keep all screenshot
 stages, including failed captures, with checksums. Archive this round separately;
 previous review packages and previews remain available as historical evidence.
+
+## Identifiers
+
+Source and client-profile IDs are addressing, not naming. They are never typed
+by the user and never derived from the display name: new ones are sequential
+(`src1`, `cli1`), like profile IDs (`p1`). The name can change freely, and no ID
+can collide with a management route under `/mcp/`, so no reserved-word list is
+needed. Existing IDs are left as they are.

@@ -21,7 +21,6 @@ interface MCPSourceEditorProps {
     title?: string;
     value: MCPSourceFormValue;
     onChange: (next: MCPSourceFormValue) => void;
-    lockId?: boolean;
     hideTools?: boolean;
     compact?: boolean;
     hideUsage?: boolean;
@@ -32,7 +31,6 @@ interface MCPSourceEditorProps {
 export default function MCPSourceEditor({
     value,
     onChange,
-    lockId = false,
     hideTools = false,
     compact = false,
     hideUsage = false,
@@ -90,20 +88,6 @@ export default function MCPSourceEditor({
     );
     return (
         <Stack spacing={2.5}>
-            {!compact && (
-                <>
-                    <TextField
-                        label={label('sourceId', 'Server ID')}
-                        value={value.id}
-                        disabled={lockId}
-                        onChange={(e) => set({ id: e.target.value })}
-                        helperText={label(
-                            'idHint',
-                            'Use letters, numbers, underscores or hyphens. This ID remains stable after creation.'
-                        )}
-                    />
-                </>
-            )}
             <ToggleButtonGroup
                 exclusive
                 fullWidth
@@ -179,20 +163,6 @@ export default function MCPSourceEditor({
                 </AccordionSummary>
                 <AccordionDetails>
                     <Stack spacing={2}>
-                        {compact && (
-                            <>
-                                <TextField
-                                    label={label('sourceId', 'Server ID')}
-                                    value={value.id}
-                                    disabled={lockId}
-                                    onChange={(e) => set({ id: e.target.value })}
-                                    helperText={label(
-                                        'idHint',
-                                        'Use letters, numbers, underscores or hyphens. This ID remains stable after creation.'
-                                    )}
-                                />
-                            </>
-                        )}
                         {compact &&
                             value.transport !== 'stdio' &&
                             pairs('headers', label('headers', 'Authentication headers'))}

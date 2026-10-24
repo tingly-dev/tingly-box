@@ -156,7 +156,7 @@ export default function MCPSourceWorkspace({
                                     value={form.name}
                                     onChange={(e) => setForm({ ...form, name: e.target.value })}
                                 />
-                                <MCPSourceEditor value={form} onChange={setForm} lockId compact hideUsage hideEnabled />
+                                <MCPSourceEditor value={form} onChange={setForm} compact hideUsage hideEnabled />
                                 <Button
                                     variant="contained"
                                     disabled={busy}

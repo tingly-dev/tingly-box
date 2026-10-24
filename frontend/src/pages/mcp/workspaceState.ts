@@ -1,16 +1,11 @@
 import { formValueToSource, type MCPClientProfile, type MCPSourceConfig, type MCPSourceFormValue } from './types';
 
-export function nextMCPId(name: string, existing: string[], fallback: string) {
-    let base =
-        name
-            .toLowerCase()
-            .replace(/[^a-z0-9_-]+/g, '-')
-            .replace(/^-+|-+$/g, '') || fallback;
-    if (!/^[a-z_]/.test(base)) base = `${fallback}-${base}`;
-    base = base.replace(/__+/g, '_');
-    let id = base;
-    for (let suffix = 2; existing.includes(id); suffix++) id = `${base}-${suffix}`;
-    return id;
+// IDs are addressing, not naming: never derived from user input. Sequential
+// like profile IDs (p1, p2), so they are short and cannot collide with a route.
+export function nextMCPId(prefix: string, existing: string[]) {
+    let n = 1;
+    while (existing.includes(`${prefix}${n}`)) n++;
+    return `${prefix}${n}`;
 }
 
 // Saving a connection must not restore the usages or policies captured when

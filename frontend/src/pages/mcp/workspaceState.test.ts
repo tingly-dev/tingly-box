@@ -45,9 +45,8 @@ describe('independent connection and client access edits', () => {
         expect(toggleClientSource(original, 'a', false, ['a', 'b'])).toEqual({ ...original, sources: ['b'] });
         expect(original.sources).toEqual(['*']);
     });
-    it('creates valid unique IDs for names in different scripts and names containing reserved separators', () => {
-        expect(nextMCPId('Team docs', ['team-docs'], 'source')).toBe('team-docs-2');
-        expect(nextMCPId('知识库', ['source'], 'source')).toBe('source-2');
-        expect(nextMCPId('1 Team__Docs', [], 'source')).toBe('source-1-team_docs');
+    it('creates sequential IDs that never depend on the display name', () => {
+        expect(nextMCPId('src', [])).toBe('src1');
+        expect(nextMCPId('src', ['src1', 'src3', 'webtools'])).toBe('src2');
     });
 });

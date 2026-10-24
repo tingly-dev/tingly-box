@@ -163,7 +163,6 @@ describe('MCP secondary layouts', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Save connection' }));
         expect(await screen.findByText('Save failed')).toBeInTheDocument();
         expect(endpoint).toHaveValue('https://changed.test/mcp');
-        expect(screen.getByLabelText('Server ID')).toBeDisabled();
         expect(mocks.patch.mock.calls[0][1]).toMatchObject({
             id: 'remote',
             endpoint: 'https://changed.test/mcp',
@@ -189,7 +188,7 @@ describe('MCP secondary layouts', () => {
         await waitFor(() =>
             expect(mocks.create).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    id: 'team-docs',
+                    id: 'src1',
                     name: 'Team docs',
                     endpoint: 'https://team.test/mcp',
                     usage: { client: false, gateway: false },

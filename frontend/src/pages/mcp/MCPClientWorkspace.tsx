@@ -48,7 +48,7 @@ export default function MCPClientWorkspace({
     const existingIds = (config.client_profiles || []).map((p) => p.id);
     const [draft, setDraft] = useState<MCPClientProfile>(() => {
         const initial = profile || {
-            id: nextMCPId('Codex', existingIds, 'client'),
+            id: nextMCPId('cli', existingIds),
             name: 'Codex',
             enabled: true,
             sources: [],
@@ -68,7 +68,6 @@ export default function MCPClientWorkspace({
     const [error, setError] = useState('');
     const [probe, setProbe] = useState<{ success: boolean; tools: string[]; error?: string } | null>(null);
     const [confirmDelete, setConfirmDelete] = useState(false);
-    const [customId, setCustomId] = useState(false);
     const sources = (config.sources || []).filter((source) => source.transport !== 'advisor' && !source.advisor);
     const selected = (draft.sources || []).includes('*')
         ? sources
@@ -134,14 +133,7 @@ export default function MCPClientWorkspace({
                             disabled={busy}
                             value={draft.name || ''}
                             onChange={(e) =>
-                                setDraft({
-                                    ...draft,
-                                    name: e.target.value,
-                                    id:
-                                        !profile && !customId
-                                            ? nextMCPId(e.target.value, existingIds, 'client')
-                                            : draft.id,
-                                })
+                                setDraft({ ...draft, name: e.target.value })
                             }
                         />
                         <Typography variant="body2" color="text.secondary">
@@ -257,26 +249,6 @@ export default function MCPClientWorkspace({
                             }
                             label={label('clientEnabled', 'Enable this client connection')}
                         />
-                        <Box component="details">
-                            <Typography component="summary" variant="body2" sx={{ cursor: 'pointer' }}>
-                                {label('advancedIdentifier', 'Advanced: connection identifier')}
-                            </Typography>
-                            <TextField
-                                sx={{ mt: 1 }}
-                                fullWidth
-                                label={label('clientId', 'Connection identifier')}
-                                value={draft.id}
-                                disabled={busy || !!profile}
-                                onChange={(e) => {
-                                    setCustomId(true);
-                                    setDraft({ ...draft, id: e.target.value });
-                                }}
-                                helperText={label(
-                                    'identifierHint',
-                                    'Generated automatically. Existing identifiers stay fixed so saved commands keep working.'
-                                )}
-                            />
-                        </Box>
                         {!profile && !config.client_profiles_configured && !(config.client_profiles || []).length && (
                             <Alert severity="info">
                                 {label(

@@ -75,7 +75,6 @@ export default function MCPRegisteredServers() {
     const [sheet, setSheet] = useState<Sheet>(null);
     const [adding, setAdding] = useState(false);
     const [form, setForm] = useState(defaultMCPSourceFormValue);
-    const [customSourceId, setCustomSourceId] = useState(false);
     const [connectionError, setConnectionError] = useState('');
     const [showRoutes, setShowRoutes] = useState(false);
     const relationshipsRef = useRef<HTMLDivElement>(null);
@@ -255,14 +254,12 @@ export default function MCPRegisteredServers() {
         setForm({
             ...defaultMCPSourceFormValue(),
             id: nextMCPId(
-                '',
-                sources.map((s) => s.id!),
-                'tool-service'
+                'src',
+                sources.map((s) => s.id!)
             ),
             transport: 'http',
             usage: { client: false, gateway: false },
         });
-        setCustomSourceId(false);
         setConnectionError('');
         setAdding(true);
     };
@@ -694,17 +691,7 @@ export default function MCPRegisteredServers() {
                             value={form.name}
                             required
                             onChange={(e) =>
-                                setForm({
-                                    ...form,
-                                    name: e.target.value,
-                                    id: customSourceId
-                                        ? form.id
-                                        : nextMCPId(
-                                              e.target.value,
-                                              sources.map((s) => s.id!),
-                                              'tool-service'
-                                          ),
-                                })
+                                setForm({ ...form, name: e.target.value })
                             }
                             placeholder={label('connectionNamePlaceholder', 'For example: Company knowledge base')}
                         />
@@ -714,10 +701,7 @@ export default function MCPRegisteredServers() {
                             hideEnabled
                             hideTools
                             value={form}
-                            onChange={(next) => {
-                                if (next.id !== form.id) setCustomSourceId(true);
-                                setForm(next);
-                            }}
+                            onChange={setForm}
                         />
                     </Stack>
                 </DialogContent>
