@@ -8,16 +8,22 @@ import { fontSizes } from '@/theme/fonts';
 import {
     CODEX_COMPACT,
     compactZones,
+    formatTokens,
     planCodexCompact,
+    resolveCodexWindow,
     trackPosition,
     type CodexCompactStatus,
 } from './codexCompact';
+import { useCodexCatalogWindow } from './useCodexCatalogWindow';
 
 interface CodexCompactChipProps {
     /** The rule's own percent; 0 = follow the Auto Config default. */
     percent: number;
-    /** Whether the rule's 1M flag is on (the catalog window is then 1M). */
+    /** The rule's own context window (0 = automatic) and 1M flag; with the
+     * catalog window they give the window this model has (resolveCodexWindow). */
+    contextWindow: number;
     context1M: boolean;
+    requestModel?: string;
     disabled?: boolean;
     onChange: (percent: number) => void;
     buttonSx: SxProps<Theme>;
@@ -60,7 +66,9 @@ const NOTE_COLOR: Record<Exclude<CodexCompactStatus, 'ok'>, 'warning' | 'info'> 
  */
 export const CodexCompactChip: React.FC<CodexCompactChipProps> = ({
     percent,
+    contextWindow,
     context1M,
+    requestModel,
     disabled,
     onChange,
     buttonSx,
@@ -77,7 +85,8 @@ export const CodexCompactChip: React.FC<CodexCompactChipProps> = ({
     const open = Boolean(anchor);
     const overridden = percent > 0;
     const shown = draft ?? (overridden ? percent : shared.percent);
-    const window = context1M ? CODEX_COMPACT.window1M : CODEX_COMPACT.window;
+    const catalog = useCodexCatalogWindow(requestModel, open);
+    const window = resolveCodexWindow(contextWindow, context1M, catalog);
     const plan = planCodexCompact({ window, percent: shown, effectivePercent: shared.effective });
     const zones = compactZones(window, shared.effective);
     const noteKind = plan.status === 'ok' ? null : NOTE_COLOR[plan.status];
@@ -253,7 +262,7 @@ export const CodexCompactChip: React.FC<CodexCompactChipProps> = ({
 
                     <Stack spacing={0.25} sx={{ fontSize: fontSizes.sm, fontVariantNumeric: 'tabular-nums' }}>
                         {[
-                            [t('ruleHeader.compact.window'), context1M ? '1M' : '200K', undefined],
+                            [t('ruleHeader.compact.window'), formatTokens(window), undefined],
                             [t('ruleHeader.compact.line'), `${plan.applied}% · ${fmt(plan.line)} tokens`, undefined],
                             [t('ruleHeader.compact.remain'), `${fmt(plan.remain)} tokens`, plan.status === 'low' ? 'warning.dark' : 'text.primary'],
                         ].map(([label, value, color]) => (

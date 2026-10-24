@@ -17730,6 +17730,11 @@
             "format": "int64",
             "description": "Field codex_compact_percent"
           },
+          "codex_context_window": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field codex_context_window"
+          },
           "context_1m": {
             "type": "boolean",
             "description": "Field context_1m"
@@ -19239,6 +19244,11 @@
       "ThreadCounts": {
         "type": "object",
         "properties": {
+          "failed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field failed"
+          },
           "idle": {
             "type": "integer",
             "format": "int64",
@@ -19268,6 +19278,7 @@
         "required": [
           "working",
           "waiting",
+          "failed",
           "ready",
           "idle",
           "resolved"

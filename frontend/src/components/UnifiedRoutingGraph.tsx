@@ -515,6 +515,10 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     onUpdateRecord?.('flags', { ...record.flags, codexCompactPercent: percent || undefined });
                 } : undefined}
                 compactPercent={record.flags?.codexCompactPercent || 0}
+                onContextWindowChange={record.scenario === 'codex' ? (window) => {
+                    onUpdateRecord?.('flags', { ...record.flags, codexContextWindow: window || undefined });
+                } : undefined}
+                contextWindow={record.flags?.codexContextWindow || 0}
                 endpointApplicable={endpointApplicable}
                 pluginsCount={pluginsCount}
                 onPluginsClick={onPluginsClick}

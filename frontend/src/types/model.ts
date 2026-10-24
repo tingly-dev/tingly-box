@@ -11,6 +11,12 @@ export interface OpenAIModel {
   description?: string;
   context?: number;
   max_output?: number;
+  // The vendor's published context window (Tingly Box's own field).
+  context_window?: number;
+  // Anthropic Models API names: the most input one request may carry (below
+  // context_window when the window counts output too) and the most output.
+  max_input_tokens?: number;
+  max_tokens?: number;
   auth_type?: string;
 }
 
@@ -28,6 +34,8 @@ export interface AnthropicModel {
   capabilities?: ModelCapabilities;
   max_input_tokens?: number;
   max_tokens?: number;
+  // Tingly Box extension: the vendor's published context window.
+  context_window?: number;
   description?: string;
   auth_type?: string;
 }

@@ -27,6 +27,7 @@ import { writeToClipboard } from '@/utils/clipboard';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import type {OpenAIEndpointSelection} from '@/hooks/useResponsesToggle';
 import {CodexCompactChip} from '@/components/rule-card/CodexCompactChip';
+import {CodexContextChip} from '@/components/rule-card/CodexContextChip';
 
 // Styled components - compact for graph use
 const HEADER_PADDING_X = 40;
@@ -142,6 +143,10 @@ export interface ModelRequestHeaderProps {
     // this rule's model (0 = follow Auto Config). Config-only, see CodexCompactChip.
     onCompactChange?: (percent: number) => void;
     compactPercent?: number;
+    // Codex only: the context window written into the catalog for this rule's
+    // model (0 = automatic). Config-only, see CodexContextChip.
+    onContextWindowChange?: (window: number) => void;
+    contextWindow?: number;
     // False when none of the rule's services is OpenAI-compatible: the chip stays
     // (and works) but its tooltip says it has no effect there.
     endpointApplicable?: boolean;
@@ -170,6 +175,8 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     onEndpointSelect,
     onCompactChange,
     compactPercent = 0,
+    onContextWindowChange,
+    contextWindow = 0,
     endpointApplicable = true,
     pluginsCount = 0,
     onPluginsClick,
@@ -436,10 +443,24 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                     </Box>
                 )}
 
+                {onContextWindowChange && (
+                    <CodexContextChip
+                        window={contextWindow}
+                        context1M={context1M}
+                        requestModel={modelName}
+                        disabled={!active}
+                        onChange={onContextWindowChange}
+                        buttonSx={strategyButtonSx}
+                        highlightedButtonSx={highlightedStrategyButtonSx}
+                    />
+                )}
+
                 {onCompactChange && (
                     <CodexCompactChip
                         percent={compactPercent}
+                        contextWindow={contextWindow}
                         context1M={context1M}
+                        requestModel={modelName}
                         disabled={!active}
                         onChange={onCompactChange}
                         buttonSx={strategyButtonSx}

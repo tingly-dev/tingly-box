@@ -37,6 +37,11 @@ type ModelInfo struct {
 	Description string `json:"description,omitempty"`
 	Context     int    `json:"context,omitempty"`
 	MaxOutput   int    `json:"max_output,omitempty"`
+	// MaxInput is the most input tokens one request may carry, when that is
+	// not Context itself. Lookups fill it for templates whose Context counts
+	// input and output together (ProviderCatalog.ContextIncludesOutput); data
+	// may also set it directly. Read it through InputLimit.
+	MaxInput int `json:"max_input,omitempty"`
 
 	// OpenAIEndpoints declares which OpenAI endpoint(s) THIS model supports,
 	// for a template whose catalog mixes vendors (OpenCode Zen: most models
@@ -145,6 +150,13 @@ type ProviderCatalog struct {
 	// ai.OpenAIEndpointMode when assigned to a Provider. Values: "" (Chat,
 	// default), "responses" (Codex-style), "both" (OpenAI proper).
 	OpenAIEndpointMode string `json:"openai_endpoint_mode,omitempty"`
+
+	// ContextIncludesOutput says this template's model `context` is the
+	// vendor's total window, input and output together (OpenAI publishes
+	// gpt-5 as 400K = 272K input + 128K output), rather than the input limit
+	// Anthropic reports as max_input_tokens. Lookups then derive MaxInput as
+	// context - max_output.
+	ContextIncludesOutput bool `json:"context_includes_output,omitempty"`
 }
 
 // ProviderCatalogRegistry represents the provider template registry structure from GitHub
@@ -910,10 +922,23 @@ func (tm *ProviderCatalogManager) GetModelInfoForProvider(provider *typ.Provider
 	}
 	for _, m := range tmpl.Models {
 		if m.ID == model {
+			if tmpl.ContextIncludesOutput && m.MaxInput == 0 && m.MaxOutput > 0 && m.Context > m.MaxOutput {
+				m.MaxInput = m.Context - m.MaxOutput
+			}
 			return m, true
 		}
 	}
 	return ModelInfo{}, false
+}
+
+// InputLimit is the most input tokens one request may carry: MaxInput when
+// known, else Context (Anthropic's meaning of max_input_tokens, where input
+// and output share one window). 0 when unknown.
+func (m ModelInfo) InputLimit() int {
+	if m.MaxInput > 0 {
+		return m.MaxInput
+	}
+	return m.Context
 }
 
 // GetOpenAIEndpointOverrideForModel looks up ModelInfo.OpenAIEndpoints for
