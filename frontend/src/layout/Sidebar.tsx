@@ -200,6 +200,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActi
                             ) : undefined}
                         >
                             <ListItemButton
+                                aria-current={active ? 'page' : undefined}
                                 {...(isAddAction
                                     ? { onClick: isAddProfile ? handleAddProfileClick : handleAddTeamClick }
                                     : { component: RouterLink, to: item.path, onClick: onClose }

@@ -71,7 +71,7 @@ describe('route contract', () => {
         expect(targets.filter((t) => !resolvesToPage(t))).toEqual([]);
     });
 
-    it('keeps both MCP tool usages on their own pages', () => {
+    it('preserves legacy links to distinct tool scopes in the workspace', () => {
         expect(
             ['/mcp/routes', '/mcp/tools', '/mcp/server-tools', '/mcp/sources', '/mcp/clients'].filter(
                 (path) => !resolvesToPage(path)
