@@ -404,7 +404,7 @@ func createProviderFromToken(appConfig *appconfig.AppConfig, config *ProviderOAu
 	}
 	// ZCode's plan key is accepted on both protocol endpoints, so the provider
 	// is dual (same as the web flow, see oauth handler createProviderFromToken).
-	if anthropicBase, openaiBase := ai.ZCodeEndpoints(ai.Issuer(config.Type)); anthropicBase != "" {
+	if anthropicBase, openaiBase := ai.DualEndpoints(ai.Issuer(config.Type)); anthropicBase != "" {
 		provider.APIBaseAnthropic = anthropicBase
 		provider.APIBaseOpenAI = openaiBase
 	}

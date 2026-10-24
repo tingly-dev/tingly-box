@@ -28,6 +28,16 @@ func ZCodeEndpoints(issuer Issuer) (anthropicBase, openaiBase string) {
 	}
 }
 
+// DualEndpoints returns the (anthropic, openai) bases of an OAuth issuer whose
+// credential is accepted natively on both protocols. Both are empty for every
+// issuer bound to a single endpoint. This is the one table behind
+// IssuerSupportsDual and the OAuth create paths (web and CLI): an issuer joins
+// by getting a row here once its native second endpoint is verified to accept
+// the OAuth bearer.
+func DualEndpoints(issuer Issuer) (anthropicBase, openaiBase string) {
+	return ZCodeEndpoints(issuer)
+}
+
 // WorkBuddySite is everything that differs between the two WorkBuddy account
 // regions: the host that serves the login, the models, the chats and the
 // billing meter, and the values the official client identifies itself with.

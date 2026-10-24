@@ -1291,7 +1291,7 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 	// ZCode resolves a plain plan API key that both protocol endpoints accept,
 	// so the provider is dual: an Anthropic client and an OpenAI client each
 	// reach the plan on its native protocol. See Provider.ResolveEndpoint.
-	if anthropicBase, openaiBase := ai.ZCodeEndpoints(issuer); anthropicBase != "" {
+	if anthropicBase, openaiBase := ai.DualEndpoints(issuer); anthropicBase != "" {
 		provider.APIBaseAnthropic = anthropicBase
 		provider.APIBaseOpenAI = openaiBase
 	}

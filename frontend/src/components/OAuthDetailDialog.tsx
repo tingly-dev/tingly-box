@@ -15,6 +15,8 @@ import {
     Typography,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ApiStyleBadge } from '@/components/ApiStyleBadge';
 import {type Provider } from '../types/provider';
 import ProviderExportButton from '@/components/ProviderExportButton';
 import { CopyIconButton } from '@/components/CopyIconButton';
@@ -40,6 +42,7 @@ interface OAuthDetailDialogProps {
 }
 
 const OAuthDetailDialog = ({ open, provider, onClose, onSubmit, onNotification }: OAuthDetailDialogProps) => {
+    const { t } = useTranslation();
     const [formData, setFormData] = useState<OAuthEditFormData>({
         name: provider?.name || '',
         apiBase: provider?.api_base || '',
@@ -141,26 +144,50 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit, onNotification }
                             </Typography>
                         </Box>
 
-                        {/* API Style Selection — a dual provider has no single style */}
-                        {!isDual && (
-                            <TextField
-                                select
-                                fullWidth
-                                size="small"
-                                label="API Style"
-                                value={formData.apiStyle}
-                                onChange={(e) => setFormData(prev => ({
-                                    ...prev,
-                                    apiStyle: e.target.value as 'openai' | 'anthropic',
-                                }))}
-                                slotProps={{
-                                    select: { native: true }
-                                }}
-                            >
-                                <option value="openai">OpenAI Compatible</option>
-                                <option value="anthropic">Anthropic Compatible</option>
-                            </TextField>
-                        )}
+                        {/* Protocols this credential serves: both badges for a dual credential, the
+                            chosen style (editable) for a single-protocol one */}
+                        <Stack spacing={1}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                    {t('credentialPage.oauthProtocolLabel')}
+                                </Typography>
+                                {isDual ? (
+                                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                                        <ApiStyleBadge apiStyle="openai" />
+                                        <ApiStyleBadge apiStyle="anthropic" />
+                                    </Stack>
+                                ) : (
+                                    <ApiStyleBadge apiStyle={formData.apiStyle} />
+                                )}
+                            </Box>
+                            {!isDual && (
+                                <TextField
+                                    select
+                                    fullWidth
+                                    size="small"
+                                    label="API Style"
+                                    value={formData.apiStyle}
+                                    onChange={(e) => setFormData(prev => ({
+                                        ...prev,
+                                        apiStyle: e.target.value as 'openai' | 'anthropic',
+                                    }))}
+                                    slotProps={{
+                                        select: { native: true }
+                                    }}
+                                    helperText={t('credentialPage.oauthProtocolSingle', {
+                                        style: formData.apiStyle === 'anthropic' ? 'Anthropic' : formData.apiStyle === 'google' ? 'Google' : 'OpenAI',
+                                    })}
+                                >
+                                    <option value="openai">OpenAI Compatible</option>
+                                    <option value="anthropic">Anthropic Compatible</option>
+                                </TextField>
+                            )}
+                            {isDual && (
+                                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                    {t('credentialPage.oauthProtocolDual')}
+                                </Typography>
+                            )}
+                        </Stack>
 
                         {/* Editable Fields */}
                         <TextField

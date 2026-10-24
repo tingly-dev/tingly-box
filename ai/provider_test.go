@@ -761,3 +761,16 @@ func findSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+func TestIssuerSupportsDualFollowsDualEndpoints(t *testing.T) {
+	for _, issuer := range []Issuer{IssuerZCode, IssuerZCodeCN} {
+		if !IssuerSupportsDual(issuer) {
+			t.Errorf("%s should support dual", issuer)
+		}
+	}
+	for _, issuer := range []Issuer{IssuerClaudeCode, IssuerCodex, IssuerQwenCode} {
+		if IssuerSupportsDual(issuer) {
+			t.Errorf("%s is single-endpoint", issuer)
+		}
+	}
+}
