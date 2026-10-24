@@ -19301,6 +19301,11 @@
       "ThreadCounts": {
         "type": "object",
         "properties": {
+          "failed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field failed"
+          },
           "idle": {
             "type": "integer",
             "format": "int64",
@@ -19330,6 +19335,7 @@
         "required": [
           "working",
           "waiting",
+          "failed",
           "ready",
           "idle",
           "resolved"
@@ -20637,6 +20643,10 @@
       "UsageRedeem": {
         "type": "object",
         "properties": {
+          "auto": {
+            "type": "boolean",
+            "description": "Field auto"
+          },
           "id": {
             "type": "string",
             "description": "Field id"

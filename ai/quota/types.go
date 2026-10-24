@@ -119,7 +119,10 @@ type UsageBreakdown struct {
 // and what spending it does, so the UI can confirm before it is irreversible.
 type UsageRedeem struct {
 	ID    string `json:"id"`    // the provider's record id for the reward
-	Scope string `json:"scope"` // which allowance it refills: "weekly" (also the 5-hour one) or "5h"
+	Scope string `json:"scope"` // what it is for: "weekly" (also the 5-hour one), "5h", or "daily" (a check-in)
+	// Auto marks a reward that is safe to take without asking: idempotent, and
+	// nothing is lost by taking it. Only the background refresher acts on it.
+	Auto bool `json:"auto,omitempty"`
 }
 
 // UsageWindow represents a single quota window
@@ -279,6 +282,9 @@ type Config struct {
 	RetryOnFailure  bool                           `json:"retry_on_failure"` // whether to retry on failure
 	MaxRetries      int                            `json:"max_retries"`      // maximum retry attempts
 	Providers       map[string]ProviderUsageConfig `json:"providers"`        // provider-specific configuration
+	// AutoClaimRewards lets the background refresher take rewards marked
+	// UsageRedeem.Auto (a daily check-in) once a day.
+	AutoClaimRewards bool `json:"auto_claim_rewards"`
 }
 
 // DefaultConfig returns default configuration
@@ -290,6 +296,8 @@ func DefaultConfig() *Config {
 		RetryOnFailure:  true,
 		MaxRetries:      3,
 		Providers:       make(map[string]ProviderUsageConfig),
+
+		AutoClaimRewards: true,
 	}
 }
 

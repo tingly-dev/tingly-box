@@ -101,6 +101,8 @@ func (r *Refresher) refresh(ctx context.Context) {
 		return
 	}
 
+	r.manager.AutoRedeem(ctx, usages)
+
 	successCount := 0
 	errorCount := 0
 	for _, usage := range usages {

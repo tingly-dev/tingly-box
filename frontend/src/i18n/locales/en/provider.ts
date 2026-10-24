@@ -156,6 +156,8 @@ export default {
       "rawResponse": "Details",
       "redeem": {
         "use": "Use",
+        "checkin": "Check in",
+        "checkedIn": "Checked in",
         "title": "Use \"{{label}}\"?",
         "weekly": "It refills your weekly and 5-hour limits right now, and the next weekly cycle counts from today. This can't be undone.",
         "fiveHour": "It refills your 5-hour limit right now. This can't be undone.",

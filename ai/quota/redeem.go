@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	typ "github.com/tingly-dev/tingly-box/ai"
 )
@@ -109,4 +110,52 @@ func (m *Manager) Redeem(ctx context.Context, providerUUID, rewardID string) (*R
 		result.Usage = usage
 	}
 	return result, redeemErr
+}
+
+// autoClaimLog remembers the day a reward was last tried automatically. A
+// reward is tried at most once a day whatever the outcome: an uncertain result
+// is never retried, and a failing one must not be hammered every refresh.
+type autoClaimLog struct {
+	mu  sync.Mutex
+	day map[string]string
+}
+
+// firstToday reports whether key has not been tried today, and marks it tried.
+func (l *autoClaimLog) firstToday(key string, now time.Time) bool {
+	today := now.Format("2006-01-02")
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.day == nil {
+		l.day = make(map[string]string)
+	}
+	if l.day[key] == today {
+		return false
+	}
+	l.day[key] = today
+	return true
+}
+
+// AutoRedeem takes the rewards the usages mark as safe to take unasked
+// (UsageRedeem.Auto), at most once a day each. It is the background
+// refresher's job; an explicit refresh never spends anything.
+func (m *Manager) AutoRedeem(ctx context.Context, usages []*ProviderUsage) {
+	if !m.config.AutoClaimRewards {
+		return
+	}
+	for _, usage := range usages {
+		for _, bd := range usage.Breakdowns {
+			if bd.Redeem == nil || !bd.Redeem.Auto {
+				continue
+			}
+			if !m.autoClaimed.firstToday(usage.ProviderUUID+"|"+bd.Redeem.ID, time.Now()) {
+				continue
+			}
+			log := m.logger.WithFields(map[string]any{"provider_uuid": usage.ProviderUUID, "reward": bd.Redeem.ID})
+			if _, err := m.Redeem(ctx, usage.ProviderUUID, bd.Redeem.ID); err != nil {
+				log.WithError(err).Warn("automatic reward claim did not complete")
+			} else {
+				log.Info("reward claimed automatically")
+			}
+		}
+	}
 }

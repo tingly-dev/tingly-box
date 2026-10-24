@@ -156,6 +156,8 @@ export default {
       "rawResponse": "详情",
       "redeem": {
         "use": "使用",
+        "checkin": "签到",
+        "checkedIn": "签到成功",
         "title": "使用「{{label}}」？",
         "weekly": "将立即补满每周额度和 5 小时额度，下一个每周周期从今天开始计算。使用后无法撤销。",
         "fiveHour": "将立即补满 5 小时额度。使用后无法撤销。",

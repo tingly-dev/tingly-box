@@ -71,7 +71,7 @@
 | [third-party-credentials.md](./third-party-credentials.md) | Third-Party Cloud Credentials (AWS Bedrock / GCP Vertex / Azure OpenAI) | 设计说明；局部实施状态见正文 |
 | [kimi-config.md](./kimi-config.md) | Kimi Code OAuth & Client Round Trip: Design and Decisions | 设计说明；局部实施状态见正文 |
 | [zcode-oauth.md](./zcode-oauth.md) | ZCode OAuth (GLM Coding Plan) | 设计说明；局部实施状态见正文 |
-| [provider-rewards.md](./provider-rewards.md) | Provider rewards：GLM 重置卡读取与使用（WorkBuddy 签到待做） | 设计说明；协议为社区来源，未经真实账号验证 |
+| [provider-rewards.md](./provider-rewards.md) | Provider rewards：GLM 重置卡读取与使用、WorkBuddy 每日签到（自动领取） | 设计说明；协议为社区来源，未经真实账号验证 |
 | [workbuddy-oauth.md](./workbuddy-oauth.md) | WorkBuddy OAuth、额度 (Tencent WorkBuddy / CodeBuddy) | 已实现；与第三方实测实现对齐，尚未用真实账号验证，见正文 |
 | [workbuddy-agent.md](./workbuddy-agent.md) | WorkBuddy as an agent（自定义模型接入、Auto Config 写已安装版本的 `~/.workbuddy/models.json`（国内版）/ `~/.workbuddy-ai/models.json`（国际版）） | 已实现；2026-10-21 在 Windows 实机确认文件位置与数组格式 |
 | [deepseek.md](./deepseek.md) | DeepSeek | 设计说明；局部实施状态见正文 |

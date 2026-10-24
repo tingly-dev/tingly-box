@@ -68,4 +68,18 @@ describe('QuotaCell reset cards', () => {
         fireEvent.click(screen.getByRole('button', { name: 'providerTable.quota.redeem.confirm' }));
         await waitFor(() => expect(notify.warning).toHaveBeenCalledWith('providerTable.quota.redeem.unconfirmed'));
     });
+
+    it('checks in without a dialog', async () => {
+        const checkin = {
+            ...quota,
+            breakdowns: [{ ...quota.breakdowns![0], key: 'daily-checkin', label: 'Daily check-in', redeem: { id: 'daily-checkin', scope: 'daily', auto: true } }],
+        } as unknown as ProviderQuota;
+        const onRedeem = vi.fn().mockResolvedValue({ status: 'spent' });
+        render(<QuotaCell quota={checkin} refreshing={false} onRefresh={vi.fn()} onRedeem={onRedeem} />);
+        hover();
+        fireEvent.click(await screen.findByText('providerTable.quota.redeem.checkin'));
+        await waitFor(() => expect(onRedeem).toHaveBeenCalledWith('daily-checkin'));
+        expect(screen.queryByRole('dialog')).toBeNull();
+        await waitFor(() => expect(notify.success).toHaveBeenCalledWith('providerTable.quota.redeem.checkedIn'));
+    });
 });

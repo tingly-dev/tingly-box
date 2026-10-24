@@ -87,13 +87,44 @@ because the client has to tell "not spent" from "maybe spent" from "spent":
 `quota.Redeemer` is the optional interface a fetcher implements to take part;
 `Manager.Redeem` finds the provider's fetcher and does the guarding.
 
+## WorkBuddy daily check-in
+
+`fetcher/workbuddy_checkin.go`. Paths and the account-region origin
+(`ai.WorkBuddySiteFor`) follow the 薅点 desktop app, which is the reference for
+this protocol: `POST /v2/billing/meter/checkin-activity-status` and
+`POST /v2/billing/meter/daily-checkin` (note the `/v2`, the credit-meter paths
+have none). Auth and client headers are the ones the credit meter already sends.
+Request and response bodies are undocumented and **unverified against a real
+account**, so the status parser is tolerant and anything it cannot read
+clearly counts as "not claimable".
+
+Rules, taken from how 薅点 stays safe:
+
+1. **Only offered when claimable.** A `UsageBreakdown` with
+   `Redeem{ID: "daily-checkin", Scope: "daily", Auto: true}` exists only when
+   the status says today is open. Already claimed, unreadable or failed status
+   shows nothing, and never drops the credit windows.
+2. **Enterprise accounts are never touched** (no status call, no claim).
+3. **Claim once, then confirm independently.** After the POST the status is read
+   again; only a status that says "claimed" is `spent`. A repeat answer (HTTP
+   400 / code 10001) is "already claimed", not an error.
+4. **Uncertain is never retried** (`ErrRedeemUnconfirmed`).
+
+`Auto` marks a reward that is safe to take without asking (idempotent,
+harmless). The UI then shows "Check in" and skips the confirm dialog.
+
+### Auto-claim
+
+After each scheduled refresh, `Manager.AutoRedeem` takes every `Auto` reward
+once per provider per local day (`autoClaimLog`, in memory, so a restart may try
+once more, which the idempotent endpoint tolerates). A failed attempt is logged
+and not retried until the next day's first refresh. `Config.AutoClaimRewards`
+defaults to true; there is no UI toggle yet.
+
 ## Not done
 
-- **WorkBuddy daily check-in** (next): `POST /v2/billing/meter/daily-checkin`
-  and `…/checkin-activity-status`, same token and headers as `workbuddy-oauth.md`.
-  Open: host (`copilot.tencent.com` vs `www.codebuddy.cn`), body and response
-  shapes. Idempotent (a repeat answers HTTP 400 / code 10001).
 - **Codex banked reset use.** Reading exists (`codex.go` lists
   `/wham/rate-limit-reset-credits`); `…/consume` is not implemented.
+- A settings toggle for `AutoClaimRewards`.
 - Doubao Work / Qoder CN daily rewards need the official client's session and
   do not fit the OAuth model.

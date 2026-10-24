@@ -105,13 +105,13 @@ export function QuotaCell({ quota, refreshing, onRefresh, onRedeem }: QuotaCellP
     // a second request while the first is out.
     const [pendingCard, setPendingCard] = useState<{ label: string; redeem: UsageRedeem } | null>(null);
     const [spending, setSpending] = useState(false);
-    const spendCard = async () => {
-        if (!pendingCard || !onRedeem || spending) return;
+    const spendCard = async (target = pendingCard) => {
+        if (!target || !onRedeem || spending) return;
         setSpending(true);
         try {
-            const outcome = await onRedeem(pendingCard.redeem.id);
+            const outcome = await onRedeem(target.redeem.id);
             const { status, message = '' } = outcome;
-            if (status === 'spent') notify.success(t('providerTable.quota.redeem.spent'));
+            if (status === 'spent') notify.success(t(target.redeem.scope === 'daily' ? 'providerTable.quota.redeem.checkedIn' : 'providerTable.quota.redeem.spent'));
             else if (status === 'unconfirmed') notify.warning(t('providerTable.quota.redeem.unconfirmed'));
             else if (status === 'rejected') notify.error(t('providerTable.quota.redeem.rejected', { message }));
             else if (status === 'not_found') notify.error(t('providerTable.quota.redeem.notFound'));
@@ -231,8 +231,12 @@ export function QuotaCell({ quota, refreshing, onRefresh, onRedeem }: QuotaCellP
                                     value={onRedeem && redeem
                                         ? (
                                             <UseButton
-                                                label={t('providerTable.quota.redeem.use')}
-                                                onClick={() => setPendingCard({ label, redeem })}
+                                                label={t(redeem.scope === 'daily' ? 'providerTable.quota.redeem.checkin' : 'providerTable.quota.redeem.use')}
+                                                // A check-in is harmless and can be repeated, so it goes
+                                                // straight through; a card is spent only after a dialog.
+                                                onClick={() => (redeem.auto
+                                                    ? void spendCard({ label, redeem })
+                                                    : setPendingCard({ label, redeem }))}
                                             />
                                         )
                                         : voucher
@@ -415,7 +419,7 @@ export function QuotaCell({ quota, refreshing, onRefresh, onRedeem }: QuotaCellP
             confirmingLabel={t('providerTable.quota.redeem.confirming')}
             loading={spending}
             onClose={() => setPendingCard(null)}
-            onConfirm={spendCard}
+            onConfirm={() => spendCard()}
         />
         <QuotaRawResponseDialog
             open={rawOpen}

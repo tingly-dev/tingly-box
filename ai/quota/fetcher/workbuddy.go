@@ -187,6 +187,7 @@ func (f *WorkBuddyFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 		}
 	}
 
+	enterprise := provider.OAuthDetail.GetExtraFieldString(oauth.WorkBuddyMetaDomain) != ""
 	window, counted := summaryWindow(summary.Packages)
 	if window == nil {
 		// An enterprise account's summary has no packages; its credits are
@@ -195,6 +196,9 @@ func (f *WorkBuddyFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 		var ent workbuddyEnterpriseUsage
 		if _, err := f.meter(ctx, client, site, provider, workbuddyEnterprisePath, map[string]any{}, &ent); err == nil {
 			window = enterpriseWindow(ent)
+			if window != nil {
+				enterprise = true
+			}
 			if window != nil && summary.SubscriptionPackageName == "" {
 				plan = "Enterprise"
 			}
@@ -212,6 +216,9 @@ func (f *WorkBuddyFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 		return unreadableUsage(provider, quota.ProviderTypeWorkBuddy, "account reports no credits"), nil
 	}
 	usage.AddWindow("credits", window)
+	if !enterprise {
+		f.addCheckin(ctx, client, site, provider, usage)
+	}
 	return usage, nil
 }
 
@@ -338,9 +345,21 @@ func (f *WorkBuddyFetcher) nextReset(ctx context.Context, client *http.Client, s
 	return earliest
 }
 
-// meter POSTs to the billing API as the desktop client does and decodes the
-// data of its {code, msg, data} envelope into out. It returns the raw body.
-func (f *WorkBuddyFetcher) meter(ctx context.Context, client *http.Client, site ai.WorkBuddySite, provider *ai.Provider, path string, body any, out any) (json.RawMessage, error) {
+// workbuddyReply is one answer of the billing API, decoded no further than its
+// {code, msg, data} envelope.
+type workbuddyReply struct {
+	Status int
+	Code   string
+	Msg    string
+	Data   json.RawMessage
+	Raw    json.RawMessage
+}
+
+// post sends a request to the billing API as the desktop client does. Only a
+// request that could not be made or answered is an error; what the answer says
+// is the caller's to read, because a refusal can also be a result (a repeat
+// check-in answers HTTP 400 / code 10001).
+func (f *WorkBuddyFetcher) post(ctx context.Context, client *http.Client, site ai.WorkBuddySite, provider *ai.Provider, path string, body any) (*workbuddyReply, error) {
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -373,20 +392,29 @@ func (f *WorkBuddyFetcher) meter(ctx context.Context, client *http.Client, site 
 		Data json.RawMessage `json:"data"`
 	}
 	_ = json.Unmarshal(raw, &env)
-	code := env.Code.String()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d%s", resp.StatusCode, errorDetail(raw))
+	return &workbuddyReply{Status: resp.StatusCode, Code: env.Code.String(), Msg: env.Msg, Data: env.Data, Raw: raw}, nil
+}
+
+// meter POSTs to the billing API and decodes the data of its envelope into
+// out. It returns the raw body.
+func (f *WorkBuddyFetcher) meter(ctx context.Context, client *http.Client, site ai.WorkBuddySite, provider *ai.Provider, path string, body any, out any) (json.RawMessage, error) {
+	reply, err := f.post(ctx, client, site, provider, path, body)
+	if err != nil {
+		return nil, err
 	}
-	if code != "" && code != "0" {
-		return nil, fmt.Errorf("billing API error %s: %s", code, env.Msg)
+	if reply.Status != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d%s", reply.Status, errorDetail(reply.Raw))
 	}
-	if len(env.Data) == 0 || string(env.Data) == "null" {
+	if reply.Code != "" && reply.Code != "0" {
+		return nil, fmt.Errorf("billing API error %s: %s", reply.Code, reply.Msg)
+	}
+	if len(reply.Data) == 0 || string(reply.Data) == "null" {
 		return nil, fmt.Errorf("billing API returned no data")
 	}
-	if err := json.Unmarshal(env.Data, out); err != nil {
+	if err := json.Unmarshal(reply.Data, out); err != nil {
 		return nil, fmt.Errorf("decode %s: %w", path, err)
 	}
-	return raw, nil
+	return reply.Raw, nil
 }
 
 func parseWorkBuddyTime(value string) *time.Time {
