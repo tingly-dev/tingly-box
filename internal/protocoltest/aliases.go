@@ -80,18 +80,19 @@ var (
 	GetErrorSpec       = scenario.GetErrorSpec
 	BuildErrorFromSpec = scenario.BuildErrorFromSpec
 
-	TextScenario                = scenario.TextScenario
-	ToolUseScenario             = scenario.ToolUseScenario
-	ToolResultScenario          = scenario.ToolResultScenario
-	ThinkingScenario            = scenario.ThinkingScenario
-	MultiTurnScenario           = scenario.MultiTurnScenario
-	StreamingTextScenario       = scenario.StreamingTextScenario
-	StreamingToolUseScenario    = scenario.StreamingToolUseScenario
-	IncompleteScenario          = scenario.IncompleteScenario
-	ErrorScenario               = scenario.ErrorScenario
-	Error500Scenario            = scenario.Error500Scenario
-	ErrorAuth401Scenario        = scenario.ErrorAuth401Scenario
-	ErrorMidStreamCloseScenario = scenario.ErrorMidStreamCloseScenario
+	TextScenario                     = scenario.TextScenario
+	ToolUseScenario                  = scenario.ToolUseScenario
+	ToolResultScenario               = scenario.ToolResultScenario
+	ThinkingScenario                 = scenario.ThinkingScenario
+	MultiTurnScenario                = scenario.MultiTurnScenario
+	StreamingTextScenario            = scenario.StreamingTextScenario
+	StreamingToolUseScenario         = scenario.StreamingToolUseScenario
+	StreamingParallelToolUseScenario = scenario.StreamingParallelToolUseScenario
+	IncompleteScenario               = scenario.IncompleteScenario
+	ErrorScenario                    = scenario.ErrorScenario
+	Error500Scenario                 = scenario.Error500Scenario
+	ErrorAuth401Scenario             = scenario.ErrorAuth401Scenario
+	ErrorMidStreamCloseScenario      = scenario.ErrorMidStreamCloseScenario
 )
 
 // mustMarshal is retained as a protocoltest-local helper because it is used by

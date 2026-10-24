@@ -298,6 +298,74 @@ data:{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":n
 event:message_stop
 data:{"type":"message_stop"}
 
+=== streaming_parallel_tool_use stream=false
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-streaming_parallel_tool_use"
+}
+--- client response (status 200)
+{"content":[{"id":"<ID1>","input":{"location":"Paris"},"name":"get_weather","type":"tool_use"},{"id":"<ID2>","input":{"timezone":"Europe/Paris"},"name":"get_time","type":"tool_use"}],"id":"<ID3>","model":"pv-anthropic_v1-to-anthropic_beta-streaming_parallel_tool_use","role":"assistant","stop_reason":"tool_use","type":"message","usage":{"input_tokens":15,"output_tokens":30}}
+
+=== streaming_parallel_tool_use stream=true
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-streaming_parallel_tool_use",
+  "stream": true
+}
+--- client response (status 200)
+event:message_start
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_v1-to-anthropic_beta-streaming_parallel_tool_use","role":"assistant","stop_reason":null,"type":"message","usage":{"input_tokens":15,"output_tokens":0}},"type":"message_start"}
+
+event:content_block_start
+data:{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"<ID2>","name":"get_weather","input":{}}}
+
+event:content_block_delta
+data:{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"location\":\"Paris\"}"}}
+
+event:content_block_stop
+data:{"type":"content_block_stop","index":0}
+
+event:content_block_start
+data:{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"<ID3>","name":"get_time","input":{}}}
+
+event:content_block_delta
+data:{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"timezone\":\"Europe/Paris\"}"}}
+
+event:content_block_stop
+data:{"type":"content_block_stop","index":1}
+
+event:message_delta
+data:{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":30}}
+
+event:message_stop
+data:{"type":"message_stop"}
+
 === streaming_text stream=false
 --- upstream request
 POST /v1/messages
