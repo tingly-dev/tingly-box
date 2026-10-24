@@ -1456,6 +1456,49 @@ const mockQuotas: Record<string, any> = {
         },
     },
 
+    // A GLM Coding Plan with two reset cards (one weekly, one 5-hour). Spending
+    // a card removes it and refills the windows — see the use handler below.
+    'mock-oauth-zcode': {
+        provider_uuid: 'mock-oauth-zcode',
+        provider_name: 'ZCode OAuth',
+        provider_type: 'glm',
+        fetched_at: now.toISOString(),
+        expires_at: inOneHour,
+        account: { tier: 'pro' },
+        windows: [
+            {
+                key: 'TOKENS_LIMIT_3_5', type: 'session', kind: 'limit', used: 91, limit: 100, used_percent: 91,
+                resets_at: inOneHour, window_minutes: 300, unit: 'tokens', label: '5-hour Tokens', description: '91% utilization',
+            },
+            {
+                key: 'TOKENS_LIMIT_6_1', type: 'weekly', kind: 'limit', used: 64, limit: 100, used_percent: 64,
+                resets_at: inTwoDays, window_minutes: 10080, unit: 'tokens', label: '1-week Tokens', description: '64% utilization',
+            },
+        ],
+        breakdowns: [
+            {
+                key: 'reset-card-101',
+                label: 'Weekly reset card',
+                group: 'resource',
+                windows: [{
+                    type: 'balance', used: 0, limit: 1, used_percent: 0,
+                    unit: 'credits', label: 'available', description: 'Available · Expire 2026-11-01',
+                }],
+                redeem: { id: '101', scope: 'weekly', refill: 'weekly,5h' },
+            },
+            {
+                key: 'reset-card-102',
+                label: '5-hour reset card',
+                group: 'resource',
+                windows: [{
+                    type: 'balance', used: 0, limit: 1, used_percent: 0,
+                    unit: 'credits', label: 'available', description: 'Available · Expire 2026-10-31',
+                }],
+                redeem: { id: '102', scope: '5h', refill: '5h' },
+            },
+        ],
+    },
+
     // The rate-limited free-plan sample. Upstream calls the spent window the
     // primary one but reports 604800s for it, so its type comes from the
     // length. Spark is untouched but scoped to its own model, so it neither
@@ -2474,6 +2517,30 @@ export const handlers = [
             return HttpResponse.json({ ...mockQuotas[uuid], fetched_at: new Date().toISOString() })
         }
         return HttpResponse.json({ error: 'quota not found for provider' }, { status: 404 })
+    }),
+
+    // Spending a reset card: the card goes, the windows it refills go back to
+    // empty, and the answer carries the new reading like the real endpoint.
+    http.post('/api/v1/provider-quota/:uuid/rewards/:id/use', async ({ params }) => {
+        const { uuid, id } = params as { uuid: string; id: string }
+        const usage = mockQuotas[uuid]
+        const card = usage?.breakdowns?.find((bd: any) => bd.redeem?.id === id)
+        await new Promise(r => setTimeout(r, 600))
+        if (!card) {
+            return HttpResponse.json({ status: 'not_found' }, { status: 404 })
+        }
+        const refill: string[] = card.redeem.refill.split(',')
+        usage.breakdowns = usage.breakdowns.filter((bd: any) => bd !== card)
+        for (const window of usage.windows) {
+            const weekly = window.type === 'weekly' && refill.includes('weekly')
+            const fiveHour = window.type === 'session' && refill.includes('5h')
+            if (weekly || fiveHour) {
+                window.used = 0
+                window.used_percent = 0
+                window.description = '0% utilization'
+            }
+        }
+        return HttpResponse.json({ status: 'spent', message: 'ok', usage: { ...usage, fetched_at: new Date().toISOString() } })
     }),
 
     http.post('/api/v1/provider-quota/:uuid/refresh', async ({ params }) => {
