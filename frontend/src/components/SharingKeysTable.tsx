@@ -13,12 +13,17 @@ import {
     Tooltip,
     Switch,
     CircularProgress,
+    Button,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { maskToken } from '@/utils/sharingKey';
 
 export interface SharingKey {
+    weekly_token_limit?: number | null;
+    weekly_tokens_used?: number;
+    quota_resets_at?: string | null;
+    quota_reset?: {mode: 'provider' | 'manual' | 'legacy'; provider_id?: string; anchor?: string};
     token_id: string;
     user_id: string;
     team_id: string;
@@ -43,6 +48,7 @@ interface SharingKeysTableProps {
     onToggleEnabled: (token: SharingKey) => void;
     onDelete: (token: SharingKey) => void;
     onMove: (token: SharingKey) => void;
+    onQuota?: (token: SharingKey) => void;
 }
 
 const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
@@ -54,6 +60,7 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
     onToggleEnabled,
     onDelete,
     onMove,
+    onQuota,
 }) => {
     const { t } = useTranslation();
     const colSpan = 7;
@@ -256,6 +263,14 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                     }}>
                                         {formatDate(key.last_used_at)}
                                     </Typography>
+                                    <Tooltip title={key.quota_resets_at ? t('sharingKeys.quota.resets', {time: formatDate(key.quota_resets_at)}) : t('sharingKeys.quota.unknownReset')}>
+                                        <Button size="small" onClick={() => onQuota?.(key)} disabled={!onQuota} sx={{display: 'block', textTransform: 'none'}}>
+                                            {t('sharingKeys.quota.usage', {
+                                                used: (key.weekly_tokens_used ?? 0).toLocaleString(),
+                                                limit: key.weekly_token_limit == null ? t('sharingKeys.quota.unlimited') : key.weekly_token_limit.toLocaleString(),
+                                            })}
+                                        </Button>
+                                    </Tooltip>
                                 </TableCell>
                                 <TableCell align="right">
                                     <Stack direction="row" spacing={0.5} sx={{justifyContent: 'flex-end'}}>

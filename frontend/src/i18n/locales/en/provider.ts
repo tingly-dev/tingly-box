@@ -219,6 +219,26 @@ export default {
     "copyButton": "Copy Token"
   },
   "sharingKeys": {
+    "quota": {
+      "title": "Weekly token budget",
+      "remaining": "Used: {{used}} · Remaining: {{remaining}}",
+      "limit": "Weekly token limit",
+      "help": "Blank = unlimited; 0 = blocked. Counts input (including cached input) + output. New keys follow the provider's weekly reset; configure the clock in the quota editor. Changes keep usage; in-flight requests may exceed the limit.",
+      "resetMode": "Reset schedule",
+      "followProvider": "Follow provider (default)",
+      "manualReset": "Custom weekly schedule",
+      "legacyReset": "Existing schedule: Monday 00:00 UTC",
+      "provider": "Reset time source",
+      "autoProvider": "Auto-select only if one provider exists",
+      "providerHelp": "Uses the account-level weekly reset, not its remaining balance. This does not change Team routing. If multiple providers exist, choose one. The last known deadline is retained on fetch failure; no further resets are guessed.",
+      "providerLoadFailed": "Could not load providers. The saved selection is retained; retry or set a custom schedule.",
+      "anchor": "Weekly reset anchor (local time)",
+      "manualHelp": "Repeats every 7 × 24 hours from this date, stored in UTC. A past date uses its next occurrence. Saving does not clear usage; local time may shift with daylight saving.",
+      "unknownReset": "Reset time unknown — waiting for provider data, or choose a custom schedule. Usage is not cleared automatically without a known deadline.",
+      "usage": "Tokens: {{used}} / {{limit}}",
+      "unlimited": "Unlimited",
+      "resets": "Resets: {{time}}"
+    },
     "title": "Team Keys",
     "titleForTeam": "Team Keys · {{team}}",
     "createToken": "Create Token",

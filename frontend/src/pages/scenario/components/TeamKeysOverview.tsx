@@ -238,6 +238,16 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
                                                 </Tooltip>
                                             </Stack>
                                             <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', justifySelf: 'end' }}>
+                                                <Tooltip title={key.quota_resets_at ? t('sharingKeys.quota.resets', {time: formatDate(key.quota_resets_at)}) : t('sharingKeys.quota.unknownReset')}>
+                                                    <ButtonBase onClick={() => actions.onQuota?.(key)} disabled={!actions.onQuota}
+                                                        aria-label={`${key.display_name} ${t('sharingKeys.quota.title')}`}
+                                                        sx={{px: 1, py: 0.5, borderRadius: 1, color: 'primary.main', fontSize: fontSizes.sm}}>
+                                                        {t('sharingKeys.quota.usage', {
+                                                            used: (key.weekly_tokens_used ?? 0).toLocaleString(),
+                                                            limit: key.weekly_token_limit == null ? t('sharingKeys.quota.unlimited') : key.weekly_token_limit.toLocaleString(),
+                                                        })}
+                                                    </ButtonBase>
+                                                </Tooltip>
                                                 <Typography
                                                     variant="caption"
                                                     noWrap

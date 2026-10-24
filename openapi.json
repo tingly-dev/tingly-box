@@ -8490,6 +8490,50 @@
         }
       }
     },
+    "/api/v1/tokens/{token_id}/quota": {
+      "put": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Set the weekly token budget without resetting consumption",
+        "description": "Set the weekly token budget without resetting consumption",
+        "operationId": "apiV1TokensToken_idQuotaPut",
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenQuotaRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APITokenInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/tokens/{token_id}/regenerate": {
       "post": {
         "tags": [
@@ -10145,6 +10189,15 @@
             "format": "date-time",
             "description": "Field last_used_at"
           },
+          "quota_reset": {
+            "$ref": "#/components/schemas/QuotaResetPolicy"
+          },
+          "quota_resets_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "Field quota_resets_at"
+          },
           "team_id": {
             "type": "string",
             "description": "Field team_id"
@@ -10156,9 +10209,24 @@
           "user_id": {
             "type": "string",
             "description": "Field user_id"
+          },
+          "weekly_token_limit": {
+            "type": "integer",
+            "nullable": true,
+            "format": "int64",
+            "description": "Field weekly_token_limit"
+          },
+          "weekly_tokens_used": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field weekly_tokens_used"
           }
         },
         "required": [
+          "weekly_token_limit",
+          "weekly_tokens_used",
+          "quota_resets_at",
+          "quota_reset",
           "token_id",
           "user_id",
           "team_id",
@@ -17224,6 +17292,32 @@
           "success"
         ]
       },
+      "QuotaResetPolicy": {
+        "type": "object",
+        "properties": {
+          "anchor": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field anchor"
+          },
+          "mode": {
+            "type": "string",
+            "description": "Field mode",
+            "enum": [
+              "provider",
+              "manual",
+              "legacy"
+            ]
+          },
+          "provider_id": {
+            "type": "string",
+            "description": "Field provider_id"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
       "RefreshSkillLocationResponse": {
         "type": "object",
         "properties": {
@@ -19239,6 +19333,11 @@
       "ThreadCounts": {
         "type": "object",
         "properties": {
+          "failed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field failed"
+          },
           "idle": {
             "type": "integer",
             "format": "int64",
@@ -19268,6 +19367,7 @@
         "required": [
           "working",
           "waiting",
+          "failed",
           "ready",
           "idle",
           "resolved"
@@ -19658,6 +19758,14 @@
           "team_id": {
             "type": "string",
             "description": "Field team_id"
+          },
+          "weekly_token_limit": {
+            "type": "integer",
+            "nullable": true,
+            "format": "int64",
+            "description": "Field weekly_token_limit",
+            "maximum": 9007199254740991,
+            "minimum": 0
           }
         },
         "required": [
@@ -19784,6 +19892,25 @@
         },
         "required": [
           "team_id"
+        ]
+      },
+      "TokenQuotaRequest": {
+        "type": "object",
+        "properties": {
+          "quota_reset": {
+            "$ref": "#/components/schemas/QuotaResetPolicy"
+          },
+          "weekly_token_limit": {
+            "type": "integer",
+            "nullable": true,
+            "format": "int64",
+            "description": "Field weekly_token_limit",
+            "maximum": 9007199254740991,
+            "minimum": 0
+          }
+        },
+        "required": [
+          "weekly_token_limit"
         ]
       },
       "TokenResponse": {

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -48,15 +49,24 @@ func sendStoreError(c *gin.Context, err error) {
 }
 
 func recordToInfo(r *db.APITokenRecord) APITokenInfo {
+	current := r.CurrentTokenWeek(time.Now())
+	mode := current.QuotaResetMode
+	if mode == "" {
+		mode = "legacy"
+	}
 	return APITokenInfo{
-		TokenID:     r.TokenID,
-		UserID:      r.UserID,
-		TeamID:      r.TeamID,
-		DisplayName: r.DisplayName,
-		Enabled:     r.Enabled,
-		LastUsedAt:  r.LastUsedAt,
-		CreatedAt:   r.CreatedAt,
-		CreatedBy:   r.CreatedBy,
+		WeeklyTokenLimit: current.WeeklyTokenLimit,
+		WeeklyTokensUsed: current.WeeklyTokensUsed,
+		QuotaResetsAt:    current.QuotaResetsAt,
+		QuotaReset:       db.QuotaResetPolicy{Mode: mode, ProviderID: current.QuotaProviderID, Anchor: current.QuotaResetAnchor},
+		TokenID:          r.TokenID,
+		UserID:           r.UserID,
+		TeamID:           r.TeamID,
+		DisplayName:      r.DisplayName,
+		Enabled:          r.Enabled,
+		LastUsedAt:       r.LastUsedAt,
+		CreatedAt:        r.CreatedAt,
+		CreatedBy:        r.CreatedBy,
 	}
 }
 
@@ -92,7 +102,7 @@ func (h *Handler) Create(c *gin.Context) {
 	if teamID == "" {
 		teamID = db.DefaultTeamID
 	}
-	record, err := h.store.CreateTokenForTeam(userUUID, tokenString, teamID, req.DisplayName, "admin", nil)
+	record, err := h.store.CreateTokenForTeam(userUUID, tokenString, teamID, req.DisplayName, "admin", nil, req.WeeklyTokenLimit)
 	if err != nil {
 		sendStoreError(c, err)
 		return
@@ -106,6 +116,26 @@ func (h *Handler) Create(c *gin.Context) {
 		DisplayName: record.DisplayName,
 		CreatedAt:   record.CreatedAt,
 	})
+}
+
+// SetQuota changes the limit without resetting this week's consumption.
+func (h *Handler) SetQuota(c *gin.Context) {
+	var req TokenQuotaRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apierr.Send(c, http.StatusBadRequest, err, "invalid_request_error")
+		return
+	}
+	tokenID := c.Param("token_id")
+	if err := h.store.SetWeeklyTokenLimit(tokenID, req.WeeklyTokenLimit, req.QuotaReset); err != nil {
+		sendStoreError(c, err)
+		return
+	}
+	record, err := h.store.GetToken(tokenID)
+	if err != nil {
+		sendStoreError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, recordToInfo(record))
 }
 
 // List handles GET /tokens — lists tokens with optional filters.
@@ -220,8 +250,7 @@ func (h *Handler) setEnabled(c *gin.Context, enabled bool) {
 	c.Status(http.StatusNoContent)
 }
 
-// Regenerate handles POST /tokens/:token_id/regenerate — keeps the same
-// token_id but issues a new token string.
+// Regenerate replaces the key with a new secret and a fresh quota.
 func (h *Handler) Regenerate(c *gin.Context) {
 	tokenID := c.Param("token_id")
 	if tokenID == "" {
@@ -249,7 +278,7 @@ func (h *Handler) Regenerate(c *gin.Context) {
 
 	c.JSON(http.StatusOK, TokenCreateResponse{
 		Token:       newTokenString,
-		TokenID:     record.TokenID,
+		TokenID:     newTokenString,
 		UserID:      record.UserID,
 		TeamID:      record.TeamID,
 		DisplayName: record.DisplayName,

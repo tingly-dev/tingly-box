@@ -1,13 +1,17 @@
 package sharing
 
-import "time"
+import (
+	"github.com/tingly-dev/tingly-box/internal/db"
+	"time"
+)
 
 // --- types ------------------------------------------------------------------
 
 // TokenCreateRequest is the request body for creating a new API token.
 type TokenCreateRequest struct {
-	DisplayName string `json:"display_name" binding:"required"`
-	TeamID      string `json:"team_id,omitempty"`
+	WeeklyTokenLimit *int64 `json:"weekly_token_limit,omitempty" binding:"omitempty,gte=0,lte=9007199254740991" nullable:"true"`
+	DisplayName      string `json:"display_name" binding:"required"`
+	TeamID           string `json:"team_id,omitempty"`
 }
 
 // TokenListQuery describes the optional filters accepted by GET /tokens.
@@ -31,14 +35,24 @@ type TokenCreateResponse struct {
 
 // APITokenInfo represents token metadata (without the raw token string).
 type APITokenInfo struct {
-	TokenID     string     `json:"token_id"`
-	UserID      string     `json:"user_id"`
-	TeamID      string     `json:"team_id"`
-	DisplayName string     `json:"display_name"`
-	Enabled     bool       `json:"enabled"`
-	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	CreatedBy   string     `json:"created_by,omitempty"`
+	WeeklyTokenLimit *int64              `json:"weekly_token_limit" nullable:"true"`
+	WeeklyTokensUsed int64               `json:"weekly_tokens_used"`
+	QuotaResetsAt    *time.Time          `json:"quota_resets_at" nullable:"true"`
+	QuotaReset       db.QuotaResetPolicy `json:"quota_reset"`
+	TokenID          string              `json:"token_id"`
+	UserID           string              `json:"user_id"`
+	TeamID           string              `json:"team_id"`
+	DisplayName      string              `json:"display_name"`
+	Enabled          bool                `json:"enabled"`
+	LastUsedAt       *time.Time          `json:"last_used_at,omitempty"`
+	CreatedAt        time.Time           `json:"created_at"`
+	CreatedBy        string              `json:"created_by,omitempty"`
+}
+
+// TokenQuotaRequest sets the weekly budget. Null removes the limit.
+type TokenQuotaRequest struct {
+	WeeklyTokenLimit *int64               `json:"weekly_token_limit" binding:"omitempty,gte=0,lte=9007199254740991" nullable:"true"`
+	QuotaReset       *db.QuotaResetPolicy `json:"quota_reset,omitempty"`
 }
 
 // TokenMoveRequest moves an existing sharing key to another team. The raw key

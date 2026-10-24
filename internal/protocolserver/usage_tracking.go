@@ -144,6 +144,7 @@ func (ph *ProtocolHandler) trackUsageFromContext(c *gin.Context, inputTokens, ou
 	ph.setTokenUsageOnSpan(c, inputTokens, outputTokens)
 
 	// 4. Persist service stats and detailed usage together in one transaction
+	chargeSharingKeyTokens(c, int64(inputTokens)+int64(outputTokens))
 	usageRecord := ph.recordDetailedUsage(c, rule, provider, model, requestModel, scenario, inputTokens, outputTokens, streamed, status, errorCode, latencyMs)
 	ph.persistRequestOutcome(service, usageRecord)
 
@@ -275,6 +276,9 @@ func (ph *ProtocolHandler) trackUsageWithTokenUsage(c *gin.Context, usage *proto
 	ph.setTokenUsageOnSpan(c, usage.InputTokens, usage.OutputTokens)
 
 	// 4. Persist service stats and detailed usage together in one transaction
+	// Canonical input excludes cache reads; writes and reasoning are already
+	// included in input and output respectively. Quotas count every token once.
+	chargeSharingKeyTokens(c, int64(usage.PromptTotalTokens())+int64(usage.OutputTokens))
 	usageRecord := ph.recordDetailedUsageWithTokenUsage(c, rule, provider, model, requestModel, scenario, usage, streamed, status, errorCode, latencyMs)
 	ph.persistRequestOutcome(service, usageRecord)
 
@@ -428,6 +432,16 @@ func (ph *ProtocolHandler) recordDetailedUsageWithTokenUsage(c *gin.Context, rul
 	}
 
 	return record
+}
+
+func chargeSharingKeyTokens(c *gin.Context, tokens int64) {
+	if value, ok := c.Get(constant.CtxKeyChargeTokens); ok {
+		if charge, ok := value.(func(int64) error); ok {
+			if err := charge(tokens); err != nil {
+				logrus.WithError(err).Error("Failed to persist sharing key token usage; key disabled in memory")
+			}
+		}
+	}
 }
 
 // updateServiceStats updates the in-memory service-level stats (tokens,

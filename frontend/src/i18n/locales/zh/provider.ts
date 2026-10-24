@@ -218,6 +218,26 @@ export default {
     "copyButton": "复制令牌"
   },
   "sharingKeys": {
+    "quota": {
+      "title": "每周 token 预算",
+      "remaining": "已用：{{used}} · 剩余：{{remaining}}",
+      "limit": "每周 token 上限",
+      "help": "留空不限额，0 禁止请求。计入输入（含缓存）和输出。新 Key 默认跟随 Provider 的周重置时间，可在额度编辑器中设置。修改保留已用量；处理中请求可能导致超额。",
+      "resetMode": "重置规则",
+      "followProvider": "跟随 Provider（默认）",
+      "manualReset": "手动设置每周重置",
+      "legacyReset": "原有规则：每周一 UTC 00:00",
+      "provider": "重置时间来源",
+      "autoProvider": "仅有一个 Provider 时自动选择",
+      "providerHelp": "仅读取账户级周重置时间，不读取余额推算消耗，也不改变 Team 路由。有多个 Provider 时请选择一个。查询失败保留已知时间，不推测后续重置。",
+      "providerLoadFailed": "无法加载 Provider，保留原选择；请重试或改为手动设置。",
+      "anchor": "每周重置起点（本地时间）",
+      "manualHelp": "从此日期起每 7×24 小时重复，按 UTC 保存。过去的日期取下一次重复时间。保存不会清空用量；夏令时可能改变本地显示时间。",
+      "unknownReset": "重置时间未知：等待 Provider 数据，或手动设置。没有已知时间时不会自动清空用量。",
+      "usage": "Token：{{used}} / {{limit}}",
+      "unlimited": "不限额",
+      "resets": "重置时间：{{time}}"
+    },
     "title": "Team 密钥",
     "titleForTeam": "Team 密钥 · {{team}}",
     "createToken": "创建令牌",

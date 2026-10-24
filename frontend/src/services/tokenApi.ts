@@ -69,10 +69,19 @@ export const tokenApi = {
     createAPIToken: async (data: {
         display_name: string;
         team_id?: string;
+        weekly_token_limit?: number | null;
     }): Promise<any> =>
         tokenWrap((client, headers) => client.POST('/api/v1/tokens', {
             headers,
             body: data as any
+        })),
+
+    // Change the weekly limit without resetting the counter.
+    setAPITokenQuota: async (tokenId: string, limit: number | null, reset?: {mode: 'provider' | 'manual' | 'legacy'; provider_id?: string; anchor?: string}): Promise<any> =>
+        tokenWrap((client, headers) => client.PUT('/api/v1/tokens/{token_id}/quota', {
+            headers,
+            params: {path: {token_id: tokenId}},
+            body: {weekly_token_limit: limit, ...(reset ? {quota_reset: reset} : {})},
         })),
 
     // Delete an API token

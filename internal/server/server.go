@@ -472,6 +472,31 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		logrus.WithError(err).Warn("Failed to initialize provider quota manager")
 	} else {
 		server.quotaManager = quotaMgr
+		if sm := cfg.StoreManager(); sm != nil && sm.APIToken() != nil {
+			sm.APIToken().SetQuotaResetSource(func(providerID string) (string, *time.Time) {
+				// Bind automatically only when there is no ambiguous provider choice.
+				if providerID == "" {
+					var providers []*typ.Provider
+					for _, provider := range cfg.ListProviders() {
+						if provider.Enabled && !provider.IsBuiltin() && !provider.IsVirtual() {
+							providers = append(providers, provider)
+						}
+					}
+					if len(providers) != 1 {
+						return "", nil
+					}
+					providerID = providers[0].UUID
+				}
+				if _, err := cfg.GetProviderByUUID(providerID); err != nil {
+					return providerID, nil
+				}
+				usage, err := quotaMgr.GetQuota(context.Background(), providerID)
+				if err != nil {
+					return providerID, nil
+				}
+				return providerID, db.ProviderWeeklyReset(usage)
+			})
+		}
 		// Wire quota into smart routing's service_quota op. Done here,
 		// after quota manager init, rather than threading it through the
 		// selector constructor above — quota init can fail independently and

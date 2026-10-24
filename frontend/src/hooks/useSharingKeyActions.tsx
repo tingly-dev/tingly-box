@@ -9,8 +9,9 @@ import {
     MenuItem,
     Stack,
     TextField,
+    Typography,
 } from '@mui/material';
-import { useState, type ComponentProps } from 'react';
+import { useEffect, useState, type ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
@@ -23,7 +24,7 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 
 export type SharingKeyTableActions = Pick<
     ComponentProps<typeof SharingKeysTable>,
-    'visibleTokens' | 'onToggleVisibility' | 'onCopy' | 'onToggleEnabled' | 'onDelete' | 'onMove'
+    'visibleTokens' | 'onToggleVisibility' | 'onCopy' | 'onToggleEnabled' | 'onDelete' | 'onMove' | 'onQuota'
 >;
 
 interface UseSharingKeyActionsOptions {
@@ -47,6 +48,31 @@ export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsO
     const [createTeam, setCreateTeam] = useState<Team | null>(null);
     const [newTokenName, setNewTokenName] = useState('');
     const [creatingToken, setCreatingToken] = useState(false);
+    const [weeklyLimit, setWeeklyLimit] = useState('');
+    const [quotaKey, setQuotaKey] = useState<SharingKey | null>(null);
+    const [savingQuota, setSavingQuota] = useState(false);
+    const [resetMode, setResetMode] = useState<'provider' | 'manual' | 'legacy'>('provider');
+    const [resetProvider, setResetProvider] = useState('');
+    const [resetAnchor, setResetAnchor] = useState('');
+    const [providers, setProviders] = useState<{uuid: string; name: string}[]>([]);
+    const [providerLoadFailed, setProviderLoadFailed] = useState(false);
+    const quotaOpen = Boolean(quotaKey);
+    useEffect(() => {
+        if (!quotaOpen) return;
+        let active = true;
+        api.getProviders().then((result) => {
+            if (!active) return;
+            if (!result.success) { setProviderLoadFailed(true); return; }
+            const items = (result.data ?? []).filter((provider: {source?: string; auth_type?: string; enabled?: boolean}) => provider.source !== 'builtin' && provider.auth_type !== 'vmodel' && provider.enabled !== false);
+            setProviders(items);
+            if (items.length === 1) setResetProvider((value) => value || items[0].uuid);
+        }).catch(() => { if (active) setProviderLoadFailed(true); });
+        return () => { active = false; };
+    }, [quotaOpen]);
+    const validReset = (resetMode !== 'manual' || (resetAnchor !== '' && Number.isFinite(new Date(resetAnchor).getTime())))
+        && (resetMode !== 'provider' || providers.length <= 1 || resetProvider !== '');
+    const parsedLimit = weeklyLimit.trim() === '' ? null : Number(weeklyLimit);
+    const validLimit = parsedLimit === null || (Number.isSafeInteger(parsedLimit) && parsedLimit >= 0);
     const [tokenToDelete, setTokenToDelete] = useState<SharingKey | null>(null);
     // Kept separate from tokenToDelete so the name doesn't blank out while the dialog animates closed.
     const [deleteOpen, setDeleteOpen] = useState(false);
@@ -57,17 +83,18 @@ export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsO
 
     const openCreate = (team: Team) => {
         setNewTokenName('');
+        setWeeklyLimit('');
         setCreateTeam(team);
     };
 
     const handleCreateToken = async () => {
-        if (!createTeam) return;
+        if (!createTeam || !validLimit) return;
         if (!newTokenName.trim()) {
             notify.error(t('sharingKeys.nameRequired'));
             return;
         }
         setCreatingToken(true);
-        const result = await api.createAPIToken({ display_name: newTokenName.trim(), team_id: createTeam.id });
+        const result = await api.createAPIToken({ display_name: newTokenName.trim(), team_id: createTeam.id, weekly_token_limit: parsedLimit });
         setCreatingToken(false);
         if (result.success) {
             notify.success(t('sharingKeys.createSuccess'));
@@ -113,6 +140,16 @@ export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsO
     };
 
     const tableProps: SharingKeyTableActions = {
+        onQuota: (key) => {
+            setProviderLoadFailed(false);
+            setProviders([]);
+            setWeeklyLimit(key.weekly_token_limit == null ? '' : String(key.weekly_token_limit));
+            setResetMode(key.quota_reset?.mode || 'legacy');
+            setResetProvider(key.quota_reset?.provider_id || '');
+            const anchor = key.quota_reset?.anchor ? new Date(key.quota_reset.anchor) : null;
+            setResetAnchor(anchor ? new Date(anchor.getTime() - anchor.getTimezoneOffset() * 60000).toISOString().slice(0, 19) : '');
+            setQuotaKey(key);
+        },
         visibleTokens,
         onToggleVisibility: (tokenId) => setVisibleTokens((prev) => ({ ...prev, [tokenId]: !prev[tokenId] })),
         onCopy: async (tokenId) => {
@@ -146,8 +183,80 @@ export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsO
         (candidate) => candidate.id !== tokenToMove?.team_id && candidate.enabled,
     );
 
+    const handleSaveQuota = async () => {
+        if (!quotaKey || !validLimit || !validReset) return;
+        setSavingQuota(true);
+        try {
+            const result = await api.setAPITokenQuota(quotaKey.token_id, parsedLimit, {
+                mode: resetMode,
+                ...(resetMode === 'provider' ? {provider_id: resetProvider} : {}),
+                ...(resetMode === 'manual' ? {anchor: new Date(resetAnchor).toISOString()} : {}),
+            });
+            if (result.success) {
+                setQuotaKey(null);
+                onChanged();
+            } else {
+                notify.error(result.error?.message || result.error || t('sharingKeys.updateFailed'));
+            }
+        } finally {
+            setSavingQuota(false);
+        }
+    };
+
     const dialogs = (
         <>
+            <Dialog open={Boolean(quotaKey)} onClose={() => { if (!savingQuota) setQuotaKey(null); }} maxWidth="sm" fullWidth>
+                <DialogTitle>{t('sharingKeys.quota.title')}</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2">
+                        {quotaKey?.display_name}
+                        {' — '}
+                        {t('sharingKeys.quota.remaining', {
+                            used: (quotaKey?.weekly_tokens_used ?? 0).toLocaleString(),
+                            remaining: parsedLimit == null || !validLimit ? t('sharingKeys.quota.unlimited')
+                                : Math.max(0, parsedLimit - (quotaKey?.weekly_tokens_used ?? 0)).toLocaleString(),
+                        })}
+                    </Typography>
+                    <TextField
+                        fullWidth
+                        sx={{ mt: 1 }}
+                        type="number"
+                        label={t('sharingKeys.quota.limit')}
+                        value={weeklyLimit}
+                        onChange={(event) => setWeeklyLimit(event.target.value)}
+                        disabled={savingQuota}
+                        error={!validLimit}
+                        helperText={t('sharingKeys.quota.help')}
+                    />
+                    <TextField select fullWidth sx={{ mt: 2 }} label={t('sharingKeys.quota.resetMode')}
+                        value={resetMode} onChange={(event) => setResetMode(event.target.value as typeof resetMode)} disabled={savingQuota}>
+                        <MenuItem value="provider">{t('sharingKeys.quota.followProvider')}</MenuItem>
+                        <MenuItem value="manual">{t('sharingKeys.quota.manualReset')}</MenuItem>
+                        {resetMode === 'legacy' && <MenuItem value="legacy">{t('sharingKeys.quota.legacyReset')}</MenuItem>}
+                    </TextField>
+                    {resetMode === 'provider' && <TextField select fullWidth sx={{ mt: 2 }}
+                        label={t('sharingKeys.quota.provider')} value={resetProvider}
+                        onChange={(event) => setResetProvider(event.target.value)} disabled={savingQuota}
+                        helperText={t(providerLoadFailed ? 'sharingKeys.quota.providerLoadFailed' : 'sharingKeys.quota.providerHelp')}>
+                        <MenuItem value="">{t('sharingKeys.quota.autoProvider')}</MenuItem>
+                        {resetProvider && !providers.some((provider) => provider.uuid === resetProvider) && <MenuItem value={resetProvider}>{resetProvider}</MenuItem>}
+                        {providers.map((provider) => <MenuItem key={provider.uuid} value={provider.uuid}>{provider.name}</MenuItem>)}
+                    </TextField>}
+                    {resetMode === 'manual' && <TextField fullWidth sx={{ mt: 2 }} type="datetime-local"
+                        label={t('sharingKeys.quota.anchor')} value={resetAnchor} disabled={savingQuota}
+                        slotProps={{ inputLabel: { shrink: true }, htmlInput: { step: 1 } }} error={!validReset}
+                        onChange={(event) => setResetAnchor(event.target.value)} helperText={t('sharingKeys.quota.manualHelp')} />}
+                    <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>
+                        {quotaKey?.quota_resets_at ? t('sharingKeys.quota.resets', {time: new Date(quotaKey.quota_resets_at).toLocaleString()}) : t('sharingKeys.quota.unknownReset')}
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button disabled={savingQuota} onClick={() => setQuotaKey(null)}>{t('common.cancel')}</Button>
+                    <Button variant="contained" disabled={savingQuota || !validLimit || !validReset} onClick={handleSaveQuota}>
+                        {t('common.save')}
+                    </Button>
+                </DialogActions>
+            </Dialog>
             <Dialog open={Boolean(tokenToMove)} onClose={() => setTokenToMove(null)} maxWidth="sm" fullWidth>
                 <DialogTitle>{t('sharingKeys.moveToken')}</DialogTitle>
                 <DialogContent>
@@ -180,6 +289,9 @@ export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsO
                 <DialogContent>
                     <Stack spacing={2} sx={{ mt: 1 }}>
                         {createTeam && <TeamKeyScopeAlert team={createTeam} />}
+                        <TextField type="number" label={t('sharingKeys.quota.limit')} fullWidth
+                            value={weeklyLimit} onChange={(event) => setWeeklyLimit(event.target.value)}
+                            error={!validLimit} helperText={t('sharingKeys.quota.help')} />
                         <TextField
                             label={t('sharingKeys.displayName')}
                             fullWidth
@@ -196,7 +308,7 @@ export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsO
                     <Button
                         variant="contained"
                         onClick={handleCreateToken}
-                        disabled={creatingToken || !newTokenName.trim()}
+                        disabled={creatingToken || !newTokenName.trim() || !validLimit}
                         startIcon={creatingToken ? <CircularProgress size={16} /> : <IconPlus sx={{ fontSize: 18 }} />}
                     >
                         {t('sharingKeys.createToken')}

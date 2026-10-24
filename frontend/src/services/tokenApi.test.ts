@@ -29,4 +29,18 @@ describe('token API', () => {
         vi.stubGlobal('fetch', vi.fn(async () => Response.json({ error: 'token not found' }, { status: 404 })));
         expect(await tokenApi.deleteAPIToken('tb-share-x')).toEqual({ success: false, error: 'token not found' });
     });
+
+    it.each([null, 0, 1000000])('sends an explicit quota of %s', async (limit) => {
+        const fetchMock = vi.fn(async (request: Request) => {
+            expect(request.url).toBe('https://example.test/api/v1/tokens/tb-share-x/quota');
+            expect(request.method).toBe('PUT');
+            expect(await request.json()).toEqual({weekly_token_limit: limit});
+            return Response.json({weekly_token_limit: limit, weekly_tokens_used: 123});
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        expect(await tokenApi.setAPITokenQuota('tb-share-x', limit)).toEqual({
+            success: true, data: {weekly_token_limit: limit, weekly_tokens_used: 123},
+        });
+        expect(fetchMock).toHaveBeenCalledOnce();
+    });
 });

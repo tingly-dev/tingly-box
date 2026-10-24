@@ -277,7 +277,8 @@ func (ph *ProtocolHandler) dispatchGoogle(
 			outputTokens = int(resp.UsageMetadata.CandidatesTokenCount)
 			cacheTokens = int(resp.UsageMetadata.CachedContentTokenCount)
 		}
-		usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
+		// Google prompt totals also include cached content.
+		usage := protocol.NewTokenUsageWithCache(inputTokens-cacheTokens, outputTokens, cacheTokens)
 		ph.trackUsageWithTokenUsage(c, usage, nil)
 
 		switch reqCtx.SourceAPI {

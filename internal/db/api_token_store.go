@@ -12,18 +12,25 @@ import (
 
 // APITokenRecord represents a user API token for multi-tenant authentication
 type APITokenRecord struct {
-	ID           uint       `gorm:"primaryKey;autoIncrement;column:id"`
-	TokenID      string     `gorm:"uniqueIndex;column:token_id;not null;size:64"` // Token identifier (jti)
-	UserID       string     `gorm:"index:idx_api_token_user_id;not null;column:user_id;size:64"`
-	TeamID       string     `gorm:"index:idx_api_token_team_id;not null;default:'00000000-0000-0000-0000-000000000001';column:team_id;size:36"`
-	DisplayName  string     `gorm:"column:display_name;size:256"`
-	Enabled      bool       `gorm:"column:enabled;default:true"`
-	ExpiresAt    *time.Time `gorm:"column:expires_at;index"`
-	LastUsedAt   *time.Time `gorm:"column:last_used_at"`
-	CreatedAt    time.Time  `gorm:"column:created_at"`
-	CreatedBy    string     `gorm:"column:created_by;size:64"`
-	RevokedAt    *time.Time `gorm:"column:revoked_at"`
-	RevokeReason string     `gorm:"column:revoke_reason;size:512"`
+	ID               uint       `gorm:"primaryKey;autoIncrement;column:id"`
+	TokenID          string     `gorm:"uniqueIndex;column:token_id;not null;size:64"` // Token identifier (jti)
+	UserID           string     `gorm:"index:idx_api_token_user_id;not null;column:user_id;size:64"`
+	TeamID           string     `gorm:"index:idx_api_token_team_id;not null;default:'00000000-0000-0000-0000-000000000001';column:team_id;size:36"`
+	DisplayName      string     `gorm:"column:display_name;size:256"`
+	Enabled          bool       `gorm:"column:enabled;default:true"`
+	ExpiresAt        *time.Time `gorm:"column:expires_at;index"`
+	LastUsedAt       *time.Time `gorm:"column:last_used_at"`
+	CreatedAt        time.Time  `gorm:"column:created_at"`
+	CreatedBy        string     `gorm:"column:created_by;size:64"`
+	RevokedAt        *time.Time `gorm:"column:revoked_at"`
+	RevokeReason     string     `gorm:"column:revoke_reason;size:512"`
+	WeeklyTokenLimit *int64     `gorm:"column:weekly_token_limit"`
+	WeeklyTokensUsed int64      `gorm:"column:weekly_tokens_used;not null;default:0"`
+	TokenWeekStart   time.Time  `gorm:"column:token_week_start"`
+	QuotaResetMode   string     `gorm:"column:quota_reset_mode"`
+	QuotaProviderID  string     `gorm:"column:quota_provider_id"`
+	QuotaResetAnchor *time.Time `gorm:"column:quota_reset_anchor"`
+	QuotaResetsAt    *time.Time `gorm:"column:quota_resets_at"`
 }
 
 // TableName specifies the table name for GORM
@@ -45,9 +52,10 @@ const defaultLastUsedDebounce = 10 * time.Minute
 // api_tokens table by TokenID the same way ProviderStore mirrors providers.
 type APITokenStore struct {
 	storeConn
-	mu        sync.RWMutex
-	cache     map[string]*APITokenRecord
-	teamStore *TeamStore
+	mu               sync.RWMutex
+	cache            map[string]*APITokenRecord
+	teamStore        *TeamStore
+	quotaResetSource func(string) (string, *time.Time)
 
 	// lastUsedDebounce is the minimum interval between persisted
 	// last_used_at writes for the same token; see UpdateLastUsed.
@@ -154,19 +162,28 @@ func ensureAPITokenSchema(db *gorm.DB) error {
 
 // createTokenRecord is a private helper that creates a token record with the given parameters.
 // The caller must hold s.mu.Lock() before calling this function.
-func (s *APITokenStore) createTokenRecord(userID, tokenID, teamID, displayName, createdBy string, expiresAt *time.Time) (*APITokenRecord, error) {
+func (s *APITokenStore) createTokenRecord(userID, tokenID, teamID, displayName, createdBy string, expiresAt *time.Time, limits ...*int64) (*APITokenRecord, error) {
 	now := time.Now()
 	record := &APITokenRecord{
-		TokenID:     tokenID,
-		UserID:      userID,
-		TeamID:      teamID,
-		DisplayName: displayName,
-		Enabled:     true,
-		ExpiresAt:   expiresAt,
-		CreatedAt:   now,
-		CreatedBy:   createdBy,
+		TokenID:        tokenID,
+		UserID:         userID,
+		TeamID:         teamID,
+		DisplayName:    displayName,
+		Enabled:        true,
+		ExpiresAt:      expiresAt,
+		CreatedAt:      now,
+		CreatedBy:      createdBy,
+		QuotaResetMode: "provider",
+		TokenWeekStart: now,
 	}
 
+	if len(limits) > 0 && limits[0] != nil {
+		limit := *limits[0]
+		if limit < 0 || limit > 9007199254740991 {
+			return nil, fmt.Errorf("weekly token limit must be a non-negative safe integer")
+		}
+		record.WeeklyTokenLimit = &limit
+	}
 	if err := s.db.Create(record).Error; err != nil {
 		return nil, fmt.Errorf("failed to create API token record: %w", err)
 	}
@@ -182,7 +199,7 @@ func (s *APITokenStore) CreateTokenWithTokenID(userID, tokenID, displayName, cre
 }
 
 // CreateTokenForTeam creates a sharing key bound to exactly one enabled team.
-func (s *APITokenStore) CreateTokenForTeam(userID, tokenID, teamID, displayName, createdBy string, expiresAt *time.Time) (*APITokenRecord, error) {
+func (s *APITokenStore) CreateTokenForTeam(userID, tokenID, teamID, displayName, createdBy string, expiresAt *time.Time, limits ...*int64) (*APITokenRecord, error) {
 	if userID == "" {
 		return nil, errors.New("user ID cannot be empty")
 	}
@@ -206,7 +223,7 @@ func (s *APITokenStore) CreateTokenForTeam(userID, tokenID, teamID, displayName,
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return s.createTokenRecord(userID, tokenID, teamID, displayName, createdBy, expiresAt)
+	return s.createTokenRecord(userID, tokenID, teamID, displayName, createdBy, expiresAt, limits...)
 }
 
 // ValidateToken validates a token ID and returns the associated token record
@@ -215,8 +232,8 @@ func (s *APITokenStore) ValidateToken(tokenID string) (*APITokenRecord, error) {
 		return nil, errors.New("token ID cannot be empty")
 	}
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	record, ok := s.cache[tokenID]
 	if !ok || !record.Enabled {
@@ -233,7 +250,13 @@ func (s *APITokenStore) ValidateToken(tokenID string) (*APITokenRecord, error) {
 		return nil, fmt.Errorf("token team not found or disabled")
 	}
 
+	if err := s.refreshQuotaLocked(record, time.Now()); err != nil {
+		return nil, err
+	}
 	clone := *record
+	if clone.WeeklyTokenLimit != nil && clone.WeeklyTokensUsed >= *clone.WeeklyTokenLimit {
+		return nil, &TokenQuotaExceeded{Limit: *clone.WeeklyTokenLimit, Used: clone.WeeklyTokensUsed, ResetsAt: clone.QuotaResetsAt}
+	}
 	return &clone, nil
 }
 
@@ -314,8 +337,8 @@ func (s *APITokenStore) ListTokens(userID string, enabled *bool, limit, offset i
 // An empty team ID preserves the legacy all-teams behavior for callers that
 // have not opted into team-aware management yet.
 func (s *APITokenStore) ListTokensForTeam(userID, teamID string, enabled *bool, limit, offset int) ([]APITokenRecord, int64, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	db := s.db.Model(&APITokenRecord{})
 
@@ -345,19 +368,30 @@ func (s *APITokenStore) ListTokensForTeam(userID, teamID string, enabled *bool, 
 		return nil, 0, fmt.Errorf("failed to list tokens: %w", err)
 	}
 
+	for i := range records {
+		if cached := s.cache[records[i].TokenID]; cached != nil {
+			if err := s.refreshQuotaLocked(cached, time.Now()); err != nil {
+				return nil, 0, err
+			}
+			records[i] = *cached
+		}
+	}
 	return records, total, nil
 }
 
 // GetToken retrieves a token by token ID
 func (s *APITokenStore) GetToken(tokenID string) (*APITokenRecord, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	record, ok := s.cache[tokenID]
 	if !ok {
 		return nil, fmt.Errorf("token with ID '%s' not found", tokenID)
 	}
 
+	if err := s.refreshQuotaLocked(record, time.Now()); err != nil {
+		return nil, err
+	}
 	clone := *record
 	return &clone, nil
 }
@@ -435,27 +469,39 @@ func (s *APITokenStore) SetTokenEnabled(tokenID string, enabled bool) error {
 	return nil
 }
 
-// UpdateTokenString updates the token string for a token (for regeneration)
+// UpdateTokenString replaces a key with a fresh quota, preserving its settings.
 func (s *APITokenStore) UpdateTokenString(tokenID, newTokenString string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	result := s.db.Model(&APITokenRecord{}).
-		Where("token_id = ?", tokenID).
-		Update("token_id", newTokenString)
-
-	if result.Error != nil {
-		return fmt.Errorf("failed to update token string: %w", result.Error)
-	}
-	if result.RowsAffected == 0 {
+	record, ok := s.cache[tokenID]
+	if !ok {
 		return fmt.Errorf("token with ID '%s' not found", tokenID)
 	}
-
-	if record, ok := s.cache[tokenID]; ok {
-		delete(s.cache, tokenID)
-		record.TokenID = newTokenString
-		s.cache[newTokenString] = record
+	if newTokenString == tokenID {
+		return fmt.Errorf("new token must differ from the old token")
 	}
+	replacement := *record
+	replacement.ID = 0 // Late usage from the old key must not charge the new key.
+	replacement.TokenID = newTokenString
+	replacement.WeeklyTokensUsed = 0
+	replacement.LastUsedAt = nil
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&replacement).Error; err != nil {
+			return err
+		}
+		// GORM applies the enabled=true default even when the source key is disabled.
+		if err := tx.Model(&replacement).Update("enabled", record.Enabled).Error; err != nil {
+			return err
+		}
+		return tx.Delete(record).Error
+	})
+	if err != nil {
+		return fmt.Errorf("failed to replace token: %w", err)
+	}
+	replacement.Enabled = record.Enabled
+	delete(s.cache, tokenID)
+	s.cache[newTokenString] = &replacement
 
 	logrus.Debugf("Token regenerated, old ID: %s, new ID: %s", tokenID, newTokenString)
 	return nil

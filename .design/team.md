@@ -172,7 +172,58 @@ NULL 的 Sharing Key 自动回填为 `DefaultTeamID`，raw token 不轮换。
 
 这对应 `.design/ux-principles.md` 的命名统一、展示具体值、合理默认、内嵌教育和降低视觉噪声。
 
-## 10. Non-goals
+## 10. Weekly Sharing Key token budgets
+
+Each Sharing Key can have a nullable `weekly_token_limit`. Null (including
+existing keys after migration) is unlimited; zero blocks requests immediately.
+Regenerating a key invalidates the old secret and starts consumption at zero,
+preserving its limit and reset schedule. Late usage from the old key does not
+charge the replacement. Moving a key to another Team or editing its limit preserves
+consumption. All routed providers contribute to the same key budget. Administrators
+who can regenerate keys can therefore grant a fresh budget before the reset time.
+
+New keys default to `quota_reset.mode = provider`. The selected provider supplies
+only the account-level weekly reset timestamp, not a usage percentage or remaining
+balance. Automatic binding occurs only when exactly one enabled, non-builtin,
+non-virtual provider exists; otherwise the administrator chooses a provider in
+the quota editor. This is a clock source, not a change to Team routing. Once bound,
+the provider ID remains fixed even when other providers are added or the Key moves.
+
+The existing quota manager's local snapshots are read; admission never triggers
+an upstream fetch. Conflicting weekly windows or missing data are treated as
+unknown. A learned deadline survives failures and restart, and is consumed once.
+After that, another reset requires another observed deadline; no weekly resets
+are extrapolated from stale provider data. The API returns a nullable
+`quota_resets_at`; HTTP 429 omits `Retry-After` when it is unknown.
+
+`quota_reset.mode = manual` uses a user-specified RFC3339 `anchor`, repeated every
+7 × 24 hours in UTC (the editor displays local time; DST can shift that display).
+Existing rows with no mode retain their Monday 00:00 UTC schedule (`legacy`) until
+edited. Schedule changes preserve current usage. Expired counters and newly learned
+deadlines are persisted when a Key is validated, read, listed, or charged.
+Historical analytics are not backfilled: counting starts when this feature is
+installed, including for unlimited keys.
+
+Accounting uses canonical input + cache-read + output tokens. Cache writes are
+already included in input, and reasoning is already included in output. Reported
+usage on failed/canceled requests still counts. Missing upstream usage cannot be
+reconstructed by this feature. No additional subscription quota polling is involved.
+
+Admission rejects exhausted keys with HTTP 429 / `token_quota_exceeded` and a
+`Retry-After` header when a reset time is known. Requests already admitted may finish and overshoot the
+budget; streaming responses are not cut off. Concurrent charges are serialized
+within the existing single-process token store and written synchronously to
+SQLite, independently of asynchronous analytics. This is not a distributed
+quota service. In-flight usage can be lost if the process crashes before it is
+reported. A storage failure disables the affected key in the running process.
+
+Management: creation accepts `weekly_token_limit`; `PUT /tokens/:token_id/quota`
+changes it without resetting usage, and accepts an optional `quota_reset` policy
+(`mode`, `provider_id`, `anchor`). Omitting the policy preserves it. Both Team key
+surfaces expose the same editor; newly created keys use automatic provider mode,
+and custom provider/manual schedules can be selected in that editor.
+
+## 11. Non-goals
 
 - 通用组织、成员或角色 RBAC。
 - 一个 Sharing Key 同时属于多个 Team。
@@ -181,7 +232,7 @@ NULL 的 Sharing Key 自动回填为 `DefaultTeamID`，raw token 不轮换。
 - 用 Sharing Key 调用控制面管理 API。
 - 在 Team 体系中取代全局 model token。
 
-## 11. Key implementation files
+## 12. Key implementation files
 
 | Layer | File | Responsibility |
 |---|---|---|

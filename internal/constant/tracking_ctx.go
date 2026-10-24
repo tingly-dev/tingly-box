@@ -4,6 +4,7 @@ package constant
 // server/, routing/, middleware/, and protocol/ sub-packages can share the
 // writer/reader contract without import cycles or duplicated string literals.
 const (
+	CtxKeyChargeTokens = "charge_sharing_key_tokens" // func(int64) error
 	// Authentication metadata.
 	CtxKeyAuthKind                  = "auth_kind"                   // string (see AuthKind* constants)
 	CtxKeyUserID                    = "user_id"                     // string

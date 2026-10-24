@@ -30,6 +30,11 @@ describe('anythingWaiting', () => {
         expect(await anythingWaiting()).toBe(true);
     });
 
+    it('is true for a failed thread even when none are waiting', async () => {
+        respond([{ type: 'project', threads: { waiting: 0, failed: 1 } }]);
+        expect(await anythingWaiting()).toBe(true);
+    });
+
     it('is false when nothing waits, or the list is unreachable', async () => {
         respond([]);
         expect(await anythingWaiting()).toBe(false);

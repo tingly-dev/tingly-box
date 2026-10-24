@@ -35,7 +35,8 @@ func newServerOpsAdapter(handler *ProtocolHandler, recorder *recording.ProtocolR
 }
 
 func (a *serverOpsAdapter) TrackUsage(c *gin.Context, input, output, cache int) {
-	usage := protocol.NewTokenUsageWithCache(input, output, cache)
+	// The tool engine reports OpenAI wire totals, which already include cache.
+	usage := protocol.NewTokenUsageWithCache(input-cache, output, cache)
 	a.handler.trackUsageWithTokenUsage(c, usage, nil)
 }
 
@@ -179,7 +180,7 @@ func (ph *ProtocolHandler) DispatchGenericOpenAIChatNonStream(
 	}
 
 	if usage != nil {
-		tokenUsage := protocol.NewTokenUsageWithCache(usage.InputTokens, usage.OutputTokens, usage.CacheTokens)
+		tokenUsage := protocol.NewTokenUsageWithCache(usage.InputTokens-usage.CacheTokens, usage.OutputTokens, usage.CacheTokens)
 		ph.trackUsageWithTokenUsage(c, tokenUsage, nil)
 	}
 

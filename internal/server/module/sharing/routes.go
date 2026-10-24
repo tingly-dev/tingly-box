@@ -10,6 +10,12 @@ var _ module.Module = (*Handler)(nil)
 
 func (h *Handler) RegisterRoutes(rt *module.Routes) {
 	group := rt.V1
+	group.PUT("/tokens/:token_id/quota", h.SetQuota,
+		swagger.WithTags("tokens"),
+		swagger.WithDescription("Set the weekly token budget without resetting consumption"),
+		swagger.WithRequestModel(TokenQuotaRequest{}),
+		swagger.WithResponseModel(APITokenInfo{}),
+	)
 	group.POST("/tokens", h.Create,
 		swagger.WithTags("tokens"),
 		swagger.WithDescription("Create a shared API token"),

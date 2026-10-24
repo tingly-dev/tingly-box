@@ -13,6 +13,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	usageutil "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 	"github.com/tingly-dev/tingly-box/internal/recording"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -31,13 +32,8 @@ func (ph *ProtocolHandler) nonstreamOpenAIChat(c *gin.Context, provider *typ.Pro
 		return
 	}
 
-	// Extract usage from response
-	inputTokens := int(response.Usage.PromptTokens)
-	outputTokens := int(response.Usage.CompletionTokens)
-	cacheTokens := int(response.Usage.PromptTokensDetails.CachedTokens)
-
-	// Track usage
-	usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
+	// Normalize total prompt tokens before the shared tracker adds cache reads.
+	usage := usageutil.FromOpenAIChatCompletion(response.Usage)
 	ph.trackUsageWithTokenUsage(c, usage, nil)
 
 	// Convert response to JSON map for modification

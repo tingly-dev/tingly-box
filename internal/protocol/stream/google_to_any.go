@@ -334,7 +334,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 				// Collect usage info
 				if googleResp.UsageMetadata != nil {
 					usage = protocol.NewTokenUsageWithCache(
-						int(googleResp.UsageMetadata.PromptTokenCount),
+						int(googleResp.UsageMetadata.PromptTokenCount-googleResp.UsageMetadata.CachedContentTokenCount),
 						int(googleResp.UsageMetadata.CandidatesTokenCount),
 						int(googleResp.UsageMetadata.CachedContentTokenCount),
 					)
@@ -360,7 +360,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 		// Track usage
 		if googleResp.UsageMetadata != nil {
 			usage = protocol.NewTokenUsageWithCache(
-				int(googleResp.UsageMetadata.PromptTokenCount),
+				int(googleResp.UsageMetadata.PromptTokenCount-googleResp.UsageMetadata.CachedContentTokenCount),
 				int(googleResp.UsageMetadata.CandidatesTokenCount),
 				int(googleResp.UsageMetadata.CachedContentTokenCount),
 			)
@@ -498,7 +498,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 				// Collect usage info
 				if googleResp.UsageMetadata != nil {
 					usage = protocol.NewTokenUsageWithCache(
-						int(googleResp.UsageMetadata.PromptTokenCount),
+						int(googleResp.UsageMetadata.PromptTokenCount-googleResp.UsageMetadata.CachedContentTokenCount),
 						int(googleResp.UsageMetadata.CandidatesTokenCount),
 						int(googleResp.UsageMetadata.CachedContentTokenCount),
 					)
@@ -541,7 +541,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 		// Track usage
 		if googleResp.UsageMetadata != nil {
 			usage = protocol.NewTokenUsageWithCache(
-				int(googleResp.UsageMetadata.PromptTokenCount),
+				int(googleResp.UsageMetadata.PromptTokenCount-googleResp.UsageMetadata.CachedContentTokenCount),
 				int(googleResp.UsageMetadata.CandidatesTokenCount),
 				int(googleResp.UsageMetadata.CachedContentTokenCount),
 			)

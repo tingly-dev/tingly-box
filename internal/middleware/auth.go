@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -326,6 +327,18 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 			if strings.HasPrefix(token, "tb-share-") {
 				// This is an API token, validate it directly from database
 				tokenRecord, validateErr := am.apiTokenStore.ValidateToken(token)
+				var quotaErr *db.TokenQuotaExceeded
+				if errors.As(validateErr, &quotaErr) {
+					if quotaErr.ResetsAt != nil {
+						c.Header("Retry-After", strconv.FormatInt(int64(time.Until(*quotaErr.ResetsAt).Seconds())+1, 10))
+					}
+					c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": gin.H{
+						"type": "token_quota_exceeded", "code": "token_quota_exceeded",
+						"message": quotaErr.Error(), "limit": quotaErr.Limit,
+						"used": quotaErr.Used, "resets_at": quotaErr.ResetsAt,
+					}})
+					return
+				}
 				if validateErr == nil && tokenRecord != nil {
 					if tokenRecord.TeamID == "" {
 						abortWithError(c, http.StatusUnauthorized, "Sharing key has no team binding", "invalid_token_error")
@@ -345,6 +358,9 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 					c.Set(constant.CtxKeyAuthKind, constant.AuthKindSharingKey)
 					c.Set(constant.CtxKeyUserID, tokenRecord.UserID)
 					c.Set(constant.CtxKeyTeamID, tokenRecord.TeamID)
+					if charger, ok := am.apiTokenStore.(interface{ ChargeTokens(uint, int64) error }); ok {
+						c.Set(constant.CtxKeyChargeTokens, func(tokens int64) error { return charger.ChargeTokens(tokenRecord.ID, tokens) })
+					}
 
 					// Update last used asynchronously
 					go am.apiTokenStore.UpdateLastUsed(tokenRecord.TokenID)
