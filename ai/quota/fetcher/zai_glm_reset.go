@@ -254,9 +254,10 @@ func addGLMResetCards(usage *quota.ProviderUsage, cards []glmResetCard) {
 		} else if c.Scope != "weekly" {
 			label = "Reset card"
 		}
-		desc := "Available"
+		// Only available cards are listed, so "available" is not repeated here.
+		desc := ""
 		if !c.ExpiresAt.IsZero() {
-			desc = fmt.Sprintf("Available · Expire %s", c.ExpiresAt.Format("2006-01-02"))
+			desc = fmt.Sprintf("Expire %s", c.ExpiresAt.Format("2006-01-02"))
 		}
 		bd := usage.AddBreakdown("reset-card-"+c.ID, label, "resource", &quota.UsageWindow{
 			Type:        quota.WindowTypeBalance,

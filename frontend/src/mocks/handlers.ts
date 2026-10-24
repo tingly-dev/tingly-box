@@ -1482,7 +1482,7 @@ const mockQuotas: Record<string, any> = {
                 group: 'resource',
                 windows: [{
                     type: 'balance', used: 0, limit: 1, used_percent: 0,
-                    unit: 'credits', label: 'available', description: 'Available · Expire 2026-11-01',
+                    unit: 'credits', label: 'available', description: 'Expire 2026-11-01',
                 }],
                 redeem: { id: '101', scope: 'weekly', refill: 'weekly,5h' },
             },
@@ -1492,7 +1492,7 @@ const mockQuotas: Record<string, any> = {
                 group: 'resource',
                 windows: [{
                     type: 'balance', used: 0, limit: 1, used_percent: 0,
-                    unit: 'credits', label: 'available', description: 'Available · Expire 2026-10-31',
+                    unit: 'credits', label: 'available', description: 'Expire 2026-10-31',
                 }],
                 redeem: { id: '102', scope: '5h', refill: '5h' },
             },

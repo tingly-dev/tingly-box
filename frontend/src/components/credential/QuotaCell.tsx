@@ -230,18 +230,21 @@ export function QuotaCell({ quota, refreshing, onRefresh, onRedeem }: QuotaCellP
                                     key={key}
                                     indent
                                     label={label}
-                                    value={voucher
-                                        ? window.label
-                                        : isCountable(window)
-                                            ? t('rule.service.quota.left', { value: formatQuotaRemaining(window, formatNumber) })
-                                            : formatQuotaAvailable(window, formatNumber)}
-                                    action={onRedeem && redeem && (
-                                        <TooltipAction
-                                            icon={<Bolt sx={{ fontSize: 14 }} />}
-                                            label={t('providerTable.quota.redeem.use')}
-                                            onClick={() => setPendingCard({ label, redeem })}
-                                        />
-                                    )}
+                                    // A spendable entry offers the action where the status would
+                                    // be: "available" is implied by being listed and spendable.
+                                    value={onRedeem && redeem
+                                        ? (
+                                            <TooltipAction
+                                                icon={<Bolt sx={{ fontSize: 14 }} />}
+                                                label={t('providerTable.quota.redeem.use')}
+                                                onClick={() => setPendingCard({ label, redeem })}
+                                            />
+                                        )
+                                        : voucher
+                                            ? window.label
+                                            : isCountable(window)
+                                                ? t('rule.service.quota.left', { value: formatQuotaRemaining(window, formatNumber) })
+                                                : formatQuotaAvailable(window, formatNumber)}
                                     detail={voucher
                                         ? window.description
                                         : Number.isFinite(resetsAt) && resetsAt > now
@@ -484,7 +487,7 @@ function TooltipAction({ icon, label, disabled, onClick }: {
  * its full name, and the figure right-aligned so a column of figures lines up;
  * the reset time sits underneath in the secondary color.
  */
-function TooltipRow({ remaining, dot, dotMuted, label, value, detail, action, indent }: {
+function TooltipRow({ remaining, dot, dotMuted, label, value, detail, indent }: {
     remaining?: number;
     /** A dot instead of a ring: the row is an item or a group, not a share of a cap. */
     dot?: boolean;
@@ -494,8 +497,6 @@ function TooltipRow({ remaining, dot, dotMuted, label, value, detail, action, in
     label: ReactNode;
     value: ReactNode;
     detail?: ReactNode;
-    /** A button under the row, for an entry the user can act on. */
-    action?: ReactNode;
 }) {
     const theme = useTheme();
     return (
@@ -516,7 +517,6 @@ function TooltipRow({ remaining, dot, dotMuted, label, value, detail, action, in
                     {detail}
                 </Typography>
             )}
-            {action && <Box sx={{ gridColumn: '2 / 4', ml: -0.75 }}>{action}</Box>}
         </Box>
     );
 }
