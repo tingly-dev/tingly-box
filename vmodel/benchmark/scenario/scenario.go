@@ -116,6 +116,7 @@ func AllScenarios() []Scenario {
 		MultiTurnScenario(),
 		StreamingTextScenario(),
 		StreamingToolUseScenario(),
+		StreamingParallelToolUseScenario(),
 		IncompleteScenario(),
 		ErrorScenario(),
 		Error500Scenario(),

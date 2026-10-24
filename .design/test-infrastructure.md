@@ -69,7 +69,7 @@ End-to-end protocol transform validation framework. Tests that the gateway corre
 - **Failover helpers** — two-tier routing rules with vmodel-backed error injection.
 - **Real model config** — `LoadProvidersConfig` for testing against real upstream providers.
 
-Built-in scenarios: `text`, `tool_use`, `tool_result`, `thinking`, `multi_turn`, `streaming_text`, `streaming_tool_use`, `error`.
+Built-in scenarios: `text`, `tool_use`, `tool_result`, `thinking`, `multi_turn`, `streaming_text`, `streaming_tool_use`, `streaming_parallel_tool_use`, `error`.
 
 ### `internal/servertest`
 

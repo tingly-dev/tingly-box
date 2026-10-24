@@ -9,7 +9,7 @@ func TestAllScenarios_Registered(t *testing.T) {
 	}
 	for _, name := range []string{
 		"text", "tool_use", "tool_result", "thinking",
-		"multi_turn", "streaming_text", "streaming_tool_use", "error",
+		"multi_turn", "streaming_text", "streaming_tool_use", "streaming_parallel_tool_use", "error",
 	} {
 		if !names[name] {
 			t.Errorf("scenario %q must be registered", name)
