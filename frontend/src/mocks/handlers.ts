@@ -418,6 +418,22 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
         },
         models: ['glm-5.1', 'glm-5-turbo', 'glm-4.7'],
     },
+    {
+        provider: {
+            uuid: 'mock-oauth-workbuddy', name: 'WorkBuddy OAuth',
+            api_base: 'https://copilot.tencent.com', api_style: 'openai', auth_type: 'oauth',
+            token: '', enabled: true, proxy_url: '',
+            oauth_detail: {
+                access_token: 'mock-workbuddy-access-token',
+                refresh_token: '',
+                expires_at: mockOAuthExpiresAt,
+                issuer: 'workbuddy-cn',
+                provider_type: 'workbuddy',
+                user_id: 'mock-workbuddy-user',
+            },
+        },
+        models: ['glm-5.1', 'deepseek-v4-pro'],
+    },
 ]
 
 const mockVirtualProviders = [
@@ -1522,6 +1538,35 @@ const mockQuotas: Record<string, any> = {
         ],
     },
 
+    // A WorkBuddy account whose daily check-in is still open. Claiming adds the
+    // 100 credits and the entry goes away, like the real endpoint.
+    'mock-oauth-workbuddy': {
+        provider_uuid: 'mock-oauth-workbuddy',
+        provider_name: 'WorkBuddy OAuth',
+        provider_type: 'workbuddy',
+        fetched_at: now.toISOString(),
+        expires_at: inOneHour,
+        account: { tier: 'Pro' },
+        windows: [
+            {
+                key: 'credits', type: 'monthly', kind: 'limit', used: 612, limit: 1050, used_percent: 58,
+                resets_at: inTwoDays, unit: 'credits', label: 'Credits', description: '438 / 1050 credits left',
+            },
+        ],
+        breakdowns: [
+            {
+                key: 'daily-checkin',
+                label: 'Daily check-in',
+                group: 'resource',
+                windows: [{
+                    type: 'balance', used: 0, limit: 1, used_percent: 0,
+                    unit: 'credits', label: 'available', description: '+100 credits',
+                }],
+                redeem: { id: 'daily-checkin', scope: 'daily', auto: true },
+            },
+        ],
+    },
+
     // The rate-limited free-plan sample. Upstream calls the spent window the
     // primary one but reports 604800s for it, so its type comes from the
     // length. Spark is untouched but scoped to its own model, so it neither
@@ -2553,6 +2598,14 @@ export const handlers = [
             return HttpResponse.json({ status: 'not_found' }, { status: 404 })
         }
         usage.breakdowns = usage.breakdowns.filter((bd: any) => bd !== card)
+        if (card.redeem.scope === 'daily') {
+            for (const window of usage.windows) {
+                window.used = Math.max(0, window.used - 100)
+                window.used_percent = Math.round((window.used / window.limit) * 100)
+                window.description = `${window.limit - window.used} / ${window.limit} credits left`
+            }
+            return HttpResponse.json({ status: 'spent', message: 'ok', usage: { ...usage, fetched_at: new Date().toISOString() } })
+        }
         for (const window of usage.windows) {
             // A weekly card refills the 5-hour window too.
             const covered = window.type === 'session' || card.redeem.scope === 'weekly'
