@@ -5,6 +5,7 @@ import {
     exportProviderAsJsonlToClipboard,
 } from "@/components/rule-card/utils";
 import {QuotaCell} from "@/components/credential/QuotaCell";
+import type {RedeemOutcome} from "@/hooks/useProviderQuota";
 import {ProviderLabel} from "@/components/ProviderLogo";
 import ConfirmPopover from "@/components/ConfirmPopover";
 import {
@@ -56,6 +57,7 @@ interface OAuthTableProps {
     providerQuotas?: { [uuid: string]: ProviderQuota };
     refreshingQuotas?: Set<string>;
     onQuotaRefresh?: (providerUuid: string) => void;
+    onQuotaRedeem?: (providerUuid: string, rewardId: string) => Promise<RedeemOutcome>;
 }
 
 interface RefreshModalState {
@@ -96,6 +98,7 @@ const OAuthTable = ({
                         providerQuotas,
                         refreshingQuotas,
                         onQuotaRefresh,
+                        onQuotaRedeem,
                     }: OAuthTableProps) => {
     const {state: deleteModal, open: handleDeleteClick, close: handleCloseDeleteModal, confirm: handleConfirmDelete} =
         useDeleteConfirm(
@@ -302,6 +305,7 @@ const OAuthTable = ({
                                                 quota={providerQuotas?.[provider.uuid]}
                                                 refreshing={refreshingQuotas?.has(provider.uuid) ?? false}
                                                 onRefresh={() => onQuotaRefresh?.(provider.uuid)}
+                                                onRedeem={onQuotaRedeem && (rewardId => onQuotaRedeem(provider.uuid, rewardId))}
                                             />
                                         </TableCell>
                                     )}

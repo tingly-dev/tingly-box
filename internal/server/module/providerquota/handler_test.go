@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -21,6 +22,8 @@ type fakeManager struct {
 	errs         map[string]error
 	history      []*quota.ProviderUsage
 	historyQuery quota.HistoryQuery
+	redeemResult *quota.RedeemResult
+	redeemErr    error
 }
 
 func (f *fakeManager) GetQuota(_ context.Context, providerUUID string) (*quota.ProviderUsage, error) {
@@ -71,8 +74,11 @@ func (f *fakeManager) RefreshProvider(context.Context, string) (*quota.ProviderU
 }
 func (f *fakeManager) Summary(context.Context) (*quota.Summary, error) { return nil, nil }
 func (f *fakeManager) IsProviderSupported(string) bool                 { return true }
-func (f *fakeManager) StartAutoRefresh(context.Context)                {}
-func (f *fakeManager) StopAutoRefresh()                                {}
+func (f *fakeManager) Redeem(context.Context, string, string) (*quota.RedeemResult, error) {
+	return f.redeemResult, f.redeemErr
+}
+func (f *fakeManager) StartAutoRefresh(context.Context) {}
+func (f *fakeManager) StopAutoRefresh()                 {}
 
 func postJSON(t *testing.T, h gin.HandlerFunc, body any) *httptest.ResponseRecorder {
 	t.Helper()
@@ -185,5 +191,48 @@ func TestBatchGetQuota_RealManagerSkipsProvidersWithNoData(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (no-data providers must be skipped, not fatal); body=%s",
 			w.Code, w.Body.String())
+	}
+}
+
+func redeem(t *testing.T, mgr *fakeManager) (*httptest.ResponseRecorder, RedeemResponse) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+	c.Params = gin.Params{{Key: "uuid", Value: "glm"}, {Key: "id", Value: "101"}}
+	NewHandler(mgr, logrus.StandardLogger()).RedeemReward(c)
+	var resp RedeemResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("body %q: %v", w.Body.String(), err)
+	}
+	return w, resp
+}
+
+// Every outcome of spending a reward has its own status in the body, because
+// the client must tell "not spent" from "maybe spent" from "spent".
+func TestRedeemReward_Outcomes(t *testing.T) {
+	for name, tc := range map[string]struct {
+		result *quota.RedeemResult
+		err    error
+		code   int
+		status RedeemStatus
+	}{
+		"spent":       {&quota.RedeemResult{Message: "ok", Usage: &quota.ProviderUsage{ProviderUUID: "glm"}}, nil, http.StatusOK, RedeemSpent},
+		"rejected":    {nil, fmt.Errorf("%w: already used", quota.ErrRedeemRejected), http.StatusUnprocessableEntity, RedeemRejected},
+		"unconfirmed": {&quota.RedeemResult{Usage: &quota.ProviderUsage{}}, fmt.Errorf("%w: timeout", quota.ErrRedeemUnconfirmed), http.StatusAccepted, RedeemUnconfirmed},
+		"not found":   {nil, quota.ErrRewardNotFound, http.StatusNotFound, RedeemNotFound},
+		"busy":        {nil, quota.ErrRedeemBusy, http.StatusConflict, RedeemBusy},
+		"unsupported": {nil, quota.ErrRedeemUnsupported, http.StatusNotFound, RedeemUnsupported},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w, resp := redeem(t, &fakeManager{redeemResult: tc.result, redeemErr: tc.err})
+			if w.Code != tc.code || resp.Status != tc.status {
+				t.Fatalf("code=%d status=%q, want %d %q", w.Code, resp.Status, tc.code, tc.status)
+			}
+			if tc.result != nil && tc.result.Usage != nil && resp.Usage == nil {
+				t.Error("the read-back usage must reach the client, also when the outcome is unconfirmed")
+			}
+		})
 	}
 }

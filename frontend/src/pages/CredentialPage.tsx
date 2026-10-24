@@ -58,7 +58,7 @@ const CredentialPage = () => {
 
     useEffect(() => { loadProviders(); }, []);
 
-    const { quotaData, refreshing, refreshQuota } = useProviderQuota(providers, { fetchOnMount: true });
+    const { quotaData, refreshing, refreshQuota, redeemReward } = useProviderQuota(providers, { fetchOnMount: true });
 
     const showNotification = useCallback((message: string, severity: 'success' | 'error') => {
         notify[severity](message);
@@ -195,13 +195,13 @@ const CredentialPage = () => {
                             {credentialCounts.oauth > 0 && (
                                 <Box>
                                     <SectionTitle label={t('credentialPage.sectionOAuth')} count={credentialCounts.oauth}/>
-                                    <OAuthTable providers={oauthProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onRefreshToken={handleRefreshToken} onReauthorize={handleReauthorize} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota}/>
+                                    <OAuthTable providers={oauthProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onRefreshToken={handleRefreshToken} onReauthorize={handleReauthorize} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota} onQuotaRedeem={redeemReward}/>
                                 </Box>
                             )}
                             {credentialCounts.apiKeys > 0 && (
                                 <Box>
                                     <SectionTitle label={t('credentialPage.sectionApiKeys')} count={credentialCounts.apiKeys}/>
-                                    <ApiKeyTable providers={apiKeyProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota}/>
+                                    <ApiKeyTable providers={apiKeyProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota} onQuotaRedeem={redeemReward}/>
                                 </Box>
                             )}
                         </Stack>

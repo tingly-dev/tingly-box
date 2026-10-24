@@ -1,6 +1,6 @@
 import { Box, Button, Tooltip, Typography } from '@mui/material';
 import { useState, type MouseEvent, type ReactNode } from 'react';
-import { Code, Refresh } from '@/components/icons';
+import { Bolt, Code, Refresh } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
 import type { ProviderQuota, QuotaWindow, QuotaWindowDisplayItem } from '@/types/quota';
 import {
@@ -17,6 +17,10 @@ import { formatNumber } from '../dashboard/chartStyles';
 import { QuotaRing, formatQuotaDuration, quotaRingColor, quotaRingSpinSx } from './QuotaRing';
 import { QuotaRawResponseDialog } from './QuotaRawResponseDialog';
 import { useQuotaBars } from './useQuotaBars';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import { useNotify } from '@/hooks/useNotify';
+import type { RedeemOutcome } from '@/hooks/useProviderQuota';
+import type { UsageRedeem } from '@/types/quota';
 import { fontSizes } from '@/theme/fonts';
 
 // Older than this, the figure is dimmed: the cache is refreshed in the
@@ -37,6 +41,8 @@ interface QuotaCellProps {
     quota: ProviderQuota | undefined;
     refreshing: boolean;
     onRefresh: () => void;
+    /** Spends a reward (a reset card) of this provider; the spend button shows only when given. */
+    onRedeem?: (rewardId: string) => Promise<RedeemOutcome>;
 }
 
 /** "5h" / "7d" / "30m" from a window's period; undefined when it has none. */
@@ -89,10 +95,37 @@ interface CellLine {
  * No reading → "—", nothing more (.design/quota-semantics.md §3.6), but the
  * cell stays clickable so a reading can still be requested.
  */
-export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
+export function QuotaCell({ quota, refreshing, onRefresh, onRedeem }: QuotaCellProps) {
     const { t } = useTranslation();
     const theme = useTheme();
+    const notify = useNotify();
     const [rawOpen, setRawOpen] = useState(false);
+    // Spending a reward cannot be undone, so it always goes through a dialog
+    // that says what it will do; `spending` keeps a double click from sending
+    // a second request while the first is out.
+    const [pendingCard, setPendingCard] = useState<{ label: string; redeem: UsageRedeem } | null>(null);
+    const [spending, setSpending] = useState(false);
+    const spendCard = async () => {
+        if (!pendingCard || !onRedeem || spending) return;
+        setSpending(true);
+        try {
+            const outcome = await onRedeem(pendingCard.redeem.id);
+            const messages: Record<RedeemOutcome['status'], [string, string]> = {
+                spent: ['success', t('providerTable.quota.redeem.spent')],
+                rejected: ['error', t('providerTable.quota.redeem.rejected', { message: outcome.message ?? '' })],
+                unconfirmed: ['warning', t('providerTable.quota.redeem.unconfirmed')],
+                not_found: ['error', t('providerTable.quota.redeem.notFound')],
+                busy: ['error', t('providerTable.quota.redeem.busy')],
+                unsupported: ['error', t('providerTable.quota.redeem.error')],
+                error: ['error', t('providerTable.quota.redeem.error')],
+            };
+            const [severity, message] = messages[outcome.status] ?? messages.error;
+            notify.notify(severity as 'success' | 'error' | 'warning', message);
+        } finally {
+            setSpending(false);
+            setPendingCard(null);
+        }
+    };
     const { resourceItems } = useQuotaBars(quota);
     const windows = quotaToWindows(quota);
     const tightest = tightestWindow(quota);
@@ -189,7 +222,7 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
                 {resourceItems.map(item => (
                     <Box key={item.key} sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                         <TooltipRow dot dotMuted={item.exhausted} label={item.window.label ?? item.key} value={item.countLabel} />
-                        {item.entries.map(({ key, label, window }) => {
+                        {item.entries.map(({ key, label, window, redeem }) => {
                             const voucher = window.unit === 'credits' && window.limit === 1;
                             const resetsAt = window.resets_at ? new Date(window.resets_at).getTime() : NaN;
                             return (
@@ -202,6 +235,13 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
                                         : isCountable(window)
                                             ? t('rule.service.quota.left', { value: formatQuotaRemaining(window, formatNumber) })
                                             : formatQuotaAvailable(window, formatNumber)}
+                                    action={onRedeem && redeem && (
+                                        <TooltipAction
+                                            icon={<Bolt sx={{ fontSize: 14 }} />}
+                                            label={t('providerTable.quota.redeem.use')}
+                                            onClick={() => setPendingCard({ label, redeem })}
+                                        />
+                                    )}
                                     detail={voucher
                                         ? window.description
                                         : Number.isFinite(resetsAt) && resetsAt > now
@@ -365,6 +405,20 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
                 {figure}
             </Box>
         </Tooltip>
+        <ConfirmDialog
+            open={!!pendingCard}
+            title={t('providerTable.quota.redeem.title', { label: pendingCard?.label ?? '' })}
+            description={pendingCard?.redeem.scope === 'weekly'
+                ? t('providerTable.quota.redeem.weekly')
+                : pendingCard?.redeem.scope === '5h'
+                    ? t('providerTable.quota.redeem.fiveHour')
+                    : t('providerTable.quota.redeem.other')}
+            confirmLabel={t('providerTable.quota.redeem.confirm')}
+            confirmingLabel={t('providerTable.quota.redeem.confirming')}
+            loading={spending}
+            onClose={() => setPendingCard(null)}
+            onConfirm={spendCard}
+        />
         <QuotaRawResponseDialog
             open={rawOpen}
             onClose={() => setRawOpen(false)}
@@ -430,7 +484,7 @@ function TooltipAction({ icon, label, disabled, onClick }: {
  * its full name, and the figure right-aligned so a column of figures lines up;
  * the reset time sits underneath in the secondary color.
  */
-function TooltipRow({ remaining, dot, dotMuted, label, value, detail, indent }: {
+function TooltipRow({ remaining, dot, dotMuted, label, value, detail, action, indent }: {
     remaining?: number;
     /** A dot instead of a ring: the row is an item or a group, not a share of a cap. */
     dot?: boolean;
@@ -440,6 +494,8 @@ function TooltipRow({ remaining, dot, dotMuted, label, value, detail, indent }: 
     label: ReactNode;
     value: ReactNode;
     detail?: ReactNode;
+    /** A button under the row, for an entry the user can act on. */
+    action?: ReactNode;
 }) {
     const theme = useTheme();
     return (
@@ -460,6 +516,7 @@ function TooltipRow({ remaining, dot, dotMuted, label, value, detail, indent }: 
                     {detail}
                 </Typography>
             )}
+            {action && <Box sx={{ gridColumn: '2 / 4', ml: -0.75 }}>{action}</Box>}
         </Box>
     );
 }

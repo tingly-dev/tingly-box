@@ -58,7 +58,10 @@ export async function fetchUIAPI(url: string, options: RequestInit = {}): Promis
     if (!response.ok) {
         // The status rides along so callers can tell "this provider has no
         // quota" (404) from a real failure, and stay quiet about the former.
-        throw Object.assign(new Error(`API error: ${response.status}`), {status: response.status});
+        // The body rides along too, for endpoints whose refusals carry a typed
+        // answer (spending a reward says whether it was spent, rejected or unknown).
+        const body = await response.json().catch(() => undefined);
+        throw Object.assign(new Error(`API error: ${response.status}`), {status: response.status, body});
     }
 
     return response.json();

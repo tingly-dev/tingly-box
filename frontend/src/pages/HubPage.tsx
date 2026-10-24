@@ -84,7 +84,7 @@ export default function HubPage() {
         return () => { cancelled = true; };
     }, []);
 
-    const { quotaData, refreshing, refreshQuota, refreshAllQuotas } = useProviderQuota(providers, { fetchOnMount: true });
+    const { quotaData, refreshing, refreshQuota, redeemReward, refreshAllQuotas } = useProviderQuota(providers, { fetchOnMount: true });
 
     // The panel answers "am I about to run out?", so the provider closest to
     // its limit comes first. Providers with nothing to count (a balance, a
@@ -297,6 +297,7 @@ export default function HubPage() {
                                             quota={quota}
                                             refreshing={refreshing.has(provider.uuid)}
                                             onRefresh={() => void refreshQuota(provider.uuid)}
+                                            onRedeem={rewardId => redeemReward(provider.uuid, rewardId)}
                                         />
                                     </Box>
                                 </Stack>

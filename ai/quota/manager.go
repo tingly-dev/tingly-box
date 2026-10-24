@@ -27,6 +27,7 @@ type Manager struct {
 	providerMgr ProviderManager
 	logger      *logrus.Logger
 	refresher   *Refresher
+	redeeming   redeemGuard
 }
 
 // ProviderManager provides access to configured providers.

@@ -153,7 +153,22 @@ export default {
       "noLimits": "上游未报告额度限制",
       "none": "暂无额度数据",
       "refresh": "刷新",
-      "rawResponse": "详情"
+      "rawResponse": "详情",
+      "redeem": {
+        "use": "使用",
+        "title": "使用「{{label}}」？",
+        "weekly": "将立即补满每周额度和 5 小时额度，下一个每周周期从今天开始计算。使用后无法撤销。",
+        "fiveHour": "将立即补满 5 小时额度。使用后无法撤销。",
+        "other": "将立即重置额度。使用后无法撤销。",
+        "confirm": "使用重置卡",
+        "confirming": "使用中…",
+        "spent": "已使用重置卡",
+        "rejected": "未使用：{{message}}",
+        "unconfirmed": "无法确认重置卡是否已使用。不会自动重试，请查看额度。",
+        "notFound": "这张重置卡已不可用",
+        "busy": "该供应商正在使用另一张卡",
+        "error": "无法使用重置卡"
+      }
     },
     "columns": {
       "name": "名称",

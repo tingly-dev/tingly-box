@@ -153,7 +153,22 @@ export default {
       "noLimits": "No quota limits reported",
       "none": "No quota reading yet",
       "refresh": "Refresh",
-      "rawResponse": "Details"
+      "rawResponse": "Details",
+      "redeem": {
+        "use": "Use",
+        "title": "Use \"{{label}}\"?",
+        "weekly": "It refills your weekly and 5-hour limits right now, and the next weekly cycle counts from today. This can't be undone.",
+        "fiveHour": "It refills your 5-hour limit right now. This can't be undone.",
+        "other": "It resets your quota right now. This can't be undone.",
+        "confirm": "Use card",
+        "confirming": "Using…",
+        "spent": "Reset card used",
+        "rejected": "Not used: {{message}}",
+        "unconfirmed": "Couldn't confirm whether the card was used. It won't be retried — check the quota.",
+        "notFound": "That card is no longer available",
+        "busy": "Another card is being used for this provider",
+        "error": "Couldn't use the card"
+      }
     },
     "columns": {
       "name": "Name",
