@@ -112,6 +112,10 @@ const (
 	// backgrounded Bash command or subagent) by its task_id. Not in the
 	// public docs; verified against the CLI (see transport_control_test.go).
 	ControlRequestSubtypeStopTask = "stop_task"
+	// Verified against CLI 2.1.302 (see ref/live-control.md): both answer
+	// with a success control_response and apply from the next turn.
+	ControlRequestSubtypeSetModel          = "set_model"
+	ControlRequestSubtypeSetPermissionMode = "set_permission_mode"
 )
 
 // Control-response subtypes

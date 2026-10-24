@@ -58,6 +58,11 @@ type ApprovalResponse struct {
 	Approved     bool
 	UpdatedInput map[string]any
 	Reason       string
+	// AddDirectories grants the agent access to these directories for the
+	// rest of the session, together with this approval. It is the only way
+	// to widen a live session's accessible directories: there is no
+	// standalone request for it.
+	AddDirectories []string
 }
 
 func (ApprovalResponse) isControlResponse() {}

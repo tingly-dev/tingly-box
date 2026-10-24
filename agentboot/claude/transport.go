@@ -126,10 +126,36 @@ func (t *Transport) EncodeControlRequest(reqID string, req agentboot.ControlRequ
 		body = map[string]any{"subtype": ControlRequestSubtypeInterrupt}
 	case agentboot.StopTaskRequest:
 		body = map[string]any{"subtype": ControlRequestSubtypeStopTask, "task_id": r.TaskID}
+	case agentboot.SetModelRequest:
+		model := r.Model
+		if model == "" {
+			model = "default"
+		}
+		body = map[string]any{"subtype": ControlRequestSubtypeSetModel, "model": model}
+	case agentboot.SetPermissionModeRequest:
+		body = map[string]any{"subtype": ControlRequestSubtypeSetPermissionMode, "mode": r.Mode}
 	default:
 		return nil
 	}
 	return map[string]any{"type": ControlMsgTypeRequest, "request_id": reqID, "request": body}
+}
+
+// DecodeControlResponse recognizes Claude's answer to a host-initiated
+// control request. Implements [agentboot.ControlResponseDecoder].
+func (t *Transport) DecodeControlResponse(ev protocol.Event) (string, error, bool) {
+	if ev.Type != ControlMsgTypeResponse {
+		return "", nil, false
+	}
+	resp, _ := ev.Data["response"].(map[string]any)
+	reqID, _ := resp["request_id"].(string)
+	if reqID == "" {
+		return "", nil, false
+	}
+	if sub, _ := resp["subtype"].(string); sub == ControlResponseSubtypeError {
+		msg, _ := resp["error"].(string)
+		return reqID, &agentboot.ControlRejectedError{Message: msg}, true
+	}
+	return reqID, nil, true
 }
 
 // IsTurnStart reports whether ev opens a turn: in stream-json mode Claude
@@ -249,10 +275,18 @@ func (t *Transport) buildPermissionResponse(requestID string, result agentboot.A
 		if updatedInput == nil {
 			updatedInput = originalInput
 		}
-		innerResponse["response"] = map[string]interface{}{
+		allow := map[string]interface{}{
 			"behavior":     "allow",
 			"updatedInput": updatedInput,
 		}
+		if len(result.AddDirectories) > 0 {
+			allow["updatedPermissions"] = []map[string]any{{
+				"type":        "addDirectories",
+				"directories": result.AddDirectories,
+				"destination": "session",
+			}}
+		}
+		innerResponse["response"] = allow
 	} else {
 		message := result.Reason
 		if message == "" {

@@ -128,6 +128,7 @@ func (s *settleStore) SetFailed(id, errMsg string) bool {
 // session status transitions are driven directly.
 func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, prompt string, opts agentboot.ExecutionOptions, prompter agentboot.Prompter) (werr error, handled bool) {
 	sig := launchSignature(opts)
+	want := launchState{sig: sig, model: opts.Model, mode: opts.PermissionMode}
 	persistentSession, found := e.pool.Acquire(sessionID)
 	res, conducted := e.residentFor(sessionID)
 	if found && (!conducted || res.c.Session() != persistentSession) {
@@ -137,13 +138,13 @@ func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, 
 	}
 	if found {
 		e.mu.Lock()
-		stale := e.launch[sessionID] != sig
+		have := e.launch[sessionID]
 		e.mu.Unlock()
-		if stale {
-			// Permission mode, model or gateway settings changed since this
-			// process started; none can be changed on a live process, so
-			// restart it (Open resumes the same Claude session via
-			// opts.Resume).
+		if have.sig != sig || !e.applyLive(sessionID, res.c, have, want) {
+			// Gateway or profile settings changed since this process
+			// started, or a model / permission mode change could not be
+			// applied to it live; restart it (Open resumes the same Claude
+			// session via opts.Resume).
 			e.Evict(sessionID)
 			found = false
 		}
@@ -162,7 +163,7 @@ func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, 
 			return nil, false
 		}
 		e.mu.Lock()
-		e.launch[sessionID] = sig
+		e.launch[sessionID] = want
 		e.mu.Unlock()
 		res = e.newResident(sessionID, opened)
 		_, werr = res.c.Await(ctx, prompter)
@@ -230,8 +231,63 @@ func (e *Engine) finishTurn(ctx context.Context, sessionID string, werr error, s
 	return werr, false
 }
 
+// launchState is what a resident process runs with: sig is what only a
+// restart changes (launchSignature), model and mode are what a live control
+// request changes.
+type launchState struct {
+	sig, model, mode string
+}
+
+// liveControlTimeout bounds applyLive; a process that does not answer in
+// this time is restarted instead.
+const liveControlTimeout = 5 * time.Second
+
+// liveController is the part of a resident process applyLive drives.
+type liveController interface {
+	SetModel(ctx context.Context, model string) error
+	SetPermissionMode(ctx context.Context, mode string) error
+}
+
+// applyLive brings res's model and permission mode to want without a
+// restart. It reports false if a change could not be applied, in which case
+// the caller restarts the process, which picks the settings up at launch.
+func (e *Engine) applyLive(sessionID string, res liveController, have, want launchState) bool {
+	if have.model == want.model && have.mode == want.mode {
+		return true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), liveControlTimeout)
+	defer cancel()
+	if have.model != want.model {
+		if err := res.SetModel(ctx, want.model); err != nil {
+			return false
+		}
+		have.model = want.model
+		e.setLaunch(sessionID, have)
+	}
+	if have.mode != want.mode {
+		// An empty mode means the launch default, which a live process
+		// cannot be told to go back to by name.
+		if want.mode == "" {
+			return false
+		}
+		if err := res.SetPermissionMode(ctx, want.mode); err != nil {
+			return false
+		}
+		have.mode = want.mode
+		e.setLaunch(sessionID, have)
+	}
+	return true
+}
+
+func (e *Engine) setLaunch(sessionID string, st launchState) {
+	e.mu.Lock()
+	e.launch[sessionID] = st
+	e.mu.Unlock()
+}
+
 // launchSignature captures the launch-time settings a persistent process
-// cannot change once started. Env is sorted because hosts often build it
+// cannot change once started. Model and permission mode are not in it: they
+// are changed live (applyLive). Env is sorted because hosts often build it
 // from a map. A settings file keeps its path when its content is edited
 // (a profile, say), so its content is part of the signature, not just the
 // path.
@@ -245,5 +301,5 @@ func launchSignature(opts agentboot.ExecutionOptions) string {
 			settings += "@" + hex.EncodeToString(sum[:])
 		}
 	}
-	return opts.PermissionMode + "\x00" + opts.Entrypoint + "\x00" + opts.Model + "\x00" + settings + "\x00" + strings.Join(env, "\x00")
+	return opts.Entrypoint + "\x00" + settings + "\x00" + strings.Join(env, "\x00")
 }
