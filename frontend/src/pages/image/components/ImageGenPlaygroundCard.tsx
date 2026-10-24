@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Box,
     Button,
@@ -44,7 +44,6 @@ import { downloadStem, formatBytes, runImage } from './imageGenSession';
 import ImageModelPicker from './ImageModelPicker';
 import { imageModelOptions } from './imageModelRules';
 import MaskEditorDialog from './MaskEditorDialog';
-import SketchCanvasDialog from './SketchCanvasDialog';
 import { createImageProfile, removeImageProfile, updateImageProfile } from '../profiles/imageProfileStore';
 import { newPromptId, type ImageProfile, type ProfilePrompt } from '../profiles/imageProfileTypes';
 import { PromptEditorCopyButton, PromptEditorField, PromptPanelField } from './PromptFields';
@@ -58,6 +57,10 @@ import { useSnippets } from '../library/assetStore';
 import type { ImageAsset } from '../library/assetTypes';
 import type { ReferenceImage } from './ImageGenReferenceImages';
 import type { IdeaHandoff } from '../prompt/ideaPromptTemplates';
+
+// The sketch canvas carries the 3D mannequin (three.js, most of this page's
+// weight): load it the first time someone opens it, not with the page.
+const SketchCanvasDialog = lazy(() => import('./SketchCanvasDialog'));
 
 const TextPlus = tablerMui(IconTextPlus);
 const Writing = tablerMui(IconWriting);
@@ -215,6 +218,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         maskedReference,
         hasMaskedReference,
     } = useImageGenRefs({ showNotification, size, initialReferences: profile?.refs });
+    // Set during render the first time the sketch opens (the lazy chunk then loads).
+    const [sketchMounted, setSketchMounted] = useState(false);
+    if (sketchTarget !== null && !sketchMounted) setSketchMounted(true);
     // A brought-in image is a first-class image on this panel, not just a
     // request parameter: it opens in the same lightbox as a result, with the
     // same download and slicing tools. Its header names the file and its real
@@ -1231,14 +1237,19 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     : undefined}
                 showNotification={showNotification}
             />
-            <SketchCanvasDialog
-                open={sketchTarget !== null}
-                size={size}
-                initial={sketchInitial}
-                onClose={() => setSketchTarget(null)}
-                onSubmit={handleSketchSubmit}
-                showNotification={showNotification}
-            />
+            {/* Mounted from its first open on, so closing still animates. */}
+            {sketchMounted && (
+                <Suspense fallback={null}>
+                    <SketchCanvasDialog
+                        open={sketchTarget !== null}
+                        size={size}
+                        initial={sketchInitial}
+                        onClose={() => setSketchTarget(null)}
+                        onSubmit={handleSketchSubmit}
+                        showNotification={showNotification}
+                    />
+                </Suspense>
+            )}
         </>
     );
 };
