@@ -7,12 +7,12 @@ vi.mock('react-i18next', () => ({
     useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-const notify = vi.hoisted(() => ({ notify: vi.fn() }));
+const notify = vi.hoisted(() => ({ success: vi.fn(), warning: vi.fn(), error: vi.fn() }));
 vi.mock('@/hooks/useNotify', () => ({ useNotify: () => notify }));
 
 afterEach(() => {
     cleanup();
-    notify.notify.mockClear();
+    Object.values(notify).forEach(fn => fn.mockClear());
 });
 
 const quota = {
@@ -27,7 +27,7 @@ const quota = {
         label: 'Weekly reset card',
         group: 'resource',
         windows: [{ type: 'balance', used: 0, limit: 1, used_percent: 0, unit: 'credits', label: 'available', description: 'Available' }],
-        redeem: { id: '101', scope: 'weekly', refill: 'weekly,5h' },
+        redeem: { id: '101', scope: 'weekly' },
     }],
 } as unknown as ProviderQuota;
 
@@ -56,7 +56,7 @@ describe('QuotaCell reset cards', () => {
         fireEvent.click(screen.getByRole('button', { name: 'providerTable.quota.redeem.confirm' }));
         await waitFor(() => expect(onRedeem).toHaveBeenCalledWith('101'));
         expect(onRedeem).toHaveBeenCalledTimes(1);
-        await waitFor(() => expect(notify.notify).toHaveBeenCalledWith('success', 'providerTable.quota.redeem.spent'));
+        await waitFor(() => expect(notify.success).toHaveBeenCalledWith('providerTable.quota.redeem.spent'));
         await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     });
 
@@ -66,6 +66,6 @@ describe('QuotaCell reset cards', () => {
         hover();
         fireEvent.click(await screen.findByText('providerTable.quota.redeem.use'));
         fireEvent.click(screen.getByRole('button', { name: 'providerTable.quota.redeem.confirm' }));
-        await waitFor(() => expect(notify.notify).toHaveBeenCalledWith('warning', 'providerTable.quota.redeem.unconfirmed'));
+        await waitFor(() => expect(notify.warning).toHaveBeenCalledWith('providerTable.quota.redeem.unconfirmed'));
     });
 });

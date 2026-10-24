@@ -1,6 +1,6 @@
 import { Box, Button, Tooltip, Typography } from '@mui/material';
 import { useState, type MouseEvent, type ReactNode } from 'react';
-import { Bolt, Code, Refresh } from '@/components/icons';
+import { Code, Refresh } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
 import type { ProviderQuota, QuotaWindow, QuotaWindowDisplayItem } from '@/types/quota';
 import {
@@ -110,17 +110,13 @@ export function QuotaCell({ quota, refreshing, onRefresh, onRedeem }: QuotaCellP
         setSpending(true);
         try {
             const outcome = await onRedeem(pendingCard.redeem.id);
-            const messages: Record<RedeemOutcome['status'], [string, string]> = {
-                spent: ['success', t('providerTable.quota.redeem.spent')],
-                rejected: ['error', t('providerTable.quota.redeem.rejected', { message: outcome.message ?? '' })],
-                unconfirmed: ['warning', t('providerTable.quota.redeem.unconfirmed')],
-                not_found: ['error', t('providerTable.quota.redeem.notFound')],
-                busy: ['error', t('providerTable.quota.redeem.busy')],
-                unsupported: ['error', t('providerTable.quota.redeem.error')],
-                error: ['error', t('providerTable.quota.redeem.error')],
-            };
-            const [severity, message] = messages[outcome.status] ?? messages.error;
-            notify.notify(severity as 'success' | 'error' | 'warning', message);
+            const { status, message = '' } = outcome;
+            if (status === 'spent') notify.success(t('providerTable.quota.redeem.spent'));
+            else if (status === 'unconfirmed') notify.warning(t('providerTable.quota.redeem.unconfirmed'));
+            else if (status === 'rejected') notify.error(t('providerTable.quota.redeem.rejected', { message }));
+            else if (status === 'not_found') notify.error(t('providerTable.quota.redeem.notFound'));
+            else if (status === 'busy') notify.error(t('providerTable.quota.redeem.busy'));
+            else notify.error(t('providerTable.quota.redeem.error'));
         } finally {
             setSpending(false);
             setPendingCard(null);
@@ -234,8 +230,7 @@ export function QuotaCell({ quota, refreshing, onRefresh, onRedeem }: QuotaCellP
                                     // be: "available" is implied by being listed and spendable.
                                     value={onRedeem && redeem
                                         ? (
-                                            <TooltipAction
-                                                icon={<Bolt sx={{ fontSize: 14 }} />}
+                                            <UseButton
                                                 label={t('providerTable.quota.redeem.use')}
                                                 onClick={() => setPendingCard({ label, redeem })}
                                             />
@@ -479,6 +474,26 @@ function TooltipAction({ icon, label, disabled, onClick }: {
         >
             {label}
         </Button>
+    );
+}
+
+/**
+ * The action in a spendable entry's value slot: the same bold black text a
+ * figure there would be, so the row reads the same with or without it.
+ */
+function UseButton({ label, onClick }: { label: string; onClick: () => void }) {
+    return (
+        <Box
+            component="button"
+            type="button"
+            onClick={(e: MouseEvent) => {
+                e.stopPropagation();
+                onClick();
+            }}
+            sx={{ font: 'inherit', fontWeight: 'inherit', color: 'inherit', background: 'none', border: 0, p: 0, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+        >
+            {label}
+        </Box>
     );
 }
 

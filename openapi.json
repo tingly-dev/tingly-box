@@ -20641,10 +20641,6 @@
             "type": "string",
             "description": "Field id"
           },
-          "refill": {
-            "type": "string",
-            "description": "Field refill"
-          },
           "scope": {
             "type": "string",
             "description": "Field scope"

@@ -77,7 +77,7 @@ func TestGLMFetch_ShowsAvailableResetCards(t *testing.T) {
 		t.Fatal("quota windows were dropped")
 	}
 	bd := findBreakdown(t, usage, "reset-card-101")
-	if bd.Group != "resource" || bd.Redeem == nil || bd.Redeem.ID != "101" || bd.Redeem.Scope != "weekly" || bd.Redeem.Refill != "weekly,5h" {
+	if bd.Group != "resource" || bd.Redeem == nil || bd.Redeem.ID != "101" || bd.Redeem.Scope != "weekly" {
 		t.Fatalf("weekly card = %+v redeem=%+v", bd, bd.Redeem)
 	}
 	if bd.Windows[0].ResetsAt != nil {

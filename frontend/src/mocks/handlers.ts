@@ -1484,7 +1484,7 @@ const mockQuotas: Record<string, any> = {
                     type: 'balance', used: 0, limit: 1, used_percent: 0,
                     unit: 'credits', label: 'available', description: 'Expire 2026-11-01',
                 }],
-                redeem: { id: '101', scope: 'weekly', refill: 'weekly,5h' },
+                redeem: { id: '101', scope: 'weekly' },
             },
             {
                 key: 'reset-card-102',
@@ -1494,7 +1494,7 @@ const mockQuotas: Record<string, any> = {
                     type: 'balance', used: 0, limit: 1, used_percent: 0,
                     unit: 'credits', label: 'available', description: 'Expire 2026-10-31',
                 }],
-                redeem: { id: '102', scope: '5h', refill: '5h' },
+                redeem: { id: '102', scope: '5h' },
             },
         ],
     },
@@ -2529,12 +2529,11 @@ export const handlers = [
         if (!card) {
             return HttpResponse.json({ status: 'not_found' }, { status: 404 })
         }
-        const refill: string[] = card.redeem.refill.split(',')
         usage.breakdowns = usage.breakdowns.filter((bd: any) => bd !== card)
         for (const window of usage.windows) {
-            const weekly = window.type === 'weekly' && refill.includes('weekly')
-            const fiveHour = window.type === 'session' && refill.includes('5h')
-            if (weekly || fiveHour) {
+            // A weekly card refills the 5-hour window too.
+            const covered = window.type === 'session' || card.redeem.scope === 'weekly'
+            if (covered) {
                 window.used = 0
                 window.used_percent = 0
                 window.description = '0% utilization'

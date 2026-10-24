@@ -118,9 +118,8 @@ type UsageBreakdown struct {
 // UsageRedeem describes a spendable reward: what to ask the provider to spend
 // and what spending it does, so the UI can confirm before it is irreversible.
 type UsageRedeem struct {
-	ID     string `json:"id"`               // the provider's record id for the reward
-	Scope  string `json:"scope"`            // which allowance it refills: "weekly" or "5h"
-	Refill string `json:"refill,omitempty"` // every window it refills, e.g. "weekly,5h"
+	ID    string `json:"id"`    // the provider's record id for the reward
+	Scope string `json:"scope"` // which allowance it refills: "weekly" (also the 5-hour one) or "5h"
 }
 
 // UsageWindow represents a single quota window

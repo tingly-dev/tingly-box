@@ -38,15 +38,6 @@ type glmResetCard struct {
 	Available bool
 }
 
-func (c glmResetCard) refill() string {
-	if c.Scope == "weekly" {
-		// A weekly card also refills the 5-hour window, without spending a
-		// 5-hour card.
-		return "weekly,5h"
-	}
-	return c.Scope
-}
-
 // glmResetEnvelope is the common {code, msg, success, data} wrapper.
 type glmResetEnvelope struct {
 	Code    int             `json:"code"`
@@ -146,11 +137,9 @@ func readGLMResetCard(row map[string]any, now time.Time) glmResetCard {
 
 	status := strings.ToUpper(glmString(row, "status", "state", "useStatus"))
 	spent := false
-	for _, word := range []string{"USED", "EXPIRED", "INVALID", "CONSUMED", "REVOKED"} {
-		// "UNUSED" contains "USED": compare whole words.
-		if status == word {
-			spent = true
-		}
+	switch status { // whole words: "UNUSED" is not "USED"
+	case "USED", "EXPIRED", "INVALID", "CONSUMED", "REVOKED":
+		spent = true
 	}
 	card.Available = card.ID != "" && !spent && (card.ExpiresAt.IsZero() || card.ExpiresAt.After(now))
 	return card
@@ -267,7 +256,7 @@ func addGLMResetCards(usage *quota.ProviderUsage, cards []glmResetCard) {
 			Label:       "available",
 			Description: desc,
 		})
-		bd.Redeem = &quota.UsageRedeem{ID: c.ID, Scope: c.Scope, Refill: c.refill()}
+		bd.Redeem = &quota.UsageRedeem{ID: c.ID, Scope: c.Scope}
 	}
 }
 

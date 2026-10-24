@@ -45,7 +45,7 @@ unverified and not covered.
 
 Each available card becomes a `resource` breakdown (`Unit credits`, `Limit 1`,
 like Codex's reset credits, so the cell shows "N/M" and the hover lists them)
-with `UsageBreakdown.Redeem{ID, Scope, Refill}`. A card is spent, not
+with `UsageBreakdown.Redeem{ID, Scope}`. A card is spent, not
 refilled: it carries no `ResetsAt` (its expiry is when it is *lost*, and is in
 the description only). Spent and expired cards are not offered. A failed card
 read is logged and **never drops the quota windows**.
