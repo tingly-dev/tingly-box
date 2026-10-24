@@ -3843,6 +3843,26 @@
         }
       }
     },
+    "/api/v1/mcp/catalog": {
+      "get": {
+        "tags": [
+          "mcp"
+        ],
+        "operationId": "apiV1McpCatalogGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPCatalogResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/mcp/client": {
       "post": {
         "tags": [
@@ -3869,6 +3889,97 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/client-profiles": {
+      "get": {
+        "tags": [
+          "mcp"
+        ],
+        "operationId": "apiV1McpClient-profilesGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPClientProfilesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/client-profiles/{profile_id}": {
+      "put": {
+        "tags": [
+          "mcp"
+        ],
+        "operationId": "apiV1McpClient-profilesProfile_idPut",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPClientProfile"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPRuntimeConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "mcp"
+        ],
+        "operationId": "apiV1McpClient-profilesProfile_idDelete",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPRuntimeConfigResponse"
                 }
               }
             }
@@ -4156,6 +4267,201 @@
         }
       }
     },
+    "/api/v1/mcp/sources": {
+      "post": {
+        "tags": [
+          "mcp"
+        ],
+        "operationId": "apiV1McpSourcesPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPSourceConfig"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPRuntimeConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/sources/{source_id}": {
+      "delete": {
+        "tags": [
+          "mcp"
+        ],
+        "operationId": "apiV1McpSourcesSource_idDelete",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPRuntimeConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "mcp"
+        ],
+        "operationId": "apiV1McpSourcesSource_idPatch",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPSourceConfig"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPRuntimeConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/sources/{source_id}/check": {
+      "post": {
+        "tags": [
+          "mcp"
+        ],
+        "operationId": "apiV1McpSourcesSource_idCheckPost",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPSourceStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/sources/{source_id}/reconnect": {
+      "post": {
+        "tags": [
+          "mcp"
+        ],
+        "operationId": "apiV1McpSourcesSource_idReconnectPost",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPSourceStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/tools/call": {
+      "post": {
+        "tags": [
+          "mcp"
+        ],
+        "operationId": "apiV1McpToolsCallPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPToolCallRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPToolCallResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/mcp/{client_name}": {
       "get": {
         "tags": [
@@ -4195,6 +4501,35 @@
         "summary": "MCP HTTP transport endpoint",
         "description": "MCP HTTP transport endpoint",
         "operationId": "apiV1McpClient_namePost",
+        "parameters": [
+          {
+            "name": "client_name",
+            "in": "path",
+            "description": "Path parameter 'client_name'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "mcp-transport"
+        ],
+        "operationId": "apiV1McpClient_nameDelete",
         "parameters": [
           {
             "name": "client_name",
@@ -11301,6 +11636,55 @@
           "bot_running"
         ]
       },
+      "CatalogTool": {
+        "type": "object",
+        "properties": {
+          "annotations": {
+            "description": "Field annotations"
+          },
+          "description": {
+            "type": "string",
+            "description": "Field description"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "implementation": {
+            "type": "string",
+            "description": "Field implementation"
+          },
+          "input_schema": {
+            "description": "Field input_schema"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "normalized_name": {
+            "type": "string",
+            "description": "Field normalized_name"
+          },
+          "output_schema": {
+            "description": "Field output_schema"
+          },
+          "source_id": {
+            "type": "string",
+            "description": "Field source_id"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/MCPToolUsage"
+          }
+        },
+        "required": [
+          "source_id",
+          "name",
+          "normalized_name",
+          "enabled",
+          "usage",
+          "implementation"
+        ]
+      },
       "ChannelBinding": {
         "type": "object",
         "properties": {
@@ -14499,6 +14883,35 @@
           "logs"
         ]
       },
+      "MCPCatalogResponse": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "sources": {
+            "type": "array",
+            "description": "Field sources",
+            "items": {
+              "$ref": "#/components/schemas/SourceStatus"
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "enabled",
+          "sources"
+        ]
+      },
       "MCPClient": {
         "type": "object",
         "properties": {
@@ -14526,6 +14939,67 @@
           "config",
           "tools",
           "state"
+        ]
+      },
+      "MCPClientProfile": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "sources": {
+            "type": "array",
+            "description": "Field sources",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tools": {
+            "type": "array",
+            "description": "Field tools",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "sources",
+          "tools"
+        ]
+      },
+      "MCPClientProfilesResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "profiles": {
+            "type": "array",
+            "description": "Field profiles",
+            "items": {
+              "$ref": "#/components/schemas/MCPClientProfile"
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "profiles"
         ]
       },
       "MCPOAuthConfig": {
@@ -14564,6 +15038,17 @@
       "MCPRuntimeConfig": {
         "type": "object",
         "properties": {
+          "client_profiles": {
+            "type": "array",
+            "description": "Field client_profiles",
+            "items": {
+              "$ref": "#/components/schemas/MCPClientProfile"
+            }
+          },
+          "client_profiles_configured": {
+            "type": "boolean",
+            "description": "Field client_profiles_configured"
+          },
           "mode": {
             "type": "string",
             "description": "Field mode"
@@ -14613,6 +15098,10 @@
           "config": {
             "$ref": "#/components/schemas/MCPRuntimeConfig"
           },
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
           "error": {
             "type": "string",
             "description": "Field error"
@@ -14623,7 +15112,8 @@
           }
         },
         "required": [
-          "success"
+          "success",
+          "enabled"
         ]
       },
       "MCPSourceConfig": {
@@ -14710,6 +15200,13 @@
           "stdio_config": {
             "$ref": "#/components/schemas/MCPStdioConfig"
           },
+          "tool_policies": {
+            "type": "object",
+            "description": "Field tool_policies",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MCPToolPolicy"
+            }
+          },
           "tools": {
             "type": "array",
             "description": "Field tools",
@@ -14735,11 +15232,34 @@
             "type": "string",
             "description": "Field transport"
           },
+          "usage": {
+            "$ref": "#/components/schemas/MCPToolUsage"
+          },
           "visibility": {
             "type": "string",
             "description": "Field visibility"
           }
         }
+      },
+      "MCPSourceStatusResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SourceStatus"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "status"
+        ]
       },
       "MCPStdioConfig": {
         "type": "object",
@@ -14785,6 +15305,82 @@
         },
         "required": [
           "name"
+        ]
+      },
+      "MCPToolCallRequest": {
+        "type": "object",
+        "properties": {
+          "arguments": {
+            "type": "object",
+            "description": "Field arguments",
+            "additionalProperties": {}
+          },
+          "source_id": {
+            "type": "string",
+            "description": "Field source_id"
+          },
+          "tool_name": {
+            "type": "string",
+            "description": "Field tool_name"
+          }
+        },
+        "required": [
+          "source_id",
+          "tool_name"
+        ]
+      },
+      "MCPToolCallResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "execution_time": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field execution_time"
+          },
+          "result": {
+            "$ref": "#/components/schemas/ToolResult"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "execution_time"
+        ]
+      },
+      "MCPToolPolicy": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/MCPToolUsage"
+          }
+        }
+      },
+      "MCPToolUsage": {
+        "type": "object",
+        "properties": {
+          "client": {
+            "type": "boolean",
+            "description": "Field client"
+          },
+          "gateway": {
+            "type": "boolean",
+            "description": "Field gateway"
+          }
+        },
+        "required": [
+          "client",
+          "gateway"
         ]
       },
       "MemStatsResponse": {
@@ -18673,6 +19269,35 @@
           }
         }
       },
+      "SourceStatus": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "source_id": {
+            "type": "string",
+            "description": "Field source_id"
+          },
+          "state": {
+            "type": "string",
+            "description": "Field state"
+          },
+          "tools": {
+            "type": "array",
+            "description": "Field tools",
+            "items": {
+              "$ref": "#/components/schemas/CatalogTool"
+            }
+          }
+        },
+        "required": [
+          "source_id",
+          "state",
+          "tools"
+        ]
+      },
       "StatusResponse": {
         "type": "object",
         "properties": {
@@ -19869,6 +20494,57 @@
           "id",
           "name",
           "input"
+        ]
+      },
+      "ToolContent": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "string",
+            "description": "Field data"
+          },
+          "mimeType": {
+            "type": "string",
+            "description": "Field mimeType"
+          },
+          "text": {
+            "type": "string",
+            "description": "Field text"
+          },
+          "type": {
+            "type": "string",
+            "description": "Field type"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "ToolResult": {
+        "type": "object",
+        "properties": {
+          "_meta": {
+            "type": "object",
+            "description": "Field _meta",
+            "additionalProperties": {}
+          },
+          "content": {
+            "type": "array",
+            "description": "Field content",
+            "items": {
+              "$ref": "#/components/schemas/ToolContent"
+            }
+          },
+          "isError": {
+            "type": "boolean",
+            "description": "Field isError"
+          },
+          "structuredContent": {
+            "description": "Field structuredContent"
+          }
+        },
+        "required": [
+          "content"
         ]
       },
       "TraceDetailResponse": {

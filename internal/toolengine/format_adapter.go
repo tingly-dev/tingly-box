@@ -52,9 +52,7 @@ type ToolExecutionResult struct {
 func (r ToolExecutionResult) TextContent() string {
 	var out string
 	for _, c := range r.Contents {
-		if c.Type == coretool.ContentTypeText {
-			out += c.Text
-		}
+		out += c.ModelText()
 	}
 	return out
 }

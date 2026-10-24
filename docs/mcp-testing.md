@@ -1,166 +1,124 @@
 # MCP Gateway Testing Guide
 
-This guide tests tingly-box MCP local mode, where tingly-box acts as an MCP server (replacing Bifrost).
+The MCP center has three pages: `/mcp/sources` manages upstream connections,
+`/mcp/tools` discovers and tests tools, and `/mcp/clients` manages downstream
+profiles. Sources can use stdio, Streamable HTTP or SSE. Configuration and
+connection checks remain available when MCP execution is disabled; tool calls
+and downstream transport require the MCP scenario flag to be enabled.
 
-## Prerequisites
+## Configure a source without replacing existing sources
 
-- tingly-box server running on port 12580
-- User token from `~/.tingly-box/config.json`
-
-## Step 1: Verify MCP Mode
-
-Ensure tingly-box is in **clienttool** mode (external clients connect to tingly-box):
-
-```bash
-TOKEN=$(cat ~/.tingly-box/config.json | jq -r '.user_token')
-curl -s http://localhost:12580/api/v1/mcp/mode \
-  -H "Authorization: Bearer $TOKEN" | jq .
-```
-
-Expected: `{"success":true,"mode":"clienttool"}`
-
-If mode is "servertool", switch to clienttool:
+Use the existing user token for management and downstream MCP access:
 
 ```bash
-curl -s -X PUT http://localhost:12580/api/v1/mcp/mode \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"mode": "clienttool"}' | jq .
+TOKEN=$(jq -r '.user_token' ~/.tingly-box/config.json)
+BASE=http://localhost:12580/api/v1
+curl -s -X POST "$BASE/mcp/sources" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"id":"remote","transport":"http","endpoint":"https://example.com/mcp","tools":["*"],"usage":{"client":true,"gateway":true}}'
 ```
 
-## Step 2: Register an MCP Source
+`usage.client` exposes eligible tools to MCP clients. `usage.gateway` injects
+eligible tools into model requests and executes them in gateway tool loops.
+Both can be enabled. Legacy `visibility: client/server` is the default when
+`usage` is absent. The deprecated global `mode` is no longer a routing switch.
 
-Register a filesystem MCP server (or any MCP server from [mcp.so](https://mcp.so)):
+Use `PATCH /mcp/sources/remote` for partial edits and
+`DELETE /mcp/sources/remote` to remove it. Omitted fields survive a patch;
+explicit empty headers/env maps clear those maps. Source IDs cannot change.
+`PUT /mcp/config` still supports bulk source replacement; omitted sources are
+preserved when changing only timeout or stripping settings.
+
+Connection fields (command, args, cwd, env, endpoint, headers and proxy) trigger
+replacement of the old connection. Policy edits retain the connection.
+Environment references resolve from the source's `env` map; to inherit a
+process variable, explicitly set `env: {"TOKEN":"${TOKEN}"}` and reference
+`${TOKEN}` in the header. Referenced variables must exist for enabled sources.
+
+## Discover, check and reconnect
 
 ```bash
-TOKEN=$(cat ~/.tingly-box/config.json | jq -r '.user_token')
-
-curl -s -X PUT http://localhost:12580/api/v1/mcp/config \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "sources": [
-      {
-        "id": "filesystem",
-        "name": "filesystem",
-        "transport": "stdio",
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/your_username/projects"],
-        "tools": ["*"],
-        "enabled": true
-      }
-    ]
-  }' | jq .
+curl -s "$BASE/mcp/catalog" -H "Authorization: Bearer $TOKEN"
+curl -s -X POST "$BASE/mcp/sources/remote/check" -H "Authorization: Bearer $TOKEN"
+curl -s -X POST "$BASE/mcp/sources/remote/reconnect" -H "Authorization: Bearer $TOKEN"
 ```
 
-Or use the Web UI: http://localhost:12580 → MCP -> Sources → Registered Servers
+The catalog returns status/errors per source and tool input/output schemas,
+annotations, normalized names and effective usage. A failed source leaves
+working sources visible. Reconnect closes the previous session and performs a
+new connection and discovery.
 
-## Step 3: Verify Tools Discovery
+Per-tool policy is keyed by upstream tool name:
 
-Each endpoint exposes a different set of tools based on the source ID:
+```json
+{"tool_policies":{"echo":{"enabled":true,"usage":{"client":true,"gateway":false}}}}
+```
+
+The source's enabled flag and `tools` allow list remain the outer limit.
+An empty source allow list retains the legacy meaning of all tools.
+
+## Configure downstream profiles
 
 ```bash
-TOKEN=$(cat ~/.tingly-box/config.json | jq -r '.user_token')
-
-# Expose only webtools tools
-curl -s -X POST "http://localhost:12580/api/v1/mcp/webtools" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "tools/list",
-    "params": {}
-  }' | jq '.result.tools | map(.name)'
-
-# Expose only filesystem tools
-curl -s -X POST "http://localhost:12580/api/v1/mcp/filesystem" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "tools/list",
-    "params": {}
-  }' | jq '.result.tools | map(.name)'
-
-# Expose all tools (aggregation)
-curl -s -X POST "http://localhost:12580/api/v1/mcp/all" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "tools/list",
-    "params": {}
-  }' | jq '.result.tools | map(.name)'
+curl -s -X PUT "$BASE/mcp/client-profiles/reader" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"id":"reader","name":"Reader","enabled":true,"sources":["remote"],"tools":["tingly_box_mcp__remote__echo"]}'
 ```
 
-Expected:
-- `/mcp/webtools` returns 2 tools (mcp_web_fetch, mcp_web_search)
-- `/mcp/filesystem` returns ~14 filesystem tools
-- `/mcp/all` returns the aggregated set of all sources
+A profile requires both a matching source grant and a matching normalized tool
+grant. Empty lists grant no access; `*` explicitly grants all eligible entries.
+Connect a standard MCP client to `$BASE/mcp/reader` using the user token.
 
-## Step 4: Connect Claude Code CLI
+Before any explicit profile is configured, legacy `tb`, `all` and known source
+ID endpoints continue to work. Unknown endpoint names fail closed. Creating a
+profile switches access to configured profiles only; deleting the last profile
+keeps that mode and does not restore aggregate access. Disabled tools and
+revoked grants are checked again at execution. Profiles currently share the
+existing user-token authentication: profile IDs select grants and are not
+separate authenticated identities. Independent credentials/OAuth are separate
+future work.
 
-Register tingly-box as an MCP server in Claude Code CLI using the `tb` endpoint (exposes all tools):
+Codex registration uses an environment variable for the bearer token:
 
 ```bash
-TOKEN=$(cat ~/.tingly-box/config.json | jq -r '.user_token')
-claude mcp add --transport http tb \
-  http://localhost:12580/api/v1/mcp/tb \
-  --header "Authorization: Bearer $TOKEN"
+export TINGLY_MCP_TOKEN="$TOKEN"
+codex mcp add tb --url "$BASE/mcp/reader" --bearer-token-env-var TINGLY_MCP_TOKEN
 ```
 
-Alternatively, connect only a specific source (e.g. filesystem):
+## Test structured results
 
 ```bash
-claude mcp add --transport http filesystem \
-  http://localhost:12580/api/v1/mcp/filesystem \
-  --header "Authorization: Bearer $TOKEN"
+curl -s -X POST "$BASE/mcp/tools/call" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"source_id":"remote","tool_name":"echo","arguments":{"q":"hello"}}'
 ```
 
-Verify the connection:
+The response retains `result.content`, `result.structuredContent`, `result._meta`
+and `result.isError`. Transport success and a tool-reported `isError` are
+separate. The MCP downstream bridge preserves the supported content blocks;
+model continuations receive structured content as JSON text and native image
+blocks where supported. APIs without matching content types receive JSON text.
+
+## Automated regression checks
 
 ```bash
-# List available tools
-claude mcp list
-
-# Or test a tool directly in Claude Code
-claude
-# Then try: Use tingly_box_mcp__filesystem__read_text_file to read a file
+go test ./internal/config ./internal/mcp/... ./internal/server/module/mcp
+go build -o harness ./cli/harness
+./harness matrix --mode=all --json
+go test -race ./internal/...
+cd frontend
+pnpm gen:api
+pnpm typecheck
+pnpm test
+pnpm build
 ```
 
-## Troubleshooting
-
-### "User authorization header required"
-
-Ensure the `Authorization: Bearer <token>` header is included in every request.
-
-### Tools not appearing
-
-1. Check MCP mode: `GET /api/v1/mcp/mode` should return `"clienttool"`
-2. Verify source is registered: `GET /api/v1/mcp/config`
-3. Check if source is enabled: Look for `"enabled": true` in the source config
-
-### Connection refused
-
-Ensure tingly-box server is running:
-
-```bash
-lsof -i :12580 | grep LISTEN
-```
-
-## Architecture
-
-In **clienttool** mode (default):
-- tingly-box acts as an MCP server (SSE/HTTP transport)
-- External clients (Claude Code CLI, OpenCode, etc.) connect to tingly-box
-- tingly-box forwards tool calls to registered MCP sources (stdio processes or HTTP endpoints)
-- Each endpoint (`/mcp/<source_id>`) exposes only that source's tools
-- The `/mcp/all` endpoint and unknown client names expose all tools as an aggregation
-
-In **servertool** mode:
-- tingly-box connects to external MCP servers as a client
-- AI model calls are intercepted and tools are injected into the request
-- The AI model is unaware of MCP - tools appear as native capabilities
+`servertool` includes 48 real HTTP/SSE MCP loop cases spanning Anthropic/OpenAI
+sources and targets, streaming modes, structured continuation and tool errors.
+Runtime tests additionally spawn a real stdio server, replace connection/env
+configuration, preserve policy-only connections, and reject retired sources.
+Management tests exercise persistence, partial edits, validation, downstream
+SDK interoperability and live grant revocation. Frontend tests cover form
+round trips, partial discovery failure, tool tests, routes and failed-save
+retention. Generate OpenAPI through the CLI before `pnpm gen:api`; do not edit
+generated schemas manually.

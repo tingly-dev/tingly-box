@@ -1,22 +1,18 @@
 import {
-    Add as AddIcon,
-    DeleteOutline as DeleteOutlineIcon,
-    OpenInNew as OpenInNewIcon,
-} from '@/components/icons';
-import {
     Box,
     Button,
-    Divider,
+    Checkbox,
+    FormControlLabel,
     IconButton,
     Stack,
     TextField,
     ToggleButton,
     ToggleButtonGroup,
     Typography,
-    Checkbox,
-    FormControlLabel,
 } from '@mui/material';
-import type { MCPSourceFormValue } from './types';
+import { Add, DeleteOutline } from '@/components/icons';
+import { useTranslation } from 'react-i18next';
+import type { MCPKVPair, MCPSourceFormValue } from './types';
 
 interface MCPSourceEditorProps {
     title?: string;
@@ -27,314 +23,192 @@ interface MCPSourceEditorProps {
     onUseExample?: () => void;
 }
 
-const sectionSx = {
-    border: '1px solid',
-    borderColor: 'divider',
-    borderRadius: 2,
-    p: 2,
-} as const;
-
-const MCPSourceEditor = ({
-    title = 'Connect to a custom MCP',
-    value,
-    onChange,
-    lockId = false,
-    hideTools = false,
-    onUseExample,
-}: MCPSourceEditorProps) => {
+export default function MCPSourceEditor({ value, onChange, lockId = false, hideTools = false }: MCPSourceEditorProps) {
+    const { t } = useTranslation();
+    const label = (key: string, fallback: string) => t(`mcp.center.${key}`, { defaultValue: fallback });
     const set = (patch: Partial<MCPSourceFormValue>) => onChange({ ...value, ...patch });
-
-    return (
-        <Stack spacing={2}>
-            <Stack spacing={0.5}>
-                <Stack direction="row" spacing={2} sx={{
-                    alignItems: "center"
-                }}>
-                    <Button
-                        href="https://tingly-dev.github.io/"
-                        target="_blank"
-                        rel="noreferrer"
-                        startIcon={<OpenInNewIcon />}
-                        sx={{ alignSelf: 'flex-start', px: 0 }}
-                    >
-                        Docs
-                    </Button>
-                    {onUseExample && (
-                        <Button variant="text" sx={{ px: 0 }} onClick={onUseExample}>
-                            Use Weather Example
-                        </Button>
-                    )}
-                </Stack>
-            </Stack>
-            <Box sx={sectionSx}>
-                <Typography
-                    variant="h6"
-                    sx={{
-                        fontWeight: 700,
-                        mb: 1
-                    }}>Name</Typography>
-                <TextField
-                    fullWidth
-                    placeholder="MCP server name"
-                    value={value.id}
-                    onChange={(e) => set({ id: e.target.value })}
-                    disabled={lockId}
-                />
-            </Box>
-            <Box sx={{ ...sectionSx, p: 0, overflow: 'hidden' }}>
-                    <ToggleButtonGroup
-                        exclusive
-                        fullWidth
-                        value={value.transport}
-                        onChange={(_, v) => v && set({ transport: v })}
-                    sx={{ '& .MuiToggleButton-root': { border: 'none', borderRadius: 0, py: 1.25, fontWeight: 700 } }}
-                >
-                    <ToggleButton value="stdio">STDIO</ToggleButton>
-                    <ToggleButton value="http">HTTP</ToggleButton>
-                    <ToggleButton value="sse">SSE</ToggleButton>
-                </ToggleButtonGroup>
-            </Box>
-            {value.transport === 'stdio' ? (
-                <>
-                    <Box sx={sectionSx}>
-                        <Typography
-                            variant="h6"
-                            sx={{
-                                fontWeight: 700,
-                                mb: 1
-                            }}>Command to launch</Typography>
-                        <TextField
-                            fullWidth
-                            placeholder="python3"
-                            value={value.command}
-                            onChange={(e) => set({ command: e.target.value })}
-                        />
-                    </Box>
-
-                    <Box sx={sectionSx}>
-                        <Typography
-                            variant="h6"
-                            sx={{
-                                fontWeight: 700,
-                                mb: 1
-                            }}>Arguments</Typography>
-                        <Stack spacing={1}>
-                            {value.args.map((arg, idx) => (
-                                <Stack key={`arg-${idx}`} direction="row" spacing={1} sx={{
-                                    alignItems: "center"
-                                }}>
-                                    <TextField
-                                        fullWidth
-                                        value={arg}
-                                        onChange={(e) => {
-                                            const args = [...value.args];
-                                            args[idx] = e.target.value;
-                                            set({ args });
-                                        }}
-                                    />
-                                    <IconButton
-                                        onClick={() => {
-                                            const args = value.args.filter((_, i) => i !== idx);
-                                            set({ args });
-                                        }}
-                                    >
-                                        <DeleteOutlineIcon />
-                                    </IconButton>
-                                </Stack>
-                            ))}
-                            <Button
-                                variant="text"
-                                startIcon={<AddIcon />}
-                                onClick={() => set({ args: [...value.args, ''] })}
-                            >
-                                Add argument
-                            </Button>
-                        </Stack>
-                    </Box>
-                </>
-            ) : (
-                <Box sx={sectionSx}>
-                    <Typography
-                        variant="h6"
-                        sx={{
-                            fontWeight: 700,
-                            mb: 1
-                        }}>{value.transport === 'sse' ? 'SSE endpoint' : 'HTTP endpoint'}</Typography>
+    const pairs = (field: 'env' | 'headers', title: string) => (
+        <Stack spacing={1}>
+            <Typography variant="subtitle2">{title}</Typography>
+            {value[field].map((row, index) => (
+                <Stack direction="row" spacing={1} key={index}>
                     <TextField
+                        size="small"
+                        label={label('key', 'Key')}
+                        value={row.key}
+                        onChange={(e) =>
+                            set({
+                                [field]: value[field].map((item, i) =>
+                                    i === index ? { ...item, key: e.target.value } : item
+                                ),
+                            })
+                        }
+                    />
+                    <TextField
+                        size="small"
                         fullWidth
-                        placeholder={value.transport === 'sse' ? "http://localhost:3000/mcp" : "http://localhost:3000/mcp"}
+                        label={label('value', 'Value')}
+                        type="password"
+                        value={row.value}
+                        onChange={(e) =>
+                            set({
+                                [field]: value[field].map((item, i) =>
+                                    i === index ? { ...item, value: e.target.value } : item
+                                ),
+                            })
+                        }
+                    />
+                    <IconButton
+                        aria-label={label('remove', 'Remove')}
+                        onClick={() => set({ [field]: value[field].filter((_, i) => i !== index) })}
+                    >
+                        <DeleteOutline />
+                    </IconButton>
+                </Stack>
+            ))}
+            <Button
+                startIcon={<Add />}
+                onClick={() => set({ [field]: [...value[field], { key: '', value: '' } as MCPKVPair] })}
+            >
+                {label('addField', 'Add field')}
+            </Button>
+        </Stack>
+    );
+    return (
+        <Stack spacing={2.5}>
+            <TextField
+                label={label('sourceId', 'Server ID')}
+                value={value.id}
+                disabled={lockId}
+                onChange={(e) => set({ id: e.target.value })}
+                helperText={label(
+                    'idHint',
+                    'Use letters, numbers, underscores or hyphens. This ID remains stable after creation.'
+                )}
+            />
+            <ToggleButtonGroup
+                exclusive
+                fullWidth
+                value={value.transport}
+                onChange={(_, transport) => transport && set({ transport })}
+            >
+                <ToggleButton value="stdio">STDIO</ToggleButton>
+                <ToggleButton value="http">Streamable HTTP</ToggleButton>
+                <ToggleButton value="sse">SSE</ToggleButton>
+            </ToggleButtonGroup>
+            {value.transport === 'stdio' ? (
+                <Stack spacing={2}>
+                    <TextField
+                        label={label('command', 'Command')}
+                        value={value.command}
+                        onChange={(e) => set({ command: e.target.value })}
+                        placeholder="npx"
+                    />
+                    <Stack spacing={1}>
+                        <Typography variant="subtitle2">{label('arguments', 'Arguments')}</Typography>
+                        {value.args.map((arg, index) => (
+                            <Stack direction="row" spacing={1} key={index}>
+                                <TextField
+                                    fullWidth
+                                    size="small"
+                                    value={arg}
+                                    onChange={(e) =>
+                                        set({
+                                            args: value.args.map((item, i) => (i === index ? e.target.value : item)),
+                                        })
+                                    }
+                                />
+                                <IconButton
+                                    aria-label={label('remove', 'Remove')}
+                                    onClick={() => set({ args: value.args.filter((_, i) => i !== index) })}
+                                >
+                                    <DeleteOutline />
+                                </IconButton>
+                            </Stack>
+                        ))}
+                        <Button startIcon={<Add />} onClick={() => set({ args: [...value.args, ''] })}>
+                            {label('addArgument', 'Add argument')}
+                        </Button>
+                    </Stack>
+                    <TextField
+                        label={label('cwd', 'Working directory')}
+                        value={value.cwd}
+                        onChange={(e) => set({ cwd: e.target.value })}
+                    />
+                </Stack>
+            ) : (
+                <Stack spacing={2}>
+                    <TextField
+                        label={label('endpoint', 'Endpoint URL')}
                         value={value.endpoint}
                         onChange={(e) => set({ endpoint: e.target.value })}
+                        placeholder="https://example.com/mcp"
                     />
-                </Box>
+                    {pairs('headers', label('headers', 'Authentication headers'))}
+                </Stack>
             )}
-            <Box sx={sectionSx}>
-                <Typography
-                    variant="h6"
-                    sx={{
-                        fontWeight: 700,
-                        mb: 1
-                    }}>Environment variables</Typography>
-                <Stack spacing={1}>
-                    {value.env.map((row, idx) => (
-                        <Stack key={`env-${idx}`} direction="row" spacing={1} sx={{
-                            alignItems: "center"
-                        }}>
-                            <TextField
-                                fullWidth
-                                placeholder="Key"
-                                value={row.key}
-                                onChange={(e) => {
-                                    const env = [...value.env];
-                                    env[idx] = { ...env[idx], key: e.target.value };
-                                    set({ env });
-                                }}
-                            />
-                            <TextField
-                                fullWidth
-                                placeholder="Value"
-                                value={row.value}
-                                onChange={(e) => {
-                                    const env = [...value.env];
-                                    env[idx] = { ...env[idx], value: e.target.value };
-                                    set({ env });
-                                }}
-                            />
-                            <IconButton
-                                onClick={() => {
-                                    const env = value.env.filter((_, i) => i !== idx);
-                                    set({ env });
-                                }}
-                            >
-                                <DeleteOutlineIcon />
-                            </IconButton>
-                        </Stack>
-                    ))}
-                    <Button
-                        variant="text"
-                        startIcon={<AddIcon />}
-                        onClick={() => set({ env: [...value.env, { key: '', value: '' }] })}
-                    >
-                        Add environment variable
-                    </Button>
-                </Stack>
-            </Box>
-            <Box sx={sectionSx}>
-                <Typography
-                    variant="h6"
-                    sx={{
-                        fontWeight: 700,
-                        mb: 1
-                    }}>Environment variable passthrough</Typography>
-                <Stack spacing={1}>
-                    {value.envPassthrough.map((item, idx) => (
-                        <Stack key={`pass-${idx}`} direction="row" spacing={1} sx={{
-                            alignItems: "center"
-                        }}>
-                            <TextField
-                                fullWidth
-                                value={item}
-                                onChange={(e) => {
-                                    const envPassthrough = [...value.envPassthrough];
-                                    envPassthrough[idx] = e.target.value;
-                                    set({ envPassthrough });
-                                }}
-                            />
-                            <IconButton
-                                onClick={() => {
-                                    const envPassthrough = value.envPassthrough.filter((_, i) => i !== idx);
-                                    set({ envPassthrough });
-                                }}
-                            >
-                                <DeleteOutlineIcon />
-                            </IconButton>
-                        </Stack>
-                    ))}
-                    <Button
-                        variant="text"
-                        startIcon={<AddIcon />}
-                        onClick={() => set({ envPassthrough: [...value.envPassthrough, ''] })}
-                    >
-                        Add variable
-                    </Button>
-                </Stack>
-            </Box>
-            <Box sx={sectionSx}>
-                <Typography
-                    variant="h6"
-                    sx={{
-                        fontWeight: 700,
-                        mb: 1
-                    }}>Proxy</Typography>
+            {pairs('env', label('env', 'Environment variables'))}
+            <TextField
+                label={label('envPassthrough', 'Inherit environment variables')}
+                value={value.envPassthrough.join(' ')}
+                onChange={(e) => set({ envPassthrough: e.target.value.split(/\s+/).filter(Boolean) })}
+                helperText={label('envHint', 'Space-separated names; referenced variables must exist on the server.')}
+            />
+            <Box>
                 <FormControlLabel
                     control={
                         <Checkbox
                             checked={value.useGlobalProxy}
-                            onChange={(e) => {
-                                const checked = e.target.checked;
-                                const passthrough = new Set(value.envPassthrough);
-                                if (checked) {
-                                    passthrough.add('HTTP_PROXY');
-                                    passthrough.add('HTTPS_PROXY');
-                                    passthrough.add('NO_PROXY');
-                                }
-                                set({
-                                    useGlobalProxy: checked,
-                                    envPassthrough: Array.from(passthrough),
-                                    proxyUrl: checked ? '' : value.proxyUrl,
-                                });
-                            }}
+                            onChange={(e) => set({ useGlobalProxy: e.target.checked })}
                         />
                     }
-                    label="Use global proxy configuration"
+                    label={label('globalProxy', 'Use global proxy')}
                 />
                 {!value.useGlobalProxy && (
                     <TextField
                         fullWidth
-                        placeholder="http://127.0.0.1:7897"
+                        label={label('proxy', 'Proxy URL')}
                         value={value.proxyUrl}
                         onChange={(e) => set({ proxyUrl: e.target.value })}
-                        sx={{ mt: 1 }}
                     />
                 )}
             </Box>
-            <Box sx={sectionSx}>
-                <Typography
-                    variant="h6"
-                    sx={{
-                        fontWeight: 700,
-                        mb: 1
-                    }}>Working directory</Typography>
-                <TextField
-                    fullWidth
-                    placeholder="~/code"
-                    value={value.cwd}
-                    onChange={(e) => set({ cwd: e.target.value })}
-                    disabled={value.transport === 'http'}
+            <Stack>
+                <Typography variant="subtitle2">{label('usage', 'Where can these tools be used?')}</Typography>
+                <FormControlLabel
+                    control={
+                        <Checkbox
+                            checked={value.usage.client}
+                            onChange={(e) => set({ usage: { ...value.usage, client: e.target.checked } })}
+                        />
+                    }
+                    label={label('clientUsage', 'MCP clients')}
                 />
-            </Box>
+                <FormControlLabel
+                    control={
+                        <Checkbox
+                            checked={value.usage.gateway}
+                            onChange={(e) => set({ usage: { ...value.usage, gateway: e.target.checked } })}
+                        />
+                    }
+                    label={label('gatewayUsage', 'Gateway model calls')}
+                />
+            </Stack>
             {!hideTools && (
-                <Box sx={sectionSx}>
-                    <Typography
-                        variant="h6"
-                        sx={{
-                            fontWeight: 700,
-                            mb: 1
-                        }}>Tools</Typography>
-                    <TextField
-                        fullWidth
-                        placeholder="* or mcp_web_search mcp_web_fetch"
-                        value={value.tools.join(' ')}
-                        onChange={(e) => set({ tools: e.target.value.split(/\s+/).filter(Boolean) })}
-                    />
-                    <Divider sx={{ mt: 1, mb: 1 }} />
-                    <Typography variant="caption" sx={{
-                        color: "text.secondary"
-                    }}>Use `*` for all tools, or list names separated by spaces.</Typography>
-                </Box>
+                <TextField
+                    label={label('allowlist', 'Allowed tools')}
+                    value={value.tools.join(' ')}
+                    onChange={(e) => set({ tools: e.target.value.split(/\s+/).filter(Boolean) })}
+                    helperText={label(
+                        'allowlistHint',
+                        'Use * for all tools. Fine-tune individual tools in the Capabilities tab.'
+                    )}
+                />
             )}
+            <FormControlLabel
+                control={<Checkbox checked={value.enabled} onChange={(e) => set({ enabled: e.target.checked })} />}
+                label={label('enabled', 'Enabled')}
+            />
         </Stack>
     );
-};
-
-export default MCPSourceEditor;
+}

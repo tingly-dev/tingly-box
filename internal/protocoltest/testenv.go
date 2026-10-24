@@ -75,6 +75,7 @@ type TestEnvOption func(*testEnvConfig)
 type testEnvConfig struct {
 	recordDir         string
 	mcpEnabled        bool
+	mcpConfig         *typ.MCPRuntimeConfig
 	guardrailsRuntime *guardrails.Guardrails
 	servertools       []servertool.ToolProvider
 	client            Client
@@ -93,6 +94,11 @@ func NewTestEnvOptionWithMCP() TestEnvOption {
 	return func(cfg *testEnvConfig) {
 		cfg.mcpEnabled = true
 	}
+}
+
+// NewTestEnvOptionWithMCPConfig seeds real remote MCP sources before gateway startup.
+func NewTestEnvOptionWithMCPConfig(config *typ.MCPRuntimeConfig) TestEnvOption {
+	return func(cfg *testEnvConfig) { cfg.mcpEnabled = true; cfg.mcpConfig = config }
 }
 
 // NewTestEnvOptionWithGuardrails enables the Guardrails extension for the
@@ -257,6 +263,7 @@ func (env *TestEnv) Close() {
 	if env.gateway != nil {
 		// NewServer starts the private virtual-model server; without this the
 		// serving goroutine would outlive every env in the process.
+		env.gateway.CloseMCPRuntime()
 		env.gateway.CloseVirtualModelServer()
 	}
 	if env.virtual != nil {
@@ -290,6 +297,9 @@ func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
 	}
 
 	core, err := newGatewayCore("pv-env-*", func(ac *appconfig.AppConfig) {
+		if cfg.mcpConfig != nil {
+			_ = ac.GetGlobalConfig().SetToolConfig("mcp_runtime", cfg.mcpConfig)
+		}
 		if cfg.mcpEnabled {
 			_ = ac.GetGlobalConfig().SetScenarioFlag(typ.ScenarioGlobal, constant.ExtensionMCP, true)
 		}

@@ -41,6 +41,8 @@ on:
       - 'internal/forwarding/**'
       - 'internal/toolengine/**'
       - 'internal/catalog/**'
+      - 'internal/mcp/**'
+      - 'internal/tool/**'
       - 'internal/guardrails/**'
       - 'internal/server/*.go'        # top-level handlers only, not module/ (management APIs)
       - 'vmodel/**'
@@ -75,6 +77,8 @@ on:
       - 'internal/forwarding/**'
       - 'internal/toolengine/**'
       - 'internal/catalog/**'
+      - 'internal/mcp/**'
+      - 'internal/tool/**'
       - 'internal/guardrails/**'
       - 'internal/server/*.go'        # top-level handlers only, not module/ (management APIs)
       - 'vmodel/**'
