@@ -21,6 +21,8 @@ export interface TranscriptEntry {
     author?: string;
     // Files attached to a user message.
     attachments?: TranscriptAttachment[];
+    // A user message added to a running turn that Claude has not read yet.
+    pending?: boolean;
     // A question that answers itself with its suggestion at this time
     // unless the user answers first (ask_request).
     autoAt?: string;

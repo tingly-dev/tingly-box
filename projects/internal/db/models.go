@@ -141,7 +141,12 @@ const (
 	EvApproval   = "approval"    // a permission request (payload: request + answer)
 	EvAsk        = "ask"         // a question for the user
 	EvSystem     = "system"      // lifecycle notes
-	EvError      = "error"
+	// EvQueued is a message the user chose to send after the running turn,
+	// held until then (payload: state "held", "sent" or "removed", and the
+	// attachments). A held one shows above the composer; sending it adds the
+	// EvUser entry.
+	EvQueued = "queued"
+	EvError  = "error"
 	// The project conversation (a main thread's events).
 	EvThreadStarted = "thread_started" // the coordinator started threads (payload: thread ids)
 	EvSuggestions   = "suggestions"    // the coordinator proposed threads (payload: suggestions)

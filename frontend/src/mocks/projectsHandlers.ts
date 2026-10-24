@@ -112,6 +112,9 @@ const threadEvents = (th: (typeof threads)[number]) => {
             ev('assistant', 'Adding a token bucket in front of the retry loop; refills at 10% of the request rate.', 2),
             ...call('Edit', { file_path: 'client/budget.go' }, 'Created budget.go', 2),
             ev('tool_use', 'Bash', 1, { payload: JSON.stringify({ command: 'go test ./client/...' }) }),
+            // Sent while the turn runs: Claude reads it at its next step. The next one is held for after the turn.
+            ev('user', 'Also log each dropped retry at debug level.', 1, { payload: JSON.stringify({ injected: true }) }),
+            ev('queued', 'When it passes, write the rollout notes into docs/retries.md.', 1, { payload: JSON.stringify({ state: 'held' }) }),
         ]
     }
     if (th.id === 't-cache') {

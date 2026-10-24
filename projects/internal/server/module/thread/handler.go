@@ -70,6 +70,10 @@ type SendRequest struct {
 	Content string `json:"content"`
 	// Attachments are paths returned by the thread's attachments upload.
 	Attachments []string `json:"attachments,omitempty"`
+	// Mode is what a message does while a turn runs: "send" (the default)
+	// adds it to the turn, "queue" holds it until the turn ends and
+	// "stop_and_send" stops the turn first.
+	Mode string `json:"mode,omitempty" enums:"send,queue,stop_and_send"`
 }
 
 // StartSuggestionsRequest starts proposed threads; empty indexes start all.
@@ -179,8 +183,11 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithDescription("A thread's subagents (its Agent calls), oldest first: to find one in a long transcript without reading it"),
 		swagger.WithResponseModel(SubagentsResponse{}))
 	api.POST("/threads/:id/messages", h.send, tag,
-		swagger.WithDescription("Send a message to the thread (runs after its current turn); to a main thread it goes to the coordinator, whose reply arrives on the event stream"),
+		swagger.WithDescription("Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream"),
 		swagger.WithRequestModel(SendRequest{}),
+		swagger.WithResponseModel(db.Thread{}))
+	api.DELETE("/threads/:id/queue/:qid", h.unqueue, tag,
+		swagger.WithDescription("Take back a message held for after the running turn"),
 		swagger.WithResponseModel(db.Thread{}))
 	api.POST("/threads/:id/events/:eid/start", h.startSuggestions, tag,
 		swagger.WithDescription("Start threads the coordinator proposed in a suggestions event of a main thread"),
@@ -391,6 +398,10 @@ func (h *Handler) send(c *gin.Context) {
 		apierr.BadRequest(c, "message is empty")
 		return
 	}
+	if !rt.SendMode(req.Mode).Valid() {
+		apierr.BadRequest(c, "mode must be send, queue or stop_and_send")
+		return
+	}
 	cur, ok := h.thread(c)
 	if !ok {
 		return
@@ -406,12 +417,24 @@ func (h *Handler) send(c *gin.Context) {
 			return
 		}
 	}
-	t, err := h.svc.Send(c.Request.Context(), cur.ID, req.Content, atts, rt.Source{})
+	t, err := h.svc.SendWith(c.Request.Context(), cur.ID, req.Content, atts, rt.Source{}, rt.SendMode(req.Mode))
 	if err != nil {
 		fail(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, t)
+}
+
+func (h *Handler) unqueue(c *gin.Context) {
+	cur, ok := h.thread(c)
+	if !ok {
+		return
+	}
+	if !h.svc.Threads.RemoveQueued(cur.ID, c.Param("qid")) {
+		apierr.Message(c, http.StatusConflict, "the message was already sent")
+		return
+	}
+	h.reply(c, cur.ID)
 }
 
 func (h *Handler) startSuggestions(c *gin.Context) {

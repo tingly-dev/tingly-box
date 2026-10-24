@@ -33,6 +33,7 @@ export default {
       "outcomeNotAnswered": "Без ответа",
       "output": "Вывод",
       "pickSeveral": "Можно выбрать несколько",
+      "readsNext": "Claude прочитает это на следующем шаге",
       "recommended": "Рекомендуется",
       "responseRetry": "Ответ не принят. Текст сохранён; попробуйте ещё раз.",
       "responseSubmitted": "Ответ отправлен — ожидаем агента…",

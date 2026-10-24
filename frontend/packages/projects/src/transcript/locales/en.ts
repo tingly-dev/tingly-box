@@ -33,6 +33,7 @@ export default {
       "outcomeNotAnswered": "Not answered",
       "output": "Output",
       "pickSeveral": "Pick any that apply",
+      "readsNext": "Claude will read this at its next step",
       "recommended": "Recommended",
       "responseRetry": "Response was not accepted. Your answer is kept; try again.",
       "responseSubmitted": "Response sent — waiting for the agent…",

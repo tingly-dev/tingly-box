@@ -7,7 +7,8 @@ import { useTranslation } from 'react-i18next';
 import type { Attachment, BackgroundTask, Subagent, Thread, ThreadEvent } from '../../client';
 import { buildTranscript, SubagentFocus, Trajectory, Transcript, type Respond, type TrajectoryAnchor } from '../../transcript';
 import type { TranscriptSubagents } from '../../hooks/useTranscript';
-import { ThreadComposer } from '../ThreadComposer';
+import { ThreadComposer, type ThreadComposerHandle } from '../ThreadComposer';
+import { HeldMessages, heldMessages } from './HeldMessages';
 import { AttachmentChips, uploadAttachments, type AttachOwner } from '../attachments';
 import { CodeBlock, Markdown } from '../Markdown';
 import { ConfirmDialog, CopyIconButton } from '@tingly/ui';
@@ -152,6 +153,19 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     const owner = useMemo<AttachOwner>(() => (session ? { threadId } : { projectId }), [session, projectId, threadId]);
     const Attachments = useMemo(() => ({ items }: { items: Attachment[] }) => <AttachmentChips owner={owner} items={items} />, [owner]);
     const ops = useMemo(() => threadOps(threadId), [threadId]);
+    const composer = useRef<ThreadComposerHandle>(null);
+    // Messages held for after the running turn.
+    const held = useMemo(() => heldMessages(events), [events]);
+    // Taking a held message back puts its text in the box to edit; the draft
+    // keeps whatever was typed meanwhile.
+    const takeBack = async (ids: string[], intoDraft: boolean) => {
+        const taken = held.filter((h) => ids.includes(h.id));
+        if (intoDraft && taken.length > 0) {
+            const text = taken.map((h) => h.content).filter((c) => c.trim() !== '').join('\n\n');
+            if (text) composer.current?.addToDraft(text);
+        }
+        await Promise.all(taken.map((h) => ops.unqueue(h.id).catch(() => undefined)));
+    };
 
     useEffect(() => {
         const el = scrollRef.current;
@@ -405,17 +419,28 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     </Alert>
                 )}
                 <ComposerStrip thread={thread} folder={session} autoAt={pendingAutoAt} onAutoAnswer={(mode) => { void act(() => ops.setAutoAnswer(mode)).then((ok) => ok && onRefresh?.()); }} />
+                <HeldMessages held={held} onEdit={(h) => void takeBack([h.id], true)} onRemove={(h) => void takeBack([h.id], false)} />
                 <ThreadComposer
+                    ref={composer}
                     draftKey={threadId}
                     context={composerContext}
                     streaming={running}
-                    onStop={() => { void act(ops.stop); }}
+                    sendModes
+                    onStop={() => {
+                        // Stop drops what was held: hand it back to the box rather than lose it.
+                        if (held.length > 0) {
+                            const text = held.map((h) => h.content).filter((c) => c.trim() !== '').join('\n\n');
+                            if (text) composer.current?.addToDraft(text);
+                            notify(t('queue.returned'), 'info');
+                        }
+                        void act(ops.stop);
+                    }}
                     disabled={disabled || thread.status === 'resolved'}
                     placeholder={thread.status === 'resolved' ? t(session ? 'session.archivedPlaceholder' : 'thread.resolvedPlaceholder') : running ? t(session ? 'session.queuePlaceholder' : 'thread.queuePlaceholder') : t(session ? 'session.placeholder' : 'thread.placeholder')}
                     attach={(files) => uploadAttachments(owner, files)}
-                    onSend={async (text, attachments) => {
+                    onSend={async (text, attachments, mode) => {
                         try {
-                            await ops.send(text, attachments);
+                            await ops.send(text, attachments, mode);
                             stick.current = true;
                             return true;
                         } catch (e) {
