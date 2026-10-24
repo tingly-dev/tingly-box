@@ -43,7 +43,7 @@ func NewKimiClient(provider *typ.Provider, model string, sessionID typ.SessionID
 		return nil, fmt.Errorf("kimi client requires OAuth configuration")
 	}
 
-	if provider.OAuthDetail.GetIssuer() != ai.IssuerKimiCode {
+	if !ai.IsKimiCodeIssuer(provider.OAuthDetail.GetIssuer()) {
 		return nil, fmt.Errorf("kimi client can only work for Kimi Code providers")
 	}
 
@@ -284,7 +284,7 @@ func (c *KimiClient) ListModels(ctx context.Context) (*ModelListResult, error) {
 // provider: the generic Anthropic client with the same kimi-cli impersonation
 // headers the OpenAI side sends, and the OAuth access token as a bearer.
 func NewKimiAnthropicClient(provider *typ.Provider, model string, sessionID typ.SessionID) (*AnthropicClient, error) {
-	if provider.OAuthDetail == nil || provider.OAuthDetail.GetIssuer() != ai.IssuerKimiCode {
+	if provider.OAuthDetail == nil || !ai.IsKimiCodeIssuer(provider.OAuthDetail.GetIssuer()) {
 		return nil, fmt.Errorf("kimi anthropic client can only work for Kimi Code OAuth providers")
 	}
 	transport := wrapWithLogging(newKimiRoundTripper(createSessionBoundTransport(provider, sessionID), provider), provider)

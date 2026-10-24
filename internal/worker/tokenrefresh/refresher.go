@@ -313,7 +313,7 @@ func (tr *OAuthRefresher) refreshProviderToken(provider *typ.Provider) {
 	}
 
 	refreshOpts := []oauth.Option{oauth.WithProxyString(provider.ProxyURL)}
-	if issuer == ai.IssuerKimiCode && provider.OAuthDetail.DeviceID != "" {
+	if ai.IsKimiCodeIssuer(issuer) && provider.OAuthDetail.DeviceID != "" {
 		refreshOpts = append(refreshOpts, oauth.WithKimiDeviceID(provider.OAuthDetail.DeviceID))
 	}
 	if ai.IsWorkBuddyIssuer(issuer) {

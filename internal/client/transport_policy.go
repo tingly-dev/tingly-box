@@ -18,20 +18,21 @@ const (
 // ProviderTransportPolicy defines transport reuse behavior per provider type
 // OAuth providers generally require per-session transports for proper isolation
 var ProviderTransportPolicy = map[ai.Issuer]TransportReusePolicy{
-	ai.IssuerClaudeCode:  TransportPerSession,
-	ai.IssuerOpenAI:      TransportPerSession,
-	ai.IssuerGoogle:      TransportPerSession,
-	ai.IssuerCodex:       TransportPerSession,
-	ai.IssuerGemini:      TransportPerSession,
-	ai.IssuerGitHub:      TransportPerSession,
-	ai.IssuerQwenCode:    TransportPerSession,
-	ai.IssuerAntigravity: TransportPerSession,
-	ai.IssuerIFlow:       TransportPerSession,
-	ai.IssuerKimiCode:    TransportPerSession,
-	ai.IssuerXAI:         TransportPerSession,
-	ai.IssuerWorkBuddy:   TransportPerSession,
-	ai.IssuerWorkBuddyCN: TransportPerSession,
-	ai.IssuerMock:        TransportReusable, // Mock for testing
+	ai.IssuerClaudeCode:   TransportPerSession,
+	ai.IssuerOpenAI:       TransportPerSession,
+	ai.IssuerGoogle:       TransportPerSession,
+	ai.IssuerCodex:        TransportPerSession,
+	ai.IssuerGemini:       TransportPerSession,
+	ai.IssuerGitHub:       TransportPerSession,
+	ai.IssuerQwenCode:     TransportPerSession,
+	ai.IssuerAntigravity:  TransportPerSession,
+	ai.IssuerIFlow:        TransportPerSession,
+	ai.IssuerKimiCode:     TransportPerSession,
+	ai.IssuerKimiCodeIntl: TransportPerSession,
+	ai.IssuerXAI:          TransportPerSession,
+	ai.IssuerWorkBuddy:    TransportPerSession,
+	ai.IssuerWorkBuddyCN:  TransportPerSession,
+	ai.IssuerMock:         TransportReusable, // Mock for testing
 }
 
 // GetTransportReusePolicy returns the transport reuse policy for a provider type

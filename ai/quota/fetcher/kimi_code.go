@@ -19,6 +19,7 @@ import (
 
 const (
 	kimiCodeAPIBase        = "https://api.kimi.com/coding/v1"
+	kimiCodeIntlAPIBase    = "https://api.kimi.ai/coding/v1"
 	kimiCodeFixedPointCent = 1_000_000
 )
 
@@ -216,8 +217,13 @@ type kimiCodeUsageResponse struct {
 }
 
 func (f *KimiCodeFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
+	intl := provider.OAuthIssuer() == ai.IssuerKimiCodeIntl
+	production := kimiCodeAPIBase
+	if intl {
+		production = kimiCodeIntlAPIBase
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		endpoint(f.baseURL, kimiCodeAPIBase, "/usages"), nil)
+		endpoint(f.baseURL, production, "/usages"), nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -230,6 +236,11 @@ func (f *KimiCodeFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*qu
 	// entitlement (an expired plan reads as permission_denied), not the shape
 	// of the client.
 	req.Header.Set("User-Agent", "")
+	if intl {
+		// api.kimi.ai refuses clients without a browser-like or CLI user
+		// agent (403), unlike the mainland host.
+		req.Header.Set("User-Agent", "KimiCLI/1.10.6")
+	}
 
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 	resp, err := client.Do(req)

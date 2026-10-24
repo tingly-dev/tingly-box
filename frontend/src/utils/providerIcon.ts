@@ -12,6 +12,7 @@ export interface IconSource {
 const OAUTH_ISSUER_ICON: Record<string, string> = {
     claude_code: 'claudecode',
     kimi_code: 'kimi',
+    kimi_code_intl: 'kimi',
     qwen_code: 'qwen',
     antigravity: 'google',
     zcode_cn: 'zcode',

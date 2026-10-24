@@ -356,7 +356,7 @@ func inferProviderType(provider *typ.Provider) ProviderType {
 		return ProviderTypeCursor
 	case typ.IssuerCodex:
 		return ProviderTypeCodex
-	case typ.IssuerKimiCode:
+	case typ.IssuerKimiCode, typ.IssuerKimiCodeIntl:
 		return ProviderTypeKimiCode
 	case typ.IssuerWorkBuddy, typ.IssuerWorkBuddyCN:
 		return ProviderTypeWorkBuddy

@@ -282,21 +282,34 @@ func DefaultRegistry() *Registry {
 	// Kimi OAuth (Device Authorization Flow)
 	// Reference: https://github.com/router-for-me/CLIProxyAPI internal/auth/kimi/kimi.go
 	// Public device flow, no client secret; no scope parameter on the wire.
-	registry.Register(&ProviderConfig{
-		Type:               ai.IssuerKimiCode,
-		GrantType:          "urn:ietf:params:oauth:grant-type:device_code",
-		DisplayName:        "Kimi Code",
-		ClientID:           "17e5f671-d194-4dfb-9706-5516cb48c098",
-		ClientSecret:       "",
-		DeviceCodeURL:      "https://auth.kimi.com/api/oauth/device_authorization",
-		TokenURL:           "https://auth.kimi.com/api/oauth/token",
-		Scopes:             nil,
-		AuthStyle:          AuthStyleInNone,
-		OAuthMethod:        OAuthMethodDeviceCode,
-		TokenRequestFormat: TokenRequestFormatForm,
-		ConsoleURL:         "https://www.kimi.com/code",
-		Hook:               &KimiHook{},
-	})
+	// Two issuers, one per account platform: kimi-cli reaches the overseas
+	// platform by pointing KIMI_CODE_OAUTH_HOST at auth.kimi.ai, and the
+	// mainland site does not serve overseas accounts.
+	for _, k := range []struct {
+		issuer  ai.Issuer
+		display string
+		host    string
+		console string
+	}{
+		{ai.IssuerKimiCode, "Kimi Code", "https://auth.kimi.com", "https://www.kimi.com/code"},
+		{ai.IssuerKimiCodeIntl, "Kimi Code International", "https://auth.kimi.ai", "https://www.kimi.ai/code"},
+	} {
+		registry.Register(&ProviderConfig{
+			Type:               k.issuer,
+			GrantType:          "urn:ietf:params:oauth:grant-type:device_code",
+			DisplayName:        k.display,
+			ClientID:           "17e5f671-d194-4dfb-9706-5516cb48c098",
+			ClientSecret:       "",
+			DeviceCodeURL:      k.host + "/api/oauth/device_authorization",
+			TokenURL:           k.host + "/api/oauth/token",
+			Scopes:             nil,
+			AuthStyle:          AuthStyleInNone,
+			OAuthMethod:        OAuthMethodDeviceCode,
+			TokenRequestFormat: TokenRequestFormatForm,
+			ConsoleURL:         k.console,
+			Hook:               &KimiHook{},
+		})
+	}
 
 	return registry
 }

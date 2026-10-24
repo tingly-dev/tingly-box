@@ -294,12 +294,13 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 	// If no manual proxy URL, try to auto-detect from existing providers
 	if proxyURL == "" {
 		providerToBase := map[ai.Issuer]string{
-			ai.IssuerCodex:       "openai",
-			ai.IssuerKimiCode:    "moonshot",
-			ai.IssuerOpenAI:      "openai",
-			ai.IssuerClaudeCode:  "anthropic",
-			ai.IssuerGemini:      "google",
-			ai.IssuerAntigravity: "google",
+			ai.IssuerCodex:        "openai",
+			ai.IssuerKimiCode:     "moonshot",
+			ai.IssuerKimiCodeIntl: "moonshot",
+			ai.IssuerOpenAI:       "openai",
+			ai.IssuerClaudeCode:   "anthropic",
+			ai.IssuerGemini:       "google",
+			ai.IssuerAntigravity:  "google",
 		}
 
 		if baseProvider, ok := providerToBase[issuer]; ok {
@@ -384,7 +385,7 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 	// Kimi binds one X-Msh-Device-Id to every request of a flow and to the
 	// persisted credential — refresh and inference must keep using it.
 	var kimiDeviceID string
-	if issuer == ai.IssuerKimiCode {
+	if ai.IsKimiCodeIssuer(issuer) {
 		kimiDeviceID = uuid.New().String()
 		deviceOpts = append(deviceOpts, oauth.WithKimiDeviceID(kimiDeviceID))
 	}
@@ -693,7 +694,7 @@ func (h *Handler) RefreshOAuthToken(c *gin.Context) {
 
 	// Refresh token
 	refreshOpts := []oauth.Option{oauth.WithProxyString(provider.ProxyURL)}
-	if issuer == ai.IssuerKimiCode && provider.OAuthDetail.DeviceID != "" {
+	if ai.IsKimiCodeIssuer(issuer) && provider.OAuthDetail.DeviceID != "" {
 		refreshOpts = append(refreshOpts, oauth.WithKimiDeviceID(provider.OAuthDetail.DeviceID))
 	}
 	if ai.IsWorkBuddyIssuer(issuer) {
@@ -1248,10 +1249,12 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 		case ai.IssuerCodex:
 			apiBase = protocol.CodexAPIBase
 			apiStyle = protocol.APIStyleOpenAI
-		case ai.IssuerKimiCode:
-			// Kimi OAuth tokens target kimi.com's coding API, not Moonshot.
+		case ai.IssuerKimiCode, ai.IssuerKimiCodeIntl:
+			// Kimi OAuth tokens target the platform's coding API, not Moonshot
+			// (kimi.com mainland, kimi.ai overseas). The OpenAI endpoint is
+			// primary; the Anthropic endpoint is attached as the dual URL below.
 			// Reference: CLIProxyAPI internal/runtime/executor/kimi_executor.go.
-			apiBase = "https://api.kimi.com/coding/v1"
+			_, apiBase = ai.DualEndpoints(issuer)
 			apiStyle = protocol.APIStyleOpenAI
 		case ai.IssuerXAI:
 			// xAI's OAuth token is only accepted by the Grok CLI proxy, not the

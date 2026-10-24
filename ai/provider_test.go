@@ -774,3 +774,17 @@ func TestIssuerSupportsDualFollowsDualEndpoints(t *testing.T) {
 		}
 	}
 }
+
+func TestDualEndpointsKimiPerPlatform(t *testing.T) {
+	a, o := DualEndpoints(IssuerKimiCode)
+	if a != "https://api.kimi.com/coding" || o != "https://api.kimi.com/coding/v1" {
+		t.Errorf("mainland = %q, %q", a, o)
+	}
+	a, o = DualEndpoints(IssuerKimiCodeIntl)
+	if a != "https://api.kimi.ai/coding" || o != "https://api.kimi.ai/coding/v1" {
+		t.Errorf("overseas = %q, %q", a, o)
+	}
+	if !IsKimiCodeIssuer(IssuerKimiCodeIntl) || IsKimiCodeIssuer(IssuerZCode) {
+		t.Error("IsKimiCodeIssuer wrong")
+	}
+}
