@@ -549,3 +549,41 @@ func TestFailedTurnMarksThreadFailedNotWaiting(t *testing.T) {
 	assert.Equal(t, 1, counts.Failed)
 	assert.Equal(t, 0, counts.Waiting)
 }
+
+// A thread's worktree lives in the repository's .claude/worktrees, hidden
+// from git status, and its branch keeps the tp/ name.
+func TestThreadWorktreeIsInTheRepository(t *testing.T) {
+	f := newFixture(t, func(*enginetest.Turn) error { return nil })
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Add feature", Task: "x", Origin: "coordinator"})
+	require.NoError(t, err)
+	assert.Equal(t, RepoWorktreeDir(f.repo, "add-feature", th.ID), th.Cwd)
+	assert.True(t, strings.HasPrefix(th.Branch, "tp/add-feature-"))
+	assert.DirExists(t, th.Cwd)
+	out := run(t, f.repo, "git", "status", "--porcelain")
+	assert.Empty(t, strings.TrimSpace(out), "the worktree directory is not reported as untracked")
+	th2, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Second", Task: "y", Origin: "coordinator"})
+	require.NoError(t, err)
+	b, err := os.ReadFile(filepath.Join(f.repo, ".git", "info", "exclude"))
+	require.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(string(b), "/.claude/worktrees/"), "excluded once, however many threads")
+	assert.NotEqual(t, th.Cwd, th2.Cwd)
+	waitStatus(t, f.store, th.ID, db.ThreadIdle)
+}
+
+// When the repository cannot hold the worktree, the thread still starts, in
+// the data directory, and the thread says so.
+func TestThreadWorktreeFallsBackToDataDir(t *testing.T) {
+	f := newFixture(t, func(*enginetest.Turn) error { return nil })
+	// A file where the directory should go makes git unable to create it.
+	require.NoError(t, os.WriteFile(filepath.Join(f.repo, ".claude"), []byte("x"), 0o644))
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Add feature", Task: "x", Origin: "coordinator"})
+	require.NoError(t, err)
+	assert.Equal(t, f.threads.layout.ThreadDir(f.project.ID, th.ID), th.Cwd)
+	evs, err := f.store.ListThreadEvents(th.ID)
+	require.NoError(t, err)
+	var said bool
+	for _, e := range evs {
+		said = said || (e.Kind == db.EvSystem && strings.Contains(e.Content, "Could not create the worktree"))
+	}
+	assert.True(t, said, "status %s: %s", th.Status, th.WaitReason)
+}

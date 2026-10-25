@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -65,6 +67,48 @@ func HeadBranch(ctx context.Context, dir string) string {
 // AddWorktree creates branch from base in a new worktree at dir.
 func AddWorktree(ctx context.Context, repo, dir, branch, base string) error {
 	_, err := git(ctx, repo, "worktree", "add", "-b", branch, dir, base)
+	if err != nil {
+		// git may have made the branch before failing to make the directory;
+		// leave no stray branch, so the caller can try another place.
+		_, _ = git(ctx, repo, "branch", "-D", branch)
+	}
+	return err
+}
+
+// excludeWorktrees keeps <repo>/.claude/worktrees out of `git status` for
+// every worktree of the repository, without touching the user's .gitignore.
+func excludeWorktrees(ctx context.Context, repo string) error {
+	p, err := git(ctx, repo, "rev-parse", "--git-path", "info/exclude")
+	if err != nil {
+		return err
+	}
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(repo, p)
+	}
+	const line = "/.claude/worktrees/"
+	if b, err := os.ReadFile(p); err == nil {
+		for _, l := range strings.Split(string(b), "\n") {
+			if strings.TrimSpace(l) == line {
+				return nil
+			}
+		}
+		if len(b) > 0 && b[len(b)-1] != '\n' {
+			return appendFile(p, "\n"+line+"\n")
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return err
+	}
+	return appendFile(p, line+"\n")
+}
+
+func appendFile(path, text string) error {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.WriteString(text)
 	return err
 }
 

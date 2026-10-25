@@ -44,6 +44,13 @@ func (l Layout) ThreadDir(projectID, threadID string) string {
 	return filepath.Join(l.Dir(projectID), "threads", threadID)
 }
 
+// RepoWorktreeDir is where a thread's worktree goes inside its repository:
+// the directory Claude Code itself uses for worktrees, so tools and people
+// find it there. The repository's .git/info/exclude hides it from status.
+func RepoWorktreeDir(repoPath, slug, threadID string) string {
+	return filepath.Join(repoPath, ".claude", "worktrees", slug+"-"+threadID[:6])
+}
+
 // SettingsFile is the Claude Code settings file a thread runs with.
 func (l Layout) SettingsFile(projectID, threadID string) string {
 	return filepath.Join(l.Dir(projectID), "threads", threadID+".settings.json")
