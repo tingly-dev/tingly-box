@@ -143,12 +143,18 @@ func types(events []map[string]any) []string {
 }
 
 func newServer(t *testing.T, agents *project.Agents) (*db.Store, client) {
+	return newServerAt(t, agents, t.TempDir())
+}
+
+// newServerAt is newServer with the data root given, for a test that reads or
+// writes the files under it.
+func newServerAt(t *testing.T, agents *project.Agents, root string) (*db.Store, client) {
 	store, err := db.Open(":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { store.Close() })
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	srv := httptest.NewServer(New(ctx, Deps{Store: store, Layout: project.Layout{Root: t.TempDir()}, Agents: agents}))
+	srv := httptest.NewServer(New(ctx, Deps{Store: store, Layout: project.Layout{Root: root}, Agents: agents}))
 	t.Cleanup(srv.Close)
 	return store, client{t: t, base: srv.URL + "/api/v1"}
 }

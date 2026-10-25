@@ -41,7 +41,21 @@
 | F7 | `PreToolUse` 钩子的拒绝文案可以引导 agent 自己调用 `EnterWorktree` | 实测（本方案不采用，见下） |
 | F8 | 官方 Projects：项目记忆是独立文件，与本机 auto memory 分开；本机文件夹线程的 worktree 是每线程的可选项 | claude-projects 文档 |
 
-实测方式：`claude -p`，用 `env -u` 去掉托管会话的标识，`CLAUDE_CODE_DISABLE_AUTO_MEMORY=0` 打开 auto memory，让模型报告系统提示里的记忆目录，用 `git worktree list` 和转录目录核对。**未测**：Projects 实际使用的常驻流式进程。
+实测方式：`claude -p`，用 `env -u` 去掉托管会话的标识，`CLAUDE_CODE_DISABLE_AUTO_MEMORY=0` 打开 auto memory，让模型报告系统提示里的记忆目录，用 `git worktree list` 和转录目录核对。**当时未测**的常驻流式进程，实现后已补测，见下一节。
+
+### 实现后的验证（2026-10-25，#2252、#2253）
+
+| 验证 | 方式 | 结果 |
+|---|---|---|
+| 新线程的 worktree 位置、分支名、`git status` | 真 git 仓库起两个线程；单元测试 `TestThreadWorktreeIsInTheRepository` | 在 `<repo>/.claude/worktrees/<slug>-<id6>`，分支 `tp/...`，`git status` 为空，exclude 只有一行 |
+| 记忆目录 | 真 `claude` 2.1.310（`-p`）加载线程实际生成的 settings，从 worktree 1 写文件，换到 worktree 2 读 | 两个 worktree 都报告项目 `memory/`，文件互通 |
+| 常驻流式进程下的 resume | 真 `claude`，`--input-format stream-json --output-format stream-json`，同一 worktree cwd，`--session-id` 起一轮，`--resume` 再来一轮 | 第二轮记得第一轮内容，记忆目录仍是 `autoMemoryDirectory`（取代上面“未测”） |
+| 仓库只读时的回退 | `unshare -m` 里把仓库的 `.claude` 以只读 bind mount，真跑 `Threads.Start` | git 报 Read-only file system；线程落到数据目录并记一条系统事件；回退不撞分支名 |
+| 失败后残留分支 | 同上 | `git worktree add -b` 失败会留下分支，`AddWorktree` 现在删掉它；单元测试 `TestThreadWorktreeFallsBackToDataDir` |
+| 文件夹上传共享、旧位置回退 | HTTP 层 `TestFolderThreadsShareUploadsOverHTTP` | 同文件夹两个线程互相读到上传；旧 `_sessions/<id>` 里的文件只对该线程可读 |
+| 整体 | `projects/` 下 `go test ./... -count=1` | 全过 |
+
+仍未验证：Projects 真实进程池里一次完整的“起线程 → 归档 → 恢复”（只有流式 CLI 层的 resume 和脚本化 CLI 的单元测试）；Windows 路径；NFS/容器卷上的 `git worktree`。
 
 ## 讨论中放弃的方向
 
@@ -124,7 +138,7 @@
 
 ## 风险
 
-- 验证用的是 `claude -p`，Projects 用常驻流式进程：F1、F2、F4 在那里应当一致，但未测；步骤 3 的验收里加一条流式 resume 的集成测试。
+- F1、F2、F4 最初只用 `claude -p` 验证；实现后用流式输入输出补测了 resume 与记忆目录，一致（见“实现后的验证”）。
 - `autoMemoryDirectory` 需要 Claude Code 2.1.x 的较新版本，旧版本会忽略该键，退化为按仓库/ cwd 的原生记忆，Projects 自己的 `MEMORY.md` 机制不受影响。
 - 仓库内的 `.claude/worktrees/` 对用户可见（`ls`），也会被 IDE 的文件监听扫到；这是与官方一致的取舍。
 - 多个线程共用一个仓库的 `.git`：并发 `git worktree add` 由 git 的锁处理，已有行为不变。
