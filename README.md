@@ -34,6 +34,7 @@ Tingly Box **connects any agent to any model** — for you and your whole team, 
   * Guardrails, MCP Gateway, and Usage Analytics
   * Image API — image generation and editing through the same gateway, with a built-in playground
   * [Text to Speech](./docs/tts.md) — speech generation, streaming audio, and a built-in playground
+  * [Speech Recognition](./docs/asr.md) — audio upload/recording, transcription, translation, and subtitle export
   * Remote Control — drive agents via Telegram, Weixin, WeCom, Feishu, Lark, and DingTalk
 * **Production-Ready**
   * VModel (Virtual Model) — for testing, validation, and benchmarking

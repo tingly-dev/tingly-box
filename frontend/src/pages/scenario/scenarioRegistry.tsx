@@ -2,7 +2,7 @@
 // nav-level consumers (layout/useActivityItems.tsx, the Power-ups menu,
 // components/dashboard/AgentQuickNav.tsx) can read this list cheaply.
 import { useCallback, useEffect, useState } from 'react';
-import { IconVolume } from '@tabler/icons-react';
+import { IconMicrophone, IconVolume } from '@tabler/icons-react';
 import { setSyncedItem } from '@/services/uiPrefs';
 import {
     CircleOutlined as IconCustom,
@@ -155,6 +155,14 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         descKey: 'audio.ttsHint',
         path: '/agent/tts',
         icon: (size) => <IconVolume size={size} />,
+        hideable: true,
+    },
+    {
+        id: 'asr',
+        labelKey: 'audio.asrTitle',
+        descKey: 'audio.asrHint',
+        path: '/agent/asr',
+        icon: (size) => <IconMicrophone size={size} />,
         hideable: true,
     },
     {

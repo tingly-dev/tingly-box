@@ -102,6 +102,8 @@ func (ph *ProtocolHandler) SetupMixinEndpoints(group *gin.RouterGroup, modelAuth
 	// Embeddings endpoint (OpenAI compatible)
 	group.POST("/embeddings", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation("embeddings"), ph.HandleOpenAIEmbeddings)...)
 	group.POST("/audio/speech", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation("speech"), ph.HandleOpenAISpeech)...)
+	group.POST("/audio/transcriptions", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation("transcription"), ph.HandleOpenAITranscription)...)
+	group.POST("/audio/translations", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation("translation"), ph.HandleOpenAITranslation)...)
 
 	// Decisions endpoint (OpenAI Decisions API, opaque passthrough)
 	group.POST("/decisions", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation("decisions"), ph.HandleOpenAIDecisions)...)

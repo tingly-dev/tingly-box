@@ -75,6 +75,7 @@ const (
 	ScenarioGlobal        RuleScenario = "_global"     // Global flags that apply to all scenarios
 	ScenarioEmbed         RuleScenario = "embed"       // Embedding application scenario; only serves /embeddings
 	ScenarioTTS           RuleScenario = "tts"         // Text-to-speech via /audio/speech
+	ScenarioASR           RuleScenario = "asr"         // Speech recognition via /audio/transcriptions
 	ScenarioImageGen      RuleScenario = "imagegen"    // Image generation scenario; only serves /images/generations
 	ScenarioImagePrompt   RuleScenario = "imageprompt" // Image to Prompt / Idea to Prompt pages: a chat model over /chat/completions
 	ScenarioDecisions     RuleScenario = "decisions"   // Decisions application scenario; only serves /decisions
@@ -100,6 +101,7 @@ func BuiltinScenarios() []RuleScenario {
 		ScenarioGlobal,
 		ScenarioEmbed,
 		ScenarioTTS,
+		ScenarioASR,
 		ScenarioImageGen,
 		ScenarioImagePrompt,
 		ScenarioDecisions,
