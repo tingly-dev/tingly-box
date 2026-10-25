@@ -90,7 +90,7 @@ func TestCatalogPolicyAndStructuredResults(t *testing.T) {
 
 func TestCatalogPartialFailureAndClientGrants(t *testing.T) {
 	remote := catalogRemote(t, "http", "working", "")
-	cfg := &typ.MCPRuntimeConfig{RequestTimeout: 1, Sources: []typ.MCPSourceConfig{{ID: "working", Transport: "http", Endpoint: remote.URL}, {ID: "failed", Transport: "http", Endpoint: "http://127.0.0.1:1"}}, ClientProfiles: []typ.MCPClientProfile{{ID: "reader", Sources: []string{"working"}, Tools: []string{NormalizeToolName("working", "echo")}}}, ClientProfilesConfigured: true}
+	cfg := &typ.MCPRuntimeConfig{RequestTimeout: 1, Sources: []typ.MCPSourceConfig{{ID: "working", Transport: "http", Endpoint: remote.URL}, {ID: "failed", Transport: "http", Endpoint: "http://127.0.0.1:1"}}, Profiles: []typ.MCPProfile{{ID: "reader", Tools: []typ.MCPProfileTool{{Name: NormalizeToolName("working", "echo")}}}}}
 	r := NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })
 	defer r.Close()
 	start := time.Now()
@@ -100,11 +100,14 @@ func TestCatalogPartialFailureAndClientGrants(t *testing.T) {
 	require.Equal(t, "connected", catalog[0].State)
 	require.Equal(t, "error", catalog[1].State)
 	require.NotEmpty(t, catalog[1].Error)
-	require.True(t, r.ClientAllows("reader", "working", NormalizeToolName("working", "echo")))
-	require.False(t, r.ClientAllows("reader", "failed", NormalizeToolName("failed", "echo")))
-	require.False(t, r.ClientAllows("typo", "working", NormalizeToolName("working", "echo")))
-	cfg.ClientProfiles = nil
-	require.False(t, r.ClientExists("tb"), "deleting the last explicit profile must not restore aggregate access")
+	require.True(t, r.ProfileAllows("reader", NormalizeToolName("working", "echo")))
+	require.False(t, r.ProfileAllows("reader", NormalizeToolName("failed", "echo")), "a tool a profile does not list is not exposed")
+	require.False(t, r.ProfileAllows("typo", NormalizeToolName("working", "echo")))
+	require.True(t, r.ProfileAllows(typ.MCPDefaultProfileID, NormalizeToolName("failed", "echo")), "Default holds every tool")
+	cfg.Profiles = nil
+	require.False(t, r.ProfileExists("reader"))
+	require.True(t, r.ProfileExists(typ.MCPDefaultProfileID), "Default exists without being saved")
+	require.False(t, r.ProfileExists("tb"), "legacy aggregate endpoint is gone")
 }
 
 func TestStdioCatalogResultAndHotUpdate(t *testing.T) {

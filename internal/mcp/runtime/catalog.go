@@ -121,7 +121,6 @@ func (r *Runtime) Catalog(ctx context.Context, usage string) []SourceStatus {
 			eligible := SourceUsage(source)
 			for _, policy := range source.ToolPolicies {
 				if policy.Usage != nil {
-					eligible.Client = eligible.Client || policy.Usage.Client
 					eligible.Gateway = eligible.Gateway || policy.Usage.Gateway
 				}
 			}

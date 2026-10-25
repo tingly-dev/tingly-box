@@ -12,12 +12,22 @@ type MCPToolPolicy struct {
 	Usage   *MCPToolUsage `json:"usage,omitempty"`
 }
 
-// MCPClientProfile is a downstream grant, independent of upstream connections.
-// Empty grants expose no tools; ["*"] explicitly grants all eligible tools.
-type MCPClientProfile struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
-	Enabled *bool    `json:"enabled,omitempty"`
-	Sources []string `json:"sources"`
-	Tools   []string `json:"tools"` // normalized tool names
+// MCPDefaultProfileID is the one profile that always exists. It contains every
+// tool; Tools holds only the entries switched off in it.
+const MCPDefaultProfileID = "default"
+
+// MCPProfileTool is one tool in a profile, addressed by normalized name.
+// A nil Enabled means on; off keeps the tool listed.
+type MCPProfileTool struct {
+	Name    string `json:"name"`
+	Enabled *bool  `json:"enabled,omitempty"`
+}
+
+// MCPProfile is one entry point to the gateway. A custom profile exposes only
+// the tools it lists; Default exposes all tools except those switched off.
+type MCPProfile struct {
+	ID      string           `json:"id"`
+	Name    string           `json:"name"`
+	Enabled *bool            `json:"enabled,omitempty"`
+	Tools   []MCPProfileTool `json:"tools"`
 }

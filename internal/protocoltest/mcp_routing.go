@@ -17,7 +17,7 @@ import (
 func routingMCPHarnessCases() []serverToolCase {
 	var cases []serverToolCase
 	for _, transport := range []string{"http", "sse"} {
-		for _, state := range []string{"client_only", "server_only", "dual", "none", "revoked", "disabled_tool", "excluded_tool"} {
+		for _, state := range []string{"client_only", "server_only", "dual", "revoked", "disabled_tool", "excluded_tool"} {
 			cases = append(cases, serverToolCase{test: "TestMCPRoutingExposure", scenario: "mcp_routing_exposure", source: protocol.APIType("mcp"), target: protocol.APIType("mcp"), sub: "transport=" + transport + "/policy=" + state, run: func(t flagTB) ([]string, string) {
 				return routingMCPCase(t, transport, state)
 			}})
@@ -42,11 +42,11 @@ func routingMCPCase(t flagTB, transport, state string) ([]string, string) {
 	}
 	remote := httptest.NewServer(handler)
 	t.Cleanup(remote.Close)
-	clientUse, serverUse := state != "server_only" && state != "none", state != "client_only" && state != "none"
-	source := typ.MCPSourceConfig{ID: "remote", Origin: "external", Transport: transport, Endpoint: remote.URL, Usage: &typ.MCPToolUsage{Client: clientUse, Gateway: serverUse}}
-	grant := []string{"*"}
+	serverUse := state != "client_only"
+	source := typ.MCPSourceConfig{ID: "remote", Origin: "external", Transport: transport, Endpoint: remote.URL, Usage: &typ.MCPToolUsage{Gateway: serverUse}}
+	grant := []typ.MCPProfileTool{{Name: mcpruntime.NormalizeToolName("remote", "echo")}}
 	if state == "revoked" {
-		grant = []string{}
+		grant = []typ.MCPProfileTool{}
 	}
 	if state == "disabled_tool" {
 		source.ToolPolicies = map[string]typ.MCPToolPolicy{"echo": {Enabled: typ.BoolPtr(false)}}
@@ -54,9 +54,9 @@ func routingMCPCase(t flagTB, transport, state string) ([]string, string) {
 	if state == "excluded_tool" {
 		source.Tools = []string{"another"}
 	}
-	wantClient := clientUse && state != "revoked" && state != "disabled_tool" && state != "excluded_tool"
+	wantClient := state != "revoked" && state != "disabled_tool" && state != "excluded_tool"
 	wantServer := serverUse && state != "disabled_tool" && state != "excluded_tool"
-	env := newCaseEnv(t, NewTestEnvOptionWithMCPConfig(&typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{source, {ID: "webtools", Enabled: typ.BoolPtr(false), Transport: "stdio", Command: "tingly-box"}}, ClientProfilesConfigured: true, ClientProfiles: []typ.MCPClientProfile{{ID: "reader", Sources: []string{"remote"}, Tools: grant}}}))
+	env := newCaseEnv(t, NewTestEnvOptionWithMCPConfig(&typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{source, {ID: "webtools", Enabled: typ.BoolPtr(false), Transport: "stdio", Command: "tingly-box"}}, Profiles: []typ.MCPProfile{{ID: "reader", Tools: grant}}}))
 	token := env.appConfig.GetGlobalConfig().GetUserToken()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -88,11 +88,12 @@ func routingMCPCase(t flagTB, transport, state string) ([]string, string) {
 	if (count(body.Routing.ServerTools) > 0) != wantServer {
 		failures = append(failures, "server-tool graph differs from effective policy")
 	}
-	if len(body.Routing.Clients) != 1 {
-		return append(failures, "expected explicit client profile"), ""
+	reader := routeProfile(body.Routing, "reader")
+	if reader == nil {
+		return append(failures, "expected explicit profile"), ""
 	}
-	if (count(body.Routing.Clients[0].Sources) > 0) != wantClient {
-		failures = append(failures, "client graph differs from grants")
+	if (count(reader.Sources) > 0) != wantClient {
+		failures = append(failures, "profile graph differs from its tools")
 	}
 	sdk := sdkmcp.NewClient(&sdkmcp.Implementation{Name: "harness-reader", Version: "1"}, nil)
 	session, err := sdk.Connect(ctx, &sdkmcp.StreamableClientTransport{Endpoint: env.GatewayURL() + "/api/v1/mcp/reader", HTTPClient: &http.Client{Transport: routingAuth{token: token}}}, nil)
@@ -135,7 +136,7 @@ func (a routingAuth) RoundTrip(req *http.Request) (*http.Response, error) {
 // Even a legacy dual-use setting cannot expose the context-dependent Advisor
 // through a generic client endpoint. Its model-loop route remains available.
 func routingMCPAdvisorCase(t flagTB) ([]string, string) {
-	cfg := &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{{ID: "advisor", Enabled: typ.BoolPtr(true), Transport: "advisor", Advisor: &typ.AdvisorConfig{ProviderUUID: "consultation", Model: "review-model"}, Usage: &typ.MCPToolUsage{Client: true, Gateway: true}}, {ID: "webtools", Enabled: typ.BoolPtr(false), Command: "tingly-box", Transport: "stdio"}}, ClientProfilesConfigured: true, ClientProfiles: []typ.MCPClientProfile{{ID: "reader", Sources: []string{"*"}, Tools: []string{"*"}}}}
+	cfg := &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{{ID: "advisor", Enabled: typ.BoolPtr(true), Transport: "advisor", Advisor: &typ.AdvisorConfig{ProviderUUID: "consultation", Model: "review-model"}, Usage: &typ.MCPToolUsage{Client: true, Gateway: true}}, {ID: "webtools", Enabled: typ.BoolPtr(false), Command: "tingly-box", Transport: "stdio"}}, Profiles: []typ.MCPProfile{{ID: "reader", Tools: []typ.MCPProfileTool{{Name: mcpruntime.NormalizeToolName("advisor", "advisor")}}}}}
 	env := newCaseEnv(t, NewTestEnvOptionWithMCPConfig(cfg))
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -154,7 +155,7 @@ func routingMCPAdvisorCase(t flagTB) ([]string, string) {
 		return []string{err.Error()}, ""
 	}
 	var failures []string
-	if len(body.Routing.Clients) != 1 || len(body.Routing.Clients[0].Sources) != 0 {
+	if reader := routeProfile(body.Routing, "reader"); reader == nil || len(reader.Sources) != 0 {
 		failures = append(failures, "Advisor appeared in ordinary client route")
 	}
 	if len(body.Routing.ServerTools) != 1 || len(body.Routing.ServerTools[0].Tools) != 1 {
@@ -178,4 +179,13 @@ func routingMCPAdvisorCase(t flagTB) ([]string, string) {
 		failures = append(failures, "context-free Advisor call falsely succeeded")
 	}
 	return failures, "Advisor available only to model loop; generic client has zero exposed tools"
+}
+
+func routeProfile(snapshot mcpruntime.RoutingSnapshot, id string) *mcpruntime.ProfileRoute {
+	for i := range snapshot.Profiles {
+		if snapshot.Profiles[i].ID == id {
+			return &snapshot.Profiles[i]
+		}
+	}
+	return nil
 }

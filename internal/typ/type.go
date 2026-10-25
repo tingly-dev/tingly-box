@@ -510,12 +510,11 @@ const (
 
 // MCPRuntimeConfig contains global MCP runtime configuration.
 type MCPRuntimeConfig struct {
-	Mode                     MCPMode            `json:"mode,omitempty"` // deprecated: kept only for backward compatibility
-	Sources                  []MCPSourceConfig  `json:"sources,omitempty"`
-	ClientProfiles           []MCPClientProfile `json:"client_profiles,omitempty"`
-	ClientProfilesConfigured bool               `json:"client_profiles_configured,omitempty"`
-	RequestTimeout           int                `json:"request_timeout,omitempty"`          // seconds, default: 30
-	StripDisabledMCPTools    bool               `json:"strip_disabled_mcp_tools,omitempty"` // dangerous: strip disabled MCP declarations/tool_calls
+	Mode                  MCPMode           `json:"mode,omitempty"` // deprecated: kept only for backward compatibility
+	Sources               []MCPSourceConfig `json:"sources,omitempty"`
+	Profiles              []MCPProfile      `json:"profiles,omitempty"`
+	RequestTimeout        int               `json:"request_timeout,omitempty"`          // seconds, default: 30
+	StripDisabledMCPTools bool              `json:"strip_disabled_mcp_tools,omitempty"` // dangerous: strip disabled MCP declarations/tool_calls
 }
 
 // MCPSourceConfig defines one MCP source connection.

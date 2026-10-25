@@ -56,7 +56,7 @@ func (a *MCPRuntimeAdapter) ListTools(ctx context.Context) ([]MCPTool, error) {
 			if normalizedName == "" {
 				normalizedName = runtime.NormalizeToolName(sourceID, t.Name)
 			}
-			if a.clientID != "" && !a.runtime.ClientAllows(a.clientID, sourceID, normalizedName) {
+			if a.clientID != "" && !a.runtime.ProfileAllows(a.clientID, normalizedName) {
 				continue
 			}
 
@@ -90,7 +90,7 @@ func (a *MCPRuntimeAdapter) CallTool(ctx context.Context, name string, arguments
 	if sourceID == "builtin" && toolName == "advisor" {
 		sourceID = "advisor"
 	}
-	if !a.isSourceAllowed(sourceID) || (a.clientID != "" && !a.runtime.ClientAllows(a.clientID, sourceID, name)) {
+	if !a.isSourceAllowed(sourceID) || (a.clientID != "" && !a.runtime.ProfileAllows(a.clientID, name)) {
 		return coretool.ToolResult{}, fmt.Errorf("tool is not allowed for this client")
 	}
 	status, err := a.runtime.DiscoverSource(ctx, sourceID)

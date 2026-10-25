@@ -47,7 +47,7 @@ func (h *Handler) ProbeClient(c *gin.Context) {
 		return
 	}
 	id := c.Param("profile_id")
-	if !h.runtime.ClientExists(id) {
+	if !h.runtime.ProfileExists(id) {
 		c.JSON(404, MCPClientProbeResponse{Error: "unknown MCP client profile"})
 		return
 	}

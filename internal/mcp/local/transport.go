@@ -46,7 +46,7 @@ func (t *TransportHandler) isMCPEnabled() bool {
 
 // GetServer returns the MCPServer for a client, creating it if needed.
 func (t *TransportHandler) GetServer(clientName string) (*MCPServer, error) {
-	if t.runtime == nil || !t.runtime.ClientExists(clientName) {
+	if t.runtime == nil || !t.runtime.ProfileExists(clientName) {
 		return nil, fmt.Errorf("unknown MCP client profile: %s", clientName)
 	}
 	t.serversMu.RLock()

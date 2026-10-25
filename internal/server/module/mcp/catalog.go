@@ -107,40 +107,30 @@ func validateConfigChange(prev, cfg *typ.MCPRuntimeConfig) error {
 		return invalid("source %s: missing environment variable %s for %s", issues[0].SourceID, issues[0].VarName, issues[0].FieldPath)
 	}
 	seen = map[string]bool{}
-	for i := range cfg.ClientProfiles {
-		p := &cfg.ClientProfiles[i]
-		if p.Sources == nil {
-			p.Sources = []string{}
-		}
+	for i := range cfg.Profiles {
+		p := &cfg.Profiles[i]
 		if p.Tools == nil {
-			p.Tools = []string{}
+			p.Tools = []typ.MCPProfileTool{}
 		}
 		if !validID.MatchString(p.ID) || strings.Contains(p.ID, "__") {
-			return invalid("invalid client profile ID: %s", p.ID)
+			return invalid("invalid profile ID: %s", p.ID)
 		}
 		if seen[p.ID] {
-			return invalid("duplicate client profile ID: %s", p.ID)
+			return invalid("duplicate profile ID: %s", p.ID)
 		}
 		seen[p.ID] = true
-		for _, id := range p.Sources {
-			if id != "*" {
-				found := false
-				for _, s := range cfg.Sources {
-					if s.ID == id {
-						found = true
-					}
-				}
-				if !found {
-					return invalid("client %s references unknown source %s", p.ID, id)
-				}
-			}
+		if p.ID == typ.MCPDefaultProfileID {
+			p.Name = "Default"
 		}
-		for _, name := range p.Tools {
-			if name != "*" {
-				if _, _, ok := mcpruntime.ParseNormalizedToolName(name); !ok {
-					return invalid("client %s requires normalized tool names", p.ID)
-				}
+		tools := map[string]bool{}
+		for _, tool := range p.Tools {
+			if _, _, ok := mcpruntime.ParseNormalizedToolName(tool.Name); !ok {
+				return invalid("profile %s requires normalized tool names", p.ID)
 			}
+			if tools[tool.Name] {
+				return invalid("profile %s lists %s twice", p.ID, tool.Name)
+			}
+			tools[tool.Name] = true
 		}
 	}
 	return nil
@@ -255,9 +245,11 @@ func (h *Handler) DeleteSource(c *gin.Context) {
 		if !found {
 			return errMissing
 		}
-		for i := range cfg.ClientProfiles {
-			cfg.ClientProfiles[i].Sources = slices.DeleteFunc(cfg.ClientProfiles[i].Sources, func(s string) bool { return s == id })
-			cfg.ClientProfiles[i].Tools = slices.DeleteFunc(cfg.ClientProfiles[i].Tools, func(name string) bool { source, _, _ := mcpruntime.ParseNormalizedToolName(name); return source == id })
+		for i := range cfg.Profiles {
+			cfg.Profiles[i].Tools = slices.DeleteFunc(cfg.Profiles[i].Tools, func(tool typ.MCPProfileTool) bool {
+				source, _, _ := mcpruntime.ParseNormalizedToolName(tool.Name)
+				return source == id
+			})
 		}
 		return nil
 	}, http.StatusOK)
@@ -365,26 +357,26 @@ func (h *Handler) CallTool(c *gin.Context) {
 	c.JSON(200, response)
 }
 
-type MCPClientProfilesResponse struct {
-	Success  bool                   `json:"success"`
-	Profiles []typ.MCPClientProfile `json:"profiles"`
-	Error    string                 `json:"error,omitempty"`
+type MCPProfilesResponse struct {
+	Success  bool             `json:"success"`
+	Profiles []typ.MCPProfile `json:"profiles"`
+	Error    string           `json:"error,omitempty"`
 }
 
-func (h *Handler) ListClientProfiles(c *gin.Context) {
+func (h *Handler) ListProfiles(c *gin.Context) {
 	if h.cfg == nil {
-		c.JSON(503, MCPClientProfilesResponse{Error: "config unavailable"})
+		c.JSON(503, MCPProfilesResponse{Error: "config unavailable"})
 		return
 	}
 	cfg := h.cfg.GetMCPRuntimeConfig()
-	profiles := []typ.MCPClientProfile{}
+	profiles := []typ.MCPProfile{}
 	if cfg != nil {
-		profiles = append(profiles, cfg.ClientProfiles...)
+		profiles = mcpruntime.Profiles(cfg)
 	}
-	c.JSON(200, MCPClientProfilesResponse{Success: true, Profiles: profiles})
+	c.JSON(200, MCPProfilesResponse{Success: true, Profiles: profiles})
 }
-func (h *Handler) SaveClientProfile(c *gin.Context) {
-	var p typ.MCPClientProfile
+func (h *Handler) SaveProfile(c *gin.Context) {
+	var p typ.MCPProfile
 	if err := c.ShouldBindJSON(&p); err != nil {
 		c.JSON(400, MCPRuntimeConfigResponse{Error: err.Error()})
 		return
@@ -394,21 +386,24 @@ func (h *Handler) SaveClientProfile(c *gin.Context) {
 		return
 	}
 	h.mutate(c, func(cfg *typ.MCPRuntimeConfig) error {
-		cfg.ClientProfilesConfigured = true
-		for i, v := range cfg.ClientProfiles {
+		for i, v := range cfg.Profiles {
 			if v.ID == p.ID {
-				cfg.ClientProfiles[i] = p
+				cfg.Profiles[i] = p
 				return nil
 			}
 		}
-		cfg.ClientProfiles = append(cfg.ClientProfiles, p)
+		cfg.Profiles = append(cfg.Profiles, p)
 		return nil
 	}, 200)
 }
-func (h *Handler) DeleteClientProfile(c *gin.Context) {
+func (h *Handler) DeleteProfile(c *gin.Context) {
+	if c.Param("profile_id") == typ.MCPDefaultProfileID {
+		c.JSON(http.StatusBadRequest, MCPRuntimeConfigResponse{Error: "the Default profile cannot be deleted"})
+		return
+	}
 	h.mutate(c, func(cfg *typ.MCPRuntimeConfig) error {
 		found := false
-		cfg.ClientProfiles = slices.DeleteFunc(cfg.ClientProfiles, func(p typ.MCPClientProfile) bool {
+		cfg.Profiles = slices.DeleteFunc(cfg.Profiles, func(p typ.MCPProfile) bool {
 			if p.ID == c.Param("profile_id") {
 				found = true
 				return true

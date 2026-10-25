@@ -1,21 +1,19 @@
 package runtime
 
 import (
-	"slices"
-
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// SourceUsage reports where a source's tools may run. Client availability is not
+// a setting: every non-virtual tool can be offered through a profile, and
+// profiles plus switches decide which. Only gateway execution is configurable.
 func SourceUsage(source typ.MCPSourceConfig) typ.MCPToolUsage {
+	usage := typ.MCPToolUsage{Gateway: SourceVisibility(source) == typ.ToolVisibilityServer}
 	if source.Usage != nil {
-		usage := *source.Usage
-		if SourceImplementation(source) == typ.ToolImplementationVirtual {
-			usage.Client = false
-		}
-		return usage
+		usage.Gateway = source.Usage.Gateway
 	}
-	server := SourceVisibility(source) == typ.ToolVisibilityServer
-	return typ.MCPToolUsage{Client: !server && SourceImplementation(source) != typ.ToolImplementationVirtual, Gateway: server}
+	usage.Client = SourceImplementation(source) != typ.ToolImplementationVirtual
+	return usage
 }
 
 // EffectiveToolPolicy applies source enablement, its allow list, and a per-tool override.
@@ -29,18 +27,10 @@ func EffectiveToolPolicy(source typ.MCPSourceConfig, name string) (bool, typ.MCP
 			enabled = false
 		}
 		if policy.Usage != nil {
-			usage = *policy.Usage
+			usage.Gateway = policy.Usage.Gateway
 		}
 	}
-	// In-process Advisor needs model-loop context and cannot be called by an MCP client.
-	if SourceImplementation(source) == typ.ToolImplementationVirtual {
-		usage.Client = false
-	}
 	return enabled, usage
-}
-
-func grantAllows(grants []string, value string) bool {
-	return slices.Contains(grants, "*") || slices.Contains(grants, value)
 }
 
 func (r *Runtime) IsGatewayToolName(name string) bool {
@@ -61,7 +51,24 @@ func (r *Runtime) IsGatewayToolName(name string) bool {
 	return false
 }
 
-func (r *Runtime) ClientAllows(clientID, sourceID, normalizedName string) bool {
+// profileByID returns the profile for an endpoint ID. Default always exists,
+// even before the user has saved anything.
+func profileByID(cfg *typ.MCPRuntimeConfig, id string) (typ.MCPProfile, bool) {
+	for _, p := range cfg.Profiles {
+		if p.ID == id {
+			return p, true
+		}
+	}
+	if id == typ.MCPDefaultProfileID {
+		return typ.MCPProfile{ID: id, Name: "Default"}, true
+	}
+	return typ.MCPProfile{}, false
+}
+
+// ProfileAllows reports whether a profile exposes a tool: the profile is on,
+// the tool is in it, and the tool is on in it. Global enablement is checked by
+// the caller against the effective tool policy.
+func (r *Runtime) ProfileAllows(profileID, normalizedName string) bool {
 	if r == nil {
 		return false
 	}
@@ -69,42 +76,41 @@ func (r *Runtime) ClientAllows(clientID, sourceID, normalizedName string) bool {
 	if cfg == nil {
 		return false
 	}
-	for _, profile := range cfg.ClientProfiles {
-		if profile.ID == clientID {
-			return (profile.Enabled == nil || *profile.Enabled) && grantAllows(profile.Sources, sourceID) && grantAllows(profile.Tools, normalizedName)
-		}
-	}
-	// Preserve the existing aggregate endpoint and source-scoped endpoints only
-	// while no explicit profiles have been configured. Unknown names fail closed.
-	if cfg.ClientProfilesConfigured || len(cfg.ClientProfiles) != 0 {
+	profile, ok := profileByID(cfg, profileID)
+	if !ok || profile.Enabled != nil && !*profile.Enabled {
 		return false
 	}
-	if clientID == "tb" || clientID == "all" {
-		return true
-	}
-	return clientID == sourceID
+	return profileToolOn(profile, normalizedName)
 }
 
-func (r *Runtime) ClientExists(clientID string) bool {
+func profileToolOn(profile typ.MCPProfile, normalizedName string) bool {
+	for _, tool := range profile.Tools {
+		if tool.Name == normalizedName {
+			return tool.Enabled == nil || *tool.Enabled
+		}
+	}
+	// Default holds every tool; only the ones switched off are listed.
+	return profile.ID == typ.MCPDefaultProfileID
+}
+
+func (r *Runtime) ProfileExists(profileID string) bool {
 	cfg := r.GetConfig()
 	if cfg == nil {
 		return false
 	}
-	for _, p := range cfg.ClientProfiles {
-		if p.ID == clientID {
-			return true
+	_, ok := profileByID(cfg, profileID)
+	return ok
+}
+
+// Profiles returns the saved profiles with Default always first.
+func Profiles(cfg *typ.MCPRuntimeConfig) []typ.MCPProfile {
+	out := []typ.MCPProfile{}
+	def, _ := profileByID(cfg, typ.MCPDefaultProfileID)
+	out = append(out, def)
+	for _, p := range cfg.Profiles {
+		if p.ID != typ.MCPDefaultProfileID {
+			out = append(out, p)
 		}
 	}
-	if cfg.ClientProfilesConfigured || len(cfg.ClientProfiles) != 0 {
-		return false
-	}
-	if clientID == "tb" || clientID == "all" {
-		return true
-	}
-	for _, s := range cfg.Sources {
-		if s.ID == clientID {
-			return true
-		}
-	}
-	return false
+	return out
 }

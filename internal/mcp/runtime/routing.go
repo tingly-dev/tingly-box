@@ -27,25 +27,25 @@ type RouteAdvisor struct {
 	ProviderName string `json:"provider_name,omitempty"`
 	Model        string `json:"model"`
 }
-type ClientRoute struct {
+type ProfileRoute struct {
 	ID       string        `json:"id"`
 	Name     string        `json:"name"`
 	Endpoint string        `json:"endpoint"`
 	Enabled  bool          `json:"enabled"`
-	Legacy   bool          `json:"legacy"`
+	Default  bool          `json:"default"`
 	Sources  []RouteSource `json:"sources"`
 }
 type RoutingSnapshot struct {
-	Sources     []RouteSource `json:"sources"`
-	Clients     []ClientRoute `json:"clients"`
-	ServerTools []RouteSource `json:"server_tools"`
+	Sources     []RouteSource  `json:"sources"`
+	Profiles    []ProfileRoute `json:"profiles"`
+	ServerTools []RouteSource  `json:"server_tools"`
 }
 
 // Routing derives reachability from the same effective policies used by both
 // the MCP bridge and model tool injection. Ordinary tools and server tools are
 // independent uses; a source can appear in both without becoming two configs.
 func (r *Runtime) Routing(ctx context.Context) RoutingSnapshot {
-	out := RoutingSnapshot{Sources: []RouteSource{}, Clients: []ClientRoute{}, ServerTools: []RouteSource{}}
+	out := RoutingSnapshot{Sources: []RouteSource{}, Profiles: []ProfileRoute{}, ServerTools: []RouteSource{}}
 	catalog := r.Catalog(ctx, "")
 	cfg := r.GetConfig()
 	if cfg == nil {
@@ -91,43 +91,38 @@ func (r *Runtime) Routing(ctx context.Context) RoutingSnapshot {
 			out.ServerTools = append(out.ServerTools, serverRoute)
 		}
 	}
-	profiles := cfg.ClientProfiles
-	if !cfg.ClientProfilesConfigured && len(profiles) == 0 {
-		profiles = []typ.MCPClientProfile{{ID: "tb", Name: "Tingly Box", Sources: []string{"*"}, Tools: []string{"*"}}}
-	}
-	for _, profile := range profiles {
-		client := ClientRoute{ID: profile.ID, Name: profile.Name, Endpoint: "/api/v1/mcp/" + url.PathEscape(profile.ID), Enabled: profile.Enabled == nil || *profile.Enabled, Legacy: !cfg.ClientProfilesConfigured && len(cfg.ClientProfiles) == 0, Sources: []RouteSource{}}
-		if client.Name == "" {
-			client.Name = client.ID
+	for _, profile := range Profiles(cfg) {
+		route := ProfileRoute{ID: profile.ID, Name: profile.Name, Endpoint: "/api/v1/mcp/" + url.PathEscape(profile.ID), Enabled: profile.Enabled == nil || *profile.Enabled, Default: profile.ID == typ.MCPDefaultProfileID, Sources: []RouteSource{}}
+		if route.Name == "" {
+			route.Name = route.ID
 		}
 		for i, source := range cfg.Sources {
-			route := out.Sources[i]
-			route.Tools = []CatalogTool{}
+			sourceRoute := out.Sources[i]
+			sourceRoute.Tools = []CatalogTool{}
 			for _, tool := range out.Sources[i].Tools {
-				if client.Enabled && tool.Enabled && tool.Usage.Client && r.ClientAllows(profile.ID, source.ID, tool.NormalizedName) {
-					route.Tools = append(route.Tools, tool)
+				if route.Enabled && tool.Enabled && tool.Usage.Client && r.ProfileAllows(profile.ID, tool.NormalizedName) {
+					sourceRoute.Tools = append(sourceRoute.Tools, tool)
 				}
 			}
-			intended := client.Enabled && grantAllows(profile.Sources, source.ID) && profileGrantsSourceTool(profile, source) && sourceIntendedFor(source, "client")
-			if len(route.Tools) > 0 || intended && route.State != "connected" {
-				client.Sources = append(client.Sources, route)
+			intended := route.Enabled && profileListsSource(profile, source) && sourceIntendedFor(source, "client")
+			if len(sourceRoute.Tools) > 0 || intended && sourceRoute.State != "connected" {
+				route.Sources = append(route.Sources, sourceRoute)
 			}
 		}
-		out.Clients = append(out.Clients, client)
+		out.Profiles = append(out.Profiles, route)
 	}
 	return out
 }
-func profileGrantsSourceTool(profile typ.MCPClientProfile, source typ.MCPSourceConfig) bool {
-	for _, name := range profile.Tools {
-		if name == "*" {
+
+// profileListsSource reports whether a profile can reach any tool of the source,
+// so a failing source stays visible instead of silently vanishing from the route.
+func profileListsSource(profile typ.MCPProfile, source typ.MCPSourceConfig) bool {
+	if profile.ID == typ.MCPDefaultProfileID {
+		return true
+	}
+	for _, tool := range profile.Tools {
+		if id, _, ok := ParseNormalizedToolName(tool.Name); ok && id == source.ID {
 			return true
-		}
-		id, tool, ok := ParseNormalizedToolName(name)
-		if ok && (id == source.ID || id == "builtin" && tool == "advisor" && source.ID == "advisor") {
-			enabled, usage := EffectiveToolPolicy(source, tool)
-			if enabled && usage.Client {
-				return true
-			}
 		}
 	}
 	return false

@@ -32,8 +32,8 @@ func managementFixture(t *testing.T) (*Handler, *gin.Engine, *config.Config) {
 	r.DELETE("/sources/:source_id", h.DeleteSource)
 	r.GET("/catalog", h.GetCatalog)
 	r.POST("/call", h.CallTool)
-	r.PUT("/profiles/:profile_id", h.SaveClientProfile)
-	r.DELETE("/profiles/:profile_id", h.DeleteClientProfile)
+	r.PUT("/profiles/:profile_id", h.SaveProfile)
+	r.DELETE("/profiles/:profile_id", h.DeleteProfile)
 	r.POST("/transport/:client_name", h.transportHandler.HandleMCP)
 	r.GET("/transport/:client_name", h.transportHandler.HandleMCP)
 	r.DELETE("/transport/:client_name", h.transportHandler.HandleMCP)
@@ -60,24 +60,24 @@ func TestManagementCRUDPersistsAndPreservesOmittedFields(t *testing.T) {
 	managementRequest(t, r, "PATCH", "/sources/remote", `{"id":"changed"}`, 400)
 	managementRequest(t, r, "PATCH", "/sources/missing", `{"enabled":false}`, 404)
 	managementRequest(t, r, "PATCH", "/sources/remote", `{"name":"New name","tool_policies":{"echo":{"enabled":false}}}`, 200)
-	managementRequest(t, r, "PUT", "/profiles/reader", `{"id":"reader","sources":["remote"],"tools":["tingly_box_mcp__remote__echo"]}`, 200)
+	managementRequest(t, r, "PUT", "/profiles/reader", `{"id":"reader","tools":[{"name":"tingly_box_mcp__remote__echo"}]}`, 200)
 	managementRequest(t, r, "PUT", "/config", `{"request_timeout":12,"strip_disabled_mcp_tools":false}`, 200)
 	got := cfg.GetMCPRuntimeConfig()
 	require.Len(t, got.Sources, 1)
 	require.Equal(t, "retained", got.Sources[0].Headers["Authorization"])
 	require.NotNil(t, got.Sources[0].ToolPolicies["echo"].Enabled)
-	require.Len(t, got.ClientProfiles, 1)
+	require.Len(t, got.Profiles, 1)
 	require.Equal(t, 12, got.RequestTimeout)
 	reloaded, err := config.NewConfig(config.WithConfigDir(cfg.ConfigDir))
 	require.NoError(t, err)
 	require.Equal(t, got, reloaded.GetMCPRuntimeConfig())
 	managementRequest(t, r, "POST", "/call", `{"source_id":"remote","tool_name":"echo"}`, 403)
 	managementRequest(t, r, "DELETE", "/sources/remote", "", 200)
-	require.Empty(t, cfg.GetMCPRuntimeConfig().ClientProfiles[0].Sources)
-	require.Empty(t, cfg.GetMCPRuntimeConfig().ClientProfiles[0].Tools)
+	require.Empty(t, cfg.GetMCPRuntimeConfig().Profiles[0].Tools, "deleting a source removes its tools from profiles")
 	managementRequest(t, r, "DELETE", "/profiles/reader", "", 200)
-	require.False(t, h.runtime.ClientExists("tb"))
-	require.True(t, cfg.GetMCPRuntimeConfig().ClientProfilesConfigured)
+	require.False(t, h.runtime.ProfileExists("reader"))
+	managementRequest(t, r, "DELETE", "/profiles/default", "", 400)
+	require.True(t, h.runtime.ProfileExists("default"))
 }
 
 func TestSourceValidationAcceptsEnvironmentURLsAndRejectsBrokenConfig(t *testing.T) {
@@ -88,9 +88,10 @@ func TestSourceValidationAcceptsEnvironmentURLsAndRejectsBrokenConfig(t *testing
 	for _, body := range []string{`{"id":"bad__id","transport":"http","endpoint":"https://example.test"}`, `{"id":"bad","transport":"http","endpoint":"file:///tmp/x"}`, `{"id":"bad","transport":"http","endpoint":"${MCP_MISSING_TEST_VAR}"}`, `{"id":"bad","transport":"stdio"}`, `{"id":"bad","transport":"other"}`} {
 		managementRequest(t, r, "POST", "/sources", body, 400)
 	}
-	managementRequest(t, r, "PUT", "/profiles/reader", `{"id":"reader","sources":["missing"],"tools":["*"]}`, 400)
-	managementRequest(t, r, "PUT", "/profiles/reader", `{"id":"reader","sources":null,"tools":null}`, 200)
-	require.Empty(t, cfg.GetMCPRuntimeConfig().ClientProfiles[0].Sources)
+	managementRequest(t, r, "PUT", "/profiles/reader", `{"id":"reader","tools":[{"name":"echo"}]}`, 400)
+	managementRequest(t, r, "PUT", "/profiles/reader", `{"id":"reader","tools":[{"name":"tingly_box_mcp__a__echo"},{"name":"tingly_box_mcp__a__echo"}]}`, 400)
+	managementRequest(t, r, "PUT", "/profiles/reader", `{"id":"reader","tools":null}`, 200)
+	require.Empty(t, cfg.GetMCPRuntimeConfig().Profiles[0].Tools)
 }
 
 func TestDownstreamBridgePreservesSchemasResultsAndRevokesAccess(t *testing.T) {
@@ -103,7 +104,7 @@ func TestDownstreamBridgePreservesSchemasResultsAndRevokesAccess(t *testing.T) {
 	defer remote.Close()
 	body, _ := json.Marshal(typ.MCPSourceConfig{ID: "remote", Transport: "http", Endpoint: remote.URL, Usage: &typ.MCPToolUsage{Client: true, Gateway: true}})
 	managementRequest(t, r, "POST", "/sources", string(body), 201)
-	managementRequest(t, r, "PUT", "/profiles/reader", `{"id":"reader","sources":["remote"],"tools":["*"]}`, 200)
+	managementRequest(t, r, "PUT", "/profiles/reader", `{"id":"reader","tools":[{"name":"tingly_box_mcp__remote__echo"}]}`, 200)
 	require.NoError(t, cfg.SetScenarioFlag(typ.ScenarioGlobal, constant.ExtensionMCP, true))
 	gateway := httptest.NewServer(r)
 	defer gateway.Close()
@@ -129,7 +130,7 @@ func TestDownstreamBridgePreservesSchemasResultsAndRevokesAccess(t *testing.T) {
 	require.Contains(t, w.Body.String(), `"resource_link"`)
 	// Keep an already-created adapter, then revoke its profile: calls must check current policy.
 	adapter := local.NewMCPRuntimeAdapterForClient(h.runtime, "reader")
-	managementRequest(t, r, "PUT", "/profiles/reader", `{"id":"reader","sources":[],"tools":[]}`, 200)
+	managementRequest(t, r, "PUT", "/profiles/reader", `{"id":"reader","tools":[]}`, 200)
 	_, err = adapter.CallTool(ctx, name, map[string]any{})
 	require.ErrorContains(t, err, "not allowed")
 	result, err = session.CallTool(ctx, &sdk.CallToolParams{Name: name, Arguments: map[string]any{}})
@@ -145,7 +146,7 @@ func TestDownstreamBridgePreservesSchemasResultsAndRevokesAccess(t *testing.T) {
 func TestValidateConfigScopesEnvChecksToChangedSources(t *testing.T) {
 	broken := typ.MCPSourceConfig{ID: "broken", Transport: "http", Endpoint: "http://127.0.0.1:1", Headers: map[string]string{"Authorization": "${TB_TEST_MISSING_VAR_XYZ}"}}
 	prev := &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{broken}}
-	next := &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{broken}, ClientProfiles: []typ.MCPClientProfile{{ID: "reader", Sources: []string{"broken"}, Tools: []string{}}}}
+	next := &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{broken}, Profiles: []typ.MCPProfile{{ID: "reader", Tools: []typ.MCPProfileTool{}}}}
 	require.NoError(t, validateConfigChange(prev, next), "an unchanged source must not block unrelated edits")
 	require.Error(t, validateConfigChange(&typ.MCPRuntimeConfig{}, next), "a new or changed source is still checked")
 }

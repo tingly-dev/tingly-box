@@ -27,10 +27,10 @@ func TestRoutingMatchesActualExposureAndKeepsOriginsIndependent(t *testing.T) {
 			"shared": {Usage: &typ.MCPToolUsage{Client: true, Gateway: true}}, "server_only": {Usage: &typ.MCPToolUsage{Gateway: true}}, "disabled": {Enabled: typ.BoolPtr(false)},
 		}},
 		{ID: "advisor", Origin: "builtin", Transport: "advisor", Advisor: &typ.AdvisorConfig{ProviderUUID: "provider", Model: "model"}, Usage: &typ.MCPToolUsage{Gateway: true}},
-	}, ClientProfilesConfigured: true, ClientProfiles: []typ.MCPClientProfile{
-		{ID: "reader", Sources: []string{"remote"}, Tools: []string{NormalizeToolName("remote", "shared")}},
-		{ID: "empty", Sources: []string{}, Tools: []string{}},
-		{ID: "off", Enabled: typ.BoolPtr(false), Sources: []string{"*"}, Tools: []string{"*"}},
+	}, Profiles: []typ.MCPProfile{
+		{ID: "reader", Tools: []typ.MCPProfileTool{{Name: NormalizeToolName("remote", "shared")}}},
+		{ID: "empty", Tools: []typ.MCPProfileTool{}},
+		{ID: "off", Enabled: typ.BoolPtr(false), Tools: []typ.MCPProfileTool{{Name: NormalizeToolName("remote", "shared")}}},
 	}}
 	rt := NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })
 	defer rt.Close()
@@ -41,10 +41,14 @@ func TestRoutingMatchesActualExposureAndKeepsOriginsIndependent(t *testing.T) {
 	require.Equal(t, "external", snapshot.Sources[0].Origin)
 	require.Equal(t, "builtin", snapshot.Sources[1].Origin)
 	require.Equal(t, "advisor", snapshot.Sources[1].Processing)
-	require.Len(t, snapshot.Clients[0].Sources, 1)
-	require.Equal(t, []string{NormalizeToolName("remote", "shared")}, routeToolNames(snapshot.Clients[0].Sources))
-	require.Empty(t, snapshot.Clients[1].Sources)
-	require.Empty(t, snapshot.Clients[2].Sources)
+	reader, empty, off := routeByID(t, snapshot, "reader"), routeByID(t, snapshot, "empty"), routeByID(t, snapshot, "off")
+	require.Len(t, reader.Sources, 1)
+	require.Equal(t, []string{NormalizeToolName("remote", "shared")}, routeToolNames(reader.Sources))
+	require.Empty(t, empty.Sources)
+	require.Empty(t, off.Sources)
+	def := routeByID(t, snapshot, typ.MCPDefaultProfileID)
+	require.True(t, def.Default)
+	require.ElementsMatch(t, []string{NormalizeToolName("remote", "client_only"), NormalizeToolName("remote", "shared"), NormalizeToolName("remote", "server_only")}, routeToolNames(def.Sources), "Default holds every available tool")
 	injected := rt.ListServerToolsForInjection(ctx)
 	var names []string
 	for _, tool := range injected {
@@ -54,44 +58,57 @@ func TestRoutingMatchesActualExposureAndKeepsOriginsIndependent(t *testing.T) {
 	clientTools, err := rt.ListClientSourceToolsForMCP(ctx)
 	require.NoError(t, err)
 	var clientNames []string
-	for sourceID, tools := range clientTools {
+	for _, tools := range clientTools {
 		for _, tool := range tools {
-			if rt.ClientAllows("reader", sourceID, tool.NormalizedName) {
+			if rt.ProfileAllows("reader", tool.NormalizedName) {
 				clientNames = append(clientNames, tool.NormalizedName)
 			}
 		}
 	}
-	require.ElementsMatch(t, clientNames, routeToolNames(snapshot.Clients[0].Sources), "graph must match actual bridge grants")
+	require.ElementsMatch(t, clientNames, routeToolNames(reader.Sources), "graph must match actual bridge grants")
 	raw, err := json.Marshal(snapshot)
 	require.NoError(t, err)
 	for _, secret := range []string{"secret-query", "secret-header", "secret-env", "Authorization"} {
 		require.NotContains(t, string(raw), secret)
 	}
 	// Revocation changes the graph immediately, without a source reconnect.
-	cfg.ClientProfiles[0].Tools = []string{}
-	require.Empty(t, rt.Routing(ctx).Clients[0].Sources)
+	cfg.Profiles[0].Tools = []typ.MCPProfileTool{}
+	require.Empty(t, routeByID(t, rt.Routing(ctx), "reader").Sources)
+	// Switching a tool off keeps it listed but stops exposing it.
+	cfg.Profiles[0].Tools = []typ.MCPProfileTool{{Name: NormalizeToolName("remote", "shared"), Enabled: typ.BoolPtr(false)}}
+	require.Empty(t, routeByID(t, rt.Routing(ctx), "reader").Sources)
+	// A tool switched off in Default is the only thing hidden there.
+	cfg.Profiles = []typ.MCPProfile{{ID: typ.MCPDefaultProfileID, Tools: []typ.MCPProfileTool{{Name: NormalizeToolName("remote", "shared"), Enabled: typ.BoolPtr(false)}}}}
+	require.ElementsMatch(t, []string{NormalizeToolName("remote", "client_only"), NormalizeToolName("remote", "server_only")}, routeToolNames(routeByID(t, rt.Routing(ctx), typ.MCPDefaultProfileID).Sources))
 }
-func TestRoutingPreservesFailedBranchesAndLegacyEndpoint(t *testing.T) {
+func TestRoutingPreservesFailedBranchesInDefault(t *testing.T) {
 	cfg := &typ.MCPRuntimeConfig{RequestTimeout: 1, Sources: []typ.MCPSourceConfig{{ID: "missing", Transport: "http", Endpoint: "http://user:secret-password@127.0.0.1:1?token=secret-query", Usage: &typ.MCPToolUsage{Client: true, Gateway: true}}}}
 	rt := NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })
 	defer rt.Close()
 	snapshot := rt.Routing(context.Background())
-	require.Len(t, snapshot.Clients, 1)
-	require.Equal(t, "/api/v1/mcp/tb", snapshot.Clients[0].Endpoint)
-	require.True(t, snapshot.Clients[0].Legacy)
-	require.Len(t, snapshot.Clients[0].Sources, 1)
-	require.Equal(t, "error", snapshot.Clients[0].Sources[0].State)
-	require.Empty(t, snapshot.Clients[0].Sources[0].Tools)
+	require.Len(t, snapshot.Profiles, 1)
+	require.Equal(t, "/api/v1/mcp/default", snapshot.Profiles[0].Endpoint)
+	require.True(t, snapshot.Profiles[0].Default)
+	require.Len(t, snapshot.Profiles[0].Sources, 1)
+	require.Equal(t, "error", snapshot.Profiles[0].Sources[0].State)
+	require.Empty(t, snapshot.Profiles[0].Sources[0].Tools)
 	require.Len(t, snapshot.ServerTools, 1)
 	raw, err := json.Marshal(snapshot)
 	require.NoError(t, err)
 	require.NotContains(t, string(raw), "secret-password")
 	require.NotContains(t, string(raw), "secret-query")
-	cfg.ClientProfilesConfigured = true
-	cfg.ClientProfiles = []typ.MCPClientProfile{{ID: "reader", Sources: []string{"missing"}, Tools: []string{NormalizeToolName("other", "echo")}}}
-	require.Empty(t, rt.Routing(context.Background()).Clients[0].Sources, "unrelated tool grants must not claim a failed source is reachable")
-	cfg.ClientProfiles = nil
-	require.Empty(t, rt.Routing(context.Background()).Clients, "deleting last profile must not restore legacy exposure")
+	cfg.Profiles = []typ.MCPProfile{{ID: "reader", Tools: []typ.MCPProfileTool{{Name: NormalizeToolName("other", "echo")}}}}
+	require.Empty(t, routeByID(t, rt.Routing(context.Background()), "reader").Sources, "unrelated tools must not claim a failed source is reachable")
+}
+func routeByID(t *testing.T, snapshot RoutingSnapshot, id string) ProfileRoute {
+	t.Helper()
+	for _, p := range snapshot.Profiles {
+		if p.ID == id {
+			return p
+		}
+	}
+	t.Fatalf("profile %s not in routing snapshot", id)
+	return ProfileRoute{}
 }
 func routeToolNames(sources []RouteSource) []string {
 	names := []string{}
@@ -104,12 +121,13 @@ func routeToolNames(sources []RouteSource) []string {
 }
 
 func TestRoutingAdvisorCannotGrantOrdinaryClientExecution(t *testing.T) {
-	cfg := &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{{ID: "advisor", Transport: "advisor", Advisor: &typ.AdvisorConfig{ProviderUUID: "provider", Model: "model"}, Usage: &typ.MCPToolUsage{Client: true, Gateway: true}, ToolPolicies: map[string]typ.MCPToolPolicy{"advisor": {Usage: &typ.MCPToolUsage{Client: true, Gateway: true}}}}}, ClientProfilesConfigured: true, ClientProfiles: []typ.MCPClientProfile{{ID: "reader", Sources: []string{"*"}, Tools: []string{"*"}}}}
+	cfg := &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{{ID: "advisor", Transport: "advisor", Advisor: &typ.AdvisorConfig{ProviderUUID: "provider", Model: "model"}, Usage: &typ.MCPToolUsage{Client: true, Gateway: true}, ToolPolicies: map[string]typ.MCPToolPolicy{"advisor": {Usage: &typ.MCPToolUsage{Client: true, Gateway: true}}}}}, Profiles: []typ.MCPProfile{{ID: "reader", Tools: []typ.MCPProfileTool{{Name: NormalizeToolName("advisor", "advisor")}}}}}
 	rt := NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })
 	defer rt.Close()
 	rt.VirtualRegistry().Register(coretool.VirtualTool{Name: "advisor", Visibility: typ.ToolVisibilityServer, InputSchema: map[string]any{"type": "object"}})
 	snapshot := rt.Routing(context.Background())
-	require.Empty(t, snapshot.Clients[0].Sources)
+	require.Empty(t, routeByID(t, snapshot, "reader").Sources)
+	require.Empty(t, routeByID(t, snapshot, typ.MCPDefaultProfileID).Sources)
 	actual, err := rt.ListClientSourceToolsForMCP(context.Background())
 	require.NoError(t, err)
 	require.Empty(t, actual)

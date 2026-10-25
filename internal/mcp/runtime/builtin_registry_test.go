@@ -47,8 +47,8 @@ func TestRegisterBuiltinTools_OptionalSearchKey(t *testing.T) {
 
 func TestRegisterBuiltinTools_RestartPreservesAccessPolicies(t *testing.T) {
 	t.Setenv("SERPER_API_KEY", "")
-	profiles := []typ.MCPClientProfile{{ID: "reader", Sources: []string{"webtools"}, Tools: []string{"*"}}}
-	cfg := &typ.MCPRuntimeConfig{ClientProfiles: profiles, ClientProfilesConfigured: true, Sources: []typ.MCPSourceConfig{
+	profiles := []typ.MCPProfile{{ID: "reader", Tools: []typ.MCPProfileTool{{Name: NormalizeToolName("webtools", "fetch")}}}}
+	cfg := &typ.MCPRuntimeConfig{Profiles: profiles, Sources: []typ.MCPSourceConfig{
 		{
 			ID: mcptools.BuiltinWebtoolsSourceID, Name: "Public reader", Enabled: typ.BoolPtr(false),
 			Usage: &typ.MCPToolUsage{Client: false, Gateway: true},
@@ -82,8 +82,7 @@ func TestRegisterBuiltinTools_RestartPreservesAccessPolicies(t *testing.T) {
 		require.Equal(t, advisorPolicies, cfg.Sources[1].ToolPolicies)
 		require.Equal(t, "review-model", cfg.Sources[1].Advisor.Model)
 		require.Equal(t, 90, cfg.Sources[1].Advisor.TimeoutSeconds)
-		require.Equal(t, profiles, cfg.ClientProfiles)
-		require.True(t, cfg.ClientProfilesConfigured)
+		require.Equal(t, profiles, cfg.Profiles)
 	}
 }
 
