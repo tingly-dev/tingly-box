@@ -26,7 +26,7 @@ import AgentAccessSection, { useAccessExpanded } from '@/pages/scenario/componen
 import { agentPageHeaderSx } from '@/pages/scenario/components/ScenarioCardHeader';
 import { getApiBaseUrl } from '@/utils/protocol';
 import { api } from '@/services/api';
-import AgentInstallCard from './AgentInstallCard';
+import ProfileConnect from './ProfileConnect';
 import MCPWorkspaceAlerts from './MCPWorkspaceAlerts';
 import { useMCPWorkspace } from './useMCPWorkspace';
 import {
@@ -218,12 +218,7 @@ export default function MCPProfilesPage() {
                 )}
                 <AgentAccessSection expanded={access.expanded} onToggle={access.toggle} url={endpointUrl}>
                     <Box sx={{ px: 2 }}>
-                        <AgentInstallCard
-                            key={profile.id}
-                            clientId={profile.id}
-                            serverName={profileServerName(profile)}
-                            hideHeader
-                        />
+                        <ProfileConnect key={profile.id} profileId={profile.id} serverName={profileServerName(profile)} />
                     </Box>
                 </AgentAccessSection>
                 <Box component="section" aria-label={label('profileTools', 'Tools in this profile')}>
