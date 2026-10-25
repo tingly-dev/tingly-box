@@ -104,7 +104,9 @@ export default function MCPProfilesPage() {
         });
     const createdOnce = useRef(false);
     useEffect(() => {
-        if (creating && !ws.loading && !createdOnce.current) {
+        // Re-armed once the new profile's page replaces /new, so "New profile" works again.
+        if (!creating) createdOnce.current = false;
+        else if (!ws.loading && !createdOnce.current) {
             createdOnce.current = true;
             void create();
         }
