@@ -232,14 +232,17 @@ export default function MCPProfilesPage() {
                     <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
                         {label('profileTools', 'Tools in this profile')}
                     </Typography>
-                    {!custom && (
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                            {label(
-                                'defaultHint',
-                                'Default always contains every tool, including ones you connect later. Switch a tool off to hide it from this profile only.'
-                            )}
-                        </Typography>
-                    )}
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        {custom
+                            ? label(
+                                  'customHint',
+                                  'Only the tools you add here are offered through this profile; new tools are never added automatically. Switch a tool off to keep it listed but unavailable.'
+                              )
+                            : label(
+                                  'defaultHint',
+                                  'Default always contains every tool, including ones you connect later. Switch a tool off to hide it from this profile only.'
+                              )}
+                    </Typography>
                     {rows.length === 0 && (
                         <Typography color="text.secondary">
                             {!custom

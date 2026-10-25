@@ -53,10 +53,12 @@ is **MCP Tools**, then one row per profile (Default first) and "New profile".
   the Claude Code profile page: the header holds the name with rename and delete
   beside it (custom only), a status line, the profile switch, refresh, Verify and
   the filled primary action (Add tools). Directly under it the connection card
-  (the shared `AgentAccessSection`: endpoint URL when folded, the install command
-  for Claude Code / Codex / OpenCode when open), then the tool list with a switch
+  (the shared `AgentAccessSection`: endpoint URL when folded; open it is two rows,
+  the endpoint URL and the whole registration command for Claude Code / Codex /
+  OpenCode with the user token already written in: nothing is read from the
+  machine or an environment variable), then the tool list with a switch
   per tool (custom ones also remove). Tools that are globally off are shown greyed
-  with the reason; Default says that it always contains every tool. The sidebar
+  with the reason; both Default and custom profiles carry a one-line explanation of what they contain. The sidebar
   reads the list from `profileStore.ts`, which the page keeps current.
 
 Tool-call arguments are not configuration: they are shown read-only on the tool
