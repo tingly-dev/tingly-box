@@ -53,9 +53,13 @@
 | 仓库只读时的回退 | `unshare -m` 里把仓库的 `.claude` 以只读 bind mount，真跑 `Threads.Start` | git 报 Read-only file system；线程落到数据目录并记一条系统事件；回退不撞分支名 |
 | 失败后残留分支 | 同上 | `git worktree add -b` 失败会留下分支，`AddWorktree` 现在删掉它；单元测试 `TestThreadWorktreeFallsBackToDataDir` |
 | 文件夹上传共享、旧位置回退 | HTTP 层 `TestFolderThreadsShareUploadsOverHTTP` | 同文件夹两个线程互相读到上传；旧 `_sessions/<id>` 里的文件只对该线程可读 |
+| 真实进程池整条链路 | 一次性测试（未提交，需要本机已登录的 `claude`）：`ClaudeAgents()` 的常驻进程池，真仓库、真 `claude`。`Start` → 第二轮在常驻进程里读到第一轮写的文件 → `Resolve`（回收进程）→ `Reopen` → 再发一轮 → `Merge` | cwd 在 `.claude/worktrees/`；重开后的轮次记得最初的任务（resume 成功）；合并后主仓库有 feature.txt、`git status` 为空 |
 | 整体 | `projects/` 下 `go test ./... -count=1` | 全过 |
 
-仍未验证：Projects 真实进程池里一次完整的“起线程 → 归档 → 恢复”（只有流式 CLI 层的 resume 和脚本化 CLI 的单元测试）；Windows 路径；NFS/容器卷上的 `git worktree`。
+没有验证、也无法在当前环境验证的：
+- Windows：没有 Windows 环境。路径全部用 `filepath` 拼接，exclude 行固定写正斜杠（git 的格式），但未实跑。
+- NFS / 容器共享卷上的 `git worktree`：环境里没有这类挂载。`git worktree` 在网络盘上的锁语义由 git 决定，放到多容器那一步（本设计之外）再验。
+- 线程里 agent 自己调用 `EnterWorktree`：本设计不依赖它，只在提示里留了说明，未验。
 
 ## 讨论中放弃的方向
 
