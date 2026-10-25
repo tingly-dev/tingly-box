@@ -453,7 +453,12 @@ func (m *Threads) writeSettings(p *db.Project, t *db.Thread) error {
 			dirs = append(dirs, r.Path)
 		}
 	}
-	settings := map[string]any{"permissions": map[string]any{"additionalDirectories": dirs}}
+	// autoMemoryDirectory points Claude Code's own memory at the project's, so
+	// a project has one memory whatever each thread's cwd is.
+	settings := map[string]any{
+		"autoMemoryDirectory": m.layout.MemoryDir(p.ID),
+		"permissions":         map[string]any{"additionalDirectories": dirs},
+	}
 	path := m.layout.SettingsFile(p.ID, t.ID)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
@@ -631,9 +636,10 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	}
 }
 
-// sessionSettings lets a folder thread read its own uploads, which live
-// outside the folder: the host's settings (a profile's), if any, plus that one
-// extra directory. On error the thread keeps the host's settings.
+// sessionSettings lets a folder thread read the folder's uploads, which live
+// outside the folder: the host's settings (a profile's), if any, plus that
+// extra directory (and the thread's own legacy upload area when it has one).
+// On error the thread keeps the host's settings.
 func (m *Threads) sessionSettings(p *db.Project, t *db.Thread, host string) (string, error) {
 	doc := map[string]any{}
 	if host != "" {
@@ -650,8 +656,14 @@ func (m *Threads) sessionSettings(p *db.Project, t *db.Thread, host string) (str
 		perms = map[string]any{}
 	}
 	dirs, _ := perms["additionalDirectories"].([]any)
-	perms["additionalDirectories"] = append(dirs, m.layout.LibraryDir(UploadOwner(p, t)))
+	dirs = append(dirs, m.layout.LibraryDir(UploadOwner(p, t)))
+	// Uploads of a thread from before they were shared per folder.
+	if legacy := m.layout.LibraryDir(SessionOwner(t.ID)); dirExists(legacy) {
+		dirs = append(dirs, legacy)
+	}
+	perms["additionalDirectories"] = dirs
 	doc["permissions"] = perms
+	doc["autoMemoryDirectory"] = m.layout.MemoryDir(p.ID)
 	path := m.layout.SessionSettingsFile(t.ID)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return host, err

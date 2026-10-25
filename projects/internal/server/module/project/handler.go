@@ -578,13 +578,9 @@ func (h *Handler) uploadAttachments(c *gin.Context) {
 		apierr.BadRequest(c, `expected multipart form with field "files"`)
 		return
 	}
-	// A folder has no library: its uploads wait in the draft area until the
-	// thread they are for exists.
-	owner := p.ID
-	if p.Type == db.ProjectFolder {
-		owner = rt.DraftOwner
-	}
-	atts, err := h.svc.Layout.SaveUploads(owner, form.File["files"], maxUpload)
+	// A folder's uploads go to its library like a project's: they are shared
+	// by all of its threads, including the one the first message starts.
+	atts, err := h.svc.Layout.SaveUploads(p.ID, form.File["files"], maxUpload)
 	if err != nil {
 		apierr.BadRequest(c, err.Error())
 		return

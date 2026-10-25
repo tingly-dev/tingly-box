@@ -318,7 +318,7 @@ func (h *Handler) create(c *gin.Context) {
 	if !apierr.Bind(c, &req) {
 		return
 	}
-	atts, err := h.svc.Layout.ResolveAttachments(rt.DraftOwner, req.Attachments)
+	atts, err := h.svc.Layout.ResolveAttachments(c.Param("id"), req.Attachments)
 	if err != nil {
 		apierr.BadRequest(c, err.Error())
 		return
@@ -685,7 +685,7 @@ func (h *Handler) downloadAttachment(c *gin.Context) {
 	if !ok {
 		return
 	}
-	owner, err := h.owner(t)
+	p, err := h.svc.Store.GetProject(t.ProjectID)
 	if err != nil {
 		fail(c, err)
 		return
@@ -695,7 +695,7 @@ func (h *Handler) downloadAttachment(c *gin.Context) {
 		apierr.BadRequest(c, "invalid attachment path")
 		return
 	}
-	path, err := h.svc.Layout.LibraryPath(owner, rel)
+	path, err := h.svc.Layout.AttachmentPath(p, t, rel)
 	if err != nil {
 		apierr.BadRequest(c, err.Error())
 		return

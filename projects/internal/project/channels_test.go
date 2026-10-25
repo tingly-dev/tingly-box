@@ -471,7 +471,7 @@ func TestFilesAChatSendsReachTheThreadAsAttachments(t *testing.T) {
 	}
 	require.Len(t, atts, 1)
 	assert.Equal(t, "photo.jpg", atts[0].Name, "named as the chat named it")
-	abs, err := f.threads.layout.LibraryPath(SessionOwner(s.ID), atts[0].Path)
+	abs, err := f.threads.layout.LibraryPath(s.ProjectID, atts[0].Path)
 	require.NoError(t, err)
 	body, err := os.ReadFile(abs)
 	require.NoError(t, err)
