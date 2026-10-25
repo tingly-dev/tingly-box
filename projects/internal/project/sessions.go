@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot/engine"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
@@ -139,9 +138,6 @@ func (m *Threads) StartFolderThread(spec FolderThreadSpec) (*db.Thread, error) {
 	}
 	if err := m.store.CreateThread(t); err != nil {
 		return nil, err
-	}
-	if err := m.layout.AdoptUploads(DraftOwner, SessionOwner(t.ID), spec.Attachments); err != nil {
-		logrus.WithError(err).Warn("move folder thread uploads")
 	}
 	_ = m.store.TouchProject(p.ID)
 	m.publish(t)

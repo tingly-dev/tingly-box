@@ -150,7 +150,11 @@ func (s *Service) folderCommand(b *db.ChannelBinding, name, arg string) (handled
 		if arg == "" {
 			return true, next, nil
 		}
-		t, err := s.startInChannelFolder(b, arg, nil, Source{Kind: db.SourceIM, Platform: b.Platform, ChatID: b.ChatID})
+		p, err := s.Store.OpenFolder(b.Folder, "")
+		if err != nil {
+			return true, "", err
+		}
+		t, err := s.startInChannelFolder(b, p, arg, nil, Source{Kind: db.SourceIM, Platform: b.Platform, ChatID: b.ChatID})
 		if err != nil {
 			return true, "", err
 		}

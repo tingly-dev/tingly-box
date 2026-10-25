@@ -84,11 +84,15 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 	// A chat that moved to a folder, or talks for the first time, starts a
 	// thread there with this message.
 	if b.Folder != "" {
-		atts, err := s.adoptChannelFiles(DraftOwner, files)
+		p, err := s.Store.OpenFolder(b.Folder, "")
 		if err != nil {
 			return true, err
 		}
-		_, err = s.startInChannelFolder(b, text, atts, src)
+		atts, err := s.adoptChannelFiles(p.ID, files)
+		if err != nil {
+			return true, err
+		}
+		_, err = s.startInChannelFolder(b, p, text, atts, src)
 		return true, err
 	}
 	t, p, err := s.boundThread(b)
@@ -116,7 +120,7 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 		}
 	}
 	if p.Type == db.ProjectFolder && (b.NewThread || t.Status == db.ThreadResolved) {
-		atts, err := s.adoptChannelFiles(DraftOwner, files)
+		atts, err := s.adoptChannelFiles(t.ProjectID, files)
 		if err != nil {
 			return true, err
 		}
@@ -183,11 +187,7 @@ func (s *Service) boundThread(b *db.ChannelBinding) (*db.Thread, *db.Project, er
 
 // startInChannelFolder starts a thread in the chat's Folder (opening the
 // folder in Projects when it is new) and moves the chat to it.
-func (s *Service) startInChannelFolder(b *db.ChannelBinding, task string, atts []Attachment, src Source) (*db.Thread, error) {
-	p, err := s.Store.OpenFolder(b.Folder, "")
-	if err != nil {
-		return nil, err
-	}
+func (s *Service) startInChannelFolder(b *db.ChannelBinding, p *db.Project, task string, atts []Attachment, src Source) (*db.Thread, error) {
 	var prev *db.Thread
 	if b.ThreadID != "" {
 		prev, _ = s.Store.GetThread(b.ThreadID)

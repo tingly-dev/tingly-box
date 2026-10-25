@@ -39,18 +39,20 @@ only in memory or in the conversation.
   age or per owner without touching anything else. Deleting a project already
   removes its library. Age-based cleanup of files never sent is the follow-up.
 
-A working folder is a `type=folder` project and its threads are ordinary
-threads; each thread gets its own area,
-`<data>/projects/_sessions/<thread>/library/uploads/<id>-<name>`. It is outside
-the folder the person works in on purpose: files put inside would show up in
-their repository's `git status` and could be committed. Uploads made before
-the thread exists (the first message) wait in `_sessions/_new` and move into
-the thread when it starts. A thread reaches only its own area: its Claude
-Code settings (the host profile's, if any, merged with one extra allowed
-directory) list that directory and nothing else, so no approval prompt and no
-view of other threads' files. Routes: `POST /projects/:id/attachments` (on a
-folder project: the draft area for its next thread), `POST /threads/:id/attachments`
-and `GET /threads/:id/attachments/file` after.
+A working folder is a `type=folder` project, and its uploads live in the
+project's own library like any other project's:
+`<data>/projects/<project>/library/uploads/<id>-<name>`, shared by every thread
+of the folder (see [workspace.md](../projects/.design/workspace.md)). It is
+outside the folder the person works in on purpose: files put inside would show
+up in their repository's `git status` and could be committed. Uploads made
+before the first thread exists go straight there; there is no draft area.
+A thread's Claude Code settings (the host profile's, if any, merged with the
+library and memory directories) list them as allowed directories, so no
+approval prompt. Threads started before uploads were shared per folder keep
+their files in `<data>/projects/_sessions/<thread>/library/`; those stay
+readable (the file route looks in the library first, then there). Routes:
+`POST /projects/:id/attachments`, `POST /threads/:id/attachments` and
+`GET /threads/:id/attachments/file` after.
 
 ## What the model gets
 

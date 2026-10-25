@@ -306,7 +306,8 @@ func TestSessionLaunchesUnderItsProfile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(merged), `"X":"1"`, "the profile's own settings are kept")
 	assert.Contains(t, string(merged), `"/data"`)
-	assert.Contains(t, string(merged), f.threads.layout.LibraryDir(SessionOwner(s.ID)))
+	assert.Contains(t, string(merged), f.threads.layout.LibraryDir(s.ProjectID))
+	assert.Contains(t, string(merged), `"autoMemoryDirectory":"`+f.threads.layout.MemoryDir(s.ProjectID)+`"`, "memory is the project's, not the cwd's")
 	assert.Empty(t, spec.Env)
 	assert.Empty(t, spec.Model, "the profile decides when no model is picked")
 
@@ -360,14 +361,17 @@ func TestSessionFirstMessageCarriesAttachments(t *testing.T) {
 		turn.Say("Saw it.", 1, 1)
 		return nil
 	})
-	a, err := f.threads.layout.SaveAttachment(DraftOwner, "log.txt", strings.NewReader("boom"), 0)
+	folder := t.TempDir()
+	p, err := f.store.OpenFolder(folder, "")
 	require.NoError(t, err)
-	// Resolved the way the handler does: against the drafts, before the session exists.
-	atts, err := f.threads.layout.ResolveAttachments(DraftOwner, []string{a.Path})
+	a, err := f.threads.layout.SaveAttachment(p.ID, "log.txt", strings.NewReader("boom"), 0)
+	require.NoError(t, err)
+	atts, err := f.threads.layout.ResolveAttachments(p.ID, []string{a.Path})
 	require.NoError(t, err)
 
-	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Attachments: atts})
+	s, err := f.startFolder(folder, FolderThreadSpec{Attachments: atts})
 	require.NoError(t, err, "a file alone is a first message")
+	assert.Equal(t, p.ID, s.ProjectID)
 	assert.Equal(t, "log.txt", s.Title)
 	waitStatus(t, f.store, s.ID, db.ThreadIdle)
 
@@ -376,25 +380,38 @@ func TestSessionFirstMessageCarriesAttachments(t *testing.T) {
 	require.NotEmpty(t, events)
 	assert.Equal(t, atts, ParseAttachments(events[0].Payload))
 
-	// The files moved into the session's own area, out of the drafts.
-	_, err = f.threads.layout.ResolveAttachments(SessionOwner(s.ID), []string{a.Path})
-	assert.NoError(t, err)
-	_, err = f.threads.layout.ResolveAttachments(DraftOwner, []string{a.Path})
-	assert.Error(t, err)
-
-	// The session may read its own area and no one else's.
+	// The file stays in the folder's library, where every thread of the folder reads it.
+	got, err := f.threads.layout.AttachmentPath(p, s, a.Path)
+	require.NoError(t, err)
+	assert.FileExists(t, got)
 	raw, err := os.ReadFile(f.threads.layout.SessionSettingsFile(s.ID))
 	require.NoError(t, err)
-	assert.Contains(t, string(raw), f.threads.layout.LibraryDir(SessionOwner(s.ID)))
-	assert.NotContains(t, string(raw), "_new")
+	assert.Contains(t, string(raw), f.threads.layout.LibraryDir(p.ID))
 }
 
-func TestSessionsDoNotShareUploads(t *testing.T) {
+func TestFolderThreadsShareUploads(t *testing.T) {
 	f := newFixture(t, func(*enginetest.Turn) error { return nil })
-	a, err := f.threads.layout.SaveAttachment(SessionOwner("s1"), "x.txt", strings.NewReader("x"), 0)
+	folder := t.TempDir()
+	s1, err := f.startFolder(folder, FolderThreadSpec{Task: "a"})
 	require.NoError(t, err)
-	_, err = f.threads.layout.ResolveAttachments(SessionOwner("s2"), []string{a.Path})
-	assert.Error(t, err, "another session's files cannot be attached")
+	s2, err := f.startFolder(folder, FolderThreadSpec{Task: "b"})
+	require.NoError(t, err)
+	require.Equal(t, s1.ProjectID, s2.ProjectID)
+	assert.Equal(t, UploadOwner(nil, s1), UploadOwner(nil, s2), "one upload area per folder")
+}
+
+// A thread from before uploads were shared per folder still opens its files.
+func TestAttachmentPathFallsBackToLegacyArea(t *testing.T) {
+	f := newFixture(t, func(*enginetest.Turn) error { return nil })
+	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "a"})
+	require.NoError(t, err)
+	p, err := f.store.GetProject(s.ProjectID)
+	require.NoError(t, err)
+	a, err := f.threads.layout.SaveAttachment(SessionOwner(s.ID), "old.txt", strings.NewReader("x"), 0)
+	require.NoError(t, err)
+	got, err := f.threads.layout.AttachmentPath(p, s, a.Path)
+	require.NoError(t, err)
+	assert.FileExists(t, got)
 }
 
 // A thread event carries its project's counts after the change, so the

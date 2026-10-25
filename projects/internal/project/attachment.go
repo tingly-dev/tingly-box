@@ -22,43 +22,39 @@ import (
 // and cleaned up on its own, and the Library tab shows it.
 const UploadsDir = "uploads"
 
-// SessionOwner is the upload owner of one folder thread. A folder has no
-// library, so each thread gets its own area under the data root, outside the
-// folder it works in (nothing lands in the person's repository).
+// SessionOwner is where a folder thread's uploads lived before they were
+// shared per folder. Nothing is written there any more; files already in it
+// stay readable (see AttachmentPath).
 func SessionOwner(sessionID string) string { return "_sessions/" + sessionID }
 
-// DraftOwner holds uploads made before the folder thread exists (the first
-// message of a new one); StartFolderThread moves them into its own area.
-const DraftOwner = "_sessions/_new"
+// UploadOwner is whose uploads a thread reads and writes: its project's. A
+// folder project keeps its library under the data root, outside the folder
+// it works in (nothing lands in the person's repository), and all of the
+// folder's threads share it.
+func UploadOwner(_ *db.Project, t *db.Thread) string { return t.ProjectID }
 
-// UploadOwner is whose uploads a thread reads: its project's, or its own when
-// the project is a folder.
-func UploadOwner(p *db.Project, t *db.Thread) string {
-	if p.Type == db.ProjectFolder {
-		return SessionOwner(t.ID)
+// AttachmentPath resolves an attachment of thread t: in the project's
+// library, or, for a folder thread from before uploads were shared, in the
+// thread's own legacy area.
+func (l Layout) AttachmentPath(p *db.Project, t *db.Thread, rel string) (string, error) {
+	path, err := l.LibraryPath(UploadOwner(p, t), rel)
+	if err != nil {
+		return "", err
 	}
-	return t.ProjectID
-}
-
-// AdoptUploads moves uploads of one owner to another, keeping their paths.
-func (l Layout) AdoptUploads(from, to string, atts []Attachment) error {
-	for _, a := range atts {
-		src, err := l.LibraryPath(from, a.Path)
-		if err != nil {
-			return err
-		}
-		dst, err := l.LibraryPath(to, a.Path)
-		if err != nil {
-			return err
-		}
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return err
-		}
-		if err := os.Rename(src, dst); err != nil {
-			return err
-		}
+	if p.Type != db.ProjectFolder {
+		return path, nil
 	}
-	return nil
+	if _, err := os.Stat(path); err == nil {
+		return path, nil
+	}
+	legacy, err := l.LibraryPath(SessionOwner(t.ID), rel)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(legacy); err == nil {
+		return legacy, nil
+	}
+	return path, nil
 }
 
 // AttachmentsResponse lists the files stored for a message.
@@ -271,4 +267,9 @@ func (l Layout) SaveUploads(owner string, files []*multipart.FileHeader, limit i
 		out = append(out, a)
 	}
 	return out, nil
+}
+
+func dirExists(p string) bool {
+	st, err := os.Stat(p)
+	return err == nil && st.IsDir()
 }
