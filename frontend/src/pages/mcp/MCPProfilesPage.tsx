@@ -43,6 +43,18 @@ import { nextMCPId } from './workspaceState';
 import { publishMCPProfiles } from './profileStore';
 import { MCP_DEFAULT_PROFILE_ID, type MCPProfile } from './types';
 
+// Keyed by profile so each one remembers its own folded state.
+function ProfileAccess({ profile, url }: { profile: MCPProfile; url: string }) {
+    const access = useAccessExpanded(`mcp-profile-${profile.id}`, true);
+    return (
+        <AgentAccessSection expanded={access.expanded} onToggle={access.toggle} url={url}>
+            <Box sx={{ px: 2 }}>
+                <ProfileConnect profileId={profile.id} serverName={profileServerName(profile)} />
+            </Box>
+        </AgentAccessSection>
+    );
+}
+
 // Profiles are entry points. Default holds every tool; a custom profile holds
 // only the tools added to it. Inside a profile each tool has its own switch, on
 // top of the tool's global switch on the Tools page.
@@ -102,7 +114,6 @@ export default function MCPProfilesPage() {
     );
     const groups = [...new Set(available.map(({ sourceName }) => sourceName))];
     const custom = !isDefaultProfile(profile);
-    const access = useAccessExpanded(`mcp-profile-${profile.id}`, true);
     const endpointUrl = `${apiBase}/api/v1/mcp/${profile.id}`;
     const statusText = !routing
         ? label('checking', 'Checking…')
@@ -216,11 +227,7 @@ export default function MCPProfilesPage() {
                             : probe.error}
                     </Alert>
                 )}
-                <AgentAccessSection expanded={access.expanded} onToggle={access.toggle} url={endpointUrl}>
-                    <Box sx={{ px: 2 }}>
-                        <ProfileConnect key={profile.id} profileId={profile.id} serverName={profileServerName(profile)} />
-                    </Box>
-                </AgentAccessSection>
+                <ProfileAccess key={profile.id} profile={profile} url={endpointUrl} />
                 <Box component="section" aria-label={label('profileTools', 'Tools in this profile')}>
                     <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
                         {label('profileTools', 'Tools in this profile')}
