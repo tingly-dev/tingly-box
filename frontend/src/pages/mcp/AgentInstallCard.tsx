@@ -182,6 +182,8 @@ export interface AgentInstallCardProps {
     heading?: string;
     /** Subtitle below heading (default: "Register the gateway…") */
     subtitle?: string;
+    /** Drop the numbered heading when the page already supplies the context. */
+    hideHeader?: boolean;
     /** Extra content rendered below the code block inside the card */
     footer?: React.ReactNode;
 }
@@ -225,6 +227,7 @@ export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
     sectionNumber = '01',
     heading,
     subtitle,
+    hideHeader = false,
     footer,
 }) => {
     const { t } = useTranslation();
@@ -250,7 +253,7 @@ export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
     return (
         <Box>
             {/* ── Section header ── */}
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 2.5 }}>
+            {!hideHeader && <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 2.5 }}>
                 <Typography
                     sx={{
                         fontFamily: fontMono,
@@ -279,7 +282,7 @@ export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
                         {subtitle ?? t('mcp.center.installSubtitle')}
                     </Typography>
                 </Box>
-            </Box>
+            </Box>}
             {/* ── Card body ── */}
             <Box
                 sx={{

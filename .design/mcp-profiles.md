@@ -49,11 +49,15 @@ is **MCP Tools**, then one row per profile (Default first) and "New profile".
   set) and flags what is still missing (empty URL, command, env or header value,
   Advisor model) with a chip that opens the connection drawer
   (`?source=<id>`). Advisor's consultation model is configured from its own row.
-- **Profile** (`/mcp/profile/:id`, `/mcp/profile/new` creates one): the tool list
-  with a switch per tool (custom ones also add/remove), the install command and a
-  real-gateway verification. Tools that are globally off are shown greyed with the
-  reason; Default says that it always contains every tool. The sidebar reads the
-  list from `profileStore.ts`, which the page keeps current.
+- **Profile** (`/mcp/profile/:id`, `/mcp/profile/new` creates one), laid out like
+  the Claude Code profile page: the header holds the name with rename and delete
+  beside it (custom only), a status line, the profile switch, refresh, Verify and
+  the filled primary action (Add tools). Directly under it the connection card
+  (the shared `AgentAccessSection`: endpoint URL when folded, the install command
+  for Claude Code / Codex / OpenCode when open), then the tool list with a switch
+  per tool (custom ones also remove). Tools that are globally off are shown greyed
+  with the reason; Default says that it always contains every tool. The sidebar
+  reads the list from `profileStore.ts`, which the page keeps current.
 
 Tool-call arguments are not configuration: they are shown read-only on the tool
 card and filled in the Test dialog.
