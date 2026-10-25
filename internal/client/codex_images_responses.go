@@ -171,6 +171,12 @@ func buildImageEditResponsesRequest(req *openai.ImageEditParams) (responses.Resp
 
 	params.Tools = []responses.ToolUnionParam{{OfImageGeneration: toolParam}}
 
+	// Optional reasoning effort: attached by the image edit handler as an extra
+	// field on ImageEditParams and mapped here onto the Responses API.
+	if effort, ok := req.ExtraFields()["reasoning_effort"].(string); ok && effort != "" {
+		params.Reasoning = responses.ReasoningParam{Effort: responses.ReasoningEffort(effort)}
+	}
+
 	params.SetExtraFields(map[string]interface{}{"stream": true})
 
 	return params, nil

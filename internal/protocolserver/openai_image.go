@@ -97,6 +97,22 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 		return
 	}
 
+	if effort, err := imageReasoningEffortFromBody(bodyBytes); err != nil {
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	} else if effort != "" {
+		// The pinned SDK has no ReasoningEffort field on ImageGenerateParams;
+		// extra fields ride the marshaled body so OpenAI-compatible upstreams
+		// receive the documented reasoning_effort parameter, and the Codex
+		// client maps it onto the Responses API (see buildImageGenerationResponsesRequest).
+		req.SetExtraFields(map[string]any{"reasoning_effort": effort})
+	}
+
 	requestModel := req.Model
 	responseModel := requestModel
 
@@ -160,6 +176,38 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	ph.persistImageGeneration(&req, resp)
 
 	c.JSON(http.StatusOK, resp)
+}
+
+// imageReasoningEffortFromBody extracts the optional reasoning_effort field
+// from a raw JSON image request body. Empty means "not sent" — identical to
+// the pre-effort behavior. Values follow the OpenAI images API: low/medium/high.
+func imageReasoningEffortFromBody(bodyBytes []byte) (string, error) {
+	var extra struct {
+		ReasoningEffort string `json:"reasoning_effort"`
+	}
+	if err := json.Unmarshal(bodyBytes, &extra); err != nil {
+		return "", nil // body shape errors surface via the main unmarshal
+	}
+	switch extra.ReasoningEffort {
+	case "", "low", "medium", "high":
+		return extra.ReasoningEffort, nil
+	default:
+		return "", fmt.Errorf("reasoning_effort must be one of low, medium, high (got %q)", extra.ReasoningEffort)
+	}
+}
+
+// applyImageReasoningEffort validates an effort value from either the JSON or
+// multipart edit surface and attaches it to the request as an extra field.
+func applyImageReasoningEffort(req *openai.ImageEditParams, effort string) error {
+	switch effort {
+	case "", "low", "medium", "high":
+	default:
+		return fmt.Errorf("reasoning_effort must be one of low, medium, high (got %q)", effort)
+	}
+	if effort != "" {
+		req.SetExtraFields(map[string]any{"reasoning_effort": effort})
+	}
+	return nil
 }
 
 // persistImageGeneration saves generated images and their prompts under the

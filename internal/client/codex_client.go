@@ -451,6 +451,12 @@ func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGener
 		logrus.Debugf("[Codex] Style parameter not supported for image generation")
 	}
 
+	// Optional reasoning effort: attached by the image handler as an extra
+	// field on ImageGenerateParams and mapped here onto the Responses API.
+	if effort, ok := req.ExtraFields()["reasoning_effort"].(string); ok && effort != "" {
+		params.Reasoning = responses.ReasoningParam{Effort: responses.ReasoningEffort(effort)}
+	}
+
 	// Set stream=true via ExtraFields
 	extraFields := map[string]interface{}{
 		"stream": true,
