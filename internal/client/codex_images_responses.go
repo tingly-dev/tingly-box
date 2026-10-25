@@ -117,7 +117,10 @@ func buildImageEditResponsesRequest(req *openai.ImageEditParams) (responses.Resp
 		})
 	}
 
-	params := responses.ResponseNewParams{Model: req.Model}
+	// The ":fast" virtual suffix (priority service tier) is not supported for
+	// image generation, so strip it instead of letting applyCodexDefaultsToParams
+	// resolve it into ServiceTier=Priority.
+	params := responses.ResponseNewParams{Model: strings.TrimSuffix(req.Model, fastModelSuffix)}
 	params.Store = param.NewOpt(false)
 	params.Instructions = param.NewOpt(defaultInstructions)
 	params.ParallelToolCalls = param.NewOpt(false)
