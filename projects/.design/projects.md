@@ -74,7 +74,7 @@ Browser ──REST──▶ HTTP modules (project / thread / settings)
 ```
 memory/MEMORY.md, memory/*.md   记忆（Claude 写，用户可改）
 library/                        上传文件；线程产出写到 library/outputs/<thread-slug>/
-worktrees/<thread-id>/          每个线程的 git worktree（无仓库时为空工作目录）；新位置与共享方式见 workspace.md
+worktrees/<thread-id>/          旧线程的 git worktree 和无仓库线程的空工作目录；新线程的 worktree 在仓库的 .claude/worktrees/（见 workspace.md）
 threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDirectories 等）
 ```
 

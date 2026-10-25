@@ -36,7 +36,7 @@ func threadSystemPrompt(l Layout, p *db.Project, t *db.Thread) string {
 	b.WriteString("<rules>\n")
 	b.WriteString("- Do only the task you were given. If you notice other work worth doing, mention it in your report instead of doing it.\n")
 	if t.Branch != "" {
-		fmt.Fprintf(&b, "- You are on branch %s (from %s) in your own worktree. Commit your work to this branch when it is done and verified. Do not push, merge, or touch other branches.\n", t.Branch, t.BaseBranch)
+		fmt.Fprintf(&b, "- You are on branch %s (from %s) in your own worktree (%s). Commit your work to this branch when it is done and verified. Do not push, merge, or touch other branches.\n", t.Branch, t.BaseBranch, t.Cwd)
 	} else {
 		fmt.Fprintf(&b, "- This thread has no repository. Write deliverables (documents, data, scripts) under %s so they appear in the project Library.\n", l.OutputDir(p.ID, slugify(t.Title)))
 	}
@@ -45,7 +45,7 @@ func threadSystemPrompt(l Layout, p *db.Project, t *db.Thread) string {
 	b.WriteString("- If you need the user's decision or input to continue, make the last line of your final message: NEEDS_INPUT: <your question>\n")
 	b.WriteString("- End every turn with a short report: what you did, what is on the branch (or which files you produced), how you verified it, and anything the user should know.\n")
 	fmt.Fprintf(&b, "- Project memory lives in %s. Read MEMORY.md there when relevant. To remember a project-level fact, decision or pitfall for future threads, write a short .md file there and add a one-line link to it in MEMORY.md.\n", l.MemoryDir(p.ID))
-	fmt.Fprintf(&b, "- Files the user added to the project are in %s.\n", l.LibraryDir(p.ID))
+	fmt.Fprintf(&b, "- Files the user added to the project are in %s. Memory and uploads are the same for every thread of this project, and they live outside the repository so you can write to them from a worktree.\n", l.LibraryDir(p.ID))
 	b.WriteString("</rules>\n")
 
 	if len(p.Repos) > 1 {
