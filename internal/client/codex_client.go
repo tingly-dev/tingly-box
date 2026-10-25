@@ -453,7 +453,7 @@ func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGener
 
 	// Optional reasoning effort: attached by the image handler as an extra
 	// field on ImageGenerateParams and mapped here onto the Responses API.
-	if effort, ok := req.ExtraFields()["reasoning_effort"].(string); ok && effort != "" {
+	if effort := codexImageReasoningEffort(req.ExtraFields()); effort != "" {
 		params.Reasoning = responses.ReasoningParam{Effort: responses.ReasoningEffort(effort)}
 	}
 

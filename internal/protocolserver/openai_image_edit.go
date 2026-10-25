@@ -247,9 +247,7 @@ func parseImageEditMultipart(c *gin.Context) (*openai.ImageEditParams, error) {
 		}
 		req.OutputCompression = param.NewOpt(oc)
 	}
-	if err := applyImageReasoningEffort(req, formValue("reasoning_effort")); err != nil {
-		return nil, err
-	}
+	applyImageReasoningEffort(req, formValue("reasoning_effort"))
 
 	return req, nil
 }
@@ -333,9 +331,7 @@ func parseImageEditJSON(c *gin.Context) (*openai.ImageEditParams, error) {
 	if jsonReq.User != "" {
 		req.User = param.NewOpt(jsonReq.User)
 	}
-	if err := applyImageReasoningEffort(req, jsonReq.ReasoningEffort); err != nil {
-		return nil, err
-	}
+	applyImageReasoningEffort(req, jsonReq.ReasoningEffort)
 
 	for idx, s := range jsonReq.Image {
 		data, contentType, err := decodeInlineImage(s)

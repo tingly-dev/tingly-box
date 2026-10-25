@@ -1007,7 +1007,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     onChange={(event) => setEffort(event.target.value as Effort)}
                                 >
                                     <MenuItem value="default">
-                                        {t('playground.effortDefault', { defaultValue: 'default' })}
+                                        {t('playground.effortDefault', { defaultValue: 'default (not sent)' })}
                                     </MenuItem>
                                     <MenuItem value="low">low</MenuItem>
                                     <MenuItem value="medium">medium</MenuItem>

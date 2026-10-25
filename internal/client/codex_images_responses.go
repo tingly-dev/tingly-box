@@ -82,6 +82,17 @@ func (c *CodexClient) imagesEditViaResponses(ctx context.Context, req openai.Ima
 	})
 }
 
+// codexImageReasoningEffort reads the optional reasoning_effort the image
+// handlers attach as an extra field on the SDK params. Single reader for both
+// Responses image builders so the string side-channel has one name and one
+// type assertion instead of two.
+func codexImageReasoningEffort(extras map[string]any) string {
+	if effort, ok := extras["reasoning_effort"].(string); ok {
+		return effort
+	}
+	return ""
+}
+
 // buildImageEditResponsesRequest translates ImageEditParams into a Responses
 // request whose single user message carries the prompt plus every reference
 // image, with the mask riding on the tool.
@@ -173,7 +184,7 @@ func buildImageEditResponsesRequest(req *openai.ImageEditParams) (responses.Resp
 
 	// Optional reasoning effort: attached by the image edit handler as an extra
 	// field on ImageEditParams and mapped here onto the Responses API.
-	if effort, ok := req.ExtraFields()["reasoning_effort"].(string); ok && effort != "" {
+	if effort := codexImageReasoningEffort(req.ExtraFields()); effort != "" {
 		params.Reasoning = responses.ReasoningParam{Effort: responses.ReasoningEffort(effort)}
 	}
 

@@ -164,6 +164,11 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
             // The mask belongs to the first reference because that is the one
             // the API applies it to; nothing here chooses which image it is.
             const mask = request.sources[0]?.mask?.file;
+            // The pinned SDK typing has no reasoning_effort yet; the gateway
+            // accepts it on both endpoints and forwards it upstream.
+            const effortParam = request.effort && request.effort !== 'default'
+                ? { reasoning_effort: request.effort as any }
+                : {};
             const response = endpoint === 'edits'
                 ? await client.images.edit({
                     image: editFiles.length === 1 ? editFiles[0] : editFiles,
@@ -173,12 +178,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
                     n: request.count,
                     size: request.size as any,
                     quality: request.quality as any,
-                    // The pinned SDK typing has no reasoning_effort yet; the
-                    // gateway accepts it on both endpoints and drops it for
-                    // upstreams that do not.
-                    ...(request.effort && request.effort !== 'default'
-                        ? { reasoning_effort: request.effort as any }
-                        : {}),
+                    ...effortParam,
                 }, { signal: controller.signal })
                 : await client.images.generate({
                     model: request.model,
@@ -186,9 +186,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
                     n: request.count,
                     size: request.size as any,
                     quality: request.quality,
-                    ...(request.effort && request.effort !== 'default'
-                        ? { reasoning_effort: request.effort as any }
-                        : {}),
+                    ...effortParam,
                 }, { signal: controller.signal });
             const images = (response.data ?? []).map(toSessionImage);
             updateRuns((currentRuns) => currentRuns.map((run) => (
