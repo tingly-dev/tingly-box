@@ -3896,141 +3896,6 @@
         }
       }
     },
-    "/api/v1/mcp/client-profiles": {
-      "get": {
-        "tags": [
-          "mcp"
-        ],
-        "operationId": "apiV1McpClient-profilesGet",
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MCPClientProfilesResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/mcp/client-profiles/{profile_id}": {
-      "put": {
-        "tags": [
-          "mcp"
-        ],
-        "operationId": "apiV1McpClient-profilesProfile_idPut",
-        "parameters": [
-          {
-            "name": "profile_id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Request body",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MCPClientProfile"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MCPRuntimeConfigResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "mcp"
-        ],
-        "operationId": "apiV1McpClient-profilesProfile_idDelete",
-        "parameters": [
-          {
-            "name": "profile_id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MCPRuntimeConfigResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/mcp/client-profiles/{profile_id}/probe": {
-      "post": {
-        "tags": [
-          "mcp"
-        ],
-        "summary": "Check initialize, discovery and optional tool call through the actual local MCP gateway",
-        "description": "Check initialize, discovery and optional tool call through the actual local MCP gateway",
-        "operationId": "apiV1McpClient-profilesProfile_idProbePost",
-        "parameters": [
-          {
-            "name": "profile_id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Request body",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MCPClientProbeRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MCPClientProbeResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/mcp/client/{id}": {
       "get": {
         "tags": [
@@ -4304,6 +4169,141 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InstallCommandResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/profiles": {
+      "get": {
+        "tags": [
+          "mcp"
+        ],
+        "operationId": "apiV1McpProfilesGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPProfilesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/profiles/{profile_id}": {
+      "put": {
+        "tags": [
+          "mcp"
+        ],
+        "operationId": "apiV1McpProfilesProfile_idPut",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPProfile"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPRuntimeConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "mcp"
+        ],
+        "operationId": "apiV1McpProfilesProfile_idDelete",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPRuntimeConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/profiles/{profile_id}/probe": {
+      "post": {
+        "tags": [
+          "mcp"
+        ],
+        "summary": "Check initialize, discovery and optional tool call through the actual local MCP gateway",
+        "description": "Check initialize, discovery and optional tool call through the actual local MCP gateway",
+        "operationId": "apiV1McpProfilesProfile_idProbePost",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPClientProbeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPClientProbeResponse"
                 }
               }
             }
@@ -12224,46 +12224,6 @@
           "success"
         ]
       },
-      "ClientRoute": {
-        "type": "object",
-        "properties": {
-          "enabled": {
-            "type": "boolean",
-            "description": "Field enabled"
-          },
-          "endpoint": {
-            "type": "string",
-            "description": "Field endpoint"
-          },
-          "id": {
-            "type": "string",
-            "description": "Field id"
-          },
-          "legacy": {
-            "type": "boolean",
-            "description": "Field legacy"
-          },
-          "name": {
-            "type": "string",
-            "description": "Field name"
-          },
-          "sources": {
-            "type": "array",
-            "description": "Field sources",
-            "items": {
-              "$ref": "#/components/schemas/RouteSource"
-            }
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "endpoint",
-          "enabled",
-          "legacy",
-          "sources"
-        ]
-      },
       "CodexConfigPreviewResponse": {
         "type": "object",
         "properties": {
@@ -15099,67 +15059,6 @@
           "execution_time"
         ]
       },
-      "MCPClientProfile": {
-        "type": "object",
-        "properties": {
-          "enabled": {
-            "type": "boolean",
-            "description": "Field enabled"
-          },
-          "id": {
-            "type": "string",
-            "description": "Field id"
-          },
-          "name": {
-            "type": "string",
-            "description": "Field name"
-          },
-          "sources": {
-            "type": "array",
-            "description": "Field sources",
-            "items": {
-              "type": "string"
-            }
-          },
-          "tools": {
-            "type": "array",
-            "description": "Field tools",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "sources",
-          "tools"
-        ]
-      },
-      "MCPClientProfilesResponse": {
-        "type": "object",
-        "properties": {
-          "error": {
-            "type": "string",
-            "description": "Field error"
-          },
-          "profiles": {
-            "type": "array",
-            "description": "Field profiles",
-            "items": {
-              "$ref": "#/components/schemas/MCPClientProfile"
-            }
-          },
-          "success": {
-            "type": "boolean",
-            "description": "Field success"
-          }
-        },
-        "required": [
-          "success",
-          "profiles"
-        ]
-      },
       "MCPOAuthConfig": {
         "type": "object",
         "properties": {
@@ -15193,6 +15092,75 @@
           "token_url"
         ]
       },
+      "MCPProfile": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "tools": {
+            "type": "array",
+            "description": "Field tools",
+            "items": {
+              "$ref": "#/components/schemas/MCPProfileTool"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "tools"
+        ]
+      },
+      "MCPProfileTool": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "MCPProfilesResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "profiles": {
+            "type": "array",
+            "description": "Field profiles",
+            "items": {
+              "$ref": "#/components/schemas/MCPProfile"
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "profiles"
+        ]
+      },
       "MCPRoutingResponse": {
         "type": "object",
         "properties": {
@@ -15221,20 +15189,16 @@
       "MCPRuntimeConfig": {
         "type": "object",
         "properties": {
-          "client_profiles": {
-            "type": "array",
-            "description": "Field client_profiles",
-            "items": {
-              "$ref": "#/components/schemas/MCPClientProfile"
-            }
-          },
-          "client_profiles_configured": {
-            "type": "boolean",
-            "description": "Field client_profiles_configured"
-          },
           "mode": {
             "type": "string",
             "description": "Field mode"
+          },
+          "profiles": {
+            "type": "array",
+            "description": "Field profiles",
+            "items": {
+              "$ref": "#/components/schemas/MCPProfile"
+            }
           },
           "request_timeout": {
             "type": "integer",
@@ -17169,6 +17133,46 @@
           "profile"
         ]
       },
+      "ProfileRoute": {
+        "type": "object",
+        "properties": {
+          "default": {
+            "type": "boolean",
+            "description": "Field default"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "Field endpoint"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "sources": {
+            "type": "array",
+            "description": "Field sources",
+            "items": {
+              "$ref": "#/components/schemas/RouteSource"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "endpoint",
+          "enabled",
+          "default",
+          "sources"
+        ]
+      },
       "ProfileUpdateRequest": {
         "type": "object",
         "properties": {
@@ -18498,11 +18502,11 @@
       "RoutingSnapshot": {
         "type": "object",
         "properties": {
-          "clients": {
+          "profiles": {
             "type": "array",
-            "description": "Field clients",
+            "description": "Field profiles",
             "items": {
-              "$ref": "#/components/schemas/ClientRoute"
+              "$ref": "#/components/schemas/ProfileRoute"
             }
           },
           "server_tools": {
@@ -18522,7 +18526,7 @@
         },
         "required": [
           "sources",
-          "clients",
+          "profiles",
           "server_tools"
         ]
       },
@@ -19552,19 +19556,6 @@
           "services"
         ]
       },
-      "StartSuggestionsRequest": {
-        "type": "object",
-        "properties": {
-          "indexes": {
-            "type": "array",
-            "description": "Field indexes",
-            "items": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        }
-      },
       "SourceStatus": {
         "type": "object",
         "properties": {
@@ -19593,6 +19584,19 @@
           "state",
           "tools"
         ]
+      },
+      "StartSuggestionsRequest": {
+        "type": "object",
+        "properties": {
+          "indexes": {
+            "type": "array",
+            "description": "Field indexes",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
       },
       "StatusResponse": {
         "type": "object",
@@ -20160,6 +20164,11 @@
       "ThreadCounts": {
         "type": "object",
         "properties": {
+          "failed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field failed"
+          },
           "idle": {
             "type": "integer",
             "format": "int64",
@@ -20189,6 +20198,7 @@
         "required": [
           "working",
           "waiting",
+          "failed",
           "ready",
           "idle",
           "resolved"

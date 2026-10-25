@@ -1,7 +1,6 @@
 import type { MCPCatalogTool, MCPSourceConfig } from './types';
 
-export type MCPToolMode = 'asset' | 'client' | 'gateway';
-export type MCPToolPatch = { enabled?: boolean; usage?: MCPCatalogTool['usage'] };
+export type MCPToolPatch = { enabled?: boolean };
 
 export const isAdvisorTool = (tool: MCPCatalogTool, source?: MCPSourceConfig) =>
     source?.transport === 'advisor' ||

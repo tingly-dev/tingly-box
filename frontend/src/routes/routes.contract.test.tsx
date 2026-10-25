@@ -71,14 +71,17 @@ describe('route contract', () => {
         expect(targets.filter((t) => !resolvesToPage(t))).toEqual([]);
     });
 
-    it('preserves legacy links to distinct tool scopes in the workspace', () => {
+    it('sends legacy MCP links to the tools or profiles page', () => {
         expect(
-            ['/mcp/routes', '/mcp/tools', '/mcp/server-tools', '/mcp/sources', '/mcp/clients'].filter(
+            ['/mcp', '/mcp/routes', '/mcp/tools', '/mcp/profiles', '/mcp/server-tools', '/mcp/sources', '/mcp/clients'].filter(
                 (path) => !resolvesToPage(path)
             )
         ).toEqual([]);
-        const legacy = matchRoutes(routes, '/tools/servertool')!.at(-1)!.route;
-        expect(navigateTargets(legacy.element)).toEqual(['/mcp/server-tools']);
+        const target = (path: string) => navigateTargets(matchRoutes(routes, path)!.at(-1)!.route.element);
+        expect(target('/tools/servertool')).toEqual(['/mcp/tools']);
+        expect(target('/mcp/server-tools')).toEqual(['/mcp/tools']);
+        expect(target('/mcp/clients')).toEqual(['/mcp/profiles']);
+        expect(target('/mcp')).toEqual(['/mcp/profiles']);
     });
 
     it('falls through to the catch-all for unknown paths', () => {

@@ -386,11 +386,10 @@ export function useActivityItems(): ActivityItem[] {
                 key: 'tools' as const,
                 icon: <IconTools sx={{ fontSize: 22 }} />,
                 label: t('layout.tools', { defaultValue: 'Tools' }),
-                defaultPath: '/mcp',
+                defaultPath: '/mcp/tools',
                 children: [
-                    { path: '/mcp', label: t('mcp.workspace.overviewNav', { defaultValue: 'MCP' }), icon: <SettingsApplications sx={{ fontSize: 20 }} />, match: (path: string) => ['/mcp', '/mcp/routes', '/mcp/clients', '/mcp/local-mode'].includes(path) },
-                    { path: '/mcp/tools', label: 'Tool', icon: <IconTerminal sx={{ fontSize: 20 }} />, match: (path: string) => ['/mcp/tools', '/mcp/sources'].includes(path) },
-                    { path: '/mcp/server-tools', label: 'Server Tool', icon: <IconServer sx={{ fontSize: 20 }} />, match: (path: string) => ['/mcp/server-tools', '/tools/servertool'].includes(path) },
+                    { path: '/mcp/tools', label: t('mcp.workspace.toolsNav', { defaultValue: 'All tools' }), icon: <IconTerminal sx={{ fontSize: 20 }} />, match: (path: string) => ['/mcp/tools', '/mcp/sources', '/mcp/server-tools', '/tools/servertool'].includes(path) },
+                    { path: '/mcp/profiles', label: t('mcp.workspace.profilesNav', { defaultValue: 'Profiles' }), icon: <SettingsApplications sx={{ fontSize: 20 }} />, match: (path: string) => ['/mcp', '/mcp/profiles', '/mcp/routes', '/mcp/clients', '/mcp/local-mode'].includes(path) },
                 ],
             }] as ActivityItem[],
             // ── Configuration: set once, rarely revisited ──

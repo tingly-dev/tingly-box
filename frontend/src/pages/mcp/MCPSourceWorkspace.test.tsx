@@ -30,20 +30,18 @@ const route: MCPRouteSource = {
             normalized_name: 'tingly_box_mcp__docs__read',
             enabled: true,
             implementation: 'mcp',
-            usage: { client: true, gateway: true },
+            usage: { client: true, gateway: false },
             input_schema: {},
         },
     ],
 };
-const open = (s = source, r = route, enabled = true, usageScope?: 'client' | 'gateway') =>
+const open = (s = source, r = route, enabled = true) =>
     render(
         <MCPSourceWorkspace
             source={s}
-            usageScope={usageScope}
             route={r}
             enabled={enabled}
             saveSource={save}
-            onConnectClient={vi.fn()}
             onDelete={vi.fn()}
             onRefresh={vi.fn()}
         />
@@ -51,41 +49,16 @@ const open = (s = source, r = route, enabled = true, usageScope?: 'client' | 'ga
 beforeEach(() => {
     save.mockReset();
 });
-describe('source tool usage boundaries', () => {
-    it.each(['client', 'gateway'] as const)(
-        'exposes only the current %s purpose while preserving the other purpose',
-        async (scope) => {
-            save.mockResolvedValue(undefined);
-            open(source, route, true, scope);
-            const row = within(screen.getByRole('group', { name: 'read' }));
-            expect(row.queryByRole('checkbox', { name: 'Enabled' })).toBeNull();
-            expect(
-                row.queryByRole('checkbox', { name: scope === 'client' ? 'Server Tools' : 'Expose through MCP' })
-            ).toBeNull();
-            fireEvent.click(
-                row.getByRole('checkbox', { name: scope === 'client' ? 'Expose through MCP' : 'Server Tools' })
-            );
-            await waitFor(() =>
-                expect(save).toHaveBeenCalledWith({
-                    id: 'docs',
-                    tool_policies: {
-                        other: { enabled: false },
-                        read: { enabled: true, usage: { client: scope !== 'client', gateway: scope !== 'gateway' } },
-                    },
-                })
-            );
-        }
-    );
-    it('edits global tool enablement in Tool without overwriting either purpose or unrelated policies', async () => {
+describe('connection workspace', () => {
+    it('switches one tool globally without overwriting unrelated policies', async () => {
         save.mockResolvedValue(undefined);
         open({
             ...source,
             tool_policies: { ...source.tool_policies, read: { enabled: true, usage: { client: true, gateway: true } } },
         });
         const row = within(screen.getByRole('group', { name: 'read' }));
-        expect(row.queryByRole('checkbox', { name: 'Expose through MCP' })).toBeNull();
-        expect(row.queryByRole('checkbox', { name: 'Server Tools' })).toBeNull();
-        fireEvent.click(row.getByRole('checkbox', { name: 'Enabled' }));
+        expect(row.queryByRole('checkbox')).toBeNull();
+        fireEvent.click(row.getByRole('switch', { name: 'On' }));
         await waitFor(() =>
             expect(save).toHaveBeenCalledWith({
                 id: 'docs',
@@ -98,39 +71,19 @@ describe('source tool usage boundaries', () => {
         expect(screen.getByRole('button', { name: 'Connection settings' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Remove connection' })).toBeInTheDocument();
     });
-    it.each(['client', 'gateway'] as const)(
-        'does not expose connection, global enablement or deletion in %s',
-        (scope) => {
-            open(source, route, true, scope);
-            expect(screen.queryByRole('button', { name: 'Connection settings' })).toBeNull();
-            expect(screen.queryByRole('button', { name: 'Remove connection' })).toBeNull();
-            expect(
-                screen.queryByRole('switch', { name: 'Enable shared connection (affects MCP and Server Tool)' })
-            ).toBeNull();
-            expect(screen.queryByRole('button', { name: 'Test tool' })).toBeNull();
-        }
-    );
-    it('keeps Advisor model settings in Server Tool and blocks a standalone asset test', () => {
+    it('shows Advisor model settings with the tool switch and blocks a standalone test', () => {
         const advisor = { ...source, id: 'advisor', transport: 'advisor' as const };
-        const view = open(advisor, { ...route, id: 'advisor' });
-        const row = within(screen.getByRole('group', { name: 'read' }));
-        expect(row.queryByRole('checkbox', { name: 'Expose through MCP' })).toBeNull();
-        expect(row.queryByRole('checkbox', { name: 'Server Tools' })).toBeNull();
-        expect(row.getByRole('button', { name: 'Test tool' })).toBeDisabled();
-        expect(screen.queryByText('Consultation model settings')).toBeNull();
-        view.unmount();
-        open(advisor, { ...route, id: 'advisor' }, true, 'gateway');
+        open(advisor, { ...route, id: 'advisor' });
         expect(screen.getByText('Consultation model settings')).toBeInTheDocument();
-        expect(screen.getByRole('checkbox', { name: 'Server Tools' })).not.toBeDisabled();
-        expect(screen.queryByRole('button', { name: 'Test tool' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Test tool' })).toBeDisabled();
+        expect(screen.queryByRole('button', { name: 'Remove connection' })).toBeNull();
     });
-    it('keeps usage configuration available while execution is off and reports a rejected change', async () => {
-        save.mockRejectedValue(new Error('Permission update failed'));
-        open(source, route, false, 'gateway');
+    it('reports a rejected change and keeps the previous state', async () => {
+        save.mockRejectedValue(new Error('Update failed'));
+        open();
         const row = within(screen.getByRole('group', { name: 'read' }));
-        expect(row.queryByRole('button', { name: 'Test tool' })).toBeNull();
-        fireEvent.click(row.getByRole('checkbox', { name: 'Server Tools' }));
-        expect(await screen.findByText('Permission update failed')).toBeInTheDocument();
-        expect(row.getByRole('checkbox', { name: 'Server Tools' })).toBeChecked();
+        fireEvent.click(row.getByRole('switch', { name: 'On' }));
+        expect(await screen.findByText('Update failed')).toBeInTheDocument();
+        expect(row.getByRole('switch', { name: 'On' })).toBeChecked();
     });
 });

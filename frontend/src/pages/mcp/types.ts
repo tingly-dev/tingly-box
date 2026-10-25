@@ -5,11 +5,14 @@ export type MCPRuntimeConfig = components['schemas']['MCPRuntimeConfig'];
 export type MCPConfigResponse = components['schemas']['MCPRuntimeConfigResponse'];
 export type MCPCatalogTool = components['schemas']['CatalogTool'];
 export type MCPSourceStatus = components['schemas']['SourceStatus'];
-export type MCPClientProfile = components['schemas']['MCPClientProfile'];
+export type MCPProfile = components['schemas']['MCPProfile'];
+export type MCPProfileTool = components['schemas']['MCPProfileTool'];
 export type MCPToolUsage = components['schemas']['MCPToolUsage'];
 export type MCPRouteSource = components['schemas']['RouteSource'];
-export type MCPClientRoute = components['schemas']['ClientRoute'];
+export type MCPProfileRoute = components['schemas']['ProfileRoute'];
 export type MCPRoutingSnapshot = components['schemas']['RoutingSnapshot'];
+
+export const MCP_DEFAULT_PROFILE_ID = 'default' as const;
 
 export const BUILTIN_WEBTOOLS_ID = 'webtools' as const;
 export const BUILTIN_ADVISOR_ID = 'advisor' as const;

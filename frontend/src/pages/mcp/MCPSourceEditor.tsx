@@ -23,7 +23,6 @@ interface MCPSourceEditorProps {
     onChange: (next: MCPSourceFormValue) => void;
     hideTools?: boolean;
     compact?: boolean;
-    hideUsage?: boolean;
     hideEnabled?: boolean;
     onUseExample?: () => void;
 }
@@ -33,7 +32,6 @@ export default function MCPSourceEditor({
     onChange,
     hideTools = false,
     compact = false,
-    hideUsage = false,
     hideEnabled = false,
 }: MCPSourceEditorProps) {
     const { t } = useTranslation();
@@ -207,36 +205,13 @@ export default function MCPSourceEditor({
                     </Stack>
                 </AccordionDetails>
             </Accordion>
-            {!hideUsage && (
-                <Stack>
-                    <Typography variant="subtitle2">{label('usage', 'Where can these tools be used?')}</Typography>
-                    <FormControlLabel
-                        control={
-                            <Checkbox
-                                checked={value.usage.client}
-                                onChange={(e) => set({ usage: { ...value.usage, client: e.target.checked } })}
-                            />
-                        }
-                        label={label('clientUsage', 'MCP clients')}
-                    />
-                    <FormControlLabel
-                        control={
-                            <Checkbox
-                                checked={value.usage.gateway}
-                                onChange={(e) => set({ usage: { ...value.usage, gateway: e.target.checked } })}
-                            />
-                        }
-                        label={label('gatewayUsage', 'Gateway model calls')}
-                    />
-                </Stack>
-            )}
             {!hideTools && (
                 <TextField
                     label={label('allowlist', 'Allowed tools')}
                     value={value.tools.join(' ')}
                     onChange={(e) => set({ tools: e.target.value.split(/\s+/).filter(Boolean) })}
                     helperText={t('mcp.workspace.allowlistHint', {
-                        defaultValue: 'Use * to discover all tools. Choose individual tool usages after connecting.',
+                        defaultValue: 'Use * to discover all tools. Switch individual tools on or off after connecting.',
                     })}
                 />
             )}

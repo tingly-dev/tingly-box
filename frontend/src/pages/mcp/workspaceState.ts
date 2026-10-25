@@ -1,4 +1,4 @@
-import { formValueToSource, type MCPClientProfile, type MCPSourceConfig, type MCPSourceFormValue } from './types';
+import { formValueToSource, type MCPSourceConfig, type MCPSourceFormValue } from './types';
 
 // IDs are addressing, not naming: random, never derived from user input, and
 // never reused after a delete (a sequence would re-point old commands and
@@ -30,15 +30,5 @@ export function connectionPatch(form: MCPSourceFormValue): MCPSourceConfig {
         env: source.env,
         proxy_url: source.proxy_url,
         tools: source.tools,
-    };
-}
-
-export function toggleClientSource(profile: MCPClientProfile, id: string, checked: boolean, known: string[]) {
-    const current = profile.sources?.includes('*')
-        ? [...new Set([...known, ...(profile.sources || []).filter((s) => s !== '*')])]
-        : [...(profile.sources || [])];
-    return {
-        ...profile,
-        sources: checked ? [...new Set([...current, id])] : current.filter((source) => source !== id),
     };
 }

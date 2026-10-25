@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { connectionPatch, nextMCPId, toggleClientSource } from './workspaceState';
+import { connectionPatch, nextMCPId } from './workspaceState';
 import { sourceToFormValue } from './types';
-describe('independent connection and client access edits', () => {
+describe('connection edits and identifiers', () => {
     it('updates a connection without replacing its usage, enabled state or per-tool policy', () => {
         const form = sourceToFormValue({
             id: 'remote',
@@ -39,11 +39,6 @@ describe('independent connection and client access edits', () => {
         expect(connectionPatch(form)).toMatchObject({ command: 'node', endpoint: '', headers: {} });
         form.transport = 'http';
         expect(connectionPatch(form)).toMatchObject({ command: '', args: [], cwd: '' });
-    });
-    it('materializes a wildcard before removing one source and preserves individual tool grants', () => {
-        const original = { id: 'client', name: 'Client', sources: ['*'], tools: ['tingly_box_mcp__b__echo'] };
-        expect(toggleClientSource(original, 'a', false, ['a', 'b'])).toEqual({ ...original, sources: ['b'] });
-        expect(original.sources).toEqual(['*']);
     });
     it('creates random prefixed IDs that are unique, name-independent and fit tool-name limits', () => {
         const id = nextMCPId('src', ['src-00000000']);

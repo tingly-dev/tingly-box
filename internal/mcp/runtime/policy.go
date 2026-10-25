@@ -12,7 +12,13 @@ func SourceUsage(source typ.MCPSourceConfig) typ.MCPToolUsage {
 	if source.Usage != nil {
 		usage.Gateway = source.Usage.Gateway
 	}
-	usage.Client = SourceImplementation(source) != typ.ToolImplementationVirtual
+	// A Server Tool exists only to be run by the gateway; its switch is the
+	// tool's own enablement, not a separate usage flag.
+	virtual := SourceImplementation(source) == typ.ToolImplementationVirtual
+	usage.Client = !virtual
+	if virtual {
+		usage.Gateway = true
+	}
 	return usage
 }
 
@@ -26,7 +32,7 @@ func EffectiveToolPolicy(source typ.MCPSourceConfig, name string) (bool, typ.MCP
 		if policy.Enabled != nil && !*policy.Enabled {
 			enabled = false
 		}
-		if policy.Usage != nil {
+		if policy.Usage != nil && SourceImplementation(source) != typ.ToolImplementationVirtual {
 			usage.Gateway = policy.Usage.Gateway
 		}
 	}

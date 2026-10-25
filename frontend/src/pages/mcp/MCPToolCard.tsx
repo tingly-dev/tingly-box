@@ -1,13 +1,13 @@
-import { Box, Button, Checkbox, FormControlLabel, Stack, Typography } from '@mui/material';
+import { Box, Button, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import MCPToolParameters from './MCPToolParameters';
-import { isAdvisorTool, isToolRestricted, type MCPToolMode, type MCPToolPatch } from './toolPresentation';
+import { isAdvisorTool, isToolRestricted, type MCPToolPatch } from './toolPresentation';
 import type { MCPCatalogTool, MCPSourceConfig } from './types';
 
+// One tool and its global switch. Off here means off in every profile.
 export default function MCPToolCard({
     tool,
     source,
-    mode,
     enabled,
     busy,
     onChange,
@@ -16,7 +16,6 @@ export default function MCPToolCard({
 }: {
     tool: MCPCatalogTool;
     source?: MCPSourceConfig;
-    mode: MCPToolMode;
     enabled: boolean;
     busy: boolean;
     onChange: (patch: MCPToolPatch) => void;
@@ -27,7 +26,6 @@ export default function MCPToolCard({
     const label = (key: string, fallback: string) => t(`mcp.workspace.${key}`, { defaultValue: fallback });
     const advisor = isAdvisorTool(tool, source);
     const restricted = isToolRestricted(tool, source);
-    const asset = mode === 'asset';
     return (
         <Box
             component={inWorkspace ? 'div' : 'article'}
@@ -36,9 +34,34 @@ export default function MCPToolCard({
             sx={{ p: 1.75, border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}
         >
             <Stack spacing={1}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                    {tool.name}
-                </Typography>
+                <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                        {tool.name}
+                    </Typography>
+                    <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
+                        {onTest && (
+                            <Button
+                                size="small"
+                                disabled={busy || !enabled || !tool.enabled || restricted || advisor}
+                                onClick={onTest}
+                            >
+                                {label('testTool', 'Test tool')}
+                            </Button>
+                        )}
+                        <FormControlLabel
+                            sx={{ m: 0 }}
+                            control={
+                                <Switch
+                                    size="small"
+                                    disabled={busy || restricted}
+                                    checked={tool.enabled}
+                                    onChange={(e) => onChange({ enabled: e.target.checked })}
+                                />
+                            }
+                            label={label('toolEnabled', 'On')}
+                        />
+                    </Stack>
+                </Stack>
                 {tool.description && (
                     <Typography variant="body2" color="text.secondary">
                         {tool.description}
@@ -54,53 +77,6 @@ export default function MCPToolCard({
                               )}
                     </Typography>
                 )}
-                {!asset && !tool.enabled && !restricted && (
-                    <Typography variant="caption" color="warning.main">
-                        {label(
-                            'sharedToolOff',
-                            'This tool is disabled in the shared connection. Enable it from the Tool page.'
-                        )}
-                    </Typography>
-                )}
-                <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                    <FormControlLabel
-                        control={
-                            <Checkbox
-                                disabled={busy || restricted || (!asset && mode === 'client' && advisor)}
-                                checked={
-                                    asset
-                                        ? tool.enabled
-                                        : mode === 'client'
-                                          ? tool.usage.client && !advisor
-                                          : tool.usage.gateway
-                                }
-                                onChange={(e) =>
-                                    onChange(
-                                        asset
-                                            ? { enabled: e.target.checked }
-                                            : { usage: { ...tool.usage, [mode]: e.target.checked } }
-                                    )
-                                }
-                            />
-                        }
-                        label={
-                            asset
-                                ? label('toolEnabled', 'Enabled')
-                                : mode === 'client'
-                                  ? label('publishUsage', 'Expose through MCP')
-                                  : label('serverTools', 'Server Tools')
-                        }
-                    />
-                    {asset && onTest && (
-                        <Button
-                            size="small"
-                            disabled={busy || !enabled || !tool.enabled || restricted || advisor}
-                            onClick={onTest}
-                        >
-                            {label('testTool', 'Test tool')}
-                        </Button>
-                    )}
-                </Stack>
                 <MCPToolParameters tool={tool} />
             </Stack>
         </Box>

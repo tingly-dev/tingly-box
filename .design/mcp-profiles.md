@@ -1,9 +1,8 @@
 # MCP: tools, global switches and profiles
 
-This replaces the three-page split in `mcp-responsibility-split.md` and the
-per-client grants in `mcp-workspace.md`. Those documents describe the
-experimental stack this one supersedes; they are merged into this file once the
-UI lands.
+This is the single current design for the MCP area. It replaces the earlier
+Tool / MCP / Server Tool split and the per-client grants; those documents were
+removed with it.
 
 ## Model
 
@@ -35,21 +34,48 @@ Code simply pick one.
   narrow profile never widens silently. Removing a tool from a profile and
   switching it off are different: off keeps it listed.
 - Custom profile IDs are random with a prefix (`prof-3f2a9c1e`), never derived
-  from the name (see the Identifiers rule in `mcp-workspace.md`).
+  from the name (see Identifiers).
 - Legacy endpoints (`tb`, `all`, one per connection) are gone. The feature has
   not shipped, so there is no migration.
 
 ## Pages
 
-- **Tools** (`/mcp/tools`): connect any MCP, see every tool (MCP and Server
-  Tool in one list), global switch, test a tool. Advisor's model settings live
-  on its own row.
-- **Profiles** (`/mcp/profiles`): Default first, then custom profiles. Each shows
-  its endpoint with the install command, and its tool list with a switch per tool
-  and an add/remove control. Tools that are globally off are shown greyed with the
-  reason.
+- **All tools** (`/mcp/tools`): connect any MCP, see every tool (MCP and Server
+  Tool in one list), global switch, test a tool. Advisor's consultation model is
+  configured from its own row. Connection editing opens in a drawer
+  (`?source=<id>`).
+- **Profiles** (`/mcp/profiles`): Default first, then custom profiles as tabs
+  (`?profile=<id>`). Each shows its tool list with a switch per tool (custom ones
+  also add/remove), the install command and a real-gateway verification. Tools
+  that are globally off are shown greyed with the reason; Default's header says
+  that it always contains every tool.
 
 The old Tool / MCP / Server Tool pages and the "client" concept are removed.
+`/mcp`, `/mcp/clients`, `/mcp/routes` land on Profiles; `/mcp/server-tools`,
+`/mcp/sources` and `/tools/servertool` land on All tools.
+
+## Identifiers
+
+Source and profile IDs are addressing, not naming. They are never typed by the
+user and never derived from the display name: new ones are random with a kind
+prefix (`src-3f2a9c1e`, `prof-9b41d07a`). A sequence (`src1`) was rejected
+because deleting and re-creating would reuse an ID and silently re-point saved
+commands and tool lists at a new object. The suffix is 8 hex characters rather
+than a full UUID because the ID is embedded in the normalized tool name
+(`tingly_box_mcp__<id>__<tool>`), which models cap at 64 characters. The prefix
+also keeps IDs from colliding with management routes under `/mcp/`. Each profile
+is registered on the user's machine under its own name (`tb` for Default,
+`tb-<slug of the name>` otherwise) so installs do not overwrite each other.
+
+## Where the pieces are
+
+- Model and effective policy: `internal/typ/mcp.go` (`MCPProfile`),
+  `internal/mcp/runtime/policy.go` (`ProfileAllows`, `SourceUsage`),
+  `internal/mcp/runtime/routing.go` (the routing snapshot both pages read).
+- API: `/api/v1/mcp/profiles[/{id}[/probe]]`; the endpoint of a profile is
+  `/api/v1/mcp/{id}`.
+- UI: `frontend/src/pages/mcp/` (`MCPToolsPage`, `MCPProfilesPage`,
+  `profileState.ts`, shared `useMCPWorkspace`).
 
 ## Open (carried, not decided here)
 
