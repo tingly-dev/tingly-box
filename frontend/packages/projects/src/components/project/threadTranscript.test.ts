@@ -75,4 +75,21 @@ describe('threadTranscript attachments', () => {
         ], false, () => undefined);
         expect(entries[0].attachments).toEqual([file]);
     });
+
+    it('marks a message added to a running turn until Claude has read it, and leaves held ones out', () => {
+        const injected = ev('user', 'also add tests', { payload: '{"injected":true}' });
+        const held = ev('queued', 'later', { payload: '{"state":"held"}' });
+        const running = [ev('tool_use', 'Bash', { payload: '{}' }), injected, held];
+        const pending = threadTranscript(running, true, author).entries;
+        expect(pending.map((e) => e.content)).toEqual(['Bash', 'also add tests']);
+        expect(pending[1].pending).toBe(true);
+
+        const read = threadTranscript([...running, ev('tool_result', 'ok')], true, author).entries;
+        expect(read[1].pending).toBe(false);
+        // A subagent's step is not Claude's next step.
+        const sub = threadTranscript([...running, ev('tool_result', 'ok', { parent: 'call-1' })], true, author).entries;
+        expect(sub[1].pending).toBe(true);
+        // Nothing runs any more: nothing is waiting to be read.
+        expect(threadTranscript(running, false, author).entries[1].pending).toBe(false);
+    });
 });

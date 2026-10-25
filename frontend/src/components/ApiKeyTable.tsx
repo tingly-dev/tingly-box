@@ -5,6 +5,7 @@ import {
     exportProviderAsJsonlToClipboard,
 } from "@/components/rule-card/utils";
 import {QuotaCell} from "@/components/credential/QuotaCell";
+import type {RedeemOutcome} from "@/hooks/useProviderQuota";
 import {ProviderLabel} from "@/components/ProviderLogo";
 import {
     Check,
@@ -56,6 +57,7 @@ interface ApiKeyTableProps {
     providerQuotas?: { [uuid: string]: ProviderQuota };
     refreshingQuotas?: Set<string>;
     onQuotaRefresh?: (providerUuid: string) => void;
+    onQuotaRedeem?: (providerUuid: string, rewardId: string) => Promise<RedeemOutcome>;
 }
 
 interface TokenModalState {
@@ -95,6 +97,7 @@ const ApiKeyTable = ({
                          providerQuotas,
                          refreshingQuotas,
                          onQuotaRefresh,
+                         onQuotaRedeem,
                      }: ApiKeyTableProps) => {
     const [tokenModal, setTokenModal] = useState<TokenModalState>({
         open: false,
@@ -293,6 +296,7 @@ const ApiKeyTable = ({
                                             quota={providerQuotas?.[provider.uuid]}
                                             refreshing={refreshingQuotas?.has(provider.uuid) ?? false}
                                             onRefresh={() => onQuotaRefresh?.(provider.uuid)}
+                                                onRedeem={onQuotaRedeem && (rewardId => onQuotaRedeem(provider.uuid, rewardId))}
                                         />
                                     </TableCell>
                                 )}

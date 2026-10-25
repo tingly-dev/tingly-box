@@ -33,6 +33,7 @@ export default {
       "outcomeNotAnswered": "未回答",
       "output": "输出",
       "pickSeveral": "可多选",
+      "readsNext": "Claude 会在下一步读到这条消息",
       "recommended": "推荐",
       "responseRetry": "回复未被接受，已保留回答，请重试。",
       "responseSubmitted": "回复已发送，等待代理继续…",

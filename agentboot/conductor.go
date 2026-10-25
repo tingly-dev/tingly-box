@@ -122,6 +122,23 @@ func (c *Conductor) RunTurn(ctx context.Context, prompt string, prompter Prompte
 // [PersistentSession.Interrupt].
 func (c *Conductor) Interrupt(ctx context.Context) error { return c.session.Interrupt(ctx) }
 
+// Inject adds a message to the turn in flight, whoever started it; see
+// [PersistentSession.Inject].
+func (c *Conductor) Inject(ctx context.Context, prompt string) error {
+	return c.session.Inject(ctx, prompt)
+}
+
+// SetModel switches the process's model live; see [PersistentSession.SetModel].
+func (c *Conductor) SetModel(ctx context.Context, model string) error {
+	return c.session.SetModel(ctx, model)
+}
+
+// SetPermissionMode switches the permission mode live; see
+// [PersistentSession.SetPermissionMode].
+func (c *Conductor) SetPermissionMode(ctx context.Context, mode string) error {
+	return c.session.SetPermissionMode(ctx, mode)
+}
+
 // StopTask stops one background task; see [PersistentSession.StopTask].
 func (c *Conductor) StopTask(ctx context.Context, taskID string) error {
 	return c.session.StopTask(ctx, taskID)

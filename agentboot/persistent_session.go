@@ -21,7 +21,15 @@ var (
 	// ErrSessionClosed is returned by Send/Respond once Close has been
 	// called or the underlying process has terminated.
 	ErrSessionClosed = errors.New("agentboot: persistent session closed")
+
+	// ErrNoTurnInFlight is returned by Inject when the session is Idle:
+	// there is no turn to join, so the message is a new turn for Send.
+	ErrNoTurnInFlight = errors.New("agentboot: no turn in flight to inject into")
 )
+
+// ControlTimeout bounds how long [PersistentSession.SetModel] and
+// [PersistentSession.SetPermissionMode] wait for the agent's answer.
+const ControlTimeout = 10 * time.Second
 
 // PersistentSession is a long-lived, multi-turn counterpart to
 // [ExecutionHandle]: one underlying agent process stays alive across
@@ -59,6 +67,25 @@ type PersistentSession interface {
 	// lifetime: the [ExecutionHandle] StreamEvent set, plus
 	// TurnCompleteEvent and SessionStateEvent.
 	Events() <-chan StreamEvent
+
+	// Inject adds a user message to the turn in flight without ending it:
+	// the agent queues it and takes it up at its next step (for Claude Code,
+	// after the current tool call), so it shapes the rest of this turn. The
+	// turn still ends with one TurnCompleteEvent. Returns ErrNoTurnInFlight
+	// when Idle (use Send) and ErrSessionClosed once closed. Returning means
+	// the message was written, not that the agent has read it yet; the
+	// agent's own replay of the user message is the sign it was taken up.
+	Inject(ctx context.Context, prompt string) error
+
+	// SetModel switches the model of the running process without a restart.
+	// It applies from the next turn and waits for the agent's answer
+	// (ControlTimeout); a refusal is a *[ControlRejectedError]. An empty
+	// model resets to the agent's default. Returns ErrControlUnsupported if
+	// the agent cannot do this live, in which case the caller restarts it.
+	SetModel(ctx context.Context, model string) error
+
+	// SetPermissionMode switches the permission mode like SetModel does.
+	SetPermissionMode(ctx context.Context, mode string) error
 
 	// Respond answers a pending ApprovalRequestEvent/AskRequestEvent from
 	// the in-flight turn, exactly like [ExecutionHandle.Respond].
@@ -113,6 +140,9 @@ type persistentSession struct {
 	done          chan struct{}
 
 	controlSeq atomic.Uint64
+	// controlWaiters holds the callers of Control waiting for their answer,
+	// by request id; the pump delivers each answer.
+	controlWaiters map[string]chan error
 }
 
 func (s *persistentSession) Events() <-chan StreamEvent { return s.events }
@@ -150,6 +180,34 @@ func (s *persistentSession) Send(_ context.Context, prompt string) error {
 		return fmt.Errorf("agentboot: send turn: %w", err)
 	}
 	return nil
+}
+
+func (s *persistentSession) Inject(_ context.Context, prompt string) error {
+	s.mu.Lock()
+	state := s.state
+	s.mu.Unlock()
+	switch state {
+	case SessionStateRunning:
+	case SessionStateIdle:
+		return ErrNoTurnInFlight
+	default:
+		return ErrSessionClosed
+	}
+	// A turn that ends between the check and the write leaves the message
+	// to start a turn of the agent's own; the pump tracks that like any
+	// unsolicited turn, so nothing is lost.
+	if err := s.encoder.Encode(s.transport.EncodeUserMessage(prompt)); err != nil {
+		return fmt.Errorf("agentboot: inject message: %w", err)
+	}
+	return nil
+}
+
+func (s *persistentSession) SetModel(ctx context.Context, model string) error {
+	return s.control(ctx, SetModelRequest{Model: model})
+}
+
+func (s *persistentSession) SetPermissionMode(ctx context.Context, mode string) error {
+	return s.control(ctx, SetPermissionModeRequest{Mode: mode})
 }
 
 func (s *persistentSession) Respond(reqID string, resp ControlResponse) error {
@@ -213,6 +271,68 @@ func (s *persistentSession) sendControl(req ControlRequest) error {
 		return fmt.Errorf("agentboot: send control request: %w", err)
 	}
 	return nil
+}
+
+// control writes req and waits for the agent's answer.
+func (s *persistentSession) control(ctx context.Context, req ControlRequest) error {
+	if _, ok := s.transport.(ControlResponseDecoder); !ok {
+		return ErrControlUnsupported
+	}
+	enc, ok := s.transport.(ControlRequestEncoder)
+	if !ok {
+		return ErrControlUnsupported
+	}
+	if st := s.Status(); st == SessionStateClosing || st == SessionStateTerminated {
+		return ErrSessionClosed
+	}
+	reqID := fmt.Sprintf("agentboot_ctl_%d", s.controlSeq.Add(1))
+	wire := enc.EncodeControlRequest(reqID, req)
+	if wire == nil {
+		return ErrControlUnsupported
+	}
+	answer := make(chan error, 1)
+	s.mu.Lock()
+	if s.controlWaiters == nil {
+		s.controlWaiters = make(map[string]chan error)
+	}
+	s.controlWaiters[reqID] = answer
+	s.mu.Unlock()
+	forget := func() {
+		s.mu.Lock()
+		delete(s.controlWaiters, reqID)
+		s.mu.Unlock()
+	}
+	if err := s.encoder.Encode(wire); err != nil {
+		forget()
+		return fmt.Errorf("agentboot: send control request: %w", err)
+	}
+	timer := time.NewTimer(ControlTimeout)
+	defer timer.Stop()
+	select {
+	case err := <-answer:
+		return err
+	case <-ctx.Done():
+		forget()
+		return ctx.Err()
+	case <-timer.C:
+		forget()
+		return fmt.Errorf("agentboot: no answer to control request within %s", ControlTimeout)
+	case <-s.done:
+		forget()
+		return ErrSessionClosed
+	}
+}
+
+// answerControl hands the agent's answer to the Control caller waiting for
+// it. Answers nobody waits for (Interrupt, StopTask) are dropped.
+func (s *persistentSession) answerControl(reqID string, err error) {
+	s.mu.Lock()
+	ch := s.controlWaiters[reqID]
+	delete(s.controlWaiters, reqID)
+	s.mu.Unlock()
+	if ch != nil {
+		ch <- err
+	}
 }
 
 func (s *persistentSession) Close(ctx context.Context) error {
@@ -309,7 +429,14 @@ func (s *persistentSession) emit(ev StreamEvent) {
 // closes, then finalizes via terminate.
 func (s *persistentSession) pump(decoderEvents <-chan protocol.Event, decoderErr func() error) {
 	detector, _ := s.transport.(TurnStartDetector)
+	responses, _ := s.transport.(ControlResponseDecoder)
 	for ev := range decoderEvents {
+		if responses != nil {
+			if reqID, err, ok := responses.DecodeControlResponse(ev); ok {
+				s.answerControl(reqID, err)
+				continue
+			}
+		}
 		s.mu.Lock()
 		// A turn opening while Idle wasn't started by Send: the agent began
 		// it itself. Track it like any turn, so Send refuses to interleave

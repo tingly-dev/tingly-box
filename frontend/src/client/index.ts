@@ -17,6 +17,7 @@ export type UsageWindow = components['schemas']['UsageWindow'];
 export type UsageCost = components['schemas']['UsageCost'];
 export type UsageAccount = components['schemas']['UsageAccount'];
 export type UsageBreakdown = components['schemas']['UsageBreakdown'];
+export type UsageRedeem = components['schemas']['UsageRedeem'];
 export type ProviderUsage = components['schemas']['ProviderUsage'];
 
 // Bot/ImBot types

@@ -59,4 +59,10 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 		swagger.WithDescription("Force a refresh of one provider's quota from upstream"),
 		swagger.WithResponseModel(quota.ProviderUsage{}),
 	)
+
+	router.POST("/provider-quota/:uuid/rewards/:id/use", h.RedeemReward,
+		swagger.WithTags("provider-quota"),
+		swagger.WithDescription("Spend one reward of a provider (a GLM reset card). Irreversible and sent at most once; the body's status says whether it was spent, rejected, or unconfirmed"),
+		swagger.WithResponseModel(RedeemResponse{}),
+	)
 }

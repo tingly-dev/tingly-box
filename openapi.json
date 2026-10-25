@@ -6118,6 +6118,49 @@
         }
       }
     },
+    "/api/v1/provider-quota/{uuid}/rewards/{id}/use": {
+      "post": {
+        "tags": [
+          "provider-quota"
+        ],
+        "summary": "Spend one reward of a provider (a GLM reset card). Irreversible and sent at most once; the body's status says whether it was spent, rejected, or unconfirmed",
+        "description": "Spend one reward of a provider (a GLM reset card). Irreversible and sent at most once; the body's status says whether it was spent, rejected, or unconfirmed",
+        "operationId": "apiV1Provider-quotaUuidRewardsIdUsePost",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "Unique identifier (UUID)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedeemResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/requests": {
       "get": {
         "tags": [
@@ -18011,6 +18054,25 @@
           "success"
         ]
       },
+      "RedeemResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Field message"
+          },
+          "status": {
+            "type": "string",
+            "description": "Field status"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/ProviderUsage"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
       "RefreshSkillLocationResponse": {
         "type": "object",
         "properties": {
@@ -21317,6 +21379,9 @@
             "type": "string",
             "description": "Field label"
           },
+          "redeem": {
+            "$ref": "#/components/schemas/UsageRedeem"
+          },
           "windows": {
             "type": "array",
             "description": "Field windows",
@@ -21549,6 +21614,27 @@
         "required": [
           "meta",
           "data"
+        ]
+      },
+      "UsageRedeem": {
+        "type": "object",
+        "properties": {
+          "auto": {
+            "type": "boolean",
+            "description": "Field auto"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "scope": {
+            "type": "string",
+            "description": "Field scope"
+          }
+        },
+        "required": [
+          "id",
+          "scope"
         ]
       },
       "UsageResponse": {

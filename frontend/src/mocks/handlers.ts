@@ -418,6 +418,22 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
         },
         models: ['glm-5.1', 'glm-5-turbo', 'glm-4.7'],
     },
+    {
+        provider: {
+            uuid: 'mock-oauth-workbuddy', name: 'WorkBuddy OAuth',
+            api_base: 'https://copilot.tencent.com', api_style: 'openai', auth_type: 'oauth',
+            token: '', enabled: true, proxy_url: '',
+            oauth_detail: {
+                access_token: 'mock-workbuddy-access-token',
+                refresh_token: '',
+                expires_at: mockOAuthExpiresAt,
+                issuer: 'workbuddy-cn',
+                provider_type: 'workbuddy',
+                user_id: 'mock-workbuddy-user',
+            },
+        },
+        models: ['glm-5.1', 'deepseek-v4-pro'],
+    },
 ]
 
 const mockVirtualProviders = [
@@ -1479,6 +1495,78 @@ const mockQuotas: Record<string, any> = {
         },
     },
 
+    // A GLM Coding Plan with two reset cards (one weekly, one 5-hour). Spending
+    // a card removes it and refills the windows — see the use handler below.
+    'mock-oauth-zcode': {
+        provider_uuid: 'mock-oauth-zcode',
+        provider_name: 'ZCode OAuth',
+        provider_type: 'glm',
+        fetched_at: now.toISOString(),
+        expires_at: inOneHour,
+        account: { tier: 'pro' },
+        windows: [
+            {
+                key: 'TOKENS_LIMIT_3_5', type: 'session', kind: 'limit', used: 91, limit: 100, used_percent: 91,
+                resets_at: inOneHour, window_minutes: 300, unit: 'tokens', label: '5-hour Tokens', description: '91% utilization',
+            },
+            {
+                key: 'TOKENS_LIMIT_6_1', type: 'weekly', kind: 'limit', used: 64, limit: 100, used_percent: 64,
+                resets_at: inTwoDays, window_minutes: 10080, unit: 'tokens', label: '1-week Tokens', description: '64% utilization',
+            },
+        ],
+        breakdowns: [
+            {
+                key: 'reset-card-101',
+                label: 'Weekly reset card',
+                group: 'resource',
+                windows: [{
+                    type: 'balance', used: 0, limit: 1, used_percent: 0,
+                    unit: 'credits', label: 'available', description: 'Expire 2026-11-01',
+                }],
+                redeem: { id: '101', scope: 'weekly' },
+            },
+            {
+                key: 'reset-card-102',
+                label: '5-hour reset card',
+                group: 'resource',
+                windows: [{
+                    type: 'balance', used: 0, limit: 1, used_percent: 0,
+                    unit: 'credits', label: 'available', description: 'Expire 2026-10-31',
+                }],
+                redeem: { id: '102', scope: '5h' },
+            },
+        ],
+    },
+
+    // A WorkBuddy account whose daily check-in is still open. Claiming adds the
+    // 100 credits and the entry goes away, like the real endpoint.
+    'mock-oauth-workbuddy': {
+        provider_uuid: 'mock-oauth-workbuddy',
+        provider_name: 'WorkBuddy OAuth',
+        provider_type: 'workbuddy',
+        fetched_at: now.toISOString(),
+        expires_at: inOneHour,
+        account: { tier: 'Pro' },
+        windows: [
+            {
+                key: 'credits', type: 'monthly', kind: 'limit', used: 612, limit: 1050, used_percent: 58,
+                resets_at: inTwoDays, unit: 'credits', label: 'Credits', description: '438 / 1050 credits left',
+            },
+        ],
+        breakdowns: [
+            {
+                key: 'daily-checkin',
+                label: 'Daily check-in',
+                group: 'resource',
+                windows: [{
+                    type: 'balance', used: 0, limit: 1, used_percent: 0,
+                    unit: 'credits', label: 'available', description: '+100 credits',
+                }],
+                redeem: { id: 'daily-checkin', scope: 'daily', auto: true },
+            },
+        ],
+    },
+
     // The rate-limited free-plan sample. Upstream calls the spent window the
     // primary one but reports 604800s for it, so its type comes from the
     // length. Spark is untouched but scoped to its own model, so it neither
@@ -2497,6 +2585,37 @@ export const handlers = [
             return HttpResponse.json({ ...mockQuotas[uuid], fetched_at: new Date().toISOString() })
         }
         return HttpResponse.json({ error: 'quota not found for provider' }, { status: 404 })
+    }),
+
+    // Spending a reset card: the card goes, the windows it refills go back to
+    // empty, and the answer carries the new reading like the real endpoint.
+    http.post('/api/v1/provider-quota/:uuid/rewards/:id/use', async ({ params }) => {
+        const { uuid, id } = params as { uuid: string; id: string }
+        const usage = mockQuotas[uuid]
+        const card = usage?.breakdowns?.find((bd: any) => bd.redeem?.id === id)
+        await new Promise(r => setTimeout(r, 600))
+        if (!card) {
+            return HttpResponse.json({ status: 'not_found' }, { status: 404 })
+        }
+        usage.breakdowns = usage.breakdowns.filter((bd: any) => bd !== card)
+        if (card.redeem.scope === 'daily') {
+            for (const window of usage.windows) {
+                window.used = Math.max(0, window.used - 100)
+                window.used_percent = Math.round((window.used / window.limit) * 100)
+                window.description = `${window.limit - window.used} / ${window.limit} credits left`
+            }
+            return HttpResponse.json({ status: 'spent', message: 'ok', usage: { ...usage, fetched_at: new Date().toISOString() } })
+        }
+        for (const window of usage.windows) {
+            // A weekly card refills the 5-hour window too.
+            const covered = window.type === 'session' || card.redeem.scope === 'weekly'
+            if (covered) {
+                window.used = 0
+                window.used_percent = 0
+                window.description = '0% utilization'
+            }
+        }
+        return HttpResponse.json({ status: 'spent', message: 'ok', usage: { ...usage, fetched_at: new Date().toISOString() } })
     }),
 
     http.post('/api/v1/provider-quota/:uuid/refresh', async ({ params }) => {

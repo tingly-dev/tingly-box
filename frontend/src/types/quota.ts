@@ -4,6 +4,7 @@ import type {
     UsageCost,
     UsageAccount,
     UsageBreakdown,
+    UsageRedeem,
     ProviderUsage,
 } from '@/client';
 
@@ -92,7 +93,7 @@ export type ProviderQuota = Omit<ProviderUsage, 'windows'> & {
 };
 
 // Re-export for consumers
-export type { UsageWindow, UsageCost, UsageAccount, UsageBreakdown, ProviderUsage };
+export type { UsageWindow, UsageCost, UsageAccount, UsageBreakdown, UsageRedeem, ProviderUsage };
 
 // Quota types for provider usage/limit information
 // Note: Most types are now from codegen, see ../client/index.ts

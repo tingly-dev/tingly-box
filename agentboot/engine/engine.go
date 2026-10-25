@@ -126,7 +126,7 @@ type Engine struct {
 	// launch records what each resident process was started with (see
 	// launchSignature), so a changed setting restarts it instead of being
 	// silently ignored.
-	launch map[string]string
+	launch map[string]launchState
 	// residents holds the Conductor of each pooled process (resident.go).
 	residents map[string]*resident
 	// live is each session's running background tasks (tasks.go).
@@ -169,7 +169,7 @@ func New(cfg Config) *Engine {
 		hostPrompter:   cfg.Prompter,
 		onTurnEnd:      cfg.OnTurnEnd,
 		runs:           map[string]*run{},
-		launch:         map[string]string{},
+		launch:         map[string]launchState{},
 		residents:      map[string]*resident{},
 		live:           map[string][]TaskBrief{},
 		stopKeepAlive:  make(chan struct{}),
@@ -231,6 +231,34 @@ func (e *Engine) Stop(id string) (<-chan struct{}, bool) {
 		}
 	}
 	return r.done, true
+}
+
+// ErrNotInjectable: Inject has nothing to join (no turn in flight on a live
+// process), so the message is a new turn for Start.
+var ErrNotInjectable = errors.New("no running turn to add the message to")
+
+// Inject adds prompt to the turn id has in flight, without ending it:
+// Claude takes it up at its next step. The message is recorded as the
+// user's. Returns ErrNotInjectable when there is no such turn, for the caller
+// to Start one instead.
+func (e *Engine) Inject(id, prompt string) error {
+	e.mu.Lock()
+	_, running := e.runs[id]
+	e.mu.Unlock()
+	res, ok := e.residentFor(id)
+	if !running || !ok {
+		return ErrNotInjectable
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), liveControlTimeout)
+	defer cancel()
+	if err := res.c.Inject(ctx, prompt); err != nil {
+		if errors.Is(err, agentboot.ErrNoTurnInFlight) || errors.Is(err, agentboot.ErrSessionClosed) {
+			return ErrNotInjectable
+		}
+		return err
+	}
+	e.store.Append(id, Entry{Role: "user", Content: prompt, Timestamp: time.Now()})
+	return nil
 }
 
 // Release closes id's resident process so something else (a terminal) can

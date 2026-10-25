@@ -1776,8 +1776,8 @@
         "tags": [
           "threads"
         ],
-        "summary": "Send a message to the thread (runs after its current turn); to a main thread it goes to the coordinator, whose reply arrives on the event stream",
-        "description": "Send a message to the thread (runs after its current turn); to a main thread it goes to the coordinator, whose reply arrives on the event stream",
+        "summary": "Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream",
+        "description": "Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream",
         "operationId": "apiV1ThreadsIdMessagesPost",
         "parameters": [
           {
@@ -1933,6 +1933,48 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/queue/{qid}": {
+      "delete": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Take back a message held for after the running turn",
+        "description": "Take back a message held for after the running turn",
+        "operationId": "apiV1ThreadsIdQueueQidDelete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "qid",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3326,6 +3368,10 @@
           "content": {
             "type": "string",
             "description": "Field content"
+          },
+          "mode": {
+            "type": "string",
+            "description": "Field mode"
           }
         },
         "required": [

@@ -93,8 +93,24 @@ type InterruptRequest struct{}
 // or subagent) by the id the agent reported for it.
 type StopTaskRequest struct{ TaskID string }
 
-func (InterruptRequest) isControlRequest() {}
-func (StopTaskRequest) isControlRequest()  {}
+// SetModelRequest switches the model of the running process. Takes effect
+// from the next turn; an empty Model resets to the agent's default.
+type SetModelRequest struct{ Model string }
+
+// SetPermissionModeRequest switches the permission mode of the running process.
+type SetPermissionModeRequest struct{ Mode string }
+
+func (InterruptRequest) isControlRequest()         {}
+func (StopTaskRequest) isControlRequest()          {}
+func (SetModelRequest) isControlRequest()          {}
+func (SetPermissionModeRequest) isControlRequest() {}
+
+// ControlRejectedError is the agent's error answer to a control request.
+type ControlRejectedError struct{ Message string }
+
+func (e *ControlRejectedError) Error() string {
+	return "agentboot: agent rejected control request: " + e.Message
+}
 
 // ErrControlUnsupported is returned for a [ControlRequest] the session's
 // agent transport can't encode.
@@ -107,6 +123,16 @@ type ControlRequestEncoder interface {
 	// EncodeControlRequest returns the wire value for req, or nil if the
 	// agent has no such request.
 	EncodeControlRequest(reqID string, req ControlRequest) any
+}
+
+// ControlResponseDecoder is implemented by transports whose agent answers a
+// host-initiated control request with a response event. Optional: without
+// it, [PersistentSession.SetModel] and friends return ErrControlUnsupported.
+type ControlResponseDecoder interface {
+	// DecodeControlResponse reports whether ev answers a control request
+	// and, if so, which one (reqID) and whether the agent rejected it
+	// (non-nil err, a *[ControlRejectedError]).
+	DecodeControlResponse(ev protocol.Event) (reqID string, err error, ok bool)
 }
 
 // TurnStartDetector is implemented by transports that can tell which event
