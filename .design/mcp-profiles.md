@@ -40,19 +40,27 @@ Code simply pick one.
 
 ## Pages
 
-- **All tools** (`/mcp/tools`): connect any MCP, see every tool (MCP and Server
-  Tool in one list), global switch, test a tool. Advisor's consultation model is
-  configured from its own row. Connection editing opens in a drawer
-  (`?source=<id>`).
-- **Profiles** (`/mcp/profiles`): Default first, then custom profiles as tabs
-  (`?profile=<id>`). Each shows its tool list with a switch per tool (custom ones
-  also add/remove), the install command and a real-gateway verification. Tools
-  that are globally off are shown greyed with the reason; Default's header says
-  that it always contains every tool.
+Profiles live in the sidebar, as Claude Code's and Image's do: under Tools there
+is **MCP Tools**, then one row per profile (Default first) and "New profile".
+
+- **MCP Tools** (`/mcp/tools`): connect any MCP, see every tool (MCP and Server
+  Tool in one list), global switch, test a tool. Each connection card shows what
+  it is configured with (URL or command line, how many headers and env vars are
+  set) and flags what is still missing (empty URL, command, env or header value,
+  Advisor model) with a chip that opens the connection drawer
+  (`?source=<id>`). Advisor's consultation model is configured from its own row.
+- **Profile** (`/mcp/profile/:id`, `/mcp/profile/new` creates one): the tool list
+  with a switch per tool (custom ones also add/remove), the install command and a
+  real-gateway verification. Tools that are globally off are shown greyed with the
+  reason; Default says that it always contains every tool. The sidebar reads the
+  list from `profileStore.ts`, which the page keeps current.
+
+Tool-call arguments are not configuration: they are shown read-only on the tool
+card and filled in the Test dialog.
 
 The old Tool / MCP / Server Tool pages and the "client" concept are removed.
-`/mcp`, `/mcp/clients`, `/mcp/routes` land on Profiles; `/mcp/server-tools`,
-`/mcp/sources` and `/tools/servertool` land on All tools.
+`/mcp`, `/mcp/profiles`, `/mcp/clients`, `/mcp/routes` land on Default;
+`/mcp/server-tools`, `/mcp/sources` and `/tools/servertool` land on MCP Tools.
 
 ## Identifiers
 
@@ -75,7 +83,7 @@ is registered on the user's machine under its own name (`tb` for Default,
 - API: `/api/v1/mcp/profiles[/{id}[/probe]]`; the endpoint of a profile is
   `/api/v1/mcp/{id}`.
 - UI: `frontend/src/pages/mcp/` (`MCPToolsPage`, `MCPProfilesPage`,
-  `profileState.ts`, shared `useMCPWorkspace`).
+  `profileState.ts`, `profileStore.ts`, shared `useMCPWorkspace`).
 
 ## Open (carried, not decided here)
 

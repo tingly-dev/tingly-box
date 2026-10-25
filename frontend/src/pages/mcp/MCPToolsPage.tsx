@@ -105,7 +105,7 @@ export default function MCPToolsPage() {
                     saveSource={ws.saveSource}
                     onConfigureSource={openSource}
                 />
-                <Button sx={{ alignSelf: 'flex-start' }} onClick={() => navigate('/mcp/profiles')}>
+                <Button sx={{ alignSelf: 'flex-start' }} onClick={() => navigate('/mcp/profile/default')}>
                     {label('chooseProfileTools', 'Choose which tools each profile exposes')}
                 </Button>
             </Stack>

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
     Alert,
@@ -14,8 +14,6 @@ import {
     IconButton,
     Stack,
     Switch,
-    Tab,
-    Tabs,
     TextField,
     Typography,
 } from '@mui/material';
@@ -36,6 +34,7 @@ import {
     setProfileToolOn,
 } from './profileState';
 import { nextMCPId } from './workspaceState';
+import { publishMCPProfiles } from './profileStore';
 import { MCP_DEFAULT_PROFILE_ID, type MCPProfile } from './types';
 
 // Profiles are entry points. Default holds every tool; a custom profile holds
@@ -44,7 +43,8 @@ import { MCP_DEFAULT_PROFILE_ID, type MCPProfile } from './types';
 export default function MCPProfilesPage() {
     const { t } = useTranslation();
     const label = (key: string, fallback: string) => t(`mcp.workspace.${key}`, { defaultValue: fallback });
-    const [search, setSearch] = useSearchParams();
+    const { profileId } = useParams();
+    const navigate = useNavigate();
     const ws = useMCPWorkspace();
     const { config, routing, enabled, busy, checking } = ws;
     const saved = config.profiles || [];
@@ -52,9 +52,13 @@ export default function MCPProfilesPage() {
         () => [saved.find((p) => p.id === MCP_DEFAULT_PROFILE_ID) || defaultProfile(), ...saved.filter((p) => p.id !== MCP_DEFAULT_PROFILE_ID)],
         [saved]
     );
-    const selectedId = search.get('profile') || MCP_DEFAULT_PROFILE_ID;
-    const profile = profiles.find((p) => p.id === selectedId) || profiles[0];
-    const select = (id: string) => setSearch(id === MCP_DEFAULT_PROFILE_ID ? {} : { profile: id }, { replace: true });
+    const creating = profileId === 'new';
+    const profile = profiles.find((p) => p.id === profileId) || profiles[0];
+    const select = (id: string) => navigate(`/mcp/profile/${id}`, { replace: true });
+    // The sidebar lists these, so keep it in step with what was loaded or saved.
+    useEffect(() => {
+        if (!ws.loading) publishMCPProfiles(config.profiles);
+    }, [ws.loading, config.profiles]);
     const [adding, setAdding] = useState(false);
     const [picked, setPicked] = useState<string[]>([]);
     const [name, setName] = useState<{ id: string; value: string } | null>(null);
@@ -76,6 +80,13 @@ export default function MCPProfilesPage() {
             await ws.acceptConfig(await api.saveMCPProfile({ id, name: label('newProfile', 'New profile'), tools: [] }));
             select(id);
         });
+    const createdOnce = useRef(false);
+    useEffect(() => {
+        if (creating && !ws.loading && !createdOnce.current) {
+            createdOnce.current = true;
+            void create();
+        }
+    });
     const available = profileCandidates(routing).filter(
         ({ tool }) => !(profile.tools || []).some((entry) => entry.name === tool.normalized_name)
     );
@@ -89,7 +100,7 @@ export default function MCPProfilesPage() {
                 >
                     <Stack>
                         <Typography component="h1" variant="h5" style={{ fontWeight: 700 }}>
-                            {label('profilesTitle', 'Profiles')}
+                            {profile.name || profile.id}
                         </Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                             {label(
@@ -106,26 +117,9 @@ export default function MCPProfilesPage() {
                         >
                             <Refresh />
                         </IconButton>
-                        <Button startIcon={<Add />} variant="contained" disabled={busy} onClick={() => void create()}>
-                            {label('newProfileAction', 'New profile')}
-                        </Button>
                     </Stack>
                 </Stack>
                 <MCPWorkspaceAlerts ws={ws} />
-                <Tabs
-                    value={profile.id}
-                    variant="scrollable"
-                    scrollButtons="auto"
-                    onChange={(_, id: string) => {
-                        setConfirmDelete(false);
-                        setProbe(null);
-                        select(id);
-                    }}
-                >
-                    {profiles.map((p) => (
-                        <Tab key={p.id} value={p.id} label={p.name || p.id} />
-                    ))}
-                </Tabs>
                 <Stack spacing={2.5} component="section" aria-label={profile.name}>
                     <Stack direction="row" sx={{ alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                         {!isDefaultProfile(profile) && (

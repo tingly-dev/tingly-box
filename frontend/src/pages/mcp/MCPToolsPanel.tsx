@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Box, Button, Chip, CircularProgress, Stack, Typography } from '@mui/material';
 import MCPToolCard from './MCPToolCard';
 import MCPToolTestDialog from './MCPToolTestDialog';
-import { toolPolicyPatch, type MCPToolPatch } from './toolPresentation';
+import { connectionSummary, toolPolicyPatch, type MCPToolPatch } from './toolPresentation';
 import type { MCPCatalogTool, MCPRouteSource, MCPSourceConfig } from './types';
 
 // Every connection and Server Tool in one list. The applied routing snapshot is
@@ -57,6 +57,7 @@ export default function MCPToolsPanel({
                 const route = routes.find((r) => r.id === source.id);
                 const tools = route?.tools || [];
                 const advisor = source.transport === 'advisor' || !!source.advisor;
+                const summary = connectionSummary(source);
                 const failed = route?.state === 'error' || route?.state === 'unconfigured';
                 return (
                     <Box
@@ -107,6 +108,33 @@ export default function MCPToolsPanel({
                                       ? workspace('configureAdvisor', 'Configure Advisor model')
                                       : workspace('configureConnection', 'Configure this connection')}
                             </Button>
+                        </Stack>
+                        <Stack direction="row" sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
+                            <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}
+                            >
+                                {summary.target || workspace('notSet', 'Not set')}
+                            </Typography>
+                            {summary.details.map(({ key, count }) => (
+                                <Chip
+                                    key={key}
+                                    size="small"
+                                    variant="outlined"
+                                    label={`${workspace(`detail_${key}`, key)}${key === 'proxy' ? '' : ` · ${count}`}`}
+                                />
+                            ))}
+                            {summary.missing.map((key) => (
+                                <Chip
+                                    key={key}
+                                    size="small"
+                                    color="warning"
+                                    clickable
+                                    onClick={() => onConfigureSource(source.id!)}
+                                    label={workspace(`missing_${key}`, `Needs ${key}`)}
+                                />
+                            ))}
                         </Stack>
                         {route && route.state !== 'connected' && !!route.error && (
                             <Alert severity={failed ? 'warning' : 'info'} sx={{ mb: 1 }}>

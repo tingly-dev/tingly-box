@@ -73,15 +73,15 @@ describe('route contract', () => {
 
     it('sends legacy MCP links to the tools or profiles page', () => {
         expect(
-            ['/mcp', '/mcp/routes', '/mcp/tools', '/mcp/profiles', '/mcp/server-tools', '/mcp/sources', '/mcp/clients'].filter(
+            ['/mcp', '/mcp/routes', '/mcp/tools', '/mcp/profiles', '/mcp/profile/default', '/mcp/profile/new', '/mcp/server-tools', '/mcp/sources', '/mcp/clients'].filter(
                 (path) => !resolvesToPage(path)
             )
         ).toEqual([]);
         const target = (path: string) => navigateTargets(matchRoutes(routes, path)!.at(-1)!.route.element);
         expect(target('/tools/servertool')).toEqual(['/mcp/tools']);
         expect(target('/mcp/server-tools')).toEqual(['/mcp/tools']);
-        expect(target('/mcp/clients')).toEqual(['/mcp/profiles']);
-        expect(target('/mcp')).toEqual(['/mcp/profiles']);
+        expect(target('/mcp/clients')).toEqual(['/mcp/profile/default']);
+        expect(target('/mcp')).toEqual(['/mcp/profile/default']);
     });
 
     it('falls through to the catch-all for unknown paths', () => {

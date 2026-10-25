@@ -216,13 +216,14 @@ export const appRoutes = (
             <Route path="/guardrails/history" element={<ExperimentalFeatureGate feature="guardrails"><GuardrailsHistoryPage /></ExperimentalFeatureGate>} />
             {/* MCP Settings */}
             <Route path="/mcp/tools" element={<MCPToolsPage />} />
-            <Route path="/mcp/profiles" element={<MCPProfilesPage />} />
+            <Route path="/mcp/profile/:profileId" element={<MCPProfilesPage />} />
+            <Route path="/mcp/profiles" element={<Navigate to="/mcp/profile/default" replace />} />
             <Route path="/mcp/sources" element={<Navigate to="/mcp/tools" replace />} />
             <Route path="/mcp/server-tools" element={<Navigate to="/mcp/tools" replace />} />
-            <Route path="/mcp/clients" element={<Navigate to="/mcp/profiles" replace />} />
-            <Route path="/mcp/routes" element={<Navigate to="/mcp/profiles" replace />} />
-            <Route path="/mcp/local-mode" element={<Navigate to="/mcp/profiles" replace />} />
-            <Route path="/mcp" element={<Navigate to="/mcp/profiles" replace />} />
+            <Route path="/mcp/clients" element={<Navigate to="/mcp/profile/default" replace />} />
+            <Route path="/mcp/routes" element={<Navigate to="/mcp/profile/default" replace />} />
+            <Route path="/mcp/local-mode" element={<Navigate to="/mcp/profile/default" replace />} />
+            <Route path="/mcp" element={<Navigate to="/mcp/profile/default" replace />} />
             <Route path="/tools/servertool" element={<Navigate to="/mcp/tools" replace />} />
             {/* Catch-all redirect for unknown routes (also covers legacy /zen/* links) */}
             <Route path="*" element={<Navigate to="/agent" replace />} />
