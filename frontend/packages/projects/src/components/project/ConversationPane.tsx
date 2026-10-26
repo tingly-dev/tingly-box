@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Box, Button, Chip, Collapse, Paper, Typography } from '@mui/material';
+import { Box, Button, Chip, CircularProgress, Collapse, Paper, Stack, Typography } from '@mui/material';
+import { getReadableAccent } from '@tingly/ui/theme/status';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -9,14 +10,14 @@ import { AttachmentChips, uploadAttachments } from '../attachments';
 import { ThreadComposer } from '../ThreadComposer';
 import { Markdown } from '../Markdown';
 import { readLocal, writeLocal } from '../../utils/storage';
-import { ChevronRight, DiffIcon, ExpandMore, PlayArrow } from '../icons';
+import { ChevronRight, DiffIcon, ErrorOutline, ExpandMore, PlayArrow } from '../icons';
 import { DiffDialog } from './DiffDialog';
 import { LoadEarlier } from './LoadEarlier';
 import { ThreadStateMark, ThreadBadges, ThreadSubtitle } from './threadStatus';
 import { radius } from '@tingly/ui/theme/radius';
+import { conversationText, messageSpacing, userBubble, userMessageWidth } from '../../transcript/conversationStyles';
 
 const REPORTS_KEY = 'conversation.threadReports';
-const COLUMN = { maxWidth: 760, mx: 'auto', width: '100%', px: { xs: 2, md: 3 } } as const;
 
 function parse<T>(payload?: string): T | null {
     if (!payload) return null;
@@ -95,7 +96,7 @@ export function ThreadUpdateRow({ message, onOpen }: { message: ThreadEvent; onO
     const hasText = message.content.trim() !== '';
     const toggle = () => hasText && setOpen((v) => !v);
     return (
-        <Box sx={{ my: 0.75 }}>
+        <Box>
             <Box
                 role="button"
                 tabIndex={0}
@@ -162,7 +163,7 @@ function SuggestionsCard({ message, threads, onStart, onOpen, disabled }: {
         }
     };
     return (
-        <Paper variant="outlined" sx={{ borderRadius: radius.card, p: 1.5, my: 1.5 }}>
+        <Paper variant="outlined" sx={{ borderRadius: radius.card, p: 1.5 }}>
             <Typography variant="overline" color="text.secondary">{t('conversation.suggested')}</Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 0.5 }}>
                 {suggestions.map((s, i) => {
@@ -236,9 +237,9 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                     const el = scrollRef.current;
                     if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
                 }}
-                sx={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain' }}
+                sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', px: 2, py: 2, overscrollBehavior: 'contain' }}
             >
-                <Box sx={{ ...COLUMN, pt: 2, pb: 3 }}>
+                <Stack spacing={messageSpacing}>
                     {more && onLoadEarlier && <LoadEarlier scrollRef={scrollRef} onLoad={onLoadEarlier} />}
                     {messages.length === 0 && (
                         <Box sx={{ py: { xs: 3, md: 6 } }}>
@@ -261,24 +262,26 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                         switch (m.kind) {
                             case 'user':
                                 return (
-                                    <Box key={m.id} sx={{ display: 'flex', justifyContent: 'flex-end', my: 2 }}>
-                                        <Box sx={{ maxWidth: '85%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                    <Box key={m.id} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                        <Box sx={{ maxWidth: userMessageWidth }}>
                                             <AttachmentChips owner={{ projectId }} items={parse<{ attachments?: Attachment[] }>(m.payload)?.attachments ?? []} />
-                                            {m.content.trim() !== '' && (
-                                                <Box sx={{ bgcolor: 'action.hover', borderRadius: radius.card, px: 1.75, py: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'text.primary', fontSize: fontSizes.base, lineHeight: 1.65 }}>{m.content}</Box>
-                                            )}
-                                            {m.source === 'im' && m.source_platform
-                                                ? <ImSourceBadge platform={m.source_platform} chat={chatTitle?.(m.source_platform, m.source_chat_id ?? '') ?? m.source_chat_id ?? ''} />
-                                                : null}
                                         </Box>
+                                        {m.content.trim() !== '' && (
+                                            <Box sx={userBubble}>
+                                                <Typography variant="body1" sx={conversationText}>{m.content}</Typography>
+                                            </Box>
+                                        )}
+                                        {m.source === 'im' && m.source_platform
+                                            ? <ImSourceBadge platform={m.source_platform} chat={chatTitle?.(m.source_platform, m.source_chat_id ?? '') ?? m.source_chat_id ?? ''} />
+                                            : null}
                                     </Box>
                                 );
                             case 'assistant':
-                                return <Box key={m.id} sx={{ my: 2 }}><Markdown text={m.content} /></Box>;
+                                return <Box key={m.id}><Markdown text={m.content} conversation /></Box>;
                             case 'thread_started': {
                                 const ids = parse<{ thread_ids: string[] }>(m.payload)?.thread_ids ?? [];
                                 return (
-                                    <Box key={m.id} sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, my: 1.5 }}>
+                                    <Box key={m.id} sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
                                         {ids.map((id) => {
                                             const th = threads.get(id);
                                             return th ? <ThreadCard key={id} thread={th} onOpen={onOpenThread} /> : null;
@@ -294,25 +297,27 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                                 return showReports ? <ThreadUpdateRow key={m.id} message={m} onOpen={onOpenThread} /> : null;
                             case 'error':
                                 return (
-                                    <Alert key={m.id} severity="error" sx={{ my: 1.5, '& .MuiAlert-message': { minWidth: 0, wordBreak: 'break-word' } }}
-                                        action={<Button color="inherit" size="small" component={RouterLink} to="/settings">{t('connection.open')}</Button>}>
-                                        {m.content}
-                                    </Alert>
+                                    <Stack key={m.id} role="alert" direction="row" spacing={0.75} sx={{ alignItems: 'flex-start', color: (theme) => getReadableAccent(theme, 'error') }}>
+                                        <ErrorOutline sx={{ fontSize: 18, mt: 0.25 }} />
+                                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                                            <Typography variant="body2" sx={{ color: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.content}</Typography>
+                                            <Button color="inherit" size="small" component={RouterLink} to="/settings" sx={{ px: 0 }}>{t('connection.open')}</Button>
+                                        </Box>
+                                    </Stack>
                                 );
                             default:
                                 return null;
                         }
                     })}
                     {busy && (
-                        <Box sx={{ display: 'flex', gap: 0.75, py: 1.5 }} aria-label={t('chat.thinking')}>
-                            {[0, 1, 2].map((i) => (
-                                <Box key={i} sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: 'primary.main', animation: 'pulse 1.2s infinite', animationDelay: `${i * 0.15}s`, '@keyframes pulse': { '0%, 80%, 100%': { opacity: 0.25 }, '40%': { opacity: 1 } } }} />
-                            ))}
-                        </Box>
+                        <Stack role="status" direction="row" spacing={1} sx={{ alignItems: 'center', color: 'text.secondary' }}>
+                            <CircularProgress size={12} color="inherit" />
+                            <Typography variant="body2" sx={{ color: 'inherit' }}>{t('chat.thinking')}</Typography>
+                        </Stack>
                     )}
-                </Box>
+                </Stack>
             </Box>
-            <Box sx={{ ...COLUMN, pb: 2 }}>
+            <Box sx={{ px: 2, pb: 2 }}>
                 {disabledReason}
                 {hasReports && (
                     <Box sx={{ display: 'flex', justifyContent: 'flex-end', pb: 0.5 }}>

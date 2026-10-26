@@ -14,6 +14,7 @@ import {CHECKLIST_TOOL, FOLD_MIN_CALLS, agentReport, agentStatus, approvalSubjec
 import Markdown from './Markdown';
 import QuestionCard from './QuestionCard';
 import { radius } from '@tingly/ui/theme/radius';
+import { conversationText, messageSpacing, userBubble, userMessageWidth } from './conversationStyles';
 
 // Respond answers a request. remember asks to allow the tool from now on
 // without asking (offered only when the host passes rememberLabel); answers
@@ -47,14 +48,6 @@ interface TranscriptProps {
 
 const mono = {fontFamily: fontMono, fontSize: fontSizes.sm};
 
-// The theme's body variants default to the secondary text color, which suits
-// metadata. The conversation itself is the subject of this page, so it uses
-// the primary color at reading size; labels, notes and tool detail stay
-// secondary so they recede.
-const conversationText = {
-    color: 'text.primary', fontSize: fontSizes.base, lineHeight: 1.65, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-} as const;
-
 const preBox = {
     ...mono, m: 0, p: 1, borderRadius: radius.row, maxHeight: 220, overflow: 'auto',
     whiteSpace: 'pre-wrap', wordBreak: 'break-word', bgcolor: 'action.hover', color: 'text.secondary',
@@ -68,10 +61,10 @@ const UserBubble = ({message}: {message: TranscriptEntry}) => {
         <Box sx={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end'}}>
             {message.author && <Typography variant="caption" sx={{color: 'text.secondary', mb: 0.25}}>{message.author}</Typography>}
             {files.length > 0 && (Attachments
-                ? <Box sx={{maxWidth: '80%'}}><Attachments items={files}/></Box>
+                ? <Box sx={{maxWidth: userMessageWidth}}><Attachments items={files}/></Box>
                 : <Typography variant="caption" sx={{color: 'text.secondary', mb: 0.5}}>{files.map((f) => f.name).join(', ')}</Typography>)}
             {message.content.trim() !== '' && (
-                <Box sx={{maxWidth: '80%', bgcolor: 'action.hover', px: 1.75, py: 1, borderRadius: radius.card}}>
+                <Box sx={userBubble}>
                     <Typography variant="body1" sx={conversationText}>{message.content}</Typography>
                 </Box>
             )}
@@ -866,7 +859,7 @@ const FocusBody = ({block, working, expandAll, onRespond, pendingRequestId}: {
     const steps = useSubagentSteps(block.call.id, true);
     const running = agentStatus(block, working) === 'running';
     return (
-        <Stack spacing={2.5}>
+        <Stack spacing={messageSpacing}>
             <AgentBody block={block} running={running} report={agentReport(block)} steps={steps} expandAll={expandAll} pendingRequestId={pendingRequestId} onRespond={onRespond} showEarlier={false}/>
             {running && block.children.length > 0 && <WorkingLine blocks={block.children}/>}
         </Stack>
@@ -881,7 +874,7 @@ const Transcript = ({blocks, pendingRequestId, working, expandAll = false, onRes
 
     return (
         <TranscriptHostProvider drafts={drafts} subagents={subagents} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel}>
-            <Stack spacing={2.5}>
+            <Stack spacing={messageSpacing}>
                 {todos && <Box sx={{position: 'sticky', top: 0, zIndex: 1}}><ChecklistCard todos={todos} working={working}/></Box>}
                 <BlockList anchored blocks={blocks} pendingRequestId={pendingRequestId} working={working} expandAll={expandAll} onRespond={onRespond} newFrom={firstNewBlock(blocks, newSince)}/>
                 {showWorking && <WorkingLine blocks={blocks}/>}

@@ -8,6 +8,7 @@ import { Check, ContentCopy } from './icons';
 import { useCopyFeedback } from '../hooks/useCopyFeedback';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
+import { conversationMarkdown } from '../transcript/conversationStyles';
 
 /** A fenced code block: highlighted, with a copy button. */
 export function CodeBlock({ code, language }: { code: string; language: string }) {
@@ -40,10 +41,15 @@ export function CodeBlock({ code, language }: { code: string; language: string }
 }
 
 /** Renders assistant Markdown (GFM) with highlighted, copyable code blocks. */
-export const Markdown = memo(function Markdown({ text }: { text: string }) {
+export const Markdown = memo(function Markdown({ text, conversation = false }: { text: string; conversation?: boolean }) {
     return (
         <Box
-            sx={{
+            sx={conversation ? {
+                ...conversationMarkdown,
+                '& > :last-child': { mb: 0 },
+                '& :not(pre) > code': { px: 0.5, py: 0.125, borderRadius: radius.chip, bgcolor: 'action.hover', fontSize: '0.85em', fontFamily: fontMono },
+                '& pre, & pre code': { fontFamily: fontMono },
+            } : {
                 wordBreak: 'break-word',
                 color: 'text.primary',
                 '& p': { my: 1 },

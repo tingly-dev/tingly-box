@@ -1,10 +1,11 @@
 import XMarkdown, {type ComponentProps} from '@ant-design/x-markdown';
 import {Box} from '@mui/material';
-import {fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import {fontMono} from '@tingly/ui/theme/fonts';
 import type {ReactNode} from 'react';
 import {Children, isValidElement} from 'react';
 import {useTranscriptHost} from './context';
 import { radius } from '@tingly/ui/theme/radius';
+import { conversationMarkdown } from './conversationStyles';
 
 // Plain text of a rendered node tree: a fenced block's code reaches the code
 // component as parsed children, but a code block takes a string.
@@ -51,26 +52,7 @@ const components = {code: Code, pre: Pre};
 // never rendered: the reply comes from a model reading arbitrary files.
 const Markdown = ({content}: {content: string}) => (
     <Box
-        sx={{
-            color: 'text.primary',
-            fontSize: fontSizes.base,
-            lineHeight: 1.65,
-            wordBreak: 'break-word',
-            '& p': {m: 0, mb: 1.25},
-            '& > .x-markdown > :last-child, & p:last-child': {mb: 0},
-            '& h1, & h2, & h3, & h4': {mt: 2, mb: 1, lineHeight: 1.35, fontWeight: 650, color: 'text.primary'},
-            '& h1': {fontSize: '1.25rem'},
-            '& h2': {fontSize: '1.125rem'},
-            '& h3, & h4': {fontSize: '1rem'},
-            '& ul, & ol': {m: 0, mb: 1.25, pl: 3},
-            '& li': {my: 0.25},
-            '& a': {color: 'primary.main'},
-            '& blockquote': {m: 0, mb: 1.25, pl: 1.5, borderLeft: 3, borderColor: 'divider', color: 'text.secondary'},
-            '& hr': {border: 0, borderTop: 1, borderColor: 'divider', my: 2},
-            '& table': {borderCollapse: 'collapse', mb: 1.25, fontSize: fontSizes.base, display: 'block', overflowX: 'auto'},
-            '& th, & td': {border: 1, borderColor: 'divider', px: 1.25, py: 0.5, textAlign: 'left'},
-            '& th': {bgcolor: 'action.hover', fontWeight: 600},
-        }}
+        sx={{...conversationMarkdown, '& > .x-markdown > :last-child': {mb: 0}}}
     >
         <XMarkdown
             content={content}
