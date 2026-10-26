@@ -451,16 +451,31 @@ task go:test        # Run Go unit tests
 
 </details>
 
-## Support
+## Sponsors
 
-|                                                              Telegram                                                              |                                                               Wechat                                                               |
-| :--------------------------------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------------------------------: |
-| <img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/56022b70-97da-498f-bf83-822a11668fa7" /> | <img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/30d24cc5-666c-425a-b8d2-5f353af453de" /> |
-|                                                   https://t.me/+V1sqeajw1pYwMzU1                                                   |                                                             tingly-box                                                             |
+If Tingly Box has been useful to you, consider supporting its development.
 
-## Early Contributors
+**Donations are optional.** A ⭐ on GitHub or a contribution is just as appreciated.
 
-Special badges are minted to recognize the contributions from following contributors:
+<div align="left">
+
+|   Sponsor   |                Details                |
+| :---------: | :-----------------------------------: |
+| 0xbeekeeper |             First Sponsor             |
+|  richardxx  | Long Term Claude Subscription Support |
+| huajiankan  |      Figma Subscription Support       |
+
+</div>
+
+<div align="left">
+
+| Github Sponsors                                             |                                                            WeChat                                                             |                                                          Alipay                                                           |
+| :---------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------------------: |
+| ❤️ [Github Sponsors](https://github.com/sponsors/tingly-dev) | <img src="https://github.com/tingly-dev/tingly-box/blob/main/docs/donation/wechat.jpg?raw=true" width="100" alt="WeChat Pay"> | <img src="https://github.com/tingly-dev/tingly-box/blob/main/docs/donation/alipay.jpg?raw=true" width="100" alt="Alipay"> |
+
+</div>
+
+## Contributors
 
 <br />
 
@@ -484,9 +499,14 @@ Special badges are minted to recognize the contributions from following contribu
   </tr>
 </table>
 
-## Contributors
-
 [![Contributors](https://contrib.rocks/image?repo=tingly-dev/tingly-box)](https://github.com/tingly-dev/tingly-box/graphs/contributors)
+
+## Tech Support
+
+|                                                              Telegram                                                              |                                                               Wechat                                                               |
+| :--------------------------------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------------------------------: |
+| <img width="100" height="100" alt="image" src="https://github.com/user-attachments/assets/56022b70-97da-498f-bf83-822a11668fa7" /> | <img width="100" height="100" alt="image" src="https://github.com/user-attachments/assets/30d24cc5-666c-425a-b8d2-5f353af453de" /> |
+|                                                   https://t.me/+V1sqeajw1pYwMzU1                                                   |                                                             tingly-box                                                             |
 
 ## License
 
@@ -495,35 +515,4 @@ This project is available under:
 - **Commercial License · © Tingly Dev** – See [LICENSE-COMMERCIAL.txt](./LICENSE-COMMERCIAL.txt)
 
 For commercial licensing inquiries, contact [box@tingly.dev](mailto:box@tingly.dev).
-
----
-
-## ❤️ Support Tingly Box
-
-If Tingly Box has been useful to you, consider supporting its development.
-
-**Donations are optional.** A ⭐ on GitHub or a contribution is just as appreciated.
-
-<div align="left">
-
-| Donation Method | QR Code / Link |
-| :--- | :---: |
-| GitHub Sponsors | ❤️ [Github Sponsors](https://github.com/sponsors/tingly-dev) |
-| WeChat Pay | <img src="https://github.com/tingly-dev/tingly-box/blob/main/docs/donation/wechat.jpg?raw=true" width="180" alt="WeChat Pay"> |
-| Alipay | <img src="https://github.com/tingly-dev/tingly-box/blob/main/docs/donation/alipay.jpg?raw=true" width="180" alt="Alipay"> |
-
-</div>
-
-
-## ❤️ Thanks to Sponsors
-
-<div align="left">
-
-|   Sponsor   |                Details                |
-| :---------: | :-----------------------------------: |
-| 0xbeekeeper |             First Sponsor             |
-|  richardxx  | Long Term Claude Subscription Support |
-| huajiankan  |      Figma Subscription Support       |
-
-</div>
 
