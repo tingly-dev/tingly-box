@@ -44,6 +44,16 @@ describe('formatQuotaUsage', () => {
     });
 });
 
+describe('Codex credit points', () => {
+    it.each([150, 150.125, 0, 1])('formats %s points without currency or a fabricated total', (available) => {
+        const window = { ...baseWindow, unit: 'credits', available };
+        expect(formatQuotaAvailable(window)).toBe(`${available} credits`);
+        expect(formatQuotaUsage(window)).toBe(`${available} credits`);
+        expect(formatQuotaRemaining(window)).toBe(`${available} credits`);
+        expect(quotaRemainingPercent(window)).toBe(0);
+    });
+});
+
 describe('remaining quota', () => {
     it('prefers an explicit available amount in both value and bar', () => {
         const window = { used: 30, limit: 100, used_percent: 30, available: 65, unit: 'credits' };

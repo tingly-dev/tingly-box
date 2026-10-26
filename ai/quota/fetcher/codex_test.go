@@ -145,6 +145,12 @@ func TestCodexFetcher_Fetch(t *testing.T) {
 	}
 
 	// Verify reset credits breakdowns (as resources, not windows)
+	for _, breakdown := range usage.Breakdowns {
+		w := breakdown.Windows[0]
+		if w.Unit != quota.UsageUnitCredits || w.Limit != 1 || w.CurrencyCode != "" {
+			t.Errorf("reset voucher must remain a single non-currency credit: %+v", w)
+		}
+	}
 	if len(usage.Breakdowns) != 3 {
 		t.Fatalf("Expected 3 reset credit breakdowns, got %d", len(usage.Breakdowns))
 	}
@@ -182,11 +188,54 @@ func TestCodexFetcher_Fetch(t *testing.T) {
 	if credits.Available == nil || *credits.Available != 150 {
 		t.Errorf("credits Available = %v, want 150", credits.Available)
 	}
-	if credits.CurrencyCode != "USD" {
-		t.Errorf("credits CurrencyCode = %q, want USD", credits.CurrencyCode)
+	if credits.Unit != quota.UsageUnitCredits || credits.CurrencyCode != "" {
+		t.Errorf("credits unit = %q, currency = %q; want credits without currency", credits.Unit, credits.CurrencyCode)
 	}
-	if credits.Description != "$150.00 remaining" {
-		t.Errorf("credits Description = %q, want '$150.00 remaining'", credits.Description)
+	if credits.Description != "150 credits left" {
+		t.Errorf("credits Description = %q, want '150 credits left'", credits.Description)
+	}
+}
+
+func TestCodexFetcher_CreditPoints(t *testing.T) {
+	for _, tt := range []struct {
+		name, balance, description string
+		want                       float64
+	}{
+		{"number", `150.125`, "150.125 credits left", 150.125},
+		{"string", `"150.125"`, "150.125 credits left", 150.125},
+		{"zero", `0`, "0 credits left", 0},
+		{"zero string", `"0"`, "0 credits left", 0},
+		{"one point", `1`, "1 credits left", 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/backend-api/wham/usage" {
+					t.Errorf("unexpected path: %s", r.URL.Path)
+				}
+				_, _ = w.Write([]byte(`{"credits":{"has_credits":true,"unlimited":false,"balance":` + tt.balance + `}}`))
+			}))
+			defer server.Close()
+			usage, err := (&CodexFetcher{baseURL: server.URL}).Fetch(context.Background(), &ai.Provider{
+				AuthType:    ai.AuthTypeOAuth,
+				OAuthDetail: &ai.OAuthDetail{AccessToken: "test-token"},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			credits := findWindow(t, usage, "credits")
+			if credits.Available == nil || *credits.Available != tt.want {
+				t.Fatalf("Available = %v, want %v", credits.Available, tt.want)
+			}
+			if credits.Unit != quota.UsageUnitCredits || credits.CurrencyCode != "" || credits.Description != tt.description {
+				t.Errorf("incorrect point denomination: %+v", credits)
+			}
+			if credits.Kind != quota.WindowKindResource || !credits.Unknown || credits.Limit != 0 || credits.ResetsAt != nil {
+				t.Errorf("points must remain a balance without a total or reset: %+v", credits)
+			}
+			if len(usage.Breakdowns) != 0 || usage.Cost != nil {
+				t.Error("ordinary points must not create reset vouchers or monetary cost")
+			}
+		})
 	}
 }
 

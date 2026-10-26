@@ -147,7 +147,7 @@ Codex code review、Z.ai MCP、MiniMax 的视频/语音/图片/音乐额度都�
 只认 OAuth 的 fetcher（`RequiresAuth() == oauth`，如 Anthropic）遇到同 host 的 API key 不发请求，按「不支持」处理：拿 key 去打订阅端点只会存下一个 401，界面就把好好的 provider 显示成坏的。
 
 但**有部分信息**的窗口要留：溢价额度（开了但上游不肯说用量）、无上限的月度花费（$8.10）、
-只报余额的 Codex credits——显示自己的数值，不画进度条、不报百分数。
+只报余额的 Codex credits——是虚拟积分（`unit: credits`），不是 USD；保留上游数值，不作货币换算。它与一次性的 reset credit 重置券不同；显示自己的数值，不画进度条、不报百分数。
 
 ### 3.7 刻意不做的
 
