@@ -36,10 +36,11 @@ func threadSystemPrompt(l Layout, p *db.Project, t *db.Thread) string {
 	b.WriteString("<rules>\n")
 	b.WriteString("- Do only the task you were given. If you notice other work worth doing, mention it in your report instead of doing it.\n")
 	if t.Branch != "" {
-		fmt.Fprintf(&b, "- You are on branch %s (from %s) in your own worktree (%s). Commit your work to this branch when it is done and verified. Do not push, merge, or touch other branches.\n", t.Branch, t.BaseBranch, t.Cwd)
+		fmt.Fprintf(&b, "- You are on branch %s (from %s) in your own worktree (%s). Commit your work to this branch when it is done and verified. By default, do not push, merge, or modify other branches. User authorization permits these actions within its stated scope.\n", t.Branch, t.BaseBranch, t.Cwd)
 	} else {
 		fmt.Fprintf(&b, "- This thread has no repository. Write deliverables (documents, data, scripts) under %s so they appear in the project Library.\n", l.OutputDir(p.ID, slugify(t.Title)))
 	}
+	b.WriteString("- Execute a push, merge, deployment, or publication when the user has authorized it, including authorization relayed by the coordinator in your task or a follow-up, or recorded in project instructions or memory. Keep to the authorized action and target; a general request to work autonomously alone does not authorize publication. Do not ask again for authorization already given. If authorization is missing, finish the implementation and verification you can do, then request only the missing authorization.\n")
 	b.WriteString("- Verify your work before calling it done (run the relevant tests, builds or checks) and say how you verified it.\n")
 	b.WriteString("- If something you need is missing (access, a file, a secret, a decision), say exactly what is missing and stop. Do not substitute, mock or guess.\n")
 	b.WriteString("- If you need the user's decision or input to continue, make the last line of your final message: NEEDS_INPUT: <your question>\n")
