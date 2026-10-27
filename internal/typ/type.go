@@ -288,6 +288,13 @@ type RuleFlags struct {
 	// Compact chip is its editor).
 	CodexCompactPercent int `json:"codex_compact_percent,omitempty" yaml:"codex_compact_percent,omitempty"`
 
+	// CodexContextWindow sets, for this rule's model only, the context window
+	// (in tokens) written into the generated Codex model catalog; 0 = automatic
+	// (1M with Context1M, else the 200K default). For models whose real window
+	// Tingly Box cannot know yet. Config-only like CodexCompactPercent, edited
+	// by the rule header's Context chip.
+	CodexContextWindow int `json:"codex_context_window,omitempty" yaml:"codex_context_window,omitempty"`
+
 	// ExtraHeaders are appended to the outbound upstream request for requests
 	// matched by this rule. Applied on api_key providers only (vendor/OAuth
 	// chains keep their handshake headers untouched). Provider- and
@@ -351,6 +358,14 @@ func ClaudeCodeVersionEnabled(v string) bool {
 // go through here.
 func (f RuleFlags) IsZero() bool {
 	return reflect.DeepEqual(f, RuleFlags{})
+}
+
+// ForcesAnthropicEndpoint reports whether AnthropicEndpointOverride forces the
+// Anthropic-style upstream. Only "anthropic" does, case-sensitively (the
+// registry emits lowercase); empty, "auto" and anything unrecognized leave
+// routing adaptive, so a misconfigured rule degrades safely.
+func (f RuleFlags) ForcesAnthropicEndpoint() bool {
+	return f.AnthropicEndpointOverride == "anthropic"
 }
 
 // VisionProxyService identifies the upstream used to describe images for the

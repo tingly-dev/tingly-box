@@ -368,6 +368,29 @@ func (p *Provider) ResolveEndpoint(clientStyle APIStyle) (string, APIStyle) {
 	return p.APIBase, p.APIStyle
 }
 
+// ServesAnthropic reports whether the provider can serve an Anthropic-style
+// request: ResolveEndpoint picks an Anthropic endpoint for one, so a dual
+// Anthropic URL only counts when the provider's auth may select it
+// (endpoint-scoped OAuth bearers skip dual URLs), and a primary endpoint only
+// when it already speaks Anthropic.
+func (p *Provider) ServesAnthropic() bool {
+	_, style := p.ResolveEndpoint(APIStyleAnthropic)
+	return style == APIStyleAnthropic
+}
+
+// RequestStyle is the client style to resolve a request's endpoint for
+// (ResolveStyle, ResolveEndpoint): the client's own, or the Anthropic style
+// when forceAnthropic (a rule's anthropic_endpoint_override) and the provider
+// serves it. A force the provider can't serve is ignored. The gateway routes
+// requests by it, and what Tingly Box tells a client about a route (the
+// Codex context window) follows the same endpoint.
+func (p *Provider) RequestStyle(clientStyle APIStyle, forceAnthropic bool) APIStyle {
+	if forceAnthropic && p.ServesAnthropic() {
+		return APIStyleAnthropic
+	}
+	return clientStyle
+}
+
 // VModelSentinelToken satisfies the SDK's non-empty APIKey check for vmodel
 // providers. It is sent to the private virtualserver listener, which ignores
 // credentials; it never reaches a network upstream.

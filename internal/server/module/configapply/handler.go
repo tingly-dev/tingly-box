@@ -613,8 +613,9 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 
 	models := collectCodexRuleModels(cfg)
 
-	// Build context windows map from rules for models with context_1m flag
+	// Per-model windows, ceilings and compact overrides derived from the rules
 	contextWindows := config.BuildContextWindowsFromRules(cfg)
+	prefs.ModelMaxContextWindow = config.BuildMaxContextWindowsFromRules(cfg)
 	prefs.ModelAutoCompactPercent = config.BuildCompactPercentsFromRules(cfg)
 
 	port := h.resolvedPort()
@@ -731,8 +732,9 @@ func (h *Handler) GetCodexConfigPreview(c *gin.Context) {
 
 	models := collectCodexRuleModels(cfg)
 
-	// Build context windows map from rules for models with context_1m flag
+	// Per-model windows, ceilings and compact overrides derived from the rules
 	contextWindows := config.BuildContextWindowsFromRules(cfg)
+	prefs.ModelMaxContextWindow = config.BuildMaxContextWindowsFromRules(cfg)
 	prefs.ModelAutoCompactPercent = config.BuildCompactPercentsFromRules(cfg)
 
 	port := h.resolvedPort()

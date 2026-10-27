@@ -1,10 +1,12 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
 	"github.com/tingly-dev/tingly-box/internal/appconfig"
+	"github.com/tingly-dev/tingly-box/internal/catalog"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/lock"
@@ -99,6 +101,14 @@ func (am *AppManager) init() (*appconfig.AppConfig, error) {
 		}
 		if am.version != "" {
 			cfg.SetVersion(am.version)
+		}
+		// Commands that run without the server (agent apply, the TUI
+		// quickstart's provider list, model listings) read the provider
+		// catalog the server last synced, so what they derive from it, like
+		// each Codex model's context window, matches what the server derives.
+		// A server started in this process installs its own.
+		if tm := catalog.NewProviderCatalogManager(catalog.LastSynced()); tm.Initialize(context.Background()) == nil {
+			cfg.GetGlobalConfig().SetTemplateManager(tm)
 		}
 		am.appConfig = cfg
 	})

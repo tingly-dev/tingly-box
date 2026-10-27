@@ -27,6 +27,9 @@ import { writeToClipboard } from '@/utils/clipboard';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import type {OpenAIEndpointSelection} from '@/hooks/useResponsesToggle';
 import {CodexCompactChip} from '@/components/rule-card/CodexCompactChip';
+import {CodexContextChip} from '@/components/rule-card/CodexContextChip';
+import {formatTokens, resolveCodexWindow} from '@/components/rule-card/codexCompact';
+import {useCodexCatalogWindow} from '@/components/rule-card/useCodexCatalogWindow';
 
 // Styled components - compact for graph use
 const HEADER_PADDING_X = 40;
@@ -142,6 +145,10 @@ export interface ModelRequestHeaderProps {
     // this rule's model (0 = follow Auto Config). Config-only, see CodexCompactChip.
     onCompactChange?: (percent: number) => void;
     compactPercent?: number;
+    // Codex only: the context window written into the catalog for this rule's
+    // model (0 = automatic). Config-only, see CodexContextChip.
+    onContextWindowChange?: (window: number) => void;
+    contextWindow?: number;
     // False when none of the rule's services is OpenAI-compatible: the chip stays
     // (and works) but its tooltip says it has no effect there.
     endpointApplicable?: boolean;
@@ -170,6 +177,8 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     onEndpointSelect,
     onCompactChange,
     compactPercent = 0,
+    onContextWindowChange,
+    contextWindow = 0,
     endpointApplicable = true,
     pluginsCount = 0,
     onPluginsClick,
@@ -183,6 +192,31 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     React.useEffect(() => {
         setTempValue(modelName);
     }, [modelName]);
+
+    // On a Codex rule (it has the Context chip) the 1M menu says the window
+    // each choice writes into Codex's catalog: the routed model's larger
+    // window can be 872K or 1M, or there may be none.
+    const codexWindows = useCodexCatalogWindow(modelName, Boolean(contextMenuAnchor) && Boolean(onContextWindowChange));
+    const codexWindowLine = (on: boolean): string | null => {
+        if (!onContextWindowChange) return null;
+        const w = resolveCodexWindow(contextWindow, on ? codexWindows.on : codexWindows.off);
+        if (w.source === 'rule') return t('ruleHeader.context1M.codexWindowPinned', { value: formatTokens(w.window) });
+        if (codexWindows.status === 'unavailable') return null;
+        if (codexWindows.status === 'pending') return t('ruleHeader.context1M.codexWindow', { value: '…' });
+        return t(w.source === 'default' ? 'ruleHeader.context1M.codexWindowGuess' : 'ruleHeader.context1M.codexWindow', { value: formatTokens(w.window) });
+    };
+    const context1MSecondary = (text: string, on: boolean) => {
+        const line = codexWindowLine(on);
+        if (!line) return text;
+        return (
+            <>
+                {text}
+                <Box component="span" data-codex-window={on ? 'on' : 'off'} sx={{display: 'block', mt: 0.25, color: 'text.primary', fontVariantNumeric: 'tabular-nums'}}>
+                    {line}
+                </Box>
+            </>
+        );
+    };
 
     const handleSave = () => {
         if (onModelChange && tempValue.trim()) {
@@ -367,7 +401,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                                 }}
                                 sx={{whiteSpace: 'normal', alignItems: 'flex-start', py: 0.75}}
                             >
-                                <ListItemText primary="Off" secondary="Do not add 1M for this rule. Client-requested 1M still works where supported." slotProps={{secondary: {sx: {whiteSpace: 'normal', lineHeight: 1.3}}}} />
+                                <ListItemText primary={t('ruleHeader.context1M.off')} secondary={context1MSecondary(t('ruleHeader.context1M.offDescription'), false)} slotProps={{secondary: {sx: {whiteSpace: 'normal', lineHeight: 1.3}}}} />
                             </MenuItem>
                             <MenuItem
                                 selected={context1M}
@@ -377,7 +411,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                                 }}
                                 sx={{whiteSpace: 'normal', alignItems: 'flex-start', py: 0.75}}
                             >
-                                <ListItemText primary="On" secondary="Add 1M for this rule. The upstream model must support it." slotProps={{secondary: {sx: {whiteSpace: 'normal', lineHeight: 1.3}}}} />
+                                <ListItemText primary={t('ruleHeader.context1M.on')} secondary={context1MSecondary(t('ruleHeader.context1M.onDescription'), true)} slotProps={{secondary: {sx: {whiteSpace: 'normal', lineHeight: 1.3}}}} />
                             </MenuItem>
                         </Menu>
                     </Box>
@@ -436,10 +470,24 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                     </Box>
                 )}
 
+                {onContextWindowChange && (
+                    <CodexContextChip
+                        window={contextWindow}
+                        context1M={context1M}
+                        requestModel={modelName}
+                        disabled={!active}
+                        onChange={onContextWindowChange}
+                        buttonSx={strategyButtonSx}
+                        highlightedButtonSx={highlightedStrategyButtonSx}
+                    />
+                )}
+
                 {onCompactChange && (
                     <CodexCompactChip
                         percent={compactPercent}
+                        contextWindow={contextWindow}
                         context1M={context1M}
+                        requestModel={modelName}
                         disabled={!active}
                         onChange={onCompactChange}
                         buttonSx={strategyButtonSx}

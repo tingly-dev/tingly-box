@@ -12,10 +12,11 @@
       "region": "cn | intl | global",
       "plan": "standard | coding | oauth"
     },
-    "models_schema": "每条模型 { id, context?, max_output? }，仅填写已验证的数值，不确定的省略字段或整个数组留空",
+    "models_schema": "每条模型 { id, context?, max_output?, max_input?, max_context? }，仅填写已验证的数值，不确定的省略字段或整个数组留空。max_context 只在客户端能把窗口开到默认 context 之上时填写（如 ChatGPT 后端模型 Codex 默认 272000、可扩至 872000），口径与 context 相同，必须大于 context。在有 Anthropic 风格端点的 provider 上，它指 context-1m 请求头才开的窗口（如订阅登录下的 Claude Opus / Sonnet 4.6 默认 200000、带头 1000000）",
     "provider_meta_fields": "可选字段：last_updated（YYYY-MM-DD，该 provider 数据最近一次校验/更新的日期）与 sources（string[]，支撑本次更新的官方参考链接）——仅在确实有验证依据时添加，只需覆盖发生变更的字段，不需要为未改动的 provider 补齐历史。",
     "model_meta_fields": "可选字段：sources（string[]，支撑该条 model 具体数据/状态——context、max_output、note、deprecated、openai_endpoints——的参考链接）。用法与 provider_meta_fields 的 sources 相同，只是作用域缩小到单个 model：优先选官方文档/changelog/开源仓库 issue，其次官方博客；不确定来源、或多个 model 共享同一条 provider 级 sources 时就不必重复写。同样只在确实核实过这条 model 时添加，不必为未改动的 model 补齐历史。不进入 Go 的 ModelInfo 结构体，encoding/json 会静默丢弃——和 note/created/deprecated 一样，是给读源码的人看的引用轨迹，运行时/前端都看不到。首个试点：codex 模板（见 2026-09-18 的模型刷新）。",
-    "token_limit_units": "context / max_output 一律写十进制整数：K=1000、M=1000000（1M=1000000、256K=256000、128K=128000、64K=64000），不写 2 的幂（1048576/262144/131072/65536）。官方给出的精确非整数值（如 gpt-3.5-turbo 的 16385）保持原样。"
+    "token_limit_units": "context / max_output / max_input / max_context 一律写十进制整数：K=1000、M=1000000（1M=1000000、256K=256000、128K=128000、64K=64000），不写 2 的幂（1048576/262144/131072/65536）。官方给出的精确非整数值（如 gpt-3.5-turbo 的 16385）保持原样。",
+    "context_includes_output": "provider 级可选布尔：该 provider 公布的 context 是输入加输出的总窗口（OpenAI：gpt-5 的 400K = 272K 输入 + 128K 输出），而不是 Anthropic max_input_tokens 意义上的输入上限。为 true 时查询把 max_input 推算为 context - max_output；单条 model 显式写的 max_input 优先。codex 等直接写输入预算的模板不要设。"
   },
   "version": "2.5.0",
   "last_updated": "2026-10-08T00:00:00Z",
@@ -132,6 +133,7 @@
       "valid": true,
       "canonical_domain": "openai.azure.com",
       "vendor_family": "openai",
+      "context_includes_output": true,
       "region": "global",
       "plan": "standard",
       "website": "https://azure.microsoft.com/en-us/products/ai-services/openai-service",
@@ -277,6 +279,7 @@
       "valid": true,
       "canonical_domain": "api.openai.com",
       "vendor_family": "openai",
+      "context_includes_output": true,
       "region": "global",
       "plan": "standard",
       "website": "https://openai.com",
@@ -752,15 +755,20 @@
         },
         {
           "id": "claude-opus-4-6",
-          "context": 1000000,
-          "max_output": 128000
+          "context": 200000,
+          "max_context": 1000000,
+          "max_output": 128000,
+          "note": "订阅登录下默认 200K；1M 只有带 context-1m 头（Claude Code 的 [1m] 变体）才开，且取决于套餐（Max / Team / Enterprise 含在订阅内，Pro 要用量额度）",
+          "sources": ["https://code.claude.com/docs/en/model-config"]
         },
         {
           "id": "claude-sonnet-4-6",
-          "context": 1000000,
+          "context": 200000,
+          "max_context": 1000000,
           "max_output": 128000,
           "legacy": true,
-          "sources": ["https://platform.claude.com/docs/en/models/sonnet-4-6/overview"]
+          "note": "订阅登录下默认 200K；1M 只有带 context-1m 头（Claude Code 的 [1m] 变体）才开，且每种套餐都要用量额度",
+          "sources": ["https://platform.claude.com/docs/en/models/sonnet-4-6/overview", "https://code.claude.com/docs/en/model-config"]
         },
         {
           "id": "claude-opus-4-7",
@@ -793,7 +801,7 @@
       "oauth_provider": "claude_code",
       "web_search_schema": "web_search_anthropic",
       "icon": "claudecode",
-      "last_updated": "2026-10-08",
+      "last_updated": "2026-10-25",
       "sources": [
         "https://www.anthropic.com/claude-fable-and-mythos-5-1",
         "https://www.anthropic.com/claude-opus-5-5",
@@ -824,6 +832,7 @@
         {
           "id": "gpt-6.1-sol",
           "context": 272000,
+          "max_context": 872000,
           "max_output": 128000,
           "created": "2026-09-29",
           "note": "接近 gpt-6-astra 性能但成本更低，适合复杂编码、computer use 与专业工作；按账户套餐、灰度进度和工作区设置开放；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
@@ -833,6 +842,7 @@
         {
           "id": "gpt-6.1-sol:fast",
           "context": 272000,
+          "max_context": 872000,
           "max_output": 128000,
           "created": "2026-09-29",
           "note": "接近 gpt-6-astra 性能的模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持（Codex 模型目录 priority 档位标注 2x speed, increased usage）；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
@@ -842,6 +852,7 @@
         {
           "id": "gpt-6-sol",
           "context": 272000,
+          "max_context": 872000,
           "max_output": 128000,
           "created": "2026-09-22",
           "note": "上一代主力模型（Codex 模型目录描述为 Previous generation workhorse model，最新主力为 gpt-6.1-sol），适合复杂编码和长程 Agent 工作流；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
@@ -855,6 +866,7 @@
         {
           "id": "gpt-6-sol:fast",
           "context": 272000,
+          "max_context": 872000,
           "max_output": 128000,
           "created": "2026-09-22",
           "note": "日常主力模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持（Codex 模型目录 priority 档位标注 1.5x speed）；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
@@ -864,6 +876,7 @@
         {
           "id": "gpt-6-luna",
           "context": 272000,
+          "max_context": 872000,
           "max_output": 128000,
           "created": "2026-09-22",
           "note": "快速且经济，适合专注、高吞吐量的较简单编码任务；Free / Go 套餐也可选用；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
@@ -877,6 +890,7 @@
         {
           "id": "gpt-6-luna:fast",
           "context": 272000,
+          "max_context": 872000,
           "max_output": 128000,
           "created": "2026-09-22",
           "note": "高效轻量模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持（Codex 模型目录 priority 档位标注 1.5x speed）；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
@@ -886,6 +900,7 @@
         {
           "id": "gpt-6-astra",
           "context": 272000,
+          "max_context": 872000,
           "max_output": 128000,
           "created": "2026-09-03",
           "note": "最新旗舰模型，代码/应用/研究综合能力最强；Codex 仓库模型目录（models.json）中已为 visibility=list、最低客户端版本 0.153.0，按账户套餐、灰度进度和工作区设置开放（企业版需管理员在后台开启）；旧版客户端或未展示时可在 config.toml 显式设置 model = \"gpt-6-astra\"；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
@@ -900,6 +915,7 @@
         {
           "id": "gpt-6-astra:fast",
           "context": 272000,
+          "max_context": 872000,
           "max_output": 128000,
           "created": "2026-09-03",
           "note": "最新旗舰模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持（Codex 模型目录 priority 档位标注 2x speed, increased usage）；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
@@ -909,6 +925,7 @@
         {
           "id": "gpt-5.6-sol",
           "context": 272000,
+          "max_context": 872000,
           "max_output": 128000,
           "created": "2026-07-09",
           "note": "上一代旗舰模型，适合复杂编码、长程 Agent 和高难度推理；Codex 模型目录已将其标为旧模型并指向 gpt-6-sol；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
@@ -921,6 +938,7 @@
         {
           "id": "gpt-5.6-sol:fast",
           "context": 272000,
+          "max_context": 872000,
           "max_output": 128000,
           "created": "2026-07-09",
           "note": "旗舰模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
@@ -929,6 +947,7 @@
         {
           "id": "gpt-5.6-terra",
           "context": 272000,
+          "max_context": 872000,
           "max_output": 128000,
           "created": "2026-07-09",
           "note": "上一代平衡模型，适合常规开发任务；已取代于 2026-08-31 退役的 gpt-5.4，Codex 模型目录已指向 gpt-6-sol；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
@@ -941,6 +960,7 @@
         {
           "id": "gpt-5.6-terra:fast",
           "context": 272000,
+          "max_context": 872000,
           "max_output": 128000,
           "created": "2026-07-09",
           "note": "平衡模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
@@ -949,6 +969,7 @@
         {
           "id": "gpt-5.6-luna",
           "context": 272000,
+          "max_context": 872000,
           "max_output": 128000,
           "created": "2026-07-09",
           "note": "上一代轻量模型，延迟和成本最低；已取代于 2026-08-31 退役的 gpt-5.4-mini，Codex 模型目录已指向 gpt-6-luna；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
@@ -961,6 +982,7 @@
         {
           "id": "gpt-5.6-luna:fast",
           "context": 272000,
+          "max_context": 872000,
           "max_output": 128000,
           "created": "2026-07-09",
           "note": "轻量模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
@@ -971,7 +993,7 @@
       "oauth_provider": "codex",
       "icon": "opencode",
       "openai_endpoint_mode": "responses",
-      "last_updated": "2026-10-19",
+      "last_updated": "2026-10-23",
       "sources": [
         "https://learn.chatgpt.com/docs/models",
         "https://learn.chatgpt.com/docs/changelog?type=codex-cli",

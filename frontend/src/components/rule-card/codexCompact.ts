@@ -1,3 +1,5 @@
+import type { CodexWindow } from '@/types/model';
+
 // Mirrors the Codex catalog rules in internal/config/apply_config_codex.go
 // (codexEffectiveContextWindowPercent,
 // codexDefaultAutoCompactTokenLimitPct, the 200K / 1M windows). The server is
@@ -81,4 +83,67 @@ export function compactZones(window: number, effectivePercent: number): CodexCom
         low: lowFrom !== null && lowFrom < cap ? { from: lowFrom, to: cap } : null,
         cappedFrom: cap < 100 ? cap : null,
     };
+}
+
+// Mirrors codexMinContextWindow / codexMaxContextWindow
+// (internal/config/apply_config_codex.go).
+export const CODEX_CONTEXT = {
+    min: 8_000,
+    max: 10_000_000,
+    // Common real windows, for picking without typing.
+    presets: [128_000, 200_000, 256_000, 400_000, 1_000_000],
+} as const;
+
+/**
+ * Where the window Codex is told about comes from: the rule's own value
+ * (`rule`), else what the rule's "Auto" gives on the server, as Codex's model
+ * list says (CodexWindow.source): the routed model's input limit (`catalog`),
+ * the larger window the 1M flag opens (`extended`), or a guess for a model
+ * the catalog doesn't know (`default`).
+ */
+export type CodexWindowSource = 'rule' | CodexWindow['source'];
+
+export interface CodexResolvedWindow {
+    window: number;
+    /** The most Codex may be told to use (max_context_window), at least window. */
+    max: number;
+    source: CodexWindowSource;
+}
+
+/**
+ * What Auto writes for a model it doesn't know: 200K, or 1M with the 1M flag.
+ * Shown until Codex's model list says otherwise.
+ */
+export function codexGuessWindow(context1M: boolean): CodexResolvedWindow {
+    const window = context1M ? CODEX_COMPACT.window1M : CODEX_COMPACT.window;
+    return { window, max: window, source: 'default' };
+}
+
+/**
+ * The window Codex is told about: the rule's own value when in range (also its
+ * ceiling), else Auto's. Mirrors CodexContextWindowFor in
+ * internal/config/apply_config_codex.go.
+ */
+export function resolveCodexWindow(manual: number, auto: CodexResolvedWindow): CodexResolvedWindow {
+    if (manual >= CODEX_CONTEXT.min && manual <= CODEX_CONTEXT.max) return { window: manual, max: manual, source: 'rule' };
+    return auto;
+}
+
+/** 200000 → "200K", 1000000 → "1M", 1500000 → "1.5M", 131072 → "131K". */
+export function formatTokens(n: number): string {
+    if (n >= 1_000_000) return `${Number((n / 1_000_000).toFixed(2))}M`;
+    if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
+    return String(n);
+}
+
+/**
+ * Reads what a person types for a window: "256k", "1m", "1.5M", "131072",
+ * "200,000". Returns null when it is not a number in range.
+ */
+export function parseTokens(raw: string): number | null {
+    const m = raw.trim().replace(/[,_\s]/g, '').match(/^(\d+(?:\.\d+)?)([km]?)$/i);
+    if (!m) return null;
+    const unit = m[2].toLowerCase();
+    const n = Math.round(Number(m[1]) * (unit === 'm' ? 1_000_000 : unit === 'k' ? 1_000 : 1));
+    return n >= CODEX_CONTEXT.min && n <= CODEX_CONTEXT.max ? n : null;
 }

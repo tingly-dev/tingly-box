@@ -304,3 +304,17 @@ func TestRuleFlags_VisionProxyService_JSONRoundTrip(t *testing.T) {
 		t.Fatalf("unset VisionProxyService should be omitted, got: %s", empty)
 	}
 }
+
+func TestRuleFlags_ForcesAnthropicEndpoint(t *testing.T) {
+	for in, want := range map[string]bool{
+		"":          false,
+		"auto":      false,
+		"anthropic": true,
+		"unknown":   false,
+		"ANTHROPIC": false, // case-sensitive on purpose; the registry emits lowercase
+	} {
+		if got := (RuleFlags{AnthropicEndpointOverride: in}).ForcesAnthropicEndpoint(); got != want {
+			t.Errorf("ForcesAnthropicEndpoint(%q) = %v, want %v", in, got, want)
+		}
+	}
+}

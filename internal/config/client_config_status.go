@@ -53,16 +53,20 @@ func routesTo(baseURL, endpoint string) bool {
 
 // CodexAppliedState is what the status check needs from ~/.codex.
 type CodexAppliedState struct {
-	Managed        bool           // model_provider / provider stanza is tingly-box
-	BaseURL        string         // [model_providers.tingly-box].base_url
-	Model          string         // top-level model
-	CatalogModels  []string       // slugs in the tingly model catalog, nil if none
-	ContextWindows map[string]int // catalog context_window per slug
+	Managed           bool           // model_provider / provider stanza is tingly-box
+	BaseURL           string         // [model_providers.tingly-box].base_url
+	Model             string         // top-level model
+	CatalogModels     []string       // slugs in the tingly model catalog, nil if none
+	ContextWindows    map[string]int // catalog context_window per slug
+	MaxContextWindows map[string]int // catalog max_context_window per slug, when the entry has one
 }
 
-// CompareCodexConfig compares the applied Codex state with the models and
-// context windows (1M overrides) the current rules would produce.
-func CompareCodexConfig(applied CodexAppliedState, models []string, contextWindows map[string]int) (string, []ClientConfigDiff) {
+// CompareCodexConfig compares the applied Codex state with the models, context
+// windows (BuildContextWindowsFromRules) and ceilings
+// (BuildMaxContextWindowsFromRules) the current rules would produce. A model
+// missing from contextWindows is expected at the default window, and one
+// missing from maxContextWindows at a ceiling equal to its window.
+func CompareCodexConfig(applied CodexAppliedState, models []string, contextWindows, maxContextWindows map[string]int) (string, []ClientConfigDiff) {
 	if !applied.Managed || !routesTo(applied.BaseURL, "/tingly/codex") {
 		return ClientConfigNotApplied, nil
 	}
@@ -85,6 +89,15 @@ func CompareCodexConfig(applied CodexAppliedState, models []string, contextWindo
 			}
 			if have != want {
 				diffs = append(diffs, ClientConfigDiff{Key: "context_window[" + m + "]", Applied: fmt.Sprint(have), Expected: fmt.Sprint(want)})
+			}
+			// A ceiling that doesn't match lets Codex's model_context_window
+			// raise the window past what the upstream accepts, or stops it short.
+			wantMax := want
+			if mw, ok := maxContextWindows[m]; ok && mw > want {
+				wantMax = mw
+			}
+			if haveMax, ok := applied.MaxContextWindows[m]; ok && haveMax != wantMax {
+				diffs = append(diffs, ClientConfigDiff{Key: "max_context_window[" + m + "]", Applied: fmt.Sprint(haveMax), Expected: fmt.Sprint(wantMax)})
 			}
 		}
 	}
@@ -118,16 +131,21 @@ func ReadCodexAppliedState() (CodexAppliedState, error) {
 		if raw, err := os.ReadFile(catalogPath); err == nil {
 			var catalog struct {
 				Models []struct {
-					Slug          string `json:"slug"`
-					ContextWindow int    `json:"context_window"`
+					Slug             string `json:"slug"`
+					ContextWindow    int    `json:"context_window"`
+					MaxContextWindow *int   `json:"max_context_window"`
 				} `json:"models"`
 			}
 			if json.Unmarshal(raw, &catalog) == nil {
 				state.CatalogModels = []string{}
 				state.ContextWindows = map[string]int{}
+				state.MaxContextWindows = map[string]int{}
 				for _, m := range catalog.Models {
 					state.CatalogModels = append(state.CatalogModels, m.Slug)
 					state.ContextWindows[m.Slug] = m.ContextWindow
+					if m.MaxContextWindow != nil {
+						state.MaxContextWindows[m.Slug] = *m.MaxContextWindow
+					}
 				}
 			}
 		}

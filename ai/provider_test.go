@@ -674,6 +674,53 @@ func TestProvider_ResolveEndpoint(t *testing.T) {
 	}
 }
 
+func TestProvider_ServesAnthropic(t *testing.T) {
+	tests := []struct {
+		name     string
+		provider *Provider
+		want     bool
+	}{
+		{"nil provider", nil, false},
+		{"native anthropic", &Provider{APIStyle: APIStyleAnthropic}, true},
+		{"dual anthropic url", &Provider{APIStyle: APIStyleOpenAI, APIBaseAnthropic: "https://a.example"}, true},
+		{"dual url an OAuth bearer can't use", &Provider{APIStyle: APIStyleOpenAI, APIBaseAnthropic: "https://a.example", AuthType: AuthTypeOAuth}, false},
+		{"openai only", &Provider{APIStyle: APIStyleOpenAI}, false},
+		{"google only", &Provider{APIStyle: APIStyleGoogle}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.provider.ServesAnthropic(); got != tt.want {
+				t.Errorf("ServesAnthropic = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// The force moves a request onto the Anthropic endpoint only where there is
+// one; otherwise the client's own style stands.
+func TestProvider_RequestStyle(t *testing.T) {
+	dual := &Provider{AuthType: AuthTypeAPIKey, APIStyle: APIStyleAnthropic, APIBase: "https://ant.example.com",
+		APIBaseOpenAI: "https://ant.example.com/v1/openai", APIBaseAnthropic: "https://ant.example.com"}
+	openai := &Provider{APIStyle: APIStyleOpenAI, APIBase: "https://oai.example.com/v1"}
+	tests := []struct {
+		name     string
+		provider *Provider
+		force    bool
+		want     APIStyle
+	}{
+		{"client style", dual, false, APIStyleOpenAI},
+		{"forced onto the Anthropic endpoint", dual, true, APIStyleAnthropic},
+		{"force without an Anthropic endpoint is ignored", openai, true, APIStyleOpenAI},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.provider.RequestStyle(APIStyleOpenAI, tt.force); got != tt.want {
+				t.Errorf("RequestStyle = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestProvider_IsDual(t *testing.T) {
 	tests := []struct {
 		name     string

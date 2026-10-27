@@ -37,6 +37,21 @@ type ModelInfo struct {
 	Description string `json:"description,omitempty"`
 	Context     int    `json:"context,omitempty"`
 	MaxOutput   int    `json:"max_output,omitempty"`
+	// MaxInput is the most input tokens one request may carry, when that is
+	// not Context itself. Lookups fill it for templates whose Context counts
+	// input and output together (ProviderCatalog.ContextIncludesOutput); data
+	// may also set it directly. Read it through InputLimit.
+	MaxInput int `json:"max_input,omitempty"`
+
+	// MaxContext is the largest window a client may opt into when it is
+	// above the default Context, counted the same way as Context: Codex lets
+	// a user raise ChatGPT-backed models from 272000 to 872000 (the codex
+	// template's context and max_context). On a provider with an
+	// Anthropic-style endpoint it is the window the context-1m header opens
+	// (the claude-code template's Opus 4.6: 200000, 1000000 with it). Empty
+	// means the ceiling is Context. Read its input limit through
+	// InputCeiling.
+	MaxContext int `json:"max_context,omitempty"`
 
 	// OpenAIEndpoints declares which OpenAI endpoint(s) THIS model supports,
 	// for a template whose catalog mixes vendors (OpenCode Zen: most models
@@ -145,6 +160,13 @@ type ProviderCatalog struct {
 	// ai.OpenAIEndpointMode when assigned to a Provider. Values: "" (Chat,
 	// default), "responses" (Codex-style), "both" (OpenAI proper).
 	OpenAIEndpointMode string `json:"openai_endpoint_mode,omitempty"`
+
+	// ContextIncludesOutput says this template's model `context` is the
+	// vendor's total window, input and output together (OpenAI publishes
+	// gpt-5 as 400K = 272K input + 128K output), rather than the input limit
+	// Anthropic reports as max_input_tokens. Lookups then derive MaxInput as
+	// context - max_output.
+	ContextIncludesOutput bool `json:"context_includes_output,omitempty"`
 }
 
 // ProviderCatalogRegistry represents the provider template registry structure from GitHub
@@ -171,12 +193,14 @@ const (
 type CatalogSourcePreference int
 
 const (
-	// PreferenceDefault: Cache -> GitHub -> Embedded
+	// PreferenceDefault: Cache -> GitHub -> Cache (any age) -> Embedded
 	PreferenceDefault CatalogSourcePreference = iota
 	// PreferenceEmbedded: Embedded only (no network requests)
 	PreferenceEmbedded
 	// PreferenceEmbeddedFirst: Embedded -> Cache -> GitHub
 	PreferenceEmbeddedFirst
+	// PreferenceLastSynced: Cache (any age) -> Embedded (no network requests)
+	PreferenceLastSynced
 )
 
 // ProviderCatalogManager manages provider templates with -tier fallback
@@ -196,7 +220,7 @@ type ProviderCatalogManager struct {
 	sourcePreference  CatalogSourcePreference // Priority order for loading templates
 	httpClient        *http.Client
 	cachePath         string        // Path to cache file
-	cacheTTL          time.Duration // Cache TTL (default 24h)
+	cacheTTL          time.Duration // Cache TTL (default DefaultCatalogCacheTTL)
 }
 
 // ProviderCatalogManagerOption configures a ProviderCatalogManager at
@@ -228,6 +252,20 @@ func EmbeddedOnly() ProviderCatalogManagerOption {
 	return func(m *ProviderCatalogManager) {
 		m.githubURL = ""
 		m.sourcePreference = PreferenceEmbedded
+	}
+}
+
+// LastSynced resolves against the last catalog synced from GitHub — the disk
+// cache the server writes each time it syncs — whatever its age, else the
+// embedded one, and never fetches. For callers without the server (the CLI)
+// that must see the catalog a running server holds: the server keeps what it
+// synced in memory for as long as it runs, and starts from this cache too
+// when it can't sync, so the cache TTL, which only decides when the server
+// syncs again, says nothing about whether it is still in use.
+func LastSynced() ProviderCatalogManagerOption {
+	return func(m *ProviderCatalogManager) {
+		m.githubURL = ""
+		m.sourcePreference = PreferenceLastSynced
 	}
 }
 
@@ -413,6 +451,12 @@ type CatalogCacheData struct {
 
 // loadCache loads templates from cache file if valid
 func (tm *ProviderCatalogManager) loadCache() (*ProviderCatalogRegistry, error) {
+	return tm.readCache(tm.cacheTTL)
+}
+
+// readCache loads templates from the cache file unless it is older than
+// maxAge (0: whatever its age). nil, nil when there is none to use.
+func (tm *ProviderCatalogManager) readCache(maxAge time.Duration) (*ProviderCatalogRegistry, error) {
 	cacheFile := filepath.Join(tm.cachePath, CatalogCacheFileName)
 
 	data, err := os.ReadFile(cacheFile)
@@ -429,7 +473,7 @@ func (tm *ProviderCatalogManager) loadCache() (*ProviderCatalogRegistry, error) 
 	}
 
 	// Check if cache is still valid
-	if time.Since(cacheData.CachedAt) > tm.cacheTTL {
+	if maxAge > 0 && time.Since(cacheData.CachedAt) > maxAge {
 		return nil, nil // Cache expired
 	}
 
@@ -478,9 +522,10 @@ func (tm *ProviderCatalogManager) saveCache(registry *ProviderCatalogRegistry) e
 }
 
 // Initialize loads templates according to the source preference:
-// - PreferenceDefault: Cache -> GitHub -> Embedded
+// - PreferenceDefault: Cache -> GitHub -> Cache (any age) -> Embedded
 // - PreferenceEmbedded: Embedded only (no network requests)
 // - PreferenceEmbeddedFirst: Embedded -> Cache -> GitHub
+// - PreferenceLastSynced: Cache (any age) -> Embedded (no network requests)
 func (tm *ProviderCatalogManager) Initialize(ctx context.Context) error {
 	// First, always load embedded templates as immutable fallback
 	if err := tm.loadEmbeddedTemplates(); err != nil {
@@ -492,6 +537,17 @@ func (tm *ProviderCatalogManager) Initialize(ctx context.Context) error {
 		// Use embedded templates only, skip all network requests
 		tm.sourceMu.Lock()
 		tm.source = CatalogSourceLocal
+		tm.sourceMu.Unlock()
+		return nil
+
+	case PreferenceLastSynced:
+		source := CatalogSourceLocal
+		if cached, err := tm.readCache(0); err == nil && cached != nil {
+			tm.setExternalTemplates(cached)
+			source = CatalogSourceGitHub
+		}
+		tm.sourceMu.Lock()
+		tm.source = source
 		tm.sourceMu.Unlock()
 		return nil
 
@@ -527,7 +583,16 @@ func (tm *ProviderCatalogManager) Initialize(ctx context.Context) error {
 				tm.sourceMu.Unlock()
 				return nil
 			}
-			// GitHub fetch failed, templates already has embedded fallback
+			// GitHub fetch failed: the copy synced last, whatever its age, is
+			// what a command run without the server reads (PreferenceLastSynced),
+			// so both see the same catalog. Embedded only when there is none.
+			if cached, err := tm.readCache(0); err == nil && cached != nil {
+				tm.setExternalTemplates(cached)
+				tm.sourceMu.Lock()
+				tm.source = CatalogSourceGitHub
+				tm.sourceMu.Unlock()
+				return nil
+			}
 		}
 
 		// Using embedded templates
@@ -668,7 +733,7 @@ func matchProviderTemplate(provider *typ.Provider, search func(func(*ProviderCat
 		return candidates[0]
 	}
 	if len(candidates) > 1 {
-		return mostSpecificTemplate(candidates, apiBase)
+		return mostSpecificTemplate(keyTemplates(candidates), apiBase)
 	}
 
 	// Fallback: Determine which base URL field to match based on APIStyle
@@ -704,6 +769,25 @@ func mostSpecificTemplate(candidates []*ProviderCatalog, apiBase string) *Provid
 		}
 	}
 	return best
+}
+
+// keyTemplates leaves an API-key provider's candidates without the
+// subscription (OAuth) templates that share their domain and base URL —
+// claude-code next to anthropic-com, gemini-cli next to googleapis-com — which
+// list what a subscription allows rather than what a key does. Picking between
+// them used to follow map order. Candidates that are all subscription
+// templates are kept.
+func keyTemplates(candidates []*ProviderCatalog) []*ProviderCatalog {
+	var keyed []*ProviderCatalog
+	for _, tmpl := range candidates {
+		if tmpl.OAuthProvider == "" {
+			keyed = append(keyed, tmpl)
+		}
+	}
+	if len(keyed) == 0 {
+		return candidates
+	}
+	return keyed
 }
 
 // cloudTemplateMatcher matches a multi-field cloud provider to its template by
@@ -910,10 +994,51 @@ func (tm *ProviderCatalogManager) GetModelInfoForProvider(provider *typ.Provider
 	}
 	for _, m := range tmpl.Models {
 		if m.ID == model {
+			if tmpl.ContextIncludesOutput && m.MaxInput == 0 && m.MaxOutput > 0 && m.Context > m.MaxOutput {
+				m.MaxInput = m.Context - m.MaxOutput
+			}
 			return m, true
 		}
 	}
 	return ModelInfo{}, false
+}
+
+// InputLimit is the most input tokens one request may carry: MaxInput when
+// known, else Context (Anthropic's meaning of max_input_tokens, where input
+// and output share one window). 0 when unknown.
+func (m ModelInfo) InputLimit() int {
+	if m.MaxInput > 0 {
+		return m.MaxInput
+	}
+	return m.Context
+}
+
+// InputCeiling is the most input tokens one request may carry when a client
+// opts into the larger window (MaxContext), with the output share taken off
+// as InputLimit takes it off Context. 0 when the model has no larger window.
+func (m ModelInfo) InputCeiling() int {
+	if m.MaxContext <= m.Context {
+		return 0
+	}
+	if m.MaxInput > 0 && m.Context > m.MaxInput {
+		return m.MaxContext - (m.Context - m.MaxInput)
+	}
+	return m.MaxContext
+}
+
+// WithMaxContext is the model with its larger window (MaxContext) in use, as
+// the context-1m header opens it on an Anthropic-style endpoint: Context
+// becomes MaxContext and the input limit InputCeiling. Unchanged when the
+// model has no larger window.
+func (m ModelInfo) WithMaxContext() ModelInfo {
+	if m.MaxContext <= m.Context {
+		return m
+	}
+	if m.MaxInput > 0 {
+		m.MaxInput = m.InputCeiling()
+	}
+	m.Context, m.MaxContext = m.MaxContext, 0
+	return m
 }
 
 // GetOpenAIEndpointOverrideForModel looks up ModelInfo.OpenAIEndpoints for

@@ -700,6 +700,16 @@ type CodexPrefs struct {
 	SupportsReasoningSummaries    string `json:"supports_reasoning_summaries,omitempty"`
 	EffectiveContextWindowPercent string `json:"effective_context_window_percent,omitempty"`
 	AutoCompactPercent            string `json:"auto_compact_percent,omitempty"`
+
+	// ModelAutoCompactPercent carries per-model overrides of AutoCompactPercent
+	// (catalog slug -> percent), filled by the caller from the rules'
+	// codex_compact_percent flag. Never read from a request.
+	ModelAutoCompactPercent map[string]int `json:"-"`
+
+	// ModelMaxContextWindow carries per-model ceilings (catalog slug ->
+	// max_context_window) above the model's window, filled by the caller from
+	// the rules. A model without one gets a ceiling equal to its window.
+	ModelMaxContextWindow map[string]int `json:"-"`
 }
 
 // codexLegacySupportsSummariesKey is the config.toml key older versions wrote;
@@ -724,6 +734,30 @@ func (p *CodexPrefs) contextHeadroom() (effective, compact int) {
 		compact = codexParsePercent(p.AutoCompactPercent, compact)
 	}
 	return effective, min(compact, effective)
+}
+
+// modelCompactPercent resolves one model's auto-compact percentage: the
+// rule-level override when it is in range, else the shared default. The result
+// never exceeds the usable window (effective).
+func (p *CodexPrefs) modelCompactPercent(model string, effective, fallback int) int {
+	pct := fallback
+	if p != nil {
+		if v, ok := p.ModelAutoCompactPercent[model]; ok && v >= codexMinContextPercent && v <= codexMaxContextPercent {
+			pct = v
+		}
+	}
+	return min(pct, effective)
+}
+
+// modelMaxContextWindow is one model's max_context_window: its ceiling from
+// ModelMaxContextWindow when that is above the window, else the window.
+func (p *CodexPrefs) modelMaxContextWindow(model string, window int) int {
+	if p != nil {
+		if v, ok := p.ModelMaxContextWindow[model]; ok && v > window {
+			return v
+		}
+	}
+	return window
 }
 
 func codexParsePercent(raw string, fallback int) int {
@@ -1080,11 +1114,9 @@ func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []strin
 }
 
 const (
-	// The gateway only knows model slugs from routing rules, not provider-native
-	// capabilities. Keep tingly-managed catalog entries conservative and
-	// internally consistent until richer per-model metadata is available.
+	// Window (and ceiling) of a model the caller passes no window for; see
+	// CodexParams.ContextWindows.
 	codexDefaultContextWindow            = 200000
-	codexDefaultMaxContextWindow         = 200000
 	codexEffectiveContextWindowPercent   = 82
 	codexDefaultAutoCompactTokenLimitPct = 75
 )
@@ -1120,13 +1152,14 @@ func RenderCodexModelCatalogWithPrefs(models []string, contextWindows map[string
 	}
 	entries := make([]map[string]interface{}, 0, len(models))
 	for _, model := range models {
-		// Per-model override (e.g. 1M context); indexing a nil map is safe.
+		// Per-model window (the caller derives it from the rules); indexing a
+		// nil map is safe. The ceiling is the window unless prefs carry a
+		// higher one.
 		contextWindow := codexDefaultContextWindow
-		maxContextWindow := codexDefaultMaxContextWindow
 		if cw, ok := contextWindows[model]; ok {
 			contextWindow = cw
-			maxContextWindow = cw
 		}
+		maxContextWindow := prefs.modelMaxContextWindow(model, contextWindow)
 
 		entries = append(entries, map[string]interface{}{
 			"slug":                             model,
@@ -1146,7 +1179,7 @@ func RenderCodexModelCatalogWithPrefs(models []string, contextWindows map[string
 			"supports_parallel_tool_calls":     true,
 			"context_window":                   contextWindow,
 			"max_context_window":               maxContextWindow,
-			"auto_compact_token_limit":         contextWindow * compactPct / 100,
+			"auto_compact_token_limit":         contextWindow * prefs.modelCompactPercent(model, effectivePct, compactPct) / 100,
 			"effective_context_window_percent": effectivePct,
 			"experimental_supported_tools":     []string{},
 			"input_modalities":                 []string{"text", "image"},

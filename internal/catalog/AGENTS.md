@@ -12,7 +12,8 @@ Static model data and its loaders. Read `.design/model-data.md` before editing d
 - New Claude model: add it to `claude.models.json` first, then `providers.json`.
 - `claude.models.json` allows only `id` and `reasoning`; dialects `budget|adaptive`, efforts `low|medium|high|xhigh|max`.
 - `providers.json`: map key == `id`; non-OAuth, non-cloud entries need a base URL; OAuth entries need `oauth_provider`.
-- `context` / `max_output` are decimal (1M=1000000), never powers of two.
+- `context` / `max_output` / `max_input` / `max_context` are decimal (1M=1000000), never powers of two.
+- `max_context` (a larger window a client may opt into) must be above `context`; `harness catalog check` enforces it. On a provider with an Anthropic-style endpoint it is the window the context-1m header opens (`claude-code`'s Opus / Sonnet 4.6: 200000 / 1000000); a model that is 1M without the header just has `context: 1000000`. Which meaning applies is decided by the provider, so a template with a header-gated `max_context` must only match providers that serve the Anthropic style (`claude-code` is OAuth and Anthropic-only).
 - `sources` / `note` / `last_updated` are human-only metadata; Go drops them.
 - Omit values you can't source.
 

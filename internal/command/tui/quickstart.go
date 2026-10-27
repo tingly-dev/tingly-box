@@ -166,10 +166,12 @@ func qsProvider(ctx StepContext, s quickstartState) (quickstartState, StepResult
 	if cfg != nil {
 		tm = cfg.GetTemplateManager()
 	}
+	// The config's catalog is already loaded (the one the server last synced,
+	// or a running server's); only a fallback needs loading.
 	if tm == nil {
 		tm = catalog.NewProviderCatalogManager(catalog.EmbeddedOnly())
+		_ = tm.Initialize(context.Background())
 	}
-	_ = tm.Initialize(context.Background())
 
 	// All non-OAuth templates that have at least one usable base URL.
 	var avail []*catalog.ProviderCatalog

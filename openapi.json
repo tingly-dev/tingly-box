@@ -15769,6 +15769,16 @@
             "type": "string",
             "description": "Field id"
           },
+          "max_context": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_context"
+          },
+          "max_input": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_input"
+          },
           "max_output": {
             "type": "integer",
             "format": "int64",
@@ -17523,6 +17533,10 @@
             "type": "string",
             "description": "Field canonical_domain"
           },
+          "context_includes_output": {
+            "type": "boolean",
+            "description": "Field context_includes_output"
+          },
           "default_model_capacity": {
             "type": "integer",
             "format": "int64",
@@ -18687,6 +18701,11 @@
             "type": "integer",
             "format": "int64",
             "description": "Field codex_compact_percent"
+          },
+          "codex_context_window": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field codex_context_window"
           },
           "context_1m": {
             "type": "boolean",

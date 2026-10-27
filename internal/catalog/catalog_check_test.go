@@ -39,6 +39,24 @@ func TestCheckProviderCatalogJSONFindsProblems(t *testing.T) {
 	require.Contains(t, all, `a: model with empty id`)
 	require.Contains(t, all, `c: at least one base URL is required`)
 
+	// max_context must sit above context: it is the ceiling a client may opt
+	// into, so equal, lower, or without a context is a data error.
+	issues = CheckProviderCatalogJSON([]byte(`{"providers":{"a":{"id":"a","name":"A","base_url_openai":"x","models":[
+		{"id":"ok","context":272000,"max_context":872000},
+		{"id":"equal","context":272000,"max_context":272000},
+		{"id":"below","context":272000,"max_context":200000},
+		{"id":"bare","max_context":872000}
+	]}}}`))
+	msgs = msgs[:0]
+	for _, i := range issues {
+		msgs = append(msgs, i.String())
+	}
+	all = strings.Join(msgs, "\n")
+	require.Len(t, issues, 3, all)
+	require.Contains(t, all, `model "equal" max_context 272000 must be above its context 272000`)
+	require.Contains(t, all, `model "below" max_context 200000`)
+	require.Contains(t, all, `model "bare" max_context 872000 must be above its context 0`)
+
 	// Reference-only metadata is tolerated; type errors are not.
 	require.Empty(t, CheckProviderCatalogJSON([]byte(`{"providers":{"a":{"id":"a","name":"A","base_url_openai":"x","sources":["s"]}}}`)))
 	issues = CheckProviderCatalogJSON([]byte(`{"providers":{"a":{"id":"a","name":["A"]}}}`))

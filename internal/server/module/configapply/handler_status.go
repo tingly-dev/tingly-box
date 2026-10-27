@@ -129,14 +129,15 @@ func toDifferences(diffs []config.ClientConfigDiff) []ClientConfigDifference {
 }
 
 // GetCodexConfigStatus compares ~/.codex (config.toml + the tingly model
-// catalog) with the models and context windows the Codex rules produce now.
+// catalog) with the models, context windows and ceilings the Codex rules
+// produce now.
 func (h *Handler) GetCodexConfigStatus(c *gin.Context) {
 	applied, err := config.ReadCodexAppliedState()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ClientConfigStatusResponse{Error: err.Error()})
 		return
 	}
-	state, diffs := config.CompareCodexConfig(applied, collectCodexRuleModels(h.config), config.BuildContextWindowsFromRules(h.config))
+	state, diffs := config.CompareCodexConfig(applied, collectCodexRuleModels(h.config), config.BuildContextWindowsFromRules(h.config), config.BuildMaxContextWindowsFromRules(h.config))
 	c.JSON(http.StatusOK, ClientConfigStatusResponse{
 		Success:     true,
 		State:       state,

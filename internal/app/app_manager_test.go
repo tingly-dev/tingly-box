@@ -65,6 +65,22 @@ func TestLazyAppManager_InitErrorHandler(t *testing.T) {
 	}
 }
 
+// A command's config carries the provider catalog (the one the server last
+// synced, here the embedded one), so what it derives from rules matches the
+// server.
+func TestAppManager_ConfigHasProviderCatalog(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", os.Getenv("HOME"))
+	am := NewLazyAppManager(t.TempDir(), func(err error) { t.Fatalf("init failed: %v", err) })
+	tm := am.GetGlobalConfig().GetTemplateManager()
+	if tm == nil {
+		t.Fatal("the command's config has no provider catalog")
+	}
+	if _, err := tm.GetTemplate("codex"); err != nil {
+		t.Fatalf("catalog without the embedded templates: %v", err)
+	}
+}
+
 func TestNewAppManager_IsEager(t *testing.T) {
 	dir := t.TempDir()
 	am, err := NewAppManager(dir)

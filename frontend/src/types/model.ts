@@ -11,7 +11,32 @@ export interface OpenAIModel {
   description?: string;
   context?: number;
   max_output?: number;
+  // The vendor's published context window (Tingly Box's own field).
+  context_window?: number;
+  // Anthropic Models API names: the most input one request may carry (below
+  // context_window when the window counts output too) and the most output.
+  max_input_tokens?: number;
+  max_tokens?: number;
+  // Codex's list only (Tingly Box's own field): what the rule's "Auto" writes
+  // into Codex's model catalog for this model, with its 1M flag off and on.
+  codex_windows?: CodexAutoWindows;
   auth_type?: string;
+}
+
+// What one Codex catalog model is told about its context, both in input
+// tokens (config.CodexContextWindow): context_window is what Codex plans
+// around, max_context_window how far Codex may raise it. source says why:
+// the routed model's input limit (catalog), the larger window the 1M flag
+// opens (extended), or a guess for a model the catalog doesn't know (default).
+export interface CodexWindow {
+  context_window: number;
+  max_context_window: number;
+  source: 'catalog' | 'extended' | 'default';
+}
+
+export interface CodexAutoWindows {
+  off: CodexWindow;
+  on: CodexWindow;
 }
 
 export interface OpenAIModelsResponse {
@@ -28,6 +53,8 @@ export interface AnthropicModel {
   capabilities?: ModelCapabilities;
   max_input_tokens?: number;
   max_tokens?: number;
+  // Tingly Box extension: the vendor's published context window.
+  context_window?: number;
   description?: string;
   auth_type?: string;
 }

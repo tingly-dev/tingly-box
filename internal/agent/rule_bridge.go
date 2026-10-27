@@ -81,7 +81,15 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 		return nil, fmt.Errorf("unknown agent type: %s", req.AgentType)
 	}
 
-	// 1. Apply config files using ai/agent
+	// 1. Apply routing rules (Tingly-specific) first: the config files below
+	// are derived from the rules (models, windows, slot models), so they must
+	// see the provider and model being set now, not the previous ones.
+	var routing routingOutcome
+	if req.Provider != "" && req.Model != "" {
+		routing = aa.applyRouting(req.AgentType, req.Provider, req.Model)
+	}
+
+	// 2. Apply config files using ai/agent
 	var fileResult *ApplyAgentResult
 	var err error
 
@@ -91,7 +99,7 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 	case AgentTypeClaudeCode:
 		config, ok := aiagent.DefaultRegistry.Get(req.AgentType)
 		if !ok {
-			return nil, fmt.Errorf("claude code config not registered")
+			return nil, routing.fileError(fmt.Errorf("claude code config not registered"))
 		}
 		// Build env vars with business logic
 		modelConfig := BuildClaudeCodeModelConfig(aa.config)
@@ -99,7 +107,7 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 		if req.InstallStatusLine {
 			statusLineScript, err = internal.ScriptAssets.ReadFile("script/tingly-statusline.sh")
 			if err != nil {
-				return nil, fmt.Errorf("failed to read status line script asset: %w", err)
+				return nil, routing.fileError(fmt.Errorf("failed to read status line script asset: %w", err))
 			}
 		}
 		fileResult, err = config.Apply(&aiagent.ClaudeCodeParams{
@@ -114,7 +122,7 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 	case AgentTypeOpenCode:
 		config, ok := aiagent.DefaultRegistry.Get(req.AgentType)
 		if !ok {
-			return nil, fmt.Errorf("opencode config not registered")
+			return nil, routing.fileError(fmt.Errorf("opencode config not registered"))
 		}
 		configBaseURL := baseURL + "/tingly/opencode"
 		// Build config object with business logic
@@ -126,23 +134,29 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 	case AgentTypeCodex:
 		config, ok := aiagent.DefaultRegistry.Get(req.AgentType)
 		if !ok {
-			return nil, fmt.Errorf("codex config not registered")
+			return nil, routing.fileError(fmt.Errorf("codex config not registered"))
 		}
 		codexBaseURL := baseURL + "/tingly/codex"
 		// Collect models with business logic
 		rawModels := aa.collectCodexRuleModels()
 		models := CollectCodexModels(rawModels)
+		// The same per-model windows, ceilings and compact overrides as the
+		// UI's Auto Config, so both paths write the same catalog.
+		prefs := aiagent.DefaultCodexPrefs()
+		prefs.ModelMaxContextWindow = serverconfig.BuildMaxContextWindowsFromRules(aa.config)
+		prefs.ModelAutoCompactPercent = serverconfig.BuildCompactPercentsFromRules(aa.config)
 		fileResult, err = config.Apply(&aiagent.CodexParams{
-			CodexBaseURL: codexBaseURL,
-			APIKey:       apiKey,
-			Models:       models,
-			Prefs:        aiagent.DefaultCodexPrefs(),
-			WriteCatalog: true,
+			CodexBaseURL:   codexBaseURL,
+			APIKey:         apiKey,
+			Models:         models,
+			Prefs:          prefs,
+			ContextWindows: serverconfig.BuildContextWindowsFromRules(aa.config),
+			WriteCatalog:   true,
 		})
 	case AgentTypeDsh:
 		config, ok := aiagent.DefaultRegistry.Get(req.AgentType)
 		if !ok {
-			return nil, fmt.Errorf("dsh config not registered")
+			return nil, routing.fileError(fmt.Errorf("dsh config not registered"))
 		}
 		dshBaseURL := baseURL + "/tingly/dsh"
 		// Collect models with business logic
@@ -157,33 +171,56 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, routing.fileError(err)
 	}
 
-	// 2. Apply routing rules (Tingly-specific)
-	if req.Provider != "" && req.Model != "" {
-		provider, err := aa.config.GetProviderByUUID(req.Provider)
-		if err != nil || provider == nil {
-			fileResult.Warnings = append(fileResult.Warnings,
-				fmt.Sprintf("provider %s not found; skipping routing rule update", req.Provider))
-		} else {
-			fileResult.ProviderName = provider.Name
-			fileResult.ProviderUUID = provider.UUID
-			fileResult.Model = req.Model
-
-			ruleCreated, ruleUpdated, err := aa.createOrUpdateRules(req.AgentType, req.Provider, req.Model)
-			if err != nil {
-				fileResult.Warnings = append(fileResult.Warnings,
-					fmt.Sprintf("failed to create/update routing rules: %v", err))
-			} else {
-				fileResult.RulesCreated = ruleCreated
-				fileResult.RulesUpdated = ruleUpdated
-			}
-		}
-	}
+	fileResult.ProviderName = routing.providerName
+	fileResult.ProviderUUID = routing.providerUUID
+	fileResult.Model = routing.model
+	fileResult.RulesCreated = routing.created
+	fileResult.RulesUpdated = routing.updated
+	fileResult.Warnings = append(fileResult.Warnings, routing.warnings...)
 
 	fileResult.Message = aa.buildResultMessage(fileResult)
 	return fileResult, nil
+}
+
+// routingOutcome is what applying an agent's routing rules did, for the
+// apply result.
+type routingOutcome struct {
+	providerName, providerUUID, model string
+	created, updated                  int
+	warnings                          []string
+}
+
+// fileError is a failure to write the agent's files, saying when the routing
+// rules were already changed (they are saved before the files are written)
+// and keeping the routing warnings the result would have carried.
+func (r routingOutcome) fileError(err error) error {
+	if r.created+r.updated > 0 {
+		err = fmt.Errorf("routing rules now use %s / %s, but writing the config files failed: %w", r.providerName, r.model, err)
+	}
+	if len(r.warnings) > 0 {
+		err = fmt.Errorf("%w (%s)", err, strings.Join(r.warnings, "; "))
+	}
+	return err
+}
+
+// applyRouting points the agent's rules at one provider + model. Problems are
+// warnings: the config files are still written.
+func (aa *AgentApply) applyRouting(agentType AgentType, providerUUID, model string) routingOutcome {
+	provider, err := aa.config.GetProviderByUUID(providerUUID)
+	if err != nil || provider == nil {
+		return routingOutcome{warnings: []string{fmt.Sprintf("provider %s not found; skipping routing rule update", providerUUID)}}
+	}
+	out := routingOutcome{providerName: provider.Name, providerUUID: provider.UUID, model: model}
+	created, updated, err := aa.createOrUpdateRules(agentType, providerUUID, model)
+	if err != nil {
+		out.warnings = append(out.warnings, fmt.Sprintf("failed to create/update routing rules: %v", err))
+		return out
+	}
+	out.created, out.updated = created, updated
+	return out
 }
 
 // createOrUpdateRules creates or updates routing rules for the given agent type
@@ -261,6 +298,10 @@ func (aa *AgentApply) getBaseURLAndToken() (string, string) {
 // buildResultMessage builds a human-readable result message
 func (aa *AgentApply) buildResultMessage(result *ApplyAgentResult) string {
 	if !result.Success {
+		// The routing rules are saved before the files are written.
+		if result.RulesCreated+result.RulesUpdated > 0 {
+			return fmt.Sprintf("Configuration application failed; routing rules now use %s / %s", result.ProviderName, result.Model)
+		}
 		return "Configuration application failed"
 	}
 

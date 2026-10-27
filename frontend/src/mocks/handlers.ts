@@ -4011,6 +4011,28 @@ export const handlers = [
         ],
     })),
 
+    // Codex's model list; gpt-5.6-terra is not in the catalog.
+    http.get('/tingly/codex/v1/models', () => HttpResponse.json({
+        object: 'list',
+        data: [
+            {
+                id: 'gpt-5.6-luna', object: 'model', created: 0, owned_by: 'tingly-box',
+                context: 272_000, context_window: 272_000, max_input_tokens: 272_000, max_output: 128_000, max_tokens: 128_000,
+                codex_windows: {
+                    off: { context_window: 272_000, max_context_window: 872_000, source: 'catalog' },
+                    on: { context_window: 872_000, max_context_window: 872_000, source: 'extended' },
+                },
+            },
+            {
+                id: 'gpt-5.6-terra', object: 'model', created: 0, owned_by: 'tingly-box',
+                codex_windows: {
+                    off: { context_window: 200_000, max_context_window: 200_000, source: 'default' },
+                    on: { context_window: 1_000_000, max_context_window: 1_000_000, source: 'default' },
+                },
+            },
+        ],
+    })),
+
     http.get('/api/v1/config/codex/status', () => HttpResponse.json({
         success: true,
         state: 'outdated',

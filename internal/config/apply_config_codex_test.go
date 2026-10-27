@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -9,6 +10,10 @@ import (
 	"github.com/pelletier/go-toml/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/internal/catalog"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -944,6 +949,26 @@ func TestBuildCompactPercentsFromRules(t *testing.T) {
 	assert.Equal(t, map[string]int{"m1": 70}, BuildCompactPercentsFromRules(cfg))
 }
 
+// A rule's own codex_context_window wins over the 1M flag; out-of-range values
+// fall back to the automatic window.
+func TestBuildContextWindowsFromRules_ManualWindow(t *testing.T) {
+	cfg := &Config{Rules: []typ.Rule{
+		{UUID: "a", Scenario: typ.ScenarioCodex, RequestModel: "m1", Active: true, Flags: typ.RuleFlags{CodexContextWindow: 256_000}},
+		{UUID: "b", Scenario: typ.ScenarioCodex, RequestModel: "m2", Active: true, Flags: typ.RuleFlags{Context1M: true, CodexContextWindow: 128_000}},
+		{UUID: "c", Scenario: typ.ScenarioCodex, RequestModel: "m3", Active: true, Flags: typ.RuleFlags{Context1M: true}},
+		{UUID: "d", Scenario: typ.ScenarioCodex, RequestModel: "m4", Active: true, Flags: typ.RuleFlags{Context1M: true, CodexContextWindow: 100}},
+		{UUID: "e", Scenario: typ.ScenarioCodex, RequestModel: "m5", Active: true},
+		{UUID: "f", Scenario: typ.ScenarioCodex, RequestModel: "m6", Active: false, Flags: typ.RuleFlags{CodexContextWindow: 256_000}},
+		{UUID: "g", Scenario: typ.ScenarioClaudeCode, RequestModel: "m7", Active: true, Flags: typ.RuleFlags{CodexContextWindow: 256_000}},
+	}}
+	assert.Equal(t, map[string]int{
+		"m1": 256_000,
+		"m2": 128_000,
+		"m3": codex1MContextWindow,
+		"m4": codex1MContextWindow,
+	}, BuildContextWindowsFromRules(cfg))
+}
+
 // With per-model overrides in the catalog, the shared default read back is the
 // most common value, not whichever model happens to come first.
 func TestReadCodexConfig_RestoresSharedCompactDefaultDespiteOverrides(t *testing.T) {
@@ -1013,4 +1038,72 @@ func TestApplyCodexConfig_SupportsSummariesMovesToCatalog(t *testing.T) {
 	prefs, _, _, err := ReadCodexConfig()
 	require.NoError(t, err)
 	assert.Equal(t, "true", prefs.SupportsReasoningSummaries)
+}
+
+// Auto resolves to the input limit the provider catalog records for the
+// routed model (the smallest across services), below the rule's own value. The
+// 1M flag can't raise a model the catalog knows has no larger window; unknown
+// models stay at the default.
+func TestBuildContextWindowsFromRules_CatalogWindow(t *testing.T) {
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	require.NoError(t, err)
+	tm := catalog.NewProviderCatalogManager(catalog.EmbeddedOnly())
+	require.NoError(t, tm.Initialize(context.Background()))
+	cfg.SetTemplateManager(tm)
+
+	p := &typ.Provider{
+		Name:     "my deepseek",
+		APIBase:  "https://api.deepseek.com/v1",
+		APIStyle: protocol.APIStyleOpenAI,
+		AuthType: typ.AuthTypeAPIKey,
+		Token:    "sk-test",
+		Enabled:  true,
+	}
+	require.NoError(t, cfg.AddProvider(p))
+	svc := func(model string) []*loadbalance.Service {
+		return []*loadbalance.Service{{Provider: p.UUID, Model: model, Active: true}}
+	}
+	cfg.Rules = []typ.Rule{
+		{UUID: "a", Scenario: typ.ScenarioCodex, RequestModel: "fast", Active: true, Services: svc("deepseek-reasoner")},
+		{UUID: "b", Scenario: typ.ScenarioCodex, RequestModel: "own", Active: true, Services: svc("deepseek-reasoner"),
+			Flags: typ.RuleFlags{CodexContextWindow: 64_000}},
+		{UUID: "c", Scenario: typ.ScenarioCodex, RequestModel: "wide", Active: true, Services: svc("deepseek-reasoner"),
+			Flags: typ.RuleFlags{Context1M: true}},
+		{UUID: "d", Scenario: typ.ScenarioCodex, RequestModel: "unknown", Active: true, Services: svc("no-such-model")},
+	}
+
+	assert.Equal(t, CodexContextWindow{Window: 128_000, Max: 128_000, Source: CodexWindowSourceCatalog}, cfg.CodexAutoContextWindow(cfg.Rules[0]))
+	assert.Equal(t, map[string]int{
+		"fast": 128_000,
+		"own":  64_000,
+		"wide": 128_000,
+	}, BuildContextWindowsFromRules(cfg))
+}
+
+// OpenAI publishes a window that counts output too (gpt-5.4-mini: 400K with
+// 128K output), so the input limit Codex is told is 272K, not 400K.
+func TestRuleModelInfo_InputLimitExcludesOutputForOpenAI(t *testing.T) {
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	require.NoError(t, err)
+	tm := catalog.NewProviderCatalogManager(catalog.EmbeddedOnly())
+	require.NoError(t, tm.Initialize(context.Background()))
+	cfg.SetTemplateManager(tm)
+
+	p := &typ.Provider{
+		Name:     "my openai",
+		APIBase:  "https://api.openai.com/v1",
+		APIStyle: protocol.APIStyleOpenAI,
+		AuthType: typ.AuthTypeAPIKey,
+		Token:    "sk-test",
+		Enabled:  true,
+	}
+	require.NoError(t, cfg.AddProvider(p))
+	rule := typ.Rule{UUID: "a", Scenario: typ.ScenarioCodex, RequestModel: "mini", Active: true,
+		Services: []*loadbalance.Service{{Provider: p.UUID, Model: "gpt-5.4-mini", Active: true}}}
+
+	info, ok := cfg.RuleModelInfo(rule, ai.APIStyleOpenAI)
+	require.True(t, ok)
+	assert.Equal(t, 400_000, info.Context)
+	assert.Equal(t, 272_000, info.InputLimit())
+	assert.Equal(t, 272_000, cfg.CodexAutoContextWindow(rule).Window)
 }

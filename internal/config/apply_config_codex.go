@@ -14,6 +14,8 @@ import (
 	"time"
 
 	tomlpkg "github.com/pelletier/go-toml/v2"
+	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -67,6 +69,12 @@ type CodexPrefs struct {
 	// (catalog slug -> percent), filled by the server from the rules'
 	// codex_compact_percent flag. Never read from a request.
 	ModelAutoCompactPercent map[string]int `json:"-"`
+
+	// ModelMaxContextWindow carries per-model ceilings (catalog slug ->
+	// max_context_window) above the model's window, filled by the server from
+	// the rules (BuildMaxContextWindowsFromRules). A model without one gets a
+	// ceiling equal to its window. Never read from a request.
+	ModelMaxContextWindow map[string]int `json:"-"`
 }
 
 // codexLegacySupportsSummariesKey is the config.toml key older versions wrote;
@@ -104,6 +112,17 @@ func (p *CodexPrefs) modelCompactPercent(model string, effective, fallback int) 
 		}
 	}
 	return min(pct, effective)
+}
+
+// modelMaxContextWindow is one model's max_context_window: its ceiling from
+// ModelMaxContextWindow when that is above the window, else the window.
+func (p *CodexPrefs) modelMaxContextWindow(model string, window int) int {
+	if p != nil {
+		if v, ok := p.ModelMaxContextWindow[model]; ok && v > window {
+			return v
+		}
+	}
+	return window
 }
 
 func codexParsePercent(raw string, fallback int) int {
@@ -491,9 +510,8 @@ func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []strin
 }
 
 const (
-	// The gateway only knows model slugs from routing rules, not provider-native
-	// capabilities. Keep tingly-managed catalog entries conservative and
-	// internally consistent until richer per-model metadata is available.
+	// Window (and ceiling) of a catalog model nothing better is known for; see
+	// CodexAutoContextWindow for how routed models get their own.
 	codexDefaultContextWindow            = 200000
 	codexDefaultMaxContextWindow         = 200000
 	codexEffectiveContextWindowPercent   = 82
@@ -501,6 +519,10 @@ const (
 
 	// 1M context window for models that support it (Sonnet 4.6+, Opus 4.6+)
 	codex1MContextWindow = 1000000
+
+	// Bounds for a rule's own codex_context_window; values outside are ignored.
+	codexMinContextWindow = 8_000
+	codexMaxContextWindow = 10_000_000
 )
 
 // renderCodexModelCatalog produces the JSON payload for
@@ -534,13 +556,13 @@ func RenderCodexModelCatalogWithPrefs(models []string, contextWindows map[string
 	}
 	entries := make([]map[string]interface{}, 0, len(models))
 	for _, model := range models {
-		// Per-model override (e.g. 1M context); indexing a nil map is safe.
+		// Per-model window (see BuildContextWindowsFromRules); indexing a nil
+		// map is safe. The ceiling is the window unless prefs carry a higher one.
 		contextWindow := codexDefaultContextWindow
-		maxContextWindow := codexDefaultMaxContextWindow
 		if cw, ok := contextWindows[model]; ok {
 			contextWindow = cw
-			maxContextWindow = cw
 		}
+		maxContextWindow := prefs.modelMaxContextWindow(model, contextWindow)
 
 		entries = append(entries, map[string]interface{}{
 			"slug":                             model,
@@ -627,21 +649,207 @@ func codexAutoCompactTokenLimit(contextWindow int) int {
 	return contextWindow * codexDefaultAutoCompactTokenLimitPct / 100
 }
 
-// BuildContextWindowsFromRules maps each active Codex rule carrying the
-// context_1m flag to the 1M context window. Keys are the rules' request
-// models verbatim — exactly the names collectCodexRuleModels feeds into the
-// catalog — so the override always lands on its catalog entry.
-func BuildContextWindowsFromRules(cfg *Config) map[string]int {
-	contextWindows := make(map[string]int)
-	for _, rule := range cfg.GetRequestConfigs() {
-		if rule.GetScenario() != typ.ScenarioCodex || !rule.Active || !rule.Flags.Context1M {
-			continue
-		}
-		if model := strings.TrimSpace(rule.RequestModel); model != "" {
-			contextWindows[model] = codex1MContextWindow
+// Where a Codex catalog model's window comes from (CodexContextWindow.Source).
+const (
+	// CodexWindowSourceRule is the rule's own codex_context_window.
+	CodexWindowSourceRule = "rule"
+	// CodexWindowSourceCatalog is the routed model's input limit in the
+	// provider catalog (max_input_tokens), with its larger opt-in window
+	// (max_context) as the ceiling when Codex can open it itself.
+	CodexWindowSourceCatalog = "catalog"
+	// CodexWindowSourceExtended is that larger opt-in window, which the
+	// rule's 1M flag asks for: ChatGPT-backed models go from 272K to 872K, not
+	// 1M; Claude 4.6 on a Claude subscription from 200K to 1M (the flag adds
+	// the context-1m header that opens it).
+	CodexWindowSourceExtended = "extended"
+	// CodexWindowSourceDefault is a model the catalog doesn't know: 200K, or
+	// 1M with the rule's 1M flag (its old meaning, kept where nothing better
+	// is known). Both are guesses.
+	CodexWindowSourceDefault = "default"
+)
+
+// CodexContextWindow is what one Codex catalog model is told about its
+// context, and why. Window is written as context_window (what Codex plans
+// around: its context meter and when it compacts); Max as max_context_window
+// (how far Codex's own model_context_window setting may raise it). Both count
+// input only, like max_input_tokens. The JSON form is what Codex's model list
+// carries (CodexAutoWindows).
+type CodexContextWindow struct {
+	Window int    `json:"context_window"`
+	Max    int    `json:"max_context_window"`
+	Source string `json:"source"`
+}
+
+// Known reports whether the window comes from what Tingly Box knows about the
+// rule or its upstream, rather than a guess for an unknown model.
+func (w CodexContextWindow) Known() bool {
+	return w.Source != CodexWindowSourceDefault
+}
+
+// CodexAutoContextWindow is the window a Codex rule gets from its routed
+// models alone, ignoring its own codex_context_window: what the rule's "Auto"
+// resolves to.
+//
+// Every upstream the rule can reach counts (ruleUpstreams, the same ones
+// RuleModelInfo reads). Each contributes:
+//
+//   - a model the provider catalog knows: its input limit, with its larger
+//     opt-in window (max_context) as the ceiling. The 1M flag asks for that
+//     larger window and changes nothing for a model without one. On a
+//     provider with an Anthropic-style endpoint the larger window is the one
+//     the context-1m header opens (sendsContext1M, for Codex's OpenAI-style
+//     requests); without the header the upstream answers with the standard
+//     window, so that is the ceiling;
+//   - anything else: 200K, or 1M with the 1M flag (its old meaning, kept where
+//     nothing better is known).
+//
+// The rule gets the smallest window and the smallest ceiling: Codex can't know
+// which upstream will answer, and only the smallest is safe for all. A rule
+// with no reachable upstream is judged like an unknown model.
+func (c *Config) CodexAutoContextWindow(rule typ.Rule) CodexContextWindow {
+	unknown := CodexContextWindow{Window: codexDefaultContextWindow, Max: codexDefaultMaxContextWindow, Source: CodexWindowSourceDefault}
+	if rule.Flags.Context1M {
+		unknown.Window, unknown.Max = codex1MContextWindow, codex1MContextWindow
+	}
+	upstreams := c.ruleUpstreams(rule)
+	if len(upstreams) == 0 {
+		return unknown
+	}
+	tm := c.GetTemplateManager()
+	best := codexUpstreamWindow(tm, upstreams[0], rule, unknown)
+	for _, up := range upstreams[1:] {
+		best = smallerCodexWindow(best, codexUpstreamWindow(tm, up, rule, unknown))
+	}
+	return best
+}
+
+// smallerCodexWindow is the window safe for both a and b: the smaller window
+// and the smaller ceiling, and on a tie what is known over a guess, whatever
+// the order.
+func smallerCodexWindow(a, b CodexContextWindow) CodexContextWindow {
+	if b.Window < a.Window || (b.Window == a.Window && b.Known() && !a.Known()) {
+		a, b = b, a
+	}
+	a.Max = max(a.Window, min(a.Max, b.Max))
+	return a
+}
+
+// codexUpstreamWindow is one routed upstream's contribution to a Codex rule's
+// window (see CodexAutoContextWindow).
+func codexUpstreamWindow(tm *catalog.ProviderCatalogManager, up ruleUpstream, rule typ.Rule, unknown CodexContextWindow) CodexContextWindow {
+	info, known := upstreamModelInfo(tm, up, rule.RequestModel)
+	input := info.InputLimit()
+	if !known || input <= 0 {
+		return unknown
+	}
+	ceiling := max(input, info.InputCeiling())
+	if ceiling > input && up.provider.ServesAnthropic() && !sendsContext1M(up.provider, rule, ai.APIStyleOpenAI) {
+		ceiling = input
+	}
+	if rule.Flags.Context1M && ceiling > input {
+		return CodexContextWindow{Window: ceiling, Max: ceiling, Source: CodexWindowSourceExtended}
+	}
+	return CodexContextWindow{Window: input, Max: ceiling, Source: CodexWindowSourceCatalog}
+}
+
+// CodexContextWindowFor is the window a Codex rule's catalog entry gets: its
+// own codex_context_window when in range, else CodexAutoContextWindow. An own
+// window is also its ceiling: it is set for models whose real window Tingly
+// Box doesn't know, where a derived ceiling would only be a guess.
+func (c *Config) CodexContextWindowFor(rule typ.Rule) CodexContextWindow {
+	if w := rule.Flags.CodexContextWindow; w >= codexMinContextWindow && w <= codexMaxContextWindow {
+		return CodexContextWindow{Window: w, Max: w, Source: CodexWindowSourceRule}
+	}
+	return c.CodexAutoContextWindow(rule)
+}
+
+// ResolveCodexContextWindows returns the window of every model the Codex
+// catalog lists: active Codex rules, keyed by trimmed request model, like
+// agent.CollectCodexModels. Two rules with the same request model share one
+// catalog entry, so it gets what is safe for both (smallerCodexWindow).
+func ResolveCodexContextWindows(cfg *Config) map[string]CodexContextWindow {
+	return resolveCodexModels(cfg, (*Config).CodexContextWindowFor)
+}
+
+// CodexAutoWindows is what "Auto" gives one Codex catalog model with the 1M
+// flag off and on, so the rule editor can say what either choice writes.
+type CodexAutoWindows struct {
+	Off CodexContextWindow `json:"off"`
+	On  CodexContextWindow `json:"on"`
+}
+
+// ResolveCodexAutoWindows returns, for every model the Codex catalog lists,
+// what its rules' "Auto" gives it (CodexAutoContextWindow) with their 1M flag
+// off and on, keyed and merged like ResolveCodexContextWindows. A rule's own
+// codex_context_window is left out: this is what Auto would write.
+func ResolveCodexAutoWindows(cfg *Config) map[string]CodexAutoWindows {
+	auto := func(on bool) func(*Config, typ.Rule) CodexContextWindow {
+		return func(c *Config, rule typ.Rule) CodexContextWindow {
+			rule.Flags.Context1M = on
+			return c.CodexAutoContextWindow(rule)
 		}
 	}
-	return contextWindows
+	off, on := resolveCodexModels(cfg, auto(false)), resolveCodexModels(cfg, auto(true))
+	out := make(map[string]CodexAutoWindows, len(off))
+	for model, w := range off {
+		out[model] = CodexAutoWindows{Off: w, On: on[model]}
+	}
+	return out
+}
+
+// resolveCodexModels maps every model the Codex catalog lists to the window
+// windowFor gives its rules, merged for rules sharing a request model.
+func resolveCodexModels(cfg *Config, windowFor func(*Config, typ.Rule) CodexContextWindow) map[string]CodexContextWindow {
+	out := make(map[string]CodexContextWindow)
+	if cfg == nil {
+		return out
+	}
+	for _, rule := range cfg.GetRequestConfigs() {
+		if rule.GetScenario() != typ.ScenarioCodex || !rule.Active {
+			continue
+		}
+		model := strings.TrimSpace(rule.RequestModel)
+		if model == "" {
+			continue
+		}
+		w := windowFor(cfg, rule)
+		if prev, ok := out[model]; ok {
+			w = smallerCodexWindow(prev, w)
+		}
+		out[model] = w
+	}
+	return out
+}
+
+// BuildContextWindowsFromRules maps each Codex catalog model to the window
+// (context_window) ResolveCodexContextWindows gives it: the rule's own
+// codex_context_window, else what its routed models accept, else 1M for the
+// context_1m flag, else the 200K default. Models at the default are absent:
+// the catalog writes the default for them anyway. Keys are the rules' request
+// models, trimmed — exactly the names agent.CollectCodexModels writes into the
+// catalog — so the window always lands on its catalog entry.
+func BuildContextWindowsFromRules(cfg *Config) map[string]int {
+	windows := make(map[string]int)
+	for model, w := range ResolveCodexContextWindows(cfg) {
+		if w.Window != codexDefaultContextWindow {
+			windows[model] = w.Window
+		}
+	}
+	return windows
+}
+
+// BuildMaxContextWindowsFromRules maps each Codex catalog model whose ceiling
+// (max_context_window) is above its window to that ceiling, keyed like
+// BuildContextWindowsFromRules. Absent models get a ceiling equal to their
+// window.
+func BuildMaxContextWindowsFromRules(cfg *Config) map[string]int {
+	ceilings := make(map[string]int)
+	for model, w := range ResolveCodexContextWindows(cfg) {
+		if w.Max > w.Window {
+			ceilings[model] = w.Max
+		}
+	}
+	return ceilings
 }
 
 // BuildCompactPercentsFromRules maps each active Codex rule that sets its own

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CODEX_COMPACT, compactZones, lowZoneStart, planCodexCompact } from './codexCompact';
+import { CODEX_COMPACT, codexGuessWindow, compactZones, formatTokens, lowZoneStart, parseTokens, planCodexCompact, resolveCodexWindow } from './codexCompact';
 
 const { window, window1M } = CODEX_COMPACT;
 
@@ -58,5 +58,37 @@ describe('compactZones', () => {
         const zones = compactZones(window1M, 100);
         expect(zones.cappedFrom).toBeNull();
         expect(zones.low?.from).toBeCloseTo(96.4);
+    });
+});
+
+describe('context window helpers', () => {
+    it('a rule\'s own window in range wins, and is also its ceiling', () => {
+        const auto = { window: 272_000, max: 872_000, source: 'catalog' } as const;
+        expect(resolveCodexWindow(400_000, auto)).toEqual({ window: 400_000, max: 400_000, source: 'rule' });
+        expect(resolveCodexWindow(0, auto)).toBe(auto);
+        expect(resolveCodexWindow(100, auto)).toBe(auto);
+    });
+
+    it('guesses 200K, or 1M with the 1M flag, for a model Auto does not know', () => {
+        expect(codexGuessWindow(false)).toEqual({ window: 200_000, max: 200_000, source: 'default' });
+        expect(codexGuessWindow(true)).toEqual({ window: 1_000_000, max: 1_000_000, source: 'default' });
+    });
+
+    it('formats windows the way people say them', () => {
+        expect(formatTokens(200_000)).toBe('200K');
+        expect(formatTokens(1_000_000)).toBe('1M');
+        expect(formatTokens(1_500_000)).toBe('1.5M');
+        expect(formatTokens(131_072)).toBe('131K');
+    });
+
+    it('parses typed windows', () => {
+        expect(parseTokens('256k')).toBe(256_000);
+        expect(parseTokens('1M')).toBe(1_000_000);
+        expect(parseTokens('1.5m')).toBe(1_500_000);
+        expect(parseTokens('131072')).toBe(131_072);
+        expect(parseTokens('200,000')).toBe(200_000);
+        expect(parseTokens('abc')).toBeNull();
+        expect(parseTokens('1k')).toBeNull();
+        expect(parseTokens('20m')).toBeNull();
     });
 });

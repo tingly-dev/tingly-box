@@ -113,6 +113,11 @@ func CheckProviderCatalogJSON(data []byte) []CheckIssue {
 				add(key, "duplicate model id %q", m.ID)
 			}
 			seen[m.ID] = true
+			// max_context is a ceiling above the default window; equal or
+			// below it (or without a context to compare with) says nothing.
+			if m.MaxContext != 0 && (m.Context == 0 || m.MaxContext <= m.Context) {
+				add(key, "model %q max_context %d must be above its context %d", m.ID, m.MaxContext, m.Context)
+			}
 		}
 	}
 	return issues

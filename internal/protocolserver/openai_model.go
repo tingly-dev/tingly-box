@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -21,6 +24,22 @@ type OpenAIModel struct {
 	Description string `json:"description,omitempty"` // Model description
 	Context     int    `json:"context,omitempty"`     // Max context window
 	MaxOutput   int    `json:"max_output,omitempty"`  // Max output tokens
+	// ContextWindow is the context window the vendor publishes (Tingly Box's
+	// own field, in both listings). MaxInputTokens / MaxTokens follow the
+	// names and meaning of Anthropic's Models API (OpenAI's Model object has
+	// no such fields): the most input one request may carry, which is below
+	// ContextWindow when the vendor's window counts output too (gpt-5: 400K
+	// window, 272K input), and the most output.
+	ContextWindow  int `json:"context_window,omitempty"`
+	MaxInputTokens int `json:"max_input_tokens,omitempty"`
+	MaxTokens      int `json:"max_tokens,omitempty"`
+	// CodexWindows is on the Codex list only (Tingly Box's own field): the
+	// context window, ceiling and source that "Auto" writes into Codex's model
+	// catalog for this model, with the rule's 1M flag off and on. They follow
+	// the route (config.CodexAutoContextWindow), so they can differ from the
+	// catalog figures above. The rule editor's Context chip and 1M menu show
+	// them.
+	CodexWindows *config.CodexAutoWindows `json:"codex_windows,omitempty"`
 	// AuthType reflects the primary backing provider's auth type. It is
 	// non-standard (OpenAI's models API has no such field) and consumed by
 	// the tingly-box frontend to order model picker entries:
@@ -57,6 +76,10 @@ func (ph *ProtocolHandler) openAIListModelsWithScenario(c *gin.Context, scenario
 	}
 
 	rules := cfg.GetRequestConfigs()
+	var codexWindows map[string]config.CodexAutoWindows
+	if scenario != nil && *scenario == typ.ScenarioCodex {
+		codexWindows = config.ResolveCodexAutoWindows(cfg)
+	}
 
 	var models []OpenAIModel
 	for _, rule := range rules {
@@ -97,18 +120,25 @@ func (ph *ProtocolHandler) openAIListModelsWithScenario(c *gin.Context, scenario
 
 		// Model details come from the catalog entry of the upstream model
 		// this rule routes to.
-		info, _ := ruleModelInfo(cfg, rule)
+		info, _ := ruleModelInfo(cfg, rule, ai.APIStyleOpenAI)
 
-		models = append(models, OpenAIModel{
-			ID:          rule.RequestModel,
-			Object:      "model",
-			Created:     created,
-			OwnedBy:     ownedBy,
-			Description: info.Description,
-			Context:     info.Context,
-			MaxOutput:   info.MaxOutput,
-			AuthType:    string(PrimaryAuthTypeForRule(cfg, rule)),
-		})
+		model := OpenAIModel{
+			ID:             rule.RequestModel,
+			Object:         "model",
+			Created:        created,
+			OwnedBy:        ownedBy,
+			Description:    info.Description,
+			Context:        info.Context,
+			MaxOutput:      info.MaxOutput,
+			ContextWindow:  info.Context,
+			MaxInputTokens: info.InputLimit(),
+			MaxTokens:      info.MaxOutput,
+			AuthType:       string(PrimaryAuthTypeForRule(cfg, rule)),
+		}
+		if w, ok := codexWindows[strings.TrimSpace(rule.RequestModel)]; ok && rule.GetScenario() == typ.ScenarioCodex {
+			model.CodexWindows = &w
+		}
+		models = append(models, model)
 	}
 
 	sort.SliceStable(models, func(i, j int) bool {

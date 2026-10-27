@@ -8,16 +8,23 @@ import { fontSizes } from '@/theme/fonts';
 import {
     CODEX_COMPACT,
     compactZones,
+    formatTokens,
     planCodexCompact,
+    resolveCodexWindow,
     trackPosition,
     type CodexCompactStatus,
 } from './codexCompact';
+import { useCodexCatalogWindow } from './useCodexCatalogWindow';
 
 interface CodexCompactChipProps {
     /** The rule's own percent; 0 = follow the Auto Config default. */
     percent: number;
-    /** Whether the rule's 1M flag is on (the catalog window is then 1M). */
+    /** The rule's own context window (0 = automatic) and 1M flag; with what
+     * the model list says Auto writes they give the window this model has
+     * (resolveCodexWindow). */
+    contextWindow: number;
     context1M: boolean;
+    requestModel?: string;
     disabled?: boolean;
     onChange: (percent: number) => void;
     buttonSx: SxProps<Theme>;
@@ -60,7 +67,9 @@ const NOTE_COLOR: Record<Exclude<CodexCompactStatus, 'ok'>, 'warning' | 'info'> 
  */
 export const CodexCompactChip: React.FC<CodexCompactChipProps> = ({
     percent,
+    contextWindow,
     context1M,
+    requestModel,
     disabled,
     onChange,
     buttonSx,
@@ -77,10 +86,17 @@ export const CodexCompactChip: React.FC<CodexCompactChipProps> = ({
     const open = Boolean(anchor);
     const overridden = percent > 0;
     const shown = draft ?? (overridden ? percent : shared.percent);
-    const window = context1M ? CODEX_COMPACT.window1M : CODEX_COMPACT.window;
+    const catalog = useCodexCatalogWindow(requestModel, open);
+    const resolvedWindow = resolveCodexWindow(contextWindow, context1M ? catalog.on : catalog.off);
+    const window = resolvedWindow.window;
+    // Until the model list has said what Auto is (or when it can't be read),
+    // token counts would be a guess: show the percent alone and no "too few
+    // tokens" warning.
+    const windowPending = catalog.status !== 'known' && resolvedWindow.source !== 'rule';
     const plan = planCodexCompact({ window, percent: shown, effectivePercent: shared.effective });
-    const zones = compactZones(window, shared.effective);
-    const noteKind = plan.status === 'ok' ? null : NOTE_COLOR[plan.status];
+    const allZones = compactZones(window, shared.effective);
+    const zones = windowPending ? { ...allZones, low: null } : allZones;
+    const noteKind = plan.status === 'ok' || (windowPending && plan.status === 'low') ? null : NOTE_COLOR[plan.status];
 
     React.useEffect(() => {
         if (!open) return;
@@ -253,9 +269,9 @@ export const CodexCompactChip: React.FC<CodexCompactChipProps> = ({
 
                     <Stack spacing={0.25} sx={{ fontSize: fontSizes.sm, fontVariantNumeric: 'tabular-nums' }}>
                         {[
-                            [t('ruleHeader.compact.window'), context1M ? '1M' : '200K', undefined],
-                            [t('ruleHeader.compact.line'), `${plan.applied}% · ${fmt(plan.line)} tokens`, undefined],
-                            [t('ruleHeader.compact.remain'), `${fmt(plan.remain)} tokens`, plan.status === 'low' ? 'warning.dark' : 'text.primary'],
+                            [t('ruleHeader.compact.window'), windowPending ? '…' : formatTokens(window), undefined],
+                            [t('ruleHeader.compact.line'), windowPending ? `${plan.applied}%` : `${plan.applied}% · ${fmt(plan.line)} tokens`, undefined],
+                            [t('ruleHeader.compact.remain'), windowPending ? '…' : `${fmt(plan.remain)} tokens`, plan.status === 'low' && !windowPending ? 'warning.dark' : 'text.primary'],
                         ].map(([label, value, color]) => (
                             <Stack key={label} direction="row" sx={{ justifyContent: 'space-between' }}>
                                 <Box component="span" sx={{ color: 'text.secondary' }}>{label}</Box>
