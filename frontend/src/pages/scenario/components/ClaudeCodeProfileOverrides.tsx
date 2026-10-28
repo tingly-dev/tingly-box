@@ -158,6 +158,12 @@ const TEXT = {
 
 const COMMON_KEYS: OverrideKey[] = ['CLAUDE_CODE_MAX_OUTPUT_TOKENS', 'defaultMode'];
 const PROFILE_OVERRIDE_FIELDS = CLAUDE_CODE_FIELD_STRUCT.filter(field => field.kind !== 'model');
+const RULE_OWNED_MODEL_KEYS = new Set(CLAUDE_CODE_FIELD_STRUCT.filter(field => field.kind === 'model').map(field => field.envName));
+
+// Model slots can change independently while this editor is open. They are
+// owned by routing rules and must not be submitted as stale profile overrides.
+export const profileRuntimePreferences = (prefs: ClaudeCodePrefs): Record<string, string> =>
+    Object.fromEntries(Object.entries(prefs).filter(([key]) => !RULE_OWNED_MODEL_KEYS.has(key as PrefsKey)));
 const FIELD_ORDER: OverrideKey[] = [
     ...COMMON_KEYS,
     ...PROFILE_OVERRIDE_FIELDS
@@ -344,7 +350,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
         () => api.updateClaudeCodeProfileConfig(
             'claude_code',
             profileId,
-            prefs as Record<string, string>,
+            profileRuntimePreferences(prefs),
             defaultMode,
         ),
         text.saved,
