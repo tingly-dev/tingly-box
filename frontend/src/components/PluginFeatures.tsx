@@ -204,6 +204,8 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                                             label={`${item.label} ${item.value}`}
                                             color={item.active ? 'primary' : 'default'}
                                             variant={item.active ? 'filled' : 'outlined'}
+                                            // A plugin at its default is quiet: a light hairline, not the dark default outline.
+                                            sx={item.active ? undefined : { borderColor: 'divider', color: 'text.secondary' }}
                                             onClick={(e) => setPanelAnchor(e.currentTarget)}
                                         />
                                     </Tooltip>
