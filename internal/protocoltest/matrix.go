@@ -239,14 +239,16 @@ var clientSkipScenarios = map[string]string{
 	// gosdk, python and node drivers all pass the same cells; this is a
 	// driver capability gap. (Passthrough openai_responses→openai_responses
 	// is unaffected — that pair is a no-op for this assertion.)
-	"aisdk|openai_responses|text|anthropic_beta|stream":               "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
-	"aisdk|openai_responses|text|openai_chat|stream":                  "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
-	"aisdk|openai_responses|tool_use|anthropic_beta|stream":           "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
-	"aisdk|openai_responses|tool_use|openai_chat|stream":              "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
-	"aisdk|openai_responses|streaming_text|anthropic_beta|stream":     "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
-	"aisdk|openai_responses|streaming_text|openai_chat|stream":        "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
-	"aisdk|openai_responses|streaming_tool_use|anthropic_beta|stream": "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
-	"aisdk|openai_responses|streaming_tool_use|openai_chat|stream":    "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
+	"aisdk|openai_responses|text|anthropic_beta|stream":                        "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
+	"aisdk|openai_responses|text|openai_chat|stream":                           "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
+	"aisdk|openai_responses|tool_use|anthropic_beta|stream":                    "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
+	"aisdk|openai_responses|tool_use|openai_chat|stream":                       "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
+	"aisdk|openai_responses|streaming_text|anthropic_beta|stream":              "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
+	"aisdk|openai_responses|streaming_text|openai_chat|stream":                 "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
+	"aisdk|openai_responses|streaming_tool_use|anthropic_beta|stream":          "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
+	"aisdk|openai_responses|streaming_tool_use|openai_chat|stream":             "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
+	"aisdk|openai_responses|streaming_parallel_tool_use|anthropic_beta|stream": "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
+	"aisdk|openai_responses|streaming_parallel_tool_use|openai_chat|stream":    "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
 }
 
 // clientSkipReason returns a skip reason when the matrix's client driver
