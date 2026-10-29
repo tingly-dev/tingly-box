@@ -43,7 +43,7 @@ func (t *workbuddyRoundTripper) setChatIDs(h http.Header, body []byte) {
 	if conversation == "" {
 		if t.sessionScope != "" {
 			conversation = workbuddyID("conversation", t.sessionScope)
-		} else if first := workbuddyFirstInstruction(body); first != "" {
+		} else if first := workbuddyConversationPrefix(body); first != "" {
 			conversation = workbuddyID("instruction", t.providerID+"|"+first)
 		} else {
 			conversation = strings.ReplaceAll(uuid.NewString(), "-", "")
@@ -61,29 +61,32 @@ func (t *workbuddyRoundTripper) setChatIDs(h http.Header, body []byte) {
 	}
 }
 
-// Read only the first non-system instruction's content into a value; do not
-// deserialize the entire history. Canonical JSON avoids whitespace/key-order
-// differences in multipart content changing the conversation ID.
-func workbuddyFirstInstruction(body []byte) string {
-	var first string
+// Hash the leading system/developer messages and first instruction, preserving
+// role boundaries and order. Only this prefix is decoded into values; canonical
+// JSON keeps equivalent formatting from changing the conversation ID.
+func workbuddyConversationPrefix(body []byte) string {
+	type messageKey struct {
+		Role    string `json:"role"`
+		Content any    `json:"content"`
+	}
+	var prefix []messageKey
+	found := false
 	gjson.GetBytes(body, "messages").ForEach(func(_, message gjson.Result) bool {
 		role := message.Get("role").String()
 		content := message.Get("content")
-		if role == "system" || role == "developer" || role == "" || content.Type == gjson.Null {
+		if role == "" || content.Type == gjson.Null ||
+			(content.Type == gjson.String && content.Str == "") || content.Raw == "[]" {
 			return true
 		}
-		value := content.Str
-		if content.Type != gjson.String {
-			raw, _ := json.Marshal(content.Value())
-			value = string(raw)
-		}
-		if value == "" || value == "[]" {
-			return true
-		}
-		first = role + "|" + value
-		return false
+		prefix = append(prefix, messageKey{role, content.Value()})
+		found = role != "system" && role != "developer"
+		return !found
 	})
-	return first
+	if !found {
+		return ""
+	}
+	raw, _ := json.Marshal(prefix)
+	return string(raw)
 }
 
 // A user turn stays the same as tool results/assistant steps are appended.

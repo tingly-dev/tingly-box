@@ -188,11 +188,12 @@ message-order retry keeps the turn and conversation but gets a new request ID.
 
 Identifiers are opaque, process-salted 32-hex digests; no raw session, prompt or
 client IP appears in the headers. Caller-supplied correlation IDs are preserved.
-Without a stable session/conversation, the first non-empty non-system/developer
-message (role and canonical content, including images), scoped to the provider,
+Without a stable session/conversation, the leading system/developer messages
+and first non-empty instruction (roles and canonical content, including images),
+scoped to the provider,
 identifies the conversation using the same salted SHA-256 truncated to 128 bits.
-Appending history or changing the system prompt keeps this ID stable. Identical
-first instructions on the same provider share an ID; explicit session IDs avoid
+Appending history keeps this ID stable; changing the leading prompts changes it.
+Identical opening prefixes on the same provider share an ID; explicit session IDs avoid
 that ambiguity. If no usable instruction exists, a random conversation ID is used.
 Rewriting/compacting the user history can change a derived turn ID; explicit caller turn IDs are the
 way to retain that identity across history changes. This is correlation, not a

@@ -2,6 +2,7 @@ package client
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -85,15 +86,37 @@ func TestWorkBuddyInstructionConversationFallback(t *testing.T) {
 	}
 	first := `{"messages":[{"role":"user","content":"hello"}]}`
 	want := id(first, p)
-	require.Equal(t, want, id(`{"messages":[{"role":"system","content":"changed"},{"role":"developer","content":"instructions"},{"role":"user","content":"hello"},{"role":"assistant","content":"reply"},{"role":"user","content":"next"}]}`, p))
+	require.NotEqual(t, want, id(`{"messages":[{"role":"system","content":"changed"},{"role":"developer","content":"instructions"},{"role":"user","content":"hello"},{"role":"assistant","content":"reply"},{"role":"user","content":"next"}]}`, p))
 	require.Equal(t, want, id(`{ "messages": [{"content":"h\u0065llo", "role":"user"}] }`, p))
 	require.NotEqual(t, want, id(`{"messages":[{"role":"user","content":"other"}]}`, p))
 	require.NotEqual(t, want, id(first, &typ.Provider{UUID: "account-two"}))
 	require.NotEqual(t, want, id(`{"messages":[{"role":"assistant","content":"hello"}]}`, p))
+	prefix := `{"messages":[{"role":"system","content":"rules"},{"role":"developer","content":"style"},{"role":"user","content":"hello"}]}`
+	prefixID := id(prefix, p)
+	require.Equal(t, prefixID, id(`{"messages":[{"role":"system","content":"rules"},{"role":"developer","content":"style"},{"role":"user","content":"hello"},{"role":"assistant","content":"reply"},{"role":"user","content":"next"}]}`, p))
+	require.NotEqual(t, prefixID, id(`{"messages":[{"role":"system","content":"rules"},{"role":"developer","content":"different"},{"role":"user","content":"hello"}]}`, p))
+	require.NotEqual(t, prefixID, id(`{"messages":[{"role":"developer","content":"style"},{"role":"system","content":"rules"},{"role":"user","content":"hello"}]}`, p))
+
 	a := `{"messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":"image-a"}}]}]}`
 	b := `{"messages":[{"role":"user","content":[{ "image_url": {"url": "image-a"}, "type": "image_url"}]}]}`
 	require.Equal(t, id(a, p), id(b, p))
 	require.NotEqual(t, id(a, p), id(`{"messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":"image-b"}}]}]}`, p))
 	empty := `{"messages":[{"role":"system","content":"instructions"}]}`
 	require.NotEqual(t, id(empty, p), id(empty, p))
+}
+
+func BenchmarkWorkBuddyConversationPrefix(b *testing.B) {
+	for _, tc := range []struct {
+		name string
+		size int
+	}{{"8KiB", 8 * 1024}, {"64KiB", 64 * 1024}} {
+		b.Run(tc.name, func(b *testing.B) {
+			body := []byte(`{"messages":[{"role":"system","content":"` + strings.Repeat("x", tc.size) + `"},{"role":"user","content":"hello"}]}`)
+			b.ReportAllocs()
+			b.SetBytes(int64(len(body)))
+			for b.Loop() {
+				workbuddyID("instruction", workbuddyConversationPrefix(body))
+			}
+		})
+	}
 }
