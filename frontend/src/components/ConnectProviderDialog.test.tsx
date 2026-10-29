@@ -79,4 +79,12 @@ describe('ConnectProviderDialog', () => {
         fireEvent.click(screen.getByRole('button', { name: /Import: From file or clipboard/ }));
         expect(onSelect).toHaveBeenCalledWith({ kind: 'import' });
     });
+
+    it('shows only matching custom actions during a search', () => {
+        render(<ProviderListContent onSelect={vi.fn()} query="import" onQueryChange={vi.fn()} />);
+
+        expect(screen.getByRole('button', { name: /Import: From file or clipboard/ })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Custom endpoint:/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Paste & detect:/ })).not.toBeInTheDocument();
+    });
 });

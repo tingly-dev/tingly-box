@@ -313,7 +313,8 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
     const filteredOAuth = needle
         ? oauthProviders.filter((p) => `${p.name} ${p.displayName} ${p.id}`.toLowerCase().includes(needle.toLowerCase()))
         : oauthProviders;
-    const showCustom = !needle || CUSTOM_SEARCH_TERMS.some(s => s.toLowerCase().includes(needle.toLowerCase()));
+    const matchingCustom = CUSTOM_SEARCH_TERMS.map(s => !needle || s.includes(needle.toLowerCase()));
+    const showCustom = matchingCustom.some(Boolean);
     const filteredCloud = needle ? searchProviders(cloudProviders, needle) : cloudProviders;
 
     // Group key providers by region (CN vs Global vs Self-hosted)
@@ -401,27 +402,27 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
                     <>
                         <SectionHeader icon={<Add fontSize="small"/>} title="Custom" accent="custom"/>
                         <CardGrid wide={wide}>
-                            <ProviderCard
+                            {matchingCustom[0] && <ProviderCard
                                 icon={<Add/>}
                                 name="Custom endpoint"
                                 meta="Not listed? Bring your own URL"
                                 badge={keyBadge}
                                 onClick={() => onSelect({kind: 'custom'})}
-                            />
-                            <ProviderCard
+                            />}
+                            {matchingCustom[1] && <ProviderCard
                                 icon={<Upload/>}
                                 name="Import"
                                 meta="From file or clipboard"
                                 badge={keyBadge}
                                 onClick={() => onSelect({kind: 'import'})}
-                            />
-                            <ProviderCard
+                            />}
+                            {matchingCustom[2] && <ProviderCard
                                 icon={<ContentPaste/>}
                                 name="Paste & detect"
                                 meta="Paste a .env, curl, or JSON — we extract the URL and key"
                                 badge={keyBadge}
                                 onClick={() => onSelect({kind: 'paste'})}
-                            />
+                            />}
                         </CardGrid>
                     </>
                 )}
