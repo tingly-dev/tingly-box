@@ -28,29 +28,20 @@ export default function MCPToolsPanel({
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [testing, setTesting] = useState<MCPCatalogTool | null>(null);
-    const policy = async (tool: MCPCatalogTool, patch: MCPToolPatch) => {
-        const source = sources.find((s) => s.id === tool.source_id);
-        if (!source) return;
+    const save = async (patch: MCPSourceConfig) => {
         setBusy(true);
         setError('');
         try {
-            await saveSource(toolPolicyPatch(source, tool, patch));
+            await saveSource(patch);
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
         } finally {
             setBusy(false);
         }
     };
-    const bulk = async (source: MCPSourceConfig, list: MCPCatalogTool[], on: boolean) => {
-        setBusy(true);
-        setError('');
-        try {
-            await saveSource(toolsPolicyPatch(source, list, on));
-        } catch (e) {
-            setError(e instanceof Error ? e.message : String(e));
-        } finally {
-            setBusy(false);
-        }
+    const policy = (tool: MCPCatalogTool, patch: MCPToolPatch) => {
+        const source = sources.find((s) => s.id === tool.source_id);
+        return source ? save(toolPolicyPatch(source, tool, patch)) : undefined;
     };
     return (
         <Stack spacing={2}>
@@ -84,6 +75,7 @@ export default function MCPToolsPanel({
                             : route.state === 'error'
                               ? { text: workspace('failed', 'Failed'), tone: 'error' }
                               : { text: workspace('needsAttention', 'Needs attention'), tone: 'warning' };
+                const toneColor = { neutral: 'text.secondary', warning: 'warning.main', error: 'error.main' }[status.tone];
                 return (
                     <Card
                         component="article"
@@ -114,12 +106,12 @@ export default function MCPToolsPanel({
                                         width: 7,
                                         height: 7,
                                         borderRadius: '50%',
-                                        bgcolor: status.tone === 'error' ? 'error.main' : status.tone === 'warning' ? 'warning.main' : 'text.disabled',
+                                        bgcolor: status.tone === 'neutral' ? 'text.disabled' : toneColor,
                                     }}
                                 />
                                 <Typography
                                     variant="caption"
-                                    sx={{ color: status.tone === 'error' ? 'error.main' : status.tone === 'warning' ? 'warning.main' : 'text.secondary' }}
+                                    sx={{ color: toneColor }}
                                 >
                                     {status.text}
                                 </Typography>
@@ -202,7 +194,7 @@ export default function MCPToolsPanel({
                                 enabled={enabled}
                                 busy={busy || loading}
                                 onChange={(tool, patch) => void policy(tool, patch)}
-                                onBulk={(list, on) => void bulk(source, list, on)}
+                                onBulk={(list, on) => void save(toolsPolicyPatch(source, list, on))}
                                 onTest={setTesting}
                             />
                         )}

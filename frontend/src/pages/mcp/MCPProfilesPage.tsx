@@ -19,7 +19,7 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import { Add, Close, Delete, Edit, Refresh } from '@/components/icons';
+import { Add, Delete, Edit, Refresh } from '@/components/icons';
 import { PageLayout } from '@/components/PageLayout';
 import PageHeader from '@/components/PageHeader';
 import ConfirmDialog from '@/components/ConfirmDialog';
