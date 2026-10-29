@@ -41,6 +41,9 @@ func TestEndTurnNoUpdateToolStaysSilent(t *testing.T) {
 
 	w.Say("Add an end-of-turn tool.")
 	w.ThreadIs(endTool, db.ThreadReady)
+	// The report reaches the coordinator a moment after the thread is ready;
+	// on a slow runner Quiet alone can return before the report turn begins.
+	w.Eventually("the report turn ran", func() bool { return len(w.Requests()) >= 3 })
 	w.Quiet()
 
 	assert.Equal(t, []string{"Started."}, assistantTexts(w), "the report turn posted nothing")
