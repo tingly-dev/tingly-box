@@ -54,7 +54,7 @@ const StyledAddProviderNode = styled(Box, {
     justifyContent: 'center',
     padding: node.padding,
     borderRadius: theme.shape.borderRadius,
-    border: '2px dashed',
+    border: '1px dashed',
     borderColor: getRouteGraphBorderColor(theme),
     backgroundColor: 'background.paper',
     width: wide ? SMART_NODE_STYLES.width : node.width,

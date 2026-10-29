@@ -19,6 +19,7 @@ import {
     activityLogoButtonSx,
     activityLogoCellSx,
     activityRailSx,
+    navRailSelectedSx,
 } from './styles';
 import { REPO_URL } from './links';
 import { useSidebarCollapsed } from './useSidebarCollapsed';
@@ -120,14 +121,8 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                             to={targetPath}
                             onClick={() => onActivityClick(item)}
                             sx={activityItemSx({
-                                '&:hover': {
-                                    bgcolor: isActiveItem ? 'primary.main' : 'action.hover',
-                                    color: isActiveItem ? 'primary.contrastText' : 'primary.main',
-                                },
-                                ...(isActiveItem && {
-                                    bgcolor: 'primary.main',
-                                    color: 'primary.contrastText',
-                                }),
+                                '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
+                                ...(isActiveItem && navRailSelectedSx),
                             })}
                         >
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
@@ -175,14 +170,8 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                             to="/help"
                             onClick={onStandaloneNavigate}
                             sx={activityItemSx({
-                                '&:hover': {
-                                    bgcolor: isHelpActive ? 'primary.main' : 'action.hover',
-                                    color: isHelpActive ? 'primary.contrastText' : 'primary.main',
-                                },
-                                ...(isHelpActive && {
-                                    bgcolor: 'primary.main',
-                                    color: 'primary.contrastText',
-                                }),
+                                '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
+                                ...(isHelpActive && navRailSelectedSx),
                             })}
                         >
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>

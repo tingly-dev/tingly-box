@@ -13,24 +13,50 @@ export const NAV_ROW_SX = {
     px: 2,
 } as const;
 
-/** The selected row: filled with the primary colour, its text and icon on it. */
+/** A thin accent bar on the edge of the selected item. `inset` is how far the
+ *  item sits from the container edge, so the bar lands on the edge itself. */
+const selectedBar = (inset: number) => ({
+    '&::before': {
+        content: '""',
+        position: 'absolute',
+        left: -inset,
+        top: 10,
+        bottom: 10,
+        width: 3,
+        borderRadius: 2,
+        backgroundColor: 'primary.main',
+    },
+}) as const;
+
+/** The selected row: a quiet tint with a thin accent bar, text and icon in the
+ *  normal ink. A solid fill is left to the page's one primary action, so
+ *  "where am I" and "what do I press" no longer share a colour. */
 export const navRowSelectedSx = {
-    backgroundColor: 'primary.main',
-    color: 'primary.contrastText',
-    '&:hover': { backgroundColor: 'primary.main' },
-    '& .MuiListItemIcon-root': { color: 'primary.contrastText' },
-    '& .MuiListItemText-primary': { color: 'primary.contrastText' },
+    backgroundColor: 'action.selected',
+    color: 'text.primary',
+    '&:hover': { backgroundColor: 'action.selected' },
+    '& .MuiListItemIcon-root': { color: 'text.primary' },
+    '& .MuiListItemText-primary': { color: 'text.primary', fontWeight: 600 },
+    ...selectedBar(8),
+} as const;
+
+/** The selected item in the icon rail (same look, its own inset). */
+export const navRailSelectedSx = {
+    backgroundColor: 'action.selected',
+    color: 'text.primary',
+    '&:hover': { backgroundColor: 'action.selected', color: 'text.primary' },
+    ...selectedBar(4),
 } as const;
 
 /** ListItemText slotProps for a nav row: a 14px name, an 11px subtitle. */
-export const navRowTextSlotProps = (active: boolean) => ({
+export const navRowTextSlotProps = (_active: boolean) => ({
     primary: { noWrap: true, variant: 'body2' as const, sx: { fontWeight: 500, lineHeight: 1.3, fontSize: '0.875rem' } },
     secondary: {
         variant: 'caption' as const,
         sx: {
             fontSize: '0.6875rem',
             lineHeight: 1.2,
-            color: active ? 'rgba(255,255,255,0.7)' : 'text.secondary',
+            color: 'text.secondary',
         },
     },
 });

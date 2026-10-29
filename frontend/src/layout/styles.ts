@@ -203,7 +203,7 @@ export const activityLogoButtonSx: SxProps<Theme> = {
 
 // Nav rows (sizing, selected look, text) live in @tingly/ui so the Projects
 // sidebar draws the same rows.
-export { NAV_ROW_SX, navRowSelectedSx, navRowTextSlotProps } from '@tingly/ui/theme/nav';
+export { NAV_ROW_SX, navRailSelectedSx, navRowSelectedSx, navRowTextSlotProps } from '@tingly/ui/theme/nav';
 
 export const sidebarContainerSx: SxProps<Theme> = {
     height: '100%',
