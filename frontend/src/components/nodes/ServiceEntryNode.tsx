@@ -1,11 +1,10 @@
-import { Box, ButtonBase, Typography } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { Box, Divider, Stack, Typography } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { fontSizes } from '@/theme/fonts';
 import {
-    getRouteGraphActiveColor,
     NODE_LAYER_STYLES,
-    SMART_NODE_STYLES,
+    StyledSmartNodePrimary,
     StyledSmartNodeWrapper,
 } from './styles.tsx';
 
@@ -14,12 +13,13 @@ export interface ServiceEntryNodeProps {
     active: boolean;
     /** Rule has conditions above this node, so it only catches the rest. */
     hasConditions?: boolean;
-    /** Shown in the title bar while there are no conditions: Default is then
-     * the whole rule, so adding the first condition lives on the node itself. */
+    /** While there are no conditions Default is the whole rule, so the node's
+     * body is where the first one is added. */
     onAddCondition?: () => void;
     addConditionDisabled?: boolean;
 }
 
+// Same box as a condition node (SmartOpNode): a header line, a divider, a body.
 export const ServiceEntryNode: React.FC<ServiceEntryNodeProps> = ({
     active,
     hasConditions,
@@ -27,50 +27,67 @@ export const ServiceEntryNode: React.FC<ServiceEntryNodeProps> = ({
     addConditionDisabled,
 }) => {
     const { t } = useTranslation();
+    const canAdd = !hasConditions && !!onAddCondition && active && !addConditionDisabled;
     return (
         <StyledSmartNodeWrapper>
-            <Box
-                sx={(theme) => ({
-                    width: SMART_NODE_STYLES.width,
-                    boxSizing: 'border-box',
-                    px: 1.25,
-                    py: 0.75,
-                    borderRadius: `${theme.shape.borderRadius}px`,
-                    border: '1px solid',
-                    borderColor: alpha(
-                        getRouteGraphActiveColor(theme),
-                        theme.palette.mode === 'dark' ? 0.45 : 0.38,
-                    ),
-                    opacity: active ? 1 : 0.6,
-                    transition: 'border-color 0.16s ease, opacity 0.16s ease',
-                })}
-            >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography sx={{ ...NODE_LAYER_STYLES.typography, color: 'text.primary', fontWeight: 600 }}>
+            <StyledSmartNodePrimary active={active} onClick={canAdd ? onAddCondition : undefined}>
+                <Stack direction="row" sx={{ alignItems: 'center', width: '100%', flexShrink: 0 }}>
+                    <Typography
+                        sx={{
+                            fontSize: fontSizes.xs,
+                            fontWeight: 700,
+                            color: 'text.secondary',
+                            lineHeight: 1,
+                            letterSpacing: '0.04em',
+                            textTransform: 'uppercase',
+                        }}
+                    >
                         {t('rule.ruleConditions.defaultTitle')}
                     </Typography>
-                    {!hasConditions && onAddCondition && (
-                        <ButtonBase
-                            onClick={onAddCondition}
-                            disabled={!active || addConditionDisabled}
-                            sx={(theme) => ({
-                                ml: 'auto',
-                                px: 0.75,
-                                borderRadius: 0.75,
-                                fontSize: 12,
-                                color: getRouteGraphActiveColor(theme),
-                                '&:hover': { backgroundColor: alpha(getRouteGraphActiveColor(theme), 0.1) },
-                                '&.Mui-disabled': { color: theme.palette.text.disabled },
-                            })}
+                </Stack>
+
+                <Divider sx={{ width: '100%', my: 0.5 }} />
+
+                {hasConditions ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexGrow: 1, py: 0.5 }}>
+                        <Typography
+                            sx={{
+                                fontSize: fontSizes.xs,
+                                color: 'text.disabled',
+                                fontStyle: 'italic',
+                                textAlign: 'center',
+                                lineHeight: 1.3,
+                            }}
+                        >
+                            {t('rule.ruleConditions.defaultOther')}
+                        </Typography>
+                    </Box>
+                ) : (
+                    <Box
+                        sx={{
+                            width: '100%',
+                            px: 0.75,
+                            py: 0.35,
+                            borderRadius: 0.75,
+                            backgroundColor: 'action.hover',
+                            minHeight: 34,
+                            display: 'flex',
+                            alignItems: 'center',
+                            cursor: canAdd ? 'pointer' : 'default',
+                        }}
+                    >
+                        <Typography
+                            sx={{
+                                ...NODE_LAYER_STYLES.typography,
+                                fontSize: fontSizes.sm,
+                                color: 'text.secondary',
+                            }}
                         >
                             {t('rule.ruleConditions.addConditionShort')}
-                        </ButtonBase>
-                    )}
-                </Box>
-                <Typography sx={{ fontSize: 11.5, color: 'text.secondary', lineHeight: 1.4 }}>
-                    {hasConditions ? t('rule.ruleConditions.defaultOther') : t('rule.ruleConditions.defaultAll')}
-                </Typography>
-            </Box>
+                        </Typography>
+                    </Box>
+                )}
+            </StyledSmartNodePrimary>
         </StyledSmartNodeWrapper>
     );
 };
