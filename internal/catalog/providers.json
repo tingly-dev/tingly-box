@@ -1999,6 +1999,526 @@
         "https://www.alibabacloud.com/help/en/model-studio/text-generation-model"
       ]
     },
+    "qianwenaiapi": {
+      "id": "qianwenaiapi",
+      "name": "Qwen AI Platform (CN)",
+      "alias": "Qwen AI Platform (CN) | 千问AI平台（中国，按量付费）",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "maas.qianwenaiapi.com",
+      "vendor_family": "alibaba",
+      "region": "cn",
+      "plan": "standard",
+      "website": "https://platform.qianwenai.com/",
+      "description": "Qwen AI Platform China pay-as-you-go API. Uses general sk-ws- keys (legacy sk- keys), not Token Plan sk-sp- subscription keys. Supports OpenAI Chat Completions, Responses and Anthropic Messages. Separate from Alibaba Cloud DashScope and from this platform's Token Plan endpoint.",
+      "type": "official",
+      "api_doc": "https://platform.qianwenai.com/docs/api-reference/chat/anthropic",
+      "model_doc": "https://platform.qianwenai.com/docs/developer-guides/getting-started/text-generation-models",
+      "pricing_doc": "https://platform.qianwenai.com/pricing/api",
+      "base_url_openai": "https://maas.qianwenaiapi.com/compatible-mode/v1",
+      "base_url_anthropic": "https://maas.qianwenaiapi.com/apps/anthropic",
+      "openai_endpoint_mode": "both",
+      "models": [
+        {
+          "id": "qwen3.8-max",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.8-max-0902",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.8-flash",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.8-2.4t-a95b",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.7-max",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-max-2026-06-08",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-max-2026-05-20",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-plus",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-plus-2026-05-26",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-flash-2026-07-15",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.6-plus",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.6-plus-2026-04-02",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.6-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.6-flash-2026-04-16",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-plus",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-plus-2026-04-20",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-plus-2026-02-15",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-flash-2026-02-23",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3-coder-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen-plus",
+          "context": 1000000,
+          "max_output": 32000
+        },
+        {
+          "id": "qwen-plus-latest",
+          "context": 1000000,
+          "max_output": 32000
+        },
+        {
+          "id": "qwen-flash",
+          "context": 1000000,
+          "max_output": 32000
+        },
+        {
+          "id": "qwen-flash-2025-07-28",
+          "context": 1000000,
+          "max_output": 32000
+        },
+        {
+          "id": "qwen3.6-27b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-397b-a17b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-122b-a10b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-27b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-35b-a3b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.8-27b"
+        },
+        {
+          "id": "qwen3-vl-plus"
+        },
+        {
+          "id": "deepseek-v4.1-flash",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "deepseek-v4.1-flash-1017",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "deepseek-v4-pro-0813",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "deepseek-v4-pro",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "deepseek-v4-flash-0731",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "kimi-k3",
+          "context": 1000000,
+          "max_output": 1000000
+        },
+        {
+          "id": "kimi-k2.7-code",
+          "context": 256000,
+          "max_output": 16000
+        },
+        {
+          "id": "kimi-k2.6",
+          "context": 256000,
+          "max_output": 96000
+        },
+        {
+          "id": "kimi-k2.5",
+          "context": 256000
+        },
+        {
+          "id": "glm-5.3",
+          "context": 1000000,
+          "max_output": 131000
+        },
+        {
+          "id": "glm-5.2",
+          "context": 1000000,
+          "max_output": 131000
+        },
+        {
+          "id": "glm-5.1",
+          "context": 198000,
+          "max_output": 128000
+        },
+        {
+          "id": "glm-5",
+          "context": 198000
+        },
+        {
+          "id": "MiniMax-M2.5",
+          "context": 200000,
+          "max_output": 32000,
+          "note": "Output budget is shared by chain of thought and final output."
+        }
+      ],
+      "supports_models_endpoint": false,
+      "auth_type": "key",
+      "icon": "qwen",
+      "last_updated": "2026-10-29",
+      "sources": [
+        "https://platform.qianwenai.com/docs/developer-guides/getting-started/introduction",
+        "https://platform.qianwenai.com/docs/api-reference/preparation/api-key",
+        "https://platform.qianwenai.com/docs/api-reference/chat/anthropic",
+        "https://platform.qianwenai.com/docs/api-reference/chat/openai-chat",
+        "https://platform.qianwenai.com/docs/api-reference/chat/openai-responses",
+        "https://platform.qianwenai.com/docs/developer-guides/getting-started/text-generation-models",
+        "https://platform.qianwenai.com/docs/developer-guides/getting-started/pricing",
+        "https://platform.qianwenai.com/pricing/api",
+        "https://platform.qianwenai.com/docs/developer-guides/clients-and-developer-tools/deepseek-harness",
+        "https://qwenlm.github.io/qwen-code-docs/en/users/configuration/auth/"
+      ],
+      "note": "Models are the documented Anthropic-compatible set (also usable through OpenAI Chat); the broader platform offers additional models through other APIs. Responses feature support varies by model. Anthropic authentication accepts x-api-key or Authorization: Bearer. No GET /models discovery; configure model IDs manually. Token Plan uses https://token-plan.maas.qianwenaiapi.com with its own sk-sp- keys; international QwenCloud uses maas.qwencloudapi.com. Neither replaces the existing DashScope templates. Limits use the catalog's decimal K/M convention; unknown limits are omitted. Documentation verified; no authenticated inference call performed."
+    },
+    "qwencloud": {
+      "id": "qwencloud",
+      "name": "QwenCloud (International, Singapore)",
+      "alias": "QwenCloud (International, Singapore) | 千问国际版（新加坡，按量付费）",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "ap-southeast-1.maas.qwencloudapi.com",
+      "vendor_family": "alibaba",
+      "region": "intl",
+      "plan": "standard",
+      "website": "https://www.qwencloud.com/",
+      "description": "QwenCloud pay-as-you-go API using the Singapore endpoint. Uses regional sk-ws- keys (legacy sk- keys); API keys from China Qwen AI Platform, other QwenCloud regions and Token Plan are separate. Supports OpenAI Chat Completions, Responses and Anthropic Messages.",
+      "type": "official",
+      "api_doc": "https://docs.qwencloud.com/api-reference/chat/anthropic",
+      "model_doc": "https://docs.qwencloud.com/developer-guides/getting-started/text-generation-models",
+      "pricing_doc": "https://docs.qwencloud.com/developer-guides/getting-started/model-prices",
+      "base_url_openai": "https://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1",
+      "base_url_anthropic": "https://ap-southeast-1.maas.qwencloudapi.com/apps/anthropic",
+      "openai_endpoint_mode": "both",
+      "models": [
+        {
+          "id": "qwen3.8-max",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.8-max-0902",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.8-flash",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.8-2.4t-a95b",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.7-max",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-max-2026-06-08",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-max-2026-05-20",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-plus",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-plus-2026-05-26",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-flash-2026-07-15",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.6-plus",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.6-plus-2026-04-02",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.6-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.6-flash-2026-04-16",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-plus",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-plus-2026-04-20",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-plus-2026-02-15",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-flash-2026-02-23",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3-coder-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen-plus",
+          "context": 1000000,
+          "max_output": 32000
+        },
+        {
+          "id": "qwen-plus-latest",
+          "context": 1000000,
+          "max_output": 32000
+        },
+        {
+          "id": "qwen-flash",
+          "context": 1000000,
+          "max_output": 32000
+        },
+        {
+          "id": "qwen-flash-2025-07-28",
+          "context": 1000000,
+          "max_output": 32000
+        },
+        {
+          "id": "qwen3.6-27b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-397b-a17b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-122b-a10b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-27b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-35b-a3b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.8-27b"
+        },
+        {
+          "id": "qwen3-vl-plus"
+        },
+        {
+          "id": "deepseek-v4.1-flash",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "deepseek-v4.1-flash-1017",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "deepseek-v4-pro-0813",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "deepseek-v4-pro",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "deepseek-v4-flash-0731",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "kimi-k3",
+          "context": 1000000,
+          "max_output": 1000000
+        },
+        {
+          "id": "kimi-k2.7-code",
+          "context": 256000,
+          "max_output": 16000
+        },
+        {
+          "id": "kimi-k2.5",
+          "context": 256000
+        },
+        {
+          "id": "glm-5.3",
+          "context": 1000000,
+          "max_output": 131000
+        },
+        {
+          "id": "glm-5.2",
+          "context": 1000000,
+          "max_output": 131000
+        },
+        {
+          "id": "glm-5.1",
+          "context": 198000,
+          "max_output": 128000
+        }
+      ],
+      "supports_models_endpoint": false,
+      "auth_type": "key",
+      "icon": "qwen",
+      "last_updated": "2026-10-29",
+      "sources": [
+        "https://docs.qwencloud.com/developer-guides/getting-started/regions",
+        "https://docs.qwencloud.com/api-reference/preparation/api-key",
+        "https://docs.qwencloud.com/api-reference/chat/anthropic",
+        "https://docs.qwencloud.com/api-reference/chat/openai-responses",
+        "https://docs.qwencloud.com/developer-guides/getting-started/text-generation-models",
+        "https://docs.qwencloud.com/developer-guides/getting-started/model-prices",
+        "https://docs.qwencloud.com/token-plan/personal/token-plan-personal-quickstart"
+      ],
+      "note": "Singapore template. maas.qwencloudapi.com is an equivalent legacy Singapore host. Other pay-as-you-go regions use cn-beijing, eu-central-1, cn-hongkong, ap-northeast-1 or us-east-1 in place of ap-southeast-1 and require keys created in that region; model availability and deployment scopes differ. Models are curated from the documented Anthropic-compatible set; glm-5 and MiniMax-M2.5 are Beijing-only and excluded, and kimi-k2.6 is not listed for this API. Check regional model pricing and console availability. Token Plan is Singapore-only at token-plan.maas.qwencloudapi.com with separate sk-sp- keys. Anthropic authentication accepts x-api-key or Authorization: Bearer; no /v1/models discovery. Responses features vary by model. Limits follow the catalog decimal K/M convention. Documentation verified; no authenticated inference call performed."
+    },
     "qwen-code": {
       "id": "qwen-code",
       "name": "Qwen Code (OAuth)",
