@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const DefaultClaudeCodeDefaultMode = "acceptEdits"
+const DefaultClaudeCodeDefaultMode = "auto"
 
 // DefaultClaudeCodeShowThinkingSummaries mirrors Claude Code's own built-in
 // default for the top-level showThinkingSummaries setting.

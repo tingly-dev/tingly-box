@@ -62,6 +62,8 @@ export default {
     "close": "Close",
     "done": "Done",
     "applying": "Applying...",
+    "advanced": "Advanced",
+    "advancedCustomized": "{{count}} customised",
     "copy": "Copy",
     "copied": "Copied",
     "copyModelName": "Copy model name",

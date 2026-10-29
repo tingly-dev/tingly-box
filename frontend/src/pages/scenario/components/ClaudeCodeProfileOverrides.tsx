@@ -156,7 +156,8 @@ const TEXT = {
     },
 } as const;
 
-const COMMON_KEYS: OverrideKey[] = ['CLAUDE_CODE_MAX_OUTPUT_TOKENS', 'defaultMode'];
+// Most used first: permission mode, then the context-size knobs.
+const COMMON_KEYS: OverrideKey[] = ['defaultMode', 'CLAUDE_CODE_AUTO_COMPACT_WINDOW', 'CLAUDE_CODE_MAX_OUTPUT_TOKENS'];
 const PROFILE_OVERRIDE_FIELDS = CLAUDE_CODE_FIELD_STRUCT.filter(field => field.kind !== 'model');
 const RULE_OWNED_MODEL_KEYS = new Set(CLAUDE_CODE_FIELD_STRUCT.filter(field => field.kind === 'model').map(field => field.envName));
 
@@ -215,9 +216,9 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
     const [basePrefs, setBasePrefs] = React.useState<ClaudeCodePrefs>({});
     const [prefs, setPrefs] = React.useState<ClaudeCodePrefs>({});
     const [loadedPrefs, setLoadedPrefs] = React.useState<ClaudeCodePrefs>({});
-    const [inheritedMode, setInheritedMode] = React.useState<ClaudeCodeDefaultMode>('acceptEdits');
-    const [defaultMode, setDefaultMode] = React.useState<ClaudeCodeDefaultMode>('acceptEdits');
-    const [loadedMode, setLoadedMode] = React.useState<ClaudeCodeDefaultMode>('acceptEdits');
+    const [inheritedMode, setInheritedMode] = React.useState<ClaudeCodeDefaultMode>('auto');
+    const [defaultMode, setDefaultMode] = React.useState<ClaudeCodeDefaultMode>('auto');
+    const [loadedMode, setLoadedMode] = React.useState<ClaudeCodeDefaultMode>('auto');
     const [selectedKeys, setSelectedKeys] = React.useState<Set<OverrideKey>>(new Set());
     const [loadedKeys, setLoadedKeys] = React.useState<Set<OverrideKey>>(new Set());
     const [hasOverrides, setHasOverrides] = React.useState(false);
@@ -233,7 +234,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
         if (!result?.success || !result.data) return false;
         const nextBase = (result.data.basePreferences || {}) as ClaudeCodePrefs;
         const nextPrefs = (result.data.preferences || {}) as ClaudeCodePrefs;
-        const nextInheritedMode = (result.data.inheritedDefaultMode || 'acceptEdits') as ClaudeCodeDefaultMode;
+        const nextInheritedMode = (result.data.inheritedDefaultMode || 'auto') as ClaudeCodeDefaultMode;
         const nextMode = (result.data.defaultMode || nextInheritedMode) as ClaudeCodeDefaultMode;
         setBasePrefs(nextBase);
         setPrefs(nextPrefs);

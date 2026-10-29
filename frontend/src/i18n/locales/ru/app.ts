@@ -68,6 +68,8 @@ export default {
     "close": "Закрыть",
     "done": "Готово",
     "applying": "Применение...",
+    "advanced": "Дополнительно",
+    "advancedCustomized": "изменено: {{count}}",
     "copy": "Копировать",
     "copied": "Скопировано",
     "copyModelName": "Копировать имя модели",

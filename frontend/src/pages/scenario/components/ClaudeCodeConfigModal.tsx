@@ -140,7 +140,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     const [previewOpen, setPreviewOpen] = React.useState(false);
     const [applyResult, setApplyResult] = React.useState<AgentApplyResult | null>(null);
     const [installStatusLine, setInstallStatusLine] = React.useState(true);
-    const [defaultMode, setDefaultMode] = React.useState<ClaudeCodeDefaultMode>('acceptEdits');
+    const [defaultMode, setDefaultMode] = React.useState<ClaudeCodeDefaultMode>('auto');
     const [showThinkingSummaries, setShowThinkingSummaries] = React.useState(CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES);
     const [coAuthoredBy, setCoAuthoredBy] = React.useState(CLAUDE_CODE_DEFAULT_CO_AUTHORED_BY);
     const [isConfigLoading, setIsConfigLoading] = React.useState(false);
@@ -154,7 +154,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     React.useEffect(() => {
         if (!open) {
             setPrefs(derivePrefsFromRules({ rules, slots }));
-            setDefaultMode('acceptEdits');
+            setDefaultMode('auto');
             setShowThinkingSummaries(CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES);
             setCoAuthoredBy(CLAUDE_CODE_DEFAULT_CO_AUTHORED_BY);
             setInstallStatusLine(true);
@@ -193,13 +193,13 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                     generated,
                     applied: result.preferences || {},
                 }));
-                setDefaultMode((result.defaultMode || 'acceptEdits') as ClaudeCodeDefaultMode);
+                setDefaultMode((result.defaultMode || 'auto') as ClaudeCodeDefaultMode);
                 setShowThinkingSummaries(result.showThinkingSummaries ?? CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES);
                 setCoAuthoredBy(result.coAuthoredBy ?? CLAUDE_CODE_DEFAULT_CO_AUTHORED_BY);
                 setInstallStatusLine(!!result.installStatusLine);
             } else {
                 setPrefs(generated);
-                setDefaultMode('acceptEdits');
+                setDefaultMode('auto');
                 setShowThinkingSummaries(CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES);
                 setCoAuthoredBy(CLAUDE_CODE_DEFAULT_CO_AUTHORED_BY);
                 setInstallStatusLine(true);
@@ -371,7 +371,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
 
     const handleResetDefaults = React.useCallback(() => {
         setPrefsAndClearResult(derivePrefsFromRules({ rules, slots }));
-        setDefaultModeAndClearResult('acceptEdits');
+        setDefaultModeAndClearResult('auto');
         setShowThinkingSummariesAndClearResult(CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES);
         setCoAuthoredByAndClearResult(CLAUDE_CODE_DEFAULT_CO_AUTHORED_BY);
     }, [rules, slots, setCoAuthoredByAndClearResult, setDefaultModeAndClearResult, setPrefsAndClearResult, setShowThinkingSummariesAndClearResult]);

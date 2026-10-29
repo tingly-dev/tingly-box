@@ -59,6 +59,8 @@ export default {
     "close": "关闭",
     "done": "完成",
     "applying": "应用中...",
+    "advanced": "高级",
+    "advancedCustomized": "已自定义 {{count}} 项",
     "copy": "复制",
     "copied": "已复制",
     "copyModelName": "复制模型名",

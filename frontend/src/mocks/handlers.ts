@@ -1959,8 +1959,8 @@ const mockProfileClaudeConfigData = (profileId: string) => {
     return {
         basePreferences,
         preferences: stored?.preferences || basePreferences,
-        inheritedDefaultMode: 'acceptEdits',
-        defaultMode: stored?.defaultMode || 'acceptEdits',
+        inheritedDefaultMode: 'auto',
+        defaultMode: stored?.defaultMode || 'auto',
         hasOverrides: stored?.hasOverrides || false,
         // Mirrors the backend contract: derive from current profile metadata;
         // never remember the path in the stored override object.

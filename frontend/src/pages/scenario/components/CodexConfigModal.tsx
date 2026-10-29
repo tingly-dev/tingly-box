@@ -5,6 +5,7 @@ import { InfoOutlined, RestartAlt } from '@/components/icons';
 import CodexQuickConfig, { type CodexPrefs, defaultCodexPrefs, mergeSavedCodexPrefs } from './CodexQuickConfig';
 import Context1MChangeBanner from './Context1MChangeBanner';
 import { ConfigModalShell, QuickApplyActions } from './config/ConfigModalShell';
+import { AdvancedSection } from './config/AdvancedSection';
 import { ManualFileSection } from './config/ManualFileSection';
 import { writeFileScripts } from './config/writeFileScripts';
 import { useAppliedPrefs } from './config/useAppliedPrefs';
@@ -66,6 +67,12 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     const [authJson, setAuthJson] = React.useState<string>(`{\n  "OPENAI_API_KEY": "${token}"\n}`);
     const [catalogJson, setCatalogJson] = React.useState<string>('');
     const [previewModels, setPreviewModels] = React.useState<string[]>([]);
+
+    const customizedCount = React.useMemo(() => {
+        const base = defaultCodexPrefs() as Record<string, string | undefined>;
+        const cur = prefs as Record<string, string | undefined>;
+        return Object.keys(cur).filter(k => (cur[k] ?? '') !== (base[k] ?? '')).length;
+    }, [prefs]);
 
     // Apply configuration state
     const [isApplying, setIsApplying] = React.useState(false);
@@ -333,12 +340,14 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
                 )}
 
                 {authMode !== 'chatgpt' && mainTab === 'quick' && !isConfigLoading && (
-                    <CodexQuickConfig
-                        prefs={prefs}
-                        setPrefs={setPrefs}
-                        writeCatalog={writeCatalog}
-                        setWriteCatalog={setWriteCatalog}
-                    />
+                    <AdvancedSection customizedCount={customizedCount}>
+                        <CodexQuickConfig
+                            prefs={prefs}
+                            setPrefs={setPrefs}
+                            writeCatalog={writeCatalog}
+                            setWriteCatalog={setWriteCatalog}
+                        />
+                    </AdvancedSection>
                 )}
 
                 {authMode !== 'chatgpt' && mainTab === 'manual' && (

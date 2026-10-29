@@ -11,7 +11,7 @@ export const configApplyApi = {
     // into ~/.claude/settings.json under "env".
     // `coAuthoredBy` left out, or equal to what settings.json says, leaves its
     // keys as the user wrote them (off when the file has none).
-    applyClaudeConfig: async (preferences: Record<string, string>, installStatusLine?: boolean, defaultMode: string = 'acceptEdits', showThinkingSummaries: boolean = true, coAuthoredBy?: boolean): Promise<any> => {
+    applyClaudeConfig: async (preferences: Record<string, string>, installStatusLine?: boolean, defaultMode: string = 'auto', showThinkingSummaries: boolean = true, coAuthoredBy?: boolean): Promise<any> => {
         return controlApi((client, headers) => client.POST('/api/v1/config/apply/claude', {
             headers,
             body: {preferences, installStatusLine, defaultMode, showThinkingSummaries, coAuthoredBy},

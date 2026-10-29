@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
 import { ExpandMore as ExpandMoreIcon } from '@/components/icons';
+import { AdvancedSection } from './config/AdvancedSection';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
@@ -653,7 +654,7 @@ interface DefaultModeOptionText {
     description: string;
 }
 
-export const CLAUDE_CODE_DEFAULT_MODE_OPTIONS: ClaudeCodeDefaultMode[] = ['acceptEdits', 'default', 'manual', 'plan', 'auto', 'delegate', 'dontAsk', 'bypassPermissions'];
+export const CLAUDE_CODE_DEFAULT_MODE_OPTIONS: ClaudeCodeDefaultMode[] = ['auto', 'acceptEdits', 'default', 'manual', 'plan', 'delegate', 'dontAsk', 'bypassPermissions'];
 
 // Mirrors agent.DefaultClaudeCodeShowThinkingSummaries in internal/agent/prefs.go.
 export const CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES = true;
@@ -671,33 +672,33 @@ export const coAuthoredBySettings = (include: boolean): Record<string, unknown> 
     : { includeCoAuthoredBy: false, attribution: { commit: '', pr: '' } };
 
 const DEFAULT_MODE_TEXT_ZH: Record<ClaudeCodeDefaultMode, DefaultModeOptionText> = {
-    acceptEdits: { label: '接受编辑（推荐）', description: '自动接受文件编辑，其他高风险操作仍按 Claude Code 规则处理。' },
+    acceptEdits: { label: '接受编辑', description: '自动接受文件编辑，其他高风险操作仍按 Claude Code 规则处理。' },
     default: { label: '默认', description: '使用 Claude Code 官方默认权限行为。' },
     manual: { label: '手动确认', description: '工具权限请求需要交互确认。' },
     plan: { label: '计划模式', description: '默认进入 plan mode，先规划再执行。' },
-    auto: { label: '自动规则', description: '由 Claude Code 的规则分类器允许、软拒绝或硬拒绝工具调用。' },
+    auto: { label: '自动（推荐）', description: '由 Claude Code 的规则分类器允许、软拒绝或硬拒绝工具调用。' },
     delegate: { label: '委托', description: '把权限决策委托给 Claude Code 支持的外部流程。' },
     dontAsk: { label: '不询问', description: '避免交互式询问；适合无人值守场景。' },
     bypassPermissions: { label: '绕过权限', description: '跳过权限检查；仅在完全可信环境中使用。' },
 };
 
 const DEFAULT_MODE_TEXT_EN: Record<ClaudeCodeDefaultMode, DefaultModeOptionText> = {
-    acceptEdits: { label: 'Accept edits (recommended)', description: 'Automatically accepts file edits while leaving riskier actions to Claude Code rules.' },
+    acceptEdits: { label: 'Accept edits', description: 'Automatically accepts file edits while leaving riskier actions to Claude Code rules.' },
     default: { label: 'Default', description: 'Use Claude Code\'s built-in default permission behavior.' },
     manual: { label: 'Manual approval', description: 'Require interactive approval for tool permission requests.' },
     plan: { label: 'Plan mode', description: 'Start in plan mode by default before implementation.' },
-    auto: { label: 'Auto rules', description: 'Use Claude Code\'s rule classifier to allow, soft-deny, or hard-deny tool calls.' },
+    auto: { label: 'Auto (recommended)', description: 'Use Claude Code\'s rule classifier to allow, soft-deny, or hard-deny tool calls.' },
     delegate: { label: 'Delegate', description: 'Delegate permission decisions to Claude Code\'s supported external flow.' },
     dontAsk: { label: 'Don\'t ask', description: 'Avoid interactive prompts; useful for unattended setups.' },
     bypassPermissions: { label: 'Bypass permissions', description: 'Skip permission checks; use only in fully trusted environments.' },
 };
 
 const DEFAULT_MODE_TEXT_RU: Record<ClaudeCodeDefaultMode, DefaultModeOptionText> = {
-    acceptEdits: { label: 'Принимать правки (рекомендуется)', description: 'Правки файлов принимаются автоматически, более рискованные действия остаются на усмотрение правил Claude Code.' },
+    acceptEdits: { label: 'Принимать правки', description: 'Правки файлов принимаются автоматически, более рискованные действия остаются на усмотрение правил Claude Code.' },
     default: { label: 'По умолчанию', description: 'Встроенное поведение прав доступа Claude Code.' },
     manual: { label: 'Ручное подтверждение', description: 'Каждый запрос прав на инструмент требует интерактивного подтверждения.' },
     plan: { label: 'Режим планирования', description: 'Начинать в режиме планирования, до реализации.' },
-    auto: { label: 'Автоправила', description: 'Классификатор правил Claude Code сам разрешает, мягко или жёстко отклоняет вызовы инструментов.' },
+    auto: { label: 'Авто (рекомендуется)', description: 'Классификатор правил Claude Code сам разрешает, мягко или жёстко отклоняет вызовы инструментов.' },
     delegate: { label: 'Делегирование', description: 'Передать решения о правах внешнему процессу, поддерживаемому Claude Code.' },
     dontAsk: { label: 'Не спрашивать', description: 'Избегать интерактивных запросов; удобно для работы без присмотра.' },
     bypassPermissions: { label: 'Обходить проверку прав', description: 'Пропускать проверки прав; только в полностью доверенном окружении.' },
@@ -712,15 +713,15 @@ export const CLAUDE_CODE_DEFAULT_MODE_TEXT: Record<AppLanguage, Record<ClaudeCod
 const DEFAULT_MODE_SECTION_TEXT: Record<AppLanguage, SectionText> = {
     zh: {
         title: '默认权限模式',
-        hint: '写入 settings.json 的 permissions.defaultMode（同时兼容旧版 Claude Code 读取的顶层 defaultMode）；tb 推荐 acceptEdits。',
+        hint: '写入 settings.json 的 permissions.defaultMode（同时兼容旧版 Claude Code 读取的顶层 defaultMode）；tb 推荐 auto。',
     },
     en: {
         title: 'Default permission mode',
-        hint: 'Writes permissions.defaultMode in settings.json (also mirrored to the legacy top-level defaultMode for older Claude Code installs); tb recommends acceptEdits.',
+        hint: 'Writes permissions.defaultMode in settings.json (also mirrored to the legacy top-level defaultMode for older Claude Code installs); tb recommends auto.',
     },
     ru: {
         title: 'Режим прав по умолчанию',
-        hint: 'Записывает permissions.defaultMode в settings.json (дублируется в устаревший defaultMode верхнего уровня для старых версий Claude Code); tb рекомендует acceptEdits.',
+        hint: 'Записывает permissions.defaultMode в settings.json (дублируется в устаревший defaultMode верхнего уровня для старых версий Claude Code); tb рекомендует auto.',
     },
 };
 
@@ -1326,16 +1327,24 @@ const ClaudeCodeQuickConfig: React.FC<QuickConfigPanelWithBehaviorProps> = ({
     setCoAuthoredBy,
 }) => {
     const lang = useLang();
+    // Model slots are derived from routing rules, so only the settings a user
+    // typed in by hand count as "customised".
+    const customizedCount = CLAUDE_CODE_FIELD_STRUCT.filter(f =>
+        f.kind !== 'model' && String((prefs as Record<string, unknown>)[f.envName] ?? '') !== '').length;
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
             <DefaultModeSection lang={lang} defaultMode={defaultMode} setDefaultMode={setDefaultMode} />
             <ShowThinkingSummariesSection lang={lang} checked={showThinkingSummaries} onChange={setShowThinkingSummaries} />
             <CoAuthoredBySection lang={lang} checked={coAuthoredBy} onChange={setCoAuthoredBy} />
-            <Section group="model" lang={lang} prefs={prefs} setPrefs={setPrefs} />
-            <Section group="limits" lang={lang} prefs={prefs} setPrefs={setPrefs} />
-            <Section group="switches" lang={lang} prefs={prefs} setPrefs={setPrefs} />
-            <Section group="network" lang={lang} prefs={prefs} setPrefs={setPrefs} />
+            <AdvancedSection customizedCount={customizedCount}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    <Section group="model" lang={lang} prefs={prefs} setPrefs={setPrefs} />
+                    <Section group="limits" lang={lang} prefs={prefs} setPrefs={setPrefs} />
+                    <Section group="switches" lang={lang} prefs={prefs} setPrefs={setPrefs} />
+                    <Section group="network" lang={lang} prefs={prefs} setPrefs={setPrefs} />
+                </Box>
+            </AdvancedSection>
         </Box>
     );
 };

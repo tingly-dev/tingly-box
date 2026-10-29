@@ -14,7 +14,7 @@ const applyClaudeConfig = async (
     t: TFunction,
     prefs: Record<string, string>,
     installStatusLine: boolean,
-    defaultMode: ClaudeCodeDefaultMode = 'acceptEdits',
+    defaultMode: ClaudeCodeDefaultMode = 'auto',
     showThinkingSummaries: boolean = true,
     coAuthoredBy?: boolean,
 ): Promise<AgentApplyResult> => {
@@ -67,7 +67,7 @@ const applyContext1M = async (
             t,
             prefs as Record<string, string>,
             !!applied.installStatusLine,
-            (applied.defaultMode || 'acceptEdits') as ClaudeCodeDefaultMode,
+            (applied.defaultMode || 'auto') as ClaudeCodeDefaultMode,
             applied.showThinkingSummaries ?? undefined,
         );
     } catch (e: any) {
