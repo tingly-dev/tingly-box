@@ -40,7 +40,7 @@ export async function projectsFetch(input: RequestInfo | URL, init?: RequestInit
 
 /** The fields of GET /api/v1/projects the nav reads (projects and folders share the list). */
 interface ProjectSummaryLite {
-    threads?: { waiting?: number };
+    threads?: { waiting?: number; failed?: number };
 }
 
 /**

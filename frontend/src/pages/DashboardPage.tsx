@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Box, Button, Grid, Paper, Skeleton, Stack, Tab, Tabs, Typography } from '@mui/material';
+import { Box, Button, Grid, Skeleton, Stack, Tab, Tabs, Typography } from '@mui/material';
 import {
     StatCard,
     DailyTokenHistoryChart,
@@ -235,17 +235,16 @@ export default function DashboardPage() {
                     12-month Activity heatmap. They sit at the top of the content
                     panel; flex: 1 so the active view can use the full pane
                     height (the Activity grid centers itself vertically in it). */}
-                <Paper variant="outlined" sx={{ flex: 1, display: 'flex', flexDirection: 'column', borderRadius: 2 }}>
+                <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                     <Tabs
                         value={viewMode}
                         onChange={(_, v) => setViewMode(v)}
                         sx={{
-                            px: 1,
-                            minHeight: 44,
+                            minHeight: 40,
                             borderBottom: '1px solid',
                             borderColor: 'divider',
                             '& .MuiTab-root': {
-                                minHeight: 44,
+                                minHeight: 40,
                                 fontSize: fontSizes.md,
                                 textTransform: 'none',
                             },
@@ -255,7 +254,9 @@ export default function DashboardPage() {
                         <Tab value="requests" label={t('dashboard.overview.viewModes.byRequest', { defaultValue: 'By Request' })} />
                         <Tab value="activity" label={t('dashboard.overview.viewModes.activity', { defaultValue: 'Activity' })} />
                     </Tabs>
-                    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1.5, p: 2 }}>
+                    {/* One level of cards: each panel below is its own card on the
+                        page, not a card inside a card. */}
+                    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {viewMode === 'activity' ? (
                             <DashboardHeatmapSection
                                 provider={selectedProvider}
@@ -271,21 +272,21 @@ export default function DashboardPage() {
                                     display: 'grid',
                                     gridTemplateColumns: 'minmax(0, 1fr)',
                                     '@media (min-width: 1280px)': {
-                                        gridTemplateColumns: '320px minmax(0, 1fr)',
+                                        gridTemplateColumns: 'minmax(0, 1fr) 400px',
                                     },
                                     gap: 2,
                                     alignItems: 'stretch',
                                 }}
                             >
                                 <Box sx={{ minWidth: 0, display: 'flex' }}>
-                                    <PerformanceSummary queryParams={recordsParams} />
-                                </Box>
-                                <Box sx={{ minWidth: 0, display: 'flex' }}>
                                     {timeRange === 'today' || timeRange === 'yesterday' ? (
                                         <HourlyTokenHistoryChart data={timeSeries} />
                                     ) : (
                                         <DailyTokenHistoryChart data={timeSeries} />
                                     )}
+                                </Box>
+                                <Box sx={{ minWidth: 0, display: 'flex' }}>
+                                    <PerformanceSummary queryParams={recordsParams} />
                                 </Box>
                             </Box>
                             {/* Per-model totals belong to the summary, not to every tab. */}
@@ -315,7 +316,7 @@ export default function DashboardPage() {
                             />
                         )}
                     </Box>
-                </Paper>
+                </Box>
             </Box>
         </Box>
     );

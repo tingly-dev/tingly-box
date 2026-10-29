@@ -5,14 +5,15 @@ import {
     Box,
     CircularProgress,
     Grid,
-    Paper,
     IconButton,
+    Paper,
     Skeleton,
     ToggleButton,
     ToggleButtonGroup,
     Tooltip,
 } from '@mui/material';
 import { Refresh } from '@/components/icons';
+import { fontSizes } from '@/theme/fonts';
 import { visuallyHidden } from '@/components/dashboard/visuallyHidden';
 import {
     formatNumber,
@@ -321,7 +322,33 @@ export default function UserUsagePage() {
             <Box component="h1" sx={visuallyHidden}>
                 {t('dashboard.userUsage.title', { defaultValue: 'Team usage' })}
             </Box>
-            <Paper variant="outlined" sx={{ px: 1.5, py: 1, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 1.5 }}>
+            <Paper variant="outlined" sx={{ px: 1.5, py: 1, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
+                    <ToggleButtonGroup
+                            size="small"
+                            exclusive
+                            value={viewMode}
+                            onChange={(_, value: ViewMode | null) => value && setViewMode(value)}
+                            aria-label={t('dashboard.userUsage.viewMode', { defaultValue: 'View' })}
+                            sx={{
+                                '& .MuiToggleButton-root': {
+                                    px: 1.5,
+                                    py: 0.25,
+                                    fontSize: fontSizes.md,
+                                    textTransform: 'none',
+                                },
+                            }}
+                        >
+                            <ToggleButton value="account">
+                                {t('dashboard.userUsage.byAccount', { defaultValue: 'By account' })}
+                            </ToggleButton>
+                            <ToggleButton value="model">
+                                {t('dashboard.userUsage.byModel', { defaultValue: 'By model' })}
+                            </ToggleButton>
+                            <ToggleButton value="provider">
+                                {t('dashboard.userUsage.byProvider', { defaultValue: 'By provider' })}
+                            </ToggleButton>
+                        </ToggleButtonGroup>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <ToggleButtonGroup
                             size="small"
                             exclusive
@@ -345,6 +372,7 @@ export default function UserUsagePage() {
                                 </IconButton>
                             </span>
                         </Tooltip>
+                </Box>
             </Paper>
 
             {error && <Alert severity="error">{error}</Alert>}

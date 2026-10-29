@@ -91,6 +91,7 @@ export default function QuotaHistoryPage() {
                                 ))}
                             </Select>
                         </FormControl>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <ToggleButtonGroup
                             size="small"
                             exclusive
@@ -110,6 +111,7 @@ export default function QuotaHistoryPage() {
                                 </IconButton>
                             </span>
                         </Tooltip>
+                        </Box>
             </Paper>
 
             <QuotaHistoryView
