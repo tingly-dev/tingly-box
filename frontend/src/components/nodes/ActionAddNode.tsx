@@ -58,7 +58,7 @@ const StyledAddProviderNode = styled(Box, {
     borderColor: getRouteGraphBorderColor(theme),
     backgroundColor: 'background.paper',
     width: wide ? SMART_NODE_STYLES.width : node.width,
-    height: wide ? 36 : node.height,
+    height: wide ? 34 : node.height,
     boxSizing: 'border-box',
     transition: 'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease',
     cursor: active ? 'pointer' : 'default',

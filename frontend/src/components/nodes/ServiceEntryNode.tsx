@@ -21,7 +21,7 @@ export const ServiceEntryNode: React.FC<ServiceEntryNodeProps> = ({ active }) =>
             <Box
                 sx={(theme) => ({
                     width: SMART_NODE_STYLES.width,
-                    height: 36,
+                    height: 34,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',

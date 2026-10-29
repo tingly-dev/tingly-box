@@ -445,11 +445,8 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         return (
             <GraphRow sx={{alignItems: 'flex-start'}}>
                 {/* Fixed height matches the tier row height so ServiceEntryNode centres vertically */}
-                <NodeContainer sx={{minHeight: PROVIDER_NODE_STYLES.height, justifyContent: 'center', gap: 1}}>
-                    <ServiceEntryNode
-                        providersCount={record.providers.length}
-                        active={active}
-                    />
+                <NodeContainer sx={{minHeight: PROVIDER_NODE_STYLES.height, justifyContent: 'center', gap: '4px'}}>
+                    {/* Stacked, the two nodes add up to one service node's height */}
                     {!showSmartRouting && (
                         <ActionAddNode
                             label={t('rule.ruleConditions.addCondition')}
@@ -457,6 +454,10 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                             onAdd={() => onAddSmartRule?.()}
                         />
                     )}
+                    <ServiceEntryNode
+                        providersCount={record.providers.length}
+                        active={active}
+                    />
                 </NodeContainer>
 
                 <Box sx={{flex: 0, display: 'flex', alignItems: 'center', height: PROVIDER_NODE_STYLES.height}}>
