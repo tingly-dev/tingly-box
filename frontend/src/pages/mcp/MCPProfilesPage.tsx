@@ -28,6 +28,7 @@ import { agentPageHeaderSx } from '@/pages/scenario/components/ScenarioCardHeade
 import { getApiBaseUrl } from '@/utils/protocol';
 import { api } from '@/services/api';
 import ProfileConnect from './ProfileConnect';
+import MCPToolRow from './MCPToolRow';
 import GitHubScope from './GitHubScope';
 import MCPWorkspaceAlerts from './MCPWorkspaceAlerts';
 import { useMCPWorkspace } from './useMCPWorkspace';
@@ -271,65 +272,27 @@ export default function MCPProfilesPage() {
                             {rows.map((row) => {
                                 const globallyOff = row.tool ? !row.tool.enabled : true;
                                 return (
-                                    <Stack
+                                    <MCPToolRow
                                         key={row.name}
-                                        direction="row"
-                                        aria-label={`${row.sourceName} / ${row.tool?.name || row.name}`}
-                                        role="group"
-                                        sx={{
-                                            alignItems: 'center',
-                                            gap: 1.5,
-                                            px: 2,
-                                            minHeight: 40,
-                                            borderTop: '1px solid',
-                                            borderColor: 'divider',
-                                            '&:hover': { bgcolor: 'action.hover' },
-                                            '&:hover .row-remove, &:focus-within .row-remove': { opacity: 1 },
-                                        }}
-                                    >
-                                        <Typography
-                                            noWrap
-                                            sx={{
-                                                fontFamily: 'monospace',
-                                                fontSize: 12,
-                                                fontWeight: 500,
-                                                color: globallyOff ? 'text.disabled' : 'text.primary',
-                                            }}
-                                        >
-                                            {row.sourceName && (
-                                                <Box component="span" sx={{ color: 'text.disabled', fontWeight: 400 }}>
-                                                    {row.sourceName} /{' '}
-                                                </Box>
-                                            )}
-                                            {row.tool?.name || row.name}
-                                        </Typography>
-                                        <Typography noWrap variant="caption" color="text.secondary" sx={{ flex: 1, minWidth: 0 }}>
-                                            {globallyOff
+                                        name={row.tool?.name || row.name}
+                                        prefix={row.sourceName}
+                                        tool={row.tool}
+                                        checked={row.on}
+                                        switchDisabled={busy}
+                                        muted={globallyOff}
+                                        caption={
+                                            globallyOff
                                                 ? row.tool
                                                     ? label('globallyOff', 'Off on the MCP Tools page, so it is unavailable here')
                                                     : label('toolGone', 'This tool no longer exists')
-                                                : row.tool?.description}
-                                        </Typography>
-                                        {custom && (
-                                            <IconButton
-                                                size="small"
-                                                className="row-remove"
-                                                sx={{ opacity: { xs: 1, sm: 0 }, '&:focus-visible': { opacity: 1 } }}
-                                                disabled={busy}
-                                                aria-label={label('removeFromProfile', 'Remove from profile')}
-                                                onClick={() => void save(removeProfileTool(profile, row.name))}
-                                            >
-                                                <Close fontSize="small" />
-                                            </IconButton>
-                                        )}
-                                        <Switch
-                                            size="small"
-                                            disabled={busy}
-                                            checked={row.on}
-                                            slotProps={{ input: { 'aria-label': row.tool?.name || row.name } }}
-                                            onChange={(e) => void save(setProfileToolOn(profile, row.name, e.target.checked))}
-                                        />
-                                    </Stack>
+                                                : undefined
+                                        }
+                                        groupRole
+                                        ariaLabel={`${row.sourceName} / ${row.tool?.name || row.name}`}
+                                        onToggle={(on) => void save(setProfileToolOn(profile, row.name, on))}
+                                        onRemove={custom ? () => void save(removeProfileTool(profile, row.name)) : undefined}
+                                        removeDisabled={busy}
+                                    />
                                 );
                             })}
                         </Card>

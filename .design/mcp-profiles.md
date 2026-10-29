@@ -84,6 +84,9 @@ MCP Tools, Server Tools and the MCP profile page show tools the same way: one
 bordered card per connection (or per profile) and one 40px row per tool, not a
 card per tool. Rules (visual tokens as in `projects-visual.md`):
 
+- One component (`MCPToolRow`) renders every row; callers only decide what the
+  switch means (global on MCP Tools, in-profile on a profile) and pass Remove or
+  a caption where needed.
 - Row: monospace name, one-line truncated description, switch. Click the row to
   expand its schemas. A tool that is off or restricted is greyed as a whole row.
 - Schemas are plain JSON (parameters, output), each with a copy button that
