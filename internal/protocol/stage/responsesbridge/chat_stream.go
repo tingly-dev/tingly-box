@@ -22,7 +22,7 @@ func newChatResponsesStream(target stage.EventStream, sourceModel string, namesp
 	iterator := &openAIChatStreamIterator{target: target}
 	return &chatResponsesStream{
 		iterator:  iterator,
-		converter: protocolstream.NewChatToResponsesConverter(iterator, sourceModel).WithNamespaces(namespaces),
+		converter: protocolstream.NewChatToResponsesConverter(iterator, sourceModel, namespaces),
 	}, nil
 }
 

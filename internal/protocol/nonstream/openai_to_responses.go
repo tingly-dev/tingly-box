@@ -18,7 +18,7 @@ import (
 // HandleOpenAIChatToResponses writes an OpenAI Chat response as Responses API format.
 // Corresponds to stream.HandleOpenAIChatToResponsesStream.
 func HandleOpenAIChatToResponses(hc *protocol.HandleContext, resp *openai.ChatCompletion, requestModel string) (*protocol.TokenUsage, error) {
-	payload := ConvertChatToResponsesWireWithNamespaces(resp, hc.ResponseModel, requestModel, hc.Namespaces).ToMap()
+	payload := BuildResponsesPayloadFromChat(resp, hc.ResponseModel, requestModel, hc.Namespaces)
 	hc.GinContext.JSON(http.StatusOK, payload)
 	return usage.FromOpenAIChatCompletion(resp.Usage), nil
 }
@@ -26,26 +26,19 @@ func HandleOpenAIChatToResponses(hc *protocol.HandleContext, resp *openai.ChatCo
 // HandleAnthropicBetaToResponses writes an Anthropic Beta response as Responses API format.
 // Corresponds to stream.HandleAnthropicBetaToOpenAIResponsesStream.
 func HandleAnthropicBetaToResponses(hc *protocol.HandleContext, resp *anthropic.BetaMessage, requestModel string) (*protocol.TokenUsage, error) {
-	payload := ConvertAnthropicBetaToResponsesWireWithNamespaces(resp, hc.ResponseModel, requestModel, hc.Namespaces).ToMap()
+	payload := BuildResponsesPayloadFromAnthropicBeta(resp, hc.ResponseModel, requestModel, hc.Namespaces)
 	hc.GinContext.JSON(http.StatusOK, payload)
 	return usage.FromAnthropicBetaMessage(resp.Usage), nil
 }
 
 // BuildResponsesPayloadFromChat converts a Chat completion response to Responses API format.
-func BuildResponsesPayloadFromChat(resp *openai.ChatCompletion, responseModel, actualModel string) map[string]any {
-	return ConvertChatToResponsesWire(resp, responseModel, actualModel).ToMap()
+func BuildResponsesPayloadFromChat(resp *openai.ChatCompletion, responseModel, actualModel string, namespaces toolnamespace.Index) map[string]any {
+	return ConvertChatToResponsesWire(resp, responseModel, actualModel, namespaces).ToMap()
 }
 
 // ConvertChatToResponsesWire builds the typed Responses API output contract
 // without routing protocol conversion through generic maps or JSON decoding.
-func ConvertChatToResponsesWire(resp *openai.ChatCompletion, responseModel, actualModel string) wire.ResponsesWireResponse {
-	return ConvertChatToResponsesWireWithNamespaces(resp, responseModel, actualModel, nil)
-}
-
-// ConvertChatToResponsesWireWithNamespaces is ConvertChatToResponsesWire for a
-// Responses client that declared `namespace` tools: calls to their flattened
-// functions come back as namespaced function calls.
-func ConvertChatToResponsesWireWithNamespaces(resp *openai.ChatCompletion, responseModel, actualModel string, namespaces toolnamespace.Index) wire.ResponsesWireResponse {
+func ConvertChatToResponsesWire(resp *openai.ChatCompletion, responseModel, actualModel string, namespaces toolnamespace.Index) wire.ResponsesWireResponse {
 	model := responseModel
 	if model == "" {
 		model = actualModel
@@ -126,21 +119,13 @@ func chatFinishReasonToResponsesStatus(finishReason string) (status, incompleteR
 }
 
 // BuildResponsesPayloadFromAnthropicBeta converts an Anthropic Beta message response to Responses API format.
-func BuildResponsesPayloadFromAnthropicBeta(resp *anthropic.BetaMessage, responseModel, actualModel string) map[string]any {
-	return ConvertAnthropicBetaToResponsesWire(resp, responseModel, actualModel).ToMap()
+func BuildResponsesPayloadFromAnthropicBeta(resp *anthropic.BetaMessage, responseModel, actualModel string, namespaces toolnamespace.Index) map[string]any {
+	return ConvertAnthropicBetaToResponsesWire(resp, responseModel, actualModel, namespaces).ToMap()
 }
 
 // ConvertAnthropicBetaToResponsesWire builds the typed Responses API output
 // contract without coupling the Bridge to transport or SDK JSON internals.
-func ConvertAnthropicBetaToResponsesWire(resp *anthropic.BetaMessage, responseModel, actualModel string) wire.ResponsesWireResponse {
-	return ConvertAnthropicBetaToResponsesWireWithNamespaces(resp, responseModel, actualModel, nil)
-}
-
-// ConvertAnthropicBetaToResponsesWireWithNamespaces is
-// ConvertAnthropicBetaToResponsesWire for a Responses client that declared
-// `namespace` tools: calls to their flattened functions come back as
-// namespaced function calls.
-func ConvertAnthropicBetaToResponsesWireWithNamespaces(resp *anthropic.BetaMessage, responseModel, actualModel string, namespaces toolnamespace.Index) wire.ResponsesWireResponse {
+func ConvertAnthropicBetaToResponsesWire(resp *anthropic.BetaMessage, responseModel, actualModel string, namespaces toolnamespace.Index) wire.ResponsesWireResponse {
 	model := responseModel
 	if model == "" {
 		model = actualModel

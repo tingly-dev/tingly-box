@@ -360,7 +360,7 @@ func ConvertResponsesToolsToAnthropicBeta(tools []responses.ToolUnionParam) []an
 		return nil
 	}
 
-	functions, _ := toolnamespace.Functions(tools)
+	functions := toolnamespace.Functions(tools)
 	out := make([]anthropic.BetaToolUnionParam, 0, len(functions))
 
 	for _, fn := range functions {

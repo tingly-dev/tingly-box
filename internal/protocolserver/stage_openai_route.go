@@ -60,6 +60,12 @@ func (ph *ProtocolHandler) serveOpenAIOnAnthropic(c *gin.Context, plan *attemptP
 	}
 
 	stripUsage := shouldStripChatUsage(source)
+	// A Responses client's namespaced tool calls come back from the flat
+	// pipeline and are restored from the request's tools.
+	var namespaces toolnamespace.Index
+	if client, ok := source.Request.(*responses.ResponseNewParams); ok {
+		namespaces = toolnamespace.IndexOf(client.Tools)
+	}
 	ph.ServeStageOpenAI(c, endpoint, StageOpenAIAttempt{
 		Client:             source.SourceAPI,
 		Request:            req,
@@ -69,17 +75,8 @@ func (ph *ProtocolHandler) serveOpenAIOnAnthropic(c *gin.Context, plan *attemptP
 		Streaming:          isStreaming,
 		DisableStreamUsage: stripUsage,
 		StripUsage:         stripUsage,
-		Namespaces:         responsesNamespaces(source),
+		Namespaces:         namespaces,
 	})
-}
-
-// responsesNamespaces is the index that restores a Responses client's
-// namespaced tool calls; nil for any other client.
-func responsesNamespaces(source *transform.TransformContext) toolnamespace.Index {
-	if client, ok := source.Request.(*responses.ResponseNewParams); ok {
-		return toolnamespace.IndexOf(client.Tools)
-	}
-	return nil
 }
 
 // openAIBetaRequest converts the client's OpenAI request to Beta, as

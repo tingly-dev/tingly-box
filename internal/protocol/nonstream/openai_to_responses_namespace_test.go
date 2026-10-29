@@ -25,7 +25,7 @@ func TestConvertChatToResponsesWire_RestoresNamespace(t *testing.T) {
 	    {"id":"call_2","type":"function","function":{"name":"shell","arguments":"{}"}}
 	  ]}}]}`), &resp))
 
-	out := ConvertChatToResponsesWireWithNamespaces(&resp, "gpt-5", "m", linearNamespaces).Output
+	out := ConvertChatToResponsesWire(&resp, "gpt-5", "m", linearNamespaces).Output
 	require.Len(t, out, 2)
 	assert.Equal(t, "mcp__linear__", out[0].Namespace)
 	assert.Equal(t, "get_issue", out[0].Name)
@@ -33,7 +33,7 @@ func TestConvertChatToResponsesWire_RestoresNamespace(t *testing.T) {
 	assert.Equal(t, "shell", out[1].Name)
 
 	// Without an index nothing changes.
-	plain := ConvertChatToResponsesWire(&resp, "gpt-5", "m").Output
+	plain := ConvertChatToResponsesWire(&resp, "gpt-5", "m", nil).Output
 	assert.Empty(t, plain[0].Namespace)
 	assert.Equal(t, "mcp__linear__get_issue", plain[0].Name)
 }
@@ -45,7 +45,7 @@ func TestConvertAnthropicBetaToResponsesWire_RestoresNamespace(t *testing.T) {
 	  "content":[{"type":"tool_use","id":"toolu_1","name":"mcp__linear__get_issue","input":{}}],
 	  "usage":{"input_tokens":1,"output_tokens":1}}`), &msg))
 
-	out := ConvertAnthropicBetaToResponsesWireWithNamespaces(&msg, "gpt-5", "claude", linearNamespaces).Output
+	out := ConvertAnthropicBetaToResponsesWire(&msg, "gpt-5", "claude", linearNamespaces).Output
 	require.Len(t, out, 1)
 	assert.Equal(t, "mcp__linear__", out[0].Namespace)
 	assert.Equal(t, "get_issue", out[0].Name)

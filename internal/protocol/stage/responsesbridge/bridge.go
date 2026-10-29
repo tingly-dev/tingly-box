@@ -102,7 +102,7 @@ func (s *anthropicBetaSession) ConvertComplete(_ context.Context, response *stag
 	if err != nil {
 		return nil, err
 	}
-	converted := nonstream.ConvertAnthropicBetaToResponsesWireWithNamespaces(message, s.sourceModel, string(message.Model), s.namespaces)
+	converted := nonstream.ConvertAnthropicBetaToResponsesWire(message, s.sourceModel, string(message.Model), s.namespaces)
 	usage := protocolusage.FromAnthropicBetaMessage(message.Usage)
 	if !usage.HasUsage() {
 		usage = nil

@@ -34,8 +34,8 @@ func TestBuildResponsesPayloadFromChat_UsageDetails(t *testing.T) {
 		},
 	}
 
-	payload := BuildResponsesPayloadFromChat(resp, "gpt-x", "gpt-x")
-	typed := ConvertChatToResponsesWire(resp, "gpt-x", "gpt-x")
+	payload := BuildResponsesPayloadFromChat(resp, "gpt-x", "gpt-x", nil)
+	typed := ConvertChatToResponsesWire(resp, "gpt-x", "gpt-x", nil)
 	require.NotNil(t, typed.Usage)
 	assert.EqualValues(t, 30, typed.Usage.InputTokensDetails.CachedTokens)
 	assert.EqualValues(t, 12, typed.Usage.OutputTokensDetails.ReasoningTokens)
@@ -69,7 +69,7 @@ func TestConvertAnthropicBetaToResponsesWireToolCall(t *testing.T) {
 		StopReason: "tool_use",
 	}
 
-	converted := ConvertAnthropicBetaToResponsesWire(resp, "public-model", "provider-model")
+	converted := ConvertAnthropicBetaToResponsesWire(resp, "public-model", "provider-model", nil)
 	require.Len(t, converted.Output, 2)
 	assert.Equal(t, "message", converted.Output[0].Type)
 	item := converted.Output[1]
@@ -100,7 +100,7 @@ func TestConvertChatToResponsesWirePreservesToolCalls(t *testing.T) {
 		}},
 	}
 
-	converted := ConvertChatToResponsesWire(resp, "public-model", "provider-model")
+	converted := ConvertChatToResponsesWire(resp, "public-model", "provider-model", nil)
 	require.Len(t, converted.Output, 1)
 	item := converted.Output[0]
 	assert.Equal(t, "function_call", item.Type)
@@ -149,8 +149,8 @@ func TestBuildResponsesPayloadFromAnthropicBeta_UsageDetails(t *testing.T) {
 		StopReason: "end_turn",
 	}
 
-	payload := BuildResponsesPayloadFromAnthropicBeta(resp, "claude-x", "claude-x")
-	typed := ConvertAnthropicBetaToResponsesWire(resp, "claude-x", "claude-x")
+	payload := BuildResponsesPayloadFromAnthropicBeta(resp, "claude-x", "claude-x", nil)
+	typed := ConvertAnthropicBetaToResponsesWire(resp, "claude-x", "claude-x", nil)
 	require.NotNil(t, typed.Usage)
 	assert.EqualValues(t, 66, typed.Usage.InputTokens)
 	assert.EqualValues(t, 11, typed.Usage.InputTokensDetails.CachedTokens)
@@ -191,7 +191,7 @@ func TestBuildResponsesPayloadFromChat_CacheWriteTokens(t *testing.T) {
 		},
 	}
 
-	payload := BuildResponsesPayloadFromChat(resp, "gpt-5.6", "gpt-5.6")
+	payload := BuildResponsesPayloadFromChat(resp, "gpt-5.6", "gpt-5.6", nil)
 	usage, _ := payload["usage"].(map[string]any)
 	require.NotNil(t, usage)
 	assert.EqualValues(t, 1000, usage["input_tokens"], "input_tokens stays the prompt TOTAL")

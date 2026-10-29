@@ -81,7 +81,7 @@ func (s *openAIChatSession) ConvertComplete(_ context.Context, response *stage.R
 	if err != nil {
 		return nil, err
 	}
-	converted := nonstream.ConvertChatToResponsesWireWithNamespaces(completion, s.sourceModel, string(completion.Model), s.namespaces)
+	converted := nonstream.ConvertChatToResponsesWire(completion, s.sourceModel, string(completion.Model), s.namespaces)
 	usage := protocolusage.FromOpenAIChatCompletion(completion.Usage)
 	if !usage.HasUsage() {
 		usage = nil

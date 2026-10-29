@@ -23,7 +23,7 @@ func newResponsesStream(target stage.EventStream, sourceModel string, namespaces
 	iterator := &anthropicBetaStreamIterator{target: target}
 	return &responsesStream{
 		iterator:  iterator,
-		converter: protocolstream.NewAnthropicBetaToOpenAIResponsesConverterWithNamespaces(iterator, sourceModel, namespaces),
+		converter: protocolstream.NewAnthropicBetaToOpenAIResponsesConverter(iterator, sourceModel, namespaces),
 	}, nil
 }
 

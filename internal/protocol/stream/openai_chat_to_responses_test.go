@@ -193,7 +193,7 @@ func TestResponsesSSEWriter(t *testing.T) {
 // TestChatToResponsesConverter_TextDelta tests that the converter emits
 // the correct events for a text content delta.
 func TestChatToResponsesConverter_TextDelta(t *testing.T) {
-	conv := NewChatToResponsesConverter(nil, "gpt-4o-mini")
+	conv := NewChatToResponsesConverter(nil, "gpt-4o-mini", nil)
 	// Simulate processing a chunk with text content
 	conv.processChunk(&openai.ChatCompletionChunk{
 		Choices: []openai.ChatCompletionChunkChoice{
@@ -216,7 +216,7 @@ func TestChatToResponsesConverter_TextDelta(t *testing.T) {
 // TestChatToResponsesConverter_ToolCall tests that the converter emits
 // tool call events correctly.
 func TestChatToResponsesConverter_ToolCall(t *testing.T) {
-	conv := NewChatToResponsesConverter(nil, "gpt-4o-mini")
+	conv := NewChatToResponsesConverter(nil, "gpt-4o-mini", nil)
 	conv.hasSentCreated = true // skip created event
 
 	conv.processChunk(&openai.ChatCompletionChunk{
@@ -244,7 +244,7 @@ func TestChatToResponsesConverter_ToolCall(t *testing.T) {
 }
 
 func TestChatToResponsesConverter_ToolOnlyUsesFirstOutputIndex(t *testing.T) {
-	conv := NewChatToResponsesConverter(nil, "gpt-4o-mini")
+	conv := NewChatToResponsesConverter(nil, "gpt-4o-mini", nil)
 	conv.hasSentCreated = true
 
 	conv.processChunk(&openai.ChatCompletionChunk{Choices: []openai.ChatCompletionChunkChoice{{
@@ -282,7 +282,7 @@ func TestChatToResponsesConverter_ToolOnlyUsesFirstOutputIndex(t *testing.T) {
 // TestChatToResponsesConverter_CompletedEvent tests usage propagation
 // into the response.completed event.
 func TestChatToResponsesConverter_CompletedEvent(t *testing.T) {
-	conv := NewChatToResponsesConverter(nil, "gpt-4o-mini")
+	conv := NewChatToResponsesConverter(nil, "gpt-4o-mini", nil)
 	conv.hasSentCreated = true
 	conv.usage = protocol.NewTokenUsage(10, 20)
 	conv.hasUsage = true
@@ -309,7 +309,7 @@ func TestChatToResponsesConverter_CompletedEvent(t *testing.T) {
 // TestChatToResponsesConverter_WithReasoningTokens verifies reasoning_tokens
 // are propagated into the wire response's output_tokens_details.
 func TestChatToResponsesConverter_WithReasoningTokens(t *testing.T) {
-	conv := NewChatToResponsesConverter(nil, "o3-mini")
+	conv := NewChatToResponsesConverter(nil, "o3-mini", nil)
 	conv.hasSentCreated = true
 	conv.usage = protocol.NewTokenUsageFull(45, 30, 5, 0, 12)
 	conv.hasUsage = true
@@ -422,7 +422,7 @@ func parseResponsesSSEEvents(t *testing.T, body string) map[string]map[string]in
 // distinct ids, and output_item.added, output_item.done and the final
 // response.completed output all agree on the same id.
 func TestChatToResponsesConverter_ItemIDsAreCanonicalAndStable(t *testing.T) {
-	conv := NewChatToResponsesConverter(nil, "deepseek-chat")
+	conv := NewChatToResponsesConverter(nil, "deepseek-chat", nil)
 	conv.hasSentCreated = true
 
 	conv.processChunk(&openai.ChatCompletionChunk{

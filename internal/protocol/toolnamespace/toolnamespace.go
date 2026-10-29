@@ -47,17 +47,15 @@ func FlatName(namespace, name string) string {
 }
 
 // Functions returns the function tools of a Responses tool list in request
-// order, with every namespace member expanded under its flat name, together
-// with the Index needed to undo the expansion. Tool types that have no flat
-// equivalent are skipped with a warning rather than dropped silently.
-func Functions(tools []responses.ToolUnionParam) ([]responses.FunctionToolParam, Index) {
+// order, with every namespace member expanded under its flat name. Tool types
+// that have no flat equivalent are skipped with a warning rather than dropped
+// silently.
+func Functions(tools []responses.ToolUnionParam) []responses.FunctionToolParam {
 	var out []responses.FunctionToolParam
-	var index Index
 	for _, tool := range tools {
 		switch {
 		case !param.IsOmitted(tool.OfFunction):
-			fn := tool.OfFunction
-			out = append(out, *fn)
+			out = append(out, *tool.OfFunction)
 		case !param.IsOmitted(tool.OfNamespace):
 			ns := tool.OfNamespace
 			for _, member := range ns.Tools {
@@ -66,13 +64,8 @@ func Functions(tools []responses.ToolUnionParam) ([]responses.FunctionToolParam,
 					continue
 				}
 				fn := member.OfFunction
-				flat := FlatName(ns.Name, fn.Name)
-				if index == nil {
-					index = Index{}
-				}
-				index[flat] = Entry{Namespace: ns.Name, Name: fn.Name}
 				out = append(out, responses.FunctionToolParam{
-					Name:        flat,
+					Name:        FlatName(ns.Name, fn.Name),
 					Description: fn.Description,
 					Parameters:  schemaMap(fn.Parameters),
 					Strict:      fn.Strict,
@@ -84,12 +77,28 @@ func Functions(tools []responses.ToolUnionParam) ([]responses.FunctionToolParam,
 			}
 		}
 	}
-	return out, index
+	return out
 }
 
-// IndexOf returns the Index for a Responses request's tools.
+// IndexOf returns the Index for a Responses request's tools: one entry per
+// function inside a namespace. It is nil when the request has none.
 func IndexOf(tools []responses.ToolUnionParam) Index {
-	_, index := Functions(tools)
+	var index Index
+	for _, tool := range tools {
+		if param.IsOmitted(tool.OfNamespace) {
+			continue
+		}
+		ns := tool.OfNamespace
+		for _, member := range ns.Tools {
+			if member.OfFunction == nil {
+				continue
+			}
+			if index == nil {
+				index = Index{}
+			}
+			index[FlatName(ns.Name, member.OfFunction.Name)] = Entry{Namespace: ns.Name, Name: member.OfFunction.Name}
+		}
+	}
 	return index
 }
 

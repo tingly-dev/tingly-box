@@ -357,7 +357,7 @@ func ConvertResponsesToolsToChatTools(tools []responses.ToolUnionParam) []openai
 		return nil
 	}
 
-	functions, _ := toolnamespace.Functions(tools)
+	functions := toolnamespace.Functions(tools)
 	result := make([]openai.ChatCompletionToolUnionParam, 0, len(functions))
 
 	for _, fn := range functions {

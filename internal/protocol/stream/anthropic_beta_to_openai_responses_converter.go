@@ -67,6 +67,7 @@ type pendingResponseToolCall struct {
 func newAnthropicBetaToResponsesConverter(
 	stream AnthropicBetaStream,
 	responseModel string,
+	namespaces toolnamespace.Index,
 ) *anthropicBetaToResponsesConverter {
 	ts := time.Now().Unix()
 	return &anthropicBetaToResponsesConverter{
@@ -77,6 +78,7 @@ func newAnthropicBetaToResponsesConverter(
 		pendingTextBlocks: make(map[int]*pendingResponseTextBlock),
 		pendingToolCalls:  make(map[int]*pendingResponseToolCall),
 		createdAt:         ts,
+		namespaces:        namespaces,
 	}
 }
 
@@ -86,21 +88,9 @@ func newAnthropicBetaToResponsesConverter(
 func NewAnthropicBetaToOpenAIResponsesConverter(
 	stream AnthropicBetaStream,
 	responseModel string,
-) StreamConverter {
-	return newAnthropicBetaToResponsesConverter(stream, responseModel)
-}
-
-// NewAnthropicBetaToOpenAIResponsesConverterWithNamespaces is the converter
-// for a Responses client that declared `namespace` tools: calls to their
-// flattened functions are emitted as namespaced function calls.
-func NewAnthropicBetaToOpenAIResponsesConverterWithNamespaces(
-	stream AnthropicBetaStream,
-	responseModel string,
 	namespaces toolnamespace.Index,
 ) StreamConverter {
-	conv := newAnthropicBetaToResponsesConverter(stream, responseModel)
-	conv.namespaces = namespaces
-	return conv
+	return newAnthropicBetaToResponsesConverter(stream, responseModel, namespaces)
 }
 
 func (c *anthropicBetaToResponsesConverter) Next() (interface{}, bool, error) {

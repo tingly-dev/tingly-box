@@ -57,7 +57,7 @@ type pendingToolCallResponse struct {
 
 // NewChatToResponsesConverter creates a converter that reads from an OpenAI
 // Chat Completions stream and yields Responses API wire events.
-func NewChatToResponsesConverter(stream OpenAIChatStream, responseModel string) *chatToResponsesConverter {
+func NewChatToResponsesConverter(stream OpenAIChatStream, responseModel string, namespaces toolnamespace.Index) *chatToResponsesConverter {
 	return &chatToResponsesConverter{
 		stream:           stream,
 		responseModel:    responseModel,
@@ -67,14 +67,8 @@ func NewChatToResponsesConverter(stream OpenAIChatStream, responseModel string) 
 		textOutputIndex:  -1,
 		usage:            protocol.ZeroTokenUsage(),
 		pendingToolCalls: make(map[int]*pendingToolCallResponse),
+		namespaces:       namespaces,
 	}
-}
-
-// WithNamespaces makes the converter emit calls to flattened namespace tools
-// as namespaced function calls, as the Responses client declared them.
-func (c *chatToResponsesConverter) WithNamespaces(namespaces toolnamespace.Index) *chatToResponsesConverter {
-	c.namespaces = namespaces
-	return c
 }
 
 func (c *chatToResponsesConverter) Next() (interface{}, bool, error) {

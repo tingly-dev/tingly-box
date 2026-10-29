@@ -84,7 +84,7 @@ func TestAnthropicBetaToResponsesConverter_GoldenSequence(t *testing.T) {
 	stream := anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](
 		newFakeAnthropicDecoder(events), nil,
 	)
-	conv := newAnthropicBetaToResponsesConverter(stream, "claude-3-5-sonnet-20241022")
+	conv := newAnthropicBetaToResponsesConverter(stream, "claude-3-5-sonnet-20241022", nil)
 
 	var got []wire.ResponsesEvent
 	for {
@@ -216,7 +216,7 @@ func TestAnthropicBetaToResponsesConverter_PreservesInterleavedTextBlocks(t *tes
 	stream := anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](
 		newFakeAnthropicDecoder(events), nil,
 	)
-	conv := newAnthropicBetaToResponsesConverter(stream, "claude-test")
+	conv := newAnthropicBetaToResponsesConverter(stream, "claude-test", nil)
 
 	var added []wire.ResponsesOutputItemAddedEvent
 	var done []wire.ResponsesOutputItemDoneEvent
@@ -285,6 +285,7 @@ func TestAnthropicBetaToResponsesConverter_OutputItemAddedWire(t *testing.T) {
 	conv := newAnthropicBetaToResponsesConverter(
 		anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](newFakeAnthropicDecoder(events), nil),
 		"claude-3-5-sonnet-20241022",
+		nil,
 	)
 
 	var added []map[string]json.RawMessage

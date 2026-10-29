@@ -37,7 +37,8 @@ func TestFlatName(t *testing.T) {
 }
 
 func TestFunctionsExpandsNamespaces(t *testing.T) {
-	functions, index := Functions(parseTools(t, codexTools))
+	tools := parseTools(t, codexTools)
+	functions, index := Functions(tools), IndexOf(tools)
 
 	names := make([]string, len(functions))
 	for i, fn := range functions {

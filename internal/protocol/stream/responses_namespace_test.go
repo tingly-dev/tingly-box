@@ -42,7 +42,7 @@ func functionCallItems(events []wire.ResponsesEvent) []wire.ResponsesOutputItemW
 }
 
 func TestChatToResponsesConverter_RestoresNamespace(t *testing.T) {
-	conv := NewChatToResponsesConverter(nil, "gpt-5").WithNamespaces(linearNamespaces)
+	conv := NewChatToResponsesConverter(nil, "gpt-5", linearNamespaces)
 	conv.hasSentCreated = true
 
 	conv.processChunk(&openai.ChatCompletionChunk{Choices: []openai.ChatCompletionChunkChoice{{
@@ -86,7 +86,7 @@ func TestAnthropicBetaToResponsesConverter_RestoresNamespace(t *testing.T) {
 		marshal(map[string]any{"type": "message_stop"}),
 	}
 	stream := anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](newFakeAnthropicDecoder(events), nil)
-	conv := NewAnthropicBetaToOpenAIResponsesConverterWithNamespaces(stream, "gpt-5", linearNamespaces)
+	conv := NewAnthropicBetaToOpenAIResponsesConverter(stream, "gpt-5", linearNamespaces)
 
 	var got []wire.ResponsesEvent
 	for {
