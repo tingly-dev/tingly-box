@@ -87,7 +87,8 @@ card per tool. Rules (visual tokens as in `projects-visual.md`):
 - Row: monospace name, one-line truncated description, switch. Click the row to
   expand its schemas. A tool that is off or restricted is greyed as a whole row.
 - Schemas are plain JSON (parameters, output), each with a copy button that
-  copies the raw schema. No custom rendering.
+  copies the raw schema. No custom rendering. Each block has a fixed height and
+  scrolls inside, so every tool expands to the same size however big its schema.
 - Test (and Remove, on a profile) appear on hover or focus, always on touch.
 - Status is a dot and a word. Connected, Off and Checking are neutral; amber is
   "needs you" (missing value, unconfigured), red is failed. The connection's

@@ -29,7 +29,7 @@ function SchemaBlock({ title, schema }: { title: string; schema: unknown }) {
                         m: 0,
                         p: 1.25,
                         pr: 5,
-                        maxHeight: 280,
+                        height: 200,
                         overflow: 'auto',
                         whiteSpace: 'pre-wrap',
                         overflowWrap: 'anywhere',
