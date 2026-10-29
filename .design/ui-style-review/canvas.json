@@ -15,98 +15,105 @@
       "y": 0,
       "w": 1560,
       "h": 760,
-      "title": "0 · 怎么读这份评审"
+      "title": "0 \u00b7 \u600e\u4e48\u8bfb\u8fd9\u4efd\u8bc4\u5ba1"
     },
     "B-AgentNow.dc.html": {
       "x": 0,
       "y": 880,
       "w": 1560,
       "h": 1000,
-      "title": "1 · Agent 页现状"
+      "title": "1 \u00b7 Agent \u9875\u73b0\u72b6"
     },
     "C-OptionA.dc.html": {
       "x": 0,
       "y": 2000,
       "w": 1560,
       "h": 1130,
-      "title": "2 · 方案 A：收紧令牌"
+      "title": "2 \u00b7 \u65b9\u6848 A\uff1a\u6536\u7d27\u4ee4\u724c"
     },
     "D-OptionB.dc.html": {
       "x": 0,
       "y": 3250,
       "w": 1560,
       "h": 1130,
-      "title": "3 · 方案 B：换视觉语法"
+      "title": "3 \u00b7 \u65b9\u6848 B\uff1a\u6362\u89c6\u89c9\u8bed\u6cd5"
     },
     "H-OptionB2.dc.html": {
       "x": 0,
       "y": 4500,
       "w": 1560,
       "h": 1150,
-      "title": "3b · 方案 B2：保留卡片只留一层"
+      "title": "3b \u00b7 \u65b9\u6848 B2\uff1a\u4fdd\u7559\u5361\u7247\u53ea\u7559\u4e00\u5c42"
     },
     "I-OptionB3.dc.html": {
       "x": 0,
       "y": 5770,
       "w": 1560,
       "h": 1150,
-      "title": "3c · 方案 B3：底色分层"
+      "title": "3c \u00b7 \u65b9\u6848 B3\uff1a\u5e95\u8272\u5206\u5c42"
     },
     "J-OptionB4.dc.html": {
       "x": 0,
       "y": 7040,
       "w": 1560,
       "h": 1180,
-      "title": "3d · 方案 B4：重做质感"
+      "title": "3d \u00b7 \u65b9\u6848 B4\uff1a\u91cd\u505a\u8d28\u611f"
     },
     "E-OptionC.dc.html": {
       "x": 0,
       "y": 8340,
       "w": 1560,
       "h": 1130,
-      "title": "4 · 方案 C：换壳"
+      "title": "4 \u00b7 \u65b9\u6848 C\uff1a\u6362\u58f3"
     },
     "F-DashInB.dc.html": {
       "x": 0,
       "y": 9590,
       "w": 1560,
       "h": 1130,
-      "title": "5 · B 推广到 Dashboard"
+      "title": "5 \u00b7 B \u63a8\u5e7f\u5230 Dashboard"
     },
     "G-Compare.dc.html": {
       "x": 0,
       "y": 10840,
       "w": 1560,
       "h": 560,
-      "title": "6 · 对比"
+      "title": "6 \u00b7 \u5bf9\u6bd4"
     },
     "K-SmartUnified.dc.html": {
       "x": 0,
       "y": 14540,
       "w": 1560,
       "h": 2260,
-      "title": "7 · Smart 与 Direct 合成一套规则"
+      "title": "7 \u00b7 Smart \u4e0e Direct \u5408\u6210\u4e00\u5957\u89c4\u5219"
     },
     "L-AddCondition.dc.html": {
       "x": 0,
       "y": 16920,
       "w": 1560,
       "h": 1960,
-      "title": "8 · 新增条件怎么做才优雅"
+      "title": "8 \u00b7 \u65b0\u589e\u6761\u4ef6\u600e\u4e48\u505a\u624d\u4f18\u96c5"
     },
     "M-AddConditionOptions.dc.html": {
       "x": 0,
       "y": 19000,
       "w": 1560,
       "h": 1560,
-      "title": "9 · 新增条件的六种思路"
+      "title": "9 \u00b7 \u65b0\u589e\u6761\u4ef6\u7684\u516d\u79cd\u601d\u8def"
     },
     "N-AddConditionMinimal.dc.html": {
       "x": 0,
       "y": 20680,
       "w": 1560,
       "h": 2500,
-      "title": "10 · 统一后：选条件，再选模型"
+      "title": "10 \u00b7 \u7edf\u4e00\u540e\uff1a\u9009\u6761\u4ef6\uff0c\u518d\u9009\u6a21\u578b"
+    },
+    "O-AddInDefault.dc.html": {
+      "x": 0,
+      "y": 23300,
+      "w": 1560,
+      "h": 1850,
+      "title": "11 \u00b7 \u65e0\u6761\u4ef6\u65f6\uff0cAdd \u5e76\u5165 Default"
     }
   }
 }
