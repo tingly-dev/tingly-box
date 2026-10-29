@@ -22,9 +22,11 @@ opens it in Direct mode. A single, page-scoped entry avoids repeating the icon
 on every card (principle #9, reduce noise) and doubles as a standing hint that
 the guide can be reopened there.
 
-- The graph's `EntryNode` keeps its contextual "View direct/smart guide →"
-  links (mode-specific, inline in the selector) — those are separate from the
-  toolbar entry.
+- A rule has no Direct/Smart switch: it is its Default row plus optional
+  conditions (`smartEnabled` just follows whether conditions exist). The
+  contextual "View direct/smart guide →" links now sit in the hover tooltips of
+  the `Default` node (Direct guide) and the `Add condition` node (Smart guide);
+  they are separate from the toolbar entry.
 
 **Fix (first-run):** the Direct guide auto-opens once per user (new *and*
 existing) the first time they land on a populated routing page, then records

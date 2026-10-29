@@ -248,6 +248,7 @@ The routing graph always renders tier rows, even when only one tier exists (T0 i
 
 - `TierNode` shows a neutral badge (52 px wide, paper background, `text.secondary` label). Hovering it reveals a tooltip explaining what the tier means and how to move services.
 - Each service card has **↑ / ↓ arrow buttons** that move it one tier up or down. The ↑ arrow is hidden on T0 services (can't go higher); the ↓ arrow is hidden on the sole service of the bottom tier (see Tier normalization). ↓ on a bottom tier that holds several services still splits a new tier off below.
+- The last `TierNode` has a second way to open a new tier: on hover its label shifts up and a small dashed **+** appears inside the node. The new, still empty tier is **UI state only** (`UnifiedRoutingGraph` `pendingTier`), never part of the record, because normalization would drop an empty tier before a model lands in it. Adding a model puts it in that tier (assigned `tier = last + 1`, already contiguous); any change to the service list clears the pending row, and reloading drops it.
 - Services in the same tier share load via the sub-tactic (random by default).
 
 The design choice here is **implicit mode activation**: assigning any service a tier flips the rule's `lb_tactic` to `tier` on save. No separate tactic-selector UI is exposed. Moving all services back to a single tier leaves the tactic as `tier` (consistent; the round-trip is safe).
