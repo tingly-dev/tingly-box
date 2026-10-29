@@ -8691,6 +8691,50 @@
         }
       }
     },
+    "/api/v1/threads/{id}/title": {
+      "put": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Rename the thread",
+        "description": "Rename the thread",
+        "operationId": "apiV1ThreadsIdTitlePut",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TitleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/token": {
       "get": {
         "tags": [
@@ -15184,6 +15228,13 @@
             "type": "boolean",
             "description": "Field enabled"
           },
+          "github_repos": {
+            "type": "array",
+            "description": "Field github_repos",
+            "items": {
+              "type": "string"
+            }
+          },
           "id": {
             "type": "string",
             "description": "Field id"
@@ -15428,6 +15479,10 @@
           "origin": {
             "type": "string",
             "description": "Field origin"
+          },
+          "preset": {
+            "type": "string",
+            "description": "Field preset"
           },
           "proxy_url": {
             "type": "string",
@@ -20644,6 +20699,18 @@
         "required": [
           "meta",
           "data"
+        ]
+      },
+      "TitleRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Field title"
+          }
+        },
+        "required": [
+          "title"
         ]
       },
       "ToggleProviderResponse": {

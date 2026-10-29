@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -21,6 +22,8 @@ type validationError struct{ message string }
 
 func (e *validationError) Error() string       { return e.message }
 func invalid(format string, args ...any) error { return &validationError{fmt.Sprintf(format, args...)} }
+
+var githubRepoRE = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?/[A-Za-z0-9._-]+$`)
 
 var validID = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 var errMissing = errors.New("MCP entry not found")
@@ -60,6 +63,9 @@ func validateConfigChange(prev, cfg *typ.MCPRuntimeConfig) error {
 		}
 		if s.Visibility != "" && s.Visibility != typ.ToolVisibilityClient && s.Visibility != typ.ToolVisibilityServer {
 			return invalid("invalid visibility for %s", s.ID)
+		}
+		if s.Preset != "" && s.Preset != mcptools.GitHubPreset {
+			return invalid("unknown preset for %s: %s", s.ID, s.Preset)
 		}
 		switch s.Transport {
 		case "stdio":
@@ -121,6 +127,11 @@ func validateConfigChange(prev, cfg *typ.MCPRuntimeConfig) error {
 		seen[p.ID] = true
 		if p.ID == typ.MCPDefaultProfileID {
 			p.Name = "Default"
+		}
+		for _, repo := range p.GitHubRepos {
+			if !githubRepoRE.MatchString(repo) {
+				return invalid("profile %s: %q is not an owner/repo", p.ID, repo)
+			}
 		}
 		tools := map[string]bool{}
 		for _, tool := range p.Tools {
@@ -223,6 +234,10 @@ func (h *Handler) PatchSource(c *gin.Context) {
 			}
 			if next.ID != id {
 				return invalid("source ID cannot be changed")
+			}
+			// The preset is what keeps a GitHub source to its fixed subset.
+			if next.Preset != s.Preset {
+				return invalid("source preset cannot be changed")
 			}
 			cfg.Sources[i] = next
 			return nil

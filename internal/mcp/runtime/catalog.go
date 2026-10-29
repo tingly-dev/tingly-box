@@ -104,7 +104,7 @@ func (r *Runtime) DiscoverSource(ctx context.Context, id string) (SourceStatus, 
 		status.State = "disabled"
 	}
 	for _, def := range definitions {
-		if def.Name == "" {
+		if def.Name == "" || source.Preset == mcptools.GitHubPreset && !mcptools.GitHubToolAllowed(def.Name) {
 			continue
 		}
 		enabled, usage := EffectiveToolPolicy(*source, def.Name)

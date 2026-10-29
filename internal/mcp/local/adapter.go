@@ -107,6 +107,9 @@ func (a *MCPRuntimeAdapter) CallTool(ctx context.Context, name string, arguments
 	if !allowed {
 		return coretool.ToolResult{}, fmt.Errorf("tool is no longer available to clients")
 	}
+	if err := a.runtime.CheckToolScope(a.clientID, name, arguments); err != nil {
+		return coretool.ToolResult{}, err
+	}
 	argsJSON, err := json.Marshal(arguments)
 	if err != nil {
 		return coretool.ToolResult{}, err

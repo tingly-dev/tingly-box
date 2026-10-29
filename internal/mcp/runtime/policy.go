@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -28,6 +29,9 @@ func EffectiveToolPolicy(source typ.MCPSourceConfig, name string) (bool, typ.MCP
 	all, allowed := buildAllowList(source.Tools)
 	enabled := typ.IsMCPSourceEnabled(source) && (all || allowed[name])
 	usage := SourceUsage(source)
+	if source.Preset == mcptools.GitHubPreset && !mcptools.GitHubToolAllowed(name) {
+		enabled = false
+	}
 	if policy, ok := source.ToolPolicies[name]; ok {
 		if policy.Enabled != nil && !*policy.Enabled {
 			enabled = false

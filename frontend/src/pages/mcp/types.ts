@@ -42,8 +42,24 @@ export interface MCPSourceFormValue {
     visibility: 'client' | 'server';
     headers: MCPKVPair[];
     usage: MCPToolUsage;
+    preset?: string;
     original?: MCPSourceConfig;
 }
+
+export const MCP_GITHUB_PRESET = 'github' as const;
+export const MCP_GITHUB_ENDPOINT = 'https://api.githubcopilot.com/mcp/';
+
+// The GitHub integration is a fixed subset of the official GitHub MCP server:
+// the tools it offers are decided by Tingly Box, not by this form.
+export const githubSourceFormValue = (id: string, token: string): MCPSourceFormValue => ({
+    ...defaultMCPSourceFormValue(),
+    id,
+    name: 'GitHub',
+    transport: 'http',
+    endpoint: MCP_GITHUB_ENDPOINT,
+    headers: [{ key: 'Authorization', value: `Bearer ${token.trim()}` }],
+    preset: MCP_GITHUB_PRESET,
+});
 
 export const MCP_DEFAULT_CWD = '~/.tingly-box/mcp';
 
@@ -110,6 +126,7 @@ export const sourceToFormValue = (source?: MCPSourceConfig): MCPSourceFormValue 
             client: source.visibility !== 'server' && source.transport !== 'advisor',
             gateway: source.visibility === 'server' || source.transport === 'advisor',
         },
+        preset: source.preset,
         id: source.id || '',
         name: source.name || '',
         enabled: source.enabled ?? true,
@@ -149,6 +166,7 @@ export const formValueToSource = (form: MCPSourceFormValue): MCPSourceConfig => 
         transport: form.transport,
         tools: (form.tools || []).map((t) => t.trim()).filter(Boolean),
         visibility: form.visibility,
+        ...(form.preset ? { preset: form.preset } : {}),
     };
 
     if (form.transport === 'http' || form.transport === 'sse') {
