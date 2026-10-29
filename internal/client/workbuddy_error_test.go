@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +21,10 @@ func TestWorkBuddyErrorSurvivesSDK(t *testing.T) {
 		status                          int
 	}{
 		{"channel", `{"code":11128,"msg":"Illegal API invocation from an unapproved channel"}`, "workbuddy_channel_refused", "11128", "unapproved channel", 400},
+		{"channel tips", `{"code":11128,"msg":"request illegal","displayMsg":{"en":"Request blocked. Please send it again"},"displayTips":{"en":"This call failed channel verification, possibly because it was not sent from an official client. Please resend from the official client."},"actions":["EDIT_INPUT","SUBMIT_FEEDBACK"]}`, "workbuddy_channel_refused", "11128", "failed channel verification", 400},
+		{"channel tips zh", `{"code":"11128","msg":"request illegal","displayTips":{"zh":"这次调用没通过渠道校验，可能不是官方客户端发出的。请用官方版本重新发送。"}}`, "workbuddy_channel_refused", "11128", "allowed client channel", 400},
+		{"channel tips zh-hant", `{"code":11128,"msg":"request illegal","displayTips":{"zh-hant":"本次呼叫未通過通路驗證，可能不是官方用戶端發出。請使用官方版本重新傳送。"}}`, "workbuddy_channel_refused", "11128", "allowed client channel", 400},
+		{"ambiguous rejection", `{"code":11128,"msg":"request illegal","displayMsg":{"en":"Request blocked. Please send it again"}}`, "workbuddy_error", "11128", "Request blocked", 400},
 		{"client", `{"code":10085,"msg":"request illegal"}`, "workbuddy_channel_refused", "10085", "allowed client channel", 400},
 		{"restriction", `{"code":11140,"msg":"request illegal","displayMsg":{"en":"Your account has been restricted due to unusual activity","zh":"账号存在异常行为，已被限制使用"}}`, "workbuddy_account_restricted", "11140", "submit feedback", 403},
 		{"system shape", `{"code":11128,"msg":"first message is not system prompt"}`, "workbuddy_error", "11128", "first message", 400},
@@ -59,7 +64,11 @@ func TestWorkBuddyErrorSurvivesSDK(t *testing.T) {
 				require.Equal(t, tc.code, sdkErr.Code)
 				require.Equal(t, tc.kind, sdkErr.Type)
 				require.Equal(t, tc.kind == "workbuddy_channel_refused", IsWorkBuddyChannelRefusal(fmt.Errorf("wrapped: %w", err)))
-				require.Contains(t, sdkErr.RawJSON(), `"msg"`)
+				var normalized struct {
+					VendorError json.RawMessage `json:"vendor_error"`
+				}
+				require.NoError(t, json.Unmarshal([]byte(sdkErr.RawJSON()), &normalized))
+				require.JSONEq(t, tc.body, string(normalized.VendorError))
 			}
 		})
 	}

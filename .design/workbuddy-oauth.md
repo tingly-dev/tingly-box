@@ -30,11 +30,13 @@ When a real capture disagrees, fix the table / parser and record it here.
 
 ### Upstream refusals (2026-10-21)
 
-The WorkBuddy transport normalizes `{code,msg,displayMsg}` into an OpenAI
+The WorkBuddy transport normalizes `{code,msg,displayMsg,displayTips}` into an OpenAI
 error envelope, preserving the HTTP status, vendor code and original body.
-Only `11128` with an `unapproved channel` message, or client-identification
-code `10085`, marks a channel refusal. Such a 400 may use the existing fallback
-before response commitment, without counting as a transient service failure.
+Only `11128` with an `unapproved channel` message or an explicit channel-verification
+failure in `displayTips`, or client-identification code `10085`, marks a channel refusal.
+Newer responses use the generic `msg: request illegal`; this alone is not enough.
+Such a 400 may use the existing fallback before response commitment, without
+counting as a transient service failure.
 Other 400s remain terminal; `403/11140` includes an account-restriction message
 and follows the existing 403 handling. No new health state or cooldown is added.
 

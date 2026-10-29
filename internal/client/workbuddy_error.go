@@ -12,7 +12,7 @@ import (
 	"github.com/openai/openai-go/v3"
 )
 
-// WorkBuddy's errors use {code,msg,displayMsg}, not OpenAI's {error:{...}}.
+// WorkBuddy errors carry code/msg/displayMsg/displayTips, not {error:{...}}.
 // Normalize at this provider's transport boundary, preserving the envelope for
 // diagnostics and the HTTP status for callers. The SDK can then retain both the
 // vendor code and message through streaming and complete-call paths.
@@ -35,19 +35,33 @@ func workbuddyNormalizeError(resp *http.Response) error {
 		if msg == "" {
 			msg = message
 		}
-		var display map[string]string
+		var display, tips map[string]string
 		_ = json.Unmarshal(env["displayMsg"], &display)
+		_ = json.Unmarshal(env["displayTips"], &tips)
+		// Newer responses put the reason in displayTips and use the generic
+		// "request illegal" as msg. Code 11128 alone is still ambiguous.
+		details := strings.ToLower(msg + " " + display["en"])
+		for _, tip := range tips {
+			details += " " + strings.ToLower(tip)
+		}
+		channelRefused := strings.Contains(details, "unapproved channel") ||
+			strings.Contains(details, "failed channel verification") ||
+			strings.Contains(details, "没通过渠道校验") ||
+			strings.Contains(details, "未通過通路驗證")
 		kind := "workbuddy_error"
 		switch {
 		case resp.StatusCode == http.StatusForbidden && code == "11140":
 			kind = "workbuddy_account_restricted"
 			msg += ": account restricted by the upstream; submit feedback in WorkBuddy to appeal"
-		case code == "11128" && strings.Contains(strings.ToLower(msg), "unapproved channel"), code == "10085":
+		case code == "11128" && channelRefused, code == "10085":
 			kind = "workbuddy_channel_refused"
 			msg += "; use an allowed client channel or another provider"
 		}
 		if display["en"] != "" {
 			msg += ": " + display["en"]
+		}
+		if tips["en"] != "" {
+			msg += ": " + tips["en"]
 		}
 		if msg == "" {
 			msg = http.StatusText(resp.StatusCode)
