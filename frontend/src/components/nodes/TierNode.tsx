@@ -10,6 +10,10 @@ export interface TierNodeProps {
     active: boolean;
     onHover?: (hovering: boolean) => void;
     onShowGuide?: () => void;
+    /** Last tier only: on hover the node shows a small dashed + at its bottom
+     * that adds a tier below. */
+    onAddTier?: () => void;
+    addTierLabel?: string;
 }
 
 export const TIER_NODE_WIDTH = 52;
@@ -22,6 +26,8 @@ export const TierNode: React.FC<TierNodeProps> = ({
     active,
     onHover,
     onShowGuide,
+    onAddTier,
+    addTierLabel,
 }) => {
     const { t } = useTranslation();
 
@@ -81,12 +87,19 @@ export const TierNode: React.FC<TierNodeProps> = ({
                     transition: 'border-color 0.16s, opacity 0.16s',
                     userSelect: 'none',
                     cursor: 'default',
+                    position: 'relative',
+                    ...(onAddTier && {
+                        '&:hover .tier-node-add': { opacity: 1 },
+                        '&:hover .tier-node-label': { transform: 'translateY(-9px)' },
+                    }),
                 })}
                 onMouseEnter={() => onHover?.(true)}
                 onMouseLeave={() => onHover?.(false)}
             >
                 <Typography
+                    className="tier-node-label"
                     sx={{
+                        transition: 'transform 0.16s ease',
                         fontSize: fontSizes.md,
                         fontWeight: 600,
                         color: 'text.secondary',
@@ -95,6 +108,39 @@ export const TierNode: React.FC<TierNodeProps> = ({
                 >
                     {`T${priority}`}
                 </Typography>
+                {onAddTier && (
+                    <Box
+                        className="tier-node-add"
+                        role="button"
+                        tabIndex={0}
+                        title={addTierLabel}
+                        aria-label={addTierLabel}
+                        onClick={(e) => { e.stopPropagation(); onAddTier(); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAddTier(); } }}
+                        sx={(theme) => ({
+                            position: 'absolute',
+                            left: 5,
+                            right: 5,
+                            bottom: 5,
+                            height: 18,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            border: '1px dashed',
+                            borderColor: getRouteGraphBorderColor(theme),
+                            borderRadius: `${theme.shape.borderRadius}px`,
+                            color: 'text.secondary',
+                            fontSize: 14,
+                            lineHeight: 1,
+                            opacity: 0,
+                            cursor: 'pointer',
+                            transition: 'opacity 0.16s ease, border-color 0.16s ease, color 0.16s ease',
+                            '&:hover, &:focus-visible': { borderColor: theme.palette.primary.main, color: 'primary.main', outline: 'none', opacity: 1 },
+                        })}
+                    >
+                        +
+                    </Box>
+                )}
             </Box>
         </NodeTooltip>
     );

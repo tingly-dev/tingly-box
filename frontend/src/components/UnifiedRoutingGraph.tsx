@@ -2,6 +2,7 @@ import {Box, Button, Card, CardContent, Collapse, Stack,} from '@mui/material';
 import {alpha, styled} from '@mui/material/styles';
 import React, {useEffect, useRef} from 'react';
 import {useTranslation} from 'react-i18next';
+import {EntryGuideDialog} from '@/components/tier/EntryGuideDialog';
 import {
     getRouteGraphActiveColor,
     PROVIDER_NODE_STYLES,
@@ -16,6 +17,7 @@ import {
     SmartOpNode,
     TierNode,
 } from '@/components/nodes';
+import NodeTooltip from '@/components/nodes/NodeTooltip';
 import ModelRequestHeader from '@/components/ModelRequestHeader';
 import {TierGuideDialog} from '@/components/tier/TierGuideDialog';
 import type {Provider} from '../types/provider';
@@ -218,6 +220,38 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     const [hoveredTier, setHoveredTier] = React.useState<number | null>(null);
     const [showTierGuide, setShowTierGuide] = React.useState(false);
 
+    const [entryGuideMode, setEntryGuideMode] = React.useState<'direct' | 'smart' | null>(null);
+
+    // Hover teaching for the Default and Add condition nodes (the old
+    // Direct/Smart entry node's tooltip, split per concept), each with a link
+    // to the matching guide.
+    const guideTooltip = (title: string, body: string, linkLabel: string, mode: 'direct' | 'smart') => (
+        <Box sx={{whiteSpace: 'pre-line', maxWidth: 280}}>
+            <strong>{title}</strong>
+            {`\n${body}`}
+            <Box
+                component="span"
+                onClick={(e) => { e.stopPropagation(); setEntryGuideMode(mode); }}
+                sx={{display: 'block', mt: 1, color: 'primary.main', cursor: 'pointer', fontWeight: 500, '&:hover': {textDecoration: 'underline'}}}
+            >
+                {linkLabel}
+            </Box>
+        </Box>
+    );
+    const defaultTooltip = guideTooltip(
+        t('rule.routing.directTooltipTitle'), t('rule.routing.directTooltipBody'),
+        t('rule.routing.viewDirectGuide'), 'direct');
+    const conditionTooltip = guideTooltip(
+        t('rule.routing.smartTooltipTitle'), t('rule.routing.smartTooltipBody'),
+        t('rule.routing.viewSmartGuide'), 'smart');
+
+    // A new, still empty tier the user just asked for. It lives here, not in
+    // the record: tiers are compacted to be contiguous on every save, which
+    // would drop an empty one before a model lands in it. Cleared whenever the
+    // service list changes (the model was added, or something else happened).
+    const [pendingTier, setPendingTier] = React.useState(false);
+    useEffect(() => { setPendingTier(false); }, [record.providers.length]);
+
     const handleShowGuide = () => {
         setShowTierGuide(true);
     };
@@ -293,7 +327,13 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     // of the bottom tier — moving it further would just be renumbered back.
     const renderTierLayout = React.useCallback(() => {
         // Always show at least T0, even when no providers exist
-        const groups = tierGroups.length > 0 ? tierGroups : [{tier: 0, providers: [] as typeof sortedDefaultProviders}];
+        const baseGroups = tierGroups.length > 0 ? tierGroups : [{tier: 0, providers: [] as typeof sortedDefaultProviders}];
+        const lastGroup = baseGroups[baseGroups.length - 1];
+        // Only a filled bottom tier can have a new one below it.
+        const canAddTier = !guideMode && lastGroup.providers.length > 0;
+        const groups = pendingTier && canAddTier
+            ? [...baseGroups, {tier: lastGroup.tier + 1, providers: [] as typeof sortedDefaultProviders}]
+            : baseGroups;
 
         // In guide mode, always show action buttons on all services
         const shouldShowActions = guideMode ? true : undefined;
@@ -316,6 +356,9 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                             active={active}
                             onHover={guideMode ? undefined : (hovering) => setHoveredTier(hovering ? group.tier : null)}
                             onShowGuide={handleShowGuide}
+                            onAddTier={canAddTier && !pendingTier && active && !saving && idx === groups.length - 1
+                                ? () => setPendingTier(true) : undefined}
+                            addTierLabel={t('rule.tier.addTierTooltip')}
                         />
                         {group.providers.map((p) => (
                             <ServiceNode
@@ -349,7 +392,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 })}
             </Box>
         );
-    }, [t, tierGroups, active, saving, record.providers.length, getApiStyle, providers, onDeleteService, onServiceNodeClick, onEditProvider, onTierChange, onAddService, hoveredTier, guideMode, handleShowGuide]);
+    }, [pendingTier, t, tierGroups, active, saving, record.providers.length, getApiStyle, providers, onDeleteService, onServiceNodeClick, onEditProvider, onTierChange, onAddService, hoveredTier, guideMode, handleShowGuide]);
 
     // Render smart rules section
     const renderSmartRules = () => {
@@ -429,6 +472,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         label={t('rule.ruleConditions.addCondition')}
                         active={active && !saving}
                         onAdd={() => onAddSmartRule?.()}
+                        tooltip={conditionTooltip}
                     />
                     {smartRouting.length > 1 && (
                         <Box sx={{fontSize: 12, color: 'text.secondary'}}>
@@ -445,19 +489,25 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         return (
             <GraphRow sx={{alignItems: 'flex-start'}}>
                 {/* Fixed height matches the tier row height so ServiceEntryNode centres vertically */}
-                <NodeContainer sx={{minHeight: PROVIDER_NODE_STYLES.height, justifyContent: 'center', gap: '4px'}}>
-                    {/* Stacked, the two nodes add up to one service node's height */}
-                    {!showSmartRouting && (
-                        <ActionAddNode
-                            label={t('rule.ruleConditions.addCondition')}
-                            active={active && !saving}
-                            onAdd={() => onAddSmartRule?.()}
+                <NodeContainer sx={{height: PROVIDER_NODE_STYLES.height, justifyContent: 'center'}}>
+                    {/* No conditions: Add condition sits beside Default (on its right), both a service node tall */}
+                    <Box sx={{display: 'flex', gap: 1}}>
+                        <ServiceEntryNode
+                            providersCount={record.providers.length}
+                            active={active}
+                            compact={!showSmartRouting}
+                            tooltip={defaultTooltip}
                         />
-                    )}
-                    <ServiceEntryNode
-                        providersCount={record.providers.length}
-                        active={active}
-                    />
+                        {!showSmartRouting && (
+                            <ActionAddNode
+                                label={t('rule.ruleConditions.addCondition')}
+                                square
+                                active={active && !saving}
+                                onAdd={() => onAddSmartRule?.()}
+                                tooltip={conditionTooltip}
+                            />
+                        )}
+                    </Box>
                 </NodeContainer>
 
                 <Box sx={{flex: 0, display: 'flex', alignItems: 'center', height: PROVIDER_NODE_STYLES.height}}>
@@ -508,6 +558,12 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
             <TierGuideDialog
                 open={showTierGuide}
                 onClose={handleGuideClose}
+            />
+
+            <EntryGuideDialog
+                open={entryGuideMode !== null}
+                onClose={() => setEntryGuideMode(null)}
+                mode={entryGuideMode ?? 'direct'}
             />
 
             {/* Graph Content */}

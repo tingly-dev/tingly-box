@@ -77,10 +77,12 @@ export interface AddProviderNodeProps {
     active: boolean;
     warning?: boolean;
     onAdd: () => void;
-    tooltip?: string;
+    tooltip?: React.ReactNode;
     /** Names something other than a model (e.g. "Add condition"). Draws the
      * node as a one-line bar as wide as a condition node. */
     label?: string;
+    /** With a label: the usual square node (like Add model) instead of the bar. */
+    square?: boolean;
 }
 
 export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
@@ -89,6 +91,7 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
     onAdd,
     tooltip,
     label,
+    square,
 }) => {
     const { t } = useTranslation();
     // Pulse when guidance (Quick Start → "Select a Model") points the user here.
@@ -100,10 +103,10 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
                 active={active}
                 warning={warning}
                 spotlight={spotlight}
-                wide={!!label}
+                wide={!!label && !square}
                 onClick={active ? onAdd : undefined}
             >
-                {label ? (
+                {label && !square ? (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary' }}>
                         <AddIcon sx={{ fontSize: 16 }} />
                         <Typography variant="caption" sx={{ fontSize: fontSizes.xs, lineHeight: 1 }}>{label}</Typography>
@@ -118,7 +121,7 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
                         fontSize: fontSizes.micro,
                         lineHeight: 1.1
                     }}>
-                    {t('rule.nodes.addModel', { defaultValue: 'Add model' })}
+                    {label ?? t('rule.nodes.addModel', { defaultValue: 'Add model' })}
                 </Typography></>)}
             </StyledAddProviderNode>
         </NodeTooltip>
