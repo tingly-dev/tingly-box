@@ -64,13 +64,10 @@ const fmtLatency = (ms: number) => {
     return `${ms}ms`;
 };
 
-const getTokensPerSecond = (record: UsageRecord) => {
-    if (!record.streamed) return 0;
-    if ((record.tokens_per_second ?? 0) > 0) return record.tokens_per_second!;
-    const decodeMs = record.latency_ms - (record.ttft_ms ?? 0);
-    if (record.output_tokens <= 1 || (record.ttft_ms ?? 0) <= 0 || decodeMs <= 0) return 0;
-    return (record.output_tokens - 1) * 1000 / decodeMs;
-};
+// The backend owns TPS (it skips decode windows too short to be reliable), so
+// no fallback computation here.
+const getTokensPerSecond = (record: UsageRecord) =>
+    record.streamed ? (record.tokens_per_second ?? 0) : 0;
 
 const getTPSFormula = (record: UsageRecord, t: TFunction) => {
     const decodeMs = record.latency_ms - (record.ttft_ms ?? 0);
