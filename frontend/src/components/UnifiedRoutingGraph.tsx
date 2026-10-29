@@ -6,6 +6,7 @@ import {EntryGuideDialog} from '@/components/tier/EntryGuideDialog';
 import {
     getRouteGraphActiveColor,
     PROVIDER_NODE_STYLES,
+    SMART_NODE_STYLES,
     SMALL_NODE_STYLES,
 } from '@/components/nodes/styles';
 import {
@@ -462,18 +463,20 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     ))
                 ) : null}
 
-                {/* Add condition and, beside it, the close node that turns conditions off */}
-                <Box sx={{display: 'flex', alignItems: 'center', gap: 1, py: 1}}>
-                    <ActionAddNode
-                        label={t('rule.ruleConditions.addCondition')}
-                        active={active && !saving}
-                        onAdd={() => onAddSmartRule?.()}
-                        tooltip={conditionTooltip}
-                    />
+                {/* Add condition sits in the condition column; the turn-off node lines up with the service column */}
+                <GraphRow>
+                    <NodeContainer>
+                        <ActionAddNode
+                            label={t('rule.ruleConditions.addCondition')}
+                            active={active && !saving}
+                            onAdd={() => onAddSmartRule?.()}
+                            tooltip={conditionTooltip}
+                        />
+                    </NodeContainer>
+                    <Box sx={{visibility: 'hidden'}}><ArrowNode direction="forward"/></Box>
                     <ActionAddNode
                         label={t('rule.ruleConditions.closeConditions')}
                         icon="close"
-                        width={190}
                         active={active && !saving}
                         onAdd={() => onSwitchRoutingMode?.()}
                         tooltip={t('rule.ruleConditions.closeConditionsTooltip')}
@@ -483,7 +486,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                             {t('rule.ruleConditions.conditionsHint')}
                         </Box>
                     )}
-                </Box>
+                </GraphRow>
             </>
         );
     };
@@ -492,7 +495,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     const renderDefaultProviders = () => (
         <GraphRow sx={{alignItems: 'flex-start'}}>
             {/* Fixed height matches the tier row height so ServiceEntryNode centres vertically */}
-            <NodeContainer sx={{height: PROVIDER_NODE_STYLES.height, justifyContent: 'center'}}>
+            <NodeContainer sx={{width: SMART_NODE_STYLES.width, height: PROVIDER_NODE_STYLES.height, justifyContent: 'center'}}>
                 <ServiceEntryNode
                     providersCount={record.providers.length}
                     active={active && !saving}
@@ -566,7 +569,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         <Box sx={{display: 'flex', alignItems: 'stretch', minWidth: 0}}>
                             <Box ref={scrollContainerRef} sx={{flexGrow: 1, minWidth: 0, overflowX: 'auto'}}>
                                 <GraphContainer>
-                                    <Box sx={{display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1.5}}>
+                                    <Box sx={{display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5}}>
                                         {renderSmartRules()}
                                         {renderDefaultProviders()}
                                     </Box>

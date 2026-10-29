@@ -11,6 +11,9 @@ import {
 } from './styles.tsx';
 import { fontSizes } from '@/theme/fonts';
 
+/** Default beside conditions only labels the fallback, so it needs less room. */
+const DEFAULT_COMPACT_WIDTH = 140;
+
 export interface ServiceEntryNodeProps {
     providersCount: number;
     active: boolean;
@@ -38,7 +41,7 @@ export const ServiceEntryNode: React.FC<ServiceEntryNodeProps> = ({
             <Box
                 sx={(theme) => ({
                     position: 'relative',
-                    width: SMART_NODE_STYLES.width,
+                    width: onAddCondition ? SMART_NODE_STYLES.width : DEFAULT_COMPACT_WIDTH,
                     height: onAddCondition ? SMART_NODE_STYLES.height : 34,
                     boxSizing: 'border-box',
                     display: 'flex',
