@@ -47,6 +47,8 @@ type Coordinator struct {
 
 	mu     sync.Mutex
 	queues map[string]*queue
+	// choosing serialises Choose, so one card is answered once.
+	choosing sync.Mutex
 }
 
 type queue struct {

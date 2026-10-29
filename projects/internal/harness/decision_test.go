@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -44,7 +45,7 @@ func TestDecisionCardIsAskedAndAnswered(t *testing.T) {
 			switch {
 			case c.AfterTools():
 				return llm.Result{Text: "Asked."}
-			case strings.Contains(c.Last(), "Merge the harness now?: Wait for review"):
+			case strings.Contains(c.Last(), "Wait for review"):
 				return llm.Result{Text: "Holding the merge until review."}
 			default:
 				return askMerge()
@@ -108,4 +109,55 @@ func TestDecisionCardRejectsMalformedAsks(t *testing.T) {
 	assert.Contains(t, refused[0], "two to four options")
 	assert.Contains(t, refused[1], "recommended must be")
 	assert.Nil(t, decisionEvent(w))
+}
+
+// D3: pressing a card twice at once (a double click, two tabs) records one
+// pick and posts one message.
+func TestDecisionCardIsAnsweredOnce(t *testing.T) {
+	w := New(t, Options{
+		Files: projectsRepo,
+		Brain: func(c *BrainCtx) llm.Result {
+			switch {
+			case c.AfterTools():
+				return llm.Result{Text: "Asked."}
+			case strings.Contains(c.Last(), "Wait for review") || strings.Contains(c.Last(), "Merge now"):
+				return llm.Result{Text: "Noted."}
+			default:
+				return askMerge()
+			}
+		},
+	})
+	w.Say("Should we merge the harness?")
+	w.Eventually("decision card", func() bool { return decisionEvent(w) != nil })
+	w.Quiet()
+	card := decisionEvent(w)
+
+	var wg sync.WaitGroup
+	errs := make([]error, 6)
+	for i := range errs {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, errs[i] = w.Coord.Choose(context.Background(), w.Project.MainThreadID, card.ID, i%2, project.Source{})
+		}(i)
+	}
+	wg.Wait()
+	w.Quiet()
+
+	won := 0
+	for _, err := range errs {
+		if err == nil {
+			won++
+		} else {
+			assert.ErrorIs(t, err, project.ErrDecided)
+		}
+	}
+	assert.Equal(t, 1, won, "exactly one pick wins")
+	picks := 0
+	for _, e := range w.Convo() {
+		if e.Kind == db.EvUser && (e.Content == "Merge now" || e.Content == "Wait for review") {
+			picks++
+		}
+	}
+	assert.Equal(t, 1, picks, "one message reaches the coordinator")
 }
