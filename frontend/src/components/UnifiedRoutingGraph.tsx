@@ -12,7 +12,6 @@ import {
 import {
     ActionAddNode,
     ArrowNode,
-    EntryNode,
     NodeContainer,
     ServiceEntryNode,
     ServiceNode,
@@ -21,7 +20,6 @@ import {
 } from '@/components/nodes';
 import ModelRequestHeader from '@/components/ModelRequestHeader';
 import {TierGuideDialog} from '@/components/tier/TierGuideDialog';
-import {EntryGuideDialog} from '@/components/tier/EntryGuideDialog';
 import type {Provider} from '../types/provider';
 import type {ConfigRecord} from './RoutingGraphTypes';
 import {useResponsesToggle} from '@/hooks/useResponsesToggle';
@@ -221,8 +219,6 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     // Track which tier is being hovered
     const [hoveredTier, setHoveredTier] = React.useState<number | null>(null);
     const [showTierGuide, setShowTierGuide] = React.useState(false);
-    const [showEntryGuide, setShowEntryGuide] = React.useState(false);
-    const [entryGuideMode, setEntryGuideMode] = React.useState<'direct' | 'smart'>('direct');
 
     const handleShowGuide = () => {
         setShowTierGuide(true);
@@ -232,29 +228,16 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         setShowTierGuide(false);
     };
 
-    const handleShowDirectGuide = () => {
-        setEntryGuideMode('direct');
-        setShowEntryGuide(true);
-    };
-
-    const handleShowSmartGuide = () => {
-        setEntryGuideMode('smart');
-        setShowEntryGuide(true);
-    };
-
-    const handleEntryGuideClose = () => {
-        setShowEntryGuide(false);
-    };
-
-    // Determine effective mode
+    // There is no Direct/Smart switch: a rule is its Default row, plus
+    // conditions above it when it has any. smartEnabled stays on the record
+    // (the backend only evaluates conditions while it is on) and follows the
+    // conditions; a rule saved with conditions but smartEnabled off (the old
+    // "Direct" toggle) shows them paused with a Resume action.
     const smartEnabled = record.smartEnabled || false;
-    const effectiveMode: 'smart' | 'direct' = mode === 'auto'
-        ? (smartEnabled ? 'smart' : 'direct')
-        : mode;
-
     const smartRouting = record.smartRouting || [];
     const hasSmartRules = smartRouting.length > 0;
-    const showSmartRouting = effectiveMode === 'smart' || (mode === 'auto' && smartEnabled && hasSmartRules);
+    const showSmartRouting = mode !== 'direct' && hasSmartRules;
+    const conditionsPaused = showSmartRouting && !smartEnabled;
 
     const getApiStyle = React.useCallback((providerUuid: string) => {
         const provider = providers.find(p => p.uuid === providerUuid);
@@ -376,6 +359,14 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
 
         return (
             <>
+                {conditionsPaused && (
+                    <Box sx={{display: 'flex', alignItems: 'center', gap: 1, fontSize: 12.5, color: 'text.secondary'}}>
+                        {t('rule.ruleConditions.conditionsPaused')}
+                        <Button size="small" onClick={onSwitchRoutingMode} disabled={!active || saving}>
+                            {t('rule.ruleConditions.conditionsResume')}
+                        </Button>
+                    </Box>
+                )}
                 {/* Smart Rules List */}
                 {smartRouting.length > 0 ? (
                     smartRouting.map((rule, index) => (
@@ -457,8 +448,13 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                             },
                         })}
                     >
-                        Add Smart Rule
+                        {t('rule.ruleConditions.addCondition')}
                     </Button>
+                    {smartRouting.length > 1 && (
+                        <Box sx={{ml: 1.5, alignSelf: 'center', fontSize: 12, color: 'text.secondary'}}>
+                            {t('rule.ruleConditions.conditionsHint')}
+                        </Box>
+                    )}
                 </Box>
             </>
         );
@@ -473,6 +469,9 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     <ServiceEntryNode
                         providersCount={record.providers.length}
                         active={active}
+                        hasConditions={showSmartRouting}
+                        onAddCondition={onAddSmartRule}
+                        addConditionDisabled={saving}
                     />
                 </NodeContainer>
 
@@ -526,13 +525,6 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 onClose={handleGuideClose}
             />
 
-            {/* Entry Guide Dialog */}
-            <EntryGuideDialog
-                open={showEntryGuide}
-                onClose={handleEntryGuideClose}
-                mode={entryGuideMode}
-            />
-
             {/* Graph Content */}
             <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                 <CardContent sx={{pt: 0, pb: 0.25, '&:last-child': {pb: 0.25}}}>
@@ -541,45 +533,10 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         <Box sx={{display: 'flex', alignItems: 'stretch', minWidth: 0}}>
                             <Box ref={scrollContainerRef} sx={{flexGrow: 1, minWidth: 0, overflowX: 'auto'}}>
                                 <GraphContainer>
-                                    <GraphRow sx={{alignItems: 'flex-start'}}>
-                                        {/* EntryNode - Direct/Smart mode selector */}
-                                        <Box sx={{
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            pr: 1,
-                                        }}>
-                                            <EntryNode
-                                                active={active}
-                                                smartEnabled={smartEnabled}
-                                                onSwitch={onSwitchRoutingMode}
-                                                switchDisabled={saving}
-                                                onShowDirectGuide={handleShowDirectGuide}
-                                                onShowSmartGuide={handleShowSmartGuide}
-                                            />
-                                        </Box>
-
-                                        {/* Arrow - height matches EntryNode so it stays centered under flex-start */}
-                                        <Box sx={{flex: 0, display: 'flex', alignItems: 'center', height: 72}}>
-                                            <ArrowNode direction="forward"/>
-                                        </Box>
-
-                                        {/* Smart Routing Section (conditional) */}
-                                        {showSmartRouting ? (
-                                            <Box sx={{
-                                                flex: 1,
-                                                display: 'flex',
-                                                alignItems: "flex-start",
-                                                flexDirection: 'column',
-                                                gap: 1.5
-                                            }}>
-                                                {renderSmartRules()}
-                                                {renderDefaultProviders()}
-                                            </Box>
-                                        ) : (
-                                            renderTierLayout()
-                                        )}
-                                    </GraphRow>
+                                    <Box sx={{display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1.5}}>
+                                        {renderSmartRules()}
+                                        {renderDefaultProviders()}
+                                    </Box>
                                 </GraphContainer>
                             </Box>
 

@@ -241,6 +241,16 @@ export default {
       "deleteService": "Удалить сервис",
       "deleteSmartRule": "Удалить умное правило"
     },
+    "ruleConditions": {
+      "defaultTitle": "По умолчанию",
+      "defaultAll": "все запросы",
+      "defaultOther": "все остальные запросы",
+      "addConditionShort": "+ Условие",
+      "addCondition": "Добавить условие",
+      "conditionsHint": "Условия проверяются сверху вниз; срабатывает первое совпадение.",
+      "conditionsPaused": "Условия сохранены, но приостановлены",
+      "conditionsResume": "Возобновить"
+    },
     "tooltips": {
       "addProviderFirst": "Добавьте провайдера, чтобы включить пересылку запросов",
       "addProviderSecond": "Добавить ещё одного провайдера (при двух и более включится балансировка согласно стратегии)",

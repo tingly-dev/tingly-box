@@ -234,6 +234,9 @@ export function useSmartRoutingHandlers({
         const updated: ConfigRecord = {
             ...configRecord,
             smartRouting: [...(configRecord.smartRouting || []), newSmartRouting],
+            // Conditions only take effect while smartEnabled is on; there is
+            // no separate switch, so adding one turns it on.
+            smartEnabled: true,
         };
 
         const previousRecord = { ...configRecord };
@@ -289,9 +292,12 @@ export function useSmartRoutingHandlers({
     const handleDeleteSmartRule = useCallback(async (ruleUuid: string) => {
         if (!configRecord) return;
 
+        const remaining = (configRecord.smartRouting || []).filter((r) => r.uuid !== ruleUuid);
         const updated: ConfigRecord = {
             ...configRecord,
-            smartRouting: (configRecord.smartRouting || []).filter((r) => r.uuid !== ruleUuid),
+            smartRouting: remaining,
+            // Without conditions the rule is just its Default row (Direct).
+            smartEnabled: remaining.length > 0 && configRecord.smartEnabled,
         };
 
         const previousRecord = { ...configRecord };
