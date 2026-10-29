@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -166,7 +167,7 @@ func GetCacheHit(c *gin.Context) (bool, bool) {
 
 // MinTPSDecodeWindow is the shortest (latency - TTFT) window for which TPS is
 // reported; below it TPS is unreliable and no sample is recorded.
-const MinTPSDecodeWindow = time.Second
+const MinTPSDecodeWindow = db.MinTPSDecodeWindowMs * time.Millisecond
 
 // CalculateTPS calculates Tokens Per Second for streaming requests.
 // For non-streaming requests, when TTFT is not available, or when the decode
