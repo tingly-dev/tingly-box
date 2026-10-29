@@ -422,7 +422,7 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
         provider: {
             uuid: 'mock-oauth-workbuddy', name: 'WorkBuddy OAuth',
             api_base: 'https://copilot.tencent.com', api_style: 'openai', auth_type: 'oauth',
-            token: '', enabled: true, proxy_url: '',
+            token: '', enabled: true, proxy_url: '', api_base_openai: null, api_base_anthropic: null,
             oauth_detail: {
                 access_token: 'mock-workbuddy-access-token',
                 refresh_token: '',

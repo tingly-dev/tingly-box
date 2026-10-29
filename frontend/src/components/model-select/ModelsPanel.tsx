@@ -190,8 +190,22 @@ export function ModelsPanel({
 
     // Filter by search term
     const searchTerm = searchTerms[provider.uuid] || '';
+    // The shortcut sections can contain models absent from the main list. Include
+    // them in search results, but show each model only once while searching.
+    const searchModels = [...allModels];
+    const seenModels = new Set(searchModels.map(({ model }) => model));
+    for (const model of [
+        ...(newModels[provider.uuid]?.newModels || []),
+        ...(recentModels[provider.uuid] || []),
+        ...(providerModels?.[provider.uuid]?.star_models || []),
+    ]) {
+        if (!seenModels.has(model)) {
+            searchModels.push({ model, type: 'standard' });
+            seenModels.add(model);
+        }
+    }
     const filteredModels = searchTerm
-        ? allModels.filter(({ model }) => model.toLowerCase().includes(searchTerm.toLowerCase()))
+        ? searchModels.filter(({ model }) => model.toLowerCase().includes(searchTerm.toLowerCase()))
         : allModels;
 
     // Device-local memory of searches that led to a pick (or were submitted
@@ -365,7 +379,7 @@ export function ModelsPanel({
                 </Typography>
 
                 {/* New Models Section */}
-                {newModels[provider.uuid]?.newModels && newModels[provider.uuid].newModels.length > 0 && (
+                {!searchTerm && newModels[provider.uuid]?.newModels && newModels[provider.uuid].newModels.length > 0 && (
                     <NewModelsSection
                         provider={provider}
                         newModels={newModels[provider.uuid].newModels}
@@ -378,7 +392,7 @@ export function ModelsPanel({
                 )}
 
                 {/* Recent Models Section */}
-                {recentModels[provider.uuid]?.length > 0 && (
+                {!searchTerm && recentModels[provider.uuid]?.length > 0 && (
                     <RecentModelsSection
                         provider={provider}
                         recentModels={recentModels[provider.uuid]}
@@ -390,7 +404,7 @@ export function ModelsPanel({
                 )}
 
                 {/* Star Models Section */}
-                {providerModels?.[provider.uuid]?.star_models && providerModels[provider.uuid].star_models!.length > 0 && (
+                {!searchTerm && providerModels?.[provider.uuid]?.star_models && providerModels[provider.uuid].star_models!.length > 0 && (
                     <Box>
                         <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                             Starred Models

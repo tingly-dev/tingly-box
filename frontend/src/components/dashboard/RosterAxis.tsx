@@ -245,8 +245,7 @@ export function RosterBreakdownTable<D extends MetricRow>({
                             '& .MuiTableCell-root': {
                                 fontWeight: 600,
                                 fontSize: fontSizes.sm,
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.05em',
+                                whiteSpace: 'nowrap',
                                 color: 'text.secondary',
                                 py: 1.25,
                             },

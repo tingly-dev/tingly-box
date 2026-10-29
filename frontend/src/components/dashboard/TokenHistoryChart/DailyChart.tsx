@@ -67,7 +67,7 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
         <ChartWrapper title={t('dashboard.chart.dailyTitle', { defaultValue: 'Token Usage Over Time (Daily)' })} hasData={hasData}>
             {hasData ? (
                 <>
-                    <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mb: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-start', gap: 3, mb: 1 }}>
                         <LegendItem
                             label={t('dashboard.chart.cacheRead', { defaultValue: 'Cache Read' })}
                             color={chartStyles.token.cache.main}
@@ -120,6 +120,7 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
                                 tickLine={false}
                                 axisLine={{ stroke: chartStyles.chart.axis, strokeWidth: 1.5 }}
                                 interval={labelInterval}
+                                padding={{left: 8, right: 44}}
                                 height={50}
                             />
                             <YAxis
