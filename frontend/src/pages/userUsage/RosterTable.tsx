@@ -13,8 +13,6 @@ import {
     TablePagination,
     TableRow,
     TableSortLabel,
-    ToggleButton,
-    ToggleButtonGroup,
     Typography,
     alpha,
     useTheme,
@@ -114,53 +112,19 @@ export default function RosterTable({
         >
             <Box
                 sx={{
-                    minHeight: 72,
+                    minHeight: 64,
                     p: 2.5,
                     display: 'flex',
                     flexWrap: 'wrap',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
+                    justifyContent: 'flex-end',
                     gap: 1.5,
                     borderBottom: '1px solid',
                     borderColor: 'divider',
                 }}
             >
-                {/* Axis switcher lives on the table it controls
-                    (conventional dashboard position), and doubles
-                    as the card's title — a separate "All users"
-                    caption would repeat it. */}
-                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                    <ToggleButtonGroup
-                        size="small"
-                        exclusive
-                        value={viewMode}
-                        onChange={(_, value: ViewMode | null) => value && onViewModeChange(value)}
-                        aria-label={t('dashboard.userUsage.viewMode', { defaultValue: 'View' })}
-                        sx={{
-                            '& .MuiToggleButton-root': {
-                                px: 1.5,
-                                py: 0.25,
-                                fontSize: fontSizes.md,
-                                textTransform: 'none',
-                            },
-                        }}
-                    >
-                        <ToggleButton value="account">
-                            {t('dashboard.userUsage.byAccount', { defaultValue: 'By account' })}
-                        </ToggleButton>
-                        <ToggleButton value="model">
-                            {t('dashboard.userUsage.byModel', { defaultValue: 'By model' })}
-                        </ToggleButton>
-                        <ToggleButton value="provider">
-                            {t('dashboard.userUsage.byProvider', { defaultValue: 'By provider' })}
-                        </ToggleButton>
-                    </ToggleButtonGroup>
-                    <Chip
-                        size="small"
-                        label={activeAxis.visibleRows.length}
-                        sx={{ height: 22 }}
-                    />
-                </Stack>
+                {/* The axis switcher lives in the page toolbar: it scopes the
+                    roster, the Top list and the detail card. */}
                 <SearchField
                     value={activeAxis.search}
                     onChange={(event) => activeAxis.setSearch(event.target.value)}
@@ -186,8 +150,7 @@ export default function RosterTable({
                                 '& .MuiTableCell-root': {
                                     fontWeight: 600,
                                     fontSize: fontSizes.sm,
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.05em',
+                                    whiteSpace: 'nowrap',
                                     color: 'text.secondary',
                                     py: 1.25,
                                     borderBottom: '1px solid',

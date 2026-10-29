@@ -20,33 +20,26 @@ export default function StatCard({ title, value, subtitle, icon, statusDot, colo
     // gets its own status colours; getReadableAccent keeps it legible on the card.
     const colors = { text: getReadableAccent(theme, color) };
     const iconBgAlpha = theme.palette.mode === 'dark' ? 0.15 : 0.08;
-    const hoverBgAlpha = theme.palette.mode === 'dark' ? 0.12 : 0.075;
-    const baseBgAlpha = theme.palette.mode === 'dark' ? 0.045 : 0.025;
+    // Colour is for status only: a neutral card, and the value takes the
+    // accent only when the metric carries a health judgment that is not "fine".
+    const judged = statusDot && color !== 'success' && color !== 'secondary';
 
     return (
         <Paper
             elevation={0}
             sx={{
-                p: 2,
+                p: 1.5,
+                px: 2,
                 borderRadius: 2,
                 border: '1px solid',
-                borderColor: alpha(colors.text, 0.18),
+                borderColor: 'divider',
                 height: '100%',
-                transition: 'border-color 0.18s ease-out, background-image 0.18s ease-out',
-                // Layered on top of the theme's own Paper backdrop (solid on most
-                // themes, translucent-over-gradient on ds) rather than replacing it —
-                // otherwise this low-alpha tint reveals whatever's behind the page
-                // itself instead of reading as a flat color, which is invisible on a
-                // solid page background but shows through visibly on ds's gradient one.
+                transition: 'border-color 0.18s ease-out',
                 backgroundColor: 'background.paper',
-                backgroundImage: `linear-gradient(${alpha(colors.text, baseBgAlpha)}, ${alpha(colors.text, baseBgAlpha)})`,
                 boxShadow: 'none',
                 position: 'relative',
                 overflow: 'hidden',
-                '&:hover': {
-                    borderColor: alpha(colors.text, 0.55),
-                    backgroundImage: `linear-gradient(${alpha(colors.text, hoverBgAlpha)}, ${alpha(colors.text, hoverBgAlpha)})`,
-                },
+                '&:hover': { borderColor: 'text.disabled' },
             }}
         >
             <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -56,8 +49,8 @@ export default function StatCard({ title, value, subtitle, icon, statusDot, colo
                         gridTemplateColumns: icon ? 'minmax(0, 1fr) 28px' : 'minmax(0, 1fr) auto',
                         alignItems: 'flex-start',
                         gap: 1,
-                        mb: 1,
-                        minHeight: '2.7em',
+                        mb: 0.5,
+                        minHeight: '1.4em',
                     }}
                 >
                     <Typography
@@ -116,7 +109,7 @@ export default function StatCard({ title, value, subtitle, icon, statusDot, colo
                         fontWeight: 700,
                         fontSize: { xs: '1.375rem', sm: '1.5rem' },
                         lineHeight: 1.2,
-                        color: 'text.primary',
+                        color: judged ? colors.text : 'text.primary',
                         mb: 0.25,
                         fontVariantNumeric: 'tabular-nums',
                     }}
