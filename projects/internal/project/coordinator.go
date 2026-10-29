@@ -47,6 +47,8 @@ type Coordinator struct {
 
 	mu     sync.Mutex
 	queues map[string]*queue
+	// choosing serialises Choose, so one card is answered once.
+	choosing sync.Mutex
 }
 
 type queue struct {
@@ -592,6 +594,9 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, call llm.ToolC
 		}
 		busy := c.threads.Running(t.ID)
 		msg := in.Message
+		if strings.Contains(strings.ToLower(msg), quoteMarker) {
+			return fail(fmt.Errorf("the message may not contain %q: only the system writes the user's quoted words, pass the user's message ids in cite", quoteMarker))
+		}
 		if len(in.Cite) > 0 {
 			quote, err := c.quoteUser(p, in.Cite)
 			if err != nil {
