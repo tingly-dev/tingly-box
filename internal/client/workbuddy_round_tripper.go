@@ -22,11 +22,15 @@ type workbuddyRoundTripper struct {
 	http.RoundTripper
 	site         ai.WorkBuddySite
 	userID       string
+	providerID   string
 	sessionScope string
 }
 
 func newWorkBuddyRoundTripper(inner http.RoundTripper, provider *typ.Provider, session typ.SessionID) *workbuddyRoundTripper {
 	t := &workbuddyRoundTripper{RoundTripper: inner}
+	if provider != nil {
+		t.providerID = provider.UUID
+	}
 	if provider != nil && !session.IsEmpty() && !session.IsIPFallback() {
 		t.sessionScope = provider.UUID + "|" + string(session.Source) + "|" + session.Value
 	}

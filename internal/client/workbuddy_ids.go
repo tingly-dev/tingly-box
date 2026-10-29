@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/tidwall/gjson"
 )
 
 // Process-local salt keeps header IDs opaque: neither prompts, session IDs,
@@ -42,9 +43,9 @@ func (t *workbuddyRoundTripper) setChatIDs(h http.Header, body []byte) {
 	if conversation == "" {
 		if t.sessionScope != "" {
 			conversation = workbuddyID("conversation", t.sessionScope)
+		} else if first := workbuddyFirstInstruction(body); first != "" {
+			conversation = workbuddyID("instruction", t.providerID+"|"+first)
 		} else {
-			// The gateway requires this header even without a client session.
-			// Use a per-request ID instead of grouping unrelated chats by IP.
 			conversation = strings.ReplaceAll(uuid.NewString(), "-", "")
 		}
 		h.Set("X-Conversation-ID", conversation)
@@ -52,14 +53,37 @@ func (t *workbuddyRoundTripper) setChatIDs(h http.Header, body []byte) {
 	if h.Get("X-Conversation-Request-ID") != "" {
 		return
 	}
-	// Without a real session (or the caller's conversation ID), do not merge
-	// unrelated chats by their shared IP or a common first message like "hi".
 	turn := workbuddyTurnKey(body)
 	if conversation != "" && turn != "" {
 		h.Set("X-Conversation-Request-ID", workbuddyID("turn", conversation+"|"+turn))
 	} else {
 		h.Set("X-Conversation-Request-ID", strings.ReplaceAll(uuid.NewString(), "-", ""))
 	}
+}
+
+// Read only the first non-system instruction's content into a value; do not
+// deserialize the entire history. Canonical JSON avoids whitespace/key-order
+// differences in multipart content changing the conversation ID.
+func workbuddyFirstInstruction(body []byte) string {
+	var first string
+	gjson.GetBytes(body, "messages").ForEach(func(_, message gjson.Result) bool {
+		role := message.Get("role").String()
+		content := message.Get("content")
+		if role == "system" || role == "developer" || role == "" || content.Type == gjson.Null {
+			return true
+		}
+		value := content.Str
+		if content.Type != gjson.String {
+			raw, _ := json.Marshal(content.Value())
+			value = string(raw)
+		}
+		if value == "" || value == "[]" {
+			return true
+		}
+		first = role + "|" + value
+		return false
+	})
+	return first
 }
 
 // A user turn stays the same as tool results/assistant steps are appended.

@@ -52,7 +52,11 @@ func TestWorkBuddyConversationAndTurnIDs(t *testing.T) {
 		rt.setChatIDs(next, []byte(first))
 		for _, k := range []string{"X-Conversation-ID", "X-Conversation-Request-ID", "X-Conversation-Message-ID"} {
 			require.Regexp(t, `^[a-f0-9]{32}$`, h.Get(k))
-			require.NotEqual(t, h.Get(k), next.Get(k), "no shared conversation without a session")
+			if k == "X-Conversation-Message-ID" {
+				require.NotEqual(t, h.Get(k), next.Get(k))
+			} else {
+				require.Equal(t, h.Get(k), next.Get(k))
+			}
 		}
 	}
 	explicit := http.Header{}
@@ -70,4 +74,26 @@ func TestWorkBuddyTurnIdentityIgnoresToolOutput(t *testing.T) {
 	require.Equal(t, workbuddyTurnKey(first), workbuddyTurnKey(withResults))
 	other := []byte(`{"messages":[{"role":"user","content":[{"type":"text","text":"hi"},{"type":"image_url","image_url":{"url":"image-b"}}]}]}`)
 	require.NotEqual(t, workbuddyTurnKey(first), workbuddyTurnKey(other))
+}
+
+func TestWorkBuddyInstructionConversationFallback(t *testing.T) {
+	p := &typ.Provider{UUID: "account-one"}
+	id := func(body string, provider *typ.Provider) string {
+		h := http.Header{}
+		newWorkBuddyRoundTripper(http.DefaultTransport, provider, typ.SessionID{}).setChatIDs(h, []byte(body))
+		return h.Get("X-Conversation-ID")
+	}
+	first := `{"messages":[{"role":"user","content":"hello"}]}`
+	want := id(first, p)
+	require.Equal(t, want, id(`{"messages":[{"role":"system","content":"changed"},{"role":"developer","content":"instructions"},{"role":"user","content":"hello"},{"role":"assistant","content":"reply"},{"role":"user","content":"next"}]}`, p))
+	require.Equal(t, want, id(`{ "messages": [{"content":"h\u0065llo", "role":"user"}] }`, p))
+	require.NotEqual(t, want, id(`{"messages":[{"role":"user","content":"other"}]}`, p))
+	require.NotEqual(t, want, id(first, &typ.Provider{UUID: "account-two"}))
+	require.NotEqual(t, want, id(`{"messages":[{"role":"assistant","content":"hello"}]}`, p))
+	a := `{"messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":"image-a"}}]}]}`
+	b := `{"messages":[{"role":"user","content":[{ "image_url": {"url": "image-a"}, "type": "image_url"}]}]}`
+	require.Equal(t, id(a, p), id(b, p))
+	require.NotEqual(t, id(a, p), id(`{"messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":"image-b"}}]}]}`, p))
+	empty := `{"messages":[{"role":"system","content":"instructions"}]}`
+	require.NotEqual(t, id(empty, p), id(empty, p))
 }
