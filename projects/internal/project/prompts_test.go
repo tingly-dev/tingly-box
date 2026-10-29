@@ -33,6 +33,7 @@ func TestCoordinatorPromptTrustAndStyleRules(t *testing.T) {
 	assert.Contains(t, s, "wins where they differ")
 	assert.Contains(t, s, "no_update")
 	assert.Contains(t, s, "rename_thread")
+	assert.Contains(t, s, "land as a pull request")
 }
 
 func TestThreadPromptRules(t *testing.T) {
@@ -43,4 +44,11 @@ func TestThreadPromptRules(t *testing.T) {
 	assert.Contains(t, s, "Memory is background")
 	assert.Contains(t, s, "wins; if the two conflict")
 	assert.Contains(t, s, "use make test")
+	assert.NotContains(t, s, "pull request", "a thread without a repository has no PR rule")
+
+	s = threadSystemPrompt(l, p, &db.Thread{Title: "Fix bug", Branch: "tb/fix", BaseBranch: "main", Cwd: "/w"})
+	assert.Contains(t, s, "open the pull request")
+	assert.Contains(t, s, "push only your own branch")
+	assert.Contains(t, s, "Never merge it yourself")
+	assert.NotContains(t, s, "Do not push", "a PR may be asked for, so pushing is not banned outright")
 }
