@@ -168,3 +168,16 @@ func TestValidateConfigScopesEnvChecksToChangedSources(t *testing.T) {
 	require.NoError(t, validateConfigChange(prev, next), "an unchanged source must not block unrelated edits")
 	require.Error(t, validateConfigChange(&typ.MCPRuntimeConfig{}, next), "a new or changed source is still checked")
 }
+
+func TestGitHubPresetValidationAndImmutability(t *testing.T) {
+	_, r, cfg := managementFixture(t)
+	managementRequest(t, r, "POST", "/sources", `{"id":"bad","transport":"http","endpoint":"https://example.test","preset":"unknown"}`, 400)
+	managementRequest(t, r, "POST", "/sources", `{"id":"gh","transport":"http","endpoint":"https://example.test","preset":"github"}`, 201)
+	managementRequest(t, r, "PATCH", "/sources/gh", `{"preset":""}`, 400)
+	managementRequest(t, r, "PATCH", "/sources/gh", `{"name":"GitHub"}`, 200)
+	require.Equal(t, "github", cfg.GetMCPRuntimeConfig().Sources[0].Preset)
+	managementRequest(t, r, "PUT", "/profiles/scoped", `{"id":"scoped","tools":[],"github_repos":["tingly-dev/tingly-box"]}`, 200)
+	for _, repo := range []string{"not a repo", "owner", "owner/repo/extra", "-x/y"} {
+		managementRequest(t, r, "PUT", "/profiles/scoped", `{"id":"scoped","tools":[],"github_repos":["`+repo+`"]}`, 400)
+	}
+}

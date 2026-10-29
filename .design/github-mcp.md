@@ -30,6 +30,8 @@ wrongly. Per-tool switches inside the subset still work like any MCP tool.
 Enforcement is in the runtime, not only the tool list:
 - `EffectiveToolPolicy` disables any tool outside the subset, so `CallTool`
   refuses it even if a model guesses the name;
+- the config API refuses to change a source's `preset` after creation, so the
+  subset cannot be switched off by editing the source;
 - `DiscoverSource` drops those tools from the catalog, so they never appear in
   the UI or profiles.
 

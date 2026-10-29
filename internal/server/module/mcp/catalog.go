@@ -235,6 +235,10 @@ func (h *Handler) PatchSource(c *gin.Context) {
 			if next.ID != id {
 				return invalid("source ID cannot be changed")
 			}
+			// The preset is what keeps a GitHub source to its fixed subset.
+			if next.Preset != s.Preset {
+				return invalid("source preset cannot be changed")
+			}
 			cfg.Sources[i] = next
 			return nil
 		}
