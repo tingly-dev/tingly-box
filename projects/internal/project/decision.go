@@ -57,13 +57,16 @@ func (d *Decision) validate() error {
 func (c *Coordinator) ask(projectID string, d Decision) string {
 	// The content is the card in words, for chats that cannot show a card.
 	c.final(c.addEvent(projectID, &db.ThreadEvent{Kind: db.EvDecision, Content: d.text(), Payload: jsonString(d)}))
-	return fmt.Sprintf("asked the user. Keep working on option %d (%q) as long as it can be undone; stop before any step that cannot be. The answer arrives as the user's next message.",
-		d.Recommended, d.Options[d.Recommended].Label)
+	return fmt.Sprintf("asked the user. Keep working on %q as long as it can be undone; stop before any step that cannot be. The answer arrives as the user's next message.",
+		d.Options[d.Recommended].Label)
 }
 
 // Choose records the user's pick on a decision card of a main thread and
-// tells the coordinator, as the user's own message.
+// tells the coordinator, as the user's own message: the label alone, so
+// the coordinator's wording of the question is never quoted as the user's.
 func (c *Coordinator) Choose(ctx context.Context, mainThreadID, eventID string, index int, src Source) (*db.ThreadEvent, error) {
+	c.choosing.Lock()
+	defer c.choosing.Unlock()
 	main, err := c.store.GetThread(mainThreadID)
 	if err != nil {
 		return nil, err
@@ -85,7 +88,7 @@ func (c *Coordinator) Choose(ctx context.Context, mainThreadID, eventID string, 
 	if index < 0 || index >= len(d.Options) {
 		return nil, fmt.Errorf("choose an option from 0 to %d", len(d.Options)-1)
 	}
-	if _, err := c.Post(main.ProjectID, fmt.Sprintf("%s: %s", d.Question, d.Options[index].Label), nil, src); err != nil {
+	if _, err := c.Post(main.ProjectID, d.Options[index].Label, nil, src); err != nil {
 		return nil, err
 	}
 	d.Chosen = &index
@@ -108,7 +111,7 @@ func (d Decision) describe() string {
 		case d.Chosen == nil && d.Recommended == i:
 			mark = ", recommended"
 		}
-		parts = append(parts, fmt.Sprintf("%d. %s%s", i, o.Label, mark))
+		parts = append(parts, fmt.Sprintf("%d. %s%s", i+1, o.Label, mark))
 	}
 	return strings.Join(parts, "; ")
 }

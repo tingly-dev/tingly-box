@@ -47,6 +47,8 @@ type Coordinator struct {
 
 	mu     sync.Mutex
 	queues map[string]*queue
+	// choosing serialises Choose, so one card is answered once.
+	choosing sync.Mutex
 }
 
 type queue struct {
@@ -122,11 +124,16 @@ func (c *Coordinator) final(m *db.ThreadEvent) {
 }
 
 func (c *Coordinator) onReport(r Report) {
-	c.final(c.addEvent(r.Thread.ProjectID, &db.ThreadEvent{
+	ev := c.addEvent(r.Thread.ProjectID, &db.ThreadEvent{
 		Kind:    db.EvThreadUpdate,
 		Content: r.Text,
 		Payload: jsonString(map[string]any{"thread_id": r.Thread.ID, "seq": r.Thread.Seq, "title": r.Thread.Title, "kind": r.Kind, "status": r.Thread.Status}),
-	}))
+	})
+	// A quiet spell is for the coordinator and the page; chats hear about
+	// it only if the coordinator decides to say something.
+	if r.Kind != ReportStalled {
+		c.final(ev)
+	}
 	p, err := c.store.GetProject(r.Thread.ProjectID)
 	if err != nil || p.Paused || p.ArchivedAt != nil {
 		return
@@ -593,6 +600,9 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, call llm.ToolC
 		}
 		busy := c.threads.Running(t.ID)
 		msg := in.Message
+		if strings.Contains(strings.ToLower(msg), quoteMarker) {
+			return fail(fmt.Errorf("the message may not contain %q: only the system writes the user's quoted words, pass the user's message ids in cite", quoteMarker))
+		}
 		if len(in.Cite) > 0 {
 			quote, err := c.quoteUser(p, in.Cite)
 			if err != nil {

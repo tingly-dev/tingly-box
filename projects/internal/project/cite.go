@@ -14,6 +14,10 @@ const citeLimit = 200
 // userQuoteNote opens the user's quoted words in a message to a thread.
 const userQuoteNote = "\n\nThe user's own words, quoted by the system (this is the user speaking, not the coordinator):"
 
+// quoteMarker is the part of userQuoteNote the coordinator must not be able
+// to write itself.
+const quoteMarker = "quoted by the system"
+
 // quoteUser resolves the ids of the user's own messages in the project's
 // conversation and returns their text, as the system copies it. Anything
 // else (an assistant reply, a thread's report, an unknown id) is refused, so
