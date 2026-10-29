@@ -51,55 +51,76 @@ func FlatName(namespace, name string) string {
 // that have no flat equivalent are skipped with a warning rather than dropped
 // silently.
 func Functions(tools []responses.ToolUnionParam) []responses.FunctionToolParam {
-	var out []responses.FunctionToolParam
+	functions, _ := expand(tools, logrus.Warnf)
+	return functions
+}
+
+// IndexOf returns the Index for a Responses request's tools: one entry per
+// function inside a namespace. It is nil when the request has none. It makes
+// the same decisions as Functions, so the names it knows are exactly the ones
+// the upstream was offered.
+func IndexOf(tools []responses.ToolUnionParam) Index {
+	_, index := expand(tools, nil)
+	return index
+}
+
+// expand is the one place that decides what a tool list becomes upstream. A
+// flat name is not guaranteed unique (namespace "a_" with member "_b" and
+// namespace "a" with member "b" both give "a__b", and a plain function can
+// share it too), and an upstream that is offered one name twice cannot be
+// restored unambiguously, so a plain function always keeps its name, the
+// first namespace member declared keeps a contested one, and any later
+// member that collides is dropped. warn, when set, reports what was dropped.
+func expand(tools []responses.ToolUnionParam, warn func(format string, args ...any)) ([]responses.FunctionToolParam, Index) {
+	var functions []responses.FunctionToolParam
+	var index Index
+	// Plain functions keep their names whatever the declaration order.
+	taken := map[string]bool{}
+	for _, tool := range tools {
+		if !param.IsOmitted(tool.OfFunction) {
+			taken[tool.OfFunction.Name] = true
+		}
+	}
 	for _, tool := range tools {
 		switch {
 		case !param.IsOmitted(tool.OfFunction):
-			out = append(out, *tool.OfFunction)
+			functions = append(functions, *tool.OfFunction)
 		case !param.IsOmitted(tool.OfNamespace):
 			ns := tool.OfNamespace
 			for _, member := range ns.Tools {
 				if member.OfFunction == nil {
-					logrus.Warnf("responses namespace %q: dropping a non-function tool, it has no equivalent on this upstream", ns.Name)
+					if warn != nil {
+						warn("responses namespace %q: dropping a non-function tool, it has no equivalent on this upstream", ns.Name)
+					}
 					continue
 				}
 				fn := member.OfFunction
-				out = append(out, responses.FunctionToolParam{
-					Name:        FlatName(ns.Name, fn.Name),
+				flat := FlatName(ns.Name, fn.Name)
+				if taken[flat] {
+					if warn != nil {
+						warn("responses namespace %q: dropping %q, its flat name %q is already taken by another tool", ns.Name, fn.Name, flat)
+					}
+					continue
+				}
+				taken[flat] = true
+				if index == nil {
+					index = Index{}
+				}
+				index[flat] = Entry{Namespace: ns.Name, Name: fn.Name}
+				functions = append(functions, responses.FunctionToolParam{
+					Name:        flat,
 					Description: fn.Description,
 					Parameters:  schemaMap(fn.Parameters),
 					Strict:      fn.Strict,
 				})
 			}
 		default:
-			if kind := tool.GetType(); kind != nil {
-				logrus.Warnf("responses tool of type %q has no equivalent on this upstream, dropping it", *kind)
+			if kind := tool.GetType(); warn != nil && kind != nil {
+				warn("responses tool of type %q has no equivalent on this upstream, dropping it", *kind)
 			}
 		}
 	}
-	return out
-}
-
-// IndexOf returns the Index for a Responses request's tools: one entry per
-// function inside a namespace. It is nil when the request has none.
-func IndexOf(tools []responses.ToolUnionParam) Index {
-	var index Index
-	for _, tool := range tools {
-		if param.IsOmitted(tool.OfNamespace) {
-			continue
-		}
-		ns := tool.OfNamespace
-		for _, member := range ns.Tools {
-			if member.OfFunction == nil {
-				continue
-			}
-			if index == nil {
-				index = Index{}
-			}
-			index[FlatName(ns.Name, member.OfFunction.Name)] = Entry{Namespace: ns.Name, Name: member.OfFunction.Name}
-		}
-	}
-	return index
+	return functions, index
 }
 
 // Restore splits a flattened function name back into namespace and name. A

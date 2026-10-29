@@ -737,3 +737,26 @@ func TestConvertOpenAIResponsesToChat_NamespaceTools(t *testing.T) {
 	}
 	assert.Equal(t, "mcp__linear__list_issues", calledAs)
 }
+
+// A namespace member must come out of both converters exactly as a plain
+// function with the same definition does, and plain functions must not change.
+func TestResponsesNamespaceMemberConvertsLikeAPlainFunction(t *testing.T) {
+	const schema = `{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}`
+	var plain, namespaced responses.ResponseNewParams
+	require.NoError(t, json.Unmarshal([]byte(`{"model":"m","input":"hi","tools":[
+	  {"type":"function","name":"mcp__crm__find","description":"Find a customer","parameters":`+schema+`},
+	  {"type":"function","name":"mcp__crm__ping"}]}`), &plain))
+	require.NoError(t, json.Unmarshal([]byte(`{"model":"m","input":"hi","tools":[{"type":"namespace","name":"mcp__crm__","description":"CRM","tools":[
+	  {"type":"function","name":"find","description":"Find a customer","parameters":`+schema+`},
+	  {"type":"function","name":"ping"}]}]}`), &namespaced))
+
+	wantChat, _ := json.Marshal(ConvertOpenAIResponsesToChat(&plain, 4096).Tools)
+	gotChat, _ := json.Marshal(ConvertOpenAIResponsesToChat(&namespaced, 4096).Tools)
+	assert.JSONEq(t, string(wantChat), string(gotChat))
+	assert.Contains(t, string(gotChat), `"required":["id"]`)
+	assert.Contains(t, string(gotChat), `"additionalProperties":false`)
+
+	wantAnthropic, _ := json.Marshal(ConvertOpenAIResponsesToAnthropicBetaRequest(plain, 4096).Tools)
+	gotAnthropic, _ := json.Marshal(ConvertOpenAIResponsesToAnthropicBetaRequest(namespaced, 4096).Tools)
+	assert.JSONEq(t, string(wantAnthropic), string(gotAnthropic))
+}
