@@ -96,26 +96,16 @@ export default function PerformanceSummary({ queryParams }: { queryParams: Perfo
                 <Typography sx={{ fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>{t('dashboard.performance.title', { defaultValue: 'Response Performance' })}</Typography>
                 {loading && <CircularProgress size={18} />}
             </Box>
-            <Box sx={{ px: 2.25, pb: 1, display: 'grid', gridTemplateColumns: '52px repeat(3, minmax(0, 1fr))', columnGap: 1 }}>
-                <Box />
-                {metrics.map(({ key, title, metric }) => (
-                    <Box key={key} sx={{ minWidth: 0 }}>
-                        <Typography sx={{ fontWeight: 600, fontSize: fontSizes.sm }}>{title}</Typography>
-                        <Typography sx={{ color: 'text.disabled', fontSize: fontSizes.micro, mt: 0.2 }}>
-                            {t('dashboard.performance.sampleCount', { n: metric?.sample_count.toLocaleString() ?? 0 })}
-                        </Typography>
-                    </Box>
-                ))}
-            </Box>
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', '& > * + *': { borderTop: '1px solid', borderColor: 'divider' } }}>
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', pb: 0.5, '& > * + *': { borderTop: '1px solid', borderColor: 'divider' } }}>
                 {PERCENTILES.map(({ key, label }) => (
-                    <Box key={key} sx={{ px: 2.25, py: 0.75, minWidth: 0, flex: 1, display: 'grid', gridTemplateColumns: '52px repeat(3, minmax(0, 1fr))', alignItems: 'center', columnGap: 1 }}>
-                        <Typography sx={{ color: 'text.secondary', fontSize: fontSizes.xs, fontWeight: 600 }}>{label}</Typography>
+                    <Box key={key} sx={{ px: 2.25, py: 0.75, minWidth: 0, flex: 1, display: 'grid', gridTemplateColumns: '40px repeat(3, minmax(0, 1fr))', alignItems: 'center', columnGap: 1 }}>
+                        <Typography sx={{ color: 'text.disabled', fontSize: fontSizes.sm, fontWeight: 500 }}>{label.toLowerCase()}</Typography>
                         {metrics.map((metric) => {
                             const value = formatMetricValue(metric.metric, metric.kind, key);
                             return (
-                                <Typography key={metric.key} sx={{ color: value === '—' ? 'text.disabled' : 'text.primary', fontWeight: 650, fontSize: fontSizes.lg, whiteSpace: 'nowrap' }}>
-                                    {value}
+                                <Typography key={metric.key} sx={{ whiteSpace: 'nowrap', fontSize: fontSizes.sm, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>
+                                    {metric.title}{' '}
+                                    <Box component="span" sx={{ color: value === '—' ? 'text.disabled' : 'text.primary', fontWeight: 650 }}>{value}</Box>
                                 </Typography>
                             );
                         })}
