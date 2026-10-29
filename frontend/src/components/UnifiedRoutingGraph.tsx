@@ -477,7 +477,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     <ActionAddNode
                         label={t('rule.ruleConditions.closeConditions')}
                         icon="close"
-                        width={180}
+                        width={PROVIDER_NODE_STYLES.width}
                         active={active && !saving}
                         onAdd={() => onSwitchRoutingMode?.()}
                         tooltip={t('rule.ruleConditions.closeConditionsTooltip')}

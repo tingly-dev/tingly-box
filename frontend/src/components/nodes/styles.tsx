@@ -55,7 +55,7 @@ export const { providerNode, smartNode } = {
 
 // ActionAddNode dimensions
 export const SMALL_NODE_STYLES = {
-    width: 140,
+    width: 100,
     height: 72,
     padding: 5,
 } as const;
