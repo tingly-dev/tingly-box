@@ -27,6 +27,10 @@ export type Quality = 'auto' | 'high' | 'medium' | 'low' | 'standard';
 export interface ImageResult {
     url?: string;
     b64_json?: string;
+    // The decoded bytes, kept instead of `b64_json` once a result lands in the
+    // session (see toSessionImage). `url` is then a blob: URL onto it, rebuilt
+    // on restore — the session never holds megabytes of base64 per image.
+    blob?: Blob;
 }
 
 // An image the user brought in to work on rather than to generate from: it
@@ -34,6 +38,9 @@ export interface ImageResult {
 export interface ImportedImage {
     id: string;
     src: string;
+    // The file behind `src` (a blob: URL), so the session persists bytes
+    // rather than a base64 string and `src` is rebuilt from it on restore.
+    blob?: Blob;
     name: string;
     bytes: number;
     width?: number;

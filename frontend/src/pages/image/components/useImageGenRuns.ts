@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { fetchBlob } from '@tingly/vision';
 import { getOpenAIClient } from '@/services/modelApi';
 import { loadPlaygroundSession, savePlaygroundSession } from '@/utils/playgroundSession';
+import { reviveSessionBlobs, toSessionImage } from './imageGenSession';
 import { readImageSize } from './useImageGenRefs';
 import type { ReferenceImage } from './ImageGenReferenceImages';
 import type { Endpoint, GenerationRun, ImportedImage, Quality, ReferenceMask } from './ImageGenPlayground.types';
@@ -25,16 +26,6 @@ export interface GenerationRequest {
     // instead of a second card appearing.
     runId?: string;
 }
-
-// Reads a File into a base64 data URL, the same representation already used
-// for generated images (`data:image/png;base64,...`) so reference thumbnails
-// and outputs render through one code path.
-const fileToDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-});
 
 type UseImageGenRunsNotification = (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
 
@@ -95,6 +86,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
         }
         void loadPlaygroundSession<GenerationRun, ImportedImage>().then(({ runs: savedRuns, imports: savedImports }) => {
             if (cancelled) return;
+            reviveSessionBlobs(savedRuns, savedImports);
             if (savedRuns.length > 0) {
                 updateRuns((current) => (current.length > 0 ? current : savedRuns.map((run) => (run.status === 'pending'
                     ? { ...run, status: 'failed', error: t('playground.interruptedByReload', { defaultValue: 'Interrupted by a page reload' }) }
@@ -174,7 +166,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
                     size: request.size as any,
                     quality: request.quality,
                 }, { signal: controller.signal });
-            const images = response.data ?? [];
+            const images = (response.data ?? []).map(toSessionImage);
             updateRuns((currentRuns) => currentRuns.map((run) => (
                 run.id === runId ? { ...run, images, status: 'completed', error: undefined } : run
             )));
@@ -250,10 +242,11 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
         const incoming = Array.from(files).filter((file) => file.type.startsWith('image/'));
         if (incoming.length === 0) return;
         const items = await Promise.all(incoming.map(async (file): Promise<ImportedImage> => {
-            const src = await fileToDataUrl(file);
+            const src = URL.createObjectURL(file);
             return {
                 id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
                 src,
+                blob: file,
                 name: file.name,
                 bytes: file.size,
                 createdAt: Date.now(),
