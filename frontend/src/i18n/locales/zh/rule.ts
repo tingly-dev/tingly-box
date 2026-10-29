@@ -243,9 +243,6 @@ export default {
     },
     "ruleConditions": {
       "defaultTitle": "默认",
-      "defaultAll": "所有请求",
-      "defaultOther": "其他所有请求",
-      "addConditionShort": "+ 添加条件",
       "addCondition": "添加条件",
       "conditionsHint": "条件从上到下依次检查，先匹配到的生效。",
       "conditionsPaused": "条件已保存，但处于暂停状态",

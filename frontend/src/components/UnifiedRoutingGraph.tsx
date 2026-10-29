@@ -1,4 +1,3 @@
-import {Add as AddIcon,} from '@/components/icons';
 import {Box, Button, Card, CardContent, Collapse, Stack,} from '@mui/material';
 import {alpha, styled} from '@mui/material/styles';
 import React, {useEffect, useRef} from 'react';
@@ -7,7 +6,6 @@ import {
     getRouteGraphActiveColor,
     PROVIDER_NODE_STYLES,
     SMALL_NODE_STYLES,
-    SMART_NODE_STYLES
 } from '@/components/nodes/styles';
 import {
     ActionAddNode,
@@ -425,33 +423,15 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     ))
                 ) : null}
 
-                {/* Add Smart Rule Button */}
-                <Box sx={{display: 'flex', justifyContent: 'flex-start', py: 2}}>
-                    <Button
-                        variant="outlined"
-                        startIcon={<AddIcon/>}
-                        onClick={onAddSmartRule}
-                        disabled={!active || saving}
-                        sx={(theme) => ({
-                            width: SMART_NODE_STYLES.width,
-                            borderColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.72 : 0.82),
-                            color: getRouteGraphActiveColor(theme),
-                            backgroundColor: 'transparent',
-                            '&:hover': {
-                                borderColor: getRouteGraphActiveColor(theme),
-                                backgroundColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.12 : 0.06),
-                                boxShadow: `0 0 0 3px ${alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.14 : 0.10)}`,
-                            },
-                            '&.Mui-disabled': {
-                                borderColor: theme.palette.divider,
-                                color: theme.palette.text.disabled,
-                            },
-                        })}
-                    >
-                        {t('rule.ruleConditions.addCondition')}
-                    </Button>
+                {/* Add condition (with conditions; without them it sits under Default) */}
+                <Box sx={{display: 'flex', alignItems: 'center', gap: 1.5, py: 1}}>
+                    <ActionAddNode
+                        label={t('rule.ruleConditions.addCondition')}
+                        active={active && !saving}
+                        onAdd={() => onAddSmartRule?.()}
+                    />
                     {smartRouting.length > 1 && (
-                        <Box sx={{ml: 1.5, alignSelf: 'center', fontSize: 12, color: 'text.secondary'}}>
+                        <Box sx={{fontSize: 12, color: 'text.secondary'}}>
                             {t('rule.ruleConditions.conditionsHint')}
                         </Box>
                     )}
@@ -465,14 +445,18 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         return (
             <GraphRow sx={{alignItems: 'flex-start'}}>
                 {/* Fixed height matches the tier row height so ServiceEntryNode centres vertically */}
-                <NodeContainer sx={{height: PROVIDER_NODE_STYLES.height, justifyContent: 'center'}}>
+                <NodeContainer sx={{minHeight: PROVIDER_NODE_STYLES.height, justifyContent: 'center', gap: 1}}>
                     <ServiceEntryNode
                         providersCount={record.providers.length}
                         active={active}
-                        hasConditions={showSmartRouting}
-                        onAddCondition={onAddSmartRule}
-                        addConditionDisabled={saving}
                     />
+                    {!showSmartRouting && (
+                        <ActionAddNode
+                            label={t('rule.ruleConditions.addCondition')}
+                            active={active && !saving}
+                            onAdd={() => onAddSmartRule?.()}
+                        />
+                    )}
                 </NodeContainer>
 
                 <Box sx={{flex: 0, display: 'flex', alignItems: 'center', height: PROVIDER_NODE_STYLES.height}}>

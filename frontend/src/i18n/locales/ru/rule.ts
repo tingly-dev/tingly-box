@@ -243,9 +243,6 @@ export default {
     },
     "ruleConditions": {
       "defaultTitle": "По умолчанию",
-      "defaultAll": "все запросы",
-      "defaultOther": "все остальные запросы",
-      "addConditionShort": "+ Добавить условие",
       "addCondition": "Добавить условие",
       "conditionsHint": "Условия проверяются сверху вниз; срабатывает первое совпадение.",
       "conditionsPaused": "Условия сохранены, но приостановлены",

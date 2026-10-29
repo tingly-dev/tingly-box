@@ -10,7 +10,7 @@ import { styled } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import NodeTooltip from './NodeTooltip';
-import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyles, nodeSpotlightSx, SMALL_NODE_STYLES } from './styles';
+import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyles, nodeSpotlightSx, SMALL_NODE_STYLES, SMART_NODE_STYLES } from './styles';
 import { fontSizes } from '@/theme/fonts';
 
 const { node } = { node: SMALL_NODE_STYLES };
@@ -46,8 +46,8 @@ export const useAddModelSpotlight = (active: boolean): boolean => {
 
 // ActionAddNode Container
 const StyledAddProviderNode = styled(Box, {
-    shouldForwardProp: (prop) => prop !== 'active' && prop !== 'warning' && prop !== 'spotlight',
-})<{ active: boolean; warning?: boolean; spotlight?: boolean }>(({ active, warning, spotlight, theme }) => ({
+    shouldForwardProp: (prop) => prop !== 'active' && prop !== 'warning' && prop !== 'spotlight' && prop !== 'wide',
+})<{ active: boolean; warning?: boolean; spotlight?: boolean; wide?: boolean }>(({ active, warning, spotlight, wide, theme }) => ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -57,8 +57,9 @@ const StyledAddProviderNode = styled(Box, {
     border: '2px dashed',
     borderColor: getRouteGraphBorderColor(theme),
     backgroundColor: 'background.paper',
-    width: node.width,
-    height: node.height,
+    width: wide ? SMART_NODE_STYLES.width : node.width,
+    height: wide ? 36 : node.height,
+    boxSizing: 'border-box',
     transition: 'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease',
     cursor: active ? 'pointer' : 'default',
     opacity: active ? 1 : 0.5,
@@ -77,6 +78,9 @@ export interface AddProviderNodeProps {
     warning?: boolean;
     onAdd: () => void;
     tooltip?: string;
+    /** Names something other than a model (e.g. "Add condition"). Draws the
+     * node as a one-line bar as wide as a condition node. */
+    label?: string;
 }
 
 export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
@@ -84,19 +88,27 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
     warning = false,
     onAdd,
     tooltip,
+    label,
 }) => {
     const { t } = useTranslation();
     // Pulse when guidance (Quick Start → "Select a Model") points the user here.
-    const spotlight = useAddModelSpotlight(active);
+    const spotlight = useAddModelSpotlight(active && !label);
 
     return (
-        <NodeTooltip title={tooltip ?? t('rule.nodes.addModel', { defaultValue: 'Add model' })} placement="top">
+        <NodeTooltip title={tooltip ?? label ?? t('rule.nodes.addModel', { defaultValue: 'Add model' })} placement="top">
             <StyledAddProviderNode
                 active={active}
                 warning={warning}
                 spotlight={spotlight}
+                wide={!!label}
                 onClick={active ? onAdd : undefined}
             >
+                {label ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary' }}>
+                        <AddIcon sx={{ fontSize: 16 }} />
+                        <Typography variant="caption" sx={{ fontSize: fontSizes.xs, lineHeight: 1 }}>{label}</Typography>
+                    </Box>
+                ) : (<>
                 <AddIcon sx={{ fontSize: 24, color: 'text.secondary' }} />
                 <Typography
                     variant="caption"
@@ -107,7 +119,7 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
                         lineHeight: 1.1
                     }}>
                     {t('rule.nodes.addModel', { defaultValue: 'Add model' })}
-                </Typography>
+                </Typography></>)}
             </StyledAddProviderNode>
         </NodeTooltip>
     );

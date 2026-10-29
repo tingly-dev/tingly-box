@@ -243,9 +243,6 @@ export default {
     },
     "ruleConditions": {
       "defaultTitle": "Default",
-      "defaultAll": "every request",
-      "defaultOther": "every other request",
-      "addConditionShort": "+ Add condition",
       "addCondition": "Add condition",
       "conditionsHint": "Conditions are checked from top to bottom; the first match wins.",
       "conditionsPaused": "Conditions are saved but paused",
