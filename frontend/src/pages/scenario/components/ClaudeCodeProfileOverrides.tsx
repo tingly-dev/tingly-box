@@ -14,6 +14,7 @@ import {
     IconButton,
     InputAdornment,
     MenuItem,
+    Popover,
     Select,
     Stack,
     Switch,
@@ -65,7 +66,6 @@ const TEXT = {
         off: '关',
         discard: '放弃',
         add: '添加',
-        closeAdd: '关闭',
         search: '搜索可覆盖的运行参数',
         noSettings: '没有可添加的参数',
         common: '常用',
@@ -98,7 +98,6 @@ const TEXT = {
         off: 'Off',
         discard: 'Discard',
         add: 'Add',
-        closeAdd: 'Close',
         search: 'Search runtime settings',
         noSettings: 'No settings available',
         common: 'Common',
@@ -131,7 +130,6 @@ const TEXT = {
         off: 'Выкл',
         discard: 'Отменить',
         add: 'Добавить',
-        closeAdd: 'Закрыть',
         search: 'Поиск рабочих параметров',
         noSettings: 'Доступных параметров нет',
         common: 'Основные',
@@ -226,7 +224,8 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
     const [savingAction, setSavingAction] = React.useState<'save' | 'restore' | null>(null);
     const [loadError, setLoadError] = React.useState(false);
     const [message, setMessage] = React.useState<{ severity: 'success' | 'error'; text: string } | null>(null);
-    const [addOpen, setAddOpen] = React.useState(false);
+    const [addAnchor, setAddAnchor] = React.useState<HTMLElement | null>(null);
+    const addOpen = Boolean(addAnchor);
     const [addQuery, setAddQuery] = React.useState('');
     const [restoreOpen, setRestoreOpen] = React.useState(false);
 
@@ -290,7 +289,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
 
     const addOverride = (key: OverrideKey) => {
         setSelectedKeys(current => new Set(current).add(key));
-        setAddOpen(false);
+        setAddAnchor(null);
         setAddQuery('');
         setMessage(null);
     };
@@ -465,7 +464,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
             size="full"
             title={text.title}
             subtitle={subtitle}
-            titleMarginBottom={hasRows || addOpen ? 1.25 : 0}
+            titleMarginBottom={hasRows ? 1.25 : 0}
             sx={{
                 '& > .MuiCardContent-root': {
                     p: 2.5,
@@ -505,14 +504,14 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                     <Button
                         size="small"
                         variant="outlined"
-                        startIcon={addOpen ? <Close fontSize="small" /> : <Add fontSize="small" />}
-                        onClick={() => {
-                            setAddOpen(current => !current);
+                        startIcon={<Add fontSize="small" />}
+                        onClick={event => {
+                            setAddAnchor(event.currentTarget);
                             setAddQuery('');
                         }}
                         disabled={loading || saving || loadError || availableKeys.length === 0}
                     >
-                        {addOpen ? text.closeAdd : text.add}
+                        {text.add}
                     </Button>
                 </Box>
             )}
@@ -586,14 +585,16 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                 </Stack>
             </Collapse>
 
-            <Collapse in={addOpen && availableKeys.length > 0} unmountOnExit>
+            <Popover
+                open={addOpen && availableKeys.length > 0}
+                anchorEl={addAnchor}
+                onClose={() => setAddAnchor(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                slotProps={{ paper: { sx: { mt: 0.5, width: 'min(620px, calc(100vw - 32px))', borderRadius: 1.5 } } }}
+            >
                 <Box
                     sx={{
-                        mt: hasRows ? 1.25 : 0,
-                        maxWidth: 620,
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        borderRadius: 1.5,
                         overflow: 'hidden',
                     }}
                 >
@@ -650,7 +651,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                         )}
                     </Box>
                 </Box>
-            </Collapse>
+            </Popover>
 
             {message && (
                 <Alert severity={message.severity} sx={{ mt: 1 }}>{message.text}</Alert>
