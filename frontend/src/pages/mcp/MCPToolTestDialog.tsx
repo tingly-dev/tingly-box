@@ -50,7 +50,7 @@ export default function MCPToolTestDialog({
             <DialogContent dividers>
                 <Stack spacing={2}>
                     {error && <Alert severity="error">{error}</Alert>}
-                    <MCPToolParameters tool={tool} expanded />
+                    <MCPToolParameters tool={tool} />
                     <TextField
                         label={label('argumentsJSON', 'Arguments (JSON)')}
                         multiline

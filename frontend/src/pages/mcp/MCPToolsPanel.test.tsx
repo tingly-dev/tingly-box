@@ -5,7 +5,10 @@ import type { MCPRouteSource, MCPSourceConfig } from './types';
 
 const mocks = vi.hoisted(() => ({ save: vi.fn() }));
 vi.mock('react-i18next', () => ({
-    useTranslation: () => ({ t: (_: string, options: { defaultValue: string }) => options.defaultValue }),
+    useTranslation: () => ({
+        t: (_: string, options: Record<string, unknown> & { defaultValue: string }) =>
+            options.defaultValue.replace(/\{\{(\w+)\}\}/g, (_m, k) => String(options[k])),
+    }),
 }));
 const source: MCPSourceConfig = {
     id: 'remote',
@@ -49,10 +52,10 @@ describe('tool list', () => {
     it('uses the shared card chrome and heading hierarchy for each source', () => {
         render(<MCPToolsPanel {...props} />);
         const connection = screen.getByRole('article', { name: 'Remote docs' });
-        expect(connection.querySelector('.MuiCard-root > .MuiCardContent-root')).not.toBeNull();
+        expect(connection.classList.contains('MuiCard-root')).toBe(true);
         expect(within(connection).getByRole('heading', { level: 2, name: 'Remote docs' })).toBeInTheDocument();
         expect(within(connection).getByText('Connected')).toBeInTheDocument();
-        expect(within(connection).getByRole('button', { name: 'Configure this connection' })).toBeEnabled();
+        expect(within(connection).getByRole('button', { name: 'Settings' })).toBeEnabled();
     });
     it('retains loading, off, empty-discovery and save-error states', async () => {
         const view = render(<MCPToolsPanel {...props} loading />);
@@ -78,10 +81,10 @@ describe('tool list', () => {
                 onConfigureSource={configure}
             />
         );
-        expect(screen.getAllByRole('button', { name: 'Configure this connection' })).toHaveLength(1);
+        expect(screen.getAllByRole('button', { name: 'Settings' })).toHaveLength(1);
         expect(screen.getByRole('article', { name: 'Remote docs / echo' })).toBeInTheDocument();
         expect(screen.getByRole('article', { name: 'Remote docs / read' })).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Configure this connection' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
         expect(configure).toHaveBeenCalledWith('remote');
     });
     it('keeps a failed connection visible and switches one tool without touching other policies', async () => {
@@ -121,5 +124,35 @@ describe('tool list', () => {
         expect(screen.getByRole('button', { name: 'Test tool' })).toBeDisabled();
         expect(screen.getByRole('button', { name: 'Configure Advisor model' })).toBeInTheDocument();
         expect(screen.getByText('Server Tool')).toBeInTheDocument();
+    });
+
+    it('expands a tool to plain JSON schemas and folds long lists', () => {
+        const many = Array.from({ length: 7 }, (_, i) => ({
+            ...tool,
+            name: `tool_${i}`,
+            normalized_name: `tool_${i}`,
+            output_schema: { type: 'object' },
+        }));
+        render(<MCPToolsPanel {...props} routes={[{ ...route, tools: many }]} />);
+        expect(screen.getByText('7 of 7 tools on')).toBeInTheDocument();
+        expect(screen.queryByText('tool_6')).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Show all 7 tools' }));
+        expect(screen.getByText('tool_6')).toBeInTheDocument();
+        fireEvent.click(screen.getByText('tool_0'));
+        expect(screen.getByText('Parameters')).toBeInTheDocument();
+        expect(screen.getByText('Output schema')).toBeInTheDocument();
+        expect(screen.getAllByText(/"type": "object"/).length).toBeGreaterThan(0);
+    });
+    it('turns every tool of a connection on or off in one save', async () => {
+        const two = [tool, { ...tool, name: 'read', normalized_name: 'read' }];
+        render(<MCPToolsPanel {...props} routes={[{ ...route, tools: two }]} />);
+        fireEvent.click(screen.getByRole('button', { name: 'All' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Turn off' }));
+        await waitFor(() =>
+            expect(mocks.save).toHaveBeenCalledWith({
+                id: 'remote',
+                tool_policies: { echo: { enabled: false }, read: { enabled: false }, other: undefined },
+            })
+        );
     });
 });

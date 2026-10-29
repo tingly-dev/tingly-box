@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Box, Button, Chip, CircularProgress, Stack, Typography } from '@mui/material';
-import UnifiedCard from '@/components/UnifiedCard';
-import MCPToolCard from './MCPToolCard';
+import { Alert, Box, Button, Card, Chip, CircularProgress, Stack, Typography } from '@mui/material';
+import MCPToolList from './MCPToolList';
 import MCPToolTestDialog from './MCPToolTestDialog';
-import { connectionSummary, isServerToolSource, isServerWebtoolsSource, toolPolicyPatch, type MCPToolPatch } from './toolPresentation';
+import { connectionSummary, isBuiltinSource, isServerToolSource, isServerWebtoolsSource, toolPolicyPatch, toolsPolicyPatch, type MCPToolPatch } from './toolPresentation';
 import type { MCPCatalogTool, MCPRouteSource, MCPSourceConfig } from './types';
 
 // Every connection and Server Tool in one list. The applied routing snapshot is
@@ -42,6 +41,17 @@ export default function MCPToolsPanel({
             setBusy(false);
         }
     };
+    const bulk = async (source: MCPSourceConfig, list: MCPCatalogTool[], on: boolean) => {
+        setBusy(true);
+        setError('');
+        try {
+            await saveSource(toolsPolicyPatch(source, list, on));
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setBusy(false);
+        }
+    };
     return (
         <Stack spacing={2}>
             {error && <Alert severity="error">{error}</Alert>}
@@ -62,123 +72,146 @@ export default function MCPToolsPanel({
                 const webtools = isServerWebtoolsSource(source);
                 const summary = connectionSummary(source);
                 const failed = route?.state === 'error' || route?.state === 'unconfigured';
+                const builtin = isBuiltinSource(source) && !webtools && !advisor;
+                // Neutral unless the connection needs the user (amber) or failed (red).
+                const status: { text: string; tone: 'neutral' | 'warning' | 'error' } =
+                    source.enabled === false
+                        ? { text: workspace('off', 'Off'), tone: 'neutral' }
+                        : !route || loading
+                          ? { text: workspace('checking', 'Checking…'), tone: 'neutral' }
+                          : route.state === 'connected'
+                            ? { text: workspace('connected', 'Connected'), tone: 'neutral' }
+                            : route.state === 'error'
+                              ? { text: workspace('failed', 'Failed'), tone: 'error' }
+                              : { text: workspace('needsAttention', 'Needs attention'), tone: 'warning' };
                 return (
-                    <Box
+                    <Card
                         component="article"
+                        variant="outlined"
                         aria-label={source.name || source.id}
                         key={source.id}
-                        sx={{ minWidth: 0 }}
+                        sx={{ minWidth: 0, borderRadius: 1.5, overflow: 'hidden' }}
                     >
-                        <UnifiedCard
-                            size="full"
-                            title={source.name || source.id}
-                            leftAction={
-                                <Stack direction="row" sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                                    <Typography variant="caption" color="text.secondary">
-                                        {serverTool
-                                            ? workspace('serverToolLabel', 'Server Tool')
-                                            : t(`mcp.relationships.${route?.origin || source.origin || 'external'}`, {
-                                                  defaultValue: route?.origin || source.origin || 'external',
-                                              })}
-                                    </Typography>
-                                    <Chip
-                                        size="small"
-                                        variant="outlined"
-                                        label={
-                                            source.enabled === false
-                                                ? workspace('off', 'Off')
-                                                : !route || loading
-                                                  ? workspace('checking', 'Checking…')
-                                                  : route.state === 'connected'
-                                                    ? workspace('connected', 'Connected')
-                                                    : workspace('needsAttention', 'Needs attention')
-                                        }
-                                    />
-                                </Stack>
-                            }
-                            rightAction={
-                                <Button size="small" onClick={() => onConfigureSource(source.id!)}>
-                                    {webtools
-                                        ? workspace('webtoolsSettings', 'Web tool settings')
-                                        : failed
-                                          ? workspace('fixConnection', 'Fix connection')
-                                          : advisor
-                                            ? workspace('configureAdvisor', 'Configure Advisor model')
-                                            : workspace('configureConnection', 'Configure this connection')}
-                                </Button>
-                            }
-                            headerSx={{
-                                flexDirection: { xs: 'column', sm: 'row' },
-                                gap: 1,
-                                '& > :first-child': { minWidth: 0, flexWrap: 'wrap' },
-                                '& h2': { overflowWrap: 'anywhere' },
-                            }}
+                        <Stack
+                            direction="row"
+                            sx={{ alignItems: 'center', gap: 1.25, px: 2, py: 1.75, flexWrap: 'wrap' }}
                         >
-                            <Stack direction="row" sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
+                            <Typography component="h2" sx={{ fontWeight: 600, fontSize: 14, overflowWrap: 'anywhere' }}>
+                                {source.name || source.id}
+                            </Typography>
+                            <Typography variant="caption" color="text.disabled">
+                                {serverTool
+                                    ? workspace('serverToolLabel', 'Server Tool')
+                                    : t(`mcp.relationships.${route?.origin || source.origin || 'external'}`, {
+                                          defaultValue: route?.origin || source.origin || 'external',
+                                      })}
+                            </Typography>
+                            <Box sx={{ flex: 1 }} />
+                            <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75 }}>
+                                <Box
+                                    aria-hidden
+                                    sx={{
+                                        width: 7,
+                                        height: 7,
+                                        borderRadius: '50%',
+                                        bgcolor: status.tone === 'error' ? 'error.main' : status.tone === 'warning' ? 'warning.main' : 'text.disabled',
+                                    }}
+                                />
                                 <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                    sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}
+                                    variant="caption"
+                                    sx={{ color: status.tone === 'error' ? 'error.main' : status.tone === 'warning' ? 'warning.main' : 'text.secondary' }}
                                 >
-                                    {summary.target || workspace('notSet', 'Not set')}
+                                    {status.text}
                                 </Typography>
-                                {summary.details.map(({ key, count }) => (
-                                    <Chip
-                                        key={key}
-                                        size="small"
-                                        variant="outlined"
-                                        label={`${workspace(`detail_${key}`, key)}${key === 'proxy' ? '' : ` · ${count}`}`}
-                                    />
-                                ))}
-                                {summary.missing.map((key) => (
-                                    <Chip
-                                        key={key}
-                                        size="small"
-                                        color="warning"
-                                        clickable
-                                        onClick={() => onConfigureSource(source.id!)}
-                                        label={workspace(`missing_${key}`, `Needs ${key}`)}
-                                    />
-                                ))}
                             </Stack>
+                            <Button
+                                size="small"
+                                variant={failed ? 'contained' : 'outlined'}
+                                color={failed ? 'primary' : 'inherit'}
+                                sx={failed ? undefined : { color: 'text.secondary', borderColor: 'divider' }}
+                                onClick={() => onConfigureSource(source.id!)}
+                            >
+                                {webtools
+                                    ? workspace('webtoolsSettings', 'Web tool settings')
+                                    : failed
+                                      ? workspace('fixConnection', 'Fix connection')
+                                      : advisor
+                                        ? workspace('configureAdvisor', 'Configure Advisor model')
+                                        : workspace('connectionSettings', 'Settings')}
+                            </Button>
+                        </Stack>
+                        <Stack sx={{ px: 2, pb: 1.5, gap: 1 }}>
+                            {builtin ? (
+                                <Typography variant="caption" color="text.secondary">
+                                    {workspace('builtinRuns', 'Runs inside Tingly Box.')}
+                                </Typography>
+                            ) : (
+                                <Stack direction="row" sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                    <Typography
+                                        color="text.secondary"
+                                        sx={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-all' }}
+                                    >
+                                        {summary.target || workspace('notSet', 'Not set')}
+                                    </Typography>
+                                    {summary.details.map(({ key, count }) => (
+                                        <Chip
+                                            key={key}
+                                            size="small"
+                                            variant="outlined"
+                                            sx={{ fontSize: 11.5, height: 22 }}
+                                            label={`${workspace(`detail_${key}`, key)}${key === 'proxy' ? '' : ` · ${count}`}`}
+                                        />
+                                    ))}
+                                    {summary.missing.map((key) => (
+                                        <Chip
+                                            key={key}
+                                            size="small"
+                                            color="warning"
+                                            variant="outlined"
+                                            clickable
+                                            sx={{ fontSize: 11.5, height: 22 }}
+                                            onClick={() => onConfigureSource(source.id!)}
+                                            label={workspace(`missing_${key}`, `Needs ${key}`)}
+                                        />
+                                    ))}
+                                </Stack>
+                            )}
                             {route && route.state !== 'connected' && !!route.error && (
-                                <Alert severity={failed ? 'warning' : 'info'} sx={{ mb: 1 }}>
+                                <Typography variant="caption" color={failed ? 'error.main' : 'text.secondary'}>
                                     {route.error}
-                                </Alert>
+                                </Typography>
                             )}
                             {webtools && (
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                                <Typography variant="caption" color="text.secondary">
                                     {workspace('webtoolsContext', 'Configure Search with a Serper API key and enable Search / Fetch separately. Ready tools replace native web tools on supported model routes. The MCP version has independent settings.')}
                                 </Typography>
                             )}
                             {advisor && (
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                                <Typography variant="caption" color="text.secondary">
                                     {workspace(
                                         'advisorContext',
                                         'Advisor is run by the gateway during model requests, so it has a switch and a consultation model but is not offered through profiles.'
                                     )}
                                 </Typography>
                             )}
-                            <Stack spacing={1}>
-                                {tools.map((tool) => (
-                                    <MCPToolCard
-                                        key={tool.normalized_name}
-                                        tool={tool}
-                                        source={source}
-                                        enabled={enabled}
-                                        busy={busy || loading}
-                                        onChange={(patch) => void policy(tool, patch)}
-                                        onTest={() => setTesting(tool)}
-                                    />
-                                ))}
-                                {!loading && route?.state === 'connected' && tools.length === 0 && (
-                                    <Typography variant="body2" color="text.secondary">
-                                        {workspace('emptyDiscovery', 'The connection returned no tools.')}
-                                    </Typography>
-                                )}
-                            </Stack>
-                        </UnifiedCard>
-                    </Box>
+                        </Stack>
+                        {tools.length > 0 && (
+                            <MCPToolList
+                                tools={tools}
+                                source={source}
+                                enabled={enabled}
+                                busy={busy || loading}
+                                onChange={(tool, patch) => void policy(tool, patch)}
+                                onBulk={(list, on) => void bulk(source, list, on)}
+                                onTest={setTesting}
+                            />
+                        )}
+                        {!loading && source.enabled !== false && route?.state === 'connected' && tools.length === 0 && (
+                            <Typography variant="body2" color="text.secondary" sx={{ px: 2, pb: 1.75 }}>
+                                {workspace('emptyDiscovery', 'The connection returned no tools.')}
+                            </Typography>
+                        )}
+                    </Card>
                 );
             })}
             {testing && (

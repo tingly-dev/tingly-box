@@ -78,6 +78,26 @@ The old Tool / MCP / Server Tool pages and the "client" concept are removed.
 `/mcp`, `/mcp/profiles`, `/mcp/clients`, `/mcp/routes` land on Default;
 `/mcp/sources` lands on MCP Tools and `/tools/servertool` on Server Tools.
 
+## Tool lists: one row language
+
+MCP Tools, Server Tools and the MCP profile page show tools the same way: one
+bordered card per connection (or per profile) and one 40px row per tool, not a
+card per tool. Rules (visual tokens as in `projects-visual.md`):
+
+- Row: monospace name, one-line truncated description, switch. Click the row to
+  expand its schemas. A tool that is off or restricted is greyed as a whole row.
+- Schemas are plain JSON (parameters, output), each with a copy button that
+  copies the raw schema. No custom rendering.
+- Test (and Remove, on a profile) appear on hover or focus, always on touch.
+- Status is a dot and a word. Connected, Off and Checking are neutral; amber is
+  "needs you" (missing value, unconfigured), red is failed. The connection's
+  Settings button is quiet and becomes the filled primary only for Fix connection.
+- A header bar says "N of M tools on". With more than 8 tools it adds a filter;
+  with more than 5 only the first 5 show until "Show all". All/Matching on/off
+  writes one patch for every tool at once; restricted tools are skipped.
+- A built-in connection says "Runs inside Tingly Box" instead of its command
+  line (the command stays in the connection drawer).
+
 ## Identifiers
 
 Source and profile IDs are addressing, not naming. They are never typed by the

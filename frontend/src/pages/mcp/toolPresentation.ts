@@ -40,6 +40,21 @@ export const toolPolicyPatch = (
     },
 });
 
+// One patch that sets every given tool on or off; tools the connection restricts are left alone.
+export const toolsPolicyPatch = (
+    source: MCPSourceConfig,
+    tools: MCPCatalogTool[],
+    enabled: boolean
+): MCPSourceConfig => ({
+    id: source.id,
+    ...(enabled && isBuiltinSource(source) ? { enabled: true } : {}),
+    tool_policies: Object.fromEntries(
+        tools
+            .filter((tool) => !isToolRestricted(tool, source))
+            .map((tool) => [tool.name, { ...source.tool_policies?.[tool.name], enabled }])
+    ),
+});
+
 export type ConnectionSummary = {
     // Where the tools come from: URL, command line or Advisor's model.
     target: string;
