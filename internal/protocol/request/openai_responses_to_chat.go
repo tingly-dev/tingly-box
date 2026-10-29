@@ -362,8 +362,10 @@ func ConvertResponsesToolsToChatTools(tools []responses.ToolUnionParam) []openai
 
 	for _, fn := range functions {
 		// Convert parameters map to proper format
-		parameters := fn.Parameters
-		if parameters == nil {
+		var parameters map[string]interface{}
+		if fn.Parameters != nil {
+			parameters = fn.Parameters
+		} else {
 			// Create empty parameters object
 			parameters = map[string]interface{}{
 				"type":       "object",
@@ -374,7 +376,17 @@ func ConvertResponsesToolsToChatTools(tools []responses.ToolUnionParam) []openai
 		functionDef := shared.FunctionDefinitionParam{
 			Name:        fn.Name,
 			Parameters:  parameters,
-			Description: fn.Description,
+			Description: param.Opt[string]{},
+		}
+
+		// Set description if present
+		if !param.IsOmitted(fn.Description) {
+			functionDef.Description = fn.Description
+		}
+
+		// Set strict mode if present
+		if !param.IsOmitted(fn.Strict) {
+			// Note: strict mode is set via ExtraFields if needed
 		}
 
 		result = append(result, openai.ChatCompletionFunctionTool(functionDef))

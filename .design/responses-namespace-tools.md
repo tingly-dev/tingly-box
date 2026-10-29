@@ -89,8 +89,9 @@ conversion never needs the index (§4); this is why multi-turn works even though
 the index is rebuilt for every request.
 
 `strict` is copied onto the expanded function but neither converter forwards it
-upstream: the Chat converter never set it (before this change it had an empty `if`
-with a comment where it would go), and Anthropic has no such field. A namespace member
+upstream: the Chat converter never set it (it still has its empty `if` with the note
+"strict mode is set via ExtraFields if needed", which this change leaves alone),
+and Anthropic has no such field. A namespace member
 behaves exactly like a plain function here; `TestResponsesStrictBehavesTheSameInANamespace`
 pins that.
 
