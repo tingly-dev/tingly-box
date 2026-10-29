@@ -1,6 +1,7 @@
 package request
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -347,4 +348,27 @@ func TestConvertOpenAIResponsesToAnthropicBetaRequest_ToolCallRepair(t *testing.
 		assert.Equal(t, "[tool output: automation_update]\nautomation: nightly", out.Messages[0].Content[0].OfText.Text)
 		assert.Equal(t, "[tool output: call_old]\nstale", out.Messages[1].Content[0].OfText.Text)
 	})
+}
+
+func TestConvertOpenAIResponsesToAnthropicBeta_NamespaceTools(t *testing.T) {
+	var params responses.ResponseNewParams
+	require.NoError(t, json.Unmarshal([]byte(codexNamespaceRequest), &params))
+
+	req := ConvertOpenAIResponsesToAnthropicBetaRequest(params, 4096)
+
+	var tools []string
+	for _, tool := range req.Tools {
+		tools = append(tools, tool.OfTool.Name)
+	}
+	assert.Equal(t, []string{"shell", "mcp__linear__list_issues", "mcp__linear__get_issue"}, tools)
+
+	var calledAs string
+	for _, msg := range req.Messages {
+		for _, block := range msg.Content {
+			if block.OfToolUse != nil {
+				calledAs = block.OfToolUse.Name
+			}
+		}
+	}
+	assert.Equal(t, "mcp__linear__list_issues", calledAs)
 }

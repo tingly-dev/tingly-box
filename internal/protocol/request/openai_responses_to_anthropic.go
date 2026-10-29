@@ -7,6 +7,8 @@ import (
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolns"
 )
 
 // ConvertOpenAIResponsesToAnthropicBetaRequest converts OpenAI Responses API params to Anthropic Beta Message API format.
@@ -323,7 +325,7 @@ func convertResponsesFunctionCallToAnthropicBeta(call *responses.ResponseFunctio
 	// Create assistant message with tool_use block
 	return anthropic.BetaMessageParam{
 		Role:    anthropic.BetaMessageParamRoleAssistant,
-		Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolUseBlock(call.CallID, argsInput, call.Name)},
+		Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolUseBlock(call.CallID, argsInput, toolns.FlatName(call.Namespace.Value, call.Name))},
 	}
 }
 
@@ -358,13 +360,10 @@ func ConvertResponsesToolsToAnthropicBeta(tools []responses.ToolUnionParam) []an
 		return nil
 	}
 
-	out := make([]anthropic.BetaToolUnionParam, 0, len(tools))
+	functions, _ := toolns.Functions(tools)
+	out := make([]anthropic.BetaToolUnionParam, 0, len(functions))
 
-	for _, t := range tools {
-		fn := t.OfFunction
-		if fn == nil {
-			continue
-		}
+	for _, fn := range functions {
 
 		// Convert OpenAI function schema to Anthropic input schema
 		var inputSchema anthropic.BetaToolInputSchemaParam

@@ -31,6 +31,7 @@ func (ph *ProtocolHandler) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx
 	}
 
 	hc := protocol.NewHandleContext(c, reqCtx.ResponseModel)
+	hc.Namespaces = reqCtx.ResponsesNamespaces()
 	tokenUsage, _ := nonstream.HandleOpenAIChatToResponses(hc, chatResp, reqCtx.RequestModel)
 	ph.trackUsageWithTokenUsage(c, tokenUsage, nil)
 }
@@ -51,6 +52,7 @@ func (ph *ProtocolHandler) streamOpenAIChatToResponses(c *gin.Context, reqCtx *t
 		return
 	}
 	hc := protocol.NewHandleContext(c, responseModel)
+	hc.Namespaces = reqCtx.ResponsesNamespaces()
 	usage, err := stream.HandleOpenAIChatToResponsesStream(hc, chatStream, responseModel)
 	ph.trackUsageWithTokenUsage(c, usage, err)
 }

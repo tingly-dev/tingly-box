@@ -146,6 +146,7 @@ type ResponsesOutputItemWire struct {
 	Content   []ResponsesContentPartWire `json:"content,omitempty"`
 	CallID    string                     `json:"call_id,omitempty"`
 	Name      string                     `json:"name,omitempty"`
+	Namespace string                     `json:"namespace,omitempty"`
 	Arguments *string                    `json:"arguments,omitempty"`
 }
 

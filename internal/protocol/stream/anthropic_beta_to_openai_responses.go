@@ -28,6 +28,7 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 	}()
 
 	conv := newAnthropicBetaToResponsesConverter(stream, responseModel)
+	conv.namespaces = hc.Namespaces
 
 	usage, err := RunConverter(hc, conv, responsesSSEWriter(c))
 

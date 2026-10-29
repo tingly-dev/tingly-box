@@ -697,3 +697,43 @@ func TestConvertOpenAIResponsesToChat_ReasoningEffort(t *testing.T) {
 		})
 	}
 }
+
+// Codex sends MCP tools as `namespace` tools and replays their calls with a
+// `namespace` field. A Chat upstream knows neither, so both must be flattened.
+const codexNamespaceRequest = `{
+  "model": "gpt-5",
+  "input": [
+    {"type":"message","role":"user","content":"list my linear issues"},
+    {"type":"function_call","call_id":"call_1","namespace":"mcp__linear__","name":"list_issues","arguments":"{}"},
+    {"type":"function_call_output","call_id":"call_1","output":"[]"}
+  ],
+  "tools": [
+    {"type":"function","name":"shell","parameters":{"type":"object","properties":{}}},
+    {"type":"namespace","name":"mcp__linear__","description":"Linear MCP","tools":[
+      {"type":"function","name":"list_issues","description":"List issues","parameters":{"type":"object","properties":{}}},
+      {"type":"function","name":"get_issue","parameters":{"type":"object","properties":{}}}
+    ]}
+  ]
+}`
+
+func TestConvertOpenAIResponsesToChat_NamespaceTools(t *testing.T) {
+	var params responses.ResponseNewParams
+	require.NoError(t, json.Unmarshal([]byte(codexNamespaceRequest), &params))
+
+	chat := ConvertOpenAIResponsesToChat(&params, 4096)
+
+	var tools []string
+	for _, tool := range chat.Tools {
+		tools = append(tools, tool.OfFunction.Function.Name)
+	}
+	assert.Equal(t, []string{"shell", "mcp__linear__list_issues", "mcp__linear__get_issue"}, tools)
+
+	// The replayed call must carry the same flat name the model was offered.
+	var calledAs string
+	for _, msg := range chat.Messages {
+		if msg.OfAssistant != nil && len(msg.OfAssistant.ToolCalls) > 0 {
+			calledAs = msg.OfAssistant.ToolCalls[0].OfFunction.Function.Name
+		}
+	}
+	assert.Equal(t, "mcp__linear__list_issues", calledAs)
+}

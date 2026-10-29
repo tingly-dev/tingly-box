@@ -12,6 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/toolround"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/upstream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolns"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -68,7 +69,17 @@ func (ph *ProtocolHandler) serveOpenAIOnAnthropic(c *gin.Context, plan *attemptP
 		Streaming:          isStreaming,
 		DisableStreamUsage: stripUsage,
 		StripUsage:         stripUsage,
+		Namespaces:         responsesNamespaces(source),
 	})
+}
+
+// responsesNamespaces is the index that restores a Responses client's
+// namespaced tool calls; nil for any other client.
+func responsesNamespaces(source *transform.TransformContext) toolns.Index {
+	if client, ok := source.Request.(*responses.ResponseNewParams); ok {
+		return toolns.IndexOf(client.Tools)
+	}
+	return nil
 }
 
 // openAIBetaRequest converts the client's OpenAI request to Beta, as
