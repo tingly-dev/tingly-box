@@ -12,6 +12,8 @@ import {
     IconButton,
     Stack,
     TextField,
+    ToggleButton,
+    ToggleButtonGroup,
     Typography,
 } from '@mui/material';
 import { Add, Refresh } from '@/components/icons';
@@ -22,7 +24,7 @@ import MCPToolsPanel from './MCPToolsPanel';
 import MCPWorkspaceAlerts from './MCPWorkspaceAlerts';
 import { nextMCPId } from './workspaceState';
 import { useMCPWorkspace } from './useMCPWorkspace';
-import { defaultMCPSourceFormValue, formValueToSource } from './types';
+import { defaultMCPSourceFormValue, formValueToSource, githubSourceFormValue } from './types';
 import { isServerToolSource } from './toolPresentation';
 
 // Every connected MCP and its tools: connect any MCP, switch each tool globally.
@@ -39,6 +41,10 @@ export default function MCPToolsPage() {
     const [adding, setAdding] = useState(false);
     const [form, setForm] = useState(defaultMCPSourceFormValue);
     const [connectionError, setConnectionError] = useState('');
+    // GitHub is a fixed, curated subset: a token is all it needs.
+    const [github, setGithub] = useState(false);
+    const [githubToken, setGithubToken] = useState('');
+    const hasGitHub = sources.some((source) => source.preset === 'github');
     const selectedId = search.get('source');
     const closeSheet = () => {
         const next = new URLSearchParams(search);
@@ -60,7 +66,18 @@ export default function MCPToolsPage() {
             transport: 'http',
         });
         setConnectionError('');
+        setGithub(false);
+        setGithubToken('');
         setAdding(true);
+    };
+    const pickGitHub = (on: boolean) => {
+        setGithub(on);
+        setConnectionError('');
+        setForm(
+            on
+                ? githubSourceFormValue(form.id, githubToken)
+                : { ...defaultMCPSourceFormValue(), id: form.id, transport: 'http' }
+        );
     };
     return (
         <PageLayout
@@ -111,14 +128,48 @@ export default function MCPToolsPage() {
                             )}
                         </Typography>
                         {connectionError && <Alert severity="error">{connectionError}</Alert>}
-                        <TextField
-                            label={label('connectionName', 'Connection name')}
-                            value={form.name}
-                            required
-                            onChange={(e) => setForm({ ...form, name: e.target.value })}
-                            placeholder={label('connectionNamePlaceholder', 'For example: Company knowledge base')}
-                        />
-                        <MCPSourceEditor compact hideEnabled hideTools value={form} onChange={setForm} />
+                        <ToggleButtonGroup exclusive fullWidth size="small" value={github ? 'github' : 'custom'} onChange={(_, v) => v && pickGitHub(v === 'github')}>
+                            <ToggleButton value="custom">{label('connectCustom', 'Any MCP')}</ToggleButton>
+                            <ToggleButton value="github" disabled={hasGitHub}>
+                                GitHub
+                            </ToggleButton>
+                        </ToggleButtonGroup>
+                        {github ? (
+                            <>
+                                <Alert severity="info">
+                                    {label(
+                                        'githubSubsetHint',
+                                        'A fixed subset of the official GitHub MCP server: read repositories, issues, pull requests and Actions logs, plus comments, issues and pull requests. Deleting, merging, file writes, workflow runs and account-wide search are never offered. Limit it to specific repositories on a custom MCP profile.'
+                                    )}
+                                </Alert>
+                                <TextField
+                                    label={label('githubToken', 'GitHub personal access token')}
+                                    type="password"
+                                    value={githubToken}
+                                    required
+                                    autoComplete="off"
+                                    onChange={(e) => {
+                                        setGithubToken(e.target.value);
+                                        setForm(githubSourceFormValue(form.id, e.target.value));
+                                    }}
+                                    helperText={label(
+                                        'githubTokenHint',
+                                        'Use a fine-grained token limited to the repositories you need.'
+                                    )}
+                                />
+                            </>
+                        ) : (
+                            <>
+                                <TextField
+                                    label={label('connectionName', 'Connection name')}
+                                    value={form.name}
+                                    required
+                                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                    placeholder={label('connectionNamePlaceholder', 'For example: Company knowledge base')}
+                                />
+                                <MCPSourceEditor compact hideEnabled hideTools value={form} onChange={setForm} />
+                            </>
+                        )}
                     </Stack>
                 </DialogContent>
                 <DialogActions>
@@ -131,6 +182,7 @@ export default function MCPToolsPage() {
                             busy ||
                             !form.name.trim() ||
                             !form.id.trim() ||
+                            (github && !githubToken.trim()) ||
                             (form.transport === 'stdio' ? !form.command.trim() : !form.endpoint.trim())
                         }
                         onClick={() =>

@@ -130,6 +130,11 @@ that request. Explicit native named choices retain their native definitions;
 Advisor loopback requests, missing search keys, disabled tools and unsupported
 paths retain native tools.
 
+## GitHub
+
+The GitHub integration (a fixed subset plus per-profile repository scope) is
+described in `github-mcp.md`.
+
 ## Open (carried, not decided here)
 
 - Ordinary connected tools can currently also be injected into model requests

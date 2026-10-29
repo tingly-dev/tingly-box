@@ -27,6 +27,7 @@ import { agentPageHeaderSx } from '@/pages/scenario/components/ScenarioCardHeade
 import { getApiBaseUrl } from '@/utils/protocol';
 import { api } from '@/services/api';
 import ProfileConnect from './ProfileConnect';
+import GitHubScope from './GitHubScope';
 import MCPWorkspaceAlerts from './MCPWorkspaceAlerts';
 import { useMCPWorkspace } from './useMCPWorkspace';
 import {
@@ -230,6 +231,9 @@ export default function MCPProfilesPage() {
                     </Alert>
                 )}
                 <ProfileAccess key={profile.id} profile={profile} url={endpointUrl} />
+                {custom && (config.sources || []).some((source) => source.preset === 'github') && (
+                    <GitHubScope profile={profile} busy={busy} onSave={(next) => void save(next)} />
+                )}
                 <Box component="section" aria-label={label('profileTools', 'Tools in this profile')}>
                     <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
                         {label('profileTools', 'Tools in this profile')}

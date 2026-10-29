@@ -535,6 +535,7 @@ type MCPSourceConfig struct {
 	Visibility   ToolVisibility           `json:"visibility,omitempty"` // "client" or "server"
 	Usage        *MCPToolUsage            `json:"usage,omitempty"`      // independent client and gateway exposure
 	ToolPolicies map[string]MCPToolPolicy `json:"tool_policies,omitempty"`
+	Preset       string                   `json:"preset,omitempty"` // "github": fixed curated subset of the official GitHub MCP server
 
 	// Local mode specific fields
 	ConnectionType      MCPConnectionType `json:"connection_type,omitempty"`       // stdio/http/sse

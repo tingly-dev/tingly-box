@@ -30,4 +30,7 @@ type MCPProfile struct {
 	Name    string           `json:"name"`
 	Enabled *bool            `json:"enabled,omitempty"`
 	Tools   []MCPProfileTool `json:"tools"`
+	// GitHubRepos limits the GitHub integration to these owner/repo entries
+	// for this profile. Empty means unscoped (Default is never scoped).
+	GitHubRepos []string `json:"github_repos,omitempty"`
 }
