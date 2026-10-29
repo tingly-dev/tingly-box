@@ -245,8 +245,8 @@ export default {
       "defaultTitle": "По умолчанию",
       "addCondition": "Добавить условие",
       "conditionsHint": "Условия проверяются сверху вниз; срабатывает первое совпадение.",
-      "conditionsPaused": "Условия сохранены, но приостановлены",
-      "conditionsResume": "Возобновить"
+      "closeConditions": "Выключить условия",
+      "closeConditionsTooltip": "Условия сохраняются; пока они выключены, все запросы идут в Default."
     },
     "tooltips": {
       "addProviderFirst": "Добавьте провайдера, чтобы включить пересылку запросов",

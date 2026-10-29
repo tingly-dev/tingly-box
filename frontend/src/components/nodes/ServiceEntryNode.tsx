@@ -6,28 +6,38 @@ import NodeTooltip from './NodeTooltip';
 import {
     getRouteGraphActiveColor,
     NODE_LAYER_STYLES,
-    SMALL_NODE_STYLES,
     SMART_NODE_STYLES,
     StyledSmartNodeWrapper,
 } from './styles.tsx';
+import { fontSizes } from '@/theme/fonts';
 
 export interface ServiceEntryNodeProps {
     providersCount: number;
     active: boolean;
-    /** Sits next to an Add condition node: a service node's height, narrower. */
-    compact?: boolean;
     /** Hover teaching for the node. */
     tooltip?: React.ReactNode;
+    /** Conditions are off: Default is the whole rule and stands as tall as a
+     * service node; on hover its label shifts up and a dashed "+ label" appears
+     * inside it (same idea as the last tier node's +). */
+    onAddCondition?: () => void;
+    addConditionLabel?: string;
 }
 
-export const ServiceEntryNode: React.FC<ServiceEntryNodeProps> = ({ active, compact, tooltip }) => {
+export const ServiceEntryNode: React.FC<ServiceEntryNodeProps> = ({
+    active,
+    tooltip,
+    onAddCondition,
+    addConditionLabel,
+}) => {
     const { t } = useTranslation();
     const node = (
         <StyledSmartNodeWrapper>
             <Box
                 sx={(theme) => ({
-                    width: compact ? SMART_NODE_STYLES.width - SMALL_NODE_STYLES.width - 8 : SMART_NODE_STYLES.width,
-                    height: compact ? SMART_NODE_STYLES.height : 34,
+                    position: 'relative',
+                    width: SMART_NODE_STYLES.width,
+                    height: onAddCondition ? SMART_NODE_STYLES.height : 34,
+                    boxSizing: 'border-box',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -39,11 +49,49 @@ export const ServiceEntryNode: React.FC<ServiceEntryNodeProps> = ({ active, comp
                     ),
                     opacity: active ? 1 : 0.6,
                     transition: 'border-color 0.16s ease, opacity 0.16s ease',
+                    ...(onAddCondition && {
+                        '&:hover .default-node-add': { opacity: 1 },
+                        '&:hover .default-node-label': { transform: 'translateY(-10px)' },
+                    }),
                 })}
             >
-                <Typography sx={{ ...NODE_LAYER_STYLES.typography, color: 'text.secondary' }}>
+                <Typography
+                    className="default-node-label"
+                    sx={{ ...NODE_LAYER_STYLES.typography, color: 'text.secondary', transition: 'transform 0.16s ease' }}
+                >
                     {t('rule.ruleConditions.defaultTitle')}
                 </Typography>
+                {onAddCondition && (
+                    <Box
+                        className="default-node-add"
+                        role="button"
+                        tabIndex={active ? 0 : -1}
+                        aria-label={addConditionLabel}
+                        onClick={active ? (e) => { e.stopPropagation(); onAddCondition(); } : undefined}
+                        onKeyDown={(e) => { if (active && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onAddCondition(); } }}
+                        sx={(theme) => ({
+                            position: 'absolute',
+                            left: 6,
+                            right: 6,
+                            bottom: 6,
+                            height: 22,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            border: '1px dashed',
+                            borderColor: theme.palette.divider,
+                            borderRadius: `${theme.shape.borderRadius}px`,
+                            color: 'text.secondary',
+                            fontSize: fontSizes.xs,
+                            opacity: 0,
+                            cursor: active ? 'pointer' : 'default',
+                            transition: 'opacity 0.16s ease, border-color 0.16s ease, color 0.16s ease',
+                            '&:hover, &:focus-visible': { borderColor: theme.palette.primary.main, color: 'primary.main', outline: 'none', opacity: 1 },
+                        })}
+                    >
+                        + {addConditionLabel}
+                    </Box>
+                )}
             </Box>
         </StyledSmartNodeWrapper>
     );

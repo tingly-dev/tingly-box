@@ -245,8 +245,8 @@ export default {
       "defaultTitle": "Default",
       "addCondition": "Add condition",
       "conditionsHint": "Conditions are checked from top to bottom; the first match wins.",
-      "conditionsPaused": "Conditions are saved but paused",
-      "conditionsResume": "Resume"
+      "closeConditions": "Turn off condition",
+      "closeConditionsTooltip": "Conditions stay saved; every request uses Default until you turn them back on."
     },
     "tooltips": {
       "addProviderFirst": "Add a provider to enable request forwarding",

@@ -1,5 +1,6 @@
 import {
     Add as AddIcon,
+    Close as CloseIcon,
 } from '@/components/icons';
 import {
     Box,
@@ -46,8 +47,8 @@ export const useAddModelSpotlight = (active: boolean): boolean => {
 
 // ActionAddNode Container
 const StyledAddProviderNode = styled(Box, {
-    shouldForwardProp: (prop) => prop !== 'active' && prop !== 'warning' && prop !== 'spotlight' && prop !== 'wide',
-})<{ active: boolean; warning?: boolean; spotlight?: boolean; wide?: boolean }>(({ active, warning, spotlight, wide, theme }) => ({
+    shouldForwardProp: (prop) => prop !== 'active' && prop !== 'warning' && prop !== 'spotlight' && prop !== 'wide' && prop !== 'widthOverride',
+})<{ active: boolean; warning?: boolean; spotlight?: boolean; wide?: boolean; widthOverride?: number }>(({ active, warning, spotlight, wide, widthOverride, theme }) => ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -57,7 +58,7 @@ const StyledAddProviderNode = styled(Box, {
     border: '1px dashed',
     borderColor: getRouteGraphBorderColor(theme),
     backgroundColor: 'background.paper',
-    width: wide ? SMART_NODE_STYLES.width : node.width,
+    width: wide ? (widthOverride ?? SMART_NODE_STYLES.width) : node.width,
     height: wide ? 34 : node.height,
     boxSizing: 'border-box',
     transition: 'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease',
@@ -81,8 +82,10 @@ export interface AddProviderNodeProps {
     /** Names something other than a model (e.g. "Add condition"). Draws the
      * node as a one-line bar as wide as a condition node. */
     label?: string;
-    /** With a label: the usual square node (like Add model) instead of the bar. */
-    square?: boolean;
+    /** Label variant only: a close (x) instead of a plus, for a node that turns something off. */
+    icon?: 'add' | 'close';
+    /** Label variant only: node width, default as wide as a condition node. */
+    width?: number;
 }
 
 export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
@@ -91,7 +94,8 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
     onAdd,
     tooltip,
     label,
-    square,
+    icon = 'add',
+    width,
 }) => {
     const { t } = useTranslation();
     // Pulse when guidance (Quick Start → "Select a Model") points the user here.
@@ -103,12 +107,13 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
                 active={active}
                 warning={warning}
                 spotlight={spotlight}
-                wide={!!label && !square}
+                wide={!!label}
+                widthOverride={width}
                 onClick={active ? onAdd : undefined}
             >
-                {label && !square ? (
+                {label ? (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary' }}>
-                        <AddIcon sx={{ fontSize: 16 }} />
+                        {icon === 'close' ? <CloseIcon sx={{ fontSize: 16 }} /> : <AddIcon sx={{ fontSize: 16 }} />}
                         <Typography variant="caption" sx={{ fontSize: fontSizes.xs, lineHeight: 1 }}>{label}</Typography>
                     </Box>
                 ) : (<>
