@@ -760,3 +760,18 @@ func TestResponsesNamespaceMemberConvertsLikeAPlainFunction(t *testing.T) {
 	gotAnthropic, _ := json.Marshal(ConvertOpenAIResponsesToAnthropicBetaRequest(namespaced, 4096).Tools)
 	assert.JSONEq(t, string(wantAnthropic), string(gotAnthropic))
 }
+
+// strict is not forwarded to a Chat upstream (the converter never set it); a
+// namespace member must behave exactly like a plain function here, so moving
+// a tool into a namespace never changes whether strict reaches the upstream.
+func TestResponsesStrictBehavesTheSameInANamespace(t *testing.T) {
+	var plain, namespaced responses.ResponseNewParams
+	require.NoError(t, json.Unmarshal([]byte(`{"model":"m","input":"hi","tools":[
+	  {"type":"function","name":"mcp__crm__find","strict":true,"parameters":{"type":"object"}}]}`), &plain))
+	require.NoError(t, json.Unmarshal([]byte(`{"model":"m","input":"hi","tools":[{"type":"namespace","name":"mcp__crm__","description":"CRM","tools":[
+	  {"type":"function","name":"find","strict":true,"parameters":{"type":"object"}}]}]}`), &namespaced))
+
+	want, _ := json.Marshal(ConvertOpenAIResponsesToChat(&plain, 4096).Tools)
+	got, _ := json.Marshal(ConvertOpenAIResponsesToChat(&namespaced, 4096).Tools)
+	assert.JSONEq(t, string(want), string(got))
+}

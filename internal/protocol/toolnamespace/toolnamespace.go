@@ -47,11 +47,14 @@ func FlatName(namespace, name string) string {
 }
 
 // Functions returns the function tools of a Responses tool list in request
-// order, with every namespace member expanded under its flat name. Tool types
-// that have no flat equivalent are skipped with a warning rather than dropped
-// silently.
+// order, with every namespace member expanded under its flat name. Whatever
+// cannot be offered upstream is logged rather than dropped silently: a
+// namespace member lost to a name clash or because it is not a function is a
+// warning, a top-level tool type with no flat equivalent (web_search, custom
+// and the like, which a flat upstream never had) is debug output, since
+// clients such as Codex send those on every request.
 func Functions(tools []responses.ToolUnionParam) []responses.FunctionToolParam {
-	functions, _ := expand(tools, logrus.Warnf)
+	functions, _ := expand(tools, true)
 	return functions
 }
 
@@ -60,7 +63,7 @@ func Functions(tools []responses.ToolUnionParam) []responses.FunctionToolParam {
 // the same decisions as Functions, so the names it knows are exactly the ones
 // the upstream was offered.
 func IndexOf(tools []responses.ToolUnionParam) Index {
-	_, index := expand(tools, nil)
+	_, index := expand(tools, false)
 	return index
 }
 
@@ -70,8 +73,9 @@ func IndexOf(tools []responses.ToolUnionParam) Index {
 // share it too), and an upstream that is offered one name twice cannot be
 // restored unambiguously, so a plain function always keeps its name, the
 // first namespace member declared keeps a contested one, and any later
-// member that collides is dropped. warn, when set, reports what was dropped.
-func expand(tools []responses.ToolUnionParam, warn func(format string, args ...any)) ([]responses.FunctionToolParam, Index) {
+// member that collides is dropped. report logs what was dropped; the response
+// side passes false so each request logs it once.
+func expand(tools []responses.ToolUnionParam, report bool) ([]responses.FunctionToolParam, Index) {
 	var functions []responses.FunctionToolParam
 	var index Index
 	// Plain functions keep their names whatever the declaration order.
@@ -89,16 +93,16 @@ func expand(tools []responses.ToolUnionParam, warn func(format string, args ...a
 			ns := tool.OfNamespace
 			for _, member := range ns.Tools {
 				if member.OfFunction == nil {
-					if warn != nil {
-						warn("responses namespace %q: dropping a non-function tool, it has no equivalent on this upstream", ns.Name)
+					if report {
+						logrus.Warnf("responses namespace %q: dropping a non-function tool, it has no equivalent on this upstream", ns.Name)
 					}
 					continue
 				}
 				fn := member.OfFunction
 				flat := FlatName(ns.Name, fn.Name)
 				if taken[flat] {
-					if warn != nil {
-						warn("responses namespace %q: dropping %q, its flat name %q is already taken by another tool", ns.Name, fn.Name, flat)
+					if report {
+						logrus.Warnf("responses namespace %q: dropping tool %q, its flat name %q is already taken by another tool, so the model will not be offered it", ns.Name, fn.Name, flat)
 					}
 					continue
 				}
@@ -115,8 +119,8 @@ func expand(tools []responses.ToolUnionParam, warn func(format string, args ...a
 				})
 			}
 		default:
-			if kind := tool.GetType(); warn != nil && kind != nil {
-				warn("responses tool of type %q has no equivalent on this upstream, dropping it", *kind)
+			if kind := tool.GetType(); report && kind != nil {
+				logrus.Debugf("responses tool of type %q has no equivalent on this upstream, dropping it", *kind)
 			}
 		}
 	}
