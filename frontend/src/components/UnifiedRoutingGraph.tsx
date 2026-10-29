@@ -473,7 +473,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     <ActionAddNode
                         label={t('rule.ruleConditions.closeConditions')}
                         icon="close"
-                        width={150}
+                        width={190}
                         active={active && !saving}
                         onAdd={() => onSwitchRoutingMode?.()}
                         tooltip={t('rule.ruleConditions.closeConditionsTooltip')}
@@ -499,6 +499,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     tooltip={defaultTooltip}
                     onAddCondition={showSmartRouting ? undefined : handleAddCondition}
                     addConditionLabel={t('rule.ruleConditions.addCondition')}
+                addTooltip={conditionTooltip}
                 />
             </NodeContainer>
 

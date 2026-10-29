@@ -21,6 +21,8 @@ export interface ServiceEntryNodeProps {
      * inside it (same idea as the last tier node's +). */
     onAddCondition?: () => void;
     addConditionLabel?: string;
+    /** Tooltip of the inline add button (the smart-routing guide). */
+    addTooltip?: React.ReactNode;
 }
 
 export const ServiceEntryNode: React.FC<ServiceEntryNodeProps> = ({
@@ -28,6 +30,7 @@ export const ServiceEntryNode: React.FC<ServiceEntryNodeProps> = ({
     tooltip,
     onAddCondition,
     addConditionLabel,
+    addTooltip,
 }) => {
     const { t } = useTranslation();
     const node = (
@@ -55,13 +58,16 @@ export const ServiceEntryNode: React.FC<ServiceEntryNodeProps> = ({
                     }),
                 })}
             >
-                <Typography
-                    className="default-node-label"
-                    sx={{ ...NODE_LAYER_STYLES.typography, color: 'text.secondary', transition: 'transform 0.16s ease' }}
-                >
-                    {t('rule.ruleConditions.defaultTitle')}
-                </Typography>
+                <NodeTooltip title={onAddCondition ? tooltip ?? '' : ''} placement="top" disableHoverListener={!onAddCondition || !tooltip}>
+                    <Typography
+                        className="default-node-label"
+                        sx={{ ...NODE_LAYER_STYLES.typography, color: 'text.secondary', transition: 'transform 0.16s ease' }}
+                    >
+                        {t('rule.ruleConditions.defaultTitle')}
+                    </Typography>
+                </NodeTooltip>
                 {onAddCondition && (
+                    <NodeTooltip title={addTooltip ?? ''} placement="top" disableHoverListener={!addTooltip}>
                     <Box
                         className="default-node-add"
                         role="button"
@@ -91,11 +97,12 @@ export const ServiceEntryNode: React.FC<ServiceEntryNodeProps> = ({
                     >
                         + {addConditionLabel}
                     </Box>
+                    </NodeTooltip>
                 )}
             </Box>
         </StyledSmartNodeWrapper>
     );
-    return tooltip ? <NodeTooltip title={tooltip} placement="top">{node}</NodeTooltip> : node;
+    return tooltip && !onAddCondition ? <NodeTooltip title={tooltip} placement="top">{node}</NodeTooltip> : node;
 };
 
 export default ServiceEntryNode;

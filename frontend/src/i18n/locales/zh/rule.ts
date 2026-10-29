@@ -243,9 +243,9 @@ export default {
     },
     "ruleConditions": {
       "defaultTitle": "默认",
-      "addCondition": "添加条件",
+      "addCondition": "添加智能条件",
       "conditionsHint": "条件从上到下依次检查，先匹配到的生效。",
-      "closeConditions": "关闭条件",
+      "closeConditions": "关闭智能条件",
       "closeConditionsTooltip": "条件会保留；关闭期间所有请求走 Default，再次添加即可恢复。"
     },
     "tooltips": {
@@ -299,6 +299,9 @@ export default {
     "endpointNotApplicable": "只对 OpenAI 兼容上游生效。此规则目前没有这类上游，所以选择暂时不起作用。",
     "managePlugins": "管理插件",
     "test": "测试",
+    "smartConditionOn": "关闭智能条件",
+    "smartConditionOff": "开启智能条件",
+    "smartConditionAdd": "添加智能条件",
     "ruleActions": "规则操作",
     "compact": {
       "chip": "压缩：{{value}}",
