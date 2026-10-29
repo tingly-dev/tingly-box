@@ -46,9 +46,14 @@ func TestWorkBuddyConversationAndTurnIDs(t *testing.T) {
 		require.Equal(t, tc.same, h.Get("X-Conversation-ID") == h1.Get("X-Conversation-ID"))
 	}
 	for _, s := range []typ.SessionID{{}, {Source: typ.SessionSourceIP, Value: "192.0.2.10"}} {
-		h := http.Header{}
-		newWorkBuddyRoundTripper(http.DefaultTransport, p, s).setChatIDs(h, []byte(first))
-		require.Empty(t, h.Get("X-Conversation-ID"))
+		h, next := http.Header{}, http.Header{}
+		rt := newWorkBuddyRoundTripper(http.DefaultTransport, p, s)
+		rt.setChatIDs(h, []byte(first))
+		rt.setChatIDs(next, []byte(first))
+		for _, k := range []string{"X-Conversation-ID", "X-Conversation-Request-ID", "X-Conversation-Message-ID"} {
+			require.Regexp(t, `^[a-f0-9]{32}$`, h.Get(k))
+			require.NotEqual(t, h.Get(k), next.Get(k), "no shared conversation without a session")
+		}
 	}
 	explicit := http.Header{}
 	for _, k := range []string{"X-Conversation-ID", "X-Conversation-Request-ID", "X-Request-ID", "X-Conversation-Message-ID"} {

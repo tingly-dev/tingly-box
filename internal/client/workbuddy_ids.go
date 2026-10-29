@@ -39,8 +39,14 @@ func workbuddyRequestIDs(h http.Header) {
 func (t *workbuddyRoundTripper) setChatIDs(h http.Header, body []byte) {
 	workbuddyRequestIDs(h)
 	conversation := h.Get("X-Conversation-ID")
-	if conversation == "" && t.sessionScope != "" {
-		conversation = workbuddyID("conversation", t.sessionScope)
+	if conversation == "" {
+		if t.sessionScope != "" {
+			conversation = workbuddyID("conversation", t.sessionScope)
+		} else {
+			// The gateway requires this header even without a client session.
+			// Use a per-request ID instead of grouping unrelated chats by IP.
+			conversation = strings.ReplaceAll(uuid.NewString(), "-", "")
+		}
 		h.Set("X-Conversation-ID", conversation)
 	}
 	if h.Get("X-Conversation-Request-ID") != "" {

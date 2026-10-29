@@ -189,8 +189,8 @@ message-order retry keeps the turn and conversation but gets a new request ID.
 Identifiers are opaque, process-salted 32-hex digests; no raw session, prompt or
 client IP appears in the headers. Caller-supplied correlation IDs are preserved.
 Without a stable session/conversation the transport does not merge chats by IP
-or a shared greeting, and generates a per-request turn ID. Rewriting/compacting
-the user history can change a derived turn ID; explicit caller turn IDs are the
+or a shared greeting, and generates per-request conversation and turn IDs.
+Rewriting/compacting the user history can change a derived turn ID; explicit caller turn IDs are the
 way to retain that identity across history changes. This is correlation, not a
 promise about upstream billing or credits.
 

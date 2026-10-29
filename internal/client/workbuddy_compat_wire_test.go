@@ -15,14 +15,15 @@ import (
 
 func TestWorkBuddyMessageOrderRetryWire(t *testing.T) {
 	for _, tc := range []struct {
-		name, refusal string
-		status, want  int
-		success       bool
+		name, refusal        string
+		status, want         int
+		success, sessionless bool
 	}{
-		{"specific ordering refusal", `{"code":11153,"msg":"the conversation must end with a user message"}`, 400, 2, true},
-		{"still refused after repair", `{"code":11153,"msg":"the conversation must end with a user message"}`, 400, 2, false},
-		{"channel refusal", `{"code":11128,"msg":"Illegal API invocation from an unapproved channel"}`, 400, 1, false},
-		{"account restriction", `{"code":11140,"msg":"request illegal"}`, 403, 1, false},
+		{"specific ordering refusal", `{"code":11153,"msg":"the conversation must end with a user message"}`, 400, 2, true, false},
+		{"ordering without session", `{"code":11153,"msg":"the conversation must end with a user message"}`, 400, 2, true, true},
+		{"still refused after repair", `{"code":11153,"msg":"the conversation must end with a user message"}`, 400, 2, false, false},
+		{"channel refusal", `{"code":11128,"msg":"Illegal API invocation from an unapproved channel"}`, 400, 1, false, false},
+		{"account restriction", `{"code":11140,"msg":"request illegal"}`, 403, 1, false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var headers []http.Header
@@ -30,6 +31,9 @@ func TestWorkBuddyMessageOrderRetryWire(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				body, err := io.ReadAll(r.Body)
 				require.NoError(t, err)
+				for _, k := range []string{"X-Conversation-ID", "X-Conversation-Request-ID", "X-Conversation-Message-ID"} {
+					require.NotEmpty(t, r.Header.Get(k), "required chat header: %s", k)
+				}
 				headers = append(headers, r.Header.Clone())
 				bodies = append(bodies, body)
 				if len(bodies) == 1 || !tc.success {
@@ -43,7 +47,11 @@ func TestWorkBuddyMessageOrderRetryWire(t *testing.T) {
 			}))
 			defer server.Close()
 			p := &typ.Provider{UUID: "wb", OAuthDetail: &typ.OAuthDetail{Issuer: ai.IssuerWorkBuddy}}
-			rt := newWorkBuddyRoundTripper(http.DefaultTransport, p, typ.SessionID{Source: typ.SessionSourceHeader, Value: "session"})
+			session := typ.SessionID{Source: typ.SessionSourceHeader, Value: "session"}
+			if tc.sessionless {
+				session = typ.SessionID{}
+			}
+			rt := newWorkBuddyRoundTripper(http.DefaultTransport, p, session)
 			var chat map[string]any
 			require.NoError(t, json.Unmarshal([]byte(strings.ReplaceAll(workbuddyToolUserChat, `"name":"read"`, `"name":"fs.read"`)), &chat))
 			chat["tools"] = []any{map[string]any{"type": "function", "function": map[string]any{"name": "fs.read", "parameters": map[string]any{"type": "object"}}}}
