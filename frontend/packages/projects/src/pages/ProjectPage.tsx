@@ -397,6 +397,16 @@ export default function ProjectPage() {
                                 return false;
                             }
                         }}
+                        onChooseDecision={async (mid, index) => {
+                            try {
+                                const m = await unwrap(api.POST('/api/v1/threads/{id}/events/{eid}/choose', { params: { path: { id: mainThreadId, eid: mid } }, body: { index } }));
+                                conversation.apply(m);
+                                // The pick is the user's next message; the reply streams in after it.
+                                await conversation.catchUp().catch(() => undefined);
+                            } catch (e) {
+                                notify((e as Error).message, 'error');
+                            }
+                        }}
                         onStartSuggestions={async (mid, indexes) => {
                             try {
                                 const m = await unwrap(api.POST('/api/v1/threads/{id}/events/{eid}/start', { params: { path: { id: mainThreadId, eid: mid } }, body: { indexes } }));

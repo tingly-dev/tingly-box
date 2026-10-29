@@ -1642,6 +1642,59 @@
         }
       }
     },
+    "/api/v1/threads/{id}/events/{eid}/choose": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Pick an option of a decision card the coordinator asked in a main thread; the pick reaches the coordinator as the user's message",
+        "description": "Pick an option of a decision card the coordinator asked in a main thread; the pick reaches the coordinator as the user's message",
+        "operationId": "apiV1ThreadsIdEventsEidChoosePost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eid",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChooseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadEvent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/threads/{id}/events/{eid}/start": {
       "post": {
         "tags": [
@@ -2451,6 +2504,19 @@
           "project_id",
           "created_at",
           "updated_at"
+        ]
+      },
+      "ChooseRequest": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field index"
+          }
+        },
+        "required": [
+          "index"
         ]
       },
       "ConnectionDraft": {

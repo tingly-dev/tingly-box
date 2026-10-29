@@ -30,7 +30,7 @@ afterEach(cleanup);
 it('uses the host model list in project composers and worker pickers', async () => {
     const choose = vi.fn();
     const view = render(<ConversationPane projectId="p1" threadId="main" messages={[]} threads={new Map()} busy={false}
-        disabled={false} model="" onModelChange={choose} effort="" onEffortChange={choose} onSend={vi.fn()} onOpenThread={vi.fn()} onStartSuggestions={vi.fn()} />);
+        disabled={false} model="" onModelChange={choose} effort="" onEffortChange={choose} onSend={vi.fn()} onOpenThread={vi.fn()} onStartSuggestions={vi.fn()} onChooseDecision={vi.fn()} />);
     await waitFor(() => expect(fetchModels).toHaveBeenCalledOnce());
     fireEvent.click(screen.getByRole('button', { name: /model\.auto/ }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'host-model' }));
