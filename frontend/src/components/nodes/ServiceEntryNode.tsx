@@ -12,7 +12,7 @@ import {
 import { fontSizes } from '@/theme/fonts';
 
 /** Default beside conditions only labels the fallback, so it needs less room. */
-const DEFAULT_COMPACT_WIDTH = 120;
+const DEFAULT_COMPACT_WIDTH = SMART_NODE_STYLES.width;
 
 export interface ServiceEntryNodeProps {
     providersCount: number;
