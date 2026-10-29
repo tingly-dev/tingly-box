@@ -10,7 +10,7 @@ import (
 	"github.com/openai/openai-go/v3/shared"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/toolns"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 )
 
 // ConvertOpenAIResponsesToChat converts OpenAI Responses API params to Chat Completions format.
@@ -147,7 +147,7 @@ func ConvertResponsesInputToMessages(items responses.ResponseInputParam) []opena
 			fnCall := item.OfFunctionCall
 			pendingCalls = append(pendingCalls, pendingToolCall{
 				CallID:    fnCall.CallID,
-				Name:      toolns.FlatName(fnCall.Namespace.Value, fnCall.Name),
+				Name:      toolnamespace.FlatName(fnCall.Namespace.Value, fnCall.Name),
 				Arguments: fnCall.Arguments,
 			})
 			continue
@@ -357,7 +357,7 @@ func ConvertResponsesToolsToChatTools(tools []responses.ToolUnionParam) []openai
 		return nil
 	}
 
-	functions, _ := toolns.Functions(tools)
+	functions, _ := toolnamespace.Functions(tools)
 	result := make([]openai.ChatCompletionToolUnionParam, 0, len(functions))
 
 	for _, fn := range functions {

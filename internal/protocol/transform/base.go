@@ -8,7 +8,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
-	"github.com/tingly-dev/tingly-box/internal/protocol/toolns"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 )
 
 // BaseTransform handles protocol conversion from original format to target API style
@@ -106,7 +106,7 @@ func (t *BaseTransform) convertToOpenAIChat(ctx *TransformContext, disableStream
 		chatReq := request.ConvertOpenAIResponsesToChat(req, ctx.Config.MaxTokens)
 		// The Chat answer is converted back to Responses after the request
 		// is gone, so keep what restores the client's namespaced tool calls.
-		if namespaces := toolns.IndexOf(req.Tools); len(namespaces) > 0 {
+		if namespaces := toolnamespace.IndexOf(req.Tools); len(namespaces) > 0 {
 			if ctx.Extra == nil {
 				ctx.Extra = map[string]interface{}{}
 			}

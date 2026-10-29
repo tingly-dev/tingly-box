@@ -10,7 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
-	"github.com/tingly-dev/tingly-box/internal/protocol/toolns"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
@@ -60,7 +60,7 @@ func (b *openAIChatBridge) Open(_ context.Context, call stage.Call, operation st
 		operation:   operation,
 		targetCall:  targetCall,
 		sourceModel: sourceModel,
-		namespaces:  toolns.IndexOf(responsesRequest.Tools),
+		namespaces:  toolnamespace.IndexOf(responsesRequest.Tools),
 	}, nil
 }
 
@@ -68,7 +68,7 @@ type openAIChatSession struct {
 	operation   stage.Operation
 	targetCall  stage.Call
 	sourceModel string
-	namespaces  toolns.Index
+	namespaces  toolnamespace.Index
 }
 
 func (s *openAIChatSession) TargetCall() stage.Call { return s.targetCall }

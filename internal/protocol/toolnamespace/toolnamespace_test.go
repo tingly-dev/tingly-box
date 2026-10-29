@@ -1,4 +1,4 @@
-package toolns
+package toolnamespace
 
 import (
 	"encoding/json"

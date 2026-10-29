@@ -12,11 +12,11 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
-	"github.com/tingly-dev/tingly-box/internal/protocol/toolns"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
-func newResponsesStream(target stage.EventStream, sourceModel string, namespaces toolns.Index) (stage.EventStream, error) {
+func newResponsesStream(target stage.EventStream, sourceModel string, namespaces toolnamespace.Index) (stage.EventStream, error) {
 	if target == nil {
 		return nil, fmt.Errorf("convert Anthropic Beta stream to OpenAI Responses: target stream is nil")
 	}

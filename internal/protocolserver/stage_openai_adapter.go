@@ -12,7 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/sdkstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
-	"github.com/tingly-dev/tingly-box/internal/protocol/toolns"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 	"github.com/tingly-dev/tingly-box/internal/recording"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -38,7 +38,7 @@ type StageOpenAIAttempt struct {
 	StripUsage         bool
 	// Namespaces restores the namespace of a Responses client's calls to its
 	// `namespace` tools, which reach the Beta pipeline as flat functions.
-	Namespaces toolns.Index
+	Namespaces toolnamespace.Index
 }
 
 // ServeStageOpenAI is the HTTP adapter for OpenAI clients on a Beta

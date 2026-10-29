@@ -11,7 +11,7 @@ import (
 	"github.com/openai/openai-go/v3"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/toolns"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
@@ -43,7 +43,7 @@ type chatToResponsesConverter struct {
 	pending []wire.ResponsesEvent
 
 	// namespaces restores the namespace of calls to flattened namespace tools.
-	namespaces toolns.Index
+	namespaces toolnamespace.Index
 }
 
 // pendingToolCallResponse tracks a tool call being assembled from stream chunks
@@ -72,7 +72,7 @@ func NewChatToResponsesConverter(stream OpenAIChatStream, responseModel string) 
 
 // WithNamespaces makes the converter emit calls to flattened namespace tools
 // as namespaced function calls, as the Responses client declared them.
-func (c *chatToResponsesConverter) WithNamespaces(namespaces toolns.Index) *chatToResponsesConverter {
+func (c *chatToResponsesConverter) WithNamespaces(namespaces toolnamespace.Index) *chatToResponsesConverter {
 	c.namespaces = namespaces
 	return c
 }
@@ -411,7 +411,7 @@ func newResponsesMessageItem(itemID, status, text string) wire.ResponsesOutputIt
 	}
 }
 
-func newResponsesFunctionCallItem(namespaces toolns.Index, itemID, callID, name, arguments, status string) wire.ResponsesOutputItemWire {
+func newResponsesFunctionCallItem(namespaces toolnamespace.Index, itemID, callID, name, arguments, status string) wire.ResponsesOutputItemWire {
 	namespace, name := namespaces.Restore(name)
 	return wire.ResponsesOutputItemWire{
 		ID:        itemID,

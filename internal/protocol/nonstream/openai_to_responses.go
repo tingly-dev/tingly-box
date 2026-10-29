@@ -10,8 +10,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 	"github.com/tingly-dev/tingly-box/internal/protocol/usage"
-	"github.com/tingly-dev/tingly-box/internal/protocol/toolns"
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
@@ -45,7 +45,7 @@ func ConvertChatToResponsesWire(resp *openai.ChatCompletion, responseModel, actu
 // ConvertChatToResponsesWireWithNamespaces is ConvertChatToResponsesWire for a
 // Responses client that declared `namespace` tools: calls to their flattened
 // functions come back as namespaced function calls.
-func ConvertChatToResponsesWireWithNamespaces(resp *openai.ChatCompletion, responseModel, actualModel string, namespaces toolns.Index) wire.ResponsesWireResponse {
+func ConvertChatToResponsesWireWithNamespaces(resp *openai.ChatCompletion, responseModel, actualModel string, namespaces toolnamespace.Index) wire.ResponsesWireResponse {
 	model := responseModel
 	if model == "" {
 		model = actualModel
@@ -140,7 +140,7 @@ func ConvertAnthropicBetaToResponsesWire(resp *anthropic.BetaMessage, responseMo
 // ConvertAnthropicBetaToResponsesWire for a Responses client that declared
 // `namespace` tools: calls to their flattened functions come back as
 // namespaced function calls.
-func ConvertAnthropicBetaToResponsesWireWithNamespaces(resp *anthropic.BetaMessage, responseModel, actualModel string, namespaces toolns.Index) wire.ResponsesWireResponse {
+func ConvertAnthropicBetaToResponsesWireWithNamespaces(resp *anthropic.BetaMessage, responseModel, actualModel string, namespaces toolnamespace.Index) wire.ResponsesWireResponse {
 	model := responseModel
 	if model == "" {
 		model = actualModel

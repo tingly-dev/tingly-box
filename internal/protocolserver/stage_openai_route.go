@@ -12,7 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/toolround"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/upstream"
-	"github.com/tingly-dev/tingly-box/internal/protocol/toolns"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -75,9 +75,9 @@ func (ph *ProtocolHandler) serveOpenAIOnAnthropic(c *gin.Context, plan *attemptP
 
 // responsesNamespaces is the index that restores a Responses client's
 // namespaced tool calls; nil for any other client.
-func responsesNamespaces(source *transform.TransformContext) toolns.Index {
+func responsesNamespaces(source *transform.TransformContext) toolnamespace.Index {
 	if client, ok := source.Request.(*responses.ResponseNewParams); ok {
-		return toolns.IndexOf(client.Tools)
+		return toolnamespace.IndexOf(client.Tools)
 	}
 	return nil
 }

@@ -9,10 +9,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tingly-dev/tingly-box/internal/protocol/toolns"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 )
 
-var linearNamespaces = toolns.Index{
+var linearNamespaces = toolnamespace.Index{
 	"mcp__linear__get_issue": {Namespace: "mcp__linear__", Name: "get_issue"},
 }
 

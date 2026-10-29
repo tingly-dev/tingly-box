@@ -9,7 +9,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/toolns"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
@@ -41,7 +41,7 @@ type anthropicBetaToResponsesConverter struct {
 	pending []wire.ResponsesEvent
 
 	// namespaces restores the namespace of calls to flattened namespace tools.
-	namespaces toolns.Index
+	namespaces toolnamespace.Index
 }
 
 // pendingResponseTextBlock tracks one Anthropic text content block as one
@@ -96,7 +96,7 @@ func NewAnthropicBetaToOpenAIResponsesConverter(
 func NewAnthropicBetaToOpenAIResponsesConverterWithNamespaces(
 	stream AnthropicBetaStream,
 	responseModel string,
-	namespaces toolns.Index,
+	namespaces toolnamespace.Index,
 ) StreamConverter {
 	conv := newAnthropicBetaToResponsesConverter(stream, responseModel)
 	conv.namespaces = namespaces

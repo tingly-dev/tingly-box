@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/tingly-dev/tingly-box/internal/protocol/toolns"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 )
 
 // HandleContext provides dependencies for handle functions.
@@ -42,7 +42,7 @@ type HandleContext struct {
 	// Namespaces maps the flattened tool names of a Responses request's
 	// `namespace` tools back to namespace and name, so a Responses client gets
 	// its namespaced function calls restored. Nil when the request had none.
-	Namespaces toolns.Index
+	Namespaces toolnamespace.Index
 }
 
 // NewHandleContext creates a new HandleContext with required dependencies.

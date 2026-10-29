@@ -9,7 +9,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/toolns"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -165,14 +165,14 @@ type TransformContext struct {
 	Extra map[string]interface{}
 }
 
-// ExtraResponsesNamespaces is the Extra key holding the toolns.Index of a
+// ExtraResponsesNamespaces is the Extra key holding the toolnamespace.Index of a
 // Responses request converted to Chat.
 const ExtraResponsesNamespaces = "responses_namespaces"
 
 // ResponsesNamespaces returns the namespace tool index a Responses request
 // left behind when it was converted, or nil.
-func (ctx *TransformContext) ResponsesNamespaces() toolns.Index {
-	index, _ := ctx.Extra[ExtraResponsesNamespaces].(toolns.Index)
+func (ctx *TransformContext) ResponsesNamespaces() toolnamespace.Index {
+	index, _ := ctx.Extra[ExtraResponsesNamespaces].(toolnamespace.Index)
 	return index
 }
 
