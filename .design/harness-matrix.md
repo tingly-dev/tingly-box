@@ -613,8 +613,10 @@ grouping, so the case sends a namespace tool plus a replayed namespaced
 `function_call` and asserts both directions: the upstream is offered the member
 as a flat function named `<namespace><name>` (replayed call included), and the
 function call it answers with reaches the client with `namespace` and `name`
-restored. The tool-use mock is renamed to the flat name so the upstream "calls"
-what it was shown.
+restored. The namespace and member are chosen to flatten to `get_weather`, the
+name the shared tool-use mock answers with, so the upstream "calls" what it was
+shown. The case lives in `content_shapes_namespace.go`; the design is in
+[`responses-namespace-tools.md`](./responses-namespace-tools.md).
 
 ### 10.2 Prompt-cache request suite (`cache_controls.go`)
 

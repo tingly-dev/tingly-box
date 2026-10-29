@@ -2,9 +2,10 @@
 
 What tingly-box guarantees on the OpenAI Responses API wire when the
 upstream speaks a different protocol. Client-specific behaviour (Codex) is
-in `codex.md`; provider findings (DeepSeek) in `deepseek.md`; when a
-Responses request is downgraded to Chat at all is decided by
-`openai-endpoint-routing.md`.
+in `codex.md`; provider findings (DeepSeek) in `deepseek.md`; how Responses
+`namespace` tools (Codex's MCP tools) survive a Chat or Anthropic upstream in
+`responses-namespace-tools.md`; when a Responses request is downgraded to Chat
+at all is decided by `openai-endpoint-routing.md`.
 
 ## 1. Tool-call repair
 
