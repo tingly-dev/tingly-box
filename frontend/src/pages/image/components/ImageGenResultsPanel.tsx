@@ -78,8 +78,9 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
     const { t } = useTranslation();
     // The run cards are memoised, so what they are handed must not change
     // identity when the panel re-renders; these forward to the newest props.
-    const latest = useRef({ onCancelRun, onRetryRun, onReuseRun, onSaveRunAsProfile, onOpenRunSource, onUseAsReference, onOpenOutput, onRemoveRun });
-    latest.current = { onCancelRun, onRetryRun, onReuseRun, onSaveRunAsProfile, onOpenRunSource, onUseAsReference, onOpenOutput, onRemoveRun };
+    const runHandlers = { onCancelRun, onRetryRun, onReuseRun, onSaveRunAsProfile, onOpenRunSource, onUseAsReference, onOpenOutput, onRemoveRun };
+    const latest = useRef(runHandlers);
+    latest.current = runHandlers;
     const cardHandlers = useMemo(() => ({
         onCancel: (id: string) => latest.current.onCancelRun(id),
         onRetry: (run: GenerationRun) => latest.current.onRetryRun(run),
