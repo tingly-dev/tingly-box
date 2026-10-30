@@ -18,7 +18,7 @@ import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
 import { resultSrc, runGridLayout, runImage, stripCardBasis, STRIP_CARD_HEIGHT, wrapCardSpanSx } from './imageGenSession';
 import RunSourceStrip from './RunSourceStrip';
 import ThumbImage from './ThumbImage';
-import { THUMB_EDGE_RUN } from './imageThumbnails';
+import { THUMB_EDGE_CARD } from './imageThumbnails';
 import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
 
 interface GenerationRunCardProps {
@@ -297,7 +297,7 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = memo(({
                                             >
                                                 <ThumbImage
                                                     src={src}
-                                                    edge={THUMB_EDGE_RUN}
+                                                    edge={THUMB_EDGE_CARD}
                                                     fit="contain"
                                                     alt={t('playground.resultAlt', {
                                                         defaultValue: 'Generated image {{number}}',
