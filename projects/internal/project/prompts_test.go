@@ -36,6 +36,7 @@ func TestCoordinatorPromptTrustAndStyleRules(t *testing.T) {
 	assert.Contains(t, s, "land as a pull request")
 	assert.Contains(t, s, "request_decision")
 	assert.Contains(t, s, "in cite")
+	assert.Contains(t, s, `outcome="stalled"`)
 }
 
 func TestThreadPromptRules(t *testing.T) {

@@ -62,6 +62,18 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 func (s *Service) Start(ctx context.Context) {
 	s.Threads.Recover()
 	go func() {
+		tick := time.NewTicker(time.Minute)
+		defer tick.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case now := <-tick.C:
+				s.Threads.CheckStalled(now)
+			}
+		}
+	}()
+	go func() {
 		tick := time.NewTicker(time.Hour)
 		defer tick.Stop()
 		for {

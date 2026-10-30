@@ -156,7 +156,7 @@ export const zh: Dict<typeof en> = {
         step2: '协调者会为每个任务开一个线程。每个线程都是一个在独立分支上工作的 Claude Code 会话。',
         step3: '你可以走开。Overview 会告诉你哪些可以 review、哪个线程在等你。',
         openThread: '打开线程',
-        updateKind: { finished: '已完成', needs_input: '需要你回复', failed: '失败' },
+        updateKind: { finished: '已完成', needs_input: '需要你回复', failed: '失败', stalled: '久无动静' },
         tryExample: '试试这些',
         example1: '先探索这个仓库并提出三个改进建议，暂时不要改任何东西。',
         example2: '在 README 里加一节，说明如何运行测试。',
