@@ -459,6 +459,11 @@ func (h *Handler) ToggleProvider(c *gin.Context) {
 // keep a plain TTL from now.
 func modelListExpiry(resolved config.ResolvedModels) time.Time {
 	now := time.Now()
+	// A stand-in served while the upstream fetch is still running must not be
+	// held for a TTL: the browser asks again shortly and gets the fetched list.
+	if resolved.Fetching {
+		return now.Add(15 * time.Second)
+	}
 	switch resolved.Source {
 	case config.ModelListSourceVModel:
 		const neverExpires = 20 * 365 * 24 * time.Hour
