@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchBlob } from '@tingly/vision';
 import { getOpenAIClient } from '@/services/modelApi';
@@ -14,6 +14,23 @@ const IMAGE_SCENARIO = 'imagegen';
 // This deliberately stays in memory: base64 images can quickly exceed sessionStorage quotas.
 let imageGenSessionRuns: GenerationRun[] = [];
 let imageGenSessionImports: ImportedImage[] = [];
+// Every mounted panel listens: a request outlives the page that sent it, so
+// its result must reach whichever panel is mounted when it lands, not the
+// instance that fired it (whose setState is gone with its page).
+const sessionListeners = new Set<() => void>();
+// False until the stored session is in (or memory already holds the newer
+// one): saving before that would overwrite it with an empty list.
+let sessionHydrated = false;
+const subscribeSession = (listener: () => void) => {
+    sessionListeners.add(listener);
+    return () => { sessionListeners.delete(listener); };
+};
+// The durable copy is written here, not by a mounted panel, so a run that
+// finishes while the person is on another page is kept too.
+const commitSession = () => {
+    sessionListeners.forEach((listener) => listener());
+    if (sessionHydrated) void savePlaygroundSession({ runs: imageGenSessionRuns, imports: imageGenSessionImports });
+};
 
 export interface GenerationRequest {
     prompt: string;
@@ -34,7 +51,7 @@ type UseImageGenRunsNotification = (message: string, severity: 'success' | 'info
 export const dropProfileSession = (profileId: string) => {
     imageGenSessionRuns = imageGenSessionRuns.filter((run) => run.profileId !== profileId);
     imageGenSessionImports = imageGenSessionImports.filter((item) => item.profileId !== profileId);
-    void savePlaygroundSession({ runs: imageGenSessionRuns, imports: imageGenSessionImports });
+    commitSession();
 };
 
 // The session half of the playground: the run/import history that survives
@@ -47,8 +64,8 @@ export const dropProfileSession = (profileId: string) => {
 // so a profile's page shows that profile's work and nothing else.
 export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, profileId?: string) => {
     const { t } = useTranslation();
-    const [allRuns, setRuns] = useState<GenerationRun[]>(() => imageGenSessionRuns);
-    const [allImported, setImported] = useState<ImportedImage[]>(() => imageGenSessionImports);
+    const allRuns = useSyncExternalStore(subscribeSession, () => imageGenSessionRuns);
+    const allImported = useSyncExternalStore(subscribeSession, () => imageGenSessionImports);
     const runs = useMemo(() => allRuns.filter((run) => run.profileId === profileId), [allRuns, profileId]);
     const imported = useMemo(() => allImported.filter((item) => item.profileId === profileId), [allImported, profileId]);
     const historyTrackRef = useRef<HTMLDivElement>(null);
@@ -63,12 +80,12 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
     // and a caller that has to remember both in the right order eventually won't.
     const updateRuns = useCallback((updater: (currentRuns: GenerationRun[]) => GenerationRun[]) => {
         imageGenSessionRuns = updater(imageGenSessionRuns);
-        setRuns(imageGenSessionRuns);
+        commitSession();
     }, []);
 
     const updateImports = useCallback((updater: (currentImports: ImportedImage[]) => ImportedImage[]) => {
         imageGenSessionImports = updater(imageGenSessionImports);
-        setImported(imageGenSessionImports);
+        commitSession();
     }, []);
 
     // The session outlives a reload: whatever the last visit left in
@@ -77,11 +94,10 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
     // change is written back. A run that was still pending when the page went
     // away can never complete, so it comes back as failed rather than as a
     // spinner that spins forever.
-    const [sessionRestored, setSessionRestored] = useState(false);
     useEffect(() => {
         let cancelled = false;
-        if (imageGenSessionRuns.length > 0 || imageGenSessionImports.length > 0) {
-            setSessionRestored(true);
+        if (sessionHydrated || imageGenSessionRuns.length > 0 || imageGenSessionImports.length > 0) {
+            sessionHydrated = true;
             return undefined;
         }
         void loadPlaygroundSession<GenerationRun, ImportedImage>().then(({ runs: savedRuns, imports: savedImports }) => {
@@ -95,15 +111,10 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
             if (savedImports.length > 0) {
                 updateImports((current) => (current.length > 0 ? current : savedImports));
             }
-            setSessionRestored(true);
+            sessionHydrated = true;
         });
         return () => { cancelled = true; };
     }, [t, updateImports, updateRuns]);
-
-    useEffect(() => {
-        if (!sessionRestored) return;
-        void savePlaygroundSession({ runs: allRuns, imports: allImported });
-    }, [allImported, allRuns, sessionRestored]);
 
     useEffect(() => {
         const frame = requestAnimationFrame(() => {
