@@ -190,9 +190,13 @@ func (c *Coordinator) turn(ctx context.Context, projectID string, userTriggered,
 	if p.Paused || p.ArchivedAt != nil {
 		return nil
 	}
-	history, err := c.store.ListRecentThreadEvents(p.MainThreadID, historyLimit)
+	history, err := c.store.ListRecentThreadEvents(p.MainThreadID, historyLimit+1)
 	if err != nil {
 		return err
+	}
+	older := len(history) > historyLimit
+	if older {
+		history = history[1:]
 	}
 	msgs := renderHistory(history, c.layout.LibraryDir(projectID))
 	if len(msgs) == 0 {
@@ -227,6 +231,9 @@ func (c *Coordinator) turn(ctx context.Context, projectID string, userTriggered,
 		}
 		threads, _ := c.store.ListThreads(projectID)
 		system := coordinatorSystemPrompt(c.layout, p, threads, time.Now())
+		if older {
+			system += olderNote
+		}
 
 		var live *db.ThreadEvent
 		var streamed strings.Builder
@@ -512,6 +519,10 @@ func coordinatorTools() []llm.Tool {
 			Required: []string{"thread_id", "message"}},
 		{Name: "get_thread", Description: "Read a thread's status, branch, last report and recent transcript.",
 			Properties: map[string]any{"thread_id": str("Thread id or its 8-character prefix.")}, Required: []string{"thread_id"}},
+		{Name: "read_conversation", Description: "Read earlier messages of this conversation that are no longer shown to you: the user's words, your replies and thread reports. Newest first back from the window you see, or from a message id. Use it when the user refers to something you cannot see; do not ask them to repeat.",
+			Properties: map[string]any{"before": str("Optional. 8-character id of a message (shown in the results) to read back from; default is the oldest message you can see."),
+				"contains": str("Optional. Only messages containing this text (case-insensitive)."),
+				"limit":    map[string]any{"type": "integer", "description": "How many messages, up to 40. Default 20."}}},
 		{Name: "resolve_thread", Description: "Mark a thread resolved (done). Only when the user says so or its work is merged.",
 			Properties: map[string]any{"thread_id": str("Thread id or prefix.")}, Required: []string{"thread_id"}},
 		{Name: "rename_thread", Description: "Change a thread's card title when its goal has changed. Does not touch its branch or history. Same title rules as start_thread.",
@@ -565,6 +576,8 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, call llm.ToolC
 		Summary, File     string
 		Instructions      string
 		Cite              []string
+		Before, Contains  string
+		Limit             int
 		Decision
 	}
 	if err := json.Unmarshal(call.Input, &in); err != nil {
@@ -634,6 +647,12 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, call llm.ToolC
 		return envelope(trustRelay, fmt.Sprintf("thread %s %q status=%s branch=%s base=%s commits_ahead=%d files_changed=%d waiting_on=%q\ntask: %s\nlast report: %s\nrecent transcript:\n%s",
 			short(t.ID), t.Title, t.Status, orNone(t.Branch), orNone(t.BaseBranch), t.CommitsAhead, t.FilesChanged, t.WaitReason,
 			clip(t.Task, 1500), clip(t.LastReport, 2000), strings.Join(lines, "\n")), "source", "thread", "kind", "get_thread"), false, nil
+	case "read_conversation":
+		out, err := c.readConversation(p, in.Before, in.Contains, in.Limit)
+		if err != nil {
+			return fail(err)
+		}
+		return out, false, nil
 	case "rename_thread":
 		t, err := c.findThread(p.ID, in.ThreadID)
 		if err != nil {

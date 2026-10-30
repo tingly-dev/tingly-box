@@ -401,6 +401,22 @@ func (s *Store) PageThreadEvents(threadID string, p EventPage) ([]ThreadEvent, b
 	return out, more, nil
 }
 
+// FindThreadEvent loads the event of a thread whose id starts with prefix; an
+// ambiguous or unknown prefix is not found.
+func (s *Store) FindThreadEvent(threadID, prefix string) (*ThreadEvent, error) {
+	if prefix == "" || strings.ContainsAny(prefix, "%_") {
+		return nil, ErrNotFound
+	}
+	var out []ThreadEvent
+	if err := s.db.Where("thread_id = ? AND id LIKE ?", threadID, prefix+"%").Limit(2).Find(&out).Error; err != nil {
+		return nil, err
+	}
+	if len(out) != 1 {
+		return nil, ErrNotFound
+	}
+	return &out[0], nil
+}
+
 // GetThreadEvent loads one event.
 func (s *Store) GetThreadEvent(id string) (*ThreadEvent, error) {
 	var e ThreadEvent
