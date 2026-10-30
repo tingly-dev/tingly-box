@@ -25,6 +25,8 @@ import { fontMono } from '@/theme/fonts';
 import { downloadImage } from '@/utils/download';
 import type { ImageAsset, PromptSnippet } from './library/assetTypes';
 import { removeAsset, removeSnippet, renameAsset, saveSnippet, useAssets, useLibraryReady, useSnippets } from './library/assetStore';
+import ThumbImage from './components/ThumbImage';
+import { THUMB_EDGE_TILE } from './components/imageThumbnails';
 
 type Tab = 'images' | 'snippets';
 
@@ -125,7 +127,7 @@ const ImageLibraryPage: React.FC = () => {
                                     sx={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', textAlign: 'left', borderRadius: 1.5 }}
                                 >
                                     <Box sx={{ aspectRatio: '1 / 1', borderRadius: 1.5, overflow: 'hidden', bgcolor: 'action.hover' }}>
-                                        <Box component="img" src={asset.src} alt={asset.name} sx={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+                                        <ThumbImage src={asset.src} alt={asset.name} edge={THUMB_EDGE_TILE} fit="contain" />
                                     </Box>
                                     <Typography noWrap sx={{ mt: 0.75, fontSize: 13 }}>{asset.name}</Typography>
                                 </ButtonBase>

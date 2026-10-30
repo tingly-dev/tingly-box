@@ -13,6 +13,8 @@ import { Close, Edit, ZoomIn } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
 import { formatBytes, stripCardBasis, STRIP_CARD_HEIGHT } from './imageGenSession';
 import type { ImportedImage } from './ImageGenPlayground.types';
+import ThumbImage from './ThumbImage';
+import { THUMB_EDGE_RUN } from './imageThumbnails';
 
 interface ImportedImageCardProps {
     item: ImportedImage;
@@ -67,12 +69,7 @@ const ImportedImageCard: React.FC<ImportedImageCardProps> = ({ item, onOpen, onU
                                 '&:hover .image-preview-overlay, &:focus-visible .image-preview-overlay': { opacity: 1 },
                             }}
                         >
-                            <Box
-                                component="img"
-                                src={item.src}
-                                alt={item.name}
-                                sx={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-                            />
+                            <ThumbImage src={item.src} alt={item.name} edge={THUMB_EDGE_RUN} fit="contain" />
                             <Box className="image-preview-overlay" sx={zoomScrimSx}>
                                 <ZoomIn sx={{ fontSize: 30 }} />
                             </Box>

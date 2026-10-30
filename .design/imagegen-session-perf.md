@@ -34,3 +34,21 @@ session in the mock app; the profile put ~3.6s in the IndexedDB read alone.
   save) share them. The bytes sit in the blob store, not the JS heap.
 
 Not covered: reference images (`sourceImages`) are still data URLs.
+
+## Thumbnails everywhere an image is shown small
+
+Library grid, library picker, imported-image cards, the reference row, the
+lightbox filmstrip and the sidebar's profile icon all drew the original (a
+20px sidebar icon decoded a full reference image on every page). They render
+through `ThumbImage` now.
+
+## Still open
+
+- `imageProfileStore` is read eagerly on every page (the sidebar lists
+  profiles), including each profile's reference `File` **and** a base64
+  `previewUrl` copy of the same image. A profile with a few large references
+  costs hundreds of ms of main-thread IndexedDB deserialisation at boot.
+  Fixing it means dropping the duplicate `previewUrl` (derive it from `file`),
+  which also touches `GenerationRun.sourceImages` (data URLs by design: they
+  must survive a reload and be re-sendable).
+- Run `sourceImages` and library assets are still data URLs.

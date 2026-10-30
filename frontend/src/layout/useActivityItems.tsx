@@ -49,6 +49,8 @@ import { orderTeams, teamPath } from '@/utils/team';
 import type { ActivityItem, NavItem, NavItemBase } from './types';
 import { useBotPlatformSummary } from './useBotPlatformSummary';
 import { useProjectsWaiting } from './useProjectsWaiting';
+import ThumbImage from '@/pages/image/components/ThumbImage';
+import { THUMB_EDGE_BADGE } from '@/pages/image/components/imageThumbnails';
 
 // The Projects sidebar body carries @tingly/projects; lazy so the package stays
 // out of the eager bundle until the Projects item is open.
@@ -331,7 +333,7 @@ export function useActivityItems(): ActivityItem[] {
                         // a repeated "Profile" caption on every row is noise.
                         label: profile.name,
                         icon: profile.refs[0]
-                            ? <Box component="img" src={profile.refs[0].previewUrl} alt="" sx={{ width: 20, height: 20, borderRadius: '4px', objectFit: 'cover', display: 'block' }} />
+                            ? <ThumbImage src={profile.refs[0].previewUrl} alt="" edge={THUMB_EDGE_BADGE} sx={{ width: 20, height: 20, borderRadius: '4px' }} />
                             : <IconPalette sx={{ fontSize: 20 }} />,
                     })),
                     { path: '/image/profile/new', label: t('imageProfile.new', { defaultValue: 'New profile' }), icon: <IconPlus sx={{ fontSize: 20 }} /> },
