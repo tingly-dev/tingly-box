@@ -205,6 +205,17 @@ export const nodeSpotlightSx = (theme: Theme) => ({
     animation: `${spotlightPulse} 1.4s ease-out 3`,
 });
 
+// Add / turn-off controls in a rule's graph carry this class: they stay out of
+// sight until the rule is hovered or holds focus, so a rule at rest shows only
+// its routing. Devices without hover always show them.
+export const ROUTE_GRAPH_QUIET_CLASS = 'route-graph-quiet';
+
+export const routeGraphQuietSx = {
+    [`& .${ROUTE_GRAPH_QUIET_CLASS}`]: { opacity: 0, transition: 'opacity 0.16s ease' },
+    [`&:hover .${ROUTE_GRAPH_QUIET_CLASS}, &:focus-within .${ROUTE_GRAPH_QUIET_CLASS}`]: { opacity: 1 },
+    '@media (hover: none)': { [`& .${ROUTE_GRAPH_QUIET_CLASS}`]: { opacity: 1 } },
+} as const;
+
 // Service node container (formerly ProviderNodeContainer)
 export const ServiceNodeContainer = styled(Box)(({ theme }: { theme: Theme }) => ({
     display: 'flex',

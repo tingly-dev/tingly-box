@@ -59,7 +59,6 @@ export default {
       "tierBalanced": "Balanced",
       "dividerHelp": "Lower-numbered tiers are always tried first. Only when all models in a tier fail (circuit open) does traffic fall through to the next tier. Models within the same tier are load-balanced.",
       "tooltip": "T0 is tried first, T1 is the fallback, and so on. Models within the same tier are load-balanced.",
-      "addTierTooltip": "Add a new fallback tier",
       "nodeTooltipPrimaryTitle": "T0 — Highest priority",
       "nodeTooltipPrimaryBody": "Tried first on every request. Models here are load-balanced.",
       "nodeTooltipFallbackTitle": "T{{tier}} — Fallback tier",
@@ -211,7 +210,9 @@ export default {
       }
     },
     "nodes": {
-      "addModel": "Add model"
+      "addModel": "Add model",
+      "loadBalance": "Load balance",
+      "fallbackTier": "Fallback tier"
     },
     "guideDiagrams": {
       "empty": { "description": "Example rule" },
@@ -242,11 +243,11 @@ export default {
       "deleteSmartRule": "Delete Smart Rule"
     },
     "ruleConditions": {
-      "defaultTitle": "Default",
+      "requestTitle": "Request",
+      "othersTitle": "Others",
       "addCondition": "Add smart condition",
-      "conditionsHint": "Conditions are checked from top to bottom; the first match wins.",
       "closeConditions": "Turn off smart condition",
-      "closeConditionsTooltip": "Conditions stay saved; every request uses Default until you turn them back on."
+      "closeConditionsTooltip": "Conditions stay saved; while they are off every request goes straight to the tiers."
     },
     "tooltips": {
       "addProviderFirst": "Add a provider to enable request forwarding",
@@ -254,7 +255,11 @@ export default {
       "addProviderMore": "Add another provider (requests will be load balanced across all providers)",
       "addFirstProvider": "Add your first provider",
       "addServiceFirst": "Add a model to enable request forwarding",
-      "addServiceSecond": "Add another model (load balancing will be enabled)"
+      "addServiceSecond": "Add another model (load balancing will be enabled)",
+      "loadBalance": "Add a service to this tier; it shares requests with the others in it",
+      "fallbackTier": "Add a tier below: used only when every tier above is unavailable",
+      "addServiceToTier": "Add a service to this tier",
+      "addServiceToCondition": "Add a service for requests that match this condition"
     },
     "notifications": {
       "loadFailed": "Failed to load data",

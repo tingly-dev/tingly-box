@@ -6,9 +6,13 @@ import {EntryGuideDialog} from '@/components/tier/EntryGuideDialog';
 import {
     getRouteGraphActiveColor,
     PROVIDER_NODE_STYLES,
+    ROUTE_GRAPH_QUIET_CLASS,
+    routeGraphQuietSx,
     SMART_NODE_STYLES,
     SMALL_NODE_STYLES,
 } from '@/components/nodes/styles';
+import {Add as AddIcon} from '@/components/icons';
+import {fontSizes} from '@/theme/fonts';
 import {
     ActionAddNode,
     ArrowNode,
@@ -129,6 +133,7 @@ const StyledCard = styled(Card, {
     margin: "3px",
     position: 'relative',
     '&:hover .rule-header-add-condition': {opacity: 1},
+    ...routeGraphQuietSx,
     ...(active ? {} : {
         '&::before': {
             content: '""',
@@ -361,9 +366,6 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                             active={active}
                             onHover={guideMode ? undefined : (hovering) => setHoveredTier(hovering ? group.tier : null)}
                             onShowGuide={handleShowGuide}
-                            onAddTier={canAddTier && !pendingTier && active && !saving && idx === groups.length - 1
-                                ? () => setPendingTier(true) : undefined}
-                            addTierLabel={t('rule.tier.addTierTooltip')}
                         />
                         {group.providers.map((p) => (
                             <ServiceNode
@@ -386,15 +388,57 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                             active={active && !saving}
                             warning={record.providers.length === 0 && idx === 0}
                             onAdd={() => onAddService?.(group.tier)}
+                            // A model next to others in its tier shares its traffic;
+                            // an empty tier (a new one, or T0 of a new rule) just needs one.
+                            caption={group.providers.length > 0 ? t('rule.nodes.loadBalance') : undefined}
+                            quiet={group.providers.length > 0}
                             tooltip={
                                 record.providers.length === 0 && idx === 0
                                     ? t('rule.tooltips.addServiceFirst')
-                                    : t('rule.tooltips.addServiceSecond')
+                                    : group.providers.length > 0
+                                        ? t('rule.tooltips.loadBalance')
+                                        : t('rule.tooltips.addServiceToTier')
                             }
                         />
                     </Box>
                     );
                 })}
+                {/* A tier below is only for when every tier above is down, so it
+                    is named for that, apart from adding a model to a tier. */}
+                {canAddTier && !pendingTier && (
+                    <NodeTooltip title={t('rule.tooltips.fallbackTier')} placement="right">
+                        <Box
+                            className={ROUTE_GRAPH_QUIET_CLASS}
+                            role="button"
+                            tabIndex={active && !saving ? 0 : -1}
+                            aria-label={t('rule.nodes.fallbackTier')}
+                            onClick={active && !saving ? () => setPendingTier(true) : undefined}
+                            onKeyDown={(e) => {
+                                if (active && !saving && (e.key === 'Enter' || e.key === ' ')) {
+                                    e.preventDefault();
+                                    setPendingTier(true);
+                                }
+                            }}
+                            sx={(theme) => ({
+                                alignSelf: 'flex-start',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 0.5,
+                                height: 22,
+                                mt: -0.5,
+                                px: 1,
+                                borderRadius: `${theme.shape.borderRadius}px`,
+                                color: 'text.secondary',
+                                fontSize: fontSizes.xs,
+                                cursor: active && !saving ? 'pointer' : 'default',
+                                '&:hover, &:focus-visible': {color: 'primary.main', outline: 'none'},
+                            })}
+                        >
+                            <AddIcon sx={{fontSize: 14}}/>
+                            {t('rule.nodes.fallbackTier')}
+                        </Box>
+                    </NodeTooltip>
+                )}
             </Box>
         );
     }, [pendingTier, t, tierGroups, active, saving, record.providers.length, getApiStyle, providers, onDeleteService, onServiceNodeClick, onEditProvider, onTierChange, onAddService, hoveredTier, guideMode, handleShowGuide]);
@@ -448,14 +492,16 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                         <ActionAddNode
                                             active={active}
                                             onAdd={() => handleAddServiceToSmartRule(index)}
-                                            tooltip="Add service to this smart rule"
+                                            caption={t('rule.nodes.loadBalance')}
+                                            tooltip={t('rule.tooltips.loadBalance')}
                                         />
                                     </Box>
                                 ) : (
                                     <ActionAddNode
                                         active={active}
                                         onAdd={() => handleAddServiceToSmartRule(index)}
-                                        tooltip="Add service to this smart rule"
+                                        quiet={false}
+                                        tooltip={t('rule.tooltips.addServiceToCondition')}
                                     />
                                 )}
                             </GraphRow>
@@ -482,28 +528,23 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         onAdd={() => onSwitchRoutingMode?.()}
                         tooltip={t('rule.ruleConditions.closeConditionsTooltip')}
                     />
-                    {smartRouting.length > 1 && (
-                        <Box sx={{ml: 0.5, fontSize: 12, color: 'text.secondary'}}>
-                            {t('rule.ruleConditions.conditionsHint')}
-                        </Box>
-                    )}
                 </GraphRow>
             </>
         );
     };
 
-    // Render default providers section: Default, an arrow, then the tiers.
+    // Render default providers section: Request (no conditions) or Others
+    // (what no condition matched), an arrow, then the tiers.
     const renderDefaultProviders = () => (
         <GraphRow sx={{alignItems: 'flex-start'}}>
-            {/* Fixed height matches the tier row height so ServiceEntryNode centres vertically */}
-            <NodeContainer sx={{width: SMART_NODE_STYLES.width, height: PROVIDER_NODE_STYLES.height, justifyContent: 'center'}}>
+            <NodeContainer sx={{width: SMART_NODE_STYLES.width}}>
                 <ServiceEntryNode
                     providersCount={record.providers.length}
                     active={active && !saving}
                     tooltip={defaultTooltip}
                     onAddCondition={showSmartRouting ? undefined : handleAddCondition}
                     addConditionLabel={t('rule.ruleConditions.addCondition')}
-                addTooltip={conditionTooltip}
+                    addTooltip={conditionTooltip}
                 />
             </NodeContainer>
 

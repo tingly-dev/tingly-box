@@ -59,7 +59,6 @@ export default {
       "tierBalanced": "均衡",
       "dividerHelp": "编号越小的层级越优先。只有当该层级所有模型均不可用（熔断）时，流量才会降级到下一层级。同一层级内的模型之间负载均衡。",
       "tooltip": "T0 最先尝试，T1 为备用，依此类推。同一层级内的模型负载均衡。",
-      "addTierTooltip": "添加新的后备层级",
       "nodeTooltipPrimaryTitle": "T0 — 最高优先级",
       "nodeTooltipPrimaryBody": "每次请求优先尝试，同层级内模型负载均衡。",
       "nodeTooltipFallbackTitle": "T{{tier}} — 后备层级",
@@ -211,7 +210,9 @@ export default {
       }
     },
     "nodes": {
-      "addModel": "添加模型"
+      "addModel": "添加模型",
+      "loadBalance": "负载均衡",
+      "fallbackTier": "兜底层"
     },
     "guideDiagrams": {
       "empty": { "description": "示例规则" },
@@ -242,11 +243,11 @@ export default {
       "deleteSmartRule": "删除智能规则"
     },
     "ruleConditions": {
-      "defaultTitle": "默认",
+      "requestTitle": "Request",
+      "othersTitle": "Others",
       "addCondition": "添加智能条件",
-      "conditionsHint": "条件从上到下依次检查，先匹配到的生效。",
       "closeConditions": "关闭智能条件",
-      "closeConditionsTooltip": "条件会保留；关闭期间所有请求走 Default，再次添加即可恢复。"
+      "closeConditionsTooltip": "条件会保留；关闭期间所有请求直接走各层，再次添加即可恢复。"
     },
     "tooltips": {
       "addProviderFirst": "添加提供商以启用请求转发",
@@ -254,7 +255,11 @@ export default {
       "addProviderMore": "添加另一个提供商（请求将在所有提供商之间负载平衡）",
       "addFirstProvider": "添加您的第一个提供商",
       "addServiceFirst": "添加模型以启用请求转发",
-      "addServiceSecond": "添加另一个模型（将启用负载均衡）"
+      "addServiceSecond": "添加另一个模型（将启用负载均衡）",
+      "loadBalance": "在这一层再加一个服务，和同层的服务分摊请求",
+      "fallbackTier": "加一层兜底：上面每一层都不可用时才会用到",
+      "addServiceToTier": "给这一层加一个服务",
+      "addServiceToCondition": "给命中这个条件的请求加一个服务"
     },
     "notifications": {
       "loadFailed": "加载数据失败",

@@ -22,13 +22,20 @@ opens it in Direct mode. A single, page-scoped entry avoids repeating the icon
 on every card (principle #9, reduce noise) and doubles as a standing hint that
 the guide can be reopened there.
 
-- A rule has no Direct/Smart switch: it is its Default row plus optional smart
+- A rule has no Direct/Smart switch: it is its entry row plus optional smart
   conditions. Conditions are switched off, not deleted: `smartEnabled` is the
-  switch and the saved conditions are kept. The contextual "View direct/smart
-  guide →" links sit in hover tooltips: the `Default` node (Direct guide), its
-  inline "+ Add smart condition" (Smart guide, the only place to reach it while
-  there are no conditions) and the standalone "Add smart condition" node. They
-  are separate from the toolbar entry.
+  switch and the saved conditions are kept. The entry node says what reaches the
+  tiers: `Request` while there are no conditions, `Others` once there are (both
+  untranslated; "Default" read as a setting, not as traffic). The contextual
+  "View direct/smart guide →" links sit in hover tooltips: the entry node
+  (Direct guide), the "+ Add smart condition" node stacked under `Request` (Smart
+  guide, the only place to reach it while there are no conditions) and the
+  standalone "Add smart condition" node. They are separate from the toolbar entry.
+  No hint line explains the order of conditions: the numbers and `Others` say it.
+- Dashed add / turn-off controls are quiet: hidden until the rule card is hovered
+  or focused (always shown on touch), so a card at rest shows only traffic. A
+  dashed control that is the only thing in its place (an empty tier or condition)
+  stays visible.
 - Turning conditions on and off is explicit in two places: the dashed "Turn off
   smart condition" node next to "Add smart condition", and one state-dependent
   item in the rule's ⋯ menu (add / turn off / turn on). Adding while off
