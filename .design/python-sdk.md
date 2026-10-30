@@ -236,6 +236,15 @@ the mechanism costs real design weight. If revived, the decisions so far:
   clean up, like any offline provider.
 - Opt-in only (`auto_register=True` plus an admin token).
 
+## `tingly.vmodel` — scripted models and a testbed
+
+A sibling of `Server`, for the opposite job: instead of *being* a provider,
+write a scripted interaction and run it against a real tb. `Script` builds a
+vmodel script (`.design/vmodel-script.md`); `Testbed` starts a throwaway tb,
+drops the script into `<config-dir>/vmodels/` and hands back base URLs, or
+`Testbed.attach()`es to a running one. No tb-side API is involved. See the
+README's "Script a model" section and the design note's Python section.
+
 ## Known limitations
 
 - Streaming is single-chunk (above).
