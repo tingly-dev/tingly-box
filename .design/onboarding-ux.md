@@ -35,9 +35,9 @@ the guide can be reopened there.
 - Dashed add / turn-off controls are quiet: hidden until the rule card is hovered
   or focused (always shown on touch), so a card at rest shows only traffic. A
   dashed control that is the only thing in its place (an empty tier or condition)
-  stays visible. The rows that hold only controls (add / turn off conditions
-  under the conditions; add condition and Fallback tier under the tiers) take no
-  height at rest and open on hover, so a quiet card is as short as its traffic.
+  stays visible. The rows that hold only controls keep their height at rest: a
+  card that grows on hover pushes every card below it, which reads worse than a
+  blank row.
 - Turning conditions on and off is explicit in two places: the dashed "Turn off
   smart condition" node next to "Add smart condition", and one state-dependent
   item in the rule's ⋯ menu (add / turn off / turn on). Adding while off

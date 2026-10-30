@@ -6,7 +6,6 @@ import {EntryGuideDialog} from '@/components/tier/EntryGuideDialog';
 import {
     getRouteGraphActiveColor,
     PROVIDER_NODE_STYLES,
-    ROUTE_GRAPH_REVEAL_CLASS,
     routeGraphQuietSx,
     SMART_NODE_STYLES,
     SMALL_NODE_STYLES,
@@ -472,7 +471,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 ) : null}
 
                 {/* Add condition sits in the condition column; the turn-off node lines up with the service column */}
-                <GraphRow className={ROUTE_GRAPH_REVEAL_CLASS}>
+                <GraphRow>
                     <NodeContainer>
                         <ActionAddNode
                             label={t('rule.ruleConditions.addCondition')}
@@ -526,7 +525,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         const addCondition = !showSmartRouting;
         if (!addCondition && !canAddFallbackTier) return null;
         return (
-            <GraphRow className={ROUTE_GRAPH_REVEAL_CLASS}>
+            <GraphRow>
                 <NodeContainer sx={{width: SMART_NODE_STYLES.width}}>
                     {addCondition && (
                         <ActionAddNode
