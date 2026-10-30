@@ -229,19 +229,21 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     // Hover teaching for the Default and Add condition nodes (the old
     // Direct/Smart entry node's tooltip, split per concept), each with a link
     // to the matching guide.
-    const guideTooltip = (title: string, body: string, linkLabel: string, mode: 'direct' | 'smart') => (
+    const linkedTooltip = (title: string, body: string, linkLabel: string, onOpen: () => void) => (
         <Box sx={{whiteSpace: 'pre-line', maxWidth: 280}}>
             <strong>{title}</strong>
             {`\n${body}`}
             <Box
                 component="span"
-                onClick={(e) => { e.stopPropagation(); setEntryGuideMode(mode); }}
+                onClick={(e) => { e.stopPropagation(); onOpen(); }}
                 sx={{display: 'block', mt: 1, color: 'primary.main', cursor: 'pointer', fontWeight: 500, '&:hover': {textDecoration: 'underline'}}}
             >
                 {linkLabel}
             </Box>
         </Box>
     );
+    const guideTooltip = (title: string, body: string, linkLabel: string, mode: 'direct' | 'smart') =>
+        linkedTooltip(title, body, linkLabel, () => setEntryGuideMode(mode));
     const defaultTooltip = guideTooltip(
         t('rule.routing.directTooltipTitle'), t('rule.routing.directTooltipBody'),
         t('rule.routing.viewDirectGuide'), 'direct');
@@ -263,6 +265,12 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     const handleGuideClose = () => {
         setShowTierGuide(false);
     };
+
+    // The add-fallback-tier node carries the tier node's teaching too: the
+    // same explanation, with the link to the tier guide.
+    const tierTooltip = linkedTooltip(
+        t('rule.nodes.fallbackTier'), t('rule.tooltips.fallbackTier'),
+        t('rule.tier.nodeTooltipLearnMore'), handleShowGuide);
 
     // There is no Direct/Smart switch: the left node is always Default, and a
     // rule shows its conditions above it only while smartEnabled is on. Turning
@@ -553,7 +561,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                             width={PROVIDER_NODE_STYLES.width}
                             active={active && !saving}
                             onAdd={() => setPendingTier(true)}
-                            tooltip={t('rule.tooltips.fallbackTier')}
+                            tooltip={tierTooltip}
                             quiet={false}
                         />
                     )}
