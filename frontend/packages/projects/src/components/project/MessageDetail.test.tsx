@@ -28,7 +28,7 @@ const messages = [
 const worker = { id: 'worker', title: 'Worker title', status: 'running', branch: '', commits_ahead: 0, files_changed: 0 } as Thread;
 const props = () => ({
     projectId: 'project', threadId: 'main', messages, threads: new Map([['worker', worker]]), busy: false, disabled: false,
-    onSend: vi.fn().mockResolvedValue(true), onOpenThread: vi.fn(), onStartSuggestions: vi.fn().mockResolvedValue(undefined),
+    onSend: vi.fn().mockResolvedValue(true), onOpenThread: vi.fn(), onStartSuggestions: vi.fn().mockResolvedValue(undefined), onChooseDecision: vi.fn().mockResolvedValue(undefined),
     onModelChange: vi.fn(), composerContext: <button>Switch control</button>,
 });
 const show = (p = props()) => render(<MemoryRouter><ConversationPane {...p} /></MemoryRouter>);

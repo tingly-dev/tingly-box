@@ -716,6 +716,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{id}/events/{eid}/choose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pick an option of a decision card the coordinator asked in a main thread; the pick reaches the coordinator as the user's message
+         * @description Pick an option of a decision card the coordinator asked in a main thread; the pick reaches the coordinator as the user's message
+         */
+        post: operations["apiV1ThreadsIdEventsEidChoosePost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{id}/events/{eid}/start": {
         parameters: {
             query?: never;
@@ -1093,6 +1113,13 @@ export interface components {
             updated_at: string;
             /** @description Field verbose */
             verbose: boolean;
+        };
+        ChooseRequest: {
+            /**
+             * Format: int64
+             * @description Field index
+             */
+            index: number;
         };
         ConnectionDraft: {
             /** @description Field api_key */
@@ -3031,6 +3058,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EventsResponse"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdEventsEidChoosePost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+                /** @description Resource ID */
+                eid: string;
+            };
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChooseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadEvent"];
                 };
             };
         };

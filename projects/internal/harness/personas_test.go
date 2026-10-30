@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,6 +26,13 @@ func reportRequest(w *World) (llm.Request, bool) {
 		}
 	}
 	return llm.Request{}, false
+}
+
+// coordinatorIdle waits for the coordinator alone; a thread that is blocked on
+// purpose keeps Quiet from ever returning.
+func coordinatorIdle(w *World) {
+	w.T.Helper()
+	w.Eventually("coordinator idle", func() bool { return !w.Coord.Busy(w.Project.ID) })
 }
 
 func quietStart(title string) BrainFunc {
@@ -142,10 +150,10 @@ func TestPersonaSettingsChangeMidTurnStopsTheTool(t *testing.T) {
 	assert.Contains(t, refused, "Project settings changed")
 }
 
-// P5 silence: a thread that never reports stays "working" and nothing wakes
-// the coordinator. This records a gap, not a goal: there is no stuck-thread
-// event yet.
-func TestPersonaSilentThreadRaisesNoEvent(t *testing.T) {
+// P5 silence: a thread that never reports stays "working". Once it has shown
+// no activity for a long while the coordinator hears about it, once per quiet
+// spell, and decides whether the user needs to.
+func TestPersonaSilentThreadIsReportedOnceAsStalled(t *testing.T) {
 	release := make(chan struct{})
 	w := New(t, Options{
 		Files: projectsRepo, Brain: quietStart(endTool),
@@ -158,7 +166,29 @@ func TestPersonaSilentThreadRaisesNoEvent(t *testing.T) {
 	w.Eventually("coordinator idle", func() bool { return !w.Coord.Busy(w.Project.ID) })
 
 	_, woken := reportRequest(w)
-	assert.False(t, woken, "no event reaches the coordinator while the thread is silent")
+	assert.False(t, woken, "a thread that has just started is not stalled")
+	w.Threads.CheckStalled(time.Now())
+	coordinatorIdle(w)
+	_, woken = reportRequest(w)
+	assert.False(t, woken, "recent activity is not a stall")
+
+	later := time.Now().Add(time.Hour)
+	w.Threads.CheckStalled(later)
+	w.Eventually("coordinator heard of the stall", func() bool { _, ok := reportRequest(w); return ok })
+	coordinatorIdle(w)
+	req, _ := reportRequest(w)
+	last := req.Messages[len(req.Messages)-1].Content
+	assert.Contains(t, last, `outcome="stalled"`)
+	assert.Contains(t, last, `trust="relay"`, "a stall report is information, not an instruction")
+
+	before := len(w.Requests())
+	w.Threads.CheckStalled(later.Add(time.Hour))
+	coordinatorIdle(w)
+	assert.Len(t, w.Requests(), before, "a quiet spell is reported once")
+
+	w.Threads.CheckStalled(time.Now())
+	w.Threads.CheckStalled(later.Add(2 * time.Hour))
+	w.Eventually("a new quiet spell is reported", func() bool { return len(w.Requests()) > before })
 }
 
 // P6 fan-out: one message with several tasks becomes several threads, each

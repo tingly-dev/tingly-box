@@ -81,6 +81,12 @@ type StartSuggestionsRequest struct {
 	Indexes []int `json:"indexes,omitempty"`
 }
 
+// ChooseRequest picks an option of a decision card.
+type ChooseRequest struct {
+	// Index is the picked option, counted from 0.
+	Index int `json:"index"`
+}
+
 // ThreadRespondRequest answers a pending approval or question.
 type ThreadRespondRequest struct {
 	RequestID string `json:"request_id" binding:"required"`
@@ -198,6 +204,10 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.POST("/threads/:id/events/:eid/start", h.startSuggestions, tag,
 		swagger.WithDescription("Start threads the coordinator proposed in a suggestions event of a main thread"),
 		swagger.WithRequestModel(StartSuggestionsRequest{}),
+		swagger.WithResponseModel(db.ThreadEvent{}))
+	api.POST("/threads/:id/events/:eid/choose", h.chooseDecision, tag,
+		swagger.WithDescription("Pick an option of a decision card the coordinator asked in a main thread; the pick reaches the coordinator as the user's message"),
+		swagger.WithRequestModel(ChooseRequest{}),
 		swagger.WithResponseModel(db.ThreadEvent{}))
 	api.POST("/threads/:id/respond", h.respond, tag,
 		swagger.WithDescription("Answer a permission request or question the thread is waiting on"),
@@ -454,6 +464,23 @@ func (h *Handler) startSuggestions(c *gin.Context) {
 	}
 	m, err := h.svc.Coordinator.StartSuggestions(c.Request.Context(), c.Param("id"), c.Param("eid"), req.Indexes)
 	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, m)
+}
+
+func (h *Handler) chooseDecision(c *gin.Context) {
+	var req ChooseRequest
+	if !apierr.Bind(c, &req) {
+		return
+	}
+	m, err := h.svc.Coordinator.Choose(c.Request.Context(), c.Param("id"), c.Param("eid"), req.Index, rt.Source{})
+	if err != nil {
+		if errors.Is(err, rt.ErrDecided) {
+			apierr.Message(c, http.StatusConflict, err.Error())
+			return
+		}
 		fail(c, err)
 		return
 	}
