@@ -116,6 +116,7 @@ on:
           - node
           - aisdk
           - replay
+          - script
           - lb
           - duo
           - routing

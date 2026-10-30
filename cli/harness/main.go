@@ -4,6 +4,7 @@
 //   - matrix: Virtual provider e2e tests (protocol transformations)
 //   - replay: Fixture replay through the in-process gateway
 //   - agent: Real agent CLI runs against mock or real upstreams
+//   - script: Scripted vmodel interaction, checked step by step through the gateway
 //   - lb: Load-balancing scenario simulator (tier/failover/breaker/affinity)
 //   - duo: Two-instance e2e verification (tb2 gateway → tb1 vmodel), function + memory
 //   - catalog: Offline validity check of providers.json / claude.models.json
@@ -32,6 +33,7 @@ type CLI struct {
 	Matrix     MatrixCmd     `kong:"cmd,help='Run protocol validation matrix tests'"`
 	Agent      AgentCmd      `kong:"cmd,help='Run agent e2e tests (use --mock or --config <file>)'"`
 	Replay     ReplayCmd     `kong:"cmd,help='Replay a captured agent request fixture through the gateway'"`
+	Script     ScriptCmd     `kong:"cmd,help='Drive a vmodel script (scripted multi-step interaction) through the in-process gateway, one request per step'"`
 	Lb         LbCmd         `kong:"cmd,help='Simulate load-balancing (tier/failover/breaker/affinity) over a request sequence'"`
 	Duo        DuoCmd        `kong:"cmd,help='Two-instance e2e verification: tb2 gateway routed to tb1 vmodel (function + memory)'"`
 	Routing    RoutingCmd    `kong:"cmd,help='Smart-routing e2e scenarios on the duo topology (rules via API, wire + trace assertions)'"`

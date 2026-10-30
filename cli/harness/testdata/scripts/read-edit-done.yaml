@@ -1,0 +1,16 @@
+# A three-turn agent loop: read a file, edit it, answer — with a rate-limit
+# hiccup in between. Run it:
+#
+#   go run ./cli/harness script cli/harness/testdata/scripts/read-edit-done.yaml
+id: read-edit-done
+steps:
+  - say: "Let me look at the file first."
+    tool:
+      name: Read
+      arguments: {file_path: /tmp/a.go}
+  - tool:
+      name: Edit
+      arguments: {file_path: /tmp/a.go, old_string: foo, new_string: bar}
+  - 429
+  - say: "Done — foo is now bar."
+    usage: {input: 1200, output: 40, cache_read: 1000}

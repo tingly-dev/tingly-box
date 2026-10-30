@@ -561,7 +561,8 @@ steps:
 ```
 
 Each protocol runs its own copy of the program (its own cursor), so calls on one
-wire never consume steps of the other. Schema, loading rules and phasing: `.design/vmodel-script.md`.
+wire never consume steps of the other. Check it end to end with `go run ./cli/harness script read-edit.yaml`.
+Schema, loading rules and phasing: `.design/vmodel-script.md`.
 
 ## Benchmarking (`benchmark/`)
 

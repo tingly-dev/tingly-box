@@ -1,0 +1,7 @@
+# An upstream that overloads, then drops a stream part-way, then recovers.
+id: flaky-stream
+steps:
+  - status: 529
+  - say: "This answer is cut off before it completes."
+    midstream: {mode: eof, after_events: 3}
+  - say: "Recovered."
