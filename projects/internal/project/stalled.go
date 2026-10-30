@@ -41,18 +41,17 @@ func (m *Threads) CheckStalled(now time.Time) {
 		}
 		quiet := now.Sub(last)
 		m.mu.Lock()
-		flagged := m.stalled[t.ID]
-		switch {
-		case quiet < after:
+		report := quiet >= after && !m.stalled[t.ID]
+		if quiet < after {
 			delete(m.stalled, t.ID)
-		case !flagged:
+		} else {
 			if m.stalled == nil {
 				m.stalled = map[string]bool{}
 			}
 			m.stalled[t.ID] = true
 		}
 		m.mu.Unlock()
-		if quiet < after || flagged || m.OnReport == nil {
+		if !report || m.OnReport == nil {
 			continue
 		}
 		t := t
