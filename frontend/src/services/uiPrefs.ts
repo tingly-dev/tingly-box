@@ -17,8 +17,6 @@ import { controlApi } from './openapi';
 const SYNCED: Array<string | RegExp> = [
     'scenario.hiddenScenarios',
     'scenario.hiddenDefaultsVersion',
-    // Quick Start progress per agent (AgentSetupCard).
-    /^setup-card-/,
 ];
 
 export const isSyncedKey = (key: string): boolean =>

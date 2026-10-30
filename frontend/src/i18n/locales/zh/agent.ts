@@ -13,7 +13,9 @@ export default {
   },
   "agentInstall": {
     "label": "安装",
-    "mirror": "安装（镜像源）",
+    "official": "官方源",
+    "mirror": "镜像源",
+    "mirrorTooltip": "从镜像源安装（部分地区更快）",
     "copy": "点击复制"
   },
   "agentAccess": {

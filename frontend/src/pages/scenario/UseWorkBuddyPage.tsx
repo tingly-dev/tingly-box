@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
 import WorkBuddyConfigModal from './components/WorkBuddyConfigModal';
 import { AgentPage, type AgentPageDescriptor, type AgentPageSlot } from './AgentPage';
-import type { AgentApplyResult } from './components/AgentSetupCard';
+import type { AgentApplyResult } from './components/agentSetup';
 
 const WORKBUDDY_DOCS_URL =
     'https://www.workbuddy.ai/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Model';
@@ -102,14 +102,11 @@ const workbuddy: AgentPageDescriptor = {
         apply: (t) => applyWorkBuddy(t),
         renderDialog: (slot) => <WorkBuddySetupDialog slot={slot} />,
     },
-    quickStart: {
+    install: {
         installDescriptionKey: 'scenarioPage.workbuddy.installDescription',
         installActions: (t) => [
             { label: t('scenarioPage.workbuddy.viewDocs'), href: WORKBUDDY_DOCS_URL, variant: 'outlined', external: true },
         ],
-        applyStepLabelKey: 'scenarioPage.workbuddy.applyStepLabel',
-        applyStepDescriptionKey: 'scenarioPage.workbuddy.applyStepDescription',
-        openDialogLabelKey: 'scenarioPage.workbuddy.openGuide',
     },
 };
 

@@ -12,7 +12,7 @@ import { ManualFileSection, type ManualFileTab } from './config/ManualFileSectio
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 import ClaudeCodeQuickConfig, { CLAUDE_CODE_DEFAULT_CO_AUTHORED_BY, CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES, coAuthoredBySettings, derivePrefsFromRules, prefsToEnvPreview } from './ClaudeCodeQuickConfig';
 import type { ClaudeCodeDefaultMode, ClaudeCodePrefs } from './ClaudeCodeQuickConfig';
-import type { AgentApplyResult } from './AgentSetupCard';
+import type { AgentApplyResult } from './agentSetup';
 import Context1MChangeBanner from './Context1MChangeBanner';
 import { api } from '@/services/api';
 import { restoreAppliedClaudeCodePrefs } from './claudeCodePrefsState';

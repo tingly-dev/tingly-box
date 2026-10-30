@@ -44,16 +44,13 @@ const dsh: AgentPageDescriptor = {
             />
         ),
     },
-    quickStart: {
+    install: {
         installCommand: 'npx @deepseek-ai/dsh web',
         installDescriptionKey: 'scenarioPage.dsh.installDescription',
         installActions: (t) => [
             { label: t('scenarioPage.dsh.openWebUi'), href: DSH_WEB_UI_URL, variant: 'contained', external: true },
             { label: t('scenarioPage.dsh.viewRepo'), href: DSH_REPO_URL, variant: 'outlined', external: true },
         ],
-        applyStepLabelKey: 'scenarioPage.dsh.applyStepLabel',
-        applyStepDescriptionKey: 'scenarioPage.dsh.applyStepDescription',
-        openDialogLabelKey: 'scenarioPage.dsh.openGuide',
     },
 };
 

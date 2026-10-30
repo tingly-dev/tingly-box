@@ -1,7 +1,7 @@
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
-import type { AgentApplyResult } from './components/AgentSetupCard';
+import type { AgentApplyResult } from './components/agentSetup';
 import ClaudeCodeConfigModal from './components/ClaudeCodeConfigModal';
 import { type ClaudeCodeDefaultMode, derivePrefsFromRules } from './components/ClaudeCodeQuickConfig';
 import { restoreAppliedClaudeCodePrefs } from './components/claudeCodePrefsState';
@@ -112,7 +112,7 @@ const claudeCode: AgentPageDescriptor = {
         applyContext1M,
         renderDialog: (slot) => <ClaudeCodeSetupDialog slot={slot} />,
     },
-    quickStart: {
+    install: {
         installCommand: 'npm install -g @anthropic-ai/claude-code',
         installMirrorCommand: 'npm install -g @anthropic-ai/claude-code --registry=https://registry.npmmirror.com',
     },

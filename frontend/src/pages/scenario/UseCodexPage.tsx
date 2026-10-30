@@ -40,7 +40,7 @@ const codex: AgentPageDescriptor = {
             />
         ),
     },
-    quickStart: {
+    install: {
         installCommand: 'npm install -g @openai/codex',
         installMirrorCommand: 'npm install -g @openai/codex --registry=https://registry.npmmirror.com',
     },

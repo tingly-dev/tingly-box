@@ -1,6 +1,6 @@
 # Agent 页 Quick Start 与安装入口
 
-状态：方案（TEP-2336）。尚未实施；实施后改写为现行契约。
+状态：已实施（TEP-2336）。
 
 ## 问题
 
@@ -21,20 +21,18 @@ Agent 页的 Quick Start 是四步卡：连 Provider、选模型、安装、应�
 2. 改成引导图并保留 Install：有教育价值，但图要三语维护、会过期、没有状态，Install 仍无处安放。
 3. Install 进头部：最省，无状态。
 
-## 决定
+## 现行契约
 
-3 + 2 并用（YZ）：
-
-- Install 是头部连接区里的普通一行，在 Base URL / API Key 之后，只展示命令（含镜像命令和各 Agent 的 `installActions`），不打勾、无状态，一直显示。
-- Quick Start 卡整个删除，连同进度键和重开/重置/隐藏。`connected` 改为 `configApplied || 发过请求 || 已有模型`，连接区折叠规则不变。
-- 下一步由头部唯一的实心主按钮指路：无 Provider → Connect AI；无模型 → Add model；其余 → Auto Config / Setup Guide；状态芯片说明原因。
-- "Quick Start" 此后只表示打开引导图。Claude Code 与 Codex 是主打，各有自己的引导图；其他 Agent 暂只有 Install 行和 Setup Guide。引导图是静态教育（SVG，文案走 i18n，随主题与语言变化），不跟踪进度。
+- Install 是头部连接区里的一行（Base URL / API Key 之后），像 Base URL 的 Local | Docker 一样用 官方 | 镜像 开关切换命令，复制按钮在行尾；没有命令的 Agent（VS Code 等）显示各自的安装链接。只展示，无状态，一直显示。
+- Quick Start 卡已删除，连同 `setup-card-*` 进度键和重开/重置/隐藏。`connected = 配置已应用 || 发过请求 || 已有模型`，连接区折叠规则不变。
+- 头部的 "Quick Start" 按钮打开已有的 Direct Routing Guide（`EntryGuideDialog`），不再有独立引导图；下一步由规则栏的 Connect AI / New Model 与头部状态芯片指路。
+- 共用的类型与 `hasModelOnAnyRule` / `scrollToModelsCard` 在 `components/agentSetup.ts`。
 
 ## 取舍与风险
 
 - 新用户失去"1 2 3 4"清单；靠主按钮、状态芯片和一键可达的引导图补偿，需在无 Provider / 仅 Provider / 仅模型 / 已应用四种状态下验证真实页面。
 - 无配置回读的 Agent（OpenCode、Pi、VS Code、WorkBuddy）的"已连上"只能靠"发过请求"。
-- 引导图随页面改动会过期：只用页面自己的 i18n 文案绘制，不用位图。
+- 为 Claude Code / Codex 单独画引导图的想法暂缓：复用已有引导页，等首次使用的反馈再决定。
 
 ## 范围外
 
