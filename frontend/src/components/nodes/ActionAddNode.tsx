@@ -89,8 +89,9 @@ export interface AddProviderNodeProps {
     /** Node variant only: the words under the plus, when the node adds
      * something more specific than a model (e.g. "Load balance"). */
     caption?: string;
-    /** Hidden until the rule is hovered (ROUTE_GRAPH_QUIET_CLASS). Off for a
-     * node that is the only thing in its place, e.g. an empty tier. */
+    /** Folds out of the layout until the rule is hovered or focused
+     * (ROUTE_GRAPH_QUIET_CLASS). Off for a node that is the only thing in its
+     * place, e.g. an empty tier, or one inside an already-folding quiet row. */
     quiet?: boolean;
 }
 

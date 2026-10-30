@@ -6,6 +6,7 @@ import {EntryGuideDialog} from '@/components/tier/EntryGuideDialog';
 import {
     getRouteGraphActiveColor,
     PROVIDER_NODE_STYLES,
+    ROUTE_GRAPH_QUIET_ROW_CLASS,
     routeGraphQuietSx,
     SMART_NODE_STYLES,
     SMALL_NODE_STYLES,
@@ -129,7 +130,6 @@ const StyledCard = styled(Card, {
     boxShadow: 'none',
     margin: "3px",
     position: 'relative',
-    '&:hover .rule-header-add-condition': {opacity: 1},
     ...routeGraphQuietSx,
     ...(active ? {} : {
         '&::before': {
@@ -470,26 +470,32 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     ))
                 ) : null}
 
-                {/* Add condition sits in the condition column; the turn-off node lines up with the service column */}
-                <GraphRow>
-                    <NodeContainer>
+                {/* Add condition sits in the condition column; the turn-off node lines up with the service column.
+                    The whole row is optional controls: it folds away at rest (the nodes themselves stay
+                    full-size — the row carries the quiet behavior). */}
+                <Box className={ROUTE_GRAPH_QUIET_ROW_CLASS}>
+                    <GraphRow>
+                        <NodeContainer>
+                            <ActionAddNode
+                                label={t('rule.ruleConditions.addCondition')}
+                                active={active && !saving}
+                                onAdd={() => onAddSmartRule?.()}
+                                tooltip={conditionTooltip}
+                                quiet={false}
+                            />
+                        </NodeContainer>
+                        <Box sx={{visibility: 'hidden'}}><ArrowNode direction="forward"/></Box>
                         <ActionAddNode
-                            label={t('rule.ruleConditions.addCondition')}
+                            label={t('rule.ruleConditions.closeConditions')}
+                            icon="close"
+                            width={PROVIDER_NODE_STYLES.width}
                             active={active && !saving}
-                            onAdd={() => onAddSmartRule?.()}
-                            tooltip={conditionTooltip}
+                            onAdd={() => onSwitchRoutingMode?.()}
+                            tooltip={t('rule.ruleConditions.closeConditionsTooltip')}
+                            quiet={false}
                         />
-                    </NodeContainer>
-                    <Box sx={{visibility: 'hidden'}}><ArrowNode direction="forward"/></Box>
-                    <ActionAddNode
-                        label={t('rule.ruleConditions.closeConditions')}
-                        icon="close"
-                        width={PROVIDER_NODE_STYLES.width}
-                        active={active && !saving}
-                        onAdd={() => onSwitchRoutingMode?.()}
-                        tooltip={t('rule.ruleConditions.closeConditionsTooltip')}
-                    />
-                </GraphRow>
+                    </GraphRow>
+                </Box>
             </>
         );
     };
@@ -525,28 +531,34 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         const addCondition = !showSmartRouting;
         if (!addCondition && !canAddFallbackTier) return null;
         return (
-            <GraphRow>
-                <NodeContainer sx={{width: SMART_NODE_STYLES.width}}>
-                    {addCondition && (
+            // Optional controls only: the row folds away at rest, so no blank
+            // strip is reserved under the tiers (nodes stay full-size).
+            <Box className={ROUTE_GRAPH_QUIET_ROW_CLASS}>
+                <GraphRow>
+                    <NodeContainer sx={{width: SMART_NODE_STYLES.width}}>
+                        {addCondition && (
+                            <ActionAddNode
+                                label={t('rule.ruleConditions.addCondition')}
+                                active={active && !saving}
+                                onAdd={handleAddCondition}
+                                tooltip={conditionTooltip}
+                                quiet={false}
+                            />
+                        )}
+                    </NodeContainer>
+                    <Box sx={{visibility: 'hidden'}}><ArrowNode direction="forward"/></Box>
+                    {canAddFallbackTier && (
                         <ActionAddNode
-                            label={t('rule.ruleConditions.addCondition')}
+                            label={t('rule.nodes.fallbackTier')}
+                            width={PROVIDER_NODE_STYLES.width}
                             active={active && !saving}
-                            onAdd={handleAddCondition}
-                            tooltip={conditionTooltip}
+                            onAdd={() => setPendingTier(true)}
+                            tooltip={t('rule.tooltips.fallbackTier')}
+                            quiet={false}
                         />
                     )}
-                </NodeContainer>
-                <Box sx={{visibility: 'hidden'}}><ArrowNode direction="forward"/></Box>
-                {canAddFallbackTier && (
-                    <ActionAddNode
-                        label={t('rule.nodes.fallbackTier')}
-                        width={PROVIDER_NODE_STYLES.width}
-                        active={active && !saving}
-                        onAdd={() => setPendingTier(true)}
-                        tooltip={t('rule.tooltips.fallbackTier')}
-                    />
-                )}
-            </GraphRow>
+                </GraphRow>
+            </Box>
         );
     };
 
