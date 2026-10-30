@@ -66,6 +66,9 @@ export interface GenerationRun {
     // alongside the output — the "what did I ask for" half of the history card
     // (only set when the run went through `edits`).
     sourceImages?: string[];
+    // The files behind `sourceImages` (blob: URLs), persisted instead of base64
+    // copies; `sourceImages` is rebuilt from them on restore.
+    sourceBlobs?: Blob[];
     // The mask the request carried, if any. It turns the endpoint line into
     // `images/edits · mask`, so someone about to call the API from their own
     // code sees which field produced this result — and it is the whole mask

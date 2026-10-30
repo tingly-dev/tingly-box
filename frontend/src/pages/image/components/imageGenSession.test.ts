@@ -106,6 +106,18 @@ describe('reviveSessionBlobs', () => {
     });
 });
 
+describe('reviveSessionBlobs sources', () => {
+    it('rebuilds a run\'s reference URLs from the files it kept', () => {
+        const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock/src');
+        const saved = run({ id: 'r2', sourceImages: ['blob:mock/stale'], sourceBlobs: [new Blob(['z'])] });
+        const legacy = run({ id: 'r3', sourceImages: ['data:image/png;base64,aW1n'] });
+        reviveSessionBlobs([saved, legacy], []);
+        expect(saved.sourceImages).toEqual(['blob:mock/src']);
+        expect(legacy.sourceImages).toEqual(['data:image/png;base64,aW1n']);
+        create.mockRestore();
+    });
+});
+
 describe('runImage', () => {
     it('carries the run request and the image identity into the lightbox', () => {
         const r = run({ id: 'r1', prompt: 'a bonsai', model: 'gpt-image-1' });

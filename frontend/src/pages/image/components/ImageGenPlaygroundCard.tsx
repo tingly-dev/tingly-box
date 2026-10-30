@@ -670,11 +670,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         setLibraryPickerOpen(false);
         const refs = await Promise.all(assets.map(async (asset): Promise<ReferenceImage> => {
             const blob = await fetchBlob(asset.src);
+            const file = new File([blob], asset.name, { type: blob.type || 'image/png' });
             return {
-                file: new File([blob], asset.name, { type: blob.type || 'image/png' }),
-                // The asset's own src, so the row (and a profile) points at the
-                // library image rather than a copy of it.
-                previewUrl: asset.src,
+                file,
+                previewUrl: URL.createObjectURL(file),
                 source: 'upload',
                 width: asset.width,
                 height: asset.height,

@@ -42,13 +42,32 @@ lightbox filmstrip and the sidebar's profile icon all drew the original (a
 20px sidebar icon decoded a full reference image on every page). They render
 through `ThumbImage` now.
 
+## References are files, previews are blob URLs
+
+A reference (`ReferenceImage`) is its `file`; `previewUrl` is only how a page
+shows it. Every new reference gets `URL.createObjectURL(file)` (upload, paste
+from an output, library pick, sketch, run re-entry) instead of a base64 copy.
+Because a blob: URL does not outlive the page:
+
+- `imageProfileStore.reviveProfile` rebuilds `previewUrl` from `file` on load.
+  Profiles saved by older builds carry a base64 copy; those are rewritten once
+  without it (new object → the store saves it). The rest are fixed in place,
+  like `reviveSessionBlobs`, so a load does not rewrite every profile.
+- `GenerationRun.sourceBlobs` keeps the files behind `sourceImages`;
+  `reviveSessionBlobs` rebuilds `sourceImages` from them. Old runs without
+  `sourceBlobs` keep their data URLs.
+- `SketchResult` no longer carries a `previewUrl`; the canvas is not encoded a
+  second time.
+
+Measured on 5 profiles × 3 × 1024px references: the boot-time profile read
+went from ~300 ms to ~220 ms and no longer leaves ~65 MB of base64 strings
+resident on every page. The sidebar still reads the whole collection (files
+are blob handles, so this is cheap); a split summary record is not worth it
+until profiles carry far more than references.
+
 ## Still open
 
-- `imageProfileStore` is read eagerly on every page (the sidebar lists
-  profiles), including each profile's reference `File` **and** a base64
-  `previewUrl` copy of the same image. A profile with a few large references
-  costs hundreds of ms of main-thread IndexedDB deserialisation at boot.
-  Fixing it means dropping the duplicate `previewUrl` (derive it from `file`),
-  which also touches `GenerationRun.sourceImages` (data URLs by design: they
-  must survive a reload and be re-sendable).
-- Run `sourceImages` and library assets are still data URLs.
+- Library assets (`ImageAsset.src`) are still data URLs; the library page and
+  picker thumbnail them, but the strings are resident while those pages are
+  open.
+- Sketch `layers.backdrop` is a data URL (only when a backdrop was loaded).

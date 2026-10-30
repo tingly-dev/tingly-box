@@ -135,6 +135,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
             count: request.count,
             images: [],
             sourceImages: endpoint === 'edits' ? request.sources.map((ref) => ref.previewUrl) : undefined,
+            sourceBlobs: endpoint === 'edits' ? request.sources.map((ref) => ref.file) : undefined,
             mask: request.sources[0]?.mask,
             status: 'pending',
         };
@@ -196,17 +197,18 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
         inFlightRef.current.get(id)?.abort();
     }, []);
 
-    // A run's references only survive as data URLs, so they are read back into
-    // files here — the shape both retry (same request again) and re-entry (same
+    // A run's references survive as blob URLs (or, in old sessions, data URLs), so
+    // they are read back into files here — the shape both retry (same request again) and re-entry (same
     // request, editable) need. The bytes and the pixel size come from two
-    // independent decodes of the same data URL, so they are awaited together
+    // independent decodes of the same image, so they are awaited together
     // rather than one after the other.
     const runSourcesToReferences = useCallback((run: GenerationRun): Promise<ReferenceImage[]> => Promise.all(
         (run.sourceImages ?? []).map(async (src, index): Promise<ReferenceImage> => {
             const [blob, size] = await Promise.all([fetchBlob(src), readImageSize(src)]);
+            const file = new File([blob], `reference-${index + 1}.png`, { type: blob.type || 'image/png' });
             return {
-                file: new File([blob], `reference-${index + 1}.png`, { type: blob.type || 'image/png' }),
-                previewUrl: src,
+                file,
+                previewUrl: URL.createObjectURL(file),
                 source: 'upload',
                 ...(size ?? {}),
                 // The mask comes back with the image it was painted on, so a
