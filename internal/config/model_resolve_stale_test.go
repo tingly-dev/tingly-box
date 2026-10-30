@@ -117,3 +117,45 @@ func TestResolveProviderModels_ManualRefreshInvalidatesCache(t *testing.T) {
 	assert.Equal(t, ModelListSourceCache, got.Source)
 	assert.Equal(t, 3, hits, "successful save clears the invalidation")
 }
+
+// A cleared cache plus a slow upstream must not hold the read path for the
+// whole fetch timeout: it answers with a stand-in after modelListReadWait while
+// the fetch finishes in the background and fills the cache for the next read.
+func TestResolveProviderModels_CacheMiss_SlowUpstream_DoesNotBlock(t *testing.T) {
+	release := make(chan struct{})
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		<-release
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"slow-model","object":"model"}]}`))
+	}))
+	defer upstream.Close()
+	defer close(release)
+
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	require.NoError(t, err)
+	p := &typ.Provider{
+		Name:     "slow",
+		APIBase:  upstream.URL + "/v1",
+		APIStyle: protocol.APIStyleOpenAI,
+		AuthType: typ.AuthTypeAPIKey,
+		Token:    "x",
+		Enabled:  true,
+	}
+	require.NoError(t, cfg.AddProvider(p))
+
+	start := time.Now()
+	got, err := cfg.ResolveProviderModels(false, false, p.UUID)
+	require.NoError(t, err)
+	assert.Less(t, time.Since(start), modelListReadWait+3*time.Second)
+	assert.True(t, got.Fetching, "stand-in must be flagged so the client retries soon")
+
+	release <- struct{}{}
+	require.Eventually(t, func() bool {
+		return len(cfg.GetModelManager().GetModels(p.UUID)) > 0
+	}, 5*time.Second, 50*time.Millisecond, "background fetch should fill the cache")
+
+	again, err := cfg.ResolveProviderModels(false, false, p.UUID)
+	require.NoError(t, err)
+	assert.False(t, again.Fetching)
+	assert.Equal(t, []string{"slow-model"}, again.Models)
+}

@@ -23,3 +23,12 @@ func TestModelListExpiry_FollowsFetchTime(t *testing.T) {
 		t.Fatalf("stale expiry too far out: %v", stale)
 	}
 }
+
+// A stand-in served while the upstream fetch is still running expires soon so
+// the browser re-asks instead of holding it for a TTL.
+func TestModelListExpiry_FetchingIsShort(t *testing.T) {
+	got := modelListExpiry(config.ResolvedModels{Source: config.ModelListSourceTemplate, Fetching: true})
+	if got.After(time.Now().Add(time.Minute)) {
+		t.Fatalf("fetching expiry too far out: %v", got)
+	}
+}

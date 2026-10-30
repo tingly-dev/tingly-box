@@ -100,7 +100,7 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             }] : [];
         }),
         // VModel — the built-in synthetic providers (onboarding, demos,
-        // dry-runs). On by default: it only hides/shows the Credentials
+        // dry-runs). Off by default: it only hides/shows the Credentials
         // sidebar row, the providers themselves keep working.
         {
             key: 'vmodel',
