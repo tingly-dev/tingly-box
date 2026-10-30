@@ -210,10 +210,28 @@ export const nodeSpotlightSx = (theme: Theme) => ({
 // its routing. Devices without hover always show them.
 export const ROUTE_GRAPH_QUIET_CLASS = 'route-graph-quiet';
 
+/** A row of quiet controls that takes no height until the card is hovered:
+ * it opens below the graph instead of leaving a blank row at rest. The
+ * negative margin cancels the column gap above it while it is closed. */
+export const ROUTE_GRAPH_REVEAL_CLASS = 'route-graph-reveal';
+
+const revealOpen = { maxHeight: 64, marginTop: 0, opacity: 1 };
+
 export const routeGraphQuietSx = {
     [`& .${ROUTE_GRAPH_QUIET_CLASS}`]: { opacity: 0, transition: 'opacity 0.16s ease' },
     [`&:hover .${ROUTE_GRAPH_QUIET_CLASS}, &:focus-within .${ROUTE_GRAPH_QUIET_CLASS}`]: { opacity: 1 },
-    '@media (hover: none)': { [`& .${ROUTE_GRAPH_QUIET_CLASS}`]: { opacity: 1 } },
+    [`& .${ROUTE_GRAPH_REVEAL_CLASS}`]: {
+        maxHeight: 0,
+        marginTop: -4,
+        opacity: 0,
+        overflow: 'hidden',
+        transition: 'max-height 0.18s ease, margin-top 0.18s ease, opacity 0.16s ease',
+    },
+    [`&:hover .${ROUTE_GRAPH_REVEAL_CLASS}, &:focus-within .${ROUTE_GRAPH_REVEAL_CLASS}`]: revealOpen,
+    '@media (hover: none)': {
+        [`& .${ROUTE_GRAPH_QUIET_CLASS}`]: { opacity: 1 },
+        [`& .${ROUTE_GRAPH_REVEAL_CLASS}`]: revealOpen,
+    },
 } as const;
 
 // Service node container (formerly ProviderNodeContainer)

@@ -28,14 +28,16 @@ the guide can be reopened there.
   tiers: `Request` while there are no conditions, `Others` once there are (both
   untranslated; "Default" read as a setting, not as traffic). The contextual
   "View direct/smart guide →" links sit in hover tooltips: the entry node
-  (Direct guide), the "+ Add smart condition" node stacked under `Request` (Smart
-  guide, the only place to reach it while there are no conditions) and the
+  (Direct guide), the "+ Add smart condition" node in the rule's last row (Smart guide,
+  the only place to reach it while there are no conditions) and the
   standalone "Add smart condition" node. They are separate from the toolbar entry.
   No hint line explains the order of conditions: the numbers and `Others` say it.
 - Dashed add / turn-off controls are quiet: hidden until the rule card is hovered
   or focused (always shown on touch), so a card at rest shows only traffic. A
   dashed control that is the only thing in its place (an empty tier or condition)
-  stays visible.
+  stays visible. The rows that hold only controls (add / turn off conditions
+  under the conditions; add condition and Fallback tier under the tiers) take no
+  height at rest and open on hover, so a quiet card is as short as its traffic.
 - Turning conditions on and off is explicit in two places: the dashed "Turn off
   smart condition" node next to "Add smart condition", and one state-dependent
   item in the rule's ⋯ menu (add / turn off / turn on). Adding while off

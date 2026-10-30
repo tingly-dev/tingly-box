@@ -2,7 +2,6 @@ import { Box, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import ActionAddNode from './ActionAddNode';
 import NodeTooltip from './NodeTooltip';
 import {
     getRouteGraphActiveColor,
@@ -12,7 +11,7 @@ import {
     StyledSmartNodeWrapper,
 } from './styles.tsx';
 
-/** As tall as a "wide" ActionAddNode, so the entry and the add node below it match. */
+/** As tall as a "wide" ActionAddNode, like the add / turn-off controls. */
 const ENTRY_NODE_HEIGHT = 34;
 
 export interface ServiceEntryNodeProps {
@@ -20,25 +19,19 @@ export interface ServiceEntryNodeProps {
     active: boolean;
     /** Hover teaching for the node. */
     tooltip?: React.ReactNode;
-    /** Conditions are off: the node is the whole rule's entry ("Request") and
-     * "+ Add smart condition" sits below it. Conditions on: it is the path for
-     * requests no condition matched ("Others"), with nothing below it. */
-    onAddCondition?: () => void;
-    addConditionLabel?: string;
-    /** Tooltip of the add node (the smart-routing guide). */
-    addTooltip?: React.ReactNode;
+    /** Conditions on: the node is the path for requests no condition matched
+     * ("Others"). Off: it is the whole rule's entry ("Request"). */
+    others?: boolean;
 }
 
 export const ServiceEntryNode: React.FC<ServiceEntryNodeProps> = ({
     active,
     tooltip,
-    onAddCondition,
-    addConditionLabel,
-    addTooltip,
+    others,
 }) => {
     const { t } = useTranslation();
     // The node lines up with the arrow and T0, which sit in the middle of a
-    // service-node-tall row; the add node hangs below it.
+    // service-node-tall row.
     const top = (PROVIDER_NODE_STYLES.height - ENTRY_NODE_HEIGHT) / 2;
     const node = (
         <StyledSmartNodeWrapper>
@@ -61,22 +54,14 @@ export const ServiceEntryNode: React.FC<ServiceEntryNodeProps> = ({
                 })}
             >
                 <Typography sx={{ ...NODE_LAYER_STYLES.typography, color: 'text.secondary' }}>
-                    {onAddCondition ? t('rule.ruleConditions.requestTitle') : t('rule.ruleConditions.othersTitle')}
+                    {others ? t('rule.ruleConditions.othersTitle') : t('rule.ruleConditions.requestTitle')}
                 </Typography>
             </Box>
         </StyledSmartNodeWrapper>
     );
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, pt: `${top}px` }}>
+        <Box sx={{ pt: `${top}px` }}>
             {tooltip ? <NodeTooltip title={tooltip} placement="top">{node}</NodeTooltip> : node}
-            {onAddCondition && (
-                <ActionAddNode
-                    label={addConditionLabel}
-                    active={active}
-                    onAdd={onAddCondition}
-                    tooltip={addTooltip}
-                />
-            )}
         </Box>
     );
 };

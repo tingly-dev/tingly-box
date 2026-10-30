@@ -6,13 +6,11 @@ import {EntryGuideDialog} from '@/components/tier/EntryGuideDialog';
 import {
     getRouteGraphActiveColor,
     PROVIDER_NODE_STYLES,
-    ROUTE_GRAPH_QUIET_CLASS,
+    ROUTE_GRAPH_REVEAL_CLASS,
     routeGraphQuietSx,
     SMART_NODE_STYLES,
     SMALL_NODE_STYLES,
 } from '@/components/nodes/styles';
-import {Add as AddIcon} from '@/components/icons';
-import {fontSizes} from '@/theme/fonts';
 import {
     ActionAddNode,
     ArrowNode,
@@ -403,42 +401,6 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     </Box>
                     );
                 })}
-                {/* A tier below is only for when every tier above is down, so it
-                    is named for that, apart from adding a model to a tier. */}
-                {canAddTier && !pendingTier && (
-                    <NodeTooltip title={t('rule.tooltips.fallbackTier')} placement="right">
-                        <Box
-                            className={ROUTE_GRAPH_QUIET_CLASS}
-                            role="button"
-                            tabIndex={active && !saving ? 0 : -1}
-                            aria-label={t('rule.nodes.fallbackTier')}
-                            onClick={active && !saving ? () => setPendingTier(true) : undefined}
-                            onKeyDown={(e) => {
-                                if (active && !saving && (e.key === 'Enter' || e.key === ' ')) {
-                                    e.preventDefault();
-                                    setPendingTier(true);
-                                }
-                            }}
-                            sx={(theme) => ({
-                                alignSelf: 'flex-start',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 0.5,
-                                height: 22,
-                                mt: -0.5,
-                                px: 1,
-                                borderRadius: `${theme.shape.borderRadius}px`,
-                                color: 'text.secondary',
-                                fontSize: fontSizes.xs,
-                                cursor: active && !saving ? 'pointer' : 'default',
-                                '&:hover, &:focus-visible': {color: 'primary.main', outline: 'none'},
-                            })}
-                        >
-                            <AddIcon sx={{fontSize: 14}}/>
-                            {t('rule.nodes.fallbackTier')}
-                        </Box>
-                    </NodeTooltip>
-                )}
             </Box>
         );
     }, [pendingTier, t, tierGroups, active, saving, record.providers.length, getApiStyle, providers, onDeleteService, onServiceNodeClick, onEditProvider, onTierChange, onAddService, hoveredTier, guideMode, handleShowGuide]);
@@ -510,7 +472,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 ) : null}
 
                 {/* Add condition sits in the condition column; the turn-off node lines up with the service column */}
-                <GraphRow>
+                <GraphRow className={ROUTE_GRAPH_REVEAL_CLASS}>
                     <NodeContainer>
                         <ActionAddNode
                             label={t('rule.ruleConditions.addCondition')}
@@ -542,9 +504,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     providersCount={record.providers.length}
                     active={active && !saving}
                     tooltip={defaultTooltip}
-                    onAddCondition={showSmartRouting ? undefined : handleAddCondition}
-                    addConditionLabel={t('rule.ruleConditions.addCondition')}
-                    addTooltip={conditionTooltip}
+                    others={showSmartRouting}
                 />
             </NodeContainer>
 
@@ -555,6 +515,41 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
             {renderTierLayout()}
         </GraphRow>
     );
+
+    // The rule's last row, like the conditions' add / turn-off row: add a
+    // condition under the entry, a fallback tier under the tiers. A tier
+    // below is only for when every tier above is down, so it is named for
+    // that, apart from adding a model to a tier.
+    const lastTier = tierGroups.length > 0 ? tierGroups[tierGroups.length - 1] : undefined;
+    const canAddFallbackTier = !guideMode && !pendingTier && !!lastTier && lastTier.providers.length > 0;
+    const renderAddRow = () => {
+        const addCondition = !showSmartRouting;
+        if (!addCondition && !canAddFallbackTier) return null;
+        return (
+            <GraphRow className={ROUTE_GRAPH_REVEAL_CLASS}>
+                <NodeContainer sx={{width: SMART_NODE_STYLES.width}}>
+                    {addCondition && (
+                        <ActionAddNode
+                            label={t('rule.ruleConditions.addCondition')}
+                            active={active && !saving}
+                            onAdd={handleAddCondition}
+                            tooltip={conditionTooltip}
+                        />
+                    )}
+                </NodeContainer>
+                <Box sx={{visibility: 'hidden'}}><ArrowNode direction="forward"/></Box>
+                {canAddFallbackTier && (
+                    <ActionAddNode
+                        label={t('rule.nodes.fallbackTier')}
+                        width={PROVIDER_NODE_STYLES.width}
+                        active={active && !saving}
+                        onAdd={() => setPendingTier(true)}
+                        tooltip={t('rule.tooltips.fallbackTier')}
+                    />
+                )}
+            </GraphRow>
+        );
+    };
 
     return (
         <StyledCard active={active}>
@@ -614,6 +609,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                     <Box sx={{display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5}}>
                                         {renderSmartRules()}
                                         {renderDefaultProviders()}
+                                        {renderAddRow()}
                                     </Box>
                                 </GraphContainer>
                             </Box>
