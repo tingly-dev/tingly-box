@@ -1,5 +1,4 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { Box } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { SCENARIOS, getHiddenScenarios, getPinnedScenarios } from '@/pages/scenario/scenarioRegistry';
 import { OpenAI, Anthropic, Claude, Cursor, DeepSeek, OpenCode, Pi, WorkBuddy, Xcode, VSCode, Codex, ClaudeDesktop } from '../components/BrandIcons';
