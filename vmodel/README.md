@@ -561,7 +561,9 @@ steps:
 ```
 
 Each protocol runs its own copy of the program (its own cursor), so calls on one
-wire never consume steps of the other. Check it end to end with `go run ./cli/harness script read-edit.yaml`.
+wire never consume steps of the other. Request `read-edit@my-test` instead of
+`read-edit` for a private run of its own (a *session*); the plain name is the
+shared default. Check it end to end with `go run ./cli/harness script read-edit.yaml`.
 Schema, loading rules and phasing: `.design/vmodel-script.md`.
 
 ## Benchmarking (`benchmark/`)

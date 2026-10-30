@@ -28,20 +28,22 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import shutil
 import socket
 import subprocess
 import tempfile
+import re
 import time
 import urllib.error
 import urllib.request
+import uuid
 
 from .client import TinglyError
 
 SCRIPT_DIR = "vmodels"
 DEFAULT_BASE_URL = "http://localhost:12580"
 _MIDSTREAM_MODES = ("close", "event", "eof")
+_SESSION_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 
 class ScriptError(RuntimeError):
@@ -348,6 +350,13 @@ class Testbed:
 
     # -- calling ---------------------------------------------------------------
 
+    def session(self, name: str | None = None) -> "Session":
+        """A fresh, isolated run of every script on this tb. Calls made through
+        it (or with `session.model(script)` as the model name) walk their own
+        copy of each program, so concurrent tests and conversations never
+        consume each other's steps. `name` defaults to a random id."""
+        return Session(self, name)
+
     @property
     def anthropic_base(self) -> str:
         return f"{self.base_url}/virtual/anthropic"
@@ -380,6 +389,38 @@ class Testbed:
                 return json.load(resp)
         except urllib.error.HTTPError as exc:
             raise TinglyError(exc.code, exc.read().decode("utf-8", "replace")) from exc
+
+
+class Session:
+    """An isolated run of the scripts on a `Testbed` — what tb calls a session:
+    requesting model `<script>@<session>` gives that session its own cursor
+    through the program (the plain model name is the shared default session).
+    Sessions start on first use and need no cleanup; re-adding a script
+    restarts every session's run of it.
+
+        s = tb.session()
+        s.messages(flow, "go")           # step 1 of flow, for this session only
+        client.messages.create(model=s.model(flow), ...)   # any SDK or agent
+    """
+
+    def __init__(self, testbed: "Testbed", name: str | None = None):
+        name = name or uuid.uuid4().hex[:12]
+        if not _SESSION_ID.match(name):
+            raise ValueError(f"session name {name!r}: use 1-64 characters of A-Z a-z 0-9 . _ -")
+        self._tb = testbed
+        self.id = name
+
+    def model(self, script: "Script | str") -> str:
+        """The model name that selects this session's run of `script`."""
+        return f"{script.id if isinstance(script, Script) else script}@{self.id}"
+
+    def messages(self, script: "Script | str", content: "str | list", **body) -> dict:
+        """`Testbed.messages` in this session."""
+        return self._tb.messages(self.model(script), content, **body)
+
+    def chat(self, script: "Script | str", content: "str | list", **body) -> dict:
+        """`Testbed.chat` in this session."""
+        return self._tb.chat(self.model(script), content, **body)
 
 
 def _read_config(config_dir: str) -> dict:

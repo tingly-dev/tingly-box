@@ -65,6 +65,11 @@ each protocol has its own place in the program, so a call on one never
 consumes a step of the other. Within one protocol every caller shares the
 place; re-adding the script (`tb.add(flow)`) restarts it.
 
+- **Sessions isolate runs.** Callers of one model share its place in the
+  program, so concurrent tests would consume each other's steps. `s = tb.session()`
+  gives your test its own run: `s.messages(flow, ...)`, or hand any SDK/agent
+  `s.model(flow)` (`"read-edit@<id>"`) as the model name. Re-adding the script
+  restarts every session.
 - **Needs a tb binary**: `TINGLY_TB_BIN`, `tb_bin=...`, or `tingly-box` on
   `PATH` (`go build -o tb ./cli/tingly-box` builds one).
 - **Already running tb?** `Testbed.attach(flow)` writes into its config dir

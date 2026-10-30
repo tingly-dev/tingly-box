@@ -32,11 +32,11 @@ def run_tool(name: str, args: dict) -> str:
     return f"(ran {name} {args})"
 
 
-def agent(tb: vmodel.Testbed, prompt: str) -> str:
+def agent(session: vmodel.Session, prompt: str) -> str:
     messages = [{"role": "user", "content": prompt}]
     for turn in range(1, 10):
         try:
-            reply = tb.messages(FLOW.model, messages)
+            reply = session.messages(FLOW, messages)
         except TinglyError as exc:
             print(f"  turn {turn}: HTTP {exc.status} — retrying")
             continue
@@ -56,4 +56,6 @@ if __name__ == "__main__":
     testbed = vmodel.Testbed.attach(FLOW) if "--attach" in sys.argv else vmodel.Testbed(FLOW)
     with testbed as tb:
         print(f"tb at {tb.base_url}; model {FLOW.model!r} (Anthropic base_url: {tb.anthropic_base})")
-        print("answer:", agent(tb, "rename foo to bar in a.go"))
+        # A session is this agent's own run of the script: nothing else calling
+        # the model (another test, a second agent) can consume its steps.
+        print("answer:", agent(tb.session(), "rename foo to bar in a.go"))
