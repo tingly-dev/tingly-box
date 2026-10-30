@@ -220,6 +220,27 @@ export const ROUTE_GRAPH_QUIET_ROW_CLASS = 'route-graph-quiet-row';
 const quietTransition =
     'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease, max-width 0.2s ease';
 
+// Expanded geometry, shared by hover, keyboard focus, and touch (no-hover
+// devices). Overflow is released when expanded: the fold's clip would
+// otherwise cut the node's hover lift (-2px) and its emphasis ring.
+const quietNodeExpanded = {
+    maxWidth: SMALL_NODE_STYLES.width,
+    opacity: 1,
+    pointerEvents: 'auto',
+    overflow: 'visible',
+} as const;
+
+// Generous headroom over the row's content (~42px) — the fold must never clip
+// the row it reveals.
+const QUIET_ROW_MAX_HEIGHT = 120;
+
+const quietRowExpanded = {
+    maxHeight: QUIET_ROW_MAX_HEIGHT,
+    opacity: 1,
+    pointerEvents: 'auto',
+    overflow: 'visible',
+} as const;
+
 export const routeGraphQuietSx = {
     // Node variant: the trailing "Load balance" controls. Folds to zero width
     // (max-width overrides the node's fixed width) — the row shrinks by the
@@ -242,40 +263,17 @@ export const routeGraphQuietSx = {
         pointerEvents: 'none',
         transition: 'opacity 0.16s ease, max-height 0.2s ease',
     },
-    // Hover or keyboard focus unfolds both back into place, clickable. Overflow
-    // is released too: the fold's clip would otherwise cut the node's hover
-    // lift (-2px) and its emphasis ring at the top of the box.
-    [`&:hover .${ROUTE_GRAPH_QUIET_CLASS}, &:focus-within .${ROUTE_GRAPH_QUIET_CLASS}`]: {
-        maxWidth: SMALL_NODE_STYLES.width,
-        opacity: 1,
-        pointerEvents: 'auto',
-        overflow: 'visible',
-    },
-    [`&:hover .${ROUTE_GRAPH_QUIET_ROW_CLASS}, &:focus-within .${ROUTE_GRAPH_QUIET_ROW_CLASS}`]: {
-        maxHeight: 120,
-        opacity: 1,
-        pointerEvents: 'auto',
-        overflow: 'visible',
-    },
+    [`&:is(:hover, :focus-within) .${ROUTE_GRAPH_QUIET_CLASS}`]: quietNodeExpanded,
+    [`&:is(:hover, :focus-within) .${ROUTE_GRAPH_QUIET_ROW_CLASS}`]: quietRowExpanded,
     // Action-bar nodes inside a folding row stay put when hovered: the row
     // already moves downward as it opens, and the nodes' own hover lift
     // (translateY(-2px)) would read as a two-direction jump.
-    [`&:hover .${ROUTE_GRAPH_QUIET_ROW_CLASS} .MuiBox-root, &:focus-within .${ROUTE_GRAPH_QUIET_ROW_CLASS} .MuiBox-root`]: {
+    [`&:is(:hover, :focus-within) .${ROUTE_GRAPH_QUIET_ROW_CLASS} .MuiBox-root`]: {
         transform: 'none',
     },
     '@media (hover: none)': {
-        [`& .${ROUTE_GRAPH_QUIET_CLASS}`]: {
-            maxWidth: SMALL_NODE_STYLES.width,
-            opacity: 1,
-            pointerEvents: 'auto',
-            overflow: 'visible',
-        },
-        [`& .${ROUTE_GRAPH_QUIET_ROW_CLASS}`]: {
-            maxHeight: 120,
-            opacity: 1,
-            pointerEvents: 'auto',
-            overflow: 'visible',
-        },
+        [`& .${ROUTE_GRAPH_QUIET_CLASS}`]: quietNodeExpanded,
+        [`& .${ROUTE_GRAPH_QUIET_ROW_CLASS}`]: quietRowExpanded,
     },
 } as const;
 
