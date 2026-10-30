@@ -159,6 +159,7 @@ const (
 	// The project conversation (a main thread's events).
 	EvThreadStarted = "thread_started" // the coordinator started threads (payload: thread ids)
 	EvSuggestions   = "suggestions"    // the coordinator proposed threads (payload: suggestions)
+	EvDecision      = "decision"       // the coordinator asked the user to pick an option (payload: the decision)
 	EvThreadUpdate  = "thread_update"  // a thread finished, failed or needs input
 	EvReport        = "report"         // end-of-turn summary sent to the coordinator
 	// Kept for folder threads only (their pages render subagents and

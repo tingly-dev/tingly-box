@@ -12,7 +12,7 @@ import { Markdown } from '../Markdown';
 import { useMessageDetail } from '../../hooks/useMessageDetail';
 import { MessageDetailControl } from '../MessageDetailControl';
 import { showManagerMessage } from './messageDetail';
-import { ChevronRight, DiffIcon, ErrorOutline, ExpandMore, PlayArrow } from '../icons';
+import { Check, ChevronRight, DiffIcon, ErrorOutline, ExpandMore, PlayArrow } from '../icons';
 import { DiffDialog } from './DiffDialog';
 import { LoadEarlier } from './LoadEarlier';
 import { ThreadStateMark, ThreadBadges, ThreadSubtitle } from './threadStatus';
@@ -189,6 +189,70 @@ function SuggestionsCard({ message, threads, onStart, onOpen, disabled }: {
     );
 }
 
+interface DecisionPayload {
+    question: string;
+    context?: string;
+    options: { label: string; consequence?: string }[];
+    recommended: number;
+    reason?: string;
+    chosen?: number;
+}
+
+/**
+ * A question the coordinator needs answered: a choice that changes the goal
+ * or a step that cannot be undone. The recommended option leads; an answered
+ * card keeps the pick and drops the buttons.
+ */
+function DecisionCard({ message, onChoose, disabled }: {
+    message: ThreadEvent;
+    onChoose: (messageId: string, index: number) => Promise<void>;
+    disabled: boolean;
+}) {
+    const { t } = useTranslation('projects');
+    const [busy, setBusy] = useState(false);
+    const d = parse<DecisionPayload>(message.payload);
+    if (!d) return null;
+    const answered = d.chosen !== undefined && d.chosen !== null;
+    const choose = async (index: number) => {
+        setBusy(true);
+        try {
+            await onChoose(message.id, index);
+        } finally {
+            setBusy(false);
+        }
+    };
+    return (
+        <Paper variant="outlined" sx={{ borderRadius: radius.card, p: 1.5 }}>
+            <Typography variant="overline" color="text.secondary">{t('conversation.decision')}</Typography>
+            <Typography sx={{ fontWeight: 600, fontSize: fontSizes.base, color: 'text.primary' }}>{d.question}</Typography>
+            {d.context && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, whiteSpace: 'pre-wrap' }}>{d.context}</Typography>}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mt: 1 }}>
+                {d.options.map((o, i) => {
+                    const picked = answered && d.chosen === i;
+                    const recommended = !answered && d.recommended === i;
+                    return (
+                        <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, borderRadius: radius.row, bgcolor: 'action.hover', opacity: answered && !picked ? 0.55 : 1 }}>
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography sx={{ fontWeight: 600, fontSize: fontSizes.base, color: 'text.primary' }}>
+                                    {o.label}
+                                    {recommended && <Chip size="small" label={t('conversation.recommended')} sx={{ ml: 1, height: 18 }} />}
+                                </Typography>
+                                {o.consequence && <Typography variant="body2" color="text.secondary">{o.consequence}</Typography>}
+                                {recommended && d.reason && <Typography variant="caption" color="text.secondary">{d.reason}</Typography>}
+                            </Box>
+                            {picked ? (
+                                <Check fontSize="small" color="primary" aria-label={t('conversation.chosen')} />
+                            ) : !answered && (
+                                <Button size="small" variant={recommended ? 'contained' : 'outlined'} disabled={busy || disabled} onClick={() => void choose(i)}>{t('conversation.choose')}</Button>
+                            )}
+                        </Box>
+                    );
+                })}
+            </Box>
+        </Paper>
+    );
+}
+
 const EXAMPLES = ['conversation.example1', 'conversation.example2', 'conversation.example3'];
 
 interface Props {
@@ -214,11 +278,12 @@ interface Props {
     composerContext?: React.ReactNode;
     onOpenThread: (id: string) => void;
     onStartSuggestions: (messageId: string, indexes: number[]) => Promise<void>;
+    onChooseDecision: (messageId: string, index: number) => Promise<void>;
     /** A bound IM chat's name for a message's source line; unknown chats show their id. */
     chatTitle?: (platform: string, chatId: string) => string | undefined;
 }
 
-export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, disabled, disabledReason, onSend, threadId, model, onModelChange, effort, onEffortChange, composerContext, onOpenThread, onStartSuggestions, chatTitle }: Props) {
+export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, disabled, disabledReason, onSend, threadId, model, onModelChange, effort, onEffortChange, composerContext, onOpenThread, onStartSuggestions, onChooseDecision, chatTitle }: Props) {
     const { t } = useTranslation('projects');
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
@@ -297,6 +362,8 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                             }
                             case 'suggestions':
                                 return <SuggestionsCard key={m.id} message={m} threads={threads} onStart={onStartSuggestions} onOpen={onOpenThread} disabled={disabled} />;
+                            case 'decision':
+                                return <DecisionCard key={m.id} message={m} onChoose={onChooseDecision} disabled={disabled} />;
                             // A thread's line above is its live state; each report is also its
                             // own folded entry here, in the order things happened.
                             case 'thread_update':

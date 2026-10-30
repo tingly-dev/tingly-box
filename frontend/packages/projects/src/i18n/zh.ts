@@ -162,6 +162,7 @@ export const zh: Dict<typeof en> = {
         example2: '在 README 里加一节，说明如何运行测试。',
         example3: '从现在起，先提议线程，等我确认后再启动。',
         suggested: '建议的线程', start: '启动', startAll: '全部启动（{{count}}）',
+        decision: '需要你来决定', recommended: '推荐', choose: '选这个', chosen: '已选',
     },
     placement: {
         title: '布局', overview: 'Overview 放在', thread: '线程打开在', side: '侧栏', window: '独立窗口', top: '顶栏', float: '浮窗', overviewFloat: '浮窗（从 Overview 点开时）',

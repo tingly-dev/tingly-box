@@ -157,6 +157,7 @@ export const en = {
         example2: 'Add a README section explaining how to run the tests.',
         example3: 'From now on, propose threads and wait for my go-ahead before starting them.',
         suggested: 'Suggested threads', start: 'Start', startAll: 'Start all {{count}}',
+        decision: 'Needs your decision', recommended: 'Recommended', choose: 'Choose', chosen: 'Chosen',
     },
     placement: {
         title: 'Layout', overview: 'Overview sits in', thread: 'Threads open in', side: 'Side pane', window: 'Window', top: 'Top bar', float: 'Floating window', overviewFloat: 'Floating, from the Overview',

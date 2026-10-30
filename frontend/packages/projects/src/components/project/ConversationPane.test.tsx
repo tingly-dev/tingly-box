@@ -24,7 +24,7 @@ const event = (kind: string, content: string, extra: Partial<ThreadEvent> = {}):
 });
 const props = (messages: ThreadEvent[] = []): ComponentProps<typeof ConversationPane> => ({
     projectId: 'p', threadId: 'coordinator', messages, threads: new Map(), busy: false, disabled: false,
-    onSend: vi.fn().mockResolvedValue(true), onOpenThread: vi.fn(), onStartSuggestions: vi.fn().mockResolvedValue(undefined),
+    onSend: vi.fn().mockResolvedValue(true), onOpenThread: vi.fn(), onStartSuggestions: vi.fn().mockResolvedValue(undefined), onChooseDecision: vi.fn().mockResolvedValue(undefined),
 });
 const show = (p: ComponentProps<typeof ConversationPane>) => render(<MemoryRouter><ProjectsHostProvider host={{ paths: { list: '/projects', project: (id) => `/projects/${id}`, folder: () => '/folders' } }}><ConversationPane {...p} /></ProjectsHostProvider></MemoryRouter>);
 
@@ -113,6 +113,21 @@ describe('conversation presentation', () => {
         expect(localStorage.getItem('tingly-project.conversation.messageDetail')).toBe('concise');
         fireEvent.click(screen.getByRole('button', { name: 'messageDetail.detailed' }));
         expect(screen.getByText('Task report')).toBeInTheDocument();
+    });
+
+    it('offers a decision card once and keeps the pick after it is answered', async () => {
+        const options = [{ label: 'Merge now', consequence: 'main gets it' }, { label: 'Wait for review' }];
+        const open = props([event('decision', 'Merge?', { id: 'dec', payload: JSON.stringify({ question: 'Merge?', options, recommended: 1, reason: 'Cannot be undone' }) })]);
+        const view = show(open);
+        expect(screen.getByText('Merge?')).toBeInTheDocument();
+        expect(screen.getByText('conversation.recommended')).toBeInTheDocument();
+        await act(async () => fireEvent.click(screen.getAllByRole('button', { name: 'conversation.choose' })[1]));
+        expect(open.onChooseDecision).toHaveBeenCalledWith('dec', 1);
+        view.unmount();
+
+        show(props([event('decision', 'Merge?', { id: 'dec', payload: JSON.stringify({ question: 'Merge?', options, recommended: 1, chosen: 1 }) })]));
+        expect(screen.queryByRole('button', { name: 'conversation.choose' })).toBeNull();
+        expect(screen.getByLabelText('conversation.chosen')).toBeInTheDocument();
     });
 
     it('leaves composer configuration, send callbacks and empty-state seeds intact', async () => {
