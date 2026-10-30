@@ -114,12 +114,11 @@ type PoseDrag =
     // slow drag and a fast one end in the same place and nothing accumulates.
     | (PoseDragBase & { mode: 'turn'; origin: CanvasPoint; start: PoseFigure });
 
-// What a finished sketch hands back. `file`/`previewUrl` are the composited
-// pixels the model gets; `layers` is what it was made of, so re-opening it
+// What a finished sketch hands back. `file` is the composited pixels the model
+// gets; `layers` is what it was made of, so re-opening it
 // restores editable strokes and a posable figure instead of a picture of them.
 export interface SketchResult {
     file: File;
-    previewUrl: string;
     layers: SketchLayers;
 }
 
@@ -645,7 +644,6 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
             }
             onSubmit({
                 file: new File([blob], `sketch-${Date.now()}.png`, { type: 'image/png' }),
-                previewUrl: output.toDataURL('image/png'),
                 // The layers travel with the result, as data rather than
                 // pixels: this is what makes a saved sketch re-editable.
                 layers: { size: dims, strokes, figures, backdrop: backdrop?.dataUrl ?? null },

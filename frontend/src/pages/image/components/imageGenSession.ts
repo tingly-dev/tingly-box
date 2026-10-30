@@ -65,6 +65,11 @@ export const reviveSessionBlobs = (runs: GenerationRun[], imports: ImportedImage
     runs.forEach((run) => run.images.forEach((image) => {
         if (image.blob) image.url = URL.createObjectURL(image.blob);
     }));
+    runs.forEach((run) => {
+        if (run.sourceBlobs && run.sourceBlobs.length === (run.sourceImages?.length ?? 0)) {
+            run.sourceImages = run.sourceBlobs.map((blob) => URL.createObjectURL(blob));
+        }
+    });
     imports.forEach((item) => {
         if (item.blob) item.src = URL.createObjectURL(item.blob);
     });
