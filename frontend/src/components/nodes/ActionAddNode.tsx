@@ -11,7 +11,7 @@ import { styled } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import NodeTooltip from './NodeTooltip';
-import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyles, nodeSpotlightSx, SMALL_NODE_STYLES, SMART_NODE_STYLES } from './styles';
+import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyles, nodeSpotlightSx, ROUTE_GRAPH_QUIET_CLASS, SMALL_NODE_STYLES, SMART_NODE_STYLES } from './styles';
 import { fontSizes } from '@/theme/fonts';
 
 const { node } = { node: SMALL_NODE_STYLES };
@@ -86,6 +86,12 @@ export interface AddProviderNodeProps {
     icon?: 'add' | 'close';
     /** Label variant only: node width, default as wide as a condition node. */
     width?: number;
+    /** Node variant only: the words under the plus, when the node adds
+     * something more specific than a model (e.g. "Load balance"). */
+    caption?: string;
+    /** Hidden until the rule is hovered (ROUTE_GRAPH_QUIET_CLASS). Off for a
+     * node that is the only thing in its place, e.g. an empty tier. */
+    quiet?: boolean;
 }
 
 export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
@@ -96,6 +102,8 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
     label,
     icon = 'add',
     width,
+    caption,
+    quiet = true,
 }) => {
     const { t } = useTranslation();
     // Pulse when guidance (Quick Start → "Select a Model") points the user here.
@@ -104,6 +112,8 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
     return (
         <NodeTooltip title={tooltip ?? label ?? t('rule.nodes.addModel', { defaultValue: 'Add model' })} placement="top">
             <StyledAddProviderNode
+                // A warning (nothing to route yet) or a spotlight must be seen at rest.
+                className={quiet && !warning && !spotlight ? ROUTE_GRAPH_QUIET_CLASS : undefined}
                 active={active}
                 warning={warning}
                 spotlight={spotlight}
@@ -111,22 +121,23 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
                 widthOverride={width}
                 onClick={active ? onAdd : undefined}
             >
+                {/* Quiet until hovered, so once shown the words need not be dimmed too. */}
                 {label ? (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.primary' }}>
                         {icon === 'close' ? <CloseIcon sx={{ fontSize: 16 }} /> : <AddIcon sx={{ fontSize: 16 }} />}
-                        <Typography variant="caption" sx={{ fontSize: fontSizes.xs, lineHeight: 1 }}>{label}</Typography>
+                        <Typography variant="caption" sx={{ color: 'inherit', fontSize: fontSizes.xs, lineHeight: 1 }}>{label}</Typography>
                     </Box>
                 ) : (<>
-                <AddIcon sx={{ fontSize: 24, color: 'text.secondary' }} />
+                <AddIcon sx={{ fontSize: 24, color: 'text.primary' }} />
                 <Typography
                     variant="caption"
                     sx={{
-                        color: "text.secondary",
+                        color: "text.primary",
                         textAlign: "center",
                         fontSize: fontSizes.micro,
                         lineHeight: 1.1
                     }}>
-                    {label ?? t('rule.nodes.addModel', { defaultValue: 'Add model' })}
+                    {caption ?? t('rule.nodes.addModel', { defaultValue: 'Add model' })}
                 </Typography></>)}
             </StyledAddProviderNode>
         </NodeTooltip>

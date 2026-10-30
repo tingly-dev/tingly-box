@@ -6,6 +6,7 @@ import {EntryGuideDialog} from '@/components/tier/EntryGuideDialog';
 import {
     getRouteGraphActiveColor,
     PROVIDER_NODE_STYLES,
+    routeGraphQuietSx,
     SMART_NODE_STYLES,
     SMALL_NODE_STYLES,
 } from '@/components/nodes/styles';
@@ -129,6 +130,7 @@ const StyledCard = styled(Card, {
     margin: "3px",
     position: 'relative',
     '&:hover .rule-header-add-condition': {opacity: 1},
+    ...routeGraphQuietSx,
     ...(active ? {} : {
         '&::before': {
             content: '""',
@@ -361,9 +363,6 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                             active={active}
                             onHover={guideMode ? undefined : (hovering) => setHoveredTier(hovering ? group.tier : null)}
                             onShowGuide={handleShowGuide}
-                            onAddTier={canAddTier && !pendingTier && active && !saving && idx === groups.length - 1
-                                ? () => setPendingTier(true) : undefined}
-                            addTierLabel={t('rule.tier.addTierTooltip')}
                         />
                         {group.providers.map((p) => (
                             <ServiceNode
@@ -386,10 +385,16 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                             active={active && !saving}
                             warning={record.providers.length === 0 && idx === 0}
                             onAdd={() => onAddService?.(group.tier)}
+                            // A model next to others in its tier shares its traffic;
+                            // an empty tier (a new one, or T0 of a new rule) just needs one.
+                            caption={group.providers.length > 0 ? t('rule.nodes.loadBalance') : undefined}
+                            quiet={group.providers.length > 0}
                             tooltip={
                                 record.providers.length === 0 && idx === 0
                                     ? t('rule.tooltips.addServiceFirst')
-                                    : t('rule.tooltips.addServiceSecond')
+                                    : group.providers.length > 0
+                                        ? t('rule.tooltips.loadBalance')
+                                        : t('rule.tooltips.addServiceToTier')
                             }
                         />
                     </Box>
@@ -448,14 +453,16 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                         <ActionAddNode
                                             active={active}
                                             onAdd={() => handleAddServiceToSmartRule(index)}
-                                            tooltip="Add service to this smart rule"
+                                            caption={t('rule.nodes.loadBalance')}
+                                            tooltip={t('rule.tooltips.loadBalance')}
                                         />
                                     </Box>
                                 ) : (
                                     <ActionAddNode
                                         active={active}
                                         onAdd={() => handleAddServiceToSmartRule(index)}
-                                        tooltip="Add service to this smart rule"
+                                        quiet={false}
+                                        tooltip={t('rule.tooltips.addServiceToCondition')}
                                     />
                                 )}
                             </GraphRow>
@@ -482,28 +489,21 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         onAdd={() => onSwitchRoutingMode?.()}
                         tooltip={t('rule.ruleConditions.closeConditionsTooltip')}
                     />
-                    {smartRouting.length > 1 && (
-                        <Box sx={{ml: 0.5, fontSize: 12, color: 'text.secondary'}}>
-                            {t('rule.ruleConditions.conditionsHint')}
-                        </Box>
-                    )}
                 </GraphRow>
             </>
         );
     };
 
-    // Render default providers section: Default, an arrow, then the tiers.
+    // Render default providers section: Request (no conditions) or Others
+    // (what no condition matched), an arrow, then the tiers.
     const renderDefaultProviders = () => (
         <GraphRow sx={{alignItems: 'flex-start'}}>
-            {/* Fixed height matches the tier row height so ServiceEntryNode centres vertically */}
-            <NodeContainer sx={{width: SMART_NODE_STYLES.width, height: PROVIDER_NODE_STYLES.height, justifyContent: 'center'}}>
+            <NodeContainer sx={{width: SMART_NODE_STYLES.width}}>
                 <ServiceEntryNode
                     providersCount={record.providers.length}
                     active={active && !saving}
                     tooltip={defaultTooltip}
-                    onAddCondition={showSmartRouting ? undefined : handleAddCondition}
-                    addConditionLabel={t('rule.ruleConditions.addCondition')}
-                addTooltip={conditionTooltip}
+                    others={showSmartRouting}
                 />
             </NodeContainer>
 
@@ -514,6 +514,41 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
             {renderTierLayout()}
         </GraphRow>
     );
+
+    // The rule's last row, like the conditions' add / turn-off row: add a
+    // condition under the entry, a fallback tier under the tiers. A tier
+    // below is only for when every tier above is down, so it is named for
+    // that, apart from adding a model to a tier.
+    const lastTier = tierGroups.length > 0 ? tierGroups[tierGroups.length - 1] : undefined;
+    const canAddFallbackTier = !guideMode && !pendingTier && !!lastTier && lastTier.providers.length > 0;
+    const renderAddRow = () => {
+        const addCondition = !showSmartRouting;
+        if (!addCondition && !canAddFallbackTier) return null;
+        return (
+            <GraphRow>
+                <NodeContainer sx={{width: SMART_NODE_STYLES.width}}>
+                    {addCondition && (
+                        <ActionAddNode
+                            label={t('rule.ruleConditions.addCondition')}
+                            active={active && !saving}
+                            onAdd={handleAddCondition}
+                            tooltip={conditionTooltip}
+                        />
+                    )}
+                </NodeContainer>
+                <Box sx={{visibility: 'hidden'}}><ArrowNode direction="forward"/></Box>
+                {canAddFallbackTier && (
+                    <ActionAddNode
+                        label={t('rule.nodes.fallbackTier')}
+                        width={PROVIDER_NODE_STYLES.width}
+                        active={active && !saving}
+                        onAdd={() => setPendingTier(true)}
+                        tooltip={t('rule.tooltips.fallbackTier')}
+                    />
+                )}
+            </GraphRow>
+        );
+    };
 
     return (
         <StyledCard active={active}>
@@ -573,6 +608,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                     <Box sx={{display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5}}>
                                         {renderSmartRules()}
                                         {renderDefaultProviders()}
+                                        {renderAddRow()}
                                     </Box>
                                 </GraphContainer>
                             </Box>
