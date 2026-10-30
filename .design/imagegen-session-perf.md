@@ -65,9 +65,20 @@ resident on every page. The sidebar still reads the whole collection (files
 are blob handles, so this is cheap); a split summary record is not worth it
 until profiles carry far more than references.
 
+## Library assets are files too
+
+`ImageAsset.blob` holds the bytes; `src` is a blob: URL rebuilt on load by
+`assetStore.reviveAsset`. Base64 assets from older builds are rewritten once
+as blobs; URL-encoded data URLs and links are left alone.
+
+Because the URL is new on every load, "is this picture already kept" can no
+longer be a `src` comparison: `keepImage` compares bytes (size, type, then the
+buffer) and a second click on the same picture while the first is running
+returns the same asset. The lightbox's "In the library" check is still by `src`,
+so it is accurate within a session and shows the keep button again after a
+reload; pressing it finds the existing asset and adds nothing.
+
 ## Still open
 
-- Library assets (`ImageAsset.src`) are still data URLs; the library page and
-  picker thumbnail them, but the strings are resident while those pages are
-  open.
-- Sketch `layers.backdrop` is a data URL (only when a backdrop was loaded).
+- Sketch `layers.backdrop` is a data URL (only when a backdrop was loaded);
+  small and rare, left alone.
