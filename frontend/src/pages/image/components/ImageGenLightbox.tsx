@@ -306,10 +306,10 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                         <Tooltip title={keepLabel}>
                             <span>
                                 <IconButton
-                                    onClick={() => keepImage({
+                                    onClick={() => { void keepImage({
                                         src: selectedImage.src,
                                         name: selectedImage.label ?? `${deriveLabel(selectedImage.prompt, 12) || 'image'}-${selectedImage.index + 1}.png`,
-                                    })}
+                                    }); }}
                                     disabled={kept}
                                     aria-label={keepLabel}
                                     aria-pressed={kept}

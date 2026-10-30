@@ -41,6 +41,18 @@ const base64ToBlob = (b64: string, type = 'image/png'): Blob => {
     return new Blob([bytes], { type });
 };
 
+// A base64 data URL as the bytes it carries; null for anything else (a plain
+// or URL-encoded data URL, a link), which the caller leaves as it is.
+export const base64DataUrlToBlob = (dataUrl: string): Blob | null => {
+    const match = /^data:([^;,]+)?(?:;[^,]*)?;base64,(.*)$/s.exec(dataUrl);
+    if (!match) return null;
+    try {
+        return base64ToBlob(match[2], match[1] || 'image/png');
+    } catch {
+        return null;
+    }
+};
+
 // What a result is kept as for the rest of the session. A provider's inline
 // base64 is decoded once into a Blob and everything downstream (render,
 // thumbnails, download, IndexedDB) works from a blob: URL: the multi-megabyte

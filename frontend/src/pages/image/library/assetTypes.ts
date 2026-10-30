@@ -10,6 +10,9 @@
 export interface ImageAsset {
     id: string;
     src: string;
+    // The bytes behind `src` (a blob: URL), so the library stores the file and
+    // not a base64 copy; `src` is rebuilt from it on load.
+    blob?: Blob;
     name: string;
     width?: number;
     height?: number;
