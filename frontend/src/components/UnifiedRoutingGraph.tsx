@@ -5,6 +5,7 @@ import {useTranslation} from 'react-i18next';
 import {EntryGuideDialog} from '@/components/tier/EntryGuideDialog';
 import {
     getRouteGraphActiveColor,
+    getRouteGraphBorderColor,
     PROVIDER_NODE_STYLES,
     SMART_NODE_STYLES,
     SMALL_NODE_STYLES,
@@ -23,6 +24,7 @@ import ModelRequestHeader from '@/components/ModelRequestHeader';
 import {TierGuideDialog} from '@/components/tier/TierGuideDialog';
 import type {Provider} from '../types/provider';
 import type {ConfigRecord} from './RoutingGraphTypes';
+import {draftLevel, DRAFT_HIT_RULE, ONE} from '@/components/nodes/draft';
 import {useResponsesToggle} from '@/hooks/useResponsesToggle';
 
 // Routing mode controls display behavior
@@ -158,7 +160,7 @@ const GraphContainer = styled(Box)(({theme}) => ({
 
 const GraphRow = styled(Box)(({theme}) => ({
     display: 'flex',
-    alignItems: 'center',
+    alignItems: ONE ? 'flex-start' : 'center',
     justifyContent: 'flex-start',
     gap: graph.rowGap,
     marginBottom: theme.spacing(0.5),
@@ -354,7 +356,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     return (
                     <Box
                         key={group.tier}
-                        sx={{display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap'}}
+                        sx={{display: 'flex', alignItems: ONE ? 'stretch' : 'center', gap: 1, flexWrap: 'nowrap'}}
                     >
                         <TierNode
                             priority={group.tier}
@@ -365,6 +367,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                 ? () => setPendingTier(true) : undefined}
                             addTierLabel={t('rule.tier.addTierTooltip')}
                         />
+                        <Box sx={ONE ? {display: 'flex', flexDirection: 'column', gap: 0.75} : {display: 'contents'}}>
                         {group.providers.map((p) => (
                             <ServiceNode
                                 key={p.uuid}
@@ -382,16 +385,22 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                 onMoveTierDown={onTierChange && !isLoneBottomTier ? () => onTierChange(p.uuid, group.tier + 1) : undefined}
                             />
                         ))}
+                        <Box sx={ONE ? {pl: '16px'} : {display: 'contents'}}>
                         <ActionAddNode
                             active={active && !saving}
                             warning={record.providers.length === 0 && idx === 0}
                             onAdd={() => onAddService?.(group.tier)}
+                            label={ONE ? t('rule.nodes.addModel', {defaultValue: 'Add model'}) : undefined}
+                            width={ONE ? PROVIDER_NODE_STYLES.width : undefined}
+                            subtle={ONE}
                             tooltip={
                                 record.providers.length === 0 && idx === 0
                                     ? t('rule.tooltips.addServiceFirst')
                                     : t('rule.tooltips.addServiceSecond')
                             }
                         />
+                        </Box>
+                        </Box>
                     </Box>
                     );
                 })}
@@ -422,12 +431,13 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                     />
                                 </NodeContainer>
 
-                                <ArrowNode direction="forward"/>
+                                <ArrowNode direction="forward" color={[2,3].includes(draftLevel()) && rule.uuid === DRAFT_HIT_RULE ? 'primary.main' : undefined} {...(ONE ? {boxWidth: 92, length: 84} : {})}/>
 
                                 {rule.services && rule.services.length > 0 ? (
                                     <Box sx={{
                                         display: 'flex',
-                                        gap: 1.5,
+                                        ...(ONE ? {flexDirection: 'column', alignItems: 'flex-start !important'} : {}),
+                                        gap: ONE ? 0.75 : 1.5,
                                         flexWrap: 'nowrap',
                                         justifyContent: 'flex-start',
                                         alignItems: 'center'
@@ -445,11 +455,19 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                 onEditProvider={onEditProvider}
                                             />
                                         ))}
+                                        {ONE ? (
+                                            <Box sx={{pl: '16px'}}>
+                                                <ActionAddNode active={active} onAdd={() => handleAddServiceToSmartRule(index)}
+                                                    label={t('rule.nodes.addModel', {defaultValue: 'Add model'})} width={PROVIDER_NODE_STYLES.width} subtle
+                                                    tooltip="Add service to this smart rule"/>
+                                            </Box>
+                                        ) : (
                                         <ActionAddNode
                                             active={active}
                                             onAdd={() => handleAddServiceToSmartRule(index)}
                                             tooltip="Add service to this smart rule"
                                         />
+                                        )}
                                     </Box>
                                 ) : (
                                     <ActionAddNode
@@ -474,6 +492,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         />
                     </NodeContainer>
                     <Box sx={{visibility: 'hidden'}}><ArrowNode direction="forward"/></Box>
+                    <Box sx={ONE ? {pl: '76px'} : {display: 'contents'}}>
                     <ActionAddNode
                         label={t('rule.ruleConditions.closeConditions')}
                         icon="close"
@@ -482,7 +501,8 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         onAdd={() => onSwitchRoutingMode?.()}
                         tooltip={t('rule.ruleConditions.closeConditionsTooltip')}
                     />
-                    {smartRouting.length > 1 && (
+                    </Box>
+                    {!ONE && smartRouting.length > 1 && (
                         <Box sx={{ml: 0.5, fontSize: 12, color: 'text.secondary'}}>
                             {t('rule.ruleConditions.conditionsHint')}
                         </Box>

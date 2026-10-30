@@ -3,6 +3,7 @@ import { alpha, keyframes, styled, type Theme } from '@mui/material/styles';
 import { fontSizes } from '@/theme/fonts';
 import { routeGraphColors } from '@/theme/routeGraph';
 
+import { ONE, ONE_H } from './draft';
 export const routeGraphActive = routeGraphColors.active;
 export const routeGraphActiveBg = routeGraphColors.activeBg;
 
@@ -31,8 +32,8 @@ export const MODEL_NODE_STYLES = {
 } as const;
 
 export const PROVIDER_NODE_STYLES = {
-    width: 220,
-    height: 72,
+    width: ONE ? 260 : 220,
+    height: ONE ? ONE_H : 72,
     heightCompact: 48,
     padding: 5,
     widthCompact: 320,
@@ -43,8 +44,8 @@ export const PROVIDER_NODE_STYLES = {
 } as const;
 
 export const SMART_NODE_STYLES = {
-    width: 140,
-    height: 72,
+    width: ONE ? 240 : 140,
+    height: ONE ? ONE_H : 72,
     padding: 5,
 } as const;
 
@@ -55,8 +56,8 @@ export const { providerNode, smartNode } = {
 
 // ActionAddNode dimensions
 export const SMALL_NODE_STYLES = {
-    width: 100,
-    height: 72,
+    width: ONE ? ONE_H : 100,
+    height: ONE ? ONE_H : 72,
     padding: 5,
 } as const;
 

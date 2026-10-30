@@ -9,6 +9,8 @@ export interface ArrowNodeProps {
     strokeWidth?: number;
     length?: number;
     arrowHeadSize?: number;
+    color?: string;
+    boxWidth?: number;
 }
 
 const ArrowContainer = styled(Box)(({ theme }) => ({
@@ -94,11 +96,13 @@ export const ArrowNode: React.FC<ArrowNodeProps> = ({
     strokeWidth = 3,
     length = 32,
     arrowHeadSize = 8,
+    color,
+    boxWidth,
 }) => {
     const arrowProps = { strokeWidth, length, arrowHeadSize };
 
     return (
-        <ArrowContainer sx={{ width: size, height: size }}>
+        <ArrowContainer sx={{ width: boxWidth ?? size, height: size, ...(color ? { color } : {}) }}>
             {direction === 'bidirectional' ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
                     <ForwardArrow {...arrowProps} />

@@ -1,3 +1,5 @@
+import { ONE } from './draft';
+import { draftLevel, draftText, DRAFT_HIT_SERVICE, DRAFT_PAUSED_SERVICE } from './draft';
 import {
     Delete as DeleteIcon,
     Warning as WarningIcon,
@@ -268,7 +270,16 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
     const hasTier = showTier && !!onTierChange;
 
     return (
-        <ServiceNodeWrapper forceShowActions={forceShowActions || spotlight}>
+        <ServiceNodeWrapper forceShowActions={forceShowActions || spotlight} sx={ONE ? { display: 'flex', alignItems: 'center', gap: 1 } : undefined}>
+            {ONE && (
+                <NodeTooltip title={provider.uuid === DRAFT_PAUSED_SERVICE ? draftText('paused') : (providerWarning || provider.active === false) ? (providerWarning || 'Off') : 'OK'} placement="left">
+                    <Box sx={{
+                        width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                        bgcolor: provider.uuid === DRAFT_PAUSED_SERVICE ? 'warning.main'
+                            : (providerWarning || provider.active === false) ? 'text.disabled' : 'success.main',
+                    }} />
+                </NodeTooltip>
+            )}
             <ServiceNodeContent
                 menuAnchorEl={menuAnchorEl}
                 menuOpen={menuOpen}
@@ -291,9 +302,48 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                 sx={{
                     cursor: active ? 'pointer' : 'default',
                     ...(spotlight && active ? nodeSpotlightSx(theme) : {}),
+                    position: 'relative',
+                    ...([2,3].includes(draftLevel()) && provider.uuid === DRAFT_HIT_SERVICE ? { borderColor: theme.palette.primary.main, boxShadow: `0 0 0 1px ${theme.palette.primary.main}` } : {}),
+                    ...(draftLevel() === 3 && provider.uuid === DRAFT_PAUSED_SERVICE ? { borderStyle: 'dashed', '& > *:not(.draft-tag):not(.action-buttons)': { opacity: 0.45 } } : {}),
                 }}
             >
-                {!provider.provider ? (
+                {[2,3].includes(draftLevel()) && provider.uuid === DRAFT_HIT_SERVICE && (
+                    <Box className="draft-tag" sx={{ position: 'absolute', top: -9, left: 12, px: 0.75, lineHeight: '16px', fontSize: fontSizes.micro, fontWeight: 600, color: 'primary.main', bgcolor: 'background.paper' }}>
+                        {draftText('hitSvc')}
+                    </Box>
+                )}
+                {draftLevel() === 3 && provider.uuid === DRAFT_PAUSED_SERVICE && (
+                    <Box className="draft-tag" sx={{ position: 'absolute', top: -9, left: 12, px: 0.75, lineHeight: '16px', fontSize: fontSizes.micro, fontWeight: 600, color: 'warning.main', bgcolor: 'background.paper' }}>
+                        {draftText('paused')}
+                    </Box>
+                )}
+                {ONE && provider.provider ? (
+                    <NodeTooltip title={<Box sx={{ whiteSpace: 'pre-line' }}>{identityTooltip}</Box>} placement="top">
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', height: '100%', px: 1 }}>
+                            {!providerWarning && (
+                                <Box sx={{ display: 'flex', flexShrink: 0, '&:empty': { display: 'none' } }}>
+                                    <ServiceNodeQuota providerUuid={provider.provider} />
+                                </Box>
+                            )}
+                            <Typography variant="body2" noWrap sx={{ ...NODE_LAYER_STYLES.typography, flexShrink: 1, minWidth: 0 }}>
+                                {provider.model || t('rule.service.selectModel')}
+                            </Typography>
+                            <Typography variant="body2" noWrap sx={{ fontSize: fontSizes.sm, color: providerWarning ? 'warning.main' : 'text.secondary', flexShrink: 1, minWidth: 0 }}>
+                                {providerInfo.name}
+                            </Typography>
+                            <Box sx={{ ml: 'auto', display: 'flex', gap: '2px', lineHeight: 0, flexShrink: 0 }}>
+                                {hasDualApiStyle ? (
+                                    <>
+                                        <ApiStyleBadge apiStyle="openai" minimal sx={{ fontSize: fontSizes.xs, width: 18, height: 18 }} />
+                                        <ApiStyleBadge apiStyle="anthropic" minimal sx={{ fontSize: fontSizes.xs, width: 18, height: 18 }} />
+                                    </>
+                                ) : (
+                                    <ApiStyleBadge apiStyle={apiStyle} minimal sx={{ fontSize: fontSizes.xs, width: 18, height: 18 }} />
+                                )}
+                            </Box>
+                        </Box>
+                    </NodeTooltip>
+                ) : !provider.provider ? (
                     <Box sx={{ ...NODE_LAYER_STYLES.topLayer }}>
                         <Typography
                             variant="body2"

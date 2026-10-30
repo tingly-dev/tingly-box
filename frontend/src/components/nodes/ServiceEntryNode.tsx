@@ -10,6 +10,7 @@ import {
     StyledSmartNodeWrapper,
 } from './styles.tsx';
 import { fontSizes } from '@/theme/fonts';
+import { draftLevel, draftText } from './draft';
 
 /** Default beside conditions only labels the fallback, so it needs less room. */
 const DEFAULT_COMPACT_WIDTH = SMART_NODE_STYLES.width;
@@ -66,7 +67,7 @@ export const ServiceEntryNode: React.FC<ServiceEntryNodeProps> = ({
                         className="default-node-label"
                         sx={{ ...NODE_LAYER_STYLES.typography, color: 'text.secondary', transition: 'transform 0.16s ease' }}
                     >
-                        {t('rule.ruleConditions.defaultTitle')}
+                        {draftLevel() >= 1 ? (onAddCondition ? 'Request' : 'Others') : t('rule.ruleConditions.defaultTitle')}
                     </Typography>
                 </NodeTooltip>
                 {onAddCondition && (

@@ -22,6 +22,8 @@ import {
     StyledSmartNodeWrapper,
 } from './styles.tsx';
 import { fontSizes } from '@/theme/fonts';
+import { ONE } from './draft';
+import { draftLevel, draftOpText, draftText, DRAFT_HIT_RULE } from './draft';
 
 export interface SmartNodeProps {
     smartRouting: SmartRouting;
@@ -56,6 +58,8 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const menuOpen = Boolean(anchorEl);
     const ops: SmartOp[] = smartRouting.ops ?? [];
+    const draft = draftLevel();
+    const hit = [2,3].includes(draft) && smartRouting.uuid === DRAFT_HIT_RULE;
 
     const handleDeleteClick = (e: React.MouseEvent<HTMLElement>) => {
         e.stopPropagation();
@@ -71,7 +75,21 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
 
     return (
         <StyledSmartNodeWrapper>
-            <StyledSmartNodePrimary active={active} onClick={() => onEdit()}>
+            {ONE ? (
+                <NodeTooltip title={ops.map(opTooltip).join('\n') || t('rule.smart.unconditional', { defaultValue: 'Unconditional, ignore' })} placement="top">
+                    <StyledSmartNodePrimary active={active} onClick={() => onEdit()} sx={{ flexDirection: 'row', alignItems: 'center', gap: 0.75, px: 1, cursor: 'pointer' }}>
+                        <Box sx={{ width: 18, height: 18, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: fontSizes.micro, fontWeight: 700, flexShrink: 0 }}>
+                            {(index ?? 0) + 1}
+                        </Box>
+                        <Typography variant="body2" noWrap sx={{ ...NODE_LAYER_STYLES.typography, fontWeight: 500, minWidth: 0, color: ops.length ? 'text.primary' : 'text.disabled', fontStyle: ops.length ? 'normal' : 'italic' }}>
+                            {ops.length === 0
+                                ? t('rule.smart.unconditional', { defaultValue: 'Unconditional, ignore' })
+                                : ops.map((op) => draftOpText(op.position, op.operation, opValue(op)) ?? `${op.position} ${op.operation} ${opValue(op)}`).join(' · ')}
+                        </Typography>
+                    </StyledSmartNodePrimary>
+                </NodeTooltip>
+            ) : (
+            <StyledSmartNodePrimary active={active} onClick={() => onEdit()} sx={hit ? { borderColor: 'primary.main', boxShadow: (th) => `0 0 0 1px ${th.palette.primary.main}` } : undefined}>
 
                 {/* ── Header ── */}
                 <Stack
@@ -116,6 +134,11 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                     >
                         IF
                     </Typography>
+                    {hit && (
+                        <Typography sx={{ fontSize: fontSizes.micro, fontWeight: 600, color: 'primary.main', lineHeight: 1, whiteSpace: 'nowrap' }}>
+                            {draftText('hit')}
+                        </Typography>
+                    )}
 
                     {/* Action buttons — revealed on hover via .action-buttons class */}
                     <Stack
@@ -215,6 +238,11 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                         minHeight: 34,
                                     }}
                                 >
+                                    {draft >= 1 && draftOpText(op.position, op.operation, opValue(op)) ? (
+                                        <Typography variant="body2" component="span" sx={{ ...NODE_LAYER_STYLES.typography, fontSize: fontSizes.sm, fontWeight: 500, color: 'text.primary', width: '100%' }}>
+                                            {draftOpText(op.position, op.operation, opValue(op))}
+                                        </Typography>
+                                    ) : (<>
                                     {/* position — primary label */}
                                     <Typography
                                         variant="body2"
@@ -263,12 +291,14 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                             : {opValue(op)}
                                         </Typography>
                                     )}
+                                    </>)}
                                 </Box>
                             </NodeTooltip>
                         ))}
                     </Stack>
                 )}
             </StyledSmartNodePrimary>
+            )}
             {/* Delete confirmation menu */}
             <Menu
                 anchorEl={anchorEl}

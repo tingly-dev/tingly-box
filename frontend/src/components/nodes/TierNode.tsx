@@ -1,3 +1,4 @@
+import { ONE } from './draft';
 import { Box, Typography } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -72,7 +73,8 @@ export const TierNode: React.FC<TierNodeProps> = ({
                 className={`tier-node-${priority}`}
                 sx={(theme) => ({
                     width: TIER_NODE_WIDTH,
-                    height: PROVIDER_NODE_STYLES.height,
+                    height: ONE ? 'auto' : PROVIDER_NODE_STYLES.height,
+                    ...(ONE ? { alignSelf: 'stretch', minHeight: PROVIDER_NODE_STYLES.height } : {}),
                     flexShrink: 0,
                     display: 'flex',
                     flexDirection: 'column',

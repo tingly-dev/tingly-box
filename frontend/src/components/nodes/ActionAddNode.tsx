@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import NodeTooltip from './NodeTooltip';
 import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyles, nodeSpotlightSx, SMALL_NODE_STYLES, SMART_NODE_STYLES } from './styles';
 import { fontSizes } from '@/theme/fonts';
+import { ONE } from './draft';
 
 const { node } = { node: SMALL_NODE_STYLES };
 
@@ -47,8 +48,8 @@ export const useAddModelSpotlight = (active: boolean): boolean => {
 
 // ActionAddNode Container
 const StyledAddProviderNode = styled(Box, {
-    shouldForwardProp: (prop) => prop !== 'active' && prop !== 'warning' && prop !== 'spotlight' && prop !== 'wide' && prop !== 'widthOverride',
-})<{ active: boolean; warning?: boolean; spotlight?: boolean; wide?: boolean; widthOverride?: number }>(({ active, warning, spotlight, wide, widthOverride, theme }) => ({
+    shouldForwardProp: (prop) => prop !== 'active' && prop !== 'warning' && prop !== 'spotlight' && prop !== 'wide' && prop !== 'widthOverride' && prop !== 'subtle',
+})<{ active: boolean; warning?: boolean; spotlight?: boolean; wide?: boolean; widthOverride?: number; subtle?: boolean }>(({ active, warning, spotlight, wide, widthOverride, subtle, theme }) => ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -59,7 +60,8 @@ const StyledAddProviderNode = styled(Box, {
     borderColor: getRouteGraphBorderColor(theme),
     backgroundColor: 'background.paper',
     width: wide ? (widthOverride ?? SMART_NODE_STYLES.width) : node.width,
-    height: wide ? 34 : node.height,
+    height: wide ? (subtle ? 22 : 34) : node.height,
+    ...(subtle ? { borderColor: 'transparent', alignItems: 'flex-start', paddingLeft: 8, opacity: 0.8 } : {}),
     boxSizing: 'border-box',
     transition: 'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease',
     cursor: active ? 'pointer' : 'default',
@@ -85,6 +87,7 @@ export interface AddProviderNodeProps {
     /** Label variant only: a close (x) instead of a plus, for a node that turns something off. */
     icon?: 'add' | 'close';
     /** Label variant only: node width, default as wide as a condition node. */
+    subtle?: boolean;
     width?: number;
 }
 
@@ -96,6 +99,7 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
     label,
     icon = 'add',
     width,
+    subtle,
 }) => {
     const { t } = useTranslation();
     // Pulse when guidance (Quick Start → "Select a Model") points the user here.
@@ -109,6 +113,7 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
                 spotlight={spotlight}
                 wide={!!label}
                 widthOverride={width}
+                subtle={subtle}
                 onClick={active ? onAdd : undefined}
             >
                 {label ? (
@@ -116,6 +121,8 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
                         {icon === 'close' ? <CloseIcon sx={{ fontSize: 16 }} /> : <AddIcon sx={{ fontSize: 16 }} />}
                         <Typography variant="caption" sx={{ fontSize: fontSizes.xs, lineHeight: 1 }}>{label}</Typography>
                     </Box>
+                ) : ONE ? (
+                    <AddIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
                 ) : (<>
                 <AddIcon sx={{ fontSize: 24, color: 'text.secondary' }} />
                 <Typography
