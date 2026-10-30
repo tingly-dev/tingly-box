@@ -140,6 +140,17 @@ export default {
         "hoverHint": "悬停示意图中的节点可查看操作按钮",
         "toolbarLabel": "页面工具栏",
         "clickHere": "点这里",
+        "connectTitle": "接入 {{agent}}",
+        "connect": {
+          "website": "在 {{agent}} 官网查看其他安装方式",
+          "official": "官方源",
+          "mirror": "镜像源",
+          "install": { "title": "安装 {{agent}}", "content": "用下面的命令安装（连接区的 Install 行里也有），装好再回来。" },
+          "apply": { "title": "应用配置", "content": "页面头部的自动配置会把 Base URL 和密钥写进 {{agent}} 的配置文件。写入前会先备份原文件，其他设置原样保留。" },
+          "applyHint": "点页面右上角的自动配置。头部显示“配置已过期”就说明还没应用。",
+          "verify": { "title": "启动 {{agent}} 并确认", "content": "运行一次 {{agent}}。头部会显示最近一次请求，说明网关已连通，下面的规则正在转发。" },
+          "verifyHint": "启动后还没有请求？检查连接区的 Base URL 与 {{agent}} 实际使用的是否一致。"
+        },
         "steps": {
           "connectAI": {
             "title": "连接 AI 提供商",
