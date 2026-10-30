@@ -34,6 +34,9 @@ func TestCoordinatorPromptTrustAndStyleRules(t *testing.T) {
 	assert.Contains(t, s, "no_update")
 	assert.Contains(t, s, "rename_thread")
 	assert.Contains(t, s, "land as a pull request")
+	assert.Contains(t, s, "request_decision")
+	assert.Contains(t, s, "in cite")
+	assert.Contains(t, s, `outcome="stalled"`)
 }
 
 func TestThreadPromptRules(t *testing.T) {
@@ -41,6 +44,7 @@ func TestThreadPromptRules(t *testing.T) {
 	p := &db.Project{ID: "p1", Name: "Demo", Instructions: "use make test"}
 	s := threadSystemPrompt(l, p, &db.Thread{Title: "Fix bug"})
 	assert.Contains(t, s, "not written by the user")
+	assert.Contains(t, s, "quoted by the system")
 	assert.Contains(t, s, "Memory is background")
 	assert.Contains(t, s, "wins; if the two conflict")
 	assert.Contains(t, s, "use make test")

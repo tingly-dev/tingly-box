@@ -57,7 +57,7 @@ type ThreadEnv interface {
 // Report is what a finished turn tells the coordinator.
 type Report struct {
 	Thread db.Thread
-	// Kind is finished, needs_input or failed.
+	// Kind is finished, needs_input, failed or stalled.
 	Kind string
 	Text string
 }
@@ -96,7 +96,13 @@ type Threads struct {
 	// (not a subagent's), as it is recorded. It must not block.
 	OnStep func(t db.Thread, e db.ThreadEvent)
 
+	// StallAfter is how long a running thread may show no activity before
+	// the coordinator is told; zero means DefaultStallAfter.
+	StallAfter time.Duration
+
 	mu sync.Mutex
+	// stalled holds the running threads already reported as quiet.
+	stalled map[string]bool
 	// folders caches which projects are folders (a project's type never changes).
 	folders map[string]bool
 	active  map[string]*activeThread

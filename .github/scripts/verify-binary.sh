@@ -26,7 +26,7 @@ expected_pattern() {
     macos-amd64)   echo 'Mach-O 64-bit.*x86_64' ;;
     macos-arm64)   echo 'Mach-O 64-bit.*arm64' ;;
     windows-amd64) echo 'PE32\+ executable.*x86-64' ;;
-    windows-arm64) echo 'PE32\+ executable.*aarch64' ;;
+    windows-arm64) echo 'PE32\+ executable.*(aarch64|ARM64)' ;;
     *) return 1 ;;
   esac
 }
