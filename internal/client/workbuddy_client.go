@@ -42,7 +42,7 @@ func NewWorkBuddyClient(provider *typ.Provider, model string, sessionID typ.Sess
 		return nil, fmt.Errorf("workbuddy client can only work for WorkBuddy providers")
 	}
 
-	transport := newWorkBuddyRoundTripper(createSessionBoundTransport(provider, sessionID), provider)
+	transport := newWorkBuddyRoundTripper(createSessionBoundTransport(provider, sessionID), provider, sessionID)
 	httpClient := &http.Client{
 		Transport: wrapWithLogging(transport, provider),
 	}

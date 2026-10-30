@@ -7,6 +7,7 @@ import {
     Extension as PluginsIcon,
     MoreHoriz as MoreIcon,
     PlayArrow as ProbeIcon,
+    Decisions as SmartIcon,
 } from '@/components/icons';
 import { Box, IconButton, Menu, MenuItem, Tooltip, Divider } from '@mui/material';
 import { useState } from 'react';
@@ -27,6 +28,8 @@ export interface GraphSettingsMenuProps {
     /** Opens the plugin catalog (add / remove); `pluginsCount` is shown beside it. */
     onOpenPlugins?: () => void;
     pluginsCount?: number;
+    /** Smart conditions on/off/add item; hidden when omitted. */
+    smartCondition?: { state: 'none' | 'on' | 'off'; onToggle: () => void };
     // Probe props
     ruleUuid?: string;
     ruleName?: string;
@@ -46,6 +49,7 @@ export const GraphSettingsMenu = ({
     onEditFlags,
     onOpenPlugins,
     pluginsCount = 0,
+    smartCondition,
     ruleUuid,
     ruleName,
     scenario,
@@ -83,6 +87,16 @@ export const GraphSettingsMenu = ({
                         {pluginsCount > 0 && (
                             <Box component="span" sx={{ ml: 'auto', pl: 2, color: 'text.secondary', fontSize: '0.8125rem' }}>{pluginsCount}</Box>
                         )}
+                    </MenuItem>
+                )}
+
+                {smartCondition && (
+                    <MenuItem
+                        onClick={() => { closeMenu(); smartCondition.onToggle(); }}
+                        disabled={saving}
+                    >
+                        <SmartIcon fontSize="small" sx={{ mr: 1 }} />
+                        {t({ none: 'ruleHeader.smartConditionAdd', on: 'ruleHeader.smartConditionOn', off: 'ruleHeader.smartConditionOff' }[smartCondition.state])}
                     </MenuItem>
                 )}
 

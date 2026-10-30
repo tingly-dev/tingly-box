@@ -26,6 +26,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/recording"
 
@@ -423,7 +424,11 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 		if committed {
 			loadbalance.RecordServiceSuccess(rule.UUID, serviceID)
 		}
-		if committed || !isRetryableStatus(status) {
+		channelRefused := false
+		for _, attemptErr := range c.Errors[errorsBeforeAttempt:] {
+			channelRefused = channelRefused || client.IsWorkBuddyChannelRefusal(attemptErr.Err)
+		}
+		if committed || (!isRetryableStatus(status) && !channelRefused) {
 			fields := failoverLogFields(c, rule, provider, model, serviceID)
 			fields["stage"] = "failover_terminal"
 			fields["attempt"] = i + 1
@@ -463,14 +468,17 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 			}
 		}
 
-		loadbalance.RecordServiceFailure(rule.UUID, serviceID)
-		state := loadbalance.DefaultBreakerStore().Get(rule.UUID, serviceID).State()
-		fields = failoverLogFields(c, rule, provider, model, serviceID)
-		fields["stage"] = "breaker_failure_recorded"
-		fields["rule_uuid"] = rule.UUID
-		fields["status"] = status
-		fields["breaker_state"] = state.String()
-		logrus.WithContext(c.Request.Context()).WithFields(fields).Warnf("[breaker] recorded failure for %s; state=%s", serviceID, state.String())
+		// A channel refusal does not indicate a transient service outage.
+		if !channelRefused {
+			loadbalance.RecordServiceFailure(rule.UUID, serviceID)
+			state := loadbalance.DefaultBreakerStore().Get(rule.UUID, serviceID).State()
+			fields = failoverLogFields(c, rule, provider, model, serviceID)
+			fields["stage"] = "breaker_failure_recorded"
+			fields["rule_uuid"] = rule.UUID
+			fields["status"] = status
+			fields["breaker_state"] = state.String()
+			logrus.WithContext(c.Request.Context()).WithFields(fields).Warnf("[breaker] recorded failure for %s; state=%s", serviceID, state.String())
+		}
 
 		fields = failoverLogFields(c, rule, provider, model, serviceID)
 		fields["stage"] = "failover_attempt_failed"

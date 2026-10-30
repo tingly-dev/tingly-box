@@ -43,7 +43,7 @@ export const PROVIDER_NODE_STYLES = {
 } as const;
 
 export const SMART_NODE_STYLES = {
-    width: 220,
+    width: 140,
     height: 72,
     padding: 5,
 } as const;
