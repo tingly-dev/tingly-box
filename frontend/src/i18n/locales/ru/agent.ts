@@ -19,7 +19,6 @@ export default {
   },
   "agentInstall": {
     "label": "Установка",
-    "website": "Сайт",
     "official": "Официальный",
     "mirror": "Зеркало",
     "mirrorTooltip": "Установка из зеркала реестра (в некоторых регионах быстрее)",

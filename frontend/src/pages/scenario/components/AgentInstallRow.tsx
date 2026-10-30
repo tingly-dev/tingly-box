@@ -13,8 +13,6 @@ export interface AgentInstallRowProps {
     mirrorCommand?: string;
     /** Used when installing is not a command (an extension, a download page). */
     actions?: AgentInstallAction[];
-    /** The agent's own site: other ways to install than npm. */
-    siteUrl?: string;
     onCopy: (text: string, label: string) => void;
 }
 
@@ -25,7 +23,7 @@ type Source = 'official' | 'mirror';
  * official | mirror switch when there is a mirror, or the agent's own install
  * links. Display only: nothing here is ticked or remembered.
  */
-export const AgentInstallRow: React.FC<AgentInstallRowProps> = ({ command, mirrorCommand, actions, siteUrl, onCopy }) => {
+export const AgentInstallRow: React.FC<AgentInstallRowProps> = ({ command, mirrorCommand, actions, onCopy }) => {
     const { t } = useTranslation();
     const [source, setSource] = useState<Source>('official');
     const label = t('agentInstall.label');
@@ -71,11 +69,6 @@ export const AgentInstallRow: React.FC<AgentInstallRowProps> = ({ command, mirro
                                     <CopyIcon fontSize="small" />
                                 </IconButton>
                             </Tooltip>
-                            {siteUrl && (
-                                <Button href={siteUrl} target="_blank" rel="noopener noreferrer" size="small" variant="text" sx={{ flexShrink: 0 }}>
-                                    {t('agentInstall.website')}
-                                </Button>
-                            )}
                             {mirrorCommand && (
                                 <ChoiceToggle<Source>
                                     value={source}
