@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/sha3"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/constant"
@@ -119,6 +120,8 @@ type Config struct {
 	ConfigDir  string `yaml:"-" json:"-"`
 
 	modelManager *catalog.ModelListManager
+	// modelFetches coalesces concurrent upstream model-list fetches per provider.
+	modelFetches singleflight.Group
 	storeManager *db.StoreManager // Unified store manager for all database stores
 
 	// Store references for internal Config methods (RefreshStatsFromStore, etc.)
