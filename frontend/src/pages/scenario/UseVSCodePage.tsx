@@ -13,7 +13,7 @@ const vscode: AgentPageDescriptor = {
         kind: 'guide',
         renderDialog: (slot) => <VSCodeConfigModal open={slot.dialogOpen} onClose={slot.closeDialog} />,
     },
-    quickStart: {
+    install: {
         installDescriptionKey: 'scenarioPage.vscode.installDescription',
         // Outlined, not contained: the step row's "I've installed it" is the
         // one contained button in this step.
@@ -21,9 +21,6 @@ const vscode: AgentPageDescriptor = {
             { label: t('scenarioPage.vscode.installInVSCode'), href: VSCODE_INSTALL_URL, variant: 'outlined' },
             { label: t('scenarioPage.vscode.viewMarketplace'), href: MARKETPLACE_URL, variant: 'outlined', external: true },
         ],
-        applyStepLabelKey: 'scenarioPage.vscode.applyStepLabel',
-        applyStepDescriptionKey: 'scenarioPage.vscode.applyStepDescription',
-        openDialogLabelKey: 'scenarioPage.vscode.openGuide',
     },
 };
 

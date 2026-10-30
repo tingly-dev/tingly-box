@@ -16,7 +16,7 @@ import {
 import React, { useState } from 'react';
 import { ContentCopy as ContentCopyIcon } from '@/components/icons';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
-import { scrollToModelsCard } from './AgentSetupCard';
+import { scrollToModelsCard } from './agentSetup';
 import Context1MChangeBanner from './Context1MChangeBanner';
 import { CopyUrlKeyButtons } from './config/CopyUrlKeyButtons';
 import api from '@/services/api';

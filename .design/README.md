@@ -160,6 +160,7 @@
 | 文档 | 内容 | 状态 / 阅读边界 |
 |---|---|---|
 | [ux-principles.md](./ux-principles.md) | UX-First 原则 | 设计说明；局部实施状态见正文 |
+| [agent-quickstart.md](./agent-quickstart.md) | Agent 页 Quick Start 与安装入口 | 已实施（TEP-2336） |
 | [onboarding-ux.md](./onboarding-ux.md) | Onboarding UX — guidance for first-time users | 设计说明；局部实施状态见正文 |
 | [ui-redesign.md](./ui-redesign.md) | UI 重设计 — 决策、实施状态与后续 | 部分落地；有撤回及后续项 |
 | [agent-page-redesign.md](./agent-page-redesign.md) | Agent 页重设计 — 模板、配置状态与实施边界 | A–D 落地；E 部分撤回；Profile 暂缓 |

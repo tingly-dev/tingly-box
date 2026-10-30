@@ -84,7 +84,7 @@ const opencode: AgentPageDescriptor = {
         },
         renderDialog: (slot) => <OpenCodeSetupDialog slot={slot} />,
     },
-    quickStart: {
+    install: {
         installCommand: 'npm install -g opencode-ai',
         installMirrorCommand: 'npm install -g opencode-ai --registry=https://registry.npmmirror.com',
     },

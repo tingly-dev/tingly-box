@@ -11,6 +11,13 @@ export default {
     "log": "日志",
     "logTooltip": "此 Agent 的请求、今日用量和系统日志"
   },
+  "agentInstall": {
+    "label": "安装",
+    "official": "官方源",
+    "mirror": "镜像源",
+    "mirrorTooltip": "从镜像源安装（部分地区更快）",
+    "copy": "点击复制"
+  },
   "agentAccess": {
     "title": "接入",
     "expand": "展开接入信息",
