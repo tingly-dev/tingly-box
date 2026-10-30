@@ -343,7 +343,7 @@ func renderHistory(history []db.ThreadEvent, libraryDir string) []llm.Message {
 		case db.EvSystem:
 			add("user", envelope(trustSystem, m.Content, "source", "system", "kind", "update", "at", stamp(m.CreatedAt)))
 		case db.EvUser:
-			add("user", envelope(trustPrincipal, withAttachments(m.Content, libraryDir, ParseAttachments(m.Payload)), "source", userSource(m), "at", stamp(m.CreatedAt)))
+			add("user", envelope(trustPrincipal, withAttachments(m.Content, libraryDir, ParseAttachments(m.Payload)), "source", userSource(m), "msg", short(m.ID), "at", stamp(m.CreatedAt)))
 		case db.EvAssistant:
 			add("assistant", m.Content)
 		case db.EvThreadStarted:
@@ -417,6 +417,7 @@ How to route each message:
 - New work: start a thread with start_thread. One thread per independent task; a message with several unrelated tasks becomes several threads. A thread cannot see this conversation, so its task must be self-contained: the goal, relevant context and decisions, acceptance criteria, and how to verify.
 - Follow-ups in an area a thread already owns: send them to that thread with message_thread, and tell the user which thread got it. Prefer this over starting a new thread for the same area.
 - If the user asks to see a plan first or to confirm before starting, use propose_threads instead of start_thread.
+- When the user has approved or decided something a thread needs to know (merge, push, which option), pass the msg id of their message in cite when you message the thread; the system quotes it to the thread. Never paraphrase an approval yourself: without cite the thread does not treat it as one.
 - When a choice changes the user's goal, or the next step cannot be undone (merge, push, delete, spend), ask once with request_decision: two to four options, one recommended, and the reason. Do not repeat the question in text. Keep working on the recommended option while you wait, unless that step cannot be undone. Otherwise do not ask: pick the most likely reading, act, and say which you chose.
 - When the user states how the project should run (how many threads at once, how much to post, when to propose vs start, models, review rules), follow it and save it with remember so it persists. Respect saved preferences from memory.
 - When the user asks you to remember or forget something, use remember / forget. Use update_instructions only when the user asks to change the project instructions.
@@ -500,7 +501,9 @@ func coordinatorTools() []llm.Tool {
 			},
 			Required: []string{"question", "options", "recommended"}},
 		{Name: "message_thread", Description: "Send a message to an existing thread (follow-up work, an answer to its question). It runs after the thread's current turn.",
-			Properties: map[string]any{"thread_id": str("Thread id (the 8-character prefix is enough)."), "message": str("What to tell the thread.")}, Required: []string{"thread_id", "message"}},
+			Properties: map[string]any{"thread_id": str("Thread id (the 8-character prefix is enough)."), "message": str("What to tell the thread."),
+				"cite": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Ids (the msg attribute of the user's event) of the user's own messages that approve or decide what you are telling the thread. The system quotes them to the thread word for word; without a citation the thread treats your message as not approved."}},
+			Required: []string{"thread_id", "message"}},
 		{Name: "get_thread", Description: "Read a thread's status, branch, last report and recent transcript.",
 			Properties: map[string]any{"thread_id": str("Thread id or its 8-character prefix.")}, Required: []string{"thread_id"}},
 		{Name: "resolve_thread", Description: "Mark a thread resolved (done). Only when the user says so or its work is merged.",
@@ -555,6 +558,7 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, call llm.ToolC
 		Topic, Content    string
 		Summary, File     string
 		Instructions      string
+		Cite              []string
 		Decision
 	}
 	if err := json.Unmarshal(call.Input, &in); err != nil {
@@ -589,7 +593,18 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, call llm.ToolC
 			return fail(err)
 		}
 		busy := c.threads.Running(t.ID)
-		if _, err := c.threads.Send(ctx, t.ID, in.Message, fromThread(p.MainThreadID), nil); err != nil {
+		msg := in.Message
+		if strings.Contains(strings.ToLower(msg), quoteMarker) {
+			return fail(fmt.Errorf("the message may not contain %q: only the system writes the user's quoted words, pass the user's message ids in cite", quoteMarker))
+		}
+		if len(in.Cite) > 0 {
+			quote, err := c.quoteUser(p, in.Cite)
+			if err != nil {
+				return fail(err)
+			}
+			msg += quote
+		}
+		if _, err := c.threads.Send(ctx, t.ID, msg, fromThread(p.MainThreadID), nil); err != nil {
 			return fail(err)
 		}
 		if busy {
