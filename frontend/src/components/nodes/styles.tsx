@@ -257,6 +257,12 @@ export const routeGraphQuietSx = {
         pointerEvents: 'auto',
         overflow: 'visible',
     },
+    // Action-bar nodes inside a folding row stay put when hovered: the row
+    // already moves downward as it opens, and the nodes' own hover lift
+    // (translateY(-2px)) would read as a two-direction jump.
+    [`&:hover .${ROUTE_GRAPH_QUIET_ROW_CLASS} .MuiBox-root, &:focus-within .${ROUTE_GRAPH_QUIET_ROW_CLASS} .MuiBox-root`]: {
+        transform: 'none',
+    },
     '@media (hover: none)': {
         [`& .${ROUTE_GRAPH_QUIET_CLASS}`]: {
             maxWidth: SMALL_NODE_STYLES.width,
