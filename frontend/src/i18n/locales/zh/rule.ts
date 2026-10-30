@@ -255,7 +255,6 @@ export default {
       "addProviderMore": "添加另一个提供商（请求将在所有提供商之间负载平衡）",
       "addFirstProvider": "添加您的第一个提供商",
       "addServiceFirst": "添加模型以启用请求转发",
-      "addServiceSecond": "添加另一个模型（将启用负载均衡）",
       "loadBalance": "在这一层再加一个服务，和同层的服务分摊请求",
       "fallbackTier": "加一层兜底：上面每一层都不可用时才会用到",
       "addServiceToTier": "给这一层加一个服务",

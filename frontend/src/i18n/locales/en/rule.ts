@@ -255,7 +255,6 @@ export default {
       "addProviderMore": "Add another provider (requests will be load balanced across all providers)",
       "addFirstProvider": "Add your first provider",
       "addServiceFirst": "Add a model to enable request forwarding",
-      "addServiceSecond": "Add another model (load balancing will be enabled)",
       "loadBalance": "Add a service to this tier; it shares requests with the others in it",
       "fallbackTier": "Add a tier below: used only when every tier above is unavailable",
       "addServiceToTier": "Add a service to this tier",

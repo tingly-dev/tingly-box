@@ -81,7 +81,6 @@ export const TierNode: React.FC<TierNodeProps> = ({
                     transition: 'border-color 0.16s, opacity 0.16s',
                     userSelect: 'none',
                     cursor: 'default',
-                    position: 'relative',
                 })}
                 onMouseEnter={() => onHover?.(true)}
                 onMouseLeave={() => onHover?.(false)}
