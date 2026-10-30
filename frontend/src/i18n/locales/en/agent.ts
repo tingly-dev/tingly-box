@@ -15,6 +15,7 @@ export default {
   },
   "agentInstall": {
     "label": "Install",
+    "website": "Website",
     "official": "Official",
     "mirror": "Mirror",
     "mirrorTooltip": "Install from a mirror registry (faster in some regions)",

@@ -53,6 +53,7 @@ export interface GuideAgent {
     name: string;
     installCommand?: string;
     installMirrorCommand?: string;
+    siteUrl?: string;
 }
 
 /** Connect steps of the agent guide; `{{agent}}` is the agent's name. */

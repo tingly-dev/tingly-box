@@ -143,6 +143,7 @@ export default {
         "clickHere": "Click here",
         "connectTitle": "Connect {{agent}}",
         "connect": {
+          "website": "Install from the {{agent}} website",
           "official": "Official",
           "mirror": "Mirror",
           "install": { "title": "Install {{agent}}", "content": "Install it with the command below (it is also in the Install row of the connection section), then come back here." },

@@ -143,6 +143,7 @@ export default {
         "clickHere": "Нажмите здесь",
         "connectTitle": "Подключение {{agent}}",
         "connect": {
+          "website": "Другие способы установки на сайте {{agent}}",
           "official": "Официальный",
           "mirror": "Зеркало",
           "install": { "title": "Установите {{agent}}", "content": "Установите командой ниже (она есть и в строке Install раздела подключения), затем вернитесь сюда." },

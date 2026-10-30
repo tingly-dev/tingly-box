@@ -143,6 +143,7 @@ export default {
         "clickHere": "点这里",
         "connectTitle": "接入 {{agent}}",
         "connect": {
+          "website": "在 {{agent}} 官网查看其他安装方式",
           "official": "官方源",
           "mirror": "镜像源",
           "install": { "title": "安装 {{agent}}", "content": "用下面的命令安装（连接区的 Install 行里也有），装好再回来。" },

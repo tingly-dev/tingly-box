@@ -261,6 +261,11 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                                                 </Box>
                                             </Box>
                                         ))}
+                                        {agent.siteUrl && (
+                                            <Button href={agent.siteUrl} target="_blank" rel="noopener noreferrer" size="small" variant="text" sx={{ alignSelf: 'flex-start' }}>
+                                                {t('rule.routing.guide.connect.website', { agent: agent.name })}
+                                            </Button>
+                                        )}
                                     </Box>
                                 )}
                                 {currentStep.panel === 'apply' && (

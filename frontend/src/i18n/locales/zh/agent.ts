@@ -13,6 +13,7 @@ export default {
   },
   "agentInstall": {
     "label": "安装",
+    "website": "官网",
     "official": "官方源",
     "mirror": "镜像源",
     "mirrorTooltip": "从镜像源安装（部分地区更快）",

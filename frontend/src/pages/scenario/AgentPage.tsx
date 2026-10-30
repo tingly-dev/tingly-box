@@ -69,6 +69,8 @@ export interface AgentInstall {
     installActions?: (t: TFunction) => AgentInstallAction[];
     /** The Quick Start button opens the agent's own connect guide (install → connect → apply → verify) before the routing steps. */
     connectGuide?: boolean;
+    /** The agent's own site, offered next to the npm command for other ways to install. */
+    siteUrl?: string;
 }
 
 /** A link next to the header's config button (e.g. DSH's local Web UI). */
@@ -319,6 +321,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                                 command={install.installCommand}
                                 mirrorCommand={install.installMirrorCommand}
                                 actions={install.installActions?.(t)}
+                                siteUrl={install.siteUrl}
                                 onCopy={copyToClipboard}
                             />
                         )}
@@ -367,6 +370,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         name: agent.title,
                         installCommand: install.installCommand,
                         installMirrorCommand: install.installMirrorCommand,
+                        siteUrl: install.siteUrl,
                     } : undefined}
                 />
             </Stack>

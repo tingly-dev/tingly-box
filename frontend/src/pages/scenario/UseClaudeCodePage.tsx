@@ -114,6 +114,7 @@ const claudeCode: AgentPageDescriptor = {
     },
     install: {
         connectGuide: true,
+        siteUrl: 'https://code.claude.com/docs/en/overview',
         installCommand: 'npm install -g @anthropic-ai/claude-code',
         installMirrorCommand: 'npm install -g @anthropic-ai/claude-code --registry=https://registry.npmmirror.com',
     },
