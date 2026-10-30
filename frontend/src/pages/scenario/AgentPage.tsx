@@ -67,6 +67,8 @@ export interface AgentInstall {
     installMirrorCommand?: string;
     installDescriptionKey?: string;
     installActions?: (t: TFunction) => AgentInstallAction[];
+    /** The Quick Start button opens the agent's own connect guide (install → connect → apply → verify) before the routing steps. */
+    connectGuide?: boolean;
 }
 
 /** A link next to the header's config button (e.g. DSH's local Web UI). */
@@ -357,7 +359,16 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
 
                 <ScenarioLogDialog open={logOpen} onClose={() => setLogOpen(false)} scenario={scenario} title={t('agentStatus.log')} />
                 {setup.kind !== 'none' && setup.renderDialog(slot)}
-                <EntryGuideDialog open={guideOpen} onClose={() => setGuideOpen(false)} mode="direct" />
+                <EntryGuideDialog
+                    open={guideOpen}
+                    onClose={() => setGuideOpen(false)}
+                    mode="direct"
+                    agent={install?.connectGuide ? {
+                        name: agent.title,
+                        installCommand: install.installCommand,
+                        installMirrorCommand: install.installMirrorCommand,
+                    } : undefined}
+                />
             </Stack>
         </PageLayout>
     );

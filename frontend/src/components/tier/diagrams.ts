@@ -44,7 +44,39 @@ export interface GuideStep {
     // button highlighted, so users can recognise what to click (the real button
     // lives in the toolbar, off-graph).
     toolbarHighlight?: 'connectAI' | 'newRule';
+    // Agent-specific connect steps (install / apply / verify) replace the diagram with a text panel.
+    panel?: 'install' | 'apply' | 'verify';
 }
+
+/** The agent a guide is opened for: its connect steps are put around the routing steps. */
+export interface GuideAgent {
+    name: string;
+    installCommand?: string;
+    installMirrorCommand?: string;
+}
+
+/** Connect steps of the agent guide; `{{agent}}` is the agent's name. */
+export const AGENT_INSTALL_STEP: GuideStep = {
+    diagram: TierDiagramType.EMPTY,
+    mode: 'direct',
+    panel: 'install',
+    title: 'rule.routing.guide.connect.install.title',
+    content: 'rule.routing.guide.connect.install.content',
+};
+export const AGENT_APPLY_STEP: GuideStep = {
+    diagram: TierDiagramType.EMPTY,
+    mode: 'direct',
+    panel: 'apply',
+    title: 'rule.routing.guide.connect.apply.title',
+    content: 'rule.routing.guide.connect.apply.content',
+};
+export const AGENT_VERIFY_STEP: GuideStep = {
+    diagram: TierDiagramType.EMPTY,
+    mode: 'direct',
+    panel: 'verify',
+    title: 'rule.routing.guide.connect.verify.title',
+    content: 'rule.routing.guide.connect.verify.content',
+};
 
 /**
  * Mock provider data for diagrams

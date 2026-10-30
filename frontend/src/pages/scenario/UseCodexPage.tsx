@@ -41,6 +41,7 @@ const codex: AgentPageDescriptor = {
         ),
     },
     install: {
+        connectGuide: true,
         installCommand: 'npm install -g @openai/codex',
         installMirrorCommand: 'npm install -g @openai/codex --registry=https://registry.npmmirror.com',
     },

@@ -141,6 +141,16 @@ export default {
         "hoverHint": "Hover over a node in the diagram to see its actions",
         "toolbarLabel": "Page toolbar",
         "clickHere": "Click here",
+        "connectTitle": "Connect {{agent}}",
+        "connect": {
+          "official": "Official",
+          "mirror": "Mirror",
+          "install": { "title": "Install {{agent}}", "content": "Install it with the command below (it is also in the Install row of the connection section), then come back here." },
+          "apply": { "title": "Apply the config", "content": "Auto Config in the page header writes the Base URL and key into {{agent}}'s config file. The existing file is backed up first and your other settings are kept." },
+          "applyHint": "Click Auto Config at the top right of the page. Config out of date in the header means it still needs applying.",
+          "verify": { "title": "Start {{agent}} and check", "content": "Run {{agent}} once. The header then shows the last request, which means the gateway is connected and the rules below are routing it." },
+          "verifyHint": "No request yet after starting {{agent}}? Check that the Base URL in the connection section matches what {{agent}} uses."
+        },
         "steps": {
           "connectAI": {
             "title": "Connect an AI provider",

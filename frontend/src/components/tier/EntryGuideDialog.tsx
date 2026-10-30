@@ -17,22 +17,25 @@ import {
 import { Close as CloseIcon } from '@/components/icons';
 import React, { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ROUTING_GUIDE_STEPS } from './diagrams';
+import { AGENT_APPLY_STEP, AGENT_INSTALL_STEP, AGENT_VERIFY_STEP, ROUTING_GUIDE_STEPS, type GuideAgent } from './diagrams';
 import { StaticGraphViewer } from './StaticGraphViewer';
 import { GuideToolbarPreview } from './GuideToolbarPreview';
 import { GuideLanguageToggle } from './GuideLanguageToggle';
-import { fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@/theme/fonts';
 
 export interface EntryGuideDialogProps {
     open: boolean;
     onClose: () => void;
     mode?: 'direct' | 'smart';
+    /** An agent page's guide: install, connect, add a model, apply, verify, then the routing steps. */
+    agent?: GuideAgent;
 }
 
 export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
     open,
     onClose,
     mode = 'direct',
+    agent,
 }) => {
     const { t } = useTranslation();
     const theme = useTheme();
@@ -41,10 +44,13 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
 
     // Steps for the current mode are the source of truth; activeStep is a plain
     // local index into this list (no array-offset arithmetic).
-    const filteredSteps = React.useMemo(
-        () => ROUTING_GUIDE_STEPS.filter((step) => step.mode === mode),
-        [mode],
-    );
+    const filteredSteps = React.useMemo(() => {
+        const routing = ROUTING_GUIDE_STEPS.filter((step) => step.mode === mode);
+        if (!agent || mode !== 'direct') return routing;
+        // Connect AI and Add model are the routing guide's own first two steps.
+        return [AGENT_INSTALL_STEP, ...routing.slice(0, 2), AGENT_APPLY_STEP, AGENT_VERIFY_STEP, ...routing.slice(2)];
+    }, [mode, agent]);
+    const stepParams = { agent: agent?.name ?? '' };
     const [activeStep, setActiveStep] = React.useState(0);
     const totalSteps = filteredSteps.length;
     const safeActiveStep = Math.min(activeStep, totalSteps - 1);
@@ -108,7 +114,9 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
         }
     };
 
-    const guideTitle = mode === 'direct'
+    const guideTitle = agent && mode === 'direct'
+        ? t('rule.routing.guide.connectTitle', { agent: agent.name })
+        : mode === 'direct'
         ? t('rule.routing.guide.directTitle', { defaultValue: 'Direct Routing Guide' })
         : t('rule.routing.guide.smartTitle', { defaultValue: 'Smart Routing Guide' });
 
@@ -193,7 +201,7 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                             {filteredSteps.map((step, index) => (
                                 <Step key={index} onClick={() => handleStepChange(index)}>
                                     <StepLabel>
-                                        {fullScreen ? '' : t(step.title, { defaultValue: `Step ${index + 1}` })}
+                                        {fullScreen ? '' : t(step.title, { defaultValue: `Step ${index + 1}`, ...stepParams })}
                                     </StepLabel>
                                 </Step>
                             ))}
@@ -212,7 +220,7 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                         {/* Explanation Text */}
                         <Box sx={{ mb: 2.5 }}>
                             <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
-                                {t(currentStep.content, { defaultValue: currentStep.content })}
+                                {t(currentStep.content, { defaultValue: currentStep.content, ...stepParams })}
                             </Typography>
 
                             {/* Annotations */}
@@ -238,6 +246,36 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                             )}
                         </Box>
 
+                        {currentStep.panel ? (
+                            <Box sx={{ bgcolor: 'background.default', p: { xs: 2, sm: 3 }, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                                {currentStep.panel === 'install' && agent && (
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                                        {[
+                                            { label: t('rule.routing.guide.connect.official'), command: agent.installCommand },
+                                            { label: t('rule.routing.guide.connect.mirror'), command: agent.installMirrorCommand },
+                                        ].filter((row) => row.command).map((row) => (
+                                            <Box key={row.label}>
+                                                <Typography variant="caption" sx={{ color: 'text.secondary' }}>{row.label}</Typography>
+                                                <Box sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, p: 1, borderRadius: 1, bgcolor: 'action.hover', wordBreak: 'break-all' }}>
+                                                    {row.command}
+                                                </Box>
+                                            </Box>
+                                        ))}
+                                    </Box>
+                                )}
+                                {currentStep.panel === 'apply' && (
+                                    <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.8 }}>
+                                        {t('rule.routing.guide.connect.applyHint', stepParams)}
+                                    </Typography>
+                                )}
+                                {currentStep.panel === 'verify' && (
+                                    <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.8 }}>
+                                        {t('rule.routing.guide.connect.verifyHint', stepParams)}
+                                    </Typography>
+                                )}
+                            </Box>
+                        ) : (
+                        <>
                         {/* Static Graph Diagram */}
                         <Box sx={{
                             bgcolor: 'background.default',
@@ -278,6 +316,8 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                                 💡 {t('rule.routing.guide.hoverHint', { defaultValue: 'Hover over a node in the diagram to see its actions' })}
                             </Box>
                         </Box>
+                        </>
+                        )}
                     </Box>
                 </Box>
             </DialogContent>
