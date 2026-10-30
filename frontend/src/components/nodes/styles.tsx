@@ -250,7 +250,7 @@ export const routeGraphQuietSx = {
     },
     [`&:hover .${ROUTE_GRAPH_QUIET_ROW_CLASS}, &:focus-within .${ROUTE_GRAPH_QUIET_ROW_CLASS}`]: {
         // A wide-label node (34px) plus the row's own bottom margin.
-        maxHeight: 64,
+        maxHeight: 120,
         opacity: 1,
         pointerEvents: 'auto',
     },
@@ -261,7 +261,7 @@ export const routeGraphQuietSx = {
             pointerEvents: 'auto',
         },
         [`& .${ROUTE_GRAPH_QUIET_ROW_CLASS}`]: {
-            maxHeight: 64,
+            maxHeight: 120,
             opacity: 1,
             pointerEvents: 'auto',
         },
