@@ -242,28 +242,33 @@ export const routeGraphQuietSx = {
         pointerEvents: 'none',
         transition: 'opacity 0.16s ease, max-height 0.2s ease',
     },
-    // Hover or keyboard focus unfolds both back into place, clickable.
+    // Hover or keyboard focus unfolds both back into place, clickable. Overflow
+    // is released too: the fold's clip would otherwise cut the node's hover
+    // lift (-2px) and its emphasis ring at the top of the box.
     [`&:hover .${ROUTE_GRAPH_QUIET_CLASS}, &:focus-within .${ROUTE_GRAPH_QUIET_CLASS}`]: {
         maxWidth: SMALL_NODE_STYLES.width,
         opacity: 1,
         pointerEvents: 'auto',
+        overflow: 'visible',
     },
     [`&:hover .${ROUTE_GRAPH_QUIET_ROW_CLASS}, &:focus-within .${ROUTE_GRAPH_QUIET_ROW_CLASS}`]: {
-        // A wide-label node (34px) plus the row's own bottom margin.
         maxHeight: 120,
         opacity: 1,
         pointerEvents: 'auto',
+        overflow: 'visible',
     },
     '@media (hover: none)': {
         [`& .${ROUTE_GRAPH_QUIET_CLASS}`]: {
             maxWidth: SMALL_NODE_STYLES.width,
             opacity: 1,
             pointerEvents: 'auto',
+            overflow: 'visible',
         },
         [`& .${ROUTE_GRAPH_QUIET_ROW_CLASS}`]: {
             maxHeight: 120,
             opacity: 1,
             pointerEvents: 'auto',
+            overflow: 'visible',
         },
     },
 } as const;
