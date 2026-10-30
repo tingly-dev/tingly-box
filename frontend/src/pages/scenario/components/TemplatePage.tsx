@@ -88,7 +88,22 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
 
     const navigate = useNavigate();
     const [allExpanded, setAllExpanded] = useState<boolean>(true);
-    const [expandedStates, setExpandedStates] = useState<Record<string, boolean>>({});
+    // Per-page collapse state of every rule, remembered across navigation and reload.
+    const expandedStorageKey = `tingly:rule-expanded:${props.scenario ?? 'default'}`;
+    const [expandedStates, setExpandedStates] = useState<Record<string, boolean>>(() => {
+        try {
+            return JSON.parse(localStorage.getItem(expandedStorageKey) || '{}');
+        } catch {
+            return {};
+        }
+    });
+    useEffect(() => {
+        try {
+            localStorage.setItem(expandedStorageKey, JSON.stringify(expandedStates));
+        } catch {
+            // storage unavailable: state just isn't remembered
+        }
+    }, [expandedStorageKey, expandedStates]);
     const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
     const [logDialogOpen, setLogDialogOpen] = useState<boolean>(false);
     const [showGuide, setShowGuide] = useState<boolean>(false);
