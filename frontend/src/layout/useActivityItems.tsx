@@ -412,7 +412,7 @@ export function useActivityItems(): ActivityItem[] {
                         icon: <IconLock sx={{ fontSize: 20 }} />,
                         ...(vmodelOff ? { match: (p: string) => p === '/credentials' || p === VMODEL_PATH } : {}),
                     },
-                    // VModel is a power-up (PowerUpsMenu), on by default: the
+                    // VModel is a power-up (PowerUpsMenu), off by default: the
                     // built-in synthetic providers are for onboarding and
                     // dry-runs, not credentials the user owns.
                     ...(vmodelOff ? [] : [{

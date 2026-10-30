@@ -11,8 +11,8 @@ const { SCENARIOS, getHiddenScenarios, useHiddenScenarios } = await import('./sc
 describe('hidden scenarios', () => {
     beforeEach(() => localStorage.clear());
 
-    it('shows every agent but cursor when nothing is stored', () => {
-        expect([...getHiddenScenarios()]).toEqual(['cursor']);
+    it('hides cursor and vmodel by default when nothing is stored', () => {
+        expect([...getHiddenScenarios()]).toEqual(['cursor', 'vmodel']);
         const { result } = renderHook(() => useHiddenScenarios());
         expect(SCENARIOS.filter((s) => s.id !== 'cursor').some((s) => result.current.isHidden(s.id))).toBe(false);
     });
@@ -33,7 +33,7 @@ describe('hidden scenarios', () => {
         first.unmount();
 
         expect(getHiddenScenarios().has('cursor')).toBe(false);
-        expect(localStorage.getItem('scenario.hiddenScenarios')).toBe('[]');
+        expect(localStorage.getItem('scenario.hiddenScenarios')).toBe('["vmodel"]');
     });
 
     it('keeps a stored choice over the defaults', () => {

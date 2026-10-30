@@ -200,7 +200,12 @@ const VISIBILITY_EVENT = 'scenario-visibility-change';
 // tingly-box is reachable over a public HTTPS URL (real deployment, or a
 // tunnel). See .design/cursor.md. Un-hide once we can detect/guide this
 // better, e.g. warn inline when baseUrl looks like localhost/a private IP.
-const DEFAULT_HIDDEN = ['cursor'];
+//
+// "vmodel" (the Virtual Models power-up) is off by default: the built-in
+// synthetic providers are for onboarding/demos/dry-runs and only add a
+// Credentials sidebar row. It is deliberately NOT behind a DEFAULTS_VERSION
+// bump, so installs that already have a stored choice keep it as they have it.
+const DEFAULT_HIDDEN = ['cursor', 'vmodel'];
 // Bump this whenever DEFAULT_HIDDEN gains a genuinely new entry, so existing
 // users pick up the new default without losing their own customisations.
 const DEFAULTS_VERSION = 5;
