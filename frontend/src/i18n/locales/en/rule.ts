@@ -243,10 +243,10 @@ export default {
     },
     "ruleConditions": {
       "defaultTitle": "Default",
-      "addCondition": "Add condition",
+      "addCondition": "Add smart condition",
       "conditionsHint": "Conditions are checked from top to bottom; the first match wins.",
-      "conditionsPaused": "Conditions are saved but paused",
-      "conditionsResume": "Resume"
+      "closeConditions": "Turn off smart condition",
+      "closeConditionsTooltip": "Conditions stay saved; every request uses Default until you turn them back on."
     },
     "tooltips": {
       "addProviderFirst": "Add a provider to enable request forwarding",
@@ -299,6 +299,9 @@ export default {
     "endpointNotApplicable": "Only applies to OpenAI-compatible upstreams. This rule has none, so the choice has no effect for now.",
     "managePlugins": "Manage plugins",
     "test": "Test",
+    "smartConditionOn": "Turn off smart condition",
+    "smartConditionOff": "Turn on smart condition",
+    "smartConditionAdd": "Add smart condition",
     "ruleActions": "Rule actions",
     "compact": {
       "chip": "Compact: {{value}}",

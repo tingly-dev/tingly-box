@@ -1,4 +1,4 @@
-import {Box, Button, Card, CardContent, Collapse, Stack,} from '@mui/material';
+import {Box, Card, CardContent, Collapse, Stack,} from '@mui/material';
 import {alpha, styled} from '@mui/material/styles';
 import React, {useEffect, useRef} from 'react';
 import {useTranslation} from 'react-i18next';
@@ -6,6 +6,7 @@ import {EntryGuideDialog} from '@/components/tier/EntryGuideDialog';
 import {
     getRouteGraphActiveColor,
     PROVIDER_NODE_STYLES,
+    SMART_NODE_STYLES,
     SMALL_NODE_STYLES,
 } from '@/components/nodes/styles';
 import {
@@ -127,6 +128,7 @@ const StyledCard = styled(Card, {
     boxShadow: 'none',
     margin: "3px",
     position: 'relative',
+    '&:hover .rule-header-add-condition': {opacity: 1},
     ...(active ? {} : {
         '&::before': {
             content: '""',
@@ -260,16 +262,19 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         setShowTierGuide(false);
     };
 
-    // There is no Direct/Smart switch: a rule is its Default row, plus
-    // conditions above it when it has any. smartEnabled stays on the record
-    // (the backend only evaluates conditions while it is on) and follows the
-    // conditions; a rule saved with conditions but smartEnabled off (the old
-    // "Direct" toggle) shows them paused with a Resume action.
+    // There is no Direct/Smart switch: the left node is always Default, and a
+    // rule shows its conditions above it only while smartEnabled is on. Turning
+    // them off (the close node) keeps them saved; adding from Default turns them
+    // back on, so the pair acts as the old switch without a backend change.
     const smartEnabled = record.smartEnabled || false;
     const smartRouting = record.smartRouting || [];
     const hasSmartRules = smartRouting.length > 0;
-    const showSmartRouting = mode !== 'direct' && hasSmartRules;
-    const conditionsPaused = showSmartRouting && !smartEnabled;
+    const showSmartRouting = mode !== 'direct' && hasSmartRules && smartEnabled;
+    const handleAddCondition = () => {
+        // Saved conditions that are switched off come back instead of a new empty one.
+        if (hasSmartRules && !smartEnabled) onSwitchRoutingMode?.();
+        else onAddSmartRule?.();
+    };
 
     const getApiStyle = React.useCallback((providerUuid: string) => {
         const provider = providers.find(p => p.uuid === providerUuid);
@@ -400,14 +405,6 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
 
         return (
             <>
-                {conditionsPaused && (
-                    <Box sx={{display: 'flex', alignItems: 'center', gap: 1, fontSize: 12.5, color: 'text.secondary'}}>
-                        {t('rule.ruleConditions.conditionsPaused')}
-                        <Button size="small" onClick={onSwitchRoutingMode} disabled={!active || saving}>
-                            {t('rule.ruleConditions.conditionsResume')}
-                        </Button>
-                    </Box>
-                )}
                 {/* Smart Rules List */}
                 {smartRouting.length > 0 ? (
                     smartRouting.map((rule, index) => (
@@ -466,58 +463,57 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     ))
                 ) : null}
 
-                {/* Add condition (with conditions; without them it sits under Default) */}
-                <Box sx={{display: 'flex', alignItems: 'center', gap: 1.5, py: 1}}>
+                {/* Add condition sits in the condition column; the turn-off node lines up with the service column */}
+                <GraphRow>
+                    <NodeContainer>
+                        <ActionAddNode
+                            label={t('rule.ruleConditions.addCondition')}
+                            active={active && !saving}
+                            onAdd={() => onAddSmartRule?.()}
+                            tooltip={conditionTooltip}
+                        />
+                    </NodeContainer>
+                    <Box sx={{visibility: 'hidden'}}><ArrowNode direction="forward"/></Box>
                     <ActionAddNode
-                        label={t('rule.ruleConditions.addCondition')}
+                        label={t('rule.ruleConditions.closeConditions')}
+                        icon="close"
+                        width={PROVIDER_NODE_STYLES.width}
                         active={active && !saving}
-                        onAdd={() => onAddSmartRule?.()}
-                        tooltip={conditionTooltip}
+                        onAdd={() => onSwitchRoutingMode?.()}
+                        tooltip={t('rule.ruleConditions.closeConditionsTooltip')}
                     />
                     {smartRouting.length > 1 && (
-                        <Box sx={{fontSize: 12, color: 'text.secondary'}}>
+                        <Box sx={{ml: 0.5, fontSize: 12, color: 'text.secondary'}}>
                             {t('rule.ruleConditions.conditionsHint')}
                         </Box>
                     )}
-                </Box>
+                </GraphRow>
             </>
         );
     };
 
-    // Render default providers section
-    const renderDefaultProviders = () => {
-        return (
-            <GraphRow sx={{alignItems: 'flex-start'}}>
-                {/* Fixed height matches the tier row height so ServiceEntryNode centres vertically */}
-                <NodeContainer sx={{height: PROVIDER_NODE_STYLES.height, justifyContent: 'center'}}>
-                    {/* No conditions: Add condition sits beside Default (on its right), both a service node tall */}
-                    <Box sx={{display: 'flex', gap: 1}}>
-                        <ServiceEntryNode
-                            providersCount={record.providers.length}
-                            active={active}
-                            compact={!showSmartRouting}
-                            tooltip={defaultTooltip}
-                        />
-                        {!showSmartRouting && (
-                            <ActionAddNode
-                                label={t('rule.ruleConditions.addCondition')}
-                                square
-                                active={active && !saving}
-                                onAdd={() => onAddSmartRule?.()}
-                                tooltip={conditionTooltip}
-                            />
-                        )}
-                    </Box>
-                </NodeContainer>
+    // Render default providers section: Default, an arrow, then the tiers.
+    const renderDefaultProviders = () => (
+        <GraphRow sx={{alignItems: 'flex-start'}}>
+            {/* Fixed height matches the tier row height so ServiceEntryNode centres vertically */}
+            <NodeContainer sx={{width: SMART_NODE_STYLES.width, height: PROVIDER_NODE_STYLES.height, justifyContent: 'center'}}>
+                <ServiceEntryNode
+                    providersCount={record.providers.length}
+                    active={active && !saving}
+                    tooltip={defaultTooltip}
+                    onAddCondition={showSmartRouting ? undefined : handleAddCondition}
+                    addConditionLabel={t('rule.ruleConditions.addCondition')}
+                addTooltip={conditionTooltip}
+                />
+            </NodeContainer>
 
-                <Box sx={{flex: 0, display: 'flex', alignItems: 'center', height: PROVIDER_NODE_STYLES.height}}>
-                    <ArrowNode direction="forward"/>
-                </Box>
+            <Box sx={{flex: 0, display: 'flex', alignItems: 'center', height: PROVIDER_NODE_STYLES.height}}>
+                <ArrowNode direction="forward"/>
+            </Box>
 
-                {renderTierLayout()}
-            </GraphRow>
-        );
-    };
+            {renderTierLayout()}
+        </GraphRow>
+    );
 
     return (
         <StyledCard active={active}>
@@ -574,7 +570,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         <Box sx={{display: 'flex', alignItems: 'stretch', minWidth: 0}}>
                             <Box ref={scrollContainerRef} sx={{flexGrow: 1, minWidth: 0, overflowX: 'auto'}}>
                                 <GraphContainer>
-                                    <Box sx={{display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1.5}}>
+                                    <Box sx={{display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5}}>
                                         {renderSmartRules()}
                                         {renderDefaultProviders()}
                                     </Box>

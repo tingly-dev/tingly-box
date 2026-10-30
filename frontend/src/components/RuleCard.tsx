@@ -332,6 +332,12 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onEditFlags={handleOpenFlagEditor}
                 onOpenPlugins={() => openCatalog()}
                 pluginsCount={enabledPlugins.length}
+                smartCondition={{
+                    state: (configRecord.smartRouting?.length ?? 0) === 0 ? 'none' : configRecord.smartEnabled ? 'on' : 'off',
+                    onToggle: () => ((configRecord.smartRouting?.length ?? 0) > 0 && !configRecord.smartEnabled) || configRecord.smartEnabled
+                        ? handleRoutingModeSwitch()
+                        : smartHandlers.handleAddSmartRule(),
+                }}
                 ruleUuid={rule.uuid}
                 ruleName={formatModelNameWithContext1M(rule.request_model || rule.uuid, configRecord.flags)}
                 scenario={rule.scenario}

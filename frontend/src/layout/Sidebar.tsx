@@ -28,7 +28,6 @@ import { useVersion } from '@/contexts/VersionContext';
 import { footerHeight, sidebarWidth } from './constants';
 import {
     NAV_ROW_SX,
-    navRowSelectedSx,
     navRowTextSlotProps,
     sidebarContainerSx,
     sidebarHeaderSx,
@@ -181,7 +180,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActi
                                         onClick={() => onTogglePinned!(item.pinId!)}
                                         aria-label={item.pinned ? t('layout.sidebar.unpin') : t('layout.sidebar.pinToTop')}
                                         aria-pressed={!!item.pinned}
-                                        sx={{ color: 'text.secondary', mr: 0.5 }}
+                                        sx={{ color: active ? 'primary.contrastText' : 'text.secondary', mr: 0.5 }}
                                     >
                                         {item.pinned ? <IconPinFilled sx={{ fontSize: 16 }} /> : <IconPin sx={{ fontSize: 16 }} />}
                                     </IconButton>
@@ -193,7 +192,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActi
                                         edge="end"
                                         onClick={() => onToggleHidden(item.hideId!)}
                                         aria-label={item.hidden ? t('scenarioOverview.showInSidebar') : t('scenarioOverview.hideFromSidebar')}
-                                        sx={{ color: 'text.secondary', mr: 0.5 }}
+                                        sx={{ color: active ? 'primary.contrastText' : 'text.secondary', mr: 0.5 }}
                                     >
                                         {item.hidden ? <IconVisibilityOff sx={{ fontSize: 18 }} /> : <IconVisibility sx={{ fontSize: 18 }} />}
                                     </IconButton>
@@ -210,8 +209,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActi
                                     ...NAV_ROW_SX,
                                     color: 'text.secondary',
                                     position: 'relative',
-                                    '&:hover': { backgroundColor: 'action.hover', color: 'text.primary' },
-                                    ...(active && navRowSelectedSx),
+                                    ...(active && {
+                                        backgroundColor: 'primary.main',
+                                        color: 'primary.contrastText',
+                                        '& img': { filter: 'none !important' },
+                                        '& .MuiListItemIcon-root > div': {
+                                            bgcolor: 'white',
+                                            borderRadius: 0.5,
+                                            p: 0.25,
+                                        },
+                                        '&:hover': { backgroundColor: 'primary.main' },
+                                        '& .MuiListItemIcon-root': { color: 'primary.contrastText' },
+                                        '& .MuiListItemText-primary': { color: 'primary.contrastText' },
+                                    }),
+                                    '&:hover': {
+                                        backgroundColor: active ? 'primary.main' : 'action.hover',
+                                        color: active ? 'primary.contrastText' : 'text.primary',
+                                    },
                                 }}
                             >
                                 {item.icon && (
@@ -234,7 +248,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActi
                                                 flexShrink: 0,
                                                 ml: 1,
                                                 fontVariantNumeric: 'tabular-nums',
-                                                color: 'text.secondary',
+                                                color: active ? 'rgba(255,255,255,0.75)' : 'text.secondary',
                                             }}
                                         >
                                             {item.count.value}

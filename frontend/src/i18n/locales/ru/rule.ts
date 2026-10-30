@@ -243,10 +243,10 @@ export default {
     },
     "ruleConditions": {
       "defaultTitle": "По умолчанию",
-      "addCondition": "Добавить условие",
+      "addCondition": "Добавить умное условие",
       "conditionsHint": "Условия проверяются сверху вниз; срабатывает первое совпадение.",
-      "conditionsPaused": "Условия сохранены, но приостановлены",
-      "conditionsResume": "Возобновить"
+      "closeConditions": "Выключить умные условия",
+      "closeConditionsTooltip": "Условия сохраняются; пока они выключены, все запросы идут в Default."
     },
     "tooltips": {
       "addProviderFirst": "Добавьте провайдера, чтобы включить пересылку запросов",
@@ -299,6 +299,9 @@ export default {
     "endpointNotApplicable": "Действует только для OpenAI-совместимых апстримов. В этом правиле их нет, поэтому выбор пока ни на что не влияет.",
     "managePlugins": "Управление плагинами",
     "test": "Проверить",
+    "smartConditionOn": "Выключить умные условия",
+    "smartConditionOff": "Включить умные условия",
+    "smartConditionAdd": "Добавить умное условие",
     "ruleActions": "Действия с правилом",
     "compact": {
       "chip": "Сжатие: {{value}}",

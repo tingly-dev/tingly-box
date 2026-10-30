@@ -22,11 +22,17 @@ opens it in Direct mode. A single, page-scoped entry avoids repeating the icon
 on every card (principle #9, reduce noise) and doubles as a standing hint that
 the guide can be reopened there.
 
-- A rule has no Direct/Smart switch: it is its Default row plus optional
-  conditions (`smartEnabled` just follows whether conditions exist). The
-  contextual "View direct/smart guide →" links now sit in the hover tooltips of
-  the `Default` node (Direct guide) and the `Add condition` node (Smart guide);
-  they are separate from the toolbar entry.
+- A rule has no Direct/Smart switch: it is its Default row plus optional smart
+  conditions. Conditions are switched off, not deleted: `smartEnabled` is the
+  switch and the saved conditions are kept. The contextual "View direct/smart
+  guide →" links sit in hover tooltips: the `Default` node (Direct guide), its
+  inline "+ Add smart condition" (Smart guide, the only place to reach it while
+  there are no conditions) and the standalone "Add smart condition" node. They
+  are separate from the toolbar entry.
+- Turning conditions on and off is explicit in two places: the dashed "Turn off
+  smart condition" node next to "Add smart condition", and one state-dependent
+  item in the rule's ⋯ menu (add / turn off / turn on). Adding while off
+  restores the saved conditions instead of making a new one.
 
 **Fix (first-run):** the Direct guide auto-opens once per user (new *and*
 existing) the first time they land on a populated routing page, then records
