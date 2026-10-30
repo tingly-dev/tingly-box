@@ -39,6 +39,7 @@ configuration is no longer a separate picker card or mode. See [dual-provider.md
 - **Import** → opens the import modal; on success, stays open showing a
   result list (see "Import" below) instead of closing
 - **OAuth** → opens OAuthDialog in direct mode (skips the provider grid, shows provider + proxy config, then starts auth)
+  - Pressing Connect & Authorize with **no proxy set** first asks "Does this sign-in need a proxy?" (TEP-2334): an inline proxy field (quick proxy offered when configured), *Use proxy & continue* or *Continue without proxy*. A proxy already filled (typed, auto-detected, quick) skips the question; Esc returns to the config screen. Retry after a failure does not ask again.
 
 ### Flow at a glance
 
@@ -173,7 +174,7 @@ enter their key without unchecking a separate toggle.
 | Advanced accordion | Proxy, user-agent, name are rarely needed; hiding them shortens the common add-key path |
 | Base URL required validation | Blocks submit and shows an inline field error; clears on first keystroke |
 | Empty `!` fix in test panel | Splitting an empty `details` string produced a dangling warning icon with no text |
-| OAuth direct mode | Picker already chose the provider; OAuthDialog skips its own grid via `autoStartProviderId`, shows provider/proxy configuration, and supports retrying a failed authorization initialization |
+| OAuth direct mode | Picker already chose the provider; OAuthDialog skips its own grid via `autoStartProviderId`, shows provider/proxy configuration, and supports retrying a failed authorization initialization; a missing proxy is asked once before starting, because forgetting it means a provider timeout and a repeated flow |
 
 ---
 

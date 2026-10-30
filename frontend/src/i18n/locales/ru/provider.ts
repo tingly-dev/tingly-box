@@ -1,5 +1,12 @@
 // Providers, credentials and access: provider dialogs, API keys, sharing keys, teams, access control
 export default {
+  "oauthProxyPrompt": {
+    "title": "Нужен ли прокси для этого входа?",
+    "body": "Если провайдер недоступен напрямую с этого компьютера, задайте прокси сейчас, иначе вход может завершиться по тайм-ауту и придётся начинать заново.",
+    "useQuick": "Быстрый прокси ({{url}})",
+    "useProxy": "Использовать прокси и продолжить",
+    "skip": "Продолжить без прокси"
+  },
   "workbuddyConnection": {
     "cardSummary": "Повседневная работа · Маршрутизация и инструменты",
     "proxyHint": "Необязательно: настройте сетевой прокси для этого подключения.",
