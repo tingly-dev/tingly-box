@@ -55,6 +55,9 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
     // For autoStartProviderId mode: whether user has clicked "Connect & Authorize"
     const [configConfirmed, setConfigConfirmed] = useState(false);
     const [authAttempt, setAuthAttempt] = useState(0);
+    // Ask once before the first start when no proxy is set (forgetting it means a
+    // timeout at the provider and a repeated flow).
+    const [proxyPromptOpen, setProxyPromptOpen] = useState(false);
     // Collapsed by default: the port-forwarding note for fixed-callback-port
     // providers (Claude Code, Codex) is only useful for remote deployments.
     const [showPortForwardHelp, setShowPortForwardHelp] = useState(false);
@@ -138,6 +141,7 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
         setConfigConfirmed(false);
         setAuthAttempt(0);
         setShowPortForwardHelp(false);
+        setProxyPromptOpen(false);
         onClose();
     };
 
@@ -452,6 +456,7 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
                                     disabled={provider?.enabled === false}
                                     onClick={() => {
                                         if (configConfirmed) setAuthAttempt((attempt) => attempt + 1);
+                                        else if (!proxyUrl.trim()) setProxyPromptOpen(true);
                                         else setConfigConfirmed(true);
                                     }}
                                 >
@@ -459,6 +464,45 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
                                 </Button>
                             </Stack>
                         )}
+                    </DialogContent>
+                </Dialog>
+                <Dialog open={open && proxyPromptOpen} onClose={() => setProxyPromptOpen(false)} maxWidth="xs" fullWidth>
+                    <DialogTitle>{t('oauthProxyPrompt.title')}</DialogTitle>
+                    <DialogContent>
+                        <Stack spacing={2} sx={{pt: 0.5}}>
+                            <Typography variant="body2" sx={{color: 'text.secondary'}}>
+                                {t('oauthProxyPrompt.body')}
+                            </Typography>
+                            <TextField
+                                autoFocus
+                                fullWidth
+                                size="small"
+                                placeholder="http://127.0.0.1:7890 or socks5://127.0.0.1:7890"
+                                value={proxyUrl}
+                                onChange={(e) => handleProxyUrlChange(e.target.value)}
+                            />
+                            {globalProxyUrl && !useGlobalProxy && (
+                                <Button
+                                    size="small"
+                                    sx={{alignSelf: 'flex-start', textTransform: 'none'}}
+                                    onClick={() => handleUseGlobalProxyChange(true)}
+                                >
+                                    {t('oauthProxyPrompt.useQuick', {url: globalProxyUrl})}
+                                </Button>
+                            )}
+                            <Stack direction="row" spacing={1} sx={{justifyContent: 'flex-end'}}>
+                                <Button onClick={() => { setProxyPromptOpen(false); setConfigConfirmed(true); }}>
+                                    {t('oauthProxyPrompt.skip')}
+                                </Button>
+                                <Button
+                                    variant="contained"
+                                    disabled={!proxyUrl.trim()}
+                                    onClick={() => { setProxyPromptOpen(false); setConfigConfirmed(true); }}
+                                >
+                                    {t('oauthProxyPrompt.useProxy')}
+                                </Button>
+                            </Stack>
+                        </Stack>
                     </DialogContent>
                 </Dialog>
                 <OAuthAuthorizationDialog

@@ -1,5 +1,12 @@
 // Providers, credentials and access: provider dialogs, API keys, sharing keys, teams, access control
 export default {
+  "oauthProxyPrompt": {
+    "title": "Does this sign-in need a proxy?",
+    "body": "If the provider is not reachable directly from this machine, set a proxy now. Otherwise sign-in may time out and you would have to start over.",
+    "useQuick": "Use quick proxy ({{url}})",
+    "useProxy": "Use proxy & continue",
+    "skip": "Continue without proxy"
+  },
   "workbuddyConnection": {
     "cardSummary": "Everyday work · Routing & tools",
     "proxyHint": "Optional: configure a network proxy for this connection.",

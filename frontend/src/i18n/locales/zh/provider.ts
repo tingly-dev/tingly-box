@@ -1,5 +1,12 @@
 // Providers, credentials and access: provider dialogs, API keys, sharing keys, teams, access control
 export default {
+  "oauthProxyPrompt": {
+    "title": "这次登录需要代理吗？",
+    "body": "如果本机无法直接访问该服务商，请先设置代理，否则登录可能超时，需要从头再来。",
+    "useQuick": "使用快捷代理（{{url}}）",
+    "useProxy": "使用代理并继续",
+    "skip": "不用代理，继续"
+  },
   "workbuddyConnection": {
     "cardSummary": "日常使用 · 路由与工具扩展",
     "proxyHint": "可选：为此连接设置网络代理。",
