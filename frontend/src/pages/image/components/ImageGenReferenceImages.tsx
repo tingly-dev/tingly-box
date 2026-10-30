@@ -6,6 +6,8 @@ import { Brush, Close, ContentPaste, Create, FileUpload, ZoomIn, tablerMui } fro
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
 import type { ReferenceMask } from './ImageGenPlayground.types';
 import type { SketchLayers } from './SketchCanvasDialog';
+import ThumbImage from './ThumbImage';
+import { THUMB_EDGE_BADGE } from './imageThumbnails';
 
 const LibraryPhoto = tablerMui(IconLibraryPhoto);
 
@@ -146,12 +148,10 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
                     '&:hover .reference-zoom, &:focus-visible .reference-zoom': { opacity: 1 },
                 }}
             >
-                <Box
-                    component="img"
+                <ThumbImage
                     src={image.previewUrl}
                     alt={t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: index + 1 })}
-                    decoding="async"
-                    sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    edge={THUMB_EDGE_BADGE}
                 />
                 {image.mask ? (
                     <Box

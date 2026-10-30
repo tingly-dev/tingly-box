@@ -1,6 +1,6 @@
 import { Box, Button, ButtonBase, Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { ContentPaste, FileUpload, Photo, ViewGallery } from '@/components/icons';
 import { CopyIconButton } from '@/components/CopyIconButton';
 import { fontMono } from '@/theme/fonts';
@@ -76,6 +76,21 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
     onRemoveRun,
 }) => {
     const { t } = useTranslation();
+    // The run cards are memoised, so what they are handed must not change
+    // identity when the panel re-renders; these forward to the newest props.
+    const runHandlers = { onCancelRun, onRetryRun, onReuseRun, onSaveRunAsProfile, onOpenRunSource, onUseAsReference, onOpenOutput, onRemoveRun };
+    const latest = useRef(runHandlers);
+    latest.current = runHandlers;
+    const cardHandlers = useMemo(() => ({
+        onCancel: (id: string) => latest.current.onCancelRun(id),
+        onRetry: (run: GenerationRun) => latest.current.onRetryRun(run),
+        onReuse: (run: GenerationRun) => latest.current.onReuseRun(run),
+        onOpenSource: (run: GenerationRun, index: number) => latest.current.onOpenRunSource(run, index),
+        onUseAsReference: (src: string) => latest.current.onUseAsReference(src),
+        onOpenOutput: (image: SelectedImage) => latest.current.onOpenOutput(image),
+        onRemove: (id: string) => latest.current.onRemoveRun(id),
+        onSaveAsProfile: (run: GenerationRun) => latest.current.onSaveRunAsProfile?.(run),
+    }), []);
     const importFileInputRef = useRef<HTMLInputElement>(null);
     // Its own words, not the reference row's "Browse" / "Paste": what lands
     // here is worked on as it is (crop, slice, mask), not generated from.
@@ -319,14 +334,8 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                             <GenerationRunCard
                                 key={entry.run.id}
                                 run={entry.run}
-                                onCancel={onCancelRun}
-                                onRetry={onRetryRun}
-                                onReuse={onReuseRun}
-                                onSaveAsProfile={onSaveRunAsProfile}
-                                onOpenSource={onOpenRunSource}
-                                onUseAsReference={onUseAsReference}
-                                onOpenOutput={onOpenOutput}
-                                onRemove={onRemoveRun}
+                                {...cardHandlers}
+                                onSaveAsProfile={onSaveRunAsProfile ? cardHandlers.onSaveAsProfile : undefined}
                             />
                         )))}
                     </Box>

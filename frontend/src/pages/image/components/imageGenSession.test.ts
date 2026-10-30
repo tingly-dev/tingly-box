@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { slugify } from '@/utils/download';
 import {
     addReferences,
@@ -8,6 +8,8 @@ import {
     formatBytes,
     reorderReferences,
     resultSrc,
+    reviveSessionBlobs,
+    toSessionImage,
     runGridLayout,
     stripCardBasis,
     STRIP_CARD_HEIGHT,
@@ -69,6 +71,38 @@ describe('resultSrc caching', () => {
         // and the filmstrip all ask for it on every render.
         const image = { b64_json: 'aW1n' };
         expect(resultSrc(image)).toBe(resultSrc(image));
+    });
+});
+
+describe('toSessionImage', () => {
+    it('keeps inline base64 as a blob behind a blob: URL, not as a string', () => {
+        const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock/1');
+        const image = toSessionImage({ b64_json: 'aW1n' });
+        expect(image.b64_json).toBeUndefined();
+        expect(image.url).toBe('blob:mock/1');
+        expect(image.blob?.size).toBe(3);
+        expect(resultSrc(image)).toBe('blob:mock/1');
+        create.mockRestore();
+    });
+
+    it('leaves a provider URL alone', () => {
+        const image = { url: 'https://cdn.example/a.png' };
+        expect(toSessionImage(image)).toBe(image);
+    });
+});
+
+describe('reviveSessionBlobs', () => {
+    it('points restored results and imports at fresh blob URLs, in place', () => {
+        const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock/new');
+        const image = { url: 'blob:mock/stale', blob: new Blob(['x']) };
+        const saved = run({ id: 'r1', images: [image, { url: 'https://cdn.example/b.png' }] });
+        const item = imported({ id: 'i1', src: 'blob:mock/stale', blob: new Blob(['y']) });
+        reviveSessionBlobs([saved], [item]);
+        expect(saved.images[0]).toBe(image);
+        expect(image.url).toBe('blob:mock/new');
+        expect(saved.images[1].url).toBe('https://cdn.example/b.png');
+        expect(item.src).toBe('blob:mock/new');
+        create.mockRestore();
     });
 });
 

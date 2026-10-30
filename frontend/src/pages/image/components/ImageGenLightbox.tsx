@@ -21,6 +21,8 @@ import type { ReferenceImage } from './ImageGenReferenceImages';
 import { keepImage, useAssets } from '../library/assetStore';
 import { deriveLabel } from '../profiles/promptLabel';
 import { handOffPicture } from '../prompt/pictureHandoff';
+import ThumbImage from './ThumbImage';
+import { THUMB_EDGE_BADGE } from './imageThumbnails';
 
 // Kept shows as a check: Tabler's filled bookmark loses its fill through
 // tablerMui and would render as nothing.
@@ -170,12 +172,7 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                                     '&:hover, &:focus-visible': { opacity: 1 },
                                 }}
                             >
-                                <Box
-                                    component="img"
-                                    src={frame.src}
-                                    alt=""
-                                    sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                                />
+                                <ThumbImage src={frame.src} alt="" edge={THUMB_EDGE_BADGE} />
                             </ButtonBase>
                         </Tooltip>
                     );

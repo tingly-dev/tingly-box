@@ -10,12 +10,15 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CopyIconButton } from '@/components/CopyIconButton';
 import { Close, Edit, ErrorOutline, Palette, Refresh, RestartAlt, ZoomIn } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
 import { resultSrc, runGridLayout, runImage, stripCardBasis, STRIP_CARD_HEIGHT, wrapCardSpanSx } from './imageGenSession';
 import RunSourceStrip from './RunSourceStrip';
+import ThumbImage from './ThumbImage';
+import { THUMB_EDGE_CARD } from './imageThumbnails';
 import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
 
 interface GenerationRunCardProps {
@@ -36,7 +39,9 @@ interface GenerationRunCardProps {
 // prompt away as text (a prompt should never have to be selected by hand),
 // put the whole request back in the panel, and drop the card. While a run
 // is in flight Cancel is what removes it, so `onRemove` is left out there.
-const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
+// Memoised: the panel re-renders on every keystroke and every run landing,
+// and a card whose run did not change has nothing new to show.
+const GenerationRunCard: React.FC<GenerationRunCardProps> = memo(({
     run,
     onCancel,
     onRetry,
@@ -290,20 +295,14 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
                                                     },
                                                 }}
                                             >
-                                                <Box
-                                                    component="img"
+                                                <ThumbImage
                                                     src={src}
+                                                    edge={THUMB_EDGE_CARD}
+                                                    fit="contain"
                                                     alt={t('playground.resultAlt', {
                                                         defaultValue: 'Generated image {{number}}',
                                                         number: index + 1,
                                                     })}
-                                                    sx={{
-                                                        width: '100%',
-                                                        height: '100%',
-                                                        maxHeight: '100%',
-                                                        objectFit: 'contain',
-                                                        display: 'block',
-                                                    }}
                                                 />
                                                 <Box className="image-preview-overlay" sx={zoomScrimSx}>
                                                     <ZoomIn sx={{ fontSize: 30 }} />
@@ -396,6 +395,7 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
             </CardContent>
         </Card>
     );
-};
+});
+GenerationRunCard.displayName = 'GenerationRunCard';
 
 export default GenerationRunCard;
