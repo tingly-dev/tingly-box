@@ -13,6 +13,11 @@ export default {
     "log": "Log",
     "logTooltip": "This agent's requests, today's usage and the system log"
   },
+  "agentInstall": {
+    "label": "Install",
+    "mirror": "Install (mirror)",
+    "copy": "Click to copy"
+  },
   "agentAccess": {
     "title": "Connection",
     "expand": "Show connection details",

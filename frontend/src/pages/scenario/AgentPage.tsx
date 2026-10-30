@@ -18,6 +18,7 @@ import { useContext1MToggle } from '@/pages/scenario/hooks/useContext1MToggle';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { useSlotRouting } from '@/pages/scenario/hooks/useSlotRouting';
 import { useAgentObservation } from '@/pages/scenario/hooks/useAgentObservation';
+import { AgentInstallRow } from './components/AgentInstallRow';
 import AgentAccessSection, { useAccessExpanded } from './components/AgentAccessSection';
 import AgentStatusRow, { AgentLogButton } from './components/AgentStatusRow';
 import AgentSetupCard, {
@@ -355,6 +356,14 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                             showApiKeyRow={connection?.apiKeyRow}
                             showBaseUrlRow={connection?.baseUrlRow}
                         />
+                        {quickStart && (
+                            <AgentInstallRow
+                                command={quickStart.installCommand}
+                                mirrorCommand={quickStart.installMirrorCommand}
+                                actions={quickStart.installActions?.(t)}
+                                onCopy={copyToClipboard}
+                            />
+                        )}
                         {/* Slots and plugins live in the connection card: they are
                             per-connection settings, set alongside the URL. Rows
                             use pt:1 so the gaps match the card's edge rhythm. */}
