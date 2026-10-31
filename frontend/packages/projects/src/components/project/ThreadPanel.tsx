@@ -157,6 +157,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     const [acting, setActing] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
+    const [awayFromBottom, setAwayFromBottom] = useState(false);
     // A folder thread has no branch to review or merge; its uploads are its own.
     const session = folder;
     const owner = useMemo<AttachOwner>(() => (session ? { threadId } : { projectId }), [session, projectId, threadId]);
@@ -321,8 +322,8 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
 
     return (
         <Box ref={panelRef} sx={{ display: 'flex', height: '100%', minHeight: 0 }}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, height: '100%', minHeight: 0 }}>
-            <Box sx={{ px: 1.5, pt: 1, pb: 1, borderBottom: 1, borderColor: 'divider' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, height: '100%', minHeight: 0, bgcolor: 'background.default' }}>
+            <Box sx={{ px: 1.5, pt: 1, pb: 1, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
                 {/* One row to name the thread and act on it, one quiet row of facts. */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                     {!hideTitle && <IconButton size="small" onClick={onBack} aria-label={t('thread.back')}><ArrowBack fontSize="small" /></IconButton>}
@@ -419,8 +420,12 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
             )}
             <Box ref={scrollRef} onScroll={() => {
                 const el = scrollRef.current;
-                if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+                if (el) {
+                    stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+                    setAwayFromBottom(!stick.current);
+                }
             }} sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', px: 2, py: 2, overscrollBehavior: 'contain' }}>
+                <Box sx={{ maxWidth: 800, mx: 'auto', width: '100%' }}>
                 {!focused && events !== null && more && onLoadEarlier && <LoadEarlier scrollRef={scrollRef} onLoad={onLoadEarlier} />}
                 {focused && focusSteps?.loaded && focusSteps.more && host && <LoadEarlier scrollRef={scrollRef} label={t('subagents.earlier')} onLoad={() => host.load(focused, true)} />}
                 {events === null || (focused && !focusBlock)
@@ -430,9 +435,18 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     : view === 'chat'
                         ? <Transcript detail={detail} blocks={blocks} subagents={host} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} />
                         : <Trajectory blocks={blocks} working={running} pendingRequestId={pendingRequestId} project={thread.cwd} onOpen={(anchor) => void openInChat(anchor)} />}
+                </Box>
             </Box>
 
-            <Box sx={{ px: 2, pb: 2 }}>
+            <Box sx={{ px: 2, pb: 2, position: 'relative' }}>
+                {awayFromBottom && (
+                    <Button size="small" variant="contained" onClick={() => {
+                        stick.current = true;
+                        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+                        setAwayFromBottom(false);
+                    }} sx={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', mb: 1, borderRadius: 99, boxShadow: 3, whiteSpace: 'nowrap', zIndex: 1 }}>↓ {t('conversation.latest', { defaultValue: 'Latest messages' })}</Button>
+                )}
+                <Box sx={{ maxWidth: 800, mx: 'auto' }}>
                 {handoff && (
                     <Alert severity="info" variant="outlined" icon={<Terminal fontSize="small" />} onClose={() => setHandoff(null)}
                         sx={{ mb: 1, '& .MuiAlert-message': { minWidth: 0, flex: 1 } }}>
@@ -481,6 +495,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     }}
                 />
                 {belowComposer}
+                </Box>
             </Box>
             <DiffDialog thread={thread} open={diffOpen} onClose={() => setDiffOpen(false)} />
             {session && (

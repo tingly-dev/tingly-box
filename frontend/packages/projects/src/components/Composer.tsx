@@ -367,13 +367,14 @@ export function Composer({
         <Paper
             variant="outlined"
             sx={{
-                borderRadius: radius.card,
+                borderRadius: 3,
                 px: inline ? 1.5 : 1.75,
                 pt: inline ? 0.75 : 1.25,
                 pb: 0.75,
                 bgcolor: 'background.paper',
                 boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-                '&:focus-within': { borderColor: 'text.disabled' },
+                transition: 'border-color .15s, box-shadow .15s',
+                '&:focus-within': { borderColor: 'primary.main', boxShadow: (theme) => `0 0 0 3px ${theme.palette.action.selected}` },
                 ...(dragging && { borderColor: 'primary.main', borderStyle: 'dashed' }),
             }}
             onDragOver={attach && !attachBlocked ? (e) => {
@@ -390,7 +391,7 @@ export function Composer({
             } : undefined}
         >
             {context && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', rowGap: 0.5, mb: 1 }}>{context}</Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', rowGap: 0.5, mb: 1.25, pb: 1, borderBottom: 1, borderColor: 'divider' }}>{context}</Box>
             )}
             {chips}
             {inline ? (
