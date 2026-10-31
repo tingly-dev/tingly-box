@@ -8108,6 +8108,59 @@
         }
       }
     },
+    "/api/v1/threads/{id}/events/{eid}/choose": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Pick an option of a decision card the coordinator asked in a main thread; the pick reaches the coordinator as the user's message",
+        "description": "Pick an option of a decision card the coordinator asked in a main thread; the pick reaches the coordinator as the user's message",
+        "operationId": "apiV1ThreadsIdEventsEidChoosePost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eid",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChooseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadEvent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/threads/{id}/events/{eid}/start": {
       "post": {
         "tags": [
@@ -9738,6 +9791,174 @@
             }
           }
         }
+      }
+    },
+    "/api/v2/local-sessions/projects": {
+      "get": {
+        "tags": [
+          "local-sessions"
+        ],
+        "summary": "List Claude Code project directories on the server computer. Requires authenticated direct loopback access, a loopback-only server bind and the local_sessions feature flag.",
+        "description": "List Claude Code project directories on the server computer. Requires authenticated direct loopback access, a loopback-only server bind and the local_sessions feature flag.",
+        "operationId": "apiV2Local-sessionsProjectsGet",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque next-page cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalSessionListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v2/local-sessions/projects/{project}/sessions": {
+      "get": {
+        "tags": [
+          "local-sessions"
+        ],
+        "summary": "List 25 session files by modification time, reading only bounded title prefixes for the displayed page.",
+        "description": "List 25 session files by modification time, reading only bounded title prefixes for the displayed page.",
+        "operationId": "apiV2Local-sessionsProjectsProjectSessionsGet",
+        "parameters": [
+          {
+            "name": "project",
+            "in": "path",
+            "description": "Path parameter 'project'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque next-page cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalSessionListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v2/local-sessions/sessions/{session}/events": {
+      "get": {
+        "tags": [
+          "local-sessions"
+        ],
+        "summary": "Read a bounded native JSONL preview: at most 2 MiB scanned, 50 events, 192 KiB of event JSON. File changes invalidate cursors.",
+        "description": "Read a bounded native JSONL preview: at most 2 MiB scanned, 50 events, 192 KiB of event JSON. File changes invalidate cursors.",
+        "operationId": "apiV2Local-sessionsSessionsSessionEventsGet",
+        "parameters": [
+          {
+            "name": "session",
+            "in": "path",
+            "description": "Path parameter 'session'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque file-version-bound cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "description": "backward (recent) or forward (beginning); only used without a cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalSessionPreviewResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v2/local-sessions/status": {
+      "get": {
+        "tags": [
+          "local-sessions"
+        ],
+        "summary": "Report whether local session browsing is enabled and this connection is local. Does not scan files.",
+        "description": "Report whether local session browsing is enabled and this connection is local. Does not scan files.",
+        "operationId": "apiV2Local-sessionsStatusGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalSessionStatusResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     },
     "/api/v2/probe": {
@@ -11932,6 +12153,19 @@
           "project_id",
           "created_at",
           "updated_at"
+        ]
+      },
+      "ChooseRequest": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field index"
+          }
+        },
+        "required": [
+          "index"
         ]
       },
       "ClaudeCodeEnvResponse": {
@@ -15022,6 +15256,242 @@
         },
         "required": [
           "teams"
+        ]
+      },
+      "LocalSessionBlock": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "label": {
+            "type": "string",
+            "description": "Field label"
+          },
+          "text": {
+            "type": "string",
+            "description": "Field text"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Field truncated"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "LocalSessionEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "modified": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field modified"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field size"
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "size",
+          "modified"
+        ]
+      },
+      "LocalSessionEvent": {
+        "type": "object",
+        "properties": {
+          "blocks": {
+            "type": "array",
+            "description": "Field blocks",
+            "items": {
+              "$ref": "#/components/schemas/LocalSessionBlock"
+            }
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "parent_id": {
+            "type": "string",
+            "description": "Field parent_id"
+          },
+          "role": {
+            "type": "string",
+            "description": "Field role"
+          },
+          "sidechain": {
+            "type": "boolean",
+            "description": "Field sidechain"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "Field timestamp"
+          },
+          "type": {
+            "type": "string",
+            "description": "Field type"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "type",
+          "blocks"
+        ]
+      },
+      "LocalSessionListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/LocalSessionListing"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
+      },
+      "LocalSessionListing": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "description": "Field entries",
+            "items": {
+              "$ref": "#/components/schemas/LocalSessionEntry"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "Field next_cursor"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field total"
+          }
+        },
+        "required": [
+          "entries",
+          "total"
+        ]
+      },
+      "LocalSessionPage": {
+        "type": "object",
+        "properties": {
+          "direction": {
+            "type": "string",
+            "description": "Field direction"
+          },
+          "events": {
+            "type": "array",
+            "description": "Field events",
+            "items": {
+              "$ref": "#/components/schemas/LocalSessionEvent"
+            }
+          },
+          "file_size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field file_size"
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "Field next_cursor"
+          },
+          "scanned_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field scanned_bytes"
+          },
+          "skipped_records": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field skipped_records"
+          }
+        },
+        "required": [
+          "events",
+          "direction",
+          "file_size",
+          "scanned_bytes",
+          "skipped_records"
+        ]
+      },
+      "LocalSessionPreviewResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/LocalSessionPage"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
+      },
+      "LocalSessionStatus": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "local_access": {
+            "type": "boolean",
+            "description": "Field local_access"
+          },
+          "local_binding": {
+            "type": "boolean",
+            "description": "Field local_binding"
+          }
+        },
+        "required": [
+          "local_access",
+          "local_binding",
+          "enabled"
+        ]
+      },
+      "LocalSessionStatusResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/LocalSessionStatus"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "data"
         ]
       },
       "LogEntry": {
@@ -23014,6 +23484,10 @@
     {
       "name": "info",
       "description": "Operations related to info"
+    },
+    {
+      "name": "local-sessions",
+      "description": "Operations related to local-sessions"
     },
     {
       "name": "logs",

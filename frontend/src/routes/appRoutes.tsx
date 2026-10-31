@@ -59,6 +59,7 @@ const UserUsagePage = lazy(() => import('@/pages/UserUsagePage'));
 const QuotaHistoryPage = lazy(() => import('@/pages/QuotaHistoryPage'));
 const ModelTestPage = lazy(() => import('@/pages/ModelTestPage'));
 const BenchPage = lazy(() => import('@/pages/bench/BenchPage'));
+const LocalSessionsPage = lazy(() => import('@/pages/LocalSessionsPage'));
 const RetiredRecordingsPage = lazy(() => import('@/pages/RetiredRecordingsPage'));
 const SkillPage = lazy(() => import('@/pages/prompt/SkillPage'));
 const TelegramPage = lazy(() => import('@/pages/bots/TelegramPage'));
@@ -176,6 +177,7 @@ export const appRoutes = (
             <Route path="/overview" element={<Navigate to="/dashboard/7d" replace />} />
             <Route path="/overview/:timeRange" element={<Navigate to="/dashboard/7d" replace />} />
             <Route path="/model-test/:providerUuid" element={<ModelTestPage />} />
+            <Route path="/agent/claude_code/sessions" element={<ExperimentalFeatureGate feature="local_sessions"><LocalSessionsPage /></ExperimentalFeatureGate>} />
             {/* Prompt routes */}
             <Route path="/prompt/user" element={<RetiredRecordingsPage />} />
             <Route path="/prompt/skill" element={<ExperimentalFeatureGate feature="skill_ide"><SkillPage /></ExperimentalFeatureGate>} />

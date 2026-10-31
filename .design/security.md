@@ -107,3 +107,14 @@ to make that clearer is a follow-up.
 | `internal/config/config.go`         | `NewConfig` bootstrap and `CreateDefaultConfig`. Both refuse legacy defaults.         |
 | `internal/server/server_webui_api.go`            | `GetUserToken` (exposes `is_default`), `ResetUserToken`, `ResetModelToken`.           |
 | `internal/servertest/server_test.go`      | Distinguishes real vs test tokens via the legacy default string.                      |
+
+
+## Local session history
+
+The optional Claude Code session viewer has a narrower boundary than ordinary
+user-authenticated management APIs: it requires a loopback-only bind, direct
+local request checks, and an explicit default-off feature flag before opening
+history. It is read-only, confines access to the configured Claude projects
+root, renders inert text, and applies independent disk/response/DOM bounds.
+Remote browsing is not supported. See [local-sessions.md](local-sessions.md)
+for the threat boundary, relay limitation, resource limits, and tests.

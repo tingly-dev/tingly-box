@@ -8,7 +8,8 @@ import {useTranslation} from 'react-i18next';
 import {useNavigate} from 'react-router-dom';
 import {api} from '../services/api';
 
-const SKILL_FEATURES = [
+const TOOL_FEATURES = [
+    {key: 'local_sessions', labelKey: 'localSessions.title', descriptionKey: 'localSessions.featureDescription'},
     {
         key: 'skill_ide',
         labelKey: 'system.experimentalFeatures.skills',
@@ -37,12 +38,12 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
     const loadFeatures = async () => {
         try {
             setLoading(true);
-            // Load skill features
+            // Load optional tool features
             const results = await Promise.all(
-                SKILL_FEATURES.map(f => api.getScenarioFlag('_global', f.key))
+                TOOL_FEATURES.map(f => api.getScenarioFlag('_global', f.key))
             );
             const newFeatures: Record<string, boolean> = {};
-            SKILL_FEATURES.forEach((f, i) => {
+            TOOL_FEATURES.forEach((f, i) => {
                 newFeatures[f.key] = results[i]?.data?.value || false;
             });
             setFeatures(newFeatures);
@@ -95,7 +96,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
         }
     };
 
-    const toggleFeature = (featureKey: 'skill_ide') => {
+    const toggleFeature = (featureKey: 'skill_ide' | 'local_sessions') => {
         const newValue = !features[featureKey];
         return finishUpdate(
             featureKey,
@@ -191,6 +192,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
     const requestedFeatureName = requestedFeature
         ? {
             skill_ide: t('system.experimentalFeatures.skills'),
+            local_sessions: t('localSessions.title'),
             guardrails: t('system.experimentalFeatures.guardrails'),
             mcp: `${t('system.experimentalFeatures.mcp')} Tools`,
             bench: t('system.experimentalFeatures.bench'),
@@ -220,8 +222,8 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
                 </Alert>
             )}
 
-            {/* Skill Features */}
-            {SKILL_FEATURES.map((feature) =>
+            {/* Optional tools */}
+            {TOOL_FEATURES.map((feature) =>
                 <React.Fragment key={feature.key}>
                     {featureRow(
                         feature.key,

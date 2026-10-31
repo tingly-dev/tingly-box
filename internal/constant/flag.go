@@ -34,6 +34,7 @@ const (
 	ExtensionGuardrails         = "guardrails"
 	ExtensionMCP                = "mcp"
 	ExtensionSkillIDE           = "skill_ide"
+	ExtensionLocalSessions      = "local_sessions"
 	ExtensionBench              = "bench"
 	ExtensionProjects           = "projects"
 )
@@ -61,9 +62,10 @@ const (
 // object (provider/model selection), not a bool, and is read directly off
 // ScenarioConfig.Extensions rather than through Get/SetScenarioFlag.
 var KnownExtensionBoolFlags = map[string]bool{
-	ExtensionGuardrails: true,
-	ExtensionMCP:        true,
-	ExtensionSkillIDE:   true,
-	ExtensionBench:      true,
-	ExtensionProjects:   true,
+	ExtensionGuardrails:    true,
+	ExtensionMCP:           true,
+	ExtensionSkillIDE:      true,
+	ExtensionLocalSessions: true,
+	ExtensionBench:         true,
+	ExtensionProjects:      true,
 }
