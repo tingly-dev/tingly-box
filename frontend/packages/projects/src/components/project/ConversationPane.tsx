@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Box, Button, Chip, CircularProgress, Collapse, Paper, Stack, Typography } from '@mui/material';
+import { Box, Button, ButtonBase, Chip, CircularProgress, Collapse, Paper, Stack, Typography } from '@mui/material';
 import { getReadableAccent } from '@tingly/ui/theme/status';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { Link as RouterLink } from 'react-router-dom';
@@ -12,12 +12,13 @@ import { Markdown } from '../Markdown';
 import { useMessageDetail } from '../../hooks/useMessageDetail';
 import { MessageDetailControl } from '../MessageDetailControl';
 import { showManagerMessage } from './messageDetail';
-import { Check, ChevronRight, DiffIcon, ErrorOutline, ExpandMore, PlayArrow } from '../icons';
+import { Check, ChevronRight, DiffIcon, ErrorOutline, ExpandLess, ExpandMore, PlayArrow, Settings } from '../icons';
 import { DiffDialog } from './DiffDialog';
 import { LoadEarlier } from './LoadEarlier';
 import { ThreadStateMark, ThreadBadges, ThreadSubtitle } from './threadStatus';
 import { radius } from '@tingly/ui/theme/radius';
 import { conversationText, messageSpacing, userBubble, userMessageWidth } from '../../transcript/conversationStyles';
+import { readLocal, writeLocal } from '../../utils/storage';
 
 function parse<T>(payload?: string): T | null {
     if (!payload) return null;
@@ -290,6 +291,11 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
     const [awayFromBottom, setAwayFromBottom] = useState(false);
     const [seed, setSeed] = useState('');
     const [detail, setDetail] = useMessageDetail('conversation');
+    const [settingsOpen, setSettingsOpen] = useState(() => readLocal('conversation.threadDefaultsOpen') === '1');
+    const toggleSettings = () => {
+        writeLocal('conversation.threadDefaultsOpen', settingsOpen ? '0' : '1');
+        setSettingsOpen(!settingsOpen);
+    };
 
     useEffect(() => {
         const el = scrollRef.current;
@@ -407,6 +413,19 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                 <Box sx={{ maxWidth: 800, mx: 'auto' }}>
                 {disabledReason}
                 <MessageDetailControl detail={detail} onChange={setDetail} surface="conversation" />
+                {composerContext && (
+                    <Box sx={{ mb: 0.75, borderRadius: radius.card, bgcolor: 'action.hover', fontSize: fontSizes.sm, color: 'text.secondary', overflow: 'hidden' }}>
+                        <ButtonBase onClick={toggleSettings} aria-expanded={settingsOpen}
+                            sx={{ width: '100%', display: 'flex', alignItems: 'center', gap: 1, minHeight: 30, px: 1.25, justifyContent: 'flex-start', font: 'inherit', color: 'inherit', textAlign: 'left', '&:hover': { color: 'text.primary' } }}>
+                            <Settings sx={{ fontSize: 15 }} />
+                            <Box component="span" sx={{ flex: 1 }}>{t('threadSettings.settings')}</Box>
+                            {settingsOpen ? <ExpandMore sx={{ fontSize: 16 }} /> : <ExpandLess sx={{ fontSize: 16 }} />}
+                        </ButtonBase>
+                        <Collapse in={settingsOpen} unmountOnExit>
+                            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, px: 1.25, pb: 1 }}>{composerContext}</Box>
+                        </Collapse>
+                    </Box>
+                )}
                 <ThreadComposer
                     // Per conversation: its draft starts fresh.
                     key={threadId}
@@ -414,9 +433,6 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                     autoFocus
                     disabled={disabled}
                     seed={seed}
-                    context={composerContext}
-                    contextCollapsible
-                    contextLabel={t('threadSettings.settings')}
                     streaming={busy}
                     model={model}
                     onModelChange={onModelChange}

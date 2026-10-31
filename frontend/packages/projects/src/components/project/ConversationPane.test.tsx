@@ -149,7 +149,14 @@ describe('conversation presentation', () => {
         show(p);
         fireEvent.click(screen.getByText('conversation.example1'));
         const configured = composer.mock.lastCall![0];
-        expect(configured).toMatchObject({ disabled: true, model: 'chosen-model', onModelChange: p.onModelChange, context: p.composerContext, contextLabel: 'threadSettings.settings', seed: 'conversation.example1' });
+        expect(configured).toMatchObject({ disabled: true, model: 'chosen-model', onModelChange: p.onModelChange, seed: 'conversation.example1' });
+        const settings = screen.getByRole('button', { name: 'threadSettings.settings' });
+        expect(settings).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryByText('Controls')).not.toBeInTheDocument();
+        fireEvent.click(settings);
+        expect(settings).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByText('Controls')).toBeVisible();
+        expect(configured.context).toBeUndefined();
         await configured.onSend('Hello', []);
         expect(p.onSend).toHaveBeenCalledWith('Hello', []);
     });
