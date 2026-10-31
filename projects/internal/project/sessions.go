@@ -55,6 +55,7 @@ type FolderThreadSpec struct {
 	Attachments    []Attachment
 	Title          string
 	Model          string
+	Effort         string
 	PermissionMode string
 	// Profile is the host's launch profile (see Launcher); empty for its default.
 	Profile string
@@ -111,6 +112,9 @@ func (m *Threads) StartFolderThread(spec FolderThreadSpec) (*db.Thread, error) {
 	if task == "" && len(spec.Attachments) == 0 {
 		return nil, errors.New("the first message is empty")
 	}
+	if !ValidEffort(spec.Effort) {
+		return nil, errors.New("invalid effort level")
+	}
 	if !ValidPermissionMode(spec.PermissionMode) {
 		return nil, ErrBadPermission
 	}
@@ -133,7 +137,7 @@ func (m *Threads) StartFolderThread(spec FolderThreadSpec) (*db.Thread, error) {
 		ProjectID: p.ID, Agent: db.AgentClaudeCode,
 		Title: title, Task: task, Status: db.ThreadWorking, Origin: "user",
 		Cwd: folder, SessionID: uuid.NewString(),
-		Model: model, PermissionMode: spec.PermissionMode, Profile: profile,
+		Model: model, EffortOverride: spec.Effort, PermissionMode: spec.PermissionMode, Profile: profile,
 		HeadBranch: HeadBranch(context.Background(), folder),
 	}
 	if err := m.store.CreateThread(t); err != nil {

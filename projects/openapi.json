@@ -1555,6 +1555,50 @@
         }
       }
     },
+    "/api/v1/threads/{id}/effort": {
+      "put": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Set the thread's next-turn effort; empty restores its default",
+        "description": "Set the thread's next-turn effort; empty restores its default",
+        "operationId": "apiV1ThreadsIdEffortPut",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EffortRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/threads/{id}/events": {
       "get": {
         "tags": [
@@ -2677,6 +2721,17 @@
             "type": "string",
             "description": "Field content"
           },
+          "effort": {
+            "type": "string",
+            "description": "Field effort",
+            "enum": [
+              "",
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
+          },
           "model": {
             "type": "string",
             "description": "Field model"
@@ -2733,6 +2788,25 @@
           "patch",
           "uncommitted",
           "truncated"
+        ]
+      },
+      "EffortRequest": {
+        "type": "object",
+        "properties": {
+          "effort": {
+            "type": "string",
+            "description": "Field effort",
+            "enum": [
+              "",
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
+          }
+        },
+        "required": [
+          "effort"
         ]
       },
       "Event": {
@@ -3803,6 +3877,10 @@
             "type": "string",
             "description": "Field cwd"
           },
+          "effort_override": {
+            "type": "string",
+            "description": "Field effort_override"
+          },
           "files_changed": {
             "type": "integer",
             "format": "int64",
@@ -3866,6 +3944,10 @@
           "repo_path": {
             "type": "string",
             "description": "Field repo_path"
+          },
+          "reported_model": {
+            "type": "string",
+            "description": "Field reported_model"
           },
           "resolved_at": {
             "type": "string",

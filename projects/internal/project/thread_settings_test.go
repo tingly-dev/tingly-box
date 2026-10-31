@@ -103,6 +103,7 @@ func TestWorkerModelOverrideIsIndependentAndSurvivesSettlement(t *testing.T) {
 	got := waitStatus(t, f.store, first.ID, db.ThreadIdle)
 	assert.Equal(t, "custom-model", got.ModelOverride)
 	assert.Equal(t, "actual-reported-model", got.Model)
+	assert.Equal(t, "actual-reported-model", got.ReportedModel)
 	launches := f.agent.Launches()
 	assert.Equal(t, "custom-model", launches[len(launches)-1].Model)
 	assert.Equal(t, "plan", launches[len(launches)-1].PermissionMode)
@@ -133,4 +134,46 @@ func TestWorkerModelOverrideIsIndependentAndSurvivesSettlement(t *testing.T) {
 	launches = f.agent.Launches()
 	assert.Equal(t, "new-project-model", launches[len(launches)-1].Model)
 	assert.Equal(t, "default", launches[len(launches)-1].PermissionMode)
+}
+
+func TestWorkerReportedModelDoesNotUseLaunchFallback(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error {
+		turn.Say("done", 1, 1)
+		return nil
+	})
+	f.project.ThreadModel = "configured-alias"
+	require.NoError(t, f.store.SaveProject(f.project))
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "check model"})
+	require.NoError(t, err)
+	f.report(t)
+	got := waitStatus(t, f.store, th.ID, db.ThreadIdle)
+	assert.Equal(t, "configured-alias", got.Model)
+	assert.Empty(t, got.ReportedModel)
+}
+
+func TestThreadEffortInheritsAndOverridesPerTurn(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
+	f.project.ThreadEffort = "medium"
+	require.NoError(t, f.store.SaveProject(f.project))
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "work"})
+	require.NoError(t, err)
+	f.report(t)
+	waitStatus(t, f.store, th.ID, db.ThreadIdle)
+	assert.Equal(t, "medium", f.agent.Launches()[0].Effort)
+	_, err = f.threads.SetEffort(th.ID, "high")
+	require.NoError(t, err)
+	_, err = f.threads.Send(context.Background(), th.ID, "continue", Source{}, nil)
+	require.NoError(t, err)
+	f.report(t)
+	waitStatus(t, f.store, th.ID, db.ThreadIdle)
+	assert.Equal(t, "high", f.agent.Launches()[1].Effort)
+	_, err = f.threads.SetEffort(th.ID, "")
+	require.NoError(t, err)
+	_, err = f.threads.Send(context.Background(), th.ID, "inherit", Source{}, nil)
+	require.NoError(t, err)
+	f.report(t)
+	waitStatus(t, f.store, th.ID, db.ThreadIdle)
+	assert.Equal(t, "medium", f.agent.Launches()[2].Effort)
+	_, err = f.threads.SetEffort(th.ID, "invalid")
+	require.Error(t, err)
 }

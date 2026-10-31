@@ -36,7 +36,7 @@ func TestFolderThreadEndToEnd(t *testing.T) {
 	assert.Equal(t, f.ID, again.ID)
 
 	var s db.Thread
-	require.Equal(t, 201, c.do("POST", "/projects/"+f.ID+"/threads", map[string]any{"content": "explain this folder", "permission_mode": "plan"}, &s))
+	require.Equal(t, 201, c.do("POST", "/projects/"+f.ID+"/threads", map[string]any{"content": "explain this folder", "permission_mode": "plan", "effort": "high"}, &s))
 	assert.Equal(t, f.ID, s.ProjectID)
 	assert.Equal(t, folder, s.Cwd)
 
@@ -50,6 +50,8 @@ func TestFolderThreadEndToEnd(t *testing.T) {
 		return detail.Thread.Status == db.ThreadIdle
 	}, 5*time.Second, 20*time.Millisecond)
 	assert.Equal(t, "plan", detail.Thread.PermissionMode)
+	assert.Equal(t, "high", detail.Thread.EffortOverride)
+	assert.Equal(t, "high", a.Launches()[0].Effort)
 	assert.NotNil(t, detail.BackgroundTasks)
 	var evs struct {
 		Events []db.ThreadEvent `json:"events"`

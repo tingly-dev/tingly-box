@@ -663,7 +663,11 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	m.mu.Lock()
 	m.turns[threadID] = &turnTally{launchModel: model}
 	m.mu.Unlock()
-	opts := agentboot.ExecutionOptions{Model: model, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings, Entrypoint: sessionEntrypoint}
+	effort := t.EffortOverride
+	if effort == "" && !folder {
+		effort = p.ThreadEffort
+	}
+	opts := agentboot.ExecutionOptions{Model: model, Effort: effort, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings, Entrypoint: sessionEntrypoint}
 	if !folder {
 		opts.AppendSystemPrompt = threadSystemPrompt(m.layout, p, t)
 		opts.SettingsPath = m.layout.SettingsFile(p.ID, t.ID)
@@ -844,6 +848,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 	report := Report{Kind: ReportFinished, Text: strings.TrimSpace(tally.text)}
 	t, _ = m.update(threadID, func(t *db.Thread) {
 		t.Turns++
+		t.ReportedModel = tally.model
 		t.InputTokens += tally.inputTokens
 		t.OutputTokens += tally.outputTokens
 		// A session's Model is the owner's pick; a project thread shows the

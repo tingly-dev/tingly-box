@@ -18,6 +18,7 @@ const ProfileSelect = ({value, onChange, disabled}: ProfileSelectProps) => {
     const {t} = useTranslation();
     const profiles = useProfileContext().getProfiles('claude_code');
     const defaultLabel = t('claudeSession.profileDefault', {defaultValue: 'Default configuration profile'});
+    const defaultDisplay = t('claudeSession.profileDefaultShort', {defaultValue: 'Default profile'});
     if (profiles.length === 0 && !value) return null;
 
     const label = (id: string) => {
@@ -39,7 +40,7 @@ const ProfileSelect = ({value, onChange, disabled}: ProfileSelectProps) => {
             renderValue={(v) => (
                 <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
                     <Route/>
-                    <Typography noWrap sx={composerPickerLabelSx}>{v ? label(v) : defaultLabel}</Typography>
+                    <Typography noWrap sx={composerPickerLabelSx}>{v ? label(v) : defaultDisplay}</Typography>
                 </Stack>
             )}
             sx={composerPickerSx}

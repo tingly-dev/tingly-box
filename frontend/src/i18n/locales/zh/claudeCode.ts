@@ -3,6 +3,7 @@
 export default {
   "claudeSession": {
     "profile": "配置方案",
+    "profileDefaultShort": "默认配置",
     "profileDefault": "默认配置方案",
     "model": "模型",
     "modelDefault": "默认",

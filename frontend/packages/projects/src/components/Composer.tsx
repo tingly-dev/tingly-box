@@ -73,8 +73,12 @@ export interface ComposerProps {
     context?: ReactNode;
     /** Fold secondary configuration out of the conversation until requested. */
     contextCollapsible?: boolean;
+    /** Label for the optional context disclosure. */
+    contextLabel?: string;
     /** Controls shown at the bottom-left (project / memory chips). */
     leftSlot?: ReactNode;
+    /** Tighter spacing and bottom-aligned actions for a row with several pickers. */
+    compactToolbar?: boolean;
     /** Lines the box shows when empty (one by default). */
     minRows?: number;
     /** Text to place in the box when it changes (e.g. a refused first message). */
@@ -101,7 +105,7 @@ export interface ComposerProps {
  */
 export function Composer({
     onSend, attach, attachBlocked, streaming, onStop, sendWhileStreaming, sendModes, disabled, canSubmit = true, placeholder, autoFocus, model, onModelChange, modelLabel, effort, onEffortChange, effortLabel, modelSource,
-    context, contextCollapsible = false, leftSlot, minRows = 1, seed, keepUntilSent, text: controlled, onTextChange, onAccepted, keysHint,
+    context, contextCollapsible = false, contextLabel, leftSlot, compactToolbar = false, minRows = 1, seed, keepUntilSent, text: controlled, onTextChange, onAccepted, keysHint,
 }: ComposerProps) {
     const { t } = useTranslation('projects');
     const mobile = useMediaQuery(useTheme().breakpoints.down('sm'));
@@ -396,7 +400,7 @@ export function Composer({
             {context && contextCollapsible && (
                 <Button size="small" color="inherit" onClick={() => setContextOpen((open) => !open)} aria-expanded={contextOpen}
                     endIcon={<ExpandMore fontSize="small" />} sx={{ color: 'text.secondary', textTransform: 'none', mb: 0.5, px: 0.5 }}>
-                    {t('composer.settings', { defaultValue: 'Session settings' })}
+                    {contextLabel ?? t('composer.settings', { defaultValue: 'Session settings' })}
                 </Button>
             )}
             {context && (!contextCollapsible || contextOpen) && (
@@ -414,8 +418,8 @@ export function Composer({
             ) : (
                 <>
                     {input}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.75 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
+                    <Box sx={{ display: 'flex', alignItems: compactToolbar ? 'flex-end' : 'center', gap: compactToolbar ? 0.5 : 1, mt: 0.75 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: compactToolbar ? 0.25 : 1, flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
                             {attachButton}
                             {leftSlot}
                             {hint && <Typography variant="caption" color="text.secondary">{t('composer.keys')}</Typography>}

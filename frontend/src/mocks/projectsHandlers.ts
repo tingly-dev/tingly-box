@@ -56,7 +56,7 @@ const thread = (o: Partial<Record<string, unknown>> & { id: string; title: strin
     project_id: 'p-latency', parent_id: 'main-p-latency', seq: 1, agent: 'claude-code', origin: 'coordinator', commits_ahead: 0, files_changed: 0, input_tokens: 0, output_tokens: 0,
     turns: 0, uncommitted: false, cwd: `/Users/me/.tingly-box/projects/p-latency/threads/${o.id}`,
     repo_path: '/Users/me/code/payments-api', base_branch: 'main', branch: `projects/${o.id}`,
-    model: 'claude-sonnet-4-5', created_at: ago(90), updated_at: ago(5), ...o,
+    model: 'claude-sonnet-4-5', reported_model: 'claude-sonnet-4-5', created_at: ago(90), updated_at: ago(5), ...o,
 })
 
 const threads = [
@@ -322,6 +322,14 @@ export const projectsHandlers = [
         else th.model = model
         return HttpResponse.json(th)
     }),
+    http.put('/api/v1/threads/:tid/effort', async ({ params, request }) => {
+        const th = findThread(params.tid as string) as Record<string, unknown> | undefined
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        const effort = ((await request.json()) as { effort: string }).effort
+        if (!['', 'low', 'medium', 'high', 'max'].includes(effort)) return HttpResponse.json({ error: 'invalid effort level' }, { status: 400 })
+        th.effort_override = effort
+        return HttpResponse.json(th)
+    }),
     http.put('/api/v1/threads/:tid/title', async ({ params, request }) => {
         const th = findThread(params.tid as string) as Record<string, unknown> | undefined
         if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
@@ -419,8 +427,8 @@ export const projectsHandlers = [
     http.post('/api/v1/projects/:id/threads', async ({ params, request }) => {
         const f = find(params.id as string)
         if (!f || f.type !== 'folder') return HttpResponse.json({ error: 'only a folder starts threads directly' }, { status: 400 })
-        const body = (await request.json()) as { content: string; permission_mode?: string }
-        const s = session({ id: `s-${Date.now()}`, title: body.content.slice(0, 60), status: 'working', cwd: f.path!, task: body.content, permission_mode: body.permission_mode, turns: 0, updated_at: ago(0) })
+        const body = (await request.json()) as { content: string; effort?: string; permission_mode?: string; profile?: string; model?: string }
+        const s = session({ id: `s-${Date.now()}`, title: body.content.slice(0, 60), status: 'working', cwd: f.path!, task: body.content, permission_mode: body.permission_mode, effort_override: body.effort, profile: body.profile, model: body.model, turns: 0, updated_at: ago(0) })
         sessions.unshift(s)
         return HttpResponse.json(s, { status: 201 })
     }),

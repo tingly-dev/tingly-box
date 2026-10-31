@@ -37,6 +37,8 @@ type CreateThreadRequest struct {
 	Title       string   `json:"title,omitempty"`
 	// Model is empty for the host's default.
 	Model string `json:"model,omitempty"`
+	// Effort applies to the first turn; empty uses the CLI default.
+	Effort string `json:"effort,omitempty" enum:",low,medium,high,max"`
 	// PermissionMode is empty to inherit the default (acceptEdits).
 	PermissionMode string `json:"permission_mode,omitempty"`
 	// Profile is the host's launch profile; empty for its default. Only
@@ -120,6 +122,11 @@ type ProfileRequest struct {
 // project default for a worker, or the host profile's default for a folder.
 type ModelRequest struct {
 	Model string `json:"model"`
+}
+
+// EffortRequest selects the next turn's effort; empty restores inheritance.
+type EffortRequest struct {
+	Effort string `json:"effort" enum:",low,medium,high,max"`
 }
 
 // TitleRequest renames a thread.
@@ -238,6 +245,10 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithDescription("Set the model of the thread's next turn; empty restores its project or host profile default"),
 		swagger.WithRequestModel(ModelRequest{}),
 		swagger.WithResponseModel(db.Thread{}))
+	api.PUT("/threads/:id/effort", h.setEffort, tag,
+		swagger.WithDescription("Set the thread's next-turn effort; empty restores its default"),
+		swagger.WithRequestModel(EffortRequest{}),
+		swagger.WithResponseModel(db.Thread{}))
 	api.PUT("/threads/:id/title", h.setTitle, tag,
 		swagger.WithDescription("Rename the thread"),
 		swagger.WithRequestModel(TitleRequest{}),
@@ -344,7 +355,7 @@ func (h *Handler) create(c *gin.Context) {
 		return
 	}
 	t, err := h.svc.Threads.StartFolderThread(rt.FolderThreadSpec{
-		ProjectID: c.Param("id"), Task: req.Content, Attachments: atts, Title: req.Title, Model: req.Model,
+		ProjectID: c.Param("id"), Task: req.Content, Attachments: atts, Title: req.Title, Model: req.Model, Effort: req.Effort,
 		PermissionMode: req.PermissionMode, Profile: req.Profile,
 	})
 	if err != nil {
@@ -640,6 +651,23 @@ func (h *Handler) setModel(c *gin.Context) {
 		return
 	}
 	out, err := h.svc.Threads.SetModel(c.Request.Context(), t.ID, req.Model)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *Handler) setEffort(c *gin.Context) {
+	var req EffortRequest
+	if !apierr.Bind(c, &req) {
+		return
+	}
+	t, ok := h.worker(c)
+	if !ok {
+		return
+	}
+	out, err := h.svc.Threads.SetEffort(t.ID, req.Effort)
 	if err != nil {
 		fail(c, err)
 		return

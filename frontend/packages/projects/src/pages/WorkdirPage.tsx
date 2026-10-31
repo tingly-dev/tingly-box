@@ -8,6 +8,8 @@ import { AddWorkdirDialog } from '../components/workdir/AddWorkdirDialog';
 import { NewSessionView } from '../components/workdir/NewSessionView';
 import { loadPermissionModes } from '../components/workdir/PermissionModeSelect';
 import { ThreadSettingsPickers } from '../components/ThreadSettingsPickers';
+import { EffortPicker } from '../components/EffortPicker';
+import type { components } from '../client';
 import { mergeThreadSettings, useThreadSettings } from '../hooks/useThreadSettings';
 import { uploadAttachments } from '../components/attachments';
 import { ProjectImTags, useProjectIm } from '../components/im/ProjectImBindings';
@@ -249,12 +251,12 @@ export default function WorkdirPage() {
         return uploadAttachments({ draftFolderId: f.id }, files);
     };
 
-    const create = async (path: string, content: string, permission_mode: string, launch: SessionLaunch, attachments: Attachment[]): Promise<boolean> => {
+    const create = async (path: string, content: string, permission_mode: string, launch: SessionLaunch, attachments: Attachment[], effort: components['schemas']['EffortRequest']['effort']): Promise<boolean> => {
         try {
             const f = await openFolder(path);
             const s = await unwrap(api.POST('/api/v1/projects/{id}/threads', {
                 params: { path: { id: f.id } },
-                body: { content, attachments: attachments.map((a) => a.path), permission_mode: permission_mode || undefined, profile: launch.profile || undefined, model: launch.model || undefined },
+                body: { content, attachments: attachments.map((a) => a.path), permission_mode: permission_mode || undefined, profile: launch.profile || undefined, model: launch.model || undefined, effort: effort || undefined },
             }));
             // Picked another folder than the one open: go to that folder.
             if (scope && s.cwd !== scope) {
@@ -380,8 +382,19 @@ export default function WorkdirPage() {
                             void loadSession(sessionId);
                             transcript.catchUp().catch(() => undefined);
                         }}
+                        modelControl={selected && (
+                            <ThreadSettingsPickers folder show="model" value={{ profile: selected.profile ?? '', model: selected.model ?? '' }}
+                                permissionMode={selected.permission_mode ?? ''} modes={modes} defaultPermissionMode={selectedFolder?.thread_permission_mode || 'acceptEdits'}
+                                disabled={threadBlocked || selected.status === 'resolved' || settings.saving}
+                                onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
+                        )}
+                        effortControl={selected && (
+                            <EffortPicker value={selected.effort_override || ''}
+                                disabled={threadBlocked || selected.status === 'resolved' || settings.saving}
+                                onChange={(value) => void settings.setEffort(value as components['schemas']['EffortRequest']['effort'])} />
+                        )}
                         composerContext={selected && (
-                            <ThreadSettingsPickers folder value={{ profile: selected.profile ?? '', model: selected.model ?? '' }}
+                            <ThreadSettingsPickers folder show="permission" value={{ profile: selected.profile ?? '', model: selected.model ?? '' }}
                                 permissionMode={selected.permission_mode ?? ''} modes={modes} defaultPermissionMode={selectedFolder?.thread_permission_mode || 'acceptEdits'}
                                 disabled={threadBlocked || selected.status === 'resolved' || settings.saving}
                                 onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />

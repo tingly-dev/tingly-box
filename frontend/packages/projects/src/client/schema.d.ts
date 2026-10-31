@@ -696,6 +696,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{id}/effort": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the thread's next-turn effort; empty restores its default
+         * @description Set the thread's next-turn effort; empty restores its default
+         */
+        put: operations["apiV1ThreadsIdEffortPut"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{id}/events": {
         parameters: {
             query?: never;
@@ -1187,6 +1207,11 @@ export interface components {
             attachments?: string[];
             /** @description Field content */
             content: string;
+            /**
+             * @description Field effort
+             * @enum {string}
+             */
+            effort?: "" | "low" | "medium" | "high" | "max";
             /** @description Field model */
             model?: string;
             /** @description Field permission_mode */
@@ -1209,6 +1234,13 @@ export interface components {
             truncated: boolean;
             /** @description Field uncommitted */
             uncommitted: string;
+        };
+        EffortRequest: {
+            /**
+             * @description Field effort
+             * @enum {string}
+             */
+            effort: "" | "low" | "medium" | "high" | "max";
         };
         Event: {
             /** @description Field data */
@@ -1676,6 +1708,8 @@ export interface components {
             created_at: string;
             /** @description Field cwd */
             cwd: string;
+            /** @description Field effort_override */
+            effort_override?: string;
             /**
              * Format: int64
              * @description Field files_changed
@@ -1718,6 +1752,8 @@ export interface components {
             project_id: string;
             /** @description Field repo_path */
             repo_path?: string;
+            /** @description Field reported_model */
+            reported_model?: string;
             /**
              * Format: date-time
              * @description Field resolved_at
@@ -3022,6 +3058,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Diff"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdEffortPut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EffortRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
                 };
             };
         };

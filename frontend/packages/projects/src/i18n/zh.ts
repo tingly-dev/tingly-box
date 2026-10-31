@@ -9,10 +9,13 @@ export const zh: Dict<typeof en> = {
         tokensApprox: '≈ {{value}} tokens',
     },
     threadSettings: {
+        settings: '线程设置',
         model: '模型', permissions: '权限', projectDefault: '项目默认', defaultModel: '默认模型', defaultPermissions: '默认权限',
         defaults: '项目线程默认设置', defaultsHelp: '新线程及未设置覆盖的已有线程使用这些默认值。单个线程的选择不会修改这里。',
         nextTurn: '启动设置在下一次开启轮次时应用。立即发送会加入当前轮；需要新设置时请选择“本轮结束后发送”或“停止并发送”。',
-        lastModel: '上次使用的模型', configuredModel: '配置的模型',
+        modelNextTurn: '更改在下一轮生效',
+        modelUnknown: '尚未记录',
+        lastModel: '最近报告的模型', configuredModel: '配置的模型',
     },
     nav: {
         newChat: '新对话', chats: '对话', projects: '项目', recentChats: '最近对话',

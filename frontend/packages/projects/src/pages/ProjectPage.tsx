@@ -257,8 +257,21 @@ export default function ProjectPage() {
             canSend={settings.canSend}
             configuredModel={selected?.model_override || `${t('threadSettings.projectDefault')} · ${project?.thread_model || t('threadSettings.defaultModel')}`}
             permissionLabel={selected?.permission_mode ? t(`session.mode.${selected.permission_mode}`, { defaultValue: selected.permission_mode }) : `${t('threadSettings.projectDefault')} · ${t(`session.mode.${project?.thread_permission_mode || 'acceptEdits'}`)}`}
+            modelControl={selected && (
+                <ThreadSettingsPickers show="model" value={{ profile: '', model: selected.model_override ?? '' }} permissionMode={selected.permission_mode ?? ''}
+                    modes={modes} disabled={blocked || selected.status === 'resolved' || settings.saving}
+                    defaultModel={project?.thread_model} defaultPermissionMode={project?.thread_permission_mode || 'acceptEdits'}
+                    onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
+            )}
+            effortControl={selected && (
+                <EffortPicker value={selected.effort_override || ''}
+                    defaultLabel={`${t('threadSettings.projectDefault')} · ${project?.thread_effort ? t(`effort.${project.thread_effort}`) : t('effort.default')}`}
+                    defaultDisplayLabel={project?.thread_effort ? t(`effort.${project.thread_effort}`) : t('effort.default')}
+                    disabled={blocked || selected.status === 'resolved' || settings.saving}
+                    onChange={(value) => void settings.setEffort(value as components['schemas']['EffortRequest']['effort'])} />
+            )}
             composerContext={selected && (
-                <ThreadSettingsPickers value={{ profile: '', model: selected.model_override ?? '' }} permissionMode={selected.permission_mode ?? ''}
+                <ThreadSettingsPickers show="permission" value={{ profile: '', model: selected.model_override ?? '' }} permissionMode={selected.permission_mode ?? ''}
                     modes={modes} disabled={blocked || selected.status === 'resolved' || settings.saving}
                     defaultModel={project?.thread_model} defaultPermissionMode={project?.thread_permission_mode || 'acceptEdits'}
                     onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
@@ -372,13 +385,11 @@ export default function ProjectPage() {
                                 />
                                 <ModelPicker
                                     source="projects"
-                                    label={t('conversation.threadModel')}
                                     value={project.thread_model}
                                     disabled={blocked || savingDefaults}
                                     onChange={(m) => void patch({ thread_model: m })}
                                 />
                                 <EffortPicker
-                                    label={t('conversation.threadEffort')}
                                     value={project.thread_effort || ''}
                                     disabled={blocked || savingDefaults}
                                     onChange={(e) => void patch({ thread_effort: e as EffortLevel })}

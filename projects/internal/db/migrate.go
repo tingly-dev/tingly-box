@@ -144,6 +144,8 @@ func migrate(g *gorm.DB, o openOptions) (err error) {
 		"UPDATE projects SET path = '' WHERE path IS NULL",
 		"UPDATE projects SET main_thread_id = '' WHERE main_thread_id IS NULL",
 		"UPDATE threads SET parent_id = '' WHERE parent_id IS NULL",
+		"UPDATE threads SET reported_model = '' WHERE reported_model IS NULL",
+		"UPDATE threads SET effort_override = '' WHERE effort_override IS NULL",
 		"UPDATE threads SET agent = '' WHERE agent IS NULL",
 		"UPDATE threads SET seq = 0 WHERE seq IS NULL",
 		"UPDATE threads SET cwd = '' WHERE cwd IS NULL",
