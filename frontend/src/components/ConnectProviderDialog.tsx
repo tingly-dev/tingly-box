@@ -488,9 +488,9 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
                     </>
                 )}
 
-                {filteredKey.length > 0 && (
+                {cnKeyProviders.length + globalKeyProviders.length > 0 && (
                     <>
-                        <SectionHeader icon={<Key fontSize="small"/>} title="API key providers" count={filteredKey.length} accent="key"/>
+                        <SectionHeader icon={<Key fontSize="small"/>} title="API key providers" count={cnKeyProviders.length + globalKeyProviders.length} accent="key"/>
 
                         {cnKeyProviders.length > 0 && (
                             <Box sx={{mb: 2}}>

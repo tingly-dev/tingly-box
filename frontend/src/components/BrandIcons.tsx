@@ -39,12 +39,17 @@ import BaiduSvg from '@lobehub/icons-static-svg/icons/baidu-color.svg?url';
 import TencentSvg from '@lobehub/icons-static-svg/icons/tencent-color.svg?url';
 import IflytekCloudSvg from '@lobehub/icons-static-svg/icons/iflytekcloud-color.svg?url';
 import BaichuanSvg from '@lobehub/icons-static-svg/icons/baichuan-color.svg?url';
-import YiSvg from '@lobehub/icons-static-svg/icons/yi-color.svg?url';
+import YiSvg from '@lobehub/icons-static-svg/icons/yi-color.svg?raw';
 import DoubaoSvg from '@lobehub/icons-static-svg/icons/doubao-color.svg?url';
 import AwsSvg from '@lobehub/icons-static-svg/icons/aws.svg?url';
 import BedrockSvg from '@lobehub/icons-static-svg/icons/bedrock-color.svg?url';
 import AzureSvg from '@lobehub/icons-static-svg/icons/azure-color.svg?url';
 import VertexAISvg from '@lobehub/icons-static-svg/icons/vertexai-color.svg?url';
+import OllamaSvg from '@lobehub/icons-static-svg/icons/ollama.svg?url';
+import LMStudioSvg from '@lobehub/icons-static-svg/icons/lmstudio.svg?url';
+import VllmSvg from '@lobehub/icons-static-svg/icons/vllm-color.svg?url';
+import VercelSvg from '@lobehub/icons-static-svg/icons/vercel.svg?url';
+import CloudflareSvg from '@lobehub/icons-static-svg/icons/cloudflare-color.svg?url';
 
 // Single-colour twins of the brand-colour icons, for surfaces that stay
 // black and white (the routing graph).
@@ -78,6 +83,9 @@ import DoubaoMonoSvg from '@lobehub/icons-static-svg/icons/doubao.svg?url';
 import BedrockMonoSvg from '@lobehub/icons-static-svg/icons/bedrock.svg?url';
 import AzureMonoSvg from '@lobehub/icons-static-svg/icons/azure.svg?url';
 import VertexAIMonoSvg from '@lobehub/icons-static-svg/icons/vertexai.svg?url';
+import VllmMonoSvg from '@lobehub/icons-static-svg/icons/vllm.svg?url';
+import ClaudeMonoSvg from '@lobehub/icons-static-svg/icons/claude.svg?url';
+import CloudflareMonoSvg from '@lobehub/icons-static-svg/icons/cloudflare.svg?url';
 
 import DingTalkSvg from '@/assets/icons/dingtalk.svg?url';
 import DiscordSvg from '@/assets/icons/discord.svg?url';
@@ -94,6 +102,15 @@ import VSCodeSvg from '@/assets/icons/vscode.svg?url';
 // belongs to its owners).
 import WorkBuddySvg from '@/assets/icons/workbuddy.svg?url';
 import ZCodeSvg from '@/assets/icons/zcode.svg?url';
+import LocalAIPng from '@/assets/icons/localai.png?url';
+import JanSvg from '@/assets/icons/jan.svg?url';
+import SGLangSvg from '@/assets/icons/sglang.svg?url';
+import AmdSvg from '@/assets/icons/amd.svg?url';
+import LemonadeSvg from '@/assets/icons/lemonade.svg?url';
+import TypeSafePng from '@/assets/icons/typesafe.png?url';
+import LlamaCppSvg from '@/assets/icons/llamacpp.svg?url';
+import OmlxSvg from '@/assets/icons/omlx.svg?url';
+import OmlxDarkSvg from '@/assets/icons/omlx-dark.svg?url';
 
 interface BrandIconProps {
     size?: number;
@@ -108,7 +125,7 @@ interface BrandIconProps {
 // currentColor 没有外部颜色继承，会落到默认黑色，导致暗色主题下黑图不可见。
 // 解决：暗色主题下对单色图标加 invert(1)（黑→白），亮色主题保持原样。
 // 高亮态由 Sidebar 处理（白底 + 强制清零 filter，保持黑图在白底上的效果）。
-const createBrandIcon = (src: string, alt: string, defaultGrayscale = false, monochrome = false, monoSrc?: string) => {
+const createBrandIcon = (src: string, alt: string, defaultGrayscale = false, monochrome = false, monoSrc?: string, darkSrc?: string) => {
     return ({size = 24, sx, style, grayscale = defaultGrayscale, mono = false}: BrandIconProps) => {
         const theme = useTheme();
         const isDark = theme.palette.mode === 'dark';
@@ -117,6 +134,10 @@ const createBrandIcon = (src: string, alt: string, defaultGrayscale = false, mon
         let filter = 'none';
         if (useMono) {
             filter = isDark ? 'invert(1)' : 'none';
+        } else if (mono && !monochrome) {
+            // Collected colour logos may not have a monochrome twin. Keep
+            // their light shades visible against a light routing-graph node.
+            filter = isDark ? 'grayscale(100%) brightness(1.8)' : 'grayscale(100%) brightness(0.55)';
         } else if (grayscale) {
             filter = isDark
                 ? 'grayscale(100%) brightness(1.6)'
@@ -140,7 +161,7 @@ const createBrandIcon = (src: string, alt: string, defaultGrayscale = false, mon
             >
                 <Box
                     component="img"
-                    src={useMono ? monoSrc : src}
+                    src={useMono ? monoSrc : isDark && darkSrc ? darkSrc : src}
                     alt={alt}
                     sx={{
                         display: 'block',
@@ -158,7 +179,7 @@ const createBrandIcon = (src: string, alt: string, defaultGrayscale = false, mon
 
 export const OpenAI = createBrandIcon(OpenAISvg, 'OpenAI', false, true);
 export const Anthropic = createBrandIcon(AnthropicSvg, 'Anthropic', false, true);
-export const Claude = createBrandIcon(ClaudeSvg, 'Claude', true);
+export const Claude = createBrandIcon(ClaudeSvg, 'Claude', true, false, ClaudeMonoSvg);
 export const ClaudeCode = createBrandIcon(ClaudeCodeSvg, 'Claude Code', false, false, ClaudeCodeMonoSvg);
 export const Codex = createBrandIcon(CodexSvg, 'Codex', true, false, CodexMonoSvg);
 export const Gemini = createBrandIcon(GeminiSvg, 'Gemini', false, false, GeminiMonoSvg);
@@ -220,8 +241,26 @@ export const Aws = createBrandIcon(AwsSvg, 'AWS', false, true);
 export const Bedrock = createBrandIcon(BedrockSvg, 'Amazon Bedrock', false, false, BedrockMonoSvg);
 export const Azure = createBrandIcon(AzureSvg, 'Azure', false, false, AzureMonoSvg);
 export const VertexAI = createBrandIcon(VertexAISvg, 'Vertex AI', false, false, VertexAIMonoSvg);
+export const Ollama = createBrandIcon(OllamaSvg, 'Ollama', false, true);
+export const LMStudio = createBrandIcon(LMStudioSvg, 'LM Studio', false, true);
+export const LocalAI = createBrandIcon(LocalAIPng, 'LocalAI');
+export const Jan = createBrandIcon(JanSvg, 'Jan');
+export const Vllm = createBrandIcon(VllmSvg, 'vLLM', false, false, VllmMonoSvg);
+export const SGLang = createBrandIcon(SGLangSvg, 'SGLang');
+export const Amd = createBrandIcon(AmdSvg, 'AMD', false, true);
+export const Lemonade = createBrandIcon(LemonadeSvg, 'Lemonade');
+export const Vercel = createBrandIcon(VercelSvg, 'Vercel', false, true);
+export const Cloudflare = createBrandIcon(CloudflareSvg, 'Cloudflare', false, false, CloudflareMonoSvg);
+export const TypeSafe = createBrandIcon(TypeSafePng, 'TypeSafe AI');
+export const LlamaCpp = createBrandIcon(LlamaCppSvg, 'llama.cpp');
+export const Omlx = createBrandIcon(OmlxSvg, 'oMLX', false, false, undefined, OmlxDarkSvg);
 export const Tencent = createBrandIcon(TencentSvg, 'Tencent', false, false, TencentMonoSvg);
 export const IflytekCloud = createBrandIcon(IflytekCloudSvg, 'iFlytek', false, false, IflytekCloudMonoSvg);
 export const Baichuan = createBrandIcon(BaichuanSvg, 'Baichuan', false, false, BaichuanMonoSvg);
-export const Yi = createBrandIcon(YiSvg, 'Lingyi Wanwu', false, false, YiMonoSvg);
+// Resolve Yi's currentColor strokes per theme while preserving its green accent.
+export const Yi = createBrandIcon(
+    `data:image/svg+xml,${encodeURIComponent(YiSvg.replaceAll('currentColor', '#000'))}`,
+    'Lingyi Wanwu', false, false, YiMonoSvg,
+    `data:image/svg+xml,${encodeURIComponent(YiSvg.replaceAll('currentColor', '#fff'))}`,
+);
 export const Doubao = createBrandIcon(DoubaoSvg, 'Doubao', false, false, DoubaoMonoSvg);
