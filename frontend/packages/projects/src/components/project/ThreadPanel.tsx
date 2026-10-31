@@ -462,11 +462,11 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 {(view === 'chat' || focused) && <MessageDetailControl detail={detail} onChange={setDetail} surface="thread" />}
                 <ComposerStrip thread={thread} folder={session} autoAt={pendingAutoAt} onAutoAnswer={(mode) => { void act(() => ops.setAutoAnswer(mode)).then((ok) => ok && onRefresh?.()); }} />
                 <HeldMessages held={held} onEdit={(h) => void takeBack([h.id], true)} onRemove={(h) => void takeBack([h.id], false)} />
-                {running && composerContext && <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5 }}>{t('threadSettings.nextTurn')}</Typography>}
                 <ThreadComposer
                     ref={composer}
                     draftKey={threadId}
-                    context={composerContext}
+                    context={composerContext && <>{running && <Typography variant="caption" color="text.secondary">{t('threadSettings.nextTurn')}</Typography>}{composerContext}</>}
+                    contextCollapsible
                     streaming={running}
                     sendModes
                     onStop={() => {
