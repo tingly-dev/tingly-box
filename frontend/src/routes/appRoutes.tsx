@@ -36,6 +36,7 @@ const UseXcodePage = lazy(() => import('@/pages/scenario/UseXcodePage'));
 const UseVSCodePage = lazy(() => import('@/pages/scenario/UseVSCodePage'));
 const UseCursorPage = lazy(() => import('@/pages/scenario/UseCursorPage'));
 const UseEmbedPage = lazy(() => import('@/pages/scenario/UseEmbedPage'));
+const TTSPage = lazy(() => import('@/pages/audio/TTSPage'));
 const UseDecisionsPage = lazy(() => import('@/pages/scenario/UseDecisionsPage'));
 const ImageApiPage = lazy(() => import('@/pages/image/ImageApiPage'));
 const ImagePlaygroundPage = lazy(() => import('@/pages/image/ImagePlaygroundPage'));
@@ -139,6 +140,7 @@ export const appRoutes = (
             <Route path="/agent/vscode" element={<UseVSCodePage />} />
             <Route path="/agent/cursor" element={<UseCursorPage />} />
             <Route path="/agent/embed" element={<UseEmbedPage />} />
+            <Route path="/agent/tts" element={<TTSPage />} />
             <Route path="/agent/decisions" element={<UseDecisionsPage />} />
             {/* Image is its own rail item: Playground (work surface) + Image API
                 (the imagegen scenario). Old /agent/* paths keep working. */}

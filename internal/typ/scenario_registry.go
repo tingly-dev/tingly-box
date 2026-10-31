@@ -14,6 +14,7 @@ const (
 	TransportOpenAI    ScenarioTransport = "openai"
 	TransportAnthropic ScenarioTransport = "anthropic"
 	TransportEmbed     ScenarioTransport = "embed"
+	TransportTTS       ScenarioTransport = "tts"
 	TransportImageGen  ScenarioTransport = "imagegen"
 	TransportDecisions ScenarioTransport = "decisions"
 )
@@ -55,7 +56,7 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 	case ScenarioOpenAI:
 		return ScenarioDescriptor{
 			ID:                 scenario,
-			SupportedTransport: []ScenarioTransport{TransportOpenAI, TransportEmbed, TransportImageGen},
+			SupportedTransport: []ScenarioTransport{TransportOpenAI, TransportEmbed, TransportImageGen, TransportTTS},
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}
@@ -63,6 +64,13 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 		return ScenarioDescriptor{
 			ID:                 scenario,
 			SupportedTransport: []ScenarioTransport{TransportEmbed},
+			AllowRuleBinding:   true,
+			AllowDirectPathUse: true,
+		}
+	case ScenarioTTS:
+		return ScenarioDescriptor{
+			ID:                 scenario,
+			SupportedTransport: []ScenarioTransport{TransportTTS},
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}
@@ -113,7 +121,7 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 		// contrast, also accepts TransportOpenAI).
 		return ScenarioDescriptor{
 			ID:                 scenario,
-			SupportedTransport: []ScenarioTransport{TransportOpenAI, TransportAnthropic, TransportImageGen},
+			SupportedTransport: []ScenarioTransport{TransportOpenAI, TransportAnthropic, TransportImageGen, TransportTTS},
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}

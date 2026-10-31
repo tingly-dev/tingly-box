@@ -1,3 +1,4 @@
+import { IconVolume } from '@tabler/icons-react';
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SCENARIOS, getHiddenScenarios, getPinnedScenarios } from '@/pages/scenario/scenarioRegistry';
@@ -196,6 +197,7 @@ export function useActivityItems(): ActivityItem[] {
             { id: 'custom', nav: { path: '/agent/custom', label: t('layout.nav.useCustom', { defaultValue: 'Custom' }), icon: <IconCustom sx={{ fontSize: 20 }} /> } },
         ]);
         const sdkTools = flagged([
+            { id: 'tts', nav: { path: '/agent/tts', label: t('audio.ttsTitle'), icon: <IconVolume size={20} /> } },
             { id: 'openai', nav: { path: '/agent/openai', label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }), icon: <OpenAI size={20} /> } },
             { id: 'anthropic', nav: { path: '/agent/anthropic', label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }), icon: <Anthropic size={20} /> } },
             { id: 'embed', nav: { path: '/agent/embed', label: t('layout.nav.useEmbed', { defaultValue: 'Embedding' }), icon: <IconEmbedding sx={{ fontSize: 20 }} /> } },
