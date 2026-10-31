@@ -1,5 +1,7 @@
 {
 	servers {
+		# HTTP/3 uses UDP on the same public port as HTTPS/TCP.
+		protocols h1 h2 h3
 		timeouts {
 			read_body 30m
 			read_header 1m
@@ -14,7 +16,8 @@
 you.domain {
 	handle /tingly/* {
 		reverse_proxy localhost:12580 {
-			flush_interval -1
+			# Caddy flushes text/event-stream responses immediately by default.
+			# A negative flush_interval would keep the upstream alive after disconnect.
 			transport http {
 				read_timeout 0
 				keepalive 10m
@@ -26,7 +29,6 @@ you.domain {
 	handle /mirror/* {
 		uri replace /mirror /tingly
 		reverse_proxy localhost:12580 {
-			flush_interval -1
 			transport http {
 				read_timeout 0
 				keepalive 10m

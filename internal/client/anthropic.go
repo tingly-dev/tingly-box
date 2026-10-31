@@ -139,7 +139,7 @@ func newAnthropicClientWithTransport(provider *typ.Provider, baseURL string, tra
 // Vertex path, which must rebuild this chain under its OAuth transport (see
 // vertexAnthropicOptions).
 func anthropicTransport(provider *typ.Provider, model string, sessionID typ.SessionID) http.RoundTripper {
-	base := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
+	base := GetGlobalTransportPool().GetPeerTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
 	return providerTransportChain(base, provider)
 }
 

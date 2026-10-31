@@ -82,6 +82,9 @@ func (t *loggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	}
 
 	entry := logrus.WithContext(req.Context()).WithFields(fields)
+	if resp != nil {
+		entry = entry.WithField("http_protocol", resp.Proto)
+	}
 	if err != nil {
 		// fail_reason categorizes the raw net/url error as its own field so
 		// entries are filterable without parsing the message text.
