@@ -1,6 +1,6 @@
 import { Box, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Composer } from '../components/Composer';
+import { ThreadComposer } from '../components/ThreadComposer';
 import { useChosenModel, useStartChat } from '../hooks/useStartChat';
 
 function greetingKey(): string {
@@ -23,7 +23,7 @@ export default function HomePage() {
                 <Typography variant="h1" sx={{ textAlign: 'center', mb: 4, fontSize: { xs: '1.8rem', md: '2.4rem' } }}>
                     {t(greetingKey())}
                 </Typography>
-                <Composer autoFocus minRows={3} model={model} onModelChange={setModel} placeholder={t('home.placeholder')} onSend={(text) => start({ text, model })} />
+                <ThreadComposer draftKey="home" autoFocus minRows={3} model={model} onModelChange={setModel} placeholder={t('home.placeholder')} onSend={(text) => start({ text, model })} />
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1.5 }}>
                     {t('home.projectHint')}
                 </Typography>

@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Box, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Attachment } from '../../client';
-import { Composer } from '../Composer';
+import { ThreadComposer } from '../ThreadComposer';
 import { FolderPicker } from './FolderPicker';
 import { ThreadSettingsPickers } from '../ThreadSettingsPickers';
 import type { SessionLaunch } from '../../host/ProjectsHost';
@@ -22,7 +22,8 @@ interface Props {
 /**
  * Opens straight onto the prompt: the folder is the first picker under the
  * text, so starting a task is type and Enter. The sidebar lists the folders,
- * so there is no second list of them here.
+ * so there is no second list of them here. The prompt is a draft like any
+ * other: what is typed survives leaving the page and switching folders.
  */
 export function NewSessionView({ initialFolder, folders, permissionModes, onCreate, onAddFolder, onAttach }: Props) {
     const { t } = useTranslation('projects');
@@ -31,23 +32,18 @@ export function NewSessionView({ initialFolder, folders, permissionModes, onCrea
     const [launch, setLaunch] = useState<SessionLaunch>({ profile: '', model: '' });
     const [picked, setPicked] = useState<string | null>(null);
     const [mode, setMode] = useState('');
-    const [text, setText] = useState('');
     const folder = picked ?? initialFolder ?? folders[0] ?? '';
 
     return (
         <Box sx={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', px: 2 }}>
             <Box sx={{ width: '100%', maxWidth: 720, mx: 'auto', my: 'auto', py: { xs: 2, md: 5 }, flexShrink: 0 }}>
                 <Typography variant="h5" sx={{ textAlign: 'center', mb: 3, fontWeight: 500 }}>{t('session.heading')}</Typography>
-                <Composer
+                <ThreadComposer
+                    draftKey="new-session"
                     autoFocus
-                    keepUntilSent
-                    keysHint
                     minRows={3}
                     placeholder={t('session.promptPlaceholder')}
                     canSubmit={folder.trim() !== '' && !creating}
-                    text={text}
-                    onTextChange={setText}
-                    onAccepted={(sent) => setText((prev) => (prev === sent ? '' : prev))}
                     attach={(files) => onAttach(folder.trim(), files)}
                     // Files are stored under the folder's project, so there must be a folder first.
                     attachBlocked={folder.trim() === '' ? t('session.attachNeedsFolder') : undefined}

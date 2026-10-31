@@ -12,7 +12,6 @@ import { radius } from '@tingly/ui/theme/radius';
 export type AutoAnswer = 'off' | 'delay' | 'now';
 const AUTO_ANSWERS: AutoAnswer[] = ['off', 'delay', 'now'];
 const OPEN_KEY = 'thread.strip.open';
-
 /**
  * The setting a thread's questions follow: its own, else delay for a
  * project thread (its owner is usually away) and off for a folder session
@@ -56,14 +55,15 @@ interface Props {
  * most right now, and counts the rest: something about to happen without
  * the user (a question answering itself), then what changes (the branch),
  * and the folder only when there is nothing else. Folded or open is
- * remembered per browser.
+ * remembered per thread.
  */
 export function ComposerStrip({ thread, folder = false, onAutoAnswer, autoAt }: Props) {
     const { t } = useTranslation('projects');
-    const [open, setOpenState] = useState(() => readLocal(OPEN_KEY) === '1');
+    const key = `${OPEN_KEY}.${thread.id}`;
+    const [open, setOpenState] = useState(() => readLocal(key) === '1');
     const setOpen = (v: boolean) => {
         setOpenState(v);
-        writeLocal(OPEN_KEY, v ? '1' : '0');
+        writeLocal(key, v ? '1' : '0');
     };
     const [menu, setMenu] = useState<HTMLElement | null>(null);
     const branch = thread.branch || thread.head_branch;

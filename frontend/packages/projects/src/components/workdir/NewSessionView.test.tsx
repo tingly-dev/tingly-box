@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { NewSessionView } from './NewSessionView';
 import { ProjectsHostProvider } from '../../host/ProjectsHost';
 
@@ -7,6 +7,8 @@ vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => k
 vi.mock('../ModelPicker', () => ({ ModelPicker: (p: { value: string; disabled?: boolean; onChange: (v: string) => void }) => <button disabled={p.disabled} onClick={() => p.onChange('chosen-model')}>{p.value || 'choose-model'}</button> }));
 const host = { paths: { list: '/', project: (id: string) => `/${id}`, folder: () => '/folder' } };
 afterEach(cleanup);
+// The prompt is a ThreadComposer draft now; keep runs independent of it.
+beforeEach(() => localStorage.clear());
 
 it('submits selected settings, locks pickers during creation and retains draft and choices on failure', async () => {
     let finish!: (value: boolean) => void;
@@ -33,4 +35,12 @@ it('submits selected settings, locks pickers during creation and retains draft a
     expect(create).toHaveBeenLastCalledWith('/repo', 'edited task', 'plan', { profile: '', model: 'chosen-model' }, []);
     await act(async () => finish(true));
     expect(input).toHaveValue('');
+});
+
+it('keeps the typed prompt across a remount, like every draft', () => {
+    const first = render(<ProjectsHostProvider host={host}><NewSessionView initialFolder="/repo" folders={['/repo']} permissionModes={['plan']} onCreate={vi.fn()} onAttach={vi.fn()} /></ProjectsHostProvider>);
+    fireEvent.change(screen.getByPlaceholderText('session.promptPlaceholder'), { target: { value: 'half typed' } });
+    first.unmount();
+    render(<ProjectsHostProvider host={host}><NewSessionView initialFolder="/other" folders={['/repo']} permissionModes={['plan']} onCreate={vi.fn()} onAttach={vi.fn()} /></ProjectsHostProvider>);
+    expect(screen.getByPlaceholderText('session.promptPlaceholder')).toHaveValue('half typed');
 });
