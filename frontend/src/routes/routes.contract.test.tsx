@@ -84,6 +84,12 @@ describe('route contract', () => {
         expect(target('/mcp')).toEqual(['/mcp/profile/default']);
     });
 
+    it('keeps the local session browser behind its own optional feature gate', () => {
+        const route = matchRoutes(routes, '/agent/claude_code/sessions')!.at(-1)!.route;
+        expect(route.path).toBe('/agent/claude_code/sessions');
+        expect(isValidElement<{ feature: string }>(route.element) && route.element.props.feature).toBe('local_sessions');
+    });
+
     it('falls through to the catch-all for unknown paths', () => {
         // Guards the helper itself: if this ever passes, resolvesToPage is
         // not actually detecting the catch-all.

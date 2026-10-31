@@ -65,7 +65,7 @@ const DASHBOARD_RANGE_PATH = /^\/dashboard\/(today|yesterday|3d|7d|30d|90d)$/;
 
 export function useActivityItems(): ActivityItem[] {
     const { t } = useTranslation();
-    const { skillIde, enableGuardrails, enableBench, enableProjects } = useFeatureFlags();
+    const { localSessions, skillIde, enableGuardrails, enableBench, enableProjects } = useFeatureFlags();
     const projectsWaiting = useProjectsWaiting(enableProjects);
     const { profiles } = useProfileContext();
     const imageProfiles = useImageProfiles();
@@ -159,6 +159,10 @@ export function useActivityItems(): ActivityItem[] {
                 tooltip: t('layout.teamKeysTooltip'),
             },
         ];
+
+        if (localSessions) {
+            profileNavItems.push({ path: '/agent/claude_code/sessions', label: t('localSessions.title'), subtitle: t('localSessions.sidebarHint'), icon: <IconFileText sx={{fontSize: 20}} /> });
+        }
 
         // Hidden agents stay in the list, flagged: the sidebar's edit mode
         // shows them (to un-hide), and drops them otherwise (see
@@ -440,5 +444,5 @@ export function useActivityItems(): ActivityItem[] {
         ];
 
         return items;
-    }, [t, promptMenuItems, enableGuardrails, enableBench, enableProjects, projectsWaiting, profiles, imageProfiles, mcpProfiles, teams, botSummary, hiddenScenarios, pinnedScenarios, vmodelOff]);
+    }, [t, localSessions, promptMenuItems, enableGuardrails, enableBench, enableProjects, projectsWaiting, profiles, imageProfiles, mcpProfiles, teams, botSummary, hiddenScenarios, pinnedScenarios, vmodelOff]);
 }

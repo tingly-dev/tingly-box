@@ -3,7 +3,7 @@ import { Box, CircularProgress } from '@mui/material';
 import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 
-export type ExperimentalFeature = 'skill_ide' | 'guardrails' | 'mcp' | 'bench' | 'projects';
+export type ExperimentalFeature = 'local_sessions' | 'skill_ide' | 'guardrails' | 'mcp' | 'bench' | 'projects';
 
 export const buildExperimentalFeatureRedirect = (
     feature: ExperimentalFeature,
@@ -14,7 +14,7 @@ export const buildExperimentalFeatureRedirect = (
 };
 
 export const parseExperimentalFeature = (value: string | null): ExperimentalFeature | undefined => {
-    if (value === 'skill_ide' || value === 'guardrails' || value === 'mcp' || value === 'bench' || value === 'projects') {
+    if (value === 'local_sessions' || value === 'skill_ide' || value === 'guardrails' || value === 'mcp' || value === 'bench' || value === 'projects') {
         return value;
     }
     return undefined;
@@ -44,6 +44,7 @@ const ExperimentalFeatureGate = ({ feature, children }: ExperimentalFeatureGateP
 
     const enabled = {
         skill_ide: flags.skillIde,
+        local_sessions: flags.localSessions,
         guardrails: flags.enableGuardrails,
         mcp: flags.enableMCP,
         bench: flags.enableBench,

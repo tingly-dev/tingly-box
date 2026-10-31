@@ -215,6 +215,9 @@ func TestRetiredRecordingFlagPreservesLegacyConfig(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if cfg.GetScenarioFlag(typ.ScenarioGlobal, constant.ExtensionLocalSessions) {
+		t.Fatal("legacy recording opt-in must not grant access to local history")
+	}
 	if err := cfg.SetScenarioFlag(typ.ScenarioGlobal, "skill_user", false); err == nil {
 		t.Fatal("retired recording toggle should no longer be settable")
 	}

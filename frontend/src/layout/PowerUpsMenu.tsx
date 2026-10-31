@@ -71,7 +71,7 @@ interface PowerUpsMenuProps {
 export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, onNavigate, onMouseEnter, onMouseLeave }) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const { skillIde, enableGuardrails, enableMCP, enableBench, enableProjects, loading, refresh } = useFeatureFlags();
+    const { localSessions, skillIde, enableGuardrails, enableMCP, enableBench, enableProjects, loading, refresh } = useFeatureFlags();
     const [updating, setUpdating] = useState<ExperimentalFeature>();
     const [failed, setFailed] = useState(false);
     const { isHidden, toggleHidden } = useHiddenScenarios();
@@ -153,6 +153,16 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             path: '/guardrails',
             enabled: enableGuardrails,
             stage: 'exp' as const,
+        },
+        {
+            key: 'local_sessions',
+            feature: 'local_sessions',
+            icon: <IconTools sx={iconSx} />,
+            name: t('localSessions.title'),
+            description: t('localSessions.featureDescription'),
+            path: '/agent/claude_code/sessions',
+            enabled: localSessions,
+            stage: 'exp',
         },
         {
             key: 'skill_ide',
