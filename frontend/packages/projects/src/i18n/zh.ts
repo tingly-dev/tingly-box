@@ -150,7 +150,7 @@ export const zh: Dict<typeof en> = {
         settingsChanged: '项目设置已更新',
         threadModel: '线程模型',
         threadEffort: '线程推理力度',
-        queuePlaceholder: '给项目发消息，它会在当前这一轮结束后读到…',
+        queuePlaceholder: '给项目发消息，它会在下一步读到…',
         emptyTitle: '给这个项目发第一份工作',
         step1: '在这里描述要做的事——一个任务、一串任务、一份 bug 报告或一段报错栈都可以。',
         step2: '协调者会为每个任务开一个线程。每个线程都是一个在独立分支上工作的 Claude Code 会话。',
