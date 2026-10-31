@@ -58,10 +58,8 @@ const BASE_SCENARIO = 'claude_code';
 const commandModeForSource = (source: string | null): 'npx' | 'global' | null => {
     switch (source) {
         case 'npx':
-        case 'npx-bundle':
             return 'npx';
         case 'npm':
-        case 'npm-bundle':
         case 'binary':
             return 'global';
         default:

@@ -7,8 +7,8 @@ interface VersionContextType {
     hasUpdate: boolean;
     shouldNotify: boolean;
     releaseURL: string | null;
-    // How this running instance was launched ("npx", "npm", "npx-bundle",
-    // "npm-bundle", "binary"; null while not yet loaded / unknown). Lets UI
+    // How this running instance was launched ("npx", "npm", "binary";
+    // null while not yet loaded / unknown). Lets UI
     // that offers several equivalent methods (e.g. the update panel) default
     // to whichever one matches how the user is already running Tingly Box.
     launchSource: string | null;

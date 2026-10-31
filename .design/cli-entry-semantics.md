@@ -30,14 +30,11 @@ installed bin.
   under npx, and `cli/tingly-box/main.go` maps zero args to `--help`.
 
 **`--source` records the channel truthfully, handling stays unified:** the
-shims report `npx` / `npx-bundle` under npx and `npm` / `npm-bundle` when run
-as an installed bin (`internal/shortcut.npmShimSource` groups all four). The
-shortcut launcher preserves the package family and tries the current local
-executable first, retaining the `--source` flag. If that file has been removed
-by cache cleanup or an update, it falls back to unversioned
-`npx --prefer-offline -y <package> open`. The bundle variants preserve that
-package for older installs; the bundle package is retired since the cli
-package ships its binary through npm (`npm.md`, F).
+shims report `npx` under npx and `npm` when run as an installed bin
+(`internal/shortcut.npmShimSource` groups both). The shortcut launcher tries
+the current local executable first, retaining the `--source` flag. If that
+file has been removed by cache cleanup or an update, it falls back to
+unversioned `npx --prefer-offline -y tingly-box open`.
 
 Both bins are always shipped (`tingly-box` and `tb`), so command hints print
 both forms (e.g. `'tingly-box restart' / 'tb restart'`) rather than guessing

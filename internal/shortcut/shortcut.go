@@ -39,31 +39,14 @@ func render(t *template.Template, data any) string {
 // Launch sources. They describe how Tingly Box is installed/started and which
 // command a shortcut should run.
 const (
-	SourceBinary    = "binary"
-	SourceNpx       = "npx"
-	SourceNpm       = "npm" // installed bin from `npm install -g tingly-box` (shim run outside npx)
-	SourceNpxBundle = "npx-bundle"
-	SourceNpmBundle = "npm-bundle" // installed bin from `npm install -g tingly-box-bundle`
+	SourceBinary = "binary"
+	SourceNpx    = "npx"
+	SourceNpm    = "npm" // installed bin from `npm install -g tingly-box` (shim run outside npx)
 )
 
-// npmShimSource reports whether source reaches the Go binary through an npm
-// shim, whatever the channel (npx or a global install) and package (cli or
-// bundle). They all get the same treatment; the split values only keep the
-// record truthful and preserve which npm package a shortcut should relaunch.
+// npmShimSource reports whether an npm shim launched the Go binary.
 func npmShimSource(source string) bool {
-	switch source {
-	case SourceNpx, SourceNpm, SourceNpxBundle, SourceNpmBundle:
-		return true
-	}
-	return false
-}
-
-// npxPackageForSource preserves the install's package without pinning a version.
-func npxPackageForSource(source string) string {
-	if strings.HasSuffix(source, "-bundle") {
-		return "tingly-box-bundle"
-	}
-	return "tingly-box"
+	return source == SourceNpx || source == SourceNpm
 }
 
 // LaunchArgs are the CLI args the shortcut runs. `open` matches what a
@@ -115,7 +98,7 @@ func ResolveLaunch(exePath, source, _ string) LaunchSpec {
 	args := LaunchArgs()
 
 	if npmShimSource(source) {
-		npxArgv := append([]string{"npx", "--prefer-offline", "-y", npxPackageForSource(source)}, args...)
+		npxArgv := append([]string{"npx", "--prefer-offline", "-y", "tingly-box"}, args...)
 		localArgs := append([]string{"--source=" + source}, args...)
 		localCommand := shJoin(append([]string{exePath}, localArgs...))
 		cmdStr := "if [ -x " + shJoin([]string{exePath}) + " ]; then " + localCommand +

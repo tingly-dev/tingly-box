@@ -192,8 +192,7 @@ type Server struct {
 
 	version string
 
-	// launchSource is how this process was itself invoked ("", "npx",
-	// "npx-bundle") — see WithLaunchSource.
+	// launchSource is how this process was itself invoked ("", "binary", "npx", "npm") — see WithLaunchSource.
 	launchSource string
 
 	// webHandler serves the status, log, request-trace and token endpoints
