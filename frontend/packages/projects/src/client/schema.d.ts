@@ -946,8 +946,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Interrupt the running turn; the process and its background tasks survive
-         * @description Interrupt the running turn; the process and its background tasks survive
+         * Interrupt the running turn; the process and its background tasks survive. On a project conversation it stops the coordinator's turn instead
+         * @description Interrupt the running turn; the process and its background tasks survive. On a project conversation it stops the coordinator's turn instead
          */
         post: operations["apiV1ThreadsIdStopPost"];
         delete?: never;

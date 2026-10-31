@@ -2124,8 +2124,8 @@
         "tags": [
           "threads"
         ],
-        "summary": "Interrupt the running turn; the process and its background tasks survive",
-        "description": "Interrupt the running turn; the process and its background tasks survive",
+        "summary": "Interrupt the running turn; the process and its background tasks survive. On a project conversation it stops the coordinator's turn instead",
+        "description": "Interrupt the running turn; the process and its background tasks survive. On a project conversation it stops the coordinator's turn instead",
         "operationId": "apiV1ThreadsIdStopPost",
         "parameters": [
           {

@@ -88,8 +88,6 @@ export interface ComposerProps {
     onTextChange?: (text: string) => void;
     /** Called with what was sent once it was accepted, instead of clearing the box (a host clears its own draft). */
     onAccepted?: (sent: string) => void;
-    /** Show the send keys under the box (desktop only). */
-    keysHint?: boolean;
 }
 
 /**
@@ -99,7 +97,7 @@ export interface ComposerProps {
  */
 export function Composer({
     onSend, attach, attachBlocked, streaming, onStop, sendWhileStreaming, sendModes, disabled, canSubmit = true, placeholder, autoFocus, model, onModelChange, modelLabel, effort, onEffortChange, effortLabel, modelSource,
-    context, leftSlot, minRows = 1, seed, keepUntilSent, text: controlled, onTextChange, onAccepted, keysHint,
+    context, leftSlot, minRows = 1, seed, keepUntilSent, text: controlled, onTextChange, onAccepted,
 }: ComposerProps) {
     const { t } = useTranslation('projects');
     const mobile = useMediaQuery(useTheme().breakpoints.down('sm'));
@@ -277,10 +275,9 @@ export function Composer({
             </span>
         </Tooltip>
     );
-    const hint = keysHint && !mobile && !leftSlot;
     // Nothing under the text: the buttons sit beside it and the box is one
     // line until the text grows.
-    const inline = !leftSlot && !onModelChange && !onEffortChange && !hint;
+    const inline = !leftSlot && !onModelChange && !onEffortChange;
 
     const attachButton = attach && (
         <Tooltip title={attachBlocked || t('composer.attach')}>
@@ -409,7 +406,6 @@ export function Composer({
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
                             {attachButton}
                             {leftSlot}
-                            {hint && <Typography variant="caption" color="text.secondary">{t('composer.keys')}</Typography>}
                         </Box>
                         {onModelChange && <ModelPicker value={model ?? ''} onChange={onModelChange} label={modelLabel} source={modelSource} disabled={disabled} />}
                         {onEffortChange && <EffortPicker value={effort ?? ''} onChange={onEffortChange} label={effortLabel} disabled={disabled} />}

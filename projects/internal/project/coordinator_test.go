@@ -232,3 +232,77 @@ func TestRenderHistoryAlternates(t *testing.T) {
 	assert.Contains(t, msgs[2].Content, `source="thread"`)
 	assert.Contains(t, msgs[2].Content, `trust="relay"`)
 }
+
+// stoppableLLM answers like fakeLLM, but its first Stream blocks until the
+// request's context is canceled (the turn to stop) or release closes.
+type stoppableLLM struct {
+	fakeLLM
+	once    sync.Once
+	entered chan struct{}
+	release chan struct{}
+}
+
+// ClientFor hands out the stoppable client itself: the embedded fake's
+// method would bypass the blocking Stream.
+func (s *stoppableLLM) ClientFor(context.Context, string) (llm.Client, string, error) {
+	return s, "coord-model", nil
+}
+
+func (s *stoppableLLM) Stream(ctx context.Context, req llm.Request, onDelta func(string)) (llm.Result, error) {
+	first := false
+	s.once.Do(func() { first = true; close(s.entered) })
+	if first {
+		s.mu.Lock()
+		s.reqs = append(s.reqs, req)
+		s.mu.Unlock()
+		select {
+		case <-s.release:
+			return llm.Result{Text: "did finish"}, nil
+		case <-ctx.Done():
+			return llm.Result{}, ctx.Err()
+		}
+	}
+	return s.fakeLLM.Stream(ctx, req, onDelta)
+}
+
+// Stop interrupts the turn in flight and drops what it had queued: the
+// conversation records the stop, never an error, and the turn does not run on.
+func TestCoordinatorStopInterruptsTheTurn(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error {
+		turn.Say("ok", 1, 1)
+		return nil
+	})
+	ai := &stoppableLLM{fakeLLM: fakeLLM{fn: func(llm.Request) llm.Result { return llm.Result{} }},
+		entered: make(chan struct{}), release: make(chan struct{})}
+	coord := NewCoordinator(f.store, f.threads.layout, f.threads.hub, f.threads, ai)
+	t.Cleanup(func() { settleCoordinator(coord) })
+
+	_, err := coord.Post(f.project.ID, "a long thought", nil, Source{})
+	require.NoError(t, err)
+	<-ai.entered
+
+	// A message sent meanwhile waits for the turn; Stop drops it unread (it
+	// stays in the conversation, as everything the user said does).
+	_, err = coord.Post(f.project.ID, "never mind", nil, Source{})
+	require.NoError(t, err)
+
+	done := coord.stop(f.project.ID)
+	require.NotNil(t, done, "a turn was in flight")
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the turn did not exit after Stop")
+	}
+	require.Eventually(t, func() bool { return !coord.Busy(f.project.ID) }, 5*time.Second, 10*time.Millisecond)
+	assert.Equal(t, 1, len(ai.requests()), "the queued message must not start a turn")
+
+	msgs := convo(t, f.store, f.project.ID)
+	assert.Equal(t, 1, countKind(msgs, db.EvSystem), stopNote)
+	for _, m := range msgs {
+		assert.NotEqual(t, db.EvError, m.Kind, "a stopped turn is not an error")
+	}
+
+	// Stop with nothing running is a no-op that returns no channel.
+	assert.Nil(t, coord.stop(f.project.ID), "no turn, no channel")
+	assert.False(t, coord.Busy(f.project.ID))
+}

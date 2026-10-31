@@ -111,7 +111,11 @@ One composer, no mode setting:
 - `POST /threads/{id}/messages` takes `mode` (`send` default, `queue`,
   `stop_and_send`); `DELETE /threads/{id}/queue/{qid}` takes a held message
   back. Every thread is addressed the same way; a main thread's messages go to
-  the coordinator, which ignores the mode.
+  the coordinator, which takes every mode the same way — the conversation has
+  no held chips, the message shows at once and is read after the turn in
+  flight — except `stop_and_send`, which stops that turn first
+  (`Coordinator.Stop`, the same thing `POST /threads/{id}/stop` does on a
+  main thread).
 - A held message is a thread event of kind `queued` (state `held`, then `sent`
   or `removed`), so it streams and reloads like the rest of the transcript. It
   becomes an ordinary `user` event only when its turn starts. Chips left over

@@ -151,6 +151,24 @@ describe('conversation presentation', () => {
         const configured = composer.mock.lastCall![0];
         expect(configured).toMatchObject({ disabled: true, model: 'chosen-model', onModelChange: p.onModelChange, context: p.composerContext, seed: 'conversation.example1' });
         await configured.onSend('Hello', []);
-        expect(p.onSend).toHaveBeenCalledWith('Hello', []);
+        // No mode reaches onSend unless the user chose one.
+        expect(p.onSend).toHaveBeenCalledWith('Hello', [], undefined);
+    });
+
+    // As in a session panel: the send menu and Stop while the coordinator
+    // works, the chosen mode reaching onSend, and a default save holding
+    // Send without freezing the box.
+    it('sends with the session send ways: modes, stop and a save that only holds Send', async () => {
+        const p = props();
+        show(p);
+        let configured = composer.mock.lastCall![0];
+        expect(configured).toMatchObject({ streaming: false, sendModes: true, canSubmit: true });
+        expect(typeof configured.onStop).toBe('function');
+        await configured.onSend('Hello', [], 'stop_and_send');
+        expect(p.onSend).toHaveBeenCalledWith('Hello', [], 'stop_and_send');
+
+        show({ ...props(), busy: true, canSubmit: false });
+        configured = composer.mock.lastCall![0];
+        expect(configured).toMatchObject({ streaming: true, sendModes: true, canSubmit: false, placeholder: 'conversation.queuePlaceholder' });
     });
 });

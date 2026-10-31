@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { api, ApiError, unwrap, type ConversationDetail, type Message, type StreamEvent } from '../client';
 import { regenerate, sendMessage } from '../client/stream';
 import { ChatActionsMenu } from '../components/ChatActionsMenu';
-import { Composer } from '../components/Composer';
+import { ThreadComposer } from '../components/ThreadComposer';
 import { Markdown } from '../components/Markdown';
 import { Check, ContentCopy, ExpandMore, Refresh } from '../components/icons';
 import { useCopyFeedback } from '../hooks/useCopyFeedback';
@@ -299,7 +299,10 @@ export default function ChatPage() {
 
             {/* Composer */}
             <Box sx={{ ...COLUMN, pb: 2 }}>
-                <Composer
+                <ThreadComposer
+                    key={id}
+                    // Per conversation: its draft starts fresh (remounted on chat switch).
+                    draftKey={`chat.${id}`}
                     autoFocus
                     model={model}
                     onModelChange={setModel}
@@ -308,7 +311,6 @@ export default function ChatPage() {
                     onStop={() => abortRef.current?.abort()}
                     onSend={(text) => run('send', text)}
                     placeholder={t('chat.replyPlaceholder')}
-                    minRows={1}
                     seed={seed}
                 />
                 <Typography variant="caption" color="text.disabled" sx={{ display: 'block', textAlign: 'center', mt: 0.75 }}>
