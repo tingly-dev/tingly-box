@@ -56,6 +56,20 @@ describe('conversation presentation', () => {
         expect(view.container.querySelectorAll('table')).toHaveLength(2);
     });
 
+    it('offers a way back to the latest messages after scrolling up', () => {
+        show(props([event('assistant', 'A reply')]));
+        const scroller = screen.getByText('A reply').closest('[class*="MuiStack"]')!.parentElement!;
+        Object.defineProperties(scroller, {
+            scrollHeight: { configurable: true, value: 1000 },
+            clientHeight: { configurable: true, value: 300 },
+            scrollTop: { configurable: true, writable: true, value: 100 },
+        });
+        scroller.scrollTo = vi.fn();
+        fireEvent.scroll(scroller);
+        fireEvent.click(screen.getByRole('button', { name: /conversation.latest/ }));
+        expect(scroller.scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'smooth' });
+    });
+
     it('keeps the existing typography for Markdown outside conversation replies', () => {
         render(<><section data-testid="detail"><Markdown text="# Detail" /></section><section data-testid="reply"><Markdown text="# Reply" conversation /></section></>);
         expect(getComputedStyle(within(screen.getByTestId('detail')).getByRole('heading')).fontSize).toBe('22.4px');

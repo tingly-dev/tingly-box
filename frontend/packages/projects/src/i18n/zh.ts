@@ -144,6 +144,7 @@ export const zh: Dict<typeof en> = {
         threadHint: '简洁隐藏普通工具调用及结果，不隐藏卡片或控件。仅影响展示，不影响任务执行。',
     },
     conversation: {
+        latest: '回到最新消息',
         placeholder: '描述工作、粘贴 bug 报告或报错栈，或者提个问题…',
         coordinatorModel: '协调者模型',
         coordinatorEffort: '协调者推理力度',

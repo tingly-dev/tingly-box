@@ -139,6 +139,7 @@ export const en = {
         threadHint: 'Concise hides ordinary tool calls and results, not cards or controls. Display only — work keeps running.',
     },
     conversation: {
+        latest: 'Latest messages',
         placeholder: 'Describe work, paste a bug report or stack trace, or ask a question…',
         coordinatorModel: 'Coordinator model',
         coordinatorEffort: 'Coordinator effort',

@@ -287,6 +287,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
     const { t } = useTranslation('projects');
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
+    const [awayFromBottom, setAwayFromBottom] = useState(false);
     const [seed, setSeed] = useState('');
     const [detail, setDetail] = useMessageDetail('conversation');
 
@@ -301,14 +302,17 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                 ref={scrollRef}
                 onScroll={() => {
                     const el = scrollRef.current;
-                    if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+                    if (el) {
+                        stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+                        setAwayFromBottom(!stick.current);
+                    }
                 }}
                 sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', px: 2, py: 2, overscrollBehavior: 'contain' }}
             >
-                <Stack spacing={messageSpacing}>
+                <Stack spacing={messageSpacing} sx={{ maxWidth: 800, mx: 'auto', width: '100%' }}>
                     {more && onLoadEarlier && <LoadEarlier scrollRef={scrollRef} onLoad={onLoadEarlier} />}
                     {messages.length === 0 && (
-                        <Box sx={{ py: { xs: 3, md: 6 } }}>
+                        <Box sx={{ py: { xs: 3, md: 6 }, maxWidth: 650 }}>
                             <Typography variant="h3" sx={{ mb: 2 }}>{t('conversation.emptyTitle')}</Typography>
                             {[1, 2, 3].map((i) => (
                                 <Box key={i} sx={{ display: 'flex', gap: 1.5, mb: 1.5 }}>
@@ -392,7 +396,15 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                     )}
                 </Stack>
             </Box>
-            <Box sx={{ px: 2, pb: 2 }}>
+            <Box sx={{ px: 2, pb: 2, position: 'relative' }}>
+                {awayFromBottom && (
+                    <Button size="small" variant="contained" onClick={() => {
+                        stick.current = true;
+                        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+                        setAwayFromBottom(false);
+                    }} sx={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', mb: 1, borderRadius: 99, boxShadow: 3, whiteSpace: 'nowrap', zIndex: 1 }}>↓ {t('conversation.latest', { defaultValue: 'Latest messages' })}</Button>
+                )}
+                <Box sx={{ maxWidth: 800, mx: 'auto' }}>
                 {disabledReason}
                 <MessageDetailControl detail={detail} onChange={setDetail} surface="conversation" />
                 <ThreadComposer
@@ -418,6 +430,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                         return onSend(text, attachments);
                     }}
                 />
+                </Box>
             </Box>
         </Box>
     );

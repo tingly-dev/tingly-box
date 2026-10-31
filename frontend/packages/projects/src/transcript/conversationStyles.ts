@@ -1,9 +1,10 @@
+import { alpha, type Theme } from '@mui/material/styles';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 // The transcript is the reference for conversation presentation. Keep both
 // Markdown parsers and their hosts independent while sharing the reading surface.
-export const messageSpacing = 2.5;
+export const messageSpacing = 3;
 export const userMessageWidth = '80%';
 
 export const conversationText = {
@@ -11,7 +12,9 @@ export const conversationText = {
 } as const;
 
 export const userBubble = {
-    maxWidth: userMessageWidth, bgcolor: 'action.hover', px: 1.75, py: 1, borderRadius: radius.card,
+    maxWidth: userMessageWidth, bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.16 : 0.08),
+    border: 1, borderColor: (theme: Theme) => alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.2 : 0.1),
+    px: 2, py: 1.25, borderRadius: radius.card, borderBottomRightRadius: 4,
 } as const;
 
 export const conversationMarkdown = {
