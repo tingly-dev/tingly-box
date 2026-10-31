@@ -73,6 +73,12 @@ func (p *ClientPool) GetOpenAIClient(ctx context.Context, provider *typ.Provider
 				logrus.WithContext(ctx).Errorf("Failed to create xAI client for provider %s: %v", provider.Name, err)
 				return nil
 			}
+		case ai.IssuerQoder, ai.IssuerQoderCN:
+			client, err = NewQoderClient(provider, model, sessionID)
+			if err != nil {
+				logrus.WithContext(ctx).Errorf("Failed to create Qoder client for provider %s: %v", provider.Name, err)
+				return nil
+			}
 		case ai.IssuerWorkBuddy, ai.IssuerWorkBuddyCN:
 			client, err = NewWorkBuddyClient(provider, model, sessionID)
 			if err != nil {

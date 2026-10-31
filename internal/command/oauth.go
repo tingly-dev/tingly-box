@@ -589,6 +589,9 @@ func getProviderConfig(issuer string) (*ProviderOAuthConfig, error) {
 		// attached as the dual URL in createProviderFromToken.
 		apiBase, _ = ai.ZCodeEndpoints(ai.Issuer(issuer))
 		apiStyle = "anthropic"
+	case ai.IssuerQoder, ai.IssuerQoderCN:
+		apiBase = ai.QoderInferenceBase(ai.Issuer(issuer))
+		apiStyle = "openai"
 	case ai.IssuerWorkBuddy, ai.IssuerWorkBuddyCN:
 		site, _ := ai.WorkBuddySiteFor(ai.Issuer(issuer))
 		apiBase = site.APIBase()

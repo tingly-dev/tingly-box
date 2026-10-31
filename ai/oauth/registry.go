@@ -220,6 +220,14 @@ func DefaultRegistry() *Registry {
 		Hook:        &NoopHook{},
 	})
 
+	for _, item := range []struct {
+		issuer ai.Issuer
+		name   string
+		site   QoderSite
+	}{{ai.IssuerQoder, "Qoder", QoderGlobal}, {ai.IssuerQoderCN, "Qoder CN", QoderCN}} {
+		registry.Register(&ProviderConfig{Type: item.issuer, DisplayName: item.name, ClientID: qoderClientID, AuthURL: item.site.BrowserURL, TokenURL: item.site.APIURL + "/api/v1/deviceToken/poll", AuthStyle: AuthStyleInNone, OAuthMethod: OAuthMethodServerPoll, ConsoleURL: item.site.BrowserURL, Hook: &NoopHook{}})
+	}
+
 	// WorkBuddy (Tencent WorkBuddy / CodeBuddy) — server-mediated login.
 	//
 	// Not an OAuth 2.0 client either: the site's plugin API mints a login

@@ -186,6 +186,20 @@ const (
 	// third channel, so it has no issuer of its own.
 	IssuerWorkBuddy   Issuer = "workbuddy"    // WorkBuddy (international, workbuddy.ai)
 	IssuerWorkBuddyCN Issuer = "workbuddy_cn" // WorkBuddy / CodeBuddy (China, copilot.tencent.com)
-	IssuerMock        Issuer = "mock"         // Mock provider for testing
+	IssuerQoder       Issuer = "qoder"
+	IssuerQoderCN     Issuer = "qoder_cn"
+	IssuerMock        Issuer = "mock" // Mock provider for testing
 	IssuerUnknown     Issuer = ""
 )
+
+func IsQoderIssuer(i Issuer) bool { return i == IssuerQoder || i == IssuerQoderCN }
+
+func QoderInferenceBase(i Issuer) string {
+	if i == IssuerQoder {
+		return "https://api2.qoder.sh"
+	}
+	if i == IssuerQoderCN {
+		return "https://gateway.qoder.com.cn"
+	}
+	return ""
+}
