@@ -663,7 +663,11 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	m.mu.Lock()
 	m.turns[threadID] = &turnTally{launchModel: model}
 	m.mu.Unlock()
-	opts := agentboot.ExecutionOptions{Model: model, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings, Entrypoint: sessionEntrypoint}
+	effort := t.EffortOverride
+	if effort == "" && !folder {
+		effort = p.ThreadEffort
+	}
+	opts := agentboot.ExecutionOptions{Model: model, Effort: effort, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings, Entrypoint: sessionEntrypoint}
 	if !folder {
 		opts.AppendSystemPrompt = threadSystemPrompt(m.layout, p, t)
 		opts.SettingsPath = m.layout.SettingsFile(p.ID, t.ID)

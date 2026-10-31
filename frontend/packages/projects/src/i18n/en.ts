@@ -5,6 +5,7 @@ export const en = {
         tokensApprox: '≈ {{value}} tokens',
     },
     threadSettings: {
+        settings: 'Thread settings',
         model: 'Model', permissions: 'Permissions', projectDefault: 'Project default', defaultModel: 'Default model', defaultPermissions: 'Default permissions',
         defaults: 'Project thread defaults', defaultsHelp: 'Used by new threads and existing threads without an override. Individual thread choices do not change these defaults.',
         nextTurn: 'Launch settings apply on the next started turn. Send now joins the current turn; use After this turn or Stop and send for a new turn.',

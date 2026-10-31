@@ -122,6 +122,11 @@ type ModelRequest struct {
 	Model string `json:"model"`
 }
 
+// EffortRequest selects the next turn's effort; empty restores inheritance.
+type EffortRequest struct {
+	Effort string `json:"effort" enum:",low,medium,high,max"`
+}
+
 // TitleRequest renames a thread.
 type TitleRequest struct {
 	Title string `json:"title"`
@@ -237,6 +242,10 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.PUT("/threads/:id/model", h.setModel, tag,
 		swagger.WithDescription("Set the model of the thread's next turn; empty restores its project or host profile default"),
 		swagger.WithRequestModel(ModelRequest{}),
+		swagger.WithResponseModel(db.Thread{}))
+	api.PUT("/threads/:id/effort", h.setEffort, tag,
+		swagger.WithDescription("Set the thread's next-turn effort; empty restores its default"),
+		swagger.WithRequestModel(EffortRequest{}),
 		swagger.WithResponseModel(db.Thread{}))
 	api.PUT("/threads/:id/title", h.setTitle, tag,
 		swagger.WithDescription("Rename the thread"),
@@ -640,6 +649,23 @@ func (h *Handler) setModel(c *gin.Context) {
 		return
 	}
 	out, err := h.svc.Threads.SetModel(c.Request.Context(), t.ID, req.Model)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *Handler) setEffort(c *gin.Context) {
+	var req EffortRequest
+	if !apierr.Bind(c, &req) {
+		return
+	}
+	t, ok := h.worker(c)
+	if !ok {
+		return
+	}
+	out, err := h.svc.Threads.SetEffort(t.ID, req.Effort)
 	if err != nil {
 		fail(c, err)
 		return

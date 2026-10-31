@@ -60,3 +60,14 @@ it('merges settings without rolling back streamed status, usage or observed work
     const saved = thread('a', { status: 'working', turns: 2, model: 'old-observed', model_override: 'chosen', permission_mode: 'plan' });
     expect(mergeThreadSettings(current, saved, false)).toMatchObject({ status: 'ready', turns: 3, model: 'latest-observed', model_override: 'chosen', permission_mode: 'plan' });
 });
+
+
+it('saves effort per thread and preserves it when merging settings', async () => {
+    const saved = thread('a', { effort_override: 'high' });
+    put.mockResolvedValueOnce(response(saved));
+    const changed = vi.fn();
+    const hook = renderHook(() => useThreadSettings(thread('a'), false, changed));
+    await act(async () => { await hook.result.current.setEffort('high'); });
+    expect(put).toHaveBeenCalledWith('/api/v1/threads/{id}/effort', { params: { path: { id: 'a' } }, body: { effort: 'high' } });
+    expect(mergeThreadSettings(thread('a'), saved, false).effort_override).toBe('high');
+});

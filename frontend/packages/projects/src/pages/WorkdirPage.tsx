@@ -8,6 +8,8 @@ import { AddWorkdirDialog } from '../components/workdir/AddWorkdirDialog';
 import { NewSessionView } from '../components/workdir/NewSessionView';
 import { loadPermissionModes } from '../components/workdir/PermissionModeSelect';
 import { ThreadSettingsPickers } from '../components/ThreadSettingsPickers';
+import { EffortPicker } from '../components/EffortPicker';
+import type { components } from '../client';
 import { mergeThreadSettings, useThreadSettings } from '../hooks/useThreadSettings';
 import { uploadAttachments } from '../components/attachments';
 import { ProjectImTags, useProjectIm } from '../components/im/ProjectImBindings';
@@ -385,6 +387,11 @@ export default function WorkdirPage() {
                                 permissionMode={selected.permission_mode ?? ''} modes={modes} defaultPermissionMode={selectedFolder?.thread_permission_mode || 'acceptEdits'}
                                 disabled={threadBlocked || selected.status === 'resolved' || settings.saving}
                                 onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
+                        )}
+                        effortControl={selected && (
+                            <EffortPicker value={selected.effort_override || ''}
+                                disabled={threadBlocked || selected.status === 'resolved' || settings.saving}
+                                onChange={(value) => void settings.setEffort(value as components['schemas']['EffortRequest']['effort'])} />
                         )}
                         composerContext={selected && (
                             <ThreadSettingsPickers folder show="permission" value={{ profile: selected.profile ?? '', model: selected.model ?? '' }}

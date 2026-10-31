@@ -416,13 +416,12 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                     seed={seed}
                     context={composerContext}
                     contextCollapsible
+                    contextLabel={t('threadSettings.settings')}
                     streaming={busy}
                     model={model}
                     onModelChange={onModelChange}
                     effort={effort}
                     onEffortChange={onEffortChange}
-                    effortLabel={t('conversation.coordinatorEffort')}
-                    modelLabel={t('conversation.coordinatorModel')}
                     modelSource="projects"
                     placeholder={t(busy ? 'conversation.queuePlaceholder' : 'conversation.placeholder')}
                     attach={(files) => uploadAttachments({ projectId }, files)}

@@ -26,10 +26,11 @@ export function ThreadSettingsPickers({ value, permissionMode, modes, onLaunchCh
     return (
         <>
             {show !== 'permission' && (folder && session?.launchPickers ? session.launchPickers({ value, onChange: onLaunchChange, disabled }) : (
-                <ModelPicker source="projects" value={value.model} label={t('threadSettings.model')} defaultLabel={modelDefault}
+                <ModelPicker source="projects" value={value.model} defaultLabel={modelDefault} defaultDisplayLabel={defaultModel || t('threadSettings.defaultModel')}
                     inheritedModel={defaultModel} disabled={disabled} onChange={(model) => onLaunchChange({ ...value, model })} />
             ))}
             {show !== 'model' && <PermissionModeSelect value={permissionMode} modes={modes} disabled={disabled} defaultLabel={permissionDefault}
+                defaultDisplayLabel={t(`session.mode.${defaultPermissionMode}`, { defaultValue: defaultPermissionMode })}
                 label={t('threadSettings.permissions')} onChange={onPermissionChange} />}
         </>
     );

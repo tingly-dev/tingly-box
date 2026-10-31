@@ -150,3 +150,30 @@ func TestWorkerReportedModelDoesNotUseLaunchFallback(t *testing.T) {
 	assert.Equal(t, "configured-alias", got.Model)
 	assert.Empty(t, got.ReportedModel)
 }
+
+func TestThreadEffortInheritsAndOverridesPerTurn(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
+	f.project.ThreadEffort = "medium"
+	require.NoError(t, f.store.SaveProject(f.project))
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "work"})
+	require.NoError(t, err)
+	f.report(t)
+	waitStatus(t, f.store, th.ID, db.ThreadIdle)
+	assert.Equal(t, "medium", f.agent.Launches()[0].Effort)
+	_, err = f.threads.SetEffort(th.ID, "high")
+	require.NoError(t, err)
+	_, err = f.threads.Send(context.Background(), th.ID, "continue", Source{}, nil)
+	require.NoError(t, err)
+	f.report(t)
+	waitStatus(t, f.store, th.ID, db.ThreadIdle)
+	assert.Equal(t, "high", f.agent.Launches()[1].Effort)
+	_, err = f.threads.SetEffort(th.ID, "")
+	require.NoError(t, err)
+	_, err = f.threads.Send(context.Background(), th.ID, "inherit", Source{}, nil)
+	require.NoError(t, err)
+	f.report(t)
+	waitStatus(t, f.store, th.ID, db.ThreadIdle)
+	assert.Equal(t, "medium", f.agent.Launches()[2].Effort)
+	_, err = f.threads.SetEffort(th.ID, "invalid")
+	require.Error(t, err)
+}

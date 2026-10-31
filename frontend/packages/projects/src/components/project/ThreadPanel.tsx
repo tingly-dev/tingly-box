@@ -74,6 +74,7 @@ interface Props {
     composerContext?: React.ReactNode;
     /** Model selector, kept visible next to the composer. */
     modelControl?: React.ReactNode;
+    effortControl?: React.ReactNode;
     settingsSaving?: boolean;
     canSend?: () => boolean;
     /** Resolved configuration labels; not the last observed response model. */
@@ -98,7 +99,7 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
     return `[data-block="${anchor.block}"]`;
 };
 
-export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, modelControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railTop, railMinPanel = RAIL_MIN_PANEL }: Props) {
+export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railTop, railMinPanel = RAIL_MIN_PANEL }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const [diffOpen, setDiffOpen] = useState(false);
@@ -473,12 +474,12 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 <ThreadComposer
                     ref={composer}
                     draftKey={threadId}
-                    context={composerContext && <>{running && <Typography variant="caption" color="text.secondary">{t('threadSettings.nextTurn')}</Typography>}{composerContext}</>}
-                    contextCollapsible
-                    leftSlot={modelControl && (
+                    leftSlot={(modelControl || effortControl || composerContext) && (
                         <Tooltip title={t('threadSettings.nextTurn')} disableHoverListener={!running} disableFocusListener={!running}>
                             <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, flexWrap: 'wrap' }}>
                                 {modelControl}
+                                {effortControl}
+                                {composerContext}
                                 {running && <Typography variant="caption" color="text.secondary">{t('threadSettings.modelNextTurn')}</Typography>}
                             </Box>
                         </Tooltip>

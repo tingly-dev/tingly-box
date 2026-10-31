@@ -116,6 +116,8 @@ type Thread struct {
 	// ModelOverride is a project worker's requested model; empty inherits the
 	// project's thread model. Folder threads keep their choice in Model.
 	ModelOverride string `gorm:"size:200" json:"model_override,omitempty"`
+	// EffortOverride is the next turn’s effort; empty inherits its project or CLI default.
+	EffortOverride string `gorm:"size:32" json:"effort_override,omitempty"`
 	// PermissionMode overrides the project's permission mode for this
 	// thread; a folder has no project mode, so it is a folder thread's only mode.
 	PermissionMode string `gorm:"size:40" json:"permission_mode,omitempty"`

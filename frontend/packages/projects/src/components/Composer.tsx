@@ -73,6 +73,8 @@ export interface ComposerProps {
     context?: ReactNode;
     /** Fold secondary configuration out of the conversation until requested. */
     contextCollapsible?: boolean;
+    /** Label for the optional context disclosure. */
+    contextLabel?: string;
     /** Controls shown at the bottom-left (project / memory chips). */
     leftSlot?: ReactNode;
     /** Lines the box shows when empty (one by default). */
@@ -101,7 +103,7 @@ export interface ComposerProps {
  */
 export function Composer({
     onSend, attach, attachBlocked, streaming, onStop, sendWhileStreaming, sendModes, disabled, canSubmit = true, placeholder, autoFocus, model, onModelChange, modelLabel, effort, onEffortChange, effortLabel, modelSource,
-    context, contextCollapsible = false, leftSlot, minRows = 1, seed, keepUntilSent, text: controlled, onTextChange, onAccepted, keysHint,
+    context, contextCollapsible = false, contextLabel, leftSlot, minRows = 1, seed, keepUntilSent, text: controlled, onTextChange, onAccepted, keysHint,
 }: ComposerProps) {
     const { t } = useTranslation('projects');
     const mobile = useMediaQuery(useTheme().breakpoints.down('sm'));
@@ -396,7 +398,7 @@ export function Composer({
             {context && contextCollapsible && (
                 <Button size="small" color="inherit" onClick={() => setContextOpen((open) => !open)} aria-expanded={contextOpen}
                     endIcon={<ExpandMore fontSize="small" />} sx={{ color: 'text.secondary', textTransform: 'none', mb: 0.5, px: 0.5 }}>
-                    {t('composer.settings', { defaultValue: 'Session settings' })}
+                    {contextLabel ?? t('composer.settings', { defaultValue: 'Session settings' })}
                 </Button>
             )}
             {context && (!contextCollapsible || contextOpen) && (

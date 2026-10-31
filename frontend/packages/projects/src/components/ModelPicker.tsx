@@ -16,6 +16,8 @@ interface Props {
     source?: ModelSource;
     /** Empty is inheritance, distinct from explicitly choosing the same model. */
     defaultLabel?: string;
+    /** Short label for the inherited value on the button; the menu keeps defaultLabel. */
+    defaultDisplayLabel?: string;
     /** Project default used to resolve the inherited alias when available. */
     inheritedModel?: string;
 }
@@ -31,7 +33,7 @@ const routedTo = (m: Model | undefined) => (m && m.provider_model && m.provider_
  * (an alias) is shown with the real model it stands for, the way the status
  * line renders a route.
  */
-export function ModelPicker({ value, onChange, disabled, label, defaultLabel, inheritedModel, source = 'connection' }: Props) {
+export function ModelPicker({ value, onChange, disabled, label, defaultLabel, defaultDisplayLabel, inheritedModel, source = 'connection' }: Props) {
     const { t } = useTranslation('projects');
     const { models, error } = useModels(source);
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -43,6 +45,7 @@ export function ModelPicker({ value, onChange, disabled, label, defaultLabel, in
     const shown = real ? `${value} → ${real}` : value;
     const inheritedReal = routedTo(models.find((m) => m.id === inheritedModel));
     const inheritedLabel = inheritedReal && defaultLabel ? `${defaultLabel} → ${inheritedReal}` : defaultLabel;
+    const inheritedDisplay = defaultDisplayLabel ? (inheritedReal ? `${defaultDisplayLabel} → ${inheritedReal}` : defaultDisplayLabel) : inheritedLabel;
 
     const close = () => setAnchor(null);
     return (
@@ -56,7 +59,7 @@ export function ModelPicker({ value, onChange, disabled, label, defaultLabel, in
                 sx={{ color: 'text.secondary', fontWeight: 500, fontSize: fontSizes.sm, maxWidth: 260, px: 0.75, minWidth: 0, borderRadius: radius.row }}
             >
                 <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={shown}>
-                    {label ? `${label} · ` : ''}{shown || inheritedLabel || t('model.auto')}
+                    {label ? `${label} · ` : ''}{shown || inheritedDisplay || t('model.auto')}
                 </Box>
             </Button>
             <Menu

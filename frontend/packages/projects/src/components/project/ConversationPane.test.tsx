@@ -149,7 +149,7 @@ describe('conversation presentation', () => {
         show(p);
         fireEvent.click(screen.getByText('conversation.example1'));
         const configured = composer.mock.lastCall![0];
-        expect(configured).toMatchObject({ disabled: true, model: 'chosen-model', onModelChange: p.onModelChange, context: p.composerContext, seed: 'conversation.example1' });
+        expect(configured).toMatchObject({ disabled: true, model: 'chosen-model', onModelChange: p.onModelChange, context: p.composerContext, contextLabel: 'threadSettings.settings', seed: 'conversation.example1' });
         await configured.onSend('Hello', []);
         expect(p.onSend).toHaveBeenCalledWith('Hello', []);
     });

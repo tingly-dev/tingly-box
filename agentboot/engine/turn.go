@@ -301,5 +301,5 @@ func launchSignature(opts agentboot.ExecutionOptions) string {
 			settings += "@" + hex.EncodeToString(sum[:])
 		}
 	}
-	return opts.Entrypoint + "\x00" + settings + "\x00" + strings.Join(env, "\x00")
+	return opts.Entrypoint + "\x00" + settings + "\x00" + opts.Effort + "\x00" + strings.Join(env, "\x00")
 }

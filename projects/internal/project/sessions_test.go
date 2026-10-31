@@ -468,3 +468,23 @@ func TestSessionWithBackgroundTasksIsNotDone(t *testing.T) {
 	store.Append(sid, changed())
 	waitStatus(t, f.store, s.ID, db.ThreadIdle)
 }
+
+func TestFolderThreadEffortAppliesOnNextTurnAndHandoff(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
+	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "start"})
+	require.NoError(t, err)
+	waitStatus(t, f.store, s.ID, db.ThreadIdle)
+	assert.Empty(t, f.agent.Launches()[0].Effort)
+	_, err = f.threads.SetEffort(s.ID, "high")
+	require.NoError(t, err)
+	_, err = f.threads.Send(context.Background(), s.ID, "continue", Source{}, nil)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		th, e := f.store.GetThread(s.ID)
+		return e == nil && th.Turns >= 2 && th.Status == db.ThreadIdle
+	}, 5*time.Second, 10*time.Millisecond)
+	assert.Equal(t, "high", f.agent.Launches()[1].Effort)
+	cmd, err := f.threads.Handoff(s.ID)
+	require.NoError(t, err)
+	assert.Contains(t, cmd, "--effort high")
+}

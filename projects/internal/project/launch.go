@@ -119,6 +119,22 @@ func (m *Threads) SetModel(ctx context.Context, id, model string) (*db.Thread, e
 	return out, err
 }
 
+// SetEffort configures the next turn without changing project defaults.
+func (m *Threads) SetEffort(id, effort string) (*db.Thread, error) {
+	effort = strings.TrimSpace(effort)
+	if !ValidEffort(effort) {
+		return nil, errors.New("invalid effort level")
+	}
+	t, err := m.store.GetThread(id)
+	if err != nil {
+		return nil, err
+	}
+	if t.Agent == db.AgentLLM {
+		return nil, errors.New("not available on a project's main thread")
+	}
+	return m.update(id, func(t *db.Thread) { t.EffortOverride = effort })
+}
+
 // Handoff releases a session so it can go on in a terminal, and returns the
 // command that does it. The resident process is closed first: two processes
 // writing one Claude session file corrupt it. A turn in flight is refused
@@ -156,6 +172,15 @@ func (m *Threads) Handoff(id string) (string, error) {
 	}
 	if model != "" {
 		argv = append(argv, "--model", model)
+	}
+	effort := t.EffortOverride
+	if effort == "" && !m.isFolder(t.ProjectID) {
+		if p, err := m.store.GetProject(t.ProjectID); err == nil {
+			effort = p.ThreadEffort
+		}
+	}
+	if effort != "" {
+		argv = append(argv, "--effort", effort)
 	}
 	return terminalCommand(runtime.GOOS, t.Cwd, argv), nil
 }

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { api, unwrap, type Thread } from '../client';
+import { api, unwrap, type Thread, type components } from '../client';
 import type { SessionLaunch } from '../host/ProjectsHost';
 import { useNotify } from './useNotify';
 
@@ -41,16 +41,20 @@ export function useThreadSettings(thread: Thread | undefined, folder: boolean, o
     const setPermission = (permission_mode: string) => save(async (current) => changed(await unwrap(api.PUT('/api/v1/threads/{id}/permission-mode', {
         params: { path: { id: current.id } }, body: { permission_mode },
     }))));
+    const setEffort = (effort: components['schemas']['EffortRequest']['effort']) => save(async (current) => changed(await unwrap(api.PUT('/api/v1/threads/{id}/effort', {
+        params: { path: { id: current.id } }, body: { effort },
+    }))));
     return {
         saving: !!thread && savingIds.has(thread.id),
         // Also checked inside onSend, before React has rendered the disabled button.
         canSend: () => !!thread && !pending.current.has(thread.id),
         setLaunch,
         setPermission,
+        setEffort,
     };
 }
 
 /** A settings response must not roll back a newer streamed status or usage update. */
 export function mergeThreadSettings(current: Thread, saved: Thread, folder: boolean): Thread {
-    return { ...current, ...(folder && { model: saved.model }), model_override: saved.model_override, profile: saved.profile, permission_mode: saved.permission_mode };
+    return { ...current, ...(folder && { model: saved.model }), model_override: saved.model_override, effort_override: saved.effort_override, profile: saved.profile, permission_mode: saved.permission_mode };
 }

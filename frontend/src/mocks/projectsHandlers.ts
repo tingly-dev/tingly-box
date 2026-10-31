@@ -322,6 +322,14 @@ export const projectsHandlers = [
         else th.model = model
         return HttpResponse.json(th)
     }),
+    http.put('/api/v1/threads/:tid/effort', async ({ params, request }) => {
+        const th = findThread(params.tid as string) as Record<string, unknown> | undefined
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        const effort = ((await request.json()) as { effort: string }).effort
+        if (!['', 'low', 'medium', 'high', 'max'].includes(effort)) return HttpResponse.json({ error: 'invalid effort level' }, { status: 400 })
+        th.effort_override = effort
+        return HttpResponse.json(th)
+    }),
     http.put('/api/v1/threads/:tid/title', async ({ params, request }) => {
         const th = findThread(params.tid as string) as Record<string, unknown> | undefined
         if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })

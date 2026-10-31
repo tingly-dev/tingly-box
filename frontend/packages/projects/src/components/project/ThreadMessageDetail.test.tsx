@@ -7,7 +7,7 @@ import { readLocal } from '../../utils/storage';
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, opts?: { defaultValue?: string }) => opts?.defaultValue ?? key }) }));
 const respond = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('./threadOps', () => ({ threadOps: () => ({ respond }) }));
-vi.mock('../ThreadComposer', () => ({ ThreadComposer: () => <div>Composer</div> }));
+vi.mock('../ThreadComposer', () => ({ ThreadComposer: ({ leftSlot }: { leftSlot?: React.ReactNode }) => <div>Composer{leftSlot}</div> }));
 vi.mock('./DiffDialog', () => ({ DiffDialog: () => null }));
 vi.mock('./ComposerStrip', () => ({ ComposerStrip: () => null }));
 vi.mock('../Markdown', () => ({ Markdown: ({ text }: { text: string }) => <div>{text}</div>, CodeBlock: () => null }));
@@ -56,4 +56,13 @@ it('distinguishes a reported model from a folder session’s configured model', 
     render(<ThreadPanel {...props} folder thread={{ ...thread, model: 'configured-alias', reported_model: 'provider-model' }} events={[usage]} />);
     expect(screen.getByText('threadSettings.lastModel: provider-model')).toBeVisible();
     expect(screen.queryByText('threadSettings.lastModel: configured-alias')).not.toBeInTheDocument();
+});
+
+
+it.each([false, true])('shows model and permission controls in the composer without a settings disclosure (folder=%s)', (folder) => {
+    render(<ThreadPanel {...props} folder={folder} modelControl={<button>Model control</button>} effortControl={<button>Effort control</button>} composerContext={<button>Permission control</button>} />);
+    expect(screen.getByRole('button', { name: 'Model control' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Effort control' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Permission control' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /composer.settings/ })).not.toBeInTheDocument();
 });
