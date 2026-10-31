@@ -13,7 +13,7 @@ const ev = (id: string, minute: number, thread = 't1', content = id): ThreadEven
 const answer = (events: ThreadEvent[], more = false) => ({ data: { events, more }, response: new Response() });
 const queries = () => m.get.mock.calls.map(([, o]) => (o as { params: { query: Record<string, unknown> } }).params.query);
 
-beforeEach(() => m.get.mockReset());
+beforeEach(() => { m.get.mockReset(); });
 afterEach(() => forgetTranscripts());
 
 describe('mergeEvents', () => {
@@ -59,6 +59,39 @@ describe('useTranscript', () => {
         await act(async () => land(answer([ev('a', 1)])));
         expect(result.current.events?.map((e) => e.id)).toEqual(['a', 'live']);
     });
+    it('shares an in-flight catch-up and retries after failure', async () => {
+        let reject!: (reason: Error) => void;
+        m.get.mockReturnValueOnce(new Promise((_, r) => { reject = r; }));
+        const { result } = renderHook(() => useTranscript('t1'));
+        const first = result.current.catchUp();
+        expect(result.current.catchUp()).toBe(first);
+        expect(m.get).toHaveBeenCalledTimes(1);
+        await act(async () => { reject(new Error('offline')); await expect(first).rejects.toThrow('offline'); });
+        m.get.mockResolvedValueOnce(answer([ev('a', 1)]));
+        await act(() => result.current.catchUp());
+        expect(result.current.events?.map((e) => e.id)).toEqual(['a']);
+        expect(m.get).toHaveBeenCalledTimes(2);
+    });
+
+    it('discards old responses after switching A to B to A and retains each thread’s early events', async () => {
+        const land: Array<(value: unknown) => void> = [];
+        m.get.mockImplementation(() => new Promise((resolve) => land.push(resolve)));
+        const { result, rerender } = renderHook(({ id }) => useTranscript(id), { initialProps: { id: 'a' } });
+        act(() => result.current.apply(ev('early-a', 2, 'a')));
+        rerender({ id: 'b' });
+        act(() => result.current.apply(ev('early-b', 2, 'b')));
+        rerender({ id: 'a' });
+        await act(async () => land[2](answer([ev('c', 1, 'a')])));
+        expect(result.current.events?.map((e) => e.id)).toEqual(['c', 'early-a']);
+        await act(async () => land[0](answer([ev('stale', 3, 'a')])));
+        expect(result.current.events?.map((e) => e.id)).toEqual(['c', 'early-a']);
+        rerender({ id: 'b' });
+        await act(async () => land[3](answer([ev('b', 1, 'b')])));
+        expect(result.current.events?.map((e) => e.id)).toEqual(['b', 'early-b']);
+        await act(async () => land[1](answer([ev('stale-b', 3, 'b')])));
+        expect(result.current.events?.map((e) => e.id)).toEqual(['b', 'early-b']);
+    });
+
     it('pages the conversation from its own first event, not a usage event before it, and reads a subagent\'s steps on request', async () => {
         const usage = { ...ev('u0', 0), kind: 'usage' };
         m.get.mockResolvedValueOnce(answer([usage, ev('c', 3), { ...ev('call', 4), kind: 'tool_use', request_id: 'a1' }], true));
