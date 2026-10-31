@@ -37,11 +37,6 @@ announce suggested inputs in their job summary; the run then waits for the
   demand; a version that was never published is an error, never a fallback.
   Flow diagram: [`npm.pencil.md`](./npm.pencil.md).
 
-`tingly-box-bundle` (all platform zips inside one ~70 MB package) is retired
-as of 2026-09; see F below. Its published versions stay on npm because
-shortcuts created by earlier installs relaunch a pinned
-`npx -y tingly-box-bundle@<ver>`.
-
 The shims expose `tingly-box` and `tb` bins. A shim never writes into its
 own install dir — binaries and caches live under `~/.cache/tingly-box/`.
 
@@ -65,8 +60,7 @@ no longer prompts); run as an installed bin (global install) it passes
 `--help` instead — server lifecycle is explicit (`tingly-box start`, which
 daemonizes by default) so a casual `tingly-box` can't kill in-flight AI
 requests. `--source` follows the same split (`npx`/`npm`) with unified
-handling downstream; the `npx-bundle`/`npm-bundle` values remain understood
-for installs of the retired bundle package.
+handling downstream.
 
 ## Making `npm install -g` viable again
 
@@ -77,12 +71,10 @@ global install broken. The rest of this doc explains the failure and lays out
 the path to re-enable global installs.
 
 - A lives in `.github/workflows/npm.yml` ("Bundle shim into a single
-  dependency-free file" steps for the cli and bundle legs and the gui job,
-  plus per-leg smoke-tests that run the bundled shim with no `node_modules` —
-  the cli one against the real release download, the bundle one against the
-  packaged zips).
+  dependency-free file" steps for the cli and gui jobs, plus smoke-tests
+  that run the compiled shim with no `node_modules`).
 - B is `cleanupRetiredInstallDirs()` and E is `cleanupStaleBinaryCaches()`,
-  both in `build/npx/shared/cleanup.js`, called by all three shims.
+  both in `build/npx/shared/cleanup.js`, called by the cli and gui shims.
 - `build/npx/harness-npm.sh` rehearses the whole release from the current source
   against a local registry under a virtual version (see
   [`harness-npm.md`](./harness-npm.md)); `test-shim.sh` below instead runs the
@@ -175,8 +167,8 @@ Effect: the global package dir holds 2 files (~1–2 MB), no nested
 `npm i -g` / `npx` get faster (no dep resolution). This shrinks the ENOTEMPTY
 window to almost nothing but does not fix stickiness (B does).
 
-Applies to the cli and gui shims (and applied to the bundle package while it
-existed). Since F, a cli install does materialize one nested directory —
+Applies to the cli and gui shims. Since F, a cli install does materialize
+one nested directory —
 the platform package — but it is a single ~20 MB file plus a manifest, not
 a dependency tree.
 
@@ -233,8 +225,8 @@ reached without leaving npm as the distribution channel.
 
 #### E. GC stale binary caches
 
-Orthogonal to the install-dir problems above: every release downloads (cli,
-gui) or extracts (bundle) its binaries into a fresh
+Orthogonal to the install-dir problems above: each cli or gui release
+installs its binaries into a fresh
 `~/.cache/<package>/<tag>/` dir — by design, so updates never overwrite a
 binary in place (no Windows locked-exe problem, a running daemon keeps its
 old inode) — but nothing ever removed the old tag dirs, so the cache grew by
@@ -269,23 +261,9 @@ the shim has no business reaching into them.
 
 Status: implemented 2026-09, effective from the next publish.
 
-Trigger: a user with a global `tingly-box` install whose GitHub download
-failed tried `npm install -g tingly-box-bundle` and got
-`EEXIST: file already exists … bin/tb`. Both packages owned the same bins,
-and npm ≥ 7 refuses to relink a global bin owned by another package —
-`bin-links/check-bin.js`, run by arborist in `[_reifyNode]` *before*
-extraction and before any lifecycle script (its comment: otherwise a
-`preinstall` could unlink system binaries). So no package-side hook could
-make the switch work; `--force` relinks but leaves the old package installed,
-and a later `npm uninstall -g tingly-box` then deletes the bins the bundle
-uses (verified with npm 10.9 in a scratch prefix). The alias form
-`npm install -g tingly-box@npm:tingly-box-bundle` does overwrite cleanly,
-but it papers over the real defect: two packages existed only because the
-cli one fetched its binary from a host (GitHub) that some networks can't
-reach, while the bundle package fetched everything from the npm registry.
-
-Decision: make the npm registry the binary's primary channel for the *one*
-package, the way esbuild / swc / biome / sharp do it, and retire the bundle.
+The npm registry is the binary's primary channel for `tingly-box`, following
+the per-platform package pattern used by esbuild / swc / biome / sharp.
+This supports networks that can reach npm but cannot download GitHub assets.
 
 - **Per-platform packages** `@tingly-dev/tingly-box-<os>-<cpu>` (Node's `process.platform`
   / `process.arch` names, matching their `os`/`cpu` fields) carry the
@@ -365,11 +343,6 @@ package, the way esbuild / swc / biome / sharp do it, and retire the bundle.
   checks that both the exact `tingly-box` version and its Linux x64 platform
   package are visible through `npm view`. This uses the same 30 × 10-second
   registry polling pattern as the shim's platform-package gate.
-- **Retired:** `build/npx/tingly-box-bundle/`, its workflow leg, the
-  `publish_bundle` input, the bundle entry in the web UI's update dialog,
-  and every doc mention. The Go side keeps recognising the `npx-bundle` /
-  `npm-bundle` sources so existing installs' shortcuts still work; the
-  package on npm should be marked with `npm deprecate` by a maintainer.
 
 Verification: `test-shim.sh` T6 builds `@tingly-dev/tingly-box-linux-x64` from the
 real release zip, plants it where npm nests a global install's optional
@@ -395,11 +368,10 @@ major versions). Once C lands, the update instruction becomes `tb update`.
 ### Rollout
 
 1. A + B in the next shim release (no Go changes; CI + bin.js only). ✅
-   (A extended to the bundle package 2026-08.)
 2. Entry-semantics split + README/user-manual flip to "npm install -g
    supported" (see `cli-entry-semantics.md`). ✅ 2026-08
 3. E in the next shim release (bin.js only). ✅ 2026-09
-4. F: platform packages + bundle retirement (CI + bin.js). ✅ 2026-09.
+4. F: platform packages (CI + bin.js). ✅ 2026-09.
    The five `@tingly-dev/tingly-box-<os>-<cpu>` packages were first published
    by hand (`build/npx/scripts/publish-platform-packages-manual.sh`, 2026-09)
    so Trusted Publishing could be configured on them; see G.

@@ -228,10 +228,6 @@ Run it with:
 | `@tingly-dev/tingly-box-<os>-<cpu>` | Binary for one platform (`linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`, `win32-x64`); published before `tingly-box` at the same version | installed automatically |
 | `tingly-box-gui` | GUI package (desktop app) | `npx tingly-box-gui@version start` |
 
-`tingly-box-bundle` (binaries zipped inside one ~70MB package) is retired:
-the platform packages cover its purpose. Its old versions stay on npm for
-shortcuts created by earlier installs, which relaunch pinned versions.
-
 ### NPX Tags
 
 When the workflow completes, it creates git tags in the format `npx-{version}`:

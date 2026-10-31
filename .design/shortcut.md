@@ -52,7 +52,7 @@ internal/server/module/shortcut/  # HTTP handler: GET/POST /api/v1/shortcut
     handler.go, routes.go, types.go, handler_test.go
 
 cli/tingly-box/main.go    # wires the global --source flag, binds LaunchSource
-build/npx/*/bin.js        # injects --source=npx / --source=npx-bundle
+build/npx/*/bin.js        # injects --source=npx / --source=npm
 
 frontend/src/components/ShortcutCard.tsx  # the card (web/npx/binary only, not Wails GUI)
 frontend/src/components/ProvidersCard.tsx # unrelated to shortcuts, but shares HelpPage —
@@ -81,7 +81,7 @@ substitution.
 
 ---
 
-## 3. Three install shapes, one launch source
+## 3. Install shapes and launch sources
 
 Tingly Box ships through three install paths, and the shortcut has to launch
 the **same** path the user is already using:
@@ -90,13 +90,13 @@ the **same** path the user is already using:
 |-------------------------------|---------------------------------------------------------|
 | native binary (Homebrew, etc.)| `<exePath> open`                             |
 | `npx tingly-box@latest`       | local executable, then `npx --prefer-offline -y tingly-box open`      |
-| `npx tingly-box-bundle@latest`| local executable, then `npx --prefer-offline -y tingly-box-bundle open` |
+| `npm install -g tingly-box`   | local executable, then `npx --prefer-offline -y tingly-box open`      |
 
 Shortcuts do not embed an npm version or an `@latest` tag. For npm/npx
 installs they first run the local executable used to create the shortcut.
 This reuses the working local version without a registry lookup. If the file
 is gone or no longer executable on POSIX, they fall back to
-`npx --prefer-offline -y <package> open`, preserving the plain/bundle package.
+`npx --prefer-offline -y tingly-box open`.
 That fallback prefers npm's cache but can fetch from the registry if necessary;
 it does not guarantee the original version or offline operation after cleanup.
 A local executable's launch failure is reported, without attempting a fallback.
@@ -127,7 +127,7 @@ handling** — no config field, no fallback chain, no path sniffing:
 func ResolveLaunch(exePath, source, version string) LaunchSpec
 ```
 
-`source` is `""` (plain binary), `"npx"`, or `"npx-bundle"`. There is nothing
+`source` is `""`/`"binary"` (plain binary), `"npx"`, or `"npm"`. There is nothing
 to persist and nothing to detect: whoever is generating or refreshing the
 shortcut right now is, by construction, the process that was launched the
 way the shortcut should launch again.
@@ -324,10 +324,10 @@ Homebrew node). `sh -lc` re-sources the user's profile so `npx` resolves.
 const (
     SourceBinary    = "binary"
     SourceNpx       = "npx"
-    SourceNpxBundle = "npx-bundle"
+    SourceNpm       = "npm"
 )
 
-func LaunchArgs() []string   // ["restart", "--daemon"]
+func LaunchArgs() []string   // ["open"]
 
 type LaunchSpec struct {
     Argv      []string   // POSIX command vector — macOS / Linux
@@ -394,11 +394,11 @@ user to pick among several equivalent install/run methods read it from
 `useVersion().launchSource` to default their toggle to whichever method
 already matches this install, instead of a hardcoded guess:
 
-- `UpdatePanelDialog` (npx / npm / docker) — `npx`/`npx-bundle` → `npx`,
-  `npm`/`npm-bundle` → `npm`, anything else (`binary`, not loaded yet) leaves
+- `UpdatePanelDialog` (npx / npm / docker) — `npx` → `npx`,
+  `npm` → `npm`, anything else (`binary`, not loaded yet) leaves
   the existing selection alone.
 - `ClaudeCodeProfilePage`'s quick-start command panel (npx / global CLI) —
-  `npx`/`npx-bundle` → `npx`, `npm`/`npm-bundle`/`binary` → `global` (a
+  `npx` → `npx`, `npm`/`binary` → `global` (a
   binary launch means `tingly-box` is already on `PATH`, same as a global npm
   install).
 

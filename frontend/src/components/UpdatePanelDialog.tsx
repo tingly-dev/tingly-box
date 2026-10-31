@@ -22,10 +22,8 @@ interface UpdatePanelDialogProps {
 const updateMethodForSource = (source: string | null): 'npx' | 'npm' | null => {
     switch (source) {
         case 'npx':
-        case 'npx-bundle':
             return 'npx';
         case 'npm':
-        case 'npm-bundle':
             return 'npm';
         default:
             return null;

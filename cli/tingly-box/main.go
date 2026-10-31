@@ -30,7 +30,7 @@ type CLI struct {
 	ConfigDir string `kong:"flag,name='config-dir',help='Configuration directory'"`
 	Verbose   bool   `kong:"flag,name='verbose',short='v',help='Verbose output'"`
 	PProf     bool   `kong:"flag,name='pprof',help='Run with pprof in :6060'"`
-	Source    string `kong:"flag,name='source',help='How tingly-box was launched (binary, npx, npm, npx-bundle, npm-bundle); used to match the shortcut it creates/refreshes to the install method'"`
+	Source    string `kong:"flag,name='source',help='How tingly-box was launched (binary, npx, npm); used to match the shortcut it creates/refreshes to the install method'"`
 
 	// Server commands
 	Start   command.StartCmdKong   `kong:"cmd,help='Start the server'"`
@@ -171,7 +171,7 @@ func main() {
 	}
 
 	// Run the selected command. command.LaunchSource carries how this process
-	// was invoked (binary/npx/npx-bundle, from --source) so `shortcut`, `start`,
+	// was invoked (binary/npx/npm, from --source) so `shortcut`, `start`,
 	// and `restart` can generate/refresh a launcher matching the install method.
 	if err := ctx.Run(appManager, command.LaunchSource(cli.Source)); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

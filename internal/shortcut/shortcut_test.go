@@ -132,14 +132,10 @@ func TestResolveLaunchEmptySourceDefaultsToBinary(t *testing.T) {
 }
 
 func TestResolveLaunchNpmDoesNotPinVersion(t *testing.T) {
-	for _, source := range []string{SourceNpx, SourceNpm, SourceNpxBundle, SourceNpmBundle} {
+	for _, source := range []string{SourceNpx, SourceNpm} {
 		for _, version := range []string{"1.4.2", "2.0.0", "", "dev", "unknown"} {
 			spec := ResolveLaunch("/local/tingly box", source, version)
-			pkg := "tingly-box"
-			if strings.HasSuffix(source, "-bundle") {
-				pkg += "-bundle"
-			}
-			want := `/d /c if exist "/local/tingly box" ("/local/tingly box" --source=` + source + ` open) else (npx --prefer-offline -y ` + pkg + ` open)`
+			want := `/d /c if exist "/local/tingly box" ("/local/tingly box" --source=` + source + ` open) else (npx --prefer-offline -y tingly-box open)`
 			if spec.WinArgs != want {
 				t.Errorf("source=%s version=%s: %s", source, version, spec.WinArgs)
 			}
@@ -164,7 +160,7 @@ func TestNpmLaunchLocalAndFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	spec := ResolveLaunch(local, SourceNpxBundle, "1.4.2")
+	spec := ResolveLaunch(local, SourceNpx, "1.4.2")
 	run := func(want string, wantError bool) {
 		t.Helper()
 		// Avoid the login shell resetting this test's isolated PATH.
@@ -173,7 +169,7 @@ func TestNpmLaunchLocalAndFallback(t *testing.T) {
 			t.Fatalf("got %q, %v; want %q, error=%v", out, err, want, wantError)
 		}
 	}
-	run("local:--source=npx-bundle open", false)
+	run("local:--source=npx open", false)
 	// A local launch error must remain visible, rather than fetching another version.
 	if err := os.WriteFile(local, []byte("#!/bin/sh\nexit 7\n"), 0755); err != nil {
 		t.Fatal(err)
@@ -182,7 +178,7 @@ func TestNpmLaunchLocalAndFallback(t *testing.T) {
 	if err := os.Remove(local); err != nil {
 		t.Fatal(err)
 	}
-	run("fallback:--prefer-offline -y tingly-box-bundle open", false)
+	run("fallback:--prefer-offline -y tingly-box open", false)
 }
 
 func TestSlugName(t *testing.T) {

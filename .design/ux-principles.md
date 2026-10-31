@@ -118,7 +118,7 @@
 ## 11. 显式提供"下一步动作所需的物件" — Hand over the artifact needed for the next action
 
 **典型案例**：
-- 版本更新对话框：直接给 `npx` / bundle / docker 命令 + copy 按钮；release URL 改到 GitHub releases（用户能 act 的地方），而非 npm 包页面。
+- 版本更新对话框：直接给 `npx` / npm / docker 命令 + copy 按钮；release URL 改到 GitHub releases（用户能 act 的地方），而非 npm 包页面。
 - 检测到 OpenAI 协议 + 缺 `/v1`：常驻 tooltip 提示。
 - TOFU：直接给完整命令。
 
