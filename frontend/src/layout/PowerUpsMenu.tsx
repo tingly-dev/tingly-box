@@ -14,7 +14,6 @@ import {
 import {
     Bolt as IconBolt,
     Folder as IconFolder,
-    Send as IconSend,
     Shield as IconShield,
     TestPipe as IconTestPipe,
     Handyman as IconTools,
@@ -72,7 +71,7 @@ interface PowerUpsMenuProps {
 export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, onNavigate, onMouseEnter, onMouseLeave }) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const { skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableProjects, loading, refresh } = useFeatureFlags();
+    const { skillIde, enableGuardrails, enableMCP, enableBench, enableProjects, loading, refresh } = useFeatureFlags();
     const [updating, setUpdating] = useState<ExperimentalFeature>();
     const [failed, setFailed] = useState(false);
     const { isHidden, toggleHidden } = useHiddenScenarios();
@@ -153,16 +152,6 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             description: t('system.experimentalFeatures.enableGuardrails'),
             path: '/guardrails',
             enabled: enableGuardrails,
-            stage: 'exp' as const,
-        },
-        {
-            key: 'skill_user',
-            feature: 'skill_user' as const,
-            icon: <IconSend sx={iconSx} />,
-            name: t('system.experimentalFeatures.userPrompts'),
-            description: t('system.experimentalFeatures.enableUserPrompts'),
-            path: '/prompt/user',
-            enabled: skillUser,
             stage: 'exp' as const,
         },
         {

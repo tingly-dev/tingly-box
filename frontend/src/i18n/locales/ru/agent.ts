@@ -362,32 +362,9 @@ export default {
   },
   "prompt": {
     "menu": "Промпт",
-    "user": {
-      "title": "Записи пользователя",
-      "subtitle": "Просмотр и управление записями из вашей IDE",
-      "filters": "Фильтры",
-      "searchPlaceholder": "Поиск по записям...",
-      "userFilter": "Пользователь",
-      "allUsers": "Все пользователи",
-      "projectFilter": "Рабочая область",
-      "allProjects": "Все рабочие области",
-      "typeFilter": "Тип",
-      "allTypes": "Все типы",
-      "recordingsFound": "Найдено записей: {{count}}",
-      "recordingsFor": "Записи за {{date}}",
-      "noRecordings": "За эту дату записей нет",
-      "actions": {
-        "play": "Воспроизвести",
-        "viewDetails": "Подробнее",
-        "delete": "Удалить"
-      },
-      "types": {
-        "code-review": "Ревью кода",
-        "debug": "Отладка",
-        "refactor": "Рефакторинг",
-        "test": "Тесты",
-        "custom": "Другое"
-      }
+    "recordingsRemoved": {
+      "title": "Раздел записей удалён",
+      "description": "Ваши локальные файлы сеансов не изменены."
     },
     "skill": {
       "title": "Навыки",

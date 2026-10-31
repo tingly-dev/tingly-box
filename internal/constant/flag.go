@@ -33,7 +33,6 @@ const (
 	ExtensionVisionProxyService = "vision_proxy_service"
 	ExtensionGuardrails         = "guardrails"
 	ExtensionMCP                = "mcp"
-	ExtensionSkillUser          = "skill_user"
 	ExtensionSkillIDE           = "skill_ide"
 	ExtensionBench              = "bench"
 	ExtensionProjects           = "projects"
@@ -54,7 +53,7 @@ const (
 // every key or it rejected the write with "unknown flag name" — so a flag
 // could be read (silently false) but never turned on until someone
 // remembered to add its case. That's what broke the bench flag on launch
-// and had bitten skill_user/skill_ide/guardrails/mcp before it (see
+// and had bitten skill_ide/guardrails/mcp before it (see
 // TestProfileScenarioFlagWriteInheritsBaseConfig's history). This map
 // closes that gap by making both directions read the same registry.
 //
@@ -64,7 +63,6 @@ const (
 var KnownExtensionBoolFlags = map[string]bool{
 	ExtensionGuardrails: true,
 	ExtensionMCP:        true,
-	ExtensionSkillUser:  true,
 	ExtensionSkillIDE:   true,
 	ExtensionBench:      true,
 	ExtensionProjects:   true,

@@ -11,6 +11,7 @@ import { createRoutesFromElements, matchRoutes, Navigate, type RouteObject } fro
 import { describe, expect, it } from 'vitest';
 import { appRoutes } from './appRoutes';
 import { SHELL_ROUTES } from './shellRoutes';
+import ExperimentalFeatureGate from '@/components/ExperimentalFeatureGate';
 // Read through Vite (?raw) rather than node:fs so the suite needs no
 // @types/node, same as i18n/locales/tKeyCoverage.test.ts.
 import appMenuGo from '../../../gui/wails3/appmenu.go?raw';
@@ -88,5 +89,14 @@ describe('route contract', () => {
         // not actually detecting the catch-all.
         expect(resolvesToPage('/agent/claude-code')).toBe(false);
         expect(resolvesToPage('/agent/claude_code')).toBe(true);
+    });
+
+    it('keeps retired recording bookmarks reachable while preserving the Skills gate', () => {
+        expect(resolvesToPage('/prompt/user')).toBe(true);
+        const retired = matchRoutes(routes, '/prompt/user')!.at(-1)!.route.element;
+        expect(isValidElement(retired) && retired.type).not.toBe(ExperimentalFeatureGate);
+        const skills = matchRoutes(routes, '/prompt/skill')!.at(-1)!.route.element;
+        expect(isValidElement<{ feature: string }>(skills) && skills.type).toBe(ExperimentalFeatureGate);
+        expect(isValidElement<{ feature: string }>(skills) && skills.props.feature).toBe('skill_ide');
     });
 });

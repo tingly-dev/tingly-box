@@ -16,7 +16,6 @@ import {
     Bell as IconBell,
     Bolt as IconBolt,
     Settings as IconSettings,
-    Send as IconSend,
     License as IconLicense,
     Speed as IconQuota,
     Key as IconKey,
@@ -66,7 +65,7 @@ const DASHBOARD_RANGE_PATH = /^\/dashboard\/(today|yesterday|3d|7d|30d|90d)$/;
 
 export function useActivityItems(): ActivityItem[] {
     const { t } = useTranslation();
-    const { skillUser, skillIde, enableGuardrails, enableBench, enableProjects } = useFeatureFlags();
+    const { skillIde, enableGuardrails, enableBench, enableProjects } = useFeatureFlags();
     const projectsWaiting = useProjectsWaiting(enableProjects);
     const { profiles } = useProfileContext();
     const imageProfiles = useImageProfiles();
@@ -111,13 +110,6 @@ export function useActivityItems(): ActivityItem[] {
 
     const promptMenuItems = useMemo(() => {
         const items: NavItem[] = [];
-        if (skillUser) {
-            items.push({
-                path: '/prompt/user',
-                label: t('layout.userRequest'),
-                icon: <IconSend sx={{ fontSize: 20 }} />,
-            });
-        }
         if (skillIde) {
             items.push({
                 path: '/prompt/skill',
@@ -126,7 +118,7 @@ export function useActivityItems(): ActivityItem[] {
             });
         }
         return items;
-    }, [skillUser, skillIde, t]);
+    }, [skillIde, t]);
 
     const vmodelOff = hiddenScenarios.has('vmodel');
 

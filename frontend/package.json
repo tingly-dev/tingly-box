@@ -22,7 +22,6 @@
     "@ant-design/x-markdown": "^2.9.0",
     "@lobehub/icons-static-svg": "^1.95.1",
     "@mui/material": "^9.5.0",
-    "@mui/x-date-pickers": "^9.15.0",
     "@tabler/icons-react": "^3.49.0",
     "@tingly/mannequin": "workspace:*",
     "@tingly/projects": "workspace:*",

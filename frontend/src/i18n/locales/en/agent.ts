@@ -356,32 +356,9 @@ export default {
   },
   "prompt": {
     "menu": "Prompt",
-    "user": {
-      "title": "User Recordings",
-      "subtitle": "Browse and manage your IDE recordings",
-      "filters": "Filters",
-      "searchPlaceholder": "Search recordings...",
-      "userFilter": "User",
-      "allUsers": "All Users",
-      "projectFilter": "Workspace",
-      "allProjects": "All workspaces",
-      "typeFilter": "Type",
-      "allTypes": "All Types",
-      "recordingsFound": "{{count}} recording(s) found",
-      "recordingsFor": "Recordings for {{date}}",
-      "noRecordings": "No recordings found for this date",
-      "actions": {
-        "play": "Play",
-        "viewDetails": "View Details",
-        "delete": "Delete"
-      },
-      "types": {
-        "code-review": "Code Review",
-        "debug": "Debug",
-        "refactor": "Refactor",
-        "test": "Test",
-        "custom": "Custom"
-      }
+    "recordingsRemoved": {
+      "title": "User Recordings has been removed",
+      "description": "Your local session files have not been modified."
     },
     "skill": {
       "title": "Skills",

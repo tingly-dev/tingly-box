@@ -10,11 +10,6 @@ import {api} from '../services/api';
 
 const SKILL_FEATURES = [
     {
-        key: 'skill_user',
-        labelKey: 'system.experimentalFeatures.userPrompts',
-        descriptionKey: 'system.experimentalFeatures.enableUserPrompts',
-    },
-    {
         key: 'skill_ide',
         labelKey: 'system.experimentalFeatures.skills',
         descriptionKey: 'system.experimentalFeatures.enableIdeSkills',
@@ -100,7 +95,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
         }
     };
 
-    const toggleFeature = (featureKey: 'skill_user' | 'skill_ide') => {
+    const toggleFeature = (featureKey: 'skill_ide') => {
         const newValue = !features[featureKey];
         return finishUpdate(
             featureKey,
@@ -195,7 +190,6 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
 
     const requestedFeatureName = requestedFeature
         ? {
-            skill_user: t('system.experimentalFeatures.userPrompts'),
             skill_ide: t('system.experimentalFeatures.skills'),
             guardrails: t('system.experimentalFeatures.guardrails'),
             mcp: `${t('system.experimentalFeatures.mcp')} Tools`,
