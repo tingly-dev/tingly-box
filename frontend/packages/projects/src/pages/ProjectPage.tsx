@@ -348,7 +348,9 @@ export default function ProjectPage() {
                         onLoadEarlier={conversation.loadEarlier}
                         threads={threadMap}
                         busy={busy}
-                        disabled={blocked || !project || savingDefaults}
+                        disabled={blocked || !project}
+                        // A default save holds Send, as a thread's settings save does; typing stays available.
+                        canSubmit={!savingDefaults}
                         disabledReason={banner}
                         threadId={mainThreadId}
                         model={project?.coordinator_model}
@@ -384,10 +386,10 @@ export default function ProjectPage() {
                         )}
                         onOpenThread={openThread}
                         chatTitle={im?.chatTitle}
-                        onSend={async (text, attachments) => {
+                        onSend={async (text, attachments, mode) => {
                             if (projectSaving.current) return false;
                             try {
-                                await unwrap(api.POST('/api/v1/threads/{id}/messages', { params: { path: { id: mainThreadId } }, body: { content: text, attachments: attachments.map((a) => a.path) } }));
+                                await unwrap(api.POST('/api/v1/threads/{id}/messages', { params: { path: { id: mainThreadId } }, body: { content: text, attachments: attachments.map((a) => a.path), mode } }));
                                 setBusy(true);
                                 // The message shows at once; the reply streams in over the event stream.
                                 await conversation.catchUp().catch(() => undefined);

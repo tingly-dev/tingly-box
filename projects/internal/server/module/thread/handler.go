@@ -214,7 +214,7 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithRequestModel(ThreadRespondRequest{}),
 		swagger.WithResponseModel(db.Thread{}))
 	api.POST("/threads/:id/stop", h.stop, tag,
-		swagger.WithDescription("Interrupt the running turn; the process and its background tasks survive"),
+		swagger.WithDescription("Interrupt the running turn; the process and its background tasks survive. On a project conversation it stops the coordinator's turn instead"),
 		swagger.WithResponseModel(db.Thread{}))
 	api.POST("/threads/:id/archive", h.archive, tag,
 		swagger.WithDescription("Archive (resolve) the thread; it stays readable and can be reopened"),
@@ -293,9 +293,10 @@ func (h *Handler) thread(c *gin.Context) (*db.Thread, bool) {
 
 // worker loads the thread named in the path for an action that only makes
 // sense on a thread that runs an agent session. A project's main thread is its
-// conversation with the coordinator: it cannot be archived, stopped, merged,
-// answered or configured like a worker, so those requests are refused (400)
-// instead of acting on the conversation.
+// conversation with the coordinator: it cannot be archived, merged, answered
+// or configured like a worker, so those requests are refused (400) instead of
+// acting on the conversation. Stopping is the exception: it interrupts the
+// coordinator's turn instead.
 func (h *Handler) worker(c *gin.Context) (*db.Thread, bool) {
 	t, ok := h.thread(c)
 	if !ok {
@@ -504,11 +505,11 @@ func (h *Handler) respond(c *gin.Context) {
 }
 
 func (h *Handler) stop(c *gin.Context) {
-	cur, ok := h.worker(c)
+	cur, ok := h.thread(c)
 	if !ok {
 		return
 	}
-	h.svc.Threads.Stop(cur.ID)
+	h.svc.Stop(cur.ID)
 	h.reply(c, cur.ID)
 }
 

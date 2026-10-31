@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 	"github.com/tingly-dev/tingly-box/projects/llm"
 )
@@ -32,6 +33,9 @@ const (
 	noUpdate = "NO_UPDATE"
 	// toolNoUpdate ends a turn without posting anything.
 	toolNoUpdate = "no_update"
+	// stopNote is what a Stop records in the conversation, in place of the
+	// canceled turn's error.
+	stopNote = "The coordinator's turn was stopped."
 )
 
 // Coordinator runs the project conversation: one serial queue per project.
@@ -56,6 +60,10 @@ type queue struct {
 	user    bool
 	config  bool
 	reports []Report
+	// cancel interrupts the turn in flight; done closes once it has exited.
+	// Both are set while the turn runs and nil together when it ends.
+	cancel context.CancelFunc
+	done   chan struct{}
 }
 
 // NewCoordinator wires the coordinator to the thread manager's reports.
@@ -113,6 +121,43 @@ func (c *Coordinator) Busy(projectID string) bool {
 	defer c.mu.Unlock()
 	q, ok := c.queues[projectID]
 	return ok && (q.running || q.user || q.config || len(q.reports) > 0)
+}
+
+// Stop interrupts the coordinator's turn in flight and drops what it had
+// queued to read next. What was already said stays in the conversation.
+// No-op, and the channel is nil, when nothing runs; otherwise the channel
+// closes once the stopped turn has exited.
+func (c *Coordinator) Stop(projectID string) { c.stop(projectID) }
+
+func (c *Coordinator) stop(projectID string) <-chan struct{} {
+	c.mu.Lock()
+	q, ok := c.queues[projectID]
+	var cancel context.CancelFunc
+	var done chan struct{}
+	if ok {
+		cancel, done = q.cancel, q.done
+		q.user, q.config = false, false
+		q.reports = nil
+	}
+	c.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	return done
+}
+
+// stopAndWait is stop, waiting for the turn to exit so what the caller does
+// next starts from a stopped state. Bounded like the agent sessions' close.
+func (c *Coordinator) stopAndWait(ctx context.Context, projectID string) error {
+	if done := c.stop(projectID); done != nil {
+		select {
+		case <-done:
+		case <-time.After(agentboot.SessionCloseTimeout):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
 }
 
 // final hands a message the coordinator is done with (a finished reply, a
@@ -173,9 +218,22 @@ func (c *Coordinator) work(projectID string, q *queue) {
 		}
 		c.mu.Unlock()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		done := make(chan struct{})
+		c.mu.Lock()
+		q.cancel, q.done = cancel, done
+		c.mu.Unlock()
 		if err := c.turn(ctx, projectID, user, config); err != nil {
-			c.final(c.addEvent(projectID, &db.ThreadEvent{Kind: db.EvError, Content: err.Error()}))
+			// A stopped turn is not a failure: it says so and moves on.
+			if errors.Is(err, context.Canceled) {
+				c.final(c.addEvent(projectID, &db.ThreadEvent{Kind: db.EvSystem, Content: stopNote}))
+			} else {
+				c.final(c.addEvent(projectID, &db.ThreadEvent{Kind: db.EvError, Content: err.Error()}))
+			}
 		}
+		c.mu.Lock()
+		q.cancel, q.done = nil, nil
+		c.mu.Unlock()
+		close(done)
 		cancel()
 	}
 }

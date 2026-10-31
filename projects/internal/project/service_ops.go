@@ -147,14 +147,34 @@ func (s *Service) Send(ctx context.Context, threadID, text string, atts []Attach
 
 // SendWith is Send for a user in the web: while a turn runs, mode says
 // whether the message joins it, waits for it or replaces it. The coordinator
-// takes every message the same way.
+// takes every message after its current turn, unless the mode says to stop
+// that turn first.
 func (s *Service) SendWith(ctx context.Context, threadID, text string, atts []Attachment, src Source, mode SendMode) (*db.Thread, error) {
 	t, err := s.Store.GetThread(threadID)
 	if err != nil {
 		return nil, err
 	}
 	if t.Agent == db.AgentLLM {
+		if mode == SendStopAndSend {
+			if err := s.Coordinator.stopAndWait(ctx, t.ProjectID); err != nil {
+				return nil, err
+			}
+		}
 		return s.Send(ctx, threadID, text, atts, src)
 	}
 	return s.Threads.SendWith(ctx, threadID, text, atts, src, mode)
+}
+
+// Stop interrupts a thread's turn in flight. On a main thread it stops the
+// project conversation's coordinator turn instead; the conversation stays.
+func (s *Service) Stop(threadID string) {
+	t, err := s.Store.GetThread(threadID)
+	if err != nil {
+		return
+	}
+	if t.Agent == db.AgentLLM {
+		s.Coordinator.Stop(t.ProjectID)
+		return
+	}
+	s.Threads.Stop(threadID)
 }

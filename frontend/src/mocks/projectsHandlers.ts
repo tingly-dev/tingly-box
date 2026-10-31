@@ -307,6 +307,18 @@ export const projectsHandlers = [
         const main = projects.find((p) => p.main_thread_id === params.tid)
         return main ? HttpResponse.json({ ...thread({ id: main.main_thread_id!, title: main.name, status: 'working', task: '' }), agent: 'llm' }) : HttpResponse.json({ error: 'thread not found' }, { status: 404 })
     }),
+    // Stop works on a session's turn and on the conversation's coordinator turn alike.
+    http.post('/api/v1/threads/:tid/stop', ({ params }) => {
+        const th = findThread(params.tid as string)
+        if (th) return HttpResponse.json(th)
+        const main = projects.find((p) => p.main_thread_id === params.tid)
+        return main ? HttpResponse.json({ ...thread({ id: main.main_thread_id!, title: main.name, status: 'idle', task: '' }), agent: 'llm' }) : HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+    }),
+    http.delete('/api/v1/threads/:tid/queue/:qid', ({ params }) => {
+        const th = findThread(params.tid as string)
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        return HttpResponse.json(th)
+    }),
     http.post('/api/v1/threads/:tid/events/:eid/start', () => HttpResponse.json(messages[2])),
     http.put('/api/v1/threads/:tid/profile', async ({ params, request }) => {
         const s = sessions.find((x) => x.id === params.tid)

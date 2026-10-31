@@ -34,7 +34,6 @@ func TestWorkerActionsAreRefusedOnAMainThread(t *testing.T) {
 		{"POST", "/reopen", nil},
 		{"POST", "/merge", nil},
 		{"POST", "/handoff", nil},
-		{"POST", "/stop", nil},
 		{"POST", "/respond", map[string]any{"request_id": "r", "allow": true}},
 		{"PUT", "/model", map[string]any{"model": "m"}},
 		{"PUT", "/profile", map[string]any{"profile": "x"}},
@@ -50,6 +49,21 @@ func TestWorkerActionsAreRefusedOnAMainThread(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, db.ThreadIdle, th.Status, "the conversation was not touched")
 	assert.Empty(t, th.PermissionMode)
+}
+
+// Stop is the exception among the worker actions: on the conversation it
+// addresses the coordinator's turn, not the thread, so it succeeds (a no-op
+// while nothing runs).
+func TestStopWorksOnAMainThread(t *testing.T) {
+	store, c := newServer(t, quietAgents())
+	var p db.Project
+	require.Equal(t, 201, c.do("POST", "/projects", map[string]any{"name": "Demo"}, &p))
+	var th db.Thread
+	assert.Equal(t, 200, c.do("POST", "/threads/"+p.MainThreadID+"/stop", nil, &th))
+	assert.Equal(t, p.MainThreadID, th.ID)
+	got, err := store.GetThread(p.MainThreadID)
+	require.NoError(t, err)
+	assert.Equal(t, db.ThreadIdle, got.Status, "the conversation itself stays")
 }
 
 func TestProjectThreadsOfAnUnknownProjectIs404(t *testing.T) {
