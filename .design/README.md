@@ -155,6 +155,12 @@
 | [vmodel-sequence.md](./vmodel-sequence.md) | Virtual sequence models | 设计说明；局部实施状态见正文 |
 | [vmodel-transport.md](./vmodel-transport.md) | vmodel transport — dispatch virtual providers over HTTP, not in-memory | 内存 listener 已实现；unix socket 未做 |
 | [python-sdk.md](./python-sdk.md) | Python SDK (tingly) — v1 framework | 设计说明；局部实施状态见正文 |
+## 工程协作
+
+| 文档 | 内容 | 状态 / 阅读边界 |
+|---|---|---|
+| [issue-resolve.md](./issue-resolve.md) | Issue 自动跟进：定时拉取、按团队 / 外部分流、阶段记在 issue 评论里 | 已实施；skill 在 `.claude/skills/issue-resolve/` |
+
 ## 产品、前端与宿主
 
 | 文档 | 内容 | 状态 / 阅读边界 |

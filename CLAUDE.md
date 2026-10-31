@@ -32,6 +32,10 @@ General UI icons come from `@/components/icons` (Tabler icons adapted to MUI via
 
 Key design decisions and architecture notes are kept in `.design/`. Before implementing a new feature or modifying an existing subsystem, check whether a relevant `.design/*.md` file exists — it captures the rationale, trade-offs, and wiring details that are not obvious from the code alone.
 
+# Issues
+
+A scheduled sweep (every 5 hours) triages and advances issues in tingly-box and tingly-design with `.claude/skills/issue-resolve/SKILL.md`: team issues go to analysis and a draft PR, external issues get a short evaluation and wait for a maintainer. Its stage lives in a hidden `<!-- issue-resolve stage=… -->` marker on its issue comments. See `.design/issue-resolve.md`.
+
 # CI
 
 When changing `.github/workflows/` or `.github/actions/`, read `.github/workflows/AGENTS.md` first and lint with `actionlint` before committing.
