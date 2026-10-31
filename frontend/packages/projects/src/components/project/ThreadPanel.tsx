@@ -72,6 +72,8 @@ interface Props {
     actions?: React.ReactNode;
     /** Pickers shown above the message box (a folder session's permission mode, a host's own). */
     composerContext?: React.ReactNode;
+    /** Model selector, kept visible next to the composer. */
+    modelControl?: React.ReactNode;
     settingsSaving?: boolean;
     canSend?: () => boolean;
     /** Resolved configuration labels; not the last observed response model. */
@@ -96,7 +98,7 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
     return `[data-block="${anchor.block}"]`;
 };
 
-export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railTop, railMinPanel = RAIL_MIN_PANEL }: Props) {
+export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, modelControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railTop, railMinPanel = RAIL_MIN_PANEL }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const [diffOpen, setDiffOpen] = useState(false);
@@ -319,6 +321,9 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
         return <Box sx={{ p: 2 }}><Skeleton height={40} /><Skeleton variant="rounded" height={200} /></Box>;
     }
     const canReview = !!thread.branch && thread.commits_ahead > 0 && !thread.merged_at;
+    // Only show the model reported by the last turn. The legacy model field
+    // can hold a configured launch value when no model was reported.
+    const observedModel = thread.reported_model;
 
     return (
         <Box ref={panelRef} sx={{ display: 'flex', height: '100%', minHeight: 0 }}>
@@ -379,6 +384,9 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 <Box sx={{ pl: hideTitle ? 0.5 : 4.5 }}>
                     <MetaLine items={[
                         <ThreadState status={thread.status} />,
+                        <Box component="span" title={t('threadSettings.lastModel')} sx={{ ...mono, overflowWrap: 'anywhere' }}>
+                            {t('threadSettings.lastModel')}: {observedModel || t('threadSettings.modelUnknown')}
+                        </Box>,
                         // The folder and branch float above the message box.
                         !thread.branch && !session && t('thread.noRepo'),
                         // The work, as badges whose details hover out (the
@@ -467,6 +475,14 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     draftKey={threadId}
                     context={composerContext && <>{running && <Typography variant="caption" color="text.secondary">{t('threadSettings.nextTurn')}</Typography>}{composerContext}</>}
                     contextCollapsible
+                    leftSlot={modelControl && (
+                        <Tooltip title={t('threadSettings.nextTurn')} disableHoverListener={!running} disableFocusListener={!running}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, flexWrap: 'wrap' }}>
+                                {modelControl}
+                                {running && <Typography variant="caption" color="text.secondary">{t('threadSettings.modelNextTurn')}</Typography>}
+                            </Box>
+                        </Tooltip>
+                    )}
                     streaming={running}
                     sendModes
                     onStop={() => {

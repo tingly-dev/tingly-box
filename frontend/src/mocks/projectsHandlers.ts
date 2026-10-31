@@ -56,7 +56,7 @@ const thread = (o: Partial<Record<string, unknown>> & { id: string; title: strin
     project_id: 'p-latency', parent_id: 'main-p-latency', seq: 1, agent: 'claude-code', origin: 'coordinator', commits_ahead: 0, files_changed: 0, input_tokens: 0, output_tokens: 0,
     turns: 0, uncommitted: false, cwd: `/Users/me/.tingly-box/projects/p-latency/threads/${o.id}`,
     repo_path: '/Users/me/code/payments-api', base_branch: 'main', branch: `projects/${o.id}`,
-    model: 'claude-sonnet-4-5', created_at: ago(90), updated_at: ago(5), ...o,
+    model: 'claude-sonnet-4-5', reported_model: 'claude-sonnet-4-5', created_at: ago(90), updated_at: ago(5), ...o,
 })
 
 const threads = [

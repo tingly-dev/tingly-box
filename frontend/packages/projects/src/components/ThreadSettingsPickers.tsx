@@ -13,10 +13,11 @@ interface Props {
     folder?: boolean;
     defaultModel?: string;
     defaultPermissionMode?: string;
+    show?: 'all' | 'model' | 'permission';
 }
 
 /** The same independent choices for a new folder thread and every open thread. */
-export function ThreadSettingsPickers({ value, permissionMode, modes, onLaunchChange, onPermissionChange, disabled, folder = false, defaultModel, defaultPermissionMode = 'acceptEdits' }: Props) {
+export function ThreadSettingsPickers({ value, permissionMode, modes, onLaunchChange, onPermissionChange, disabled, folder = false, defaultModel, defaultPermissionMode = 'acceptEdits', show = 'all' }: Props) {
     const { t } = useTranslation('projects');
     const { session } = useProjectsHost();
     const modelDefault = folder ? t('threadSettings.defaultModel')
@@ -24,12 +25,12 @@ export function ThreadSettingsPickers({ value, permissionMode, modes, onLaunchCh
     const permissionDefault = `${t(folder ? 'threadSettings.defaultPermissions' : 'threadSettings.projectDefault')} · ${t(`session.mode.${defaultPermissionMode}`, { defaultValue: defaultPermissionMode })}`;
     return (
         <>
-            {folder && session?.launchPickers ? session.launchPickers({ value, onChange: onLaunchChange, disabled }) : (
+            {show !== 'permission' && (folder && session?.launchPickers ? session.launchPickers({ value, onChange: onLaunchChange, disabled }) : (
                 <ModelPicker source="projects" value={value.model} label={t('threadSettings.model')} defaultLabel={modelDefault}
-                    disabled={disabled} onChange={(model) => onLaunchChange({ ...value, model })} />
-            )}
-            <PermissionModeSelect value={permissionMode} modes={modes} disabled={disabled} defaultLabel={permissionDefault}
-                label={t('threadSettings.permissions')} onChange={onPermissionChange} />
+                    inheritedModel={defaultModel} disabled={disabled} onChange={(model) => onLaunchChange({ ...value, model })} />
+            ))}
+            {show !== 'model' && <PermissionModeSelect value={permissionMode} modes={modes} disabled={disabled} defaultLabel={permissionDefault}
+                label={t('threadSettings.permissions')} onChange={onPermissionChange} />}
         </>
     );
 }

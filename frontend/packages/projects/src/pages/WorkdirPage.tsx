@@ -380,8 +380,14 @@ export default function WorkdirPage() {
                             void loadSession(sessionId);
                             transcript.catchUp().catch(() => undefined);
                         }}
+                        modelControl={selected && (
+                            <ThreadSettingsPickers folder show="model" value={{ profile: selected.profile ?? '', model: selected.model ?? '' }}
+                                permissionMode={selected.permission_mode ?? ''} modes={modes} defaultPermissionMode={selectedFolder?.thread_permission_mode || 'acceptEdits'}
+                                disabled={threadBlocked || selected.status === 'resolved' || settings.saving}
+                                onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
+                        )}
                         composerContext={selected && (
-                            <ThreadSettingsPickers folder value={{ profile: selected.profile ?? '', model: selected.model ?? '' }}
+                            <ThreadSettingsPickers folder show="permission" value={{ profile: selected.profile ?? '', model: selected.model ?? '' }}
                                 permissionMode={selected.permission_mode ?? ''} modes={modes} defaultPermissionMode={selectedFolder?.thread_permission_mode || 'acceptEdits'}
                                 disabled={threadBlocked || selected.status === 'resolved' || settings.saving}
                                 onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />

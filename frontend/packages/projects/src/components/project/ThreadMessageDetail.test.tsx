@@ -45,3 +45,15 @@ describe('thread message detail integration', () => {
         expect(readLocal('thread.messageDetail')).toBe('detailed');
     });
 });
+
+it('distinguishes a reported model from a folder session’s configured model', () => {
+    const view = render(<ThreadPanel {...props} thread={{ ...thread, model: 'chosen-alias', reported_model: 'reported-worker-model' }} />);
+    expect(screen.getByText('threadSettings.lastModel: reported-worker-model')).toBeVisible();
+    view.rerender(<ThreadPanel {...props} thread={{ ...thread, model: 'chosen-alias' }} />);
+    expect(screen.getByText('threadSettings.lastModel: threadSettings.modelUnknown')).toBeVisible();
+    view.unmount();
+    const usage = event('usage', 'usage', '', { payload: JSON.stringify({ model: 'provider-model' }) });
+    render(<ThreadPanel {...props} folder thread={{ ...thread, model: 'configured-alias', reported_model: 'provider-model' }} events={[usage]} />);
+    expect(screen.getByText('threadSettings.lastModel: provider-model')).toBeVisible();
+    expect(screen.queryByText('threadSettings.lastModel: configured-alias')).not.toBeInTheDocument();
+});

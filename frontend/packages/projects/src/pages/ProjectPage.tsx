@@ -257,8 +257,14 @@ export default function ProjectPage() {
             canSend={settings.canSend}
             configuredModel={selected?.model_override || `${t('threadSettings.projectDefault')} · ${project?.thread_model || t('threadSettings.defaultModel')}`}
             permissionLabel={selected?.permission_mode ? t(`session.mode.${selected.permission_mode}`, { defaultValue: selected.permission_mode }) : `${t('threadSettings.projectDefault')} · ${t(`session.mode.${project?.thread_permission_mode || 'acceptEdits'}`)}`}
+            modelControl={selected && (
+                <ThreadSettingsPickers show="model" value={{ profile: '', model: selected.model_override ?? '' }} permissionMode={selected.permission_mode ?? ''}
+                    modes={modes} disabled={blocked || selected.status === 'resolved' || settings.saving}
+                    defaultModel={project?.thread_model} defaultPermissionMode={project?.thread_permission_mode || 'acceptEdits'}
+                    onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
+            )}
             composerContext={selected && (
-                <ThreadSettingsPickers value={{ profile: '', model: selected.model_override ?? '' }} permissionMode={selected.permission_mode ?? ''}
+                <ThreadSettingsPickers show="permission" value={{ profile: '', model: selected.model_override ?? '' }} permissionMode={selected.permission_mode ?? ''}
                     modes={modes} disabled={blocked || selected.status === 'resolved' || settings.saving}
                     defaultModel={project?.thread_model} defaultPermissionMode={project?.thread_permission_mode || 'acceptEdits'}
                     onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />

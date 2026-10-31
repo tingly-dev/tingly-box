@@ -1718,6 +1718,8 @@ export interface components {
             project_id: string;
             /** @description Field repo_path */
             repo_path?: string;
+            /** @description Field reported_model */
+            reported_model?: string;
             /**
              * Format: date-time
              * @description Field resolved_at

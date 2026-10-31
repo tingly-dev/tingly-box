@@ -3867,6 +3867,10 @@
             "type": "string",
             "description": "Field repo_path"
           },
+          "reported_model": {
+            "type": "string",
+            "description": "Field reported_model"
+          },
           "resolved_at": {
             "type": "string",
             "format": "date-time",

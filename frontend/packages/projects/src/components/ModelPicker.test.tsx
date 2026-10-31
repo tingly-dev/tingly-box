@@ -85,3 +85,13 @@ it('shows what an alias resolves to, the way the status line routes it', async (
     fireEvent.click(alias);
     expect(choose).toHaveBeenCalledWith('sonnet');
 });
+
+it('shows the provider route for an inherited project model without changing the selected value', async () => {
+    fetchModels.mockImplementation(async () => ({ data: { models: hostModels }, response: new Response() }));
+    const choose = vi.fn();
+    render(<ModelPicker source="projects" value="" inheritedModel="sonnet" defaultLabel="Project default · sonnet" onChange={choose} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Project default · sonnet → claude-sonnet-4-5' }));
+    expect(screen.getByRole('menuitem', { name: 'Project default · sonnet → claude-sonnet-4-5' })).toHaveClass('Mui-selected');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'claude-opus-4-6' }));
+    expect(choose).toHaveBeenCalledWith('claude-opus-4-6');
+});
