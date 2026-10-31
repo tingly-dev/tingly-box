@@ -206,14 +206,75 @@ export const nodeSpotlightSx = (theme: Theme) => ({
 });
 
 // Add / turn-off controls in a rule's graph carry this class: they stay out of
-// sight until the rule is hovered or holds focus, so a rule at rest shows only
-// its routing. Devices without hover always show them.
+// sight and out of the layout until the rule is hovered or holds focus, so a
+// rule at rest shows only its routing and no reserved slots. Devices without
+// hover always show them.
 export const ROUTE_GRAPH_QUIET_CLASS = 'route-graph-quiet';
 
+// The same treatment for a whole optional row (e.g. the add-condition /
+// fallback-tier row): folds its height away instead of its width.
+export const ROUTE_GRAPH_QUIET_ROW_CLASS = 'route-graph-quiet-row';
+
+// Both classes expand in flow (never as an overlay), so nothing can be
+// occluded by the graph's scroll container.
+const quietTransition =
+    'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease, max-width 0.2s ease';
+
+// Expanded geometry, shared by hover, keyboard focus, and touch (no-hover
+// devices). Overflow is released when expanded: the fold's clip would
+// otherwise cut the node's hover lift (-2px) and its emphasis ring.
+const quietNodeExpanded = {
+    maxWidth: SMALL_NODE_STYLES.width,
+    opacity: 1,
+    pointerEvents: 'auto',
+    overflow: 'visible',
+} as const;
+
+// Generous headroom over the row's content (~42px) — the fold must never clip
+// the row it reveals.
+const QUIET_ROW_MAX_HEIGHT = 120;
+
+const quietRowExpanded = {
+    maxHeight: QUIET_ROW_MAX_HEIGHT,
+    opacity: 1,
+    pointerEvents: 'auto',
+    overflow: 'visible',
+} as const;
+
 export const routeGraphQuietSx = {
-    [`& .${ROUTE_GRAPH_QUIET_CLASS}`]: { opacity: 0, transition: 'opacity 0.16s ease' },
-    [`&:hover .${ROUTE_GRAPH_QUIET_CLASS}, &:focus-within .${ROUTE_GRAPH_QUIET_CLASS}`]: { opacity: 1 },
-    '@media (hover: none)': { [`& .${ROUTE_GRAPH_QUIET_CLASS}`]: { opacity: 1 } },
+    // Node variant: the trailing "Load balance" controls. Folds to zero width
+    // (max-width overrides the node's fixed width) — the row shrinks by the
+    // node's full 100px at rest. The transition list mirrors the node's own
+    // (this two-class selector outranks the node's single class) plus the fold.
+    [`& .${ROUTE_GRAPH_QUIET_CLASS}`]: {
+        maxWidth: 0,
+        opacity: 0,
+        overflow: 'hidden',
+        pointerEvents: 'none',
+        transition: quietTransition,
+    },
+    // Row variant: a row made only of optional controls. Folds to zero height;
+    // a wide-label node inside keeps its full width because only the row hides.
+    // Covers the row's own margin (spacing 0.5) once collapsed.
+    [`& .${ROUTE_GRAPH_QUIET_ROW_CLASS}`]: {
+        maxHeight: 0,
+        opacity: 0,
+        overflow: 'hidden',
+        pointerEvents: 'none',
+        transition: 'opacity 0.16s ease, max-height 0.2s ease',
+    },
+    [`&:is(:hover, :focus-within) .${ROUTE_GRAPH_QUIET_CLASS}`]: quietNodeExpanded,
+    [`&:is(:hover, :focus-within) .${ROUTE_GRAPH_QUIET_ROW_CLASS}`]: quietRowExpanded,
+    // Action-bar nodes inside a folding row stay put when hovered: the row
+    // already moves downward as it opens, and the nodes' own hover lift
+    // (translateY(-2px)) would read as a two-direction jump.
+    [`&:is(:hover, :focus-within) .${ROUTE_GRAPH_QUIET_ROW_CLASS} .MuiBox-root`]: {
+        transform: 'none',
+    },
+    '@media (hover: none)': {
+        [`& .${ROUTE_GRAPH_QUIET_CLASS}`]: quietNodeExpanded,
+        [`& .${ROUTE_GRAPH_QUIET_ROW_CLASS}`]: quietRowExpanded,
+    },
 } as const;
 
 // Service node container (formerly ProviderNodeContainer)
