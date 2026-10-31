@@ -15,8 +15,15 @@ import { ProjectsHostProvider } from '../../host/ProjectsHost';
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, options?: Record<string, unknown>) => key === 'im.source' ? `${options?.platform} · ${options?.chat}` : key }) }));
 const composer = vi.hoisted(() => vi.fn());
 vi.mock('../ThreadComposer', () => ({ ThreadComposer: (props: unknown) => { composer(props); return <div data-testid="composer" />; } }));
+const ops = vi.hoisted(() => ({ stop: vi.fn(), unqueue: vi.fn() }));
+vi.mock('./threadOps', () => ({ threadOps: () => ops }));
 
-beforeEach(() => { localStorage.clear(); composer.mockClear(); });
+beforeEach(() => {
+    localStorage.clear();
+    composer.mockClear();
+    ops.stop.mockReset();
+    ops.unqueue.mockReset().mockResolvedValue(undefined);
+});
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const event = (kind: string, content: string, extra: Partial<ThreadEvent> = {}): ThreadEvent => ({
@@ -137,6 +144,24 @@ describe('conversation presentation', () => {
         const configured = composer.mock.lastCall![0];
         expect(configured).toMatchObject({ disabled: true, model: 'chosen-model', onModelChange: p.onModelChange, context: p.composerContext, seed: 'conversation.example1' });
         await configured.onSend('Hello', []);
-        expect(p.onSend).toHaveBeenCalledWith('Hello', []);
+        expect(p.onSend).toHaveBeenCalledWith('Hello', [], undefined);
+        await configured.onSend('Hello', [], 'queue');
+        expect(p.onSend).toHaveBeenCalledWith('Hello', [], 'queue');
+    });
+
+    it('sends like a session composer: send modes, stop and held messages with take-back', async () => {
+        const p = props([event('queued', 'run the checks after this turn', { id: 'q1', payload: JSON.stringify({ state: 'held' }) })]);
+        show({ ...p, busy: true });
+        // A held message waits above the box, as in a session panel.
+        expect(screen.getByText('run the checks after this turn')).toBeInTheDocument();
+        expect(composer).toHaveBeenLastCalledWith(expect.objectContaining({ sendModes: true, streaming: true, onStop: expect.any(Function) }));
+        // Taking a held message back (edit or remove) takes it out of the queue.
+        fireEvent.click(screen.getByRole('button', { name: 'queue.edit' }));
+        fireEvent.click(screen.getByRole('button', { name: 'queue.remove' }));
+        await act(async () => undefined);
+        expect(ops.unqueue).toHaveBeenCalledWith('q1');
+        // Stop interrupts the turn through the conversation's own thread.
+        await act(async () => composer.mock.lastCall![0].onStop());
+        expect(ops.stop).toHaveBeenCalledExactlyOnceWith();
     });
 });

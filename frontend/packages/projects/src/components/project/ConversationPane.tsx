@@ -1,17 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, Chip, CircularProgress, Collapse, Paper, Stack, Typography } from '@mui/material';
 import { getReadableAccent } from '@tingly/ui/theme/status';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { Attachment, Thread, ThreadEvent } from '../../client';
+import type { SendMode } from '../Composer';
 import { ImSourceBadge } from '../im/ImSourceBadge';
 import { AttachmentChips, uploadAttachments } from '../attachments';
-import { ThreadComposer } from '../ThreadComposer';
+import { ThreadComposer, type ThreadComposerHandle } from '../ThreadComposer';
 import { Markdown } from '../Markdown';
 import { useMessageDetail } from '../../hooks/useMessageDetail';
+import { useNotify } from '../../hooks/useNotify';
 import { MessageDetailControl } from '../MessageDetailControl';
 import { showManagerMessage } from './messageDetail';
+import { HeldMessages, heldMessages } from './HeldMessages';
+import { threadOps } from './threadOps';
 import { Check, ChevronRight, DiffIcon, ErrorOutline, ExpandMore, PlayArrow } from '../icons';
 import { DiffDialog } from './DiffDialog';
 import { LoadEarlier } from './LoadEarlier';
@@ -265,7 +269,8 @@ interface Props {
     busy: boolean;
     disabled: boolean;
     disabledReason?: React.ReactNode;
-    onSend: (text: string, attachments: Attachment[]) => Promise<boolean>;
+    /** Returns false to keep the text in the box (e.g. the send failed). The mode is only set when the user chose one from the send menu. */
+    onSend: (text: string, attachments: Attachment[], mode?: SendMode) => Promise<boolean>;
     /** The conversation's own thread: its draft is kept under this id. */
     threadId: string;
     /** The coordinator's model, switched from the message box; the picker is left out without onModelChange. */
@@ -285,10 +290,33 @@ interface Props {
 
 export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, disabled, disabledReason, onSend, threadId, model, onModelChange, effort, onEffortChange, composerContext, onOpenThread, onStartSuggestions, onChooseDecision, chatTitle }: Props) {
     const { t } = useTranslation('projects');
+    const notify = useNotify();
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
     const [seed, setSeed] = useState('');
     const [detail, setDetail] = useMessageDetail('conversation');
+    const ops = useMemo(() => threadOps(threadId), [threadId]);
+    const composer = useRef<ThreadComposerHandle>(null);
+    // Messages held for after the running turn, as in a session's panel.
+    const held = useMemo(() => heldMessages(messages), [messages]);
+    const act = async (run: () => Promise<unknown>) => {
+        try {
+            await run();
+            return true;
+        } catch (e) {
+            notify((e as Error).message, 'error');
+            return false;
+        }
+    };
+    // Taking a held message back puts its text in the box to edit; the draft keeps whatever was typed meanwhile.
+    const takeBack = async (ids: string[], intoDraft: boolean) => {
+        const taken = held.filter((h) => ids.includes(h.id));
+        if (intoDraft && taken.length > 0) {
+            const text = taken.map((h) => h.content).filter((c) => c.trim() !== '').join('\n\n');
+            if (text) composer.current?.addToDraft(text);
+        }
+        await Promise.all(taken.map((h) => ops.unqueue(h.id).catch(() => undefined)));
+    };
 
     useEffect(() => {
         const el = scrollRef.current;
@@ -395,15 +423,27 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
             <Box sx={{ px: 2, pb: 2 }}>
                 {disabledReason}
                 <MessageDetailControl detail={detail} onChange={setDetail} surface="conversation" />
+                <HeldMessages held={held} onEdit={(h) => void takeBack([h.id], true)} onRemove={(h) => void takeBack([h.id], false)} />
                 <ThreadComposer
                     // Per conversation: its draft starts fresh.
                     key={threadId}
+                    ref={composer}
                     draftKey={threadId}
                     autoFocus
                     disabled={disabled}
                     seed={seed}
                     context={composerContext}
                     streaming={busy}
+                    sendModes
+                    onStop={() => {
+                        // Stop drops what was held: hand it back to the box rather than lose it.
+                        if (held.length > 0) {
+                            const text = held.map((h) => h.content).filter((c) => c.trim() !== '').join('\n\n');
+                            if (text) composer.current?.addToDraft(text);
+                            notify(t('queue.returned'), 'info');
+                        }
+                        void act(ops.stop);
+                    }}
                     model={model}
                     onModelChange={onModelChange}
                     effort={effort}
@@ -413,9 +453,9 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                     modelSource="projects"
                     placeholder={t(busy ? 'conversation.queuePlaceholder' : 'conversation.placeholder')}
                     attach={(files) => uploadAttachments({ projectId }, files)}
-                    onSend={async (text, attachments) => {
+                    onSend={async (text, attachments, mode) => {
                         stick.current = true;
-                        return onSend(text, attachments);
+                        return onSend(text, attachments, mode);
                     }}
                 />
             </Box>

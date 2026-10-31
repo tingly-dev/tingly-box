@@ -111,7 +111,7 @@ describe('manager message detail', () => {
         expect(readLocal('conversation.messageDetail')).toBe('concise');
         expect(JSON.stringify(p.messages)).toBe(original);
         await act(async () => fireEvent.click(screen.getByText('Send message')));
-        expect(p.onSend).toHaveBeenCalledWith('New message', []);
+        expect(p.onSend).toHaveBeenCalledWith('New message', [], undefined);
         fireEvent.click(screen.getByRole('button', { name: 'messageDetail.detailed' }));
         expect(screen.getByText('Worker report')).toBeInTheDocument();
     });
