@@ -2,6 +2,7 @@ package shortcut
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -130,33 +131,58 @@ func TestResolveLaunchEmptySourceDefaultsToBinary(t *testing.T) {
 	}
 }
 
-func TestResolveLaunchNpxPinsVersion(t *testing.T) {
-	spec := ResolveLaunch("/usr/local/bin/tingly-box", "npx", "1.4.2")
-
-	wantArgv := []string{"sh", "-lc", "npx -y tingly-box@1.4.2 open"}
-	if strings.Join(spec.Argv, "\x00") != strings.Join(wantArgv, "\x00") {
-		t.Fatalf("unexpected argv: %#v", spec.Argv)
-	}
-	if spec.WinArgs != "/c npx -y tingly-box@1.4.2 open" {
-		t.Errorf("unexpected winArgs: %q", spec.WinArgs)
-	}
-}
-
-func TestResolveLaunchNpxBundlePinsVersion(t *testing.T) {
-	spec := ResolveLaunch("/usr/local/bin/tingly-box", "npx-bundle", "1.4.2")
-
-	if spec.WinArgs != "/c npx -y tingly-box-bundle@1.4.2 open" {
-		t.Errorf("unexpected winArgs: %q", spec.WinArgs)
-	}
-}
-
-func TestResolveLaunchNpxUnknownVersionFallsBackToLatest(t *testing.T) {
-	for _, v := range []string{"", "dev", "unknown"} {
-		spec := ResolveLaunch("/usr/local/bin/tingly-box", "npx", v)
-		if spec.WinArgs != "/c npx -y tingly-box@latest open" {
-			t.Errorf("version=%q: unexpected winArgs: %q", v, spec.WinArgs)
+func TestResolveLaunchNpmDoesNotPinVersion(t *testing.T) {
+	for _, source := range []string{SourceNpx, SourceNpm, SourceNpxBundle, SourceNpmBundle} {
+		for _, version := range []string{"1.4.2", "2.0.0", "", "dev", "unknown"} {
+			spec := ResolveLaunch("/local/tingly box", source, version)
+			pkg := "tingly-box"
+			if strings.HasSuffix(source, "-bundle") {
+				pkg += "-bundle"
+			}
+			want := `/d /c if exist "/local/tingly box" ("/local/tingly box" --source=` + source + ` open) else (npx --prefer-offline -y ` + pkg + ` open)`
+			if spec.WinArgs != want {
+				t.Errorf("source=%s version=%s: %s", source, version, spec.WinArgs)
+			}
+			if len(spec.Argv) != 3 || spec.Argv[0] != "sh" || spec.Argv[1] != "-lc" || strings.Contains(spec.Argv[2], "@") {
+				t.Errorf("unexpected POSIX launch: %v", spec.Argv)
+			}
 		}
 	}
+}
+
+func TestNpmLaunchLocalAndFallback(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("requires a POSIX shell")
+	}
+	dir := t.TempDir()
+	local := filepath.Join(dir, "local ' executable")
+	if err := os.WriteFile(local, []byte("#!/bin/sh\nprintf 'local:%s' \"$*\"\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	npx := filepath.Join(dir, "npx")
+	if err := os.WriteFile(npx, []byte("#!/bin/sh\nprintf 'fallback:%s' \"$*\"\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	spec := ResolveLaunch(local, SourceNpxBundle, "1.4.2")
+	run := func(want string, wantError bool) {
+		t.Helper()
+		// Avoid the login shell resetting this test's isolated PATH.
+		out, err := exec.Command("sh", "-c", spec.Argv[2]).CombinedOutput()
+		if string(out) != want || (err != nil) != wantError {
+			t.Fatalf("got %q, %v; want %q, error=%v", out, err, want, wantError)
+		}
+	}
+	run("local:--source=npx-bundle open", false)
+	// A local launch error must remain visible, rather than fetching another version.
+	if err := os.WriteFile(local, []byte("#!/bin/sh\nexit 7\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	run("", true)
+	if err := os.Remove(local); err != nil {
+		t.Fatal(err)
+	}
+	run("fallback:--prefer-offline -y tingly-box-bundle open", false)
 }
 
 func TestSlugName(t *testing.T) {

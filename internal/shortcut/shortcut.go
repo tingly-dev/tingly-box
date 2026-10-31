@@ -58,25 +58,12 @@ func npmShimSource(source string) bool {
 	return false
 }
 
-// npxPackageForSource returns the npm package + version spec an npx-based
-// launch should run. It pins to the currently-running version so the
-// shortcut relaunches the exact build the user is already on — not whatever
-// happens to be newest on the registry at double-click time — and so it
-// works offline once npm has that version cached. version is empty (or the
-// "dev"/"unknown" placeholders used by unversioned builds) falls back to
-// "@latest".
-func npxPackageForSource(source, version string) string {
-	// The source values encode channel × package ("npx-bundle", "npm-bundle");
-	// the package axis is the "-bundle" suffix, so a new channel value can't
-	// silently fall back to the cli package here.
-	pkg := "tingly-box"
+// npxPackageForSource preserves the install's package without pinning a version.
+func npxPackageForSource(source string) string {
 	if strings.HasSuffix(source, "-bundle") {
-		pkg = "tingly-box-bundle"
+		return "tingly-box-bundle"
 	}
-	if version == "" || version == "dev" || version == "unknown" {
-		return pkg + "@latest"
-	}
-	return pkg + "@" + version
+	return "tingly-box"
 }
 
 // LaunchArgs are the CLI args the shortcut runs. `open` matches what a
@@ -120,19 +107,22 @@ type Options struct {
 	NoMenu    bool
 }
 
-// ResolveLaunch decides whether the shortcut runs the binary directly or goes
-// through a version-pinned npx relaunch (every npm shim source, npx or global
-// install alike — a shim's own exePath points into the download cache, which
-// a later update orphans), then builds the platform-specific launch vectors.
-// source is how the *current* process was invoked; the caller always knows
-// this first-hand. See .design/cli-entry-semantics.md.
-func ResolveLaunch(exePath, source, version string) LaunchSpec {
+// ResolveLaunch prefers the current local executable. For npm installs, if
+// that executable is removed (for example by cache cleanup), an unversioned
+// npx invocation prefers cached packages before fetching from the registry.
+// version is retained in the API for compatibility, but is never pinned.
+func ResolveLaunch(exePath, source, _ string) LaunchSpec {
 	args := LaunchArgs()
 
 	if npmShimSource(source) {
-		// e.g. "npx -y tingly-box@1.4.2 restart --daemon"
-		npxArgv := append([]string{"npx", "-y", npxPackageForSource(source, version)}, args...)
-		cmdStr := strings.Join(npxArgv, " ")
+		npxArgv := append([]string{"npx", "--prefer-offline", "-y", npxPackageForSource(source)}, args...)
+		localArgs := append([]string{"--source=" + source}, args...)
+		localCommand := shJoin(append([]string{exePath}, localArgs...))
+		cmdStr := "if [ -x " + shJoin([]string{exePath}) + " ]; then " + localCommand +
+			"; else " + shJoin(npxArgv) + "; fi"
+		// Quote local paths for cmd.exe, including installations under Program Files.
+		winCommand := `if exist "` + exePath + `" ("` + exePath + `" ` + strings.Join(localArgs, " ") +
+			`) else (` + strings.Join(npxArgv, " ") + `)`
 		home, _ := os.UserHomeDir()
 
 		comspec := os.Getenv("ComSpec")
@@ -144,7 +134,7 @@ func ResolveLaunch(exePath, source, version string) LaunchSpec {
 			// Wrap in a login shell so GUI launches pick up node/npx on PATH.
 			Argv:      []string{"sh", "-lc", cmdStr},
 			WinTarget: comspec,
-			WinArgs:   "/c " + cmdStr,
+			WinArgs:   "/d /c " + winCommand,
 			WorkDir:   home,
 		}
 	}

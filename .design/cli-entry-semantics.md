@@ -32,15 +32,12 @@ installed bin.
 **`--source` records the channel truthfully, handling stays unified:** the
 shims report `npx` / `npx-bundle` under npx and `npm` / `npm-bundle` when run
 as an installed bin (`internal/shortcut.npmShimSource` groups all four). The
-only consumer that cares about the split is shortcut generation, which keeps
-relaunching via a version-pinned `npx -y <package>@<ver>` for every npm shim
-source — a global install's own exePath sits in the version-tagged download
-cache that a later update orphans, and npm's cache still holds the installed
-tarball so the npx relaunch works offline. The bundle variants exist so a
-`tingly-box-bundle` install's shortcut relaunches that package, not the cli
-one; the bundle package is retired since the cli package ships its binary
-through npm (`npm.md`, F), but installs made from it still report these
-sources and their shortcuts keep relaunching the pinned bundle version.
+shortcut launcher preserves the package family and tries the current local
+executable first, retaining the `--source` flag. If that file has been removed
+by cache cleanup or an update, it falls back to unversioned
+`npx --prefer-offline -y <package> open`. The bundle variants preserve that
+package for older installs; the bundle package is retired since the cli
+package ships its binary through npm (`npm.md`, F).
 
 Both bins are always shipped (`tingly-box` and `tb`), so command hints print
 both forms (e.g. `'tingly-box restart' / 'tb restart'`) rather than guessing
@@ -86,8 +83,8 @@ wrapper, user scripts) keep working. When the server is not running,
 **Shortcuts** (desktop / start menu) launch `open` instead of the former
 `restart --daemon`: a double-click means "give me Tingly Box" — open the web
 UI, starting the server only if needed. The old restart target would now
-prompt in a popup terminal, and npx shortcuts are pinned to one version so
-their restart carried no update semantics anyway.
+prompt in a popup terminal. Shortcut creation is separate from explicitly
+updating the installation; the local executable is preferred at launch.
 
 ## Explicitly out of scope (for now)
 
