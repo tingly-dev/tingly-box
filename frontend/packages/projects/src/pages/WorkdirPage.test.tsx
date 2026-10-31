@@ -105,6 +105,7 @@ describe('WorkdirPage live transcript', () => {
         m.get.mockImplementation((url: string, options: unknown) => url.endsWith('permission-modes')
             ? Promise.resolve({ data: { modes: ['plan'] }, response: new Response() }) : oldGet(url, options));
         show('/?path=%2Fhome%2Fme%2Fapp&session=t1');
+        fireEvent.click(await screen.findByRole('button', { name: /^composer\.settings/ }));
         const permissions = await screen.findByRole('combobox', { name: 'threadSettings.permissions' });
         const input = screen.getByPlaceholderText('session.queuePlaceholder');
         fireEvent.change(input, { target: { value: 'continue' } });
