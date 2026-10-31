@@ -26,7 +26,7 @@ func (c *Config) SetGUIDebug(debug bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.GUI.Debug = debug
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetGUIPort returns the GUI port setting (0 means use ServerPort)
@@ -41,7 +41,7 @@ func (c *Config) SetGUIPort(port int) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.GUI.Port = port
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetGUIVerbose returns the GUI verbose setting
@@ -56,5 +56,5 @@ func (c *Config) SetGUIVerbose(verbose bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.GUI.Verbose = verbose
-	return c.Save()
+	return c.saveLocked()
 }
