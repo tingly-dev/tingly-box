@@ -15,6 +15,8 @@ describe('experimental feature routing', () => {
     it('accepts only known feature keys', () => {
         expect(parseExperimentalFeature('mcp')).toBe('mcp');
         expect(parseExperimentalFeature('projects')).toBe('projects');
+        expect(parseExperimentalFeature('skill_ide')).toBe('skill_ide');
+        expect(parseExperimentalFeature('skill_user')).toBeUndefined();
         expect(parseExperimentalFeature('unknown')).toBeUndefined();
     });
 

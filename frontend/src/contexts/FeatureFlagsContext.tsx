@@ -4,7 +4,6 @@ import { api } from '@/services/api';
 import { useAuth } from './AuthContext';
 
 interface FeatureFlagsContextType {
-    skillUser: boolean;
     skillIde: boolean;
     enableGuardrails: boolean;
     enableMCP: boolean;
@@ -30,7 +29,6 @@ interface FeatureFlagsProviderProps {
 
 export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ children }) => {
     const { isLoading: isAuthLoading } = useAuth();
-    const [skillUser, setSkillUser] = useState(false);
     const [skillIde, setSkillIde] = useState(false);
     const [enableGuardrails, setEnableGuardrails] = useState(false);
     const [enableMCP, setEnableMCP] = useState(false);
@@ -42,15 +40,13 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
     // memoized context value below can depend on a stable `refresh`).
     const loadFlags = useCallback(async () => {
         try {
-            const [skillUserResult, skillIdeResult, guardrailsResult, mcpResult, benchResult, projectsResult] = await Promise.all([
-                api.getScenarioFlag('_global', 'skill_user'),
+            const [skillIdeResult, guardrailsResult, mcpResult, benchResult, projectsResult] = await Promise.all([
                 api.getScenarioFlag('_global', 'skill_ide'),
                 api.getScenarioFlag('_global', 'guardrails'),
                 api.getScenarioFlag('_global', 'mcp'),
                 api.getScenarioFlag('_global', 'bench'),
                 api.getScenarioFlag('_global', 'projects'),
             ]);
-            setSkillUser(skillUserResult?.data?.value || false);
             setSkillIde(skillIdeResult?.data?.value || false);
             setEnableGuardrails(guardrailsResult?.data?.value || false);
             setEnableMCP(mcpResult?.data?.value || false);
@@ -75,8 +71,8 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
     const refresh = loadFlags;
 
     const value = useMemo(() => ({
-        skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableProjects, loading, refresh,
-    }), [skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableProjects, loading, refresh]);
+        skillIde, enableGuardrails, enableMCP, enableBench, enableProjects, loading, refresh,
+    }), [skillIde, enableGuardrails, enableMCP, enableBench, enableProjects, loading, refresh]);
 
     return (
         <FeatureFlagsContext.Provider value={value}>

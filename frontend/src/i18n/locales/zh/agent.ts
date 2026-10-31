@@ -332,32 +332,9 @@ export default {
   },
   "prompt": {
     "menu": "提示词",
-    "user": {
-      "title": "用户录制",
-      "subtitle": "浏览和管理您的 IDE 录制",
-      "filters": "筛选",
-      "searchPlaceholder": "搜索录制...",
-      "userFilter": "用户",
-      "allUsers": "所有用户",
-      "projectFilter": "工作区",
-      "allProjects": "所有工作区",
-      "typeFilter": "类型",
-      "allTypes": "所有类型",
-      "recordingsFound": "找到 {{count}} 条录制",
-      "recordingsFor": "{{date}} 的录制",
-      "noRecordings": "此日期没有找到录制",
-      "actions": {
-        "play": "播放",
-        "viewDetails": "查看详情",
-        "delete": "删除"
-      },
-      "types": {
-        "code-review": "代码审查",
-        "debug": "调试",
-        "refactor": "重构",
-        "test": "测试",
-        "custom": "自定义"
-      }
+    "recordingsRemoved": {
+      "title": "用户录制功能已移除",
+      "description": "你的本地会话文件未被修改。"
     },
     "skill": {
       "title": "技能",

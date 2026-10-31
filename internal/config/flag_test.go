@@ -204,6 +204,31 @@ func TestSetScenarioFlag_UnknownFlagRejected(t *testing.T) {
 	}
 }
 
+func TestRetiredRecordingFlagPreservesLegacyConfig(t *testing.T) {
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.SetScenarioExtensions(typ.ScenarioGlobal, map[string]interface{}{
+		"skill_user":               true,
+		constant.ExtensionSkillIDE: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.SetScenarioFlag(typ.ScenarioGlobal, "skill_user", false); err == nil {
+		t.Fatal("retired recording toggle should no longer be settable")
+	}
+	if err := cfg.SetScenarioFlag(typ.ScenarioGlobal, constant.ExtensionSkillIDE, false); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.GetScenarioFlag(typ.ScenarioGlobal, constant.ExtensionSkillIDE) {
+		t.Fatal("Skills toggle should still be writable")
+	}
+	if value := cfg.GetScenarioConfig(typ.ScenarioGlobal).Extensions["skill_user"]; value != true {
+		t.Fatalf("cleanup must retain legacy configuration data, got %v", value)
+	}
+}
+
 // TestBuiltInRulesSessionAffinity verifies the built-in Claude Code / Desktop /
 // Codex rules seed session_affinity to the 30-min default, while other built-in
 // rules leave it disabled.

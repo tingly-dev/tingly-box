@@ -59,7 +59,7 @@ const UserUsagePage = lazy(() => import('@/pages/UserUsagePage'));
 const QuotaHistoryPage = lazy(() => import('@/pages/QuotaHistoryPage'));
 const ModelTestPage = lazy(() => import('@/pages/ModelTestPage'));
 const BenchPage = lazy(() => import('@/pages/bench/BenchPage'));
-const UserPage = lazy(() => import('@/pages/prompt/UserPage'));
+const RetiredRecordingsPage = lazy(() => import('@/pages/RetiredRecordingsPage'));
 const SkillPage = lazy(() => import('@/pages/prompt/SkillPage'));
 const TelegramPage = lazy(() => import('@/pages/bots/TelegramPage'));
 const FeishuPage = lazy(() => import('@/pages/bots/FeishuPage'));
@@ -177,7 +177,7 @@ export const appRoutes = (
             <Route path="/overview/:timeRange" element={<Navigate to="/dashboard/7d" replace />} />
             <Route path="/model-test/:providerUuid" element={<ModelTestPage />} />
             {/* Prompt routes */}
-            <Route path="/prompt/user" element={<ExperimentalFeatureGate feature="skill_user"><UserPage /></ExperimentalFeatureGate>} />
+            <Route path="/prompt/user" element={<RetiredRecordingsPage />} />
             <Route path="/prompt/skill" element={<ExperimentalFeatureGate feature="skill_ide"><SkillPage /></ExperimentalFeatureGate>} />
             <Route path="/prompt/command" element={<Navigate to="/prompt/skill" replace />} />
             {/* Retired Remote Coder bookmarks now enter Remote Control. */}

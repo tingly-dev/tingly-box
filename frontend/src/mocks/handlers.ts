@@ -2720,7 +2720,7 @@ export const handlers = [
         return HttpResponse.json({ success: true, data: { scenario, ...body } })
     }),
 
-    // Experimental feature flags (guardrails, mcp, skill_user, skill_ide) —
+    // Experimental feature flags (guardrails, mcp, skill_ide) —
     // enable them all in mock mode so their gated pages are screenshot-able.
     http.get('/api/v1/scenario/:scenario/flag/:flag', ({ params }) => {
         const { scenario, flag } = params as { scenario: string; flag: string }
