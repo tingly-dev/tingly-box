@@ -415,6 +415,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                     disabled={disabled}
                     seed={seed}
                     context={composerContext}
+                    contextCollapsible
                     streaming={busy}
                     model={model}
                     onModelChange={onModelChange}

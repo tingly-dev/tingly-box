@@ -94,7 +94,7 @@ export const en = {
         placeholder: 'How can I help you today?',
         projectHint: 'A quick chat with the model. For ongoing work that should run as threads, start a project.',
     },
-    composer: { placeholder: 'Write a message…', send: 'Send (Enter)', sendShort: 'Send', stop: 'Stop', stopTurn: 'Stop the current turn', attach: 'Attach files', pastedText: 'Pasted text · {{count}} lines', removeAttachment: 'Remove {{name}}', attachFailed: 'Could not attach the file', keys: 'Enter to send · Shift+Enter for a new line',
+    composer: { settings: 'Session settings', placeholder: 'Write a message…', send: 'Send (Enter)', sendShort: 'Send', stop: 'Stop', stopTurn: 'Stop the current turn', attach: 'Attach files', pastedText: 'Pasted text · {{count}} lines', removeAttachment: 'Remove {{name}}', attachFailed: 'Could not attach the file', keys: 'Enter to send · Shift+Enter for a new line',
         sendOptions: 'Other ways to send', sendQueue: 'Send after this turn', sendQueueHint: 'Holds it until Claude is done (Alt+Enter)',
         sendStop: 'Stop and send', sendStopHint: 'Interrupts the current turn first' },
     queue: { heading: 'Sends after this turn', edit: 'Edit', remove: 'Remove', attachmentsOnly: 'Attachments', returned: 'Your held messages are back in the box.' },
@@ -161,6 +161,7 @@ export const en = {
         decision: 'Needs your decision', recommended: 'Recommended', choose: 'Choose', chosen: 'Chosen',
     },
     placement: {
+        main: 'Main area (switch)',
         title: 'Layout', overview: 'Overview sits in', thread: 'Threads open in', side: 'Side pane', window: 'Window', top: 'Top bar', float: 'Floating window', overviewFloat: 'Floating, from the Overview',
         lockedTop: 'With the Overview on top, a thread opens below it.', remember: 'Remembered in this browser.',
     },

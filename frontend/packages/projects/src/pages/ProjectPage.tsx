@@ -70,7 +70,7 @@ export default function ProjectPage() {
     // Overview; at most one window, since picking another thread only swaps it.
     const [overviewFloatId, setOverviewFloatId] = useState<string | null>(null);
     const floatedFromOverview = placement.overviewFloat && overviewAt === 'side' && !!threadId && overviewFloatId === threadId;
-    const threadAt = pane.narrow || overviewAt === 'top' ? 'side' : floatedFromOverview ? 'float' : placement.thread;
+    const threadAt = pane.narrow ? 'main' : floatedFromOverview ? 'float' : overviewAt === 'top' && placement.thread !== 'main' ? 'side' : placement.thread;
     const remember = (key: string, set: (v: boolean) => void) => (v: boolean) => {
         writeLocal(key, v ? '1' : '0');
         set(v);
@@ -185,7 +185,8 @@ export default function ProjectPage() {
             p.set('thread', tid);
             return p;
         });
-        pane.reveal();
+        if (threadAt === 'side') pane.reveal();
+        else if (pane.narrow) pane.setDrawerOpen(false);
     };
     const openFromOverview = (tid: string) => {
         setOverviewFloatId(tid);
@@ -193,7 +194,7 @@ export default function ProjectPage() {
     };
     const dockThread = () => {
         setOverviewFloatId(null);
-        placement.setThread('side');
+        placement.setThread('main');
     };
     const closeThread = () => setParams((p) => {
         p.delete('thread');
@@ -338,7 +339,9 @@ export default function ProjectPage() {
                 top={overviewAt === 'top' ? (
                     <OverviewBand threads={threads} selectedId={threadId} open={bandOpen} onToggle={() => setBand(!bandOpen)} onOpen={openThread} onLibrary={() => setLibraryWindow(true)} />
                 ) : undefined}
-                main={messages === null ? (
+                main={<Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                    <Box sx={{ flex: 1, minHeight: 0, display: threadId && threadAt === 'main' ? 'none' : 'flex', flexDirection: 'column' }}>
+                    {messages === null ? (
                     <Box sx={{ flex: 1, p: 3 }}><Skeleton variant="rounded" height={80} /></Box>
                 ) : (
                     <ConversationPane
@@ -416,7 +419,10 @@ export default function ProjectPage() {
                             }
                         }}
                     />
-                )}
+                    )}
+                    </Box>
+                    {threadAt === 'main' && threadEl}
+                </Box>}
             />
 
             <FloatingWindow

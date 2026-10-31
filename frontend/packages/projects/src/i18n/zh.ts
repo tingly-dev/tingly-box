@@ -99,7 +99,7 @@ export const zh: Dict<typeof en> = {
         placeholder: '今天想聊点什么？',
         projectHint: '这里是和模型的快速对话。需要以线程方式持续推进的工作，请新建一个项目。',
     },
-    composer: { placeholder: '输入消息…', send: '发送（Enter）', sendShort: '发送', stop: '停止', stopTurn: '停止当前轮次', attach: '添加附件', pastedText: '粘贴的文本 · {{count}} 行', removeAttachment: '移除 {{name}}', attachFailed: '附件上传失败', keys: 'Enter 发送 · Shift+Enter 换行',
+    composer: { settings: '会话设置', placeholder: '输入消息…', send: '发送（Enter）', sendShort: '发送', stop: '停止', stopTurn: '停止当前轮次', attach: '添加附件', pastedText: '粘贴的文本 · {{count}} 行', removeAttachment: '移除 {{name}}', attachFailed: '附件上传失败', keys: 'Enter 发送 · Shift+Enter 换行',
         sendOptions: '其他发送方式', sendQueue: '本轮结束后发送', sendQueueHint: '等 Claude 做完再发（Alt+Enter）',
         sendStop: '停止并发送', sendStopHint: '先中断当前这一轮' },
     queue: { heading: '本轮结束后发送', edit: '编辑', remove: '移除', attachmentsOnly: '附件', returned: '排队的消息已放回输入框。' },
@@ -166,6 +166,7 @@ export const zh: Dict<typeof en> = {
         decision: '需要你来决定', recommended: '推荐', choose: '选这个', chosen: '已选',
     },
     placement: {
+        main: '主区域（切换）',
         title: '布局', overview: 'Overview 放在', thread: '线程打开在', side: '侧栏', window: '独立窗口', top: '顶栏', float: '浮窗', overviewFloat: '浮窗（从 Overview 点开时）',
         lockedTop: 'Overview 在顶栏时，线程在它下方打开。', remember: '记在这个浏览器里。',
     },
