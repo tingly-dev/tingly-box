@@ -53,3 +53,43 @@ func TestRuleModelInfo_MatchesByProviderAndUpstreamModel(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, 8000, info.MaxOutput)
 }
+
+// With several services, numeric fields are the smallest known across them,
+// and /v1/models carries them under both our names and the OpenAI-compatible
+// ones.
+func TestRuleModelInfo_SmallestAcrossServices(t *testing.T) {
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	require.NoError(t, err)
+	tm := catalog.NewProviderCatalogManager(catalog.EmbeddedOnly())
+	require.NoError(t, tm.Initialize(context.Background()))
+	cfg.SetTemplateManager(tm)
+
+	p := &typ.Provider{
+		Name:     "ds",
+		APIBase:  "https://api.deepseek.com/v1",
+		APIStyle: protocol.APIStyleOpenAI,
+		AuthType: typ.AuthTypeAPIKey,
+		Token:    "sk-test",
+		Enabled:  true,
+	}
+	require.NoError(t, cfg.AddProvider(p))
+	reasoner, ok := tm.GetModelInfoForProvider(p, "deepseek-reasoner")
+	require.True(t, ok)
+	chat, ok := tm.GetModelInfoForProvider(p, "deepseek-chat")
+	require.True(t, ok)
+
+	rule := typ.Rule{
+		RequestModel: "mixed",
+		Active:       true,
+		Services: []*loadbalance.Service{
+			{Provider: p.UUID, Model: "deepseek-reasoner", Active: true},
+			{Provider: p.UUID, Model: "deepseek-chat", Active: true},
+			{Provider: p.UUID, Model: "not-in-catalog", Active: true},
+		},
+	}
+	info, ok := ruleModelInfo(cfg, rule)
+	require.True(t, ok)
+	assert.Equal(t, min(reasoner.Context, chat.Context), info.Context)
+	assert.Equal(t, min(reasoner.MaxOutput, chat.MaxOutput), info.MaxOutput)
+	assert.Equal(t, reasoner.Description, info.Description, "description comes from the first known service")
+}

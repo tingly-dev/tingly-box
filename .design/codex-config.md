@@ -318,6 +318,71 @@ pipeline, so it is deliberately not in `RuleFlagRegistry` (see `rule-flags.md`).
   overrides; the UI "Auto Config" path does. Whether the 36,000 threshold is
   right still wants a real long-session check against Codex.
 
+## Per-model context window (rule flag `codex_context_window`)
+
+The catalog window was 200K for every model, 1M with the rule's `1M` flag.
+Real windows vary (128K, 256K, 400K…), and until Tingly Box learns them from the
+model list (#2225, #1774) a person must be able to say it. A Codex rule can set
+`RuleFlags.CodexContextWindow` (tokens, 8,000–10,000,000, `0` = automatic). It
+is config-only like `codex_compact_percent`: `BuildContextWindowsFromRules`
+resolves each rule to *own value > 1M flag > provider catalog > default 200K*,
+so apply, the out-of-date check and the compact preview all see the same window.
+
+- **Auto uses the catalog first.** Many models already carry limits in the
+  built-in provider catalog (`providers.json`), so Auto is never a blind 200K
+  for them. `Config.RuleModelInfo` is the one place a rule's model metadata is
+  resolved: it looks up the routed model of each active service (then the
+  request model) on the provider's matched template, keeps the first known
+  description and the smallest known limits, so the value is safe whichever
+  service answers. `/v1/models`, the Codex catalog and the editor all read it,
+  and 200K is only for models the catalog does not know.
+- **Three numbers, one meaning each.** Vendors publish "context window" in two
+  senses: Anthropic's window is shared by input and output, so its Models API
+  reports it as `max_input_tokens`; OpenAI's counts output too (gpt-5: 400K =
+  272K input + 128K output). Both model listings therefore carry
+  `context_window` (the window the vendor publishes, catalog `context`; Tingly
+  Box's own field, named so a reader never has to ask which sense),
+  `max_input_tokens` (the most input one request may carry) and `max_tokens`
+  (the most output), the last two with Anthropic's names and meaning. A
+  template whose `context` counts output sets `context_includes_output`
+  (`openai-com`, `azure-openai`) and lookups derive `max_input` as
+  `context − max_output`; a model may also state `max_input` itself. The
+  OpenAI-format list keeps its older `context` / `max_output` for existing
+  clients. OpenAI's Model object has no limit fields; OpenRouter's
+  `context_length` and Gemini's `inputTokenLimit` are other spellings, only
+  for reading upstream lists (#1774).
+- **Codex is given the input limit.** Codex's `context_window` is an input
+  budget (its own catalog gives gpt-5 272K, not 400K), so Auto resolves to
+  `max_input_tokens` (`RuleCatalogInputLimit`), and the editor reads the same
+  field from `/tingly/codex/v1/models` (the list Codex's clients see, matched
+  by request model), so the chip and the generated catalog cannot drift. The
+  `codex` template's `context` values are already that input budget and do not
+  set `context_includes_output`.
+- **Codex and Claude Code read the same number.** Both treat a model's window
+  as the most input a request may carry, i.e. `max_input_tokens`, not the
+  published `context_window`. Codex: its catalog's `context_window` is an input
+  budget (272K for gpt-5, whose published window is 400K). Claude Code: its
+  model table and its `models.retrieve` call read `max_input_tokens` (falling
+  back to `context_window`), and the auto-compact threshold is the smaller of
+  `CLAUDE_CODE_AUTO_COMPACT_WINDOW` and that window. For Claude models the two
+  numbers are equal, so the difference only shows for vendors whose window
+  counts output. Tingly Box has no `GET /v1/models/{id}`, so Claude Code cannot
+  learn a routed model's window from us yet and uses its own table or the
+  window Tingly Box writes into its settings.
+- **Editor.** A `Context: Auto ▾` chip sits before `Compact`. Its popover offers
+  Auto (showing what it resolves to), the common sizes 128K / 200K / 256K / 400K /
+  1M, and a box for anything else (`131072`, `300K`, `1.5M`). The Compact popover
+  reads its window from the same resolution (`resolveCodexWindow`), so moving
+  the context window updates the compact numbers at once.
+- **Why a manual setting before automatic detection.** Detection cannot be
+  exhaustive (unknown upstreams, self-hosted gateways), and Codex is sensitive to
+  a wrong window, so the manual value stays as the override even after detection
+  lands; the upstream model list (#1774) would only add a source to what Auto
+  resolves to.
+- **Open.** `context_window` and `max_context_window` are still written equal
+  (#2131), and the agent-apply bridge does not carry the rule value, like the
+  other rule overrides.
+
 ## Schema alignment: `supports_reasoning_summaries` (2026-10-19)
 
 The current upstream `config.schema.json` (root and `ConfigProfile` are

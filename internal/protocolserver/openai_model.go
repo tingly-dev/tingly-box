@@ -21,6 +21,15 @@ type OpenAIModel struct {
 	Description string `json:"description,omitempty"` // Model description
 	Context     int    `json:"context,omitempty"`     // Max context window
 	MaxOutput   int    `json:"max_output,omitempty"`  // Max output tokens
+	// ContextWindow is the context window the vendor publishes (Tingly Box's
+	// own field, in both listings). MaxInputTokens / MaxTokens follow the
+	// names and meaning of Anthropic's Models API (OpenAI's Model object has
+	// no such fields): the most input one request may carry, which is below
+	// ContextWindow when the vendor's window counts output too (gpt-5: 400K
+	// window, 272K input), and the most output.
+	ContextWindow  int `json:"context_window,omitempty"`
+	MaxInputTokens int `json:"max_input_tokens,omitempty"`
+	MaxTokens      int `json:"max_tokens,omitempty"`
 	// AuthType reflects the primary backing provider's auth type. It is
 	// non-standard (OpenAI's models API has no such field) and consumed by
 	// the tingly-box frontend to order model picker entries:
@@ -100,14 +109,17 @@ func (ph *ProtocolHandler) openAIListModelsWithScenario(c *gin.Context, scenario
 		info, _ := ruleModelInfo(cfg, rule)
 
 		models = append(models, OpenAIModel{
-			ID:          rule.RequestModel,
-			Object:      "model",
-			Created:     created,
-			OwnedBy:     ownedBy,
-			Description: info.Description,
-			Context:     info.Context,
-			MaxOutput:   info.MaxOutput,
-			AuthType:    string(PrimaryAuthTypeForRule(cfg, rule)),
+			ID:             rule.RequestModel,
+			Object:         "model",
+			Created:        created,
+			OwnedBy:        ownedBy,
+			Description:    info.Description,
+			Context:        info.Context,
+			MaxOutput:      info.MaxOutput,
+			ContextWindow:  info.Context,
+			MaxInputTokens: info.InputLimit(),
+			MaxTokens:      info.MaxOutput,
+			AuthType:       string(PrimaryAuthTypeForRule(cfg, rule)),
 		})
 	}
 
