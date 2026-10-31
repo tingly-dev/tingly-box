@@ -190,9 +190,13 @@ func (c *Coordinator) turn(ctx context.Context, projectID string, userTriggered,
 	if p.Paused || p.ArchivedAt != nil {
 		return nil
 	}
-	history, err := c.store.ListRecentThreadEvents(p.MainThreadID, historyLimit)
+	history, err := c.store.ListRecentThreadEvents(p.MainThreadID, historyLimit+1)
 	if err != nil {
 		return err
+	}
+	older := len(history) > historyLimit
+	if older {
+		history = history[1:]
 	}
 	msgs := renderHistory(history, c.layout.LibraryDir(projectID))
 	if len(msgs) == 0 {
@@ -227,6 +231,9 @@ func (c *Coordinator) turn(ctx context.Context, projectID string, userTriggered,
 		}
 		threads, _ := c.store.ListThreads(projectID)
 		system := coordinatorSystemPrompt(c.layout, p, threads, time.Now())
+		if older {
+			system += olderNote
+		}
 
 		var live *db.ThreadEvent
 		var streamed strings.Builder
@@ -463,7 +470,7 @@ Current date: %s
 	}
 	for i, t := range threads {
 		if i >= 30 {
-			fmt.Fprintf(&b, "(%d older threads omitted)\n", len(threads)-i)
+			fmt.Fprintf(&b, "(%d older threads omitted; list_threads finds them)\n", len(threads)-i)
 			break
 		}
 		fmt.Fprintf(&b, "- %s %q status=%s", short(t.ID), t.Title, t.Status)
@@ -510,8 +517,21 @@ func coordinatorTools() []llm.Tool {
 			Properties: map[string]any{"thread_id": str("Thread id (the 8-character prefix is enough)."), "message": str("What to tell the thread."),
 				"cite": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Ids (the msg attribute of the user's event) of the user's own messages that approve or decide what you are telling the thread. The system quotes them to the thread word for word; without a citation the thread treats your message as not approved."}},
 			Required: []string{"thread_id", "message"}},
-		{Name: "get_thread", Description: "Read a thread's status, branch, last report and recent transcript.",
-			Properties: map[string]any{"thread_id": str("Thread id or its 8-character prefix.")}, Required: []string{"thread_id"}},
+		{Name: "get_thread", Description: "Read a thread's status, branch, last report and recent transcript. Entries are cut and the result capped like read_conversation; page back with before, read entries whole with full.",
+			Properties: map[string]any{"thread_id": str("Thread id or its 8-character prefix."),
+				"before": str("Optional. 8-character id of a transcript entry to read back from."),
+				"limit":  map[string]any{"type": "integer", "description": "How many entries, up to 40. Default 15."},
+				"full":   map[string]any{"type": "boolean", "description": "Show each entry up to 4000 characters instead of 300."}}, Required: []string{"thread_id"}},
+		{Name: "read_conversation", Description: "Read earlier messages of this conversation that are no longer shown to you: the user's words, your replies and thread reports. Newest first, back from the window you see or from a message id; or search by text. Results are capped like grep output: long messages are cut, and when the result is too big the oldest entries are hidden and you are told how to reach them. Use it when the user refers to something you cannot see; do not ask them to repeat.",
+			Properties: map[string]any{"before": str("Optional. 8-character id of a message (shown in the results) to read back from; default is the oldest message you can see."),
+				"contains": str("Optional. Only messages containing this text (case-insensitive)."),
+				"id":       str("Optional. Read this one message whole instead (use the id of a cut-short entry)."),
+				"limit":    map[string]any{"type": "integer", "description": "How many messages, up to 40. Default 20."},
+				"full":     map[string]any{"type": "boolean", "description": "Show each message up to 4000 characters instead of 600 (fewer fit in one result)."}}},
+		{Name: "list_threads", Description: "List the project's threads, including old and archived ones the thread table in your prompt leaves out. Capped like ls output: when too many match, the oldest are hidden and you are told to narrow it.",
+			Properties: map[string]any{"status": str("Optional. Only threads with this status, e.g. working, waiting, ready, resolved."),
+				"contains": str("Optional. Only threads whose title, task or last report contains this text."),
+				"limit":    map[string]any{"type": "integer", "description": "How many threads, up to 40. Default 20."}}},
 		{Name: "resolve_thread", Description: "Mark a thread resolved (done). Only when the user says so or its work is merged.",
 			Properties: map[string]any{"thread_id": str("Thread id or prefix.")}, Required: []string{"thread_id"}},
 		{Name: "rename_thread", Description: "Change a thread's card title when its goal has changed. Does not touch its branch or history. Same title rules as start_thread.",
@@ -565,6 +585,10 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, call llm.ToolC
 		Summary, File     string
 		Instructions      string
 		Cite              []string
+		Before, Contains  string
+		ID, Status        string
+		Limit             int
+		Full              bool
 		Decision
 	}
 	if err := json.Unmarshal(call.Input, &in); err != nil {
@@ -623,17 +647,45 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, call llm.ToolC
 			return fail(err)
 		}
 		// The thread's own conversation: a subagent's steps stay out.
-		events, _, _ := c.store.PageThreadEvents(t.ID, db.EventPage{Limit: 15})
-		var lines []string
+		page := db.EventPage{Limit: 15}
+		if in.Limit > 0 {
+			page.Limit = in.Limit
+			if page.Limit > readItemsMax {
+				page.Limit = readItemsMax
+			}
+		}
+		if in.Before != "" {
+			e, err := c.store.FindThreadEvent(t.ID, in.Before)
+			if err != nil {
+				return fail(fmt.Errorf("no transcript entry %q in this thread", in.Before))
+			}
+			page.Before = e.ID
+		}
+		events, more, _ := c.store.PageThreadEvents(t.ID, page)
+		var entries []readEntry
 		for _, e := range events {
 			if e.Kind == db.EvUsage || e.Kind == db.EvTask {
 				continue
 			}
-			lines = append(lines, fmt.Sprintf("[%s] %s", e.Kind, clip(e.Content, 300)))
+			entries = append(entries, readEntry{short(e.ID), e.Kind, e.Content})
 		}
+		lines, oldest, hidden := fit(entries, in.Full, func(id string) string { return "get_thread full for the whole" })
+		lines += footer(hidden, more, oldest, "get_thread")
 		return envelope(trustRelay, fmt.Sprintf("thread %s %q status=%s branch=%s base=%s commits_ahead=%d files_changed=%d waiting_on=%q\ntask: %s\nlast report: %s\nrecent transcript:\n%s",
 			short(t.ID), t.Title, t.Status, orNone(t.Branch), orNone(t.BaseBranch), t.CommitsAhead, t.FilesChanged, t.WaitReason,
-			clip(t.Task, 1500), clip(t.LastReport, 2000), strings.Join(lines, "\n")), "source", "thread", "kind", "get_thread"), false, nil
+			clip(t.Task, 1500), clip(t.LastReport, 2000), lines), "source", "thread", "kind", "get_thread"), false, nil
+	case "read_conversation":
+		out, err := c.readConversation(p, readArgs{Before: in.Before, Contains: in.Contains, ID: in.ID, Limit: in.Limit, Full: in.Full})
+		if err != nil {
+			return fail(err)
+		}
+		return out, false, nil
+	case "list_threads":
+		out, err := c.listThreads(p, in.Status, in.Contains, in.Limit)
+		if err != nil {
+			return fail(err)
+		}
+		return out, false, nil
 	case "rename_thread":
 		t, err := c.findThread(p.ID, in.ThreadID)
 		if err != nil {
