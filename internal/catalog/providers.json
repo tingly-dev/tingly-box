@@ -983,7 +983,7 @@
       ],
       "supports_models_endpoint": false,
       "oauth_provider": "codex",
-      "icon": "opencode",
+      "icon": "codex",
       "openai_endpoint_mode": "responses",
       "last_updated": "2026-10-27",
       "sources": [
@@ -5171,6 +5171,7 @@
       "status": "active",
       "valid": true,
       "canonical_domain": "ai-gateway.vercel.sh",
+      "icon": "vercel",
       "vendor_family": "vercel",
       "region": "global",
       "plan": "standard",
@@ -5197,6 +5198,7 @@
       "status": "active",
       "valid": true,
       "canonical_domain": "gateway.ai.cloudflare.com",
+      "icon": "cloudflare",
       "vendor_family": "cloudflare",
       "region": "global",
       "plan": "standard",
@@ -5223,6 +5225,7 @@
       "status": "active",
       "valid": true,
       "canonical_domain": "api.typesafe.ai",
+      "icon": "typesafe",
       "vendor_family": "typesafe",
       "region": "global",
       "plan": "standard",
@@ -5614,7 +5617,7 @@
       "base_url_anthropic": "http://localhost:13305",
       "no_key_required": true,
       "supports_models_endpoint": true,
-      "icon": "amd",
+      "icon": "lemonade",
       "last_updated": "2026-09-04",
       "sources": [
         "https://github.com/lemonade-sdk/lemonade",
@@ -5623,6 +5626,53 @@
         "https://lemonade-server.ai/docs/integrations/claude-code/"
       ],
       "models": []
+    },
+    "llamacpp": {
+      "id": "llamacpp",
+      "name": "llama.cpp",
+      "status": "active",
+      "valid": true,
+      "vendor_family": "llamacpp",
+      "region": "self-hosted",
+      "plan": "standard",
+      "type": "self-hosted",
+      "description": "llama.cpp server for local GGUF models with OpenAI and Anthropic compatible APIs",
+      "website": "https://github.com/ggml-org/llama.cpp",
+      "base_url_openai": "http://localhost:9931/v1",
+      "base_url_anthropic": "http://localhost:9931",
+      "no_key_required": true,
+      "supports_models_endpoint": true,
+      "icon": "llamacpp",
+      "last_updated": "2026-10-31",
+      "sources": [
+        "https://github.com/ggml-org/llama.cpp/blob/8956c769e8ababd9fbd89c81764f241d5f515d68/tools/server/README.md"
+      ],
+      "models": [],
+      "note": "Current upstream CLI default is port 9931; older releases and Docker examples may use 8080. Anthropic tool use requires --jinja."
+    },
+    "omlx": {
+      "id": "omlx",
+      "name": "oMLX",
+      "status": "active",
+      "valid": true,
+      "vendor_family": "omlx",
+      "region": "self-hosted",
+      "plan": "standard",
+      "type": "self-hosted",
+      "description": "Local inference server for Apple Silicon with continuous batching and SSD-backed KV caching",
+      "website": "https://github.com/jundot/omlx",
+      "base_url_openai": "http://localhost:8000/v1",
+      "base_url_anthropic": "http://localhost:8000",
+      "no_key_required": true,
+      "supports_models_endpoint": true,
+      "icon": "omlx",
+      "last_updated": "2026-10-31",
+      "sources": [
+        "https://github.com/jundot/omlx/blob/5c6cbd6314cadba33f0db3f90f27dce6620831b4/README.md",
+        "https://github.com/jundot/omlx/blob/5c6cbd6314cadba33f0db3f90f27dce6620831b4/omlx/server.py"
+      ],
+      "models": [],
+      "note": "The default loopback server accepts keyless inference when no API key is configured; network binds require configured authentication."
     }
   }
 }

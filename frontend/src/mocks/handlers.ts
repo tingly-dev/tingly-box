@@ -4,6 +4,7 @@ import { projectsHandlers } from './projectsHandlers'
 import { resolveMockDataProfile } from './mockConfig'
 import { systemHandlers } from './systemHandlers'
 import { createSkillHandlers } from './skillHandlers'
+import providerCatalog from '../../../internal/catalog/providers.json'
 
 // ============================================
 // Mock Model Requests (correlated per-request traces)
@@ -520,9 +521,8 @@ const getMockProviderModels = (uuid: string): string[] => {
 // above, which is the *already-connected* provider list, and from
 // mockStandardProviderCatalog/mockOAuthProviderCatalog below, which back the
 // provider-management CRUD endpoints. Real data comes from the backend
-// catalog (dozens of entries); this is a small representative slice — one of
-// each region/type — just enough for the picker's every section to have
-// something to show in mock mode.
+// catalog (dozens of entries); this is a representative slice plus the complete
+// self-hosted catalog, so local presets and logos stay in sync in mock previews.
 const getMockProviderCatalogs = () => ({
     anthropic: {
         id: 'anthropic', name: 'Anthropic', status: 'active', valid: true,
@@ -586,13 +586,9 @@ const getMockProviderCatalogs = () => ({
         base_url_openai: 'https://api.deepseek.com', api_style: 'openai',
         region: 'cn', type: 'official', icon: 'deepseek',
     },
-    'self-hosted-ollama': {
-        id: 'self-hosted-ollama', name: 'Ollama (local)', status: 'active', valid: true,
-        website: '', description: 'Self-hosted via Ollama',
-        api_doc: '', model_doc: '', pricing_doc: '',
-        base_url_openai: 'http://localhost:11434/v1', api_style: 'openai',
-        region: 'self-hosted', type: 'self-hosted', icon: 'ollama',
-    },
+    ...Object.fromEntries(Object.entries(providerCatalog.providers).filter(
+        ([, provider]) => provider.region === 'self-hosted',
+    )),
     'aws-bedrock': {
         id: 'aws-bedrock', name: 'AWS Bedrock', status: 'active', valid: true,
         website: 'https://aws.amazon.com/bedrock', description: 'Amazon Bedrock — AWS SigV4 credentials',
