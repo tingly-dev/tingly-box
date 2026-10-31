@@ -110,7 +110,49 @@ func TestBuildCodexImageEditRequest_MaskIsAnError(t *testing.T) {
 	assert.Contains(t, err.Error(), "mask")
 }
 
-// The Responses tool returns one image per call, so n never reaches the wire:
+// The optional reasoning_effort extra field maps onto the Responses API
+// reasoning.effort; without it the field stays absent (pre-effort behavior).
+func TestBuildImageEditResponsesRequest_ReasoningEffort(t *testing.T) {
+	newReq := func() *openai.ImageEditParams {
+		req := &openai.ImageEditParams{Prompt: "x", Model: "gpt-image-2"}
+		req.Image.OfFile = openai.File(bytes.NewReader(testPNGBytes), "input.png", "image/png")
+		return req
+	}
+
+	req := newReq()
+	req.SetExtraFields(map[string]any{"reasoning_effort": "low"})
+	params, err := buildImageEditResponsesRequest(req)
+	require.NoError(t, err)
+	body, err := json.Marshal(params)
+	require.NoError(t, err)
+	assert.Equal(t, "low", gjson.ParseBytes(body).Get("reasoning.effort").String())
+
+	params, err = buildImageEditResponsesRequest(newReq())
+	require.NoError(t, err)
+	body, err = json.Marshal(params)
+	require.NoError(t, err)
+	assert.False(t, gjson.ParseBytes(body).Get("reasoning").Exists())
+}
+
+// Same mapping on the generation path: the extra field becomes
+// reasoning.effort on the Responses request, and no field means no reasoning.
+func TestBuildImageGenerationResponsesRequest_ReasoningEffort(t *testing.T) {
+	build := func(extras map[string]any) gjson.Result {
+		req := openai.ImageGenerateParams{Prompt: "a cat", Model: "gpt-image-1"}
+		if extras != nil {
+			req.SetExtraFields(extras)
+		}
+		params := (&CodexClient{}).buildImageGenerationResponsesRequest(req)
+		body, err := json.Marshal(params)
+		require.NoError(t, err)
+		return gjson.ParseBytes(body)
+	}
+
+	assert.Equal(t, "low", build(map[string]any{"reasoning_effort": "low"}).Get("reasoning.effort").String())
+	assert.False(t, build(nil).Get("reasoning").Exists())
+}
+
+// The Responses tool returns one image per call, so n never reaches the wire.
 // n > 1 is served by fanning the same request out (codex_images_fanout.go).
 func TestBuildImageEditResponsesRequest_NIgnored(t *testing.T) {
 	req := &openai.ImageEditParams{Prompt: "x", Model: "gpt-image-2", N: param.NewOpt(int64(3))}

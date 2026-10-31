@@ -6,7 +6,7 @@ import { loadPlaygroundSession, savePlaygroundSession } from '@/utils/playground
 import { reviveSessionBlobs, toSessionImage } from './imageGenSession';
 import { readImageSize } from './useImageGenRefs';
 import type { ReferenceImage } from './ImageGenReferenceImages';
-import type { Endpoint, GenerationRun, ImportedImage, Quality, ReferenceMask } from './ImageGenPlayground.types';
+import type { Effort, Endpoint, GenerationRun, ImportedImage, Quality, ReferenceMask } from './ImageGenPlayground.types';
 
 const IMAGE_SCENARIO = 'imagegen';
 
@@ -37,6 +37,8 @@ export interface GenerationRequest {
     model: string;
     size: string;
     quality: Quality;
+    // 'default' = omit reasoning_effort from the request entirely.
+    effort?: Effort;
     count: number;
     sources: { file: File; previewUrl: string; mask?: ReferenceMask }[];
     // Set when re-running a failed run: its card flips back to pending
@@ -143,6 +145,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
             model: request.model,
             size: request.size,
             quality: request.quality,
+            effort: request.effort,
             count: request.count,
             images: [],
             sourceImages: endpoint === 'edits' ? request.sources.map((ref) => ref.previewUrl) : undefined,
@@ -161,6 +164,11 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
             // The mask belongs to the first reference because that is the one
             // the API applies it to; nothing here chooses which image it is.
             const mask = request.sources[0]?.mask?.file;
+            // The pinned SDK typing has no reasoning_effort yet; the gateway
+            // accepts it on both endpoints and forwards it upstream.
+            const effortParam = request.effort && request.effort !== 'default'
+                ? { reasoning_effort: request.effort as any }
+                : {};
             const response = endpoint === 'edits'
                 ? await client.images.edit({
                     image: editFiles.length === 1 ? editFiles[0] : editFiles,
@@ -170,6 +178,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
                     n: request.count,
                     size: request.size as any,
                     quality: request.quality as any,
+                    ...effortParam,
                 }, { signal: controller.signal })
                 : await client.images.generate({
                     model: request.model,
@@ -177,6 +186,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
                     n: request.count,
                     size: request.size as any,
                     quality: request.quality,
+                    ...effortParam,
                 }, { signal: controller.signal });
             const images = (response.data ?? []).map(toSessionImage);
             updateRuns((currentRuns) => currentRuns.map((run) => (
@@ -239,6 +249,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
                 model: run.model,
                 size: run.size,
                 quality: run.quality,
+                effort: run.effort,
                 count: run.count ?? 1,
                 sources,
                 runId: run.id,

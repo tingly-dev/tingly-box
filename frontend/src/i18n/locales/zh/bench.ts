@@ -161,6 +161,8 @@ export default {
     "promptEditorDone": "完成",
     "size": "尺寸",
     "quality": "质量",
+    "effort": "思考力度",
+    "effortDefault": "默认（不发送）",
     "count": "数量",
     "generate": "生成",
     "generateAnother": "再生成一批 · {{count}} 个进行中",

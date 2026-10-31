@@ -24,6 +24,11 @@ export type Endpoint = 'generations' | 'edits';
 
 export type Quality = 'auto' | 'high' | 'medium' | 'low' | 'standard';
 
+// How much the model reasons before drawing. 'default' means the field is not
+// sent at all — identical to the pre-effort behavior; the others map onto the
+// images API `reasoning_effort` parameter (and the Responses API for Codex).
+export type Effort = 'default' | 'low' | 'medium' | 'high';
+
 export interface ImageResult {
     url?: string;
     b64_json?: string;
@@ -61,6 +66,7 @@ export interface GenerationRun {
     model: string;
     size: string;
     quality: Quality;
+    effort?: Effort;
     images: ImageResult[];
     // Data URLs of the reference images a run was built from, kept for display
     // alongside the output — the "what did I ask for" half of the history card
