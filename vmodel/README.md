@@ -224,7 +224,7 @@ extension UI and registry consumers can group by behavior:
 | `static` | Returns a fixed text response                                                                        | `virtual-claude-3`, `virtual-gpt-4`, `echo-model` |
 | `tool`   | Returns a `tool_use` / `tool_calls` block                                                           | `ask-user-question`, `ask-confirmation`, `web-search-example` |
 | `proxy`  | Applies a transform chain (no upstream call; same model also runs in real proxy paths)              | `compact-round-only`, `claude-code-compact`   |
-| `sequence` | Walks a configured program of per-request outcomes (status + content) to simulate a flaky upstream | `virtual-sequence-429`                       |
+| `sequence` | Walks a configured program of per-request outcomes (status, text, tool call, usage, mid-stream cut) to simulate a flaky upstream or a scripted agent loop | `virtual-sequence-429`, any `<config-dir>/vmodels/*.yaml` |
 
 ## Error models
 
@@ -542,6 +542,26 @@ distinct, monotonically advancing step.
 `virtual-sequence-429` (`200, 200, 429`) ships in **both** default registries
 as a user-facing demo for failover dry-runs. Construct your own
 `SequenceModel` for bespoke programs. See `.design/vmodel-sequence.md`.
+
+### Scripts (`<config-dir>/vmodels/*.yaml`)
+
+A sequence can also be written as a YAML file — no Go required. Drop it in
+`<config-dir>/vmodels/` and the model is callable on the next request (no
+restart, no API; edits restart its cursor, deleting the file removes it):
+
+```yaml
+# vmodels/read-edit.yaml → model "read-edit", on /messages AND /chat/completions
+steps:
+  - say: "Let me look at the file."
+    tool: {name: Read, arguments: {file_path: /tmp/a.go}}
+  - tool: {name: Edit, arguments: {file_path: /tmp/a.go, old_string: foo, new_string: bar}}
+  - 529                      # a bare number is an error status
+  - say: "Done."
+    usage: {input: 1200, output: 40}
+```
+
+Each protocol runs its own copy of the program (its own cursor), so calls on one
+wire never consume steps of the other. Schema, loading rules and phasing: `.design/vmodel-script.md`.
 
 ## Benchmarking (`benchmark/`)
 

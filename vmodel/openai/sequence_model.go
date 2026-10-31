@@ -42,7 +42,9 @@ var (
 	_ Snapshotter  = (*SequenceModel)(nil)
 )
 
-// NewSequenceModel constructs an OpenAI-protocol sequence model from cfg.
+// NewSequenceModel constructs an OpenAI-protocol sequence model from cfg. It
+// owns its cursor: the same script registered for the other protocol is an
+// independent run, so requests on one wire never consume steps of the other.
 func NewSequenceModel(cfg *vmodel.SequenceConfig) *SequenceModel {
 	description := cfg.Description
 	if description == "" {
@@ -79,12 +81,15 @@ func NewStatusSequence(id, name string, statuses ...int) *SequenceModel {
 func (m *SequenceModel) Snapshot() VirtualModel {
 	step := m.seq.Next()
 	return NewMockModel(&MockModelConfig{
-		ID:          m.ID,
-		Name:        m.Name,
-		Description: m.Description,
-		Content:     step.Content,
-		Delay:       m.Delay,
-		Error:       step.Error,
+		ID:           m.ID,
+		Name:         m.Name,
+		Description:  m.Description,
+		Content:      step.Content,
+		ToolCall:     step.Tool,
+		FinishReason: finishReason(step.StopReason),
+		Usage:        step.Usage,
+		Delay:        m.Delay,
+		Error:        step.Error,
 	})
 }
 
@@ -98,4 +103,19 @@ func (m *SequenceModel) HandleOpenAIChat(req *protocol.OpenAIChatCompletionReque
 // HandleOpenAIChatStream mirrors HandleOpenAIChat for the streaming path.
 func (m *SequenceModel) HandleOpenAIChatStream(ctx context.Context, req *protocol.OpenAIChatCompletionRequest, emit func(any)) error {
 	return m.Snapshot().HandleOpenAIChatStream(ctx, req, emit)
+}
+
+// finishReason renders the script's protocol-neutral stop reason (Anthropic's
+// vocabulary, see vmodel.StopReasons) as an OpenAI finish_reason. Empty stays
+// empty so NewMockModel applies its own default ("stop" / "tool_calls").
+func finishReason(stop string) string {
+	switch stop {
+	case "end_turn", "stop_sequence":
+		return "stop"
+	case "tool_use":
+		return "tool_calls"
+	case "max_tokens":
+		return "length"
+	}
+	return stop
 }
