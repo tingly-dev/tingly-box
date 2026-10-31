@@ -1,5 +1,5 @@
 import {Box} from '@mui/material';
-import {Claude, Gemini, Google, Kimi, OpenAI, Qwen, WorkBuddy, XAI, ZCode} from '../BrandIcons';
+import {Claude, Codex, Gemini, Google, Kimi, Qwen, WorkBuddy, XAI, ZCode} from '../BrandIcons';
 
 export interface OAuthProvider {
     id: string;
@@ -32,7 +32,7 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         name: 'Claude Code',
         displayName: 'Anthropic Claude Code',
         description: 'Access Claude Code models via OAuth',
-        icon: <Claude size={32}/>,
+        icon: <Claude size={32} grayscale={false}/>,
         color: '#D97757',
         enabled: true,
         callbackPort: 54545,
@@ -67,10 +67,10 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
     },
     {
         id: 'codex',
-        name: 'Codex',
-        displayName: 'OpenAI Codex',
+        name: 'Codex / ChatGPT',
+        displayName: 'OpenAI Codex / ChatGPT',
         description: 'Access OpenAI Codex via OAuth',
-        icon: <OpenAI size={32}/>,
+        icon: <Codex size={32} grayscale={false}/>,
         color: '#10A37F',
         enabled: true,
         callbackPort: 1455,
