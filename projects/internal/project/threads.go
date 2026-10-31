@@ -844,6 +844,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 	report := Report{Kind: ReportFinished, Text: strings.TrimSpace(tally.text)}
 	t, _ = m.update(threadID, func(t *db.Thread) {
 		t.Turns++
+		t.ReportedModel = tally.model
 		t.InputTokens += tally.inputTokens
 		t.OutputTokens += tally.outputTokens
 		// A session's Model is the owner's pick; a project thread shows the
