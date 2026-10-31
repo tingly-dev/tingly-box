@@ -102,10 +102,34 @@ func convertV1MessagesToResponsesInput(messages []anthropic.MessageParam) respon
 		} else if string(msg.Role) == "assistant" {
 			items := convertV1AssistantMessageToResponsesInput(msg)
 			inputItems = append(inputItems, items...)
+		} else if string(msg.Role) == "system" {
+			// Mid-conversation system message (issue #1921)
+			items := convertV1SystemMessageToResponsesInput(msg)
+			inputItems = append(inputItems, items...)
 		}
 	}
 
 	return inputItems
+}
+
+// convertV1SystemMessageToResponsesInput forwards a mid-conversation
+// role:"system" message, which Claude Code uses for its environment block and
+// token-budget notices (issue #1921), as a system input message at the same
+// position, in the same shape as the top-level system prefix. Only text is
+// carried; other blocks are skipped like any block Responses cannot represent,
+// and a message with no text left emits nothing.
+func convertV1SystemMessageToResponsesInput(msg anthropic.MessageParam) []responses.ResponseInputItemUnionParam {
+	var textBlocks []anthropic.TextBlockParam
+	for _, block := range msg.Content {
+		if block.OfText != nil {
+			textBlocks = append(textBlocks, *block.OfText)
+		}
+	}
+	parts := responsesTextParts(textBlocks)
+	if len(parts) == 0 {
+		return nil
+	}
+	return []responses.ResponseInputItemUnionParam{responseMessageWithContent("system", parts)}
 }
 
 // markFunctionCallOutputBreakpoint stamps a prompt-cache breakpoint on a

@@ -292,6 +292,9 @@ func convertAnthropicViewToOpenAIRequest(view anthropicRequestView, isStreaming 
 		case anthropic.MessageParamRoleAssistant:
 			// Convert assistant message with potential tool_use blocks
 			openaiReq.Messages = append(openaiReq.Messages, convertAnthropicViewAssistantToOpenAI(msg.Content))
+		case "system":
+			// Mid-conversation system message (issue #1921)
+			openaiReq.Messages = append(openaiReq.Messages, convertAnthropicViewSystemToOpenAI(msg.Content)...)
 		}
 	}
 
@@ -498,6 +501,25 @@ func convertAnthropicViewUserToOpenAI(blocks []anthropic.ContentBlockParamUnion)
 	}
 
 	return result
+}
+
+// convertAnthropicViewSystemToOpenAI forwards a mid-conversation role:"system"
+// message, which Claude Code uses for its environment block and token-budget
+// notices (issue #1921), as a system message at the same position. Only text is
+// carried; other blocks are skipped like any block Chat cannot represent, and a
+// message with no text left emits nothing.
+func convertAnthropicViewSystemToOpenAI(blocks []anthropic.ContentBlockParamUnion) []openai.ChatCompletionMessageParamUnion {
+	parts := make([]openai.ChatCompletionContentPartTextParam, 0, len(blocks))
+	for _, block := range blocks {
+		if block.OfText == nil || block.OfText.Text == "" {
+			continue
+		}
+		parts = append(parts, openAITextPart(block.OfText.Text, hasAnthropicCacheControl(block.OfText.CacheControl)))
+	}
+	if len(parts) == 0 {
+		return nil
+	}
+	return []openai.ChatCompletionMessageParamUnion{openai.SystemMessage(parts)}
 }
 
 // openAIToolMessageFromAnthropicToolResult converts a normalized tool_result
