@@ -1207,6 +1207,11 @@ export interface components {
             attachments?: string[];
             /** @description Field content */
             content: string;
+            /**
+             * @description Field effort
+             * @enum {string}
+             */
+            effort?: "" | "low" | "medium" | "high" | "max";
             /** @description Field model */
             model?: string;
             /** @description Field permission_mode */

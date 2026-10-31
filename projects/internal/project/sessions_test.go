@@ -23,7 +23,7 @@ func TestFolderThreadRunsInItsFolder(t *testing.T) {
 		return nil
 	})
 	folder := t.TempDir()
-	s, err := f.startFolder(folder, FolderThreadSpec{Task: "what is here?", PermissionMode: "plan"})
+	s, err := f.startFolder(folder, FolderThreadSpec{Task: "what is here?", PermissionMode: "plan", Effort: "high"})
 	require.NoError(t, err)
 	folderProject, err := f.store.FindFolder(folder)
 	require.NoError(t, err)
@@ -41,6 +41,8 @@ func TestFolderThreadRunsInItsFolder(t *testing.T) {
 	assert.Equal(t, "default-model", spec.Model)
 	assert.Equal(t, folder, spec.ProjectPath)
 	assert.Equal(t, "plan", spec.PermissionMode)
+	assert.Equal(t, "high", spec.Effort)
+	assert.Equal(t, "high", got.EffortOverride)
 	assert.Empty(t, spec.AppendSystemPrompt, "no project instructions")
 	assert.Equal(t, f.threads.layout.SessionSettingsFile(s.ID), spec.SettingsPath, "a session reads its own uploads")
 	assert.Contains(t, spec.Env, "ANTHROPIC_BASE_URL=http://gw")
@@ -82,6 +84,8 @@ func TestSessionNeedsAFolderAndAMode(t *testing.T) {
 	}
 	_, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "x", PermissionMode: "yolo"})
 	assert.ErrorIs(t, err, ErrBadPermission)
+	_, err = f.startFolder(t.TempDir(), FolderThreadSpec{Task: "x", Effort: "invalid"})
+	assert.Error(t, err)
 	_, err = f.startFolder(t.TempDir(), FolderThreadSpec{Task: "  "})
 	assert.Error(t, err)
 }

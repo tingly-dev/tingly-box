@@ -251,12 +251,12 @@ export default function WorkdirPage() {
         return uploadAttachments({ draftFolderId: f.id }, files);
     };
 
-    const create = async (path: string, content: string, permission_mode: string, launch: SessionLaunch, attachments: Attachment[]): Promise<boolean> => {
+    const create = async (path: string, content: string, permission_mode: string, launch: SessionLaunch, attachments: Attachment[], effort: components['schemas']['EffortRequest']['effort']): Promise<boolean> => {
         try {
             const f = await openFolder(path);
             const s = await unwrap(api.POST('/api/v1/projects/{id}/threads', {
                 params: { path: { id: f.id } },
-                body: { content, attachments: attachments.map((a) => a.path), permission_mode: permission_mode || undefined, profile: launch.profile || undefined, model: launch.model || undefined },
+                body: { content, attachments: attachments.map((a) => a.path), permission_mode: permission_mode || undefined, profile: launch.profile || undefined, model: launch.model || undefined, effort: effort || undefined },
             }));
             // Picked another folder than the one open: go to that folder.
             if (scope && s.cwd !== scope) {

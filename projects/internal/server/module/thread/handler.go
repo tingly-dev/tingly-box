@@ -37,6 +37,8 @@ type CreateThreadRequest struct {
 	Title       string   `json:"title,omitempty"`
 	// Model is empty for the host's default.
 	Model string `json:"model,omitempty"`
+	// Effort applies to the first turn; empty uses the CLI default.
+	Effort string `json:"effort,omitempty" enum:",low,medium,high,max"`
 	// PermissionMode is empty to inherit the default (acceptEdits).
 	PermissionMode string `json:"permission_mode,omitempty"`
 	// Profile is the host's launch profile; empty for its default. Only
@@ -353,7 +355,7 @@ func (h *Handler) create(c *gin.Context) {
 		return
 	}
 	t, err := h.svc.Threads.StartFolderThread(rt.FolderThreadSpec{
-		ProjectID: c.Param("id"), Task: req.Content, Attachments: atts, Title: req.Title, Model: req.Model,
+		ProjectID: c.Param("id"), Task: req.Content, Attachments: atts, Title: req.Title, Model: req.Model, Effort: req.Effort,
 		PermissionMode: req.PermissionMode, Profile: req.Profile,
 	})
 	if err != nil {

@@ -2721,6 +2721,17 @@
             "type": "string",
             "description": "Field content"
           },
+          "effort": {
+            "type": "string",
+            "description": "Field effort",
+            "enum": [
+              "",
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
+          },
           "model": {
             "type": "string",
             "description": "Field model"

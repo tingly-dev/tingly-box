@@ -427,8 +427,8 @@ export const projectsHandlers = [
     http.post('/api/v1/projects/:id/threads', async ({ params, request }) => {
         const f = find(params.id as string)
         if (!f || f.type !== 'folder') return HttpResponse.json({ error: 'only a folder starts threads directly' }, { status: 400 })
-        const body = (await request.json()) as { content: string; permission_mode?: string }
-        const s = session({ id: `s-${Date.now()}`, title: body.content.slice(0, 60), status: 'working', cwd: f.path!, task: body.content, permission_mode: body.permission_mode, turns: 0, updated_at: ago(0) })
+        const body = (await request.json()) as { content: string; effort?: string; permission_mode?: string; profile?: string; model?: string }
+        const s = session({ id: `s-${Date.now()}`, title: body.content.slice(0, 60), status: 'working', cwd: f.path!, task: body.content, permission_mode: body.permission_mode, effort_override: body.effort, profile: body.profile, model: body.model, turns: 0, updated_at: ago(0) })
         sessions.unshift(s)
         return HttpResponse.json(s, { status: 201 })
     }),
