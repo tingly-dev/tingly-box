@@ -22,6 +22,7 @@ func TextScenario() Scenario {
 		},
 		Assertions: []check.Assertion{
 			check.AssertResponsesItemIDsCanonical(),
+			check.AssertResponsesMessageItemsHaveContent(),
 			check.AssertHTTPStatus(200),
 			check.AssertRoleEquals("assistant"),
 			check.AssertContentContains("Paris"),
@@ -364,6 +365,7 @@ func StreamingTextScenario() Scenario {
 		},
 		Assertions: []check.Assertion{
 			check.AssertResponsesItemIDsCanonical(),
+			check.AssertResponsesMessageItemsHaveContent(),
 			check.AssertHTTPStatus(200),
 			check.AssertStreamEventCount(3),
 			check.AssertRoleEquals("assistant"),
@@ -405,6 +407,177 @@ func StreamingToolUseScenario() Scenario {
 			check.AssertStreamEventCount(1),
 			check.AssertHasToolCalls(1),
 		},
+	}
+}
+
+// ─── Streaming Parallel Tool Use ──────────────────────────────────────────────
+
+// StreamingParallelToolUseScenario tests SSE streaming of two tool calls in
+// one assistant turn. Clients must see them as two distinct calls: Chat
+// tool_calls[].index has to be 0 and 1, not 0 twice (which merges the calls
+// and concatenates their arguments into invalid JSON).
+func StreamingParallelToolUseScenario() Scenario {
+	return Scenario{
+		Name:        "streaming_parallel_tool_use",
+		Description: "Streaming parallel tool use: two tool calls in one turn, each with its own index",
+		Tags:        []string{"tool_use", "streaming", "parallel"},
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatOpenAIChat:      openAIParallelToolUseResponse(),
+			FormatOpenAIResponses: openAIResponsesParallelToolUseResponse(),
+			FormatAnthropic:       anthropicParallelToolUseResponse(),
+			FormatGoogle:          googleParallelToolUseResponse(),
+		},
+		Assertions: []check.Assertion{
+			check.AssertResponsesItemIDsCanonical(),
+			check.AssertHTTPStatus(200),
+			check.AssertHasToolCalls(2),
+			check.AssertToolCallName(0, "get_weather"),
+			check.AssertToolCallArgs(0, "location", "Paris"),
+			check.AssertToolCallName(1, "get_time"),
+			check.AssertToolCallArgs(1, "timezone", "Europe/Paris"),
+		},
+		Structural: []check.Assertion{
+			check.AssertHTTPStatus(200),
+			check.AssertHasToolCalls(2),
+		},
+	}
+}
+
+func openAIParallelToolUseResponse() MockResponseBuilder {
+	body := map[string]interface{}{
+		"id":      "chatcmpl-validate-ptool",
+		"object":  "chat.completion",
+		"created": time.Now().Unix(),
+		"model":   "gpt-4o",
+		"choices": []map[string]interface{}{{
+			"index": 0,
+			"message": map[string]interface{}{
+				"role":    "assistant",
+				"content": nil,
+				"tool_calls": []map[string]interface{}{
+					{"id": "call_validate_weather_1", "type": "function", "function": map[string]interface{}{"name": "get_weather", "arguments": `{"location":"Paris"}`}},
+					{"id": "call_validate_time_1", "type": "function", "function": map[string]interface{}{"name": "get_time", "arguments": `{"timezone":"Europe/Paris"}`}},
+				},
+			},
+			"finish_reason": "tool_calls",
+		}},
+		"usage": map[string]interface{}{"prompt_tokens": 15, "completion_tokens": 30, "total_tokens": 45},
+	}
+	return MockResponseBuilder{
+		NonStream: func() (int, []byte) { return 200, mustMarshal(body) },
+		Stream:    openAIParallelToolUseSSE,
+	}
+}
+
+func openAIParallelToolUseSSE() []string {
+	return []string{
+		`data: {"id":"chatcmpl-validate-ptool","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{"role":"assistant","content":null,"tool_calls":[{"index":0,"id":"call_validate_weather_1","type":"function","function":{"name":"get_weather","arguments":""}}]},"finish_reason":null}]}`,
+		`data: {"id":"chatcmpl-validate-ptool","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"location\":\"Paris\"}"}}]},"finish_reason":null}]}`,
+		`data: {"id":"chatcmpl-validate-ptool","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"call_validate_time_1","type":"function","function":{"name":"get_time","arguments":""}}]},"finish_reason":null}]}`,
+		`data: {"id":"chatcmpl-validate-ptool","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"{\"timezone\":\"Europe/Paris\"}"}}]},"finish_reason":"tool_calls"}]}`,
+		`data: [DONE]`,
+	}
+}
+
+func openAIResponsesParallelToolUseResponse() MockResponseBuilder {
+	body := map[string]interface{}{
+		"id":         "resp-validate-ptool",
+		"object":     "realtime.response",
+		"created_at": time.Now().Unix(),
+		"model":      "gpt-4o",
+		"status":     "completed",
+		"output": []map[string]interface{}{
+			{"id": "call-validate-weather", "type": "function_call", "call_id": "call_validate_weather_1", "name": "get_weather", "arguments": `{"location":"Paris"}`},
+			{"id": "call-validate-time", "type": "function_call", "call_id": "call_validate_time_1", "name": "get_time", "arguments": `{"timezone":"Europe/Paris"}`},
+		},
+		"usage": map[string]interface{}{"input_tokens": 15, "output_tokens": 30, "total_tokens": 45},
+	}
+	return MockResponseBuilder{
+		NonStream: func() (int, []byte) { return 200, mustMarshal(body) },
+		Stream:    openAIResponsesParallelToolUseSSE,
+	}
+}
+
+func openAIResponsesParallelToolUseSSE() []string {
+	return []string{
+		`data: {"type":"response.created","response":{"id":"resp-validate-ptool","object":"realtime.response","created_at":1700000000,"model":"gpt-4o","status":"in_progress","output":[]}}`,
+		`data: {"type":"response.output_item.added","response_id":"resp-validate-ptool","output_index":0,"item":{"id":"call-validate-weather","type":"function_call","call_id":"call_validate_weather_1","name":"get_weather","arguments":"","status":"in_progress"}}`,
+		`data: {"type":"response.function_call_arguments.delta","response_id":"resp-validate-ptool","item_id":"call-validate-weather","output_index":0,"delta":"{\"location\":\"Paris\"}"}`,
+		`data: {"type":"response.function_call_arguments.done","response_id":"resp-validate-ptool","item_id":"call-validate-weather","output_index":0,"arguments":"{\"location\":\"Paris\"}"}`,
+		`data: {"type":"response.output_item.done","response_id":"resp-validate-ptool","output_index":0,"item":{"id":"call-validate-weather","type":"function_call","call_id":"call_validate_weather_1","name":"get_weather","arguments":"{\"location\":\"Paris\"}","status":"completed"}}`,
+		`data: {"type":"response.output_item.added","response_id":"resp-validate-ptool","output_index":1,"item":{"id":"call-validate-time","type":"function_call","call_id":"call_validate_time_1","name":"get_time","arguments":"","status":"in_progress"}}`,
+		`data: {"type":"response.function_call_arguments.delta","response_id":"resp-validate-ptool","item_id":"call-validate-time","output_index":1,"delta":"{\"timezone\":\"Europe/Paris\"}"}`,
+		`data: {"type":"response.function_call_arguments.done","response_id":"resp-validate-ptool","item_id":"call-validate-time","output_index":1,"arguments":"{\"timezone\":\"Europe/Paris\"}"}`,
+		`data: {"type":"response.output_item.done","response_id":"resp-validate-ptool","output_index":1,"item":{"id":"call-validate-time","type":"function_call","call_id":"call_validate_time_1","name":"get_time","arguments":"{\"timezone\":\"Europe/Paris\"}","status":"completed"}}`,
+		`data: {"type":"response.completed","response":{"id":"resp-validate-ptool","object":"realtime.response","created_at":1700000000,"model":"gpt-4o","status":"completed","output":[{"id":"call-validate-weather","type":"function_call","call_id":"call_validate_weather_1","name":"get_weather","arguments":"{\"location\":\"Paris\"}"},{"id":"call-validate-time","type":"function_call","call_id":"call_validate_time_1","name":"get_time","arguments":"{\"timezone\":\"Europe/Paris\"}"}],"usage":{"input_tokens":15,"output_tokens":30,"total_tokens":45}}}`,
+		`data: [DONE]`,
+	}
+}
+
+func anthropicParallelToolUseResponse() MockResponseBuilder {
+	body := map[string]interface{}{
+		"id":   "msg-validate-ptool",
+		"type": "message",
+		"role": "assistant",
+		"content": []map[string]interface{}{
+			{"type": "tool_use", "id": "toolu_validate_weather_1", "name": "get_weather", "input": map[string]interface{}{"location": "Paris"}},
+			{"type": "tool_use", "id": "toolu_validate_time_1", "name": "get_time", "input": map[string]interface{}{"timezone": "Europe/Paris"}},
+		},
+		"model":       "claude-3-5-sonnet-20241022",
+		"stop_reason": "tool_use",
+		"usage":       map[string]interface{}{"input_tokens": 15, "output_tokens": 30},
+	}
+	return MockResponseBuilder{
+		NonStream: func() (int, []byte) { return 200, mustMarshal(body) },
+		Stream:    anthropicParallelToolUseSSE,
+	}
+}
+
+func anthropicParallelToolUseSSE() []string {
+	return []string{
+		`event: message_start`,
+		`data: {"type":"message_start","message":{"id":"msg-validate-ptool","type":"message","role":"assistant","content":[],"model":"claude-3-5-sonnet-20241022","stop_reason":null,"usage":{"input_tokens":15,"output_tokens":0}}}`,
+		`event: content_block_start`,
+		`data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_validate_weather_1","name":"get_weather","input":{}}}`,
+		`event: content_block_delta`,
+		`data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"location\":\"Paris\"}"}}`,
+		`event: content_block_stop`,
+		`data: {"type":"content_block_stop","index":0}`,
+		`event: content_block_start`,
+		`data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_validate_time_1","name":"get_time","input":{}}}`,
+		`event: content_block_delta`,
+		`data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"timezone\":\"Europe/Paris\"}"}}`,
+		`event: content_block_stop`,
+		`data: {"type":"content_block_stop","index":1}`,
+		`event: message_delta`,
+		`data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":30}}`,
+		`event: message_stop`,
+		`data: {"type":"message_stop"}`,
+	}
+}
+
+func googleParallelToolUseResponse() MockResponseBuilder {
+	body := googleParallelToolUseBody()
+	return MockResponseBuilder{
+		NonStream: func() (int, []byte) { return 200, mustMarshal(body) },
+		Stream:    func() []string { return []string{"data: " + string(mustMarshal(body))} },
+	}
+}
+
+func googleParallelToolUseBody() map[string]interface{} {
+	return map[string]interface{}{
+		"candidates": []map[string]interface{}{{
+			"content": map[string]interface{}{
+				"role": "model",
+				"parts": []map[string]interface{}{
+					{"functionCall": map[string]interface{}{"name": "get_weather", "args": map[string]interface{}{"location": "Paris"}}},
+					{"functionCall": map[string]interface{}{"name": "get_time", "args": map[string]interface{}{"timezone": "Europe/Paris"}}},
+				},
+			},
+			"finishReason": "STOP",
+			"index":        0,
+		}},
+		"usageMetadata": map[string]interface{}{"promptTokenCount": 15, "candidatesTokenCount": 30, "totalTokenCount": 45},
 	}
 }
 
