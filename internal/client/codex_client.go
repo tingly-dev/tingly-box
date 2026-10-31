@@ -483,10 +483,14 @@ func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ss
 	var imageCallID string
 	var failure codexImageFailure
 
+streamLoop:
 	for stream.Next() {
 		event := stream.Current()
 
 		switch event.Type {
+		case "response.completed":
+			// The response is complete even if the server leaves the SSE connection open.
+			break streamLoop
 		case "response.image_generation_call.partial_image":
 			partialEvent := event.AsResponseImageGenerationCallPartialImage()
 			if partialEvent.PartialImageB64 != "" {
