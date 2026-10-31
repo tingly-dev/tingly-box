@@ -10,8 +10,6 @@ export interface AgentObservation {
     errorsToday: number;
 }
 
-const REFRESH_MS = 30_000;
-
 /**
  * Read-only glance at an agent's traffic, from the existing usage endpoints
  * (the newest usage record + today's usage stats, both filtered by scenario) —
@@ -55,15 +53,13 @@ export function useAgentObservation(scenario: string): { data: AgentObservation 
     useEffect(() => {
         setData(null);
         void refresh();
+        // No background polling: the numbers load with the page and again when
+        // the window regains focus.
         const onFocus = () => void refresh();
         window.addEventListener('focus', onFocus);
-        const timer = window.setInterval(() => {
-            if (document.visibilityState === 'visible') void refresh();
-        }, REFRESH_MS);
         return () => {
             seq.current++;
             window.removeEventListener('focus', onFocus);
-            window.clearInterval(timer);
         };
     }, [refresh]);
 

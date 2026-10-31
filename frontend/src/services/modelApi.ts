@@ -11,7 +11,8 @@
 // openapi.ts's generated client (not api.ts) to avoid a circular import.
 import { host } from '@/host';
 import {getApiBaseUrl} from '@/utils/protocol';
-import OpenAI from 'openai';
+// Type only: the SDK (~370 KB) loads on first use, not with every page.
+import type OpenAI from 'openai';
 import {controlApi} from './openapi';
 
 // Get model token for OpenAI/Anthropic API from localStorage
@@ -66,7 +67,8 @@ export const getOpenAIClient = async (scenario: string): Promise<OpenAI> => {
     const base = await getApiBaseUrl();
     const result = await controlApi((client, headers) => client.GET('/api/v1/token', {headers}));
     const apiKey = result?.token ?? '';
-    return new OpenAI({
+    const { default: OpenAIClient } = await import('openai');
+    return new OpenAIClient({
         baseURL: `${base}/tingly/${scenario}/v1`,
         apiKey,
         dangerouslyAllowBrowser: true,

@@ -95,7 +95,8 @@ const AILogViewer = ({ getRequests, getRequestDetail, getTrace, scenario }: Requ
     const [search, setSearch] = useState('');
     const [errorsOnly, setErrorsOnly] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [autoRefresh, setAutoRefresh] = useState(true);
+    // Off by default: a log only refetches when asked (switch or refresh button).
+    const [autoRefresh, setAutoRefresh] = useState(false);
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [detailState, setDetailState] = useState<{ id: string; detail?: ModelRequestDetail; error?: string }>();
     const [detailVersion, setDetailVersion] = useState(0);
