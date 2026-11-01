@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -43,7 +44,8 @@ type Coordinator struct {
 	llm     LLMSource
 	// OnFinal is called with each finished coordinator reply, thread report
 	// and error, once, in order. It must not block.
-	OnFinal func(db.ThreadEvent)
+	OnFinal     func(db.ThreadEvent)
+	PublishFile func(context.Context, string, string, string) (*db.ThreadEvent, error)
 
 	mu     sync.Mutex
 	queues map[string]*queue
@@ -502,6 +504,7 @@ func coordinatorTools() []llm.Tool {
 		"repo":  str("Optional. Path of the project repository to work in; \"none\" for no repository."),
 	}
 	return []llm.Tool{
+		{Name: "send_file", Description: "Publish a file from the project library to the conversation.", Properties: map[string]any{"path": str("File path in the project library."), "caption": str("Optional description.")}, Required: []string{"path"}},
 		{Name: "start_thread", Description: "Start a new thread (a Claude Code session on its own branch) for one task.", Properties: threadSpec, Required: []string{"title", "task"}},
 		{Name: "propose_threads", Description: "Propose threads for the user to start, instead of starting them. Use when the user wants to review a plan first.",
 			Properties: map[string]any{"threads": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": threadSpec, "required": []string{"title", "task"}}}},
@@ -575,6 +578,7 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, call llm.ToolC
 		Message           string
 		Topic, Content    string
 		Summary, File     string
+		Path, Caption     string
 		Instructions      string
 		Cite              []string
 		Decision
@@ -584,6 +588,19 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, call llm.ToolC
 	}
 	fail := func(err error) (string, bool, []string) { return err.Error(), true, nil }
 	switch call.Name {
+	case "send_file":
+		if c.PublishFile == nil {
+			return "file publishing is unavailable", true, nil
+		}
+		path := in.Path
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(c.layout.LibraryDir(p.ID), path)
+		}
+		e, err := c.PublishFile(ctx, p.MainThreadID, path, in.Caption)
+		if err != nil {
+			return fail(err)
+		}
+		return "Published file to the conversation: " + e.ID, false, nil
 	case "start_thread":
 		if strings.TrimSpace(in.Task) == "" {
 			return "task is required", true, nil

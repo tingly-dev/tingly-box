@@ -117,6 +117,17 @@ func (a *App) Register(api *swagger.RouteGroup) {
 	module.Mount(&module.Routes{API: api}, a.mods...)
 }
 
+// PublishFile publishes a local output file to a thread's conversation. The
+// caller supplies the trusted thread identity; the file is copied into the
+// project's library and the returned ID identifies the conversation event.
+func (a *App) PublishFile(ctx context.Context, threadID, path, caption string) (string, error) {
+	e, err := a.svc.PublishFile(ctx, threadID, path, caption)
+	if err != nil {
+		return "", err
+	}
+	return e.ID, nil
+}
+
 // PostFromChannel hands a message typed in an IM chat to the thread the chat
 // is bound to (a project's main thread is its coordinator), as Send does (replies come back
 // through the host's ChannelSink). handled is false when the chat is not
@@ -272,6 +283,7 @@ func (a *App) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	a.svc.Threads.Shutdown(ctx)
+	_ = a.svc.CloseTools(ctx)
 	return a.store.Close()
 }
 
