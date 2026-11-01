@@ -606,8 +606,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Archive (resolve) the thread; it stays readable and can be reopened
-         * @description Archive (resolve) the thread; it stays readable and can be reopened
+         * Archive a folder session, stopping its process without resolving it
+         * @description Archive a folder session, stopping its process without resolving it
          */
         post: operations["apiV1ThreadsIdArchivePost"];
         delete?: never;
@@ -926,10 +926,30 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Reopen an archived thread
-         * @description Reopen an archived thread
+         * Reopen a resolved thread
+         * @description Reopen a resolved thread
          */
         post: operations["apiV1ThreadsIdReopenPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve the thread; it stays readable and can be reopened
+         * @description Resolve the thread; it stays readable and can be reopened
+         */
+        post: operations["apiV1ThreadsIdResolvePost"];
         delete?: never;
         options?: never;
         head?: never;
@@ -950,6 +970,26 @@ export interface paths {
          * @description Answer a permission request or question the thread is waiting on
          */
         post: operations["apiV1ThreadsIdRespondPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore an archived folder session without changing its status
+         * @description Restore an archived folder session without changing its status
+         */
+        post: operations["apiV1ThreadsIdRestorePost"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1726,6 +1766,11 @@ export interface components {
         Thread: {
             /** @description Field agent */
             agent: string;
+            /**
+             * Format: date-time
+             * @description Field archived_at
+             */
+            archived_at?: string;
             /** @description Field auto_answer */
             auto_answer?: string;
             /** @description Field base_branch */
@@ -3443,6 +3488,29 @@ export interface operations {
             };
         };
     };
+    apiV1ThreadsIdResolvePost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
+                };
+            };
+        };
+    };
     apiV1ThreadsIdRespondPost: {
         parameters: {
             query?: never;
@@ -3459,6 +3527,29 @@ export interface operations {
                 "application/json": components["schemas"]["ThreadRespondRequest"];
             };
         };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdRestorePost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful response */
             200: {

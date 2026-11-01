@@ -22,10 +22,11 @@ import (
 
 // Errors returned to callers (mapped to HTTP statuses by the module).
 var (
-	ErrPaused   = errors.New("the project is paused; resume it first")
-	ErrArchived = errors.New("the project is archived; unarchive it first")
-	ErrResolved = errors.New("the thread is resolved; reopen it first")
-	ErrNoPrompt = errors.New("no pending request with that id")
+	ErrPaused         = errors.New("the project is paused; resume it first")
+	ErrArchived       = errors.New("the project is archived; unarchive it first")
+	ErrThreadArchived = errors.New("the session is archived; restore it first")
+	ErrResolved       = errors.New("the thread is resolved; reopen it first")
+	ErrNoPrompt       = errors.New("no pending request with that id")
 	// ErrNotProject is for starting a worker in a project that is a folder.
 	ErrNotProject = errors.New("only a project's main thread starts threads in it")
 	// ErrMainThread is for running a main thread as an agent session.
@@ -538,6 +539,9 @@ func (m *Threads) sendable(threadID string) (*db.Thread, error) {
 	if p.Paused {
 		return nil, ErrPaused
 	}
+	if t.ArchivedAt != nil {
+		return nil, ErrThreadArchived
+	}
 	if t.Status == db.ThreadResolved {
 		return nil, ErrResolved
 	}
@@ -933,8 +937,8 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		if session {
 			t.HeadBranch = head
 		}
-		if t.Status == db.ThreadResolved {
-			// Resolved while the turn was ending: that decision stands.
+		if t.Status == db.ThreadResolved || t.ArchivedAt != nil {
+			// A finish or archive decision made while the turn ended stands.
 			return
 		}
 		t.WaitReason = ""
@@ -962,7 +966,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 			t.LastReport = report.Text
 		}
 	})
-	if t == nil || t.Status == db.ThreadResolved {
+	if t == nil || t.Status == db.ThreadResolved || t.ArchivedAt != nil {
 		return
 	}
 	switch {
@@ -1063,6 +1067,32 @@ func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
 		m.releaseChats(t)
 	}
 	return t, err
+}
+
+// ArchiveSession stores an independent archive flag. A stopped waiting or
+// working session becomes idle: there is no longer a live request to answer.
+func (m *Threads) ArchiveSession(threadID string) (*db.Thread, error) {
+	if done := m.stop(threadID); done != nil {
+		select {
+		case <-done:
+		case <-time.After(agentboot.SessionCloseTimeout):
+		}
+	}
+	m.engine.Evict(m.sessionOf(threadID))
+	return m.update(threadID, func(t *db.Thread) {
+		if t.ArchivedAt == nil {
+			now := time.Now()
+			t.ArchivedAt = &now
+		}
+		if t.Status == db.ThreadWaiting || t.Status == db.ThreadWorking {
+			t.Status, t.WaitReason = db.ThreadIdle, ""
+		}
+	})
+}
+
+// RestoreSession returns an archived session to the list in its stored state.
+func (m *Threads) RestoreSession(threadID string) (*db.Thread, error) {
+	return m.update(threadID, func(t *db.Thread) { t.ArchivedAt = nil })
 }
 
 // releaseChats hands the chats focused on a finished thread back to its

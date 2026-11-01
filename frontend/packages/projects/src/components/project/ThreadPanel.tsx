@@ -159,7 +159,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     // The handoff command stays on screen with its own copy button, since
     // copying right after the request can be refused by the browser.
     const [handoff, setHandoff] = useState<string | null>(null);
-    const [confirm, setConfirm] = useState<'archive' | 'handoff' | null>(null);
+    const [confirm, setConfirm] = useState<'resolve' | 'archive' | 'handoff' | null>(null);
     const [acting, setActing] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
@@ -302,19 +302,22 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
             return false;
         }
     };
-    const runConfirmed = async (what: 'archive' | 'handoff') => {
+    const runConfirmed = async (what: 'resolve' | 'archive' | 'handoff') => {
         setActing(true);
-        const done = what === 'archive'
-            ? await act(ops.finish)
+        const done = what === 'resolve' ? await act(ops.finish)
+            : what === 'archive' ? await act(ops.archiveSession)
             : await act(async () => setHandoff(await ops.handoff()));
         setActing(false);
-        if (done) setConfirm(null);
+        if (done) {
+            setConfirm(null);
+            if (what !== 'handoff') onRefresh?.();
+        }
     };
-    // Archiving or handing off ends the process and every background task it
+    // Resolving or handing off ends the process and every background task it
     // runs: ask first while any is running.
-    const guarded = (what: 'archive' | 'handoff') => {
+    const guarded = (what: 'resolve' | 'archive' | 'handoff') => {
         setMenu(null);
-        if (liveTasks.length > 0) setConfirm(what);
+        if (liveTasks.length > 0 || (what === 'archive' && running)) setConfirm(what);
         else void runConfirmed(what);
     };
     // Renaming is metadata: it persists at once and the thread's next event
@@ -367,14 +370,17 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         {session && !rail && <MenuItem onClick={() => { setTasksAnchor(menu); setMenu(null); }}>{t('session.backgroundTasks')}</MenuItem>}
                         {wide && railTop == null && <MenuItem onClick={() => { setMenu(null); toggleRail(); }}>{railOn ? t('rail.hide') : t('rail.show')}</MenuItem>}
                         {subagents && <MenuItem onClick={() => { setAgentsAnchor(menu); setMenu(null); }}>{t('subagents.title')}</MenuItem>}
-                        {session && thread.status !== 'resolved' && (
+                        {session && !thread.archived_at && thread.status !== 'resolved' && (
                             <MenuItem disabled={running || acting} onClick={() => guarded('handoff')}>{running ? t('session.handoffBusy') : t('session.handoff')}</MenuItem>
                         )}
-                        {/* Finishing sits in the menu, apart from the buttons used all the time: a stray click cannot archive. */}
+                        {/* Finishing sits in the menu, apart from the buttons used all the time: a stray click cannot resolve it. */}
                         <Divider />
-                        {thread.status !== 'resolved'
-                            ? <MenuItem disabled={acting} onClick={() => { setMenu(null); if (session) guarded('archive'); else void act(ops.finish); }}>{t(session ? 'session.archive' : 'thread.resolve')}</MenuItem>
-                            : <MenuItem disabled={acting} onClick={() => { setMenu(null); void act(ops.reopen); }}>{t(session ? 'session.reopen' : 'thread.reopen')}</MenuItem>}
+                        {!thread.archived_at && (thread.status !== 'resolved'
+                            ? <MenuItem disabled={acting} onClick={() => { setMenu(null); if (session) guarded('resolve'); else void act(ops.finish); }}>{t(session ? 'session.resolve' : 'thread.resolve')}</MenuItem>
+                            : <MenuItem disabled={acting} onClick={() => { setMenu(null); void act(ops.reopen).then((ok) => { if (ok) onRefresh?.(); }); }}>{t(session ? 'session.reopen' : 'thread.reopen')}</MenuItem>)}
+                        {session && (thread.archived_at
+                            ? <MenuItem disabled={acting} onClick={() => { setMenu(null); void act(ops.restoreSession).then((ok) => { if (ok) onRefresh?.(); }); }}>{t('session.restore')}</MenuItem>
+                            : <MenuItem disabled={acting} onClick={() => guarded('archive')}>{t('session.archive')}</MenuItem>)}
                         {/* Run details, for when they matter: kept off the header. */}
                         {(thread.model || thread.input_tokens > 0 || thread.output_tokens > 0) && <Divider />}
                         {(thread.model || thread.input_tokens > 0 || thread.output_tokens > 0) && (
@@ -500,7 +506,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     }}
                     canSubmit={!settingsSaving}
                     disabled={disabled || thread.status === 'resolved'}
-                    placeholder={thread.status === 'resolved' ? t(session ? 'session.archivedPlaceholder' : 'thread.resolvedPlaceholder') : running ? t(session ? 'session.queuePlaceholder' : 'thread.queuePlaceholder') : t(session ? 'session.placeholder' : 'thread.placeholder')}
+                    placeholder={thread.archived_at ? t('session.archivedPlaceholder') : thread.status === 'resolved' ? t(session ? 'session.resolvedPlaceholder' : 'thread.resolvedPlaceholder') : running ? t(session ? 'session.queuePlaceholder' : 'thread.queuePlaceholder') : t(session ? 'session.placeholder' : 'thread.placeholder')}
                     attach={(files) => uploadAttachments(owner, files)}
                     onSend={async (text, attachments, mode) => {
                         if (settingsSaving || (canSend && !canSend())) return false;
@@ -532,11 +538,11 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
             )}
             <ConfirmDialog
                 open={confirm !== null}
-                title={confirm === 'handoff' ? t('session.handoffConfirm') : t('session.archiveConfirm')}
-                description={t('session.tasksWillStop', { count: liveTasks.length })}
+                title={confirm === 'handoff' ? t('session.handoffConfirm') : confirm === 'archive' ? t('session.archiveConfirm') : t('session.resolveConfirm')}
+                description={liveTasks.length > 0 ? t('session.tasksWillStop', { count: liveTasks.length }) : undefined}
                 loading={acting}
                 cancelLabel={t('common.cancel')}
-                confirmLabel={confirm === 'handoff' ? t('session.handoff') : t('session.archive')}
+                confirmLabel={confirm === 'handoff' ? t('session.handoff') : confirm === 'archive' ? t('session.archive') : t('session.resolve')}
                 confirmColor="warning"
                 onClose={() => setConfirm(null)}
                 onConfirm={() => confirm && void runConfirmed(confirm)}
