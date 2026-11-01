@@ -51,6 +51,7 @@ type remoteDirectChatRecord struct {
 	BotUUID        string     `gorm:"column:bot_uuid;not null"`
 	Platform       string     `gorm:"column:platform;not null"`
 	ExternalChatID string     `gorm:"column:external_chat_id;not null"`
+	Alias          string     `gorm:"column:alias"`
 	PeerActorID    *string    `gorm:"column:peer_actor_id"`
 	Blocked        bool       `gorm:"column:blocked;not null"`
 	PairedAt       *time.Time `gorm:"column:paired_at"`
@@ -76,6 +77,7 @@ type remoteGroupRecord struct {
 	BotUUID         string    `gorm:"column:bot_uuid;not null"`
 	Platform        string    `gorm:"column:platform;not null"`
 	ExternalGroupID string    `gorm:"column:external_group_id;not null"`
+	Alias           string    `gorm:"column:alias"`
 	Name            string    `gorm:"column:name"`
 	Blocked         bool      `gorm:"column:blocked;not null"`
 	ProjectPath     string    `gorm:"column:project_path"`
@@ -159,6 +161,15 @@ func migrateBotAccessTables(db *gorm.DB) error {
 	for _, statement := range statements {
 		if err := db.Exec(statement).Error; err != nil {
 			return err
+		}
+	}
+
+	// Add optional user aliases to existing databases without disturbing identity.
+	for _, model := range []any{&remoteDirectChatRecord{}, &remoteGroupRecord{}} {
+		if !db.Migrator().HasColumn(model, "alias") {
+			if err := db.Migrator().AddColumn(model, "Alias"); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -310,7 +321,7 @@ func directFromRecord(r remoteDirectChatRecord) access.DirectChat {
 	if r.PeerActorID != nil {
 		peer = *r.PeerActorID
 	}
-	return access.DirectChat{ID: r.ID, BotUUID: r.BotUUID, Platform: r.Platform, ExternalChatID: r.ExternalChatID, PeerActorID: peer, Blocked: r.Blocked, PairedAt: r.PairedAt, ProjectPath: r.ProjectPath, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	return access.DirectChat{ID: r.ID, BotUUID: r.BotUUID, Platform: r.Platform, ExternalChatID: r.ExternalChatID, Alias: r.Alias, PeerActorID: peer, Blocked: r.Blocked, PairedAt: r.PairedAt, ProjectPath: r.ProjectPath, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 
 func (s *BotAccessStore) PairDirectChat(ctx context.Context, chatID, externalActorID, displayName string) error {
@@ -492,7 +503,7 @@ func (s *BotAccessStore) DiscoverGroup(ctx context.Context, botUUID, platform, e
 	return groupFromRecord(row), nil
 }
 func groupFromRecord(r remoteGroupRecord) access.Group {
-	return access.Group{ID: r.ID, BotUUID: r.BotUUID, Platform: r.Platform, ExternalGroupID: r.ExternalGroupID, Name: r.Name, Blocked: r.Blocked, ProjectPath: r.ProjectPath, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	return access.Group{ID: r.ID, BotUUID: r.BotUUID, Platform: r.Platform, ExternalGroupID: r.ExternalGroupID, Alias: r.Alias, Name: r.Name, Blocked: r.Blocked, ProjectPath: r.ProjectPath, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 func (s *BotAccessStore) ListGroups(ctx context.Context, botUUID string) ([]access.Group, error) {
 	var rows []remoteGroupRecord
@@ -1037,4 +1048,25 @@ func (s *BotAccessStore) IsExternalTargetBlocked(ctx context.Context, botUUID, p
 		return false, err
 	}
 	return n > 0, nil
+}
+
+// SetTargetAlias changes only the user-facing label, scoped to its bot.
+func (s *BotAccessStore) SetTargetAlias(ctx context.Context, botUUID, id, kind, alias string) error {
+	var model any
+	switch kind {
+	case "chat":
+		model = &remoteDirectChatRecord{}
+	case "group":
+		model = &remoteGroupRecord{}
+	default:
+		return ErrAccessTargetNotFound
+	}
+	result := s.db.WithContext(ctx).Model(model).Where("id = ? AND bot_uuid = ?", id, botUUID).Updates(map[string]any{"alias": strings.TrimSpace(alias), "updated_at": time.Now().UTC()})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrAccessTargetNotFound
+	}
+	return nil
 }

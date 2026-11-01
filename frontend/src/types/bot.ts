@@ -34,10 +34,10 @@ export type CapabilityName = 'notify' | 'remote_control';
 export type AccessEffect = 'allow' | 'deny';
 export interface BotCapability { bot_uuid: string; capability: CapabilityName; enabled: boolean; config?: Record<string, unknown>; }
 export interface AccessPermission { capability: CapabilityName; action: string; effect: AccessEffect; }
-export interface DirectChat { id: string; bot_uuid: string; platform: string; external_chat_id: string; peer_actor_id?: string; blocked: boolean; paired_at?: string; }
+export interface DirectChat { id: string; bot_uuid: string; platform: string; external_chat_id: string; alias?: string; peer_actor_id?: string; blocked: boolean; paired_at?: string; }
 export interface DirectChatDetail { chat: DirectChat; permissions: AccessPermission[]; }
 export interface GroupActor { actor: {id:string; external_actor_id:string; display_name?:string}; label?:string; permissions:AccessPermission[]; }
-export interface BotGroup { id:string; bot_uuid:string; platform:string; external_group_id:string; name?:string; blocked:boolean; }
+export interface BotGroup { id:string; bot_uuid:string; platform:string; external_group_id:string; alias?:string; name?:string; blocked:boolean; }
 export interface BotGroupDetail { group:BotGroup; capabilities:Partial<Record<CapabilityName,AccessEffect>>; actors:GroupActor[]; }
 export interface AuthorizationDecision { allowed:boolean; reason:string; failed_gate?:string; facts:Record<string,unknown>; }
 

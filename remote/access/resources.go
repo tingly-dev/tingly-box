@@ -31,6 +31,7 @@ type DirectChat struct {
 	BotUUID        string     `json:"bot_uuid"`
 	Platform       string     `json:"platform"`
 	ExternalChatID string     `json:"external_chat_id"`
+	Alias          string     `json:"alias,omitempty"`
 	PeerActorID    string     `json:"peer_actor_id,omitempty"`
 	Blocked        bool       `json:"blocked"`
 	PairedAt       *time.Time `json:"paired_at,omitempty"`
@@ -44,6 +45,7 @@ type Group struct {
 	BotUUID         string    `json:"bot_uuid"`
 	Platform        string    `json:"platform"`
 	ExternalGroupID string    `json:"external_group_id"`
+	Alias           string    `json:"alias,omitempty"`
 	Name            string    `json:"name,omitempty"`
 	Blocked         bool      `json:"blocked"`
 	ProjectPath     string    `json:"project_path,omitempty"`
