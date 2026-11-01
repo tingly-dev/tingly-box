@@ -12,7 +12,7 @@ vi.mock('../../client', async (actual) => ({ ...(await actual<typeof import('../
 
 // A project's chats are bound to its main thread, named m<project>.
 const binding = (id: string, chat_id: string, chat_title: string, project_id: string): ChannelBinding => ({
-    id, platform: 'telegram', chat_id, chat_title, project_id, thread_id: `m${project_id}`, created_at: '', updated_at: '', verbose: false,
+    id, platform: 'telegram', bot_uuid: 'b1', chat_id, chat_title, project_id, thread_id: `m${project_id}`, created_at: '', updated_at: '', verbose: false,
 });
 
 const summary = (id: string, name: string, over: Record<string, unknown> = {}) => ({ id, name, type: 'project', main_thread_id: `m${id}`, threads: { waiting: 0, working: 0, ready: 0, idle: 0, resolved: 0 }, ...over });
@@ -85,8 +85,21 @@ describe('project IM bindings', () => {
         expect(submit).toBeDisabled();
         fireEvent.click(radios[2]);
         fireEvent.click(submit);
-        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:2', project_id: 'p1' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:2', bot_uuid: 'b1', project_id: 'p1' }));
         expect(m.notify).toHaveBeenCalledWith(expect.stringContaining('im.bind.moved'), 'success');
+    });
+
+    it('allows selecting another bot for the same chat and thread', async () => {
+        const bots = [{ uuid: 'b1', name: 'First bot', platform: 'telegram', online: true }, { uuid: 'b2', name: 'Second bot', platform: 'telegram', online: true }];
+        const h = host([], bots);
+        h.im!.listChats = async (bot) => [chat('tg:1', 'yz', { botUuid: bot.uuid })];
+        show(h);
+        fireEvent.click(await screen.findByRole('button', { name: /im\.tags\.bind/ }));
+        const dialog = await screen.findByRole('dialog');
+        const other = await within(dialog).findByRole('radio', { name: /Second bot/ });
+        fireEvent.click(other);
+        fireEvent.click(within(dialog).getByRole('button', { name: 'im.bind.submit' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:1', bot_uuid: 'b2', project_id: 'p1' }));
     });
 
     it('says why there is nothing to bind', async () => {

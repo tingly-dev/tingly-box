@@ -1093,6 +1093,8 @@ export interface components {
             task_type: string;
         };
         BindChannelRequest: {
+            /** @description Field bot_uuid */
+            bot_uuid?: string;
             /** @description Field chat_id */
             chat_id: string;
             /** @description Field chat_title */
@@ -1109,6 +1111,8 @@ export interface components {
             bindings: components["schemas"]["ChannelBinding"][];
         };
         ChannelBinding: {
+            /** @description Field bot_uuid */
+            bot_uuid?: string;
             /** @description Field chat_id */
             chat_id: string;
             /** @description Field chat_title */

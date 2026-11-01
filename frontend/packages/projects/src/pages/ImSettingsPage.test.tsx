@@ -59,7 +59,7 @@ describe('ImSettingsPage', () => {
         const dialog = await screen.findByRole('dialog');
         fireEvent.click(await within(dialog).findByRole('radio', { name: /Docs/ }));
         fireEvent.click(within(dialog).getByRole('button', { name: 'im.bind.submit' }));
-        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:2', project_id: 'p2' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:2', bot_uuid: 'b1', project_id: 'p2' }));
     });
 
     it('does not offer the project a chat is already bound to, nor a folder (those are bound by thread)', async () => {

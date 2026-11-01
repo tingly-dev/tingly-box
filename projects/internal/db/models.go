@@ -244,6 +244,7 @@ type ChannelBinding struct {
 	ID       string `gorm:"primaryKey;size:36" json:"id"`
 	Platform string `gorm:"size:40;not null;uniqueIndex:idx_channel_chat" json:"platform"`
 	ChatID   string `gorm:"size:200;not null;uniqueIndex:idx_channel_chat" json:"chat_id"`
+	BotUUID  string `gorm:"size:100" json:"bot_uuid,omitempty"`
 	// ChatTitle is a display name for the chat, when the caller knows one.
 	ChatTitle string `gorm:"size:300" json:"chat_title"`
 	ThreadID  string `gorm:"size:36;index" json:"thread_id"`

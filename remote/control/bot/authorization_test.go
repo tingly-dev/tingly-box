@@ -143,3 +143,21 @@ func TestAuthorizationGateProjectPromptNeedsApprove(t *testing.T) {
 		setting.UUID, chats[0].ID, access.CapabilityRemoteControl, access.ActionRemoteControlApprove, access.EffectAllow))
 	require.False(t, gate(press, imbot.Platform(setting.Platform), setting.UUID))
 }
+
+func TestPendingApprovalDoesNotGrantDirectoryOrProjectAccess(t *testing.T) {
+	sm, setting, msg := directAuthorizationFixture(t)
+	gate := bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), false, nil, nil)
+	require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID), "first message pairs the chat")
+	pending := func(string) (access.CapabilityName, access.ActionName) {
+		return access.CapabilityRemoteControl, access.ActionRemoteControlApprove
+	}
+	gate = bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), false, pending, nil)
+	for _, text := range []string{"/dir", "/dir 1", "/project", "/project 1", "/cd /tmp"} {
+		m := msg
+		m.Content = imbot.NewTextContent(text)
+		require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "%s must require privileged access", text)
+	}
+	m := msg
+	m.Payload = imbot.NewPayload("project", "switch", "/tmp")
+	require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "folder buttons must require privileged access")
+}

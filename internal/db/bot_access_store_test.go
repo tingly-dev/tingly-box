@@ -212,3 +212,28 @@ func TestBotAccessStoreSetDirectChatPermissionsAtomic(t *testing.T) {
 	require.ErrorIs(t, store.SetDirectChatPermissions(ctx, bot.UUID, "ghost", batch), ErrAccessTargetNotFound)
 	require.ErrorIs(t, store.SetDirectChatPermissions(ctx, bot.UUID, chat.ID, nil), ErrInvalidPermission)
 }
+
+func TestExternalTargetBlockIsScopedToBotAndPlatform(t *testing.T) {
+	sm, err := NewStoreManager(t.TempDir())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sm.Close() })
+	first, second := createAccessBot(t, sm, "first"), createAccessBot(t, sm, "second")
+	store, ctx := sm.BotAccess(), context.Background()
+	direct, err := store.DiscoverDirectChat(ctx, first.UUID, "telegram", "same-id")
+	require.NoError(t, err)
+	group, err := store.DiscoverGroup(ctx, first.UUID, "telegram", "group-id", "group")
+	require.NoError(t, err)
+	require.NoError(t, store.SetDirectChatBlocked(ctx, first.UUID, direct.ID, true))
+	require.NoError(t, store.SetGroupBlocked(ctx, first.UUID, group.ID, true))
+	for _, id := range []string{"same-id", "group-id"} {
+		blocked, err := store.IsExternalTargetBlocked(ctx, first.UUID, "telegram", id)
+		require.NoError(t, err)
+		require.True(t, blocked)
+		blocked, err = store.IsExternalTargetBlocked(ctx, second.UUID, "telegram", id)
+		require.NoError(t, err)
+		require.False(t, blocked)
+		blocked, err = store.IsExternalTargetBlocked(ctx, first.UUID, "other", id)
+		require.NoError(t, err)
+		require.False(t, blocked)
+	}
+}

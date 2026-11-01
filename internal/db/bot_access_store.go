@@ -1022,3 +1022,19 @@ func (s *BotAccessStore) Snapshot(ctx context.Context, req access.AuthorizationR
 
 var _ access.FactSource = (*BotAccessStore)(nil)
 var _ access.RouteResolver = (*BotAccessStore)(nil)
+
+// IsExternalTargetBlocked reports whether a known direct chat or group is
+// blocked for a bot. Unknown targets remain usable for legacy bindings.
+func (s *BotAccessStore) IsExternalTargetBlocked(ctx context.Context, botUUID, platform, externalID string) (bool, error) {
+	var n int64
+	if err := s.db.WithContext(ctx).Model(&remoteDirectChatRecord{}).Where("bot_uuid = ? AND platform = ? AND external_chat_id = ? AND blocked = ?", botUUID, platform, externalID, true).Count(&n).Error; err != nil {
+		return false, err
+	}
+	if n > 0 {
+		return true, nil
+	}
+	if err := s.db.WithContext(ctx).Model(&remoteGroupRecord{}).Where("bot_uuid = ? AND platform = ? AND external_group_id = ? AND blocked = ?", botUUID, platform, externalID, true).Count(&n).Error; err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}

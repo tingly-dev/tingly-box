@@ -24,12 +24,13 @@ func TestChannelBindingRoutes(t *testing.T) {
 	// A project id is resolved to its main thread; the response carries both.
 	var bound db.ChannelBinding
 	require.Equal(t, 200, c.do("PUT", "/projects/channel-bindings", map[string]any{
-		"platform": "telegram", "chat_id": "42", "project_id": a.ID, "chat_title": "Me",
+		"platform": "telegram", "chat_id": "42", "project_id": a.ID, "chat_title": "Me", "bot_uuid": "bot-2",
 	}, &bound))
 	assert.NotEmpty(t, bound.ID)
 	assert.Equal(t, a.MainThreadID, bound.ThreadID)
 	assert.Equal(t, a.ID, bound.ProjectID)
 	assert.Equal(t, "Me", bound.ChatTitle)
+	assert.Equal(t, "bot-2", bound.BotUUID)
 
 	// Binding the chat again moves it rather than adding a second row; a
 	// thread id binds that thread.
@@ -40,6 +41,7 @@ func TestChannelBindingRoutes(t *testing.T) {
 	assert.Equal(t, bound.ID, moved.ID)
 	assert.Equal(t, b.MainThreadID, moved.ThreadID)
 	assert.Equal(t, b.ID, moved.ProjectID)
+	assert.Equal(t, "bot-2", moved.BotUUID, "legacy callers retain the selected bot")
 
 	require.Equal(t, 200, c.do("GET", "/projects/channel-bindings", nil, &l))
 	assert.Len(t, l.Bindings, 1)

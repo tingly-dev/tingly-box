@@ -315,3 +315,35 @@ func TestBridgeSendsPromptsWithButtonsAndRestatesThroughTheSameBot(t *testing.T)
 	require.NoError(t, err)
 	assert.Empty(t, ref, "a blocked chat gets nothing")
 }
+
+func TestBridgeUsesBoundBotEvenWhenAnotherBotLastReceivedChat(t *testing.T) {
+	reg := channel.NewRegistry()
+	one, two := newFakeChannel("bot-1", "telegram"), newFakeChannel("bot-2", "telegram")
+	reg.Register(one)
+	reg.Register(two)
+	b := NewChatBridge()
+	b.Bind(nil, reg, nil, nil, nil)
+	b.bots[chatKey("telegram", "42")] = "bot-1"
+	bot, err := b.through(context.Background(), "telegram", "42", "bot-2", func(ch channel.Channel) error {
+		return ch.Send(context.Background(), channel.Target{ChatID: "42"}, interaction.Notification{Body: "hello"})
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "bot-2", bot)
+	assert.Equal(t, sent{"42", "hello"}, two.next(t))
+	assert.Empty(t, one.sent)
+	_, err = b.through(context.Background(), "telegram", "42", "missing", func(channel.Channel) error { t.Fatal("must not choose another bot"); return nil })
+	assert.ErrorIs(t, err, ErrNoChannel)
+}
+
+func TestBridgeDoesNotSendWhenAccessLookupFails(t *testing.T) {
+	reg := channel.NewRegistry()
+	ch := newFakeChannel("bot-1", "telegram")
+	reg.Register(ch)
+	bridge := NewChatBridge()
+	bridge.Bind(nil, reg, nil, nil, nil)
+	bridge.SetTargetBlocked(func(context.Context, string, string, string) (bool, error) {
+		return false, errors.New("store unavailable")
+	})
+	require.ErrorContains(t, bridge.SendChannelText(context.Background(), "telegram", "42", "private"), "store unavailable")
+	assert.Empty(t, ch.sent)
+}
