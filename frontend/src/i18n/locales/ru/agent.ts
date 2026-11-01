@@ -803,7 +803,7 @@ export default {
       "testTool": "Проверить инструмент",
       "restrictedTool": "Excluded by the connection allow list. Adjust it in connection settings.",
       "toolEnabled": "Вкл.",
-      "connectionSettings": "Настройки",
+      "connectionSettingsShort": "Настройки",
       "failed": "Ошибка",
       "builtinRuns": "Работает внутри Tingly Box.",
       "toolsOn": "Включено {{on}} из {{total}}",

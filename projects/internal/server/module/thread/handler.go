@@ -116,6 +116,7 @@ type PermissionModeRequest struct {
 // ProfileRequest sets the launch profile of a folder thread's next turn.
 type ProfileRequest struct {
 	Profile string `json:"profile"`
+	Inherit bool   `json:"inherit,omitempty"`
 }
 
 // ModelRequest sets the model of the thread's next turn. Empty restores the
@@ -633,7 +634,13 @@ func (h *Handler) setProfile(c *gin.Context) {
 	if !ok {
 		return
 	}
-	out, err := h.svc.Threads.SetProfile(c.Request.Context(), t.ID, req.Profile)
+	var out *db.Thread
+	var err error
+	if p, e := h.svc.Store.GetProject(t.ProjectID); e == nil && p.Type == db.ProjectProject {
+		out, err = h.svc.Threads.SetWorkerProfile(c.Request.Context(), t.ID, req.Profile, req.Inherit)
+	} else {
+		out, err = h.svc.Threads.SetProfile(c.Request.Context(), t.ID, req.Profile)
+	}
 	if err != nil {
 		fail(c, err)
 		return

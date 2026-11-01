@@ -35,10 +35,12 @@ type Project struct {
 	// CoordinatorModel / ThreadModel are empty for "connection default".
 	// CoordinatorEffort / ThreadEffort are the thinking effort beside each of
 	// them (project.Efforts); empty for the endpoint's default.
-	CoordinatorModel  string `gorm:"size:200" json:"coordinator_model"`
-	ThreadModel       string `gorm:"size:200" json:"thread_model"`
-	CoordinatorEffort string `gorm:"size:32" json:"coordinator_effort"`
-	ThreadEffort      string `gorm:"size:32" json:"thread_effort"`
+	CoordinatorProfile string `gorm:"size:200" json:"coordinator_profile"`
+	ThreadProfile      string `gorm:"size:200" json:"thread_profile"`
+	CoordinatorModel   string `gorm:"size:200" json:"coordinator_model"`
+	ThreadModel        string `gorm:"size:200" json:"thread_model"`
+	CoordinatorEffort  string `gorm:"size:32" json:"coordinator_effort"`
+	ThreadEffort       string `gorm:"size:32" json:"thread_effort"`
 	// ThreadPermissionMode is the Claude Code permission mode threads run in.
 	ThreadPermissionMode string     `gorm:"size:40" json:"thread_permission_mode"`
 	Paused               bool       `json:"paused"`
@@ -115,7 +117,8 @@ type Thread struct {
 	ReportedModel string `gorm:"size:200" json:"reported_model,omitempty"`
 	// ModelOverride is a project worker's requested model; empty inherits the
 	// project's thread model. Folder threads keep their choice in Model.
-	ModelOverride string `gorm:"size:200" json:"model_override,omitempty"`
+	ProfileOverride *string `gorm:"size:200" json:"profile_override"`
+	ModelOverride   string  `gorm:"size:200" json:"model_override,omitempty"`
 	// EffortOverride is the next turn’s effort; empty inherits its project or CLI default.
 	EffortOverride string `gorm:"size:32" json:"effort_override,omitempty"`
 	// PermissionMode overrides the project's permission mode for this

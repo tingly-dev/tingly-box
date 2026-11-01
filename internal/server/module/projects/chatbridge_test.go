@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -145,6 +146,12 @@ func (echoClient) Stream(_ context.Context, req llm.Request, onDelta func(string
 		if m.Role == "user" {
 			last = m.Content
 		}
+	}
+	// The coordinator wraps user input with provenance. A real model reads
+	// the event's content rather than repeating its envelope in the answer.
+	if strings.HasPrefix(last, "<event ") && strings.HasSuffix(last, "\n</event>") {
+		_, body, _ := strings.Cut(last, "\n")
+		last = strings.TrimSuffix(body, "\n</event>")
 	}
 	text := "You said: " + last
 	onDelta(text)

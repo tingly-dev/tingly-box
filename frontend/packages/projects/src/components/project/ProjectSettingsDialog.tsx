@@ -42,6 +42,7 @@ function ModelField({ label, value, onChange, help }: { label: string; value: st
 
 function General({ project, patch }: { project: Project; patch: (p: Patch) => Promise<void> }) {
     const { t } = useTranslation('projects');
+    const { session } = useProjectsHost();
     const [name, setName] = useState(project.name);
     const [goal, setGoal] = useState(project.goal);
     const [coord, setCoord] = useState(project.coordinator_model);
@@ -53,8 +54,8 @@ function General({ project, patch }: { project: Project; patch: (p: Patch) => Pr
         <Stack spacing={2.5}>
             <TextField label={t('project.name')} value={name} onChange={(e) => setName(e.target.value)} fullWidth />
             <TextField label={t('project.goal')} value={goal} onChange={(e) => setGoal(e.target.value)} placeholder={t('project.goalPlaceholder')} helperText={t('project.goalHelp')} fullWidth />
-            <ModelField label={t('projectSettings.coordinatorModel')} value={coord} onChange={setCoord} help={t('projectSettings.coordinatorModelHelp')} />
-            <ModelField label={t('projectSettings.threadModel')} value={threadModel} onChange={setThreadModel} help={t('projectSettings.threadModelHelp')} />
+            {!session?.launchPickers && <ModelField label={t('projectSettings.coordinatorModel')} value={coord} onChange={setCoord} help={t('projectSettings.coordinatorModelHelp')} />}
+            {!session?.launchPickers && <ModelField label={t('projectSettings.threadModel')} value={threadModel} onChange={setThreadModel} help={t('projectSettings.threadModelHelp')} />}
             <TextField select label={t('projectSettings.permissionMode')} value={mode} onChange={(e) => setMode(e.target.value as Mode)} helperText={t(`projectSettings.mode.${mode}Help`)}>
                 {['acceptEdits', 'default', 'auto', 'bypassPermissions'].map((m) => (
                     <MenuItem key={m} value={m}><Box component="span" sx={{ ...mono, fontSize: fontSizes.base, mr: 1 }}>{m}</Box>{t(`projectSettings.mode.${m}`)}</MenuItem>

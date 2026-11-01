@@ -1423,6 +1423,8 @@ export interface components {
             modes: string[];
         };
         ProfileRequest: {
+            /** @description Field inherit */
+            inherit?: boolean;
             /** @description Field profile */
             profile: string;
         };
@@ -1436,6 +1438,8 @@ export interface components {
             coordinator_effort: string;
             /** @description Field coordinator_model */
             coordinator_model: string;
+            /** @description Field coordinator_profile */
+            coordinator_profile: string;
             /**
              * Format: date-time
              * @description Field created_at
@@ -1465,6 +1469,8 @@ export interface components {
             thread_model: string;
             /** @description Field thread_permission_mode */
             thread_permission_mode: string;
+            /** @description Field thread_profile */
+            thread_profile: string;
             /** @description Field type */
             type: string;
             /**
@@ -1507,6 +1513,8 @@ export interface components {
             coordinator_effort: string;
             /** @description Field coordinator_model */
             coordinator_model: string;
+            /** @description Field coordinator_profile */
+            coordinator_profile: string;
             /**
              * Format: date-time
              * @description Field created_at
@@ -1536,6 +1544,8 @@ export interface components {
             thread_model: string;
             /** @description Field thread_permission_mode */
             thread_permission_mode: string;
+            /** @description Field thread_profile */
+            thread_profile: string;
             threads: components["schemas"]["ThreadCounts"];
             /** @description Field type */
             type: string;
@@ -1748,6 +1758,8 @@ export interface components {
             permission_mode?: string;
             /** @description Field profile */
             profile?: string;
+            /** @description Field profile_override */
+            profile_override: string;
             /** @description Field project_id */
             project_id: string;
             /** @description Field repo_path */
@@ -1932,6 +1944,8 @@ export interface components {
             coordinator_effort?: "" | "low" | "medium" | "high" | "max";
             /** @description Field coordinator_model */
             coordinator_model?: string;
+            /** @description Field coordinator_profile */
+            coordinator_profile?: string;
             /** @description Field goal */
             goal?: string;
             /** @description Field instructions */
@@ -1956,6 +1970,8 @@ export interface components {
              * @enum {string}
              */
             thread_permission_mode?: "default" | "acceptEdits" | "auto" | "bypassPermissions";
+            /** @description Field thread_profile */
+            thread_profile?: string;
         };
         UsageResponse: {
             /** @description Field by_model */

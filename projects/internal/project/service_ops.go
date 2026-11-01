@@ -81,6 +81,8 @@ func configurationChanges(a, b *db.Project) []string {
 	}{
 		{"name", a.Name, b.Name}, {"goal", a.Goal, b.Goal},
 		{"instructions", a.Instructions, b.Instructions},
+		{"coordinator profile", a.CoordinatorProfile, b.CoordinatorProfile},
+		{"thread profile", a.ThreadProfile, b.ThreadProfile},
 		{"coordinator model", a.CoordinatorModel, b.CoordinatorModel},
 		{"thread model", a.ThreadModel, b.ThreadModel},
 		{"coordinator effort", a.CoordinatorEffort, b.CoordinatorEffort},

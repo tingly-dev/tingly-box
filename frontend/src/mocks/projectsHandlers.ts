@@ -309,10 +309,12 @@ export const projectsHandlers = [
     }),
     http.post('/api/v1/threads/:tid/events/:eid/start', () => HttpResponse.json(messages[2])),
     http.put('/api/v1/threads/:tid/profile', async ({ params, request }) => {
-        const s = sessions.find((x) => x.id === params.tid)
-        if (!s) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
-        s.profile = ((await request.json()) as { profile: string }).profile
-        return HttpResponse.json(s)
+        const th = findThread(params.tid as string) as Record<string, unknown> | undefined
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        const body = (await request.json()) as { profile: string; inherit?: boolean }
+        if (th.parent_id) { th.profile_override = body.inherit ? null : body.profile; th.model_override = '' }
+        else th.profile = body.profile
+        return HttpResponse.json(th)
     }),
     http.put('/api/v1/threads/:tid/model', async ({ params, request }) => {
         const th = findThread(params.tid as string) as Record<string, unknown> | undefined

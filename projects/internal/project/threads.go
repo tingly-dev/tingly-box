@@ -648,12 +648,44 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	}
 
 	env, defModel, settings := m.launchEnv(ctx, t, folder)
+	if !folder {
+		profile := workerProfile(p, t)
+		if l, ok := m.env.(Launcher); ok && profile != "" {
+			var err error
+			env, settings, err = l.LaunchEnv(ctx, profile)
+			if err == nil {
+				settings, err = m.workerSettings(p, t, settings)
+			}
+			if err != nil {
+				m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: fmt.Sprintf("profile %s unavailable: %v", profile, err)})
+				_, _ = m.update(t.ID, func(t *db.Thread) {
+					t.Status, t.WaitReason = db.ThreadFailed, fmt.Sprintf("Failed: profile %s unavailable: %v", profile, err)
+				})
+				m.mu.Lock()
+				a.slot = nil
+				m.mu.Unlock()
+				<-slot
+				m.giveUp(threadID, a)
+				return
+			}
+			defModel = ""
+		} else if profile != "" {
+			m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "profile unavailable"})
+			_, _ = m.update(t.ID, func(t *db.Thread) { t.Status, t.WaitReason = db.ThreadFailed, "Failed: profile unavailable" })
+			m.mu.Lock()
+			a.slot = nil
+			m.mu.Unlock()
+			<-slot
+			m.giveUp(threadID, a)
+			return
+		}
+	}
 	// A worker's observed Model is history, not its launch choice. Only an
 	// explicit override pins it instead of following the project's default.
 	model := t.Model
 	if !folder {
 		model = t.ModelOverride
-		if model == "" {
+		if model == "" && t.ProfileOverride == nil {
 			model = p.ThreadModel
 		}
 	}
@@ -670,7 +702,9 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	opts := agentboot.ExecutionOptions{Model: model, Effort: effort, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings, Entrypoint: sessionEntrypoint}
 	if !folder {
 		opts.AppendSystemPrompt = threadSystemPrompt(m.layout, p, t)
-		opts.SettingsPath = m.layout.SettingsFile(p.ID, t.ID)
+		if settings == "" {
+			opts.SettingsPath = m.layout.SettingsFile(p.ID, t.ID)
+		}
 	} else if path, err := m.sessionSettings(p, t, settings); err == nil {
 		opts.SettingsPath = path
 	}
@@ -685,6 +719,41 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 		<-slot
 		m.next(threadID)
 	}
+}
+
+// workerSettings combines profile settings with the project's required access.
+func (m *Threads) workerSettings(p *db.Project, t *db.Thread, host string) (string, error) {
+	doc := map[string]any{}
+	b, err := os.ReadFile(host)
+	if err != nil {
+		return "", err
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		return "", err
+	}
+	perms, _ := doc["permissions"].(map[string]any)
+	if perms == nil {
+		perms = map[string]any{}
+	}
+	dirs, _ := perms["additionalDirectories"].([]any)
+	dirs = append(dirs, m.layout.LibraryDir(p.ID), m.layout.MemoryDir(p.ID))
+	for _, r := range p.Repos {
+		if r.Path != t.RepoPath {
+			dirs = append(dirs, r.Path)
+		}
+	}
+	perms["additionalDirectories"] = dirs
+	doc["permissions"] = perms
+	doc["autoMemoryDirectory"] = m.layout.MemoryDir(p.ID)
+	path := m.layout.SessionSettingsFile(t.ID)
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return "", err
+	}
+	out, err := json.Marshal(doc)
+	if err != nil {
+		return "", err
+	}
+	return path, os.WriteFile(path, out, 0600)
 }
 
 // sessionSettings lets a folder thread read the folder's uploads, which live
