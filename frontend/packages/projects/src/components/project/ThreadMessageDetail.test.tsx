@@ -1,8 +1,14 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as renderWithHost, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Thread, ThreadEvent } from '../../client';
 import { ThreadPanel } from './ThreadPanel';
 import { readLocal } from '../../utils/storage';
+import { ProjectsHostProvider } from '../../host/ProjectsHost';
+
+const host = { paths: { list: '/', project: () => '/', folder: () => '/' } };
+const render = (ui: React.ReactElement) => renderWithHost(ui, {
+    wrapper: ({ children }) => <ProjectsHostProvider host={host}>{children}</ProjectsHostProvider>,
+});
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, opts?: { defaultValue?: string }) => opts?.defaultValue ?? key }) }));
 const respond = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
@@ -26,6 +32,12 @@ const events = [
 const props = { projectId: 'p', threadId: 't', thread, events, running: true, disabled: false, onBack: () => {} };
 
 describe('thread message detail integration', () => {
+    it.each([false, true])('shows the IM source for a message (folder=%s)', (folder) => {
+        const fromIM = event('im', 'user', 'Hello from IM', { source: 'im', source_platform: 'telegram', source_chat_id: '42' });
+        render(<ThreadPanel {...props} events={[fromIM, event('web', 'user', 'Hello from web')]} folder={folder} />);
+        expect(screen.getByText('Hello from IM').parentElement?.parentElement).toHaveTextContent('im.source');
+        expect(screen.getByText('Hello from web').parentElement?.parentElement).not.toHaveTextContent('im.source');
+    });
     it.each([false, true])('filters paired calls but retains the actual response path (folder=%s)', async (folder) => {
         const requestId = `permission-${folder}`;
         const currentEvents = events.map((e) => e.kind === 'approval' ? { ...e, payload: e.payload!.replace('permission', requestId) } : e);

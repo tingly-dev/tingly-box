@@ -352,8 +352,8 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                                                 <Typography variant="body1" sx={conversationText}>{m.content}</Typography>
                                             </Box>
                                         )}
-                                        {m.source === 'im' && m.source_platform
-                                            ? <ImSourceBadge platform={m.source_platform} chat={chatTitle?.(m.source_platform, m.source_chat_id ?? '') ?? m.source_chat_id ?? ''} />
+                                        {m.source === 'im'
+                                            ? <ImSourceBadge platform={m.source_platform ?? ''} chat={chatTitle?.(m.source_platform ?? '', m.source_chat_id ?? '') ?? m.source_chat_id ?? ''} />
                                             : null}
                                     </Box>
                                 );

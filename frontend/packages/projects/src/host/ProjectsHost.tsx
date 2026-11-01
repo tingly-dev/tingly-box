@@ -78,6 +78,8 @@ export interface ImHost {
     platformLabel?: (platform: string) => string;
     /** A platform's logo at `size` px; defaults to a coloured initial. */
     platformIcon?: (platform: string, size: number) => ReactNode;
+    /** A friendly name for a previously seen chat, if the host has one. */
+    chatTitle?: (platform: string, chatId: string) => string | undefined;
     /** The host's access-control dialog for a bot (who may use it); the "Access" button shows only with it. */
     accessDialog?: (p: { bot: ImBot; onClose: () => void }) => ReactNode;
 }

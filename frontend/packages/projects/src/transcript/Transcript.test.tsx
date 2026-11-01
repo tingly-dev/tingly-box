@@ -312,6 +312,16 @@ describe('host extensions', () => {
         expect(screen.getAllByText('Coordinator')).toHaveLength(1);
         expect(screen.getAllByText('Do it')).toHaveLength(2);
     });
+
+    it('renders a host-provided message source next to the corresponding user message', () => {
+        const entries: TranscriptEntry[] = [
+            {role: 'user', content: 'From IM', imSource: {platform: 'telegram', chatId: '42'}, timestamp: '2026-10-04T00:00:00Z'},
+            {role: 'user', content: 'From web', timestamp: '2026-10-04T00:00:01Z'},
+        ];
+        render(<Transcript blocks={buildTranscript(entries)} working={false} onRespond={vi.fn()} messageSource={(m) => m.imSource && <span>From {m.imSource.platform} · {m.imSource.chatId}</span>}/>);
+        expect(screen.getByText('From IM').parentElement?.parentElement).toHaveTextContent('From telegram · 42');
+        expect(screen.getByText('From web').parentElement?.parentElement).not.toHaveTextContent('From telegram');
+    });
 });
 
 describe('checklist card', () => {
