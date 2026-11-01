@@ -121,7 +121,7 @@ func TestChatBoundToAThreadTalksToThatThread(t *testing.T) {
 	require.True(t, handled)
 	waitStatus(t, f.store, th.ID, db.ThreadIdle)
 
-	assert.Equal(t, "[#1 Worker] ok", sink.next(t).text, "the worker answers the chat bound to it, named by its number")
+	assert.Equal(t, "ok\n\n[#1 Worker]", sink.next(t).text, "the worker answers the chat bound to it, named by its number")
 	evs := userEvents(t, f.store, th.ID)
 	last := evs[len(evs)-1]
 	assert.Equal(t, "from the chat", last.Content)

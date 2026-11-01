@@ -54,7 +54,7 @@ func TestMentionSendsOneMessageToThatThread(t *testing.T) {
 	assert.Equal(t, "add the edge case", evs[len(evs)-1].Content)
 	assert.Equal(t, db.SourceIM, evs[len(evs)-1].Source)
 	assert.Equal(t, f.project.MainThreadID, boundOf(t, f, "1"), "the chat stays where it was")
-	assert.Contains(t, sink.next(t).text, "[#1 Worker] Finished: ok", "the reply comes back as the thread's report")
+	assert.Contains(t, sink.next(t).text, "Finished: ok\n\n[#1 Worker]", "the reply comes back as the thread's report")
 
 	_, err = svc.PostFromChannel("telegram", "1", "@9 hello", nil)
 	assert.ErrorIs(t, err, ErrNoSuchThread)
@@ -79,7 +79,7 @@ func TestSessionListsAndSwitches(t *testing.T) {
 	// A plain message now goes to the worker, and its reply to this chat.
 	_, err = svc.PostFromChannel("telegram", "1", "keep going", nil)
 	require.NoError(t, err)
-	assert.Equal(t, "[#1 Worker] ok", sink.next(t).text)
+	assert.Equal(t, "ok\n\n[#1 Worker]", sink.next(t).text)
 	waitQuiet(t, f, svc, th.ID)
 
 	_, reply, err = svc.ChannelCommand("telegram", "1", ChatSession, "")

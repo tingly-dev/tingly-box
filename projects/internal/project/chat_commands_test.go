@@ -46,7 +46,7 @@ func TestNewWithATaskStartsANewFolderSessionAndMovesTheChat(t *testing.T) {
 	assert.Equal(t, "plan", cur.PermissionMode)
 	assert.Equal(t, 2, cur.Seq)
 	assert.True(t, strings.HasPrefix(reply, "Started [#2 fix the login bug]"), reply)
-	assert.Equal(t, "[#2 fix the login bug] ok", sink.next(t).text)
+	assert.Equal(t, "ok\n\n[#2 fix the login bug]", sink.next(t).text)
 
 	evs := userEvents(t, f.store, cur.ID)
 	require.Len(t, evs, 1)
