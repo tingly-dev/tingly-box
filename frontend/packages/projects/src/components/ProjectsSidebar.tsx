@@ -5,10 +5,9 @@ import { fontSizes } from '@tingly/ui/theme/fonts';
 import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useProjectList } from '../hooks/useProjectList';
-import { folderName } from '../utils/format';
 import { Add, ChatBubble, Folder, Stack, Star } from './icons';
 import { useProjectsHost } from '../host/ProjectsHost';
-import { api, unwrap, type ProjectSummary, type Thread } from '../client';
+import { NavTree } from './NavTree';
 
 /** One row of a sidebar section: a place the user can open. */
 export interface ProjectsSidebarRow {
@@ -136,49 +135,6 @@ function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection;
     );
 }
 
-function FolderTree({ folder, selected, sessionId, onNavigate, revision }: { folder: ProjectSummary; selected: boolean; sessionId: string | null; onNavigate?: () => void; revision: number }) {
-    const { t } = useTranslation('projects');
-    const { paths } = useProjectsHost();
-    const [open, setOpen] = useState(selected && !!sessionId);
-    const [sessions, setSessions] = useState<Thread[] | null>(null);
-    const [error, setError] = useState(false);
-    const path = folder.path ?? '';
-    useEffect(() => { if (selected && sessionId) setOpen(true); }, [selected, sessionId]);
-    useEffect(() => {
-        if (!open) return;
-        let alive = true;
-        setError(false);
-        unwrap(api.GET('/api/v1/projects/{id}/threads', { params: { path: { id: folder.id } } }))
-            .then((result) => { if (alive) setSessions([...result.threads].sort((a, b) => b.updated_at.localeCompare(a.updated_at))); })
-            .catch(() => { if (alive) setError(true); });
-        return () => { alive = false; };
-    }, [open, folder.id, revision]);
-    const folderUrl = paths.folder(path);
-    return <Box>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <ListItemButton component={NavLink} to={folderUrl} onClick={onNavigate} title={path} aria-current={selected && !sessionId ? 'page' : false}
-                sx={{ ...NAV_ROW_SX, flex: 1, minWidth: 0, color: 'text.secondary', ...(selected && !sessionId && navRowSelectedSx) }}>
-                <ListItemIcon sx={{ minWidth: 32, color: 'inherit', '& svg': { fontSize: 20 } }}>
-                    <Badge color="warning" variant="dot" invisible={folder.threads.waiting + folder.threads.failed === 0 && folder.threads.working === 0} sx={folder.threads.waiting + folder.threads.failed > 0 ? undefined : RUNNING_DOT}><Folder /></Badge>
-                </ListItemIcon>
-                <ListItemText primary={folderName(path)} slotProps={navRowTextSlotProps(selected && !sessionId)} sx={{ minWidth: 0, my: 0 }} />
-            </ListItemButton>
-            <IconButton size="small" aria-label={t(open ? 'sidebar.collapseFolder' : 'sidebar.expandFolder', { name: folderName(path) })} aria-expanded={open} onClick={() => setOpen(!open)} sx={{ mr: 1.5 }}>
-                <Box component="span" aria-hidden sx={{ display: 'inline-block', transform: open ? 'rotate(90deg)' : undefined }}>›</Box>
-            </IconButton>
-        </Box>
-        {open && <Box sx={{ pl: 5 }}>
-            {error ? <Typography variant="caption" color="error">{t('sidebar.sessionsError')}</Typography> : sessions === null ? null : sessions.length === 0 ? <Typography variant="caption" color="text.secondary">{t('session.none')}</Typography> : sessions.map((session) => {
-                const url = `${folderUrl}${folderUrl.includes('?') ? '&' : '?'}session=${encodeURIComponent(session.id)}`;
-                const active = selected && sessionId === session.id;
-                return <ListItemButton key={session.id} component={NavLink} to={url} onClick={onNavigate} aria-current={active ? 'page' : false} sx={{ ...NAV_ROW_SX, ...(active && navRowSelectedSx) }}>
-                    <ListItemText primary={session.title || t('chat.untitled')} slotProps={navRowTextSlotProps(active)} sx={{ minWidth: 0, my: 0 }} />
-                </ListItemButton>;
-            })}
-        </Box>}
-    </Box>;
-}
-
 /**
  * The Projects navigation: the user's projects and working folders, one flat
  * row each. Folders can expand to show their sessions, followed by
@@ -241,7 +197,9 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
             },
         },
         rows: [],
-        content: folders?.length ? folders.map((f) => <FolderTree key={f.id} folder={f} selected={f.path != null && f.path === scope} sessionId={params.get('session')} onNavigate={onNavigate} revision={(revisions[f.id] ?? 0) + reconnect} />) : undefined,
+        content: folders?.length ? <NavTree items={folders} activeId={folders.find((f) => f.path === scope)?.id}
+            openSession={scope === undefined ? null : params.get('session')} to={(f) => paths.folder(f.path ?? '')}
+            onNavigate={onNavigate} revisions={revisions} reconnect={reconnect} /> : undefined,
         empty: folders ? t('sidebar.noWorkdirs') : undefined,
     } : null;
 
