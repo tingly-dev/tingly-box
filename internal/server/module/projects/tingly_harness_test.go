@@ -345,9 +345,10 @@ func TestTinglyBindFolderBeforeFirstSession(t *testing.T) {
 	h.call("PUT", "/projects/channel-bindings", map[string]any{"platform": "tingly", "chat_id": chat.ChatID, "bot_uuid": h.chosenID, "project_id": folder.ID}, nil)
 	var list struct {
 		Bindings []struct {
-			ProjectID string `json:"project_id"`
-			ThreadID  string `json:"thread_id"`
-			BotUUID   string `json:"bot_uuid"`
+			ProjectID       string `json:"project_id"`
+			TargetProjectID string `json:"target_project_id"`
+			ThreadID        string `json:"thread_id"`
+			BotUUID         string `json:"bot_uuid"`
 		} `json:"bindings"`
 	}
 	h.call("GET", "/projects/channel-bindings?project_id="+folder.ID, nil, &list)
@@ -359,6 +360,21 @@ func TestTinglyBindFolderBeforeFirstSession(t *testing.T) {
 	require.Len(t, list.Bindings, 1)
 	require.NotEmpty(t, list.Bindings[0].ThreadID)
 	require.Equal(t, h.chosenID, list.Bindings[0].BotUUID)
+	first := list.Bindings[0].ThreadID
+	chat.SendText("/new")
+	chat.WaitText(10*time.Second).AssertContains(t, "next message")
+	chat.SendText("second session")
+	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: second session")
+	h.call("GET", "/projects/channel-bindings?project_id="+folder.ID, nil, &list)
+	require.Len(t, list.Bindings, 1)
+	require.NotEqual(t, first, list.Bindings[0].ThreadID)
+	require.Equal(t, folder.ID, list.Bindings[0].TargetProjectID)
+	chat.SendText("/session 1")
+	chat.WaitText(10*time.Second).AssertContains(t, "This chat now talks to")
+	h.call("GET", "/projects/channel-bindings?project_id="+folder.ID, nil, &list)
+	require.Len(t, list.Bindings, 1)
+	require.Equal(t, first, list.Bindings[0].ThreadID)
+	require.Equal(t, folder.ID, list.Bindings[0].TargetProjectID)
 }
 
 func TestTinglyCoordinatorIMRoundTrip(t *testing.T) {
