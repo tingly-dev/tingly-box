@@ -154,6 +154,7 @@ func TestBindingAFolderOrAThread(t *testing.T) {
 	b, err := svc.BindChannel("telegram", "1", "", "", s.ProjectID, "bot-1")
 	require.NoError(t, err)
 	assert.Equal(t, s.ProjectID, b.ProjectID)
+	assert.Equal(t, s.ProjectID, b.TargetProjectID)
 	assert.Empty(t, b.ThreadID)
 	assert.NotEmpty(t, b.Folder)
 	assert.Equal(t, "bot-1", b.BotUUID)
@@ -161,6 +162,7 @@ func TestBindingAFolderOrAThread(t *testing.T) {
 	b, err = svc.BindChannel("telegram", "1", "", s.ID, "")
 	require.NoError(t, err)
 	assert.Equal(t, s.ProjectID, b.ProjectID)
+	assert.Equal(t, s.ID, b.TargetThreadID, "an explicit folder session is retained as the binding target")
 
 	_, err = svc.BindChannel("telegram", "1", "", s.ID, f.project.ID)
 	assert.ErrorIs(t, err, ErrBindingInvalid, "a thread or a project, not both")

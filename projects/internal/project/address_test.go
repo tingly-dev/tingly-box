@@ -75,6 +75,12 @@ func TestSessionListsAndSwitches(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "This chat now talks to [#1 Worker]. /session 0 returns to the project conversation of Demo.", reply)
 	assert.Equal(t, th.ID, boundOf(t, f, "1"))
+	bindings, err := f.store.ListChannelBindings(db.BindingFilter{ProjectID: f.project.ID})
+	require.NoError(t, err)
+	require.Len(t, bindings, 1)
+	assert.Equal(t, f.project.ID, bindings[0].TargetProjectID, "switching focus keeps the project binding")
+	assert.Equal(t, th.ID, bindings[0].ThreadID)
+	assert.Equal(t, th.Title, bindings[0].FocusTitle)
 
 	// A plain message now goes to the worker, and its reply to this chat.
 	_, err = svc.PostFromChannel("telegram", "1", "keep going", nil)
@@ -90,11 +96,35 @@ func TestSessionListsAndSwitches(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "This chat now talks to the project conversation of Demo.", reply)
 	assert.Equal(t, f.project.MainThreadID, boundOf(t, f, "1"))
+	bindings, err = f.store.ListChannelBindings(db.BindingFilter{ProjectID: f.project.ID})
+	require.NoError(t, err)
+	require.Len(t, bindings, 1)
+	assert.Equal(t, f.project.ID, bindings[0].TargetProjectID)
 
 	_, _, err = svc.ChannelCommand("telegram", "1", ChatSession, "7")
 	assert.ErrorIs(t, err, ErrNoSuchThread)
 	_, _, err = svc.ChannelCommand("telegram", "1", ChatSession, "Worker")
 	assert.Error(t, err)
+}
+
+func TestPendingFolderCanSelectAnExistingSession(t *testing.T) {
+	f, svc, _ := channelFixture(t)
+	session, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "first"})
+	require.NoError(t, err)
+	waitStatus(t, f.store, session.ID, db.ThreadIdle)
+	_, err = svc.BindChannel("telegram", "1", "", "", session.ProjectID)
+	require.NoError(t, err)
+	_, list, err := svc.ChannelCommand("telegram", "1", ChatSession, "")
+	require.NoError(t, err)
+	assert.Contains(t, list, "#1")
+	_, _, err = svc.ChannelCommand("telegram", "1", ChatSession, "1")
+	require.NoError(t, err)
+	b, err := f.store.GetChannelBinding("telegram", "1")
+	require.NoError(t, err)
+	assert.Equal(t, session.ID, b.ThreadID)
+	assert.Equal(t, session.ProjectID, b.TargetProjectID)
+	assert.Empty(t, b.TargetThreadID, "focusing a session does not change a folder binding")
+	assert.Empty(t, b.Folder)
 }
 
 func TestAResolvedThreadHandsItsChatsBackToItsParent(t *testing.T) {

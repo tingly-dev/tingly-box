@@ -156,6 +156,10 @@ func migrate(g *gorm.DB, o openOptions) (err error) {
 		"UPDATE thread_events SET source_chat_id = '' WHERE source_chat_id IS NULL",
 		"UPDATE thread_events SET parent = '' WHERE parent IS NULL",
 		"UPDATE channel_bindings SET new_thread = false WHERE new_thread IS NULL",
+		`UPDATE channel_bindings SET target_project_id = COALESCE(CASE WHEN COALESCE(folder, '') <> '' THEN
+			(SELECT id FROM projects WHERE type = 'folder' AND path = channel_bindings.folder AND archived_at IS NULL LIMIT 1)
+			ELSE (SELECT project_id FROM threads WHERE id = channel_bindings.thread_id) END, '') WHERE target_project_id IS NULL`,
+		"UPDATE channel_bindings SET target_thread_id = '' WHERE target_thread_id IS NULL",
 		"CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_path ON projects(path) WHERE path <> ''",
 	} {
 		if err = tx.Exec(q).Error; err != nil {

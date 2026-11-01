@@ -248,6 +248,11 @@ type ChannelBinding struct {
 	// ChatTitle is a display name for the chat, when the caller knows one.
 	ChatTitle string `gorm:"size:300" json:"chat_title"`
 	ThreadID  string `gorm:"size:36;index" json:"thread_id"`
+	// TargetProjectID identifies the bound project or folder independently of
+	// ThreadID, which follows the chat's current focus.
+	TargetProjectID string `gorm:"size:36;index" json:"target_project_id,omitempty"`
+	// TargetThreadID is set only when explicitly binding a folder session.
+	TargetThreadID string `gorm:"size:36" json:"target_thread_id,omitempty"`
 	// NewThread makes the chat's next message start a new thread in the
 	// folder of ThreadID instead of continuing it (/new in a folder chat).
 	NewThread bool `gorm:"not null;default:false" json:"-"`
@@ -263,9 +268,14 @@ type ChannelBinding struct {
 	// it says between tool calls, and each call), not only the reply.
 	Verbose bool `gorm:"not null;default:false" json:"verbose"`
 	// ProjectID is the thread's project, filled in when read.
-	ProjectID string    `gorm:"->;-:migration" json:"project_id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ProjectID   string    `gorm:"->;-:migration" json:"project_id"`
+	FocusTitle  string    `gorm:"->;-:migration" json:"focus_title,omitempty"`
+	FocusSeq    int       `gorm:"->;-:migration" json:"focus_seq,omitempty"`
+	FocusAgent  string    `gorm:"->;-:migration" json:"focus_agent,omitempty"`
+	TargetTitle string    `gorm:"->;-:migration" json:"target_title,omitempty"`
+	TargetSeq   int       `gorm:"->;-:migration" json:"target_seq,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // EventRole is the role a conversation event plays in the coordinator's

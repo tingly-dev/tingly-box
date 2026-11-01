@@ -1122,6 +1122,15 @@ export interface components {
              * @description Field created_at
              */
             created_at: string;
+            /** @description Field focus_agent */
+            focus_agent?: string;
+            /**
+             * Format: int64
+             * @description Field focus_seq
+             */
+            focus_seq?: number;
+            /** @description Field focus_title */
+            focus_title?: string;
             /** @description Field folder */
             folder?: string;
             /** @description Field id */
@@ -1130,6 +1139,17 @@ export interface components {
             platform: string;
             /** @description Field project_id */
             project_id: string;
+            /** @description Field target_project_id */
+            target_project_id?: string;
+            /**
+             * Format: int64
+             * @description Field target_seq
+             */
+            target_seq?: number;
+            /** @description Field target_thread_id */
+            target_thread_id?: string;
+            /** @description Field target_title */
+            target_title?: string;
             /** @description Field thread_id */
             thread_id: string;
             /**

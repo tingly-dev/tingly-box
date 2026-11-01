@@ -2520,6 +2520,19 @@
             "format": "date-time",
             "description": "Field created_at"
           },
+          "focus_agent": {
+            "type": "string",
+            "description": "Field focus_agent"
+          },
+          "focus_seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field focus_seq"
+          },
+          "focus_title": {
+            "type": "string",
+            "description": "Field focus_title"
+          },
           "folder": {
             "type": "string",
             "description": "Field folder"
@@ -2535,6 +2548,23 @@
           "project_id": {
             "type": "string",
             "description": "Field project_id"
+          },
+          "target_project_id": {
+            "type": "string",
+            "description": "Field target_project_id"
+          },
+          "target_seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field target_seq"
+          },
+          "target_thread_id": {
+            "type": "string",
+            "description": "Field target_thread_id"
+          },
+          "target_title": {
+            "type": "string",
+            "description": "Field target_title"
           },
           "thread_id": {
             "type": "string",

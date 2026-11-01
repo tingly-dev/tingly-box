@@ -61,6 +61,10 @@ func (s *Service) BindChannel(platform, chatID, title, threadID, projectID strin
 		return nil, ErrArchived
 	}
 	b := &db.ChannelBinding{Platform: platform, ChatID: chatID, ChatTitle: strings.TrimSpace(title), ThreadID: t.ID}
+	b.TargetProjectID = p.ID
+	if threadID != "" && p.Type == db.ProjectFolder {
+		b.TargetThreadID = t.ID
+	}
 	if len(botUUID) > 0 {
 		b.BotUUID = strings.TrimSpace(botUUID[0])
 	}
@@ -213,7 +217,7 @@ func (s *Service) startFromChannel(b *db.ChannelBinding, prev *db.Thread, projec
 		spec.Profile = b.Profile
 	}
 	return s.Threads.startFolderThread(spec, func(t *db.Thread) error {
-		nb := &db.ChannelBinding{Platform: b.Platform, ChatID: b.ChatID, ThreadID: t.ID}
+		nb := &db.ChannelBinding{Platform: b.Platform, ChatID: b.ChatID, ThreadID: t.ID, TargetProjectID: t.ProjectID, TargetThreadID: b.TargetThreadID}
 		return s.Store.UpsertChannelBinding(nb)
 	})
 }
