@@ -461,13 +461,10 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 	var content string
 
 	if opts.ParseMode == core.ParseModeMarkdown {
-		// For Lark/Feishu, markdown in card needs to be wrapped in div element
-		// MessageCardLarkMd implements MessageCardText interface
 		msgType = "interactive"
 		cardJson, err := larkcard.NewMessageCard().
 			Elements([]larkcard.MessageCardElement{
-				larkcard.NewMessageCardDiv().
-					Text(larkcard.NewMessageCardLarkMd().Content(opts.Text)),
+				larkcard.NewMessageCardMarkdown().Content(opts.Text),
 			}).
 			String()
 		if err != nil {

@@ -35,10 +35,12 @@ type Project struct {
 	// CoordinatorModel / ThreadModel are empty for "connection default".
 	// CoordinatorEffort / ThreadEffort are the thinking effort beside each of
 	// them (project.Efforts); empty for the endpoint's default.
-	CoordinatorModel  string `gorm:"size:200" json:"coordinator_model"`
-	ThreadModel       string `gorm:"size:200" json:"thread_model"`
-	CoordinatorEffort string `gorm:"size:32" json:"coordinator_effort"`
-	ThreadEffort      string `gorm:"size:32" json:"thread_effort"`
+	CoordinatorProfile string `gorm:"size:200" json:"coordinator_profile"`
+	ThreadProfile      string `gorm:"size:200" json:"thread_profile"`
+	CoordinatorModel   string `gorm:"size:200" json:"coordinator_model"`
+	ThreadModel        string `gorm:"size:200" json:"thread_model"`
+	CoordinatorEffort  string `gorm:"size:32" json:"coordinator_effort"`
+	ThreadEffort       string `gorm:"size:32" json:"thread_effort"`
 	// ThreadPermissionMode is the Claude Code permission mode threads run in.
 	ThreadPermissionMode string     `gorm:"size:40" json:"thread_permission_mode"`
 	Paused               bool       `json:"paused"`
@@ -111,9 +113,14 @@ type Thread struct {
 	// Model is the observed model for a project worker, or a folder thread's
 	// selected launch model. Never use a worker's observation as its choice.
 	Model string `gorm:"size:200" json:"model,omitempty"`
+	// ReportedModel is the model reported by the last turn, never a launch fallback.
+	ReportedModel string `gorm:"size:200" json:"reported_model,omitempty"`
 	// ModelOverride is a project worker's requested model; empty inherits the
 	// project's thread model. Folder threads keep their choice in Model.
-	ModelOverride string `gorm:"size:200" json:"model_override,omitempty"`
+	ProfileOverride *string `gorm:"size:200" json:"profile_override"`
+	ModelOverride   string  `gorm:"size:200" json:"model_override,omitempty"`
+	// EffortOverride is the next turn’s effort; empty inherits its project or CLI default.
+	EffortOverride string `gorm:"size:32" json:"effort_override,omitempty"`
 	// PermissionMode overrides the project's permission mode for this
 	// thread; a folder has no project mode, so it is a folder thread's only mode.
 	PermissionMode string `gorm:"size:40" json:"permission_mode,omitempty"`
@@ -137,6 +144,8 @@ type Thread struct {
 	// MergedAt is set when the branch was merged from the Overview.
 	MergedAt   *time.Time `json:"merged_at,omitempty"`
 	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
+	// ArchivedAt hides a folder session from active work without resolving it.
+	ArchivedAt *time.Time `gorm:"index" json:"archived_at,omitempty"`
 	CreatedAt  time.Time  `json:"created_at"`
 	UpdatedAt  time.Time  `json:"updated_at"`
 }
@@ -237,16 +246,22 @@ type ChannelBinding struct {
 	ID       string `gorm:"primaryKey;size:36" json:"id"`
 	Platform string `gorm:"size:40;not null;uniqueIndex:idx_channel_chat" json:"platform"`
 	ChatID   string `gorm:"size:200;not null;uniqueIndex:idx_channel_chat" json:"chat_id"`
+	BotUUID  string `gorm:"size:100" json:"bot_uuid,omitempty"`
 	// ChatTitle is a display name for the chat, when the caller knows one.
 	ChatTitle string `gorm:"size:300" json:"chat_title"`
 	ThreadID  string `gorm:"size:36;index" json:"thread_id"`
+	// TargetProjectID identifies the bound project or folder independently of
+	// ThreadID, which follows the chat's current focus.
+	TargetProjectID string `gorm:"size:36;index" json:"target_project_id,omitempty"`
+	// TargetThreadID is set only when explicitly binding a folder session.
+	TargetThreadID string `gorm:"size:36" json:"target_thread_id,omitempty"`
 	// NewThread makes the chat's next message start a new thread in the
 	// folder of ThreadID instead of continuing it (/new in a folder chat).
 	NewThread bool `gorm:"not null;default:false" json:"-"`
 	// Folder, when set, is a folder (an absolute path) the chat's next
 	// message starts a new thread in, the chat moving there: a chat that never
 	// talked yet (ThreadID empty) or one that changed folder (/cd).
-	Folder string `gorm:"size:1000" json:"-"`
+	Folder string `gorm:"size:1000" json:"folder,omitempty"`
 	// Profile is the launch profile a chat that never talked starts its
 	// first thread under: the profile of the bot that brought it in. Later
 	// threads keep the profile of the one before.
@@ -255,9 +270,14 @@ type ChannelBinding struct {
 	// it says between tool calls, and each call), not only the reply.
 	Verbose bool `gorm:"not null;default:false" json:"verbose"`
 	// ProjectID is the thread's project, filled in when read.
-	ProjectID string    `gorm:"->;-:migration" json:"project_id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ProjectID   string    `gorm:"->;-:migration" json:"project_id"`
+	FocusTitle  string    `gorm:"->;-:migration" json:"focus_title,omitempty"`
+	FocusSeq    int       `gorm:"->;-:migration" json:"focus_seq,omitempty"`
+	FocusAgent  string    `gorm:"->;-:migration" json:"focus_agent,omitempty"`
+	TargetTitle string    `gorm:"->;-:migration" json:"target_title,omitempty"`
+	TargetSeq   int       `gorm:"->;-:migration" json:"target_seq,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // EventRole is the role a conversation event plays in the coordinator's

@@ -9,8 +9,8 @@ export function ImSourceBadge({ platform, chat }: { platform: string; chat: stri
     const label = usePlatformLabel()(platform);
     return (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5, color: 'text.secondary', minWidth: 0, maxWidth: '100%' }}>
-            <PlatformMark platform={platform} size={12} />
-            <Typography noWrap sx={{ fontSize: fontSizes.sm, lineHeight: 1.4 }}>{t('im.source', { platform: label, chat })}</Typography>
+            {platform && <PlatformMark platform={platform} size={12} />}
+            <Typography noWrap sx={{ fontSize: fontSizes.sm, lineHeight: 1.4 }}>{platform ? (chat ? t('im.source', { platform: label, chat }) : t('im.sourcePlatform', { platform: label })) : t('im.sourceBot')}</Typography>
         </Box>
     );
 }

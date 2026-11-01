@@ -22,10 +22,11 @@ import (
 
 // Errors returned to callers (mapped to HTTP statuses by the module).
 var (
-	ErrPaused   = errors.New("the project is paused; resume it first")
-	ErrArchived = errors.New("the project is archived; unarchive it first")
-	ErrResolved = errors.New("the thread is resolved; reopen it first")
-	ErrNoPrompt = errors.New("no pending request with that id")
+	ErrPaused         = errors.New("the project is paused; resume it first")
+	ErrArchived       = errors.New("the project is archived; unarchive it first")
+	ErrThreadArchived = errors.New("the session is archived; restore it first")
+	ErrResolved       = errors.New("the thread is resolved; reopen it first")
+	ErrNoPrompt       = errors.New("no pending request with that id")
 	// ErrNotProject is for starting a worker in a project that is a folder.
 	ErrNotProject = errors.New("only a project's main thread starts threads in it")
 	// ErrMainThread is for running a main thread as an agent session.
@@ -538,6 +539,9 @@ func (m *Threads) sendable(threadID string) (*db.Thread, error) {
 	if p.Paused {
 		return nil, ErrPaused
 	}
+	if t.ArchivedAt != nil {
+		return nil, ErrThreadArchived
+	}
 	if t.Status == db.ThreadResolved {
 		return nil, ErrResolved
 	}
@@ -648,12 +652,44 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	}
 
 	env, defModel, settings := m.launchEnv(ctx, t, folder)
+	if !folder {
+		profile := workerProfile(p, t)
+		if l, ok := m.env.(Launcher); ok && profile != "" {
+			var err error
+			env, settings, err = l.LaunchEnv(ctx, profile)
+			if err == nil {
+				settings, err = m.workerSettings(p, t, settings)
+			}
+			if err != nil {
+				m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: fmt.Sprintf("profile %s unavailable: %v", profile, err)})
+				_, _ = m.update(t.ID, func(t *db.Thread) {
+					t.Status, t.WaitReason = db.ThreadFailed, fmt.Sprintf("Failed: profile %s unavailable: %v", profile, err)
+				})
+				m.mu.Lock()
+				a.slot = nil
+				m.mu.Unlock()
+				<-slot
+				m.giveUp(threadID, a)
+				return
+			}
+			defModel = ""
+		} else if profile != "" {
+			m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "profile unavailable"})
+			_, _ = m.update(t.ID, func(t *db.Thread) { t.Status, t.WaitReason = db.ThreadFailed, "Failed: profile unavailable" })
+			m.mu.Lock()
+			a.slot = nil
+			m.mu.Unlock()
+			<-slot
+			m.giveUp(threadID, a)
+			return
+		}
+	}
 	// A worker's observed Model is history, not its launch choice. Only an
 	// explicit override pins it instead of following the project's default.
 	model := t.Model
 	if !folder {
 		model = t.ModelOverride
-		if model == "" {
+		if model == "" && t.ProfileOverride == nil {
 			model = p.ThreadModel
 		}
 	}
@@ -663,10 +699,16 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	m.mu.Lock()
 	m.turns[threadID] = &turnTally{launchModel: model}
 	m.mu.Unlock()
-	opts := agentboot.ExecutionOptions{Model: model, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings, Entrypoint: sessionEntrypoint}
+	effort := t.EffortOverride
+	if effort == "" && !folder {
+		effort = p.ThreadEffort
+	}
+	opts := agentboot.ExecutionOptions{Model: model, Effort: effort, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings, Entrypoint: sessionEntrypoint}
 	if !folder {
 		opts.AppendSystemPrompt = threadSystemPrompt(m.layout, p, t)
-		opts.SettingsPath = m.layout.SettingsFile(p.ID, t.ID)
+		if settings == "" {
+			opts.SettingsPath = m.layout.SettingsFile(p.ID, t.ID)
+		}
 	} else if path, err := m.sessionSettings(p, t, settings); err == nil {
 		opts.SettingsPath = path
 	}
@@ -681,6 +723,41 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 		<-slot
 		m.next(threadID)
 	}
+}
+
+// workerSettings combines profile settings with the project's required access.
+func (m *Threads) workerSettings(p *db.Project, t *db.Thread, host string) (string, error) {
+	doc := map[string]any{}
+	b, err := os.ReadFile(host)
+	if err != nil {
+		return "", err
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		return "", err
+	}
+	perms, _ := doc["permissions"].(map[string]any)
+	if perms == nil {
+		perms = map[string]any{}
+	}
+	dirs, _ := perms["additionalDirectories"].([]any)
+	dirs = append(dirs, m.layout.LibraryDir(p.ID), m.layout.MemoryDir(p.ID))
+	for _, r := range p.Repos {
+		if r.Path != t.RepoPath {
+			dirs = append(dirs, r.Path)
+		}
+	}
+	perms["additionalDirectories"] = dirs
+	doc["permissions"] = perms
+	doc["autoMemoryDirectory"] = m.layout.MemoryDir(p.ID)
+	path := m.layout.SessionSettingsFile(t.ID)
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return "", err
+	}
+	out, err := json.Marshal(doc)
+	if err != nil {
+		return "", err
+	}
+	return path, os.WriteFile(path, out, 0600)
 }
 
 // sessionSettings lets a folder thread read the folder's uploads, which live
@@ -844,6 +921,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 	report := Report{Kind: ReportFinished, Text: strings.TrimSpace(tally.text)}
 	t, _ = m.update(threadID, func(t *db.Thread) {
 		t.Turns++
+		t.ReportedModel = tally.model
 		t.InputTokens += tally.inputTokens
 		t.OutputTokens += tally.outputTokens
 		// A session's Model is the owner's pick; a project thread shows the
@@ -859,8 +937,8 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		if session {
 			t.HeadBranch = head
 		}
-		if t.Status == db.ThreadResolved {
-			// Resolved while the turn was ending: that decision stands.
+		if t.Status == db.ThreadResolved || t.ArchivedAt != nil {
+			// A finish or archive decision made while the turn ended stands.
 			return
 		}
 		t.WaitReason = ""
@@ -888,7 +966,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 			t.LastReport = report.Text
 		}
 	})
-	if t == nil || t.Status == db.ThreadResolved {
+	if t == nil || t.Status == db.ThreadResolved || t.ArchivedAt != nil {
 		return
 	}
 	switch {
@@ -989,6 +1067,32 @@ func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
 		m.releaseChats(t)
 	}
 	return t, err
+}
+
+// ArchiveSession stores an independent archive flag. A stopped waiting or
+// working session becomes idle: there is no longer a live request to answer.
+func (m *Threads) ArchiveSession(threadID string) (*db.Thread, error) {
+	if done := m.stop(threadID); done != nil {
+		select {
+		case <-done:
+		case <-time.After(agentboot.SessionCloseTimeout):
+		}
+	}
+	m.engine.Evict(m.sessionOf(threadID))
+	return m.update(threadID, func(t *db.Thread) {
+		if t.ArchivedAt == nil {
+			now := time.Now()
+			t.ArchivedAt = &now
+		}
+		if t.Status == db.ThreadWaiting || t.Status == db.ThreadWorking {
+			t.Status, t.WaitReason = db.ThreadIdle, ""
+		}
+	})
+}
+
+// RestoreSession returns an archived session to the list in its stored state.
+func (m *Threads) RestoreSession(threadID string) (*db.Thread, error) {
+	return m.update(threadID, func(t *db.Thread) { t.ArchivedAt = nil })
 }
 
 // releaseChats hands the chats focused on a finished thread back to its

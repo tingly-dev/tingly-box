@@ -41,6 +41,18 @@ type ProjectRouter interface {
 	ToFolder(ctx context.Context, in ProjectInbound, folder string, ifNew bool) error
 }
 
+// ProjectChoice is one project coordinator offered by an embedding host.
+type ProjectChoice struct {
+	ID   string
+	Name string
+}
+
+// ProjectDirectory is an optional router capability for listing and selecting projects.
+type ProjectDirectory interface {
+	ProjectChoices(context.Context, ProjectInbound) ([]ProjectChoice, string, error)
+	SelectProject(context.Context, ProjectInbound, string) error
+}
+
 // ProjectAnswerPayload names the callbacks of a Projects prompt's buttons.
 const ProjectAnswerPayload = "pj"
 
@@ -215,6 +227,62 @@ func (h *BotHandler) routeMediaToProject(hCtx HandlerContext, mc *imbot.MediaCon
 	}
 	h.reactReceived(hCtx)
 	h.deliverToProject(hCtx, strings.TrimSpace(mc.Caption), files)
+}
+
+// projectDirectory lists projects or switches to the coordinator shown in the
+// last list. Snapshotting the IDs prevents concurrent list reorder from
+// selecting a different project than the user saw.
+func (h *BotHandler) projectDirectory(hCtx HandlerContext, arg string) {
+	source, ok := h.projectRouter.(ProjectDirectory)
+	if !ok || !h.projectsOn() {
+		h.SendText(hCtx, "Project selection is not available.")
+		return
+	}
+	in := h.projectInbound(hCtx, "")
+	arg = strings.TrimSpace(arg)
+	if arg == "" {
+		choices, current, err := source.ProjectChoices(h.ctx, in)
+		if err != nil {
+			h.SendText(hCtx, "Could not list projects: "+err.Error())
+			return
+		}
+		h.projectListsMu.Lock()
+		if h.projectLists == nil {
+			h.projectLists = map[string][]ProjectChoice{}
+		}
+		h.projectLists[hCtx.ChatID] = append([]ProjectChoice(nil), choices...)
+		h.projectListsMu.Unlock()
+		if len(choices) == 0 {
+			h.SendText(hCtx, "No projects are available.")
+			return
+		}
+		var out strings.Builder
+		out.WriteString("Projects:\n")
+		for i, p := range choices {
+			marker := ""
+			if p.ID == current {
+				marker = " ✓"
+			}
+			fmt.Fprintf(&out, "  %d. %s%s\n", i+1, p.Name, marker)
+		}
+		out.WriteString("\n/project <number> switches to its coordinator.")
+		h.SendText(hCtx, out.String())
+		return
+	}
+	n, valid := parsePositiveInt(arg)
+	h.projectListsMu.Lock()
+	list := append([]ProjectChoice(nil), h.projectLists[hCtx.ChatID]...)
+	h.projectListsMu.Unlock()
+	if !valid || n > len(list) {
+		h.SendText(hCtx, "Use /project to list projects, then /project <number> to switch.")
+		return
+	}
+	chosen := list[n-1]
+	if err := source.SelectProject(h.ctx, in, chosen.ID); err != nil {
+		h.SendText(hCtx, "Could not switch project: "+err.Error())
+		return
+	}
+	h.SendText(hCtx, "This chat now talks to the coordinator of "+chosen.Name+".")
 }
 
 // projectCommand reads a chat command that Projects runs: /new and /stop

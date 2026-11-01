@@ -56,6 +56,20 @@ describe('conversation presentation', () => {
         expect(view.container.querySelectorAll('table')).toHaveLength(2);
     });
 
+    it('offers a way back to the latest messages after scrolling up', () => {
+        show(props([event('assistant', 'A reply')]));
+        const scroller = screen.getByText('A reply').closest('[class*="MuiStack"]')!.parentElement!;
+        Object.defineProperties(scroller, {
+            scrollHeight: { configurable: true, value: 1000 },
+            clientHeight: { configurable: true, value: 300 },
+            scrollTop: { configurable: true, writable: true, value: 100 },
+        });
+        scroller.scrollTo = vi.fn();
+        fireEvent.scroll(scroller);
+        fireEvent.click(screen.getByRole('button', { name: /conversation.latest/ }));
+        expect(scroller.scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'smooth' });
+    });
+
     it('keeps the existing typography for Markdown outside conversation replies', () => {
         render(<><section data-testid="detail"><Markdown text="# Detail" /></section><section data-testid="reply"><Markdown text="# Reply" conversation /></section></>);
         expect(getComputedStyle(within(screen.getByTestId('detail')).getByRole('heading')).fontSize).toBe('22.4px');
@@ -135,7 +149,14 @@ describe('conversation presentation', () => {
         show(p);
         fireEvent.click(screen.getByText('conversation.example1'));
         const configured = composer.mock.lastCall![0];
-        expect(configured).toMatchObject({ disabled: true, model: 'chosen-model', onModelChange: p.onModelChange, context: p.composerContext, seed: 'conversation.example1' });
+        expect(configured).toMatchObject({ disabled: true, model: 'chosen-model', onModelChange: p.onModelChange, seed: 'conversation.example1' });
+        const settings = screen.getByRole('button', { name: 'threadSettings.settings' });
+        expect(settings).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryByText('Controls')).not.toBeInTheDocument();
+        fireEvent.click(settings);
+        expect(settings).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByText('Controls')).toBeVisible();
+        expect(configured.context).toBeUndefined();
         await configured.onSend('Hello', []);
         expect(p.onSend).toHaveBeenCalledWith('Hello', []);
     });

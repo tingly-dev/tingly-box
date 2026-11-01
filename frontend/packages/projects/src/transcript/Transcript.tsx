@@ -48,6 +48,7 @@ interface TranscriptProps {
     // arrived since. None on a first visit.
     newSince?: string;
     hideChecklist?: boolean;
+    messageSource?: (message: TranscriptEntry) => ReactNode;
 }
 
 const mono = {fontFamily: fontMono, fontSize: fontSizes.sm};
@@ -59,7 +60,7 @@ const preBox = {
 
 const UserBubble = ({message}: {message: TranscriptEntry}) => {
     const {t} = useTranslation();
-    const {attachments: Attachments} = useTranscriptHost();
+    const {attachments: Attachments, messageSource} = useTranscriptHost();
     const files = message.attachments ?? [];
     return (
         <Box sx={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end'}}>
@@ -72,6 +73,7 @@ const UserBubble = ({message}: {message: TranscriptEntry}) => {
                     <Typography variant="body1" sx={conversationText}>{message.content}</Typography>
                 </Box>
             )}
+            {messageSource?.(message)}
             {message.pending && (
                 <Typography sx={{color: 'text.secondary', fontSize: fontSizes.sm, mt: 0.25}}>
                     {t('projects.transcript.readsNext', {defaultValue: 'Claude will read this at its next step'})}
@@ -887,7 +889,7 @@ const FocusBody = ({block, working, expandAll, onRespond, pendingRequestId}: {
     );
 };
 
-const Transcript = ({blocks, pendingRequestId, working, detail = 'detailed', expandAll = false, onRespond, drafts, subagents, codeBlock, attachments, rememberLabel, newSince, hideChecklist = false}: TranscriptProps) => {
+const Transcript = ({blocks, pendingRequestId, working, detail = 'detailed', expandAll = false, onRespond, drafts, subagents, codeBlock, attachments, rememberLabel, newSince, hideChecklist = false, messageSource}: TranscriptProps) => {
     // While a request waits, its card is the live part; otherwise the turn
     // gets a line saying what it does and for how long.
     const showWorking = working && !pendingRequestId;
@@ -895,7 +897,7 @@ const Transcript = ({blocks, pendingRequestId, working, detail = 'detailed', exp
     const currentGroup = groups.at(-1);
 
     return (
-        <TranscriptHostProvider detail={detail} drafts={drafts} subagents={subagents} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel}>
+        <TranscriptHostProvider detail={detail} drafts={drafts} subagents={subagents} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel} messageSource={messageSource}>
             <Stack spacing={messageSpacing}>
                 {!hideChecklist && currentGroup && <Box sx={{position: 'sticky', top: 0, zIndex: 1}}><ChecklistCard key={currentGroup.id} todos={currentGroup.todos} history={groups.slice(0, -1)} working={working}/></Box>}
                 <BlockList anchored blocks={blocks} pendingRequestId={pendingRequestId} working={working} expandAll={expandAll} onRespond={onRespond} newFrom={firstNewBlock(blocks, newSince)}/>

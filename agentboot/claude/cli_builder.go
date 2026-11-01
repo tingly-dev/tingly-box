@@ -12,6 +12,7 @@ import (
 type CommonOptions struct {
 	Model                string
 	FallbackModel        string
+	Effort               string
 	MaxTurns             int
 	CustomSystemPrompt   string
 	AppendSystemPrompt   string
@@ -40,6 +41,10 @@ func BuildCommonArgs(config Config, opts CommonOptions) []string {
 	}
 	if opts.Model != "" {
 		args = append(args, "--model", opts.Model)
+	}
+
+	if opts.Effort != "" {
+		args = append(args, "--effort", opts.Effort)
 	}
 
 	// Fallback model - only from opts (config doesn't have this in original)

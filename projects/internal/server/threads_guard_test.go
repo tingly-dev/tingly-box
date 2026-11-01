@@ -30,13 +30,16 @@ func TestWorkerActionsAreRefusedOnAMainThread(t *testing.T) {
 		method, path string
 		body         any
 	}{
+		{"POST", "/resolve", nil},
 		{"POST", "/archive", nil},
+		{"POST", "/restore", nil},
 		{"POST", "/reopen", nil},
 		{"POST", "/merge", nil},
 		{"POST", "/handoff", nil},
 		{"POST", "/stop", nil},
 		{"POST", "/respond", map[string]any{"request_id": "r", "allow": true}},
 		{"PUT", "/model", map[string]any{"model": "m"}},
+		{"PUT", "/effort", map[string]any{"effort": "high"}},
 		{"PUT", "/profile", map[string]any{"profile": "x"}},
 		{"PUT", "/permission-mode", map[string]any{"permission_mode": "plan"}},
 		{"PUT", "/auto-answer", map[string]any{"auto_answer": "now"}},

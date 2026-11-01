@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProjectsHostProvider, type ProjectsHost } from '../host/ProjectsHost';
@@ -13,6 +13,7 @@ vi.mock('../client', async (actual) => ({
 afterEach(() => {
     cleanup();
     list.mockReset();
+    localStorage.clear();
 });
 
 const summary = (id: string, name: string, waiting: number, starred = false) => ({
@@ -62,7 +63,7 @@ describe('ProjectsSidebar', () => {
         expect(list).not.toHaveBeenCalled();
     });
 
-    it('lists projects and working folders flat: a row opens the page, threads are no subtree', async () => {
+    it('keeps projects flat and expands folders to show sessions', async () => {
         const h = host([summary('a', 'Alpha', 0), folder('f-app', '/home/me/app', 1, 0), folder('f-notes', '/home/me/notes', 0, 1)]);
         list.mockImplementation((path: string) => Promise.resolve({
             data: path.endsWith('/threads')
@@ -75,14 +76,29 @@ describe('ProjectsSidebar', () => {
         }));
         show(h, '/f?path=%2Fhome%2Fme%2Fapp&session=t-run', { showWorkdirs: true });
         const region = await screen.findByRole('region', { name: 'workdir.title' });
-        await waitFor(() => expect(within(region).getAllByRole('link').map((l) => l.textContent)).toEqual(['workdir.title', 'app', 'notes']));
-        // The open folder's row is marked; the session open inside it is not a row.
-        expect(within(region).getByRole('link', { name: 'app' })).toHaveAttribute('aria-current', 'page');
-        expect(within(region).getByRole('link', { name: 'app' })).toHaveAttribute('href', '/f?path=%2Fhome%2Fme%2Fapp');
+        const session = await within(region).findByRole('link', { name: /Running one/ });
+        expect(session).toHaveAttribute('href', '/f?path=%2Fhome%2Fme%2Fapp&session=t-run');
+        expect(session).toHaveAttribute('aria-current', 'page');
+        expect(within(region).getAllByRole('link').map((link) => link.textContent)).toEqual(expect.arrayContaining([expect.stringContaining('Waiting one'), expect.stringContaining('Running one')]));
+        expect(within(region).getByText('Waiting one').closest('a')!.compareDocumentPosition(session) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        fireEvent.click(within(region).getByRole('button', { name: 'sidebar.fold' }));
+        expect(localStorage.getItem('tingly-project.nav.folder.f-app')).toBe('folded');
         expect(within(region).queryByText('Running one')).not.toBeInTheDocument();
-        expect(within(region).queryByRole('button', { name: /sidebar.(un)?fold/ })).not.toBeInTheDocument();
-        // The nav reads no thread lists: sessions are observed inside the folder's page.
-        expect(list.mock.calls.every(([p]) => !String(p).includes('threads'))).toBe(true);
+        fireEvent.click(within(region).getAllByRole('button', { name: 'sidebar.unfold' })[0]);
+        expect(await within(region).findByText('Running one')).toBeInTheDocument();
+        const projects = screen.getByRole('region', { name: 'nav.projects' });
+        expect(within(projects).queryByRole('button', { name: /sidebar\.(fold|unfold)/ })).not.toBeInTheDocument();
+    });
+    it('limits older sessions while keeping urgent and selected sessions visible', async () => {
+        const h = host([folder('f-app', '/home/me/app', 1)]);
+        const threads = Array.from({ length: 7 }, (_, i) => ({ id: `t-${i}`, title: `Session ${i}`, status: i === 6 ? 'waiting' : 'idle', updated_at: `2026-10-${String(20 - i).padStart(2, '0')}T00:00:00Z` }));
+        list.mockImplementation((path: string) => Promise.resolve({ data: path.endsWith('/threads') ? { threads } : { projects: [folder('f-app', '/home/me/app', 1)] }, response: new Response() }));
+        show(h, '/f?path=%2Fhome%2Fme%2Fapp&session=t-5', { showWorkdirs: true });
+        expect(await screen.findByText('Session 6')).toBeInTheDocument();
+        expect(screen.getByText('Session 5')).toBeInTheDocument();
+        const older = screen.getByRole('button', { name: /sidebar.showOlder/ });
+        fireEvent.click(older);
+        expect(screen.getByText('Session 4')).toBeInTheDocument();
     });
     it('pins an IM row with the bot count when the host has IM, and leaves it out otherwise', async () => {
         const h = host([summary('a', 'Alpha', 0)]);

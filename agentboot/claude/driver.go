@@ -218,6 +218,7 @@ func (d *Driver) buildArgs(
 	commonOpts := CommonOptions{
 		Model:                opts.Model,
 		FallbackModel:        opts.FallbackModel,
+		Effort:               opts.Effort,
 		MaxTurns:             opts.MaxTurns,
 		CustomSystemPrompt:   opts.CustomSystemPrompt,
 		AppendSystemPrompt:   opts.AppendSystemPrompt,

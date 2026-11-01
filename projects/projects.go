@@ -141,6 +141,108 @@ func (a *App) AnswerFromChannel(platform, chatID, threadID, requestID, value str
 	return a.svc.AnswerFromChannel(platform, chatID, threadID, requestID, value)
 }
 
+// RegisteredFolders lists existing, non-archived working folders. Projects'
+// repositories are not independent folder registrations.
+func (a *App) RegisteredFolders() ([]string, error) {
+	projects, err := a.store.ListProjects("", false)
+	if err != nil {
+		return nil, err
+	}
+	folders := make([]string, 0)
+	for _, p := range projects {
+		if p.Type != db.ProjectFolder {
+			continue
+		}
+		path, err := project.CleanFolder(p.Path)
+		if err == nil {
+			folders = append(folders, path)
+		}
+	}
+	return folders, nil
+}
+
+// ProjectChoice is a non-archived project offered to an IM chat.
+type ProjectChoice struct {
+	ID   string
+	Name string
+}
+
+// RegisteredProjects lists project coordinators, excluding working folders.
+func (a *App) RegisteredProjects() ([]ProjectChoice, error) {
+	projects, err := a.store.ListProjects("", false)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ProjectChoice, 0)
+	for _, p := range projects {
+		if p.Type == db.ProjectProject {
+			out = append(out, ProjectChoice{ID: p.ID, Name: p.Name})
+		}
+	}
+	return out, nil
+}
+
+// ChannelProject returns the current project of a chat, if it is on a project.
+func (a *App) ChannelProject(platform, chatID string) (string, error) {
+	b, err := a.store.GetChannelBinding(platform, chatID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return "", nil
+		}
+		return "", err
+	}
+	if b.Folder != "" || b.ThreadID == "" {
+		return "", nil
+	}
+	t, err := a.store.GetThread(b.ThreadID)
+	if err != nil {
+		return "", err
+	}
+	p, err := a.store.GetProject(t.ProjectID)
+	if err != nil {
+		return "", err
+	}
+	if p.Type != db.ProjectProject {
+		return "", nil
+	}
+	return p.ID, nil
+}
+
+// ChannelToProject moves a chat to a project's coordinator.
+func (a *App) ChannelToProject(platform, chatID, botUUID, projectID string) error {
+	_, err := a.svc.BindChannel(platform, chatID, "", "", projectID, botUUID)
+	return err
+}
+
+// ChannelFolder is the folder a chat is on or has selected for its next turn.
+func (a *App) ChannelFolder(platform, chatID string) (string, error) {
+	b, err := a.store.GetChannelBinding(platform, chatID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return "", nil
+		}
+		return "", err
+	}
+	if b.Folder != "" {
+		return b.Folder, nil
+	}
+	if b.ThreadID == "" {
+		return "", nil
+	}
+	t, err := a.store.GetThread(b.ThreadID)
+	if err != nil {
+		return "", err
+	}
+	p, err := a.store.GetProject(t.ProjectID)
+	if err != nil {
+		return "", err
+	}
+	if p.Type != db.ProjectFolder {
+		return "", nil
+	}
+	return p.Path, nil
+}
+
 // ChannelBound reports whether an IM chat has a place in Projects: a thread,
 // or a folder its next message starts one in.
 func (a *App) ChannelBound(platform, chatID string) bool {
@@ -153,8 +255,8 @@ func (a *App) ChannelBound(platform, chatID string) bool {
 // With ifNew a chat that already has a place is left alone, which is how a
 // chat gets its first folder. title names the chat, when known; profile is
 // the launch profile the chat's first session runs under ("" the default).
-func (a *App) ChannelToFolder(platform, chatID, title, folder, profile string, ifNew bool) error {
-	return a.svc.ChannelToFolder(platform, chatID, title, folder, profile, ifNew)
+func (a *App) ChannelToFolder(platform, chatID, title, folder, profile string, ifNew bool, botUUID ...string) error {
+	return a.svc.ChannelToFolder(platform, chatID, title, folder, profile, ifNew, botUUID...)
 }
 
 // Start recovers threads interrupted by a restart and runs housekeeping
@@ -172,3 +274,6 @@ func (a *App) Close() error {
 	a.svc.Threads.Shutdown(ctx)
 	return a.store.Close()
 }
+
+// ChannelBot returns the bot selected by a channel binding for this delivery.
+func ChannelBot(ctx context.Context) string { return project.ChannelBot(ctx) }

@@ -447,6 +447,8 @@ func NewConfigWithDir(configDir string, opts ...ConfigOption) (*Config, error) {
 
 // load loads the global configuration from file
 func (c *Config) load() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	// Store the config file path before unmarshaling
 	configFile := c.ConfigFile
 
@@ -482,6 +484,13 @@ func (c *Config) load() error {
 
 // Save saves the global configuration to file
 func (c *Config) Save() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.saveLocked()
+}
+
+// saveLocked persists the config while c.mu is held.
+func (c *Config) saveLocked() error {
 	if c.ConfigFile == "" {
 		return fmt.Errorf("ConfigFile is empty")
 	}

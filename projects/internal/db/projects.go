@@ -118,7 +118,7 @@ func (s *Store) ProjectThreadCounts(projectID string) (ThreadCounts, error) {
 		Status string
 		N      int
 	}
-	if err := s.db.Model(&Thread{}).Select("status, COUNT(*) AS n").Where("project_id = ? AND agent <> ?", projectID, AgentLLM).Group("status").Scan(&rows).Error; err != nil {
+	if err := s.db.Model(&Thread{}).Select("status, COUNT(*) AS n").Where("project_id = ? AND agent <> ? AND archived_at IS NULL", projectID, AgentLLM).Group("status").Scan(&rows).Error; err != nil {
 		return ThreadCounts{}, err
 	}
 	m := map[string]int{}
@@ -136,7 +136,7 @@ func (s *Store) ThreadCounts() (map[string]map[string]int, error) {
 		Status    string
 		N         int
 	}
-	if err := s.db.Model(&Thread{}).Select("project_id, status, COUNT(*) AS n").Where("agent <> ?", AgentLLM).Group("project_id, status").Scan(&rows).Error; err != nil {
+	if err := s.db.Model(&Thread{}).Select("project_id, status, COUNT(*) AS n").Where("agent <> ? AND archived_at IS NULL", AgentLLM).Group("project_id, status").Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	out := map[string]map[string]int{}
@@ -256,7 +256,7 @@ func (s *Store) ListThreads(projectID string) ([]Thread, error) {
 // all projects.
 func (s *Store) ListThreadsByStatus(statuses ...string) ([]Thread, error) {
 	var out []Thread
-	err := s.db.Where("status IN ? AND agent <> ?", statuses, AgentLLM).Find(&out).Error
+	err := s.db.Where("status IN ? AND agent <> ? AND archived_at IS NULL", statuses, AgentLLM).Find(&out).Error
 	return out, err
 }
 

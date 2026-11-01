@@ -260,7 +260,7 @@ func Test_BoundChatCommandsGoToItsProject(t *testing.T) {
 	assert.NotContains(t, help.Text, "/threads")
 
 	// The old commands are gone, and a bare "stop" is a message.
-	for _, text := range []string{"/bash ls", "/resume", "/project", "/threads", "/focus 2", "/back", "/quiet", "/interrupt", "/mock"} {
+	for _, text := range []string{"/bash ls", "/resume", "/threads", "/focus 2", "/back", "/quiet", "/interrupt", "/mock"} {
 		chat.Drain()
 		chat.SendText(text)
 		chat.WaitText(3*time.Second).AssertContains(t, "Unknown command")

@@ -7841,8 +7841,8 @@
         "tags": [
           "threads"
         ],
-        "summary": "Archive (resolve) the thread; it stays readable and can be reopened",
-        "description": "Archive (resolve) the thread; it stays readable and can be reopened",
+        "summary": "Archive a folder session, stopping its process without resolving it",
+        "description": "Archive a folder session, stopping its process without resolving it",
         "operationId": "apiV1ThreadsIdArchivePost",
         "parameters": [
           {
@@ -8460,9 +8460,42 @@
         "tags": [
           "threads"
         ],
-        "summary": "Reopen an archived thread",
-        "description": "Reopen an archived thread",
+        "summary": "Reopen a resolved thread",
+        "description": "Reopen a resolved thread",
         "operationId": "apiV1ThreadsIdReopenPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/resolve": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Resolve the thread; it stays readable and can be reopened",
+        "description": "Resolve the thread; it stays readable and can be reopened",
+        "operationId": "apiV1ThreadsIdResolvePost",
         "parameters": [
           {
             "name": "id",
@@ -8518,6 +8551,39 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/restore": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Restore an archived folder session without changing its status",
+        "description": "Restore an archived folder session without changing its status",
+        "operationId": "apiV1ThreadsIdRestorePost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -20200,6 +20266,11 @@
           "agent": {
             "type": "string",
             "description": "Field agent"
+          },
+          "archived_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field archived_at"
           },
           "auto_answer": {
             "type": "string",

@@ -32,8 +32,7 @@ export default function ImSettingsPage() {
     const { bots, chats, reload } = useImChats(!!im);
     const { bindings, byChat, bind } = useChannelBindings(!!im);
     const directory = useProjectDirectory(!!im);
-    // A chat is bound to a project from here; a folder is bound by one of its threads, from its page.
-    const bindable = useMemo(() => [...directory.values()].filter((p) => !isFolder(p)), [directory]);
+    const bindable = useMemo(() => [...directory.values()], [directory]);
     const [accessBot, setAccessBot] = useState<ImBot | null>(null);
     const [moving, setMoving] = useState<ImChat | null>(null);
 
@@ -102,6 +101,10 @@ export default function ImSettingsPage() {
                                                         const place = b ? directory.get(b.project_id) : undefined;
                                                         // A thread other than the project's main one is opened on its own.
                                                         const thread = b && place && b.thread_id !== place.main_thread_id ? `?thread=${encodeURIComponent(b.thread_id)}` : '';
+                                                        const folderPath = place && isFolder(place) ? paths.folder(place.path) : '';
+                                                        const destination = folderPath
+                                                            ? `${folderPath}${b?.thread_id && !b.folder ? `${folderPath.includes('?') ? '&' : '?'}session=${encodeURIComponent(b.thread_id)}` : ''}`
+                                                            : `${paths.project(b?.project_id ?? '')}${thread}`;
                                                         return (
                                                             <TableRow key={chatKey(c.platform, c.chatId)}>
                                                                 <TableCell sx={{ pl: 2 }}>
@@ -110,12 +113,18 @@ export default function ImSettingsPage() {
                                                                 </TableCell>
                                                                 <TableCell>
                                                                     {b?.project_id ? (
-                                                                        <Link component={RouterLink} to={`${paths.project(b.project_id)}${thread}`} underline="hover" color="text.primary" noWrap sx={{ display: 'block', fontSize: fontSizes.base }}>
+                                                                        <Link component={RouterLink} to={destination} underline="hover" color="text.primary" noWrap sx={{ display: 'block', fontSize: fontSizes.base }}>
                                                                             {place?.name ?? t('im.place.elsewhere')}
                                                                         </Link>
                                                                     ) : (
                                                                         <Typography color="text.disabled" sx={{ fontSize: fontSizes.base }}>{t('im.settings.notBound')}</Typography>
                                                                     )}
+                                                                    {b?.target_thread_id && <Typography noWrap color="text.secondary" sx={{ fontSize: fontSizes.sm }}>
+                                                                        {t('im.focus.boundSession', { number: b.target_seq, title: b.target_title || b.target_thread_id })}
+                                                                    </Typography>}
+                                                                    {b?.project_id && <Typography noWrap color="text.secondary" sx={{ fontSize: fontSizes.sm }}>
+                                                                        {b.folder || !b.thread_id ? t('im.focus.nextSession') : b.focus_agent === 'llm' ? t('im.focus.coordinator') : t('im.focus.thread', { number: b.focus_seq, title: b.focus_title || b.thread_id })}
+                                                                    </Typography>}
                                                                 </TableCell>
                                                                 <TableCell sx={{ whiteSpace: 'nowrap' }}>
                                                                     <Typography component="span" sx={{ fontSize: fontSizes.base, display: 'inline-flex', alignItems: 'center', gap: 0.75, color: 'text.secondary' }}>

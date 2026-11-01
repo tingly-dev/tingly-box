@@ -93,7 +93,7 @@ export function WorkspaceLayout({ pane, title, actions, paneLabel, paneAttention
 
     return (
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: { xs: headerInsetXs, md: 3 }, py: 1, minHeight: 52, borderBottom: 1, borderColor: 'divider' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: { xs: headerInsetXs, md: 3 }, py: 1, minHeight: 52, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
                 <Box sx={{ minWidth: 0, flex: 1 }}>{title}</Box>
                 {actions}
                 {!hidePaneToggle && (
@@ -107,7 +107,7 @@ export function WorkspaceLayout({ pane, title, actions, paneLabel, paneAttention
             {notice}
             {top}
             <Box ref={row} sx={{ flex: 1, display: 'flex', minHeight: 0 }}>
-                <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>{main}</Box>
+                <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0, bgcolor: 'background.default' }}>{main}</Box>
                 {side == null ? null : pane.narrow ? (
                     <Drawer anchor="right" open={pane.drawerOpen} onClose={() => pane.setDrawerOpen(false)}
                         slotProps={{ paper: { sx: { width: { xs: '100%', sm: PANE_DEFAULT } } } }}>
