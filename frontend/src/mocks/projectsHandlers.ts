@@ -109,6 +109,12 @@ const threadEvents = (th: (typeof threads)[number]) => {
     if (th.id === 't-sdk') {
         return [
             ev('user', th.task, 3, { source: 'thread', source_ref: 'main-p-latency' }),
+            ...call('TaskCreate', { subject: 'Inspect the retry loop' }, 'Task #1 created successfully: Inspect the retry loop', 3),
+            ...call('TaskUpdate', { taskId: '1', status: 'completed' }, 'Updated task #1', 3),
+            ...call('TaskCreate', { subject: 'Add retry budget', activeForm: 'Adding retry budget' }, 'Task #2 created successfully: Add retry budget', 3),
+            ...call('TaskCreate', { subject: 'Run client tests' }, 'Task #3 created successfully: Run client tests', 3),
+            ...call('TaskCreate', { subject: 'Document the rollout' }, 'Task #4 created successfully: Document the rollout', 3),
+            ...call('TaskUpdate', { taskId: '2', status: 'in_progress' }, 'Updated task #2', 3),
             ...call('Read', { file_path: 'client/retry.go' }, 'for attempt := 0; attempt < max; attempt++ {', 3),
             ev('assistant', 'Adding a token bucket in front of the retry loop; refills at 10% of the request rate.', 2),
             ...call('Edit', { file_path: 'client/budget.go' }, 'Created budget.go', 2),
@@ -201,6 +207,9 @@ const sessionEvents = (s: (typeof sessions)[number]) => {
     if (s.id === 's-dark') {
         return [
             first,
+            ...call('TodoWrite', { todos: [{ content: 'Review theme preferences', status: 'pending' }] }, 'ok', 15, 'todo-1'),
+            ...call('TodoWrite', { todos: [{ content: 'Review theme preferences', status: 'completed' }] }, 'ok', 14, 'todo-2'),
+            ...call('TodoWrite', { todos: [{ content: 'Add the theme toggle', status: 'completed' }, { content: 'Verify settings persist', activeForm: 'Verifying settings persist', status: 'in_progress' }, { content: 'Run the test suite', status: 'pending' }] }, 'ok', 13, 'todo-3'),
             ev('assistant', 'I will look at how the settings page stores preferences first.', 12),
             ...call('Read', { file_path: 'src/settings/Settings.tsx' }, 'export function Settings() { ... }', 11, 'c1'),
             ev('tool_use', 'Agent', 10, { request_id: 'agent-1', payload: JSON.stringify({ description: 'Find where the theme is applied', subagent_type: 'Explore' }) }),

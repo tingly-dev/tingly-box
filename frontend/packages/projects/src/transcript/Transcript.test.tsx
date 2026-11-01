@@ -519,3 +519,23 @@ describe('message detail', () => {
         expect(respond).toHaveBeenCalledWith('nested', false, '');
     });
 });
+
+
+it('shows the current group and lets the reader revisit earlier groups', () => {
+    const entries = [
+        {kind: 'tool_use', content: 'TaskCreate', request_id: 'a', payload: {subject: 'Earlier'}, timestamp: '2026-10-04T00:00:01Z'},
+        {kind: 'tool_result', content: 'Task #1 created successfully: Earlier', request_id: 'a', timestamp: '2026-10-04T00:00:02Z'},
+        {kind: 'tool_use', content: 'TaskUpdate', request_id: 'b', payload: {taskId: '1', status: 'completed'}, timestamp: '2026-10-04T00:00:03Z'},
+        {kind: 'tool_result', content: 'Updated task #1', request_id: 'b', timestamp: '2026-10-04T00:00:04Z'},
+        {kind: 'tool_use', content: 'TaskCreate', request_id: 'c', payload: {subject: 'Current'}, timestamp: '2026-10-04T00:00:05Z'},
+        {kind: 'tool_result', content: 'Task #2 created successfully: Current', request_id: 'c', timestamp: '2026-10-04T00:00:06Z'},
+    ];
+    const {container} = render(<Transcript blocks={buildTranscript(entries)} working onRespond={respondNever}/>);
+    const card = container.querySelector('[data-checklist]')!;
+    expect(within(card as HTMLElement).getByText('Current')).toBeInTheDocument();
+    expect(within(card as HTMLElement).queryByText('Earlier')).not.toBeInTheDocument();
+    fireEvent.click(within(card as HTMLElement).getByRole('button', {name: /Previous task groups/}));
+    const buttons = within(card as HTMLElement).getAllByRole('button');
+    fireEvent.click(buttons[2]);
+    expect(within(card as HTMLElement).getByText('Earlier')).toBeInTheDocument();
+});
