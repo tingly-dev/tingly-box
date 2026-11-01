@@ -237,3 +237,31 @@ func TestExternalTargetBlockIsScopedToBotAndPlatform(t *testing.T) {
 		require.False(t, blocked)
 	}
 }
+
+func TestTargetAliasesPersistAndStayScoped(t *testing.T) {
+	sm, err := NewStoreManager(t.TempDir())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sm.Close() })
+	bot := createAccessBot(t, sm, "aliases")
+	other := createAccessBot(t, sm, "other")
+	store, ctx := sm.BotAccess(), context.Background()
+	chat, err := store.DiscoverDirectChat(ctx, bot.UUID, "telegram", "chat-id")
+	require.NoError(t, err)
+	group, err := store.DiscoverGroup(ctx, bot.UUID, "telegram", "group-id", "Platform name")
+	require.NoError(t, err)
+	require.ErrorIs(t, store.SetTargetAlias(ctx, other.UUID, chat.ID, "chat", "wrong"), ErrAccessTargetNotFound)
+	require.NoError(t, store.SetTargetAlias(ctx, bot.UUID, chat.ID, "chat", " Alice "))
+	require.NoError(t, store.SetTargetAlias(ctx, bot.UUID, group.ID, "group", "Team"))
+	chat, err = store.DiscoverDirectChat(ctx, bot.UUID, "telegram", "chat-id")
+	require.NoError(t, err)
+	group, err = store.DiscoverGroup(ctx, bot.UUID, "telegram", "group-id", "New platform name")
+	require.NoError(t, err)
+	require.Equal(t, "Alice", chat.Alias)
+	require.Equal(t, "Team", group.Alias)
+	require.Equal(t, "chat-id", chat.ExternalChatID)
+	require.NoError(t, store.SetTargetAlias(ctx, bot.UUID, chat.ID, "chat", ""))
+	chat, found, err := store.GetDirectChat(ctx, bot.UUID, chat.ID)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Empty(t, chat.Alias)
+}
