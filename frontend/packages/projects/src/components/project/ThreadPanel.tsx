@@ -167,7 +167,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     // A folder thread has no branch to review or merge; its uploads are its own.
     const session = folder;
     const owner = useMemo<AttachOwner>(() => (session ? { threadId } : { projectId }), [session, projectId, threadId]);
-    const Attachments = useMemo(() => ({ items }: { items: Attachment[] }) => <AttachmentChips owner={owner} items={items} />, [owner]);
+    const Attachments = useMemo(() => ({ items, align }: { items: Attachment[]; align?: 'flex-start' | 'flex-end' }) => <AttachmentChips owner={owner} items={items} align={align} />, [owner]);
     const ops = useMemo(() => threadOps(threadId), [threadId]);
     const composer = useRef<ThreadComposerHandle>(null);
     // Messages held for after the running turn.

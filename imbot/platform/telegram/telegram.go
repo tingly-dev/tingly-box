@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -528,6 +529,18 @@ func (b *Bot) sendMedia(ctx context.Context, chatID int64, opts *core.SendMessag
 	}
 
 	media := opts.Media[0]
+	var input models.InputFile = &models.InputFileString{Data: media.URL}
+	if parsed, parseErr := url.Parse(media.URL); parseErr == nil && parsed.Scheme == "file" {
+		if parsed.Host != "" || !strings.HasPrefix(parsed.Path, "/") {
+			return nil, fmt.Errorf("invalid local file URL")
+		}
+		file, openErr := os.Open(parsed.Path)
+		if openErr != nil {
+			return nil, openErr
+		}
+		defer file.Close()
+		input = &models.InputFileUpload{Filename: media.Filename, Data: file}
+	}
 
 	var sentMsg *models.Message
 	var err error
@@ -536,7 +549,7 @@ func (b *Bot) sendMedia(ctx context.Context, chatID int64, opts *core.SendMessag
 		// Send as photo
 		params := &tgbot.SendPhotoParams{
 			ChatID: chatID,
-			Photo:  &models.InputFileString{Data: media.URL},
+			Photo:  input,
 		}
 		if opts.Text != "" {
 			params.Caption = opts.Text
@@ -546,7 +559,7 @@ func (b *Bot) sendMedia(ctx context.Context, chatID int64, opts *core.SendMessag
 		// Send as document
 		params := &tgbot.SendDocumentParams{
 			ChatID:   chatID,
-			Document: &models.InputFileString{Data: media.URL},
+			Document: input,
 		}
 		if opts.Text != "" {
 			params.Caption = opts.Text
