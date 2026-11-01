@@ -4,8 +4,8 @@ import {
     Popover, Skeleton, Tooltip, Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import type { Attachment, BackgroundTask, Subagent, Thread, ThreadEvent } from '../../client';
-import { buildTranscript, SubagentFocus, Trajectory, Transcript, type Respond, type TrajectoryAnchor } from '../../transcript';
+import { api, unwrap, type Attachment, type BackgroundTask, type Subagent, type Thread, type ThreadEvent } from '../../client';
+import { buildTranscript, todoGroups, ChecklistCard, SubagentFocus, Trajectory, Transcript, type Respond, type TrajectoryAnchor } from '../../transcript';
 import type { TranscriptSubagents } from '../../hooks/useTranscript';
 import { ThreadComposer, type ThreadComposerHandle } from '../ThreadComposer';
 import { HeldMessages, heldMessages } from './HeldMessages';
@@ -189,6 +189,31 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
         const { entries, pendingRequestId } = threadTranscript(events ?? [], running, (e) => e.source === 'thread' ? coordinator : undefined);
         return { blocks: buildTranscript(entries), pendingRequestId };
     }, [events, running, coordinator]);
+
+    // Load the older progress calls separately so a long conversation's
+    // paginated transcript does not lose its current checklist.
+    const [progressHistory, setProgressHistory] = useState<{threadId: string; events: ThreadEvent[]} | null>(null);
+    useEffect(() => {
+        if (!threadId || !more) return;
+        let active = true;
+        unwrap(api.GET('/api/v1/threads/{id}/events', {params: {path: {id: threadId}}})).then((r) => {
+            if (!active) return;
+            const names = new Set(['TodoWrite', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet']);
+            const ids = new Set(r.events.filter((e) => !e.parent && e.kind === 'tool_use' && names.has(e.content)).map((e) => e.request_id));
+            setProgressHistory({threadId, events: r.events.filter((e) => !e.parent && ((e.kind === 'tool_use' && names.has(e.content)) || (e.kind === 'tool_result' && ids.has(e.request_id))))});
+        }).catch(() => { /* The loaded transcript still supplies current progress. */ });
+        return () => { active = false; };
+    }, [threadId, more]);
+    const groups = useMemo(() => {
+        const history = progressHistory?.threadId === threadId ? progressHistory.events : [];
+        if (!history.length) return todoGroups(blocks);
+        const combined = new Map(history.map((e) => [e.id, e]));
+        for (const e of events ?? []) combined.set(e.id, e);
+        const all = [...combined.values()].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        return todoGroups(buildTranscript(threadTranscript(all, running, () => undefined).entries));
+    }, [blocks, events, progressHistory, running, threadId]);
+
+    const currentGroup = groups.at(-1);
 
     const focusCallLoaded = !!focused && !!events?.some((e) => !e.parent && e.kind === 'tool_use' && e.request_id === focused);
     useEffect(() => {
@@ -417,6 +442,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     <Button size="small" onClick={() => void openInChat({ call: focused }, own?.call === focused ? own.events.find((e) => e.kind === 'tool_use')?.id : undefined)} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>{t('subagents.show')}</Button>
                 </Box>
             )}
+            {!focused && currentGroup && <Box sx={{ px: 2, pt: 1 }}><ChecklistCard key={`${threadId}:${currentGroup.id}`} todos={currentGroup.todos} history={groups.slice(0, -1)} working={running} /></Box>}
             <Box ref={scrollRef} onScroll={() => {
                 const el = scrollRef.current;
                 if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
@@ -428,7 +454,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     : focused && focusBlock
                         ? <SubagentFocus detail={detail} block={focusBlock} subagents={host} working={running} pendingRequestId={pendingRequestId} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} />
                     : view === 'chat'
-                        ? <Transcript detail={detail} blocks={blocks} subagents={host} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} />
+                        ? <Transcript hideChecklist detail={detail} blocks={blocks} subagents={host} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} />
                         : <Trajectory blocks={blocks} working={running} pendingRequestId={pendingRequestId} project={thread.cwd} onOpen={(anchor) => void openInChat(anchor)} />}
             </Box>
 

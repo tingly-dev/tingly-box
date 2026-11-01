@@ -409,28 +409,114 @@ export interface Todo {
     status: 'pending' | 'in_progress' | 'completed';
 }
 
-// latestTodos is the progress list as of the last TodoWrite call: each call
-// rewrites the whole list, so the last one is the current state. Undefined
-// when the agent never wrote one.
-export const latestTodos = (blocks: TranscriptBlock[]): Todo[] | undefined => {
-    for (let i = blocks.length - 1; i >= 0; i--) {
-        const b = blocks[i];
-        if (b.type !== 'activity') continue;
-        for (let j = b.steps.length - 1; j >= 0; j--) {
-            const s = b.steps[j];
-            if (s.type !== 'tool' || s.name !== 'TodoWrite') continue;
-            const raw = (s.input as {todos?: unknown} | null)?.todos;
-            if (!Array.isArray(raw)) continue;
-            const todos = raw.flatMap((x): Todo[] => {
-                const r = x as Partial<Todo> | null;
-                if (!r || typeof r.content !== 'string' || r.content.trim() === '') return [];
-                const status = r.status === 'completed' || r.status === 'in_progress' ? r.status : 'pending';
-                return [{content: r.content, activeForm: typeof r.activeForm === 'string' ? r.activeForm : undefined, status}];
-            });
-            return todos.length > 0 ? todos : undefined;
+// Groups are a presentation inferred from tool calls, not Claude task-list IDs.
+export interface TodoGroup { id: string; todos: Todo[] }
+
+export const todoGroups = (blocks: TranscriptBlock[]): TodoGroup[] => {
+    type Group = {id: string; source: 'todo' | 'task'; items: Map<string, Todo>; unfinished: number};
+    const groups: Group[] = [];
+    const taskGroups = new Map<string, Group>();
+    const record = (v: unknown): Record<string, unknown> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
+    const status = (v: unknown): Todo['status'] => v === 'completed' || v === 'in_progress' ? v : 'pending';
+    const current = () => groups.at(-1);
+    const finished = (g: Group) => g.items.size > 0 && g.unfinished === 0;
+    const put = (g: Group, id: string, item: Todo) => {
+        const old = g.items.get(id);
+        if (old && old.status !== 'completed') g.unfinished--;
+        if (item.status !== 'completed') g.unfinished++;
+        g.items.set(id, item);
+    };
+    const remove = (g: Group, id: string) => {
+        const old = g.items.get(id);
+        if (old && old.status !== 'completed') g.unfinished--;
+        g.items.delete(id);
+    };
+    const addGroup = (id: string, source: Group['source']) => {
+        const group: Group = {id, source, items: new Map(), unfinished: 0};
+        groups.push(group);
+        return group;
+    };
+    const findTask = (id: string) => taskGroups.get(id);
+    for (const block of blocks) {
+        if (block.type !== 'activity') continue;
+        for (const step of block.steps) {
+            if (step.type !== 'tool' || step.isError) continue;
+            const input = record(step.input);
+            if (step.name === 'TodoWrite' && Array.isArray(input.todos)) {
+                const items = input.todos.flatMap((value): Todo[] => {
+                    const r = record(value);
+                    return typeof r.content === 'string' && r.content.trim() ? [{content: r.content, activeForm: typeof r.activeForm === 'string' ? r.activeForm : undefined, status: status(r.status)}] : [];
+                });
+                let g = current();
+                if (!items.length) {
+                    if (g?.source === 'todo') { g.items.clear(); g.unfinished = 0; }
+                    continue;
+                }
+                const names = new Set(g?.source === 'todo' ? [...g.items.values()].map((old) => old.content) : []);
+                const overlap = items.some((x) => names.has(x.content));
+                if (!g || g.source !== 'todo' || (finished(g) && !overlap)) g = addGroup(step.id, 'todo');
+                g.items = new Map(items.map((todo, i) => [String(i), todo]));
+                g.unfinished = items.filter((todo) => todo.status !== 'completed').length;
+                continue;
+            }
+            if (step.result === undefined) continue;
+            let parsed: unknown;
+            try { parsed = JSON.parse(step.result); } catch { /* Claude also returns plain text. */ }
+            const output = record(parsed);
+            const getText = step.name === 'TaskGet' ? step.result.match(/^Task #([^:]+): ([^\n]+)\nStatus: (pending|in_progress|completed)/) : null;
+            const item = getText ? {id: getText[1], subject: getText[2], status: getText[3]} : record(output.task ?? output);
+            if (step.name === 'TaskCreate') {
+                const id = item.id ?? item.taskId ?? step.result.match(/(?:task\s*#|task\s+)([\w-]+)\s+created/i)?.[1];
+                if ((typeof id !== 'string' && typeof id !== 'number') || typeof input.subject !== 'string') continue;
+                let g = findTask(String(id)) ?? current();
+                if (!g || g.source !== 'task' || (finished(g) && !g.items.has(String(id)))) g = addGroup(step.id, 'task');
+                put(g, String(id), {content: input.subject, activeForm: typeof input.activeForm === 'string' ? input.activeForm : undefined, status: 'pending'});
+                taskGroups.set(String(id), g);
+            } else if (step.name === 'TaskUpdate') {
+                const id = String(input.taskId ?? '');
+                const g = findTask(id);
+                const old = g?.items.get(id);
+                if (!g || !old) continue;
+                if (input.status === 'deleted') { remove(g, id); taskGroups.delete(id); }
+                else put(g, id, {content: typeof input.subject === 'string' ? input.subject : old.content, activeForm: typeof input.activeForm === 'string' ? input.activeForm : old.activeForm, status: input.status === undefined ? old.status : status(input.status)});
+            } else if (step.name === 'TaskGet' || step.name === 'TaskList') {
+                let list: unknown = step.name === 'TaskGet' ? [item] : Array.isArray(parsed) ? parsed : output.tasks;
+                if (step.name === 'TaskList' && !Array.isArray(list)) {
+                    const lines = step.result.split('\n').map((line) => line.match(/^#([^ ]+) \[(pending|in_progress|completed)\] (.+)$/));
+                    if (step.result.trim() === 'No tasks found') list = [];
+                    else if (lines.length && lines.every(Boolean)) list = lines.map((m) => ({id: m![1], status: m![2], subject: m![3]}));
+                    else continue;
+                }
+                if (!Array.isArray(list)) continue;
+                const seen = new Set<string>();
+                for (const value of list) {
+                    const r = record(value);
+                    const id = r.id ?? (step.name === 'TaskGet' ? input.taskId : undefined);
+                    if ((typeof id !== 'string' && typeof id !== 'number') || typeof r.subject !== 'string') continue;
+                    const key = String(id);
+                    seen.add(key);
+                    let g = findTask(key) ?? current();
+                    if (!g || g.source !== 'task') g = addGroup(step.id, 'task');
+                    const old = g.items.get(key);
+                    put(g, key, {content: r.subject, activeForm: typeof r.activeForm === 'string' ? r.activeForm : old?.activeForm, status: status(r.status)});
+                    taskGroups.set(key, g);
+                }
+                // A list is authoritative for the live group, but archived groups
+                // remain available even after Claude removes old tasks.
+                const g = current();
+                if (step.name === 'TaskList' && g?.source === 'task') {
+                    for (const id of g.items.keys()) if (!seen.has(id)) { remove(g, id); taskGroups.delete(id); }
+                }
+            }
         }
     }
-    return undefined;
+    const visible = groups.filter((g) => g.items.size > 0 || (g === current() && groups.some((old) => old.items.size > 0)));
+    return visible.map((g) => ({id: g.id, todos: [...g.items.values()]}));
+};
+
+export const latestTodos = (blocks: TranscriptBlock[]): Todo[] | undefined => {
+    const todos = todoGroups(blocks).at(-1)?.todos;
+    return todos?.length ? todos : undefined;
 };
 
 // RequestOutcome is how a request ended, or that it still waits.
