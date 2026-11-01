@@ -4,7 +4,7 @@ import { DialogHeader, EmptyState } from '@tingly/ui';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { useTranslation } from 'react-i18next';
 import type { ChannelBinding } from '../../client/channelBindings';
-import type { ProjectSummary } from '../../client';
+import { isFolder, type ProjectSummary } from '../../client';
 import type { ImChat } from '../../host/ProjectsHost';
 import { Folder, Info } from '../icons';
 import { ChoiceList, type Choice } from './ChoiceList';
@@ -33,10 +33,11 @@ export function MoveChatDialog({ chat, bound, projects, onClose, onMove }: Props
     };
 
     // Moving to where it already is changes nothing, so that project is not offered.
-    const items: Choice[] = projects.filter((p) => p.main_thread_id !== bound?.thread_id).map((p) => ({
+    const items: Choice[] = projects.filter((p) => p.id !== bound?.project_id || (isFolder(p) && !!bound.target_thread_id)).map((p) => ({
         key: p.id,
         lead: <Folder sx={{ fontSize: 22, color: 'text.secondary' }} />,
         title: p.name,
+        subtitle: isFolder(p) ? t('im.focus.folder') : t('im.focus.project'),
     }));
 
     const submit = async () => {

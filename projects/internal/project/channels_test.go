@@ -578,7 +578,7 @@ func TestMovingAChatToAnotherFolderStartsThereNext(t *testing.T) {
 	assert.ErrorIs(t, svc.ChannelToFolder("telegram", "c", "", filepath.Join(other, "missing"), "", false), ErrNotFolder)
 	_, reply, err := svc.ChannelCommand("telegram", "c", ChatSession, "")
 	require.NoError(t, err)
-	assert.Contains(t, reply, "#1", "other commands still act on the thread it is on")
+	assert.Contains(t, reply, "No sessions in this folder yet", "session selection follows the new folder, not the previous thread")
 
 	_, err = svc.PostFromChannel("telegram", "c", "over here", nil)
 	require.NoError(t, err)

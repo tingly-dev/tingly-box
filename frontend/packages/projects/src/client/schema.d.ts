@@ -168,13 +168,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the IM chats bound to threads, all of them or one project's or thread's
-         * @description List the IM chats bound to threads, all of them or one project's or thread's
+         * List IM chats bound to threads, projects, or folders
+         * @description List IM chats bound to threads, projects, or folders
          */
         get: operations["apiV1ProjectsChannel-bindingsGet"];
         /**
-         * Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it
-         * @description Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it
+         * Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it
+         * @description Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it
          */
         put: operations["apiV1ProjectsChannel-bindingsPut"];
         post?: never;
@@ -1122,12 +1122,34 @@ export interface components {
              * @description Field created_at
              */
             created_at: string;
+            /** @description Field focus_agent */
+            focus_agent?: string;
+            /**
+             * Format: int64
+             * @description Field focus_seq
+             */
+            focus_seq?: number;
+            /** @description Field focus_title */
+            focus_title?: string;
+            /** @description Field folder */
+            folder?: string;
             /** @description Field id */
             id: string;
             /** @description Field platform */
             platform: string;
             /** @description Field project_id */
             project_id: string;
+            /** @description Field target_project_id */
+            target_project_id?: string;
+            /**
+             * Format: int64
+             * @description Field target_seq
+             */
+            target_seq?: number;
+            /** @description Field target_thread_id */
+            target_thread_id?: string;
+            /** @description Field target_title */
+            target_title?: string;
             /** @description Field thread_id */
             thread_id: string;
             /**
@@ -2271,7 +2293,7 @@ export interface operations {
     "apiV1ProjectsChannel-bindingsGet": {
         parameters: {
             query?: {
-                /** @description Only chats bound to a thread of this project */
+                /** @description Only chats bound to this project or folder */
                 project_id?: string;
                 /** @description Only chats bound to this thread */
                 thread_id?: string;

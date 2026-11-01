@@ -57,7 +57,8 @@ describe('WorkdirPage removing a folder', () => {
     it('asks first, counting the sessions it would stop', async () => {
         m.folders = [folder(1, 1)];
         show();
-        fireEvent.click(await screen.findByRole('button', { name: 'workdir.remove' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'workdir.actions' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'workdir.remove' }));
         expect(await screen.findByText(/workdir\.removeRunning.*"count":2/)).toBeInTheDocument();
         expect(m.del).not.toHaveBeenCalled();
         fireEvent.click(screen.getByRole('button', { name: 'workdir.removeConfirm' }));
@@ -67,7 +68,8 @@ describe('WorkdirPage removing a folder', () => {
     it('removes at once when nothing is running', async () => {
         m.folders = [folder(0, 0)];
         show();
-        fireEvent.click(await screen.findByRole('button', { name: 'workdir.remove' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'workdir.actions' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'workdir.remove' }));
         await waitFor(() => expect(m.del).toHaveBeenCalledTimes(1));
         expect(screen.queryByText(/workdir\.removeRunning/)).not.toBeInTheDocument();
     });
@@ -95,6 +97,15 @@ describe('WorkdirPage live transcript', () => {
                         : { threads: [thread] };
             return { data, response: new Response() };
         });
+    });
+
+    it('starts a new session from the more menu', async () => {
+        show('/?path=%2Fhome%2Fme%2Fapp&session=t1');
+        expect(await screen.findByPlaceholderText('session.queuePlaceholder')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'session.new' })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'workdir.actions' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'session.new' }));
+        expect(await screen.findByPlaceholderText('session.promptPlaceholder')).toBeInTheDocument();
     });
 
     it('saves thread permissions before continuing and never sends while that save is pending', async () => {

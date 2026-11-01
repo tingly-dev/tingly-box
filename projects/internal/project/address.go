@@ -83,7 +83,7 @@ func (s *Service) focus(b *db.ChannelBinding, p *db.Project, ref string) (string
 	if t.Status == db.ThreadResolved {
 		return fmt.Sprintf("[%s] is done; reopen it in Projects on the web to talk to it.", threadTag(t.Seq, t.Title)), nil
 	}
-	if err := s.Store.UpsertChannelBinding(&db.ChannelBinding{Platform: b.Platform, ChatID: b.ChatID, ThreadID: t.ID}); err != nil {
+	if err := s.Store.UpsertChannelBinding(&db.ChannelBinding{Platform: b.Platform, ChatID: b.ChatID, ThreadID: t.ID, TargetProjectID: p.ID, TargetThreadID: b.TargetThreadID}); err != nil {
 		return "", err
 	}
 	reply := "This chat now talks to " + placeName(t, p) + "."
