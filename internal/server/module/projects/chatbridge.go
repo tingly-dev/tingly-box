@@ -34,7 +34,8 @@ type ChatBridge struct {
 	enabled  func() bool
 	start    func()
 	// disabled reports a blocklisted chat; nothing is sent to one.
-	disabled func(chatID string) bool
+	disabled      func(chatID string) bool
+	targetBlocked func(context.Context, string, string, string) (bool, error)
 	// bots remembers which bot a bound chat last wrote through, so replies
 	// go back through the same one when several bots share a platform.
 	bots map[string]string
@@ -57,6 +58,33 @@ func (b *ChatBridge) Bind(app *projectsapp.App, registry *channel.Registry, enab
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.app, b.registry, b.enabled, b.start, b.disabled = app, registry, enabled, start, disabled
+}
+
+// SetTargetBlocked connects the bot-scoped access control used by outbound
+// messages and prompt updates. A lookup failure prevents delivery.
+func (b *ChatBridge) SetTargetBlocked(check func(context.Context, string, string, string) (bool, error)) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.targetBlocked = check
+}
+
+func (b *ChatBridge) checkTarget(ctx context.Context, botUUID, platform, chatID string) error {
+	b.mu.RLock()
+	disabled, check := b.disabled, b.targetBlocked
+	b.mu.RUnlock()
+	if disabled != nil && disabled(chatID) {
+		return errChatDisabled
+	}
+	if check != nil {
+		blocked, err := check(ctx, botUUID, platform, chatID)
+		if err != nil {
+			return fmt.Errorf("check chat access: %w", err)
+		}
+		if blocked {
+			return errChatDisabled
+		}
+	}
+	return nil
 }
 
 func chatKey(platform, chatID string) string { return platform + "\x00" + chatID }
@@ -87,7 +115,55 @@ func (b *ChatBridge) ToFolder(_ context.Context, in remoteagent.ProjectInbound, 
 	if app == nil {
 		return errors.New("Projects is switched off")
 	}
-	return app.ChannelToFolder(in.Platform, in.ChatID, "", folder, in.Profile, ifNew)
+	return app.ChannelToFolder(in.Platform, in.ChatID, "", folder, in.Profile, ifNew, in.BotUUID)
+}
+
+// RegisteredFolders returns Projects' current, existing working folders.
+func (b *ChatBridge) RegisteredFolders(_ context.Context) ([]string, error) {
+	app := b.live()
+	if app == nil {
+		return nil, errors.New("Projects is switched off")
+	}
+	return app.RegisteredFolders()
+}
+
+// CurrentFolder resolves the folder from the actual Projects binding.
+func (b *ChatBridge) CurrentFolder(_ context.Context, platform, chatID string) (string, error) {
+	app := b.live()
+	if app == nil {
+		return "", errors.New("Projects is switched off")
+	}
+	return app.ChannelFolder(platform, chatID)
+}
+
+// ProjectChoices lists project coordinators separately from working folders.
+func (b *ChatBridge) ProjectChoices(_ context.Context, in remoteagent.ProjectInbound) ([]remoteagent.ProjectChoice, string, error) {
+	app := b.live()
+	if app == nil {
+		return nil, "", errors.New("Projects is switched off")
+	}
+	projects, err := app.RegisteredProjects()
+	if err != nil {
+		return nil, "", err
+	}
+	current, err := app.ChannelProject(in.Platform, in.ChatID)
+	if err != nil {
+		return nil, "", err
+	}
+	choices := make([]remoteagent.ProjectChoice, 0, len(projects))
+	for _, p := range projects {
+		choices = append(choices, remoteagent.ProjectChoice{ID: p.ID, Name: p.Name})
+	}
+	return choices, current, nil
+}
+
+// SelectProject binds the chat to the chosen project's coordinator.
+func (b *ChatBridge) SelectProject(_ context.Context, in remoteagent.ProjectInbound, id string) error {
+	app := b.live()
+	if app == nil {
+		return errors.New("Projects is switched off")
+	}
+	return app.ChannelToProject(in.Platform, in.ChatID, in.BotUUID, id)
 }
 
 // RouteInbound implements remoteagent.ProjectRouter.
@@ -180,7 +256,7 @@ var ErrNoChannel = errors.New("no running bot for this chat")
 // through the channel of the bot the chat last wrote through, else through the
 // bots of the chat's platform.
 func (b *ChatBridge) SendChannelText(ctx context.Context, platform, chatID, text string) error {
-	_, err := b.through(platform, chatID, func(ch channel.Channel) error {
+	_, err := b.through(ctx, platform, chatID, projectsapp.ChannelBot(ctx), func(ch channel.Channel) error {
 		return ch.Send(ctx, channel.Target{ChatID: chatID}, interaction.Notification{Body: text})
 	})
 	if errors.Is(err, errChatDisabled) {
@@ -205,7 +281,7 @@ func (b *ChatBridge) SendChannelPrompt(ctx context.Context, platform, chatID str
 		buttons[i] = imchannel.Button{Label: c.Label, Payload: []string{remoteagent.ProjectAnswerPayload, p.ThreadID, p.RequestID, c.Value}}
 	}
 	var messageID string
-	botUUID, err := b.through(platform, chatID, func(ch channel.Channel) error {
+	botUUID, err := b.through(ctx, platform, chatID, projectsapp.ChannelBot(ctx), func(ch channel.Channel) error {
 		ac, ok := ch.(actionChannel)
 		if !ok {
 			return projectsapp.ErrNoButtons
@@ -239,6 +315,12 @@ func (b *ChatBridge) RestateChannelPrompt(ctx context.Context, platform, chatID,
 	if reg == nil {
 		return ErrNoChannel
 	}
+	if err := b.checkTarget(ctx, botUUID, platform, chatID); err != nil {
+		if errors.Is(err, errChatDisabled) {
+			return nil
+		}
+		return err
+	}
 	ch, found := reg.Get(botUUID)
 	if !found {
 		return fmt.Errorf("%w: bot %s stopped", ErrNoChannel, botUUID)
@@ -255,18 +337,29 @@ var errChatDisabled = errors.New("the chat is disabled")
 // through runs send with the channel of the bot the chat last wrote through,
 // else with each bot of the chat's platform until one succeeds, and returns
 // the bot that did.
-func (b *ChatBridge) through(platform, chatID string, send func(channel.Channel) error) (string, error) {
+func (b *ChatBridge) through(ctx context.Context, platform, chatID, chosenBot string, send func(channel.Channel) error) (string, error) {
 	b.mu.RLock()
-	reg, disabled, botUUID := b.registry, b.disabled, b.bots[chatKey(platform, chatID)]
+	reg, botUUID := b.registry, b.bots[chatKey(platform, chatID)]
 	b.mu.RUnlock()
 	if reg == nil {
 		return "", ErrNoChannel
 	}
-	if disabled != nil && disabled(chatID) {
-		return "", errChatDisabled
+
+	if chosenBot != "" {
+		ch, ok := reg.Get(chosenBot)
+		if !ok || ch.Platform() != platform {
+			return "", fmt.Errorf("%w: bot %s", ErrNoChannel, chosenBot)
+		}
+		if err := b.checkTarget(ctx, chosenBot, platform, chatID); err != nil {
+			return "", err
+		}
+		return chosenBot, send(ch)
 	}
 	if botUUID != "" {
 		if ch, ok := reg.Get(botUUID); ok {
+			if err := b.checkTarget(ctx, botUUID, platform, chatID); err != nil {
+				return "", err
+			}
 			return botUUID, send(ch)
 		}
 	}
@@ -275,6 +368,9 @@ func (b *ChatBridge) through(platform, chatID string, send func(channel.Channel)
 	// next one is tried.
 	var errs []error
 	for _, ch := range reg.ByPlatform(platform) {
+		if err := b.checkTarget(ctx, ch.ID(), platform, chatID); err != nil {
+			return "", err
+		}
 		err := send(ch)
 		if err == nil {
 			b.mu.Lock()

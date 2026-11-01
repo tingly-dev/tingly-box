@@ -586,3 +586,50 @@ func TestMovingAChatToAnotherFolderStartsThereNext(t *testing.T) {
 	assert.Equal(t, db.PathKey(other), db.PathKey(p.Path))
 	waitQuiet(t, f, svc, th.ID)
 }
+
+type botAwareSink struct{ bots chan string }
+
+func (s botAwareSink) SendChannelText(ctx context.Context, _, _, _ string) error {
+	s.bots <- ChannelBot(ctx)
+	return nil
+}
+
+func TestSessionReplyUsesTheBotChosenForTheBinding(t *testing.T) {
+	f, svc, _ := channelFixture(t)
+	thread, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "first"})
+	require.NoError(t, err)
+	waitQuiet(t, f, svc, thread.ID)
+	_, err = svc.BindChannel("telegram", "chat", "", thread.ID, "", "selected-bot")
+	require.NoError(t, err)
+	binding, err := f.store.GetChannelBinding("telegram", "chat")
+	require.NoError(t, err)
+	assert.Equal(t, "selected-bot", binding.BotUUID)
+	sink := botAwareSink{bots: make(chan string, 1)}
+	relay := NewRelay(f.store, sink)
+	relay.ThreadReply(Report{Thread: *thread, Kind: ReportFinished, Text: "hello"})
+	select {
+	case got := <-sink.bots:
+		assert.Equal(t, "selected-bot", got)
+	case <-time.After(5 * time.Second):
+		t.Fatal("session reply was not sent")
+	}
+}
+
+func TestFolderBindingExistsBeforeFirstTurn(t *testing.T) {
+	f, svc, sink := channelFixture(t)
+	require.NoError(t, svc.ChannelToFolder("telegram", "new-chat", "", t.TempDir(), "", true))
+	// A synchronous prompt is emitted immediately after the turn starts; it
+	// must be addressed to the new binding just like a very fast final reply.
+	f.threads.OnReply = func(rep Report) {
+		binding, err := f.store.GetChannelBinding("telegram", "new-chat")
+		assert.NoError(t, err)
+		if err == nil {
+			assert.Equal(t, rep.Thread.ID, binding.ThreadID)
+		}
+		svc.Relay.ThreadReply(rep)
+	}
+	handled, err := svc.PostFromChannel("telegram", "new-chat", "hello", nil)
+	require.NoError(t, err)
+	require.True(t, handled)
+	assert.Equal(t, "new-chat", sink.next(t).chatID)
+}

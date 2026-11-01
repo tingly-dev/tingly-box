@@ -85,6 +85,9 @@ func (s *Store) UpsertChannelBinding(b *ChannelBinding) error {
 			return err
 		}
 		cur.ThreadID, cur.NewThread, cur.Folder = b.ThreadID, b.NewThread, b.Folder
+		if b.BotUUID != "" {
+			cur.BotUUID = b.BotUUID
+		}
 		if t := strings.TrimSpace(b.ChatTitle); t != "" {
 			cur.ChatTitle = t
 		}
@@ -127,7 +130,11 @@ func (s *Store) DeleteProjectChannelBindings(projectID string) (int64, error) {
 // SetChannelBindingFolder makes a chat's next message start a new thread in
 // folder (see ChannelBinding.Folder); a chat with no binding gets one that
 // has only the folder.
-func (s *Store) SetChannelBindingFolder(platform, chatID, title, folder, profile string) error {
+func (s *Store) SetChannelBindingFolder(platform, chatID, title, folder, profile string, botUUID ...string) error {
+	var chosenBot string
+	if len(botUUID) > 0 {
+		chosenBot = strings.TrimSpace(botUUID[0])
+	}
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		now := time.Now()
 		var cur ChannelBinding
@@ -135,11 +142,15 @@ func (s *Store) SetChannelBindingFolder(platform, chatID, title, folder, profile
 		switch {
 		case errors.Is(err, gorm.ErrRecordNotFound):
 			return tx.Create(&ChannelBinding{ID: newID(), Platform: platform, ChatID: chatID,
-				ChatTitle: strings.TrimSpace(title), Folder: folder, Profile: profile, CreatedAt: now, UpdatedAt: now}).Error
+				ChatTitle: strings.TrimSpace(title), Folder: folder, Profile: profile, BotUUID: chosenBot, CreatedAt: now, UpdatedAt: now}).Error
 		case err != nil:
 			return err
 		}
-		return tx.Model(&cur).Updates(map[string]any{"folder": folder, "profile": profile, "new_thread": false, "updated_at": now}).Error
+		updates := map[string]any{"folder": folder, "profile": profile, "new_thread": false, "updated_at": now}
+		if chosenBot != "" {
+			updates["bot_uuid"] = chosenBot
+		}
+		return tx.Model(&cur).Updates(updates).Error
 	})
 }
 

@@ -1,0 +1,43 @@
+name: Verify IM Bot and Projects
+
+on:
+  pull_request:
+    paths:
+      - 'agentboot/**'
+      - 'imbot/**'
+      - 'remote/**'
+      - 'projects/**'
+      - 'internal/config/**'
+      - 'internal/db/**'
+      - 'internal/server/**'
+      - 'internal/tbclient/**'
+      - 'libs/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'go.work*'
+      - '.github/workflows/verify-imbot-projects.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-imbot-projects-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tingly-integration:
+    name: Tingly IM and Projects harness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+          cache: false
+      - name: Run Tingly integration harness
+        run: go test -race ./internal/server/module/projects -run '^TestTingly' -count=1

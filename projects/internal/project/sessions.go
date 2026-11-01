@@ -91,6 +91,12 @@ func CleanFolder(raw string) (string, error) {
 // StartFolderThread creates a thread in a folder project and runs its first
 // turn.
 func (m *Threads) StartFolderThread(spec FolderThreadSpec) (*db.Thread, error) {
+	return m.startFolderThread(spec, nil)
+}
+
+// startFolderThread calls beforeStart after persistence and before enqueueing the
+// first turn, allowing an IM binding to exist before replies or prompts arrive.
+func (m *Threads) startFolderThread(spec FolderThreadSpec, beforeStart func(*db.Thread) error) (*db.Thread, error) {
 	p, err := m.store.GetProject(spec.ProjectID)
 	if err != nil {
 		return nil, err
@@ -142,6 +148,12 @@ func (m *Threads) StartFolderThread(spec FolderThreadSpec) (*db.Thread, error) {
 	}
 	if err := m.store.CreateThread(t); err != nil {
 		return nil, err
+	}
+	if beforeStart != nil {
+		if err := beforeStart(t); err != nil {
+			_, _ = m.update(t.ID, func(t *db.Thread) { t.Status, t.WaitReason = db.ThreadFailed, "Failed to start: "+err.Error() })
+			return nil, err
+		}
 	}
 	_ = m.store.TouchProject(p.ID)
 	m.publish(t)

@@ -26,7 +26,7 @@ var (
 // BindChannel binds an IM chat to a thread; a chat that is already bound
 // moves. A project id stands for the project's main thread. title is an
 // optional display name for the chat.
-func (s *Service) BindChannel(platform, chatID, title, threadID, projectID string) (*db.ChannelBinding, error) {
+func (s *Service) BindChannel(platform, chatID, title, threadID, projectID string, botUUID ...string) (*db.ChannelBinding, error) {
 	platform, chatID = strings.TrimSpace(platform), strings.TrimSpace(chatID)
 	threadID, projectID = strings.TrimSpace(threadID), strings.TrimSpace(projectID)
 	if platform == "" || chatID == "" || (threadID == "") == (projectID == "") {
@@ -58,6 +58,9 @@ func (s *Service) BindChannel(platform, chatID, title, threadID, projectID strin
 		return nil, ErrArchived
 	}
 	b := &db.ChannelBinding{Platform: platform, ChatID: chatID, ChatTitle: strings.TrimSpace(title), ThreadID: t.ID}
+	if len(botUUID) > 0 {
+		b.BotUUID = strings.TrimSpace(botUUID[0])
+	}
 	if err := s.Store.UpsertChannelBinding(b); err != nil {
 		return nil, err
 	}
@@ -206,15 +209,10 @@ func (s *Service) startFromChannel(b *db.ChannelBinding, prev *db.Thread, projec
 	} else if s.Threads.Launchable(b.Profile) {
 		spec.Profile = b.Profile
 	}
-	t, err := s.Threads.StartFolderThread(spec)
-	if err != nil {
-		return nil, err
-	}
-	nb := &db.ChannelBinding{Platform: b.Platform, ChatID: b.ChatID, ThreadID: t.ID}
-	if err := s.Store.UpsertChannelBinding(nb); err != nil {
-		return nil, err
-	}
-	return t, nil
+	return s.Threads.startFolderThread(spec, func(t *db.Thread) error {
+		nb := &db.ChannelBinding{Platform: b.Platform, ChatID: b.ChatID, ThreadID: t.ID}
+		return s.Store.UpsertChannelBinding(nb)
+	})
 }
 
 // answerFromText answers a request a chat was asked with the chat's reply
@@ -251,7 +249,7 @@ func (s *Service) answerFromText(threadID, requestID, text string) (done bool, e
 // that already has a binding is left as it is, which is how a chat that
 // never talked gets its first folder. profile is the launch profile a chat
 // that never talked starts its first thread under.
-func (s *Service) ChannelToFolder(platform, chatID, title, folder, profile string, ifNew bool) error {
+func (s *Service) ChannelToFolder(platform, chatID, title, folder, profile string, ifNew bool, botUUID ...string) error {
 	path, err := CleanFolder(folder)
 	if err != nil {
 		return err
@@ -263,7 +261,7 @@ func (s *Service) ChannelToFolder(platform, chatID, title, folder, profile strin
 			return err
 		}
 	}
-	return s.Store.SetChannelBindingFolder(platform, chatID, title, path, strings.TrimSpace(profile))
+	return s.Store.SetChannelBindingFolder(platform, chatID, title, path, strings.TrimSpace(profile), botUUID...)
 }
 
 // AnswerFromChannel answers a thread's pending approval with the button a

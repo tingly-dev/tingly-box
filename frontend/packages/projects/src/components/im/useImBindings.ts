@@ -55,8 +55,8 @@ export function useChannelBindings(enabled: boolean) {
         };
     }, [enabled]);
 
-    const bind = useCallback(async (chat: { platform: string; chatId: string }, target: BindTarget) => {
-        const b = await bindChannel({ platform: chat.platform, chat_id: chat.chatId, ...target });
+    const bind = useCallback(async (chat: { platform: string; chatId: string; botUuid: string }, target: BindTarget) => {
+        const b = await bindChannel({ platform: chat.platform, chat_id: chat.chatId, bot_uuid: chat.botUuid, ...target });
         window.dispatchEvent(new Event(IM_BINDINGS_CHANGED));
         return b;
     }, []);

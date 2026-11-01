@@ -90,6 +90,7 @@ export function useProjectIm(target: ImTarget | null): ProjectIm | null {
                 targetName={projectName}
                 chats={chats}
                 hasBots={(bots ?? []).length > 0}
+                bots={bots ?? []}
                 byChat={byChat}
                 directory={directory}
                 onClose={() => setDialogOpen(false)}

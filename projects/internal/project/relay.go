@@ -385,7 +385,7 @@ func (r *Relay) deliver(job relayJob) {
 	}
 	text := "[" + tag + "] " + job.text
 	for _, b := range bindings {
-		ctx, cancel := context.WithTimeout(context.Background(), relaySendTimeout)
+		ctx, cancel := context.WithTimeout(withChannelBot(context.Background(), b.BotUUID), relaySendTimeout)
 		if job.request != nil {
 			r.await(b, *job.request)
 		}

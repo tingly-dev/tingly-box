@@ -2455,6 +2455,10 @@
       "BindChannelRequest": {
         "type": "object",
         "properties": {
+          "bot_uuid": {
+            "type": "string",
+            "description": "Field bot_uuid"
+          },
           "chat_id": {
             "type": "string",
             "description": "Field chat_id"
@@ -2499,6 +2503,10 @@
       "ChannelBinding": {
         "type": "object",
         "properties": {
+          "bot_uuid": {
+            "type": "string",
+            "description": "Field bot_uuid"
+          },
           "chat_id": {
             "type": "string",
             "description": "Field chat_id"

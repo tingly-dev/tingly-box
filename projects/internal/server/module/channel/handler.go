@@ -25,6 +25,7 @@ type BindingsResponse struct {
 type BindChannelRequest struct {
 	Platform string `json:"platform" binding:"required"`
 	ChatID   string `json:"chat_id" binding:"required"`
+	BotUUID  string `json:"bot_uuid,omitempty"`
 	// ThreadID is the thread to talk to. Either it or ProjectID is given.
 	ThreadID string `json:"thread_id,omitempty"`
 	// ProjectID is resolved to the project's main thread (a project only; bind
@@ -81,7 +82,7 @@ func (h *Handler) bind(c *gin.Context) {
 	if !apierr.Bind(c, &req) {
 		return
 	}
-	b, err := h.svc.BindChannel(req.Platform, req.ChatID, req.ChatTitle, req.ThreadID, req.ProjectID)
+	b, err := h.svc.BindChannel(req.Platform, req.ChatID, req.ChatTitle, req.ThreadID, req.ProjectID, req.BotUUID)
 	switch {
 	case err == nil:
 		c.JSON(http.StatusOK, b)
