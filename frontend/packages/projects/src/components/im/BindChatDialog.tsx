@@ -15,7 +15,8 @@ import { chatKey } from './useImBindings';
 interface Props {
     open: boolean;
     /** The thread the chat will be bound to. */
-    threadId: string;
+    threadId?: string;
+    folderId?: string;
     /** Its name, for the title: the project's, or the folder thread's. */
     targetName: string;
     /** Every chat the host's bots have seen; null while loading. */
@@ -32,7 +33,7 @@ interface Props {
 }
 
 /** Bind a known IM chat to this thread (the project side of "bind from either side"). */
-export function BindChatDialog({ open, threadId, targetName, chats, hasBots, bots = [], byChat, directory, onClose, onBind, onOpenSettings }: Props) {
+export function BindChatDialog({ open, threadId, folderId, targetName, chats, hasBots, bots = [], byChat, directory, onClose, onBind, onOpenSettings }: Props) {
     const { t } = useTranslation('projects');
     const platformLabel = usePlatformLabel();
     const [picked, setPicked] = useState<string | null>(null);
@@ -47,11 +48,12 @@ export function BindChatDialog({ open, threadId, targetName, chats, hasBots, bot
     const candidates = useMemo(() => {
         const rest = (chats ?? []).filter((c) => {
             const binding = byChat.get(chatKey(c.platform, c.chatId));
-            return binding?.thread_id !== threadId || binding.bot_uuid !== c.botUuid;
+            const here = folderId ? binding?.project_id === folderId : !!threadId && binding?.thread_id === threadId && !binding.folder;
+            return !here || binding?.bot_uuid !== c.botUuid;
         });
         const elsewhere = (c: ImChat) => (byChat.has(chatKey(c.platform, c.chatId)) ? 1 : 0);
         return rest.sort((a, b) => elsewhere(a) - elsewhere(b));
-    }, [chats, byChat, threadId]);
+    }, [chats, byChat, threadId, folderId]);
 
     const items: Choice[] = candidates.map((c) => {
         const bound = byChat.get(chatKey(c.platform, c.chatId));

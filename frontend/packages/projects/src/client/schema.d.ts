@@ -168,13 +168,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the IM chats bound to threads, all of them or one project's or thread's
-         * @description List the IM chats bound to threads, all of them or one project's or thread's
+         * List IM chats bound to threads, projects, or folders
+         * @description List IM chats bound to threads, projects, or folders
          */
         get: operations["apiV1ProjectsChannel-bindingsGet"];
         /**
-         * Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it
-         * @description Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it
+         * Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it
+         * @description Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it
          */
         put: operations["apiV1ProjectsChannel-bindingsPut"];
         post?: never;
@@ -1122,6 +1122,8 @@ export interface components {
              * @description Field created_at
              */
             created_at: string;
+            /** @description Field folder */
+            folder?: string;
             /** @description Field id */
             id: string;
             /** @description Field platform */
@@ -2271,7 +2273,7 @@ export interface operations {
     "apiV1ProjectsChannel-bindingsGet": {
         parameters: {
             query?: {
-                /** @description Only chats bound to a thread of this project */
+                /** @description Only chats bound to this project or folder */
                 project_id?: string;
                 /** @description Only chats bound to this thread */
                 thread_id?: string;

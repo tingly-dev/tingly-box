@@ -15,14 +15,15 @@ import { radius } from '@tingly/ui/theme/radius';
 /**
  * What a header binds chats to: a thread, named for the dialog. A project's
  * conversation is its main thread and is bound as the project (the server
- * resolves it); a folder cannot be bound as a project, so its open thread is
- * bound by id.
+ * resolves it); a folder can be bound directly or through an open session.
  */
 export interface ImTarget {
-    threadId: string;
+    threadId?: string;
     name: string;
     /** Set for a project's main thread. */
     projectId?: string;
+    /** A folder can be selected before a session exists. */
+    folder?: boolean;
 }
 
 /** The IM chats bound to one thread, and what the header needs to show and change them. */
@@ -79,7 +80,7 @@ export function useProjectIm(target: ImTarget | null): ProjectIm | null {
 
     if (!im || !target) return null;
     return {
-        mine: bindings && bindings.filter((b) => b.thread_id === threadId),
+        mine: bindings && bindings.filter((b) => target.folder ? b.project_id === projectId : b.thread_id === threadId && !b.folder),
         open: () => setDialogOpen(true),
         unbind: onUnbind,
         chatTitle: (platform, chatId) => byChat.get(chatKey(platform, chatId))?.chat_title || undefined,
@@ -87,6 +88,7 @@ export function useProjectIm(target: ImTarget | null): ProjectIm | null {
             <BindChatDialog
                 open={dialogOpen}
                 threadId={threadId}
+                folderId={target.folder ? projectId : undefined}
                 targetName={projectName}
                 chats={chats}
                 hasBots={(bots ?? []).length > 0}

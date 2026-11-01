@@ -13,8 +13,7 @@ const POLL_MS = 15_000;
 export const chatKey = (platform: string, chatId: string) => `${platform}\u0000${chatId}`;
 
 /**
- * Where a chat is bound: a project (it resolves to the project's main thread;
- * not for a folder) or one thread, which is how a folder is bound.
+ * Where a chat is bound: a project, a folder, or one thread.
  */
 export type BindTarget = { project_id: string } | { thread_id: string };
 

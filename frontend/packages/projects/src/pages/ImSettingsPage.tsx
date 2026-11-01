@@ -102,6 +102,10 @@ export default function ImSettingsPage() {
                                                         const place = b ? directory.get(b.project_id) : undefined;
                                                         // A thread other than the project's main one is opened on its own.
                                                         const thread = b && place && b.thread_id !== place.main_thread_id ? `?thread=${encodeURIComponent(b.thread_id)}` : '';
+                                                        const folderPath = place && isFolder(place) ? paths.folder(place.path) : '';
+                                                        const destination = folderPath
+                                                            ? `${folderPath}${b?.thread_id && !b.folder ? `${folderPath.includes('?') ? '&' : '?'}session=${encodeURIComponent(b.thread_id)}` : ''}`
+                                                            : `${paths.project(b?.project_id ?? '')}${thread}`;
                                                         return (
                                                             <TableRow key={chatKey(c.platform, c.chatId)}>
                                                                 <TableCell sx={{ pl: 2 }}>
@@ -110,7 +114,7 @@ export default function ImSettingsPage() {
                                                                 </TableCell>
                                                                 <TableCell>
                                                                     {b?.project_id ? (
-                                                                        <Link component={RouterLink} to={`${paths.project(b.project_id)}${thread}`} underline="hover" color="text.primary" noWrap sx={{ display: 'block', fontSize: fontSizes.base }}>
+                                                                        <Link component={RouterLink} to={destination} underline="hover" color="text.primary" noWrap sx={{ display: 'block', fontSize: fontSizes.base }}>
                                                                             {place?.name ?? t('im.place.elsewhere')}
                                                                         </Link>
                                                                     ) : (

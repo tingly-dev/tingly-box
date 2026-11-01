@@ -254,7 +254,7 @@ type ChannelBinding struct {
 	// Folder, when set, is a folder (an absolute path) the chat's next
 	// message starts a new thread in, the chat moving there: a chat that never
 	// talked yet (ThreadID empty) or one that changed folder (/cd).
-	Folder string `gorm:"size:1000" json:"-"`
+	Folder string `gorm:"size:1000" json:"folder,omitempty"`
 	// Profile is the launch profile a chat that never talked starts its
 	// first thread under: the profile of the bot that brought it in. Later
 	// threads keep the profile of the one before.

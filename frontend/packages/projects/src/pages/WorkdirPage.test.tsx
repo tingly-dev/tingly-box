@@ -57,7 +57,8 @@ describe('WorkdirPage removing a folder', () => {
     it('asks first, counting the sessions it would stop', async () => {
         m.folders = [folder(1, 1)];
         show();
-        fireEvent.click(await screen.findByRole('button', { name: 'workdir.remove' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'common.more' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'workdir.remove' }));
         expect(await screen.findByText(/workdir\.removeRunning.*"count":2/)).toBeInTheDocument();
         expect(m.del).not.toHaveBeenCalled();
         fireEvent.click(screen.getByRole('button', { name: 'workdir.removeConfirm' }));
@@ -67,7 +68,8 @@ describe('WorkdirPage removing a folder', () => {
     it('removes at once when nothing is running', async () => {
         m.folders = [folder(0, 0)];
         show();
-        fireEvent.click(await screen.findByRole('button', { name: 'workdir.remove' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'common.more' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'workdir.remove' }));
         await waitFor(() => expect(m.del).toHaveBeenCalledTimes(1));
         expect(screen.queryByText(/workdir\.removeRunning/)).not.toBeInTheDocument();
     });

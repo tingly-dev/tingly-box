@@ -404,14 +404,14 @@
         "tags": [
           "projects"
         ],
-        "summary": "List the IM chats bound to threads, all of them or one project's or thread's",
-        "description": "List the IM chats bound to threads, all of them or one project's or thread's",
+        "summary": "List IM chats bound to threads, projects, or folders",
+        "description": "List IM chats bound to threads, projects, or folders",
         "operationId": "apiV1ProjectsChannel-bindingsGet",
         "parameters": [
           {
             "name": "project_id",
             "in": "query",
-            "description": "Only chats bound to a thread of this project",
+            "description": "Only chats bound to this project or folder",
             "required": false,
             "schema": {
               "type": "string"
@@ -444,8 +444,8 @@
         "tags": [
           "projects"
         ],
-        "summary": "Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it",
-        "description": "Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it",
+        "summary": "Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it",
+        "description": "Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it",
         "operationId": "apiV1ProjectsChannel-bindingsPut",
         "requestBody": {
           "description": "Request body",
@@ -2519,6 +2519,10 @@
             "type": "string",
             "format": "date-time",
             "description": "Field created_at"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Field folder"
           },
           "id": {
             "type": "string",

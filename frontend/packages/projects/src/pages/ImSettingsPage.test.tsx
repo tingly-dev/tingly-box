@@ -39,6 +39,16 @@ afterEach(() => {
 });
 
 describe('ImSettingsPage', () => {
+    it('links a folder binding to its folder and an existing session to that session', async () => {
+        m.list.mockResolvedValue([
+            { id: 'cb1', platform: 'telegram', chat_id: 'tg:1', chat_title: 'yz', project_id: 'f1', thread_id: '', folder: '/home/me/notes', created_at: '', updated_at: '', verbose: false },
+            { id: 'cb2', platform: 'telegram', chat_id: 'tg:2', chat_title: 'New chat', project_id: 'f1', thread_id: 'session1', created_at: '', updated_at: '', verbose: false },
+        ]);
+        show(host());
+        const rows = await screen.findAllByRole('row');
+        await waitFor(() => expect(within(rows[1]).getByRole('link', { name: 'notes' })).toHaveAttribute('href', '/f'));
+        expect(within(rows[2]).getByRole('link', { name: 'notes' })).toHaveAttribute('href', '/f?session=session1');
+    });
     it('lists each bot\'s chats with where they are bound and offers Move or Bind', async () => {
         show(host());
         expect(await screen.findByText('My bot')).toBeInTheDocument();

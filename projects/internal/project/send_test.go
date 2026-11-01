@@ -146,15 +146,19 @@ func TestNeedsYouReachesChatsOfTheThreadAndItsAncestors(t *testing.T) {
 	sink.none(t)
 }
 
-func TestBindingAFolderNeedsAThread(t *testing.T) {
+func TestBindingAFolderOrAThread(t *testing.T) {
 	f, svc, _ := channelFixture(t)
 	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "go"})
 	require.NoError(t, err)
 
-	_, err = svc.BindChannel("telegram", "1", "", "", s.ProjectID)
-	assert.ErrorIs(t, err, ErrBindFolder, "a folder has no main thread to stand for it")
+	b, err := svc.BindChannel("telegram", "1", "", "", s.ProjectID, "bot-1")
+	require.NoError(t, err)
+	assert.Equal(t, s.ProjectID, b.ProjectID)
+	assert.Empty(t, b.ThreadID)
+	assert.NotEmpty(t, b.Folder)
+	assert.Equal(t, "bot-1", b.BotUUID)
 	waitStatus(t, f.store, s.ID, db.ThreadIdle)
-	b, err := svc.BindChannel("telegram", "1", "", s.ID, "")
+	b, err = svc.BindChannel("telegram", "1", "", s.ID, "")
 	require.NoError(t, err)
 	assert.Equal(t, s.ProjectID, b.ProjectID)
 

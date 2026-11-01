@@ -15,9 +15,6 @@ import (
 // Errors for channel bindings.
 var (
 	ErrBindingInvalid = errors.New("platform, chat_id and one of thread_id or project_id are required")
-	// ErrBindFolder is for binding a folder by project id: a folder has no
-	// main thread, so the chat is bound to one of its threads.
-	ErrBindFolder = errors.New("a folder has no main thread; bind one of its threads (thread_id)")
 	// ErrNotThisChat is for a chat answering a thread it is not bound to,
 	// directly or through an ancestor.
 	ErrNotThisChat = errors.New("this chat is not bound to that thread")
@@ -44,7 +41,13 @@ func (s *Service) BindChannel(platform, chatID, title, threadID, projectID strin
 			return nil, err
 		}
 		if p.Type == db.ProjectFolder {
-			return nil, ErrBindFolder
+			if p.ArchivedAt != nil {
+				return nil, ErrArchived
+			}
+			if err := s.ChannelToFolder(platform, chatID, title, p.Path, "", false, botUUID...); err != nil {
+				return nil, err
+			}
+			return s.Store.GetChannelBinding(platform, chatID)
 		}
 		if t, err = s.Store.GetThread(p.MainThreadID); err != nil {
 			return nil, err
@@ -252,6 +255,14 @@ func (s *Service) answerFromText(threadID, requestID, text string) (done bool, e
 func (s *Service) ChannelToFolder(platform, chatID, title, folder, profile string, ifNew bool, botUUID ...string) error {
 	path, err := CleanFolder(folder)
 	if err != nil {
+		return err
+	}
+	// Use the same spelling as a registered folder, including symlinks and
+	// case-insensitive filesystems, so pending bindings remain visible there.
+	path = db.CanonicalPath(path)
+	if p, err := s.Store.FindFolder(path); err == nil {
+		path = p.Path
+	} else if !errors.Is(err, db.ErrNotFound) {
 		return err
 	}
 	if ifNew {

@@ -20,16 +20,14 @@ type BindingsResponse struct {
 	Bindings []db.ChannelBinding `json:"bindings"`
 }
 
-// BindChannelRequest binds an IM chat to a thread. A chat that is already
-// bound moves to the thread.
+// BindChannelRequest binds an IM chat to a thread, project, or folder.
 type BindChannelRequest struct {
 	Platform string `json:"platform" binding:"required"`
 	ChatID   string `json:"chat_id" binding:"required"`
 	BotUUID  string `json:"bot_uuid,omitempty"`
 	// ThreadID is the thread to talk to. Either it or ProjectID is given.
 	ThreadID string `json:"thread_id,omitempty"`
-	// ProjectID is resolved to the project's main thread (a project only; bind
-	// a folder's thread by thread_id).
+	// ProjectID selects a project's main thread or a folder for a new session.
 	ProjectID string `json:"project_id,omitempty"`
 	// ChatTitle is an optional display name for the chat.
 	ChatTitle string `json:"chat_title,omitempty"`
@@ -55,12 +53,12 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api := r.API
 	tag := swagger.WithTags("projects")
 	api.GET("/projects/channel-bindings", h.list, tag,
-		swagger.WithDescription("List the IM chats bound to threads, all of them or one project's or thread's"),
-		swagger.WithQuery("project_id", "string", "Only chats bound to a thread of this project"),
+		swagger.WithDescription("List IM chats bound to threads, projects, or folders"),
+		swagger.WithQuery("project_id", "string", "Only chats bound to this project or folder"),
 		swagger.WithQuery("thread_id", "string", "Only chats bound to this thread"),
 		swagger.WithResponseModel(BindingsResponse{}))
 	api.PUT("/projects/channel-bindings", h.bind, tag,
-		swagger.WithDescription("Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it"),
+		swagger.WithDescription("Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it"),
 		swagger.WithRequestModel(BindChannelRequest{}),
 		swagger.WithResponseModel(db.ChannelBinding{}))
 	api.DELETE("/projects/channel-bindings/:id", h.unbind, tag,
@@ -90,7 +88,7 @@ func (h *Handler) bind(c *gin.Context) {
 		apierr.Store(c, err, "thread or project")
 	case errors.Is(err, rt.ErrArchived):
 		apierr.Message(c, http.StatusConflict, err.Error())
-	case errors.Is(err, rt.ErrBindingInvalid), errors.Is(err, rt.ErrBindFolder):
+	case errors.Is(err, rt.ErrBindingInvalid):
 		apierr.BadRequest(c, err.Error())
 	default:
 		apierr.Message(c, http.StatusInternalServerError, err.Error())

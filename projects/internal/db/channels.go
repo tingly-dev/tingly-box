@@ -11,11 +11,13 @@ import (
 // ---- IM channel bindings ----
 
 // bindingSelect reads bindings with the project of their thread.
-const bindingSelect = "channel_bindings.*, COALESCE(threads.project_id, '') AS project_id"
+const bindingProject = "CASE WHEN COALESCE(channel_bindings.folder, '') <> '' THEN COALESCE(folder_projects.id, '') ELSE COALESCE(threads.project_id, '') END"
+const bindingSelect = "channel_bindings.*, " + bindingProject + " AS project_id"
 
 func (s *Store) bindings() *gorm.DB {
 	return s.db.Table("channel_bindings").Select(bindingSelect).
-		Joins("LEFT JOIN threads ON threads.id = channel_bindings.thread_id")
+		Joins("LEFT JOIN threads ON threads.id = channel_bindings.thread_id").
+		Joins("LEFT JOIN projects AS folder_projects ON folder_projects.path = channel_bindings.folder AND folder_projects.type = 'folder' AND folder_projects.archived_at IS NULL")
 }
 
 // BindingFilter narrows ListChannelBindings; both empty lists all.
@@ -26,17 +28,16 @@ type BindingFilter struct {
 	ThreadID string
 }
 
-// ListChannelBindings returns bindings, newest first. A chat that has not
-// reached a thread yet (only a Folder) is not listed.
+// ListChannelBindings returns bindings, including chats waiting to start in a folder.
 func (s *Store) ListChannelBindings(f BindingFilter) ([]ChannelBinding, error) {
 	out := []ChannelBinding{}
-	q := s.bindings().Where("channel_bindings.thread_id <> ''").
+	q := s.bindings().Where("channel_bindings.thread_id <> '' OR folder_projects.id IS NOT NULL").
 		Order("channel_bindings.created_at DESC, channel_bindings.rowid DESC")
 	if f.ProjectID != "" {
-		q = q.Where("threads.project_id = ?", f.ProjectID)
+		q = q.Where(bindingProject+" = ?", f.ProjectID)
 	}
 	if f.ThreadID != "" {
-		q = q.Where("channel_bindings.thread_id = ?", f.ThreadID)
+		q = q.Where("channel_bindings.thread_id = ? AND COALESCE(channel_bindings.folder, '') = ''", f.ThreadID)
 	}
 	err := q.Scan(&out).Error
 	return out, err
@@ -48,7 +49,7 @@ func (s *Store) ListChannelBindingsOf(threadIDs []string) ([]ChannelBinding, err
 	if len(threadIDs) == 0 {
 		return out, nil
 	}
-	err := s.bindings().Where("channel_bindings.thread_id IN ?", threadIDs).
+	err := s.bindings().Where("channel_bindings.thread_id IN ? AND COALESCE(channel_bindings.folder, '') = ''", threadIDs).
 		Order("channel_bindings.created_at, channel_bindings.rowid").Scan(&out).Error
 	return out, err
 }
@@ -122,7 +123,7 @@ func (s *Store) DeleteChannelBinding(id string) error {
 // DeleteProjectChannelBindings unbinds every chat bound to a thread of the
 // project and returns how many there were.
 func (s *Store) DeleteProjectChannelBindings(projectID string) (int64, error) {
-	res := s.db.Where("thread_id IN (?)", s.db.Model(&Thread{}).Select("id").Where("project_id = ?", projectID)).
+	res := s.db.Where("(COALESCE(folder, '') = '' AND thread_id IN (?)) OR folder IN (?)", s.db.Model(&Thread{}).Select("id").Where("project_id = ?", projectID), s.db.Model(&Project{}).Select("path").Where("id = ? AND type = ?", projectID, ProjectFolder)).
 		Delete(&ChannelBinding{})
 	return res.RowsAffected, res.Error
 }
@@ -149,6 +150,9 @@ func (s *Store) SetChannelBindingFolder(platform, chatID, title, folder, profile
 		updates := map[string]any{"folder": folder, "profile": profile, "new_thread": false, "updated_at": now}
 		if chosenBot != "" {
 			updates["bot_uuid"] = chosenBot
+		}
+		if name := strings.TrimSpace(title); name != "" {
+			updates["chat_title"] = name
 		}
 		return tx.Model(&cur).Updates(updates).Error
 	})

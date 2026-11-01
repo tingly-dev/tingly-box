@@ -335,6 +335,32 @@ func TestTinglyNewChatAndSessionCommands(t *testing.T) {
 	chat.WaitText(10*time.Second).AssertContains(t, "Verbose is on")
 }
 
+func TestTinglyBindFolderBeforeFirstSession(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	chat := h.env.NewUser("folder-binding-user").OpenDM(h.chosenID)
+	var folder struct {
+		ID string `json:"id"`
+	}
+	h.call("POST", "/projects", map[string]any{"type": "folder", "path": t.TempDir()}, &folder)
+	h.call("PUT", "/projects/channel-bindings", map[string]any{"platform": "tingly", "chat_id": chat.ChatID, "bot_uuid": h.chosenID, "project_id": folder.ID}, nil)
+	var list struct {
+		Bindings []struct {
+			ProjectID string `json:"project_id"`
+			ThreadID  string `json:"thread_id"`
+			BotUUID   string `json:"bot_uuid"`
+		} `json:"bindings"`
+	}
+	h.call("GET", "/projects/channel-bindings?project_id="+folder.ID, nil, &list)
+	require.Len(t, list.Bindings, 1)
+	require.Empty(t, list.Bindings[0].ThreadID)
+	chat.SendText("from a folder binding")
+	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: from a folder binding")
+	h.call("GET", "/projects/channel-bindings?project_id="+folder.ID, nil, &list)
+	require.Len(t, list.Bindings, 1)
+	require.NotEmpty(t, list.Bindings[0].ThreadID)
+	require.Equal(t, h.chosenID, list.Bindings[0].BotUUID)
+}
+
 func TestTinglyCoordinatorIMRoundTrip(t *testing.T) {
 	h := newTinglyProjectsHarness(t)
 	chat := h.env.NewUser("coordinator-user").OpenDM(h.chosenID)
