@@ -57,6 +57,8 @@ export const zh: Dict<typeof en> = {
             moveDone: '{{chat}} 已改绑到 {{project}}',
         },
         source: '来自 {{platform}} · {{chat}}',
+        sourcePlatform: '来自 {{platform}}',
+        sourceBot: '来自 Bot',
     },
     workdir: {
         title: '工作目录', add: '添加工作目录', remove: '从侧栏移除',

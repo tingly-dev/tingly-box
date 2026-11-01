@@ -53,6 +53,8 @@ export const en = {
             moveDone: '{{chat}} moved to {{project}}',
         },
         source: 'From {{platform}} · {{chat}}',
+        sourcePlatform: 'From {{platform}}',
+        sourceBot: 'From bot',
     },
     workdir: {
         title: 'Working folders', add: 'Add working folder', remove: 'Remove from the sidebar',

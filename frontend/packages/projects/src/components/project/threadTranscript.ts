@@ -61,6 +61,9 @@ export function threadTranscript(events: ThreadEvent[], running: boolean, author
             case 'user': {
                 const pl = parse<{ attachments?: TranscriptEntry['attachments']; injected?: boolean }>(e.payload);
                 const entry: TranscriptEntry = { role: 'user', content: e.content, author: author(e), attachments: pl?.attachments, timestamp };
+                if (e.source === 'im') {
+                    entry.imSource = { platform: e.source_platform ?? '', chatId: e.source_chat_id ?? '' };
+                }
                 if (pl?.injected) {
                     entry.pending = true;
                     unread.push(entry);

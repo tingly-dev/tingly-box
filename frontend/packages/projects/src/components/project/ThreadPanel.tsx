@@ -31,6 +31,8 @@ import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { useMessageDetail } from '../../hooks/useMessageDetail';
 import { MessageDetailControl } from '../MessageDetailControl';
+import { ImSourceBadge } from '../im/ImSourceBadge';
+import { useProjectsHost } from '../../host/ProjectsHost';
 
 const mono = { fontFamily: fontMono } as const;
 
@@ -101,6 +103,7 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
 
 export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railTop, railMinPanel = RAIL_MIN_PANEL }: Props) {
     const { t } = useTranslation('projects');
+    const { im } = useProjectsHost();
     const notify = useNotify();
     const [diffOpen, setDiffOpen] = useState(false);
     const [menu, setMenu] = useState<HTMLElement | null>(null);
@@ -442,7 +445,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     : focused && focusBlock
                         ? <SubagentFocus detail={detail} block={focusBlock} subagents={host} working={running} pendingRequestId={pendingRequestId} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} />
                     : view === 'chat'
-                        ? <Transcript detail={detail} blocks={blocks} subagents={host} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} />
+                        ? <Transcript detail={detail} blocks={blocks} subagents={host} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} messageSource={(message) => message.imSource && <ImSourceBadge platform={message.imSource.platform} chat={im?.chatTitle?.(message.imSource.platform, message.imSource.chatId) ?? message.imSource.chatId} />} />
                         : <Trajectory blocks={blocks} working={running} pendingRequestId={pendingRequestId} project={thread.cwd} onOpen={(anchor) => void openInChat(anchor)} />}
                 </Box>
             </Box>
