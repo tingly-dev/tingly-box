@@ -57,7 +57,7 @@ export const en = {
         sourceBot: 'From bot',
     },
     workdir: {
-        title: 'Working folders', add: 'Add working folder', remove: 'Remove from the sidebar',
+        title: 'Working folders', add: 'Add working folder', actions: 'Folder actions', remove: 'Remove from the sidebar',
         removeTitle: 'Remove this folder?', removeConfirm: 'Remove',
         removeRunning_one: 'This stops {{count}} running session in {{name}} and takes the folder off the sidebar. Its past sessions are kept.',
         removeRunning_other: 'This stops {{count}} running sessions in {{name}} and takes the folder off the sidebar. Its past sessions are kept.',

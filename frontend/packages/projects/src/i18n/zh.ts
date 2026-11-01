@@ -61,7 +61,7 @@ export const zh: Dict<typeof en> = {
         sourceBot: '来自 Bot',
     },
     workdir: {
-        title: '工作目录', add: '添加工作目录', remove: '从侧栏移除',
+        title: '工作目录', add: '添加工作目录', actions: '目录操作', remove: '从侧栏移除',
         removeTitle: '移除此目录？', removeConfirm: '移除',
         removeRunning_one: '这会停止 {{name}} 中 {{count}} 个正在运行的会话，并把该目录从侧栏移除。历史会话会保留。',
         removeRunning_other: '这会停止 {{name}} 中 {{count}} 个正在运行的会话，并把该目录从侧栏移除。历史会话会保留。',

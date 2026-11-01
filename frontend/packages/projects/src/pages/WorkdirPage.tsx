@@ -17,7 +17,7 @@ import { IM_BINDINGS_CHANGED } from '../components/im/useImBindings';
 import { ThreadPanel } from '../components/project/ThreadPanel';
 import { StatusGroups, type StatusGroup } from '../components/workspace/StatusGroups';
 import { WorkspaceLayout, useWorkspacePane } from '../components/workspace/WorkspaceLayout';
-import { Add, MoreVert } from '../components/icons';
+import { MoreVert } from '../components/icons';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useNotify } from '../hooks/useNotify';
 import { useProjectEvents, type ProjectEvent } from '../hooks/useProjectEvents';
@@ -325,15 +325,11 @@ export default function WorkdirPage() {
                 actions={(
                     <>
                         {im && <Box sx={{ display: { xs: 'none', md: 'flex' }, minWidth: 0, flexShrink: 1 }}><ProjectImTags im={im} /></Box>}
-                        {removable && (
-                            <>
-                                <Tooltip title={t('common.more')}><IconButton size="small" aria-label={t('common.more')} aria-haspopup="menu" onClick={(e) => setFolderMenu(e.currentTarget)}><MoreVert fontSize="small" /></IconButton></Tooltip>
-                                <Menu anchorEl={folderMenu} open={!!folderMenu} onClose={() => setFolderMenu(null)}>
-                                    <MenuItem onClick={() => { setFolderMenu(null); if (stopCount > 0) setConfirmRemove(true); else void removeFolder(); }}>{t('workdir.remove')}</MenuItem>
-                                </Menu>
-                            </>
-                        )}
-                        <Button size="small" startIcon={<Add />} onClick={() => openNew()}>{t('session.new')}</Button>
+                        <Tooltip title={t('workdir.actions')}><IconButton size="small" aria-label={t('workdir.actions')} aria-haspopup="menu" onClick={(e) => setFolderMenu(e.currentTarget)}><MoreVert fontSize="small" /></IconButton></Tooltip>
+                        <Menu anchorEl={folderMenu} open={!!folderMenu} onClose={() => setFolderMenu(null)}>
+                            <MenuItem onClick={() => { setFolderMenu(null); openNew(); }}>{t('session.new')}</MenuItem>
+                            {removable && <MenuItem onClick={() => { setFolderMenu(null); if (stopCount > 0) setConfirmRemove(true); else void removeFolder(); }}>{t('workdir.remove')}</MenuItem>}
+                        </Menu>
                     </>
                 )}
                 notice={(error || im) && (
