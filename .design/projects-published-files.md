@@ -7,7 +7,7 @@
 
 Claude Code 可以生成图片和文件，但 Projects 会话目前缺少一种让 Claude 主动把这些产物作为消息交给用户查看的统一方式。旧的自定义 Agent 曾有 `send_file`，切换到 Claude Code 后没有等价的出站能力。
 
-目标是让 Session、Project 协调者和 Project Thread 都能发布文件：Web 对话中可查看和下载；有适用 IM 绑定时，同一条消息可以同步到 IM。文件发布本身属于 Projects，不依赖 Tingly Box 或 IM，Projects 单独构建运行时也应可用。
+第一版目标是让 Folder Session 和 Project Thread 都能发布文件：Web 对话中可查看和下载；有适用 IM 绑定时，同一条消息可以同步到 IM。文件发布本身属于 Projects，不依赖 Tingly Box 或 IM，Projects 单独构建运行时也应可用。
 
 ## 已讨论的方向
 
@@ -46,7 +46,7 @@ flowchart LR
 | 会话定位 | 每个 Claude Code 实例的工具连接绑定到它的 Thread | 服务端根据连接上下文确定归属，不接受模型指定任意 Thread；令牌或其他本地身份绑定的具体方式待验证。 |
 | 发布核心 | `PublishFile(threadID, path, caption)` | 复制文件到 Projects 管理的存储，持久化会话消息并通知前端；优先复用 Library 和附件能力。 |
 | 页面与 IM | Thread 内直接展示；需要时同时在 Project 视图可见，消息写清来源 | 沿用现有事件与 Relay 路径，尽早让真实用户看到产物；不把复杂焦点模型当作发布前置条件。 |
-| 协调者 | 复用同一个发布核心 | Project 协调者不一定是 Claude Code 进程，需分别确认它的工具接入；不能假定注入 Claude Code MCP 就覆盖协调者。 |
+| 协调者 | 暂不接入 | 协调者使用独立的模型调用和工具机制；其接入方式留待后续设计。 |
 
 ### HTTP 与 stdio 的取舍
 
@@ -102,6 +102,6 @@ Projects 创建每个 Thread 时已构造 `agentboot.ExecutionOptions`；可以�
 ## 第一版实现状态
 
 - Projects 启动 Claude Code 时自动追加独立的本地 HTTP MCP 配置；每个 Thread 使用独立的随机能力地址。原有 MCP 配置保留，工具的目标 Thread 由服务端确定。此实现未复用 TB MCP Profile，以保证 Projects 单独运行时也可使用。
-- `send_file(path, caption?)` 读取当前工作目录或项目 Library 内的普通文件，复制到 Library，并持久化为会话消息。Project Thread 的产物也会显示在 Project 对话，标注来源；协调者通过自身工具调用同一发布核心。
+- `send_file(path, caption?)` 读取当前工作目录或项目 Library 内的普通文件，复制到 Library，并持久化为会话消息。Project Thread 的产物也会显示在 Project 对话，标注来源。协调者不在第一版接入范围内。
 - 发送时按现有绑定查找 IM 目标。首批适配 Tingly 测试渠道和 Telegram；其他渠道返回明确的投递错误，Web 中的文件仍保留。失败会在 Thread 中显示错误消息，目前没有逐目标投递状态或重试。
 - 已覆盖 MCP 协议调用、文件持久化、路径约束及 Tingly 渠道的文件内容和改绑场景。真实 Claude 模型调用及 Telegram 实际上传仍需在有相应凭据的环境验证。

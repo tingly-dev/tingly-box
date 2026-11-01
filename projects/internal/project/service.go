@@ -66,7 +66,6 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 	}
 	svc.fileMCP = &fileMCP{service: svc}
 	threads.FileTool = svc.fileMCP.config
-	coord.PublishFile = svc.PublishFile
 	return svc
 }
 
