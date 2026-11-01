@@ -30,7 +30,9 @@ func TestWorkerActionsAreRefusedOnAMainThread(t *testing.T) {
 		method, path string
 		body         any
 	}{
+		{"POST", "/resolve", nil},
 		{"POST", "/archive", nil},
+		{"POST", "/restore", nil},
 		{"POST", "/reopen", nil},
 		{"POST", "/merge", nil},
 		{"POST", "/handoff", nil},

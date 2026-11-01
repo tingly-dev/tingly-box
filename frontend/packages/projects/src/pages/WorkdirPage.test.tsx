@@ -156,3 +156,37 @@ describe('WorkdirPage live transcript', () => {
         expect(calls('/api/v1/threads/{id}/events')).toBe(1);
     });
 });
+
+describe('folder session archive', () => {
+    it('offers restore for an archived resolved session', async () => {
+        m.folders = [folder(0, 0)];
+        const archived = { id: 't1', project_id: 'f1', title: 'old session', status: 'resolved', archived_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' };
+        m.get.mockImplementation(async (url: string) => ({
+            data: url.endsWith('permission-modes') ? { modes: [] }
+                : url === '/api/v1/threads/{id}' ? { thread: archived, background_tasks: [], running: false }
+                    : url === '/api/v1/threads/{id}/events' ? { events: [] } : { threads: [archived] },
+            response: new Response(),
+        }));
+        m.post.mockResolvedValue({ data: { ...archived, archived_at: undefined }, response: new Response() });
+        show('/?path=%2Fhome%2Fme%2Fapp&session=t1');
+        expect(await screen.findByPlaceholderText('session.archivedPlaceholder')).toBeDisabled();
+        fireEvent.click(screen.getByRole('button', { name: 'common.more' }));
+        expect(screen.queryByRole('menuitem', { name: 'session.reopen' })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('menuitem', { name: 'session.restore' }));
+        await waitFor(() => expect(m.post).toHaveBeenCalledWith('/api/v1/threads/{id}/restore', { params: { path: { id: 't1' } } }));
+    });
+
+    it('shows archived sessions separately without marking their failures as waiting', async () => {
+        m.folders = [folder(0, 0)];
+        const archived = { id: 'archived', project_id: 'f1', title: 'old session', status: 'failed', wait_reason: 'old error', archived_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' };
+        m.get.mockImplementation(async (url: string) => ({
+            data: url.endsWith('permission-modes') ? { modes: [] } : { threads: [archived] }, response: new Response(),
+        }));
+        show();
+        expect(await screen.findByRole('button', { name: /session.group.archived/ })).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryByText('session.group.failed')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /session.group.archived/ }));
+        expect(await screen.findByText('old session')).toBeVisible();
+        expect(screen.queryByText('old error')).not.toBeInTheDocument();
+    });
+});

@@ -52,6 +52,7 @@ const GROUPS: { key: string; collapsed?: boolean }[] = [
     { key: 'working' },
     { key: 'idle' },
     { key: 'resolved', collapsed: true },
+    { key: 'archived', collapsed: true },
 ];
 
 /**
@@ -78,10 +79,10 @@ export default function WorkdirPage() {
     const onThreadEvent = useRef<(ev: ProjectEvent) => void>(() => undefined);
     const { folders, reload: reloadList } = useProjectList(true, (ev) => onEvent.current(ev), () => onOpen.current());
     const folder = scope ? folders?.find((f) => f.path === scope) : undefined;
-    // Which folders' threads this page lists, as a stable key: the open folder, or every folder with threads.
+    // Which folders' threads this page lists, including folders with only archived sessions.
     const listed = !folders ? null
         : scope ? (folder ? [folder.id] : [])
-            : folders.filter((f) => f.threads.waiting + f.threads.working + f.threads.ready + f.threads.idle + f.threads.resolved > 0).map((f) => f.id);
+            : folders.map((f) => f.id);
     const listedKey = listed?.join(',') ?? null;
 
     const [sessions, setSessions] = useState<Thread[] | null>(null);
@@ -181,7 +182,7 @@ export default function WorkdirPage() {
                 // The list stream already refreshes the folder list for this event.
                 if (mine) setSessions((list) => upsert(list ?? [], th));
                 // A turn starting or ending moves the status; read whether one is in flight.
-                if (th.id === sessionId && th.status !== openStatus.current) void loadSession(th.id);
+                if (th.id === sessionId && `${th.status}:${!!th.archived_at}` !== openStatus.current) void loadSession(th.id);
             }
         };
         onThreadEvent.current = (ev: ProjectEvent) => {
@@ -203,7 +204,7 @@ export default function WorkdirPage() {
     const selected = sessions?.find((s) => s.id === sessionId);
     const selectedFolder = folders?.find((f) => f.id === selected?.project_id);
     const settings = useThreadSettings(selected, true, (saved) => setSessions((list) => list?.map((th) => th.id === saved.id ? mergeThreadSettings(th, saved, true) : th) ?? null));
-    const threadBlocked = !!selectedFolder && (selectedFolder.paused || !!selectedFolder.archived_at);
+    const threadBlocked = !!selected?.archived_at || (!!selectedFolder && (selectedFolder.paused || !!selectedFolder.archived_at));
     // The open thread's project stream (the all-projects one never carries thread_event). It reconnects on its own;
     // on a reconnect the thread is re-read for anything missed.
     useProjectEvents(sessionId ? (selected?.project_id ?? folder?.id ?? '') : '', (ev) => onThreadEvent.current(ev), () => {
@@ -213,7 +214,7 @@ export default function WorkdirPage() {
         }
     });
     useEffect(() => {
-        openStatus.current = selected?.status;
+        openStatus.current = selected ? `${selected.status}:${!!selected.archived_at}` : undefined;
     });
     const running = (selected?.status === 'working' && turnRunning)
         || (selected?.status === 'waiting' && !!events?.some((e) => (e.kind === 'approval' || e.kind === 'ask') && e.payload?.includes('"state":"pending"')));
@@ -296,13 +297,13 @@ export default function WorkdirPage() {
     const groups: StatusGroup[] = GROUPS.map((g) => ({ key: g.key, label: t(`session.group.${g.key}`), collapsed: g.collapsed }));
     const rows = useMemo(() => (sessions ?? []).map((s) => ({
         id: s.id,
-        group: s.status === 'ready' ? 'idle' : s.status,
+        group: s.archived_at ? 'archived' : s.status === 'ready' ? 'idle' : s.status,
         title: s.title,
-        subtitle: [scope ? '' : folderName(s.cwd), needsUser(s.status) ? s.wait_reason : ''].filter(Boolean).join(' · ') || undefined,
+        subtitle: [scope ? '' : folderName(s.cwd), !s.archived_at && needsUser(s.status) ? s.wait_reason : ''].filter(Boolean).join(' · ') || undefined,
         meta: timeAgo(s.updated_at, i18n.language),
         selected: s.id === sessionId,
     })), [sessions, scope, sessionId, i18n.language]);
-    const waitingHere = (sessions ?? []).some((s) => needsUser(s.status));
+    const waitingHere = (sessions ?? []).some((s) => !s.archived_at && needsUser(s.status));
     // With a session open on a wide screen the list becomes the first card of the thread's info rail, so the page has one right column.
     const merged = !!sessionId && !pane.narrow;
     const sessionList = sessions === null

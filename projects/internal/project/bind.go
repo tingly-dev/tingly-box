@@ -129,7 +129,7 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 			return true, err
 		}
 	}
-	if p.Type == db.ProjectFolder && (b.NewThread || t.Status == db.ThreadResolved) {
+	if p.Type == db.ProjectFolder && (b.NewThread || t.Status == db.ThreadResolved || t.ArchivedAt != nil) {
 		atts, err := s.adoptChannelFiles(t.ProjectID, files)
 		if err != nil {
 			return true, err

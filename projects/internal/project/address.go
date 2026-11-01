@@ -110,6 +110,9 @@ func (s *Service) threadList(cur *db.Thread, p *db.Project) (string, error) {
 	var open []db.Thread
 	done := 0
 	for _, t := range threads {
+		if t.ArchivedAt != nil {
+			continue
+		}
 		if t.Status == db.ThreadResolved {
 			done++
 			continue

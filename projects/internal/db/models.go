@@ -144,6 +144,8 @@ type Thread struct {
 	// MergedAt is set when the branch was merged from the Overview.
 	MergedAt   *time.Time `json:"merged_at,omitempty"`
 	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
+	// ArchivedAt hides a folder session from active work without resolving it.
+	ArchivedAt *time.Time `gorm:"index" json:"archived_at,omitempty"`
 	CreatedAt  time.Time  `json:"created_at"`
 	UpdatedAt  time.Time  `json:"updated_at"`
 }

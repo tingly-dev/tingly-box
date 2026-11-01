@@ -492,3 +492,25 @@ func TestFolderThreadEffortAppliesOnNextTurnAndHandoff(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, cmd, "--effort high")
 }
+
+func TestArchiveRunningSessionStopsAndStaysArchived(t *testing.T) {
+	started := make(chan struct{})
+	f := newFixture(t, func(turn *enginetest.Turn) error {
+		close(started)
+		<-turn.Ctx.Done()
+		return turn.Ctx.Err()
+	})
+	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "long"})
+	require.NoError(t, err)
+	<-started
+	archived, err := f.threads.ArchiveSession(s.ID)
+	require.NoError(t, err)
+	require.NotNil(t, archived.ArchivedAt)
+	assert.Eventually(t, func() bool { return !f.threads.Running(s.ID) }, 5*time.Second, 10*time.Millisecond)
+	got, err := f.store.GetThread(s.ID)
+	require.NoError(t, err)
+	assert.NotNil(t, got.ArchivedAt)
+	assert.Equal(t, db.ThreadIdle, got.Status)
+	_, err = f.threads.Send(context.Background(), s.ID, "continue", Source{}, nil)
+	assert.ErrorIs(t, err, ErrThreadArchived)
+}

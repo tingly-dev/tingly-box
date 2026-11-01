@@ -224,11 +224,17 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.POST("/threads/:id/stop", h.stop, tag,
 		swagger.WithDescription("Interrupt the running turn; the process and its background tasks survive"),
 		swagger.WithResponseModel(db.Thread{}))
-	api.POST("/threads/:id/archive", h.archive, tag,
-		swagger.WithDescription("Archive (resolve) the thread; it stays readable and can be reopened"),
+	api.POST("/threads/:id/resolve", h.resolve, tag,
+		swagger.WithDescription("Resolve the thread; it stays readable and can be reopened"),
+		swagger.WithResponseModel(db.Thread{}))
+	api.POST("/threads/:id/archive", h.archiveSession, tag,
+		swagger.WithDescription("Archive a folder session, stopping its process without resolving it"),
+		swagger.WithResponseModel(db.Thread{}))
+	api.POST("/threads/:id/restore", h.restoreSession, tag,
+		swagger.WithDescription("Restore an archived folder session without changing its status"),
 		swagger.WithResponseModel(db.Thread{}))
 	api.POST("/threads/:id/reopen", h.reopen, tag,
-		swagger.WithDescription("Reopen an archived thread"),
+		swagger.WithDescription("Reopen a resolved thread"),
 		swagger.WithResponseModel(db.Thread{}))
 	api.PUT("/threads/:id/auto-answer", h.setAutoAnswer, tag,
 		swagger.WithDescription("Set when the thread answers a question with its suggested option by itself"),
@@ -282,7 +288,7 @@ func fail(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, db.ErrNotFound):
 		apierr.Store(c, err, "thread")
-	case errors.Is(err, rt.ErrPaused), errors.Is(err, rt.ErrArchived), errors.Is(err, rt.ErrResolved), errors.Is(err, rt.ErrNoPrompt),
+	case errors.Is(err, rt.ErrPaused), errors.Is(err, rt.ErrArchived), errors.Is(err, rt.ErrThreadArchived), errors.Is(err, rt.ErrResolved), errors.Is(err, rt.ErrNoPrompt),
 		errors.Is(err, rt.ErrTaskNotRunning), errors.Is(err, rt.ErrBusy):
 		apierr.Message(c, http.StatusConflict, err.Error())
 	case errors.Is(err, rt.ErrTaskOutputUnset), errors.Is(err, os.ErrNotExist):
@@ -534,7 +540,7 @@ func (h *Handler) reply(c *gin.Context, id string) {
 	c.JSON(http.StatusOK, t)
 }
 
-func (h *Handler) archive(c *gin.Context) {
+func (h *Handler) resolve(c *gin.Context) {
 	cur, ok := h.worker(c)
 	if !ok {
 		return
@@ -545,6 +551,50 @@ func (h *Handler) archive(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, t)
+}
+
+// folderSession limits the independent archive flag to folder sessions.
+func (h *Handler) folderSession(c *gin.Context) (*db.Thread, bool) {
+	t, ok := h.worker(c)
+	if !ok {
+		return nil, false
+	}
+	p, err := h.svc.Store.GetProject(t.ProjectID)
+	if err != nil {
+		fail(c, err)
+		return nil, false
+	}
+	if p.Type != db.ProjectFolder {
+		apierr.BadRequest(c, "only folder sessions can be archived here")
+		return nil, false
+	}
+	return t, true
+}
+
+func (h *Handler) archiveSession(c *gin.Context) {
+	t, ok := h.folderSession(c)
+	if !ok {
+		return
+	}
+	out, err := h.svc.Threads.ArchiveSession(t.ID)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *Handler) restoreSession(c *gin.Context) {
+	t, ok := h.folderSession(c)
+	if !ok {
+		return
+	}
+	out, err := h.svc.Threads.RestoreSession(t.ID)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
 }
 
 func (h *Handler) reopen(c *gin.Context) {
