@@ -89,6 +89,41 @@ func (m *Threads) SetProfile(ctx context.Context, id, profile string) (*db.Threa
 	return out, err
 }
 
+// SetWorkerProfile selects a profile for a project worker, or restores inheritance.
+func (m *Threads) SetWorkerProfile(ctx context.Context, id, profile string, inherit bool) (*db.Thread, error) {
+	t, err := m.store.GetThread(id)
+	if err != nil {
+		return nil, err
+	}
+	if m.isFolder(t.ProjectID) || t.Agent == db.AgentLLM {
+		return nil, errors.New("not a project worker")
+	}
+	profile = strings.TrimSpace(profile)
+	if !inherit && profile != "" {
+		l, ok := m.env.(Launcher)
+		if !ok {
+			return nil, ErrNoProfiles
+		}
+		if err := l.CheckLaunch(ctx, profile, ""); err != nil {
+			return nil, err
+		}
+	}
+	return m.update(id, func(t *db.Thread) {
+		if inherit {
+			t.ProfileOverride = nil
+		} else {
+			t.ProfileOverride = &profile
+		}
+		t.ModelOverride = ""
+	})
+}
+func workerProfile(p *db.Project, t *db.Thread) string {
+	if t.ProfileOverride != nil {
+		return *t.ProfileOverride
+	}
+	return p.ThreadProfile
+}
+
 // SetModel sets the model the thread's next turn asks for. Empty restores
 // the project's model for a worker, or the host profile's default for a folder.
 func (m *Threads) SetModel(ctx context.Context, id, model string) (*db.Thread, error) {
@@ -101,8 +136,16 @@ func (m *Threads) SetModel(ctx context.Context, id, model string) (*db.Thread, e
 		return nil, errors.New("not available on a project's main thread; use the project's own settings")
 	}
 	folder := m.isFolder(t.ProjectID)
-	if l, ok := m.env.(Launcher); folder && ok && model != "" {
-		if err := l.CheckLaunch(ctx, t.Profile, model); err != nil {
+	if l, ok := m.env.(Launcher); ok && model != "" {
+		profile := t.Profile
+		if !folder {
+			p, err := m.store.GetProject(t.ProjectID)
+			if err != nil {
+				return nil, err
+			}
+			profile = workerProfile(p, t)
+		}
+		if err := l.CheckLaunch(ctx, profile, model); err != nil {
 			return nil, err
 		}
 	}
@@ -156,7 +199,13 @@ func (m *Threads) Handoff(id string) (string, error) {
 	}
 	argv := []string{"claude"}
 	if h, ok := m.env.(Handoffer); ok {
-		argv = h.HandoffLaunch(t.Profile)
+		profile := t.Profile
+		if !m.isFolder(t.ProjectID) {
+			if p, err := m.store.GetProject(t.ProjectID); err == nil {
+				profile = workerProfile(p, t)
+			}
+		}
+		argv = h.HandoffLaunch(profile)
 	}
 	argv = append(argv, "--resume", t.SessionID)
 	model := t.Model
@@ -164,7 +213,7 @@ func (m *Threads) Handoff(id string) (string, error) {
 		// A worker's Model is the model that last answered, not its next
 		// launch choice. Handoff must preserve the configured override/default.
 		model = t.ModelOverride
-		if model == "" {
+		if model == "" && t.ProfileOverride == nil {
 			if p, err := m.store.GetProject(t.ProjectID); err == nil {
 				model = p.ThreadModel
 			}

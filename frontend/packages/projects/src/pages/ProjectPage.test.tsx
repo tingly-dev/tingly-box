@@ -9,11 +9,11 @@ vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => k
 vi.mock('../client', async (actual) => ({ ...await actual<typeof import('../client')>(), api: { GET: m.get, PUT: m.put, PATCH: m.patch } }));
 vi.mock('../hooks/useProjectEvents', () => ({ useProjectEvents: vi.fn() }));
 vi.mock('../hooks/useTranscript', () => ({ useTranscript: () => ({ events: [], apply: vi.fn(), edit: vi.fn(), catchUp: vi.fn() }) }));
-vi.mock('../components/project/ConversationPane', () => ({ ConversationPane: ({ composerContext }: { composerContext: React.ReactNode }) => <div data-testid="defaults">{composerContext}</div> }));
+vi.mock('../components/project/ConversationPane', () => ({ ConversationPane: ({ composerContext, disabledReason }: { composerContext: React.ReactNode; disabledReason: React.ReactNode }) => <div data-testid="defaults">{disabledReason}{composerContext}</div> }));
 vi.mock('../components/project/OverviewPane', () => ({ OverviewPane: ({ onOpen }: { onOpen: (id: string) => void }) => <button onClick={() => onOpen('a')}>open thread</button> }));
 vi.mock('../components/workspace/WorkspaceLayout', () => ({ useWorkspacePane: () => ({ narrow: false, reveal: vi.fn() }), WorkspaceLayout: ({ main, side }: { main: React.ReactNode; side: React.ReactNode }) => <>{main}{side}</> }));
 vi.mock('../hooks/usePlacement', () => ({ usePlacement: () => m.placement }));
-vi.mock('../components/project/ThreadPanel', () => ({ ThreadPanel: ({ composerContext, modelControl, effortControl, settingsSaving, canSend, onBack }: { composerContext: React.ReactNode; modelControl: React.ReactNode; effortControl: React.ReactNode; settingsSaving: boolean; canSend: () => boolean; onBack: () => void }) => <div data-testid="thread" data-saving={settingsSaving} data-can-send={canSend()}><button onClick={onBack}>back</button>{modelControl}{effortControl}{composerContext}</div> }));
+vi.mock('../components/project/ThreadPanel', () => ({ ThreadPanel: ({ composerContext, modelControl, effortControl, belowComposer, settingsSaving, canSend, onBack }: { composerContext: React.ReactNode; modelControl: React.ReactNode; effortControl: React.ReactNode; belowComposer: React.ReactNode; settingsSaving: boolean; canSend: () => boolean; onBack: () => void }) => <div data-testid="thread" data-saving={settingsSaving} data-can-send={canSend()}><button onClick={onBack}>back</button>{modelControl}{effortControl}{composerContext}{belowComposer}</div> }));
 vi.mock('../components/ModelPicker', () => ({ ModelPicker: ({ value, defaultLabel, disabled, onChange }: { value: string; defaultLabel?: string; disabled?: boolean; onChange: (v: string) => void }) => <button disabled={disabled} onClick={() => onChange('worker-choice')}>{value || defaultLabel}</button> }));
 const host = { paths: { list: '/projects', project: (id: string) => `/projects/${id}`, folder: () => '/folders' } };
 const p = { id: 'p', type: 'project', main_thread_id: 'main', name: 'Project', thread_model: 'project-choice', thread_permission_mode: 'auto' };
@@ -60,4 +60,24 @@ it('switches the main surface to a thread and returns to the preserved project c
     expect(screen.getByTestId('defaults')).toBeVisible();
     expect(screen.queryByTestId('thread')).not.toBeInTheDocument();
     m.placement.thread = 'side';
+});
+
+
+it('lets standalone users recover an imported project and worker profile', async () => {
+    const imported = { ...p, coordinator_profile: 'tb-coordinator', thread_profile: 'tb-workers', coordinator_model: 'opus' };
+    const worker = { ...a, profile_override: 'tb-worker' };
+    m.get.mockImplementation(async (url: string) => ({ data: url === '/api/v1/projects/{id}'
+        ? { project: imported, threads: [worker], coordinator_busy: false }
+        : url.endsWith('permission-modes') ? { modes: ['auto'] } : { thread: worker }, response: new Response() }));
+    m.patch.mockResolvedValue({ data: { ...imported, coordinator_profile: '', coordinator_model: '' }, response: new Response() });
+    m.put.mockResolvedValue({ data: { ...worker, profile_override: '' }, response: new Response() });
+    render(<MemoryRouter initialEntries={['/projects/p?thread=a']}><ProjectsHostProvider host={host}><Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes></ProjectsHostProvider></MemoryRouter>);
+    await screen.findByText('threadSettings.coordinatorProfileUnavailable');
+    expect(screen.getByText('threadSettings.defaultProfileUnavailable')).toBeInTheDocument();
+    expect(screen.getByText('threadSettings.threadProfileUnavailable')).toBeInTheDocument();
+    const buttons = screen.getAllByRole('button', { name: 'threadSettings.useConnection' });
+    fireEvent.click(buttons[2]);
+    await waitFor(() => expect(m.put).toHaveBeenCalledWith('/api/v1/threads/{id}/profile', { params: { path: { id: 'a' } }, body: { profile: '', inherit: false } }));
+    fireEvent.click(buttons[0]);
+    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { coordinator_profile: '', coordinator_model: '' } }));
 });

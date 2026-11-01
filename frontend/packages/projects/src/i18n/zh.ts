@@ -9,6 +9,10 @@ export const zh: Dict<typeof en> = {
         tokensApprox: '≈ {{value}} tokens',
     },
     threadSettings: {
+        useConnection: '使用当前连接',
+        coordinatorProfileUnavailable: '协调者使用的 profile 在此不可用。切换到当前连接后即可继续。',
+        defaultProfileUnavailable: '项目线程默认使用的 profile 在此不可用。切换后，继承默认值的线程将使用当前连接。',
+        threadProfileUnavailable: '此线程使用的 profile 在此不可用。切换到当前连接后即可继续。',
         settings: '线程设置',
         model: '模型', permissions: '权限', projectDefault: '项目默认', defaultModel: '默认模型', defaultPermissions: '默认权限',
         defaults: '项目线程默认设置', defaultsHelp: '新线程及未设置覆盖的已有线程使用这些默认值。单个线程的选择不会修改这里。',

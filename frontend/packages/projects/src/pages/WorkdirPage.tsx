@@ -399,7 +399,10 @@ export default function WorkdirPage() {
                                 disabled={threadBlocked || selected.status === 'resolved' || settings.saving}
                                 onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
                         )}
-                        belowComposer={selected && events && slots?.statusLine?.({ session: selected, events })}
+                        belowComposer={selected && <>
+                            {!slots?.launchPickers && selected.profile && <Alert severity="warning" action={<Button color="inherit" size="small" disabled={settings.saving} onClick={() => void settings.setLaunch({ profile: '', model: '' })}>{t('threadSettings.useConnection')}</Button>}>{t('threadSettings.threadProfileUnavailable')}</Alert>}
+                            {events && slots?.statusLine?.({ session: selected, events })}
+                        </>}
                     />
                 ) : (
                     <NewSessionView

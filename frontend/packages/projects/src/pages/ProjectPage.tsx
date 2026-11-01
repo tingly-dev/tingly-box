@@ -47,7 +47,7 @@ export default function ProjectPage() {
     const { t } = useTranslation('projects');
     const navigate = useNavigate();
     const notify = useNotify();
-    const { onProjectsChanged: refresh, paths: routes, embedded } = useProjectsHost();
+    const { onProjectsChanged: refresh, paths: routes, embedded, session } = useProjectsHost();
     const [params, setParams] = useSearchParams();
     const threadId = params.get('thread') ?? '';
 
@@ -200,7 +200,7 @@ export default function ProjectPage() {
         p.delete('thread');
         return p;
     });
-    const patch = async (body: Pick<components['schemas']['UpdateProjectRequest'], 'starred' | 'paused' | 'archived' | 'coordinator_model' | 'thread_model' | 'coordinator_effort' | 'thread_effort' | 'thread_permission_mode'>) => {
+    const patch = async (body: Pick<components['schemas']['UpdateProjectRequest'], 'starred' | 'paused' | 'archived' | 'coordinator_model' | 'thread_model' | 'coordinator_profile' | 'thread_profile' | 'coordinator_effort' | 'thread_effort' | 'thread_permission_mode'>) => {
         if (projectSaving.current) return;
         projectSaving.current = true;
         setSavingDefaults(true);
@@ -258,10 +258,15 @@ export default function ProjectPage() {
             configuredModel={selected?.model_override || `${t('threadSettings.projectDefault')} · ${project?.thread_model || t('threadSettings.defaultModel')}`}
             permissionLabel={selected?.permission_mode ? t(`session.mode.${selected.permission_mode}`, { defaultValue: selected.permission_mode }) : `${t('threadSettings.projectDefault')} · ${t(`session.mode.${project?.thread_permission_mode || 'acceptEdits'}`)}`}
             modelControl={selected && (
-                <ThreadSettingsPickers show="model" value={{ profile: '', model: selected.model_override ?? '' }} permissionMode={selected.permission_mode ?? ''}
+                session?.workerLaunchPickers ? session.workerLaunchPickers({ profileOverride: selected.profile_override ?? null, projectProfile: project?.thread_profile ?? '', model: selected.model_override || (selected.profile_override == null ? project?.thread_model : '') || '', disabled: blocked || selected.status === 'resolved' || settings.saving, onChange: (profile, model) => void settings.setWorkerLaunch(profile, model) }) : <ThreadSettingsPickers show="model" value={{ profile: '', model: selected.model_override ?? '' }} permissionMode={selected.permission_mode ?? ''}
                     modes={modes} disabled={blocked || selected.status === 'resolved' || settings.saving}
                     defaultModel={project?.thread_model} defaultPermissionMode={project?.thread_permission_mode || 'acceptEdits'}
                     onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
+            )}
+            belowComposer={selected && !session?.workerLaunchPickers && !!(selected.profile_override ?? project?.thread_profile) && (
+                <Alert severity="warning" action={<Button color="inherit" size="small" disabled={settings.saving} onClick={() => void settings.setWorkerLaunch('', '')}>{t('threadSettings.useConnection')}</Button>}>
+                    {t('threadSettings.threadProfileUnavailable')}
+                </Alert>
             )}
             effortControl={selected && (
                 <EffortPicker value={selected.effort_override || ''}
@@ -365,10 +370,15 @@ export default function ProjectPage() {
                         threads={threadMap}
                         busy={busy}
                         disabled={blocked || !project || savingDefaults}
-                        disabledReason={banner}
+                        disabledReason={<>
+                            {banner}
+                            {!session?.launchPickers && project?.coordinator_profile && <Alert severity="warning" sx={{ mb: 1 }} action={<Button color="inherit" size="small" disabled={savingDefaults} onClick={() => void patch({ coordinator_profile: '', coordinator_model: '' })}>{t('threadSettings.useConnection')}</Button>}>{t('threadSettings.coordinatorProfileUnavailable')}</Alert>}
+                            {!session?.launchPickers && project?.thread_profile && <Alert severity="warning" sx={{ mb: 1 }} action={<Button color="inherit" size="small" disabled={savingDefaults} onClick={() => void patch({ thread_profile: '', thread_model: '' })}>{t('threadSettings.useConnection')}</Button>}>{t('threadSettings.defaultProfileUnavailable')}</Alert>}
+                        </>}
                         threadId={mainThreadId}
                         model={project?.coordinator_model}
-                        onModelChange={(m) => void patch({ coordinator_model: m })}
+                        onModelChange={session?.launchPickers ? undefined : (m) => void patch({ coordinator_model: m })}
+                        modelControl={project && session?.launchPickers?.({ value: { profile: project.coordinator_profile || '', model: project.coordinator_model || '' }, disabled: blocked || savingDefaults, onChange: (next) => void patch({ coordinator_profile: next.profile, coordinator_model: next.model }) })}
                         effort={project?.coordinator_effort}
                         onEffortChange={(e) => void patch({ coordinator_effort: e as EffortLevel })}
                         composerContext={project && (
@@ -383,12 +393,12 @@ export default function ProjectPage() {
                                     disabled={blocked || savingDefaults}
                                     onChange={(m) => void patch({ thread_permission_mode: m as ThreadMode })}
                                 />
-                                <ModelPicker
+                                {session?.launchPickers ? session.launchPickers({ value: { profile: project.thread_profile || '', model: project.thread_model || '' }, disabled: blocked || savingDefaults, onChange: (next) => void patch({ thread_profile: next.profile, thread_model: next.model }) }) : <ModelPicker
                                     source="projects"
                                     value={project.thread_model}
                                     disabled={blocked || savingDefaults}
                                     onChange={(m) => void patch({ thread_model: m })}
-                                />
+                                />}
                                 <EffortPicker
                                     value={project.thread_effort || ''}
                                     disabled={blocked || savingDefaults}

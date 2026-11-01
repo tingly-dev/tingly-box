@@ -52,7 +52,8 @@ const ModelSelect = ({profile, value, onChange, disabled}: ModelSelectProps) => 
     // A unified profile has one model for every tier: the menu still opens,
     // shows that model and says where to change it.
     const tiers = data.unified ? [data.tiers[0]] : data.tiers;
-    const selected = tiers.find((x) => x.alias === value) ?? tiers[0];
+    // Existing projects may have stored a concrete model instead of a tier alias.
+    const selected = tiers.find((x) => x.alias === value) ?? {alias: value, model: value, provider_name: '', provider_model: ''};
     return (
         <Select
             disabled={disabled}
@@ -68,12 +69,13 @@ const ModelSelect = ({profile, value, onChange, disabled}: ModelSelectProps) => 
                 <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
                     <AutoAwesome/>
                     <Typography noWrap sx={composerPickerLabelSx}>
-                        {data.unified ? concrete(selected) : `${tierLabel(selected.alias)} · ${concrete(selected)}`}
+                        {!tiers.some((tier) => tier.alias === value) ? value : data.unified ? concrete(selected) : `${tierLabel(selected.alias)} · ${concrete(selected)}`}
                     </Typography>
                 </Stack>
             )}
             sx={composerPickerSx}
         >
+            {!tiers.some((tier) => tier.alias === value) && <MenuItem value={value}>{value}</MenuItem>}
             {tiers.map((tier) => (
                 <MenuItem key={tier.alias} value={tier.alias}>
                     <Box>

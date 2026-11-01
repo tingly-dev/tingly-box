@@ -2,6 +2,8 @@ package project
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -176,4 +178,59 @@ func TestThreadEffortInheritsAndOverridesPerTurn(t *testing.T) {
 	assert.Equal(t, "medium", f.agent.Launches()[2].Effort)
 	_, err = f.threads.SetEffort(th.ID, "invalid")
 	require.Error(t, err)
+}
+
+func TestWorkerProfileInheritanceAndOverride(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
+	work := filepath.Join(t.TempDir(), "work.json")
+	require.NoError(t, os.WriteFile(work, []byte(`{"env":{"X":"profile"},"permissions":{"allow":["Read"],"additionalDirectories":["/data"]}}`), 0600))
+	f.threads.env = profiles{settings: work}
+	f.project.ThreadProfile = "work"
+	require.NoError(t, f.store.SaveProject(f.project))
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "profile"})
+	require.NoError(t, err)
+	f.report(t)
+	waitStatus(t, f.store, th.ID, db.ThreadIdle)
+	spec := f.agent.Launches()[0]
+	data, err := os.ReadFile(spec.SettingsPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), `"X":"profile"`)
+	assert.Contains(t, string(data), `"allow":["Read"]`)
+	assert.Contains(t, string(data), `/data`)
+	assert.Contains(t, string(data), f.threads.layout.MemoryDir(f.project.ID))
+	cmd, err := f.threads.Handoff(th.ID)
+	require.NoError(t, err)
+	assert.Contains(t, cmd, "tb profile work")
+	saved, err := f.threads.SetWorkerProfile(context.Background(), th.ID, "", false)
+	require.NoError(t, err)
+	require.NotNil(t, saved.ProfileOverride)
+	assert.Empty(t, *saved.ProfileOverride)
+	cmd, err = f.threads.Handoff(th.ID)
+	require.NoError(t, err)
+	assert.Contains(t, cmd, "tb cc")
+	saved, err = f.threads.SetWorkerProfile(context.Background(), th.ID, "", true)
+	require.NoError(t, err)
+	assert.Nil(t, saved.ProfileOverride)
+	_, err = f.threads.SetWorkerProfile(context.Background(), th.ID, "missing", false)
+	assert.Error(t, err)
+}
+
+func TestWorkerCanLeaveUnavailableProfileWithoutLauncher(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "work"})
+	require.NoError(t, err)
+	f.report(t)
+	waitStatus(t, f.store, th.ID, db.ThreadIdle)
+	f.project.ThreadProfile = "tb-only"
+	require.NoError(t, f.store.SaveProject(f.project))
+	_, err = f.threads.SetWorkerProfile(context.Background(), th.ID, "other", false)
+	require.ErrorIs(t, err, ErrNoProfiles)
+	got, err := f.threads.SetWorkerProfile(context.Background(), th.ID, "", false)
+	require.NoError(t, err)
+	require.NotNil(t, got.ProfileOverride)
+	assert.Empty(t, *got.ProfileOverride)
+	_, err = f.threads.Send(context.Background(), th.ID, "continue", Source{}, nil)
+	require.NoError(t, err)
+	f.report(t)
+	waitStatus(t, f.store, th.ID, db.ThreadIdle)
 }

@@ -3233,6 +3233,10 @@
       "ProfileRequest": {
         "type": "object",
         "properties": {
+          "inherit": {
+            "type": "boolean",
+            "description": "Field inherit"
+          },
           "profile": {
             "type": "string",
             "description": "Field profile"
@@ -3257,6 +3261,10 @@
           "coordinator_model": {
             "type": "string",
             "description": "Field coordinator_model"
+          },
+          "coordinator_profile": {
+            "type": "string",
+            "description": "Field coordinator_profile"
           },
           "created_at": {
             "type": "string",
@@ -3314,6 +3322,10 @@
             "type": "string",
             "description": "Field thread_permission_mode"
           },
+          "thread_profile": {
+            "type": "string",
+            "description": "Field thread_profile"
+          },
           "type": {
             "type": "string",
             "description": "Field type"
@@ -3331,6 +3343,8 @@
           "goal",
           "instructions",
           "repos",
+          "coordinator_profile",
+          "thread_profile",
           "coordinator_model",
           "thread_model",
           "coordinator_effort",
@@ -3437,6 +3451,10 @@
             "type": "string",
             "description": "Field coordinator_model"
           },
+          "coordinator_profile": {
+            "type": "string",
+            "description": "Field coordinator_profile"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -3493,6 +3511,10 @@
             "type": "string",
             "description": "Field thread_permission_mode"
           },
+          "thread_profile": {
+            "type": "string",
+            "description": "Field thread_profile"
+          },
           "threads": {
             "$ref": "#/components/schemas/ThreadCounts"
           },
@@ -3513,6 +3535,8 @@
           "goal",
           "instructions",
           "repos",
+          "coordinator_profile",
+          "thread_profile",
           "coordinator_model",
           "thread_model",
           "coordinator_effort",
@@ -3937,6 +3961,10 @@
             "type": "string",
             "description": "Field profile"
           },
+          "profile_override": {
+            "type": "string",
+            "description": "Field profile_override"
+          },
           "project_id": {
             "type": "string",
             "description": "Field project_id"
@@ -4004,6 +4032,7 @@
           "status",
           "origin",
           "cwd",
+          "profile_override",
           "commits_ahead",
           "files_changed",
           "uncommitted",
@@ -4307,6 +4336,10 @@
             "type": "string",
             "description": "Field coordinator_model"
           },
+          "coordinator_profile": {
+            "type": "string",
+            "description": "Field coordinator_profile"
+          },
           "goal": {
             "type": "string",
             "description": "Field goal"
@@ -4358,6 +4391,10 @@
               "auto",
               "bypassPermissions"
             ]
+          },
+          "thread_profile": {
+            "type": "string",
+            "description": "Field thread_profile"
           }
         }
       },

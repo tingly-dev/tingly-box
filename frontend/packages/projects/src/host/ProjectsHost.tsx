@@ -95,6 +95,7 @@ export interface SessionLaunch {
  */
 export interface SessionSlots {
     /** Pickers for how a session launches, in the message box strip of a new session and of an open one. */
+    workerLaunchPickers?: (p: { profileOverride: string | null; projectProfile: string; model: string; onChange: (profile: string | null, model: string) => void; disabled?: boolean }) => ReactNode;
     launchPickers?: (p: { value: SessionLaunch; onChange: (next: SessionLaunch) => void; disabled?: boolean }) => ReactNode;
     /** Under an open session's message box. */
     statusLine?: (p: { session: Thread; events: ThreadEvent[] }) => ReactNode;

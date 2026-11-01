@@ -38,6 +38,13 @@ export function useThreadSettings(thread: Thread | undefined, folder: boolean, o
         }
         return saved;
     });
+    const setWorkerLaunch = (profile: string | null, model: string) => save(async (current) => {
+        const path = { params: { path: { id: current.id } } };
+        let saved = current;
+        if (profile !== (saved.profile_override ?? null)) saved = changed(await unwrap(api.PUT('/api/v1/threads/{id}/profile', { ...path, body: { profile: profile ?? '', inherit: profile === null } })));
+        if (model !== (saved.model_override ?? '')) saved = changed(await unwrap(api.PUT('/api/v1/threads/{id}/model', { ...path, body: { model } })));
+        return saved;
+    });
     const setPermission = (permission_mode: string) => save(async (current) => changed(await unwrap(api.PUT('/api/v1/threads/{id}/permission-mode', {
         params: { path: { id: current.id } }, body: { permission_mode },
     }))));
@@ -49,6 +56,7 @@ export function useThreadSettings(thread: Thread | undefined, folder: boolean, o
         // Also checked inside onSend, before React has rendered the disabled button.
         canSend: () => !!thread && !pending.current.has(thread.id),
         setLaunch,
+        setWorkerLaunch,
         setPermission,
         setEffort,
     };
@@ -56,5 +64,5 @@ export function useThreadSettings(thread: Thread | undefined, folder: boolean, o
 
 /** A settings response must not roll back a newer streamed status or usage update. */
 export function mergeThreadSettings(current: Thread, saved: Thread, folder: boolean): Thread {
-    return { ...current, ...(folder && { model: saved.model }), model_override: saved.model_override, effort_override: saved.effort_override, profile: saved.profile, permission_mode: saved.permission_mode };
+    return { ...current, ...(folder && { model: saved.model }), profile_override: saved.profile_override, model_override: saved.model_override, effort_override: saved.effort_override, profile: saved.profile, permission_mode: saved.permission_mode };
 }

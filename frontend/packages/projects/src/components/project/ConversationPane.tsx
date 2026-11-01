@@ -272,6 +272,7 @@ interface Props {
     /** The coordinator's model, switched from the message box; the picker is left out without onModelChange. */
     model?: string;
     onModelChange?: (model: string) => void;
+    modelControl?: React.ReactNode;
     /** The coordinator's thinking effort, beside its model picker. */
     effort?: string;
     onEffortChange?: (effort: string) => void;
@@ -284,7 +285,7 @@ interface Props {
     chatTitle?: (platform: string, chatId: string) => string | undefined;
 }
 
-export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, disabled, disabledReason, onSend, threadId, model, onModelChange, effort, onEffortChange, composerContext, onOpenThread, onStartSuggestions, onChooseDecision, chatTitle }: Props) {
+export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, disabled, disabledReason, onSend, threadId, model, onModelChange, modelControl, effort, onEffortChange, composerContext, onOpenThread, onStartSuggestions, onChooseDecision, chatTitle }: Props) {
     const { t } = useTranslation('projects');
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
@@ -434,6 +435,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                     disabled={disabled}
                     seed={seed}
                     streaming={busy}
+                    leftSlot={modelControl}
                     model={model}
                     onModelChange={onModelChange}
                     effort={effort}

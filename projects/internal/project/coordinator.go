@@ -221,7 +221,19 @@ func (c *Coordinator) turn(ctx context.Context, projectID string, userTriggered,
 		if p.Paused || p.ArchivedAt != nil {
 			return nil
 		}
-		client, model, err := c.llm.ClientFor(ctx, p.CoordinatorModel)
+		var client llm.Client
+		var model string
+		if p.CoordinatorProfile != "" {
+			if source, ok := c.llm.(interface {
+				ClientForProfile(context.Context, string, string) (llm.Client, string, error)
+			}); ok {
+				client, model, err = source.ClientForProfile(ctx, p.CoordinatorProfile, p.CoordinatorModel)
+			} else {
+				err = ErrNoProfiles
+			}
+		} else {
+			client, model, err = c.llm.ClientFor(ctx, p.CoordinatorModel)
+		}
 		if err != nil {
 			return fmt.Errorf("coordinator unavailable: %w", err)
 		}

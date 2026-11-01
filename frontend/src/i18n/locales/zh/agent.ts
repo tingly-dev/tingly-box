@@ -773,7 +773,7 @@ export default {
       "testTool": "测试工具",
       "restrictedTool": "此工具被连接的允许列表排除，可在连接设置中调整。",
       "toolEnabled": "开",
-      "connectionSettings": "设置",
+      "connectionSettingsShort": "设置",
       "failed": "失败",
       "builtinRuns": "在 Tingly Box 内运行。",
       "toolsOn": "已开启 {{on}} / {{total}} 个工具",
