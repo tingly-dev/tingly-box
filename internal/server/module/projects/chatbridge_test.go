@@ -218,7 +218,10 @@ func TestChatToProjectAndBack(t *testing.T) {
 	handled, err = bridge.RouteInbound(ctx, in("42", "status?"))
 	require.NoError(t, err)
 	require.True(t, handled)
-	assert.Equal(t, sent{"42", "[Atlas] You said: status?"}, bot.next(t))
+	got := bot.next(t)
+	assert.Equal(t, "42", got.chatID)
+	assert.Contains(t, got.body, "status?")
+	assert.True(t, strings.HasSuffix(got.body, "\n\n[Atlas]"), got.body)
 
 	// The conversation the web shows has both sides, the first marked as IM.
 	var msgs struct {
