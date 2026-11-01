@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProjectsHostProvider, type ProjectsHost } from '../host/ProjectsHost';
@@ -62,7 +62,7 @@ describe('ProjectsSidebar', () => {
         expect(list).not.toHaveBeenCalled();
     });
 
-    it('lists projects and working folders flat: a row opens the page, threads are no subtree', async () => {
+    it('keeps projects flat and expands folders to show sessions', async () => {
         const h = host([summary('a', 'Alpha', 0), folder('f-app', '/home/me/app', 1, 0), folder('f-notes', '/home/me/notes', 0, 1)]);
         list.mockImplementation((path: string) => Promise.resolve({
             data: path.endsWith('/threads')
@@ -75,14 +75,15 @@ describe('ProjectsSidebar', () => {
         }));
         show(h, '/f?path=%2Fhome%2Fme%2Fapp&session=t-run', { showWorkdirs: true });
         const region = await screen.findByRole('region', { name: 'workdir.title' });
-        await waitFor(() => expect(within(region).getAllByRole('link').map((l) => l.textContent)).toEqual(['workdir.title', 'app', 'notes']));
-        // The open folder's row is marked; the session open inside it is not a row.
-        expect(within(region).getByRole('link', { name: 'app' })).toHaveAttribute('aria-current', 'page');
-        expect(within(region).getByRole('link', { name: 'app' })).toHaveAttribute('href', '/f?path=%2Fhome%2Fme%2Fapp');
+        const session = await within(region).findByRole('link', { name: 'Running one' });
+        expect(session).toHaveAttribute('href', '/f?path=%2Fhome%2Fme%2Fapp&session=t-run');
+        expect(session).toHaveAttribute('aria-current', 'page');
+        fireEvent.click(within(region).getByRole('button', { name: 'sidebar.collapseFolder' }));
         expect(within(region).queryByText('Running one')).not.toBeInTheDocument();
-        expect(within(region).queryByRole('button', { name: /sidebar.(un)?fold/ })).not.toBeInTheDocument();
-        // The nav reads no thread lists: sessions are observed inside the folder's page.
-        expect(list.mock.calls.every(([p]) => !String(p).includes('threads'))).toBe(true);
+        fireEvent.click(within(region).getAllByRole('button', { name: 'sidebar.expandFolder' })[0]);
+        expect(await within(region).findByText('Running one')).toBeInTheDocument();
+        const projects = screen.getByRole('region', { name: 'nav.projects' });
+        expect(within(projects).queryByRole('button', { name: /sidebar\.(expand|collapse)Folder/ })).not.toBeInTheDocument();
     });
     it('pins an IM row with the bot count when the host has IM, and leaves it out otherwise', async () => {
         const h = host([summary('a', 'Alpha', 0)]);
