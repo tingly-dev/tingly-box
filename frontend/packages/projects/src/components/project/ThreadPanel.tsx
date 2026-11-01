@@ -159,7 +159,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     // The handoff command stays on screen with its own copy button, since
     // copying right after the request can be refused by the browser.
     const [handoff, setHandoff] = useState<string | null>(null);
-    const [confirm, setConfirm] = useState<'archive' | 'handoff' | null>(null);
+    const [confirm, setConfirm] = useState<'resolve' | 'handoff' | null>(null);
     const [acting, setActing] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
@@ -302,17 +302,20 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
             return false;
         }
     };
-    const runConfirmed = async (what: 'archive' | 'handoff') => {
+    const runConfirmed = async (what: 'resolve' | 'handoff') => {
         setActing(true);
-        const done = what === 'archive'
+        const done = what === 'resolve'
             ? await act(ops.finish)
             : await act(async () => setHandoff(await ops.handoff()));
         setActing(false);
-        if (done) setConfirm(null);
+        if (done) {
+            setConfirm(null);
+            if (what === 'resolve') onRefresh?.();
+        }
     };
-    // Archiving or handing off ends the process and every background task it
+    // Resolving or handing off ends the process and every background task it
     // runs: ask first while any is running.
-    const guarded = (what: 'archive' | 'handoff') => {
+    const guarded = (what: 'resolve' | 'handoff') => {
         setMenu(null);
         if (liveTasks.length > 0) setConfirm(what);
         else void runConfirmed(what);
@@ -370,11 +373,11 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         {session && thread.status !== 'resolved' && (
                             <MenuItem disabled={running || acting} onClick={() => guarded('handoff')}>{running ? t('session.handoffBusy') : t('session.handoff')}</MenuItem>
                         )}
-                        {/* Finishing sits in the menu, apart from the buttons used all the time: a stray click cannot archive. */}
+                        {/* Finishing sits in the menu, apart from the buttons used all the time: a stray click cannot resolve it. */}
                         <Divider />
                         {thread.status !== 'resolved'
-                            ? <MenuItem disabled={acting} onClick={() => { setMenu(null); if (session) guarded('archive'); else void act(ops.finish); }}>{t(session ? 'session.archive' : 'thread.resolve')}</MenuItem>
-                            : <MenuItem disabled={acting} onClick={() => { setMenu(null); void act(ops.reopen); }}>{t(session ? 'session.reopen' : 'thread.reopen')}</MenuItem>}
+                            ? <MenuItem disabled={acting} onClick={() => { setMenu(null); if (session) guarded('resolve'); else void act(ops.finish); }}>{t(session ? 'session.resolve' : 'thread.resolve')}</MenuItem>
+                            : <MenuItem disabled={acting} onClick={() => { setMenu(null); void act(ops.reopen).then((ok) => { if (ok) onRefresh?.(); }); }}>{t(session ? 'session.reopen' : 'thread.reopen')}</MenuItem>}
                         {/* Run details, for when they matter: kept off the header. */}
                         {(thread.model || thread.input_tokens > 0 || thread.output_tokens > 0) && <Divider />}
                         {(thread.model || thread.input_tokens > 0 || thread.output_tokens > 0) && (
@@ -500,7 +503,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     }}
                     canSubmit={!settingsSaving}
                     disabled={disabled || thread.status === 'resolved'}
-                    placeholder={thread.status === 'resolved' ? t(session ? 'session.archivedPlaceholder' : 'thread.resolvedPlaceholder') : running ? t(session ? 'session.queuePlaceholder' : 'thread.queuePlaceholder') : t(session ? 'session.placeholder' : 'thread.placeholder')}
+                    placeholder={thread.status === 'resolved' ? t(session ? 'session.resolvedPlaceholder' : 'thread.resolvedPlaceholder') : running ? t(session ? 'session.queuePlaceholder' : 'thread.queuePlaceholder') : t(session ? 'session.placeholder' : 'thread.placeholder')}
                     attach={(files) => uploadAttachments(owner, files)}
                     onSend={async (text, attachments, mode) => {
                         if (settingsSaving || (canSend && !canSend())) return false;
@@ -532,11 +535,11 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
             )}
             <ConfirmDialog
                 open={confirm !== null}
-                title={confirm === 'handoff' ? t('session.handoffConfirm') : t('session.archiveConfirm')}
+                title={confirm === 'handoff' ? t('session.handoffConfirm') : t('session.resolveConfirm')}
                 description={t('session.tasksWillStop', { count: liveTasks.length })}
                 loading={acting}
                 cancelLabel={t('common.cancel')}
-                confirmLabel={confirm === 'handoff' ? t('session.handoff') : t('session.archive')}
+                confirmLabel={confirm === 'handoff' ? t('session.handoff') : t('session.resolve')}
                 confirmColor="warning"
                 onClose={() => setConfirm(null)}
                 onConfirm={() => confirm && void runConfirmed(confirm)}
