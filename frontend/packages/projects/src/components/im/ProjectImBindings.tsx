@@ -80,7 +80,7 @@ export function useProjectIm(target: ImTarget | null): ProjectIm | null {
 
     if (!im || !target) return null;
     return {
-        mine: bindings && bindings.filter((b) => target.folder ? b.project_id === projectId : b.thread_id === threadId && !b.folder),
+        mine: bindings && bindings.filter((b) => projectId ? b.project_id === projectId : b.target_thread_id === threadId || (!b.target_project_id && b.thread_id === threadId && !b.folder)),
         open: () => setDialogOpen(true),
         unbind: onUnbind,
         chatTitle: (platform, chatId) => byChat.get(chatKey(platform, chatId))?.chat_title || undefined,
@@ -89,6 +89,7 @@ export function useProjectIm(target: ImTarget | null): ProjectIm | null {
                 open={dialogOpen}
                 threadId={threadId}
                 folderId={target.folder ? projectId : undefined}
+                projectId={!target.folder ? projectId : undefined}
                 targetName={projectName}
                 chats={chats}
                 hasBots={(bots ?? []).length > 0}

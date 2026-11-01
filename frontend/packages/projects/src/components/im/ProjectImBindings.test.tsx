@@ -52,6 +52,21 @@ afterEach(() => {
 });
 
 describe('project IM bindings', () => {
+    it('keeps a project binding visible when the chat focuses a project thread', async () => {
+        m.list.mockResolvedValue([{ ...binding('focused', 'tg:1', 'yz', 'p1'), thread_id: 'worker-1', target_project_id: 'p1' }]);
+        show(host([chat('tg:1', 'yz')]));
+        expect(await screen.findByText('yz')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /im\.tags\.bind/ }));
+        expect(await screen.findByText('im.bind.noChatsTitle')).toBeInTheDocument();
+    });
+    it('allows moving a chat from a specific session to its folder', async () => {
+        m.list.mockResolvedValue([{ ...binding('session', 'tg:1', 'yz', 'f1'), thread_id: 'session1', target_project_id: 'f1', target_thread_id: 'session1' }]);
+        show(host([chat('tg:1', 'yz')]), true);
+        fireEvent.click(await screen.findByRole('button', { name: /im\.tags\.bind/ }));
+        fireEvent.click(await screen.findByRole('radio', { name: /yz/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'im.bind.submit' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:1', bot_uuid: 'b1', project_id: 'f1' }));
+    });
     it('binds a chat to a folder before a session exists and shows pending bindings', async () => {
         m.list.mockResolvedValue([{ ...binding('pending', 'tg:1', 'yz', 'f1'), thread_id: '', folder: '/work' }]);
         show(host([chat('tg:1', 'yz'), chat('tg:3', 'Free')]), true);
