@@ -99,7 +99,7 @@ func (m *Threads) SetWorkerProfile(ctx context.Context, id, profile string, inhe
 		return nil, errors.New("not a project worker")
 	}
 	profile = strings.TrimSpace(profile)
-	if !inherit {
+	if !inherit && profile != "" {
 		l, ok := m.env.(Launcher)
 		if !ok {
 			return nil, ErrNoProfiles

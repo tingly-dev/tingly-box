@@ -214,3 +214,23 @@ func TestWorkerProfileInheritanceAndOverride(t *testing.T) {
 	_, err = f.threads.SetWorkerProfile(context.Background(), th.ID, "missing", false)
 	assert.Error(t, err)
 }
+
+func TestWorkerCanLeaveUnavailableProfileWithoutLauncher(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "work"})
+	require.NoError(t, err)
+	f.report(t)
+	waitStatus(t, f.store, th.ID, db.ThreadIdle)
+	f.project.ThreadProfile = "tb-only"
+	require.NoError(t, f.store.SaveProject(f.project))
+	_, err = f.threads.SetWorkerProfile(context.Background(), th.ID, "other", false)
+	require.ErrorIs(t, err, ErrNoProfiles)
+	got, err := f.threads.SetWorkerProfile(context.Background(), th.ID, "", false)
+	require.NoError(t, err)
+	require.NotNil(t, got.ProfileOverride)
+	assert.Empty(t, *got.ProfileOverride)
+	_, err = f.threads.Send(context.Background(), th.ID, "continue", Source{}, nil)
+	require.NoError(t, err)
+	f.report(t)
+	waitStatus(t, f.store, th.ID, db.ThreadIdle)
+}

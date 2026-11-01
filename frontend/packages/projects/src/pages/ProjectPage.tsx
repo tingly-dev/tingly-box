@@ -263,6 +263,11 @@ export default function ProjectPage() {
                     defaultModel={project?.thread_model} defaultPermissionMode={project?.thread_permission_mode || 'acceptEdits'}
                     onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
             )}
+            belowComposer={selected && !session?.workerLaunchPickers && !!(selected.profile_override ?? project?.thread_profile) && (
+                <Alert severity="warning" action={<Button color="inherit" size="small" disabled={settings.saving} onClick={() => void settings.setWorkerLaunch('', '')}>{t('threadSettings.useConnection')}</Button>}>
+                    {t('threadSettings.threadProfileUnavailable')}
+                </Alert>
+            )}
             effortControl={selected && (
                 <EffortPicker value={selected.effort_override || ''}
                     defaultLabel={`${t('threadSettings.projectDefault')} · ${project?.thread_effort ? t(`effort.${project.thread_effort}`) : t('effort.default')}`}
@@ -365,7 +370,11 @@ export default function ProjectPage() {
                         threads={threadMap}
                         busy={busy}
                         disabled={blocked || !project || savingDefaults}
-                        disabledReason={banner}
+                        disabledReason={<>
+                            {banner}
+                            {!session?.launchPickers && project?.coordinator_profile && <Alert severity="warning" sx={{ mb: 1 }} action={<Button color="inherit" size="small" disabled={savingDefaults} onClick={() => void patch({ coordinator_profile: '', coordinator_model: '' })}>{t('threadSettings.useConnection')}</Button>}>{t('threadSettings.coordinatorProfileUnavailable')}</Alert>}
+                            {!session?.launchPickers && project?.thread_profile && <Alert severity="warning" sx={{ mb: 1 }} action={<Button color="inherit" size="small" disabled={savingDefaults} onClick={() => void patch({ thread_profile: '', thread_model: '' })}>{t('threadSettings.useConnection')}</Button>}>{t('threadSettings.defaultProfileUnavailable')}</Alert>}
+                        </>}
                         threadId={mainThreadId}
                         model={project?.coordinator_model}
                         onModelChange={session?.launchPickers ? undefined : (m) => void patch({ coordinator_model: m })}

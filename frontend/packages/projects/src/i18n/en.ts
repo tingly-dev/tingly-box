@@ -5,6 +5,10 @@ export const en = {
         tokensApprox: '≈ {{value}} tokens',
     },
     threadSettings: {
+        useConnection: 'Use this connection',
+        coordinatorProfileUnavailable: 'The coordinator uses a profile that is unavailable here. Switch to this connection to continue.',
+        defaultProfileUnavailable: 'The project thread default uses a profile that is unavailable here. Switch to this connection for threads that inherit it.',
+        threadProfileUnavailable: 'This thread uses a profile that is unavailable here. Switch it to this connection to continue.',
         settings: 'Thread settings',
         model: 'Model', permissions: 'Permissions', projectDefault: 'Project default', defaultModel: 'Default model', defaultPermissions: 'Default permissions',
         defaults: 'Project thread defaults', defaultsHelp: 'Used by new threads and existing threads without an override. Individual thread choices do not change these defaults.',
