@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -12,6 +13,15 @@ import (
 
 // handleProjectSwitch moves the chat to a folder it picked from /dir.
 func (h *BotHandler) handleProjectSwitch(hCtx HandlerContext, projectPath string) {
+	paths, err := NewBotHandlerAdapter(h).ListChatProjectPaths(hCtx.ChatID)
+	if err != nil {
+		h.SendText(hCtx, fmt.Sprintf("Failed to list folders: %v", err))
+		return
+	}
+	if !slices.Contains(paths, projectPath) {
+		h.SendText(hCtx, "That folder is no longer available. Use /dir to refresh the list.")
+		return
+	}
 	h.completeBind(hCtx, projectPath)
 }
 

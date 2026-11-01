@@ -443,6 +443,10 @@ func TestTinglyRegisteredDirectories(t *testing.T) {
 	chat.WaitText(10*time.Second).AssertContains(t, first)
 	chat.SendText("new directory message")
 	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: new directory message")
+	// A button on an old list must not switch to a folder after it is archived.
+	h.call("PATCH", "/projects/"+f1.ID, map[string]any{"archived": true}, nil)
+	chat.SendCallback("old-message", "project:switch:"+first)
+	chat.WaitText(10*time.Second).AssertContains(t, "no longer available")
 }
 
 func TestTinglyProjectsAndFoldersAreDistinct(t *testing.T) {
