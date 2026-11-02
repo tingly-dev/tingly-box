@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, CircularProgress, Divider, LinearProgress, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
-import { AutoAwesome, ExpandMore, PlayArrow } from '@/components/icons';
+import { ExpandMore, PlayArrow } from '@/components/icons';
+import { toggleButtonGroupStyle } from '@/styles/toggleStyles';
 import { useTranslation } from 'react-i18next';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import type { ProbeResult } from '@/types/probe';
@@ -81,10 +82,10 @@ export default function DecisionTryCard({ rules }: { rules: Rule[] }) {
         : [];
 
     return (
-        <Accordion disableGutters defaultExpanded sx={{ border: 1, borderColor: 'divider', borderRadius: 2, overflow: 'hidden', '&:before': { display: 'none' } }}>
-            <AccordionSummary expandIcon={<ExpandMore />} sx={{ px: { xs: 2, md: 3 } }}>
+        <Accordion disableGutters defaultExpanded sx={{ border: 1, borderColor: 'divider', borderRadius: 2, boxShadow: 'none', bgcolor: 'background.paper', overflow: 'hidden', '&:before': { display: 'none' } }}>
+            <AccordionSummary expandIcon={<ExpandMore sx={{ fontSize: '1.1rem', color: 'text.secondary' }} />} sx={{ px: 3, py: 1, '& .MuiAccordionSummary-content': { my: 1 } }}>
                 <Box>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{t('decisionTry.title')}</Typography>
+                    <Typography component="h2" variant="h4" sx={{ fontWeight: 600 }}>{t('decisionTry.title')}</Typography>
                     <Typography variant="body2" color="text.secondary">{t('decisionTry.subtitle')}</Typography>
                 </Box>
             </AccordionSummary>
@@ -92,8 +93,8 @@ export default function DecisionTryCard({ rules }: { rules: Rule[] }) {
                 {!selected ? (
                     <Box sx={{ px: { xs: 2, md: 3 }, pb: 3 }}><Alert severity="info">{t('decisionTry.noRules')}</Alert></Box>
                 ) : (
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1.05fr) minmax(0, 0.95fr)' }, borderTop: 1, borderColor: 'divider' }}>
-                        <Stack spacing={2} sx={{ p: { xs: 2, md: 3 }, minWidth: 0 }}>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) minmax(0, 1fr)' }, gap: 2, px: 3, pb: 3 }}>
+                        <Stack spacing={1.5} sx={{ p: 1.5, minWidth: 0, border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
                             <TextField select fullWidth size="small" label={t('decisionTry.rule')} value={selected.uuid} disabled={running}
                                 onChange={e => change(() => setSelectedId(e.target.value))}>
                                 {available.map(rule => <MenuItem key={rule.uuid} value={rule.uuid}>{rule.request_model}{rule.description ? ` · ${rule.description}` : ''}</MenuItem>)}
@@ -103,10 +104,10 @@ export default function DecisionTryCard({ rules }: { rules: Rule[] }) {
                             <TextField fullWidth label={t('decisionTry.input')} value={state} multiline minRows={3} maxRows={8} disabled={running}
                                 onChange={e => change(() => setState(e.target.value))} />
                             <Box>
-                                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.75 }}>{t('decisionTry.type')}</Typography>
+                                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, display: 'block', mb: 0.5 }}>{t('decisionTry.type')}</Typography>
                                 <ToggleButtonGroup exclusive fullWidth size="small" aria-label={t('decisionTry.type')} value={kind} disabled={running}
                                     onChange={(_, next: QuestionType | null) => { if (next) changeKind(next); }}
-                                    sx={{ '& .MuiToggleButton-root': { textTransform: 'none', flex: 1, px: 1, fontSize: '0.8125rem', lineHeight: 1.3 } }}>
+                                    sx={{ ...toggleButtonGroupStyle, '& .MuiToggleButton-root': { ...((toggleButtonGroupStyle as Record<string, any>)['& .MuiToggleButton-root'] ?? {}), flex: 1, px: 1, height: 'auto', minHeight: 32, fontSize: '0.8125rem', lineHeight: 1.3 } }}>
                                     <ToggleButton value="choice">{t('decisionTry.choice')}</ToggleButton>
                                     <ToggleButton value="noul">{t('decisionTry.predicate')}</ToggleButton>
                                     <ToggleButton value="score">{t('decisionTry.score')}</ToggleButton>
@@ -119,14 +120,14 @@ export default function DecisionTryCard({ rules }: { rules: Rule[] }) {
                                 helperText={validOptions ? t('decisionTry.onePerLine') : t('decisionTry.invalidOptions', { max: maxOptions })}
                                 onChange={e => change(() => setOptions(e.target.value))} />}
                             <Box>
-                                <Button variant="contained" startIcon={running ? <CircularProgress size={16} color="inherit" /> : <PlayArrow fontSize="small" />}
+                                <Button variant="contained" size="small" startIcon={running ? <CircularProgress size={16} color="inherit" /> : <PlayArrow fontSize="small" />}
                                     onClick={() => void run()} disabled={!canRun}>
                                     {running ? t('decisionTry.running') : t('decisionTry.run')}
                                 </Button>
                             </Box>
                         </Stack>
 
-                        <Box component="section" aria-label={t('decisionTry.result')} aria-live="polite" sx={{ minWidth: 0, p: { xs: 2, md: 3 }, bgcolor: 'background.default', borderTop: { xs: 1, md: 0 }, borderTopColor: { xs: 'divider', md: 'transparent' }, borderLeft: { xs: 0, md: 1 }, borderLeftColor: { xs: 'transparent', md: 'divider' } }}>
+                        <Box component="section" aria-label={t('decisionTry.result')} aria-live="polite" sx={{ minWidth: 0 }}>
                             <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{t('decisionTry.result')}</Typography>
                             {running ? (
                                 <Stack spacing={1.5} sx={{ mt: 3 }}>
@@ -134,10 +135,9 @@ export default function DecisionTryCard({ rules }: { rules: Rule[] }) {
                                     <Typography variant="body2" color="text.secondary">{t('decisionTry.runningHint')}</Typography>
                                 </Stack>
                             ) : !result ? (
-                                <Stack spacing={1} sx={{ alignItems: 'flex-start', justifyContent: 'center', minHeight: { xs: 120, md: 240 }, color: 'text.secondary' }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 2, bgcolor: 'action.hover' }}><AutoAwesome fontSize="small" /></Box>
-                                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>{t('decisionTry.emptyTitle')}</Typography>
-                                    <Typography variant="body2">{t('decisionTry.emptyBody')}</Typography>
+                                <Stack spacing={0.5} sx={{ mt: 1.5, alignItems: 'center', justifyContent: 'center', minHeight: { xs: 120, md: 260 }, px: 3, py: 3, textAlign: 'center', border: '1px dashed', borderColor: 'divider', borderRadius: 2 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('decisionTry.emptyTitle')}</Typography>
+                                    <Typography variant="caption" color="text.secondary">{t('decisionTry.emptyBody')}</Typography>
                                 </Stack>
                             ) : !result.success ? (
                                 <Alert severity="error" sx={{ mt: 2 }}>{result.error?.message || t('decisionTry.failed')}</Alert>
