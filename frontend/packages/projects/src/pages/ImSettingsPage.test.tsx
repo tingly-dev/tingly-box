@@ -39,6 +39,13 @@ afterEach(() => {
 });
 
 describe('ImSettingsPage', () => {
+    it('shows a colored platform icon when a bot has a bound chat', async () => {
+        const platformIcon = vi.fn(() => <span>platform icon</span>);
+        show(host({ platformIcon }));
+        await screen.findByText('My bot');
+        expect(platformIcon).toHaveBeenLastCalledWith('telegram', 24, true);
+    });
+
     it('offers the host bot setup alongside the setup steps', async () => {
         render(<MemoryRouter><ProjectsHostProvider host={host()}><ImSettingsPage setupPath="/bots/overview" /></ProjectsHostProvider></MemoryRouter>);
         expect(screen.getByRole('link', { name: /im.settings.manageBots/ })).toHaveAttribute('href', '/bots/overview');

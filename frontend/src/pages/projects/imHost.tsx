@@ -76,9 +76,9 @@ export const imHost: ImHost = {
     listBots,
     listChats,
     platformLabel,
-    platformIcon: (platform, size) => {
+    platformIcon: (platform, size, colored) => {
         const Icon = PLATFORM_BRAND_ICONS[platform];
-        return Icon ? <Icon size={size} /> : null;
+        return Icon ? <Icon size={size} grayscale={!colored} /> : null;
     },
     accessDialog: ({ bot, onClose }) => <AccessDialog bot={bot} onClose={onClose} />,
 };

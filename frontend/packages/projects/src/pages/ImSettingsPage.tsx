@@ -82,7 +82,7 @@ export default function ImSettingsPage({ setupPath }: { setupPath?: string } = {
                             return (
                                 <Surface key={bot.uuid} padding={0} sx={{ overflow: 'hidden' }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, px: 2, py: 1.5, borderBottom: rows.length > 0 ? 1 : 0, borderColor: 'divider' }}>
-                                        <PlatformMark platform={bot.platform} size={24} />
+                                        <PlatformMark platform={bot.platform} size={24} colored={rows.some((chat) => !!byChat.get(chatKey(chat.platform, chat.chatId)))} />
                                         <Box sx={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'baseline', columnGap: 1.5, rowGap: 0.25, flexWrap: 'wrap' }}>
                                             <Typography noWrap sx={{ fontWeight: 600 }}>{bot.name}</Typography>
                                             <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary', display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
