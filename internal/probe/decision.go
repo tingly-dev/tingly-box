@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -54,17 +55,21 @@ func probeDecisions(ctx context.Context, oc client.OpenAIClientInterface, p prob
 	}
 	u := gjson.GetBytes(resp, "usage")
 	var usage *protocol.TokenUsage
-	get := func(keys ...string) int64 {
+	get := func(keys ...string) (int64, bool) {
 		for _, k := range keys {
 			v := u.Get(k)
 			if v.Type == gjson.Number {
-				return v.Int()
+				return v.Int(), true
 			}
 		}
-		return 0
+		return 0, false
 	}
 	if u.IsObject() {
-		usage = protocol.NewTokenUsageWithCache(int(get("input_tokens", "inputTokens", "prompt_tokens")), int(get("output_tokens", "outputTokens", "completion_tokens")), 0)
+		in, hasIn := get("input_tokens", "inputTokens", "prompt_tokens")
+		out, hasOut := get("output_tokens", "outputTokens", "completion_tokens")
+		if hasIn && hasOut {
+			usage = protocol.NewTokenUsageWithCache(int(in), int(out), 0)
+		}
 	}
 	result := toProbeResult(string(resp), time.Since(start).Milliseconds(), strings.TrimRight(oc.GetProvider().APIBase, "/")+"/decisions", false, usage, nil)
 	result.DecisionResponse = json.RawMessage(resp)
@@ -87,15 +92,20 @@ func validateDecisionResponse(request, response []byte) error {
 		if typ == "" || a.Get("type").String() != typ {
 			return false
 		}
+		probability := func(v gjson.Result) bool {
+			return v.Type == gjson.Number && !math.IsNaN(v.Float()) && !math.IsInf(v.Float(), 0) && v.Float() >= 0 && v.Float() <= 1
+		}
 		switch typ {
 		case "noul":
-			return a.Get("noul").Type == gjson.Number
+			return probability(a.Get("noul"))
 		case "predicate":
-			return a.Get("probability").Type == gjson.Number
+			return probability(a.Get("probability"))
 		case "choice":
-			return a.Get("choice").Exists()
+			choice := a.Get("choice")
+			return choice.Type == gjson.String || questions.IsArray() && (choice.Type == gjson.True || choice.Type == gjson.False)
 		case "score":
-			return a.Get("score").Type == gjson.Number
+			score := a.Get("score")
+			return score.Type == gjson.Number && !math.IsNaN(score.Float()) && !math.IsInf(score.Float(), 0)
 		default:
 			return true // preserve provider-specific answer types
 		}

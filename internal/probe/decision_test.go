@@ -19,6 +19,7 @@ import (
 func TestDecisionProbeLoopbackAndCurl(t *testing.T) {
 	var gotPath string
 	var gotBody []byte
+	responseBody := `{"model":"model-a","answers":{"q":{"type":"noul","noul":0.8}},"usage":{"input_tokens":7,"output_tokens":1}}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
 		gotBody, _ = io.ReadAll(r.Body)
@@ -26,7 +27,7 @@ func TestDecisionProbeLoopbackAndCurl(t *testing.T) {
 		w.Header().Set("X-Tingly-Matched-Rule", "decision-rule")
 		w.Header().Set("X-Tingly-Selected-Provider", "test-provider")
 		w.Header().Set("X-Tingly-Selected-Model", "upstream-model")
-		_, _ = w.Write([]byte(`{"model":"model-a","answers":{"q":{"type":"noul","noul":0.8}},"usage":{"input_tokens":7,"output_tokens":1}}`))
+		_, _ = w.Write([]byte(responseBody))
 	}))
 	defer srv.Close()
 	_, port, err := net.SplitHostPort(srv.Listener.Addr().String())
@@ -53,6 +54,10 @@ func TestDecisionProbeLoopbackAndCurl(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "http://localhost:"+port+"/tingly/decisions/decisions", curl.URL)
 	require.JSONEq(t, string(gotBody), curl.Body)
+	responseBody = `{"model":"model-a","answers":{"q":{"type":"noul","noul":0.8}},"usage":{"input_tokens":7}}`
+	result, err = svc.Probe(context.Background(), req)
+	require.NoError(t, err)
+	require.Nil(t, result.Usage, "do not report an invented output-token count")
 }
 func TestDecisionProbeValidation(t *testing.T) {
 	valid := &E2ERequest{TargetType: E2ETargetRule, Scenario: "decisions", RuleUUID: "r", Operation: "decisions"}
@@ -83,7 +88,7 @@ func TestDecisionProbeWildcardNeedsConcreteModel(t *testing.T) {
 
 func TestDecisionProbeResponseValidation(t *testing.T) {
 	request := []byte(`{"state":"x","questions":{"q":{"type":"noul","instructions":"x"}}}`)
-	for _, response := range []string{`{"answers":{}}`, `{"answers":{"other":{"type":"noul","noul":0.8}}}`, `{"answers":{"q":{"type":"noul"}}}`, `{"answers":[{"type":"noul","noul":0.8}]}`} {
+	for _, response := range []string{`{"answers":{}}`, `{"answers":{"other":{"type":"noul","noul":0.8}}}`, `{"answers":{"q":{"type":"noul"}}}`, `{"answers":{"q":{"type":"noul","noul":1.2}}}`, `{"answers":[{"type":"noul","noul":0.8}]}`} {
 		require.Error(t, validateDecisionResponse(request, []byte(response)), response)
 	}
 	require.NoError(t, validateDecisionResponse(request, []byte(`{"answers":{"q":{"type":"noul","noul":0.8}}}`)))
