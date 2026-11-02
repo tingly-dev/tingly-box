@@ -111,14 +111,14 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting bot.BotSetting, o
 
 // MintPairingCode mints a fresh pairing code for the harness's bot. Tests
 // that exercise the pairing-required path use this to obtain the code the
-// user must send via /bind.
+// user must send via /pair.
 func (h *TestHarness) MintPairingCode() (code string, expiresAt time.Time) {
 	return h.Pairing.Mint(h.Setting.UUID)
 }
 
 // MarkChatPaired records a pairing for the harness's bot via the same
 // production API path that VerifyAndPair uses. Tests focused on
-// post-pairing behavior can skip the /bind handshake without bypassing
+// post-pairing behavior can skip the /pair handshake without bypassing
 // the real persistence path — exercising any future bug in SetPaired.
 func (h *TestHarness) MarkChatPaired(chatID, senderID string) {
 	if err := h.ChatStore.SetPaired(chatID, h.Setting.Platform, h.Setting.UUID, senderID); err != nil {

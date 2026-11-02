@@ -69,7 +69,7 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	// notifications the host sends).
 	text := hCtx.Text()
 	if !h.projectsOn() {
-		if isBindCommand(text) || isJoinCommand(text) {
+		if isPairCommand(text) || isJoinCommand(text) {
 			h.handleSlashCommand(hCtx, text)
 			return
 		}
@@ -128,9 +128,9 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 //
 // DM and group are two explicit branches rather than one flat gate list
 // because their semantics genuinely differ: the pairing gate lets an unpaired
-// chat fall through to the /bind handler (so a chat can still pair itself),
+// chat fall through to the /pair handler (so a chat can still pair itself),
 // while the whitelist gate does not — collapsing both into one uniform
-// func(ctx) bool would either drop the /bind escape hatch or fake it with a
+// func(ctx) bool would either drop the /pair escape hatch or fake it with a
 // side channel. See the spec (bot-chat-lifecycle-collapse §3a).
 func (h *BotHandler) handleInboundGate(hCtx HandlerContext) bool {
 	msg := hCtx.Message
@@ -150,7 +150,7 @@ func (h *BotHandler) handleInboundGate(hCtx HandlerContext) bool {
 
 // handlePairingGate enforces pairing for a direct message: when
 // RequirePairing is on, only paired chats reach the regular handlers — but an
-// unpaired chat may still send /bind, which falls through to the bind handler
+// unpaired chat may still send /pair, which falls through to the bind handler
 // that verifies the code. Returns true when the message is rejected (a
 // pairing hint was sent).
 func (h *BotHandler) handlePairingGate(hCtx HandlerContext) bool {
@@ -160,8 +160,8 @@ func (h *BotHandler) handlePairingGate(hCtx HandlerContext) bool {
 	if h.chatStore.IsChatPaired(hCtx.ChatID, hCtx.BotUUID) {
 		return false
 	}
-	if isBindCommand(hCtx.Text()) {
-		// Fall through so the /bind handler can verify the code.
+	if isPairCommand(hCtx.Text()) {
+		// Fall through so the /pair handler can verify the code.
 		return false
 	}
 	logrus.WithFields(logrus.Fields{
@@ -193,7 +193,7 @@ func (h *BotHandler) handleWhitelistGate(hCtx HandlerContext) bool {
 			"chat_id":  hCtx.ChatID,
 			"platform": string(hCtx.Platform),
 		}).Warn("rejected group whitelisted by unpaired operator")
-		h.SendText(hCtx, "🔒 This group's operator has not paired with the bot. Ask them to send /bind <code> in a DM first.")
+		h.SendText(hCtx, "🔒 This group's operator has not paired with the bot. Ask them to send /pair <code> in a DM first.")
 		return true
 	}
 	return false

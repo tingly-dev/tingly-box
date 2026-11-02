@@ -25,7 +25,7 @@ func isPairingBootstrap(msg imbot.Message) bool {
 		return false
 	}
 	t := strings.TrimSpace(msg.GetText())
-	return t == "/bind" || strings.HasPrefix(t, "/bind ") || strings.HasPrefix(t, "/bind\t")
+	return t == "/pair" || strings.HasPrefix(t, "/pair ") || strings.HasPrefix(t, "/pair\t") || t == "/bind" || strings.HasPrefix(t, "/bind ") || strings.HasPrefix(t, "/bind\t")
 }
 
 func inboundAction(msg imbot.Message, pendingCapability access.CapabilityName, pendingAction access.ActionName) (access.CapabilityName, access.ActionName) {

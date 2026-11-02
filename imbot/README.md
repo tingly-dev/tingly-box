@@ -148,7 +148,7 @@ When a bot has pairing enabled:
 
 1. The server prints a fresh pairing code to stderr on bot start, e.g.
    `[tingly-box] Bot "personal-tg" (telegram) pairing code: K7P2-QX9M`.
-2. The operator sends `/bind K7P2-QX9M` from the bot's DM; the chat becomes
+2. The operator sends `/pair K7P2-QX9M` from the bot's DM; the chat becomes
    the bot's owner. Codes are in-memory only, time-limited (default 10 min),
    single-use, compared in constant time, and lock the bot after 5 wrong
    attempts. Every outcome is audit-logged as `imbot.pair.*`.

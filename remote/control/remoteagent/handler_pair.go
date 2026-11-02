@@ -8,13 +8,13 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
 )
 
-// isBindCommand reports whether text is a (well-formed-enough) /bind invocation.
-func isBindCommand(text string) bool {
+// isPairCommand reports whether text is a (well-formed-enough) /pair invocation.
+func isPairCommand(text string) bool {
 	t := strings.TrimSpace(text)
-	if t == "/bind" {
+	if t == "/pair" {
 		return true
 	}
-	return strings.HasPrefix(t, "/bind ") || strings.HasPrefix(t, "/bind\t")
+	return strings.HasPrefix(t, "/pair ") || strings.HasPrefix(t, "/pair\t") || t == "/bind" || strings.HasPrefix(t, "/bind ") || strings.HasPrefix(t, "/bind\t")
 }
 
 // isJoinCommand reports whether text is a /join invocation.
@@ -28,7 +28,7 @@ func isJoinCommand(text string) bool {
 func pairingHintMessage() string {
 	return "🔒 This bot requires pairing.\n" +
 		"Ask the operator for the current pairing code, then send:\n" +
-		"`/bind <code>`"
+		"`/pair <code>`"
 }
 
 // userFacingPairError translates a bot.PairingManager error into a short, safe
@@ -75,7 +75,7 @@ func (h *BotHandler) isWhitelisterPaired(groupChatID, botUUID string) bool {
 }
 
 // VerifyAndPair runs the pairing-code check and, on success, persists the
-// binding in the chat store. It is invoked by the /bind command handler.
+// binding in the chat store. It is invoked by the /pair command handler.
 func (h *BotHandler) VerifyAndPair(botUUID, chatID, senderID, platform, code string) error {
 	if h == nil {
 		return errors.New("internal error")

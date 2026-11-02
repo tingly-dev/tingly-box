@@ -13,7 +13,7 @@ import (
 
 // RegisterBuiltinCommands registers the chat commands
 // (.design/remote-into-projects.md, "命令精简"): which folder (/cd, /dir),
-// the session commands Projects runs, /help, and access (/bind, /join, which
+// the session commands Projects runs, /help, and access (/pair, /join, which
 // /help does not list). The registry is also what a platform shows as its
 // command menu.
 func RegisterBuiltinCommands(registry *imbot.CommandRegistry, botHandler BotHandlerAdapter) error {
@@ -73,7 +73,7 @@ type BotHandlerAdapter interface {
 const (
 	usageCd       = "Usage: /cd <path|number>"
 	usageJoin     = "Usage: /join <group_id|@username|invite_link>"
-	usagePairBind = "Usage: /bind <code>"
+	usagePairBind = "Usage: /pair <code>"
 )
 
 func sendCommandText(adapter BotHandlerAdapter, ctx *imbot.HandlerContext, text string) error {
@@ -305,16 +305,17 @@ func newJoinCommand(adapter BotHandlerAdapter) imbot.Command {
 		MustBuild()
 }
 
-// newPairBindCommand registers the `/bind <code>` command used by an end-user
+// newPairBindCommand registers the `/pair <code>` command used by an end-user
 // to pair their direct chat with the bot. It is the only command an unpaired
 // chat is allowed to invoke when RequirePairing is on.
 func newPairBindCommand(adapter BotHandlerAdapter) imbot.Command {
-	return imbot.NewCommand("cmd-pair-bind", "bind",
+	return imbot.NewCommand("cmd-pair-bind", "pair",
 		"Pair this chat with the bot using the operator's pairing code").
+		WithAliases("bind").
 		Hidden().
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			if !ctx.IsDirectMessage {
-				return sendCommandText(adapter, ctx, "/bind only works in a direct message.")
+				return sendCommandText(adapter, ctx, "/pair only works in a direct message.")
 			}
 			code, ok := parsePairBindCode(args)
 			if !ok {
