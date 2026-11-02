@@ -24,6 +24,8 @@ import { useProfileContext } from '@/contexts/ProfileContext';
 import { useTeamContext } from '@/contexts/TeamContext';
 import { teamPath } from '@/utils/team';
 import { useNotify } from '@/hooks/useNotify';
+import { useVersion } from '@/contexts/VersionContext';
+import { displayVersion } from '@/utils/version';
 import { sidebarWidth } from './constants';
 import {
     NAV_ROW_SX,
@@ -62,6 +64,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActi
     const notify = useNotify();
     const { refresh } = useProfileContext();
     const { refresh: refreshTeams } = useTeamContext();
+    const { currentVersion } = useVersion();
 
     const [addProfileAnchorEl, setAddProfileAnchorEl] = useState<HTMLElement | null>(null);
     const [newProfileName, setNewProfileName] = useState('');
@@ -362,26 +365,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActi
                     </Button>
                 </Box>
             </Popover>
-            {/* Version and slogan share a compact card at the bottom. */}
-            <Box sx={{ px: 1.5, pb: 1.5, pt: 1, flexShrink: 0 }}>
-                <Box
-                    sx={{
-                        px: 1.5, py: 1.25,
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5,
-                        bgcolor: 'action.hover', borderRadius: 2, minWidth: 0,
-                    }}
-                >
-                    <VersionDisplay onClick={() => setUpdatePanelOpen(true)} />
-                    <Typography
-                        variant="caption"
-                        component="div"
-                        sx={{ color: 'text.secondary', textAlign: 'center', fontStyle: 'italic' }}
-                    >
-                        <Tooltip title={t('layout.sidebar.sloganTooltip')} placement="top" arrow>
-                            <Box component="span" sx={{ cursor: 'default' }}>{t('layout.slogan')}</Box>
-                        </Tooltip>
-                    </Typography>
+            {/* App information stays at the bottom of the secondary navigation. */}
+            <Box sx={{ px: 2, pb: 2, pt: 1, flexShrink: 0, minWidth: 0 }}>
+                <Box sx={{ display: 'flex', mb: 0.5, minWidth: 0 }}>
+                    <VersionDisplay onClick={() => setUpdatePanelOpen(true)}>
+                        <Typography variant="body2" sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {displayVersion(currentVersion)}
+                        </Typography>
+                    </VersionDisplay>
                 </Box>
+                <Tooltip title={t('layout.sidebar.sloganTooltip')} placement="top" arrow>
+                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', cursor: 'default' }}>
+                        {t('layout.slogan')}
+                    </Typography>
+                </Tooltip>
             </Box>
             {/* Update Panel Dialog */}
             <UpdatePanelDialog
