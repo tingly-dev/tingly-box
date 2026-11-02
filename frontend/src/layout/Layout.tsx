@@ -44,7 +44,6 @@ const MobileNavigationBar = ({ onMenuClick }: { onMenuClick: () => void }) => (
     >
         <IconButton
             color="primary"
-            data-feature-notice-anchor
             aria-label="Open navigation menu"
             onClick={onMenuClick}
             sx={mobileMenuButtonSx}
@@ -125,9 +124,10 @@ const LayoutInner = ({ children }: LayoutProps) => {
     const [featureBusy, setFeatureBusy] = useState(false);
     useEffect(() => {
         const onDisabled = (event: Event) => {
-            const mobileAnchor = document.querySelector<HTMLElement>('[data-feature-notice-anchor]');
-            const anchor = mobileAnchor && mobileAnchor.offsetParent !== null ? mobileAnchor
-                : Array.from(document.querySelectorAll<HTMLElement>('[data-nav-rail]')).find(el => el.offsetParent !== null);
+            // The rail is mounted twice (desktop and mobile). Anchor to the
+            // visible settings button, not the rail or the mobile menu button.
+            const anchor = Array.from(document.querySelectorAll<HTMLElement>('[data-settings-anchor]'))
+                .find(el => el.offsetParent !== null);
             if (anchor) setDisabledNotice({ name: (event as CustomEvent<string>).detail, anchor });
         };
         window.addEventListener(FEATURE_DISABLED_EVENT, onDisabled);
@@ -261,7 +261,7 @@ const LayoutInner = ({ children }: LayoutProps) => {
         </Stack>
     );
 
-    const showTip = !tipDismissed && activeActivity === 'scenario' && hasSidebar && !sidebarCollapsed && !!eyeEl && eyeEl.isConnected;
+    const showTip = !disabledNotice && !tipDismissed && activeActivity === 'scenario' && hasSidebar && !sidebarCollapsed && !!eyeEl && eyeEl.isConnected;
     const visibilityTip = (
         <CoachMark
             open={showTip}
@@ -280,7 +280,7 @@ const LayoutInner = ({ children }: LayoutProps) => {
                 onActivityClick={handleActivityClick}
                 onStandaloneNavigate={() => setMobileOpen(false)}
                 // One callout at a time: the rail's waits for this one.
-                tipsBlocked={showTip}
+                tipsBlocked={showTip || !!disabledNotice}
             />
             {hasSidebar && !sidebarCollapsed && (
                 <Sidebar
@@ -322,7 +322,7 @@ const LayoutInner = ({ children }: LayoutProps) => {
     return (
         <Box sx={{ display: 'flex', height: isProjectsPage ? '100dvh' : '100vh', overflow: 'hidden', position: 'relative', zIndex: Z_INDEX.main }}>
             {visibilityTip}
-            <CoachMark open={!!disabledNotice} anchorEl={disabledNotice?.anchor ?? null}
+            <CoachMark open={!!disabledNotice} anchorEl={disabledNotice?.anchor ?? null} align="bottom"
                 title={t('layout.featureSwitch.disabledTitle', { name: disabledNotice?.name })}
                 text={t('layout.featureSwitch.disabledText')} onDismiss={() => setDisabledNotice(null)} />
             <CoachMark open={!teamTipDismissed && activeActivity === 'team' && !sidebarCollapsed && !!featureButton?.isConnected && !disabledNotice}

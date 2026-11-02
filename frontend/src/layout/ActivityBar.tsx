@@ -282,6 +282,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                 <Tooltip title={t('layout.activityBar.preferences')} placement="right" arrow>
                     <ListItemButton
                         ref={userButtonRef}
+                        data-settings-anchor
                         onClick={(e) => {
                             setPreferencesAnchorEl(e.currentTarget);
                             dismissPowerUpsTip();
