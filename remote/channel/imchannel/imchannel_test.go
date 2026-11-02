@@ -41,7 +41,7 @@ func TestSendFileToFeishuAndLark(t *testing.T) {
 			if err := c.SendFile(context.Background(), "ou_user", "/tmp/image.png", "image.png", "image/png", "caption"); err != nil {
 				t.Fatal(err)
 			}
-			if s.lastTarget != "ou_user" || s.lastText != "caption" || len(s.lastMedia) != 1 || s.lastMedia[0].Type != "image" || s.lastMedia[0].URL != "file:///tmp/image.png" {
+			if s.lastTarget != "ou_user" || s.lastText != "caption" || s.lastParseMode != imbot.ParseModeMarkdown || len(s.lastMedia) != 1 || s.lastMedia[0].Type != "image" || s.lastMedia[0].URL != "file:///tmp/image.png" {
 				t.Fatalf("unexpected message: target=%q text=%q media=%+v", s.lastTarget, s.lastText, s.lastMedia)
 			}
 		})

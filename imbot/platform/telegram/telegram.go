@@ -427,8 +427,8 @@ func (b *Bot) PlatformInfo() *core.PlatformInfo {
 	return core.NewPlatformInfoFor(core.PlatformTelegram)
 }
 
-// sendText sends a text message
-func (b *Bot) sendText(ctx context.Context, chatID int64, opts *core.SendMessageOptions) (*core.SendResult, error) {
+// telegramFormattedText applies the same formatting to messages and captions.
+func telegramFormattedText(opts *core.SendMessageOptions) (string, models.ParseMode, []models.MessageEntity) {
 	var parseMode models.ParseMode
 	var text string = opts.Text
 	var entities []models.MessageEntity
@@ -459,6 +459,13 @@ func (b *Bot) sendText(ctx context.Context, chatID int64, opts *core.SendMessage
 			parseMode = models.ParseModeHTML
 		}
 	}
+
+	return text, parseMode, entities
+}
+
+// sendText sends a text message.
+func (b *Bot) sendText(ctx context.Context, chatID int64, opts *core.SendMessageOptions) (*core.SendResult, error) {
+	text, parseMode, entities := telegramFormattedText(opts)
 
 	// Chunk text first (handles long messages)
 	chunks := b.ChunkText(text)
@@ -544,6 +551,7 @@ func (b *Bot) sendMedia(ctx context.Context, chatID int64, opts *core.SendMessag
 
 	var sentMsg *models.Message
 	var err error
+	caption, parseMode, entities := telegramFormattedText(opts)
 
 	if media.Type == "image" || media.Type == "sticker" {
 		// Send as photo
@@ -551,9 +559,9 @@ func (b *Bot) sendMedia(ctx context.Context, chatID int64, opts *core.SendMessag
 			ChatID: chatID,
 			Photo:  input,
 		}
-		if opts.Text != "" {
-			params.Caption = opts.Text
-		}
+		params.Caption = caption
+		params.ParseMode = parseMode
+		params.CaptionEntities = entities
 		sentMsg, err = b.api.SendPhoto(b.ctx, params)
 	} else {
 		// Send as document
@@ -561,9 +569,9 @@ func (b *Bot) sendMedia(ctx context.Context, chatID int64, opts *core.SendMessag
 			ChatID:   chatID,
 			Document: input,
 		}
-		if opts.Text != "" {
-			params.Caption = opts.Text
-		}
+		params.Caption = caption
+		params.ParseMode = parseMode
+		params.CaptionEntities = entities
 		sentMsg, err = b.api.SendDocument(b.ctx, params)
 	}
 
