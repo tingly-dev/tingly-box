@@ -1,4 +1,7 @@
 import ApiKeyTable from '@/components/ApiKeyTable.tsx';
+import { sortCredentials, type CredentialSort } from '@/components/credential/sortCredentials';
+import { providerIconId } from '@/utils/providerIcon';
+import { getServiceProvidersSync, useProviderCatalogLoaded } from '@/services/serviceProviders';
 import ConnectAIDialogs from '@/components/ConnectAIDialogs';
 import EmptyState from '@/components/EmptyState';
 import OAuthDialog from '@/components/OAuthDialog.tsx';
@@ -22,6 +25,8 @@ import {
     DialogTitle,
     Divider,
     Stack,
+    Select,
+    MenuItem,
     Typography,
     ToggleButton,
     ToggleButtonGroup,
@@ -36,6 +41,7 @@ import { fontSizes } from '@/theme/fonts';
 
 type CredentialView = 'table' | 'list' | 'card';
 const VIEW_STORAGE_KEY = 'tb.credentials.view';
+const SORT_STORAGE_KEY = 'tb.credentials.sort';
 
 const readCredentialView = (): CredentialView => {
     try {
@@ -62,9 +68,18 @@ const CredentialPage = () => {
         setView(next);
         try { localStorage.setItem(VIEW_STORAGE_KEY, next); } catch { /* View remains usable if storage is unavailable. */ }
     };
+    const [sort, setSort] = useState<CredentialSort>(() => {
+        try { return localStorage.getItem(SORT_STORAGE_KEY) === 'provider' ? 'provider' : 'name'; } catch { return 'name'; }
+    });
+    const changeSort = (next: CredentialSort) => {
+        setSort(next);
+        try { localStorage.setItem(SORT_STORAGE_KEY, next); } catch { /* Sorting works without storage. */ }
+    };
+    useProviderCatalogLoaded();
+    const providerCatalog = getServiceProvidersSync();
     const [loading, setLoading] = useState(true);
     const notify = useNotify();
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
 
     // Reauthorize dialog state (page-local: re-authenticates an existing OAuth
     // provider in place — the shared Connect AI flow only covers adding).
@@ -172,10 +187,10 @@ const CredentialPage = () => {
     };
 
     const { apiKeyProviders, oauthProviders, credentialCounts } = useMemo(() => {
-        const apiKeys = providers.filter((p: any) => p.auth_type !== 'oauth' && p.auth_type !== 'vmodel');
-        const oauth = providers.filter((p: any) => p.auth_type === 'oauth');
+        const apiKeys = sortCredentials(providers.filter((p: any) => p.auth_type !== 'oauth' && p.auth_type !== 'vmodel'), i18n.resolvedLanguage, sort, providerIconId);
+        const oauth = sortCredentials(providers.filter((p: any) => p.auth_type === 'oauth'), i18n.resolvedLanguage, sort, providerIconId);
         return { apiKeyProviders: apiKeys, oauthProviders: oauth, credentialCounts: { apiKeys: apiKeys.length, oauth: oauth.length, total: apiKeys.length + oauth.length } };
-    }, [providers]);
+    }, [providers, i18n.resolvedLanguage, sort, providerCatalog]);
 
     return (
         <PageLayout loading={loading}>
@@ -188,7 +203,11 @@ const CredentialPage = () => {
                     // Empty: the landing below carries Connect AI — one CTA, not two.
                     // The provider catalog is reached from inside Connect AI.
                     actions={credentialCounts.total === 0 ? undefined : (
-                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
+                            <Select size="small" value={sort} onChange={event => changeSort(event.target.value as CredentialSort)} inputProps={{ 'aria-label': t('credentialPage.sortBy') }} sx={{ minWidth: 135 }}>
+                                <MenuItem value="name">{t('credentialPage.sortName')}</MenuItem>
+                                <MenuItem value="provider">{t('credentialPage.sortProvider')}</MenuItem>
+                            </Select>
                             <ToggleButtonGroup size="small" exclusive value={view} onChange={(_, next: CredentialView | null) => changeView(next)} aria-label={t('credentialPage.viewMode')}>
                                 <ToggleButton value="table" aria-label={t('credentialPage.tableView')}><Tooltip title={t('credentialPage.tableView')}><IconTable size={18}/></Tooltip></ToggleButton>
                                 <ToggleButton value="list" aria-label={t('credentialPage.listView')}><Tooltip title={t('credentialPage.listView')}><IconList size={18}/></Tooltip></ToggleButton>
