@@ -613,6 +613,12 @@ func TestEmbeddedGatewayProtocolEndpoints(t *testing.T) {
 			anthropicBaseURL:       "https://api.runcrate.ai",
 			supportsModelsEndpoint: true,
 		},
+		{
+			id:                     "cloudgpu-app",
+			openAIBaseURL:          "https://cloudgpu.app/v1",
+			anthropicBaseURL:       "https://cloudgpu.app",
+			supportsModelsEndpoint: true,
+		},
 	}
 
 	for _, tt := range tests {
