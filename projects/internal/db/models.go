@@ -154,6 +154,7 @@ type Thread struct {
 const (
 	EvUser       = "user"        // a message to the thread (from the user or the coordinator)
 	EvAssistant  = "assistant"   // the thread's text
+	EvFile       = "file"        // a file published by the thread
 	EvToolUse    = "tool_use"    // a tool call (content: tool name, payload: input)
 	EvToolResult = "tool_result" // a tool's output
 	EvApproval   = "approval"    // a permission request (payload: request + answer)

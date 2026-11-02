@@ -45,7 +45,7 @@ export type CodeBlockComponent = ComponentType<{code: string; language: string}>
 
 // AttachmentsComponent renders the files a user message carries. The host
 // passes its own (thumbnails fetched with its auth); without one, names only.
-export type AttachmentsComponent = ComponentType<{items: {name: string; path: string; type: string; size: number}[]}>;
+export type AttachmentsComponent = ComponentType<{items: {name: string; path: string; type: string; size: number}[]; align?: 'flex-start' | 'flex-end'}>;
 
 /** Where a subagent's steps stand: not read yet, or read with or without older ones left. */
 export type AgentSteps = {loaded: false} | {loaded: true; more: boolean};

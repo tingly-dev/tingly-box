@@ -206,7 +206,7 @@ export const zh: Dict<typeof en> = {
         noChanges: '没有已提交的改动。', truncated: 'diff 已截断。',
         uncommittedWarn: '线程在 worktree 里留下了未提交的改动，它们不在本次合并中：',
     },
-    attachments: { removed: '{{name}}（已移除）' },
+    attachments: { removed: '{{name}}（已移除）', fromThread: '来自 {{name}}' },
     strip: {
         title: '本线程', sessionTitle: '本会话', autoAt: '{{time}} 自动按推荐回答', expand: '展开详情', collapse: '收起详情',
         folder: '文件夹', copyCd: '复制 cd 命令', branch: '分支', copyBranch: '复制分支名',

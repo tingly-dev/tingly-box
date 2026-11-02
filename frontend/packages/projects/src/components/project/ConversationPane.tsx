@@ -360,6 +360,8 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                             }
                             case 'assistant':
                                 return <Box key={m.id}><Markdown text={m.content} conversation /></Box>;
+                            case 'file':
+                                return <Box key={m.id}>{m.source === 'thread' && <Typography variant="caption" color="text.secondary">{t('attachments.fromThread', { name: threads.get(m.source_ref ?? '')?.title || m.source_ref || '' })}</Typography>}<AttachmentChips owner={{ projectId }} items={parse<{ attachments?: Attachment[] }>(m.payload)?.attachments ?? []} align="flex-start" />{m.content && <Markdown text={m.content} conversation />}</Box>;
                             case 'thread_started': {
                                 const ids = parse<{ thread_ids: string[] }>(m.payload)?.thread_ids ?? [];
                                 return (

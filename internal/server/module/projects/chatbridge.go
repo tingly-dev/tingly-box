@@ -266,6 +266,27 @@ func (b *ChatBridge) SendChannelText(ctx context.Context, platform, chatID, text
 	return err
 }
 
+// SendChannelFile delivers a published file through the bound bot.
+func (h *Host) SendChannelFile(ctx context.Context, platform, chatID, path, name, mediaType, caption string) error {
+	if h.bridge == nil {
+		return ErrNoChannel
+	}
+	return h.bridge.SendChannelFile(ctx, platform, chatID, path, name, mediaType, caption)
+}
+
+func (b *ChatBridge) SendChannelFile(ctx context.Context, platform, chatID, path, name, mediaType, caption string) error {
+	_, err := b.through(ctx, platform, chatID, projectsapp.ChannelBot(ctx), func(ch channel.Channel) error {
+		sender, ok := ch.(interface {
+			SendFile(context.Context, string, string, string, string, string) error
+		})
+		if !ok {
+			return fmt.Errorf("file delivery is not supported by %s", platform)
+		}
+		return sender.SendFile(ctx, chatID, path, name, mediaType, caption)
+	})
+	return err
+}
+
 // actionChannel is a channel that can send buttons and restate them
 // (imchannel.Channel).
 type actionChannel interface {

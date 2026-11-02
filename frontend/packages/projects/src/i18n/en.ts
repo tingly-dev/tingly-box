@@ -201,7 +201,7 @@ export const en = {
         noChanges: 'No committed changes.', truncated: 'Diff truncated.',
         uncommittedWarn: 'The thread left uncommitted changes in its worktree; they are not part of the merge:',
     },
-    attachments: { removed: '{{name}} (removed)' },
+    attachments: { removed: '{{name}} (removed)', fromThread: 'From {{name}}' },
     strip: {
         title: 'This thread', sessionTitle: 'This session', autoAt: 'Goes with the suggestion at {{time}}', expand: 'Show details', collapse: 'Hide details',
         folder: 'Folder', copyCd: 'Copy the cd command', branch: 'Branch', copyBranch: 'Copy the branch name',

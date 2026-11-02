@@ -15,11 +15,13 @@ package imchannel
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/remote/control/ask"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/remote/channel"
+	"github.com/tingly-dev/tingly-box/remote/control/ask"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 )
 
@@ -27,6 +29,23 @@ import (
 // existing remote_control/bot.IMPrompter satisfies this interface.
 type Prompter interface {
 	Prompt(ctx context.Context, req ask.Request) (ask.Result, error)
+}
+
+// SendFile delivers local file contents on platforms with file upload support.
+func (c *Channel) SendFile(ctx context.Context, chatID, path, name, mediaType, caption string) error {
+	if c.sender == nil {
+		return fmt.Errorf("imchannel: no sender")
+	}
+	if c.platform != "telegram" && c.platform != "tingly" {
+		return fmt.Errorf("file upload is not supported by %s", c.platform)
+	}
+	kind := "document"
+	if strings.HasPrefix(mediaType, "image/") {
+		kind = "image"
+	}
+	u := (&url.URL{Scheme: "file", Path: path}).String()
+	_, err := c.sender.SendMessage(ctx, chatID, &imbot.SendMessageOptions{Text: caption, Media: []imbot.MediaAttachment{{Type: kind, URL: u, Filename: name, MimeType: mediaType}}})
+	return err
 }
 
 // Sender is the subset of imbot.Bot needed for one-way notifications.
