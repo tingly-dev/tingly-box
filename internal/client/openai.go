@@ -16,7 +16,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/decisionprotocol"
+	"github.com/tingly-dev/tingly-box/internal/decision"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/vision/imagegen"
@@ -171,7 +171,7 @@ func decisionsTarget(apiBase string) (path string, override []option.RequestOpti
 	if err != nil {
 		return "decisions", nil
 	}
-	target := decisionprotocol.ResolveTarget(apiBase)
+	target := decision.ResolveTarget(apiBase)
 	if target.BasePath != "" {
 		root := u.Scheme + "://" + u.Host
 		return target.Endpoint, []option.RequestOption{option.WithBaseURL(root + target.BasePath)}

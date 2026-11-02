@@ -1,9 +1,10 @@
-// Package decisionprotocol identifies and converts supported decision wire
+// Package decision identifies and converts supported decision wire
 // formats and resolves known provider endpoints.
-package decisionprotocol
+package decision
 
 import (
 	"fmt"
+
 	"github.com/tidwall/gjson"
 )
 

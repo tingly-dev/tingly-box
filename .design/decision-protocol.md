@@ -8,7 +8,7 @@ rejected. Legacy requests with neither identifying field remain opaque.
 
 ## Upstream selection
 
-`internal/decisionprotocol.ResolveTarget` is the single registry for the
+`internal/decision.ResolveTarget` is the single registry for the
 known upstream endpoint and dialect. Exact host matching uses the resolved
 OpenAI-compatible provider base, not a model or provider display name:
 
@@ -25,7 +25,7 @@ called directly. There is no UI override or automatic endpoint probing.
 
 ## Conversion
 
-`internal/decisionprotocol` performs request conversion only when both formats
+`internal/decision` performs request conversion only when both formats
 are known and differ. A per-request context carries question order, original
 names, choice values and score labels to convert the response. The model field
 is replaced by the routed model upstream and echoed back as the caller's model.
