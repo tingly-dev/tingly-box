@@ -1,11 +1,13 @@
 import DecisionsGuideModal from './components/DecisionsGuideModal';
 import { AgentPage, type AgentPageDescriptor } from './AgentPage';
+import DecisionTryCard from './components/DecisionTryCard';
 
 const decisions: AgentPageDescriptor = {
     scenario: 'decisions',
     tooltipKey: 'scenarioPage.tooltip.decisions',
     title: 'Decisions API',
     rulesTitleKey: 'scenarioPage.decisionsModelRules',
+    renderBeforeRules: (slot) => <DecisionTryCard rules={slot.rules} />,
     connection: { compact: true, apiKeyRow: true, baseUrlRow: true },
     setup: {
         kind: 'guide',

@@ -21,3 +21,13 @@ The Decisions scenario's quick test runs this operation. Unknown upstreams keep
 the production gateway's existing passthrough behavior. The feature depends on
 `.design/decision-protocol.md`; it does not add a provider-direct test or a
 new gateway protocol.
+
+## Scenario experience
+
+The Decisions scenario renders a collapsible try-it card above its rule list.
+It uses the same rule probe with an editable text state and choice, noul, or
+score question. It requires an active rule and a concrete model for wildcard
+rules, does not send a request until the user runs it, and retains the input
+on failure. Answers and their reported probabilities, matched-routing warning,
+provider/model, latency, reported token counts and raw response are shown when
+available. Inputs are local to the mounted card and are not persisted.
