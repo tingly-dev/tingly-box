@@ -24,7 +24,7 @@ function Dot({ color }: { color: string }) {
  * binding or moving a chat to a project. Bot connection and access control
  * stay the host's (the "Access control" button opens its dialog).
  */
-export default function ImSettingsPage() {
+export default function ImSettingsPage({ setupPath }: { setupPath?: string } = {}) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const { im, paths, embedded } = useProjectsHost();
@@ -59,6 +59,18 @@ export default function ImSettingsPage() {
             <Box sx={{ maxWidth: 1040, mx: 'auto', px: { xs: 2, md: embedded ? 3 : 4 }, pt: embedded ? { xs: 2, md: 3 } : { xs: 7, md: 5 }, pb: 6 }}>
                 <PageHeader title={t('im.settings.title')} subtitle={t('im.settings.intro')} icon={<ChatBubble />} sx={{ mb: 3 }} />
 
+                {setupPath && (
+                    <Surface sx={{ p: 2, mb: 2 }}>
+                        <Typography sx={{ fontWeight: 600, mb: 0.5 }}>{t('im.settings.getStarted', { defaultValue: 'Get started with IM' })}</Typography>
+                        <Typography color="text.secondary" sx={{ mb: 1.5 }}>
+                            {t('im.settings.getStartedSteps', { defaultValue: '1. Connect a bot. 2. Message it and grant access. 3. Bind the chat to a project below.' })}
+                        </Typography>
+                        <Button component={RouterLink} to={setupPath} variant="outlined" size="small">
+                            {t('im.settings.manageBots', { defaultValue: 'Connect or manage bots' })}
+                        </Button>
+                    </Surface>
+                )}
+
                 {loading ? (
                     <Skeleton variant="rounded" height={180} />
                 ) : bots.length === 0 ? (
@@ -70,7 +82,7 @@ export default function ImSettingsPage() {
                             return (
                                 <Surface key={bot.uuid} padding={0} sx={{ overflow: 'hidden' }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, px: 2, py: 1.5, borderBottom: rows.length > 0 ? 1 : 0, borderColor: 'divider' }}>
-                                        <PlatformMark platform={bot.platform} size={24} />
+                                        <PlatformMark platform={bot.platform} size={24} colored={rows.some((chat) => !!byChat.get(chatKey(chat.platform, chat.chatId)))} />
                                         <Box sx={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'baseline', columnGap: 1.5, rowGap: 0.25, flexWrap: 'wrap' }}>
                                             <Typography noWrap sx={{ fontWeight: 600 }}>{bot.name}</Typography>
                                             <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary', display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>

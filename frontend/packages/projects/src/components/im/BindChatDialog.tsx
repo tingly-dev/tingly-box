@@ -63,7 +63,7 @@ export function BindChatDialog({ open, threadId, folderId, projectId, targetName
         const where = bound ? t(place && isFolder(place) ? 'im.place.atFolder' : 'im.place.at', { place: (place && isFolder(place) ? folderName(place.path ?? '') || place.name : place?.name) ?? t('im.place.elsewhere') }) : t('im.place.none');
         return {
             key: `${chatKey(c.platform, c.chatId)}\0${c.botUuid}`,
-            lead: <PlatformMark platform={c.platform} size={28} />,
+            lead: <PlatformMark platform={c.platform} size={28} colored={!!bound} />,
             title: c.title,
             subtitle: [platformLabel(c.platform), bots.find((bot) => bot.uuid === c.botUuid)?.name, t(`im.chatKind.${c.kind}`), c.state === 'blocked' ? t('im.bind.blocked') : where].filter(Boolean).join(' · '),
             chip: bound && c.state !== 'blocked' ? t('im.bind.rebind') : undefined,

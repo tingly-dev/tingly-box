@@ -107,11 +107,14 @@ describe('ProjectsSidebar', () => {
             paths: { ...h.paths, im: '/im' },
             im: { listBots: async () => [{ uuid: 'b1', name: 'A', platform: 'telegram', online: true }, { uuid: 'b2', name: 'B', platform: 'feishu', online: false }], listChats: async () => [] },
         };
-        show(withIm, '/im');
+        show(withIm, '/im', { imRows: [{ key: 'bots', label: 'Bots', to: '/bots' }] });
         const row = await screen.findByRole('link', { name: /im\.title/ });
         expect(row).toHaveAttribute('href', '/im');
         expect(row).toHaveAttribute('aria-current', 'page');
         await waitFor(() => expect(row.textContent).toContain('im.bots'));
+        const bots = screen.getByRole('link', { name: 'Bots' });
+        expect(bots).toHaveAttribute('href', '/bots');
+        expect(row.compareDocumentPosition(bots) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         cleanup();
         show(h, '/p');
         await screen.findByRole('region', { name: 'nav.projects' });

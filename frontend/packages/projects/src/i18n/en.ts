@@ -27,7 +27,7 @@ export const en = {
     sidebar: { showOlder_one: 'Show {{count}} older…', showOlder_other: 'Show {{count}} older…', fold: 'Fold {{name}}', unfold: 'Unfold {{name}}', activity: '{{running}} running · {{waiting}} waiting', running_one: '{{count}} running', running_other: '{{count}} running', recent: 'Recent sessions', noWorkdirs: 'No working folders yet', sessionsWaiting_one: '{{count}} session waits on you', sessionsWaiting_other: '{{count}} sessions wait on you', noProjects: 'No projects yet', waiting_one: '{{count}} thread waits on you', waiting_other: '{{count}} threads wait on you' },
     // IM chats bound to projects (TEP #2143, .design/projects-im.md).
     im: {
-        title: 'IM',
+        title: 'Bind',
         bots_one: '{{count}} bot', bots_other: '{{count}} bots',
         chatKind: { direct: 'Private chat', group: 'Group' },
         tags: { label: 'Bound IM chats', bind: 'Bind chat', unbind: 'Unbind {{chat}}', more: '+{{count}}', manage: 'IM chats' },
@@ -44,12 +44,13 @@ export const en = {
             openSettings: 'Open IM settings',
         },
         settings: {
-            title: 'IM', intro: 'Chat bots that talk to your projects, and where each chat is bound.',
+            title: 'Bind', intro: 'Chat bots that talk to your projects, and where each chat is bound.',
             access: 'Access control', online: 'Connected', offline: 'Not running',
             chat: 'Chat', boundTo: 'Bound to', status: 'Status', action: 'Action', notBound: 'Not bound',
             bindAction: 'Bind', rebindAction: 'Move', rebindLabel: 'Move {{chat}} to another project or folder',
             statusOk: 'Ready', statusBlocked: 'Disabled', statusUnpaired: 'Waiting to pair',
             noChats: 'No chats yet. Send this bot a message and the chat shows up here.',
+            getStarted: 'Get started with IM', getStartedSteps: '1. Connect a bot. 2. Message it and grant access. 3. Bind the chat to a project below.', manageBots: 'Connect or manage bots',
             emptyTitle: 'No IM bots yet', emptyBody: 'Connect a Telegram, Feishu or other chat bot, then bind its chats to projects.',
             loadFailed: 'Could not load the bots.',
             pickProject: 'Move {{chat}} to', pickPlaceholder: 'Choose a project or folder', noProjects: 'Create a project or folder first.',
@@ -60,7 +61,7 @@ export const en = {
         sourceBot: 'From bot',
     },
     workdir: {
-        title: 'Working folders', add: 'Add working folder', actions: 'Folder actions', remove: 'Remove from the sidebar',
+        title: 'Workdirs', add: 'Add working folder', actions: 'Folder actions', remove: 'Remove from the sidebar',
         removeTitle: 'Remove this folder?', removeConfirm: 'Remove',
         removeRunning_one: 'This stops {{count}} running session in {{name}} and takes the folder off the sidebar. Its past sessions are kept.',
         removeRunning_other: 'This stops {{count}} running sessions in {{name}} and takes the folder off the sidebar. Its past sessions are kept.',

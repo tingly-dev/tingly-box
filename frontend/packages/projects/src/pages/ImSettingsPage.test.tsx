@@ -39,6 +39,19 @@ afterEach(() => {
 });
 
 describe('ImSettingsPage', () => {
+    it('shows a colored platform icon when a bot has a bound chat', async () => {
+        const platformIcon = vi.fn(() => <span>platform icon</span>);
+        show(host({ platformIcon }));
+        await screen.findByText('My bot');
+        expect(platformIcon).toHaveBeenLastCalledWith('telegram', 24, true);
+    });
+
+    it('offers the host bot setup alongside the setup steps', async () => {
+        render(<MemoryRouter><ProjectsHostProvider host={host()}><ImSettingsPage setupPath="/bots/overview" /></ProjectsHostProvider></MemoryRouter>);
+        expect(screen.getByRole('link', { name: /im.settings.manageBots/ })).toHaveAttribute('href', '/bots/overview');
+        expect(screen.getByText(/im.settings.getStartedSteps/)).toBeInTheDocument();
+    });
+
     it('links a folder binding to its folder and an existing session to that session', async () => {
         m.list.mockResolvedValue([
             { id: 'cb1', platform: 'telegram', chat_id: 'tg:1', chat_title: 'yz', project_id: 'f1', thread_id: '', folder: '/home/me/notes', created_at: '', updated_at: '', verbose: false },

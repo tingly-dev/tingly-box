@@ -5,7 +5,7 @@ import { projectsHost } from './projectsHost';
 
 const ProjectsRoute = ({ page }: { page: 'list' | 'project' | 'folder' | 'im' }) => (
     <ProjectsHostProvider host={projectsHost}>
-        {page === 'list' ? <ProjectsPage /> : page === 'folder' ? <WorkdirPage /> : page === 'im' ? <ImSettingsPage /> : <ProjectPage />}
+        {page === 'list' ? <ProjectsPage /> : page === 'folder' ? <WorkdirPage /> : page === 'im' ? <ImSettingsPage setupPath="/bots/overview" /> : <ProjectPage />}
     </ProjectsHostProvider>
 );
 
