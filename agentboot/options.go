@@ -83,7 +83,10 @@ type ExecutionOptions struct {
 	DisallowedTools []string
 
 	// MCP servers (per-execution override)
-	MCPServers      map[string]interface{}
+	MCPServers map[string]interface{}
+	// MCPConfigPath is an additional Claude MCP config file, useful for
+	// credentials that must not appear in process arguments.
+	MCPConfigPath   string
 	StrictMcpConfig bool
 
 	// System prompts (per-execution override)

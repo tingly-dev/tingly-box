@@ -83,7 +83,14 @@ const UserBubble = ({message}: {message: TranscriptEntry}) => {
     );
 };
 
-const AssistantText = ({message}: {message: TranscriptEntry}) => <Markdown content={message.content}/>;
+const AssistantText = ({message}: {message: TranscriptEntry}) => {
+    const {attachments: Attachments} = useTranscriptHost();
+    const files = message.attachments ?? [];
+    return <>
+        {files.length > 0 && (Attachments ? <Attachments items={files} align="flex-start"/> : <Typography variant="caption">{files.map((f) => f.name).join(', ')}</Typography>)}
+        {message.content && <Markdown content={message.content}/>}
+    </>;
+};
 
 const formatDuration = (ms: number): string => {
     const sec = Math.round(ms / 1000);

@@ -5,6 +5,7 @@ package project
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,13 +28,14 @@ type Host interface {
 
 // Service bundles the project runtime for the HTTP modules.
 type Service struct {
-	Store       *db.Store
-	Layout      Layout
-	Hub         *Hub
-	Threads     *Threads
-	Coordinator *Coordinator
-	Relay       *Relay
-	Host        Host
+	Store           *db.Store
+	Layout          Layout
+	Hub             *Hub
+	Threads         *Threads
+	Coordinator     *Coordinator
+	Relay           *Relay
+	Host            Host
+	sessionToolsMCP *sessionToolsMCP
 }
 
 // NewService wires the runtime. Call Start once the server is up.
@@ -45,16 +47,26 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 	// reach IM (Tingly Box); the standalone app has no sink.
 	sink, _ := host.(ChannelSink)
 	relay := NewRelay(store, sink)
+	relay.OnFileError = func(threadID, platform, chatID, name string, err error) {
+		t, getErr := store.GetThread(threadID)
+		if getErr != nil {
+			return
+		}
+		threads.addEvent(t, &db.ThreadEvent{Kind: db.EvError, Content: fmt.Sprintf("Could not send %s to %s (%s): %v", name, platform, chatID, err)})
+	}
 	coord.OnFinal = relay.Message
 	threads.OnWait = relay.NeedsUser
 	threads.OnSettled = relay.Settled
 	threads.OnReply = relay.ThreadReply
 	threads.OnStep = relay.Step
-	return &Service{
+	svc := &Service{
 		Store: store, Layout: layout, Hub: hub, Threads: threads,
 		Coordinator: coord, Relay: relay,
 		Host: host,
 	}
+	svc.sessionToolsMCP = &sessionToolsMCP{service: svc}
+	threads.SessionToolsConfig = svc.sessionToolsMCP.config
+	return svc
 }
 
 // Start recovers interrupted threads and runs housekeeping until ctx ends,
@@ -82,12 +94,21 @@ func (s *Service) Start(ctx context.Context) {
 			case <-ctx.Done():
 				shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				s.Threads.Shutdown(shutdown)
+				_ = s.CloseTools(shutdown)
 				cancel()
 				return
 			case <-tick.C:
 			}
 		}
 	}()
+}
+
+// CloseTools stops the local MCP service after the thread processes stop.
+func (s *Service) CloseTools(ctx context.Context) error {
+	if s.sessionToolsMCP != nil {
+		return s.sessionToolsMCP.close(ctx)
+	}
+	return nil
 }
 
 // NewProjectSpec is the New project dialog (a project), or a folder to open.

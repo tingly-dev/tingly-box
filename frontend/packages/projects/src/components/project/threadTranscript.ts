@@ -78,6 +78,9 @@ export function threadTranscript(events: ThreadEvent[], running: boolean, author
                 if (!e.parent) markRead();
                 entries.push({ role: 'assistant', content: e.content, timestamp });
                 break;
+            case 'file':
+                entries.push({ role: 'assistant', content: e.content, attachments: parse<{ attachments?: TranscriptEntry['attachments'] }>(e.payload)?.attachments, timestamp });
+                break;
             case 'report': {
                 // The turn's summary repeats its last reply: show it once.
                 const last = entries.at(-1);

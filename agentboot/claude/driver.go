@@ -225,6 +225,7 @@ func (d *Driver) buildArgs(
 		AllowedTools:         opts.AllowedTools,
 		DisallowedTools:      opts.DisallowedTools,
 		MCPServers:           opts.MCPServers,
+		MCPConfigPath:        opts.MCPConfigPath,
 		StrictMcpConfig:      opts.StrictMcpConfig,
 		PermissionMode:       opts.PermissionMode,
 		SettingsPath:         opts.SettingsPath,

@@ -75,6 +75,14 @@ func TestLaunchSignature_ChangesWhenTheSettingsFileChanges(t *testing.T) {
 	}
 }
 
+func TestLaunchSignatureChangesWhenMCPChanges(t *testing.T) {
+	a := agentboot.ExecutionOptions{MCPServers: map[string]interface{}{"projects": map[string]interface{}{"url": "http://localhost/one"}}}
+	b := agentboot.ExecutionOptions{MCPServers: map[string]interface{}{"projects": map[string]interface{}{"url": "http://localhost/two"}}}
+	if launchSignature(a) == launchSignature(b) {
+		t.Fatal("MCP configuration changes must restart the resident process")
+	}
+}
+
 // recorder collects OnTurnEnd calls.
 type recorder struct{ ends chan TurnEnd }
 

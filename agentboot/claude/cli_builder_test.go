@@ -2,6 +2,7 @@ package claude
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -240,6 +241,15 @@ func TestDriverBuildMCPArgs(t *testing.T) {
 	assert.Contains(t, argsStr, "--mcp-config")
 	assert.Contains(t, argsStr, "filesystem")
 	assert.Contains(t, argsStr, "brave-search")
+}
+
+func TestMCPConfigPathIsAddedAlongsideConfiguredServers(t *testing.T) {
+	args := BuildCommonArgs(Config{MCPServers: map[string]interface{}{"existing": map[string]interface{}{"command": "example"}}}, CommonOptions{MCPConfigPath: "/private/projects-mcp.json"})
+	index := slices.Index(args, "--mcp-config")
+	require.GreaterOrEqual(t, index, 0)
+	require.GreaterOrEqual(t, len(args), index+3)
+	assert.Contains(t, args[index+1], "existing")
+	assert.Equal(t, "/private/projects-mcp.json", args[index+2])
 }
 
 func TestBuildCommonArgsEffort(t *testing.T) {

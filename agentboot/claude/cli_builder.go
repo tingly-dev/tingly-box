@@ -21,6 +21,7 @@ type CommonOptions struct {
 	AllowedTools         []string
 	DisallowedTools      []string
 	MCPServers           map[string]interface{}
+	MCPConfigPath        string
 	StrictMcpConfig      bool
 	PermissionMode       string
 	SettingsPath         string
@@ -146,10 +147,16 @@ func buildMCPArgs(config Config, opts CommonOptions) []string {
 		maps.Copy(mcpServers, opts.MCPServers)
 	}
 
+	if len(mcpServers) > 0 || opts.MCPConfigPath != "" {
+		args = append(args, "--mcp-config")
+	}
 	if len(mcpServers) > 0 {
 		mcpConfig := map[string]interface{}{"mcpServers": mcpServers}
 		mcpJSON, _ := json.Marshal(mcpConfig)
-		args = append(args, "--mcp-config", string(mcpJSON))
+		args = append(args, string(mcpJSON))
+	}
+	if opts.MCPConfigPath != "" {
+		args = append(args, opts.MCPConfigPath)
 	}
 
 	// Strict MCP config

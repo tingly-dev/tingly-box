@@ -15,6 +15,11 @@ type ChannelSink interface {
 	SendChannelText(ctx context.Context, platform, chatID, text string) error
 }
 
+// ChannelFileSender optionally delivers a published file to an IM chat.
+type ChannelFileSender interface {
+	SendChannelFile(ctx context.Context, platform, chatID, path, name, mediaType, caption string) error
+}
+
 // ChannelPrompter is an optional ChannelSink capability: a message with
 // buttons that answer a thread's permission approval, and a way to restate it
 // once the request is settled. A press comes back to Service.AnswerFromChannel

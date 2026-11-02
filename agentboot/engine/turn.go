@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"os"
 	"sort"
@@ -301,5 +302,12 @@ func launchSignature(opts agentboot.ExecutionOptions) string {
 			settings += "@" + hex.EncodeToString(sum[:])
 		}
 	}
-	return opts.Entrypoint + "\x00" + settings + "\x00" + opts.Effort + "\x00" + strings.Join(env, "\x00")
+	mcpConfig, _ := json.Marshal(opts.MCPServers)
+	if opts.MCPConfigPath != "" {
+		if b, err := os.ReadFile(opts.MCPConfigPath); err == nil {
+			mcpConfig = append(mcpConfig, b...)
+		}
+	}
+	mcpHash := sha256.Sum256(mcpConfig)
+	return opts.Entrypoint + "\x00" + settings + "\x00" + opts.Effort + "\x00" + strings.Join(env, "\x00") + "\x00" + hex.EncodeToString(mcpHash[:])
 }

@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -333,6 +334,42 @@ func TestTinglyNewChatAndSessionCommands(t *testing.T) {
 	require.Equal(t, h.chosenID, list.Bindings[0].BotUUID)
 	chat.SendText("/verbose on")
 	chat.WaitText(10*time.Second).AssertContains(t, "Verbose is on")
+}
+
+func TestTinglyPublishedFileReachesBoundChat(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	chat := h.env.NewUser("file-user").OpenDM(h.chosenID)
+	chat.SendText("start")
+	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: start")
+	var list struct {
+		Bindings []struct {
+			ID       string `json:"id"`
+			ThreadID string `json:"thread_id"`
+		} `json:"bindings"`
+	}
+	h.call("GET", "/projects/channel-bindings", nil, &list)
+	require.Len(t, list.Bindings, 1)
+	file := filepath.Join(h.workdir, "result.txt")
+	require.NoError(t, os.WriteFile(file, []byte("file contents"), 0o600))
+	_, err := h.bridge.live().PublishFile(context.Background(), list.Bindings[0].ThreadID, file, "Result")
+	require.NoError(t, err)
+	message := chat.WaitMedia(10 * time.Second)
+	require.Len(t, message.Media, 1)
+	require.Equal(t, "result.txt", message.Media[0].Filename)
+	stored, err := url.Parse(message.Media[0].URL)
+	require.NoError(t, err)
+	contents, err := os.ReadFile(stored.Path)
+	require.NoError(t, err)
+	require.Equal(t, "file contents", string(contents))
+	require.Contains(t, message.Text, "Result")
+	// Rebinding changes the delivery target without restarting the session.
+	other := h.env.NewUser("new-file-user").OpenDM(h.chosenID)
+	h.call("DELETE", "/projects/channel-bindings/"+list.Bindings[0].ID, nil, nil)
+	h.call("PUT", "/projects/channel-bindings", map[string]any{"platform": "tingly", "chat_id": other.ChatID, "bot_uuid": h.chosenID, "thread_id": list.Bindings[0].ThreadID}, nil)
+	_, err = h.bridge.live().PublishFile(context.Background(), list.Bindings[0].ThreadID, file, "Moved")
+	require.NoError(t, err)
+	other.WaitMedia(10*time.Second).AssertContains(t, "Moved")
+	chat.ExpectNoEvent(300*time.Millisecond, tingly.EventSend, tingly.EventMedia)
 }
 
 func TestTinglyBindFolderBeforeFirstSession(t *testing.T) {
