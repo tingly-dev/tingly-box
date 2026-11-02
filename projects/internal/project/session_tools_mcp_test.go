@@ -12,7 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
 
-func TestFileMCPPublishesToItsThread(t *testing.T) {
+func TestSessionToolsMCPPublishesToItsThread(t *testing.T) {
 	ctx := context.Background()
 	store, err := db.Open(":memory:")
 	require.NoError(t, err)
@@ -24,7 +24,7 @@ func TestFileMCPPublishesToItsThread(t *testing.T) {
 	require.NoError(t, store.CreateThread(thread))
 	require.NoError(t, os.WriteFile(filepath.Join(root, "result.txt"), []byte("hello"), 0o600))
 	svc := &Service{Store: store, Layout: Layout{Root: t.TempDir()}, Hub: NewHub()}
-	server := &fileMCP{service: svc}
+	server := &sessionToolsMCP{service: svc}
 	t.Cleanup(func() { _ = server.close(ctx) })
 	configPath, err := server.config(thread.ID)
 	require.NoError(t, err)
@@ -42,8 +42,11 @@ func TestFileMCPPublishesToItsThread(t *testing.T) {
 	t.Cleanup(func() { _ = session.Close() })
 	tools, err := session.ListTools(ctx, nil)
 	require.NoError(t, err)
-	require.Len(t, tools.Tools, 1)
-	require.Equal(t, "send_file", tools.Tools[0].Name)
+	names := make([]string, 0, len(tools.Tools))
+	for _, tool := range tools.Tools {
+		names = append(names, tool.Name)
+	}
+	require.Contains(t, names, "send_file")
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "send_file", Arguments: map[string]any{"path": "result.txt", "caption": "Here"}})
 	require.NoError(t, err)
 	require.False(t, result.IsError)

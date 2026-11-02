@@ -28,14 +28,14 @@ type Host interface {
 
 // Service bundles the project runtime for the HTTP modules.
 type Service struct {
-	Store       *db.Store
-	Layout      Layout
-	Hub         *Hub
-	Threads     *Threads
-	Coordinator *Coordinator
-	Relay       *Relay
-	Host        Host
-	fileMCP     *fileMCP
+	Store           *db.Store
+	Layout          Layout
+	Hub             *Hub
+	Threads         *Threads
+	Coordinator     *Coordinator
+	Relay           *Relay
+	Host            Host
+	sessionToolsMCP *sessionToolsMCP
 }
 
 // NewService wires the runtime. Call Start once the server is up.
@@ -64,8 +64,8 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 		Coordinator: coord, Relay: relay,
 		Host: host,
 	}
-	svc.fileMCP = &fileMCP{service: svc}
-	threads.FileTool = svc.fileMCP.config
+	svc.sessionToolsMCP = &sessionToolsMCP{service: svc}
+	threads.SessionToolsConfig = svc.sessionToolsMCP.config
 	return svc
 }
 
@@ -105,8 +105,8 @@ func (s *Service) Start(ctx context.Context) {
 
 // CloseTools stops the local MCP service after the thread processes stop.
 func (s *Service) CloseTools(ctx context.Context) error {
-	if s.fileMCP != nil {
-		return s.fileMCP.close(ctx)
+	if s.sessionToolsMCP != nil {
+		return s.sessionToolsMCP.close(ctx)
 	}
 	return nil
 }

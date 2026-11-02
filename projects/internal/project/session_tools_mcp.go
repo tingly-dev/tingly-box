@@ -14,9 +14,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// fileMCP hosts a thread-scoped send_file tool on a loopback listener. Each
+// sessionToolsMCP hosts thread-scoped tools on a loopback listener. Each
 // capability URL is private to the Claude process for that thread.
-type fileMCP struct {
+type sessionToolsMCP struct {
 	mu       sync.Mutex
 	service  *Service
 	server   *http.Server
@@ -35,7 +35,7 @@ type sendFileResult struct {
 	MessageID string `json:"message_id"`
 }
 
-func (f *fileMCP) config(threadID string) (string, error) {
+func (f *sessionToolsMCP) config(threadID string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if path := f.configs[threadID]; path != "" {
@@ -92,7 +92,7 @@ func (f *fileMCP) config(threadID string) (string, error) {
 	return file.Name(), nil
 }
 
-func (f *fileMCP) serveHTTP(w http.ResponseWriter, r *http.Request) {
+func (f *sessionToolsMCP) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	h := f.handlers[r.URL.Path]
 	f.mu.Unlock()
@@ -103,7 +103,7 @@ func (f *fileMCP) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	h.ServeHTTP(w, r)
 }
 
-func (f *fileMCP) close(ctx context.Context) error {
+func (f *sessionToolsMCP) close(ctx context.Context) error {
 	f.mu.Lock()
 	srv := f.server
 	for _, path := range f.configs {

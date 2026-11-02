@@ -96,8 +96,8 @@ type Threads struct {
 	// OnStep is called with each text and tool call of a thread's own turn
 	// (not a subagent's), as it is recorded. It must not block.
 	OnStep func(t db.Thread, e db.ThreadEvent)
-	// FileTool provides the MCP configuration scoped to the current thread.
-	FileTool func(threadID string) (string, error)
+	// SessionToolsConfig provides the MCP configuration scoped to the current thread.
+	SessionToolsConfig func(threadID string) (string, error)
 
 	// StallAfter is how long a running thread may show no activity before
 	// the coordinator is told; zero means DefaultStallAfter.
@@ -706,11 +706,11 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 		effort = p.ThreadEffort
 	}
 	opts := agentboot.ExecutionOptions{Model: model, Effort: effort, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings, Entrypoint: sessionEntrypoint}
-	if m.FileTool != nil {
-		if config, err := m.FileTool(threadID); err == nil {
+	if m.SessionToolsConfig != nil {
+		if config, err := m.SessionToolsConfig(threadID); err == nil {
 			opts.MCPConfigPath = config
 		} else {
-			logrus.WithError(err).Warn("projects: cannot start file publishing tool")
+			logrus.WithError(err).Warn("projects: cannot start session tools")
 		}
 	}
 	if !folder {
