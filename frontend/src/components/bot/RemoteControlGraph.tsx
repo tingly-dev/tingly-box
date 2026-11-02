@@ -48,7 +48,7 @@ const RemoteControlGraph: React.FC<RemoteControlGraphProps> = ({
     // keeps the full row inside the card at common desktop widths.
     return (
         <Box sx={(t) => ({...graphRowStyles(t), gap: t.spacing(1), py: 1, px: 0.5})}>
-            <Box sx={{ flex: '0 0 400px', width: 400, maxHeight: 520, overflowY: 'auto', pr: 1 }}>
+            <Box sx={{ flex: '0 0 400px', width: 400, maxHeight: 680, overflowY: 'auto', pr: 1 }}>
                 {accessContent}
             </Box>
 
