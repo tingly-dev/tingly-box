@@ -24,8 +24,7 @@ import { useProfileContext } from '@/contexts/ProfileContext';
 import { useTeamContext } from '@/contexts/TeamContext';
 import { teamPath } from '@/utils/team';
 import { useNotify } from '@/hooks/useNotify';
-import { useVersion } from '@/contexts/VersionContext';
-import { footerHeight, sidebarWidth } from './constants';
+import { sidebarWidth } from './constants';
 import {
     NAV_ROW_SX,
     navRowTextSlotProps,
@@ -63,7 +62,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActi
     const notify = useNotify();
     const { refresh } = useProfileContext();
     const { refresh: refreshTeams } = useTeamContext();
-    const { currentVersion } = useVersion();
 
     const [addProfileAnchorEl, setAddProfileAnchorEl] = useState<HTMLElement | null>(null);
     const [newProfileName, setNewProfileName] = useState('');
@@ -307,24 +305,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActi
                 })}
             </List>
             )}
-            {/* Footer: the running version and its update badge — app state,
-                one row. A dev build's long version ellipsizes, the badge stays.
-                The GitHub star link lives under the slogan below instead:
-                side by side it was pushed out, and stacked here it read as a
-                second status line. */}
-            <Box
-                sx={{
-                    py: 1.5, px: 2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    height: footerHeight,
-                    minWidth: 0,
-                }}
-            >
-                <VersionDisplay onClick={() => setUpdatePanelOpen(true)} />
-            </Box>
             {/* Add Profile Popover */}
             <Popover
                 open={Boolean(addProfileAnchorEl)}
@@ -382,24 +362,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActi
                     </Button>
                 </Box>
             </Popover>
-            {/* Footer bottom row: the slogan. Still footerHeight tall, so its
-                bottom lines up with the activity bar's footer. The GitHub star
-                lives in the activity bar, under Help. */}
-            <Box
-                sx={{
-                    height: footerHeight, py: 1, px: 2, borderTop: '1px solid', borderColor: 'divider',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}
-            >
-                <Typography
-                    variant="caption"
-                    component="div"
-                    sx={{ color: 'text.secondary', textAlign: 'center', fontStyle: 'italic' }}
+            {/* Version and slogan share a compact card at the bottom. */}
+            <Box sx={{ px: 1.5, pb: 1.5, pt: 1, flexShrink: 0 }}>
+                <Box
+                    sx={{
+                        px: 1.5, py: 1.25,
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5,
+                        bgcolor: 'action.hover', borderRadius: 2, minWidth: 0,
+                    }}
                 >
-                    <Tooltip title={t('layout.sidebar.sloganTooltip')} placement="top" arrow>
-                        <Box component="span" sx={{ cursor: 'default' }}>{t('layout.slogan')}</Box>
-                    </Tooltip>
-                </Typography>
+                    <VersionDisplay onClick={() => setUpdatePanelOpen(true)} />
+                    <Typography
+                        variant="caption"
+                        component="div"
+                        sx={{ color: 'text.secondary', textAlign: 'center', fontStyle: 'italic' }}
+                    >
+                        <Tooltip title={t('layout.sidebar.sloganTooltip')} placement="top" arrow>
+                            <Box component="span" sx={{ cursor: 'default' }}>{t('layout.slogan')}</Box>
+                        </Tooltip>
+                    </Typography>
+                </Box>
             </Box>
             {/* Update Panel Dialog */}
             <UpdatePanelDialog

@@ -263,8 +263,6 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
             <Box
                 sx={{
                     py: 0.5,
-                    borderTop: '1px solid',
-                    borderColor: 'divider',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
