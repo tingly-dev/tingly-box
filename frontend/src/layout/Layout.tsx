@@ -1,9 +1,9 @@
 import { Box, ClickAwayListener, Drawer, IconButton, Tooltip, Stack } from '@mui/material';
 import { Menu as IconMenu, Visibility as IconVisibility, Check as IconCheck, tablerMui } from '@/components/icons';
-import { IconLayoutSidebarLeftCollapse } from '@tabler/icons-react';
+import { IconLayoutSidebarLeftCollapse, IconPower } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Z_INDEX } from '../constants/zIndex';
 import { activityBarWidth, sidebarWidth } from './constants';
 import { mobileContentSx, mobileMenuButtonSx, mobileNavigationBarSx } from './styles';
@@ -19,6 +19,10 @@ import { rememberAgentPath } from '@/pages/scenario/lastAgent';
 import { CoachMark } from '@/components/CoachMark';
 import { useOneTimeTip } from '@/hooks/useOneTimeTip';
 import type { NavItem } from './types';
+import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
+import { api } from '@/services/api';
+import { useNotify } from '@/hooks/useNotify';
+import { announceFeatureDisabled, FEATURE_DISABLED_EVENT } from './featureNotice';
 
 // The eye in the Agent sidebar header introduces itself once: a callout
 // pointing at it until the user closes it (or uses the eye).
@@ -40,6 +44,7 @@ const MobileNavigationBar = ({ onMenuClick }: { onMenuClick: () => void }) => (
     >
         <IconButton
             color="primary"
+            data-feature-notice-anchor
             aria-label="Open navigation menu"
             onClick={onMenuClick}
             sx={mobileMenuButtonSx}
@@ -52,6 +57,9 @@ const MobileNavigationBar = ({ onMenuClick }: { onMenuClick: () => void }) => (
 const LayoutInner = ({ children }: LayoutProps) => {
     const { t } = useTranslation();
     const location = useLocation();
+    const navigate = useNavigate();
+    const notify = useNotify();
+    const flags = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
 
     // Layout only renders after sign-in: bring this surface's UI prefs in
@@ -108,6 +116,23 @@ const LayoutInner = ({ children }: LayoutProps) => {
     const { toggleHidden } = useHiddenScenarios();
     const { togglePinned } = usePinnedScenarios();
     const { dismissed: tipDismissed, dismiss: dismissTip } = useOneTimeTip(AGENT_VISIBILITY_TIP_KEY);
+    const { dismissed: teamTipDismissed, dismiss: dismissTeamTip } = useOneTimeTip('layout.teamPowerTip.dismissed');
+    const [featureButton, setFeatureButton] = useState<HTMLElement | null>(null);
+    const featureButtonRef = useCallback((el: HTMLElement | null) => {
+        if (el && el.offsetParent !== null) setFeatureButton(el);
+    }, []);
+    const [disabledNotice, setDisabledNotice] = useState<{ name: string; anchor: HTMLElement } | null>(null);
+    const [featureBusy, setFeatureBusy] = useState(false);
+    useEffect(() => {
+        const onDisabled = (event: Event) => {
+            const mobileAnchor = document.querySelector<HTMLElement>('[data-feature-notice-anchor]');
+            const anchor = mobileAnchor && mobileAnchor.offsetParent !== null ? mobileAnchor
+                : Array.from(document.querySelectorAll<HTMLElement>('[data-nav-rail]')).find(el => el.offsetParent !== null);
+            if (anchor) setDisabledNotice({ name: (event as CustomEvent<string>).detail, anchor });
+        };
+        window.addEventListener(FEATURE_DISABLED_EVENT, onDisabled);
+        return () => window.removeEventListener(FEATURE_DISABLED_EVENT, onDisabled);
+    }, []);
     // The header renders in both the desktop nav and the (kept-mounted)
     // mobile drawer; anchor the callout to whichever eye is on screen.
     const [eyeEl, setEyeEl] = useState<HTMLElement | null>(null);
@@ -177,8 +202,37 @@ const LayoutInner = ({ children }: LayoutProps) => {
         </Tooltip>
     );
 
+    const featureId = activeActivity === 'image' ? 'imagegen' : activeActivity === 'team' ? 'team' : activeActivity === 'projects' && flags.enableProjects ? 'projects' : undefined;
+    const disableFeature = async () => {
+        if (!featureId || featureBusy) return;
+        if (featureId === 'projects') {
+            setFeatureBusy(true);
+            try {
+                const result = await api.setScenarioFlag('_global', 'projects', false);
+                if (!result.success) throw new Error('Feature update rejected');
+                await flags.refresh();
+            } catch {
+                notify.error(t('system.experimentalFeatures.enableFailed'));
+                return;
+            } finally { setFeatureBusy(false); }
+        } else {
+            toggleHidden(featureId);
+        }
+        if (featureId === 'team') dismissTeamTip();
+        navigate('/agent');
+        announceFeatureDisabled(activeActivityLabel);
+    };
+
     const sidebarHeaderAction = (
         <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
+            {featureId && (
+                <Tooltip title={t('layout.featureSwitch.disable', { name: activeActivityLabel })} arrow placement="bottom">
+                    <IconButton ref={featureButtonRef} size="small" disabled={featureBusy || flags.loading}
+                        aria-label={t('layout.featureSwitch.disable', { name: activeActivityLabel })} onClick={() => void disableFeature()} sx={{ color: 'text.secondary' }}>
+                        <IconPower size={18} />
+                    </IconButton>
+                </Tooltip>
+            )}
             {activeActivity === 'scenario' && (
                 <Tooltip
                     title={editingAgents ? t('layout.sidebar.doneEditing') : t('scenarioOverview.editTooltip')}
@@ -268,6 +322,12 @@ const LayoutInner = ({ children }: LayoutProps) => {
     return (
         <Box sx={{ display: 'flex', height: isProjectsPage ? '100dvh' : '100vh', overflow: 'hidden', position: 'relative', zIndex: Z_INDEX.main }}>
             {visibilityTip}
+            <CoachMark open={!!disabledNotice} anchorEl={disabledNotice?.anchor ?? null}
+                title={t('layout.featureSwitch.disabledTitle', { name: disabledNotice?.name })}
+                text={t('layout.featureSwitch.disabledText')} onDismiss={() => setDisabledNotice(null)} />
+            <CoachMark open={!teamTipDismissed && activeActivity === 'team' && !sidebarCollapsed && !!featureButton?.isConnected && !disabledNotice}
+                anchorEl={featureButton} title={t('layout.featureSwitch.teamTitle')}
+                text={t('layout.featureSwitch.teamText')} onDismiss={dismissTeamTip} />
             {!isHubPage && <FloatingStatusIndicators />}
 
             {!isHubPage && (
