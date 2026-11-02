@@ -206,6 +206,8 @@ export const en = {
         origin: { upload: 'added', output: 'from a thread' },
     },
     projectSettings: {
+        worktree: 'Use a worktree for each thread',
+        worktreeHelp: 'When off, new threads share the repository directory and current branch. Their changes are visible to each other. Existing threads keep their working directories.',
         title: 'Project settings', tabGeneral: 'General', tabMemory: 'Memory', tabEnvironment: 'Environment', tabUsage: 'Usage',
         coordinatorModel: 'Coordinator model', coordinatorModelHelp: 'Runs the project conversation: routing, updates. Empty uses the connection default.',
         threadModel: 'Default thread model', threadModelHelp: 'Used by new threads and threads without a model override (Claude Code --model). Empty uses the host default. Individual thread choices stay independent.',

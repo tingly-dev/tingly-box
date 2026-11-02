@@ -1409,6 +1409,8 @@ export interface components {
              * @description Field created_at
              */
             created_at: string;
+            /** @description Field disable_worktree */
+            disable_worktree?: boolean;
             /** @description Field goal */
             goal: string;
             /** @description Field id */
@@ -1480,6 +1482,8 @@ export interface components {
              * @description Field created_at
              */
             created_at: string;
+            /** @description Field disable_worktree */
+            disable_worktree?: boolean;
             /** @description Field goal */
             goal: string;
             /** @description Field id */
@@ -1896,6 +1900,8 @@ export interface components {
             coordinator_effort?: "" | "low" | "medium" | "high" | "max";
             /** @description Field coordinator_model */
             coordinator_model?: string;
+            /** @description Field disable_worktree */
+            disable_worktree?: boolean;
             /** @description Field goal */
             goal?: string;
             /** @description Field instructions */

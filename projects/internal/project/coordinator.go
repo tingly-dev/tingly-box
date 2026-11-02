@@ -204,7 +204,7 @@ func (c *Coordinator) turn(ctx context.Context, projectID string, userTriggered,
 		budget = append(budget, "minutes_since_user", roundMinutes(away))
 	}
 	if configChanged {
-		msgs = appendUser(msgs, envelope(trustSystem, "(Project settings changed. Re-evaluate pending work using the current settings. Continue previously requested work if the change unblocks it; do not start unrelated work or repeat completed work. Existing threads keep their worktrees. If no action or useful update is needed, call "+toolNoUpdate+".)", append([]string{"source", "system", "kind", "settings-changed"}, budget...)...))
+		msgs = appendUser(msgs, envelope(trustSystem, "(Project settings changed. Re-evaluate pending work using the current settings. Continue previously requested work if the change unblocks it; do not start unrelated work or repeat completed work. Existing threads keep their working directories. If no action or useful update is needed, call "+toolNoUpdate+".)", append([]string{"source", "system", "kind", "settings-changed"}, budget...)...))
 	} else if !userTriggered {
 		// The thread updates are already in the history; nudge the model
 		// to stay quiet unless they matter.
@@ -444,7 +444,11 @@ Current date: %s
 		fmt.Fprintf(&b, "\nProject goal: %s\n", g)
 	}
 	if len(p.Repos) > 0 {
-		b.WriteString("\nRepositories (each thread gets its own branch and worktree in one of them; pass repo to start_thread to choose, the first is the default):\n")
+		if p.DisableWorktree {
+			b.WriteString("\nRepositories (threads share the selected checkout and its current branch; coordinate concurrent work; pass repo to start_thread to choose, the first is the default):\n")
+		} else {
+			b.WriteString("\nRepositories (each thread gets its own branch and worktree in one of them; pass repo to start_thread to choose, the first is the default):\n")
+		}
 		for _, r := range p.Repos {
 			fmt.Fprintf(&b, "- %s (base branch %s)\n", r.Path, r.BaseBranch)
 		}
@@ -490,7 +494,7 @@ func coordinatorTools() []llm.Tool {
 		"repo":  str("Optional. Path of the project repository to work in; \"none\" for no repository."),
 	}
 	return []llm.Tool{
-		{Name: "start_thread", Description: "Start a new thread (a Claude Code session on its own branch) for one task.", Properties: threadSpec, Required: []string{"title", "task"}},
+		{Name: "start_thread", Description: "Start a new thread (a Claude Code session) for one task, using the project worktree setting.", Properties: threadSpec, Required: []string{"title", "task"}},
 		{Name: "propose_threads", Description: "Propose threads for the user to start, instead of starting them. Use when the user wants to review a plan first.",
 			Properties: map[string]any{"threads": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": threadSpec, "required": []string{"title", "task"}}}},
 			Required:   []string{"threads"}},

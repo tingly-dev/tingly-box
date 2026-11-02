@@ -3189,6 +3189,10 @@
             "format": "date-time",
             "description": "Field created_at"
           },
+          "disable_worktree": {
+            "type": "boolean",
+            "description": "Field disable_worktree"
+          },
           "goal": {
             "type": "string",
             "description": "Field goal"
@@ -3367,6 +3371,10 @@
             "type": "string",
             "format": "date-time",
             "description": "Field created_at"
+          },
+          "disable_worktree": {
+            "type": "boolean",
+            "description": "Field disable_worktree"
           },
           "goal": {
             "type": "string",
@@ -4224,6 +4232,10 @@
           "coordinator_model": {
             "type": "string",
             "description": "Field coordinator_model"
+          },
+          "disable_worktree": {
+            "type": "boolean",
+            "description": "Field disable_worktree"
           },
           "goal": {
             "type": "string",

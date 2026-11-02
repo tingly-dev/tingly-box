@@ -422,6 +422,23 @@ func TestProjectEffortSettings(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, c.do("PATCH", "/projects/"+f.ID, map[string]any{"thread_effort": "high"}, nil))
 }
 
+func TestProjectWorktreeSetting(t *testing.T) {
+	_, c := newServer(t, nil)
+	var p db.Project
+	require.Equal(t, http.StatusCreated, c.do("POST", "/projects", map[string]any{"name": "shared"}, &p))
+	assert.False(t, p.DisableWorktree)
+	require.Equal(t, http.StatusOK, c.do("PATCH", "/projects/"+p.ID, map[string]any{"disable_worktree": true}, &p))
+	assert.True(t, p.DisableWorktree)
+	require.Equal(t, http.StatusOK, c.do("GET", "/projects/"+p.ID, nil, &struct {
+		Project *db.Project `json:"project"`
+	}{Project: &p}))
+	assert.True(t, p.DisableWorktree)
+	id := p.ID
+	p = db.Project{}
+	require.Equal(t, http.StatusOK, c.do("PATCH", "/projects/"+id, map[string]any{"disable_worktree": false}, &p))
+	assert.False(t, p.DisableWorktree)
+}
+
 // The events stream outlives the server's WriteTimeout: cut at it, every open
 // page reconnects and re-fetches everything it shows.
 func TestEventStreamOutlivesWriteTimeout(t *testing.T) {

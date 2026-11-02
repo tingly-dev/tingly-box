@@ -69,6 +69,7 @@ type UpdateProjectRequest struct {
 	CoordinatorEffort    *string   `json:"coordinator_effort,omitempty" enum:",low,medium,high,max"`
 	ThreadEffort         *string   `json:"thread_effort,omitempty" enum:",low,medium,high,max"`
 	ThreadPermissionMode *string   `json:"thread_permission_mode,omitempty" enum:"default,acceptEdits,auto,bypassPermissions"`
+	DisableWorktree      *bool     `json:"disable_worktree,omitempty"`
 	Starred              *bool     `json:"starred,omitempty"`
 	Paused               *bool     `json:"paused,omitempty"`
 	Archived             *bool     `json:"archived,omitempty"`
@@ -363,8 +364,8 @@ func (h *Handler) update(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if p.Type == db.ProjectFolder && (req.Repos != nil || req.ThreadModel != nil || req.ThreadEffort != nil) {
-		apierr.BadRequest(c, "repos, thread_model and thread_effort do not apply to a folder")
+	if p.Type == db.ProjectFolder && (req.Repos != nil || req.ThreadModel != nil || req.ThreadEffort != nil || req.DisableWorktree != nil) {
+		apierr.BadRequest(c, "repos, thread_model, thread_effort and disable_worktree do not apply to a folder")
 		return
 	}
 	if req.Name != nil {
@@ -420,6 +421,9 @@ func (h *Handler) update(c *gin.Context) {
 			apierr.BadRequest(c, "unknown permission mode")
 			return
 		}
+	}
+	if req.DisableWorktree != nil {
+		p.DisableWorktree = *req.DisableWorktree
 	}
 	if req.Starred != nil {
 		p.Starred = *req.Starred

@@ -55,7 +55,7 @@ func (s *Service) Save(p *db.Project) error {
 	var notice *db.ThreadEvent
 	if fields := configurationChanges(previous, p); len(fields) > 0 && p.Type == db.ProjectProject && p.MainThreadID != "" {
 		notice = &db.ThreadEvent{ThreadID: p.MainThreadID, Kind: db.EvSystem, Source: db.SourceSystem,
-			Content: "Project settings changed: " + strings.Join(fields, ", ") + ". Use the current project settings instead of older values in the conversation. Repository changes apply to new threads; existing threads keep their worktrees.",
+			Content: "Project settings changed: " + strings.Join(fields, ", ") + ". Use the current project settings instead of older values in the conversation. Repository and worktree settings apply to new threads; existing threads keep their working directories.",
 			Payload: jsonString(map[string]bool{"settings_changed": true}),
 		}
 	}
@@ -90,6 +90,9 @@ func configurationChanges(a, b *db.Project) []string {
 		if field.a != field.b {
 			fields = append(fields, field.name)
 		}
+	}
+	if a.DisableWorktree != b.DisableWorktree {
+		fields = append(fields, "thread worktree mode")
 	}
 	if !slices.Equal(a.Repos, b.Repos) {
 		fields = append(fields, "repositories")
