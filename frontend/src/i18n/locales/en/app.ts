@@ -136,6 +136,7 @@ export default {
       "expand": "Expand sidebar"
     },
     // One-time callouts pointing at a control (components/CoachMark).
+    "featureSwitch": { "disable": "Turn off {{name}}", "disabledTitle": "{{name}} is off", "disabledText": "You can turn it back on in Preferences → Power-ups.", "teamTitle": "Team is on", "teamText": "Team is enabled by default. Use this button to turn it off." },
     "coachMarks": {
       "gotIt": "Got it",
       "agentVisibility": {

@@ -133,6 +133,7 @@ export default {
       "doneEditing": "完成",
       "expand": "展开侧边栏"
     },
+    "featureSwitch": { "disable": "关闭 {{name}}", "disabledTitle": "{{name}} 已关闭", "disabledText": "你可以在偏好设置 → 扩展中重新开启。", "teamTitle": "Team 已开启", "teamText": "Team 默认开启，可以点击此按钮关闭。" },
     "coachMarks": {
       "gotIt": "知道了",
       "agentVisibility": {
