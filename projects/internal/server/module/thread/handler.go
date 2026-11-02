@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/agentboot/history"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 	rt "github.com/tingly-dev/tingly-box/projects/internal/project"
 	"github.com/tingly-dev/tingly-box/projects/internal/server/module"
@@ -42,6 +43,14 @@ type CreateThreadRequest struct {
 	// Profile is the host's launch profile; empty for its default. Only
 	// hosts with profiles (Tingly Box) accept one.
 	Profile string `json:"profile,omitempty"`
+}
+
+// LocalSessionsResponse lists Claude histories in the folder.
+type LocalSessionsResponse struct {
+	Sessions []history.SessionMetadata `json:"sessions"`
+}
+type LoadLocalSessionRequest struct {
+	SessionID string `json:"session_id" binding:"required"`
 }
 
 // ThreadDetailResponse is a thread as it is now.
@@ -175,6 +184,8 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithDescription("Start a thread in a folder project"),
 		swagger.WithRequestModel(CreateThreadRequest{}),
 		swagger.WithResponseModel(db.Thread{}))
+	api.GET("/projects/:id/local-sessions", h.localSessions, tag, swagger.WithDescription("List Claude Code sessions in a folder"), swagger.WithResponseModel(LocalSessionsResponse{}))
+	api.POST("/projects/:id/local-sessions", h.loadLocalSession, tag, swagger.WithDescription("Load a Claude Code session in a folder"), swagger.WithRequestModel(LoadLocalSessionRequest{}), swagger.WithResponseModel(db.Thread{}))
 	api.GET("/threads/permission-modes", h.permissionModes, tag,
 		swagger.WithDescription("The Claude Code permission modes a thread can run in"),
 		swagger.WithResponseModel(PermissionModesResponse{}))
@@ -352,6 +363,30 @@ func (h *Handler) create(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, t)
+}
+
+func (h *Handler) localSessions(c *gin.Context) {
+	sessions, err := h.svc.Threads.LocalSessions(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	if sessions == nil {
+		sessions = []history.SessionMetadata{}
+	}
+	c.JSON(http.StatusOK, LocalSessionsResponse{Sessions: sessions})
+}
+func (h *Handler) loadLocalSession(c *gin.Context) {
+	var req LoadLocalSessionRequest
+	if !apierr.Bind(c, &req) {
+		return
+	}
+	t, err := h.svc.Threads.LoadLocalSession(c.Request.Context(), c.Param("id"), req.SessionID)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, t)
 }
 
 func (h *Handler) permissionModes(c *gin.Context) {

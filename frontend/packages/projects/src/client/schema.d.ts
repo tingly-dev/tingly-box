@@ -400,6 +400,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/local-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Claude Code sessions in a folder
+         * @description List Claude Code sessions in a folder
+         */
+        get: operations["apiV1ProjectsIdLocal-sessionsGet"];
+        put?: never;
+        /**
+         * Load a Claude Code session in a folder
+         * @description Load a Claude Code session in a folder
+         */
+        post: operations["apiV1ProjectsIdLocal-sessionsPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/memory": {
         parameters: {
             query?: never;
@@ -1276,6 +1300,14 @@ export interface components {
             /** @description Field files */
             files: components["schemas"]["LibraryFile"][];
         };
+        LoadLocalSessionRequest: {
+            /** @description Field session_id */
+            session_id: string;
+        };
+        LocalSessionsResponse: {
+            /** @description Field sessions */
+            sessions: components["schemas"]["SessionMetadata"][];
+        };
         MemoryFile: {
             /** @description Field name */
             name: string;
@@ -1536,6 +1568,64 @@ export interface components {
             content: string;
             /** @description Field mode */
             mode?: string;
+        };
+        SessionMetadata: {
+            /**
+             * Format: int64
+             * @description Field cache_read_tokens
+             */
+            cache_read_tokens?: number;
+            /**
+             * Format: int64
+             * @description Field duration_ms
+             */
+            duration_ms?: number;
+            /**
+             * Format: date-time
+             * @description Field end_time
+             */
+            end_time?: string;
+            /** @description Field error */
+            error?: string;
+            /** @description Field first_message */
+            first_message?: string;
+            /**
+             * Format: int64
+             * @description Field input_tokens
+             */
+            input_tokens?: number;
+            /** @description Field last_assistant_message */
+            last_assistant_message?: string;
+            /** @description Field last_result */
+            last_result?: string;
+            /** @description Field last_user_message */
+            last_user_message?: string;
+            /**
+             * Format: int64
+             * @description Field num_turns
+             */
+            num_turns?: number;
+            /**
+             * Format: int64
+             * @description Field output_tokens
+             */
+            output_tokens?: number;
+            /** @description Field project_path */
+            project_path: string;
+            /** @description Field session_id */
+            session_id: string;
+            /**
+             * Format: date-time
+             * @description Field start_time
+             */
+            start_time: string;
+            /** @description Field status */
+            status: string;
+            /**
+             * Format: double
+             * @description Field total_cost_usd
+             */
+            total_cost_usd?: number;
         };
         SettingsResponse: {
             /**
@@ -2584,6 +2674,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OKResponse"];
+                };
+            };
+        };
+    };
+    "apiV1ProjectsIdLocal-sessionsGet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalSessionsResponse"];
+                };
+            };
+        };
+    };
+    "apiV1ProjectsIdLocal-sessionsPost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoadLocalSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
                 };
             };
         };

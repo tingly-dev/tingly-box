@@ -60,6 +60,7 @@ export const zh: Dict<typeof en> = {
         pathExample: '/目录路径',
     },
     session: {
+        localHint: '请先在 Claude Code 中关闭该会话，再在此处继续；同一会话请勿同时在多处运行。', loadLocal: '加载本地会话', noLocal: '此目录下没有找到 Claude Code 会话。',
         attachNeedsFolder: '先选择工作目录，再添加附件',
         sessions: '会话', new: '新建会话', none: '还没有会话', folder: '工作目录', chooseFolder: '选择工作目录',
         folderPlaceholder: '/目录路径', heading: '需要 Claude 处理什么任务？', promptPlaceholder: '描述一个任务…',

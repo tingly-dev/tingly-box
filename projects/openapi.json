@@ -922,6 +922,81 @@
         }
       }
     },
+    "/api/v1/projects/{id}/local-sessions": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "List Claude Code sessions in a folder",
+        "description": "List Claude Code sessions in a folder",
+        "operationId": "apiV1ProjectsIdLocal-sessionsGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalSessionsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Load a Claude Code session in a folder",
+        "description": "Load a Claude Code session in a folder",
+        "operationId": "apiV1ProjectsIdLocal-sessionsPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadLocalSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/memory": {
       "get": {
         "tags": [
@@ -2898,6 +2973,33 @@
           "files"
         ]
       },
+      "LoadLocalSessionRequest": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "description": "Field session_id"
+          }
+        },
+        "required": [
+          "session_id"
+        ]
+      },
+      "LocalSessionsResponse": {
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "type": "array",
+            "description": "Field sessions",
+            "items": {
+              "$ref": "#/components/schemas/SessionMetadata"
+            }
+          }
+        },
+        "required": [
+          "sessions"
+        ]
+      },
       "MemoryFile": {
         "type": "object",
         "properties": {
@@ -3514,6 +3616,89 @@
         },
         "required": [
           "content"
+        ]
+      },
+      "SessionMetadata": {
+        "type": "object",
+        "properties": {
+          "cache_read_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field cache_read_tokens"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field duration_ms"
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field end_time"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "first_message": {
+            "type": "string",
+            "description": "Field first_message"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field input_tokens"
+          },
+          "last_assistant_message": {
+            "type": "string",
+            "description": "Field last_assistant_message"
+          },
+          "last_result": {
+            "type": "string",
+            "description": "Field last_result"
+          },
+          "last_user_message": {
+            "type": "string",
+            "description": "Field last_user_message"
+          },
+          "num_turns": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field num_turns"
+          },
+          "output_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field output_tokens"
+          },
+          "project_path": {
+            "type": "string",
+            "description": "Field project_path"
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Field session_id"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field start_time"
+          },
+          "status": {
+            "type": "string",
+            "description": "Field status"
+          },
+          "total_cost_usd": {
+            "type": "number",
+            "format": "double",
+            "description": "Field total_cost_usd"
+          }
+        },
+        "required": [
+          "session_id",
+          "project_path",
+          "status",
+          "start_time"
         ]
       },
       "SettingsResponse": {

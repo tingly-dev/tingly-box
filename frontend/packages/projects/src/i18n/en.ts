@@ -56,6 +56,7 @@ export const en = {
         pathExample: '/path/to/folder',
     },
     session: {
+        localHint: 'Use one place at a time: close the session in Claude Code before continuing it here.', loadLocal: 'Load local session', noLocal: 'No Claude Code sessions found for this folder.',
         sessions: 'Sessions', new: 'New session', none: 'No sessions yet', folder: 'Working folder', chooseFolder: 'Choose a working folder',
         folderPlaceholder: '/path/to/folder', attachNeedsFolder: 'Choose a working folder to attach files', heading: 'What should Claude work on?', promptPlaceholder: 'Describe a task…',
         placeholder: 'Message this session…', queuePlaceholder: 'Message this session — it reads it at its next step…',

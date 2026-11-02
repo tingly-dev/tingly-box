@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Box, Button, IconButton, Skeleton, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, Dialog, DialogContent, DialogTitle, IconButton, List, ListItemButton, ListItemText, Skeleton, Tooltip, Typography } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
@@ -94,6 +94,29 @@ export default function WorkdirPage() {
     // The add dialog lives in the URL, so a link (the sidebar's "add") opens it.
     const adding = params.get('add') === '1';
     const [error, setError] = useState<string | null>(null);
+    const [localOpen, setLocalOpen] = useState(false);
+    const [localLoading, setLocalLoading] = useState(false);
+    const [localError, setLocalError] = useState('');
+    const [localSessions, setLocalSessions] = useState<{session_id: string; first_message?: string; start_time: string}[]>([]);
+    const showLocal = async () => {
+        if (!folder) return;
+        setLocalOpen(true); setLocalLoading(true); setLocalError('');
+        try {
+            const result = await unwrap(api.GET('/api/v1/projects/{id}/local-sessions', {params: {path: {id: folder.id}}}));
+            setLocalSessions((result.sessions ?? []).filter((s) => !!s.session_id));
+        } catch (e) { setLocalError((e as Error).message); }
+        finally { setLocalLoading(false); }
+    };
+    const loadLocal = async (id: string) => {
+        if (!folder) return;
+        setLocalLoading(true); setLocalError('');
+        try {
+            const thread = await unwrap(api.POST('/api/v1/projects/{id}/local-sessions', {params: {path: {id: folder.id}}, body: {session_id: id}}));
+            setSessions((list) => upsert(list ?? [], thread));
+            setLocalOpen(false); openSession(thread.id); refresh(); reloadList();
+        } catch (e) { setLocalError((e as Error).message); }
+        finally { setLocalLoading(false); }
+    };
 
     useEffect(() => {
         loadPermissionModes().then(setModes).catch(() => {
@@ -308,6 +331,18 @@ export default function WorkdirPage() {
 
     return (
         <>
+            <Dialog open={localOpen} onClose={() => setLocalOpen(false)} fullWidth maxWidth="sm">
+                <DialogTitle>{t('session.loadLocal')}</DialogTitle>
+                <DialogContent>
+                    <Typography color="text.secondary" variant="body2">{t('session.localHint')}</Typography>
+                    {localError && <Alert severity="error">{localError}</Alert>}
+                    {localLoading && <Skeleton height={48} />}
+                    {!localLoading && !localError && localSessions.length === 0 && <Typography color="text.secondary">{t('session.noLocal')}</Typography>}
+                    <List>{localSessions.map((s) => <ListItemButton key={s.session_id} disabled={localLoading} onClick={() => void loadLocal(s.session_id)}>
+                        <ListItemText primary={s.first_message || s.session_id} secondary={`${s.start_time ? new Date(s.start_time).toLocaleString() : ''} · ${s.session_id}`} />
+                    </ListItemButton>)}</List>
+                </DialogContent>
+            </Dialog>
             <WorkspaceLayout
                 pane={pane}
                 headerInsetXs={embedded ? 2 : 6}
@@ -327,6 +362,7 @@ export default function WorkdirPage() {
                                 <IconButton size="small" aria-label={t('workdir.remove')} onClick={() => (stopCount > 0 ? setConfirmRemove(true) : void removeFolder())}><Close fontSize="small" /></IconButton>
                             </Tooltip>
                         )}
+                        {folder && <Button size="small" onClick={() => void showLocal()}>{t('session.loadLocal')}</Button>}
                         <Button size="small" startIcon={<Add />} onClick={() => openNew()}>{t('session.new')}</Button>
                     </>
                 )}

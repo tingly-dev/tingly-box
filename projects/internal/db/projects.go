@@ -448,3 +448,20 @@ type ModelUsage struct {
 	InputTokens  int64  `json:"input_tokens"`
 	OutputTokens int64  `json:"output_tokens"`
 }
+
+// CreateImportedThread creates a thread and its transcript atomically.
+func (s *Store) CreateImportedThread(t *Thread, events []ThreadEvent) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		store := &Store{db: tx}
+		if err := store.CreateThread(t); err != nil {
+			return err
+		}
+		for i := range events {
+			events[i].ThreadID = t.ID
+			if err := store.AddThreadEvent(&events[i]); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
