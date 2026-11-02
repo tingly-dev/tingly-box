@@ -251,6 +251,9 @@ export default {
     }
   },
   "credentialPage": {
+    "sortBy": "Sort credentials",
+    "sortName": "Name",
+    "sortProvider": "Provider",
     "tableView": "Table view",
     "endpoint": "Endpoint",
     "twoEndpoints": "2 endpoints",

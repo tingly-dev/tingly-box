@@ -251,6 +251,9 @@ export default {
     }
   },
   "credentialPage": {
+    "sortBy": "Сортировка",
+    "sortName": "По имени",
+    "sortProvider": "По провайдеру",
     "tableView": "Таблица",
     "endpoint": "Адрес",
     "twoEndpoints": "2 адреса",
