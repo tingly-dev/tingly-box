@@ -103,5 +103,5 @@ Projects 创建每个 Thread 时已构造 `agentboot.ExecutionOptions`；可以�
 
 - Projects 启动 Claude Code 时自动追加独立的本地 HTTP MCP 配置；每个 Thread 使用独立的随机能力地址。原有 MCP 配置保留，工具的目标 Thread 由服务端确定。此实现未复用 TB MCP Profile，以保证 Projects 单独运行时也可使用。
 - `send_file(path, caption?)` 读取当前工作目录或项目 Library 内的普通文件，复制到 Library，并持久化为会话消息。Project Thread 的产物也会显示在 Project 对话，标注来源。协调者不在第一版接入范围内。
-- 发送时按现有绑定查找 IM 目标。首批适配 Tingly 测试渠道和 Telegram；其他渠道返回明确的投递错误，Web 中的文件仍保留。失败会在 Thread 中显示错误消息，目前没有逐目标投递状态或重试。
-- 已覆盖 MCP 协议调用、文件持久化、路径约束及 Tingly 渠道的文件内容和改绑场景。真实 Claude 模型调用及 Telegram 实际上传仍需在有相应凭据的环境验证。
+- 发送时按现有绑定查找 IM 目标。首批适配 Tingly 测试渠道、Telegram 和飞书 / Lark；其他渠道返回明确的投递错误，Web 中的文件仍保留。失败会在 Thread 中显示错误消息，目前没有逐目标投递状态或重试。
+- 已覆盖 MCP 协议调用、文件持久化、路径约束及 Tingly 渠道的文件内容和改绑场景。真实 Claude 模型调用及 Telegram、飞书 / Lark 实际上传仍需在有相应凭据的环境验证。

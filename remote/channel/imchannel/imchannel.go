@@ -36,7 +36,7 @@ func (c *Channel) SendFile(ctx context.Context, chatID, path, name, mediaType, c
 	if c.sender == nil {
 		return fmt.Errorf("imchannel: no sender")
 	}
-	if c.platform != "telegram" && c.platform != "tingly" {
+	if c.platform != "telegram" && c.platform != "tingly" && c.platform != "feishu" && c.platform != "lark" {
 		return fmt.Errorf("file upload is not supported by %s", c.platform)
 	}
 	kind := "document"
