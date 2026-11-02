@@ -39,6 +39,10 @@ func ConvertAnthropicBetaToResponsesRequest(anthropicReq *anthropic.BetaMessageN
 		} else if string(msg.Role) == "assistant" {
 			items := convertBetaAssistantMessageToResponsesInput(msg)
 			inputItems = append(inputItems, items...)
+		} else if string(msg.Role) == "system" {
+			// Mid-conversation system message (issue #1921)
+			items := convertV1SystemMessageToResponsesInput(viewAnthropicBetaMessage(msg))
+			inputItems = append(inputItems, items...)
 		}
 	}
 
