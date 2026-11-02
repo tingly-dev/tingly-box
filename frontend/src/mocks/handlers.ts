@@ -184,7 +184,7 @@ const mockStandardProviderCatalog: MockProviderCatalogEntry[] = [
         provider: {
             uuid: 'mock-provider-tingly-box', name: 'Tingly',
             api_base: 'https://box.example.com/tingly/claude_code', api_style: 'anthropic', auth_type: 'api_key',
-            token: 'tingly-****wxyz', enabled: true, proxy_url: '',
+            token: 'tingly-****wxyz', enabled: true, proxy_url: 'http://proxy.example.com:8080',
             api_base_openai: null, api_base_anthropic: 'https://box.example.com/tingly/claude_code',
         },
         models: ['claude-sonnet-5', 'claude-opus-4-8'],
@@ -205,7 +205,7 @@ const mockStandardProviderCatalog: MockProviderCatalogEntry[] = [
         provider: {
             uuid: 'mock-provider-openai', name: 'OpenAI',
             api_base: 'https://api.openai.com/v1', api_style: 'openai', auth_type: 'api_key',
-            token: 'sk-****efgh', enabled: true, proxy_url: '',
+            token: 'sk-****efgh', enabled: true, proxy_url: 'http://127.0.0.1:7890',
             api_base_openai: 'https://api.openai.com/v1', api_base_anthropic: null,
         },
         models: [
@@ -284,7 +284,7 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
         provider: {
             uuid: 'mock-oauth-claude-code', name: 'Claude Code OAuth',
             api_base: 'https://api.anthropic.com', api_style: 'anthropic', auth_type: 'oauth',
-            token: '', enabled: true, proxy_url: '',
+            token: '', enabled: true, proxy_url: 'http://127.0.0.1:7890',
             api_base_openai: null, api_base_anthropic: null,
             oauth_detail: {
                 access_token: 'mock-claude-code-access-token',
@@ -352,7 +352,7 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
         provider: {
             uuid: 'mock-oauth-codex', name: 'Codex OAuth',
             api_base: 'https://chatgpt.com/backend-api', api_style: 'openai', auth_type: 'oauth',
-            token: '', enabled: true, proxy_url: '',
+            token: '', enabled: true, proxy_url: 'socks5://127.0.0.1:1080',
             api_base_openai: null, api_base_anthropic: null,
             oauth_detail: {
                 access_token: 'mock-codex-access-token',

@@ -251,6 +251,14 @@ export default {
     }
   },
   "credentialPage": {
+    "viewMode": "Режим просмотра",
+    "listView": "Список",
+    "cardView": "Карточки",
+    "status": "Статус",
+    "expiresAt": "Истекает",
+    "baseUrl": "Базовый URL API",
+    "never": "Никогда",
+    "expired": "Истёк",
     "empty": "Пока нет ключей",
     "managing_one": "Управление {{count}} ключом",
     "managing_few": "Управление {{count}} ключами",

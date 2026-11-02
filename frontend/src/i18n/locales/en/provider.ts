@@ -251,6 +251,14 @@ export default {
     }
   },
   "credentialPage": {
+    "viewMode": "View mode",
+    "listView": "List view",
+    "cardView": "Card view",
+    "status": "Status",
+    "expiresAt": "Expires at",
+    "baseUrl": "API base URL",
+    "never": "Never",
+    "expired": "Expired",
     "empty": "No credentials yet",
     "managing_one": "Managing {{count}} credential",
     "managing_other": "Managing {{count}} credentials",

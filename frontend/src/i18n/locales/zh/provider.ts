@@ -251,6 +251,14 @@ export default {
     }
   },
   "credentialPage": {
+    "viewMode": "显示模式",
+    "listView": "列表视图",
+    "cardView": "卡片视图",
+    "status": "状态",
+    "expiresAt": "到期时间",
+    "baseUrl": "API 地址",
+    "never": "永不过期",
+    "expired": "已过期",
     "empty": "还没有凭证",
     "managing_other": "共 {{count}} 个凭证",
     "emptyTitle": "连接你的第一个 AI",
