@@ -50,6 +50,7 @@ export const en = {
             bindAction: 'Bind', rebindAction: 'Move', rebindLabel: 'Move {{chat}} to another project or folder',
             statusOk: 'Ready', statusBlocked: 'Disabled', statusUnpaired: 'Waiting to pair',
             noChats: 'No chats yet. Send this bot a message and the chat shows up here.',
+            getStarted: 'Get started with IM', getStartedSteps: '1. Connect a bot. 2. Message it and grant access. 3. Bind the chat to a project below.', manageBots: 'Connect or manage bots',
             emptyTitle: 'No IM bots yet', emptyBody: 'Connect a Telegram, Feishu or other chat bot, then bind its chats to projects.',
             loadFailed: 'Could not load the bots.',
             pickProject: 'Move {{chat}} to', pickPlaceholder: 'Choose a project or folder', noProjects: 'Create a project or folder first.',

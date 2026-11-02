@@ -56,6 +56,8 @@ export interface ProjectsSidebarProps {
     sections?: ProjectsSidebarSection[];
     /** Show the IM entry at the bottom when the host has IM (default true). */
     showIm?: boolean;
+    /** Host-specific destinations displayed below the IM chats entry. */
+    imRows?: ProjectsSidebarRow[];
     /** Called after a row or link is followed (closes a host's mobile drawer). */
     onNavigate?: () => void;
 }
@@ -141,7 +143,7 @@ function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection;
  * whatever sections the host adds. It knows nothing about the host; Tingly Box
  * passes its working folders in as a section.
  */
-export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, showIm = true, sections = [], onNavigate }: ProjectsSidebarProps) {
+export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, showIm = true, imRows = [], sections = [], onNavigate }: ProjectsSidebarProps) {
     const { t } = useTranslation('projects');
     const navigate = useNavigate();
     const location = useLocation();
@@ -214,7 +216,7 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
             subtitle: botCount == null ? undefined : t('im.bots', { count: botCount }),
             to: paths.im,
             selected: location.pathname === paths.im,
-        }],
+        }, ...imRows],
     } : null;
 
     return (

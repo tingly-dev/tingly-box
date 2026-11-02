@@ -54,6 +54,7 @@ export const zh: Dict<typeof en> = {
             bindAction: '绑定', rebindAction: '改绑', rebindLabel: '把 {{chat}} 改绑到其他项目或目录',
             statusOk: '可用', statusBlocked: '已停用', statusUnpaired: '等待配对',
             noChats: '还没有聊天。给这个机器人发一条消息，聊天就会出现在这里。',
+            getStarted: '开始使用 IM', getStartedSteps: '1. 连接机器人。2. 给机器人发消息并授予访问权限。3. 在下方将聊天绑定到项目。', manageBots: '连接或管理机器人',
             emptyTitle: '还没有 IM 机器人', emptyBody: '连接 Telegram、飞书等聊天机器人，再把它们的聊天绑定到项目。',
             loadFailed: '读取机器人失败。',
             pickProject: '把 {{chat}} 绑定到', pickPlaceholder: '选择项目或目录', noProjects: '先创建一个项目或目录。',
