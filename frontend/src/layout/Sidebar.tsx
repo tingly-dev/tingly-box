@@ -367,7 +367,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActi
             </Popover>
             {/* App information stays at the bottom of the secondary navigation. */}
             <Box sx={{ px: 2, pb: 2, pt: 1, flexShrink: 0, minWidth: 0 }}>
-                <Box sx={{ display: 'flex', mb: 0.5, minWidth: 0 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'center', mb: 0.5, minWidth: 0 }}>
                     <VersionDisplay onClick={() => setUpdatePanelOpen(true)}>
                         <Typography variant="body2" sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {displayVersion(currentVersion)}
@@ -375,7 +375,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActi
                     </VersionDisplay>
                 </Box>
                 <Tooltip title={t('layout.sidebar.sloganTooltip')} placement="top" arrow>
-                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', cursor: 'default' }}>
+                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', textAlign: 'center', cursor: 'default' }}>
                         {t('layout.slogan')}
                     </Typography>
                 </Tooltip>

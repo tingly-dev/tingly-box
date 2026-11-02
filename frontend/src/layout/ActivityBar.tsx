@@ -291,9 +291,6 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                         <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
                             <IconSettings sx={{ fontSize: 22 }} />
                         </ListItemIcon>
-                        <Typography variant="caption" sx={{ color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
-                            {t('layout.settings')}
-                        </Typography>
                     </ListItemButton>
                 </Tooltip>
                 <PreferencesMenu anchorEl={preferencesAnchorEl} onClose={() => setPreferencesAnchorEl(null)} />
