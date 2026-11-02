@@ -114,7 +114,7 @@ describe('ProjectsSidebar', () => {
         await waitFor(() => expect(row.textContent).toContain('im.bots'));
         const bots = screen.getByRole('link', { name: 'Bots' });
         expect(bots).toHaveAttribute('href', '/bots');
-        expect(row.compareDocumentPosition(bots) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(bots.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         cleanup();
         show(h, '/p');
         await screen.findByRole('region', { name: 'nav.projects' });
