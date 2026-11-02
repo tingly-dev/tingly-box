@@ -55,6 +55,11 @@ func (ph *ProtocolHandler) HandleOpenAIDecisions(c *gin.Context) {
 		decisionBadRequest(c, err.Error())
 		return
 	}
+	// Decisions bypasses the chat dispatch chain that normally emits this
+	// diagnostic header. debugHeaderGuard limits it to local probes.
+	if c.GetHeader("X-Tingly-Debug-Routing") == "1" && rule != nil {
+		c.Header("X-Tingly-Matched-Rule", rule.UUID)
+	}
 	// Single-shot endpoints share content-free selection (no smart routing).
 	provider, selectedService, err := ph.selectServiceForEmbeddings(c, scenarioType, rule)
 	if err != nil {

@@ -117,10 +117,12 @@ func TestDecisionAliasesAcceptOpenAIFormat(t *testing.T) {
 		typ.ScenarioOpenAI, "decision-model", "upstream")
 	for _, path := range []string{"/tingly/openai/v1/systemone", "/tingly/openai/v1/decisions"} {
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"decision-model","input":"x","questions":[{"type":"predicate","name":"q","instructions":"Is it true?"}]}`))
+		req.Header.Set("X-Tingly-Debug-Routing", "1")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 		require.Equal(t, http.StatusOK, w.Code, "%s: %s", path, w.Body.String())
 		require.Equal(t, "predicate", gjson.Get(w.Body.String(), "answers.0.type").String())
+		require.NotEmpty(t, w.Header().Get("X-Tingly-Matched-Rule"))
 	}
 }
 

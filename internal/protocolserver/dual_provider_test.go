@@ -12,6 +12,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/routing"
@@ -66,7 +67,7 @@ func newDualProviderRouterWithProxy(t *testing.T, upstreamURL, proxyURL string, 
 	})
 
 	engine := gin.New()
-	ph.RegisterRoutes(engine, func(c *gin.Context) { c.Next() })
+	ph.RegisterRoutes(engine, func(c *gin.Context) { c.Set(constant.CtxKeyAuthKind, constant.AuthKindGlobalModelToken); c.Next() })
 	return engine
 }
 

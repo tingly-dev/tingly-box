@@ -13399,6 +13399,9 @@
             "type": "string",
             "description": "Field api_style"
           },
+          "decision_request": {
+            "description": "Field decision_request"
+          },
           "direct": {
             "type": "boolean",
             "description": "Field direct"
@@ -13426,6 +13429,10 @@
           "name": {
             "type": "string",
             "description": "Field name"
+          },
+          "operation": {
+            "type": "string",
+            "description": "Field operation"
           },
           "protocol": {
             "type": "string",
@@ -18397,6 +18404,9 @@
           "content": {
             "type": "string",
             "description": "Field content"
+          },
+          "decision_response": {
+            "description": "Field decision_response"
           },
           "direct": {
             "type": "boolean",

@@ -23,6 +23,8 @@ export type ProbeVision = 'none' | 'user' | 'tool';
 
 export interface ProbeRequest {
     target_type: ProbeTargetType;
+    operation?: 'decisions';
+    decision_request?: Record<string, unknown>;
 
     // Rule test (required)
     scenario?: string;
@@ -97,6 +99,7 @@ export interface ProbeTokenUsage {
 
 export interface ProbeResultData {
     content?: string;
+    decision_response?: Record<string, unknown>;
     latency_ms: number;
     request_url?: string;
     stream?: boolean;
