@@ -2,8 +2,8 @@
 // (POST {base}/decisions, see .design/decision-protocol.md): typed questions
 // about a piece of state in, calibrated answers out.
 //
-// The wire shape follows Jev, the only published decisions API (OpenAI's is
-// unpublished): a request carries "model", "state" and "questions" keyed by
+// The wire shape follows Jev/System One, distinct from OpenAI Decisions:
+// a request carries "model", "state" and "questions" keyed by
 // caller-chosen ids; each question has a "type" and "criteria":
 //
 //	choice  criteria: {"option": "description", ...}   -> choice + probabilities + confidence
