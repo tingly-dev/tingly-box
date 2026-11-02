@@ -1,11 +1,11 @@
-import { BotTable, BotConfigDialog, PlatformPicker, BotAccessDialog, RemoteAgentBotCard } from '@/components/bot';
+import { BotTable, BotConfigDialog, PlatformPicker, RemoteAgentBotCard } from '@/components/bot';
 import EmptyState from '@/components/EmptyState';
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import CollapsibleGuide from '@/components/remote-control/CollapsibleGuide';
 import { BOT_PLATFORM_IDS, PLATFORM_BRAND_ICONS, platformDisplayName, usePlatformGuide } from '@/constants/platformGuides';
-import { countBotsByPlatform } from '@/types/bot';
 import type { BotSettings } from '@/types/bot';
+import { countBotsByPlatform } from '@/types/bot';
 import { useBotList } from '@/hooks/useBotList';
 import { useBotToggle } from '@/hooks/useBotToggle';
 import { useNotify } from '@/hooks/useNotify';
@@ -41,7 +41,6 @@ const BotOverviewPage = () => {
     const [dialogMode, setDialogMode] = useState<'add' | 'edit'>('add');
     const [dialogEditUuid, setDialogEditUuid] = useState<string | null>(null);
     const [dialogPlatformId, setDialogPlatformId] = useState('telegram');
-    const [accessBot, setAccessBot] = useState<BotSettings | null>(null);
     const [capability, setCapability] = useState<{ uuid: string; name: 'remote_control' | 'notify' } | null>(null);
     const [capabilityBusy, setCapabilityBusy] = useState(false);
     const [profileOpen, setProfileOpen] = useState(false);
@@ -196,7 +195,6 @@ const BotOverviewPage = () => {
                         onRestart={(uuid) => handleBotRestart(uuid)}
                         isToggling={isToggling}
                         isRestarting={isRestarting}
-                        onManageAccess={setAccessBot}
                         onCapabilityClick={(bot, name) => bot.uuid && setCapability({ uuid: bot.uuid, name })}
                     />
                 )}
@@ -236,12 +234,6 @@ const BotOverviewPage = () => {
                 </DialogContent>
             </Dialog>
             <CCProfileDialog open={profileOpen} bot={selectedBot ?? null} profiles={profiles} onClose={() => setProfileOpen(false)} onSelect={async (uuid, profileId) => { const result = await api.updateImBotSetting(uuid, { default_agent: defaultAgentForCCProfile(profileId) }); if (!result?.success) throw new Error(result?.error || 'Failed to update profile'); await loadBotSettings(); }} />
-            <BotAccessDialog
-                open={Boolean(accessBot)}
-                bot={accessBot}
-                onClose={() => setAccessBot(null)}
-                onChanged={loadBotSettings}
-            />
         </PageLayout>
     );
 };

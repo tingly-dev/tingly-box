@@ -1,11 +1,10 @@
-import {ContentCopy as CopyIcon, Delete as DeleteIcon, Edit as EditIcon, RestartAlt as RestartIcon, Security} from '@/components/icons';
+import {ContentCopy as CopyIcon, Delete as DeleteIcon, Edit as EditIcon, RestartAlt as RestartIcon} from '@/components/icons';
 import ConfirmPopover from '@/components/ConfirmPopover';
 import {capabilityEnabled} from '@/types/bot';
 import type {BotSettings} from '@/types/bot';
 import {notify} from '@/utils/notify';
 import {
     Box,
-    Button,
     Chip,
     IconButton,
     Stack,
@@ -21,6 +20,7 @@ import {
 } from '@mui/material';
 import {useCallback, useState} from 'react';
 import {useTranslation} from 'react-i18next';
+import {Link as RouterLink} from 'react-router-dom';
 import { fontMono } from '@/theme/fonts';
 import { writeToClipboard } from '@/utils/clipboard';
 
@@ -42,7 +42,6 @@ interface BotTableProps {
     onRestart: (uuid: string) => void;
     isToggling?: (uuid: string) => boolean;
     isRestarting?: (uuid: string) => boolean;
-	onManageAccess?:(bot:BotSettings)=>void;
     onCapabilityClick?: (bot: BotSettings, capability: 'remote_control' | 'notify') => void;
 }
 
@@ -67,7 +66,6 @@ const BotTable: React.FC<BotTableProps> = ({
     onRestart,
     isToggling,
     isRestarting,
-	onManageAccess,
     onCapabilityClick,
 }) => {
     const {t} = useTranslation();
@@ -207,25 +205,13 @@ const BotTable: React.FC<BotTableProps> = ({
                                     {/* Capability chips open the selected bot’s settings. */}
                                     <TableCell>
                                         <Box sx={{display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap'}}>
-                                            <Chip onClick={onCapabilityClick ? () => onCapabilityClick(bot, 'remote_control') : undefined} label={t('bots.card.remoteAgentChip', {defaultValue: 'Remote'})} size="small" variant={isMounted ? 'filled' : 'outlined'} color={isMounted ? 'primary' : 'default'}/>
-                                            <Chip onClick={onCapabilityClick ? () => onCapabilityClick(bot, 'notify') : undefined} label={t('bots.card.notifyChip', {defaultValue: 'Notify'})} size="small" variant={isNotified ? 'filled' : 'outlined'} color={isNotified ? 'primary' : 'default'}/>
+                                            <Chip {...(onCapabilityClick ? {onClick: () => onCapabilityClick(bot, 'remote_control')} : {component: RouterLink, to: '/remote-agent', clickable: true})} label={t('bots.card.remoteAgentChip', {defaultValue: 'Remote'})} size="small" variant={isMounted ? 'filled' : 'outlined'} color={isMounted ? 'primary' : 'default'}/>
+                                            <Chip {...(onCapabilityClick ? {onClick: () => onCapabilityClick(bot, 'notify')} : {component: RouterLink, to: '/notify', clickable: true})} label={t('bots.card.notifyChip', {defaultValue: 'Notify'})} size="small" variant={isNotified ? 'filled' : 'outlined'} color={isNotified ? 'primary' : 'default'}/>
                                         </Box>
                                     </TableCell>
                                     {/* Actions */}
                                     <TableCell align="right">
                                         <Stack direction="row" spacing={0.5} sx={{alignItems: 'center', justifyContent: 'flex-end'}}>
-                                            {onManageAccess && (
-                                                <Button
-                                                    size="small"
-                                                    variant="text"
-                                                    startIcon={<Security fontSize="small"/>}
-                                                    onClick={() => onManageAccess(bot)}
-                                                    disabled={toggling || restarting}
-                                                    sx={{textTransform: 'none'}}
-                                                >
-                                                    {t('bots.table.access', {defaultValue: 'Access'})}
-                                                </Button>
-                                            )}
                                             <Tooltip title={isActive
                                                 ? t('remoteControl.card.restartBot', {defaultValue: 'Restart Bot'})
                                                 : t('remoteControl.card.enableToRestart', {defaultValue: 'Enable bot to restart'})}>
@@ -297,11 +283,10 @@ const BotTable: React.FC<BotTableProps> = ({
                                 <IconButton size="small" onClick={() => handleCopyUuid(bot.uuid!)} disabled={!bot.uuid}><CopyIcon fontSize="inherit"/></IconButton>
                             </Stack>
                             <Stack direction="row" spacing={0.75} sx={{mt: 1, flexWrap: 'wrap'}}>
-                                <Chip onClick={onCapabilityClick ? () => onCapabilityClick(bot, 'remote_control') : undefined} label={t('bots.card.remoteAgentChip', {defaultValue: 'Remote'})} size="small" variant={isMounted ? 'filled' : 'outlined'} color={isMounted ? 'primary' : 'default'}/>
-                                <Chip onClick={onCapabilityClick ? () => onCapabilityClick(bot, 'notify') : undefined} label={t('bots.card.notifyChip', {defaultValue: 'Notify'})} size="small" variant={isNotified ? 'filled' : 'outlined'} color={isNotified ? 'primary' : 'default'}/>
+                                <Chip {...(onCapabilityClick ? {onClick: () => onCapabilityClick(bot, 'remote_control')} : {component: RouterLink, to: '/remote-agent', clickable: true})} label={t('bots.card.remoteAgentChip', {defaultValue: 'Remote'})} size="small" variant={isMounted ? 'filled' : 'outlined'} color={isMounted ? 'primary' : 'default'}/>
+                                <Chip {...(onCapabilityClick ? {onClick: () => onCapabilityClick(bot, 'notify')} : {component: RouterLink, to: '/notify', clickable: true})} label={t('bots.card.notifyChip', {defaultValue: 'Notify'})} size="small" variant={isNotified ? 'filled' : 'outlined'} color={isNotified ? 'primary' : 'default'}/>
                             </Stack>
                             <Stack direction="row" spacing={0.5} sx={{alignItems: 'center', justifyContent: 'flex-end', mt: 1.25, pt: 1, borderTop: 1, borderColor: 'divider'}}>
-                                {onManageAccess && <Button size="small" startIcon={<Security fontSize="small"/>} onClick={() => onManageAccess(bot)} sx={{textTransform: 'none'}}>{t('bots.table.access', {defaultValue: 'Access'})}</Button>}
                                 <IconButton size="small" color="primary" onClick={() => onRestart(bot.uuid!)} disabled={!isActive || toggling || restarting}><RestartIcon fontSize="small"/></IconButton>
                                 <IconButton size="small" color="primary" onClick={() => onEdit(bot.uuid!, bot.platform!)} disabled={toggling || restarting}><EditIcon fontSize="small"/></IconButton>
                                 <IconButton size="small" color="error" onClick={(e) => handleDeleteClick(bot, e.currentTarget)} disabled={toggling || restarting}><DeleteIcon fontSize="small"/></IconButton>
