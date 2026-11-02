@@ -37,7 +37,7 @@ func logPairAudit(c *gin.Context, action, uuid, message string) {
 }
 
 // GetPairingCode reveals the bot's current TOFU pairing code so the operator
-// can /bind from their DM. The cleartext code is included in the response;
+// can /pair from their DM. The cleartext code is included in the response;
 // every reveal is recorded in the audit log.
 func (h *Handler) GetPairingCode(c *gin.Context) {
 	if h.store == nil {

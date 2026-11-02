@@ -38,7 +38,7 @@ func gateBoot(t *testing.T) (*testenv.TestEnv, *remoteagent.TestHarness, *testen
 }
 
 // TestDisabledChatDroppedSilently is the inbound half of the blocklist: a
-// disabled chat's messages — including commands like /bind that could
+// disabled chat's messages — including commands like /pair that could
 // otherwise re-establish state — produce no outbound traffic at all. Silence
 // is the point: a reply would hand the blocked party a probe signal.
 func TestDisabledChatDroppedSilently(t *testing.T) {
@@ -61,7 +61,7 @@ func TestDisabledChatDroppedSilently(t *testing.T) {
 
 	chat.SendText("hello?")
 	chat.SendText("/help")
-	chat.SendText("/bind 123456") // must not be able to talk its way back in
+	chat.SendText("/pair 123456") // must not be able to talk its way back in
 	chat.ExpectIdle(700 * time.Millisecond)
 
 	// Re-enable restores normal handling.

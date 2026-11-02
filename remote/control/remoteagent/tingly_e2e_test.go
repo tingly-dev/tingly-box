@@ -69,23 +69,31 @@ func Test_UnknownCommand(t *testing.T) {
 }
 
 // Test_PairingGate verifies the RequirePairing flow: an unpaired DM is
-// rejected with the pairing hint, and only /bind is accepted.
+// rejected with the pairing hint, and only /pair is accepted.
 func Test_PairingGate(t *testing.T) {
 	_, harness, alice := bootHelper(t, true)
 	chat := alice.OpenDM(harness.Setting.UUID)
 
-	// Unpaired chat: any non-/bind text gets the pairing hint.
+	// Unpaired chat: any non-/pair text gets the pairing hint.
 	chat.SendText("/help")
-	chat.WaitText(3*time.Second).AssertContains(t, "/bind <code>")
+	chat.WaitText(3*time.Second).AssertContains(t, "/pair <code>")
 
-	// Mint a code, then /bind it.
+	// Mint a code, then /pair it.
 	code, _ := harness.MintPairingCode()
-	chat.SendText("/bind " + code)
+	chat.SendText("/pair " + code)
 	chat.WaitText(3*time.Second).AssertContains(t, "Paired")
 
 	// Now /help works.
 	chat.SendText("/help")
 	chat.WaitText(3*time.Second).AssertContains(t, "/session")
+}
+
+func Test_LegacyBindStillPairs(t *testing.T) {
+	_, harness, alice := bootHelper(t, true)
+	chat := alice.OpenDM(harness.Setting.UUID)
+	code, _ := harness.MintPairingCode()
+	chat.SendText("/bind " + code)
+	chat.WaitText(3*time.Second).AssertContains(t, "Paired")
 }
 
 // Test_Cd_And_Dir moves the chat to a folder with /cd, then lists it with /dir.

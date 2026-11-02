@@ -67,6 +67,17 @@ func TestAuthorizationGateKeepsUnpairedDirectPeerDeniedWhenPairingRequired(t *te
 	require.Empty(t, chats[0].PeerActorID)
 }
 
+func TestAuthorizationGateAllowsPairingCommandsForUnpairedDirectPeer(t *testing.T) {
+	sm, setting, msg := directAuthorizationFixture(t)
+	gate := bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), true, nil, nil)
+	for _, text := range []string{"/pair CODE", "/bind CODE"} {
+		msg.Content = imbot.NewTextContent(text)
+		require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID), text)
+	}
+	msg.Content = imbot.NewTextContent("/pairing CODE")
+	require.True(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID))
+}
+
 func TestAuthorizationGateMigratesLegacyPairedDirectPeer(t *testing.T) {
 	sm, setting, msg := directAuthorizationFixture(t)
 	require.NoError(t, sm.RemoteChats().SetPaired(msg.Recipient.ID, setting.Platform, setting.UUID, msg.Sender.ID))

@@ -33,7 +33,7 @@ const formatRemaining = (expiresAt: string): string | null => {
 
 interface Props {
     bot: BotSettings;
-    /** Show the full `/bind <code>` up front — for surfaces whose whole point is handing the user that command. */
+    /** Show the full `/pair <code>` up front — for surfaces whose whole point is handing the user that command. */
     revealByDefault?: boolean;
 }
 
@@ -87,7 +87,7 @@ const PairingCodePanel: React.FC<Props> = ({ bot, revealByDefault = false }) => 
     const handleCopy = useCallback(async () => {
         if (!code) return;
         try {
-            await writeToClipboard(`/bind ${code}`);
+            await writeToClipboard(`/pair ${code}`);
             notify.success(t('remoteControl.pairing.copied', { defaultValue: 'Pairing command copied' }));
         } catch {
             notify.error(t('remoteControl.pairing.copyFailed', { defaultValue: 'Copy failed — check clipboard permissions' }));
@@ -151,7 +151,7 @@ const PairingCodePanel: React.FC<Props> = ({ bot, revealByDefault = false }) => 
                             borderRadius: 1,
                         }}
                     >
-                        {revealed ? `/bind ${code}` : '••••••••'}
+                        {revealed ? `/pair ${code}` : '••••••••'}
                     </Typography>
                     {expiresAt && (
                         <Typography variant="caption" sx={{ color: 'text.secondary' }}>

@@ -436,7 +436,7 @@ func (h *BotAPIHandler) DeleteChat(c *gin.Context) {
 // SetChatDisabled handles PUT /api/v1/bots/:bot/chats/:chat_id/disabled.
 //
 // Toggles the chat's inbound blocklist flag. A disabled chat's messages are
-// dropped before any handler runs (including /bind — it cannot re-enable
+// dropped before any handler runs (including /pair — it cannot re-enable
 // itself) and it disappears from the reachable list, notify, and interact.
 //
 //	200  updated
