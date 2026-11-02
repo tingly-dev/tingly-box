@@ -179,7 +179,7 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                 <Box sx={{px: 2, pb: 1}}>
                     <Alert
                         severity="warning"
-                        action={<Button color="inherit" size="small" onClick={() => setAccessDialogOpen(true)}>
+                        action={<Button color="inherit" size="small" onClick={() => setAccessDialogOpen((v) => !v)}>
                             {t('remoteAgent.card.manageAccess', {defaultValue: 'Manage access'})}
                         </Button>}
                     >
@@ -222,8 +222,11 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                         groupCount={access.controllingGroups.length}
                         accessLoading={access.loading}
                         accessError={access.error}
-                        onAccessClick={() => setAccessDialogOpen(true)}
+                        onAccessClick={() => setAccessDialogOpen((v) => !v)}
                     />
+                    <Collapse in={accessDialogOpen} unmountOnExit>
+                        <BotAccessDialog inline scope="remote_control" remoteAccess={access} open={accessDialogOpen} bot={bot} onClose={() => setAccessDialogOpen(false)} />
+                    </Collapse>
                 </Box>
             </Collapse>
 
@@ -235,13 +238,6 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                 confirmColor="error"
                 onClose={() => setDeleteModalOpen(false)}
                 onConfirm={() => { setDeleteModalOpen(false); onDelete(); }}
-            />
-            <BotAccessDialog
-                scope="remote_control"
-                remoteAccess={access}
-                open={accessDialogOpen}
-                bot={bot}
-                onClose={() => setAccessDialogOpen(false)}
             />
         </Box>
     );
