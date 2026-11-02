@@ -460,7 +460,17 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 	var msgType string
 	var content string
 
-	if opts.ParseMode == core.ParseModeMarkdown {
+	if opts.ParseMode == core.ParseModeMarkdown && b.domain == DomainFeishu {
+		// Feishu's rich-text md node supports CommonMark and GFM, including
+		// tables, which the older interactive card markdown does not render.
+		msgType = "post"
+		body := map[string]any{"zh_cn": map[string]any{"content": [][]map[string]string{{{"tag": "md", "text": opts.Text}}}}}
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("build markdown message: %w", err)
+		}
+		content = string(encoded)
+	} else if opts.ParseMode == core.ParseModeMarkdown {
 		msgType = "interactive"
 		cardJson, err := larkcard.NewMessageCard().
 			Elements([]larkcard.MessageCardElement{

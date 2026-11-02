@@ -44,7 +44,7 @@ func (c *Channel) SendFile(ctx context.Context, chatID, path, name, mediaType, c
 		kind = "image"
 	}
 	u := (&url.URL{Scheme: "file", Path: path}).String()
-	_, err := c.sender.SendMessage(ctx, chatID, &imbot.SendMessageOptions{Text: caption, Media: []imbot.MediaAttachment{{Type: kind, URL: u, Filename: name, MimeType: mediaType}}})
+	_, err := c.sender.SendMessage(ctx, chatID, &imbot.SendMessageOptions{Text: caption, ParseMode: imbot.ParseModeMarkdown, Media: []imbot.MediaAttachment{{Type: kind, URL: u, Filename: name, MimeType: mediaType}}})
 	return err
 }
 

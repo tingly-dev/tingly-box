@@ -72,7 +72,7 @@ func TestSendMediaUploadsByCategoryAndSendsCaption(t *testing.T) {
 			bot := &Bot{BaseBot: base, client: client, domain: DomainFeishu}
 			path := filepath.Join(t.TempDir(), tc.name)
 			require.NoError(t, os.WriteFile(path, []byte("payload"), 0600))
-			_, err := bot.SendMessage(context.Background(), "ou_test", &core.SendMessageOptions{Text: "caption", Media: []core.MediaAttachment{{Type: tc.kind, MimeType: tc.mime, Filename: tc.name, URL: (&url.URL{Scheme: "file", Path: path}).String()}}})
+			_, err := bot.SendMessage(context.Background(), "ou_test", &core.SendMessageOptions{Text: "**caption**\n\n| A | B |\n| --- | --- |\n| 1 | 2 |", ParseMode: core.ParseModeMarkdown, Media: []core.MediaAttachment{{Type: tc.kind, MimeType: tc.mime, Filename: tc.name, URL: (&url.URL{Scheme: "file", Path: path}).String()}}})
 			require.NoError(t, err)
 			require.Equal(t, "payload", uploaded)
 			require.Len(t, messages, 2)
@@ -81,8 +81,20 @@ func TestSendMediaUploadsByCategoryAndSendsCaption(t *testing.T) {
 			var content map[string]string
 			require.NoError(t, json.Unmarshal([]byte(messages[0].Content), &content))
 			require.Equal(t, "key-123", content[tc.msgType+"_key"])
-			require.Equal(t, "text", messages[1].MsgType)
-			require.Contains(t, messages[1].Content, "caption")
+			require.Equal(t, "post", messages[1].MsgType)
+			var post struct {
+				ZhCN struct {
+					Content [][]struct {
+						Tag  string `json:"tag"`
+						Text string `json:"text"`
+					} `json:"content"`
+				} `json:"zh_cn"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(messages[1].Content), &post))
+			require.Len(t, post.ZhCN.Content, 1)
+			require.Len(t, post.ZhCN.Content[0], 1)
+			require.Equal(t, "md", post.ZhCN.Content[0][0].Tag)
+			require.Equal(t, "**caption**\n\n| A | B |\n| --- | --- |\n| 1 | 2 |", post.ZhCN.Content[0][0].Text)
 		})
 	}
 }
@@ -111,4 +123,41 @@ func TestSendMediaReportsUploadFailureWithoutSendingText(t *testing.T) {
 	_, err := bot.SendMessage(context.Background(), "ou_test", &core.SendMessageOptions{Text: "caption", Media: []core.MediaAttachment{{Type: "image", MimeType: "image/png", URL: (&url.URL{Scheme: "file", Path: path}).String()}}})
 	require.ErrorContains(t, err, "missing permission")
 	require.False(t, sent)
+}
+
+func TestSendTextMarkdownAndPlain(t *testing.T) {
+	for _, tc := range []struct {
+		domain Domain
+		mode   core.ParseMode
+		want   string
+	}{
+		{DomainFeishu, core.ParseModeMarkdown, "post"},
+		{DomainFeishu, "", "text"},
+		{DomainLark, core.ParseModeMarkdown, "interactive"},
+	} {
+		t.Run(string(tc.domain)+"_"+tc.want, func(t *testing.T) {
+			var msg struct {
+				MsgType string `json:"msg_type"`
+				Content string `json:"content"`
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if r.URL.Path == "/open-apis/auth/v3/tenant_access_token/internal" {
+					fmt.Fprint(w, `{"code":0,"tenant_access_token":"test-token","expire":7200}`)
+					return
+				}
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&msg))
+				fmt.Fprint(w, `{"code":0,"data":{"message_id":"om_123"}}`)
+			}))
+			defer server.Close()
+			client, _ := buildIMService("id", "secret", server.URL)
+			base := core.NewBaseBot(&core.Config{})
+			base.SetStatus(core.BotStatus{Ready: true})
+			b := &Bot{BaseBot: base, client: client, domain: tc.domain}
+			_, err := b.SendMessage(context.Background(), "ou_test", &core.SendMessageOptions{Text: "**hi**", ParseMode: tc.mode})
+			require.NoError(t, err)
+			require.Equal(t, tc.want, msg.MsgType)
+			require.Contains(t, msg.Content, "**hi**")
+		})
+	}
 }
