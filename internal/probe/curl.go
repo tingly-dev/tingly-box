@@ -48,6 +48,7 @@ func (e *E2EProber) BuildCurl(ctx context.Context, req *E2ERequest) (*CurlData, 
 
 	stream, _ := req.ResolveAxes()
 	params := req.probeParams(model)
+	params.DecisionRequest = req.DecisionRequest
 	params.ClaudeCodePreamble = e.targetIsClaudeCode(req)
 
 	// resolveTargetToProviderModel has already applied the protocol override
@@ -76,7 +77,13 @@ func (e *E2EProber) BuildCurl(ctx context.Context, req *E2ERequest) (*CurlData, 
 	)
 	switch clientStyle {
 	case protocol.APIStyleOpenAI:
-		if resolveOpenAIProbeEndpoint(req.ResolveOpenAIEndpointOverride(), provider) == "responses" {
+		if req.Operation == "decisions" {
+			url = strings.TrimSuffix(provider.APIBase, "/") + "/decisions"
+			bodyObj, err = buildDecisionBody(params.DecisionRequest, model)
+			if err != nil {
+				return nil, err
+			}
+		} else if resolveOpenAIProbeEndpoint(req.ResolveOpenAIEndpointOverride(), provider) == "responses" {
 			url = strings.TrimSuffix(provider.APIBase, "/") + "/responses"
 			bodyObj = buildOpenAIResponsesParams(params)
 		} else {

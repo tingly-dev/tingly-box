@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, CircularProgress, Fade, IconButton, Tooltip, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Fade, IconButton, Tooltip, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import {
@@ -12,6 +12,7 @@ import type { ProbeResult } from '@/types/probe';
 import { formatLatency, runProbe } from './runProbe';
 import { ProbeDialog } from './ProbeDialog';
 import { DEFAULT_AXES } from './probeConfig';
+import { CopyBlock, Journey, StatusBar } from './ResultSections';
 import { fontMono, fontSizes } from '@/theme/fonts';
 
 interface QuickProbeButtonProps {
@@ -33,6 +34,8 @@ export const QuickProbeButton: React.FC<QuickProbeButtonProps> = ({ ruleUuid, ru
     const [running, setRunning] = useState(false);
     const [result, setResult] = useState<ProbeResult | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
+    const isDecision = (scenario || '').split(':')[0] === 'decisions';
+    const needsModel = isDecision && (!model || model === '*');
     const mounted = useRef(true);
 
     useEffect(() => {
@@ -43,6 +46,7 @@ export const QuickProbeButton: React.FC<QuickProbeButtonProps> = ({ ruleUuid, ru
     }, []);
 
     const run = useCallback(async () => {
+        if (needsModel) return;
         setRunning(true);
         setResult(null);
         // The dialog's defaults (stream, medium thinking) — closest to
@@ -52,13 +56,12 @@ export const QuickProbeButton: React.FC<QuickProbeButtonProps> = ({ ruleUuid, ru
             target_type: 'rule',
             scenario: scenario || 'openai',
             rule_uuid: ruleUuid,
-            stream: DEFAULT_AXES.stream,
-            thinking: DEFAULT_AXES.thinking,
+            ...(isDecision ? { operation: 'decisions' as const } : { stream: DEFAULT_AXES.stream, thinking: DEFAULT_AXES.thinking }),
         });
         if (!mounted.current) return;
         setResult(res);
         setRunning(false);
-    }, [ruleUuid, scenario]);
+    }, [ruleUuid, scenario, isDecision, needsModel]);
 
     // External trigger: run when the signal increments (skipped while already
     // running — the signal is consumed either way so it can't re-fire late).
@@ -126,14 +129,14 @@ export const QuickProbeButton: React.FC<QuickProbeButtonProps> = ({ ruleUuid, ru
                 </Fade>
             )}
 
-            <Tooltip title={t('probe.quickTest')}>
+            <Tooltip title={needsModel ? t('decisionTry.concreteModel', { defaultValue: 'Use the Decisions test card to enter a model for this rule.' }) : t('probe.quickTest')}>
                 <span>
                     {/* Icon only, the same size as the "⋯" and fold icons beside it;
                         the label is the tooltip and the aria-label. */}
                     <IconButton
                         size="small"
                         onClick={run}
-                        disabled={running}
+                        disabled={running || needsModel}
                         aria-label={t('ruleHeader.test')}
                         sx={{ color: 'text.secondary', '&:hover': { backgroundColor: 'action.hover' } }}
                     >
@@ -142,7 +145,16 @@ export const QuickProbeButton: React.FC<QuickProbeButtonProps> = ({ ruleUuid, ru
                 </span>
             </Tooltip>
 
-            <ProbeDialog
+            {isDecision ? (
+                <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
+                    <DialogTitle>{ruleName}</DialogTitle>
+                    <DialogContent>
+                        {result && <><StatusBar result={result} /><Journey result={result} targetType="rule" targetName={ruleName} scenario={scenario} model={model} bypassed={false} />
+                            {result.data?.decision_response && <CopyBlock text={JSON.stringify(result.data.decision_response, null, 2)} maxHeight="40vh" />}</>}
+                    </DialogContent>
+                    <DialogActions><Button onClick={run} disabled={running || needsModel}>{t('probe.rerun')}</Button><Button onClick={() => setDialogOpen(false)}>{t('common.close')}</Button></DialogActions>
+                </Dialog>
+            ) : <ProbeDialog
                 open={dialogOpen}
                 onClose={() => setDialogOpen(false)}
                 targetType="rule"
@@ -151,7 +163,7 @@ export const QuickProbeButton: React.FC<QuickProbeButtonProps> = ({ ruleUuid, ru
                 scenario={scenario}
                 model={model}
                 initialResult={result ?? undefined}
-            />
+            />}
         </Box>
     );
 };

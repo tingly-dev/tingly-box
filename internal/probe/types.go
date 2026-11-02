@@ -39,11 +39,12 @@ import (
 // probe HTTP endpoints (exposed under the E2EData alias).
 type Result struct {
 	// Basic fields
-	Success      bool   `json:"success"`
-	Message      string `json:"message,omitempty"`
-	Content      string `json:"content,omitempty"`
-	LatencyMs    int64  `json:"latency_ms"`
-	ErrorMessage string `json:"error_message,omitempty"`
+	Success          bool            `json:"success"`
+	Message          string          `json:"message,omitempty"`
+	Content          string          `json:"content,omitempty"`
+	DecisionResponse json.RawMessage `json:"decision_response,omitempty" swaggertype:"object"`
+	LatencyMs        int64           `json:"latency_ms"`
+	ErrorMessage     string          `json:"error_message,omitempty"`
 
 	// Request-echo axes — the exact stream/tool/direct/protocol/thinking
 	// combination that produced this result. Stream is redundant with the
@@ -243,6 +244,9 @@ type E2ERequest struct {
 
 	ProviderUUID string `json:"provider_uuid,omitempty" binding:"required_if=TargetType provider"`
 	Model        string `json:"model,omitempty" binding:"required_if=TargetType provider"`
+	// Operation selects a non-chat probe. Decisions currently runs through a rule.
+	Operation       string          `json:"operation,omitempty"`
+	DecisionRequest json.RawMessage `json:"decision_request,omitempty" swaggertype:"object"`
 
 	Name     string `json:"name,omitempty"`
 	APIBase  string `json:"api_base,omitempty"`
@@ -441,6 +445,23 @@ func ValidateE2ERequest(req *E2ERequest) error {
 		}
 	default:
 		return &ValidationError{Field: "target_type", Message: "target_type must be 'rule', 'provider', or 'provider_config'"}
+	}
+
+	if req.Operation != "" && req.Operation != "decisions" {
+		return &ValidationError{Field: "operation", Message: "unsupported probe operation"}
+	}
+	if req.Operation == "decisions" {
+		if req.TargetType != E2ETargetRule || req.Direct {
+			return &ValidationError{Field: "operation", Message: "decisions probes require a through-gateway rule"}
+		}
+		if stream, tool := req.ResolveAxes(); stream || tool || req.Vision.Enabled() || (req.Thinking != "" && req.Thinking != ThinkingNone) || req.Message != "" || req.Protocol != "" || req.HasRawRequest() {
+			return &ValidationError{Field: "operation", Message: "decisions probes do not support chat controls or raw chat requests"}
+		}
+		if _, err := buildDecisionBody(req.DecisionRequest, "probe-model"); err != nil {
+			return &ValidationError{Field: "decision_request", Message: err.Error()}
+		}
+	} else if len(req.DecisionRequest) > 0 {
+		return &ValidationError{Field: "decision_request", Message: "decision_request requires operation decisions"}
 	}
 
 	switch req.Protocol {
