@@ -191,6 +191,7 @@ export default {
     "imagePlayground": "Playground",
     "remoteControl": "Remote Control",
     "notify": "IM Notify",
+    "imBots": "IM Bots",
     "bots": "Bots",
     "overview": "Overview",
     "platforms": {

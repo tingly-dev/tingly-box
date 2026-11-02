@@ -27,7 +27,7 @@ export const en = {
     sidebar: { showOlder_one: 'Show {{count}} older…', showOlder_other: 'Show {{count}} older…', fold: 'Fold {{name}}', unfold: 'Unfold {{name}}', activity: '{{running}} running · {{waiting}} waiting', running_one: '{{count}} running', running_other: '{{count}} running', recent: 'Recent sessions', noWorkdirs: 'No working folders yet', sessionsWaiting_one: '{{count}} session waits on you', sessionsWaiting_other: '{{count}} sessions wait on you', noProjects: 'No projects yet', waiting_one: '{{count}} thread waits on you', waiting_other: '{{count}} threads wait on you' },
     // IM chats bound to projects (TEP #2143, .design/projects-im.md).
     im: {
-        title: 'IM',
+        title: 'Bind',
         bots_one: '{{count}} bot', bots_other: '{{count}} bots',
         chatKind: { direct: 'Private chat', group: 'Group' },
         tags: { label: 'Bound IM chats', bind: 'Bind chat', unbind: 'Unbind {{chat}}', more: '+{{count}}', manage: 'IM chats' },
@@ -44,7 +44,7 @@ export const en = {
             openSettings: 'Open IM settings',
         },
         settings: {
-            title: 'IM', intro: 'Chat bots that talk to your projects, and where each chat is bound.',
+            title: 'Bind', intro: 'Chat bots that talk to your projects, and where each chat is bound.',
             access: 'Access control', online: 'Connected', offline: 'Not running',
             chat: 'Chat', boundTo: 'Bound to', status: 'Status', action: 'Action', notBound: 'Not bound',
             bindAction: 'Bind', rebindAction: 'Move', rebindLabel: 'Move {{chat}} to another project or folder',

@@ -31,7 +31,7 @@ export const zh: Dict<typeof en> = {
     sidebar: { showOlder_one: '显示更早的 {{count}} 个…', showOlder_other: '显示更早的 {{count}} 个…', fold: '收起 {{name}}', unfold: '展开 {{name}}', activity: '{{running}} 个运行中 · {{waiting}} 个在等你', running_one: '{{count}} 个运行中', running_other: '{{count}} 个运行中', recent: '最近的会话', noWorkdirs: '还没有工作目录', sessionsWaiting_one: '{{count}} 个会话在等你', sessionsWaiting_other: '{{count}} 个会话在等你', noProjects: '还没有项目', waiting_one: '{{count}} 个线程在等你', waiting_other: '{{count}} 个线程在等你' },
     // IM 聊天绑定到项目（TEP #2143，.design/projects-im.md）。
     im: {
-        title: 'IM',
+        title: '绑定',
         bots_one: '{{count}} 个机器人', bots_other: '{{count}} 个机器人',
         chatKind: { direct: '私聊', group: '群聊' },
         tags: { label: '已绑定的 IM', bind: '绑定聊天', unbind: '解绑 {{chat}}', more: '+{{count}}', manage: 'IM 聊天' },
@@ -48,7 +48,7 @@ export const zh: Dict<typeof en> = {
             openSettings: '打开 IM 设置',
         },
         settings: {
-            title: 'IM', intro: '和你的项目对话的聊天机器人，以及每个聊天绑定在哪里。',
+            title: '绑定', intro: '和你的项目对话的聊天机器人，以及每个聊天绑定在哪里。',
             access: '访问控制', online: '已连接', offline: '未运行',
             chat: '聊天', boundTo: '绑定到', status: '状态', action: '操作', notBound: '未绑定',
             bindAction: '绑定', rebindAction: '改绑', rebindLabel: '把 {{chat}} 改绑到其他项目或目录',

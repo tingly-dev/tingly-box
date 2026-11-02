@@ -188,6 +188,7 @@ export default {
     "imagePlayground": "Playground",
     "remoteControl": "远程控制",
     "notify": "IM 通知",
+    "imBots": "IM 机器人",
     "bots": "机器人",
     "overview": "概览",
     "platforms": {
