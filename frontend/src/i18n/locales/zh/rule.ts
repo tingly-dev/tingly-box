@@ -399,7 +399,13 @@ export default {
     "examplePredicate": "客户是否提到不明费用？",
     "exampleScore": "这个请求有多紧急？",
     "exampleLevels": "低\n中\n高",
-    "tokens": "Token：输入 {{input}} · 输出 {{output}}"
+    "tokens": "Token：输入 {{input}} · 输出 {{output}}",
+    "runningHint": "正在等待模型返回决策…",
+    "emptyTitle": "结果将显示在这里",
+    "emptyBody": "可以直接运行示例，也可以修改输入和问题后再测试。",
+    "answer": "模型回答",
+    "probabilities": "各选项概率",
+    "stale": "输入已更改，当前显示的是上次结果。重新运行可更新。"
   },
   "decisionsGuide": {
     "title": "Decisions API 快速开始",

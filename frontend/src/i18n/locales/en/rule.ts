@@ -401,7 +401,13 @@ export default {
     "examplePredicate": "Does the customer report an unexpected charge?",
     "exampleScore": "How urgent is this request?",
     "exampleLevels": "low\nmedium\nhigh",
-    "tokens": "Tokens: {{input}} input · {{output}} output"
+    "tokens": "Tokens: {{input}} input · {{output}} output",
+    "runningHint": "Waiting for the model’s decision…",
+    "emptyTitle": "Your result will appear here",
+    "emptyBody": "Review the example or add your own text, then run a decision.",
+    "answer": "Model answer",
+    "probabilities": "OPTION PROBABILITIES",
+    "stale": "Inputs have changed since this result. Run again to update it."
   },
   "decisionsGuide": {
     "title": "Decisions API Quick Start",

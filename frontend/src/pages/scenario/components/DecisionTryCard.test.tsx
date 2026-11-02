@@ -33,6 +33,9 @@ describe('DecisionTryCard', () => {
         }));
         expect(await screen.findByText('90.0%')).toBeInTheDocument();
         expect(screen.getByText('Provider · upstream · 42ms')).toBeInTheDocument();
+        fireEvent.change(screen.getByLabelText('decisionTry.input'), { target: { value: 'Updated invoice' } });
+        expect(screen.getByText('decisionTry.stale')).toBeInTheDocument();
+        expect(screen.getByText('90.0%')).toBeInTheDocument();
     });
 
     it('requires a concrete model for a wildcard rule', async () => {
@@ -49,8 +52,7 @@ describe('DecisionTryCard', () => {
     it('builds a score question with ordered levels', async () => {
         vi.mocked(runProbe).mockResolvedValue({ success: true, data: { latency_ms: 4, decision_response: { answers: { result: { type: 'score', score: 1.2, probabilities: { '0': 0.1, '1': 0.6, '2': 0.3 }, legend: { '0': 'low', '1': 'medium', '2': 'high' } } } } } });
         render(<DecisionTryCard rules={[rule]} />);
-        fireEvent.mouseDown(screen.getByRole('combobox', { name: 'decisionTry.type' }));
-        fireEvent.click(screen.getByRole('option', { name: 'decisionTry.score' }));
+        fireEvent.click(screen.getByRole('button', { name: 'decisionTry.score' }));
         fireEvent.click(screen.getByRole('button', { name: 'decisionTry.run' }));
         await waitFor(() => expect(runProbe).toHaveBeenCalledWith(expect.objectContaining({
             decision_request: { state: 'Invoice problem', questions: { result: { type: 'score', instructions: 'How urgent?', criteria: ['low', 'medium', 'high'] } } },
@@ -69,8 +71,7 @@ describe('DecisionTryCard', () => {
     it('builds a yes/no question and shows the returned probability', async () => {
         vi.mocked(runProbe).mockResolvedValue({ success: true, data: { latency_ms: 4, decision_response: { answers: { result: { type: 'noul', noul: 0.75 } } } } });
         render(<DecisionTryCard rules={[rule]} />);
-        fireEvent.mouseDown(screen.getByRole('combobox', { name: 'decisionTry.type' }));
-        fireEvent.click(screen.getByRole('option', { name: 'decisionTry.predicate' }));
+        fireEvent.click(screen.getByRole('button', { name: 'decisionTry.predicate' }));
         fireEvent.click(screen.getByRole('button', { name: 'decisionTry.run' }));
         await waitFor(() => expect(runProbe).toHaveBeenCalledWith(expect.objectContaining({
             decision_request: { state: 'Invoice problem', questions: { result: { type: 'noul', instructions: 'Is it urgent?' } } },
