@@ -15,6 +15,8 @@ import { fontMono } from '@/theme/fonts';
 
 interface Props {
     open: boolean;
+    /** Render access controls inside the parent surface. */
+    inline?: boolean;
     bot: BotSettings | null;
     onClose: () => void;
     onChanged?: () => void;
@@ -37,6 +39,11 @@ interface Props {
 type ChatControl = 'control' | 'none' | 'blocked';
 
 const rowSx = {p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1.5} as const;
+
+function AccessEditor({inline, open, onClose, children}: {inline: boolean; open: boolean; onClose: () => void; children: ReactNode}) {
+    if (inline) return open ? <Box sx={{mt: 1.5, border: 1, borderColor: 'divider', borderRadius: 1.5}}>{children}</Box> : null;
+    return <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">{children}</Dialog>;
+}
 
 const rowHeader = (title: ReactNode, id: string) => (
     <Box sx={{minWidth: 0}}>
@@ -66,7 +73,7 @@ const remoteRows = (allow: boolean) => {
     ];
 };
 
-const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAccess}: Props) => {
+const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAccess, inline = false}: Props) => {
     const {t} = useTranslation();
     const remoteOnly = scope === 'remote_control';
     const shared = remoteOnly ? remoteAccess : undefined;
@@ -153,7 +160,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                 <Stack direction={{xs: 'column', sm: 'row'}} sx={{justifyContent: 'space-between', alignItems: {sm: 'center'}, gap: 1}}>
                     <Stack direction="row" sx={{alignItems: 'center'}} spacing={1}>
                         {chatHeader(chat)}
-                        <Button size="small" onClick={() => setRename({kind: 'chat', id: chat.chat.id, alias: chat.chat.alias || ''})}>{t('botAccess.rename', {defaultValue: 'Rename'})}</Button>
+                        <Button size="small" onClick={() => { setActorGroup(null); setRename({kind: 'chat', id: chat.chat.id, alias: chat.chat.alias || ''}); }}>{t('botAccess.rename', {defaultValue: 'Rename'})}</Button>
                     </Stack>
                     <ToggleButtonGroup
                         exclusive
@@ -196,7 +203,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                 <Stack direction={{xs: 'column', sm: 'row'}} sx={{justifyContent: 'space-between', gap: 1}}>
                     <Stack direction="row" sx={{alignItems: 'center'}} spacing={1}>
                         {chatHeader(chat)}
-                        <Button size="small" onClick={() => setRename({kind: 'chat', id: chat.chat.id, alias: chat.chat.alias || ''})}>{t('botAccess.rename', {defaultValue: 'Rename'})}</Button>
+                        <Button size="small" onClick={() => { setActorGroup(null); setRename({kind: 'chat', id: chat.chat.id, alias: chat.chat.alias || ''}); }}>{t('botAccess.rename', {defaultValue: 'Rename'})}</Button>
                     </Stack>
                     <Stack direction="row" spacing={1} sx={{flexWrap: 'wrap', alignItems: 'center'}}>
                         {state === 'on' && <Chip size="small" color="primary" label={t('botAccess.chipRemote', {defaultValue: 'Remote Control'})}/>}
@@ -246,7 +253,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                 <Stack direction={{xs: 'column', sm: 'row'}} sx={{justifyContent: 'space-between', gap: 1}}>
                     <Stack direction="row" sx={{alignItems: 'center'}} spacing={1}>
                         {rowHeader(group.alias || group.name || group.external_group_id, group.external_group_id)}
-                        <Button size="small" onClick={() => setRename({kind: 'group', id: group.id, alias: group.alias || ''})}>{t('botAccess.rename', {defaultValue: 'Rename'})}</Button>
+                        <Button size="small" onClick={() => { setActorGroup(null); setRename({kind: 'group', id: group.id, alias: group.alias || ''}); }}>{t('botAccess.rename', {defaultValue: 'Rename'})}</Button>
                     </Stack>
                     <Stack direction="row">
                         {!remoteOnly && capSwitch('notify', t('botAccess.notify', {defaultValue: 'Notify'}))}
@@ -261,6 +268,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                         </Typography>
                         {actors.map(({actor}) => <Chip key={actor.id} size="small" label={actor.display_name || actor.external_actor_id}/>)}
                         <Button size="small" onClick={() => {
+                            setRename(null);
                             setActorGroup({group, capabilities: groupCaps, actors});
                             setExternalActorID('');
                             setActorName('');
@@ -275,14 +283,14 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
 
     const name = bot?.name || bot?.platform || '';
 
-    return <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-        <DialogTitle sx={{display: 'flex', alignItems: 'center', gap: 1}}>
+    const content = <>
+        {!inline && <DialogTitle sx={{display: 'flex', alignItems: 'center', gap: 1}}>
             <Security color="primary"/>
             {remoteOnly
                 ? t('botAccess.titleRemote', {defaultValue: 'Who can control {{name}}', name})
                 : t('botAccess.titleAll', {defaultValue: '{{name}} access', name})}
-        </DialogTitle>
-        <DialogContent dividers>
+        </DialogTitle>}
+        <DialogContent dividers={!inline} sx={inline ? { px: 0, py: 1 } : undefined}>
             <Stack spacing={3}>
                 {remoteOnly ? (
                     // The next action for adding someone, handed over as the
@@ -345,8 +353,12 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                 </>}
             </Stack>
         </DialogContent>
-        <DialogActions><Button onClick={onClose}>{t('common.close', {defaultValue: 'Close'})}</Button></DialogActions>
-        <Dialog open={Boolean(rename)} onClose={() => setRename(null)} fullWidth maxWidth="xs">
+        {!inline && <DialogActions><Button onClick={onClose}>{t('common.close', {defaultValue: 'Close'})}</Button></DialogActions>}
+    </>;
+
+    return <>
+        {inline ? (open && content) : <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">{content}</Dialog>}
+        <AccessEditor inline={inline} open={Boolean(rename)} onClose={() => setRename(null)}>
             <DialogTitle>{t('botAccess.rename', {defaultValue: 'Rename'})}</DialogTitle>
             <DialogContent>{error && <Alert severity="error">{error}</Alert>}<TextField autoFocus fullWidth sx={{mt: 1}}
                 label={t('botAccess.alias', {defaultValue: 'Alias'})}
@@ -361,8 +373,8 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                     setRename(null);
                 })}>{t('common.save', {defaultValue: 'Save'})}</Button>
             </DialogActions>
-        </Dialog>
-        <Dialog open={Boolean(actorGroup)} onClose={() => setActorGroup(null)} fullWidth maxWidth="xs">
+        </AccessEditor>
+        <AccessEditor inline={inline} open={Boolean(actorGroup)} onClose={() => setActorGroup(null)}>
             <DialogTitle>{t('botAccess.addActorTitle', {defaultValue: 'Add authorized actor'})}</DialogTitle>
             <DialogContent>
                 <Stack spacing={2} sx={{pt: 1}}>
@@ -394,8 +406,8 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                     {t('botAccess.addController', {defaultValue: 'Add controller'})}
                 </Button>
             </DialogActions>
-        </Dialog>
-    </Dialog>;
+        </AccessEditor>
+    </>;
 };
 
 export default BotAccessDialog;
