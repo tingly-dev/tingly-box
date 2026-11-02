@@ -429,10 +429,11 @@ func TestProjectWorktreeSetting(t *testing.T) {
 	assert.False(t, p.DisableWorktree)
 	require.Equal(t, http.StatusOK, c.do("PATCH", "/projects/"+p.ID, map[string]any{"disable_worktree": true}, &p))
 	assert.True(t, p.DisableWorktree)
-	require.Equal(t, http.StatusOK, c.do("GET", "/projects/"+p.ID, nil, &struct {
-		Project *db.Project `json:"project"`
-	}{Project: &p}))
-	assert.True(t, p.DisableWorktree)
+	var detail struct {
+		Project db.Project `json:"project"`
+	}
+	require.Equal(t, http.StatusOK, c.do("GET", "/projects/"+p.ID, nil, &detail))
+	assert.True(t, detail.Project.DisableWorktree)
 	id := p.ID
 	p = db.Project{}
 	require.Equal(t, http.StatusOK, c.do("PATCH", "/projects/"+id, map[string]any{"disable_worktree": false}, &p))
