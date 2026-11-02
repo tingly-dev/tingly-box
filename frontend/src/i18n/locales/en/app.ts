@@ -88,6 +88,9 @@ export default {
     "saved": "Saved"
   },
   "layout": {
+    "workspace": "Workspace",
+    "workspaceTip": { "title": "Meet Workspace", "text": "Organize projects, work in directories and connect IM chats in one place." },
+    "workspaceGate": { "title": "Enable Workspace", "text": "Enable the Workspace power-up to use projects, workdirs and IM chats.", "enable": "Enable Workspace", "error": "Could not enable Workspace. Please try again." },
     "projects": "Projects",
     "projectsWaiting": "Claude is waiting on you",
     "appTitle": "Tingly Box",

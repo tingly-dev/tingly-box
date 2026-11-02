@@ -320,21 +320,21 @@ export function useActivityItems(): ActivityItem[] {
             // plain working folders (.design/projects.md). Its sidebar lists
             // the projects and folders themselves (ProjectsNav), not pages.
             // The dot says a thread waits on you.
-            ...(enableProjects ? [{
+            ...([{
                 key: 'projects',
                 icon: <IconFolder sx={{ fontSize: 22 }} />,
-                label: t('layout.projects'),
+                label: t('layout.workspace', { defaultValue: 'Workspace' }),
                 defaultPath: '/projects',
                 attention: projectsWaiting ? t('layout.projectsWaiting') : undefined,
-                sidebar: (onNavigate: () => void) => (
+                sidebar: enableProjects ? (onNavigate: () => void) => (
                     <Suspense fallback={null}>
                         <ProjectsNav onNavigate={onNavigate} />
                     </Suspense>
-                ),
+                ) : undefined,
                 children: [
                     { path: '/projects', label: t('layout.projects'), match: (p: string) => p === '/projects' || p.startsWith('/projects/') || p === '/bots' || p.startsWith('/bots/') || p.startsWith('/remote-agent') || p === '/notify' },
                 ],
-            }] as ActivityItem[] : []),
+            }] as ActivityItem[]),
             // ── Power-ups: what extends an agent beyond plain model routing ──
             // Power-ups — one rail item for the opt-in features that act on
             // requests rather than being somewhere you work: Guardrails, the

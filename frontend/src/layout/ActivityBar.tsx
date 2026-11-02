@@ -31,6 +31,7 @@ import { fontSizes } from '@/theme/fonts';
 
 // Power-ups moved off the /agent page into the user menu's submenu; a
 // one-time callout on the user button says where they went.
+export const WORKSPACE_TIP_KEY = 'layout.workspaceTip.dismissed';
 export const POWER_UPS_TIP_KEY = 'layout.powerUpsTip.dismissed';
 
 interface ActivityBarProps {
@@ -58,6 +59,9 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
     const isHelpActive = location.pathname === '/help';
     const { collapsed: sidebarCollapsed, toggle: toggleSidebar } = useSidebarCollapsed();
     const { dismissed: powerUpsTipDismissed, dismiss: dismissPowerUpsTip } = useOneTimeTip(POWER_UPS_TIP_KEY);
+    const { dismissed: workspaceTipDismissed, dismiss: dismissWorkspaceTip } = useOneTimeTip(WORKSPACE_TIP_KEY);
+    const [workspaceEl, setWorkspaceEl] = useState<HTMLElement | null>(null);
+    const workspaceRef = useCallback((el: HTMLElement | null) => { if (el && el.offsetParent !== null) setWorkspaceEl(el); }, []);
     // The rail renders in both the desktop nav and the (kept-mounted) mobile
     // drawer; only the copy on screen anchors the callout.
     const [userButtonEl, setUserButtonEl] = useState<HTMLElement | null>(null);
@@ -116,9 +120,10 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                     return (
                         <ListItemButton
                             key={item.key}
+                            ref={item.key === 'projects' ? workspaceRef : undefined}
                             component={targetPath ? RouterLink : 'div'}
                             to={targetPath}
-                            onClick={() => onActivityClick(item)}
+                            onClick={() => { if (item.key === 'projects') dismissWorkspaceTip(); onActivityClick(item); }}
                             sx={activityItemSx({
                                 '&:hover': {
                                     bgcolor: isActiveItem ? 'primary.main' : 'action.hover',
@@ -161,6 +166,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                     );
                 })}
 
+                <CoachMark open={!workspaceTipDismissed && powerUpsTipDismissed && !tipsBlocked && !!workspaceEl?.isConnected} anchorEl={workspaceEl} title={t('layout.workspaceTip.title', { defaultValue: 'Meet Workspace' })} text={t('layout.workspaceTip.text', { defaultValue: 'Organize projects, work in directories and connect IM chats in one place.' })} onDismiss={dismissWorkspaceTip} />
                 <Divider sx={{ mx: 2, my: 1 }} />
 
                 {/* Help — the onboarding front door now (replaces the old

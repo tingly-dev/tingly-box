@@ -85,6 +85,9 @@ export default {
     "saved": "已保存"
   },
   "layout": {
+    "workspace": "工作区",
+    "workspaceTip": { "title": "认识工作区", "text": "在一处管理项目、工作目录和 IM 聊天。" },
+    "workspaceGate": { "title": "开启工作区", "text": "开启工作区扩展功能后，即可使用项目、工作目录和 IM 聊天。", "enable": "开启工作区", "error": "无法开启工作区，请重试。" },
     "projects": "项目",
     "projectsWaiting": "有线程或会话在等你处理",
     "appTitle": "Tingly Box",
