@@ -200,12 +200,15 @@ Remote 页面保留，只去掉 SmartGuide 模型和“常驻会话”这类作�
 
 ## 命令精简（已定，YZ 2026-10-22）
 
-新模式下聊天只做三件事：选在哪干（目录、会话）、控制当前会话、看状态。`/help` 只列这 9 个，**旧名字一律不留**（不做隐藏别名，用到了回“Unknown command”）：
+新模式下聊天只做三件事：选在哪干（目录、项目、会话）、控制当前会话、看状态。2026-11-01 更新：`/dir` 列 Projects 注册的未归档文件夹，`/project` 单独列项目并绑定协调者；两者需要远程控制的高级权限，现有模型没有逐目录权限。`/help` 列出这些命令，**旧名字一律不留**（不做隐藏别名，用到了回“Unknown command”）：
+
+2026-11-01 补充：主动绑定的对象是 Project、Folder 或指定的 Folder Session。绑定归属保存在 `target_project_id`，指定 Folder Session 时另有 `target_thread_id`；`thread_id` 是当前交互焦点。Project 初始焦点是协调者，Folder 可先无焦点、首条消息创建 Session。`/session N` 只切换焦点、不改变归属；`@N` 只将一条消息发给目标线程。旧绑定升级时按已有线程或待启动文件夹推断归属，历史数据没有记录是否由用户主动选中某个 Folder Session，无法恢复该意图。
 
 | 命令 | 由谁执行 | 说明 |
 |---|---|---|
 | `/cd <路径>` | Remote → `ToFolder` | 换文件夹，下一条开新会话 |
-| `/dir [N\|路径]` | Remote → `ToFolder` | 不带参数列出本 chat 用过的目录（原 `/project`），带参数 = `/cd` |
+| `/dir [N\|路径]` | Remote → `ToFolder` | 列出已注册的工作文件夹，带参数切换文件夹；聊天使用历史只影响排序 |
+| `/project [N]` | Remote → Projects | 列出未归档项目，选择后绑定该项目的协调者；编号来自上一次列表 |
 | `/session [N]` | Projects | 不带参数列出会话（项目的对话是 `#0`），带参数切过去；替代 `/threads`、`/focus`、`/back`、`/resume` |
 | `/new [话]` | Projects | 下一条（或这句话）开新会话，正在跑的不受影响 |
 | `/stop [#N]` | Projects | 停 |
@@ -215,7 +218,7 @@ Remote 页面保留，只去掉 SmartGuide 模型和“常驻会话”这类作�
 | `/yolo` | Projects | 当前会话在 `bypassPermissions` 和继承的模式之间切换（YZ：保留）；`/new`、`/cd` 开的新会话沿用它 |
 
 `@N <话>` 保留（不是命令）。`/bind`、`/join`（接入层）照旧，不进帮助。删掉：`/bash`（Claude Code 自己能跑命令）、`/mock`、
-`/resume`（并入 `/session`；在 Projects 外开的 CLI 会话不列）、`/project` `/p`、`/threads`、`/focus`、`/back`、`/interrupt` `/s` `/i`、
+`/resume`（并入 `/session`；在 Projects 外开的 CLI 会话不列）、`/p`、`/threads`、`/focus`、`/back`、`/interrupt` `/s` `/i`、
 `/quiet` `/noverbose`、`/h`，以及裸词 `stop`（现在是普通消息）。
 
 ## 已定（YZ，2026-10-21）

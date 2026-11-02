@@ -16,6 +16,8 @@ export default {
       "background": "后台",
       "callFailed": "失败",
       "checklist": "进度",
+      "checklistEmpty": "当前没有任务",
+      "checklistHistory": "之前的任务（{{count}} 组）",
       "checklistCount": "已完成 {{done}}/{{total}}",
       "decline": "拒绝",
       "deny": "不允许",

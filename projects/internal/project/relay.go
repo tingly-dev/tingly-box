@@ -18,7 +18,7 @@ import (
 // it or to any ancestor, to answer by replying (an approval also has buttons
 // where the host can show them, ChannelPrompter, restated once the request is
 // settled wherever it was answered). Messages go out one at a time, in the order
-// they finished. Each starts with where it comes from: `[project name]` for a
+// they finished. Each includes where it comes from: `[project name]` for a
 // project conversation, `[#N title]` for any other thread. A chat that turned
 // on /verbose also hears each step of its own thread's turns (Step).
 type Relay struct {
@@ -383,9 +383,9 @@ func (r *Relay) deliver(job relayJob) {
 		}
 		tag = p.Name
 	}
-	text := "[" + tag + "] " + job.text
 	for _, b := range bindings {
-		ctx, cancel := context.WithTimeout(context.Background(), relaySendTimeout)
+		text := job.text + "\n\n[" + tag + "]"
+		ctx, cancel := context.WithTimeout(withChannelBot(context.Background(), b.BotUUID), relaySendTimeout)
 		if job.request != nil {
 			r.await(b, *job.request)
 		}

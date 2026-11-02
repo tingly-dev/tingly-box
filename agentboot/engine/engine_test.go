@@ -252,3 +252,9 @@ func TestInject_WithoutARunningTurnIsNotInjectable(t *testing.T) {
 		t.Fatalf("Inject = %v, want ErrNotInjectable", err)
 	}
 }
+
+func TestLaunchSignatureChangesForEffort(t *testing.T) {
+	if launchSignature(agentboot.ExecutionOptions{Effort: "low"}) == launchSignature(agentboot.ExecutionOptions{Effort: "high"}) {
+		t.Fatal("a changed effort must restart the resident process before the next turn")
+	}
+}

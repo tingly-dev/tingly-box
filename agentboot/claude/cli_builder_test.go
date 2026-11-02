@@ -241,3 +241,20 @@ func TestDriverBuildMCPArgs(t *testing.T) {
 	assert.Contains(t, argsStr, "filesystem")
 	assert.Contains(t, argsStr, "brave-search")
 }
+
+func TestBuildCommonArgsEffort(t *testing.T) {
+	driver := &Driver{}
+	built, err := driver.buildArgs(agentboot.OutputFormatText, "hi", agentboot.ExecutionOptions{Effort: "high"}, Config{}, false)
+	require.NoError(t, err)
+	assert.Contains(t, built, "--effort")
+	assert.Contains(t, built, "high")
+	assert.NotContains(t, BuildCommonArgs(Config{}, CommonOptions{}), "--effort")
+	args := BuildCommonArgs(Config{}, CommonOptions{Effort: "high"})
+	assert.Contains(t, args, "--effort")
+	for i, v := range args {
+		if v == "--effort" {
+			require.Less(t, i+1, len(args))
+			assert.Equal(t, "high", args[i+1])
+		}
+	}
+}

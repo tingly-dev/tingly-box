@@ -125,16 +125,26 @@ implemented.
   waiting on a subagent, thinking) and the time since the last message to
   the agent, ticking each second. A stuck turn reads differently from a slow
   one without opening anything.
-- **The agent's own checklist.** When the agent keeps a progress list
-  (Claude Code's `TodoWrite`), the transcript pins it as a card above the
-  conversation: done items struck through, the one in progress in its
-  present-tense form with a spinner while the turn runs, the rest muted.
-  The data is the last `TodoWrite` call's `todos` (each call rewrites the
-  whole list), read in the shared transcript, so project threads and folder
-  sessions both get it with no API change. It starts open while work
-  remains and folds to one line ("3 of 5 done · Writing tests") once
-  everything is done or the reader folds it. Tracked in
-  [#2118](https://github.com/tingly-dev/tingly-box/issues/2118).
+- **The agent's progress card.** Thread and folder session panels pin a
+  read-only card above the scrolling conversation, in both chat and trajectory
+  views. Claude's `TodoWrite` snapshots and successful `TaskCreate`,
+  `TaskUpdate`, `TaskGet`, and `TaskList` calls are folded from transcript
+  events; background execution tools are separate. The latest group shows its
+  own count and opens while unfinished, and completed groups remain accessible
+  through “Previous task groups”. Changing the current group resets the default
+  expansion; the user can always expand or fold it. Long lists scroll inside
+  the card.
+- **Grouping is presentation, not a Claude task-list boundary.** A successful
+  create after every task in the current group has completed starts a new group;
+  an update to an existing ID remains with its original group. A `TodoWrite`
+  replaces its snapshot; after completion, a disjoint snapshot starts a new
+  group. Overlapping snapshots remain in the same group. This is a heuristic:
+  edited or repeated text and shared task lists can make the real intent
+  ambiguous. Empty lists clear the current visible list. Grouping ignores
+  elapsed time and never writes back to Claude. When the initial transcript is
+  paginated, the panel reads the thread's history separately to reconstruct
+  progress; missing events or external changes cannot be inferred. The fold is
+  recomputed when the loaded events change, not on unrelated renders.
 - **A run of calls is one line.** Calls and thoughts with no reply between
   them are one run; from two calls on it folds into a line saying what it did
   ("Read 3 files, ran 2 commands, edited 1 file · 30s") with failures in red,

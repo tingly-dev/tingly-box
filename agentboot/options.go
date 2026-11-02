@@ -72,6 +72,8 @@ type ExecutionOptions struct {
 	// Model selection (per-execution override)
 	Model         string
 	FallbackModel string
+	// Effort is the Claude Code reasoning effort for this execution.
+	Effort string
 
 	// Execution control
 	MaxTurns int

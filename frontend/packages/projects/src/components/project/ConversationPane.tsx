@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Box, Button, Chip, CircularProgress, Collapse, Paper, Stack, Typography } from '@mui/material';
+import { Box, Button, ButtonBase, Chip, CircularProgress, Collapse, Paper, Stack, Typography } from '@mui/material';
 import { getReadableAccent } from '@tingly/ui/theme/status';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { Link as RouterLink } from 'react-router-dom';
@@ -12,12 +12,13 @@ import { Markdown } from '../Markdown';
 import { useMessageDetail } from '../../hooks/useMessageDetail';
 import { MessageDetailControl } from '../MessageDetailControl';
 import { showManagerMessage } from './messageDetail';
-import { Check, ChevronRight, DiffIcon, ErrorOutline, ExpandMore, PlayArrow } from '../icons';
+import { Check, ChevronRight, DiffIcon, ErrorOutline, ExpandLess, ExpandMore, PlayArrow, Settings } from '../icons';
 import { DiffDialog } from './DiffDialog';
 import { LoadEarlier } from './LoadEarlier';
 import { ThreadStateMark, ThreadBadges, ThreadSubtitle } from './threadStatus';
 import { radius } from '@tingly/ui/theme/radius';
 import { conversationText, messageSpacing, userBubble, userMessageWidth } from '../../transcript/conversationStyles';
+import { readLocal, writeLocal } from '../../utils/storage';
 
 function parse<T>(payload?: string): T | null {
     if (!payload) return null;
@@ -271,6 +272,7 @@ interface Props {
     /** The coordinator's model, switched from the message box; the picker is left out without onModelChange. */
     model?: string;
     onModelChange?: (model: string) => void;
+    modelControl?: React.ReactNode;
     /** The coordinator's thinking effort, beside its model picker. */
     effort?: string;
     onEffortChange?: (effort: string) => void;
@@ -283,12 +285,18 @@ interface Props {
     chatTitle?: (platform: string, chatId: string) => string | undefined;
 }
 
-export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, disabled, disabledReason, onSend, threadId, model, onModelChange, effort, onEffortChange, composerContext, onOpenThread, onStartSuggestions, onChooseDecision, chatTitle }: Props) {
+export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, disabled, disabledReason, onSend, threadId, model, onModelChange, modelControl, effort, onEffortChange, composerContext, onOpenThread, onStartSuggestions, onChooseDecision, chatTitle }: Props) {
     const { t } = useTranslation('projects');
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
+    const [awayFromBottom, setAwayFromBottom] = useState(false);
     const [seed, setSeed] = useState('');
     const [detail, setDetail] = useMessageDetail('conversation');
+    const [settingsOpen, setSettingsOpen] = useState(() => readLocal('conversation.threadDefaultsOpen') === '1');
+    const toggleSettings = () => {
+        writeLocal('conversation.threadDefaultsOpen', settingsOpen ? '0' : '1');
+        setSettingsOpen(!settingsOpen);
+    };
 
     useEffect(() => {
         const el = scrollRef.current;
@@ -301,14 +309,17 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                 ref={scrollRef}
                 onScroll={() => {
                     const el = scrollRef.current;
-                    if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+                    if (el) {
+                        stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+                        setAwayFromBottom(!stick.current);
+                    }
                 }}
                 sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', px: 2, py: 2, overscrollBehavior: 'contain' }}
             >
-                <Stack spacing={messageSpacing}>
+                <Stack spacing={messageSpacing} sx={{ maxWidth: 800, mx: 'auto', width: '100%' }}>
                     {more && onLoadEarlier && <LoadEarlier scrollRef={scrollRef} onLoad={onLoadEarlier} />}
                     {messages.length === 0 && (
-                        <Box sx={{ py: { xs: 3, md: 6 } }}>
+                        <Box sx={{ py: { xs: 3, md: 6 }, maxWidth: 650 }}>
                             <Typography variant="h3" sx={{ mb: 2 }}>{t('conversation.emptyTitle')}</Typography>
                             {[1, 2, 3].map((i) => (
                                 <Box key={i} sx={{ display: 'flex', gap: 1.5, mb: 1.5 }}>
@@ -341,8 +352,8 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                                                 <Typography variant="body1" sx={conversationText}>{m.content}</Typography>
                                             </Box>
                                         )}
-                                        {m.source === 'im' && m.source_platform
-                                            ? <ImSourceBadge platform={m.source_platform} chat={chatTitle?.(m.source_platform, m.source_chat_id ?? '') ?? m.source_chat_id ?? ''} />
+                                        {m.source === 'im'
+                                            ? <ImSourceBadge platform={m.source_platform ?? ''} chat={chatTitle?.(m.source_platform ?? '', m.source_chat_id ?? '') ?? m.source_chat_id ?? ''} />
                                             : null}
                                     </Box>
                                 );
@@ -392,9 +403,30 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                     )}
                 </Stack>
             </Box>
-            <Box sx={{ px: 2, pb: 2 }}>
+            <Box sx={{ px: 2, pb: 2, position: 'relative' }}>
+                {awayFromBottom && (
+                    <Button size="small" variant="contained" onClick={() => {
+                        stick.current = true;
+                        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+                        setAwayFromBottom(false);
+                    }} sx={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', mb: 1, borderRadius: 99, boxShadow: 3, whiteSpace: 'nowrap', zIndex: 1 }}>↓ {t('conversation.latest', { defaultValue: 'Latest messages' })}</Button>
+                )}
+                <Box sx={{ maxWidth: 800, mx: 'auto' }}>
                 {disabledReason}
                 <MessageDetailControl detail={detail} onChange={setDetail} surface="conversation" />
+                {composerContext && (
+                    <Box sx={{ mb: 0.75, borderRadius: radius.card, bgcolor: 'action.hover', fontSize: fontSizes.sm, color: 'text.secondary', overflow: 'hidden' }}>
+                        <ButtonBase onClick={toggleSettings} aria-expanded={settingsOpen}
+                            sx={{ width: '100%', display: 'flex', alignItems: 'center', gap: 1, minHeight: 30, px: 1.25, justifyContent: 'flex-start', font: 'inherit', color: 'inherit', textAlign: 'left', '&:hover': { color: 'text.primary' } }}>
+                            <Settings sx={{ fontSize: 15 }} />
+                            <Box component="span" sx={{ flex: 1 }}>{t('threadSettings.settings')}</Box>
+                            {settingsOpen ? <ExpandMore sx={{ fontSize: 16 }} /> : <ExpandLess sx={{ fontSize: 16 }} />}
+                        </ButtonBase>
+                        <Collapse in={settingsOpen} unmountOnExit>
+                            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, px: 1.25, pb: 1 }}>{composerContext}</Box>
+                        </Collapse>
+                    </Box>
+                )}
                 <ThreadComposer
                     // Per conversation: its draft starts fresh.
                     key={threadId}
@@ -402,14 +434,12 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                     autoFocus
                     disabled={disabled}
                     seed={seed}
-                    context={composerContext}
                     streaming={busy}
+                    leftSlot={modelControl}
                     model={model}
                     onModelChange={onModelChange}
                     effort={effort}
                     onEffortChange={onEffortChange}
-                    effortLabel={t('conversation.coordinatorEffort')}
-                    modelLabel={t('conversation.coordinatorModel')}
                     modelSource="projects"
                     placeholder={t(busy ? 'conversation.queuePlaceholder' : 'conversation.placeholder')}
                     attach={(files) => uploadAttachments({ projectId }, files)}
@@ -418,6 +448,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                         return onSend(text, attachments);
                     }}
                 />
+                </Box>
             </Box>
         </Box>
     );

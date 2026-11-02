@@ -1,7 +1,9 @@
 package remoteagent
 
 import (
+	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/tingly-dev/tingly-box/imbot"
 )
@@ -25,6 +27,7 @@ func NewBotHandlerAdapter(handler *BotHandler) BotHandlerAdapter {
 func (a *botHandlerAdapter) ctx(chatID string) HandlerContext {
 	return HandlerContext{
 		ChatID:   chatID,
+		BotUUID:  a.handler.botSetting.UUID,
 		Platform: imbot.Platform(a.handler.botSetting.Platform),
 	}
 }
@@ -37,6 +40,15 @@ func (a *botHandlerAdapter) SendText(chatID, text string) error {
 
 // GetProjectPath gets the folder of a chat.
 func (a *botHandlerAdapter) GetProjectPath(chatID string) (string, error) {
+	if source, ok := a.handler.projectRouter.(interface {
+		CurrentFolder(context.Context, string, string) (string, error)
+	}); ok && a.handler.projectsOn() {
+		path, err := source.CurrentFolder(a.handler.ctx, a.handler.botSetting.Platform, chatID)
+		if err != nil {
+			return "", err
+		}
+		return path, nil
+	}
 	projectPath, _, err := a.handler.chatStore.GetProjectPath(chatID)
 	return projectPath, err
 }
@@ -63,7 +75,58 @@ func (a *botHandlerAdapter) AddToWhitelist(groupID, platform, userID string) err
 
 // ListChatProjectPaths returns the folders a chat used, most recent first.
 func (a *botHandlerAdapter) ListChatProjectPaths(chatID string) ([]string, error) {
-	return a.handler.chatStore.ListChatProjectPaths(chatID)
+	history, err := a.handler.chatStore.ListChatProjectPaths(chatID)
+	if err != nil {
+		return nil, err
+	}
+	source, ok := a.handler.projectRouter.(interface {
+		RegisteredFolders(context.Context) ([]string, error)
+	})
+	if !ok || !a.handler.projectsOn() {
+		return history, nil
+	}
+	registered, err := source.RegisteredFolders(a.handler.ctx)
+	if err != nil {
+		return nil, err
+	}
+	key := func(path string) string {
+		if p, err := filepath.EvalSymlinks(path); err == nil {
+			return filepath.Clean(p)
+		}
+		return filepath.Clean(path)
+	}
+	allowed := make(map[string]string, len(registered))
+	for _, p := range registered {
+		allowed[key(p)] = p
+	}
+	result := make([]string, 0, len(registered))
+	seen := map[string]bool{}
+	for _, list := range [][]string{history, registered} {
+		for _, path := range list {
+			k := key(path)
+			if p, ok := allowed[k]; ok && !seen[k] {
+				result = append(result, p)
+				seen[k] = true
+			}
+		}
+	}
+	return result, nil
+}
+
+// RememberFolderList captures the numbers shown to this chat, so a later
+// selection cannot change meaning when the registered list is reordered.
+func (a *botHandlerAdapter) RememberFolderList(chatID string, paths []string) {
+	a.handler.projectListsMu.Lock()
+	defer a.handler.projectListsMu.Unlock()
+	if a.handler.folderLists == nil {
+		a.handler.folderLists = map[string][]string{}
+	}
+	a.handler.folderLists[chatID] = append([]string(nil), paths...)
+}
+func (a *botHandlerAdapter) FolderList(chatID string) []string {
+	a.handler.projectListsMu.Lock()
+	defer a.handler.projectListsMu.Unlock()
+	return append([]string(nil), a.handler.folderLists[chatID]...)
 }
 
 // VerifyAndPair runs pairing-code verification and persists the binding.
@@ -80,6 +143,11 @@ func (a *botHandlerAdapter) RunSessionCommand(ctx *imbot.HandlerContext, name, a
 		SenderID: ctx.SenderID,
 		Platform: ctx.Platform,
 	}, name, arg)
+}
+
+// RunProjectDirectory handles the separate project-coordinator picker.
+func (a *botHandlerAdapter) RunProjectDirectory(ctx *imbot.HandlerContext, arg string) {
+	a.handler.projectDirectory(HandlerContext{Bot: ctx.Bot, BotUUID: a.handler.botSetting.UUID, ChatID: ctx.ChatID, SenderID: ctx.SenderID, Platform: ctx.Platform}, arg)
 }
 
 // InitCommandRegistry initializes the command registry with built-in commands.

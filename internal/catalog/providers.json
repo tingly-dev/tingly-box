@@ -17,8 +17,8 @@
     "model_meta_fields": "可选字段：sources（string[]，支撑该条 model 具体数据/状态——context、max_output、note、deprecated、openai_endpoints——的参考链接）。用法与 provider_meta_fields 的 sources 相同，只是作用域缩小到单个 model：优先选官方文档/changelog/开源仓库 issue，其次官方博客；不确定来源、或多个 model 共享同一条 provider 级 sources 时就不必重复写。同样只在确实核实过这条 model 时添加，不必为未改动的 model 补齐历史。不进入 Go 的 ModelInfo 结构体，encoding/json 会静默丢弃——和 note/created/deprecated 一样，是给读源码的人看的引用轨迹，运行时/前端都看不到。首个试点：codex 模板（见 2026-09-18 的模型刷新）。",
     "token_limit_units": "context / max_output 一律写十进制整数：K=1000、M=1000000（1M=1000000、256K=256000、128K=128000、64K=64000），不写 2 的幂（1048576/262144/131072/65536）。官方给出的精确非整数值（如 gpt-3.5-turbo 的 16385）保持原样。"
   },
-  "version": "2.5.0",
-  "last_updated": "2026-10-08T00:00:00Z",
+  "version": "2.6.0",
+  "last_updated": "2026-10-28T00:00:00Z",
   "providers": {
     "aws-bedrock": {
       "id": "aws-bedrock",
@@ -5164,6 +5164,31 @@
       "models": [],
       "supports_models_endpoint": true,
       "icon": "hyperbolic"
+    },
+    "runcrate-ai": {
+      "id": "runcrate-ai",
+      "name": "Runcrate",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "api.runcrate.ai",
+      "vendor_family": "runcrate",
+      "region": "global",
+      "plan": "standard",
+      "website": "https://www.runcrate.ai",
+      "description": "Runcrate inference API for open models (OpenAI + Anthropic compatible)",
+      "type": "reseller",
+      "api_doc": "https://www.runcrate.ai/llms.txt",
+      "model_doc": "https://api.runcrate.ai/v1/models",
+      "pricing_doc": "https://www.runcrate.ai/inference/pricing",
+      "base_url_openai": "https://api.runcrate.ai/v1",
+      "base_url_anthropic": "https://api.runcrate.ai",
+      "models": [],
+      "supports_models_endpoint": true,
+      "last_updated": "2026-10-28",
+      "sources": [
+        "https://www.runcrate.ai/llms.txt",
+        "https://api.runcrate.ai/v1/models"
+      ]
     },
     "vercel-ai-gateway": {
       "id": "vercel-ai-gateway",

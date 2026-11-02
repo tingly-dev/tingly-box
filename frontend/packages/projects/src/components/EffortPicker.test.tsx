@@ -38,3 +38,17 @@ it('sits beside the model picker in the composer and reports the level', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: item('effort.max') }));
     expect(choose).toHaveBeenCalledWith('max');
 });
+
+
+it('displays the inherited level and can restore project inheritance', () => {
+    const choose = vi.fn();
+    const view = render(<EffortPicker value="" defaultLabel="Project default · Medium" defaultDisplayLabel="Medium" onChange={choose} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Medium' }));
+    expect(screen.getByRole('menuitem', { name: /Project default · Medium/ })).toHaveClass('Mui-selected');
+    fireEvent.click(screen.getByRole('menuitem', { name: /effort.high/ }));
+    expect(choose).toHaveBeenCalledWith('high');
+    view.rerender(<EffortPicker value="high" defaultLabel="Project default · Medium" defaultDisplayLabel="Medium" onChange={choose} />);
+    fireEvent.click(screen.getByRole('button', { name: 'effort.high' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Project default · Medium/ }));
+    expect(choose).toHaveBeenLastCalledWith('');
+});

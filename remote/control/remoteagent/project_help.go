@@ -9,7 +9,8 @@ func helpText(senderID, chatID string) string {
 	lines := []string{
 		"Send a message to talk to Claude Code.",
 		"/cd <path>: work in another folder",
-		"/dir [N]: list the folders this chat used, or switch to one",
+		"/dir [N]: list registered folders, or switch to one",
+		"/project [N]: list projects, or switch to a project's coordinator",
 		"/session [N]: list the sessions here, or switch to #N",
 		"/new [message]: start a new session",
 		"/stop: stop the running session",

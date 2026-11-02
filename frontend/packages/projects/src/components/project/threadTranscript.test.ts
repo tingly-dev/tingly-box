@@ -11,6 +11,16 @@ const request = (state: string, extra: Record<string, unknown> = {}) => JSON.str
 const author = (e: ThreadEvent) => e.source === 'thread' ? 'Coordinator' : undefined;
 
 describe('threadTranscript', () => {
+    it('retains IM provenance for thread and folder messages without marking web messages', () => {
+        const { entries } = threadTranscript([
+            ev('user', 'From bot', { source: 'im', source_platform: 'telegram', source_chat_id: '42' }),
+            ev('user', 'From web'),
+            ev('user', 'Legacy bot message', { source: 'im' }),
+        ], false, author);
+        expect(entries[0].imSource).toEqual({ platform: 'telegram', chatId: '42' });
+        expect(entries[1].imSource).toBeUndefined();
+        expect(entries[2].imSource).toEqual({ platform: '', chatId: '' });
+    });
     it('pairs calls with their results and folds a settled approval into its call', () => {
         const { entries, pendingRequestId } = threadTranscript([
             ev('user', 'Run the tests', { source: 'thread', source_ref: 'main' }),

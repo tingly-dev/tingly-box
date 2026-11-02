@@ -9,8 +9,8 @@ import {Fragment, useCallback, useEffect, useMemo, useRef, useState} from 'react
 import {useTranslation} from 'react-i18next';
 import type {AttachmentsComponent, CodeBlockComponent, DraftStorage, SubagentSteps} from './context';
 import {TranscriptHostProvider, useDraft, useTranscriptHost} from './context';
-import type {ActivityStep, RequestBlock, RequestOutcome, TaskState, ThinkingStep, Todo, ToolStep, TranscriptBlock, TranscriptEntry, WorkingVerb} from './model';
-import {CHECKLIST_TOOL, FOLD_MIN_CALLS, agentReport, agentStatus, approvalSubject, askQuestions, firstNewBlock, formatTokens, latestTodos, requestOutcome, summarizeRun, toolSummary, workingState} from './model';
+import type {ActivityStep, RequestBlock, RequestOutcome, TaskState, ThinkingStep, Todo, TodoGroup, ToolStep, TranscriptBlock, TranscriptEntry, WorkingVerb} from './model';
+import {CHECKLIST_TOOL, FOLD_MIN_CALLS, agentReport, agentStatus, approvalSubject, askQuestions, firstNewBlock, formatTokens, todoGroups, requestOutcome, summarizeRun, toolSummary, workingState} from './model';
 import Markdown from './Markdown';
 import QuestionCard from './QuestionCard';
 import { radius } from '@tingly/ui/theme/radius';
@@ -47,6 +47,8 @@ interface TranscriptProps {
     // When the reader last saw this transcript: a "New" divider marks what
     // arrived since. None on a first visit.
     newSince?: string;
+    hideChecklist?: boolean;
+    messageSource?: (message: TranscriptEntry) => ReactNode;
 }
 
 const mono = {fontFamily: fontMono, fontSize: fontSizes.sm};
@@ -58,7 +60,7 @@ const preBox = {
 
 const UserBubble = ({message}: {message: TranscriptEntry}) => {
     const {t} = useTranslation();
-    const {attachments: Attachments} = useTranscriptHost();
+    const {attachments: Attachments, messageSource} = useTranscriptHost();
     const files = message.attachments ?? [];
     return (
         <Box sx={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end'}}>
@@ -71,6 +73,7 @@ const UserBubble = ({message}: {message: TranscriptEntry}) => {
                     <Typography variant="body1" sx={conversationText}>{message.content}</Typography>
                 </Box>
             )}
+            {messageSource?.(message)}
             {message.pending && (
                 <Typography sx={{color: 'text.secondary', fontSize: fontSizes.sm, mt: 0.25}}>
                     {t('projects.transcript.readsNext', {defaultValue: 'Claude will read this at its next step'})}
@@ -780,29 +783,31 @@ const WorkingLine = ({blocks}: {blocks: TranscriptBlock[]}) => {
 // ChecklistCard shows the agent's own progress list (its last TodoWrite),
 // pinned above the conversation: what is done, what runs now, what is left.
 // It starts open while work remains and folded once everything is done.
-const ChecklistCard = ({todos, working}: {todos: Todo[]; working: boolean}) => {
+export const ChecklistCard = ({todos, working, history = []}: {todos: Todo[]; working: boolean; history?: TodoGroup[]}) => {
     const {t} = useTranslation();
     const done = todos.filter((x) => x.status === 'completed').length;
     const finished = done === todos.length;
     const [choice, setChoice] = useState<boolean | undefined>();
+    const [historyOpen, setHistoryOpen] = useState(false);
     const open = choice ?? !finished;
     const current = todos.find((x) => x.status === 'in_progress');
     return (
         <Paper variant="outlined" data-checklist sx={{borderRadius: radius.card, overflow: 'hidden', bgcolor: 'background.paper'}}>
             <Stack
-                direction="row" spacing={1} role="button" aria-expanded={open} onClick={() => setChoice(!open)}
+                direction="row" spacing={1} role="button" tabIndex={0} aria-expanded={open} onClick={() => setChoice(!open)}
+                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setChoice(!open); } }}
                 sx={{alignItems: 'center', px: 1.5, py: 0.75, cursor: 'default', userSelect: 'none', '&:hover': {bgcolor: 'action.hover'}}}
             >
                 <Typography variant="body2" sx={{fontWeight: 600, color: 'text.primary', flexShrink: 0}}>{t('projects.transcript.checklist', {defaultValue: 'Progress'})}</Typography>
                 <Typography variant="body2" sx={{color: 'text.secondary', flexShrink: 0, fontVariantNumeric: 'tabular-nums'}}>
-                    {t('projects.transcript.checklistCount', {defaultValue: '{{done}} of {{total}} done', done, total: todos.length})}
+                    {todos.length ? t('projects.transcript.checklistCount', {defaultValue: '{{done}} of {{total}} done', done, total: todos.length}) : t('projects.transcript.checklistEmpty', {defaultValue: 'No current tasks'})}
                 </Typography>
                 {!open && current && <Typography variant="body2" noWrap sx={{color: 'text.secondary', minWidth: 0}}>· {current.activeForm || current.content}</Typography>}
                 <Box sx={{flex: 1}}/>
                 {open ? <ExpandMore sx={{fontSize: 16, color: 'text.secondary'}}/> : <ChevronRight sx={{fontSize: 16, color: 'text.secondary'}}/>}
             </Stack>
             <Collapse in={open} unmountOnExit>
-                <Stack component="ul" spacing={0.5} sx={{m: 0, listStyle: 'none', px: 1.5, pb: 1, pt: 0.5, borderTop: 1, borderColor: 'divider'}}>
+                <Stack component="ul" spacing={0.5} sx={{m: 0, listStyle: 'none', px: 1.5, pb: 1, pt: 0.5, borderTop: 1, borderColor: 'divider', maxHeight: 220, overflowY: 'auto'}}>
                     {todos.map((x, i) => (
                         <Stack component="li" key={i} direction="row" spacing={1} sx={{alignItems: 'flex-start'}}>
                             <Box sx={{width: 16, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
@@ -825,6 +830,16 @@ const ChecklistCard = ({todos, working}: {todos: Todo[]; working: boolean}) => {
                     ))}
                 </Stack>
             </Collapse>
+            {history.length > 0 && <Box sx={{px: 1.5, pb: 0.5, borderTop: 1, borderColor: 'divider'}}>
+                <Button size="small" color="inherit" aria-expanded={historyOpen} onClick={() => setHistoryOpen(!historyOpen)}>
+                    {t('projects.transcript.checklistHistory', {defaultValue: 'Previous task groups ({{count}})', count: history.length})}
+                </Button>
+                <Collapse in={historyOpen} unmountOnExit>
+                    <Stack spacing={1} sx={{maxHeight: 240, overflowY: 'auto', pb: 1}}>
+                        {[...history].reverse().map((group) => <ChecklistCard key={group.id} todos={group.todos} working={false}/>)}
+                    </Stack>
+                </Collapse>
+            </Box>}
         </Paper>
     );
 };
@@ -874,16 +889,17 @@ const FocusBody = ({block, working, expandAll, onRespond, pendingRequestId}: {
     );
 };
 
-const Transcript = ({blocks, pendingRequestId, working, detail = 'detailed', expandAll = false, onRespond, drafts, subagents, codeBlock, attachments, rememberLabel, newSince}: TranscriptProps) => {
+const Transcript = ({blocks, pendingRequestId, working, detail = 'detailed', expandAll = false, onRespond, drafts, subagents, codeBlock, attachments, rememberLabel, newSince, hideChecklist = false, messageSource}: TranscriptProps) => {
     // While a request waits, its card is the live part; otherwise the turn
     // gets a line saying what it does and for how long.
     const showWorking = working && !pendingRequestId;
-    const todos = latestTodos(blocks);
+    const groups = useMemo(() => todoGroups(blocks), [blocks]);
+    const currentGroup = groups.at(-1);
 
     return (
-        <TranscriptHostProvider detail={detail} drafts={drafts} subagents={subagents} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel}>
+        <TranscriptHostProvider detail={detail} drafts={drafts} subagents={subagents} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel} messageSource={messageSource}>
             <Stack spacing={messageSpacing}>
-                {todos && <Box sx={{position: 'sticky', top: 0, zIndex: 1}}><ChecklistCard todos={todos} working={working}/></Box>}
+                {!hideChecklist && currentGroup && <Box sx={{position: 'sticky', top: 0, zIndex: 1}}><ChecklistCard key={currentGroup.id} todos={currentGroup.todos} history={groups.slice(0, -1)} working={working}/></Box>}
                 <BlockList anchored blocks={blocks} pendingRequestId={pendingRequestId} working={working} expandAll={expandAll} onRespond={onRespond} newFrom={firstNewBlock(blocks, newSince)}/>
                 {showWorking && <WorkingLine blocks={blocks}/>}
             </Stack>

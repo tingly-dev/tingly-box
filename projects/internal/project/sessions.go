@@ -55,6 +55,7 @@ type FolderThreadSpec struct {
 	Attachments    []Attachment
 	Title          string
 	Model          string
+	Effort         string
 	PermissionMode string
 	// Profile is the host's launch profile (see Launcher); empty for its default.
 	Profile string
@@ -90,6 +91,12 @@ func CleanFolder(raw string) (string, error) {
 // StartFolderThread creates a thread in a folder project and runs its first
 // turn.
 func (m *Threads) StartFolderThread(spec FolderThreadSpec) (*db.Thread, error) {
+	return m.startFolderThread(spec, nil)
+}
+
+// startFolderThread calls beforeStart after persistence and before enqueueing the
+// first turn, allowing an IM binding to exist before replies or prompts arrive.
+func (m *Threads) startFolderThread(spec FolderThreadSpec, beforeStart func(*db.Thread) error) (*db.Thread, error) {
 	p, err := m.store.GetProject(spec.ProjectID)
 	if err != nil {
 		return nil, err
@@ -110,6 +117,9 @@ func (m *Threads) StartFolderThread(spec FolderThreadSpec) (*db.Thread, error) {
 	task := strings.TrimSpace(spec.Task)
 	if task == "" && len(spec.Attachments) == 0 {
 		return nil, errors.New("the first message is empty")
+	}
+	if !ValidEffort(spec.Effort) {
+		return nil, errors.New("invalid effort level")
 	}
 	if !ValidPermissionMode(spec.PermissionMode) {
 		return nil, ErrBadPermission
@@ -133,11 +143,17 @@ func (m *Threads) StartFolderThread(spec FolderThreadSpec) (*db.Thread, error) {
 		ProjectID: p.ID, Agent: db.AgentClaudeCode,
 		Title: title, Task: task, Status: db.ThreadWorking, Origin: "user",
 		Cwd: folder, SessionID: uuid.NewString(),
-		Model: model, PermissionMode: spec.PermissionMode, Profile: profile,
+		Model: model, EffortOverride: spec.Effort, PermissionMode: spec.PermissionMode, Profile: profile,
 		HeadBranch: HeadBranch(context.Background(), folder),
 	}
 	if err := m.store.CreateThread(t); err != nil {
 		return nil, err
+	}
+	if beforeStart != nil {
+		if err := beforeStart(t); err != nil {
+			_, _ = m.update(t.ID, func(t *db.Thread) { t.Status, t.WaitReason = db.ThreadFailed, "Failed to start: "+err.Error() })
+			return nil, err
+		}
 	}
 	_ = m.store.TouchProject(p.ID)
 	m.publish(t)

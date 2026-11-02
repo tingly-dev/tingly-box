@@ -3,6 +3,7 @@
 export default {
   "claudeSession": {
     "profile": "Профиль конфигурации",
+    "profileDefaultShort": "Профиль по умолчанию",
     "profileDefault": "Профиль конфигурации по умолчанию",
     "model": "Модель",
     "modelDefault": "По умолчанию",

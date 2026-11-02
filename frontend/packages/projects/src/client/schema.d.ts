@@ -168,13 +168,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the IM chats bound to threads, all of them or one project's or thread's
-         * @description List the IM chats bound to threads, all of them or one project's or thread's
+         * List IM chats bound to threads, projects, or folders
+         * @description List IM chats bound to threads, projects, or folders
          */
         get: operations["apiV1ProjectsChannel-bindingsGet"];
         /**
-         * Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it
-         * @description Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it
+         * Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it
+         * @description Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it
          */
         put: operations["apiV1ProjectsChannel-bindingsPut"];
         post?: never;
@@ -606,8 +606,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Archive (resolve) the thread; it stays readable and can be reopened
-         * @description Archive (resolve) the thread; it stays readable and can be reopened
+         * Archive a folder session, stopping its process without resolving it
+         * @description Archive a folder session, stopping its process without resolving it
          */
         post: operations["apiV1ThreadsIdArchivePost"];
         delete?: never;
@@ -689,6 +689,26 @@ export interface paths {
          */
         get: operations["apiV1ThreadsIdDiffGet"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{id}/effort": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the thread's next-turn effort; empty restores its default
+         * @description Set the thread's next-turn effort; empty restores its default
+         */
+        put: operations["apiV1ThreadsIdEffortPut"];
         post?: never;
         delete?: never;
         options?: never;
@@ -906,10 +926,30 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Reopen an archived thread
-         * @description Reopen an archived thread
+         * Reopen a resolved thread
+         * @description Reopen a resolved thread
          */
         post: operations["apiV1ThreadsIdReopenPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve the thread; it stays readable and can be reopened
+         * @description Resolve the thread; it stays readable and can be reopened
+         */
+        post: operations["apiV1ThreadsIdResolvePost"];
         delete?: never;
         options?: never;
         head?: never;
@@ -930,6 +970,26 @@ export interface paths {
          * @description Answer a permission request or question the thread is waiting on
          */
         post: operations["apiV1ThreadsIdRespondPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore an archived folder session without changing its status
+         * @description Restore an archived folder session without changing its status
+         */
+        post: operations["apiV1ThreadsIdRestorePost"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1073,6 +1133,8 @@ export interface components {
             task_type: string;
         };
         BindChannelRequest: {
+            /** @description Field bot_uuid */
+            bot_uuid?: string;
             /** @description Field chat_id */
             chat_id: string;
             /** @description Field chat_title */
@@ -1089,6 +1151,8 @@ export interface components {
             bindings: components["schemas"]["ChannelBinding"][];
         };
         ChannelBinding: {
+            /** @description Field bot_uuid */
+            bot_uuid?: string;
             /** @description Field chat_id */
             chat_id: string;
             /** @description Field chat_title */
@@ -1098,12 +1162,34 @@ export interface components {
              * @description Field created_at
              */
             created_at: string;
+            /** @description Field focus_agent */
+            focus_agent?: string;
+            /**
+             * Format: int64
+             * @description Field focus_seq
+             */
+            focus_seq?: number;
+            /** @description Field focus_title */
+            focus_title?: string;
+            /** @description Field folder */
+            folder?: string;
             /** @description Field id */
             id: string;
             /** @description Field platform */
             platform: string;
             /** @description Field project_id */
             project_id: string;
+            /** @description Field target_project_id */
+            target_project_id?: string;
+            /**
+             * Format: int64
+             * @description Field target_seq
+             */
+            target_seq?: number;
+            /** @description Field target_thread_id */
+            target_thread_id?: string;
+            /** @description Field target_title */
+            target_title?: string;
             /** @description Field thread_id */
             thread_id: string;
             /**
@@ -1187,6 +1273,11 @@ export interface components {
             attachments?: string[];
             /** @description Field content */
             content: string;
+            /**
+             * @description Field effort
+             * @enum {string}
+             */
+            effort?: "" | "low" | "medium" | "high" | "max";
             /** @description Field model */
             model?: string;
             /** @description Field permission_mode */
@@ -1209,6 +1300,13 @@ export interface components {
             truncated: boolean;
             /** @description Field uncommitted */
             uncommitted: string;
+        };
+        EffortRequest: {
+            /**
+             * @description Field effort
+             * @enum {string}
+             */
+            effort: "" | "low" | "medium" | "high" | "max";
         };
         Event: {
             /** @description Field data */
@@ -1391,6 +1489,8 @@ export interface components {
             modes: string[];
         };
         ProfileRequest: {
+            /** @description Field inherit */
+            inherit?: boolean;
             /** @description Field profile */
             profile: string;
         };
@@ -1404,6 +1504,8 @@ export interface components {
             coordinator_effort: string;
             /** @description Field coordinator_model */
             coordinator_model: string;
+            /** @description Field coordinator_profile */
+            coordinator_profile: string;
             /**
              * Format: date-time
              * @description Field created_at
@@ -1435,6 +1537,8 @@ export interface components {
             thread_model: string;
             /** @description Field thread_permission_mode */
             thread_permission_mode: string;
+            /** @description Field thread_profile */
+            thread_profile: string;
             /** @description Field type */
             type: string;
             /**
@@ -1477,6 +1581,8 @@ export interface components {
             coordinator_effort: string;
             /** @description Field coordinator_model */
             coordinator_model: string;
+            /** @description Field coordinator_profile */
+            coordinator_profile: string;
             /**
              * Format: date-time
              * @description Field created_at
@@ -1508,6 +1614,8 @@ export interface components {
             thread_model: string;
             /** @description Field thread_permission_mode */
             thread_permission_mode: string;
+            /** @description Field thread_profile */
+            thread_profile: string;
             threads: components["schemas"]["ThreadCounts"];
             /** @description Field type */
             type: string;
@@ -1662,6 +1770,11 @@ export interface components {
         Thread: {
             /** @description Field agent */
             agent: string;
+            /**
+             * Format: date-time
+             * @description Field archived_at
+             */
+            archived_at?: string;
             /** @description Field auto_answer */
             auto_answer?: string;
             /** @description Field base_branch */
@@ -1680,6 +1793,8 @@ export interface components {
             created_at: string;
             /** @description Field cwd */
             cwd: string;
+            /** @description Field effort_override */
+            effort_override?: string;
             /**
              * Format: int64
              * @description Field files_changed
@@ -1718,10 +1833,14 @@ export interface components {
             permission_mode?: string;
             /** @description Field profile */
             profile?: string;
+            /** @description Field profile_override */
+            profile_override: string;
             /** @description Field project_id */
             project_id: string;
             /** @description Field repo_path */
             repo_path?: string;
+            /** @description Field reported_model */
+            reported_model?: string;
             /**
              * Format: date-time
              * @description Field resolved_at
@@ -1900,6 +2019,8 @@ export interface components {
             coordinator_effort?: "" | "low" | "medium" | "high" | "max";
             /** @description Field coordinator_model */
             coordinator_model?: string;
+            /** @description Field coordinator_profile */
+            coordinator_profile?: string;
             /** @description Field disable_worktree */
             disable_worktree?: boolean;
             /** @description Field goal */
@@ -1926,6 +2047,8 @@ export interface components {
              * @enum {string}
              */
             thread_permission_mode?: "default" | "acceptEdits" | "auto" | "bypassPermissions";
+            /** @description Field thread_profile */
+            thread_profile?: string;
         };
         UsageResponse: {
             /** @description Field by_model */
@@ -2221,7 +2344,7 @@ export interface operations {
     "apiV1ProjectsChannel-bindingsGet": {
         parameters: {
             query?: {
-                /** @description Only chats bound to a thread of this project */
+                /** @description Only chats bound to this project or folder */
                 project_id?: string;
                 /** @description Only chats bound to this thread */
                 thread_id?: string;
@@ -3032,6 +3155,34 @@ export interface operations {
             };
         };
     };
+    apiV1ThreadsIdEffortPut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EffortRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
+                };
+            };
+        };
+    };
     apiV1ThreadsIdEventsGet: {
         parameters: {
             query?: {
@@ -3343,6 +3494,29 @@ export interface operations {
             };
         };
     };
+    apiV1ThreadsIdResolvePost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
+                };
+            };
+        };
+    };
     apiV1ThreadsIdRespondPost: {
         parameters: {
             query?: never;
@@ -3359,6 +3533,29 @@ export interface operations {
                 "application/json": components["schemas"]["ThreadRespondRequest"];
             };
         };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdRestorePost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful response */
             200: {

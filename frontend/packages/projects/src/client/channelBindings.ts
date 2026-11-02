@@ -17,9 +17,8 @@ export async function listChannelBindings(): Promise<ChannelBinding[]> {
 }
 
 /**
- * Binds a chat to a thread, or to a project (its main thread; a folder
- * project cannot be bound this way: bind one of its threads). A chat bound
- * elsewhere is moved (one place at a time), old threads stay.
+ * Binds a chat to a thread, a project's main thread, or a folder for a new
+ * session. A chat bound elsewhere is moved; old threads stay.
  */
 export async function bindChannel(req: components['schemas']['BindChannelRequest']): Promise<ChannelBinding> {
     return unwrap(api.PUT('/api/v1/projects/channel-bindings', { body: req }));

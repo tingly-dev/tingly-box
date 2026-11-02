@@ -62,3 +62,20 @@ const (
 	relayLineMax     = 240
 	relaySendTimeout = 30 * time.Second
 )
+
+// channelBotKey carries a binding's chosen bot to a host without making bot
+// identity a requirement of the generic channel interface.
+type channelBotKey struct{}
+
+func withChannelBot(ctx context.Context, botUUID string) context.Context {
+	if botUUID == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, channelBotKey{}, botUUID)
+}
+
+// ChannelBot returns the bot selected for this delivery, if the binding has one.
+func ChannelBot(ctx context.Context) string {
+	bot, _ := ctx.Value(channelBotKey{}).(string)
+	return bot
+}

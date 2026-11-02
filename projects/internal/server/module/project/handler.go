@@ -64,6 +64,8 @@ type UpdateProjectRequest struct {
 	Goal                 *string   `json:"goal,omitempty"`
 	Instructions         *string   `json:"instructions,omitempty"`
 	Repos                *[]string `json:"repos,omitempty"`
+	CoordinatorProfile   *string   `json:"coordinator_profile,omitempty"`
+	ThreadProfile        *string   `json:"thread_profile,omitempty"`
 	CoordinatorModel     *string   `json:"coordinator_model,omitempty"`
 	ThreadModel          *string   `json:"thread_model,omitempty"`
 	CoordinatorEffort    *string   `json:"coordinator_effort,omitempty" enum:",low,medium,high,max"`
@@ -364,8 +366,8 @@ func (h *Handler) update(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if p.Type == db.ProjectFolder && (req.Repos != nil || req.ThreadModel != nil || req.ThreadEffort != nil || req.DisableWorktree != nil) {
-		apierr.BadRequest(c, "repos, thread_model, thread_effort and disable_worktree do not apply to a folder")
+	if p.Type == db.ProjectFolder && (req.Repos != nil || req.ThreadModel != nil || req.ThreadEffort != nil || req.ThreadProfile != nil || req.CoordinatorProfile != nil || req.DisableWorktree != nil) {
+		apierr.BadRequest(c, "repository and project thread settings do not apply to a folder")
 		return
 	}
 	if req.Name != nil {
@@ -390,11 +392,40 @@ func (h *Handler) update(c *gin.Context) {
 		}
 		p.Repos = repos
 	}
+	for _, item := range []struct {
+		in  *string
+		out *string
+	}{{req.CoordinatorProfile, &p.CoordinatorProfile}, {req.ThreadProfile, &p.ThreadProfile}} {
+		if item.in != nil {
+			v := strings.TrimSpace(*item.in)
+			if !h.svc.Threads.Launchable(v) {
+				apierr.BadRequest(c, "profile unavailable")
+				return
+			}
+			*item.out = v
+		}
+	}
 	if req.CoordinatorModel != nil {
 		p.CoordinatorModel = strings.TrimSpace(*req.CoordinatorModel)
 	}
 	if req.ThreadModel != nil {
 		p.ThreadModel = strings.TrimSpace(*req.ThreadModel)
+	}
+	if l, ok := h.svc.Host.(rt.Launcher); ok {
+		for _, item := range []struct {
+			changed        bool
+			profile, model string
+		}{
+			{req.CoordinatorProfile != nil || req.CoordinatorModel != nil, p.CoordinatorProfile, p.CoordinatorModel},
+			{req.ThreadProfile != nil || req.ThreadModel != nil, p.ThreadProfile, p.ThreadModel},
+		} {
+			if item.changed && item.profile != "" {
+				if err := l.CheckLaunch(c.Request.Context(), item.profile, item.model); err != nil {
+					apierr.BadRequest(c, err.Error())
+					return
+				}
+			}
+		}
 	}
 	for _, effort := range []struct {
 		req *string

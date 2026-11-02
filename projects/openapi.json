@@ -404,14 +404,14 @@
         "tags": [
           "projects"
         ],
-        "summary": "List the IM chats bound to threads, all of them or one project's or thread's",
-        "description": "List the IM chats bound to threads, all of them or one project's or thread's",
+        "summary": "List IM chats bound to threads, projects, or folders",
+        "description": "List IM chats bound to threads, projects, or folders",
         "operationId": "apiV1ProjectsChannel-bindingsGet",
         "parameters": [
           {
             "name": "project_id",
             "in": "query",
-            "description": "Only chats bound to a thread of this project",
+            "description": "Only chats bound to this project or folder",
             "required": false,
             "schema": {
               "type": "string"
@@ -444,8 +444,8 @@
         "tags": [
           "projects"
         ],
-        "summary": "Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it",
-        "description": "Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it",
+        "summary": "Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it",
+        "description": "Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it",
         "operationId": "apiV1ProjectsChannel-bindingsPut",
         "requestBody": {
           "description": "Request body",
@@ -1375,8 +1375,8 @@
         "tags": [
           "threads"
         ],
-        "summary": "Archive (resolve) the thread; it stays readable and can be reopened",
-        "description": "Archive (resolve) the thread; it stays readable and can be reopened",
+        "summary": "Archive a folder session, stopping its process without resolving it",
+        "description": "Archive a folder session, stopping its process without resolving it",
         "operationId": "apiV1ThreadsIdArchivePost",
         "parameters": [
           {
@@ -1548,6 +1548,50 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Diff"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/effort": {
+      "put": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Set the thread's next-turn effort; empty restores its default",
+        "description": "Set the thread's next-turn effort; empty restores its default",
+        "operationId": "apiV1ThreadsIdEffortPut",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EffortRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
                 }
               }
             }
@@ -2047,9 +2091,42 @@
         "tags": [
           "threads"
         ],
-        "summary": "Reopen an archived thread",
-        "description": "Reopen an archived thread",
+        "summary": "Reopen a resolved thread",
+        "description": "Reopen a resolved thread",
         "operationId": "apiV1ThreadsIdReopenPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/resolve": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Resolve the thread; it stays readable and can be reopened",
+        "description": "Resolve the thread; it stays readable and can be reopened",
+        "operationId": "apiV1ThreadsIdResolvePost",
         "parameters": [
           {
             "name": "id",
@@ -2105,6 +2182,39 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/restore": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Restore an archived folder session without changing its status",
+        "description": "Restore an archived folder session without changing its status",
+        "operationId": "apiV1ThreadsIdRestorePost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2411,6 +2521,10 @@
       "BindChannelRequest": {
         "type": "object",
         "properties": {
+          "bot_uuid": {
+            "type": "string",
+            "description": "Field bot_uuid"
+          },
           "chat_id": {
             "type": "string",
             "description": "Field chat_id"
@@ -2455,6 +2569,10 @@
       "ChannelBinding": {
         "type": "object",
         "properties": {
+          "bot_uuid": {
+            "type": "string",
+            "description": "Field bot_uuid"
+          },
           "chat_id": {
             "type": "string",
             "description": "Field chat_id"
@@ -2468,6 +2586,23 @@
             "format": "date-time",
             "description": "Field created_at"
           },
+          "focus_agent": {
+            "type": "string",
+            "description": "Field focus_agent"
+          },
+          "focus_seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field focus_seq"
+          },
+          "focus_title": {
+            "type": "string",
+            "description": "Field focus_title"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Field folder"
+          },
           "id": {
             "type": "string",
             "description": "Field id"
@@ -2479,6 +2614,23 @@
           "project_id": {
             "type": "string",
             "description": "Field project_id"
+          },
+          "target_project_id": {
+            "type": "string",
+            "description": "Field target_project_id"
+          },
+          "target_seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field target_seq"
+          },
+          "target_thread_id": {
+            "type": "string",
+            "description": "Field target_thread_id"
+          },
+          "target_title": {
+            "type": "string",
+            "description": "Field target_title"
           },
           "thread_id": {
             "type": "string",
@@ -2677,6 +2829,17 @@
             "type": "string",
             "description": "Field content"
           },
+          "effort": {
+            "type": "string",
+            "description": "Field effort",
+            "enum": [
+              "",
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
+          },
           "model": {
             "type": "string",
             "description": "Field model"
@@ -2733,6 +2896,25 @@
           "patch",
           "uncommitted",
           "truncated"
+        ]
+      },
+      "EffortRequest": {
+        "type": "object",
+        "properties": {
+          "effort": {
+            "type": "string",
+            "description": "Field effort",
+            "enum": [
+              "",
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
+          }
+        },
+        "required": [
+          "effort"
         ]
       },
       "Event": {
@@ -3159,6 +3341,10 @@
       "ProfileRequest": {
         "type": "object",
         "properties": {
+          "inherit": {
+            "type": "boolean",
+            "description": "Field inherit"
+          },
           "profile": {
             "type": "string",
             "description": "Field profile"
@@ -3183,6 +3369,10 @@
           "coordinator_model": {
             "type": "string",
             "description": "Field coordinator_model"
+          },
+          "coordinator_profile": {
+            "type": "string",
+            "description": "Field coordinator_profile"
           },
           "created_at": {
             "type": "string",
@@ -3244,6 +3434,10 @@
             "type": "string",
             "description": "Field thread_permission_mode"
           },
+          "thread_profile": {
+            "type": "string",
+            "description": "Field thread_profile"
+          },
           "type": {
             "type": "string",
             "description": "Field type"
@@ -3261,6 +3455,8 @@
           "goal",
           "instructions",
           "repos",
+          "coordinator_profile",
+          "thread_profile",
           "coordinator_model",
           "thread_model",
           "coordinator_effort",
@@ -3367,6 +3563,10 @@
             "type": "string",
             "description": "Field coordinator_model"
           },
+          "coordinator_profile": {
+            "type": "string",
+            "description": "Field coordinator_profile"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -3427,6 +3627,10 @@
             "type": "string",
             "description": "Field thread_permission_mode"
           },
+          "thread_profile": {
+            "type": "string",
+            "description": "Field thread_profile"
+          },
           "threads": {
             "$ref": "#/components/schemas/ThreadCounts"
           },
@@ -3447,6 +3651,8 @@
           "goal",
           "instructions",
           "repos",
+          "coordinator_profile",
+          "thread_profile",
           "coordinator_model",
           "thread_model",
           "coordinator_effort",
@@ -3785,6 +3991,11 @@
             "type": "string",
             "description": "Field agent"
           },
+          "archived_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field archived_at"
+          },
           "auto_answer": {
             "type": "string",
             "description": "Field auto_answer"
@@ -3810,6 +4021,10 @@
           "cwd": {
             "type": "string",
             "description": "Field cwd"
+          },
+          "effort_override": {
+            "type": "string",
+            "description": "Field effort_override"
           },
           "files_changed": {
             "type": "integer",
@@ -3867,6 +4082,10 @@
             "type": "string",
             "description": "Field profile"
           },
+          "profile_override": {
+            "type": "string",
+            "description": "Field profile_override"
+          },
           "project_id": {
             "type": "string",
             "description": "Field project_id"
@@ -3874,6 +4093,10 @@
           "repo_path": {
             "type": "string",
             "description": "Field repo_path"
+          },
+          "reported_model": {
+            "type": "string",
+            "description": "Field reported_model"
           },
           "resolved_at": {
             "type": "string",
@@ -3930,6 +4153,7 @@
           "status",
           "origin",
           "cwd",
+          "profile_override",
           "commits_ahead",
           "files_changed",
           "uncommitted",
@@ -4233,6 +4457,10 @@
             "type": "string",
             "description": "Field coordinator_model"
           },
+          "coordinator_profile": {
+            "type": "string",
+            "description": "Field coordinator_profile"
+          },
           "disable_worktree": {
             "type": "boolean",
             "description": "Field disable_worktree"
@@ -4288,6 +4516,10 @@
               "auto",
               "bypassPermissions"
             ]
+          },
+          "thread_profile": {
+            "type": "string",
+            "description": "Field thread_profile"
           }
         }
       },

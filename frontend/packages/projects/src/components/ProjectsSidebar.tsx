@@ -5,9 +5,9 @@ import { fontSizes } from '@tingly/ui/theme/fonts';
 import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useProjectList } from '../hooks/useProjectList';
-import { folderName } from '../utils/format';
 import { Add, ChatBubble, Folder, Stack, Star } from './icons';
 import { useProjectsHost } from '../host/ProjectsHost';
+import { NavTree } from './NavTree';
 
 /** One row of a sidebar section: a place the user can open. */
 export interface ProjectsSidebarRow {
@@ -137,8 +137,7 @@ function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection;
 
 /**
  * The Projects navigation: the user's projects and working folders, one flat
- * row each that opens the project or folder (its threads are observed inside,
- * in the Overview and the info rail — not as a subtree here), followed by
+ * row each. Folders can expand to show their sessions, followed by
  * whatever sections the host adds. It knows nothing about the host; Tingly Box
  * passes its working folders in as a section.
  */
@@ -149,7 +148,11 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
     const { paths, im } = useProjectsHost();
     const botCount = useImBotCount(showIm && !!im);
     // One list serves both groups: Projects and Folders are its two types.
-    const { projects, folders } = useProjectList(showProjects || showWorkdirs);
+    const [revisions, setRevisions] = useState<Record<string, number>>({});
+    const [reconnect, setReconnect] = useState(0);
+    const { projects, folders } = useProjectList(showProjects || showWorkdirs, (ev) => {
+        if (ev.type === 'thread') setRevisions((r) => ({ ...r, [ev.project_id]: (r[ev.project_id] ?? 0) + 1 }));
+    }, () => setReconnect((n) => n + 1));
     const [params] = useSearchParams();
     const scope = location.pathname === paths.folder().split('?')[0] ? params.get('path') ?? '' : undefined;
 
@@ -193,15 +196,10 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
                 onNavigate?.();
             },
         },
-        rows: (folders ?? []).map((f) => ({
-            key: f.id,
-            label: folderName(f.path ?? ''),
-            title: f.path ?? '',
-            icon: <Folder />,
-            to: paths.folder(f.path ?? ''),
-            selected: f.path != null && f.path === scope,
-            ...state(f),
-        })),
+        rows: [],
+        content: folders?.length ? <NavTree items={folders} activeId={folders.find((f) => f.path === scope)?.id}
+            openSession={scope === undefined ? null : params.get('session')} to={(f) => paths.folder(f.path ?? '')}
+            onNavigate={onNavigate} revisions={revisions} reconnect={reconnect} /> : undefined,
         empty: folders ? t('sidebar.noWorkdirs') : undefined,
     } : null;
 
