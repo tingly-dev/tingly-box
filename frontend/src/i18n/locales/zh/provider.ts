@@ -251,7 +251,7 @@ export default {
     }
   },
   "credentialPage": {
-    "sortBy": "凭证排序",
+    "sortBy": "排序方式",
     "sortName": "按名称",
     "sortProvider": "按 Provider",
     "tableView": "表格视图",

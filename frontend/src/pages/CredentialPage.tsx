@@ -12,8 +12,8 @@ import Surface from '@/components/Surface';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
 import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
 import { useProviderDialog } from '@/hooks/useProviderDialog';
-import { IconLayoutGrid, IconList, IconTable } from '@tabler/icons-react';
-import { Add, VpnKey } from '@/components/icons';
+import { IconArrowsSort, IconLayoutGrid, IconList, IconTable } from '@tabler/icons-react';
+import { Add, Check, VpnKey } from '@/components/icons';
 import {
     Alert,
     Box,
@@ -25,7 +25,8 @@ import {
     DialogTitle,
     Divider,
     Stack,
-    Select,
+    IconButton,
+    Menu,
     MenuItem,
     Typography,
     ToggleButton,
@@ -77,6 +78,7 @@ const CredentialPage = () => {
     };
     useProviderCatalogLoaded();
     const providerCatalog = getServiceProvidersSync();
+    const [sortAnchor, setSortAnchor] = useState<HTMLElement | null>(null);
     const [loading, setLoading] = useState(true);
     const notify = useNotify();
     const { t, i18n } = useTranslation();
@@ -204,10 +206,12 @@ const CredentialPage = () => {
                     // The provider catalog is reached from inside Connect AI.
                     actions={credentialCounts.total === 0 ? undefined : (
                         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
-                            <Select size="small" value={sort} onChange={event => changeSort(event.target.value as CredentialSort)} inputProps={{ 'aria-label': t('credentialPage.sortBy') }} sx={{ minWidth: 135 }}>
-                                <MenuItem value="name">{t('credentialPage.sortName')}</MenuItem>
-                                <MenuItem value="provider">{t('credentialPage.sortProvider')}</MenuItem>
-                            </Select>
+                            <Tooltip title={`${t('credentialPage.sortBy')}: ${t(sort === 'name' ? 'credentialPage.sortName' : 'credentialPage.sortProvider')}`}>
+                                <IconButton aria-label={t('credentialPage.sortBy')} aria-haspopup="menu" aria-expanded={Boolean(sortAnchor)} onClick={event => setSortAnchor(event.currentTarget)} size="small" sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 0.75 }}><IconArrowsSort size={18}/></IconButton>
+                            </Tooltip>
+                            <Menu anchorEl={sortAnchor} open={Boolean(sortAnchor)} onClose={() => setSortAnchor(null)}>
+                                {(['name', 'provider'] as const).map(option => <MenuItem key={option} selected={sort === option} onClick={() => { changeSort(option); setSortAnchor(null); }} sx={{ minWidth: 155, justifyContent: 'space-between', gap: 2 }}>{t(option === 'name' ? 'credentialPage.sortName' : 'credentialPage.sortProvider')}{sort === option && <Check fontSize="small"/>}</MenuItem>)}
+                            </Menu>
                             <ToggleButtonGroup size="small" exclusive value={view} onChange={(_, next: CredentialView | null) => changeView(next)} aria-label={t('credentialPage.viewMode')}>
                                 <ToggleButton value="table" aria-label={t('credentialPage.tableView')}><Tooltip title={t('credentialPage.tableView')}><IconTable size={18}/></Tooltip></ToggleButton>
                                 <ToggleButton value="list" aria-label={t('credentialPage.listView')}><Tooltip title={t('credentialPage.listView')}><IconList size={18}/></Tooltip></ToggleButton>
