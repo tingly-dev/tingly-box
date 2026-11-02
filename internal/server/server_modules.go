@@ -10,6 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
 	debugmodule "github.com/tingly-dev/tingly-box/internal/server/module/debug"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
+	localsessionsmodule "github.com/tingly-dev/tingly-box/internal/server/module/localsessions"
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
 	projectsmodule "github.com/tingly-dev/tingly-box/internal/server/module/projects"
@@ -139,6 +140,7 @@ func (s *Server) apiModules(ctx context.Context, schema bool) []module.Module {
 		// UI-only preferences shared by the browser and desktop UIs
 		uiprefs.NewHandler(s.config),
 		codeximport.NewHandler(nil, s.config),
+		localsessionsmodule.NewHandler(s.config, s.host),
 		mcpmodule.NewHandler(s.config, s.mcpRuntime),
 		// Provider quota API routes — registered unconditionally (nil manager is
 		// safe; Handler.available() answers 503 per request) so the routes and

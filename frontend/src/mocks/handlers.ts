@@ -4,6 +4,7 @@ import { projectsHandlers } from './projectsHandlers'
 import { resolveMockDataProfile } from './mockConfig'
 import { systemHandlers } from './systemHandlers'
 import { createSkillHandlers } from './skillHandlers'
+import { localSessionHandlers } from './localSessionHandlers'
 import providerCatalog from '../../../internal/catalog/providers.json'
 
 // ============================================
@@ -2003,6 +2004,7 @@ const mockUiPrefs: Record<string, unknown> = {};
 const mockScenarioStringFlags = new Map<string, string>()
 
 export const handlers = [
+    ...localSessionHandlers,
     ...newcomerHandlers,
     ...systemHandlers,
     ...createSkillHandlers(),

@@ -5,6 +5,7 @@ import { useAuth } from './AuthContext';
 
 interface FeatureFlagsContextType {
     skillIde: boolean;
+    localSessions: boolean;
     enableGuardrails: boolean;
     enableMCP: boolean;
     enableBench: boolean;
@@ -30,6 +31,7 @@ interface FeatureFlagsProviderProps {
 export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ children }) => {
     const { isLoading: isAuthLoading } = useAuth();
     const [skillIde, setSkillIde] = useState(false);
+    const [localSessions, setLocalSessions] = useState(false);
     const [enableGuardrails, setEnableGuardrails] = useState(false);
     const [enableMCP, setEnableMCP] = useState(false);
     const [enableBench, setEnableBench] = useState(false);
@@ -40,13 +42,15 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
     // memoized context value below can depend on a stable `refresh`).
     const loadFlags = useCallback(async () => {
         try {
-            const [skillIdeResult, guardrailsResult, mcpResult, benchResult, projectsResult] = await Promise.all([
+            const [localSessionsResult, skillIdeResult, guardrailsResult, mcpResult, benchResult, projectsResult] = await Promise.all([
+                api.getScenarioFlag('_global', 'local_sessions'),
                 api.getScenarioFlag('_global', 'skill_ide'),
                 api.getScenarioFlag('_global', 'guardrails'),
                 api.getScenarioFlag('_global', 'mcp'),
                 api.getScenarioFlag('_global', 'bench'),
                 api.getScenarioFlag('_global', 'projects'),
             ]);
+            setLocalSessions(localSessionsResult?.data?.value || false);
             setSkillIde(skillIdeResult?.data?.value || false);
             setEnableGuardrails(guardrailsResult?.data?.value || false);
             setEnableMCP(mcpResult?.data?.value || false);
@@ -71,8 +75,8 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
     const refresh = loadFlags;
 
     const value = useMemo(() => ({
-        skillIde, enableGuardrails, enableMCP, enableBench, enableProjects, loading, refresh,
-    }), [skillIde, enableGuardrails, enableMCP, enableBench, enableProjects, loading, refresh]);
+        localSessions, skillIde, enableGuardrails, enableMCP, enableBench, enableProjects, loading, refresh,
+    }), [localSessions, skillIde, enableGuardrails, enableMCP, enableBench, enableProjects, loading, refresh]);
 
     return (
         <FeatureFlagsContext.Provider value={value}>
