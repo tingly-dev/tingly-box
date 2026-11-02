@@ -9,23 +9,30 @@ vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => (
     'decisionTry.examplePredicate': 'Is it urgent?', 'decisionTry.exampleScore': 'How urgent?', 'decisionTry.exampleLevels': 'low\nmedium\nhigh',
 }[key] ?? key) }) }));
 vi.mock('@/components/probe/runProbe', () => ({ runProbe: vi.fn(), formatLatency: (ms: number) => `${ms}ms` }));
+vi.mock('@/pages/image/components/ImageModelPicker', () => ({ default: () => null }));
 
 const rule: Rule = { uuid: 'rule-1', scenario: 'decisions', request_model: 'decision-model', active: true };
 
 describe('DecisionTryCard', () => {
     beforeEach(() => vi.resetAllMocks());
 
-    it('offers a collapsible empty state without sending a request', () => {
-        render(<DecisionTryCard rules={[]} />);
+    // The card ships collapsed; every interaction starts by expanding it.
+    const expand = () => fireEvent.click(screen.getByRole('button', { name: /decisionTry.title/ }));
+
+    it('starts collapsed and offers a collapsible empty state without sending a request', () => {
+        render(<DecisionTryCard rules={[]} showNotification={vi.fn()} onRulesReload={vi.fn()} />);
+        const header = screen.getByRole('button', { name: /decisionTry.title/ });
+        expect(header).toHaveAttribute('aria-expanded', 'false');
+        expand();
+        expect(header).toHaveAttribute('aria-expanded', 'true');
         expect(screen.getByText('decisionTry.noRules')).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: /decisionTry.title/ }));
-        expect(screen.getByRole('button', { name: /decisionTry.title/ })).toHaveAttribute('aria-expanded', 'false');
         expect(runProbe).not.toHaveBeenCalled();
     });
 
     it('runs the selected rule through Decisions and displays its answer', async () => {
         vi.mocked(runProbe).mockResolvedValue({ success: true, data: { latency_ms: 42, selected_provider: 'Provider', selected_model: 'upstream', decision_response: { answers: { result: { type: 'choice', choice: 'billing', probabilities: { billing: 0.9, technical: 0.1 } } } } } });
-        render(<DecisionTryCard rules={[rule]} />);
+        render(<DecisionTryCard rules={[rule]} showNotification={vi.fn()} onRulesReload={vi.fn()} />);
+        expand();
         fireEvent.click(screen.getByRole('button', { name: 'decisionTry.run' }));
         await waitFor(() => expect(runProbe).toHaveBeenCalledWith({
             target_type: 'rule', scenario: 'decisions', rule_uuid: 'rule-1', operation: 'decisions',
@@ -40,7 +47,8 @@ describe('DecisionTryCard', () => {
 
     it('requires a concrete model for a wildcard rule', async () => {
         vi.mocked(runProbe).mockResolvedValue({ success: false, error: { message: 'failed', type: 'probe_error' } });
-        render(<DecisionTryCard rules={[{ ...rule, request_model: '*' }]} />);
+        render(<DecisionTryCard rules={[{ ...rule, request_model: '*' }]} showNotification={vi.fn()} onRulesReload={vi.fn()} />);
+        expand();
         const run = screen.getByRole('button', { name: 'decisionTry.run' });
         expect(run).toBeDisabled();
         fireEvent.change(screen.getByLabelText('decisionTry.model'), { target: { value: 'actual-model' } });
@@ -51,7 +59,8 @@ describe('DecisionTryCard', () => {
 
     it('builds a score question with ordered levels', async () => {
         vi.mocked(runProbe).mockResolvedValue({ success: true, data: { latency_ms: 4, decision_response: { answers: { result: { type: 'score', score: 1.2, probabilities: { '0': 0.1, '1': 0.6, '2': 0.3 }, legend: { '0': 'low', '1': 'medium', '2': 'high' } } } } } });
-        render(<DecisionTryCard rules={[rule]} />);
+        render(<DecisionTryCard rules={[rule]} showNotification={vi.fn()} onRulesReload={vi.fn()} />);
+        expand();
         fireEvent.click(screen.getByRole('button', { name: 'decisionTry.score' }));
         fireEvent.click(screen.getByRole('button', { name: 'decisionTry.run' }));
         await waitFor(() => expect(runProbe).toHaveBeenCalledWith(expect.objectContaining({
@@ -62,7 +71,8 @@ describe('DecisionTryCard', () => {
     });
 
     it('rejects duplicate choice values before sending', () => {
-        render(<DecisionTryCard rules={[rule]} />);
+        render(<DecisionTryCard rules={[rule]} showNotification={vi.fn()} onRulesReload={vi.fn()} />);
+        expand();
         fireEvent.change(screen.getByLabelText('decisionTry.options'), { target: { value: 'same\nsame' } });
         expect(screen.getByRole('button', { name: 'decisionTry.run' })).toBeDisabled();
         expect(runProbe).not.toHaveBeenCalled();
@@ -70,7 +80,8 @@ describe('DecisionTryCard', () => {
 
     it('builds a yes/no question and shows the returned probability', async () => {
         vi.mocked(runProbe).mockResolvedValue({ success: true, data: { latency_ms: 4, decision_response: { answers: { result: { type: 'noul', noul: 0.75 } } } } });
-        render(<DecisionTryCard rules={[rule]} />);
+        render(<DecisionTryCard rules={[rule]} showNotification={vi.fn()} onRulesReload={vi.fn()} />);
+        expand();
         fireEvent.click(screen.getByRole('button', { name: 'decisionTry.predicate' }));
         fireEvent.click(screen.getByRole('button', { name: 'decisionTry.run' }));
         await waitFor(() => expect(runProbe).toHaveBeenCalledWith(expect.objectContaining({

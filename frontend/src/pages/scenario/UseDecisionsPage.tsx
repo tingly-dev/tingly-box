@@ -7,7 +7,13 @@ const decisions: AgentPageDescriptor = {
     tooltipKey: 'scenarioPage.tooltip.decisions',
     title: 'Decisions API',
     rulesTitleKey: 'scenarioPage.decisionsModelRules',
-    renderBeforeRules: (slot) => <DecisionTryCard rules={slot.rules} />,
+    renderAfterRules: (slot) => (
+        <DecisionTryCard
+            rules={slot.rules}
+            showNotification={slot.showNotification}
+            onRulesReload={() => slot.loadRules(slot.scenario)}
+        />
+    ),
     connection: { compact: true, apiKeyRow: true, baseUrlRow: true },
     setup: {
         kind: 'guide',
