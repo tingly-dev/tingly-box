@@ -429,24 +429,28 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 	var note string
 	if repo != nil {
 		t.RepoPath, t.BaseBranch = repo.Path, repo.BaseBranch
-		t.Branch = fmt.Sprintf("tp/%s-%s", slugify(title), t.ID[:6])
-		// In the repository's own .claude/worktrees; if that cannot be used
-		// (read-only repository, ...) fall back to the data directory, where
-		// threads used to live, and say so.
-		inRepo := RepoWorktreeDir(repo.Path, slugify(title), t.ID)
-		err := excludeWorktrees(ctx, repo.Path)
-		if err == nil {
-			err = AddWorktree(ctx, repo.Path, inRepo, t.Branch, repo.BaseBranch)
-		}
-		if err == nil {
-			t.Cwd = inRepo
+		if p.DisableWorktree {
+			t.Cwd = repo.Path
 		} else {
-			note = fmt.Sprintf("Could not create the worktree in %s (%v); using %s instead.", filepath.Join(repo.Path, ".claude", "worktrees"), err, t.Cwd)
-			if err := AddWorktree(ctx, repo.Path, t.Cwd, t.Branch, repo.BaseBranch); err != nil {
-				t.Status, t.WaitReason = db.ThreadWaiting, "Could not create the worktree: "+err.Error()
-				_ = m.store.SaveThread(t)
-				m.publish(t)
-				return t, nil
+			t.Branch = fmt.Sprintf("tp/%s-%s", slugify(title), t.ID[:6])
+			// In the repository's own .claude/worktrees; if that cannot be used
+			// (read-only repository, ...) fall back to the data directory, where
+			// threads used to live, and say so.
+			inRepo := RepoWorktreeDir(repo.Path, slugify(title), t.ID)
+			err := excludeWorktrees(ctx, repo.Path)
+			if err == nil {
+				err = AddWorktree(ctx, repo.Path, inRepo, t.Branch, repo.BaseBranch)
+			}
+			if err == nil {
+				t.Cwd = inRepo
+			} else {
+				note = fmt.Sprintf("Could not create the worktree in %s (%v); using %s instead.", filepath.Join(repo.Path, ".claude", "worktrees"), err, t.Cwd)
+				if err := AddWorktree(ctx, repo.Path, t.Cwd, t.Branch, repo.BaseBranch); err != nil {
+					t.Status, t.WaitReason = db.ThreadWaiting, "Could not create the worktree: "+err.Error()
+					_ = m.store.SaveThread(t)
+					m.publish(t)
+					return t, nil
+				}
 			}
 		}
 	} else if err := os.MkdirAll(t.Cwd, 0o755); err != nil {
@@ -910,7 +914,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		return
 	}
 	stats := BranchStats{}
-	if t.RepoPath != "" {
+	if t.Branch != "" {
 		stats = Stats(context.Background(), t.Cwd, t.BaseBranch)
 	}
 	session := m.isFolder(t.ProjectID)
@@ -1179,8 +1183,8 @@ func (m *Threads) Diff(ctx context.Context, threadID string) (Diff, error) {
 	if err != nil {
 		return Diff{}, err
 	}
-	if t.RepoPath == "" {
-		return Diff{}, errors.New("this thread works without a repository")
+	if t.Branch == "" {
+		return Diff{}, errors.New("this thread has no worktree branch to review")
 	}
 	return BranchDiff(ctx, t.Cwd, t.BaseBranch, t.Branch)
 }

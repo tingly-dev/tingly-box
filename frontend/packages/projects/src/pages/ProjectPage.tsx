@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Box, Button, IconButton, Link, Skeleton, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, IconButton, Link, MenuItem, Select, Skeleton, Stack, Tooltip, Typography } from '@mui/material';
 import { Link as RouterLink, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, isFolder, type components, unwrap, type Project, type Thread, type ThreadEvent } from '../client';
@@ -18,7 +18,7 @@ import { FloatingWindow } from '../components/workspace/FloatingWindow';
 import { OverviewBand } from '../components/workspace/OverviewBand';
 import { PlacementMenu } from '../components/workspace/PlacementMenu';
 import { WorkspaceLayout, useWorkspacePane } from '../components/workspace/WorkspaceLayout';
-import { FloatWindow, Pause, Settings, Star, StarBorder } from '../components/icons';
+import { ExpandMore, FloatWindow, Folder, Pause, Settings, Star, StarBorder } from '../components/icons';
 import { useNotify } from '../hooks/useNotify';
 import { useProjectEvents, type ProjectEvent } from '../hooks/useProjectEvents';
 import { useTranscript } from '../hooks/useTranscript';
@@ -26,6 +26,7 @@ import { usePlacement } from '../hooks/usePlacement';
 import { useProjectsHost } from '../host/ProjectsHost';
 import { readLocal, writeLocal } from '../utils/storage';
 import { needsUser } from '../components/project/threadStatus';
+import { composerPickerLabelSx, composerPickerSx } from '../components/composerPicker';
 
 
 // The permission modes a project can give its threads (the server refuses others).
@@ -200,7 +201,7 @@ export default function ProjectPage() {
         p.delete('thread');
         return p;
     });
-    const patch = async (body: Pick<components['schemas']['UpdateProjectRequest'], 'starred' | 'paused' | 'archived' | 'coordinator_model' | 'thread_model' | 'coordinator_profile' | 'thread_profile' | 'coordinator_effort' | 'thread_effort' | 'thread_permission_mode'>) => {
+    const patch = async (body: Pick<components['schemas']['UpdateProjectRequest'], 'starred' | 'paused' | 'archived' | 'coordinator_model' | 'thread_model' | 'coordinator_profile' | 'thread_profile' | 'coordinator_effort' | 'thread_effort' | 'thread_permission_mode' | 'disable_worktree'>) => {
         if (projectSaving.current) return;
         projectSaving.current = true;
         setSavingDefaults(true);
@@ -385,6 +386,20 @@ export default function ProjectPage() {
                             // Defaults stay project-scoped; the selected worker's overrides are in its own panel.
                             <>
                                 <Typography variant="caption" color="text.secondary" title={t('threadSettings.defaultsHelp')}>{t('threadSettings.defaults')}</Typography>
+                                <Tooltip title={t('projectSettings.worktreeHelp')}>
+                                    <Select
+                                        size="small" variant="standard" disableUnderline IconComponent={ExpandMore}
+                                        value={project.disable_worktree ? 'shared' : 'worktree'}
+                                        inputProps={{ 'aria-label': t('threadSettings.worktreeMode') }}
+                                        disabled={blocked || savingDefaults}
+                                        onChange={(e) => void patch({ disable_worktree: e.target.value === 'shared' })}
+                                        renderValue={(value) => <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}><Folder /><Typography noWrap sx={composerPickerLabelSx}>{t(`threadSettings.workspace.${value}`)}</Typography></Stack>}
+                                        sx={composerPickerSx}
+                                    >
+                                        <MenuItem value="worktree">{t('threadSettings.workspace.worktree')}</MenuItem>
+                                        <MenuItem value="shared">{t('threadSettings.workspace.shared')}</MenuItem>
+                                    </Select>
+                                </Tooltip>
                                 <PermissionModeSelect
                                     value={project.thread_permission_mode || 'acceptEdits'}
                                     modes={THREAD_MODES}

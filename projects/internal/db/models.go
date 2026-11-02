@@ -42,12 +42,14 @@ type Project struct {
 	CoordinatorEffort  string `gorm:"size:32" json:"coordinator_effort"`
 	ThreadEffort       string `gorm:"size:32" json:"thread_effort"`
 	// ThreadPermissionMode is the Claude Code permission mode threads run in.
-	ThreadPermissionMode string     `gorm:"size:40" json:"thread_permission_mode"`
-	Paused               bool       `json:"paused"`
-	Starred              bool       `json:"starred"`
-	ArchivedAt           *time.Time `json:"archived_at,omitempty"`
-	CreatedAt            time.Time  `json:"created_at"`
-	UpdatedAt            time.Time  `json:"updated_at"`
+	ThreadPermissionMode string `gorm:"size:40" json:"thread_permission_mode"`
+	// DisableWorktree makes new threads share the selected repository checkout.
+	DisableWorktree bool       `json:"disable_worktree,omitempty"`
+	Paused          bool       `json:"paused"`
+	Starred         bool       `json:"starred"`
+	ArchivedAt      *time.Time `json:"archived_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 // Project types.
