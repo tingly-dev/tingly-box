@@ -63,6 +63,7 @@ func (s *Service) SetupRoutes(group *gin.RouterGroup) {
 	group.POST("/chat/completions", s.handler.ChatCompletions)
 	group.POST("/responses", s.handler.Responses)
 	group.POST("/decisions", s.handler.Decisions)
+	group.POST("/systemone", s.handler.Decisions)
 	group.POST("/messages", s.handler.Messages)
 }
 
@@ -81,6 +82,7 @@ func (s *Service) SetupOpenAIRoutes(group *gin.RouterGroup) {
 	v1.POST("/chat/completions", s.handler.ChatCompletions)
 	v1.POST("/responses", s.handler.Responses)
 	v1.POST("/decisions", s.handler.Decisions)
+	v1.POST("/systemone", s.handler.Decisions)
 }
 
 // SetupAnthropicRoutes mounts the Anthropic-only entrypoints on the given

@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 
+	"github.com/tingly-dev/tingly-box/internal/decisionprotocol"
 	decisionvm "github.com/tingly-dev/tingly-box/vmodel/decision"
 )
 
@@ -25,6 +26,16 @@ func (h *Handler) Decisions(c *gin.Context) {
 	}
 	if !gjson.ValidBytes(body) {
 		decisionError(c, http.StatusBadRequest, "invalid_request_error", "Invalid request body: not valid JSON")
+		return
+	}
+	dialect, err := decisionprotocol.Request(body)
+	if err != nil {
+		decisionError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
+		return
+	}
+	body, conversion, err := decisionprotocol.ConvertRequest(body, dialect, decisionprotocol.SystemOne)
+	if err != nil {
+		decisionError(c, http.StatusBadRequest, "invalid_request_error", "decision conversion: "+err.Error())
 		return
 	}
 	model := gjson.GetBytes(body, "model")
@@ -48,6 +59,13 @@ func (h *Handler) Decisions(c *gin.Context) {
 		}
 		decisionError(c, http.StatusInternalServerError, "api_error", err.Error())
 		return
+	}
+	if conversion != nil {
+		out, err = conversion.ConvertResponse(out)
+		if err != nil {
+			decisionError(c, http.StatusBadGateway, "api_error", "invalid virtual decision response: "+err.Error())
+			return
+		}
 	}
 	c.Data(http.StatusOK, "application/json", out)
 }
