@@ -263,8 +263,6 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
             <Box
                 sx={{
                     py: 0.5,
-                    borderTop: '1px solid',
-                    borderColor: 'divider',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
@@ -283,14 +281,15 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                             dismissPowerUpsTip();
                         }}
                         aria-label={t('layout.activityBar.preferences')}
-                        sx={activityBottomItemSx({
-                            '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
+                        sx={activityItemSx({
+                            width: '100%',
+                            '&:hover': { bgcolor: 'action.hover', color: 'primary.main' },
                             // On a System page the gear is the lit rail item.
                             ...(activeActivity === 'system' && { color: 'primary.main', bgcolor: 'action.selected' }),
                         })}
                     >
                         <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                            <IconSettings sx={{ fontSize: 20 }} />
+                            <IconSettings sx={{ fontSize: 22 }} />
                         </ListItemIcon>
                     </ListItemButton>
                 </Tooltip>
