@@ -54,6 +54,9 @@ func newImBotSettingsStore(conn storeConn) (*ImBotSettingsStore, error) {
 	if err := conn.db.AutoMigrate(&ImBotSettingsRecord{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate imbot settings database: %w", err)
 	}
+	if err := migrateBotAccessTables(conn.db); err != nil {
+		return nil, fmt.Errorf("failed to migrate bot access tables: %w", err)
+	}
 	return &ImBotSettingsStore{storeConn: conn}, nil
 }
 
@@ -139,7 +142,12 @@ func (s *ImBotSettingsStore) CreateSettings(settings Settings) (Settings, error)
 		UpdatedAt:      settings.UpdatedAt,
 	}
 
-	if err := s.db.Create(&record).Error; err != nil {
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&record).Error; err != nil {
+			return err
+		}
+		return tx.Exec(`INSERT INTO bot_capabilities (bot_uuid, capability, enabled, config, created_at, updated_at) VALUES (?, 'remote_control', TRUE, '{}', ?, ?), (?, 'notify', FALSE, '{}', ?, ?)`, settings.UUID, now, now, settings.UUID, now, now).Error
+	}); err != nil {
 		return Settings{Auth: make(map[string]string)}, fmt.Errorf("failed to create settings: %w", err)
 	}
 

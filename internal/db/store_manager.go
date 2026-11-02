@@ -186,9 +186,6 @@ func (sm *StoreManager) dropDeprecatedModelCapabilities() error {
 // These replace the JSON files the remote subsystem used to keep beside the
 // database; see .design/remote-storage.md.
 func (sm *StoreManager) initRemoteStores() error {
-	if err := migrateBotAccessTables(sm.db); err != nil {
-		return fmt.Errorf("migrate bot access tables: %w", err)
-	}
 	if err := sm.db.AutoMigrate(
 		&RemoteChatRecord{},
 	); err != nil {
