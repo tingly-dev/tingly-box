@@ -22,9 +22,13 @@ func TestDecisionProbeThroughGatewayToVirtualModel(t *testing.T) {
 	require.NoError(t, err)
 	cfg.ServerPort, err = strconv.Atoi(port)
 	require.NoError(t, err)
-	rule := cfg.MatchRuleByModelAndScenario(model, typ.ScenarioOpenAI)
-	require.NotNil(t, rule)
-	request := &probe.E2ERequest{TargetType: probe.E2ETargetRule, Scenario: "openai", RuleUUID: rule.UUID, Operation: "decisions", DecisionRequest: json.RawMessage(`{"state":"invoice problem","questions":{"q":{"type":"choice","instructions":"Which team?","criteria":{"billing":"Invoices","technical":"Errors"}}}}`)}
+	original := cfg.MatchRuleByModelAndScenario(model, typ.ScenarioOpenAI)
+	require.NotNil(t, original)
+	rule := *original
+	rule.UUID = "decision-probe-scenario-rule"
+	rule.Scenario = typ.ScenarioDecisions
+	require.NoError(t, cfg.AddRule(rule))
+	request := &probe.E2ERequest{TargetType: probe.E2ETargetRule, Scenario: "decisions", RuleUUID: rule.UUID, Operation: "decisions", DecisionRequest: json.RawMessage(`{"state":"invoice problem","questions":{"q":{"type":"choice","instructions":"Which team?","criteria":{"billing":"Invoices","technical":"Errors"}}}}`)}
 	require.NoError(t, probe.ValidateE2ERequest(request))
 	result, err := probe.NewE2EProber(cfg, client.NewClientPool()).Probe(context.Background(), request)
 	require.NoError(t, err)
