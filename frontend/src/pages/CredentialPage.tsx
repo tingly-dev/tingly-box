@@ -9,7 +9,7 @@ import Surface from '@/components/Surface';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
 import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
 import { useProviderDialog } from '@/hooks/useProviderDialog';
-import { IconLayoutGrid, IconList } from '@tabler/icons-react';
+import { IconLayoutGrid, IconList, IconTable } from '@tabler/icons-react';
 import { Add, VpnKey } from '@/components/icons';
 import {
     Alert,
@@ -34,6 +34,18 @@ import { api } from '../services/api';
 import { useNotify } from '@/hooks/useNotify';
 import { fontSizes } from '@/theme/fonts';
 
+type CredentialView = 'table' | 'list' | 'card';
+const VIEW_STORAGE_KEY = 'tb.credentials.view';
+
+const readCredentialView = (): CredentialView => {
+    try {
+        const saved = localStorage.getItem(VIEW_STORAGE_KEY);
+        return saved === 'list' || saved === 'card' || saved === 'table' ? saved : 'table';
+    } catch {
+        return 'table';
+    }
+};
+
 const SectionTitle = ({ label, count }: { label: string; count: number }) => (
     <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.5 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>{label}</Typography>
@@ -44,7 +56,12 @@ const SectionTitle = ({ label, count }: { label: string; count: number }) => (
 const CredentialPage = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const [providers, setProviders] = useState<any[]>([]);
-    const [view, setView] = useState<"list" | "card">("list");
+    const [view, setView] = useState<CredentialView>(readCredentialView);
+    const changeView = (next: CredentialView | null) => {
+        if (!next) return;
+        setView(next);
+        try { localStorage.setItem(VIEW_STORAGE_KEY, next); } catch { /* View remains usable if storage is unavailable. */ }
+    };
     const [loading, setLoading] = useState(true);
     const notify = useNotify();
     const { t } = useTranslation();
@@ -172,7 +189,8 @@ const CredentialPage = () => {
                     // The provider catalog is reached from inside Connect AI.
                     actions={credentialCounts.total === 0 ? undefined : (
                         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                            <ToggleButtonGroup size="small" exclusive value={view} onChange={(_, next) => { if (next) setView(next); }} aria-label={t('credentialPage.viewMode')}>
+                            <ToggleButtonGroup size="small" exclusive value={view} onChange={(_, next: CredentialView | null) => changeView(next)} aria-label={t('credentialPage.viewMode')}>
+                                <ToggleButton value="table" aria-label={t('credentialPage.tableView')}><Tooltip title={t('credentialPage.tableView')}><IconTable size={18}/></Tooltip></ToggleButton>
                                 <ToggleButton value="list" aria-label={t('credentialPage.listView')}><Tooltip title={t('credentialPage.listView')}><IconList size={18}/></Tooltip></ToggleButton>
                                 <ToggleButton value="card" aria-label={t('credentialPage.cardView')}><Tooltip title={t('credentialPage.cardView')}><IconLayoutGrid size={18}/></Tooltip></ToggleButton>
                             </ToggleButtonGroup>

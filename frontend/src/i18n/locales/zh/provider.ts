@@ -251,6 +251,9 @@ export default {
     }
   },
   "credentialPage": {
+    "tableView": "表格视图",
+    "endpoint": "端点",
+    "twoEndpoints": "2 个端点",
     "viewMode": "显示模式",
     "listView": "列表视图",
     "cardView": "卡片视图",

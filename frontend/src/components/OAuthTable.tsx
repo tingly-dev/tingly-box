@@ -49,7 +49,7 @@ import { fontMono, fontSizes } from '@/theme/fonts';
 
 interface OAuthTableProps {
     providers: Provider[];
-    view?: "list" | "card";
+    view?: "table" | "list" | "card";
     onEdit?: (providerUuid: string) => void;
     onToggle?: (providerUuid: string) => void;
     onDelete?: (providerUuid: string) => void;
@@ -91,7 +91,7 @@ const columnsFor = (showQuota: boolean) => showQuota ? COLUMNS : COLUMNS.filter(
 
 const OAuthTable = ({
                         providers,
-                        view = "list",
+                        view = "table",
                         onEdit,
                         onToggle,
                         onDelete,
@@ -224,7 +224,7 @@ const OAuthTable = ({
             component={Paper}
             elevation={0}
             sx={{
-                border: view === "card" ? 0 : 1,
+                border: view === "table" ? 1 : 0,
                 borderColor: "divider",
                 borderRadius: 2,
                 boxShadow: "none",
@@ -233,7 +233,7 @@ const OAuthTable = ({
         >
             {/* Fixed column widths (see COLUMNS above); the table itself
                 scrolls horizontally below minWidth instead of columns resizing. */}
-            {view === "card" ? <CredentialCards providers={providers} onEdit={onEdit} onToggle={onToggle} onModels={handleModelListClick} onMore={handleMoreOpen} providerQuotas={providerQuotas} refreshingQuotas={refreshingQuotas} onQuotaRefresh={onQuotaRefresh} onQuotaRedeem={onQuotaRedeem}/> : <Table sx={{tableLayout: "fixed", width: '100%', minWidth: columns.reduce((sum, c) => sum + c.width, 0)}}>
+            {view !== "table" ? <CredentialCards layout={view} providers={providers} onEdit={onEdit} onToggle={onToggle} onModels={handleModelListClick} onMore={handleMoreOpen} providerQuotas={providerQuotas} refreshingQuotas={refreshingQuotas} onQuotaRefresh={onQuotaRefresh} onQuotaRedeem={onQuotaRedeem}/> : <Table sx={{tableLayout: "fixed", width: '100%', minWidth: columns.reduce((sum, c) => sum + c.width, 0)}}>
                 <TableHead>
                     <TableRow sx={{bgcolor: "action.hover"}}>
                         {columns.map((col) => (

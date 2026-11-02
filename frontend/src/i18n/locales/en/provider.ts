@@ -251,6 +251,9 @@ export default {
     }
   },
   "credentialPage": {
+    "tableView": "Table view",
+    "endpoint": "Endpoint",
+    "twoEndpoints": "2 endpoints",
     "viewMode": "View mode",
     "listView": "List view",
     "cardView": "Card view",
