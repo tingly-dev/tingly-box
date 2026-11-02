@@ -1,9 +1,11 @@
-package decisionprotocol
+package decision
 
 import (
+	"strings"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
-	"testing"
 )
 
 func TestConversionOpenAIToSystemOne(t *testing.T) {
@@ -11,7 +13,7 @@ func TestConversionOpenAIToSystemOne(t *testing.T) {
 	out, ctx, err := ConvertRequest(req, OpenAI, SystemOne)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"model":"m","state":"hello","questions":{"urgent":{"type":"noul","instructions":"urgent?"},"dept":{"type":"choice","instructions":"where?","criteria":{"z":"last","a":"first"}},"rating":{"type":"score","instructions":"rate","criteria":["low","high"]}}}`, string(out))
-	require.Less(t, stringsIndex(string(out), `"z":"last"`), stringsIndex(string(out), `"a":"first"`))
+	require.Less(t, strings.Index(string(out), `"z":"last"`), strings.Index(string(out), `"a":"first"`))
 	resp := []byte(`{"model":"m","answers":{"rating":{"type":"score","score":0.8,"confidence":0.4,"legend":{"0":"low","1":"high"},"probabilities":{"0":0.2,"1":0.8}},"dept":{"type":"choice","choice":"z","confidence":0.7,"probabilities":{"z":0.7,"a":0.3}},"urgent":{"type":"noul","noul":0.9}},"usage":{"inputTokens":10,"outputTokens":2}}`)
 	got, err := ctx.ConvertResponse(resp)
 	require.NoError(t, err)
@@ -21,13 +23,16 @@ func TestConversionOpenAIToSystemOne(t *testing.T) {
 	require.Equal(t, "high", gjson.GetBytes(got, "answers.2.probabilities.1.label").String())
 	require.Equal(t, int64(12), gjson.GetBytes(got, "usage.total_tokens").Int())
 }
-func stringsIndex(s, sub string) int {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
+func TestConversionAnonymousNamesDoNotCollide(t *testing.T) {
+	req := []byte(`{"model":"m","input":"x","questions":[{"type":"predicate","instructions":"first"},{"type":"predicate","name":"__question_0","instructions":"second"},{"type":"predicate","instructions":"third"}]}`)
+	out, ctx, err := ConvertRequest(req, OpenAI, SystemOne)
+	require.NoError(t, err)
+	require.Equal(t, "first", gjson.GetBytes(out, "questions.__question_1.instructions").String())
+	require.Equal(t, "second", gjson.GetBytes(out, "questions.__question_0.instructions").String())
+	require.Equal(t, "third", gjson.GetBytes(out, "questions.__question_2.instructions").String())
+	resp, err := ctx.ConvertResponse([]byte(`{"model":"m","answers":{"__question_1":{"type":"noul","noul":0.1},"__question_0":{"type":"noul","noul":0.2},"__question_2":{"type":"noul","noul":0.3}}}`))
+	require.NoError(t, err)
+	require.JSONEq(t, `[{"type":"predicate","name":null,"probability":0.1},{"type":"predicate","name":"__question_0","probability":0.2},{"type":"predicate","name":null,"probability":0.3}]`, gjson.GetBytes(resp, "answers").Raw)
 }
 func TestConversionSystemOneToOpenAI(t *testing.T) {
 	req := []byte(`{"model":"m","state":"hello","questions":{"urgent":{"type":"noul","instructions":"urgent?"},"dept":{"type":"choice","instructions":"where?","criteria":{"z":"last","a":"first"}},"rating":{"type":"score","instructions":"rate","criteria":["low","high"]}}}`)

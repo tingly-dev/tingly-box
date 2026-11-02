@@ -1,9 +1,10 @@
-package decisionprotocol
+package decision
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 
 	"github.com/tidwall/gjson"
@@ -48,13 +49,9 @@ func fields(v gjson.Result, allowed ...string) error {
 	if !v.IsObject() {
 		return fmt.Errorf("expected an object")
 	}
-	ok := map[string]bool{}
-	for _, k := range allowed {
-		ok[k] = true
-	}
 	var err error
 	v.ForEach(func(k, _ gjson.Result) bool {
-		if !ok[k.String()] {
+		if !slices.Contains(allowed, k.String()) {
 			err = fmt.Errorf("unsupported field %q in decision conversion", k.String())
 			return false
 		}
@@ -101,6 +98,17 @@ func ConvertRequest(body []byte, from, to Dialect) ([]byte, *Conversion, error) 
 	outputObj := object{}
 	outputList := []any{}
 	seen := map[string]bool{}
+	// Reserve explicit names before assigning IDs to unnamed questions so an
+	// internal ID cannot collide with a name that appears later in the array.
+	reserved := map[string]bool{}
+	if from == OpenAI {
+		qs.ForEach(func(_, q gjson.Result) bool {
+			if name := q.Get("name"); name.Type == gjson.String && name.String() != "" {
+				reserved[name.String()] = true
+			}
+			return true
+		})
+	}
 	var failure error
 	qs.ForEach(func(k, q gjson.Result) bool {
 		if len(ctx.Questions) >= 200 {
@@ -129,7 +137,12 @@ func ConvertRequest(body []byte, from, to Dialect) ([]byte, *Conversion, error) 
 				id = n.String()
 			}
 			if id == "" {
-				id = fmt.Sprintf("__question_%d", len(ctx.Questions))
+				for suffix := len(ctx.Questions); ; suffix++ {
+					id = fmt.Sprintf("__question_%d", suffix)
+					if !reserved[id] && !seen[id] {
+						break
+					}
+				}
 			}
 		} else {
 			id = k.String()
@@ -338,21 +351,17 @@ func (c *Conversion) ConvertResponse(body []byte) ([]byte, error) {
 	resultArray := []any{}
 	resultObj := object{}
 	list := answers.Array()
+	answerMap := answers.Map()
 	if c.From == SystemOne && len(list) != len(c.Questions) {
 		return nil, fmt.Errorf("upstream answer count mismatch")
 	}
-	if c.From == OpenAI && len(answers.Map()) != len(c.Questions) {
+	if c.From == OpenAI && len(answerMap) != len(c.Questions) {
 		return nil, fmt.Errorf("upstream answer count mismatch")
 	}
 	for i, q := range c.Questions {
 		var a gjson.Result
 		if c.From == OpenAI {
-			for k, v := range answers.Map() {
-				if k == q.ID {
-					a = v
-					break
-				}
-			}
+			a = answerMap[q.ID]
 		} else {
 			a = list[i]
 			name := a.Get("name")
@@ -410,6 +419,10 @@ func (c *Conversion) ConvertResponse(body []byte) ([]byte, error) {
 			}
 			out[dst] = p.Float()
 		case "choice", "score":
+			options := make(map[string]bool, len(q.Options))
+			for _, option := range q.Options {
+				options[option] = true
+			}
 			confidence := a.Get("confidence")
 			if confidence.Type != gjson.Number || confidence.Float() < 0 || confidence.Float() > 1 {
 				return nil, fmt.Errorf("invalid confidence for %q", q.ID)
@@ -420,13 +433,7 @@ func (c *Conversion) ConvertResponse(body []byte) ([]byte, error) {
 				if val.Type != gjson.String {
 					return nil, fmt.Errorf("invalid choice for %q", q.ID)
 				}
-				found := false
-				for _, v := range q.Options {
-					if v == val.String() {
-						found = true
-					}
-				}
-				if !found {
+				if !options[val.String()] {
 					return nil, fmt.Errorf("unknown choice for %q", q.ID)
 				}
 				out["choice"] = val.String()
@@ -440,7 +447,8 @@ func (c *Conversion) ConvertResponse(body []byte) ([]byte, error) {
 			outList := []any{}
 			outMap := map[string]float64{}
 			if c.From == OpenAI {
-				if !probs.IsObject() || len(probs.Map()) != len(q.Options) {
+				probabilities := probs.Map()
+				if !probs.IsObject() || len(probabilities) != len(q.Options) {
 					return nil, fmt.Errorf("invalid probabilities for %q", q.ID)
 				}
 				for n, opt := range q.Options {
@@ -452,7 +460,7 @@ func (c *Conversion) ConvertResponse(body []byte) ([]byte, error) {
 							return nil, fmt.Errorf("invalid score legend for %q", q.ID)
 						}
 					}
-					p := probs.Map()[key]
+					p := probabilities[key]
 					if p.Type != gjson.Number || p.Float() < 0 || p.Float() > 1 {
 						return nil, fmt.Errorf("invalid probabilities for %q", q.ID)
 					}
@@ -493,16 +501,7 @@ func (c *Conversion) ConvertResponse(body []byte) ([]byte, error) {
 							return nil, fmt.Errorf("invalid score label")
 						}
 					}
-					valid := false
-					if q.Type == "score" {
-						valid = true
-					} else {
-						for _, option := range q.Options {
-							if option == key {
-								valid = true
-							}
-						}
-					}
+					valid := q.Type == "score" || options[key]
 					prob := p.Get("probability")
 					if !valid || seen[key] || prob.Type != gjson.Number || prob.Float() < 0 || prob.Float() > 1 {
 						return nil, fmt.Errorf("invalid probabilities for %q", q.ID)

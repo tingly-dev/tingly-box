@@ -9,7 +9,7 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
-	"github.com/tingly-dev/tingly-box/internal/decisionprotocol"
+	"github.com/tingly-dev/tingly-box/internal/decision"
 	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -39,7 +39,7 @@ func (ph *ProtocolHandler) HandleOpenAIDecisions(c *gin.Context) {
 		decisionBadRequest(c, "Failed to read request body: "+err.Error())
 		return
 	}
-	dialect, err := decisionprotocol.Request(body)
+	dialect, err := decision.Request(body)
 	if err != nil {
 		decisionBadRequest(c, err.Error())
 		return
@@ -70,11 +70,11 @@ func (ph *ProtocolHandler) HandleOpenAIDecisions(c *gin.Context) {
 	}
 
 	actualModel := selectedService.Model
-	target := decisionprotocol.ResolveTarget(provider.APIBase).Dialect
+	target := decision.ResolveTarget(provider.APIBase).Dialect
 	if provider.AuthType == typ.AuthTypeVirtual {
-		target = decisionprotocol.SystemOne
+		target = decision.SystemOne
 	}
-	upstreamBody, conversion, err := decisionprotocol.ConvertRequest(body, dialect, target)
+	upstreamBody, conversion, err := decision.ConvertRequest(body, dialect, target)
 	if err != nil {
 		decisionBadRequest(c, "decision conversion: "+err.Error())
 		return
@@ -110,8 +110,8 @@ func (ph *ProtocolHandler) HandleOpenAIDecisions(c *gin.Context) {
 			return
 		}
 	}
-	responseDialect := decisionprotocol.Response(resp)
-	if dialect != decisionprotocol.Unknown && responseDialect != decisionprotocol.Unknown && dialect != responseDialect {
+	responseDialect := decision.Response(resp)
+	if dialect != decision.Unknown && responseDialect != decision.Unknown && dialect != responseDialect {
 		writeErrorResponse(c, http.StatusBadGateway, ErrorResponse{Error: ErrorDetail{
 			Message: "upstream returned an incompatible decision response format; protocol conversion is not configured",
 			Type:    "api_error",

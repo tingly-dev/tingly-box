@@ -1,4 +1,4 @@
-package decisionprotocol
+package decision
 
 import (
 	"net/url"
