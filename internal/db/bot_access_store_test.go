@@ -22,6 +22,24 @@ func createAccessBot(t *testing.T, sm *StoreManager, name string) Settings {
 	return bot
 }
 
+func TestNewBotHasDefaultCapabilities(t *testing.T) {
+	sm, err := NewStoreManager(t.TempDir())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sm.Close() })
+	bot := createAccessBot(t, sm, "new-bot")
+	ctx := context.Background()
+	capabilities, err := sm.BotAccess().ListCapabilities(ctx, bot.UUID)
+	require.NoError(t, err)
+	got := make(map[access.CapabilityName]bool)
+	for _, capability := range capabilities {
+		got[capability.Name] = capability.Enabled
+	}
+	require.Equal(t, map[access.CapabilityName]bool{
+		access.CapabilityRemoteControl: true,
+		access.CapabilityNotify:        false,
+	}, got)
+}
+
 func TestBotAccessStoreExplicitDefaultsAndAuthorization(t *testing.T) {
 	sm, err := NewStoreManager(t.TempDir())
 	require.NoError(t, err)
