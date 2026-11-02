@@ -251,6 +251,9 @@ export default {
     }
   },
   "credentialPage": {
+    "tableView": "Таблица",
+    "endpoint": "Адрес",
+    "twoEndpoints": "2 адреса",
     "viewMode": "Режим просмотра",
     "listView": "Список",
     "cardView": "Карточки",
