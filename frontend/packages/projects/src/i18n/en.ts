@@ -60,6 +60,7 @@ export const en = {
         sourcePlatform: 'From {{platform}}',
         sourceBot: 'From bot',
     },
+    directory: { title: 'Choose a directory', browse: 'Browse', select: 'Select this directory', help: 'Browse non-hidden folders in the server user’s home directory. You can also type another path.', loading: 'Loading…', empty: 'No folders here.', failed: 'Could not browse this directory.' },
     workdir: {
         title: 'Workdirs', add: 'Add working folder', actions: 'Folder actions', remove: 'Remove from the sidebar',
         removeTitle: 'Remove this folder?', removeConfirm: 'Remove',
