@@ -209,14 +209,14 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
     const imSection: ProjectsSidebarSection | null = showIm && im && paths.im ? {
         key: 'im',
         title: '',
-        rows: [{
+        rows: [...imRows, {
             key: 'im',
             label: t('im.title'),
             icon: <ChatBubble />,
             subtitle: botCount == null ? undefined : t('im.bots', { count: botCount }),
             to: paths.im,
             selected: location.pathname === paths.im,
-        }, ...imRows],
+        }],
     } : null;
 
     return (
