@@ -74,11 +74,14 @@ func TestDecisionsNew_UpstreamError(t *testing.T) {
 // real request path, not just the helper).
 func TestDecisionsTarget_SDKURL(t *testing.T) {
 	for base, want := range map[string]string{
-		"https://api.openai.com/v1":    "https://api.openai.com/v1/decisions",
-		"https://api.typesafe.ai":      "https://api.typesafe.ai/v1/systemone",
-		"https://api.typesafe.ai/v1":   "https://api.typesafe.ai/v1/systemone",
-		"https://openrouter.ai/api/v1": "https://openrouter.ai/api/alpha/decisions",
-		"::bad":                        "",
+		"https://api.openai.com/v1":          "https://api.openai.com/v1/decisions",
+		"https://api.typesafe.ai":            "https://api.typesafe.ai/v1/systemone",
+		"https://api.typesafe.ai/v1":         "https://api.typesafe.ai/v1/systemone",
+		"https://openrouter.ai/api/v1":       "https://openrouter.ai/api/alpha/decisions",
+		"https://API.TYPESAFE.AI:8443/v1/":   "https://API.TYPESAFE.AI:8443/v1/systemone",
+		"https://proxy.example/custom/v1":    "https://proxy.example/custom/v1/decisions",
+		"https://api.typesafe.ai.example/v1": "https://api.typesafe.ai.example/v1/decisions",
+		"::bad":                              "",
 	} {
 		path, override := decisionsTarget(base)
 		var got string

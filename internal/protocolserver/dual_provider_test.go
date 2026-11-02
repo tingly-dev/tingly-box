@@ -25,6 +25,10 @@ import (
 // resolved the dual endpoint via ResolveStyle. One rule binds requestModel
 // under scenario to the provider's upstreamModel.
 func newDualProviderRouter(t *testing.T, upstreamURL string, apiStyle protocol.APIStyle, scenario typ.RuleScenario, requestModel, upstreamModel string) *gin.Engine {
+	return newDualProviderRouterWithProxy(t, upstreamURL, "", apiStyle, scenario, requestModel, upstreamModel)
+}
+
+func newDualProviderRouterWithProxy(t *testing.T, upstreamURL, proxyURL string, apiStyle protocol.APIStyle, scenario typ.RuleScenario, requestModel, upstreamModel string) *gin.Engine {
 	t.Helper()
 	loadbalance.DefaultBreakerStore().Reset()
 
@@ -34,9 +38,13 @@ func newDualProviderRouter(t *testing.T, upstreamURL string, apiStyle protocol.A
 		config.WithDisableBuiltIn(),
 	)
 	require.NoError(t, err)
+	providerID := "prov-dual"
+	if proxyURL != "" {
+		providerID += "-" + t.Name()
+	}
 	require.NoError(t, cfg.AddProvider(&typ.Provider{
-		UUID: "prov-dual", Name: "prov-dual", Enabled: true,
-		AuthType: typ.AuthTypeAPIKey, Token: "test-key",
+		UUID: providerID, Name: "prov-dual", Enabled: true,
+		AuthType: typ.AuthTypeAPIKey, Token: "test-key", ProxyURL: proxyURL,
 		APIStyle:         apiStyle,
 		APIBase:          "http://127.0.0.1:1/v1",
 		APIBaseOpenAI:    upstreamURL + "/v1",
@@ -44,7 +52,7 @@ func newDualProviderRouter(t *testing.T, upstreamURL string, apiStyle protocol.A
 	}))
 	require.NoError(t, cfg.AddRule(typ.Rule{
 		Scenario: scenario, RequestModel: requestModel, Active: true,
-		Services: []*loadbalance.Service{{Provider: "prov-dual", Model: upstreamModel, Active: true}},
+		Services: []*loadbalance.Service{{Provider: providerID, Model: upstreamModel, Active: true}},
 	}))
 
 	hm := loadbalance.NewHealthMonitor(loadbalance.HealthMonitorConfig{ProbeEnabled: false})
