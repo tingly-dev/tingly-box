@@ -107,6 +107,8 @@ export interface AgentPageDescriptor {
     rulesTitleKey?: string;
 	/** Optional scenario-specific content shown immediately above routing rules. */
 	renderBeforeRules?: (slot: AgentPageSlot) => React.ReactNode;
+    /** Optional scenario-specific content shown immediately below routing rules. */
+    renderAfterRules?: (slot: AgentPageSlot) => React.ReactNode;
     /**
      * Fixed model slots (Claude Code): a Unified / Separate switch in the
      * header decides which rules are shown; rules can't be added, removed or
@@ -362,6 +364,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                     {...(agent.context1M ? { onContext1MToggle: handleContext1MToggle } : {})}
                 />
 
+                {agent.renderAfterRules?.(slot)}
                 <ScenarioLogDialog open={logOpen} onClose={() => setLogOpen(false)} scenario={scenario} title={t('agentStatus.log')} />
                 {setup.kind !== 'none' && setup.renderDialog(slot)}
                 <EntryGuideDialog
