@@ -219,6 +219,7 @@ const BotTable: React.FC<BotTableProps> = ({
                                                     <IconButton
                                                         size="small"
                                                         color="primary"
+                                                        aria-label={t('remoteControl.card.restartBot', {defaultValue: 'Restart Bot'})}
                                                         onClick={() => onRestart(bot.uuid!)}
                                                         disabled={!isActive || toggling || restarting}
                                                     >
@@ -287,7 +288,7 @@ const BotTable: React.FC<BotTableProps> = ({
                                 <Chip {...(onCapabilityClick ? {onClick: () => onCapabilityClick(bot, 'notify')} : {component: RouterLink, to: '/notify', clickable: true})} label={t('bots.card.notifyChip', {defaultValue: 'Notify'})} size="small" variant={isNotified ? 'filled' : 'outlined'} color={isNotified ? 'primary' : 'default'}/>
                             </Stack>
                             <Stack direction="row" spacing={0.5} sx={{alignItems: 'center', justifyContent: 'flex-end', mt: 1.25, pt: 1, borderTop: 1, borderColor: 'divider'}}>
-                                <IconButton size="small" color="primary" onClick={() => onRestart(bot.uuid!)} disabled={!isActive || toggling || restarting}><RestartIcon fontSize="small"/></IconButton>
+                                <IconButton size="small" color="primary" aria-label={t('remoteControl.card.restartBot', {defaultValue: 'Restart Bot'})} onClick={() => onRestart(bot.uuid!)} disabled={!isActive || toggling || restarting}><RestartIcon fontSize="small"/></IconButton>
                                 <IconButton size="small" color="primary" onClick={() => onEdit(bot.uuid!, bot.platform!)} disabled={toggling || restarting}><EditIcon fontSize="small"/></IconButton>
                                 <IconButton size="small" color="error" onClick={(e) => handleDeleteClick(bot, e.currentTarget)} disabled={toggling || restarting}><DeleteIcon fontSize="small"/></IconButton>
                             </Stack>
