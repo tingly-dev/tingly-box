@@ -14,6 +14,8 @@ export const zh: Dict<typeof en> = {
         defaultProfileUnavailable: '项目线程默认使用的 profile 在此不可用。切换后，继承默认值的线程将使用当前连接。',
         threadProfileUnavailable: '此线程使用的 profile 在此不可用。切换到当前连接后即可继续。',
         settings: '线程设置',
+        worktreeMode: '线程工作目录',
+        workspace: { worktree: '独立 worktree', shared: '共享源目录' },
         model: '模型', permissions: '权限', projectDefault: '项目默认', defaultModel: '默认模型', defaultPermissions: '默认权限',
         defaults: '项目线程默认设置', defaultsHelp: '新线程及未设置覆盖的已有线程使用这些默认值。单个线程的选择不会修改这里。',
         nextTurn: '启动设置在下一次开启轮次时应用。立即发送会加入当前轮；需要新设置时请选择“本轮结束后发送”或“停止并发送”。',

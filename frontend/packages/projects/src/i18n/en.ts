@@ -10,6 +10,8 @@ export const en = {
         defaultProfileUnavailable: 'The project thread default uses a profile that is unavailable here. Switch to this connection for threads that inherit it.',
         threadProfileUnavailable: 'This thread uses a profile that is unavailable here. Switch it to this connection to continue.',
         settings: 'Thread settings',
+        worktreeMode: 'Thread workspace',
+        workspace: { worktree: 'Separate worktree', shared: 'Shared repository' },
         model: 'Model', permissions: 'Permissions', projectDefault: 'Project default', defaultModel: 'Default model', defaultPermissions: 'Default permissions',
         defaults: 'Project thread defaults', defaultsHelp: 'Used by new threads and existing threads without an override. Individual thread choices do not change these defaults.',
         nextTurn: 'Launch settings apply on the next started turn. Send now joins the current turn; use After this turn or Stop and send for a new turn.',

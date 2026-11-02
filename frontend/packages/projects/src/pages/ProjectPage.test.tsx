@@ -81,3 +81,25 @@ it('lets standalone users recover an imported project and worker profile', async
     fireEvent.click(buttons[0]);
     await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { coordinator_profile: '', coordinator_model: '' } }));
 });
+
+it('changes the project workspace default from the composer settings', async () => {
+    let project = { ...p, disable_worktree: false };
+    m.get.mockImplementation(async (url: string) => ({ data:
+        url === '/api/v1/projects/{id}' ? { project, threads: [], coordinator_busy: false }
+            : url.endsWith('permission-modes') ? { modes: ['auto'] } : {}, response: new Response() }));
+    m.patch.mockImplementation(async (_url: string, options: { body: { disable_worktree: boolean } }) => {
+        project = { ...project, disable_worktree: options.body.disable_worktree };
+        return { data: project, response: new Response() };
+    });
+    render(<MemoryRouter initialEntries={['/projects/p']}><ProjectsHostProvider host={host}><Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes></ProjectsHostProvider></MemoryRouter>);
+    const picker = await screen.findByRole('combobox', { name: 'threadSettings.worktreeMode' });
+    expect(picker).toHaveTextContent('threadSettings.workspace.worktree');
+    fireEvent.mouseDown(picker);
+    fireEvent.click(screen.getByRole('option', { name: 'threadSettings.workspace.shared' }));
+    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { disable_worktree: true } }));
+    await waitFor(() => expect(picker).toHaveTextContent('threadSettings.workspace.shared'));
+    fireEvent.mouseDown(picker);
+    fireEvent.click(screen.getByRole('option', { name: 'threadSettings.workspace.worktree' }));
+    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { disable_worktree: false } }));
+    await waitFor(() => expect(picker).toHaveTextContent('threadSettings.workspace.worktree'));
+});
