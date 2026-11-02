@@ -31,9 +31,7 @@ import { writeToClipboard } from '@/utils/clipboard';
 // takes that UUID in the path — without it visible, the API is unusable from
 // the UI. See .design/bot-interaction-api.md.
 //
-// What each bot is used FOR (Remote Agent, notifications) stays on the
-// purpose pages; this table only shows mount status as a click-through chip,
-// mirroring the old card. The shell (title/padding/border) is provided by
+// Capability chips open configuration for the selected bot. The shell (title/padding/border) is provided by
 // the page's UnifiedCard — this component renders a borderless table so the
 // card is the single container (no double border).
 interface BotTableProps {
@@ -45,6 +43,7 @@ interface BotTableProps {
     isToggling?: (uuid: string) => boolean;
     isRestarting?: (uuid: string) => boolean;
 	onManageAccess?:(bot:BotSettings)=>void;
+    onCapabilityClick?: (bot: BotSettings, capability: 'remote_control' | 'notify') => void;
 }
 
 // Status chip sizing — matches ApiKeyTable's Status cell so On/Off reads the
@@ -69,6 +68,7 @@ const BotTable: React.FC<BotTableProps> = ({
     isToggling,
     isRestarting,
 	onManageAccess,
+    onCapabilityClick,
 }) => {
     const {t} = useTranslation();
 
@@ -204,12 +204,11 @@ const BotTable: React.FC<BotTableProps> = ({
                                     <TableCell>
                                         <Chip label={bot.platform} size="small"/>
                                     </TableCell>
-                                    {/* Capabilities are status, not navigation. Access has one
-                                        explicit work-surface entry in the Actions column. */}
+                                    {/* Capability chips open the selected bot’s settings. */}
                                     <TableCell>
                                         <Box sx={{display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap'}}>
-                                            <Chip label={t('bots.card.remoteAgentChip', {defaultValue: 'Remote'})} size="small" variant={isMounted ? 'filled' : 'outlined'} color={isMounted ? 'primary' : 'default'}/>
-                                            <Chip label={t('bots.card.notifyChip', {defaultValue: 'Notify'})} size="small" variant={isNotified ? 'filled' : 'outlined'} color={isNotified ? 'primary' : 'default'}/>
+                                            <Chip onClick={onCapabilityClick ? () => onCapabilityClick(bot, 'remote_control') : undefined} label={t('bots.card.remoteAgentChip', {defaultValue: 'Remote'})} size="small" variant={isMounted ? 'filled' : 'outlined'} color={isMounted ? 'primary' : 'default'}/>
+                                            <Chip onClick={onCapabilityClick ? () => onCapabilityClick(bot, 'notify') : undefined} label={t('bots.card.notifyChip', {defaultValue: 'Notify'})} size="small" variant={isNotified ? 'filled' : 'outlined'} color={isNotified ? 'primary' : 'default'}/>
                                         </Box>
                                     </TableCell>
                                     {/* Actions */}
@@ -298,8 +297,8 @@ const BotTable: React.FC<BotTableProps> = ({
                                 <IconButton size="small" onClick={() => handleCopyUuid(bot.uuid!)} disabled={!bot.uuid}><CopyIcon fontSize="inherit"/></IconButton>
                             </Stack>
                             <Stack direction="row" spacing={0.75} sx={{mt: 1, flexWrap: 'wrap'}}>
-                                <Chip label={t('bots.card.remoteAgentChip', {defaultValue: 'Remote'})} size="small" variant={isMounted ? 'filled' : 'outlined'} color={isMounted ? 'primary' : 'default'}/>
-                                <Chip label={t('bots.card.notifyChip', {defaultValue: 'Notify'})} size="small" variant={isNotified ? 'filled' : 'outlined'} color={isNotified ? 'primary' : 'default'}/>
+                                <Chip onClick={onCapabilityClick ? () => onCapabilityClick(bot, 'remote_control') : undefined} label={t('bots.card.remoteAgentChip', {defaultValue: 'Remote'})} size="small" variant={isMounted ? 'filled' : 'outlined'} color={isMounted ? 'primary' : 'default'}/>
+                                <Chip onClick={onCapabilityClick ? () => onCapabilityClick(bot, 'notify') : undefined} label={t('bots.card.notifyChip', {defaultValue: 'Notify'})} size="small" variant={isNotified ? 'filled' : 'outlined'} color={isNotified ? 'primary' : 'default'}/>
                             </Stack>
                             <Stack direction="row" spacing={0.5} sx={{alignItems: 'center', justifyContent: 'flex-end', mt: 1.25, pt: 1, borderTop: 1, borderColor: 'divider'}}>
                                 {onManageAccess && <Button size="small" startIcon={<Security fontSize="small"/>} onClick={() => onManageAccess(bot)} sx={{textTransform: 'none'}}>{t('bots.table.access', {defaultValue: 'Access'})}</Button>}
