@@ -432,7 +432,6 @@ export default function ProjectPage() {
                             </>
                         )}
                         onOpenThread={openThread}
-                        chatTitle={im?.chatTitle}
                         onSend={async (text, attachments) => {
                             if (projectSaving.current) return false;
                             try {

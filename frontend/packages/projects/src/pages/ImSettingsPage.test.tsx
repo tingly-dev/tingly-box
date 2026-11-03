@@ -43,7 +43,7 @@ describe('ImSettingsPage', () => {
         const platformIcon = vi.fn(() => <span>platform icon</span>);
         show(host({ platformIcon }));
         await screen.findByText('My bot');
-        expect(platformIcon).toHaveBeenLastCalledWith('telegram', 24, true);
+        expect(platformIcon).toHaveBeenCalledWith('telegram', 24, true);
     });
 
     it('offers the host bot setup alongside the setup steps', async () => {
@@ -99,7 +99,7 @@ describe('ImSettingsPage', () => {
         const dialog = await screen.findByRole('dialog');
         fireEvent.click(await within(dialog).findByRole('radio', { name: /Docs/ }));
         fireEvent.click(within(dialog).getByRole('button', { name: 'im.bind.submit' }));
-        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:2', bot_uuid: 'b1', project_id: 'p2' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:2', bot_uuid: 'b1', chat_title: expect.any(String), project_id: 'p2' }));
     });
 
     it('offers folders but not the project a chat is already bound to', async () => {
@@ -118,7 +118,7 @@ describe('ImSettingsPage', () => {
         const dialog = await screen.findByRole('dialog');
         fireEvent.click(await within(dialog).findByRole('radio', { name: /notes/ }));
         fireEvent.click(within(dialog).getByRole('button', { name: 'im.bind.submit' }));
-        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:2', bot_uuid: 'b1', project_id: 'f1' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:2', bot_uuid: 'b1', chat_title: expect.any(String), project_id: 'f1' }));
     });
 
     it('opens the host\'s access dialog for a bot', async () => {

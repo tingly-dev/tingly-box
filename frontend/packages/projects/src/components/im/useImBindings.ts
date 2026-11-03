@@ -54,8 +54,9 @@ export function useChannelBindings(enabled: boolean) {
         };
     }, [enabled]);
 
-    const bind = useCallback(async (chat: { platform: string; chatId: string; botUuid: string }, target: BindTarget) => {
-        const b = await bindChannel({ platform: chat.platform, chat_id: chat.chatId, bot_uuid: chat.botUuid, ...target });
+    const bind = useCallback(async (chat: { platform: string; chatId: string; botUuid: string; alias?: string }, target: BindTarget) => {
+        // The alias is saved with the binding as the last-known name, for when the chat can no longer be looked up.
+        const b = await bindChannel({ platform: chat.platform, chat_id: chat.chatId, bot_uuid: chat.botUuid, chat_title: chat.alias ?? '', ...target });
         window.dispatchEvent(new Event(IM_BINDINGS_CHANGED));
         return b;
     }, []);

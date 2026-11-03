@@ -18,7 +18,7 @@ const binding = (id: string, chat_id: string, chat_title: string, project_id: st
 const summary = (id: string, name: string, over: Record<string, unknown> = {}) => ({ id, name, type: 'project', main_thread_id: `m${id}`, threads: { waiting: 0, working: 0, ready: 0, idle: 0, resolved: 0 }, ...over });
 
 const chat = (chatId: string, title: string, over: Partial<ImChat> = {}): ImChat => ({
-    botUuid: 'b1', platform: 'telegram', chatId, title, kind: 'direct', state: 'ok', ...over,
+    botUuid: 'b1', platform: 'telegram', chatId, alias: title, title, kind: 'direct', state: 'ok', ...over,
 });
 
 const host = (chats: ImChat[], bots = [{ uuid: 'b1', name: 'Bot', platform: 'telegram', online: true }]): ProjectsHost => ({
@@ -65,7 +65,7 @@ describe('project IM bindings', () => {
         fireEvent.click(await screen.findByRole('button', { name: /im\.tags\.bind/ }));
         fireEvent.click(await screen.findByRole('radio', { name: /yz/ }));
         fireEvent.click(screen.getByRole('button', { name: 'im.bind.submit' }));
-        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:1', bot_uuid: 'b1', project_id: 'f1' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:1', bot_uuid: 'b1', chat_title: expect.any(String), project_id: 'f1' }));
     });
     it('binds a chat to a folder before a session exists and shows pending bindings', async () => {
         m.list.mockResolvedValue([{ ...binding('pending', 'tg:1', 'yz', 'f1'), thread_id: '', folder: '/work' }]);
@@ -74,7 +74,7 @@ describe('project IM bindings', () => {
         fireEvent.click(screen.getByRole('button', { name: /im\.tags\.bind/ }));
         fireEvent.click(await screen.findByRole('radio', { name: /Free/ }));
         fireEvent.click(screen.getByRole('button', { name: 'im.bind.submit' }));
-        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:3', bot_uuid: 'b1', project_id: 'f1' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:3', bot_uuid: 'b1', chat_title: expect.any(String), project_id: 'f1' }));
     });
     it('shows only this project\'s chats and unbinds one with its ×', async () => {
         show(host([]));
@@ -109,7 +109,7 @@ describe('project IM bindings', () => {
         expect(submit).toBeDisabled();
         fireEvent.click(radios[2]);
         fireEvent.click(submit);
-        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:2', bot_uuid: 'b1', project_id: 'p1' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:2', bot_uuid: 'b1', chat_title: expect.any(String), project_id: 'p1' }));
         expect(m.notify).toHaveBeenCalledWith(expect.stringContaining('im.bind.moved'), 'success');
     });
 
@@ -123,7 +123,7 @@ describe('project IM bindings', () => {
         const other = await within(dialog).findByRole('radio', { name: /Second bot/ });
         fireEvent.click(other);
         fireEvent.click(within(dialog).getByRole('button', { name: 'im.bind.submit' }));
-        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:1', bot_uuid: 'b2', project_id: 'p1' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:1', bot_uuid: 'b2', chat_title: expect.any(String), project_id: 'p1' }));
     });
 
     it('says why there is nothing to bind', async () => {

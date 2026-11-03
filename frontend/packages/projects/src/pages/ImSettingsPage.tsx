@@ -1,3 +1,4 @@
+import { ImChatLabel } from '../components/im/ImChatLabel';
 import { useCallback, useMemo, useState } from 'react';
 import { Box, Button, Link, Skeleton, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
 import { EmptyState, PageHeader, Surface } from '@tingly/ui';
@@ -120,8 +121,7 @@ export default function ImSettingsPage({ setupPath }: { setupPath?: string } = {
                                                         return (
                                                             <TableRow key={chatKey(c.platform, c.chatId)}>
                                                                 <TableCell sx={{ pl: 2 }}>
-                                                                    <Typography noWrap sx={{ fontWeight: 500, fontSize: fontSizes.base }}>{c.title}</Typography>
-                                                                    <Typography noWrap sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{t(`im.chatKind.${c.kind}`)}</Typography>
+                                                                    <ImChatLabel platform={c.platform} chatId={c.chatId} kind={c.kind} alias={c.alias} copy />
                                                                 </TableCell>
                                                                 <TableCell>
                                                                     {b?.project_id ? (

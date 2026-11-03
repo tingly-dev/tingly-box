@@ -1,0 +1,70 @@
+import { useSyncExternalStore } from 'react';
+import { EntityLabel, bareId, entityText } from '@tingly/ui';
+import { useTranslation } from 'react-i18next';
+import { useProjectsHost } from '../../host/ProjectsHost';
+import { PlatformMark, usePlatformLabel } from './PlatformMark';
+
+interface ChatRefProps {
+    platform: string;
+    /** The platform's chat id as the host stores it (may carry a `platform:` prefix). */
+    chatId: string;
+    /** Set when the caller knows the chat's kind (a chat list); otherwise the host is asked. */
+    kind?: 'direct' | 'group';
+    /** A name the caller already has: a chat list's alias, or a binding's saved `chat_title`. */
+    alias?: string;
+}
+
+/** Segments of `平台 · 群 · alias · id` for one chat, resolved through the host when it knows the chat. */
+const noSubscribe = () => () => {};
+const noVersion = () => 0;
+
+function useChatSegments() {
+    const { im } = useProjectsHost();
+    // The host learns its chats lazily; re-render when it does.
+    useSyncExternalStore(im?.subscribeChatInfo ?? noSubscribe, im?.chatInfoVersion ?? noVersion);
+    const { t } = useTranslation('projects');
+    const platformLabel = usePlatformLabel();
+    const groupLabel = t('im.group');
+    return ({ platform, chatId, kind, alias }: ChatRefProps) => {
+        const info = im?.chatInfo?.(platform, chatId);
+        return {
+            platform: platformLabel(platform),
+            group: kind ? kind === 'group' : info?.group ?? false,
+            alias: info?.alias ?? alias ?? '',
+            id: info?.displayId ?? bareId(platform, chatId),
+            groupLabel,
+        };
+    };
+}
+
+/** `平台 · 群 · alias · id` as plain text, for toasts and aria-labels. */
+export function useImChatText(): (chat: ChatRefProps) => string {
+    const segments = useChatSegments();
+    return (chat) => {
+        const { groupLabel, ...parts } = segments(chat);
+        return entityText(parts, { groupLabel });
+    };
+}
+
+/**
+ * One chat in the shared display convention. The platform shows as its logo by
+ * default (the surrounding bot / tag already says which platform); pass
+ * `platformAs="text"` where nothing else does.
+ */
+export function ImChatLabel({ platformAs = 'icon', copy = false, ...chat }: ChatRefProps & { platformAs?: 'icon' | 'text'; copy?: boolean }) {
+    const { t } = useTranslation('projects');
+    const segments = useChatSegments();
+    const { groupLabel, ...parts } = segments(chat);
+    return (
+        <EntityLabel
+            {...parts}
+            groupLabel={groupLabel}
+            platformIcon={<PlatformMark platform={chat.platform} size={14} colored />}
+            platformAs={platformAs}
+            copy={copy}
+            copyValue={chat.chatId}
+            copyLabel={t('common.copy')}
+            copiedLabel={t('common.copied')}
+        />
+    );
+}

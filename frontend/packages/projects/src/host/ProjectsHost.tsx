@@ -55,12 +55,23 @@ export interface ImBot {
     online: boolean;
 }
 
+/** What a host knows about one chat, for labelling it where a binding or message only holds its id. */
+export interface ImChatInfo {
+    alias?: string;
+    /** The id to display (the platform prefix stripped). */
+    displayId: string;
+    group: boolean;
+}
+
 /** A chat a bot has seen: a person's private chat or a group. */
 export interface ImChat {
     botUuid: string;
     platform: string;
     /** The platform's chat id; with `platform` it is the binding's key. */
     chatId: string;
+    /** The chat's alias (the user's, or the platform's name as default); empty when it has none. */
+    alias?: string;
+    /** `平台 · 群 · alias · id` as plain text, for toasts and labels. */
     title: string;
     kind: 'direct' | 'group';
     /** Whether the bot may use the chat: `ok`, `blocked` in access control, or a private chat not yet `unpaired`. */
@@ -78,8 +89,11 @@ export interface ImHost {
     platformLabel?: (platform: string) => string;
     /** A platform's logo at `size` px; defaults to a coloured initial. */
     platformIcon?: (platform: string, size: number, colored?: boolean) => ReactNode;
-    /** A friendly name for a previously seen chat, if the host has one. */
-    chatTitle?: (platform: string, chatId: string) => string | undefined;
+    /** What the host knows about a chat it has seen: alias, bare id and whether it is a group. */
+    chatInfo?: (platform: string, chatId: string) => ImChatInfo | undefined;
+    /** Lets views re-render when `chatInfo` learns more (the host loads its chats lazily). */
+    subscribeChatInfo?: (onChange: () => void) => () => void;
+    chatInfoVersion?: () => number;
     /** The host's access-control dialog for a bot (who may use it); the "Access" button shows only with it. */
     accessDialog?: (p: { bot: ImBot; onClose: () => void }) => ReactNode;
 }

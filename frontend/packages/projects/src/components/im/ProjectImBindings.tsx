@@ -8,6 +8,7 @@ import { useNotify } from '../../hooks/useNotify';
 import { useProjectsHost, type ImChat } from '../../host/ProjectsHost';
 import { Add, Close } from '../icons';
 import { BindChatDialog } from './BindChatDialog';
+import { ImChatLabel, useImChatText } from './ImChatLabel';
 import { PlatformMark } from './PlatformMark';
 import { chatKey, useChannelBindings, useImChats, useProjectDirectory } from './useImBindings';
 import { radius } from '@tingly/ui/theme/radius';
@@ -32,8 +33,6 @@ export interface ProjectIm {
     mine: ChannelBinding[] | null;
     open: () => void;
     unbind: (b: ChannelBinding) => Promise<void>;
-    /** A bound chat's name by platform and chat id, for a message's "From …" line. */
-    chatTitle: (platform: string, chatId: string) => string | undefined;
     /** The bind dialog; render it once, anywhere. */
     dialog: ReactNode;
 }
@@ -49,6 +48,7 @@ export function useProjectIm(target: ImTarget | null): ProjectIm | null {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const navigate = useNavigate();
+    const chatText = useImChatText();
     const [dialogOpen, setDialogOpen] = useState(false);
     const { bindings, byChat, bind, unbind } = useChannelBindings(!!im);
     // The dialog's data is only needed while it is open.
@@ -72,18 +72,17 @@ export function useProjectIm(target: ImTarget | null): ProjectIm | null {
     const onUnbind = useCallback(async (b: ChannelBinding) => {
         try {
             await unbind(b.id);
-            notify(t('im.bind.unbound', { chat: b.chat_title || b.chat_id }), 'success');
+            notify(t('im.bind.unbound', { chat: chatText({ platform: b.platform, chatId: b.chat_id, alias: b.chat_title }) }), 'success');
         } catch (e) {
             notify(`${t('im.bind.unbindFailed')}: ${(e as Error).message}`, 'error');
         }
-    }, [notify, t, unbind]);
+    }, [notify, t, unbind, chatText]);
 
     if (!im || !target) return null;
     return {
         mine: bindings && bindings.filter((b) => projectId ? b.project_id === projectId : b.target_thread_id === threadId || (!b.target_project_id && b.thread_id === threadId && !b.folder)),
         open: () => setDialogOpen(true),
         unbind: onUnbind,
-        chatTitle: (platform, chatId) => byChat.get(chatKey(platform, chatId))?.chat_title || undefined,
         dialog: (
             <BindChatDialog
                 open={dialogOpen}
@@ -104,16 +103,16 @@ export function useProjectIm(target: ImTarget | null): ProjectIm | null {
     };
 }
 
-const tagTitle = (b: ChannelBinding) => b.chat_title || b.chat_id;
-
 /** One bound chat: platform mark, name, and × to unbind. */
 function Tag({ binding, onUnbind }: { binding: ChannelBinding; onUnbind: () => void }) {
     const { t } = useTranslation('projects');
-    const title = tagTitle(binding);
+    const chatText = useImChatText();
+    const title = chatText({ platform: binding.platform, chatId: binding.chat_id, alias: binding.chat_title });
     return (
-        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, height: 26, pl: 1, pr: 0.25, borderRadius: radius.pill, border: 1, borderColor: 'divider', bgcolor: 'action.hover', minWidth: 0, maxWidth: 180 }}>
-            <PlatformMark platform={binding.platform} size={14} colored />
-            <Typography noWrap title={title} sx={{ fontSize: fontSizes.sm, fontWeight: 500, minWidth: 0 }}>{title}</Typography>
+        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, height: 26, pl: 1, pr: 0.25, borderRadius: radius.pill, border: 1, borderColor: 'divider', bgcolor: 'action.hover', minWidth: 0, maxWidth: 260 }}>
+            <Box title={title} sx={{ minWidth: 0, fontSize: fontSizes.sm, fontWeight: 500, display: 'flex' }}>
+                <ImChatLabel platform={binding.platform} chatId={binding.chat_id} alias={binding.chat_title} />
+            </Box>
             <Tooltip title={t('im.tags.unbind', { chat: title })}>
                 <IconButton size="small" onClick={onUnbind} aria-label={t('im.tags.unbind', { chat: title })} sx={{ p: 0.25, color: 'text.secondary', '&:hover': { color: 'error.main' } }}>
                     <Close sx={{ fontSize: 14 }} />
@@ -127,6 +126,8 @@ function Tag({ binding, onUnbind }: { binding: ChannelBinding; onUnbind: () => v
 function MoreTags({ bindings, onUnbind }: { bindings: ChannelBinding[]; onUnbind: (b: ChannelBinding) => void }) {
     const { t } = useTranslation('projects');
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+    const chatText = useImChatText();
+    const bindingText = (b: ChannelBinding) => chatText({ platform: b.platform, chatId: b.chat_id, alias: b.chat_title });
     return (
         <>
             <Button size="small" color="inherit" onClick={(e) => setAnchor(e.currentTarget)} aria-haspopup="menu" aria-label={t('im.tags.label')}
@@ -135,9 +136,8 @@ function MoreTags({ bindings, onUnbind }: { bindings: ChannelBinding[]; onUnbind
             </Button>
             <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
                 {bindings.map((b) => (
-                    <MenuItem key={b.id} onClick={() => { setAnchor(null); onUnbind(b); }} aria-label={t('im.tags.unbind', { chat: tagTitle(b) })}>
-                        <ListItemIcon><PlatformMark platform={b.platform} size={16} colored /></ListItemIcon>
-                        <ListItemText primary={tagTitle(b)} slotProps={{ primary: { noWrap: true, sx: { maxWidth: 200 } } }} />
+                    <MenuItem key={b.id} onClick={() => { setAnchor(null); onUnbind(b); }} aria-label={t('im.tags.unbind', { chat: bindingText(b) })}>
+                        <ListItemText primary={<ImChatLabel platform={b.platform} chatId={b.chat_id} alias={b.chat_title} />} slotProps={{ primary: { noWrap: true, sx: { maxWidth: 260 } } }} />
                         <Close sx={{ fontSize: 14, ml: 1.5, color: 'text.secondary' }} />
                     </MenuItem>
                 ))}
