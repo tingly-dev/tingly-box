@@ -1,4 +1,4 @@
-# Bot / IM display convention: `platform · alias · id [type]`
+# Bot / IM display convention: `平台 · 群 · alias · id`
 
 > Status: **proposal** (nothing implemented). Inventory and evidence: [`.research/bot-im-alias-display.md`](../.research/bot-im-alias-display.md), cited below as R-A / R-B / R-C (its Parts A, B, C).
 > Judged against [`ux-principles.md`](./ux-principles.md); checklist at the end.
@@ -8,13 +8,17 @@
 
 ## 0. Decisions already made (user, 2026-11-03) [DECIDED]
 
-1. **One display format everywhere:** `平台 · alias · id [type]`.
-   - Omit the alias segment when there is none.
+1. **One display format everywhere:** `平台 · 群 · alias · id` (platform · group · alias · id). The most important information comes first.
+   - Any segment that is empty or does not apply is omitted, together with its separator.
+   - The `群` (group) segment appears only for group chats. Direct chats, bots and actors show `平台 · alias · id`.
+   - The alias is omitted when there is none.
    - A very long id may be shortened or omitted in display, but the full id must always be reachable another way (copy button, tooltip, detail view).
-   - `[type]` appears only for group chats.
+   - The platform segment shows the platform's display name.
+   - This **supersedes** the earlier `平台 · alias · id [type]` (trailing type), decided earlier the same day.
 2. **Naming model:** if the platform supplies a name, store it as the default alias. If it supplies none, leave the alias empty and display the id until the user sets an alias.
+3. **Bots follow the naming model (D4):** by default a bot's name is its platform account name (e.g. Telegram `@username`). If the platform gives no name, the name stays empty and the bot displays by id. The old generated `"<platform> Bot"` default is dropped.
 
-Not yet decided by the user: whether bots follow rule 2 (D4), the `[type]` wording (D5), and the four open questions D1/D2/D3/D7, plus the icon form of the platform segment (D6). All have proposed defaults in §10.
+Not yet decided by the user: how the `群` segment renders (D5), the icon form of the platform segment under a bot header (D6), and the four open questions D1/D2/D3/D7. All have proposed defaults in §10.
 
 ## 1. Problem [context]
 
@@ -42,15 +46,15 @@ This is a display-convention problem sitting on a data-quality problem. Both nee
 ### 3.1 Segments [DECIDED order and omission rules; DERIVED details]
 
 ```
-平台 · alias · id [type]
+平台 · 群 · alias · id
 ```
 
 | Segment | Content | Rule |
 |---|---|---|
 | 平台 (platform) | platform **display name** ("Telegram", "Feishu", "WeCom"), from the descriptor table / `GET /imbot-platforms`. Never the raw platform id (`telegram`). | Always present. Rendered as icon + name in the UI; in lists grouped under a bot header the icon may stand in for the text (§10 D6). |
+| 群 (group) | marks a group chat; rendering proposed in §10 D5 (localised word `群` / `Group`, as a small chip in the UI) | Only for group chats. Omitted for direct chats, bots and actors. Second position so the reader knows "this is a group" before reading the name. |
 | alias | the entity's alias (§4) | Omitted when empty. Never replaced by a placeholder like "Unnamed". |
 | id | the id the user can use next: external chat id for chats/groups, external actor id for actors, bot uuid for bots | Always present, mono, muted. May be shortened or hidden when too long (§3.3); full id always reachable. |
-| `[type]` | `[group]` (localised, e.g. `[群聊]`) | Only for group chats. Direct chats and bots show nothing. |
 
 Separator is a middle dot with spaces (` · `). No trailing separator when a segment is omitted.
 
@@ -59,11 +63,11 @@ Examples:
 | Entity | With alias | Without alias |
 |---|---|---|
 | Direct chat | `Telegram · Alice · 123456789` | `Telegram · 123456789` |
-| Group chat | `Feishu · Dev team · oc_a1b2…9z [group]` | `Feishu · oc_a1b2…9z [group]` |
+| Group chat | `Feishu · 群 · Dev team · oc_a1b2…9z` | `Feishu · 群 · oc_a1b2…9z` |
 | Bot | `Telegram · Ops bot · …456789` | `Telegram · …456789` |
 | Actor (person) | `Telegram · Alice · 123456789` | `Telegram · 123456789` |
 
-Visual weight in the UI follows ux-principles §9: alias is the anchor (normal/bold), platform and id are muted, id is monospace, `[group]` is a small muted chip. When the alias is empty the id takes the anchor position instead of the muted one, so the line never looks empty.
+Visual weight in the UI follows ux-principles §9: alias is the anchor (normal/bold), platform and id are muted, id is monospace, `群` is a small muted chip. When the alias is empty the id takes the anchor position instead of the muted one, so the line never looks empty.
 
 ### 3.2 Which entities use it [DERIVED: user said "everywhere"; non-platform entities are PROPOSED to keep simple labels]
 
@@ -73,7 +77,7 @@ Entities that are not platform-scoped keep their own simpler label because there
 
 | Entity | Label |
 |---|---|
-| Route | `name` followed by its resolved target in the same format, e.g. `alerts → Feishu · Dev team · oc_a1…9z [group]` |
+| Route | `name` followed by its resolved target in the same format, e.g. `alerts → Feishu · 群 · Dev team · oc_a1…9z` |
 | Claude Code profile | `name` with `claude_code:<id>` as secondary (already consistent today) |
 | Project / thread | unchanged: `#seq title`, project/folder name |
 | Pairing code | not an alias entity; the full `/pair <code>` string stays |
@@ -87,7 +91,7 @@ Shortening is a **display-only, width-driven** decision made by one helper `shor
 | bot uuid | drop the constant `-imbot` suffix, keep the last 6 digits: `1730600000123456789-imbot` → `…456789` | Server-generated ids are `<unixnano>-imbot` (`internal/db/imbot_settings_store.go:316`). The head digits are nearly identical for bots created close together and the tail is constant, so a generic head…tail rule would show indistinguishable text. |
 | external chat / group / actor id | ≤ 20 chars: full. Longer: first 6 + `…` + last 4 | Platform ids vary in length (Telegram numeric vs Feishu `oc_` + 32 chars). |
 
-Truncation order when the row is still too narrow: shorten the id, then hide the id behind the copy/tooltip affordance, then ellipsise the alias. The platform and `[group]` are never dropped.
+Truncation order when the row is still too narrow: shorten the id, then hide the id behind the copy/tooltip affordance, then ellipsise the alias. The platform and `群` segments are never dropped.
 
 **The full id must always be reachable**, so every place that shows a shortened or hidden id also has at least one of:
 
@@ -117,7 +121,7 @@ The same segment order is used wherever text is emitted. Differences from the UI
 
 | Channel | Rule |
 |---|---|
-| Toasts, confirm dialogs, aria-labels | Same format, id shortened as in the UI. Must name the entity ("Bot `Telegram · Ops bot · …456789` restarted", `Delete Feishu · Dev team · oc_a1…9z [group]?`). The full id is in the confirm body when the action is destructive. |
+| Toasts, confirm dialogs, aria-labels | Same format, id shortened as in the UI. Must name the entity ("Bot `Telegram · Ops bot · …456789` restarted", `Delete Feishu · 群 · Dev team · oc_a1…9z?`). The full id is in the confirm body when the action is destructive. |
 | IM messages the bot sends | Same format with the **full** id wherever the user must paste it (`Your ID`, `Chat ID`, `/join <ChatID>`). Never shortened. |
 | CLI | Same format, full id. `bot list` column "ID" (list index) is renamed "#". |
 | Logs | Structured fields remain the primary form so logs stay greppable: `bot_uuid`, `bot_name`, `platform`, `chat_id` (always the **external** id), `chat_alias`, `actor_id` (external). Internal access uuids are renamed `access_target_id` / `access_actor_id` so they cannot be mistaken for `chat_id`. Where a free-text rendering is needed, use the same format with the full id. Never shortened. |
@@ -126,7 +130,7 @@ The same segment order is used wherever text is emitted. Differences from the UI
 
 - **Alias** is the single user-facing word for the editable name of a bot, chat, group or actor. Today the bot field is "Alias" in the edit dialog and "Name" in the table (R-B §6); both become "Alias". The API field stays `name` for bots and `alias` for chats (no breaking rename).
 - **ID** in UI/CLI always means the identifier the user can use next (external id / bot uuid).
-- "Type" only ever means chat type (`[group]`); it is not a bot or platform attribute.
+- The `群` segment only ever means "group chat"; it is not a bot or platform attribute.
 
 ## 4. Naming model [DECIDED rule; DERIVED invariants; PROPOSED storage]
 
@@ -181,16 +185,16 @@ Considered and rejected: keeping alias and platform name as two fields and resol
 | Names already wiped by N1 | not recoverable; refill on the next inbound message |
 | Bot `name` equal to `"<platform id> Bot"` (generated default) | cleared to empty, `name_source` empty (§4.5); the bot then displays by id |
 
-### 4.5 Bots [PROPOSED, see D4]
+### 4.5 Bots [DECIDED (D4, user confirmed 2026-11-03); details PROPOSED]
 
-The user's rule says the platform name is the default. For bots, the platform-side identity exists on connect (Telegram `@username`, Discord username, Slack bot user, WeCom bot id: these are already logged at connect, R-C §3). Proposal:
+Decided: a bot's default name is its platform account name; if the platform gives none, the name stays empty. The platform-side identity exists on connect (Telegram `@username`, Discord username, Slack bot user, WeCom bot id: these are already logged at connect, R-C §3). How to implement it:
 
 - When the user leaves the name empty, do **not** write `"<platform id> Bot"` any more (`BotConfigDialog.tsx:163,252`, `wechat_qr.go:330-335`, `feishu_qr.go:320-322`).
 - After a successful connect, if the bot has no name and the adapter exposes an account name, store it as the default (`name_source = platform`). Otherwise leave the name empty; the bot displays as `Telegram · …456789`.
 - Allow clearing a bot name (`imbot_settings_store.go:181` currently ignores empty).
 - Because the id is part of every display, two bots with the same name (or both unnamed) are told apart by their id segment. No separate disambiguation suffix is needed.
 
-This extends the user's decision to bots; flagged as D4 in §10.
+The user confirmed this extension of the naming model to bots on 2026-11-03 (D4).
 
 ## 5. Resolver and API [PROPOSED]
 
@@ -216,10 +220,10 @@ type DisplayRef struct {
     PlatformLabel string `json:"platform_label"`          // 平台
     Alias         string `json:"alias,omitempty"`         // omitted when empty
     ID            string `json:"id"`                      // full, usable id (external / bot uuid)
-    Group         bool   `json:"group,omitempty"`         // drives the [type] segment
+    Group         bool   `json:"group,omitempty"`         // drives the 群 segment
     Resolved      bool   `json:"resolved"`                // false = entity gone, only ids known
 }
-func (d DisplayRef) String() string // "Feishu · Dev team · oc_a1b2…9z [group]" with the full id
+func (d DisplayRef) String() string // "Feishu · 群 · Dev team · oc_a1b2…9z" with the full id
 ```
 
 It lives next to the access domain types (`remote/access`), reads existing tables only (`imbot_settings`, `remote_direct_chats`, `remote_groups`, `remote_actors`), caches per request, and is the only place the §3 rules exist on the server. Logging helpers and IM message builders call the same type.
@@ -260,7 +264,7 @@ Smallest useful subset if scope has to shrink: `ref` on bot/chat/group, `chat_re
 
 It generalises the existing `rowHeader(title, id)` in `BotAccessDialog.tsx:48`, the best current pattern (bold alias, mono external id beneath, id hidden if equal). Behaviour that follows from §3:
 
-- Segments in the fixed order `platform · alias · id [group]`; empty alias omitted.
+- Segments in the fixed order `platform · 群 · alias · id`; every empty or inapplicable segment omitted with its separator.
 - `resolved: false` adds a muted `(deleted)`.
 - A tooltip always carries the full id and, where relevant, a labelled "Internal target UUID" line.
 - Select **input value and option** use the same component, so the two never disagree (today `NotifyTestDialog.tsx:108` vs `:118`).
@@ -282,7 +286,7 @@ Every site in R-B moves to `EntityLabel` or `refText`. The ones with the largest
 
 | Surface | Today | After |
 |---|---|---|
-| Notify delete-chat confirm (`BotNotifyGroup.tsx:593`) | **internal uuid** | `Delete Feishu · Dev team · oc_a1…9z [group]?` with the full external id in the body |
+| Notify delete-chat confirm (`BotNotifyGroup.tsx:593`) | **internal uuid** | `Delete Feishu · 群 · Dev team · oc_a1…9z?` with the full external id in the body |
 | Notify chat leaf (`ChatNode.tsx:60`), target mapping (`BotNotifyGroup.tsx:137-158`) | external id; alias dropped; group `name` only | full format; tooltip keeps both ids, labelled |
 | Test-send picker (`NotifyTestDialog.tsx:108,118`) | name in input, id in options | same `EntityLabel` in both |
 | Remote card / Notify card header / Bots table | `name \|\| platform` (raw id), uuid mostly invisible | `Telegram · Ops bot · …456789`, copy button for the uuid |
@@ -332,12 +336,14 @@ The user's main concern is the display effect, so these are sorted by whether th
 
 The four questions the user was asked about (Feishu scopes, deleted entities, bot naming itself in IM, PR split) are **D1, D2, D3, D7**. D4, D5, D6 are points I found while applying the user's format and rule.
 
+**D4 is now DECIDED** (user confirmed 2026-11-03): bots default to their platform account name, else empty. See §0 item 3 and §4.5. It stays in the table below for traceability.
+
 ### Blocks the display work (confirm before building P3)
 
 | # | Question | Recommended default | Why it matters |
 |---|---|---|---|
-| D4 (mine) | Bots: when the name is empty, should the platform account name (Telegram `@username` etc.) become the default alias (§4.5), or stay empty and show only `Telegram · …456789`? | Store the platform account name when the adapter exposes one; otherwise empty. Stop writing `"<platform> Bot"`. | Decides what an unnamed bot looks like everywhere. Without it the display still works (id only), just less friendly. |
-| D5 (mine) | `[type]` wording: literally `[group]` (localised `[群聊]`), or the platform's own chat kind (`supergroup`, `channel`, `topic`)? | Literal `[group]`, localised. The data model only knows direct vs group; platform kinds are not stored. | Affects the component and i18n strings. |
+| D4 (mine) — **DECIDED** | Bots: when the name is empty, should the platform account name (Telegram `@username` etc.) become the default alias (§4.5), or stay empty and show only `Telegram · …456789`? | **Decided:** store the platform account name when the adapter exposes one; otherwise empty. Stop writing `"<platform> Bot"`. | Decides what an unnamed bot looks like everywhere. |
+| D5 (mine) | **How the `群` segment renders.** It is now the second segment (the earlier trailing `[group]` no longer applies). Options: (a) localised word — `群` in zh, `Group` in en (ru: `Группа`); (b) icon only (users/people icon); (c) word plus icon. Also: show the platform's own kind (`supergroup`, `channel`, `topic`) instead? | **(a) localised word**, rendered in the UI as a small muted outlined chip right after the platform; plain text (logs, CLI, IM, toasts) uses the bare word: `Feishu · 群 · Dev team · oc_a1…9z`. A word reads in every channel, including text-only ones where an icon cannot appear, and an icon next to the platform icon would be two pictures in a row that users must decode. Use the generic word, not platform kinds: the data model only knows direct vs group. | Affects the component and i18n strings. |
 
 ### Can wait (a default exists, nothing on the display path depends on it)
 
@@ -346,7 +352,7 @@ The four questions the user was asked about (Feishu scopes, deleted entities, bo
 | D1 | **Feishu / Weixin / WeCom names.** Real sender names on Feishu need contact-API permission on the user's app; Weixin/WeCom may expose none. | Do not require new scopes in the first iteration. Platforms that already return names (Telegram, Discord, Slack, DingTalk) work immediately. For Feishu, try a lazy lookup and fall back to the id on permission error (one warning, not per message). Weixin/WeCom stay id-only. The `platform · id` format already covers them. Which Feishu scope and API call is needed is UNVERIFIED. | No. Falls back to the id. |
 | D2 | **Deleted entities.** Keep a last-known-alias snapshot, or show only the id? And on bot delete: cascade-delete Projects bindings? | Show `platform · id (deleted)`; no new snapshot column (the existing `chat_title`, filled at bind time, is a free fallback). Do not cascade-delete bindings in this work; they render as unresolved. Cleanup is a separate change. | No, the unresolved rendering is already specified in §3.4. |
 | D3 | **Should the bot name itself in IM** (`/status`, `/help`, pairing replies)? These labels are visible to everyone in the chat. | Yes for the bot's own label (it is the account the user is talking to). Chat alias only in DMs, because an alias is an operator's private note and a group member would see it. | No, it lives in P4. |
-| D6 (mine) | **Platform segment under a bot header.** The user asked for the format everywhere; in a per-bot list the platform repeats on every row. | Keep the segment, rendered as the platform icon (text in the tooltip) in lists already grouped under a bot header. Full text everywhere else. | No, a single prop on the component. |
+| D6 (mine) | **Platform segment under a bot header.** The user asked for the format everywhere; in a per-bot list the platform repeats on every row. | Keep the segment, rendered as the platform icon (text in the tooltip) in lists already grouped under a bot header. Full text everywhere else. Still fits the new order: the row reads `[icon] · 群 · alias · id`, so on group rows the `群` chip becomes the first readable token, which matches the "important information first" intent. Order is unchanged, only the platform's form changes. | No, a single prop on the component. |
 | D7 | **PR split.** | PR0 = P0 bug fixes (optional, immediate). PR1 = P1 naming model (backend, small, correctness). PR2 = P2 + P3, the visible display change. PR3 = P4 text channels. | No. |
 
 ## 11. UX-principles checklist (`ux-principles.md`)
@@ -354,10 +360,10 @@ The four questions the user was asked about (Feishu scopes, deleted entities, bo
 - [x] Organised around the user's questions: "which chat/bot is this?" is answered by the format, "how do I reference it?" by the id segment and copy.
 - [x] No mode picker: one format; truncation is automatic, not a setting.
 - [x] One word per concept (§3.6); the external-id vs internal-uuid collision is split (§3.3, §3.5 key rename).
-- [x] Orthogonal axes separated: platform · alias · id · type are distinct segments; alias source (user vs platform) is its own marker.
+- [x] Orthogonal axes separated: platform · 群 · alias · id are distinct segments; alias source (user vs platform) is its own marker.
 - [x] Concrete value vs alias (§5): both are shown, in a fixed order. The id is never hidden without a copy path. This resolves the tension between alias-first display and the "show the concrete value" principle.
 - [x] Smart defaults: platform name becomes the default alias (user's rule), no toggle.
-- [x] Noise reduced (§9): muted platform and id, alias as anchor, `[group]` only when it carries information, icon form under a bot header.
+- [x] Noise reduced (§9): muted platform and id, alias as anchor, `群` only when it carries information, icon form under a bot header.
 - [x] Next-action artifact: the copy value is the id the user can use next.
 - [x] Side effects scoped: a rename propagates through the resolver; platform names never overwrite the user's alias.
 - Deviation: none that needs justification.
@@ -366,14 +372,16 @@ The four questions the user was asked about (Feishu scopes, deleted entities, bo
 
 | Date | Item | Status | Source |
 |---|---|---|---|
-| 2026-11-03 | Display format `平台 · alias · id [type]` everywhere; alias omitted when empty; `[type]` for group chats only | DECIDED | user |
+| 2026-11-03 | Display format `平台 · alias · id [type]` everywhere; alias omitted when empty; `[type]` for group chats only | SUPERSEDED by the next row | user |
+| 2026-11-03 | Display format `平台 · 群 · alias · id` everywhere (important information first); any empty or inapplicable segment omitted; `群` only for group chats; platform shows its display name | DECIDED (supersedes `平台 · alias · id [type]`) | user |
 | 2026-11-03 | Long ids may be shortened or omitted in display, with another way to get the full id | DECIDED | user |
 | 2026-11-03 | Platform name stored as default alias; no name → empty alias, show id, until the user sets one | DECIDED | user |
 | 2026-11-03 | A user-set alias is never overwritten by inbound names; an empty inbound name never wipes a value | DECIDED (requirement relayed by coordinator from the user's decision) | coordinator |
 | 2026-11-03 | D1 Feishu/Weixin/WeCom names: no new scopes in v1, fall back to id | PROPOSED | me |
 | 2026-11-03 | D2 Deleted entities: `platform · id (deleted)`, no snapshot column, no cascade | PROPOSED | me |
 | 2026-11-03 | D3 Bot names itself in IM; chat alias only in DMs | PROPOSED | me |
-| 2026-11-03 | D4 Bot default name from platform account, else empty; drop `"<platform> Bot"` | PROPOSED | me |
-| 2026-11-03 | D5 `[type]` is literal `[group]`, localised | PROPOSED | me |
-| 2026-11-03 | D6 Platform segment as icon under a bot header | PROPOSED | me |
+| 2026-11-03 | D4 Bot default name from platform account, else empty; drop `"<platform> Bot"` | DECIDED (user confirmed) | user |
+| 2026-11-03 | D5 (old) `[type]` is literal `[group]`, localised | WITHDRAWN (trailing type removed by the new order) | me |
+| 2026-11-03 | D5 `群` segment renders as a localised word (`群` / `Group`), small chip in the UI, bare word in text | PROPOSED | me |
+| 2026-11-03 | D6 Platform segment as icon under a bot header (checked: still fits the new order) | PROPOSED | me |
 | 2026-11-03 | D7 PR split PR0/PR1/PR2/PR3 | PROPOSED | me |

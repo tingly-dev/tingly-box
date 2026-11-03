@@ -65,7 +65,7 @@ Two ID spaces collide under the word "chat id": the **external** platform id (wh
 - Projects IM text: `[#<seq> <title>]` thread tag, project/folder name first, `#N` as the handle the user types (`projects/internal/project/relay.go`, `chat_commands.go`).
 - `Message.GetSenderDisplayName()` (`imbot/core/message.go:243`): the one existing “name else id” resolver; nothing in `remote/**` calls it.
 - `manager.go:172-181` logs `uuid + name + platform` as fields: the right log shape.
-- Tension between `.design/ux-principles.md` §5 (“show the concrete value, not the alias”) and alias-first display: resolved by the user's `平台 · alias · id [type]` format, which shows both (see the design doc §0, §3).
+- Tension between `.design/ux-principles.md` §5 (“show the concrete value, not the alias”) and alias-first display: resolved by the user's `平台 · 群 · alias · id` format, which shows both (see the design doc §0, §3).
 
 ## 5. Not verified
 
@@ -78,14 +78,14 @@ Two ID spaces collide under the word "chat id": the **external** platform id (wh
 
 ## 6. Effect of the decisions on these findings (2026-11-03)
 
-The user decided on the `平台 · alias · id [type]` display and on storing the platform name as the default alias (design doc §0). That changes how several findings above should be read:
+The user decided on the `平台 · 群 · alias · id` display (which superseded an earlier `平台 · alias · id [type]` the same day; the segment order does not change any finding below), on storing the platform name as the default alias, and on bots defaulting to their platform account name (design doc §0). That changes how several findings above should be read:
 
 | Finding | Before | After the decisions |
 |---|---|---|
 | Group `name` and `alias` are two fields (R-A §1.3) | Two sources to chain at read time | Platform title is promoted into `alias` as default, so the data model change (not just display) is now part of the work; priority up |
 | `upsertActor` overwrites `display_name` with `""` (§2 item 3) | Data-quality bug | Now a stated invariant violation (design N1); fix is a prerequisite, not a nice-to-have |
 | `Group.name` never refreshed; DMs have no name (§2 item 3) | Stale / missing source | With "platform name = default alias" this becomes the main data gap; DM name must be copied into `DirectChat.alias` (design §4.3) |
-| Bot stored name `"<platform id> Bot"` (§2 item 4) | Duplicate-name problem needing a disambiguator | Obsolete as a stored value (no alias → show id); the id is part of every display so a separate disambiguator rule is dropped |
+| Bot stored name `"<platform id> Bot"` (§2 item 4) | Duplicate-name problem needing a disambiguator | Obsolete as a stored value: bots now default to their platform account name, else empty (D4, decided), and the id is part of every display so a separate disambiguator rule is dropped |
 | Feishu display name = raw sender id (§2 item 3) | Hollow name | Must be treated as "no name" (N4), otherwise the id is stored as an alias |
 | Five chat labels / four platform-name sources (§2 item 1, §3 class F) | Inconsistency | Collapse into one format; platform label comes from the descriptor, the raw platform id is never shown |
 | Hidden bot/chat ids on several surfaces (§3 class I) | Id missing | Id is now a mandatory segment; where it is shortened, a copy path must exist |
