@@ -48,6 +48,19 @@ describe('EntityLabel', () => {
         expect(el.getAttribute('aria-label')).toBe('Telegram · Alice · 1');
     });
 
+    it('compact leaves the id out when there is an alias but keeps the full label reachable', () => {
+        render(<EntityLabel platform="Feishu" group groupLabel="群" alias="Dev team" id="oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5" compact />);
+        const el = screen.getByTestId('entity-label');
+        expect(el.textContent).toBe('Feishu·群·Dev team');
+        expect(el.getAttribute('title')).toBe('Feishu · 群 · Dev team · oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5');
+        expect(el.getAttribute('aria-label')).toBe(el.getAttribute('title'));
+    });
+
+    it('compact still shows the id when there is no alias', () => {
+        render(<EntityLabel platform="Telegram" id="123456789" compact />);
+        expect(screen.getByTestId('entity-label').textContent).toBe('Telegram·123456789');
+    });
+
     it('shortens bot ids by their distinguishing tail', () => {
         render(<EntityLabel platform="Telegram" kind="bot" alias="@ops_bot" id="1730600000123456789-imbot" />);
         expect(screen.getByTestId('entity-label').textContent).toBe('Telegram·@ops_bot·…456789');

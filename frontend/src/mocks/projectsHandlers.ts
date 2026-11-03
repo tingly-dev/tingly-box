@@ -241,6 +241,8 @@ type Binding = { id: string; platform: string; chat_id: string; bot_uuid?: strin
 const bindings: Binding[] = [
     { id: 'cb-1', platform: 'telegram', chat_id: 'telegram:123456789', chat_title: 'Alice (ops)', project_id: 'p-latency', thread_id: 'main-p-latency', created_at: ago(60 * 30), updated_at: ago(60 * 30) },
     { id: 'cb-2', platform: 'telegram', chat_id: 'telegram:-10024681012', chat_title: 'Release Crew', project_id: 'p-docs', thread_id: 'main-p-docs', created_at: ago(60 * 48), updated_at: ago(60 * 48) },
+    // A chat that was deleted in Remote since it was bound: shown as deleted, with its saved alias.
+    { id: 'cb-3', platform: 'telegram', chat_id: 'telegram:55512345', chat_title: 'Old support chat', project_id: 'p-docs', thread_id: 'main-p-docs', created_at: ago(60 * 72), updated_at: ago(60 * 72) },
 ]
 // What the Remote mocks call a chat, to title a new binding.
 const mockChatTitles: Record<string, string> = {

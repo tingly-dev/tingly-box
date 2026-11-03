@@ -84,10 +84,12 @@ describe('project IM bindings', () => {
             : { alias: 'Alice (ops)', displayId: '1', group: false });
         show(h);
         const labels = await screen.findAllByTestId('entity-label');
-        expect(labels[0]).toHaveTextContent('Alice (ops)·1');
+        // Tags are compact: the alias gets the room, the full label (id included) is the tooltip.
+        expect(labels[0]).toHaveTextContent('Alice (ops)');
+        expect(labels[0]).toHaveAttribute('title', 'Telegram · Alice (ops) · 1');
         expect(labels[0]).not.toHaveTextContent('im.deleted');
         expect(labels[1]).toHaveTextContent('im.deleted');
-        expect(labels[1]).toHaveTextContent('2');
+        expect(labels[1]).toHaveTextContent('Gone chat');
     });
     it('shows only this project\'s chats and unbinds one with its ×', async () => {
         show(host([]));

@@ -111,7 +111,7 @@ function Tag({ binding, onUnbind }: { binding: ChannelBinding; onUnbind: () => v
     return (
         <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, height: 26, pl: 1, pr: 0.25, borderRadius: radius.pill, border: 1, borderColor: 'divider', bgcolor: 'action.hover', minWidth: 0, maxWidth: 260 }}>
             <Box title={title} sx={{ minWidth: 0, fontSize: fontSizes.sm, fontWeight: 500, display: 'flex' }}>
-                <ImChatLabel platform={binding.platform} chatId={binding.chat_id} alias={binding.chat_title} botUuid={binding.bot_uuid} />
+                <ImChatLabel platform={binding.platform} chatId={binding.chat_id} alias={binding.chat_title} botUuid={binding.bot_uuid} compact />
             </Box>
             <Tooltip title={t('im.tags.unbind', { chat: title })}>
                 <IconButton size="small" onClick={onUnbind} aria-label={t('im.tags.unbind', { chat: title })} sx={{ p: 0.25, color: 'text.secondary', '&:hover': { color: 'error.main' } }}>

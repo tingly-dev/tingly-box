@@ -17,6 +17,12 @@ export interface EntityLabelProps extends EntityParts {
     /** False when the referenced entity no longer exists: the stored id is shown with a muted marker. */
     resolved?: boolean;
     deletedLabel?: string;
+    /**
+     * For tight places (tags, chips): when there is an alias, leave the id out
+     * of the line so the alias gets the room. The full label, id included, is
+     * the element's tooltip and accessible name.
+     */
+    compact?: boolean;
     /** Show a copy button that always copies the full id (or `copyValue`). */
     copy?: boolean;
     /** What the copy button and the tooltip carry when it differs from the displayed id (e.g. the stored external id with its platform prefix). */
@@ -51,6 +57,7 @@ export const EntityLabel = ({
     groupLabel = 'Group',
     resolved = true,
     deletedLabel = '(deleted)',
+    compact = false,
     copy = false,
     copyValue,
     copyLabel = 'Copy ID',
@@ -64,6 +71,7 @@ export const EntityLabel = ({
     const short = shortId(entityKind, id);
     const full = entityText({ platform, group, alias: aliasText, id }, { groupLabel, shorten: false, kind: entityKind });
     const idAnchor = aliasText === '';
+    const showId = !(compact && !idAnchor);
     // With the platform drawn as a logo alone, the first segment after it needs no separator.
     const iconOnly = platformAs === 'icon' && Boolean(platformIcon);
 
@@ -88,6 +96,7 @@ export const EntityLabel = ({
         <Box
             component="span"
             aria-label={full}
+            title={compact ? full : undefined}
             data-testid="entity-label"
             sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, minWidth: 0, maxWidth: '100%', whiteSpace: 'nowrap', ...sx }}
         >
@@ -125,12 +134,12 @@ export const EntityLabel = ({
                     </Box>
                 </>
             )}
-            {!(iconOnly && !group && aliasText === '') && <Sep />}
-            {idTooltip ? <Tooltip title={idTooltip}>{idNode}</Tooltip> : idNode}
+            {showId && !(iconOnly && !group && aliasText === '') && <Sep />}
+            {showId && (idTooltip ? <Tooltip title={idTooltip}>{idNode}</Tooltip> : idNode)}
             {!resolved && (
                 <Box component="span" sx={{ fontSize: '0.75rem', color: 'warning.main', flexShrink: 0 }}>{deletedLabel}</Box>
             )}
-            {copy && (
+            {copy && showId && (
                 <CopyIconButton
                     value={fullId}
                     label={copyLabel}

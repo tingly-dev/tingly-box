@@ -56,7 +56,7 @@ export function useImChatText(): (chat: ChatRefProps) => string {
  * default (the surrounding bot / tag already says which platform); pass
  * `platformAs="text"` where nothing else does.
  */
-export function ImChatLabel({ platformAs = 'icon', copy = false, ...chat }: ChatRefProps & { platformAs?: 'icon' | 'text'; copy?: boolean }) {
+export function ImChatLabel({ platformAs = 'icon', copy = false, compact = false, ...chat }: ChatRefProps & { platformAs?: 'icon' | 'text'; copy?: boolean; compact?: boolean }) {
     const { t } = useTranslation('projects');
     const segments = useChatSegments();
     const { groupLabel, deleted, ...parts } = segments(chat);
@@ -69,6 +69,7 @@ export function ImChatLabel({ platformAs = 'icon', copy = false, ...chat }: Chat
             platformIcon={<PlatformMark platform={chat.platform} size={14} colored />}
             platformAs={platformAs}
             copy={copy}
+            compact={compact}
             copyValue={chat.chatId}
             copyLabel={t('common.copy')}
             copiedLabel={t('common.copied')}
