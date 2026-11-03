@@ -74,19 +74,25 @@ func NewLogger(config *LoggingConfig) Logger {
 	}
 }
 
-// BotLogPrefix is the log prefix that says which bot a line belongs to:
-// "[imbot telegram/…456789]". Without it, two bots on one platform write
-// indistinguishable lines. Generated bot UUIDs are "<unixnano>-imbot", so only
-// the tail of the numeric part tells bots apart.
-func BotLogPrefix(platform Platform, uuid string) string {
+// BotTag is how a bot is named inside a log line: "telegram/…456789".
+// Generated bot UUIDs are "<unixnano>-imbot", so only the tail of the numeric
+// part tells two bots on one platform apart; short ids stay whole.
+func BotTag(platform Platform, uuid string) string {
 	id := strings.TrimSuffix(uuid, "-imbot")
 	if len(id) > 8 {
 		id = "…" + id[len(id)-6:]
 	}
 	if id == "" {
-		return "[imbot " + string(platform) + "]"
+		return string(platform)
 	}
-	return "[imbot " + string(platform) + "/" + id + "]"
+	return string(platform) + "/" + id
+}
+
+// BotLogPrefix is the log prefix that says which bot a line belongs to:
+// "[imbot telegram/…456789]". Without it, two bots on one platform write
+// indistinguishable lines.
+func BotLogPrefix(platform Platform, uuid string) string {
+	return "[imbot " + BotTag(platform, uuid) + "]"
 }
 
 // NewLoggerWithPrefix creates a new logger with a custom prefix

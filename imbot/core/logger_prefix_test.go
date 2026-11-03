@@ -30,3 +30,12 @@ func TestNewBaseBotLogsWithItsIdentity(t *testing.T) {
 		t.Fatalf("a bot without an id keeps the generic prefix")
 	}
 }
+
+func TestBotTagIsThePrefixWithoutBrackets(t *testing.T) {
+	if got := BotTag(PlatformTelegram, "1730600000123456789-imbot"); got != "telegram/…456789" {
+		t.Fatalf("got %q", got)
+	}
+	if BotLogPrefix(PlatformTelegram, "x") != "[imbot "+BotTag(PlatformTelegram, "x")+"]" {
+		t.Fatal("prefix must wrap the tag")
+	}
+}

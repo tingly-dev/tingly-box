@@ -20,6 +20,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/uiprefs"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
 	virtualmodelmodule "github.com/tingly-dev/tingly-box/internal/server/module/virtualmodel"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/remote/access"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
@@ -167,6 +168,10 @@ func (s *Server) apiModules(ctx context.Context, schema bool) []module.Module {
 		if sm != nil && sm.BotAccess() != nil {
 			chatBridge.SetTargetBlocked(sm.BotAccess().IsExternalTargetBlocked)
 		}
+		chatBridge.SetProfileNames(func(id string) (string, bool) {
+			p, ok := s.config.GetProfile(typ.ScenarioClaudeCode, id)
+			return p.Name, ok
+		})
 		chatBridge.Bind(app, s.channelRegistry, s.projectsEnabled, start, chatDisabled)
 		mods = append(mods, projectsmodule.NewHandler(app, s.projectsEnabled, start))
 		if !schema {

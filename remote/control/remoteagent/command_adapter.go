@@ -7,6 +7,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/imbot/core"
+	bot2 "github.com/tingly-dev/tingly-box/remote/control/bot"
 )
 
 // botHandlerAdapter implements command.BotHandlerAdapter by delegating to BotHandler.
@@ -155,7 +156,11 @@ func (a *botHandlerAdapter) RunProjectDirectory(ctx *imbot.HandlerContext, arg s
 // A bot with no name has nothing worth saying beyond its platform, so it
 // returns "".
 func (a *botHandlerAdapter) BotLabel() string {
-	setting := a.handler.currentSetting()
+	return botLabelFor(a.handler.currentSetting())
+}
+
+// botLabelFor is "Telegram · Ops bot", or "" for a bot with no name.
+func botLabelFor(setting bot2.BotSetting) string {
 	if setting.Name == "" {
 		return ""
 	}

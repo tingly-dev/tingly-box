@@ -133,12 +133,12 @@ func (m *Manager) AddBot(config *core.Config) error {
 	// Connect if enabled
 	if config.Enabled {
 		if err := bot.Connect(m.ctx); err != nil {
-			m.logger.Error("%s Failed to connect: %v", core.BotLogPrefix(config.Platform, config.UUID), err)
+			m.logger.Error("%s Failed to connect: %v", core.BotTag(config.Platform, config.UUID), err)
 			// Don't return error, bot is still added
 		}
 	}
 
-	m.logger.Info("%s Added bot (uuid %s)", core.BotLogPrefix(config.Platform, config.UUID), config.UUID)
+	m.logger.Info("%s Added bot (uuid %s)", core.BotTag(config.Platform, config.UUID), config.UUID)
 	return nil
 }
 
@@ -167,7 +167,7 @@ func (m *Manager) RemoveBot(uid string) error {
 	}
 
 	delete(m.bots, uid)
-	m.logger.Info("%s Removed bot (uuid %s)", core.BotLogPrefix(bot.PlatformInfo().ID, bot.UUID()), bot.UUID())
+	m.logger.Info("%s Removed bot (uuid %s)", core.BotTag(bot.PlatformInfo().ID, bot.UUID()), bot.UUID())
 	return nil
 }
 
@@ -209,7 +209,7 @@ func (m *Manager) Start(ctx context.Context) error {
 	for _, bot := range m.snapshotBots() {
 		if !bot.IsConnected() {
 			if err := bot.Connect(ctx); err != nil {
-				m.logger.Error("%s Failed to connect: %v", core.BotLogPrefix(bot.PlatformInfo().ID, bot.UUID()), err)
+				m.logger.Error("%s Failed to connect: %v", core.BotTag(bot.PlatformInfo().ID, bot.UUID()), err)
 			}
 		}
 	}
@@ -246,7 +246,7 @@ func (m *Manager) shutdown() {
 	for _, bot := range bots {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		if err := bot.Disconnect(ctx); err != nil {
-			m.logger.Error("%s Error disconnecting: %v", core.BotLogPrefix(bot.PlatformInfo().ID, bot.UUID()), err)
+			m.logger.Error("%s Error disconnecting: %v", core.BotTag(bot.PlatformInfo().ID, bot.UUID()), err)
 		}
 		cancel()
 	}
@@ -450,14 +450,14 @@ func (m *Manager) emitPlatformHandlers(handlers []func(Platform), platform Platf
 
 func (m *Manager) recoverHandler(event string, platform Platform, botUUID string) {
 	if r := recover(); r != nil {
-		m.logger.Error("%s panic in %s handler (contained, event dropped): %v\n%s", core.BotLogPrefix(platform, botUUID), event, r, debug.Stack())
+		m.logger.Error("%s panic in %s handler (contained, event dropped): %v\n%s", core.BotTag(platform, botUUID), event, r, debug.Stack())
 	}
 }
 
 // handleReconnect handles auto-reconnect logic
 func (m *Manager) handleReconnect(bot core.Bot, platform Platform) {
 	if !m.tryAddWorker() {
-		m.logger.Info("%s Skipping reconnect: manager is stopping", core.BotLogPrefix(platform, bot.UUID()))
+		m.logger.Info("%s Skipping reconnect: manager is stopping", core.BotTag(platform, bot.UUID()))
 		return
 	}
 	go func() {
@@ -476,7 +476,7 @@ func (m *Manager) handleReconnect(bot core.Bot, platform Platform) {
 
 			// Don't reconnect if context is cancelled or auto-reconnect is disabled
 			if ctxCancelled || !autoReconnect || m.stopping.Load() {
-				m.logger.Info("%s Skipping reconnect: context cancelled or auto-reconnect disabled", core.BotLogPrefix(platform, bot.UUID()))
+				m.logger.Info("%s Skipping reconnect: context cancelled or auto-reconnect disabled", core.BotTag(platform, bot.UUID()))
 				return
 			}
 
@@ -485,17 +485,17 @@ func (m *Manager) handleReconnect(bot core.Bot, platform Platform) {
 			}
 
 			attempts++
-			m.logger.Info("%s Reconnecting (attempt %d/%d)", core.BotLogPrefix(platform, bot.UUID()), attempts, m.config.MaxReconnectAttempts)
+			m.logger.Info("%s Reconnecting (attempt %d/%d)", core.BotTag(platform, bot.UUID()), attempts, m.config.MaxReconnectAttempts)
 
 			time.Sleep(delay)
 
 			if err := bot.Connect(ctx); err == nil {
-				m.logger.Info("%s Reconnected successfully", core.BotLogPrefix(platform, bot.UUID()))
+				m.logger.Info("%s Reconnected successfully", core.BotTag(platform, bot.UUID()))
 				return
 			}
 
 			if attempts >= m.config.MaxReconnectAttempts {
-				m.logger.Error("%s Failed to reconnect after %d attempts", core.BotLogPrefix(platform, bot.UUID()), attempts)
+				m.logger.Error("%s Failed to reconnect after %d attempts", core.BotTag(platform, bot.UUID()), attempts)
 			}
 		}
 	}()

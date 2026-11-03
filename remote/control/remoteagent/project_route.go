@@ -3,13 +3,20 @@ package remoteagent
 import (
 	"context"
 	"fmt"
-	"github.com/tingly-dev/tingly-box/remote/logfields"
 	"os"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/remote/logfields"
 )
+
+// ProfileNamer is optionally implemented by a ProjectRouter that can say what a
+// Claude Code profile is called, so /status can name the profile a bot's chats
+// run under instead of showing nothing.
+type ProfileNamer interface {
+	ProfileName(profileID string) (name string, ok bool)
+}
 
 // ProjectRouter is how a chat talks to Claude Code: through Projects, where
 // every chat has a folder or a session (.design/remote-into-projects.md). The
@@ -318,8 +325,39 @@ func (h *BotHandler) runProjectCommand(hCtx HandlerContext, name, arg string) {
 		logrus.WithError(err).WithFields(logfields.Chat(hCtx.BotUUID, hCtx.ChatID, "")).Warn("Failed to run a chat command in its project")
 		h.SendText(hCtx, "Could not do that: "+err.Error())
 	case reply != "":
+		if name == "status" {
+			reply = h.statusIdentity() + reply
+		}
 		h.SendText(hCtx, reply)
 	}
+}
+
+// statusIdentity is the top of /status: which bot this chat is talking to and
+// which Claude Code profile it runs under. Both are names a person knows; the
+// ids stay in /help.
+func (h *BotHandler) statusIdentity() string {
+	setting := h.currentSetting()
+	var b strings.Builder
+	if label := botLabelFor(setting); label != "" {
+		b.WriteString("Bot: " + label + "\n")
+	}
+	b.WriteString("Profile: " + h.profileLabel(botProfile(setting.DefaultAgent)) + "\n")
+	return b.String()
+}
+
+// profileLabel names a profile id; "" is the default profile. An id the host
+// cannot name (a deleted profile) is shown as the id with that said.
+func (h *BotHandler) profileLabel(id string) string {
+	if id == "" {
+		return "Default"
+	}
+	if namer, ok := h.projectRouter.(ProfileNamer); ok {
+		if name, found := namer.ProfileName(id); found {
+			return name
+		}
+		return id + " (deleted)"
+	}
+	return id
 }
 
 // routeProjectAnswer hands a press on a Projects prompt to the project.

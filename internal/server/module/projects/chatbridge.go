@@ -39,10 +39,13 @@ type ChatBridge struct {
 	// bots remembers which bot a bound chat last wrote through, so replies
 	// go back through the same one when several bots share a platform.
 	bots map[string]string
+	// profileName says what a Claude Code profile is called (for /status).
+	profileName func(id string) (string, bool)
 }
 
 var (
 	_ remoteagent.ProjectRouter = (*ChatBridge)(nil)
+	_ remoteagent.ProfileNamer  = (*ChatBridge)(nil)
 	_ projectsapp.ChannelSink   = (*ChatBridge)(nil)
 )
 
@@ -58,6 +61,25 @@ func (b *ChatBridge) Bind(app *projectsapp.App, registry *channel.Registry, enab
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.app, b.registry, b.enabled, b.start, b.disabled = app, registry, enabled, start, disabled
+}
+
+// SetProfileNames connects the lookup /status uses to name a bot's Claude Code
+// profile.
+func (b *ChatBridge) SetProfileNames(lookup func(id string) (string, bool)) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.profileName = lookup
+}
+
+// ProfileName implements remoteagent.ProfileNamer.
+func (b *ChatBridge) ProfileName(id string) (string, bool) {
+	b.mu.RLock()
+	lookup := b.profileName
+	b.mu.RUnlock()
+	if lookup == nil {
+		return "", false
+	}
+	return lookup(id)
 }
 
 // SetTargetBlocked connects the bot-scoped access control used by outbound

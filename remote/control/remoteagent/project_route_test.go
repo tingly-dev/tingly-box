@@ -361,3 +361,41 @@ func Test_ProjectsOffTurnsChatOff(t *testing.T) {
 	assert.Empty(t, router.inbound())
 	assert.Empty(t, router.movedTo())
 }
+
+// profileRouter is a fakeRouter that can also name Claude Code profiles.
+type profileRouter struct {
+	*fakeRouter
+	names map[string]string
+}
+
+func (p profileRouter) ProfileName(id string) (string, bool) {
+	name, ok := p.names[id]
+	return name, ok
+}
+
+// /status says which bot the chat is talking to and which Claude Code profile
+// it runs under; a deleted profile is shown as its id, flagged.
+func Test_StatusNamesTheBotAndItsProfile(t *testing.T) {
+	env := testenv.NewTestEnv(t)
+	rp := false
+	setting := bot.BotSetting{
+		UUID: env.BotUUID(), Name: "Ops bot", Platform: "tingly", AuthType: "none",
+		Auth: map[string]string{}, Enabled: true, RequirePairing: &rp, DefaultAgent: "claude_code:p1",
+	}
+	harness := remoteagent.BootForTest(t, env.Manager(), setting)
+	router := profileRouter{fakeRouter: &fakeRouter{bound: map[string]bool{}}, names: map[string]string{"p1": "ds"}}
+	harness.Handler.SetProjectRouter(router)
+	require.NoError(t, env.Manager().Start(env.Context()))
+
+	chat := env.NewUser("alice").OpenDM(harness.Setting.UUID)
+	router.bind(chat.ChatID)
+	chat.SendText("/status")
+	got := chat.WaitText(3 * time.Second)
+	got.AssertContains(t, "Bot: ").AssertContains(t, "Ops bot").AssertContains(t, "Profile: ds").AssertContains(t, "project did status")
+	assert.True(t, strings.Index(got.Text, "Bot: ") < strings.Index(got.Text, "project did status"), "identity comes first")
+
+	delete(router.names, "p1")
+	chat.Drain()
+	chat.SendText("/status")
+	chat.WaitText(3*time.Second).AssertContains(t, "Profile: p1 (deleted)")
+}
