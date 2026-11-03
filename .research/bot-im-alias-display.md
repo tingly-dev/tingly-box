@@ -76,6 +76,23 @@ Two ID spaces collide under the word "chat id": the **external** platform id (wh
 - Mock handlers (`frontend/src/mocks/*`) were not audited.
 - Output of WhatsApp/tingly adapters’ display names (set in code, not exercised).
 
+## 6. Effect of the decisions on these findings (2026-11-03)
+
+The user decided on the `平台 · alias · id [type]` display and on storing the platform name as the default alias (design doc §0). That changes how several findings above should be read:
+
+| Finding | Before | After the decisions |
+|---|---|---|
+| Group `name` and `alias` are two fields (R-A §1.3) | Two sources to chain at read time | Platform title is promoted into `alias` as default, so the data model change (not just display) is now part of the work; priority up |
+| `upsertActor` overwrites `display_name` with `""` (§2 item 3) | Data-quality bug | Now a stated invariant violation (design N1); fix is a prerequisite, not a nice-to-have |
+| `Group.name` never refreshed; DMs have no name (§2 item 3) | Stale / missing source | With "platform name = default alias" this becomes the main data gap; DM name must be copied into `DirectChat.alias` (design §4.3) |
+| Bot stored name `"<platform id> Bot"` (§2 item 4) | Duplicate-name problem needing a disambiguator | Obsolete as a stored value (no alias → show id); the id is part of every display so a separate disambiguator rule is dropped |
+| Feishu display name = raw sender id (§2 item 3) | Hollow name | Must be treated as "no name" (N4), otherwise the id is stored as an alias |
+| Five chat labels / four platform-name sources (§2 item 1, §3 class F) | Inconsistency | Collapse into one format; platform label comes from the descriptor, the raw platform id is never shown |
+| Hidden bot/chat ids on several surfaces (§3 class I) | Id missing | Id is now a mandatory segment; where it is shortened, a copy path must exist |
+| Priority order | Display bugs first | Naming-model backend fix (P1) before the shared display component; P0 bug fixes optional and independent |
+
+Nothing in the inventory itself was wrong; the *ranking* changes: "names are empty or wiped at the source" is now the first thing to fix because the new format depends on it.
+
 ---
 
 # Part A — Data model and API shapes
