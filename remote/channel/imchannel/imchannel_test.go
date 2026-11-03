@@ -48,6 +48,50 @@ func TestSendFileToFeishuAndLark(t *testing.T) {
 	}
 }
 
+func TestSendFileToUploadPlatforms(t *testing.T) {
+	for _, platform := range []string{"dingtalk", "weixin", "wecom", "telegram"} {
+		t.Run(platform, func(t *testing.T) {
+			s := &fakeSender{}
+			c := New("bot", platform, s, nil, func(target string) string {
+				if target == "chat1" {
+					return "ctx-token"
+				}
+				return ""
+			})
+			if err := c.SendFile(context.Background(), "chat1", "/tmp/a b.pdf", "a b.pdf", "application/pdf", "cap"); err != nil {
+				t.Fatal(err)
+			}
+			if len(s.lastMedia) != 1 || s.lastMedia[0].Type != "document" || s.lastMedia[0].URL != "file:///tmp/a%20b.pdf" || s.lastMedia[0].Filename != "a b.pdf" {
+				t.Fatalf("media = %+v", s.lastMedia)
+			}
+			if s.lastMetadata["context_token"] != "ctx-token" {
+				t.Fatalf("metadata = %v", s.lastMetadata)
+			}
+		})
+	}
+}
+
+func TestSendFileUnsupportedPlatformErrors(t *testing.T) {
+	for _, platform := range []string{"slack", "discord", "whatsapp"} {
+		s := &fakeSender{}
+		c := New("bot", platform, s, nil, nil)
+		if err := c.SendFile(context.Background(), "c", "/tmp/a.png", "a.png", "image/png", ""); err == nil {
+			t.Errorf("%s: want unsupported error", platform)
+		}
+		if s.lastTarget != "" {
+			t.Errorf("%s: nothing may be sent", platform)
+		}
+	}
+}
+
+func TestSendFilePropagatesSendError(t *testing.T) {
+	s := &fakeSender{err: context.DeadlineExceeded}
+	c := New("bot", "dingtalk", s, nil, nil)
+	if err := c.SendFile(context.Background(), "c", "/tmp/a.png", "a.png", "image/png", ""); err == nil {
+		t.Fatal("send error must surface")
+	}
+}
+
 type fakePrompter struct {
 	gotReq ask.Request
 	result ask.Result

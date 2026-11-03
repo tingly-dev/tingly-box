@@ -305,7 +305,10 @@ func (b *Bot) sendMedia(ctx context.Context, target string, opts *core.SendMessa
 	localPath := filePath
 	cleanupNeeded := false
 	if _, err := os.Stat(filePath); err != nil {
-		// File doesn't exist, try to download from URL
+		if !strings.HasPrefix(filePath, "http://") && !strings.HasPrefix(filePath, "https://") {
+			return nil, core.NewBotError(core.ErrMediaNotSupported, fmt.Sprintf("media file not readable: %v", err), false)
+		}
+		// Remote URL: download it first
 		tempDir := filepath.Join(os.TempDir(), "tingly-box-weixin")
 		downloadedPath, err := media.DownloadRemoteMediaToTemp(ctx, filePath, tempDir)
 		if err != nil {
@@ -363,6 +366,16 @@ func (b *Bot) sendMedia(ctx context.Context, target string, opts *core.SendMessa
 
 	if !result.OK {
 		return nil, core.NewBotError(core.ErrPlatformError, result.Error, false)
+	}
+
+	// WechatBot.SendMedia carries only the attachment: msg.Text is dropped, so
+	// the caption goes out as its own message after it.
+	if opts.Text != "" {
+		textOpts := *opts
+		textOpts.Media = nil
+		if _, err := b.sendText(ctx, target, &textOpts); err != nil {
+			return nil, fmt.Errorf("attachment sent but description failed: %w", err)
+		}
 	}
 
 	b.UpdateLastActivity()

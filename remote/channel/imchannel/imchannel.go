@@ -31,12 +31,21 @@ type Prompter interface {
 	Prompt(ctx context.Context, req ask.Request) (ask.Result, error)
 }
 
+// fileUploadPlatforms are the platforms whose imbot adapter uploads a local
+// file:// attachment. The others either have no upload (slack, discord and
+// whatsapp adapters only post a URL placeholder) or are not wired yet, and must
+// fail loudly rather than pretend a file was delivered.
+var fileUploadPlatforms = map[string]bool{
+	"telegram": true, "tingly": true, "feishu": true, "lark": true,
+	"dingtalk": true, "weixin": true, "wecom": true,
+}
+
 // SendFile delivers local file contents on platforms with file upload support.
 func (c *Channel) SendFile(ctx context.Context, chatID, path, name, mediaType, caption string) error {
 	if c.sender == nil {
 		return fmt.Errorf("imchannel: no sender")
 	}
-	if c.platform != "telegram" && c.platform != "tingly" && c.platform != "feishu" && c.platform != "lark" {
+	if !fileUploadPlatforms[c.platform] {
 		return fmt.Errorf("file upload is not supported by %s", c.platform)
 	}
 	kind := "document"
@@ -44,7 +53,13 @@ func (c *Channel) SendFile(ctx context.Context, chatID, path, name, mediaType, c
 		kind = "image"
 	}
 	u := (&url.URL{Scheme: "file", Path: path}).String()
-	_, err := c.sender.SendMessage(ctx, chatID, &imbot.SendMessageOptions{Text: caption, ParseMode: imbot.ParseModeMarkdown, Media: []imbot.MediaAttachment{{Type: kind, URL: u, Filename: name, MimeType: mediaType}}})
+	_, err := c.sender.SendMessage(ctx, chatID, &imbot.SendMessageOptions{
+		Text:      caption,
+		ParseMode: imbot.ParseModeMarkdown,
+		Media:     []imbot.MediaAttachment{{Type: kind, URL: u, Filename: name, MimeType: mediaType}},
+		// Reply-context token (WeChat ilink needs it for a proactive send).
+		Metadata: c.tokenMetadata(chatID),
+	})
 	return err
 }
 
