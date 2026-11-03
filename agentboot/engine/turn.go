@@ -14,6 +14,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/claude"
 )
 
 // turnTimeout bounds one turn. Coding tasks run far longer than a chat
@@ -203,7 +204,26 @@ func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, 
 		// A crash mid-turn: drop the pool's stale bookkeeping now rather
 		// than waiting for the next Acquire to self-heal it.
 		e.pool.Remove(sessionID)
-	} else {
+
+		// The crash happened with staged work on disk (any output seen
+		// means the session reached the transcript): recover it naturally
+		// instead of failing the turn. --resume replays the interrupted
+		// turn from the transcript — the user's message is never re-sent
+		// — and interrupted tool calls are not re-run (CLI-guaranteed).
+		// One attempt only: a recovery that also fails surfaces the error.
+		if agentboot.PreOutputFailure(werr) && res.c.TurnOutputSeen() {
+			logrus.WithError(werr).Warnf("engine: session %s crashed mid-turn, resuming the interrupted turn", sessionID)
+			recRes, recErr := e.recoverInterruptedTurn(ctx, sessionID, projectPath, opts, want, prompter)
+			if recErr == nil {
+				werr = nil
+				res = recRes
+			} else {
+				werr = recErr
+			}
+		}
+	} else if werr == nil || res.c.Session().Status() != agentboot.SessionStateTerminated {
+		// Not a mid-turn crash (clean turn, or a ResultError on a live
+		// session): the session stays pooled — count the activity.
 		e.pool.Touch(sessionID)
 	}
 	if werr == nil {
@@ -212,6 +232,25 @@ func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, 
 		e.store.SetFailed(sessionID, werr.Error())
 	}
 	return werr, true
+}
+
+// recoverInterruptedTurn relaunches a persistent process that crashed
+// mid-turn, recovering the interrupted turn instead of failing it. The
+// relaunch resumes the same Claude session (the engine pins the Claude
+// session id to the engine's own at first launch, so --resume <sessionID>
+// finds it) with CLAUDE_CODE_RESUME_INTERRUPTED_TURN set: the CLI replays
+// the interrupted turn's prompt from its transcript — the host's prompt is
+// empty, injecting no message — and continues it without re-running
+// interrupted tool calls.
+func (e *Engine) recoverInterruptedTurn(ctx context.Context, sessionID, projectPath string, opts agentboot.ExecutionOptions, want launchState, prompter agentboot.Prompter) (*resident, error) {
+	e.Evict(sessionID)
+	e.store.SetRunning(sessionID)
+
+	recOpts := opts
+	recOpts.Resume = true
+	recOpts.Env = append(append([]string(nil), opts.Env...), claude.EnvResumeInterruptedTurn+"=1")
+	recWant := launchState{sig: launchSignature(recOpts), model: opts.Model, mode: opts.PermissionMode}
+	return e.openPersistentTurn(ctx, sessionID, projectPath, "", recOpts, recWant, prompter)
 }
 
 // finishTurn applies the two corrections both the one-shot and persistent

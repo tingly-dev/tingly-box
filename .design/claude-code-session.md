@@ -417,6 +417,38 @@ split, implemented at `agentboot` level and shared by both paths:
   `ResultError`) are never retried, exactly as before: side effects may
   exist. The mid-turn-crash paragraph above still governs them.
 
+**Mid-turn crash recovery — natural resume, not re-send (2026-11-03).**
+The "mid-turn crash is never retried" rule above still holds in the sense
+that the *host* never re-sends the user's message. But a crash with output
+already seen means staged work is on disk (Claude Code writes its transcript
+incrementally), and the CLI has a documented recovery primitive for exactly
+this: `CLAUDE_CODE_RESUME_INTERRUPTED_TURN=1` + `--resume <session-id>` —
+the CLI detects the unfinished turn in the transcript, replays its prompt
+itself, and continues it without re-running interrupted tool calls
+(CLI-guaranteed; changelog carries multiple fixes enforcing "don't re-run
+finished turns"). Verified empirically against CLI 2.1.303: kill a process
+mid-turn (3 tool calls done, no `result`), resume with the env var and a
+stdin that stays open with no message injected → the turn continues and
+completes `result: success`.
+
+`Engine.runPersistentTurn` now does exactly that, once, when a persistent
+session terminates mid-turn with output seen: Evict → re-`Open` with
+`opts.Resume=true`, `CLAUDE_CODE_RESUME_INTERRUPTED_TURN=1` in `opts.Env`,
+and an **empty prompt**. `claude.Driver.Prepare` treats an empty prompt in
+stream-json mode as "hold stdin open, inject no message" — an immediately
+closed stdin would EOF the `--print` process before recovery; the runner's
+own shutdown closes stdin at turn end. A recovery that also fails surfaces
+the error — one attempt, no loop. The launch bookkeeping records the
+recovery launch's own signature (the env var changes `launchSignature`).
+
+Supporting facts (from the same research): every stream message carries
+`session_id` from `system(init)` on (so the host always knows what to
+resume); SIGTERM mid-turn leaves the turn unfinished with no `result`
+(crash discriminator); in-process API retries are tunable via
+`CLAUDE_CODE_MAX_RETRIES` / `CLAUDE_CODE_RETRY_WATCHDOG` /
+`API_TIMEOUT_MS`; the `api_retry` stream event uses fields
+`attempt`/`max_retries`/`retry_delay_ms`/`error_status`/`error`.
+
 **Bot setting**: `persistent_session` (`*bool`, default unset = off) landed
 end-to-end — `db.ImBotSettingsRecord`/`db.Settings` →
 `imbot.CreateRequest`/`UpdateRequest` → `bot.BotSetting.IsPersistentSession()`

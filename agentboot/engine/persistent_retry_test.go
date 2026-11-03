@@ -21,6 +21,9 @@ type fakePersistentAgent struct {
 	mu      sync.Mutex
 	scripts []fakePersistentScript
 	opens   int
+	// openPrompts/openOpts record every Open call, in order.
+	openPrompts []string
+	openOpts    []agentboot.ExecutionOptions
 }
 
 // fakePersistentScript describes one opened session's single turn: complete
@@ -38,10 +41,12 @@ func (a *fakePersistentAgent) Execute(context.Context, string, agentboot.Executi
 	return nil, errors.New("fakePersistentAgent: one-shot Execute not scripted")
 }
 
-func (a *fakePersistentAgent) Open(context.Context, string, agentboot.ExecutionOptions) (agentboot.PersistentSession, error) {
+func (a *fakePersistentAgent) Open(_ context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error) {
 	a.mu.Lock()
 	i := a.opens
 	a.opens++
+	a.openPrompts = append(a.openPrompts, prompt)
+	a.openOpts = append(a.openOpts, opts)
 	script := fakePersistentScript{}
 	if i < len(a.scripts) {
 		script = a.scripts[i]
@@ -160,14 +165,46 @@ func TestRunPersistentTurn_RetriesPreOutputCrash(t *testing.T) {
 	assert.Equal(t, 2, agent.opens, "the engine must relaunch exactly once")
 }
 
-func TestRunPersistentTurn_NoRetryAfterOutput(t *testing.T) {
+func TestRunPersistentTurn_RecoversInterruptedTurn(t *testing.T) {
+	// Open #1 crashes mid-turn (output seen — the interrupted turn reached
+	// the transcript); the recovery relaunch resumes the same Claude session
+	// and the CLI replays the turn from its transcript.
 	agent := &fakePersistentAgent{scripts: []fakePersistentScript{
+		{crashAfterOutput: true},
+		{}, // the recovery relaunch completes the turn
+	}}
+	e, endCh := newPersistentRetryEngine(t, agent)
+
+	require.True(t, e.Start("s1", t.TempDir(), "hello", false, nil))
+	end := <-endCh
+	require.NoError(t, end.Err, "a mid-turn crash must be recovered by resuming")
+	assert.Equal(t, 2, agent.opens, "exactly one recovery relaunch")
+
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	assert.Equal(t, "", agent.openPrompts[1],
+		"the recovery launch must not inject a message — the CLI replays the interrupted turn")
+	assert.True(t, agent.openOpts[1].Resume, "the recovery launch must resume the session")
+	foundEnv := false
+	for _, kv := range agent.openOpts[1].Env {
+		if kv == "CLAUDE_CODE_RESUME_INTERRUPTED_TURN=1" {
+			foundEnv = true
+		}
+	}
+	assert.True(t, foundEnv, "the recovery launch must set the resume-interrupted-turn env")
+}
+
+func TestRunPersistentTurn_RecoveryFailureSurfaces(t *testing.T) {
+	// Both the original process and the recovery relaunch crash mid-turn:
+	// one recovery attempt only, then the error surfaces.
+	agent := &fakePersistentAgent{scripts: []fakePersistentScript{
+		{crashAfterOutput: true},
 		{crashAfterOutput: true},
 	}}
 	e, endCh := newPersistentRetryEngine(t, agent)
 
 	require.True(t, e.Start("s1", t.TempDir(), "hello", false, nil))
 	end := <-endCh
-	require.Error(t, end.Err, "a crash after output must surface, not retry")
-	assert.Equal(t, 1, agent.opens)
+	require.Error(t, end.Err, "a recovery that also fails must surface")
+	assert.Equal(t, 2, agent.opens, "exactly one recovery attempt — no loop")
 }
