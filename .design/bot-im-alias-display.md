@@ -385,6 +385,8 @@ The four questions the user was asked about (Feishu scopes, deleted entities, bo
 | 2026-11-03 | D5 `群` segment renders as a localised word (`群` / `Group`), small chip in the UI, bare word in text | DECIDED (delegated by the user) | me |
 | 2026-11-03 | D6 Platform segment as icon under a bot header (checked: still fits the new order) | DECIDED (delegated by the user) | me |
 | 2026-11-03 | D7 PR split PR0/PR1/PR2/PR3 | DECIDED (delegated by the user) | me |
+| 2026-11-03 | Build order followed: P0, P1, P1b, P3, P4 text channels, then logfields, `/status`, Feishu names, deleted-binding display; server `ref` API fields dropped (§14) | DECIDED (implementation) | me |
+| 2026-11-03 | `/status` carries Bot and Profile only, no chat line | DECIDED (implementation, from D3) | me |
 
 ## 13. Visuals
 
@@ -411,24 +413,27 @@ Screenshots were taken in frontend mock mode (headless Chromium, mock data exten
 
 ## 14. Implementation status and deviations (2026-11-03)
 
-Built on the branch, with tests (Go: `remote/access`, `internal/db`, `imbot/core`, `remote/control/remoteagent`; frontend: `@tingly/ui`, Projects package, `imHost`):
+Built on the branch with tests (Go: `remote/access`, `remote/logfields`, `internal/db`, `imbot/core`, `imbot/platform/feishu`, `remote/control/{bot,remoteagent}`; frontend: `@tingly/ui`, the Projects package, `imHost`). `openapi.json` was regenerated in an isolated HOME and `pnpm gen:api` run; the generated file also picked up routes that were missing from the committed one before this work.
 
 | Phase | State | Notes |
 |---|---|---|
-| P0 bug fixes | done | delete confirm no longer shows the internal uuid; picker input/option agree; aliases reach the Notify graph; `chat_title` is sent on bind; the host implements the lookup the transcript already called |
-| P1 naming model | done | `alias_source` / `display_name_source`, one-time backfill, N1–N5 enforced and tested; Feishu adapter returns no name instead of the sender id |
+| P0 bug fixes | done | delete confirm no longer shows the internal uuid; picker input/option agree; aliases reach the Notify graph; `chat_title` is sent on bind; the host implements the chat lookup the transcript already called |
+| P1 naming model | done | `alias_source` / `display_name_source`, one-time backfill, N1–N5 enforced and tested; a direct chat takes its peer's platform name as default alias on the first inbound message |
 | P1b bot names | done | no `"<platform> Bot"` defaults (QR flows, CLI, UI); explicit empty name clears; an unnamed bot takes the adapter's account name on connect (Telegram, Discord, Slack) |
-| P2 resolver + API | **changed** | see below |
-| P3 shared UI | done | `EntityLabel`, `shortId`, `entityText` in `@tingly/ui`; `useEntityLabels` in the app; applied to Bots table, Remote and Notify cards, Access dialog, notify picker/confirm/graph nodes, Projects tags, source lines, IM settings, bind dialog; ~12 toasts now name the entity |
-| P4 text channels | **partly done** | `/help` names the bot, pairing confirmation names the bot, imbot logs carry `[imbot <platform>/<short id>]`, the stderr pairing banner includes the uuid, CLI says `/pair` and labels the index column `#` |
-| P5 lifecycle | not started | Feishu/Weixin/WeCom sender names (D1), dangling-reference cleanup (D2), persisted audit events |
+| P2 resolver + API | **changed** | see deviations |
+| P3 shared UI | done | `EntityLabel` (with a `compact` form for tags), `shortId`, `entityText` in `@tingly/ui`; `useEntityLabels` in the app; applied to the Bots table, Remote and Notify cards, Access dialog, notify picker/confirm/graph nodes, Projects tags, "From …" lines, IM settings and the bind dialog; ~12 toasts name the entity |
+| P4 text channels | done | `/help` and `/status` name the bot (`/status` also the Claude Code profile); pairing confirmation names the bot; every imbot adapter line carries `[imbot <platform>/<short id>]`; the stderr pairing banner includes the uuid; CLI says `/pair` and labels the index column `#`; `remote/logfields` is the one key set (`bot_uuid`, `bot_name`, `chat_id` = external id, `chat_alias`, `access_target_id` / `access_actor_id` for internal ids, `ilink_bot_id`) |
+| D1 Feishu names | done | contact (raw request) and chat lookups behind a cache; a missing scope is logged once and not retried for 30 minutes; Weixin/WeCom stay id-only |
+| D2 deleted entities | done (display) | a binding whose chat or bot is gone shows its saved alias and id with `(deleted)`, decided only from a complete listing; nothing is cascade-deleted |
+| P5 persisted audit events | not started | audit events are still log-only |
 
 Deviations from the plan above (decided while building):
 
-- **No server `DisplayRef` / `*_ref` API fields (§5).** Once platform names are stored as default aliases (P1), the alias is already on `DirectChat` / `Group`, so the client resolves labels from lists it already loads (`useEntityLabels`, and the host's lazily filled chat index for Projects). Only `alias_source` was added to the API. A server resolver is only needed for the persisted-audit and CLI cases still open in P5.
+- **No server `DisplayRef` / `*_ref` API fields (§5).** Once platform names are stored as default aliases (P1), the alias is already on `DirectChat` / `Group`, so the client resolves labels from lists it already loads (`useEntityLabels`, and the host's lazily filled chat index for Projects). Only `alias_source` / `display_name_source` were added to the API.
 - **Bots have no `name_source`.** A bot's name is only filled when empty and never refreshed, so provenance would carry no information.
 - **Projects `chatKey` still ignores the bot.** A binding is unique per `(platform, chat_id)` on the server, so adding the bot to the key would hide a real conflict instead of fixing one.
-- **Graph nodes use the compact form.** In the Notify graph the platform is the preceding node and the `Group` tag is on the node, so the node shows alias over short id (the D6 icon form taken to its end).
-- **`logfields` helper not built.** Only the highest-value log change (per-bot adapter prefix) is done; normalising `uuid|bot|botUUID|channel` field names across ~80 sites is deferred.
-- **`/status` unchanged.** The Projects module cannot resolve bot or profile names without a host hook; left for P5.
-- **Display of a group alias in the Remote card is truncated in narrow columns** (the id is shortened first only past 20 characters); acceptable for now.
+- **Graph nodes and tags use compact forms.** In the Notify graph the platform is the preceding node, so the node shows alias over short id; project tags (`compact`) drop the id when there is an alias and keep the full label as tooltip and accessible name, so the alias is not squeezed in a narrow header.
+- **Log keys: `user_id` stays.** About 20 pairing/auth lines log the external sender under `user_id`; it already means the external id, so it was not renamed to `actor_id` (churn without a gain). Free-text log lines in the imbot manager use the shared `platform/…tail` tag.
+- **`/status` shows no chat line.** The bot and profile lines were added; a chat alias would be visible to a whole group (D3: alias only in DMs) and in a DM it is the user's own chat.
+- **Feishu webhook path** (`Adapter.AdaptWebhook`) still carries no name; only the WebSocket path looks names up.
+- **No dangling-reference cleanup.** Per D2 nothing is deleted when a bot or profile is removed; references render as `(deleted)` (bindings in Projects, profile in `/status`) instead.

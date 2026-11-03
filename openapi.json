@@ -352,6 +352,57 @@
         }
       }
     },
+    "/api/v1/bots/{bot}/chats/{chat}/alias": {
+      "put": {
+        "tags": [
+          "bot-access"
+        ],
+        "operationId": "apiV1BotsBotChatsChatAliasPut",
+        "parameters": [
+          {
+            "name": "bot",
+            "in": "path",
+            "description": "Path parameter 'bot'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "chat",
+            "in": "path",
+            "description": "Path parameter 'chat'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AliasUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/bots/{bot}/chats/{chat}/authorize-check": {
       "post": {
         "tags": [
@@ -954,6 +1005,57 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PermissionUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bots/{bot}/groups/{group}/alias": {
+      "put": {
+        "tags": [
+          "bot-access"
+        ],
+        "operationId": "apiV1BotsBotGroupsGroupAliasPut",
+        "parameters": [
+          {
+            "name": "bot",
+            "in": "path",
+            "description": "Path parameter 'bot'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "group",
+            "in": "path",
+            "description": "Path parameter 'group'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AliasUpdateRequest"
               }
             }
           }
@@ -5089,14 +5191,14 @@
         "tags": [
           "projects"
         ],
-        "summary": "List the IM chats bound to threads, all of them or one project's or thread's",
-        "description": "List the IM chats bound to threads, all of them or one project's or thread's",
+        "summary": "List IM chats bound to threads, projects, or folders",
+        "description": "List IM chats bound to threads, projects, or folders",
         "operationId": "apiV1ProjectsChannel-bindingsGet",
         "parameters": [
           {
             "name": "project_id",
             "in": "query",
-            "description": "Only chats bound to a thread of this project",
+            "description": "Only chats bound to this project or folder",
             "required": false,
             "schema": {
               "type": "string"
@@ -5129,8 +5231,8 @@
         "tags": [
           "projects"
         ],
-        "summary": "Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it",
-        "description": "Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it",
+        "summary": "Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it",
+        "description": "Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it",
         "operationId": "apiV1ProjectsChannel-bindingsPut",
         "requestBody": {
           "description": "Request body",
@@ -5183,6 +5285,39 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/directories": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Browse non-hidden directories under the server user home",
+        "description": "Browse non-hidden directories under the server user home",
+        "operationId": "apiV1ProjectsDirectoriesPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrowseDirectoriesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowseDirectoriesResponse"
                 }
               }
             }
@@ -8021,6 +8156,50 @@
         }
       }
     },
+    "/api/v1/threads/{id}/effort": {
+      "put": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Set the thread's next-turn effort; empty restores its default",
+        "description": "Set the thread's next-turn effort; empty restores its default",
+        "operationId": "apiV1ThreadsIdEffortPut",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EffortRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/threads/{id}/events": {
       "get": {
         "tags": [
@@ -8101,6 +8280,59 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EventsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/events/{eid}/choose": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Pick an option of a decision card the coordinator asked in a main thread; the pick reaches the coordinator as the user's message",
+        "description": "Pick an option of a decision card the coordinator asked in a main thread; the pick reaches the coordinator as the user's message",
+        "operationId": "apiV1ThreadsIdEventsEidChoosePost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eid",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChooseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadEvent"
                 }
               }
             }
@@ -10858,6 +11090,10 @@
             "type": "string",
             "description": "Field display_name"
           },
+          "display_name_source": {
+            "type": "string",
+            "description": "Field display_name_source"
+          },
           "external_actor_id": {
             "type": "string",
             "description": "Field external_actor_id"
@@ -11099,6 +11335,18 @@
           "cache_read_tokens",
           "cache_write_tokens",
           "reasoning_tokens"
+        ]
+      },
+      "AliasUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string",
+            "description": "Field alias"
+          }
+        },
+        "required": [
+          "alias"
         ]
       },
       "ApplyClaudeConfigRequest": {
@@ -11598,6 +11846,10 @@
       "BindChannelRequest": {
         "type": "object",
         "properties": {
+          "bot_uuid": {
+            "type": "string",
+            "description": "Field bot_uuid"
+          },
           "chat_id": {
             "type": "string",
             "description": "Field chat_id"
@@ -11842,6 +12094,43 @@
           "ok"
         ]
       },
+      "BrowseDirectoriesRequest": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "BrowseDirectoriesResponse": {
+        "type": "object",
+        "properties": {
+          "directories": {
+            "type": "array",
+            "description": "Field directories",
+            "items": {
+              "type": "string"
+            }
+          },
+          "home": {
+            "type": "string",
+            "description": "Field home"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "home",
+          "path",
+          "directories"
+        ]
+      },
       "CapabilityListResponse": {
         "type": "object",
         "properties": {
@@ -11949,6 +12238,10 @@
       "ChannelBinding": {
         "type": "object",
         "properties": {
+          "bot_uuid": {
+            "type": "string",
+            "description": "Field bot_uuid"
+          },
           "chat_id": {
             "type": "string",
             "description": "Field chat_id"
@@ -11962,6 +12255,23 @@
             "format": "date-time",
             "description": "Field created_at"
           },
+          "focus_agent": {
+            "type": "string",
+            "description": "Field focus_agent"
+          },
+          "focus_seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field focus_seq"
+          },
+          "focus_title": {
+            "type": "string",
+            "description": "Field focus_title"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Field folder"
+          },
           "id": {
             "type": "string",
             "description": "Field id"
@@ -11973,6 +12283,23 @@
           "project_id": {
             "type": "string",
             "description": "Field project_id"
+          },
+          "target_project_id": {
+            "type": "string",
+            "description": "Field target_project_id"
+          },
+          "target_seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field target_seq"
+          },
+          "target_thread_id": {
+            "type": "string",
+            "description": "Field target_thread_id"
+          },
+          "target_title": {
+            "type": "string",
+            "description": "Field target_title"
           },
           "thread_id": {
             "type": "string",
@@ -11998,6 +12325,19 @@
           "project_id",
           "created_at",
           "updated_at"
+        ]
+      },
+      "ChooseRequest": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field index"
+          }
+        },
+        "required": [
+          "index"
         ]
       },
       "ClaudeCodeEnvResponse": {
@@ -12886,6 +13226,17 @@
             "type": "string",
             "description": "Field content"
           },
+          "effort": {
+            "type": "string",
+            "description": "Field effort",
+            "enum": [
+              "",
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
+          },
           "model": {
             "type": "string",
             "description": "Field model"
@@ -13181,6 +13532,14 @@
       "DirectChat": {
         "type": "object",
         "properties": {
+          "alias": {
+            "type": "string",
+            "description": "Field alias"
+          },
+          "alias_source": {
+            "type": "string",
+            "description": "Field alias_source"
+          },
           "blocked": {
             "type": "boolean",
             "description": "Field blocked"
@@ -13509,6 +13868,25 @@
         },
         "required": [
           "success"
+        ]
+      },
+      "EffortRequest": {
+        "type": "object",
+        "properties": {
+          "effort": {
+            "type": "string",
+            "description": "Field effort",
+            "enum": [
+              "",
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
+          }
+        },
+        "required": [
+          "effort"
         ]
       },
       "Entry": {
@@ -14040,6 +14418,14 @@
       "Group": {
         "type": "object",
         "properties": {
+          "alias": {
+            "type": "string",
+            "description": "Field alias"
+          },
+          "alias_source": {
+            "type": "string",
+            "description": "Field alias_source"
+          },
           "blocked": {
             "type": "boolean",
             "description": "Field blocked"
@@ -17345,6 +17731,10 @@
       "ProfileRequest": {
         "type": "object",
         "properties": {
+          "inherit": {
+            "type": "boolean",
+            "description": "Field inherit"
+          },
           "profile": {
             "type": "string",
             "description": "Field profile"
@@ -17423,10 +17813,18 @@
             "type": "string",
             "description": "Field coordinator_model"
           },
+          "coordinator_profile": {
+            "type": "string",
+            "description": "Field coordinator_profile"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "description": "Field created_at"
+          },
+          "disable_worktree": {
+            "type": "boolean",
+            "description": "Field disable_worktree"
           },
           "goal": {
             "type": "string",
@@ -17479,6 +17877,10 @@
             "type": "string",
             "description": "Field thread_permission_mode"
           },
+          "thread_profile": {
+            "type": "string",
+            "description": "Field thread_profile"
+          },
           "type": {
             "type": "string",
             "description": "Field type"
@@ -17496,6 +17898,8 @@
           "goal",
           "instructions",
           "repos",
+          "coordinator_profile",
+          "thread_profile",
           "coordinator_model",
           "thread_model",
           "coordinator_effort",
@@ -17602,10 +18006,18 @@
             "type": "string",
             "description": "Field coordinator_model"
           },
+          "coordinator_profile": {
+            "type": "string",
+            "description": "Field coordinator_profile"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "description": "Field created_at"
+          },
+          "disable_worktree": {
+            "type": "boolean",
+            "description": "Field disable_worktree"
           },
           "goal": {
             "type": "string",
@@ -17658,6 +18070,10 @@
             "type": "string",
             "description": "Field thread_permission_mode"
           },
+          "thread_profile": {
+            "type": "string",
+            "description": "Field thread_profile"
+          },
           "threads": {
             "$ref": "#/components/schemas/ThreadCounts"
           },
@@ -17678,6 +18094,8 @@
           "goal",
           "instructions",
           "repos",
+          "coordinator_profile",
+          "thread_profile",
           "coordinator_model",
           "thread_model",
           "coordinator_effort",
@@ -20308,6 +20726,10 @@
             "type": "string",
             "description": "Field cwd"
           },
+          "effort_override": {
+            "type": "string",
+            "description": "Field effort_override"
+          },
           "files_changed": {
             "type": "integer",
             "format": "int64",
@@ -20364,6 +20786,10 @@
             "type": "string",
             "description": "Field profile"
           },
+          "profile_override": {
+            "type": "string",
+            "description": "Field profile_override"
+          },
           "project_id": {
             "type": "string",
             "description": "Field project_id"
@@ -20371,6 +20797,10 @@
           "repo_path": {
             "type": "string",
             "description": "Field repo_path"
+          },
+          "reported_model": {
+            "type": "string",
+            "description": "Field reported_model"
           },
           "resolved_at": {
             "type": "string",
@@ -20427,6 +20857,7 @@
           "status",
           "origin",
           "cwd",
+          "profile_override",
           "commits_ahead",
           "files_changed",
           "uncommitted",
@@ -21283,6 +21714,14 @@
             "type": "string",
             "description": "Field coordinator_model"
           },
+          "coordinator_profile": {
+            "type": "string",
+            "description": "Field coordinator_profile"
+          },
+          "disable_worktree": {
+            "type": "boolean",
+            "description": "Field disable_worktree"
+          },
           "goal": {
             "type": "string",
             "description": "Field goal"
@@ -21334,6 +21773,10 @@
               "auto",
               "bypassPermissions"
             ]
+          },
+          "thread_profile": {
+            "type": "string",
+            "description": "Field thread_profile"
           }
         }
       },
