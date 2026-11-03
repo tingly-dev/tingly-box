@@ -18,6 +18,8 @@ import VerificationResultPanel from '@/components/provider-form-dialog/Verificat
 import {type VerificationResult, runProviderProbe, beginProbeRun, type ProbeRun} from '@/components/provider-form-dialog/probe';
 import {PlayerStop} from '@/components/icons';
 import ProviderIcon from '@/components/ProviderIcon';
+import AccountLimitsSection from '@/components/limits/AccountLimitsSection';
+import type {Limits} from '@/components/limits/LimitsEditor';
 import {isHttpUrl} from '@/components/provider-form-dialog/validation';
 import ProviderExportButton from '@/components/ProviderExportButton';
 import ProviderFormLayout, {ProviderIdentityFields, ProviderFormSection} from '@/components/provider-form-dialog/ProviderFormLayout';
@@ -41,6 +43,8 @@ export interface EnhancedProviderFormData {
     /** If set, prefer this exact provider ID when resolving the template.
      *  Avoids mismatches when multiple providers share the same base URL. */
     selectedProviderId?: string;
+    /** Account concurrency/usage limits (edit mode). undefined = leave unchanged. */
+    limits?: Limits;
 }
 
 interface PresetProviderFormDialogProps {
@@ -698,6 +702,13 @@ const ProviderFormDialog = ({
                     onUseGlobalProxyChange={handleUseGlobalProxyChange}
                 />
             </ProviderFormSection>
+            {mode === 'edit' && data.uuid && (
+                <AccountLimitsSection
+                    providerUuid={data.uuid}
+                    value={data.limits}
+                    onChange={(next) => onChange('limits', next)}
+                />
+            )}
             {submitError && <Alert severity="error" onClose={() => setSubmitError(null)}>{submitError}</Alert>}
         </ProviderFormLayout>
     );

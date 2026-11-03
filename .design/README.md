@@ -87,6 +87,7 @@
 | [opencode-session.md](./opencode-session.md) | OpenCode Zen session header | 设计说明；局部实施状态见正文 |
 | [opencode-quota.md](./opencode-quota.md) | OpenCode（Zen / Go）配额方案 | 设计说明；局部实施状态见正文 |
 | [quota-semantics.md](./quota-semantics.md) | Quota 语义归一 | 设计说明；局部实施状态见正文 |
+| [routing-limits.md](./routing-limits.md) | 路由限额算子：账号并发上限 + 滑动窗口用量/额度（Team 友好） | 已实现；研究见 `.research/routing-concurrency-usage-operators.md` |
 | [quota-relay.md](./quota-relay.md) | Quota 中继：端侧看到中央的 quota | 设计说明；局部实施状态见正文 |
 | [quota-backoff.md](./quota-backoff.md) | Quota 请求失败退避 | 已实现 |
 | [team.md](./team.md) | Team and Sharing Key Authorization | 设计说明；局部实施状态见正文 |

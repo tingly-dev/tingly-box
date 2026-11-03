@@ -5,6 +5,7 @@ import {
     Edit as EditIcon,
     KeyboardArrowUp,
     KeyboardArrowDown,
+    Speed as LimitsIcon,
 } from '@/components/icons';
 import {
     Box,
@@ -25,6 +26,8 @@ import { ProviderLabel } from '../ProviderLogo.tsx';
 import { ProbeMenu } from '../probe';
 import type { ConfigProvider } from '../RoutingGraphTypes.ts';
 import { ServiceNodeContainer, NODE_LAYER_STYLES, ActionButtonsBox, nodeSpotlightSx } from './styles.tsx';
+import LimitsDialog from '../limits/LimitsDialog';
+import { isEmptyLimits, type Limits } from '../limits/LimitsEditor';
 import ServiceNodeContent from './ServiceNodeContent.tsx';
 import ServiceNodeQuota from './ServiceNodeQuota.tsx';
 import NodeTooltip from './NodeTooltip.tsx';
@@ -86,6 +89,10 @@ export interface ServiceNodeProps {
     onMoveTierUp?: () => void;
     onMoveTierDown?: () => void;
     onEditProvider?: (providerUuid: string) => void;
+    /** Save this service's concurrency/usage limits (its share of the account). */
+    onLimitsChange?: (limits: Limits) => void;
+    /** Owning rule, used to find this service's live limit state. */
+    ruleUuid?: string;
     forceShowActions?: boolean;
 }
 
@@ -215,9 +222,12 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
     onMoveTierUp,
     onMoveTierDown,
     onEditProvider,
+    onLimitsChange,
+    ruleUuid,
     forceShowActions = false,
 }) => {
     const { t } = useTranslation();
+    const [limitsOpen, setLimitsOpen] = useState(false);
     const theme = useTheme();
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
     const [probeAnchorEl, setProbeAnchorEl] = useState<null | HTMLElement>(null);
@@ -416,6 +426,19 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                             </IconButton>
                         </NodeTooltip>
                     )}
+                    {onLimitsChange && (
+                        <NodeTooltip title={t('limits.buttonTooltip')} placement="bottom">
+                            <IconButton
+                                size="small"
+                                aria-label={t('limits.button')}
+                                onClick={(e) => { e.stopPropagation(); setLimitsOpen(true); }}
+                                sx={{ p: 0.5 }}
+                                color={isEmptyLimits(provider.limits) ? 'default' : 'primary'}
+                            >
+                                <LimitsIcon sx={{ fontSize: '1rem' }} />
+                            </IconButton>
+                        </NodeTooltip>
+                    )}
                     {handleEditProvider && (
                         <NodeTooltip title={t('rule.service.editProvider')} placement="bottom">
                             <IconButton
@@ -438,6 +461,15 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                     </NodeTooltip>
                 </ActionButtonsBox>
             </ServiceNodeContainer>
+            {onLimitsChange && (
+                <LimitsDialog
+                    open={limitsOpen}
+                    onClose={() => setLimitsOpen(false)}
+                    value={provider.limits}
+                    onSave={onLimitsChange}
+                    statusKey={ruleUuid ? `svc:${ruleUuid}/${provider.provider}/${provider.model}` : undefined}
+                />
+            )}
         </ServiceNodeWrapper>
     );
 };

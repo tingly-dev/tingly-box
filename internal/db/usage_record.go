@@ -944,3 +944,46 @@ func rateFloat(numerator, denominator int64) float64 {
 	}
 	return float64(numerator) / float64(denominator)
 }
+
+// UsageMinute is usage aggregated to one UTC minute.
+type UsageMinute struct {
+	At       time.Time
+	Requests int64
+	Tokens   int64
+}
+
+// UsageMinutesSince aggregates usage_records since a point in time to
+// one-minute buckets, for warm-starting routing-limit windows after a restart.
+// providerUUID is required; model and ruleUUID narrow it when non-empty
+// (service-level limits are scoped to rule+provider+model).
+func (us *UsageStore) UsageMinutesSince(providerUUID, model, ruleUUID string, since time.Time) ([]UsageMinute, error) {
+	us.mu.RLock()
+	defer us.mu.RUnlock()
+
+	q := us.db.Model(&UsageRecord{}).
+		Select("strftime('%Y-%m-%d %H:%M:00', timestamp) AS minute, COUNT(*) AS requests, COALESCE(SUM(total_tokens), 0) AS tokens").
+		Where("provider_uuid = ? AND timestamp >= ?", providerUUID, since)
+	if model != "" {
+		q = q.Where("model = ?", model)
+	}
+	if ruleUUID != "" {
+		q = q.Where("rule_uuid = ?", ruleUUID)
+	}
+	var rows []struct {
+		Minute   string
+		Requests int64
+		Tokens   int64
+	}
+	if err := q.Group("minute").Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]UsageMinute, 0, len(rows))
+	for _, r := range rows {
+		at, err := time.Parse("2006-01-02 15:04:05", r.Minute)
+		if err != nil {
+			continue
+		}
+		out = append(out, UsageMinute{At: at.UTC().Add(30 * time.Second), Requests: r.Requests, Tokens: r.Tokens})
+	}
+	return out, nil
+}

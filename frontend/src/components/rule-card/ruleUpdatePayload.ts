@@ -1,4 +1,5 @@
 import type { ConfigRecord, Rule, RuleFlagsApi, SmartRouting } from '@/components/RoutingGraphTypes';
+import type { Limits } from '@/components/limits/LimitsEditor';
 import { flagsToApi } from './flagHelpers';
 import { normalizeConfigRecordTiers, normalizeProviderTiers } from './utils';
 
@@ -9,6 +10,7 @@ export interface RuleUpdateService {
     active: boolean;
     time_window: number;
     tier: number;
+    limits?: Limits;
 }
 
 export interface RuleUpdatePayload {
@@ -59,6 +61,8 @@ export function buildRuleUpdatePayload(
                 active: provider.active !== undefined ? provider.active : true,
                 time_window: provider.time_window || 0,
                 tier: provider.tier ?? 0,
+                // Full-replace PUT: omitting limits would silently wipe them.
+                limits: provider.limits,
             })),
         smart_enabled: config.smartEnabled || false,
         smart_routing: normalized.smartRouting || [],

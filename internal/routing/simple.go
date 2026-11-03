@@ -3,11 +3,13 @@ package routing
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/limits"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -24,6 +26,14 @@ type SimpleSelector struct {
 // NewSimpleSelector creates a simplified selector
 func NewSimpleSelector(selector *ServiceSelector) *SimpleSelector {
 	return &SimpleSelector{selector: selector}
+}
+
+// Limits returns the account-limits guard (nil when limits are off).
+func (s *SimpleSelector) Limits() *LimitsGuard {
+	if s == nil || s.selector == nil {
+		return nil
+	}
+	return s.selector.limits
 }
 
 // SelectService resolves the session, runs the selection pipeline, validates
@@ -58,8 +68,9 @@ func (s *SimpleSelector) SelectService(
 	// Build context (session ID resolved internally)
 	ctx := NewSelectionContext(rule, req, c, scenario)
 
-	// Execute pipeline
-	result, err := s.selector.Select(ctx)
+	// Execute pipeline; with limits on, also take the account permit and
+	// re-select if another request won the last slot in the meantime.
+	result, err := s.selectAndAcquire(c, ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -106,6 +117,49 @@ func (s *SimpleSelector) SelectService(
 
 	return result.Provider, result.Service, nil
 }
+
+// selectAndAcquire runs the pipeline and, when limits are enabled, acquires the
+// selected service's permit into the request lease. The LimitStage already
+// filtered on a read-only assessment; this re-checks atomically, so losing a
+// race just excludes that service and selects again (bounded by the number of
+// candidates; the queue wait budget is shared across retries).
+func (s *SimpleSelector) selectAndAcquire(c *gin.Context, ctx *SelectionContext) (*SelectionResult, error) {
+	guard := s.selector.limits
+	if guard == nil {
+		return s.selector.Select(ctx)
+	}
+	attempts := len(ctx.Rule.Services) + 1
+	for _, sr := range ctx.Rule.SmartRouting {
+		attempts += len(sr.Services)
+	}
+	for i := 0; i < attempts; i++ {
+		result, err := s.selector.Select(ctx)
+		if err != nil {
+			return nil, err
+		}
+		permit, ok := guard.Acquire(ctx.Rule.UUID, result.Service, ctx.LimitsIgnored)
+		if ok {
+			if permit != nil {
+				LeaseFromGin(c).Hold(result.Service.ServiceID(), permit)
+				if c.GetHeader("X-Tingly-Debug-Routing") == "1" {
+					c.Header(limitsDebugHeader, "held="+result.Service.ServiceID())
+				}
+			}
+			return result, nil
+		}
+		if ctx.LimitExcluded == nil {
+			ctx.LimitExcluded = map[string]bool{}
+		}
+		ctx.LimitExcluded[result.Service.ServiceID()] = true
+		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+			"stage": "routing_limit_race_lost", "rule_uuid": ctx.Rule.UUID, "service": result.Service.ServiceID(),
+		}).Debugf("[limits] lost the last slot of %s; re-selecting", result.Service.ServiceID())
+	}
+	return nil, &LimitError{RuleUUID: ctx.Rule.UUID, Reasons: limits.ReasonConcurrency, RetryAfter: time.Second}
+}
+
+// limitsDebugHeader is only emitted for X-Tingly-Debug-Routing probes.
+const limitsDebugHeader = "X-Tingly-Limits"
 
 // setRoutingDebugHeaders emits X-Tingly-Selected-* response headers describing
 // the routing decision, but only when the request opted in via
