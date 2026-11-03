@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot"
 )
 
@@ -153,21 +154,32 @@ func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, 
 
 	e.store.SetRunning(sessionID)
 	if !found {
-		opened, operr := e.agent.Open(ctx, "", projectPath, prompt, opts)
-		if operr != nil {
+		// A first turn that failed strictly pre-output (launch flake,
+		// startup crash, network error before the agent produced anything)
+		// is safe to relaunch: no output was streamed, no tool ran, and
+		// with no output there is no Claude session id to resume — each
+		// attempt is a fresh launch of the same prompt. Bounded by the
+		// service's retry config. A retry that also fails returns the
+		// final error with handled=true (the turn ran on a persistent
+		// process) — never falling through to a one-shot re-run; see
+		// .design/claude-code-session.md §5.4.
+		retryCfg := e.agent.RetryConfig()
+		for attempt := 0; ; attempt++ {
+			res, werr = e.openPersistentTurn(ctx, sessionID, projectPath, prompt, opts, want, prompter)
+			if werr == nil || attempt >= retryCfg.MaxRetries ||
+				!agentboot.PreOutputFailure(werr) || (res != nil && res.c.TurnOutputSeen()) {
+				break
+			}
+			logrus.WithError(werr).Warnf("engine: pre-output failure on session %s's first turn (attempt %d), relaunching", sessionID, attempt+1)
+			e.Evict(sessionID)
+			e.store.SetRunning(sessionID)
+		}
+		if res == nil {
+			// No process ever started (or the pool refused it): the
+			// existing fallback contract applies — nothing was sent, so a
+			// one-shot turn can still take the message.
 			return nil, false
 		}
-		if perr := e.pool.Open(ctx, sessionID, opened); perr != nil {
-			closeCtx, cancel := context.WithTimeout(context.Background(), agentboot.SessionCloseTimeout)
-			_ = opened.Close(closeCtx)
-			cancel()
-			return nil, false
-		}
-		e.mu.Lock()
-		e.launch[sessionID] = want
-		e.mu.Unlock()
-		res = e.newResident(sessionID, opened)
-		_, werr = res.c.Await(ctx, prompter)
 	} else {
 		_, werr = res.c.RunTurn(ctx, prompt, prompter)
 		switch {
@@ -230,6 +242,29 @@ func (e *Engine) finishTurn(ctx context.Context, sessionID string, werr error, s
 		e.appendError(sessionID, werr.Error())
 	}
 	return werr, false
+}
+
+// openPersistentTurn starts a fresh persistent process for sessionID's first
+// turn (prompt submitted via Open's InitialInput), registers it with the pool
+// and the launch bookkeeping, and awaits the turn. A nil resident means
+// nothing was sent — the caller falls back to a one-shot turn.
+func (e *Engine) openPersistentTurn(ctx context.Context, sessionID, projectPath, prompt string, opts agentboot.ExecutionOptions, want launchState, prompter agentboot.Prompter) (*resident, error) {
+	opened, operr := e.agent.Open(ctx, "", projectPath, prompt, opts)
+	if operr != nil {
+		return nil, operr
+	}
+	if perr := e.pool.Open(ctx, sessionID, opened); perr != nil {
+		closeCtx, cancel := context.WithTimeout(context.Background(), agentboot.SessionCloseTimeout)
+		_ = opened.Close(closeCtx)
+		cancel()
+		return nil, perr
+	}
+	e.mu.Lock()
+	e.launch[sessionID] = want
+	e.mu.Unlock()
+	res := e.newResident(sessionID, opened)
+	_, werr := res.c.Await(ctx, prompter)
+	return res, werr
 }
 
 // launchState is what a resident process runs with: sig is what only a

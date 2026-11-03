@@ -114,6 +114,10 @@ type PersistentSession interface {
 	Close(ctx context.Context) error
 }
 
+// sessionReasonClosed is the terminate reason for a session ended by an
+// explicit Close — not a process failure.
+const sessionReasonClosed = "closed"
+
 // persistentSession is the concrete PersistentSession returned by Runner.Open.
 type persistentSession struct {
 	agentType AgentType
@@ -151,6 +155,17 @@ func (s *persistentSession) Status() SessionState {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.state
+}
+
+// TurnOutputSeen reports whether the turn in flight — or the turn that was
+// in flight when the session terminated, whose completeTurn never ran — has
+// produced any output events. A terminated session reporting false failed
+// strictly pre-output, so re-running its prompt is safe (see
+// [PreOutputFailure]).
+func (s *persistentSession) TurnOutputSeen() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.turnEvents) > 0
 }
 
 // Send encodes and writes the next turn directly onto the shared encoder.
@@ -509,7 +524,7 @@ func (s *persistentSession) terminate(streamErr error) {
 		waitErr := s.proc.Wait()
 		s.shutdownWG.Wait()
 
-		reason := "closed"
+		reason := sessionReasonClosed
 		switch {
 		case fatalDecode:
 			reason = fmt.Sprintf("protocol error: %v", streamErr)

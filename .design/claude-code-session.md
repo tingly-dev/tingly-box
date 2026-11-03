@@ -399,6 +399,24 @@ through the runner-internal wiring the one-shot path relies on.
   execution failure, and the dead session is dropped from the pool so the
   *next* message starts clean.
 
+**Pre-output auto-retry (2026-11-03).** The above sharpens into a two-way
+split, implemented at `agentboot` level and shared by both paths:
+
+- **Pre-output failures** (launch failure, startup crash, stream ended
+  without a result — `agentboot.PreOutputFailure`, gated on the failed
+  attempt having produced *no* output events) are now retried
+  automatically: `AgentService.Run` re-executes bounded by
+  `Config.Retry` (`DefaultRetryConfig`: 2 retries, 250ms→2s capped
+  backoff); `Engine.runPersistentTurn` relaunches the first turn by
+  re-`Open`ing (with no output there is no Claude session id, so the
+  retry is a fresh launch) and returns `handled=true` even when the retry
+  also fails — never a one-shot re-run after a persistent turn was
+  attempted. Nothing was streamed and no tool ran, so a retry cannot
+  double-execute anything.
+- **Post-output failures** (anything after the first event, and any
+  `ResultError`) are never retried, exactly as before: side effects may
+  exist. The mid-turn-crash paragraph above still governs them.
+
 **Bot setting**: `persistent_session` (`*bool`, default unset = off) landed
 end-to-end — `db.ImBotSettingsRecord`/`db.Settings` →
 `imbot.CreateRequest`/`UpdateRequest` → `bot.BotSetting.IsPersistentSession()`

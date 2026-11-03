@@ -74,6 +74,22 @@ func NewConductor(session PersistentSession, hooks ConductorHooks) *Conductor {
 // Session returns the conducted session.
 func (c *Conductor) Session() PersistentSession { return c.session }
 
+// turnOutputReporter is implemented by sessions that can say whether the
+// current turn has produced output; sessions that cannot report false.
+type turnOutputReporter interface {
+	TurnOutputSeen() bool
+}
+
+// TurnOutputSeen reports whether the turn in flight — or the turn that was
+// in flight when the session terminated — has produced any output events.
+// See [persistentSession.TurnOutputSeen].
+func (c *Conductor) TurnOutputSeen() bool {
+	if r, ok := c.session.(turnOutputReporter); ok {
+		return r.TurnOutputSeen()
+	}
+	return false
+}
+
 // Done is closed once the process has ended and every hook has run.
 func (c *Conductor) Done() <-chan struct{} { return c.done }
 
@@ -237,7 +253,7 @@ func (c *Conductor) read() {
 			if e.State != SessionStateTerminated {
 				continue
 			}
-			c.finish(nil, errors.New("agentboot: persistent session terminated before this turn completed: "+e.Reason))
+			c.finish(nil, &SessionTerminatedError{Reason: e.Reason, ProcessFailure: e.Reason != sessionReasonClosed})
 			if c.hooks.OnTerminated != nil {
 				c.hooks.OnTerminated(e.Reason)
 			}

@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot/history"
 )
 
@@ -53,6 +55,11 @@ func NewAgentService(config Config, options ...ServiceOption) (*AgentService, er
 	}
 	if config.StreamBufferSize == 0 {
 		config.StreamBufferSize = 100
+	}
+	if config.Retry == (RetryConfig{}) {
+		// An unset retry block means the defaults. To disable retry, set
+		// MaxRetries to a negative value.
+		config.Retry = DefaultRetryConfig()
 	}
 
 	service := &AgentService{
@@ -231,13 +238,78 @@ type RunRequest struct {
 // [RunWithPrompter]: it streams MessageEvent.Raw values to sink (nil to drop),
 // routes Approval/Ask requests to prompter, and returns the aggregated Result.
 //
+// A failed attempt is retried automatically — bounded by Config.Retry — but
+// only when the failure was strictly pre-output ([PreOutputFailure] and an
+// empty Result.Events): nothing was streamed to sink or answered by the
+// prompter, and no tool can have run, so re-running the prompt is safe.
+// Once any output was seen, or the agent returned an error result, the
+// failure is returned as-is.
+//
 // This is the high-level convenience entry point — callers that need
 // event-level control should use [AgentService.Execute] and consume the handle
 // directly.
 func (s *AgentService) Run(ctx context.Context, req RunRequest, prompter Prompter, sink MessageSink) (*Result, error) {
-	handle, err := s.Execute(ctx, req.AgentType, req.ProjectPath, req.Prompt, req.Opts)
-	if err != nil {
-		return nil, err
+	s.mu.RLock()
+	retryCfg := s.config.Retry
+	s.mu.RUnlock()
+
+	for attempt := 0; ; attempt++ {
+		handle, err := s.Execute(ctx, req.AgentType, req.ProjectPath, req.Prompt, req.Opts)
+		if err != nil {
+			// Synchronous launch failure: nothing ran, and a wrapped
+			// ProcessError says the launch itself failed (config problems
+			// like a missing CLI are not ProcessErrors and won't retry).
+			if attempt < retryCfg.MaxRetries && PreOutputFailure(err) {
+				s.warnRetry(req, attempt, err)
+				if !retryPause(ctx, retryCfg, attempt) {
+					return nil, err
+				}
+				continue
+			}
+			return nil, err
+		}
+		res, err := RunWithPrompter(ctx, handle, prompter, sink)
+		if err == nil {
+			return res, nil
+		}
+		// Retry only a strictly pre-output failure: res.Events empty means
+		// not even an init/system message was decoded, so sink received
+		// nothing and no tool can have executed.
+		if attempt < retryCfg.MaxRetries && res != nil && len(res.Events) == 0 && PreOutputFailure(err) {
+			s.warnRetry(req, attempt, err)
+			if !retryPause(ctx, retryCfg, attempt) {
+				return res, err
+			}
+			continue
+		}
+		return res, err
 	}
-	return RunWithPrompter(ctx, handle, prompter, sink)
+}
+
+// RetryConfig returns the service's retry settings, for callers (like the
+// persistent engine) that implement their own pre-output retry loops and
+// want to match this service's bounds.
+func (s *AgentService) RetryConfig() RetryConfig {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.config.Retry
+}
+
+// warnRetry logs one auto-retry of a pre-output turn failure.
+func (s *AgentService) warnRetry(req RunRequest, attempt int, err error) {
+	logrus.WithError(err).Warnf("agentservice.Run: pre-output failure (attempt %d), retrying", attempt+1)
+}
+
+// retryPause sleeps the exponential backoff for retry attempt n (0-based).
+// It reports false if ctx was canceled while waiting — the caller should
+// give up and return rather than start another attempt.
+func retryPause(ctx context.Context, cfg RetryConfig, attempt int) bool {
+	timer := time.NewTimer(cfg.backoff(attempt))
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }
