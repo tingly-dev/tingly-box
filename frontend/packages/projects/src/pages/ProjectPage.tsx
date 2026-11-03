@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Box, Button, IconButton, Link, MenuItem, Select, Skeleton, Stack, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, IconButton, Link, MenuItem, Radio, RadioGroup, Select, Skeleton, Stack, Tooltip, Typography } from '@mui/material';
 import { Link as RouterLink, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, isFolder, type components, unwrap, type Project, type Thread, type ThreadEvent } from '../client';
@@ -78,6 +78,15 @@ export default function ProjectPage() {
     };
     const setWindow = remember('overviewWindowOpen', setWindowOpen);
     const setBand = remember('overviewBandOpen', setBandOpen);
+    const [worktreeChoice, setWorktreeChoice] = useState<{ projectId: string; shared: boolean } | null>(null);
+    const worktreeReply = useRef<((choice: boolean | null) => void) | null>(null);
+    useEffect(() => () => { worktreeReply.current?.(null); worktreeReply.current = null; }, [id]);
+    const answerWorktree = (choice: boolean | null) => {
+        const reply = worktreeReply.current;
+        worktreeReply.current = null;
+        setWorktreeChoice(null);
+        reply?.(choice);
+    };
     const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
     const [memoryKey, setMemoryKey] = useState(0);
     const [libraryKey, setLibraryKey] = useState(0);
@@ -426,6 +435,19 @@ export default function ProjectPage() {
                         onSend={async (text, attachments) => {
                             if (projectSaving.current) return false;
                             try {
+                                if (readLocal('worktreeNoticeSeen') !== '1' && project) {
+                                    const choice = await new Promise<boolean | null>((resolve) => {
+                                        worktreeReply.current = resolve;
+                                        setWorktreeChoice({ projectId: id, shared: !!project.disable_worktree });
+                                    });
+                                    if (choice === null) return false;
+                                    if (choice !== !!project.disable_worktree) {
+                                        const saved = await unwrap(api.PATCH('/api/v1/projects/{id}', { params: { path: { id } }, body: { disable_worktree: choice } }));
+                                        setProject((current) => current?.id === saved.id ? saved : current);
+                                        refresh();
+                                    }
+                                    writeLocal('worktreeNoticeSeen', '1');
+                                }
                                 await unwrap(api.POST('/api/v1/threads/{id}/messages', { params: { path: { id: mainThreadId } }, body: { content: text, attachments: attachments.map((a) => a.path) } }));
                                 setBusy(true);
                                 // The message shows at once; the reply streams in over the event stream.
@@ -495,6 +517,18 @@ export default function ProjectPage() {
                 {threadEl}
             </FloatingWindow>
 
+            <Dialog open={worktreeChoice !== null && worktreeChoice.projectId === id} onClose={() => answerWorktree(null)} aria-labelledby="worktree-notice-title" maxWidth="sm" fullWidth>
+                <DialogTitle id="worktree-notice-title">{t('worktreeNotice.title')}</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>{t('worktreeNotice.description')}</DialogContentText>
+                    <RadioGroup value={worktreeChoice?.shared ? 'shared' : 'worktree'} onChange={(e) => setWorktreeChoice({ projectId: id, shared: e.target.value === 'shared' })} sx={{ mt: 1 }}>
+                        <FormControlLabel value="worktree" control={<Radio />} label={t('worktreeNotice.worktree')} />
+                        <FormControlLabel value="shared" control={<Radio />} label={t('worktreeNotice.shared')} />
+                    </RadioGroup>
+                    <DialogContentText>{t('worktreeNotice.changeLater')}</DialogContentText>
+                </DialogContent>
+                <DialogActions><Button onClick={() => answerWorktree(null)}>{t('common.cancel')}</Button><Button variant="contained" onClick={() => answerWorktree(worktreeChoice?.shared ?? null)}>{t('worktreeNotice.continue')}</Button></DialogActions>
+            </Dialog>
             {im?.dialog}
 
             {project && settingsTab && (

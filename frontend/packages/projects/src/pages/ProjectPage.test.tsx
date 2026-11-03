@@ -4,12 +4,12 @@ import { afterEach, expect, it, vi } from 'vitest';
 import ProjectPage from './ProjectPage';
 import { ProjectsHostProvider } from '../host/ProjectsHost';
 
-const m = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), patch: vi.fn(), placement: { overview: 'side', thread: 'side', overviewFloat: false, setThread: vi.fn() } }));
+const m = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), post: vi.fn(), patch: vi.fn(), placement: { overview: 'side', thread: 'side', overviewFloat: false, setThread: vi.fn() } }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
-vi.mock('../client', async (actual) => ({ ...await actual<typeof import('../client')>(), api: { GET: m.get, PUT: m.put, PATCH: m.patch } }));
+vi.mock('../client', async (actual) => ({ ...await actual<typeof import('../client')>(), api: { GET: m.get, PUT: m.put, POST: m.post, PATCH: m.patch } }));
 vi.mock('../hooks/useProjectEvents', () => ({ useProjectEvents: vi.fn() }));
 vi.mock('../hooks/useTranscript', () => ({ useTranscript: () => ({ events: [], apply: vi.fn(), edit: vi.fn(), catchUp: vi.fn() }) }));
-vi.mock('../components/project/ConversationPane', () => ({ ConversationPane: ({ composerContext, disabledReason }: { composerContext: React.ReactNode; disabledReason: React.ReactNode }) => <div data-testid="defaults">{disabledReason}{composerContext}</div> }));
+vi.mock('../components/project/ConversationPane', () => ({ ConversationPane: ({ composerContext, disabledReason, onSend }: { composerContext: React.ReactNode; disabledReason: React.ReactNode; onSend: (text: string, attachments: never[]) => Promise<boolean> }) => <div data-testid="defaults">{disabledReason}{composerContext}<button onClick={() => void onSend("hello", [])}>send message</button></div> }));
 vi.mock('../components/project/OverviewPane', () => ({ OverviewPane: ({ onOpen }: { onOpen: (id: string) => void }) => <button onClick={() => onOpen('a')}>open thread</button> }));
 vi.mock('../components/workspace/WorkspaceLayout', () => ({ useWorkspacePane: () => ({ narrow: false, reveal: vi.fn() }), WorkspaceLayout: ({ main, side }: { main: React.ReactNode; side: React.ReactNode }) => <>{main}{side}</> }));
 vi.mock('../hooks/usePlacement', () => ({ usePlacement: () => m.placement }));
@@ -20,7 +20,7 @@ const p = { id: 'p', type: 'project', main_thread_id: 'main', name: 'Project', t
 const a = { id: 'a', project_id: 'p', model: 'observed-upstream', status: 'idle' };
 const b = { id: 'b', project_id: 'p', model_override: 'sibling-choice', status: 'idle' };
 function Switch() { const nav = useNavigate(); return <button onClick={() => nav('/projects/p?thread=b')}>switch</button>; }
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+afterEach(() => { cleanup(); localStorage.clear(); vi.clearAllMocks(); });
 
 it('uses independent worker values, guards saves across thread switching and never patches project defaults', async () => {
     m.get.mockImplementation(async (url: string, options: { params?: { path: { id: string } } }) => ({ data:
@@ -102,4 +102,41 @@ it('changes the project workspace default from the composer settings', async () 
     fireEvent.click(screen.getByRole('option', { name: 'threadSettings.workspace.worktree' }));
     await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { disable_worktree: false } }));
     await waitFor(() => expect(picker).toHaveTextContent('threadSettings.workspace.worktree'));
+});
+
+
+it('asks once before the first message, saves the chosen mode before sending, and allows cancellation', async () => {
+    m.get.mockImplementation(async (url: string) => ({ data: url === '/api/v1/projects/{id}'
+        ? { project: { ...p, disable_worktree: false }, threads: [], coordinator_busy: false }
+        : url.endsWith('permission-modes') ? { modes: ['auto'] } : {}, response: new Response() }));
+    m.patch.mockResolvedValue({ data: { ...p, disable_worktree: true }, response: new Response() });
+    m.post.mockResolvedValue({ data: {}, response: new Response() });
+    render(<MemoryRouter initialEntries={['/projects/p']}><ProjectsHostProvider host={host}><Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes></ProjectsHostProvider></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'send message' }));
+    expect(await screen.findByRole('radio', { name: 'worktreeNotice.worktree' })).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'common.cancel' }));
+    expect(m.post).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: 'send message' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'worktreeNotice.shared' }));
+    fireEvent.click(screen.getByRole('button', { name: 'worktreeNotice.continue' }));
+    await waitFor(() => expect(m.post).toHaveBeenCalledTimes(1));
+    expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { disable_worktree: true } });
+    expect(m.patch.mock.invocationCallOrder[0]).toBeLessThan(m.post.mock.invocationCallOrder[0]);
+    fireEvent.click(await screen.findByRole('button', { name: 'send message' }));
+    await waitFor(() => expect(m.post).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+it('does not send or dismiss the notice permanently when saving the chosen mode fails', async () => {
+    m.get.mockImplementation(async (url: string) => ({ data: url === '/api/v1/projects/{id}'
+        ? { project: { ...p, disable_worktree: false }, threads: [], coordinator_busy: false }
+        : url.endsWith('permission-modes') ? { modes: ['auto'] } : {}, response: new Response() }));
+    m.patch.mockResolvedValue({ error: { error: 'save failed' }, response: new Response(null, { status: 500 }) });
+    render(<MemoryRouter initialEntries={['/projects/p']}><ProjectsHostProvider host={host}><Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes></ProjectsHostProvider></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'send message' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'worktreeNotice.shared' }));
+    fireEvent.click(screen.getByRole('button', { name: 'worktreeNotice.continue' }));
+    await waitFor(() => expect(m.patch).toHaveBeenCalled());
+    expect(m.post).not.toHaveBeenCalled();
+    expect(localStorage.getItem('tingly-project.worktreeNoticeSeen')).toBeNull();
 });

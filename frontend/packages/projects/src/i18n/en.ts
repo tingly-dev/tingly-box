@@ -61,6 +61,7 @@ export const en = {
         sourceBot: 'From bot',
     },
     directory: { title: 'Choose a directory', browse: 'Browse', select: 'Select this directory', help: 'Browse non-hidden folders in the server user’s home directory. You can also type another path.', loading: 'Loading…', empty: 'No folders here.', failed: 'Could not browse this directory.' },
+    worktreeNotice: { title: 'Where project threads work', description: 'When a project has a repository, new threads use separate Git worktrees and branches by default. Their changes do not appear in your original checkout until you merge them.', worktree: 'Separate worktrees (default)', shared: 'Shared repository and current branch', changeLater: 'You can change this in project settings. Existing threads keep their working directories.', continue: 'Continue and send' },
     workdir: {
         title: 'Workdirs', add: 'Add working folder', actions: 'Folder actions', remove: 'Remove from the sidebar',
         removeTitle: 'Remove this folder?', removeConfirm: 'Remove',
