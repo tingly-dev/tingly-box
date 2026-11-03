@@ -21,6 +21,29 @@ import (
 // reply, so this is looser than a plain chat default.
 const turnTimeout = 2 * time.Hour
 
+// maxPreOutputRetries bounds the automatic relaunch of a first turn that
+// failed strictly pre-output; preOutputPause is the fixed wait between
+// attempts. Pre-output failures are launch flakes and startup crashes, not
+// sustained outages, so a short fixed pause beats a backoff curve.
+const (
+	maxPreOutputRetries = 2
+	preOutputPause      = 500 * time.Millisecond
+)
+
+// retryPause waits preOutputPause unless ctx ends first. It reports false
+// when the context was canceled — the caller should give up rather than
+// start another attempt.
+func retryPause(ctx context.Context) bool {
+	timer := time.NewTimer(preOutputPause)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
 // Start claims session id for one turn, records prompt as the user's
 // message, marks the session running and runs the turn in the background in
 // dir. resume continues the Claude session id (false only on its first
@@ -159,21 +182,23 @@ func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, 
 		// startup crash, network error before the agent produced anything)
 		// is safe to relaunch: no output was streamed, no tool ran, and
 		// with no output there is no Claude session id to resume — each
-		// attempt is a fresh launch of the same prompt. Bounded by the
-		// service's retry config. A retry that also fails returns the
+		// attempt is a fresh launch of the same prompt. Bounded retries
+		// with a short fixed pause. A retry that also fails returns the
 		// final error with handled=true (the turn ran on a persistent
 		// process) — never falling through to a one-shot re-run; see
 		// .design/claude-code-session.md §5.4.
-		retryCfg := e.agent.RetryConfig()
 		for attempt := 0; ; attempt++ {
 			res, werr = e.openPersistentTurn(ctx, sessionID, projectPath, prompt, opts, want, prompter)
-			if werr == nil || attempt >= retryCfg.MaxRetries ||
+			if werr == nil || attempt >= maxPreOutputRetries ||
 				!agentboot.PreOutputFailure(werr) || (res != nil && res.c.TurnOutputSeen()) {
 				break
 			}
 			logrus.WithError(werr).Warnf("engine: pre-output failure on session %s's first turn (attempt %d), relaunching", sessionID, attempt+1)
 			e.Evict(sessionID)
 			e.store.SetRunning(sessionID)
+			if !retryPause(ctx) {
+				break
+			}
 		}
 		if res == nil {
 			// No process ever started (or the pool refused it): the
