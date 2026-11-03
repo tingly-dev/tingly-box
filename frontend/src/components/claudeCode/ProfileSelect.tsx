@@ -3,7 +3,7 @@ import {useProfileContext} from '@/contexts/ProfileContext';
 import {MenuItem, Select, Stack, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
 import { fontMono } from '@/theme/fonts';
-import {composerPickerLabelSx, composerPickerSx} from '@tingly/projects';
+import {composerPickerLabelSx, composerPickerMenuProps, composerPickerSx} from '@tingly/projects';
 
 interface ProfileSelectProps {
     value: string;
@@ -47,6 +47,7 @@ const ProfileSelect = ({value, onChange, disabled, allowInherit, inherited, onIn
                 </Stack>
             )}
             sx={composerPickerSx}
+            MenuProps={composerPickerMenuProps}
         >
             {allowInherit && <MenuItem value="__project_inherit__">{t("claudeSession.projectProfile", {defaultValue: "Project profile"})}</MenuItem>}
             <MenuItem value="">{defaultLabel}</MenuItem>

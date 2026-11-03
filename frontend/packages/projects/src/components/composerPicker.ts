@@ -1,5 +1,11 @@
 import { fontSizes } from '@tingly/ui/theme/fonts';
 
+/** Composer menus open above their trigger to leave room at the bottom of the page. */
+export const composerPickerMenuProps = {
+    anchorOrigin: { vertical: 'top', horizontal: 'right' },
+    transformOrigin: { vertical: 'bottom', horizontal: 'right' },
+} as const;
+
 /**
  * The look of a picker that sits in the message box (a model, a profile, a
  * permission mode): quiet text with an icon, no border of its own, so a row

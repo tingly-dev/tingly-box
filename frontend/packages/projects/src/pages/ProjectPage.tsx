@@ -26,7 +26,7 @@ import { usePlacement } from '../hooks/usePlacement';
 import { useProjectsHost } from '../host/ProjectsHost';
 import { readLocal, writeLocal } from '../utils/storage';
 import { needsUser } from '../components/project/threadStatus';
-import { composerPickerLabelSx, composerPickerSx } from '../components/composerPicker';
+import { composerPickerLabelSx, composerPickerMenuProps, composerPickerSx } from '../components/composerPicker';
 
 
 // The permission modes a project can give its threads (the server refuses others).
@@ -404,6 +404,7 @@ export default function ProjectPage() {
                                         onChange={(e) => void patch({ disable_worktree: e.target.value === 'shared' })}
                                         renderValue={(value) => <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}><Folder /><Typography noWrap sx={composerPickerLabelSx}>{t(`threadSettings.workspace.${value}`)}</Typography></Stack>}
                                         sx={composerPickerSx}
+                                        MenuProps={composerPickerMenuProps}
                                     >
                                         <MenuItem value="worktree">{t('threadSettings.workspace.worktree')}</MenuItem>
                                         <MenuItem value="shared">{t('threadSettings.workspace.shared')}</MenuItem>
