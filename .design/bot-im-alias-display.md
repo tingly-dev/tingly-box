@@ -385,3 +385,27 @@ The four questions the user was asked about (Feishu scopes, deleted entities, bo
 | 2026-11-03 | D5 `群` segment renders as a localised word (`群` / `Group`), small chip in the UI, bare word in text | PROPOSED | me |
 | 2026-11-03 | D6 Platform segment as icon under a bot header (checked: still fits the new order) | PROPOSED | me |
 | 2026-11-03 | D7 PR split PR0/PR1/PR2/PR3 | PROPOSED | me |
+
+## 13. Visuals
+
+Screenshots were taken in frontend mock mode (headless Chromium, mock data extended with two bots that share the stored default name `telegram Bot` and with aliases on chats; the scratch mock edits were not committed). Files are in [`images/bot-im-alias-display/`](./images/bot-im-alias-display/); the mockup is a static page, [`mockup.html`](./images/bot-im-alias-display/mockup.html), not product code.
+
+**Today (problem sites)**
+
+| Image | What it shows |
+|---|---|
+| [current-1](./images/bot-im-alias-display/current-1-bots-table-name-collision.png) | Bots table: two bots both named `telegram Bot`, raw platform id as the chip, bot ids truncated with no way to tell them apart |
+| [current-2](./images/bot-im-alias-display/current-2-notify-chats-alias-dropped.png) | Notify graph: the chats have aliases (`Alice (ops)`, `Bob (on-call)`, `Releases`) but the nodes show `telegram:123456789`; the group is `Release Crew` from its platform name |
+| [current-3](./images/bot-im-alias-display/current-3-notify-delete-confirm-internal-uuid.png) | Delete-chat confirm shows the internal uuid `direct-1` |
+| [current-4](./images/bot-im-alias-display/current-4-notify-test-picker.png) | Test-send picker lists raw `telegram:…` ids, no alias |
+| [current-5](./images/bot-im-alias-display/current-5-projects-im-rows.png) | Projects IM rows: `Telegram · alias` with the external id not visible anywhere |
+| [current-6](./images/bot-im-alias-display/current-6-project-chat-tag-raw-id.png) | Project header tag and "From Telegram · 123456789" show the raw chat id although the chat has an alias |
+
+**Proposed `平台 · 群 · alias · id` (mockup, not implemented)**
+
+| Image | What it shows |
+|---|---|
+| [new-1](./images/bot-im-alias-display/new-1-format-bots-chats.png) | The four segments; bots with platform-account alias, no alias, user alias; chats direct/group/no-alias/deleted; a shortened Feishu id with the hover tooltip (full id, copy button, internal uuid as a labelled detail) |
+| [new-2](./images/bot-im-alias-display/new-2-confirm-and-picker.png) | Delete confirm naming the chat with its external id; test-send picker where input and options use the same label |
+| [new-3](./images/bot-im-alias-display/new-3-projects.png) | Projects tag and message-source line; group tags with and without alias; the icon-only platform form under a bot header (D6) |
+
