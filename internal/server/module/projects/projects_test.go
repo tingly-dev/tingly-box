@@ -156,3 +156,40 @@ func TestHostCoordinatorProfileUsesProfileRouting(t *testing.T) {
 	_, _, err = h.ClientForProfile(context.Background(), "", "not-a-tier")
 	require.Error(t, err)
 }
+
+// The embedded browser can have a different origin (for example behind a
+// proxy or in the desktop shell), but must pass host authentication first.
+func TestDirectoryBrowserRequiresAuthenticationBehindProxy(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	app, err := projectsapp.New(projectsapp.Options{Host: nopHost{}})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = app.Close() })
+	engine := gin.New()
+	mgr := swagger.NewRouteManager(engine)
+	auth := func(c *gin.Context) {
+		if c.GetHeader("Authorization") != "Bearer valid" {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		c.Next()
+	}
+	module.Mount(&module.Routes{Manager: mgr, UserAuth: auth}, NewHandler(app, func() bool { return true }, nil))
+	for _, tc := range []struct {
+		token  string
+		status int
+	}{{"", 401}, {"Bearer valid", 200}} {
+		req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:12580/api/v1/projects/directories", strings.NewReader(`{"path":"."}`))
+		req.Header.Set("Authorization", tc.token)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", "https://app.example")
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		require.Equal(t, tc.status, w.Code)
+		if tc.status == 200 {
+			require.Contains(t, w.Body.String(), `"home"`)
+		}
+	}
+}

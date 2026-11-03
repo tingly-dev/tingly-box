@@ -12,6 +12,9 @@ import (
 	"github.com/tingly-dev/tingly-box/projects/internal/server/module/apierr"
 )
 
+// DirectoryAuthenticatedKey marks a request already authenticated by the embedding host.
+const DirectoryAuthenticatedKey = "projects.directory.authenticated"
+
 // BrowseDirectoriesRequest specifies a path relative to the server user's home.
 type BrowseDirectoriesRequest struct {
 	Path string `json:"path"`
@@ -73,10 +76,13 @@ func browseDirectories(home, path string) (BrowseDirectoriesResponse, error) {
 }
 
 func (h *Handler) browseDirectories(c *gin.Context) {
-	// The host may allow cross-origin JSON requests, so check Origin here too.
-	if origin := c.GetHeader("Origin"); origin != "" {
+	// An authenticated host may serve its UI from another origin (desktop or proxy).
+	// For an unauthenticated standalone server, browsers set Sec-Fetch-Site themselves. Same-origin requests remain
+	// same-origin when a reverse proxy rewrites Host; never trust forwarded
+	// headers for this decision. Other origins still need to match Host.
+	if origin := c.GetHeader("Origin"); origin != "" && !c.GetBool(DirectoryAuthenticatedKey) {
 		u, err := url.Parse(origin)
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || !strings.EqualFold(u.Host, c.Request.Host) || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || (!strings.EqualFold(u.Host, c.Request.Host) && c.GetHeader("Sec-Fetch-Site") != "same-origin") || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
 			apierr.Message(c, http.StatusForbidden, "cross-origin browsing is not allowed")
 			return
 		}

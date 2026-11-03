@@ -11,14 +11,15 @@ export function DirectoryPicker({ onClose, onSelect }: { onClose: () => void; on
     const [path, setPath] = useState('.');
     const [listing, setListing] = useState<Listing | null>(null);
     const [error, setError] = useState('');
+    const [attempt, setAttempt] = useState(0);
     useEffect(() => {
         const controller = new AbortController();
         void apiFetch('/api/v1/projects/directories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }), signal: controller.signal })
-            .then(async (response) => { if (!response.ok) throw new Error(t('directory.failed')); return response.json() as Promise<Listing>; })
+            .then(async (response) => { if (!response.ok) throw new Error(t(response.status === 401 ? 'directory.unauthorized' : response.status === 403 ? 'directory.blocked' : 'directory.failed'));  return response.json() as Promise<Listing>; })
             .then(setListing)
-            .catch((e: Error) => { if (e.name !== 'AbortError') setError(t('directory.failed')); });
+            .catch((e: Error) => { if (e.name !== 'AbortError') setError(e.message || t('directory.failed'));  });
         return () => controller.abort();
-    }, [path, t]);
+    }, [path, t, attempt]);
     const navigate = (next: string) => { setListing(null); setError(''); setPath(next); };
     const separator = listing?.home.includes('\\') ? '\\' : '/';
     const fullPath = listing ? listing.path === '.' ? listing.home : listing.home.replace(/[/\\]+$/, '') + separator + listing.path.replace(/[/\\]/g, separator) : '';
@@ -28,7 +29,7 @@ export function DirectoryPicker({ onClose, onSelect }: { onClose: () => void; on
             <DialogContent>
                 <DialogContentText>{t('directory.help')}</DialogContentText>
                 {listing && <Typography sx={{ my: 1, overflowWrap: 'anywhere' }}>{fullPath}</Typography>}
-                {error && <Alert severity="error">{error}</Alert>}
+                {error && <Alert severity="error" action={<Button color="inherit" onClick={() => { setError(''); setAttempt((n) => n + 1); }}>{t('directory.retry')}</Button>}>{error}</Alert>}
                 {!listing && !error && <Typography>{t('directory.loading')}</Typography>}
                 {listing && <Box sx={{ maxHeight: 300, overflow: 'auto' }}>
                     <List dense>
