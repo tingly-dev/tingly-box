@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -111,6 +112,19 @@ func (c *converter) messages(raw any) []Entry {
 				c.model = model
 			}
 			return []Entry{c.msg("system", "claude code session "+m.SessionID, "", nil)}
+		}
+		if m.SubType == claude.SystemSubtypeAPIRetry {
+			// The CLI's own in-process API retry: surface it so users see
+			// the turn is alive and why it is pausing, instead of silence
+			// until the attempt lands.
+			text := fmt.Sprintf("api retry attempt %d", m.RetryAttempt())
+			if reason := m.RetryReason(); reason != "" {
+				text += " (" + reason + ")"
+			}
+			if delay := m.RetryDelayMS(); delay > 0 {
+				text += fmt.Sprintf(", next in %.1fs", float64(delay)/1000)
+			}
+			return []Entry{c.msg("system", text, "", nil)}
 		}
 		if t, ok := c.task(m); ok {
 			return []Entry{t}

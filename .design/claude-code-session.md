@@ -449,6 +449,17 @@ resume); SIGTERM mid-turn leaves the turn unfinished with no `result`
 `API_TIMEOUT_MS`; the `api_retry` stream event uses fields
 `attempt`/`max_retries`/`retry_delay_ms`/`error_status`/`error`.
 
+**TODO (unattended-run tuning, not yet wired):** for long-running or
+unattended sessions, consider setting the CLI's own retry knobs at launch —
+`CLAUDE_CODE_RETRY_WATCHDOG=1` (indefinite 429/529 retry, backoff to 5min;
+sub-vars `_MAX_WAIT_MS`/`_MAX_USAGE_LIMIT_WAIT_MS`), a raised
+`CLAUDE_CODE_MAX_RETRIES` (default 10, cap 15), and `API_TIMEOUT_MS` — so
+transient API failures resolve inside one process instead of costing a
+host-level relaunch. The `api_retry` notice itself is already surfaced in
+the transcript (converter, 2026-11-03); decide per-profile whether the
+watchdog env ships by default or as a setting (ux-principles §5/§6:
+resource/cost blast radius deserves an explicit choice).
+
 **Bot setting**: `persistent_session` (`*bool`, default unset = off) landed
 end-to-end — `db.ImBotSettingsRecord`/`db.Settings` →
 `imbot.CreateRequest`/`UpdateRequest` → `bot.BotSetting.IsPersistentSession()`
