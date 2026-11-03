@@ -311,9 +311,11 @@ export default {
       "duplicateProfile": "Дублировать профиль",
       "duplicateTitle": "Дублировать профиль",
       "duplicateDescription": "Создаёт новый профиль с теми же правилами моделей, флагами и переопределениями Claude Code. {{name}} не меняется.",
-      "duplicateAction": "Дублировать",
       "profileDuplicated": "Профиль продублирован",
-      "duplicateFailed": "Не удалось продублировать профиль"
+      "duplicateFailed": "Не удалось продублировать профиль",
+      "duplicateMain": "Дублировать как профиль",
+      "duplicateMainTitle": "Дублировать как профиль",
+      "duplicateMainDescription": "Создаёт профиль с теми же правилами моделей и флагами, что у основной конфигурации Claude Code. Основная конфигурация не меняется."
     },
     "defaultModeLabel": "Режим по умолчанию"
   },

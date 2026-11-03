@@ -281,9 +281,11 @@ export default {
       "duplicateProfile": "复制方案",
       "duplicateTitle": "复制方案",
       "duplicateDescription": "创建一个新方案,沿用相同的模型规则、开关和 Claude Code 覆盖项。{{name}} 保持不变。",
-      "duplicateAction": "复制",
       "profileDuplicated": "方案已复制",
-      "duplicateFailed": "复制方案失败"
+      "duplicateFailed": "复制方案失败",
+      "duplicateMain": "复制为方案",
+      "duplicateMainTitle": "复制为方案",
+      "duplicateMainDescription": "创建一个新方案,沿用主 Claude Code 配置的模型规则和开关。主配置保持不变。"
     },
     "defaultModeLabel": "默认权限模式"
   },

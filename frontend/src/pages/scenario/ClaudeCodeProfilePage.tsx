@@ -49,7 +49,8 @@ import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPage
 import ClaudeCodeProfileOverrides, { type ClaudeCodeProfileSettingsArtifact } from './components/ClaudeCodeProfileOverrides';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { fontMono, fontSizes } from '@/theme/fonts';
-import { suggestProfileCopyName } from '@/utils/profileCopyName';
+import DuplicateDialog from '@/components/DuplicateDialog';
+import { suggestProfileCopyName } from '@/utils/copyName';
 
 const BASE_SCENARIO = 'claude_code';
 
@@ -96,7 +97,6 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     const [renameProfileOpen, setRenameProfileOpen] = useState(false);
     const [deleteProfileOpen, setDeleteProfileOpen] = useState(false);
     const [duplicateOpen, setDuplicateOpen] = useState(false);
-    const [duplicateName, setDuplicateName] = useState('');
     const [renameName, setRenameName] = useState('');
     const [isProfileMutating, setIsProfileMutating] = useState(false);
     const [appVersion, setAppVersion] = useState('');
@@ -163,25 +163,22 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
         }
     };
 
-    // Duplicate profile handler: lands on the copy; stays open on failure so the name can be fixed.
-    const handleDuplicateProfile = async () => {
-        if (!duplicateName.trim() || !profileId) return;
+    // Duplicate profile handler: lands on the copy; the dialog stays open on failure so the name can be fixed.
+    const handleDuplicateProfile = async (name: string): Promise<boolean> => {
+        if (!profileId) return false;
         try {
-            setIsProfileMutating(true);
-            const result = await api.duplicateProfile(BASE_SCENARIO, profileId, duplicateName.trim());
+            const result = await api.duplicateProfile(BASE_SCENARIO, profileId, name);
             if (result.success) {
                 showNotification(t('claudeCode.profile.profileDuplicated'), 'success');
-                setDuplicateOpen(false);
                 refreshProfiles();
                 navigate(`/agent/claude_code/profile/${result.data.id}`);
-            } else {
-                showNotification(`${t('claudeCode.profile.duplicateFailed')}: ${result.error || 'Unknown error'}`, 'error');
+                return true;
             }
+            showNotification(`${t('claudeCode.profile.duplicateFailed')}: ${result.error || 'Unknown error'}`, 'error');
         } catch {
             showNotification(t('claudeCode.profile.duplicateFailed'), 'error');
-        } finally {
-            setIsProfileMutating(false);
         }
+        return false;
     };
 
     // Delete profile handler
@@ -264,10 +261,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                             </IconButton>
                         </Tooltip>
                         <Tooltip title={t('claudeCode.profile.duplicateProfile')}>
-                            <IconButton size="small" aria-label={t('claudeCode.profile.duplicateProfile')} onClick={() => {
-                                setDuplicateName(suggestProfileCopyName(currentProfile?.name || '', getProfiles(BASE_SCENARIO).map(p => p.name)));
-                                setDuplicateOpen(true);
-                            }}>
+                            <IconButton size="small" aria-label={t('claudeCode.profile.duplicateProfile')} onClick={() => setDuplicateOpen(true)}>
                                 <DuplicateIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                             </IconButton>
                         </Tooltip>
@@ -531,32 +525,15 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                     </DialogActions>
                 </Dialog>
 
-                <Dialog open={duplicateOpen} onClose={() => setDuplicateOpen(false)} maxWidth="xs" fullWidth>
-                    <DialogTitle>{t('claudeCode.profile.duplicateTitle')}</DialogTitle>
-                    <DialogContent sx={{ pt: 1 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            {t('claudeCode.profile.duplicateDescription', { name: currentProfile?.name || profileId || '', interpolation: { escapeValue: false } })}
-                        </Typography>
-                        <TextField
-                            autoFocus
-                            fullWidth
-                            label={t('claudeCode.profile.profileName')}
-                            value={duplicateName}
-                            onChange={(e) => setDuplicateName(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleDuplicateProfile()}
-                            size="small"
-                            margin="dense"
-                        />
-                    </DialogContent>
-                    <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
-                        <Button onClick={() => setDuplicateOpen(false)} color="inherit" disabled={isProfileMutating}>
-                            Cancel
-                        </Button>
-                        <Button onClick={handleDuplicateProfile} variant="contained" disabled={!duplicateName.trim() || isProfileMutating}>
-                            {t('claudeCode.profile.duplicateAction')}
-                        </Button>
-                    </DialogActions>
-                </Dialog>
+                <DuplicateDialog
+                    open={duplicateOpen}
+                    onClose={() => setDuplicateOpen(false)}
+                    title={t('claudeCode.profile.duplicateTitle')}
+                    description={t('claudeCode.profile.duplicateDescription', { name: currentProfile?.name || profileId || '', interpolation: { escapeValue: false } })}
+                    label={t('claudeCode.profile.profileName')}
+                    initialName={suggestProfileCopyName(currentProfile?.name || '', getProfiles(BASE_SCENARIO).map(p => p.name))}
+                    onSubmit={handleDuplicateProfile}
+                />
                 <ConfirmDialog
                     open={deleteProfileOpen}
                     onClose={() => setDeleteProfileOpen(false)}

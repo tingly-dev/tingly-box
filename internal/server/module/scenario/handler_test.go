@@ -331,11 +331,16 @@ func TestDuplicateProfileEndpoint(t *testing.T) {
 	_, statErr := os.Stat(settingsPath)
 	assert.NoError(t, statErr)
 
+	// "default" copies the main Claude Code config.
+	main := post("default", `{"name":"from-main"}`)
+	assert.Equal(t, http.StatusOK, main.Code, main.Body.String())
+	assert.Contains(t, main.Body.String(), `"from-main"`)
+
 	assert.Equal(t, http.StatusOK, post(profile.ID, `{"name":"named"}`).Code)
 	assert.Equal(t, http.StatusBadRequest, post(profile.ID, `{"name":"work"}`).Code, "taken name")
 	assert.Equal(t, http.StatusBadRequest, post(profile.ID, `{"name":"not valid"}`).Code)
 	assert.Equal(t, http.StatusNotFound, post("p99", `{}`).Code, "unknown source")
-	assert.Len(t, cfg.GetProfiles(typ.ScenarioClaudeCode), 3)
+	assert.Len(t, cfg.GetProfiles(typ.ScenarioClaudeCode), 4)
 }
 
 func TestScenarioTypes(t *testing.T) {

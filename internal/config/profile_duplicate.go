@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -16,22 +15,42 @@ var ErrProfileNotFound = errors.New("profile not found")
 
 var profileNameUnsafe = regexp.MustCompile(`[^A-Za-z0-9_-]+`)
 
+// ProfileMainID addresses a scenario's main configuration where a profile id
+// is expected: DuplicateProfile(base, ProfileMainID, …) creates a profile from
+// the main scenario's rules (for claude_code, the main Claude Code config).
+// "default" is a reserved profile name, so it never names a real profile.
+const ProfileMainID = "default"
+
 // DuplicateProfile creates a new profile of baseScenario as a copy of
-// sourceID: all of its rules (routing, smart routing, flags, active state),
-// its own scenario flags and its Claude Code overrides. The source is left
-// untouched. An empty name picks a free "<source>-copy" name; an explicit name
-// is validated like CreateProfile's.
+// sourceID — or of the main configuration for ProfileMainID: all of its rules
+// (routing, smart routing, flags, active state), its own scenario flags and
+// its Claude Code overrides. The source is left untouched. An empty name picks
+// a free "<source>-copy" name; an explicit name is validated like
+// CreateProfile's.
 func (c *Config) DuplicateProfile(baseScenario typ.RuleScenario, sourceID, name string) (typ.ProfileMeta, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	base := string(baseScenario)
 	profiles := c.Profiles[base]
-	i := slices.IndexFunc(profiles, func(p typ.ProfileMeta) bool { return p.ID == sourceID })
-	if i < 0 {
-		return typ.ProfileMeta{}, fmt.Errorf("%w: '%s' in scenario '%s'", ErrProfileNotFound, sourceID, base)
+
+	var source typ.ProfileMeta
+	srcScenario := baseScenario
+	if sourceID == ProfileMainID {
+		if d, ok := typ.GetScenarioDescriptor(baseScenario); !ok || !d.SupportsProfiles {
+			return typ.ProfileMeta{}, fmt.Errorf("scenario '%s' has no profiles", base)
+		}
+		// The main config has no profile overrides; the copy inherits them
+		// from it like any profile.
+		source = typ.ProfileMeta{Name: ProfileMainID, Unified: true}
+	} else {
+		i := slices.IndexFunc(profiles, func(p typ.ProfileMeta) bool { return p.ID == sourceID })
+		if i < 0 {
+			return typ.ProfileMeta{}, fmt.Errorf("%w: '%s' in scenario '%s'", ErrProfileNotFound, sourceID, base)
+		}
+		source = profiles[i]
+		srcScenario = typ.ProfiledScenarioName(baseScenario, sourceID)
 	}
-	source := profiles[i]
 
 	if name == "" {
 		name = freeCopyName(source.Name, profiles)
@@ -52,47 +71,9 @@ func (c *Config) DuplicateProfile(baseScenario typ.RuleScenario, sourceID, name 
 	meta.ID = typ.NextFreeNumberedID("p", ids)
 	meta.Name = name
 
-	srcScenario := typ.ProfiledScenarioName(baseScenario, sourceID)
-	dstScenario := typ.ProfiledScenarioName(baseScenario, meta.ID)
-
-	nRules, nScenarios := len(c.Rules), len(c.Scenarios)
-	rollback := func() {
-		c.Rules = c.Rules[:nRules]
-		c.Scenarios = c.Scenarios[:nScenarios]
-	}
-
-	var rules []typ.Rule
-	for k := range c.Rules {
-		r := &c.Rules[k]
-		if r.Scenario != srcScenario {
-			continue
-		}
-		var cp typ.Rule
-		if err := deepCopyJSON(r, &cp); err != nil {
-			return typ.ProfileMeta{}, err
-		}
-		cp.Scenario = dstScenario
-		// Built-in rules are addressed by UUID (builtin:<scenario>:<slot>);
-		// the copy must keep that shape under its own scenario.
-		if slot, ok := strings.CutPrefix(r.UUID, BuiltinRuleUUID(srcScenario, "")); ok {
-			cp.UUID = BuiltinRuleUUID(dstScenario, slot)
-		} else {
-			cp.UUID = GenerateUUID()
-		}
-		rules = append(rules, cp)
-	}
-	c.Rules = append(c.Rules, rules...)
-
-	// Only the profile's own scenario config is copied: when it has none, the
-	// copy keeps inheriting the base scenario's live config like the source.
-	if k := slices.IndexFunc(c.Scenarios, func(sc typ.ScenarioConfig) bool { return sc.Scenario == srcScenario }); k >= 0 {
-		var cp typ.ScenarioConfig
-		if err := deepCopyJSON(c.Scenarios[k], &cp); err != nil {
-			rollback()
-			return typ.ProfileMeta{}, err
-		}
-		cp.Scenario = dstScenario
-		c.Scenarios = append(c.Scenarios, cp)
+	undo, err := c.cloneScopeLocked(srcScenario, typ.ProfiledScenarioName(baseScenario, meta.ID))
+	if err != nil {
+		return typ.ProfileMeta{}, err
 	}
 
 	if c.Profiles == nil {
@@ -100,7 +81,7 @@ func (c *Config) DuplicateProfile(baseScenario typ.RuleScenario, sourceID, name 
 	}
 	c.Profiles[base] = append(slices.Clip(profiles), meta)
 	if err := c.saveLocked(); err != nil {
-		rollback()
+		undo()
 		c.Profiles[base] = profiles
 		return typ.ProfileMeta{}, err
 	}
@@ -125,12 +106,4 @@ func freeCopyName(source string, profiles []typ.ProfileMeta) string {
 			return candidate
 		}
 	}
-}
-
-func deepCopyJSON(src, dst any) error {
-	data, err := json.Marshal(src)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(data, dst)
 }

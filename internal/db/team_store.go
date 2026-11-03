@@ -24,6 +24,16 @@ const (
 
 var legacyDefaultTeamNames = []string{"Default Team", "default"}
 
+// TeamScenario is the routing scope a team's rules live under. The default
+// team keeps the legacy bare "team" scope so existing rules stay usable
+// without a migration; every other team is isolated as "team:<id>".
+func TeamScenario(teamID string) typ.RuleScenario {
+	if teamID == DefaultTeamID {
+		return typ.ScenarioTeam
+	}
+	return typ.ProfiledScenarioName(typ.ScenarioTeam, teamID)
+}
+
 // TeamRecord is an authorization and routing boundary for sharing keys.
 // Human-readable names and slugs may change; ID is the durable identity stored
 // on tokens, rules, and usage records.

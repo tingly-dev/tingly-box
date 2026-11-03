@@ -89,6 +89,8 @@ export interface AgentPageDescriptor {
     /** Product name; not translated. */
     title: string;
     tooltipKey?: string;
+    /** Extra control next to the title (e.g. Claude Code's "Duplicate as profile"). */
+    titleAddon?: React.ReactNode;
     connection?: {
         /** Title of the connection rows when it differs from `title`. */
         titleKey?: string;
@@ -279,6 +281,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         <ScenarioCardHeader
                             title={agent.title}
                             tooltipKey={agent.tooltipKey}
+                            addon={agent.titleAddon}
                         />
                     }
                     meta={(

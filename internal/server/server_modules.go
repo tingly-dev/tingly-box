@@ -181,7 +181,7 @@ func (s *Server) apiModules(ctx context.Context, schema bool) []module.Module {
 		// Schema generation only references these handlers, so no live token
 		// store is required. At runtime they are mounted by
 		// UseTokenManagementEndpoints, which does not depend on the UI.
-		mods = append(mods, sharing.NewHandler(nil), team.NewHandler(nil))
+		mods = append(mods, sharing.NewHandler(nil), team.NewHandler(nil, nil))
 	}
 	return mods
 }

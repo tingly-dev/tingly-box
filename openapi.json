@@ -7801,6 +7801,50 @@
         }
       }
     },
+    "/api/v1/teams/{team_id}/duplicate": {
+      "post": {
+        "tags": [
+          "teams"
+        ],
+        "summary": "Duplicate a team's routing into a new team; sharing keys are not copied",
+        "description": "Duplicate a team's routing into a new team; sharing keys are not copied",
+        "operationId": "apiV1TeamsTeam_idDuplicatePost",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamDuplicateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/teams/{team_id}/enable": {
       "put": {
         "tags": [
@@ -20288,6 +20332,16 @@
           "truncated",
           "size"
         ]
+      },
+      "TeamDuplicateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name",
+            "example": "Research copy"
+          }
+        }
       },
       "TeamInfo": {
         "type": "object",

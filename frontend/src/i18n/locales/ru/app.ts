@@ -59,6 +59,7 @@ export default {
     "save": "Сохранить",
     "delete": "Удалить",
     "edit": "Изменить",
+    "duplicate": "Дублировать",
     "confirm": "Подтвердить",
     "loading": "Загрузка...",
     "enabled": "Включено",

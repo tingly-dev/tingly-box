@@ -136,3 +136,51 @@ func TestDuplicateProfile_SaveFailureRollsBack(t *testing.T) {
 	assert.Len(t, cfg.Scenarios, nScenarios)
 	assert.Len(t, cfg.GetProfiles(typ.ScenarioClaudeCode), 1)
 }
+
+func TestDuplicateProfile_FromMainConfig(t *testing.T) {
+	cfg := newSlotTestConfig(t)
+	_, err := cfg.SetClaudeCodeSlot(typ.ScenarioClaudeCode, "haiku", true)
+	require.NoError(t, err)
+	cfg.findRuleByUUID(RuleUUIDCCHaiku).Services = []*loadbalance.Service{{Provider: "p", Model: "cheap", Active: true}}
+	cfg.Rules = append(cfg.Rules, typ.Rule{UUID: "main-custom", Scenario: typ.ScenarioClaudeCode, RequestModel: "my-model", Active: true})
+	require.NoError(t, cfg.SetScenarioConfig(typ.ScenarioConfig{Scenario: typ.ScenarioClaudeCode, Flags: typ.ScenarioFlags{SkipUsage: true}}))
+	mainBefore := rulesOf(cfg, typ.ScenarioClaudeCode)
+	nScenarios := len(cfg.Scenarios)
+
+	dup, err := cfg.DuplicateProfile(typ.ScenarioClaudeCode, ProfileMainID, "")
+	require.NoError(t, err)
+	assert.Equal(t, "default-copy", dup.Name)
+	assert.Nil(t, dup.ClaudeCode, "overrides stay inherited from main")
+
+	dst := profileScenario(dup.ID)
+	require.Len(t, rulesOf(cfg, dst), len(mainBefore))
+	cc := cfg.findRuleByUUID(BuiltinRuleUUID(dst, "cc"))
+	require.NotNil(t, cc)
+	assert.Equal(t, "main", cc.Services[0].Model)
+	assert.Equal(t, []string{"haiku"}, cfg.ClaudeCodeSlots(dst), "split slots come along")
+	assert.Equal(t, "cheap", cfg.findRuleByUUID(BuiltinRuleUUID(dst, "haiku")).Services[0].Model)
+	for _, r := range rulesOf(cfg, dst) {
+		assert.NotEqual(t, "main-custom", r.UUID)
+	}
+
+	// The main config's flags are inherited by the profile, not snapshotted.
+	assert.Len(t, cfg.Scenarios, nScenarios)
+	assert.True(t, cfg.GetScenarioConfig(dst).Flags.SkipUsage)
+
+	// Main is unchanged, and the copy is independent of it.
+	assert.Equal(t, mainBefore, rulesOf(cfg, typ.ScenarioClaudeCode))
+	cc.Services[0].Model = "changed"
+	assert.Equal(t, "main", cfg.findRuleByUUID(RuleUUIDCC).Services[0].Model)
+
+	second, err := cfg.DuplicateProfile(typ.ScenarioClaudeCode, ProfileMainID, "")
+	require.NoError(t, err)
+	assert.Equal(t, "default-copy-2", second.Name)
+	assert.NotEqual(t, dup.ID, second.ID)
+}
+
+func TestDuplicateProfile_FromMainRequiresProfileScenario(t *testing.T) {
+	cfg := newSlotTestConfig(t)
+	_, err := cfg.DuplicateProfile(typ.ScenarioOpenAI, ProfileMainID, "")
+	assert.ErrorContains(t, err, "has no profiles")
+	assert.Empty(t, cfg.GetProfiles(typ.ScenarioOpenAI))
+}

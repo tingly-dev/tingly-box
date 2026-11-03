@@ -57,6 +57,7 @@ var migrationSteps = []migrationStep{
 	{"normalize-builtin-rule-identity", kindBaseline, "", normalizeBuiltinRuleIdentity},
 	{"agent-scenario-to-custom", kindBaseline, "", migrateAgentScenarioToCustom},
 	{"ensure-current-builtin-rules", kindBaseline, "", ensureCurrentBuiltinRules},
+	{"drop-orphan-team-scopes", kindBaseline, "", dropOrphanTeamScopes},
 	{"20261004-claude-code-fable-rule", kindOnce, "2026-10-04", backfillFableRuleOnce},
 	{"20261022-claude-code-unified-slot-rules", kindOnce, "2026-10-22", resetUnifiedSlotRulesOnce},
 	{"20261023-claude-code-fold-separate", kindOnce, "2026-10-23", foldClaudeCodeSeparateOnce},

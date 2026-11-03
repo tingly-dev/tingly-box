@@ -103,5 +103,5 @@ func (s *Server) UseTokenManagementEndpoints() {
 	api := manager.NewGroup("api", "v1", "")
 	api.Router.Use(s.getUserAuthMiddleware())
 	module.Mount(&module.Routes{V1: api, Engine: s.engine, Manager: manager},
-		sharing.NewHandler(store), team.NewHandler(sm.Team()))
+		sharing.NewHandler(store), team.NewHandler(sm.Team(), s.config))
 }
