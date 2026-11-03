@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -36,11 +37,13 @@ const (
 
 // Coordinator runs the project conversation: one serial queue per project.
 type Coordinator struct {
-	store   *db.Store
-	layout  Layout
-	hub     *Hub
-	threads *Threads
-	llm     LLMSource
+	store    *db.Store
+	layout   Layout
+	hub      *Hub
+	threads  *Threads
+	llm      LLMSource
+	sessions *coordinatorSessions
+	stopping atomic.Bool
 	// OnFinal is called with each finished coordinator reply, thread report
 	// and error, once, in order. It must not block.
 	OnFinal func(db.ThreadEvent)
@@ -101,7 +104,15 @@ func (c *Coordinator) Post(projectID, text string, atts []Attachment, src Source
 	}
 	m := &db.ThreadEvent{Kind: db.EvUser, Content: text, Payload: AttachmentsPayload(atts)}
 	src.stamp(m)
-	c.addEvent(projectID, m)
+	if c.sessions != nil {
+		m.ThreadID = p.MainThreadID
+		if err := c.store.AddCoordinatorInput(projectID, m); err != nil {
+			return nil, err
+		}
+		c.publishEvent(projectID, m)
+	} else {
+		c.addEvent(projectID, m)
+	}
 	_ = c.store.TouchProject(projectID)
 	c.schedule(projectID, func(q *queue) { q.user = true })
 	return m, nil
@@ -115,6 +126,35 @@ func (c *Coordinator) Busy(projectID string) bool {
 	return ok && (q.running || q.user || q.config || len(q.reports) > 0)
 }
 
+func (c *Coordinator) shutdown(ctx context.Context) {
+	if c.sessions == nil {
+		return
+	}
+	c.stopping.Store(true)
+	c.sessions.engine.Shutdown(ctx)
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		c.mu.Lock()
+		busy := false
+		for _, q := range c.queues {
+			if q.running {
+				busy = true
+				break
+			}
+		}
+		c.mu.Unlock()
+		if !busy {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+	}
+}
+
 // final hands a message the coordinator is done with (a finished reply, a
 // thread's report, an error) to OnFinal, where the host's IM chats hear it.
 func (c *Coordinator) final(m *db.ThreadEvent) {
@@ -124,17 +164,27 @@ func (c *Coordinator) final(m *db.ThreadEvent) {
 }
 
 func (c *Coordinator) onReport(r Report) {
-	ev := c.addEvent(r.Thread.ProjectID, &db.ThreadEvent{
+	p, err := c.store.GetProject(r.Thread.ProjectID)
+	ev := &db.ThreadEvent{
 		Kind:    db.EvThreadUpdate,
 		Content: r.Text,
 		Payload: jsonString(map[string]any{"thread_id": r.Thread.ID, "seq": r.Thread.Seq, "title": r.Thread.Title, "kind": r.Kind, "status": r.Thread.Status}),
-	})
+	}
+	if c.sessions != nil && err == nil && !p.Paused && p.ArchivedAt == nil {
+		ev.ThreadID = p.MainThreadID
+		if err := c.store.AddCoordinatorInput(p.ID, ev); err != nil {
+			logrus.WithError(err).Error("save coordinator report")
+			return
+		}
+		c.publishEvent(p.ID, ev)
+	} else {
+		ev = c.addEvent(r.Thread.ProjectID, ev)
+	}
 	// A quiet spell is for the coordinator and the page; chats hear about
 	// it only if the coordinator decides to say something.
 	if r.Kind != ReportStalled {
 		c.final(ev)
 	}
-	p, err := c.store.GetProject(r.Thread.ProjectID)
 	if err != nil || p.Paused || p.ArchivedAt != nil {
 		return
 	}
@@ -173,11 +223,65 @@ func (c *Coordinator) work(projectID string, q *queue) {
 		}
 		c.mu.Unlock()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		if err := c.turn(ctx, projectID, user, config); err != nil {
+		var err error
+		if c.sessions != nil {
+			err = c.drainSessionInputs(ctx, projectID)
+		} else {
+			err = c.turn(ctx, projectID, user, config)
+		}
+		if err != nil {
 			c.final(c.addEvent(projectID, &db.ThreadEvent{Kind: db.EvError, Content: err.Error()}))
 		}
 		cancel()
 	}
+}
+
+func (c *Coordinator) drainSessionInputs(ctx context.Context, projectID string) error {
+	for {
+		if c.stopping.Load() {
+			return nil
+		}
+		p, err := c.store.GetProject(projectID)
+		if err != nil {
+			return err
+		}
+		if p.Paused || p.ArchivedAt != nil {
+			return nil
+		}
+		input, err := c.store.ClaimCoordinatorInput(projectID)
+		if errors.Is(err, db.ErrNotFound) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("coordinator input: %w; review prior activity, then resolve it with the project coordinator recovery API", err)
+		}
+		event, err := c.store.GetThreadEvent(input.EventID)
+		if err == nil {
+			err = c.sessions.turn(ctx, p, event)
+		}
+		if finishErr := c.store.FinishCoordinatorInput(input.ID, err == nil); finishErr != nil {
+			return finishErr
+		}
+		if err != nil {
+			return fmt.Errorf("coordinator session interrupted; input %s needs recovery after reviewing its effects (project coordinator recovery API): %w", input.ID, err)
+		}
+	}
+}
+
+// RecoverInput resumes the project queue after an explicit decision about an
+// interrupted input. Retrying may repeat tools that already ran.
+func (c *Coordinator) RecoverInput(projectID, inputID string, retry bool) error {
+	if c.sessions == nil {
+		return fmt.Errorf("coordinator sessions are unavailable")
+	}
+	if c.Busy(projectID) {
+		return fmt.Errorf("coordinator is still running")
+	}
+	if err := c.store.ResolveCoordinatorInput(projectID, inputID, retry); err != nil {
+		return err
+	}
+	c.schedule(projectID, func(q *queue) { q.config = true })
+	return nil
 }
 
 // turn runs one coordinator turn: the model answers, calls tools, and the

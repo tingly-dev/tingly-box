@@ -39,7 +39,8 @@ type ProjectDetailResponse struct {
 	Threads []db.Thread     `json:"threads"`
 	Counts  db.ThreadCounts `json:"counts"`
 	// CoordinatorBusy is true while the coordinator is working on a turn.
-	CoordinatorBusy bool `json:"coordinator_busy"`
+	CoordinatorBusy     bool   `json:"coordinator_busy"`
+	CoordinatorRecovery string `json:"coordinator_recovery,omitempty"`
 }
 
 // CreateProjectRequest is the New project dialog, or opens a folder.
@@ -75,6 +76,12 @@ type UpdateProjectRequest struct {
 	Starred              *bool     `json:"starred,omitempty"`
 	Paused               *bool     `json:"paused,omitempty"`
 	Archived             *bool     `json:"archived,omitempty"`
+}
+
+// RecoverCoordinatorRequest resolves an interrupted input after reviewing its effects.
+type RecoverCoordinatorRequest struct {
+	InputID string `json:"input_id" binding:"required"`
+	Action  string `json:"action" binding:"required" enum:"retry,skip"`
 }
 
 // MemoryResponse lists memory files.
@@ -191,6 +198,10 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithResponseModel(InspectRepoResponse{}))
 	api.GET("/projects/:id", h.get, tag,
 		swagger.WithDescription("Get a project with its threads"),
+		swagger.WithResponseModel(ProjectDetailResponse{}))
+	api.POST("/projects/:id/coordinator/recover", h.recoverCoordinator, tag,
+		swagger.WithDescription("Resolve an interrupted coordinator input; retry may repeat side effects"),
+		swagger.WithRequestModel(RecoverCoordinatorRequest{}),
 		swagger.WithResponseModel(ProjectDetailResponse{}))
 	api.PATCH("/projects/:id", h.update, tag,
 		swagger.WithDescription("Update project settings; pause, resume, archive, unarchive, star. A folder has no repos or thread model: setting either on a folder is a 400."),
@@ -341,6 +352,26 @@ func (h *Handler) inspectRepo(c *gin.Context) {
 	c.JSON(http.StatusOK, InspectRepoResponse{OK: true, Root: info.Root, Branch: info.Branch, Dirty: info.Dirty})
 }
 
+func (h *Handler) recoverCoordinator(c *gin.Context) {
+	p, ok := h.project(c)
+	if !ok {
+		return
+	}
+	var req RecoverCoordinatorRequest
+	if !apierr.Bind(c, &req) {
+		return
+	}
+	if req.Action != "retry" && req.Action != "skip" {
+		apierr.BadRequest(c, "action must be retry or skip")
+		return
+	}
+	if err := h.svc.Coordinator.RecoverInput(p.ID, req.InputID, req.Action == "retry"); err != nil {
+		apierr.Message(c, http.StatusConflict, err.Error())
+		return
+	}
+	h.get(c)
+}
+
 func (h *Handler) get(c *gin.Context) {
 	p, ok := h.project(c)
 	if !ok {
@@ -358,7 +389,12 @@ func (h *Handler) get(c *gin.Context) {
 	if threads == nil {
 		threads = []db.Thread{}
 	}
-	c.JSON(http.StatusOK, ProjectDetailResponse{Project: *p, Threads: threads, Counts: db.CountsOf(m), CoordinatorBusy: h.svc.Coordinator.Busy(p.ID)})
+	recovery, err := h.svc.Store.UncertainCoordinatorInput(p.ID)
+	if err != nil {
+		apierr.Store(c, err, "coordinator recovery")
+		return
+	}
+	c.JSON(http.StatusOK, ProjectDetailResponse{Project: *p, Threads: threads, Counts: db.CountsOf(m), CoordinatorBusy: h.svc.Coordinator.Busy(p.ID), CoordinatorRecovery: recovery})
 }
 
 func (h *Handler) update(c *gin.Context) {

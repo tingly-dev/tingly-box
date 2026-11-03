@@ -776,6 +776,50 @@
         }
       }
     },
+    "/api/v1/projects/{id}/coordinator/recover": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Resolve an interrupted coordinator input; retry may repeat side effects",
+        "description": "Resolve an interrupted coordinator input; retry may repeat side effects",
+        "operationId": "apiV1ProjectsIdCoordinatorRecoverPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoverCoordinatorRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/events": {
       "get": {
         "tags": [
@@ -3545,6 +3589,10 @@
             "type": "boolean",
             "description": "Field coordinator_busy"
           },
+          "coordinator_recovery": {
+            "type": "string",
+            "description": "Field coordinator_recovery"
+          },
           "counts": {
             "$ref": "#/components/schemas/ThreadCounts"
           },
@@ -3733,6 +3781,27 @@
           "created_at",
           "updated_at",
           "threads"
+        ]
+      },
+      "RecoverCoordinatorRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Field action",
+            "enum": [
+              "retry",
+              "skip"
+            ]
+          },
+          "input_id": {
+            "type": "string",
+            "description": "Field input_id"
+          }
+        },
+        "required": [
+          "input_id",
+          "action"
         ]
       },
       "RegenerateRequest": {

@@ -171,3 +171,17 @@ func (s *Service) ThreadEnv(ctx context.Context) ([]string, string) {
 	model, _ := s.ResolveModel(ctx, conn, "")
 	return env, model
 }
+
+// CoordinatorEnv requires a Claude-compatible endpoint rather than silently
+// switching a configured OpenAI connection to the CLI's unrelated login.
+func (s *Service) CoordinatorEnv(ctx context.Context) ([]string, string, error) {
+	conn, err := s.Connection()
+	if err != nil {
+		return nil, "", err
+	}
+	if conn.APIStyle != llm.StyleAnthropic || conn.BaseURL == "" {
+		return nil, "", fmt.Errorf("the coordinator requires an Anthropic-compatible connection or a Claude Code profile")
+	}
+	env, model := s.ThreadEnv(ctx)
+	return env, model, nil
+}
