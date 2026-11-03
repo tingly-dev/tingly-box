@@ -138,6 +138,9 @@ func (b *Bot) Connect(ctx context.Context) error {
 		b.Logger().Error("Failed to get bot info: %v", err)
 	} else {
 		b.Logger().Info("Telegram bot connected: @%s", me.Username)
+		if me.Username != "" {
+			b.SetAccountName("@" + me.Username)
+		}
 	}
 
 	b.MarkReady()

@@ -109,6 +109,10 @@ type BotStatus struct {
 	Ready         bool               `json:"ready"`
 	LastActivity  int64              `json:"lastActivity,omitempty"`
 	Error         string             `json:"error,omitempty"`
+	// AccountName is the bot's own platform identity (e.g. a Telegram
+	// @username) once the adapter has learned it; empty when the platform
+	// gives none. Hosts use it as the default bot name.
+	AccountName string             `json:"accountName,omitempty"`
 	Connection    *ConnectionDetails `json:"connection,omitempty"`
 }
 

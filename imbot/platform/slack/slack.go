@@ -61,6 +61,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 
 	b.MarkConnected(true)
 	b.Logger().Info("Slack bot connected: %s", authResp.User)
+	b.SetAccountName(authResp.User)
 
 	// Start RTM or WebSocket
 	if err := b.startRTM(); err != nil {

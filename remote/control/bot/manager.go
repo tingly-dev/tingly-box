@@ -36,7 +36,7 @@ import (
 // Returns nil when stopped via ctx, or the fatal error when a contained
 // receive-loop panic (imbot ErrPanic) forced the bot to close — the
 // supervisor's deferred cancel then unwinds everything exactly like a stop.
-func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatStoreInterface, consumers []Consumer, pairing *PairingManager, channels *channel.Registry, accessStore AccessStore, authorizer access.Authorizer) error {
+func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatStoreInterface, consumers []Consumer, pairing *PairingManager, channels *channel.Registry, accessStore AccessStore, authorizer access.Authorizer, onAccountName func(string)) error {
 	// Create platform-specific auth config
 	authConfig := buildAuthConfig(setting)
 	platform := imbot.Platform(setting.Platform)
@@ -87,6 +87,17 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatS
 	})
 	if err != nil {
 		return fmt.Errorf("failed to start %s bot: %w", setting.Platform, err)
+	}
+
+	// An unnamed bot takes the platform account name it just learned (e.g. a
+	// Telegram @username) as its default name. The host decides whether to
+	// persist it; it never replaces a name the user has set.
+	if onAccountName != nil && setting.Name == "" {
+		if b := manager.GetBot(setting.UUID, platform); b != nil {
+			if st := b.Status(); st != nil && st.AccountName != "" {
+				onAccountName(st.AccountName)
+			}
+		}
 	}
 
 	// The bot's shared channel prompter. Consumers send prompts through it
@@ -277,6 +288,9 @@ type Manager struct {
 	}
 	accessStore AccessStore
 	authorizer  access.Authorizer
+	// accountNameSink receives (botUUID, accountName) when an unnamed bot
+	// learns its platform account name on connect.
+	accountNameSink func(uuid, name string)
 }
 
 // NewManager creates a new bot manager with a settings store and the
@@ -332,6 +346,14 @@ func (m *Manager) SetCapabilityStore(store interface {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.capabilityStore = store
+}
+
+// SetAccountNameSink registers where a connecting bot's platform account name
+// is reported so an unnamed bot can be given it as a default name.
+func (m *Manager) SetAccountNameSink(sink func(uuid, name string)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.accountNameSink = sink
 }
 
 func (m *Manager) SetAccessStore(store AccessStore) {
@@ -462,7 +484,11 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	pairing := m.pairing
 	channels := m.channels
 	accessStore, authorizer := m.accessStore, m.authorizer
-	go m.runBotSupervised(ctx, cancel, uuid, s, chatStore, mounted, pairing, channels, accessStore, authorizer, doneChan)
+	var onAccountName func(string)
+	if sink := m.accountNameSink; sink != nil {
+		onAccountName = func(name string) { sink(uuid, name) }
+	}
+	go m.runBotSupervised(ctx, cancel, uuid, s, chatStore, mounted, pairing, channels, accessStore, authorizer, onAccountName, doneChan)
 
 	logrus.WithField("uuid", uuid).WithField("name", name).WithField("platform", platform).Info("Bot started")
 	return nil
@@ -490,6 +516,7 @@ func (m *Manager) runBotSupervised(
 	channels *channel.Registry,
 	accessStore AccessStore,
 	authorizer access.Authorizer,
+	onAccountName func(string),
 	doneChan chan struct{},
 ) {
 	defer close(doneChan)
@@ -509,7 +536,7 @@ func (m *Manager) runBotSupervised(
 		}
 	}()
 
-	if err := runBotWithSettings(ctx, s, chatStore, consumers, pairing, channels, accessStore, authorizer); err != nil {
+	if err := runBotWithSettings(ctx, s, chatStore, consumers, pairing, channels, accessStore, authorizer, onAccountName); err != nil {
 		if imbot.IsPanicError(err) {
 			logrus.WithError(err).WithField("uuid", uuid).Error("Bot receive loop panicked; closed for clean restart by reconcile")
 		} else {
