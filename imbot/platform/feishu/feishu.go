@@ -81,6 +81,8 @@ type Bot struct {
 	adapter     *Adapter
 	eventCtx    context.Context
 	eventCancel context.CancelFunc
+	// names asks Feishu for the person / group names its events leave out.
+	names *nameDirectory
 }
 
 // buildIMService constructs the IM v1 service directly against a hand-built
@@ -149,12 +151,14 @@ func NewBot(config *core.Config, domain Domain) (*Bot, error) {
 
 	client, larkConfig := buildIMService(config.Auth.ClientID, config.Auth.ClientSecret, baseURL)
 
-	return &Bot{
+	b := &Bot{
 		BaseBot:    core.NewBaseBot(config),
 		client:     client,
 		larkConfig: larkConfig,
 		domain:     domain,
-	}, nil
+	}
+	b.names = newNameDirectory(larkNameFetcher{client: client, config: larkConfig}, func(format string, args ...any) { b.Logger().Warn(format, args...) })
+	return b, nil
 }
 
 // NewFeishuBot creates a Feishu bot (preserved for backward compatibility)
@@ -274,11 +278,33 @@ func (b *Bot) handleP2MessageReceiveV1(ctx context.Context, event *larkim.P2Mess
 
 	// Convert Lark event to core.Message
 	coreMsg := b.convertLarkMessageToCore(event)
+	b.addNames(ctx, coreMsg)
 
 	// Emit the message
 	b.EmitMessage(*coreMsg)
 
 	return nil
+}
+
+// addNames fills in who wrote the message and, in a group, what the group is
+// called. Events carry only ids; a name that cannot be had (no scope, API
+// error) stays empty and the chat is shown by its id.
+func (b *Bot) addNames(ctx context.Context, msg *core.Message) {
+	if b.names == nil || msg == nil {
+		return
+	}
+	if msg.Sender.ID != "" && msg.Sender.DisplayName == "" {
+		idType := "open_id"
+		if userID, _ := msg.Metadata["sender_user_id"].(string); userID != "" {
+			idType = "user_id"
+		}
+		msg.Sender.DisplayName = b.names.UserName(ctx, idType, msg.Sender.ID)
+	}
+	if chatType, _ := msg.Metadata["chat_type"].(core.ChatType); chatType != core.ChatTypeDirect && msg.Recipient.DisplayName == "" {
+		if chatID, _ := msg.Metadata["original_chat_id"].(string); chatID != "" {
+			msg.Recipient.DisplayName = b.names.ChatName(ctx, chatID)
+		}
+	}
 }
 
 // convertLarkMessageToCore converts a Lark P2MessageReceiveV1 event to core.Message
