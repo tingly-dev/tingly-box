@@ -208,3 +208,92 @@ func TestRunPersistentTurn_RecoveryFailureSurfaces(t *testing.T) {
 	require.Error(t, end.Err, "a recovery that also fails must surface")
 	assert.Equal(t, 2, agent.opens, "exactly one recovery attempt — no loop")
 }
+
+// The host-facing Retry mirrors the automatic mid-turn recovery: a manual
+// retry of a turn that crashed with staged output resumes the interrupted
+// turn (empty prompt, resume, env) and never re-sends the message.
+func TestEngineRetry_ResumesInterruptedTurn(t *testing.T) {
+	agent := &fakePersistentAgent{scripts: []fakePersistentScript{
+		{crashAfterOutput: true},
+		{crashAfterOutput: true}, // the automatic recovery also fails: the turn errors out
+		{},                       // the manual retry completes the turn
+	}}
+	e, endCh := newPersistentRetryEngine(t, agent)
+
+	require.True(t, e.Start("s1", t.TempDir(), "hello", false, nil))
+	end := <-endCh
+	require.Error(t, end.Err, "the auto-recovery is off in this script: the turn fails")
+
+	require.True(t, e.Retry("s1", t.TempDir(), nil), "a failed turn is retryable")
+	end = <-endCh
+	require.NoError(t, end.Err)
+
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	assert.Equal(t, "", agent.openPrompts[len(agent.openPrompts)-1],
+		"the retry must not inject a message — the CLI replays the interrupted turn")
+	assert.True(t, agent.openOpts[len(agent.openOpts)-1].Resume)
+}
+
+// A retry of a turn that failed before any output re-sends the recorded
+// prompt as a fresh turn: the prompt never reached Claude.
+func TestEngineRetry_ResendsPromptAfterPreOutputFailure(t *testing.T) {
+	agent := &fakePersistentAgent{scripts: []fakePersistentScript{
+		{crashBeforeOutput: true}, {crashBeforeOutput: true}, {crashBeforeOutput: true},
+		{}, // the manual retry completes the turn
+	}}
+	e, endCh := newPersistentRetryEngine(t, agent)
+
+	require.True(t, e.Start("s1", t.TempDir(), "hello", false, nil))
+	end := <-endCh
+	require.Error(t, end.Err, "pre-output retries are exhausted")
+
+	require.True(t, e.Retry("s1", t.TempDir(), nil))
+	end = <-endCh
+	require.NoError(t, end.Err)
+
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	last := len(agent.openPrompts) - 1
+	assert.Equal(t, "hello", agent.openPrompts[last], "the prompt is sent again — it never reached Claude")
+	assert.False(t, agent.openOpts[last].Resume, "no Claude session exists to resume")
+}
+
+// Retry is refused while a turn is in flight.
+func TestEngineRetry_Guards(t *testing.T) {
+	agent := &fakePersistentAgent{scripts: []fakePersistentScript{
+		{}, {crashBeforeOutput: true}, {crashBeforeOutput: true}, {crashBeforeOutput: true},
+	}}
+	e, endCh := newPersistentRetryEngine(t, agent)
+
+	assert.False(t, e.Retry("s1", t.TempDir(), nil), "no turn has run yet")
+
+	require.True(t, e.Start("s1", t.TempDir(), "hello", false, nil))
+	assert.False(t, e.Retry("s1", t.TempDir(), nil), "the session is busy")
+	end := <-endCh
+	require.NoError(t, end.Err)
+
+	assert.False(t, e.Retry("s1", t.TempDir(), nil), "a clean turn leaves nothing to retry")
+}
+
+// A failed turn arms Retry again after a clean one: only the latest turn's
+// outcome counts.
+func TestEngineRetry_OnlyLatestTurnCounts(t *testing.T) {
+	agent := &fakePersistentAgent{scripts: []fakePersistentScript{
+		{crashBeforeOutput: true}, {crashBeforeOutput: true}, {crashBeforeOutput: true},
+		{}, // a later clean turn clears the retryable failure
+	}}
+	e, endCh := newPersistentRetryEngine(t, agent)
+
+	require.True(t, e.Start("s1", t.TempDir(), "hello", false, nil))
+	end := <-endCh
+	require.Error(t, end.Err)
+	require.True(t, e.Retry("s1", t.TempDir(), nil), "the failed turn is retryable")
+	assert.False(t, e.Retry("s1", t.TempDir(), nil), "retry claims are atomic — no second one")
+	<-endCh
+
+	require.True(t, e.Start("s2", t.TempDir(), "clean", false, nil))
+	end = <-endCh
+	require.NoError(t, end.Err)
+	assert.False(t, e.Retry("s2", t.TempDir(), nil), "the clean turn cleared the failed one")
+}

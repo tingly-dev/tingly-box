@@ -72,6 +72,9 @@ func (e *Engine) Start(id, dir, prompt string, resume bool, launch Launch) bool 
 	// tell the page there is nothing to poll for.
 	e.store.Append(id, Entry{Role: "user", Content: prompt, Timestamp: time.Now()})
 	e.store.SetRunning(id)
+	e.mu.Lock()
+	e.lastTurn[id] = lastTurn{prompt: prompt}
+	e.mu.Unlock()
 
 	go e.runTurn(turnCtx, id, dir, prompt, resume, launch, prompter, cancel, done)
 	return true
@@ -106,6 +109,7 @@ func (e *Engine) runTurn(ctx context.Context, sessionID, projectPath, prompt str
 				end.NotSent, werr = true, nil
 			}
 			end.Err, end.Stopped = e.finishTurn(ctx, sessionID, werr, nil)
+			e.settleTurn(sessionID, prompt, end.Err)
 			return
 		}
 	}
@@ -114,11 +118,52 @@ func (e *Engine) runTurn(ctx context.Context, sessionID, projectPath, prompt str
 	opts.Store = settled
 	conv := newConverter()
 	sink := func(raw any) { e.record(sessionID, conv, raw) }
-	_, werr = e.agent.Run(ctx, agentboot.RunRequest{ProjectPath: projectPath, Prompt: prompt, Opts: opts}, prompter, sink)
+	res, werr := e.agent.Run(ctx, agentboot.RunRequest{ProjectPath: projectPath, Prompt: prompt, Opts: opts}, prompter, sink)
 	// A one-shot process exits with its turn, and its background tasks
 	// with it.
 	e.clearTasks(sessionID)
 	end.Err, end.Stopped = e.finishTurn(ctx, sessionID, werr, settled)
+	e.settleTurn(sessionID, prompt, end.Err)
+	if end.Err != nil {
+		// The host may retry this turn: whether output was seen decides
+		// between resuming the interrupted turn and re-sending the prompt.
+		e.markTurnOutput(sessionID, res != nil && len(res.Events) > 0)
+	}
+}
+
+// lastTurn remembers a session's most recent turn for Retry: the prompt it
+// ran ("" for a recovery launch), whether it ended in failure, and whether
+// the agent produced any output before failing.
+type lastTurn struct {
+	prompt     string
+	failed     bool
+	outputSeen bool
+}
+
+// settleTurn records the outcome of a turn: a failure arms Retry, a clean
+// turn clears the record — there is nothing to retry.
+func (e *Engine) settleTurn(id, prompt string, err error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if err == nil {
+		delete(e.lastTurn, id)
+		return
+	}
+	if lt, ok := e.lastTurn[id]; ok {
+		lt.prompt, lt.failed = prompt, true
+		e.lastTurn[id] = lt
+	}
+}
+
+// markTurnOutput notes whether the failed turn produced any output, the
+// gate that decides how Retry relaunches.
+func (e *Engine) markTurnOutput(id string, seen bool) {
+	e.mu.Lock()
+	if lt, ok := e.lastTurn[id]; ok {
+		lt.outputSeen = seen
+		e.lastTurn[id] = lt
+	}
+	e.mu.Unlock()
 }
 
 // settleStore notes whether the runner recorded a one-shot turn's outcome.
@@ -255,6 +300,9 @@ func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, 
 		e.store.SetCompleted(sessionID, "")
 	} else {
 		e.store.SetFailed(sessionID, werr.Error())
+		// The host may retry this turn: whether output was seen decides
+		// between resuming the interrupted turn and re-sending the prompt.
+		e.markTurnOutput(sessionID, res.c.TurnOutputSeen())
 	}
 	return werr, true
 }
@@ -276,6 +324,50 @@ func (e *Engine) recoverInterruptedTurn(ctx context.Context, sessionID, projectP
 	recOpts.Env = append(append([]string(nil), opts.Env...), claude.EnvResumeInterruptedTurn+"=1")
 	recWant := launchState{sig: launchSignature(recOpts), model: opts.Model, mode: opts.PermissionMode}
 	return e.openPersistentTurn(ctx, sessionID, projectPath, "", recOpts, recWant, prompter)
+}
+
+// Retry re-runs a failed turn without adding anything to the transcript.
+// How it relaunches depends on the failed turn (settleTurn/markTurnOutput):
+// output seen means staged work reached the CLI's transcript, so the
+// relaunch resumes the same Claude session with
+// CLAUDE_CODE_RESUME_INTERRUPTED_TURN and an empty prompt — the CLI replays
+// the interrupted turn itself, exactly like the automatic mid-turn recovery.
+// No output means the prompt never reached Claude, so the recorded prompt is
+// sent again as a fresh turn. It returns false when the session is busy or
+// has no failed turn to retry; like Start, the claim is atomic.
+func (e *Engine) Retry(id, dir string, launch Launch) bool {
+	e.mu.Lock()
+	if _, busy := e.runs[id]; busy {
+		e.mu.Unlock()
+		return false
+	}
+	failed, ok := e.lastTurn[id]
+	if !ok || !failed.failed {
+		e.mu.Unlock()
+		return false
+	}
+	delete(e.lastTurn, id)
+	turnCtx, cancel := context.WithTimeout(context.Background(), turnTimeout)
+	prompter := newWebPrompter(id, e.store)
+	done := make(chan struct{})
+	e.runs[id] = &run{cancel: cancel, prompter: prompter, done: done}
+	e.mu.Unlock()
+
+	prompt, resume := "", true
+	if !failed.outputSeen {
+		prompt, resume = failed.prompt, false
+	} else if launch != nil {
+		base := launch
+		launch = func(ctx context.Context) agentboot.ExecutionOptions {
+			opts := base(ctx)
+			opts.Env = append(opts.Env, claude.EnvResumeInterruptedTurn+"=1")
+			return opts
+		}
+	}
+	e.store.SetRunning(id)
+
+	go e.runTurn(turnCtx, id, dir, prompt, resume, launch, prompter, cancel, done)
+	return true
 }
 
 // finishTurn applies the two corrections both the one-shot and persistent

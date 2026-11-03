@@ -203,6 +203,7 @@ export const en = {
         copyCd: 'Copy cd command to the worktree', back: 'Back to Overview',
         editTitle: 'Rename thread',
         review: 'Review changes', resolve: 'Mark resolved', reopen: 'Reopen', showTask: 'Show task', hideTask: 'Hide task',
+        retry: 'Retry turn',
         showTrajectory: 'Show trajectory', showChat: 'Show conversation', expandTools: 'Expand all tool calls', collapseTools: 'Collapse tool calls',
         fromCoordinator: 'Coordinator', allowThread: 'Always allow {{tool}} here', loadEarlier: 'Show earlier messages',
         placeholder: 'Message this thread directly…', queuePlaceholder: 'Message this thread — it reads it at its next step…',

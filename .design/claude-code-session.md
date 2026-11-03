@@ -442,6 +442,23 @@ own shutdown closes stdin at turn end. A recovery that also fails surfaces
 the error — one attempt, no loop. The launch bookkeeping records the
 recovery launch's own signature (the env var changes `launchSignature`).
 
+**Manual retry — the same recovery behind a button (2026-11-03).** The
+recovery is also a user action. `Engine.Retry(id, dir, launch)` re-runs a
+session's *failed* turn without adding anything to the transcript: the
+engine remembers each session's latest turn (`lastTurn`: prompt, failed,
+outputSeen — armed on failure, cleared on a clean turn, untouched by Evict
+so the pre-output retry loop's own evictions don't disarm it). Retry picks
+the relaunch by what the failure was: output seen → the recovery launch
+above (resume, env var, empty prompt — the CLI replays the interrupted
+turn); no output → the prompt never reached Claude, so the recorded prompt
+is sent again as a fresh turn. Projects exposes it as
+`POST /api/v1/threads/{id}/retry` (`Threads.Retry`, gated on
+`ThreadFailed` + not busy, reusing `begin`'s launch-options builder
+`turnLaunch`), with a Retry button on the thread's failed banner
+(`ThreadPanel`). The host never re-sends the user's message either way —
+the "mid-turn crash is never retried" rule now reads "never re-sent";
+recovery is the only path back.
+
 Supporting facts (from the same research): every stream message carries
 `session_id` from `system(init)` on (so the host always knows what to
 resume); SIGTERM mid-turn leaves the turn unfinished with no `result`

@@ -33,6 +33,8 @@ var (
 	ErrMainThread = errors.New("a main thread is the project conversation; send to it through the coordinator")
 	// ErrEmptyTitle is for renaming a thread to nothing.
 	ErrEmptyTitle = errors.New("the title is empty")
+	// ErrNoFailedTurn is for retrying a thread whose latest turn did not fail.
+	ErrNoFailedTurn = errors.New("the thread has no failed turn to retry")
 )
 
 // MaxRunningPerProject caps concurrently running turns in one project. Turns
@@ -606,6 +608,70 @@ func (m *Threads) enqueue(threadID string, q queued) {
 
 var needsInputRe = regexp.MustCompile(`(?m)^\s*NEEDS_INPUT:\s*(.+)$`)
 
+// turnLaunch builds one turn's launch options: env and settings (worker
+// profile included), model, effort, permission mode and session tools.
+// Shared by begin (a queued user message) and Retry (a failed turn). An
+// error means the turn cannot launch (a worker profile is unavailable); the
+// thread has already been marked failed and noted.
+func (m *Threads) turnLaunch(ctx context.Context, threadID string, t *db.Thread, p *db.Project, folder bool) (model string, opts agentboot.ExecutionOptions, err error) {
+	env, defModel, settings := m.launchEnv(ctx, t, folder)
+	if !folder {
+		profile := workerProfile(p, t)
+		if l, ok := m.env.(Launcher); ok && profile != "" {
+			env, settings, err = l.LaunchEnv(ctx, profile)
+			if err == nil {
+				settings, err = m.workerSettings(p, t, settings)
+			}
+			if err != nil {
+				m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: fmt.Sprintf("profile %s unavailable: %v", profile, err)})
+				_, _ = m.update(t.ID, func(t *db.Thread) {
+					t.Status, t.WaitReason = db.ThreadFailed, fmt.Sprintf("Failed: profile %s unavailable: %v", profile, err)
+				})
+				return "", opts, fmt.Errorf("profile %s unavailable: %w", profile, err)
+			}
+			defModel = ""
+		} else if profile != "" {
+			m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "profile unavailable"})
+			_, _ = m.update(t.ID, func(t *db.Thread) { t.Status, t.WaitReason = db.ThreadFailed, "Failed: profile unavailable" })
+			return "", opts, errors.New("profile unavailable")
+		}
+	}
+	// A worker's observed Model is history, not its launch choice. Only an
+	// explicit override pins it instead of following the project's default.
+	model = t.Model
+	if !folder {
+		model = t.ModelOverride
+		if model == "" && t.ProfileOverride == nil {
+			model = p.ThreadModel
+		}
+	}
+	if model == "" {
+		model = defModel
+	}
+	effort := t.EffortOverride
+	if effort == "" && !folder {
+		effort = p.ThreadEffort
+	}
+	env = m.withTmpEnv(env, p, t)
+	opts = agentboot.ExecutionOptions{Model: model, Effort: effort, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings, Entrypoint: sessionEntrypoint}
+	if m.SessionToolsConfig != nil {
+		if config, err := m.SessionToolsConfig(threadID); err == nil {
+			opts.MCPConfigPath = config
+		} else {
+			logrus.WithError(err).Warn("projects: cannot start session tools")
+		}
+	}
+	if !folder {
+		opts.AppendSystemPrompt = threadSystemPrompt(m.layout, p, t)
+		if settings == "" {
+			opts.SettingsPath = m.layout.SettingsFile(p.ID, t.ID)
+		}
+	} else if path, err := m.sessionSettings(p, t, settings); err == nil {
+		opts.SettingsPath = path
+	}
+	return model, opts, nil
+}
+
 // begin waits for a slot in the project, then starts a's current message
 // as a turn.
 func (m *Threads) begin(threadID string, a *activeThread) {
@@ -663,75 +729,18 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 		p = fresh
 	}
 
-	env, defModel, settings := m.launchEnv(ctx, t, folder)
-	if !folder {
-		profile := workerProfile(p, t)
-		if l, ok := m.env.(Launcher); ok && profile != "" {
-			var err error
-			env, settings, err = l.LaunchEnv(ctx, profile)
-			if err == nil {
-				settings, err = m.workerSettings(p, t, settings)
-			}
-			if err != nil {
-				m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: fmt.Sprintf("profile %s unavailable: %v", profile, err)})
-				_, _ = m.update(t.ID, func(t *db.Thread) {
-					t.Status, t.WaitReason = db.ThreadFailed, fmt.Sprintf("Failed: profile %s unavailable: %v", profile, err)
-				})
-				m.mu.Lock()
-				a.slot = nil
-				m.mu.Unlock()
-				<-slot
-				m.giveUp(threadID, a)
-				return
-			}
-			defModel = ""
-		} else if profile != "" {
-			m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "profile unavailable"})
-			_, _ = m.update(t.ID, func(t *db.Thread) { t.Status, t.WaitReason = db.ThreadFailed, "Failed: profile unavailable" })
-			m.mu.Lock()
-			a.slot = nil
-			m.mu.Unlock()
-			<-slot
-			m.giveUp(threadID, a)
-			return
-		}
-	}
-	// A worker's observed Model is history, not its launch choice. Only an
-	// explicit override pins it instead of following the project's default.
-	model := t.Model
-	if !folder {
-		model = t.ModelOverride
-		if model == "" && t.ProfileOverride == nil {
-			model = p.ThreadModel
-		}
-	}
-	if model == "" {
-		model = defModel
+	model, opts, lerr := m.turnLaunch(ctx, threadID, t, p, folder)
+	if lerr != nil {
+		m.mu.Lock()
+		a.slot = nil
+		m.mu.Unlock()
+		<-slot
+		m.giveUp(threadID, a)
+		return
 	}
 	m.mu.Lock()
 	m.turns[threadID] = &turnTally{launchModel: model}
 	m.mu.Unlock()
-	effort := t.EffortOverride
-	if effort == "" && !folder {
-		effort = p.ThreadEffort
-	}
-	env = m.withTmpEnv(env, p, t)
-	opts := agentboot.ExecutionOptions{Model: model, Effort: effort, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings, Entrypoint: sessionEntrypoint}
-	if m.SessionToolsConfig != nil {
-		if config, err := m.SessionToolsConfig(threadID); err == nil {
-			opts.MCPConfigPath = config
-		} else {
-			logrus.WithError(err).Warn("projects: cannot start session tools")
-		}
-	}
-	if !folder {
-		opts.AppendSystemPrompt = threadSystemPrompt(m.layout, p, t)
-		if settings == "" {
-			opts.SettingsPath = m.layout.SettingsFile(p.ID, t.ID)
-		}
-	} else if path, err := m.sessionSettings(p, t, settings); err == nil {
-		opts.SettingsPath = path
-	}
 	started := m.engine.Start(m.sessionOf(threadID), t.Cwd, prompt, t.Turns > 0, func(context.Context) agentboot.ExecutionOptions { return opts })
 	if !started {
 		// Claude started a turn of its own in the meantime: this message
@@ -1026,6 +1035,40 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 // Stop interrupts a thread's running turn and drops its queued messages.
 // Its resident process, and the background work in it, survive.
 func (m *Threads) Stop(threadID string) { m.stop(threadID) }
+
+// Retry re-runs a failed turn without adding anything to the transcript.
+// A turn that crashed mid-turn (with staged output) resumes the interrupted
+// turn — the CLI replays it from its own transcript, so the user's message
+// is never re-sent and interrupted tool calls are not re-run; a turn that
+// failed before reaching Claude re-sends its prompt.
+func (m *Threads) Retry(ctx context.Context, threadID string) (*db.Thread, error) {
+	t, err := m.store.GetThread(threadID)
+	if err != nil {
+		return nil, err
+	}
+	if t.Status != db.ThreadFailed {
+		return nil, ErrNoFailedTurn
+	}
+	p, err := m.store.GetProject(t.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+	sid := m.sessionOf(threadID)
+	if m.Running(threadID) {
+		return nil, ErrBusy
+	}
+	model, opts, err := m.turnLaunch(ctx, threadID, t, p, p.Type == db.ProjectFolder)
+	if err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	m.turns[sid] = &turnTally{launchModel: model}
+	m.mu.Unlock()
+	if !m.engine.Retry(sid, t.Cwd, func(context.Context) agentboot.ExecutionOptions { return opts }) {
+		return nil, ErrNoFailedTurn
+	}
+	return m.store.GetThread(threadID)
+}
 
 // stop is Stop, returning a channel closed once the stopped turn has
 // exited (nil when no turn was running).
