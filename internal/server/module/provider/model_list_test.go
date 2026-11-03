@@ -93,8 +93,10 @@ func TestGetProviderModelsByUUID_Codex_EmptyCache_UsesTemplate(t *testing.T) {
 
 	require.True(t, resp.Success)
 	assert.Equal(t, ModelCacheSourceTemplate, resp.Data.Source)
-	assert.NotEmpty(t, resp.Data.Models)
-	assert.Contains(t, resp.Data.Models, "gpt-5.5")
+	template, err := cfg.GetTemplateManager().GetEmbeddedModelsForProvider(provider)
+	require.NoError(t, err)
+	require.NotEmpty(t, template)
+	assert.ElementsMatch(t, template, resp.Data.Models)
 }
 
 // TestUpdateProviderModelsByUUID_Codex_ReturnsTemplateModels is a regression
@@ -122,8 +124,35 @@ func TestUpdateProviderModelsByUUID_Codex_ReturnsTemplateModels(t *testing.T) {
 	var resp ProviderModelsResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	require.True(t, resp.Success)
-	assert.NotEmpty(t, resp.Data.Models, "codex refresh must fall back to template models, not return an empty list")
-	assert.Contains(t, resp.Data.Models, "gpt-5.5")
+	template, err := cfg.GetTemplateManager().GetEmbeddedModelsForProvider(provider)
+	require.NoError(t, err)
+	require.NotEmpty(t, template)
+	assert.ElementsMatch(t, template, resp.Data.Models, "codex refresh must return the embedded template")
+}
+
+// A refresh of an unsupported Codex endpoint returns the embedded catalog.
+// Reopening the picker must not bring back the invalidated old database list.
+func TestCodexModelList_RefreshThenReadUsesSameCatalog(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := newTestConfigWithTemplates(t)
+	provider := newCodexOAuthProvider()
+	require.NoError(t, cfg.AddProvider(provider))
+	require.NoError(t, cfg.GetModelManager().SaveModels(provider, []string{"old-model"}, db.ModelSourceAPI))
+
+	handler := NewHandler(cfg, nil)
+	router := gin.New()
+	router.POST("/provider-models/:uuid", handler.UpdateProviderModelsByUUID)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/provider-models/"+provider.UUID, nil))
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var refreshed ProviderModelsResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &refreshed))
+	require.Equal(t, ModelCacheSourceTemplate, refreshed.Data.Source)
+	require.NotEmpty(t, refreshed.Data.Models)
+
+	reopened := getProviderModels(t, cfg, provider.UUID)
+	assert.Equal(t, ModelCacheSourceTemplate, reopened.Data.Source)
+	assert.Equal(t, refreshed.Data.Models, reopened.Data.Models)
 }
 
 // TestGetProviderModelsByUUID_ClaudeCode_NonEmptyCache_NotPollutedByTemplate
