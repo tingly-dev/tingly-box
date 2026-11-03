@@ -25,6 +25,7 @@ import { SCENARIO_HEADER_CONTENT_MAX_WIDTH, ScenarioCardHeader, agentPageHeaderS
 import PluginFeatures from '@/components/PluginFeatures';
 import { usePluginsActive } from '@/hooks/usePluginsActive';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
+import ClaudeCodeDefaultProfileSwitch from './components/ClaudeCodeDefaultProfileSwitch';
 import TemplatePage from './components/TemplatePage.tsx';
 
 /**
@@ -117,6 +118,8 @@ export interface AgentPageDescriptor {
      * switched off, since each one backs a slot.
      */
     slotRouting?: { unifiedRuleUuid: string };
+    /** Offer "apply a profile" on the default config (Claude Code's main scenario only). */
+    defaultProfileSwitch?: boolean;
 }
 
 /** What an agent's setup dialog gets from the page. */
@@ -336,6 +339,9 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                             use pt:1 so the gaps match the card's edge rhythm. */}
                         {slotRouting && (
                             <Box sx={{ px: 2, pt: 1 }}>{slots.slotsRow}</Box>
+                        )}
+                        {slotRouting && agent.defaultProfileSwitch && (
+                            <ClaudeCodeDefaultProfileSwitch onChanged={slots.reload} />
                         )}
                         <Box sx={{ px: 2, pt: 1 }}>{pluginsRow}</Box>
                     </Box>

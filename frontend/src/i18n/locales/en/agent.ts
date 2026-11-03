@@ -254,6 +254,19 @@ export default {
       "mergeAll": "Merge all",
       "failed": "Failed to update the slot"
     },
+    "defaultSwitch": {
+      "label": "Profile",
+      "apply": "Apply profile…",
+      "own": "Using its own configuration",
+      "mirrors": "Same routing as profile \"{{name}}\"",
+      "edited": "Started from profile \"{{name}}\", edited since",
+      "profileDeleted": "Copied from profile \"{{name}}\" (since deleted)",
+      "restore": "Restore my default",
+      "restoreHint": "Back to the routing from before the first switch",
+      "applied": "Default now uses the routing of profile \"{{name}}\"",
+      "restored": "Default routing restored",
+      "failed": "Failed to switch the default configuration"
+    },
     "applyFailed": "Failed to apply configurations",
     "configPath": "Add env config to Claude Code config file",
     "copyConfig": "Config",

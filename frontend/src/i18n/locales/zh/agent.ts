@@ -230,6 +230,19 @@ export default {
       "mergeAll": "全部合并",
       "failed": "更新 slot 失败"
     },
+    "defaultSwitch": {
+      "label": "方案",
+      "apply": "套用方案…",
+      "own": "使用自己的配置",
+      "mirrors": "路由与方案“{{name}}”相同",
+      "edited": "基于方案“{{name}}”，之后有过修改",
+      "profileDeleted": "复制自方案“{{name}}”（该方案已删除）",
+      "restore": "恢复我的默认配置",
+      "restoreHint": "回到第一次套用方案之前的路由",
+      "applied": "默认配置已改用方案“{{name}}”的路由",
+      "restored": "已恢复默认路由",
+      "failed": "切换默认配置失败"
+    },
     "applyFailed": "应用配置失败",
     "configPath": "将环境配置添加到 Claude Code 配置文件",
     "copyConfig": "配置",

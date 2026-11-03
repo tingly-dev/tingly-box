@@ -29,6 +29,8 @@ export interface SlotRouting {
     slots: string[];
     /** The Slots row: default always on, one switch per other slot, and split/merge all. */
     slotsRow: React.ReactNode;
+    /** Re-read the rules and slots from the backend, e.g. after the default was switched to a profile. */
+    reload: () => Promise<void>;
 }
 
 /**
@@ -168,5 +170,5 @@ export const useSlotRouting = (
         />
     ) : null;
 
-    return { rules, setRules, loading, slots, slotsRow };
+    return { rules, setRules, loading, slots, slotsRow, reload };
 };

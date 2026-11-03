@@ -126,6 +126,25 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 		swagger.WithResponseModel(ClaudeCodeSlotsResponse{}),
 	)
 
+	router.GET("/scenario/:scenario/claude-code/default-switch", h.GetClaudeCodeDefaultSwitch,
+		swagger.WithDescription("Whether the default Claude Code routing is switched to a profile's (only the claude_code scenario)"),
+		swagger.WithTags("scenarios"),
+		swagger.WithResponseModel(ClaudeCodeDefaultSwitchResponse{}),
+	)
+
+	router.PUT("/scenario/:scenario/claude-code/default-switch", h.SwitchClaudeCodeDefault,
+		swagger.WithDescription("Make the default Claude Code routing a copy of a profile's; the profile is not changed and the default's own routing is kept for restore"),
+		swagger.WithTags("scenarios"),
+		swagger.WithRequestModel(ClaudeCodeDefaultSwitchRequest{}),
+		swagger.WithResponseModel(ClaudeCodeDefaultSwitchResponse{}),
+	)
+
+	router.DELETE("/scenario/:scenario/claude-code/default-switch", h.RestoreClaudeCodeDefault,
+		swagger.WithDescription("Restore the default Claude Code routing from before it was switched to a profile"),
+		swagger.WithTags("scenarios"),
+		swagger.WithResponseModel(ClaudeCodeDefaultSwitchResponse{}),
+	)
+
 	router.GET("/scenario/:scenario/models", h.GetClaudeCodeModels,
 		swagger.WithDescription("List the model tiers Claude Code can be asked for under the main routing or a profile, each with its current route"),
 		swagger.WithTags("scenarios"),

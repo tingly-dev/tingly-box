@@ -92,6 +92,11 @@ type Config struct {
 	// Each entry is a list of profiles for that scenario.
 	Profiles map[string][]typ.ProfileMeta `json:"profiles" yaml:"profiles"`
 
+	// ClaudeCodeDefaultSwitch is set while the default Claude Code routing was
+	// switched to a profile's; nil otherwise. Not omitempty: Save() keeps file
+	// keys missing from the marshalled config, so clearing must serialize as null.
+	ClaudeCodeDefaultSwitch *ClaudeCodeDefaultSwitch `json:"claude_code_default_switch" yaml:"claude_code_default_switch"`
+
 	// Enterprise context JWT validation settings for TBE->TB proxy calls.
 	EnterpriseContextJWT EnterpriseContextJWTConfig `json:"enterprise_context_jwt,omitempty" yaml:"enterprise_context_jwt,omitempty"`
 

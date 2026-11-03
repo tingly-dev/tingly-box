@@ -2,6 +2,7 @@ package scenario
 
 import (
 	"github.com/tingly-dev/tingly-box/internal/agent"
+	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -116,4 +117,15 @@ type ClaudeCodeSlotsData struct {
 type ClaudeCodeSlotsResponse struct {
 	Success bool                `json:"success"`
 	Data    ClaudeCodeSlotsData `json:"data"`
+}
+
+// ClaudeCodeDefaultSwitchRequest names the profile the default Claude Code
+// routing should become a copy of (ID or name).
+type ClaudeCodeDefaultSwitchRequest struct {
+	Profile string `json:"profile" binding:"required"`
+}
+
+type ClaudeCodeDefaultSwitchResponse struct {
+	Success bool                                 `json:"success"`
+	Data    config.ClaudeCodeDefaultSwitchStatus `json:"data"`
 }

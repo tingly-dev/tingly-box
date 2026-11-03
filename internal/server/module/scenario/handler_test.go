@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -480,4 +482,63 @@ func TestScenarioUpdateResponseStructure(t *testing.T) {
 	if response.Data.Scenario != "claude_code" {
 		t.Errorf("expected Scenario 'claude_code', got %q", response.Data.Scenario)
 	}
+}
+
+func TestClaudeCodeDefaultSwitchEndpoints(t *testing.T) {
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := cfg.CreateProfile(typ.ScenarioClaudeCode, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profiled := typ.ProfiledScenarioName(typ.ScenarioClaudeCode, profile.ID)
+	profileRule := cfg.GetRuleByUUID("builtin:" + string(profiled) + ":cc")
+	if profileRule == nil {
+		t.Fatal("profile has no cc rule")
+	}
+	provider := &typ.Provider{UUID: "work-prov", Name: "work-prov", APIBase: "https://example.invalid", APIStyle: protocol.APIStyleOpenAI, Token: "k", Enabled: true}
+	if err := cfg.AddProvider(provider); err != nil {
+		t.Fatal(err)
+	}
+	profileRule.Services = append(profileRule.Services, &loadbalance.Service{Provider: provider.UUID, Model: "work-model", Active: true})
+	if err := cfg.UpdateRule(profileRule.UUID, *profileRule); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := NewHandler(cfg, &mockRemoteControlController{})
+	router := gin.New()
+	route := "/scenario/:scenario/claude-code/default-switch"
+	router.GET(route, handler.GetClaudeCodeDefaultSwitch)
+	router.PUT(route, handler.SwitchClaudeCodeDefault)
+	router.DELETE(route, handler.RestoreClaudeCodeDefault)
+	call := func(method, scenario, body string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(method, "/scenario/"+scenario+"/claude-code/default-switch", bytes.NewBufferString(body)))
+		return w
+	}
+
+	assert.Contains(t, call(http.MethodGet, "claude_code", "").Body.String(), `"switched":false`)
+
+	// Only the default can be switched: not a profile, not another scenario.
+	assert.Equal(t, http.StatusBadRequest, call(http.MethodPut, string(profiled), `{"profile":"work"}`).Code)
+	assert.Equal(t, http.StatusBadRequest, call(http.MethodPut, "openai", `{"profile":"work"}`).Code)
+	assert.Equal(t, http.StatusBadRequest, call(http.MethodPut, "claude_code", `{"profile":"missing"}`).Code)
+	assert.Equal(t, http.StatusBadRequest, call(http.MethodDelete, "claude_code", "").Code, "nothing to restore yet")
+
+	w := call(http.MethodPut, "claude_code", `{"profile":"`+profile.ID+`"}`)
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), `"switched":true`)
+	assert.Contains(t, w.Body.String(), `"profile_name":"work"`)
+	assert.Contains(t, w.Body.String(), `"in_sync":true`)
+	mainRule := cfg.GetRuleByUUID("builtin:claude_code:cc")
+	if assert.NotNil(t, mainRule) && assert.NotEmpty(t, mainRule.Services) {
+		assert.Equal(t, "work-model", mainRule.Services[0].Model)
+	}
+
+	w = call(http.MethodDelete, "claude_code", "")
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), `"switched":false`)
+	assert.Empty(t, cfg.GetRuleByUUID("builtin:claude_code:cc").Services)
 }
