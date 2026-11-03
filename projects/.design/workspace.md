@@ -87,6 +87,7 @@
 ├── memory/                  项目记忆；autoMemoryDirectory 指向这里
 ├── library/uploads/         上传（项目与文件夹项目一致）
 ├── library/outputs/<slug>/  无仓库线程的产出
+├── library/.tmp/<thread-id>/ 线程的 TMPDIR（Library 页不显示，resolve 时清理）
 └── threads/<id>.settings.json
 
 <repo>/.claude/worktrees/<slug>-<id6>/   新线程的 cwd（有仓库）
@@ -108,6 +109,25 @@
   "permissions": { "additionalDirectories": ["<library>", "<memory>", "<其他仓库>…"] }
 }
 ```
+
+### 共享上传目录（library）的授权
+
+library 就是共享上传目录（`library/uploads/` 上传，`library/outputs/<slug>/` 线程产出），项目线程和文件夹线程用同一套授权（`library_access.go` 的 `addDirectories` / `grantLibrary`，三处 settings 生成都走它）：
+
+- `permissions.additionalDirectories` 加 library：只放宽 acceptEdits 下文件工具能到的范围，不够。
+- `permissions.allow` 加 `Read(//<library>/**)`、`Edit(//<library>/**)`：任何权限模式下读写 library 都不再询问，范围只限这个目录。
+- `autoMode.environment` / `autoMode.allow` 各加一条（以 `$defaults` 开头，保留内置规则）：告诉 auto 模式的分类器 library 是被认可的写入目标，否则从 `/tmp` 往里 `cp` 会被分类器拒绝。
+- `send_file` 只收工作目录和 library 里的文件。因此线程提示词（项目线程）和 `send_file` 的工具描述（两种模式都有）都要求：截图、报告等直接存到 `library/outputs/<slug>/` 再发送，不要先放 `/tmp` 再拷；被拒绝时的错误信息也给出该目录。
+
+### 线程临时目录（TMPDIR）
+
+每个线程的 `TMPDIR` / `TMP` / `TEMP` 指向共享 library 里自己的目录，不再用全局 `/tmp`：`<library>/.tmp/<thread-id>/`（`Layout.TmpDir`；`Threads.withTmpEnv` 在每次 turn 启动前建目录并写进 env，项目线程、profile 线程、文件夹线程都走这一处，profile 自带的 env 保留）。
+
+- **为什么在 library 下**：library 已有 `Read`/`Edit` 授权和 auto 分类器条目（上节），`send_file` 也收 library 里的文件；临时文件落在这里就不需要拷贝，也就没有“从 /tmp 拷进 library 被拒”的问题。
+- **为什么用 `.tmp/<thread-id>/`，不用 `outputs/<slug>/tmp/`**：`ListLibrary` 跳过点开头的目录，草稿文件不会出现在 Library 页；thread id 唯一，而标题 slug 会重复。`outputs/<slug>/` 保持“要给用户看的产出”。
+- **提示词**：`ArtifactGuidance`（项目线程的系统提示词和 `send_file` 的工具描述，所以文件夹线程也看得到）告诉线程不要用 `/tmp`，草稿放 `TMPDIR`，要给用户看的放 `outputs/<slug>/`。
+- **清理**：线程被 Resolve 或合并（合并也会 resolve）时 `cleanTmp` 删除该目录；`send_file` 已经把文件复制进 `uploads/`，发出去的文件不受影响。Reopen 后下一个 turn 重建。Archive 不清理（可恢复）。
+- **未解决**：从未 resolve 的线程留下的目录不会被回收（没有按时间的清理）；Claude Code 自己也读 `TMPDIR`，它的内部临时文件会落在同一目录，resolve 时一起清掉。
 
 `autoMemoryDirectory` 对所有项目线程设置（有仓库的也设），让一个项目只有一份记忆：Projects 自己的 `MEMORY.md` 机制与 Claude 的原生 auto memory 指向同一目录。
 

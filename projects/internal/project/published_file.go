@@ -52,7 +52,7 @@ func (s *Service) PublishFile(ctx context.Context, threadID, source, caption str
 		}
 	}
 	if !allowed {
-		return nil, fmt.Errorf("file is outside the thread's working directory and library")
+		return nil, fmt.Errorf("file is outside the thread's working directory (%s) and the project library (%s); save it under %s and send it from there", t.Cwd, s.Layout.LibraryDir(t.ProjectID), threadOutputDir(s.Layout, p, t))
 	}
 	f, err := os.Open(path)
 	if err != nil {

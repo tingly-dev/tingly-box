@@ -127,7 +127,7 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
   - **显式收尾**：协调者的每个轮次以三种方式之一结束：回复用户、调用做事的工具、或调用 `no_update` 工具表示无需发言。`no_update` 只对线程汇报和 check-in 轮次有效，立即结束轮次；用户消息触发的轮次调用它会被拒绝（用户的消息必须有回应）。旧模型回复 `NO_UPDATE` 文本在汇报轮次仍然静默（兼容）。用户消息触发的轮次如果什么都没做就结束，会被提醒一次，仍然为空则结束，保证循环有界。
   - **改名**：目标变了协调者用 `rename_thread` 改卡片标题，不动分支和历史，也不开新一轮。
   - 未做：用真实模型验证回复预算和信封是否真的被遵守（harness 阶段 4）。
-- **目录权限**：生成 settings 文件，`permissions.additionalDirectories` = [library, memory, 其他仓库]，`--settings` 传入。
+- **目录权限**：生成 settings 文件，`permissions.additionalDirectories` = [library, memory, 其他仓库]，`--settings` 传入；library 另有 `allow` 规则和 auto 模式分类器条目，见 `workspace.md`「共享上传目录（library）的授权」。
 - **连接**：全局连接为 Anthropic 风格时，线程继承它（`ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN`），即默认走 Tingly Box；否则用本机 `claude` 自己的登录。
 - **权限模式**：默认 `acceptEdits`（编辑自动通过，命令等需审批 → Waiting on you）；项目设置可改为 `auto` / `bypassPermissions`。
 - **审批**：prompter 把请求记为线程事件、线程进入 `waiting`、阻塞等待用户在线程里回答（权限审批不超时）；"本线程同类都允许"按工具名记住。

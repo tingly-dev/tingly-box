@@ -496,23 +496,29 @@ func pickRepo(p *db.Project, want string) (*db.Repo, error) {
 // writeSettings gives the thread's Claude Code session access to the
 // project's library, memory and other repositories.
 func (m *Threads) writeSettings(p *db.Project, t *db.Thread) error {
+	// autoMemoryDirectory points Claude Code's own memory at the project's, so
+	// a project has one memory whatever each thread's cwd is.
+	settings := map[string]any{"autoMemoryDirectory": m.layout.MemoryDir(p.ID)}
+	m.grantProjectAccess(settings, p, t)
+	path := m.layout.SettingsFile(p.ID, t.ID)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(jsonString(settings)), 0o644)
+}
+
+// grantProjectAccess adds the directories every project thread works with to
+// doc: the library (the shared upload directory, with rules so it is writable
+// in any permission mode), the memory and the project's other repositories.
+func (m *Threads) grantProjectAccess(doc map[string]any, p *db.Project, t *db.Thread) {
 	dirs := []string{m.layout.LibraryDir(p.ID), m.layout.MemoryDir(p.ID)}
 	for _, r := range p.Repos {
 		if r.Path != t.RepoPath {
 			dirs = append(dirs, r.Path)
 		}
 	}
-	// autoMemoryDirectory points Claude Code's own memory at the project's, so
-	// a project has one memory whatever each thread's cwd is.
-	settings := map[string]any{
-		"autoMemoryDirectory": m.layout.MemoryDir(p.ID),
-		"permissions":         map[string]any{"additionalDirectories": dirs},
-	}
-	path := m.layout.SettingsFile(p.ID, t.ID)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(jsonString(settings)), 0o644)
+	addDirectories(doc, dirs...)
+	grantLibrary(doc, m.layout.LibraryDir(p.ID))
 }
 
 // Send gives a Claude Code thread a message; src says who sent it. A busy
@@ -709,6 +715,7 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	if effort == "" && !folder {
 		effort = p.ThreadEffort
 	}
+	env = m.withTmpEnv(env, p, t)
 	opts := agentboot.ExecutionOptions{Model: model, Effort: effort, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings, Entrypoint: sessionEntrypoint}
 	if m.SessionToolsConfig != nil {
 		if config, err := m.SessionToolsConfig(threadID); err == nil {
@@ -738,6 +745,30 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	}
 }
 
+// withTmpEnv points the thread's TMPDIR (and TMP, TEMP) at its scratch
+// directory in the shared library and creates it, whatever the launch mode:
+// project, profile or folder. On error the thread keeps the global temp dir.
+func (m *Threads) withTmpEnv(env []string, p *db.Project, t *db.Thread) []string {
+	dir := m.layout.TmpDir(UploadOwner(p, t), t.ID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		logrus.WithError(err).WithField("thread_id", t.ID).Warn("projects: cannot create the thread's temp dir")
+		return env
+	}
+	return setEnv(env, "TMPDIR", dir, "TMP", dir, "TEMP", dir)
+}
+
+// cleanTmp removes a finished thread's scratch directory. Files it sent with
+// send_file were copied into uploads/ and stay.
+func (m *Threads) cleanTmp(t *db.Thread) {
+	if t == nil {
+		return
+	}
+	dir := m.layout.TmpDir(t.ProjectID, t.ID)
+	if err := os.RemoveAll(dir); err != nil {
+		logrus.WithError(err).WithField("thread_id", t.ID).Warn("projects: cannot remove the thread's temp dir")
+	}
+}
+
 // workerSettings combines profile settings with the project's required access.
 func (m *Threads) workerSettings(p *db.Project, t *db.Thread, host string) (string, error) {
 	doc := map[string]any{}
@@ -748,19 +779,7 @@ func (m *Threads) workerSettings(p *db.Project, t *db.Thread, host string) (stri
 	if err := json.Unmarshal(b, &doc); err != nil {
 		return "", err
 	}
-	perms, _ := doc["permissions"].(map[string]any)
-	if perms == nil {
-		perms = map[string]any{}
-	}
-	dirs, _ := perms["additionalDirectories"].([]any)
-	dirs = append(dirs, m.layout.LibraryDir(p.ID), m.layout.MemoryDir(p.ID))
-	for _, r := range p.Repos {
-		if r.Path != t.RepoPath {
-			dirs = append(dirs, r.Path)
-		}
-	}
-	perms["additionalDirectories"] = dirs
-	doc["permissions"] = perms
+	m.grantProjectAccess(doc, p, t)
 	doc["autoMemoryDirectory"] = m.layout.MemoryDir(p.ID)
 	path := m.layout.SessionSettingsFile(t.ID)
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -788,18 +807,13 @@ func (m *Threads) sessionSettings(p *db.Project, t *db.Thread, host string) (str
 			return host, err
 		}
 	}
-	perms, _ := doc["permissions"].(map[string]any)
-	if perms == nil {
-		perms = map[string]any{}
-	}
-	dirs, _ := perms["additionalDirectories"].([]any)
-	dirs = append(dirs, m.layout.LibraryDir(UploadOwner(p, t)))
+	library := m.layout.LibraryDir(UploadOwner(p, t))
+	addDirectories(doc, library)
+	grantLibrary(doc, library)
 	// Uploads of a thread from before they were shared per folder.
 	if legacy := m.layout.LibraryDir(SessionOwner(t.ID)); dirExists(legacy) {
-		dirs = append(dirs, legacy)
+		addDirectories(doc, legacy)
 	}
-	perms["additionalDirectories"] = dirs
-	doc["permissions"] = perms
 	doc["autoMemoryDirectory"] = m.layout.MemoryDir(p.ID)
 	path := m.layout.SessionSettingsFile(t.ID)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -1078,6 +1092,7 @@ func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
 	})
 	if err == nil {
 		m.releaseChats(t)
+		m.cleanTmp(t)
 	}
 	return t, err
 }
@@ -1182,6 +1197,7 @@ func (m *Threads) Merge(ctx context.Context, threadID string) (*db.Thread, error
 	if err == nil {
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: fmt.Sprintf("Merged %s into %s.", t.Branch, t.BaseBranch)})
 		m.releaseChats(t)
+		m.cleanTmp(t)
 	}
 	return t, err
 }
