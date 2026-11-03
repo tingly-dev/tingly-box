@@ -5,8 +5,12 @@ import "strings"
 // helpText is /help: every command a chat has
 // (.design/remote-into-projects.md, "命令精简"), and the ids the notify API
 // asks for.
-func helpText(senderID, chatID string) string {
-	lines := []string{
+func helpText(botLabel, senderID, chatID string) string {
+	var lines []string
+	if botLabel != "" {
+		lines = append(lines, "Bot: "+botLabel, "")
+	}
+	lines = append(lines, []string{
 		"Send a message to talk to Claude Code.",
 		"/cd <path>: work in another folder",
 		"/dir [N]: list registered folders, or switch to one",
@@ -21,9 +25,18 @@ func helpText(senderID, chatID string) string {
 		"@N <message>: say one thing to session #N",
 		"",
 		"Your ID: " + senderID,
-	}
+	}...)
 	if chatID != "" {
 		lines = append(lines, "Chat ID: "+chatID)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// pairedMessage confirms pairing and, when the bot has a name, says which bot
+// the chat is now paired with.
+func pairedMessage(botLabel string) string {
+	if botLabel == "" {
+		return "✅ Paired. You can now send commands to this bot."
+	}
+	return "✅ Paired with " + botLabel + ". You can now send commands to this bot."
 }

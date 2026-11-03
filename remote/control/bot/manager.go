@@ -189,8 +189,8 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatS
 			}).Warnf("Pairing code: %s — DM /pair %s within %s",
 				code, code, time.Until(expiresAt).Round(time.Second))
 			fmt.Fprintf(os.Stderr,
-				"\n[tingly-box] Bot %q (%s) pairing code: %s  (expires %s, %s)\nIn the bot DM, send: /pair %s\n\n",
-				setting.Name, setting.Platform, code,
+				"\n[tingly-box] Bot %q (%s · %s) pairing code: %s  (expires %s, %s)\nIn the bot DM, send: /pair %s\n\n",
+				setting.Name, setting.Platform, setting.UUID, code,
 				expiresAt.Format(time.RFC3339), source, code)
 		}
 	}

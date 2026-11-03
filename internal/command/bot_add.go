@@ -84,7 +84,7 @@ func runBotAddInteractive(reader *bufio.Reader, appManager *app.AppManager) erro
 	fmt.Println()
 	if bot.PlatformDefaultsRequirePairing(platform) {
 		fmt.Println("On this platform, anyone who learns the bot token can DM the bot")
-		fmt.Println("and run commands. TOFU pairing requires a one-time `/bind <code>`")
+		fmt.Println("and run commands. TOFU pairing requires a one-time `/pair <code>`")
 		fmt.Println("from the operator before the bot accepts any other DM.")
 		fmt.Print("Require TOFU pairing for this bot? (Y/n): ")
 		input, _ := reader.ReadString('\n')

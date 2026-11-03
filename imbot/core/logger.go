@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -71,6 +72,21 @@ func NewLogger(config *LoggingConfig) Logger {
 		prefix:     prefix,
 		logger:     log.New(os.Stdout, "", 0),
 	}
+}
+
+// BotLogPrefix is the log prefix that says which bot a line belongs to:
+// "[imbot telegram/…456789]". Without it, two bots on one platform write
+// indistinguishable lines. Generated bot UUIDs are "<unixnano>-imbot", so only
+// the tail of the numeric part tells bots apart.
+func BotLogPrefix(platform Platform, uuid string) string {
+	id := strings.TrimSuffix(uuid, "-imbot")
+	if len(id) > 8 {
+		id = "…" + id[len(id)-6:]
+	}
+	if id == "" {
+		return "[imbot " + string(platform) + "]"
+	}
+	return "[imbot " + string(platform) + "/" + id + "]"
 }
 
 // NewLoggerWithPrefix creates a new logger with a custom prefix

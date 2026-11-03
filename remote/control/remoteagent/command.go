@@ -68,6 +68,10 @@ type BotHandlerAdapter interface {
 	// chat the result.
 	RunSessionCommand(ctx *imbot.HandlerContext, name, arg string)
 	RunProjectDirectory(ctx *imbot.HandlerContext, arg string)
+
+	// BotLabel names this bot for the people in its chats ("Telegram · Ops bot");
+	// empty when the bot has no name to show.
+	BotLabel() string
 }
 
 const (
@@ -136,7 +140,7 @@ func newHelpCommand(adapter BotHandlerAdapter) imbot.Command {
 	return imbot.NewCommand("cmd-help", "help", "Show what this chat can do").
 		WithAliases("start").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
-			return sendCommandText(adapter, ctx, helpText(ctx.SenderID, ctx.ChatID))
+			return sendCommandText(adapter, ctx, helpText(adapter.BotLabel(), ctx.SenderID, ctx.ChatID))
 		}).
 		WithCategory("system").
 		WithPriority(100).
@@ -329,8 +333,7 @@ func newPairBindCommand(adapter BotHandlerAdapter) imbot.Command {
 				string(ctx.Platform), code); err != nil {
 				return sendCommandText(adapter, ctx, "❌ "+err.Error())
 			}
-			return sendCommandText(adapter, ctx,
-				"✅ Paired. You can now send commands to this bot.")
+			return sendCommandText(adapter, ctx, pairedMessage(adapter.BotLabel()))
 		}).
 		WithCategory("system").
 		WithPriority(95).

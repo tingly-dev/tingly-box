@@ -43,8 +43,25 @@ func NewBaseBot(config *Config) *BaseBot {
 			disconnected: make([]func(), 0),
 			ready:        make([]func(), 0),
 		},
-		logger: NewLogger(config.Logging),
+		logger: newBotLogger(config),
 	}
+}
+
+// newBotLogger gives every bot its own prefix (platform and id) so adapter
+// lines can be attributed when several bots run in one process.
+func newBotLogger(config *Config) Logger {
+	if config == nil || config.UUID == "" {
+		var logging *LoggingConfig
+		if config != nil {
+			logging = config.Logging
+		}
+		return NewLogger(logging)
+	}
+	level, timestamps := LevelInfo, true
+	if config.Logging != nil {
+		level, timestamps = ParseLogLevel(config.Logging.Level), config.Logging.Timestamps
+	}
+	return NewLoggerWithPrefix(BotLogPrefix(config.Platform, config.UUID), level, timestamps)
 }
 
 // UUID returns the bot's unique identifier

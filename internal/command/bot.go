@@ -242,7 +242,7 @@ func runBotList(appManager *app.AppManager) error {
 
 	fmt.Println("Bot Settings:")
 	fmt.Println()
-	fmt.Printf("%-6s %-36s %-12s %-15s %-8s\n", "ID", "UUID", "Platform", "Name", "Enabled")
+	fmt.Printf("%-6s %-36s %-12s %-15s %-8s\n", "#", "UUID", "Platform", "Name", "Enabled")
 	fmt.Println(strings.Repeat("-", 82))
 	for i, s := range settings {
 		enabled := "No"

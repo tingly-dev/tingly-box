@@ -37,7 +37,7 @@ func BotPairEnable(appManager *app.AppManager, botUUID string, enable bool) erro
 	fmt.Println("Restart the bot for the change to take effect.")
 	if enable {
 		fmt.Println("On restart the server will print a one-time pairing code; " +
-			"send `/bind <code>` from the bot's DM to bind the chat.")
+			"send `/pair <code>` from the bot's DM to bind the chat.")
 	}
 	return nil
 }
@@ -69,7 +69,7 @@ func BotPairRevoke(appManager *app.AppManager, botUUID, chatID string) error {
 		"chat_id":  chatID,
 		"by":       "cli",
 	}).Info("pairing revoked via CLI")
-	fmt.Printf("Revoked pairing for chat %s on bot %s. The chat will need to re-/bind.\n",
+	fmt.Printf("Revoked pairing for chat %s on bot %s. The chat will need to re-/pair.\n",
 		chatID, botUUID)
 	return nil
 }

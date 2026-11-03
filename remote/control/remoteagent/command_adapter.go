@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
 // botHandlerAdapter implements command.BotHandlerAdapter by delegating to BotHandler.
@@ -148,6 +149,17 @@ func (a *botHandlerAdapter) RunSessionCommand(ctx *imbot.HandlerContext, name, a
 // RunProjectDirectory handles the separate project-coordinator picker.
 func (a *botHandlerAdapter) RunProjectDirectory(ctx *imbot.HandlerContext, arg string) {
 	a.handler.projectDirectory(HandlerContext{Bot: ctx.Bot, BotUUID: a.handler.botSetting.UUID, ChatID: ctx.ChatID, SenderID: ctx.SenderID, Platform: ctx.Platform}, arg)
+}
+
+// BotLabel names this bot for the people in its chats: "Telegram · Ops bot".
+// A bot with no name has nothing worth saying beyond its platform, so it
+// returns "".
+func (a *botHandlerAdapter) BotLabel() string {
+	setting := a.handler.currentSetting()
+	if setting.Name == "" {
+		return ""
+	}
+	return core.GetPlatformName(core.Platform(setting.Platform)) + " · " + setting.Name
 }
 
 // InitCommandRegistry initializes the command registry with built-in commands.
