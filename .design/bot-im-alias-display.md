@@ -1,266 +1,359 @@
-# Bot / IM display convention: alias first, ID reachable
+# Bot / IM display convention: `platform · alias · id [type]`
 
-> Status: **proposal** (nothing implemented). Inventory and evidence: [`.research/bot-im-alias-display.md`](../.research/bot-im-alias-display.md) — cited below as R-A / R-B / R-C (Parts A, B, C).
-> Judged against [`ux-principles.md`](./ux-principles.md); the checklist is at the end.
+> Status: **proposal** (nothing implemented). Inventory and evidence: [`.research/bot-im-alias-display.md`](../.research/bot-im-alias-display.md), cited below as R-A / R-B / R-C (its Parts A, B, C).
+> Judged against [`ux-principles.md`](./ux-principles.md); checklist at the end.
 > Related: [`bot-arch.md`](./bot-arch.md), [`bot-capability-access-control.md`](./bot-capability-access-control.md), [`projects-im.md`](./projects-im.md), [`logging.md`](./logging.md).
+
+## 0. Decisions already made (user, 2026-11-03)
+
+1. **One display format everywhere:** `平台 · alias · id [type]`.
+   - Omit the alias segment when there is none.
+   - A very long id may be shortened or omitted in display, but the full id must always be reachable another way (copy button, tooltip, detail view).
+   - `[type]` appears only for group chats.
+2. **Naming model:** if the platform supplies a name, store it as the default alias. If it supplies none, leave the alias empty and display the id until the user sets an alias.
+
+Everything below follows from these two. Remaining open points have recommended defaults in §10.
 
 ## 1. Problem
 
 Bots and IM entities have an ID *and* a human name, but the product treats them inconsistently:
 
-- The same chat gets up to five different labels across five surfaces; Projects shows the raw platform chat id even after the user names the chat (R §2.1, R-B §6).
-- Several surfaces show the wrong thing: an internal uuid in a delete confirm, a raw id in a picker whose input shows the name (R §2.2).
-- The names themselves are often empty or stale at the source, so a UI-only fix would just show `""` more consistently (R §2.3).
-- The backend has the aliases but never uses them: logs, CLI, and the messages the bot sends to users carry IDs only, and imbot adapter logs carry no bot identity at all (R §2.5).
-- Where users *need* the ID (paste into `/join`, the notify API, grep logs, compare with the IM app), it is often hidden (R §2.4).
+- The same chat gets up to five different labels across five surfaces. Projects shows the raw platform chat id even after the user has named the chat (R §2.1, R-B §6).
+- Some surfaces show the wrong thing: an internal uuid in a delete confirm, a raw id in a picker whose input shows the name (R §2.2).
+- The names are often empty or stale at the source, so a UI-only fix would only show blanks more consistently (R §2.3).
+- The backend holds the aliases but never uses them: logs, CLI and bot-sent IM messages carry ids only, and `imbot` adapter logs carry no bot identity (R §2.5).
+- Where users need the id (paste into `/join`, the notify API, grep logs, compare with the IM app) it is often hidden (R §2.4).
 
-This is a display-convention problem on top of a data-quality problem. Both need work, in that order.
+This is a display-convention problem sitting on a data-quality problem. Both need work, data first.
 
-## 2. Principles for this feature
+## 2. Principles
 
-1. **Alias is the primary text; the ID is secondary but always one step away.** People recognise “Ops alerts”, machines need `-100123456789`.
-2. **Show the ID itself (mono, copyable) wherever it is the thing the user will paste or grep** — this is ux-principles §5 (“show the concrete value, not the alias”). The two rules do not conflict: the *kind* of surface decides which one leads (§3.2).
-3. **Never blank, never `undefined`, never the wrong ID space.** Every entity always renders something, and a deleted/unknown entity renders its stored ID marked as such.
-4. **One word, one meaning** (ux-principles §3). One term for the user-set label of each entity, used in every locale and surface.
-5. **Resolve once, near the data.** A label is computed in one place per layer (a server resolver for what clients cannot join, one shared component/helper for UI, one field-set helper for logs) rather than re-derived at every site.
-6. **Scope to surfaces.** A rename in the Access dialog must show up in Notify, Projects, toasts and logs on the next render/line, without a manual sync.
+1. **Alias is the recognisable part; the id is always present or one step away.**
+2. **Never blank, never `undefined`, never the wrong id space.** Every entity renders something. A deleted or unknown entity renders its stored id, marked as such.
+3. **One format, one word per concept** (ux-principles §3). The user-chosen string is the same segment order on every surface.
+4. **Resolve once, near the data.** Segments are computed in one server resolver, rendered by one shared component, and formatted by one text helper for logs/CLI/IM, rather than re-derived per site.
+5. **Platform data may fill a gap but never override the user.** (§4 invariants.)
+6. **A rename shows up everywhere** on the next render or log line, with no manual sync.
 
-## 3. The convention
+## 3. The display format
 
-### 3.1 Entity fields and fallback chains
+### 3.1 Segments
 
-“Label” is the single human string for an entity. Chains are evaluated top to bottom; the first non-empty trimmed value wins. `⟨short⟩` is a 4-char disambiguator derived from the ID (§3.4).
+```
+平台 · alias · id [type]
+```
 
-| Entity | Label chain | Always-available ID shown as secondary | Notes |
-|---|---|---|---|
-| Bot | `name` → `⟨Platform display name⟩ ⟨short⟩` | `uuid` (mono, copy) | Never `"<platform id> Bot"`. New bots get a *unique* generated default (`Telegram`, `Telegram 2`) at creation so the stored name is meaningful. |
-| Platform | descriptor `display_name` | `platform` id (tooltip/dev only) | Single source = `GET /imbot-platforms`. No hand-copied maps. |
-| Direct chat | `alias` → peer actor `display_name` → `external_chat_id` | `external_chat_id` | Peer name needs the server join (§4). |
-| Group | `alias` → `name` → `external_group_id` | `external_group_id` | |
-| Actor | group-context `label` → `display_name` → `external_actor_id` | `external_actor_id` | `label` is today stored and never shown. |
-| Route | `name` | `id` (tooltip) | Plus the resolved target label. |
-| CC profile | `name` → `id` | `claude_code:<id>` | Already consistent today; keep. |
-| Pairing code | not an alias entity | the value itself | Keep showing the full `/pair <code>` string. |
-| Project / thread | unchanged (`#seq title`) | — | Already the model for IM text. |
-
-The platform *id* is never user-visible text; the platform display name is.
-
-### 3.2 Three display densities
-
-| Density | Surfaces | Form | Example |
-|---|---|---|---|
-| **Inline** | chips, tags, select input value, breadcrumbs, graph node labels, toasts, button aria-labels | `Label` (+ ` · ⟨short⟩` only if two visible entities in scope share a label) | `Ops alerts` |
-| **Row** | table cells, list rows, select *options*, dialog headers | `Label` primary, ID mono secondary line/column with copy affordance | `Ops alerts` / `-100123456789 ⧉` |
-| **Text** | confirm dialogs, error/log/CLI text, IM messages when an ID must be pasted | `Label (id)` — id full for machine-use, `⟨short⟩` otherwise | `Delete “Ops alerts” (-100123456789)?` |
-
-Rules that make the densities safe:
-
-- **Select input value and option label must be the same Label** (fixes `NotifyTestDialog.tsx:108` vs `:118`). Options add the ID as the secondary line.
-- **Disambiguation is by scope, not global.** If the visible list has two bots called `Telegram`, append `· ⟨short⟩` to both; otherwise show the clean label. (Avoids permanent noise, fixes duplicate-name pain.)
-- **Copy value = the ID the user can use next.** For a chat: the *external* id (what `/join` and the notify API want); the internal uuid is available only in a “details” tooltip and labelled as such. For a bot: `uuid`.
-- **Toast/confirm text always names the entity** (“Bot “Ops” restarted”, “Chat “Ops alerts” blocked”).
-
-### 3.3 Unresolved and deleted entities
-
-| Situation | Render | Where the info comes from |
+| Segment | Content | Rule |
 |---|---|---|
-| Entity exists, no alias, no platform name | ID in mono, muted style, tooltip “No name set — click Rename” | chain tail |
-| Entity referenced but deleted (binding, route target, `default_agent`, `bot_uuid`) | stored ID in mono + muted “deleted” suffix/chip | server resolver returns `{id, label:"", resolved:false}` |
-| Name was known once but source is gone | last-known snapshot name + “deleted” | needs a snapshot, see Q4 |
-| Resolution failed / still loading | skeleton or ID for ≤ 1 render, never blank | UI state |
+| 平台 (platform) | platform **display name** ("Telegram", "Feishu", "WeCom"), from the descriptor table / `GET /imbot-platforms`. Never the raw platform id (`telegram`). | Always present. Rendered as icon + name in the UI; in lists grouped under a bot header the icon may stand in for the text (§10 D6). |
+| alias | the entity's alias (§4) | Omitted when empty. Never replaced by a placeholder like "Unnamed". |
+| id | the id the user can use next: external chat id for chats/groups, external actor id for actors, bot uuid for bots | Always present, mono, muted. May be shortened or hidden when too long (§3.3); full id always reachable. |
+| `[type]` | `[group]` (localised, e.g. `[群聊]`) | Only for group chats. Direct chats and bots show nothing. |
 
-Principle: the *ID is the only thing guaranteed to exist*, so it is the universal fallback; the UI never invents text.
+Separator is a middle dot with spaces (` · `). No trailing separator when a segment is omitted.
 
-### 3.4 Short id (`⟨short⟩`)
+Examples:
 
-Bot ids are `<unixnano>-imbot` (`internal/db/imbot_settings_store.go:316`) — prefix digits are nearly identical across bots created close together, so the disambiguator must be the **last 4 digits of the numeric part** (e.g. `…6789`). Chat/actor internal uuids: first 4 hex. The short id is only a disambiguator and must never be the copy value.
+| Entity | With alias | Without alias |
+|---|---|---|
+| Direct chat | `Telegram · Alice · 123456789` | `Telegram · 123456789` |
+| Group chat | `Feishu · Dev team · oc_a1b2…9z [group]` | `Feishu · oc_a1b2…9z [group]` |
+| Bot | `Telegram · Ops bot · …456789` | `Telegram · …456789` |
+| Actor (person) | `Telegram · Alice · 123456789` | `Telegram · 123456789` |
 
-### 3.5 Terminology
+Visual weight in the UI follows ux-principles §9: alias is the anchor (normal/bold), platform and id are muted, id is monospace, `[group]` is a small muted chip. When the alias is empty the id takes the anchor position instead of the muted one, so the line never looks empty.
 
-- **Bot**: user-defined label = **Name** (field `name`; UI currently mixes “Alias” and “Name”, R-B §6 P5).
-- **Chat / group**: user-defined label = **Alias**; platform-supplied = **Platform name** (shown as the fallback, not a separate field in UI).
-- Rename affordance on a chat says “Alias”; its helper text “Leave empty to use the platform name or ID” already matches the chain above.
-- The word “ID” in UI/CLI always means the identifier the user can use next (external chat id, bot uuid). The CLI `bot list` column named “ID” (list index) becomes “#”.
+### 3.2 Which entities use it
 
-### 3.6 Logs, CLI, IM messages
+The format applies to every **platform-scoped** entity: bot, direct chat, group, actor.
+
+Entities that are not platform-scoped keep their own simpler label because there is no platform or external id to show:
+
+| Entity | Label |
+|---|---|
+| Route | `name` followed by its resolved target in the same format, e.g. `alerts → Feishu · Dev team · oc_a1…9z [group]` |
+| Claude Code profile | `name` with `claude_code:<id>` as secondary (already consistent today) |
+| Project / thread | unchanged: `#seq title`, project/folder name |
+| Pairing code | not an alias entity; the full `/pair <code>` string stays |
+
+### 3.3 Shortening and getting the full id
+
+Shortening is a **display-only, width-driven** decision made by one helper `shortId(kind, id)`:
+
+| Kind | Rule | Why |
+|---|---|---|
+| bot uuid | drop the constant `-imbot` suffix, keep the last 6 digits: `1730600000123456789-imbot` → `…456789` | Server-generated ids are `<unixnano>-imbot` (`internal/db/imbot_settings_store.go:316`). The head digits are nearly identical for bots created close together and the tail is constant, so a generic head…tail rule would show indistinguishable text. |
+| external chat / group / actor id | ≤ 20 chars: full. Longer: first 6 + `…` + last 4 | Platform ids vary in length (Telegram numeric vs Feishu `oc_` + 32 chars). |
+
+Truncation order when the row is still too narrow: shorten the id, then hide the id behind the copy/tooltip affordance, then ellipsise the alias. The platform and `[group]` are never dropped.
+
+**The full id must always be reachable**, so every place that shows a shortened or hidden id also has at least one of:
+
+- a copy button that copies the full id (visible, not hover-only, so touch devices work),
+- a tooltip with the full id,
+- a detail view (the Access dialog row already shows the full external id).
+
+The copy value is always the id the user can use next: the **external** chat id (what `/join` and the notify API expect) or the bot uuid. The internal access uuid (`DirectChat.id`/`Group.id`) is available only in a labelled "Internal target UUID" detail line, never as the default copy value and never in a confirm dialog.
+
+Plain-text channels (§3.5) never shorten.
+
+### 3.4 Unresolved and deleted entities
+
+The id is the only thing guaranteed to exist, so it is the universal fallback.
+
+| Situation | Render |
+|---|---|
+| Entity exists, no alias | `平台 · id` (the format with the alias omitted) |
+| Referenced entity was deleted (binding chat, route target, `default_agent`, binding `bot_uuid`) | `平台 · id` + muted `(deleted)`; platform comes from the stored reference, not from the deleted row |
+| Still loading | skeleton, not blank, not a half-rendered format |
+
+No snapshot of the last-known alias is kept in this iteration (§10 D2).
+
+### 3.5 Plain-text channels (logs, CLI, IM messages, toasts, confirms)
+
+The same segment order is used wherever text is emitted. Differences from the UI:
 
 | Channel | Rule |
 |---|---|
-| **Logs** | Greppable ID **and** name as separate structured fields. Canonical keys: `bot_uuid`, `bot_name`, `platform`, `chat_id` (always the *external* id), `chat_alias` (when known), `actor_id` (external), `route_name`. Internal access uuids are renamed `access_target_id` / `access_actor_id` so they cannot be mistaken for `chat_id`. Free-text form when needed: `bot "Ops" (1730…6789)`. |
-| **imbot adapter logs** | One logger prefix per bot, applied once: `[imbot telegram/1730…6789 Ops]` (extends the existing `[%s/%s]` panic prefix at `imbot/core/base.go:473`). Adapters stop formatting identity themselves. |
-| **CLI** | `Name (UUID)` everywhere a bot is mentioned (already done at `internal/command/bot_pair.go:98`); chats as `Alias (external id)`; accept name or uuid or `#index` as a reference. |
-| **IM messages to users** | Bot names itself where it helps orient: `/status` and `/help` get a `Bot: <name>` line and the chat’s alias; pairing/authorisation replies name the bot. IDs stay where they are required (`Your ID`, `Chat ID`, `/join <ChatID>`) and gain the title beside them. Follow the Projects pattern (`[#seq title]`, names first). |
-| **Persisted audit events** | Today logrus-only (R-C §7). Any event we may need to re-label later must carry the name at write time. |
+| Toasts, confirm dialogs, aria-labels | Same format, id shortened as in the UI. Must name the entity ("Bot `Telegram · Ops bot · …456789` restarted", `Delete Feishu · Dev team · oc_a1…9z [group]?`). The full id is in the confirm body when the action is destructive. |
+| IM messages the bot sends | Same format with the **full** id wherever the user must paste it (`Your ID`, `Chat ID`, `/join <ChatID>`). Never shortened. |
+| CLI | Same format, full id. `bot list` column "ID" (list index) is renamed "#". |
+| Logs | Structured fields remain the primary form so logs stay greppable: `bot_uuid`, `bot_name`, `platform`, `chat_id` (always the **external** id), `chat_alias`, `actor_id` (external). Internal access uuids are renamed `access_target_id` / `access_actor_id` so they cannot be mistaken for `chat_id`. Where a free-text rendering is needed, use the same format with the full id. Never shortened. |
 
-## 4. Where labels get resolved — options
+### 3.6 Terminology
 
-The UI needs `Label` for entities it did not load (route target, binding chat, thread-event source, `peer_actor_id`, `default_agent`, `bot_uuid` on a binding). Three ways to get it:
+- **Alias** is the single user-facing word for the editable name of a bot, chat, group or actor. Today the bot field is "Alias" in the edit dialog and "Name" in the table (R-B §6); both become "Alias". The API field stays `name` for bots and `alias` for chats (no breaking rename).
+- **ID** in UI/CLI always means the identifier the user can use next (external id / bot uuid).
+- "Type" only ever means chat type (`[group]`); it is not a bot or platform attribute.
 
-| | Option 1: server resolves, embeds in responses | Option 2: client joins from lists it already has | Option 3: separate `labels` resolve endpoint |
+## 4. Naming model
+
+### 4.1 Rule
+
+- If the platform provides a name for an entity, it is stored as that entity's **default alias**.
+- If it provides none, the alias stays **empty** and the id is displayed, until the user sets an alias.
+- A user-set alias is authoritative from then on.
+
+Applies to: bot (platform account name, see §4.5), direct chat (the peer's display name), group (the platform chat title), actor (sender display name).
+
+### 4.2 Invariants (must hold in every write path)
+
+| # | Invariant | Currently violated at |
+|---|---|---|
+| N1 | **An empty inbound name never overwrites an existing value.** Only a non-empty, changed name is written. | `internal/db/bot_access_store.go:246` `upsertActor` writes `display_name = <incoming>` unconditionally, so a nameless message wipes a good name |
+| N2 | **An inbound platform name never overwrites a user-set alias.** | not enforceable today: `DirectChat` has no platform name field and `Group.name` / `alias` are separate, so the question never arose; it becomes real once platform names are stored as default alias |
+| N3 | **A platform-sourced alias may be refreshed** by a later non-empty, different platform name (group renamed on the platform), but only while its source is `platform`. | `DiscoverGroup` (`bot_access_store.go:477-505`) returns early for existing rows, so group names never refresh |
+| N4 | **The platform "name" must be a real name.** If an adapter returns the raw id as the display name, it is treated as no name. | `imbot/platform/feishu/adapter.go:72` sets `DisplayName: detail.SenderID` |
+| N5 | **Clearing a user alias resets it to the latest known platform name** (or empty if none), and the source returns to `platform`. | n/a (new) |
+
+N4 is enforced twice: adapters return `""` when they have no name, and the store ignores any incoming name equal to the external id.
+
+### 4.3 Storage
+
+Single display field plus a source marker, reusing the existing raw-name columns as the platform-name cache:
+
+| Entity | Display field | Source marker | Raw platform-name cache (never wiped by empty) |
 |---|---|---|---|
-| How | Responses carry `*_label` / nested ref `{id, label, resolved}` | Shared `useBotDirectory` / `useChatDirectory` hooks fetch bots, chats, groups once and look up | `POST /imbot/labels {refs:[…]}` → labels |
-| Pros | One source of truth; log/CLI/IM can use the same resolver; works in the Projects module through host without N+1; deleted-entity handling is natural | No API change; fast to ship for bot-centric pages | Single place to evolve; batched |
-| Cons | Touches several response structs + swagger + codegen; Projects (separate Go module) needs a host-injected resolver | Does not cover Projects/thread-event/binding data; every page re-implements fetch/cache/invalidation; stale after rename elsewhere; cannot serve logs/CLI/IM | New endpoint nobody else benefits from; extra round trip |
-| Cost | M–L | S–M per page, repeated | M |
+| Direct chat | `alias` (exists) | **new** `alias_source` = `user` \| `platform` \| `` | peer `Actor.display_name` (exists) |
+| Group | `alias` (exists) | **new** `alias_source` | `Group.name` (exists, now refreshed per N3) |
+| Actor | `display_name` (exists) | **new** `display_name_source` (set to `user` only by the manual `PUT …/actors/:actor`) | itself |
+| Bot | `name` (exists) | **new** `name_source` | n/a, adapter supplies it on connect |
 
-**Recommendation: Option 1 as the backbone, Option 2 only as a thin client cache on top.** Reasons: the biggest gaps (Projects tags, transcript source lines, route targets) are exactly the ones a client-side join cannot cover without moving join logic into the Projects package (which must not import the root module, `CLAUDE.md`), and the backend text channels (logs/CLI/IM) need the same resolver anyway. Option 3 is a fallback if response-shape changes prove too wide.
+How it works:
 
-### 4.1 Backend resolver
+- On discovery/first message/pairing: if `alias` is empty and a non-empty platform name arrives, set `alias := name`, `alias_source := platform`.
+- On a later message: if `alias_source = platform` (or `alias` empty) and the incoming name is non-empty and different, update both the alias and the cache. If `alias_source = user`, update only the cache.
+- `PUT …/alias` with a non-empty value sets `alias_source := user`. With an empty value it applies N5: `alias := cache`, `alias_source := platform` (or `alias := ""` if the cache is empty).
+- Group actors keep `GroupActor.label` as a user-only, group-scoped override. It is stored today and never displayed; the actor label resolves as `label` → `display_name` → external id.
 
-One small package in the remote domain, e.g. `remote/access` (`labels.go`), no new storage:
+Considered and rejected: keeping alias and platform name as two fields and resolving `alias → name → id` at read time. It needs no migration and cannot overwrite the user by construction, but it contradicts the user's stated model ("store as the default alias") and leaves two near-identical fields in every API response. The source marker gives the same safety with one field.
+
+### 4.4 Migration
+
+| Existing data | Becomes |
+|---|---|
+| `DirectChat.alias` non-empty, `Group.alias` non-empty | `alias_source = user` (they can only have come from `PUT …/alias`) |
+| `Group.alias` empty, `Group.name` non-empty | `alias := name`, `alias_source = platform` |
+| `DirectChat.alias` empty, peer `Actor.display_name` non-empty and not equal to the external id | `alias := display_name`, `alias_source = platform` |
+| `Actor.display_name` equal to its external id (feishu) | cleared (N4) |
+| Names already wiped by N1 | not recoverable; refill on the next inbound message |
+| Bot `name` equal to `"<platform id> Bot"` (generated default) | cleared to empty, `name_source` empty (§4.5); the bot then displays by id |
+
+### 4.5 Bots
+
+The user's rule says the platform name is the default. For bots, the platform-side identity exists on connect (Telegram `@username`, Discord username, Slack bot user, WeCom bot id: these are already logged at connect, R-C §3). Proposal:
+
+- When the user leaves the name empty, do **not** write `"<platform id> Bot"` any more (`BotConfigDialog.tsx:163,252`, `wechat_qr.go:330-335`, `feishu_qr.go:320-322`).
+- After a successful connect, if the bot has no name and the adapter exposes an account name, store it as the default (`name_source = platform`). Otherwise leave the name empty; the bot displays as `Telegram · …456789`.
+- Allow clearing a bot name (`imbot_settings_store.go:181` currently ignores empty).
+- Because the id is part of every display, two bots with the same name (or both unnamed) are told apart by their id segment. No separate disambiguation suffix is needed.
+
+This extends the user's decision to bots; flagged as D4 in §10.
+
+## 5. Resolver and API
+
+The UI needs the segments for entities it did not load: route target, binding chat, thread-event source, `peer_actor_id`, `default_agent`, a binding's `bot_uuid` (R-A §2). Options:
+
+| | 1: server resolves, embeds in responses | 2: client joins from lists it already has | 3: separate batch resolve endpoint |
+|---|---|---|---|
+| Covers Projects bindings / transcript / route targets | yes | no, needs join logic inside the Projects package (which must not import the root module, `CLAUDE.md`) | yes |
+| Serves logs, CLI, IM messages | yes (same Go resolver) | no | partly |
+| Deleted entities | natural (`resolved:false`) | client has to guess | natural |
+| Cost | M–L (response structs, swagger, `task codegen`) | S–M per page, repeated | M, plus an extra round trip |
+
+**Recommendation: option 1**, with a thin client cache. Option 3 is the fallback if response shapes get too wide.
+
+### 5.1 Shape: segments, not a baked string
+
+The component needs to style segments and shorten the id, so responses carry parts. Text channels reuse the same struct through a `String()`.
 
 ```go
-type Ref struct {            // goes in API responses
-    ID       string `json:"id"`                 // the id the user can use next (external where applicable)
-    Label    string `json:"label"`              // resolved per §3.1; never empty when Resolved
-    Resolved bool   `json:"resolved"`           // false = entity gone/unknown, label echoes the ID
-    Name     string `json:"name,omitempty"`     // user alias, if any (lets UI style "unnamed")
+type DisplayRef struct {
+    Kind          string `json:"kind"`                    // "bot" | "direct" | "group" | "actor"
+    Platform      string `json:"platform"`                // raw id, for icon lookup
+    PlatformLabel string `json:"platform_label"`          // 平台
+    Alias         string `json:"alias,omitempty"`         // omitted when empty
+    ID            string `json:"id"`                      // full, usable id (external / bot uuid)
+    Group         bool   `json:"group,omitempty"`         // drives the [type] segment
+    Resolved      bool   `json:"resolved"`                // false = entity gone, only ids known
 }
-
-type Resolver interface {
-    Bot(uuid string) Ref
-    Chat(botUUID, platform, externalID string) Ref   // DirectChat→Group lookup, applies §3.1 chain
-    Actor(botUUID, platform, externalID string) Ref
-    Profile(id string) Ref
-}
+func (d DisplayRef) String() string // "Feishu · Dev team · oc_a1b2…9z [group]" with the full id
 ```
 
-It reads the existing `remote_direct_chats`, `remote_groups`, `remote_actors` and `imbot_settings` tables, caches per request, and is the **only** place the §3.1 chains live on the server. The logging helper and the IM-message builders call the same resolver.
+It lives next to the access domain types (`remote/access`), reads existing tables only (`imbot_settings`, `remote_direct_chats`, `remote_groups`, `remote_actors`), caches per request, and is the only place the §3 rules exist on the server. Logging helpers and IM message builders call the same type.
 
-For the Projects module: extend its `Host` interface (`internal/server/module/projects/host.go`) with `ChatLabel(platform, chatID, botUUID) Ref` and `BotLabel(uuid) Ref`; the root module implements them with the resolver above. `projects/` never imports the root module. (Whether `Host` already has a suitable hook is UNVERIFIED, R §5.)
+For Projects, which cannot import the root module: extend its `Host` interface (`internal/server/module/projects/host.go`) with `ChatRef(platform, chatID, botUUID)` and `BotRef(uuid)`, implemented by the root module with the resolver. Whether `Host` already has a usable hook is UNVERIFIED (R §5).
 
-### 4.2 Source data fixes (prerequisite, otherwise labels are empty)
-
-| # | Fix | Where | Why |
-|---|---|---|---|
-| D1 | Do not overwrite `display_name` with `""`; only update when the incoming value is non-empty | `internal/db/bot_access_store.go:246` `upsertActor` | Names currently wiped by nameless messages (R §2.3) |
-| D2 | Refresh `Group.name` when the platform reports a different non-empty title | `DiscoverGroup` `bot_access_store.go:477-505` | Never refreshed → stale after rename |
-| D3 | Give direct chats a name: resolve via `peer_actor_id → Actor.display_name` in the chain (preferred, no new column), or copy sender name into a new `DirectChat.name` at pairing/discovery | `bot_access_store.go:296-322`, `authorization.go:93-108` | DMs have no platform-captured name at all |
-| D4 | Real feishu sender names (contact API) and weixin/wecom where the platform exposes one; otherwise leave `""` so the chain falls through to the id | `imbot/platform/feishu/adapter.go:72`, `feishu.go:386`, `weixin/adapter.go:55`, `wecom/adapter.go:42` | Today feishu name == raw id, which defeats the chain. Needs API scope — Q3 |
-| D5 | Unique generated default bot name; stop writing `"<platform id> Bot"`; allow clearing a bot name | `BotConfigDialog.tsx:163,252`, server QR flows `wechat_qr.go:330-335`, `feishu_qr.go:320-322`, `imbot_settings_store.go:181` | Duplicate names are the root of “which Telegram bot?” |
-| D6 | Dangling-reference handling: on bot delete remove its Projects `channel_bindings` (or mark unresolved); on profile delete clear/flag bots’ `default_agent` | `imbot_settings_store.go:224`, Projects bridge; `internal/config/profile.go:228` | Needed for §3.3 “deleted” rendering to be rare and honest |
-
-D1/D2/D3 are tiny, local, and unblock everything; D4 is the only one with a platform-permission cost.
-
-### 4.3 API changes (swagger-defined, then `task codegen`)
+### 5.2 API changes (swagger-defined, then `task codegen`)
 
 Additive only; existing fields stay.
 
-| Response | Add | Replaces client-side |
+| Response | Add | Replaces |
 |---|---|---|
-| `DirectChatDetailResponse` (`GET /bots/:bot/chats[/:chat]`) | `label` (resolved, §3.1), `peer_actor` ref | `alias || external_chat_id` in `imHost.tsx:48`, Access dialog |
-| `Group` list/detail | `label` | `alias || name || id` in 3 places |
-| `Route` | `target_ref {kind,id,label,external_id,resolved}` | UI join across chats+groups |
-| Projects `ChannelBinding` | `chat_ref`, `bot_ref` (resolved live through the Host), keep `chat_title` as last-known snapshot | `chat_title \|\| chat_id` fallbacks (`ProjectImBindings.tsx:75,107`) |
+| `GET /bots/:bot/chats[/:chat]` (`DirectChatDetailResponse`) | `ref` | `alias \|\| external_chat_id` in `imHost.tsx:48`, Access dialog rows |
+| `GET /bots/:bot/groups[/:group]` | `ref` | `alias \|\| name \|\| id` in 3 places |
+| `Route` | `target_ref` | UI join across chats and groups |
+| Group-actor list | `actor.ref` | `display_name \|\| id` |
+| Projects `ChannelBinding` | `chat_ref`, `bot_ref`; `chat_title` becomes a plain fallback | `chat_title \|\| chat_id` (`ProjectImBindings.tsx:75,107`) |
 | Projects `ThreadEvent` (IM source) | `source_chat_ref` | `ConversationPane.tsx:356`, `ThreadPanel.tsx:480` |
-| `Settings` (bot) | `label`, `short_id`, `platform_label`, `default_agent_ref` | `name \|\| platform` (9 sites), profile join |
-| `PairingCodeResponse`, QR status, reload | `bot_ref` | toasts lacking name |
+| Bot `Settings` | `ref`, `default_agent_ref` (profile name + id) | `name \|\| platform` (9 sites), profile join |
+| Pairing-code, QR-status, reload responses | `bot_ref` | toasts with no entity |
 
-If Option 1 stalls on response size, the smallest useful subset is: `label` on DirectChat/Group/Settings, `chat_ref`/`source_chat_ref` on Projects, `target_ref` on Route.
+Smallest useful subset if scope has to shrink: `ref` on bot/chat/group, `chat_ref`/`source_chat_ref` on Projects, `target_ref` on Route.
 
-## 5. Frontend
+## 6. Frontend
 
-### 5.1 One presentational primitive
+### 6.1 One presentational component
 
-`EntityLabel` in `@tingly/ui` (shared by the root app and the Projects pages, per `CLAUDE.md`), purely presentational, no data fetching:
+`EntityLabel` in `@tingly/ui` (shared by the root app and the Projects pages, per `CLAUDE.md`). It renders a `DisplayRef`, fetches nothing:
 
 ```tsx
 <EntityLabel
-  label="Ops alerts"        // §3.1 result
-  id="-100123456789"        // the user-usable id
-  density="inline|row|text"
-  resolved={true}           // false → muted + "deleted"
-  unnamedHint={…}           // shown as tooltip when label === id
-  copy                      // CopyIconButton, copies `id`
-  icon={<PlatformMark/>}
-  disambiguator="6789"      // only passed when scope has duplicates
+  ref={ref}                // DisplayRef from the API (§5.1)
+  maxIdLength="auto"       // applies shortId(); hides the id behind copy/tooltip when narrow
+  copy                     // CopyIconButton, always visible, copies ref.id
+  platformAs="text|icon"   // icon form for lists already under a bot header
 />
 ```
 
-It generalises the existing `rowHeader` (`BotAccessDialog.tsx:48`) and reuses `CopyIconButton`, `PageLayout` primitives. Styling follows ux-principles §9: label is the visual anchor, ID is muted mono.
+It generalises the existing `rowHeader(title, id)` in `BotAccessDialog.tsx:48`, the best current pattern (bold alias, mono external id beneath, id hidden if equal). Behaviour that follows from §3:
 
-### 5.2 One thin data layer in the root app
+- Segments in the fixed order `platform · alias · id [group]`; empty alias omitted.
+- `resolved: false` adds a muted `(deleted)`.
+- A tooltip always carries the full id and, where relevant, a labelled "Internal target UUID" line.
+- Select **input value and option** use the same component, so the two never disagree (today `NotifyTestDialog.tsx:108` vs `:118`).
+- `shortId(kind, id)` lives beside it with unit tests for both rules in §3.3.
 
-`frontend/src/services/labels.ts` (plain functions, tested) + a small `useBotLabels()` that returns `labelFor(bot)` with scope-aware disambiguation (§3.2). Because the server provides `label`/`*_ref` (§4.3), this layer mostly *reads* server labels and only computes the “duplicates in scope” suffix. The four platform-name sources collapse to `platform_label` from `/imbot-platforms` (`PlatformConfig.display_name`) — delete `PLATFORM_NAMES` in `imHost.tsx:19-23`.
+### 6.2 Data layer
 
-### 5.3 Projects package
+Mostly read-through: the server already supplies the segments. `frontend/src/services/labels.ts` holds `shortId`, `refText(ref)` for toasts/confirms/aria-labels, and nothing else. The four hand-copied platform-name sources collapse into `platform_label`: delete `PLATFORM_NAMES` and the `layout.platforms.*` fallback in `imHost.tsx:18-26`, and the raw-id displays in `BotTable.tsx:203,275` and `BotNotifyGroup.tsx:399-400`.
 
-- `ImHost` gets `chatLabel`/`botLabel` implemented (the optional `chatTitle` hook at `ProjectsHost.tsx:82` is already called by `ThreadPanel.tsx:480` but never implemented), fed from the server refs.
-- `bind` sends the resolved label as `chat_title` (`useImBindings.ts:58`) so the snapshot is no longer empty (last-known fallback for deleted chats).
-- `chatKey` includes `bot_uuid` (`useImBindings.ts:13`).
-- Delete the second resolver; both transcript surfaces use the same one.
+### 6.3 Projects package
 
-### 5.4 Site-by-site targets
+- `ImHost` gets `chatRef`/`botRef`. The optional `chatTitle` hook (`ProjectsHost.tsx:82`) that `ThreadPanel.tsx:480` already calls but `imHost.tsx` never implements is replaced by it. Delete the second resolver so `ConversationPane.tsx:356` and `ThreadPanel.tsx:480` share one path.
+- `bind` sends the resolved alias as `chat_title` (`useImBindings.ts:58`) so the stored snapshot is not empty.
+- `chatKey` includes `bot_uuid` (`useImBindings.ts:13`), otherwise two bots on one platform that see the same chat id collide.
 
-Full per-site table is R-B. The convention applied:
+### 6.4 Site targets
+
+Every site in R-B moves to `EntityLabel` or `refText`. The ones with the largest visible change:
 
 | Surface | Today | After |
 |---|---|---|
-| Notify chat leaf (`ChatNode.tsx:60`) | external id for DMs | alias / peer name / id; tooltip keeps both ids, labelled “Chat ID” and “Internal target UUID” |
-| Notify delete confirm (`BotNotifyGroup.tsx:593`) | **internal uuid** | `Delete “Ops alerts” (-100123456789)?` |
-| Test-send picker (`NotifyTestDialog.tsx:108,118`) | name in input, id in options | same label both; id as option secondary line |
-| Remote card / Notify card header | `name \|\| platform` | `EntityLabel` bot, density row, uuid in the secondary line/tooltip with copy |
-| Bots table | `name \|\| platform` + uuid column | label + disambiguator; uuid column kept |
-| Projects tags / source line / transcript | raw chat id | server-resolved chat label; id on hover |
-| Projects IM settings chat rows | `Platform · alias` (id hidden) | label + external id secondary |
-| Toasts (~20), icon-only button `aria-label`s | no entity | include entity label (§3.2 inline) |
-| Access dialog Rename / CC profile dialog titles | no entity | name the chat / bot |
-| Group actor chips | `display_name \|\| id` | `label \|\| display_name \|\| id`, id in tooltip |
+| Notify delete-chat confirm (`BotNotifyGroup.tsx:593`) | **internal uuid** | `Delete Feishu · Dev team · oc_a1…9z [group]?` with the full external id in the body |
+| Notify chat leaf (`ChatNode.tsx:60`), target mapping (`BotNotifyGroup.tsx:137-158`) | external id; alias dropped; group `name` only | full format; tooltip keeps both ids, labelled |
+| Test-send picker (`NotifyTestDialog.tsx:108,118`) | name in input, id in options | same `EntityLabel` in both |
+| Remote card / Notify card header / Bots table | `name \|\| platform` (raw id), uuid mostly invisible | `Telegram · Ops bot · …456789`, copy button for the uuid |
+| Projects tags, "From …" lines, transcript | raw chat id | full format from `chat_ref`/`source_chat_ref` |
+| Projects IM settings rows, bind/move dialogs | `Platform · alias` (id hidden) or title only | full format, external id reachable via copy |
+| ~20 toasts, icon-only row buttons | name no entity | `refText` in message / `aria-label` |
+| Access dialog Rename, CC profile dialog titles | name no entity | include the entity |
+| Actor chips (`BotAccessDialog.tsx:325`) | `display_name \|\| id` | full format, `label` first |
 
-## 6. Backend text channels
+## 7. Backend text channels
 
-Concrete work (details and line refs in R-C):
+Concrete work (line references in R-C):
 
-1. **Logging field helper** `logfields.Bot(setting)`, `.Chat(botUUID, platform, externalID)` producing the §3.6 keys; migrate the ~80 bot/chat log sites over time, starting with lifecycle, authorization, pairing and imprompter “auto-approving” lines. Normalise `uuid|bot|botUUID|channel` → `bot_uuid`, `chatID|target` → `chat_id`.
-2. **imbot per-bot logger prefix**: add `Name`/identity to the logger built from `core.Config` (or inject a prefix from `remote/control/bot`), so the 85 adapter lines are attributable without touching call sites. `imbot/core/logger.go:60-70`, `imbot/core/base.go:45`.
-3. **IM messages**: `/status` (`projects/internal/project/chat_commands.go:193-224`) gains `Bot:` and `Profile:` lines; `/help` header gains the bot name and chat alias beside the two IDs (`remote/control/remoteagent/project_help.go:8-28`); pairing/auth replies and the “not authorized” notice name the bot (`handler_pair.go:29`, `command.go:330`, `manager.go:140`). Keep IDs where the user pastes them (`/join <ChatID>`).
-4. **CLI**: echo name+uuid after `bot add`, `pair`, `config`; accept name/uuid/index in `resolveBotRef`; rename list column “ID” → “#”; unify `/bind` vs `/pair` text (`bot_add.go:87`, `bot_pair.go:39`, `manager.go:178-181`); add UUID to the stderr pairing banner that `bot pair status` tells operators to grep.
-5. **Server errors that reach the UI** (`ErrNoChannel: bot <uuid>`, “bot for platform %s is missing credentials”): resolve to label + id before returning. Keep the deliberately uniform 404s for notify/interact (anti-probe, `bot_api.go:166-192`) unchanged — do not add names there.
-6. **Audit events** (`bot.authorization.decision`, `imbot.pair.*`, notify): include `bot_name`, `chat_alias`, `route_name` at write time because they are logrus-only and cannot be relabelled later.
+1. **`logfields` helper** producing the §3.5 keys (`bot_uuid`, `bot_name`, `platform`, `chat_id`, `chat_alias`). Migrate the ~80 bot/chat log sites over time, starting with lifecycle, authorization, pairing and the imprompter "auto-approving" line. Normalise `uuid|bot|botUUID|channel` → `bot_uuid` and `chatID|target` → `chat_id`.
+2. **imbot per-bot logger prefix**, applied once instead of per call site: add identity to the logger built from `core.Config` (or inject a prefix from `remote/control/bot`), e.g. `[imbot telegram/…456789 Ops bot]`, extending the existing `[%s/%s]` panic prefix at `imbot/core/base.go:473`. Covers all 85 adapter lines (`imbot/core/logger.go:60-70`).
+3. **IM messages**: `/status` (`projects/internal/project/chat_commands.go:193-224`) gains `Bot:` and `Profile:` lines; `/help` (`remote/control/remoteagent/project_help.go:8-28`) gains the bot line and the chat's own `DisplayRef`; pairing/authorisation replies name the bot (`handler_pair.go:29`, `command.go:330`, `manager.go:140`). Full ids stay where users paste them.
+4. **CLI**: echo bot name + uuid after `bot add`, `pair`, `config`; accept name, uuid or `#index` in `resolveBotRef`; rename the `bot list` "ID" column to "#"; make `/bind` vs `/pair` consistent between `bot_add.go:87`, `bot_pair.go:39` and the banner at `manager.go:178-181`; add the uuid to that stderr banner, which `bot pair status` tells operators to grep.
+5. **Errors that reach the UI** (`ErrNoChannel: bot <uuid>`, "bot for platform %s is missing credentials"): resolve to the format before returning. Keep the deliberately uniform notify/interact 404s unchanged (anti-probe, `bot_api.go:166-192`).
+6. **Audit events** (`bot.authorization.decision`, `imbot.pair.*`): include `bot_name`, `chat_alias`, route name at write time, since they are logrus-only and cannot be relabelled later.
 
-## 7. Suggested order of work
+## 8. Order of work
 
-| Phase | Content | Size | Why this order |
+Display is the goal, but it depends on the data being real, so the naming invariants come first.
+
+| Phase | Content | Size | Depends on |
 |---|---|---|---|
-| **P0 – bug-level fixes** (no design needed) | Delete-confirm shows internal uuid; picker input/option mismatch; map alias onto Notify targets; implement `ImHost.chatTitle`; send `chat_title` on bind; `chatKey` with bot; `imHost.tsx` group `name`; stale i18n copy `remote.ts:400`; Notify empty-state platform id | S (≈1–2 days) | Pure wrong-field/dropped-field bugs; immediately visible; independent of the rest |
-| **P1 – source data (D1–D3, D5)** | actor upsert no-wipe, group name refresh, DM name via peer actor, unique default bot name | S–M | Labels are only as good as the data; tiny and local |
-| **P2 – resolver + API** | `Resolver` + `label/*_ref` fields, Projects `Host.ChatLabel`, swagger + `task codegen` | M | Backbone for UI and text channels; includes platform label from `/imbot-platforms` |
-| **P3 – shared UI** | `EntityLabel` in `@tingly/ui`, `labels.ts`, migrate all sites in R-B (bots, Notify, Remote, Projects, toasts, aria-labels) | M | Mechanical once P2 exists; fix by surface, not by file |
-| **P4 – backend text channels** | `logfields`, imbot logger prefix, IM `/status` `/help` messages, CLI polish | M | Independent of P3; can run in parallel after P2 |
-| **P5 – lifecycle/consistency** | D4 (feishu/weixin names, needs scope), D6 dangling cleanup, persisted audit, `ErrNoChannel` text | M, partly blocked by Q3/Q4 | Highest cost per benefit; do last |
+| **P0 – bug fixes** (optional, can ship alone) | Delete-confirm shows internal uuid; picker input/option mismatch; map alias onto Notify targets; send `chat_title` on bind; `chatKey` includes bot; stale i18n at `en/remote.ts:400`; raw platform id in Notify empty state | S, 1–2 days | nothing |
+| **P1 – naming model** | §4: N1–N5, `alias_source`, migration, adapters return `""` not id, stop writing `"<platform> Bot"`, bot name clearable | S–M | nothing |
+| **P2 – resolver + API** | `DisplayRef`, `ref`/`*_ref` fields, Projects `Host` refs, swagger + `task codegen` | M | P1 (for good data) |
+| **P3 – shared UI** | `EntityLabel`, `shortId`, migrate every site in R-B (bots, Notify, Remote, Projects, toasts, aria-labels) | M | P2 |
+| **P4 – text channels** | §7: logfields, imbot prefix, IM messages, CLI | M | P2 (resolver); parallel to P3 |
+| **P5 – lifecycle** | Real sender names on Feishu/Weixin/WeCom, dangling-reference cleanup, persisted audit | M, partly blocked by D1, D2 | later |
 
-P0 can ship alone as a PR, then P1, then P2→P3 as the “main” feature; P4 parallel to P3.
+The display effect the user is after lands with P3; P1 and P2 are what make it show real names instead of ids.
 
-## 8. Risks and trade-offs
+## 9. Risks and trade-offs
 
-- **Privacy of platform names.** Persisting sender names (D3/D4) stores more PII; today it is already stored on `Actor`. IM messages that print the bot’s name or the chat alias are visible to every member of the chat (Q5).
-- **Rename propagation vs snapshots.** Live resolution makes renames propagate; snapshots (`chat_title`) survive deletion. We keep both: live first, snapshot as the “deleted” fallback.
-- **Log volume/cost.** Name lookups per log line must come from the in-memory bot setting already in scope; do not add DB reads to hot paths. imbot adapters get the name once at construction.
-- **Name staleness at renames** in long-running processes: the imbot logger prefix is fixed at bot start; a rename takes effect on restart (acceptable; the uuid stays correct).
-- **Scope creep**: sharing keys/API tokens are explicitly out of scope (no bot/IM relation, R §1).
+- **Privacy.** Platform names become a stored default alias (they are already stored on `Actor`). IM messages that print the bot or chat label are visible to every member of the chat (§10 D3).
+- **Platform refresh vs surprise.** A platform-sourced alias changes when the platform name changes (N3). A user who finds that surprising sets their own alias once and it sticks (N2).
+- **Visual noise (ux-principles §9).** The platform segment on every row is redundant under a bot header. Mitigation: icon form, with the text in the tooltip (§10 D6).
+- **Log cost.** Name lookups per log line must come from the in-memory bot setting already in scope, not a DB read. imbot adapters get the identity once at construction; a bot rename affects the prefix after restart, while the uuid stays correct.
+- **Scope.** Sharing keys / API tokens are out of scope: no bot/IM relation (R §1).
 
-## 9. Open questions for the user
+## 10. Remaining questions, with a recommended default for each
 
-1. **Terminology.** OK to standardise on **Name** for bots and **Alias** for chats/groups (platform-supplied title is just the fallback)? Or one word (“Name”) everywhere?
-2. **DM naming.** For direct chats, resolve the platform name through the peer actor (no schema change, my recommendation) or copy it into a stored `DirectChat.name`?
-3. **Feishu/Weixin/WeCom names.** Fetching real sender names on Feishu needs contact-API permission on the user’s app; Weixin/WeCom may not offer it at all. Accept a permission/scope requirement, or live with id-fallback on those platforms?
-4. **Deleted entities.** Keep a last-known-name snapshot (needs a denormalised column on bindings, more storage) or show only the ID marked “deleted”? And on bot delete: cascade-delete Projects bindings or keep them as unresolved?
-5. **Should the bot name itself in IM?** Adding `Bot: <name>` / chat alias to `/status`, `/help` and pairing replies exposes those labels to everyone in the chat. Fine for all chats, only DMs, or opt-in?
-6. **Logs.** Is it acceptable to include `bot_name` / `chat_alias` in every structured log line (greppability gain, minor extra PII)? Or names only on lifecycle/audit lines, uuid-only elsewhere?
-7. **Bot ID shape.** Server-generated ids look like `1730600000123456789-imbot`. Worth introducing a real short, human-pasteable id (or a unique slug) for new bots, or keep and use the last-4 disambiguator?
-8. **Default bot name.** New bots: generated unique name (`Telegram`, `Telegram 2`) as proposed, or force the user to name the bot in the create dialog?
-9. **Reference-by-name in CLI.** OK to accept bot name as a reference in `tingly-box bot …` (ambiguity → error listing uuids)?
-10. **Delivery.** Ship P0 as an immediate small PR, then the rest as one feature branch, or everything together?
+The user's main concern is the display effect, so these are sorted by whether they block it. Each has a default I will use unless overridden.
 
-## 10. UX-principles checklist (`ux-principles.md`)
+### Blocks the display work (confirm before building P3)
 
-- [x] Information organised by user questions: “which chat/bot is this” answered by the label; “how do I reference it” answered by the ID line (§3.2).
-- [x] No mode picker introduced; density follows the surface, not a setting.
-- [x] One word per concept (§3.5), and the two ID spaces are separated (§3.6 key rename).
-- [x] Orthogonal axes split: label (what people recognise) vs id (what machines use) vs disambiguator vs resolved/deleted state.
-- [x] Alias vs concrete value (§5): label leads on recognition surfaces, ID leads on paste/grep surfaces (`/join <ChatID>`, copy value, logs, CLI) — the rule is stated per surface, not globally.
-- [x] Smart defaults: unique generated bot names, scope-aware disambiguation instead of a toggle.
-- [x] Noise reduced (§9): ID is muted mono, disambiguator appears only on collision.
-- [x] Next-action artifact: copy value is the ID the user can use next; Rename affordance is reachable from the unnamed hint (§3.3).
-- [x] Side effects scoped: rename propagates to all surfaces via the resolver, no manual sync.
-- Deviation: none requiring justification; the one tension (principle 5 vs alias-first) is resolved by the per-surface rule above.
+| # | Question | Recommended default | Why it matters |
+|---|---|---|---|
+| D4 | Bots: when the name is empty, should the platform account name (Telegram `@username` etc.) become the default alias (§4.5), or stay empty and show only `Telegram · …456789`? | Store the platform account name when the adapter exposes one; otherwise empty. Stop writing `"<platform> Bot"`. | Decides what an unnamed bot looks like everywhere. Without it the display still works (id only), just less friendly. |
+| D5 | `[type]` wording: literally `[group]` (localised `[群聊]`), or the platform's own chat kind (`supergroup`, `channel`, `topic`)? | Literal `[group]`, localised. The data model only knows direct vs group; platform kinds are not stored. | Affects the component and i18n strings. |
+
+### Can wait (a default exists, nothing on the display path depends on it)
+
+| # | Question | Recommended default | Blocks display? |
+|---|---|---|---|
+| D1 | **Feishu / Weixin / WeCom names.** Real sender names on Feishu need contact-API permission on the user's app; Weixin/WeCom may expose none. | Do not require new scopes in the first iteration. Platforms that already return names (Telegram, Discord, Slack, DingTalk) work immediately. For Feishu, try a lazy lookup and fall back to the id on permission error (one warning, not per message). Weixin/WeCom stay id-only. The `platform · id` format already covers them. Which Feishu scope and API call is needed is UNVERIFIED. | No. Falls back to the id. |
+| D2 | **Deleted entities.** Keep a last-known-alias snapshot, or show only the id? And on bot delete: cascade-delete Projects bindings? | Show `platform · id (deleted)`; no new snapshot column (the existing `chat_title`, filled at bind time, is a free fallback). Do not cascade-delete bindings in this work; they render as unresolved. Cleanup is a separate change. | No, the unresolved rendering is already specified in §3.4. |
+| D3 | **Should the bot name itself in IM** (`/status`, `/help`, pairing replies)? These labels are visible to everyone in the chat. | Yes for the bot's own label (it is the account the user is talking to). Chat alias only in DMs, because an alias is an operator's private note and a group member would see it. | No, it lives in P4. |
+| D6 | **Platform segment under a bot header.** The user asked for the format everywhere; in a per-bot list the platform repeats on every row. | Keep the segment, rendered as the platform icon (text in the tooltip) in lists already grouped under a bot header. Full text everywhere else. | No, a single prop on the component. |
+| D7 | **PR split.** | PR0 = P0 bug fixes (optional, immediate). PR1 = P1 naming model (backend, small, correctness). PR2 = P2 + P3, the visible display change. PR3 = P4 text channels. | No. |
+
+## 11. UX-principles checklist (`ux-principles.md`)
+
+- [x] Organised around the user's questions: "which chat/bot is this?" is answered by the format, "how do I reference it?" by the id segment and copy.
+- [x] No mode picker: one format; truncation is automatic, not a setting.
+- [x] One word per concept (§3.6); the external-id vs internal-uuid collision is split (§3.3, §3.5 key rename).
+- [x] Orthogonal axes separated: platform · alias · id · type are distinct segments; alias source (user vs platform) is its own marker.
+- [x] Concrete value vs alias (§5): both are shown, in a fixed order. The id is never hidden without a copy path. This resolves the tension between alias-first display and the "show the concrete value" principle.
+- [x] Smart defaults: platform name becomes the default alias (user's rule), no toggle.
+- [x] Noise reduced (§9): muted platform and id, alias as anchor, `[group]` only when it carries information, icon form under a bot header.
+- [x] Next-action artifact: the copy value is the id the user can use next.
+- [x] Side effects scoped: a rename propagates through the resolver; platform names never overwrite the user's alias.
+- Deviation: none that needs justification.

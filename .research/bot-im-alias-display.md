@@ -1,6 +1,6 @@
 # Bot / IM entities: ID vs alias — where each is shown today
 
-> Inventory only. The proposal built on it is [`.design/bot-im-alias-display.md`](../.design/bot-im-alias-display.md).
+> Inventory only. Decisions taken after this audit (display format, naming model) are recorded in the design doc §0. The proposal built on this inventory is [`.design/bot-im-alias-display.md`](../.design/bot-im-alias-display.md).
 > Audit date: 2026-11-03, against `main` @ `01a128ee2`. Everything was read in code, nothing was run;
 > items marked UNVERIFIED are called out where they occur. Paths are repo-relative.
 
@@ -65,7 +65,7 @@ Two ID spaces collide under the word "chat id": the **external** platform id (wh
 - Projects IM text: `[#<seq> <title>]` thread tag, project/folder name first, `#N` as the handle the user types (`projects/internal/project/relay.go`, `chat_commands.go`).
 - `Message.GetSenderDisplayName()` (`imbot/core/message.go:243`): the one existing “name else id” resolver; nothing in `remote/**` calls it.
 - `manager.go:172-181` logs `uuid + name + platform` as fields: the right log shape.
-- Tension to resolve in the design: `.design/ux-principles.md` §5 (“show the concrete value, not the alias”) vs alias-first display.
+- Tension between `.design/ux-principles.md` §5 (“show the concrete value, not the alias”) and alias-first display: resolved by the user's `平台 · alias · id [type]` format, which shows both (see the design doc §0, §3).
 
 ## 5. Not verified
 
