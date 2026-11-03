@@ -352,6 +352,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/coordinator/recover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve an interrupted coordinator input; retry may repeat side effects
+         * @description Resolve an interrupted coordinator input; retry may repeat side effects
+         */
+        post: operations["apiV1ProjectsIdCoordinatorRecoverPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/events": {
         parameters: {
             query?: never;
@@ -1582,6 +1602,8 @@ export interface components {
         ProjectDetailResponse: {
             /** @description Field coordinator_busy */
             coordinator_busy: boolean;
+            /** @description Field coordinator_recovery */
+            coordinator_recovery?: string;
             counts: components["schemas"]["ThreadCounts"];
             project: components["schemas"]["Project"];
             /** @description Field threads */
@@ -1656,6 +1678,15 @@ export interface components {
              * @description Field updated_at
              */
             updated_at: string;
+        };
+        RecoverCoordinatorRequest: {
+            /**
+             * @description Field action
+             * @enum {string}
+             */
+            action: "retry" | "skip";
+            /** @description Field input_id */
+            input_id: string;
         };
         RegenerateRequest: {
             /** @description Field model */
@@ -2649,6 +2680,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AttachmentsResponse"];
+                };
+            };
+        };
+    };
+    apiV1ProjectsIdCoordinatorRecoverPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecoverCoordinatorRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectDetailResponse"];
                 };
             };
         };

@@ -1,5 +1,7 @@
 # Projects 接入（宿主侧）
 
+> Coordinator 的持久 Claude Code 会话、共享路径、工具边界与中断恢复设计见 [Projects Coordinator 设计](../projects/.design/coordinator-session.md)。
+
 > 读者：要在 tingly-box 里挂上 Projects 的人。Projects 的代码在本仓库 `projects/`
 > （原 tingly-project 仓库，2026-10-15 带历史搬入），**嵌入契约**（门面与 `Host`
 > 接口、路由/鉴权/存储、前端入口、步骤与风险）写在

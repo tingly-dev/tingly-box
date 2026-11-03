@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
@@ -216,6 +217,39 @@ func TestSendWithoutConnectionKeepsNothing(t *testing.T) {
 // commitAgents run each thread turn by committing one file.
 func commitAgents() *project.Agents {
 	a := &enginetest.Agent{Script: func(turn *enginetest.Turn) error {
+		if turn.Opts.CustomSystemPrompt != "" {
+			if strings.Contains(turn.Prompt, `<event source="thread"`) {
+				turn.Say("The login bug fix is ready for review.", 1, 1)
+				return nil
+			}
+			data, err := os.ReadFile(turn.Opts.MCPConfigPath)
+			if err != nil {
+				return err
+			}
+			var config struct {
+				MCPServers map[string]struct {
+					URL string `json:"url"`
+				} `json:"mcpServers"`
+			}
+			if err := json.Unmarshal(data, &config); err != nil {
+				return err
+			}
+			client := mcp.NewClient(&mcp.Implementation{Name: "fixture", Version: "1"}, nil)
+			session, err := client.Connect(turn.Ctx, &mcp.StreamableClientTransport{Endpoint: config.MCPServers["tingly-projects"].URL}, nil)
+			if err != nil {
+				return err
+			}
+			defer session.Close()
+			result, err := session.CallTool(turn.Ctx, &mcp.CallToolParams{Name: "start_thread", Arguments: map[string]any{"title": "Fix login bug", "task": "Fix the login bug and commit."}})
+			if err != nil {
+				return err
+			}
+			if result.IsError {
+				return fmt.Errorf("start_thread: %v", result.Content)
+			}
+			turn.Say("Started a thread for the login bug.", 1, 1)
+			return nil
+		}
 		dir := turn.Opts.ProjectPath
 		turn.Say("Fixing it.", 60, 10)
 		if err := os.WriteFile(filepath.Join(dir, "fix.txt"), []byte("fixed\n"), 0o644); err != nil {
@@ -239,6 +273,29 @@ func gitRepo(t *testing.T) string {
 		require.NoError(t, err, string(out))
 	}
 	return dir
+}
+
+func TestCoordinatorRecoveryEndpoint(t *testing.T) {
+	store, c := newServer(t, commitAgents())
+	var p db.Project
+	require.Equal(t, 201, c.do("POST", "/projects", map[string]any{"name": "Recovery"}, &p))
+	event := &db.ThreadEvent{ThreadID: p.MainThreadID, Kind: db.EvUser, Content: "interrupted"}
+	require.NoError(t, store.AddCoordinatorInput(p.ID, event))
+	input, err := store.ClaimCoordinatorInput(p.ID)
+	require.NoError(t, err)
+	require.NoError(t, store.FinishCoordinatorInput(input.ID, false))
+	var before struct {
+		Recovery string `json:"coordinator_recovery"`
+	}
+	require.Equal(t, 200, c.do("GET", "/projects/"+p.ID, nil, &before))
+	require.Equal(t, input.ID, before.Recovery)
+	require.Equal(t, 400, c.do("POST", "/projects/"+p.ID+"/coordinator/recover", map[string]any{"input_id": input.ID, "action": "invalid"}, nil))
+	require.Equal(t, 200, c.do("POST", "/projects/"+p.ID+"/coordinator/recover", map[string]any{"input_id": input.ID, "action": "skip"}, nil))
+	var after struct {
+		Recovery string `json:"coordinator_recovery"`
+	}
+	require.Equal(t, 200, c.do("GET", "/projects/"+p.ID, nil, &after))
+	require.Empty(t, after.Recovery)
 }
 
 func TestProjectEndToEnd(t *testing.T) {
