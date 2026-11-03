@@ -3,6 +3,7 @@ package imchannel
 import (
 	"context"
 	"fmt"
+	"github.com/tingly-dev/tingly-box/remote/logfields"
 	"maps"
 	"sort"
 	"sync"
@@ -111,9 +112,9 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 	bot = p.manager.GetBot(botUUID, platform)
 	if bot == nil {
 		logrus.WithFields(logrus.Fields{
-			"id":       req.ID,
-			"platform": platform,
-			"botUUID":  botUUID,
+			"id":              req.ID,
+			"platform":        platform,
+			logfields.BotUUID: botUUID,
 		}).Warn("Bot not found for request, auto-approving")
 		return ask.Result{
 			ID:           req.ID,

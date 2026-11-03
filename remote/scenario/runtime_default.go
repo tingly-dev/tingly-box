@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/tingly-dev/tingly-box/remote/logfields"
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/remote/access"
@@ -130,8 +131,8 @@ func (r *DefaultRuntime) Notify(ctx context.Context, ch channel2.Channel, target
 	}
 	if err := ch.Send(ctx, target, msg); err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{
-			"channel":  ch.ID(),
-			"platform": ch.Platform(),
+			logfields.BotUUID: ch.ID(),
+			"platform":        ch.Platform(),
 		}).Warn("notify push failed")
 		return err
 	}

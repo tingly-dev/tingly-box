@@ -3,6 +3,7 @@ package remoteagent
 import (
 	"context"
 	"fmt"
+	"github.com/tingly-dev/tingly-box/remote/logfields"
 	"os"
 	"strings"
 
@@ -101,10 +102,10 @@ func (h *BotHandler) adoptChat(hCtx HandlerContext) {
 		if err == nil {
 			return
 		}
-		logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("The chat's folder cannot be used; trying the default")
+		logrus.WithError(err).WithFields(logfields.Chat(hCtx.BotUUID, hCtx.ChatID, "")).Warn("The chat's folder cannot be used; trying the default")
 	}
 	if err := h.projectRouter.ToFolder(h.ctx, in, h.defaultProjectPath(), true); err != nil {
-		logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to give the chat a folder in Projects")
+		logrus.WithError(err).WithFields(logfields.Chat(hCtx.BotUUID, hCtx.ChatID, "")).Warn("Failed to give the chat a folder in Projects")
 	}
 }
 
@@ -184,7 +185,7 @@ func (h *BotHandler) deliverToProject(hCtx HandlerContext, text string, files []
 	case !handled:
 		h.SendText(hCtx, noPlace)
 	case err != nil:
-		logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to deliver chat message to its project")
+		logrus.WithError(err).WithFields(logfields.Chat(hCtx.BotUUID, hCtx.ChatID, "")).Warn("Failed to deliver chat message to its project")
 		h.SendText(hCtx, "Could not send this to the project: "+err.Error())
 	}
 }
@@ -314,7 +315,7 @@ func (h *BotHandler) runProjectCommand(hCtx HandlerContext, name, arg string) {
 	case !handled:
 		h.SendText(hCtx, noPlace)
 	case err != nil:
-		logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to run a chat command in its project")
+		logrus.WithError(err).WithFields(logfields.Chat(hCtx.BotUUID, hCtx.ChatID, "")).Warn("Failed to run a chat command in its project")
 		h.SendText(hCtx, "Could not do that: "+err.Error())
 	case reply != "":
 		h.SendText(hCtx, reply)
@@ -333,7 +334,7 @@ func (h *BotHandler) routeProjectAnswer(hCtx HandlerContext, threadID, requestID
 		SenderID: hCtx.SenderID,
 	}, threadID, requestID, choice)
 	if err != nil {
-		logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to answer a project's request")
+		logrus.WithError(err).WithFields(logfields.Chat(hCtx.BotUUID, hCtx.ChatID, "")).Warn("Failed to answer a project's request")
 		h.SendText(hCtx, "Could not answer: "+err.Error())
 		return
 	}

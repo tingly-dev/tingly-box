@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"fmt"
+	"github.com/tingly-dev/tingly-box/remote/logfields"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -365,8 +366,8 @@ func persistWeixinContextToken(chatStore ChatStoreInterface) OnMessage {
 			c.ContextToken = token
 		}); err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{
-				"bot_uuid": botUUID,
-				"target":   target,
+				logfields.BotUUID: botUUID,
+				logfields.ChatID:  target,
 			}).Warn("Failed to persist weixin context token")
 		}
 		return false

@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"github.com/tingly-dev/tingly-box/remote/logfields"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -16,7 +17,7 @@ type AccessStore interface {
 	DiscoverDirectChat(context.Context, string, string, string) (access.DirectChat, error)
 	GetDirectChat(context.Context, string, string) (access.DirectChat, bool, error)
 	PairDirectChat(context.Context, string, string, string) error
-	SyncDirectChatName(ctx context.Context, botUUID, chatID, name string) error
+	SyncDirectChatName(ctx context.Context, botUUID, chatID, name string) (string, error)
 	DiscoverGroup(context.Context, string, string, string, string) (access.Group, error)
 	UpsertActor(context.Context, access.Actor) (access.Actor, error)
 }
@@ -77,31 +78,39 @@ func AuthorizationGate(store AccessStore, authorizer access.Authorizer, legacyCh
 		if externalTarget == "" || externalActor == "" {
 			return true
 		}
+		where := logfields.Chat(botUUID, externalTarget, "")
+		where[logfields.Platform] = string(platform)
+		where[logfields.ActorID] = externalActor
 		actor, err := store.UpsertActor(ctx, access.Actor{BotUUID: botUUID, Platform: string(platform), ExternalActorID: externalActor, DisplayName: msg.Sender.DisplayName})
 		if err != nil {
-			logrus.WithError(err).Warn("bot access: resolve actor")
+			logrus.WithError(err).WithFields(where).Warn("bot access: resolve actor")
 			return true
 		}
 		var target access.TargetRef
 		if msg.IsGroupMessage() {
 			group, err := store.DiscoverGroup(ctx, botUUID, string(platform), externalTarget, msg.Recipient.DisplayName)
 			if err != nil {
-				logrus.WithError(err).Warn("bot access: resolve group")
+				logrus.WithError(err).WithFields(where).Warn("bot access: resolve group")
 				return true
 			}
 			target = access.TargetRef{Kind: access.TargetGroup, ID: group.ID}
+			where[logfields.ChatAlias] = group.Alias
 		} else if msg.IsDirectMessage() {
 			chat, err := store.DiscoverDirectChat(ctx, botUUID, string(platform), externalTarget)
 			if err != nil {
-				logrus.WithError(err).Warn("bot access: resolve direct chat")
+				logrus.WithError(err).WithFields(where).Warn("bot access: resolve direct chat")
 				return true
 			}
 			target = access.TargetRef{Kind: access.TargetDirectChat, ID: chat.ID}
+			where[logfields.ChatAlias] = chat.Alias
 			// In a direct chat the peer is the sender: their platform name is
 			// the chat's default alias (a user-set alias is never replaced).
-			if err := store.SyncDirectChatName(ctx, botUUID, chat.ID, actor.DisplayName); err != nil {
-				logrus.WithError(err).Warn("bot access: sync direct chat name")
+			if alias, err := store.SyncDirectChatName(ctx, botUUID, chat.ID, actor.DisplayName); err != nil {
+				logrus.WithError(err).WithFields(where).Warn("bot access: sync direct chat name")
+			} else {
+				where[logfields.ChatAlias] = alias
 			}
+
 			if isPairingBootstrap(msg) {
 				return false
 			}
@@ -112,7 +121,7 @@ func AuthorizationGate(store AccessStore, authorizer access.Authorizer, legacyCh
 				// of leaving the new authorizer stuck on discovered-chat deny.
 				if legacyPaired || !requirePairing {
 					if err := store.PairDirectChat(ctx, chat.ID, externalActor, msg.Sender.DisplayName); err != nil {
-						logrus.WithError(err).Warn("bot access: establish direct peer")
+						logrus.WithError(err).WithFields(where).Warn("bot access: establish direct peer")
 						return true
 					}
 				}
@@ -127,7 +136,10 @@ func AuthorizationGate(store AccessStore, authorizer access.Authorizer, legacyCh
 		}
 		capability, action := inboundAction(msg, pendingCapability, pendingAction)
 		decision := authorizer.Evaluate(ctx, access.AuthorizationRequest{BotUUID: botUUID, Target: target, ActorID: actor.ID, Capability: capability, Action: action})
-		fields := logrus.Fields{"event": "bot.authorization.decision", "bot_uuid": botUUID, "capability": capability, "action": action, "target_kind": target.Kind, "target_id": target.ID, "actor_id": actor.ID, "allowed": decision.Allowed, "failed_gate": decision.FailedGate, "reason": decision.Reason}
+		fields := logrus.Fields{"event": "bot.authorization.decision", logfields.BotUUID: botUUID, "capability": capability, "action": action, "target_kind": target.Kind, logfields.AccessTargetID: target.ID, logfields.AccessActorID: actor.ID, logfields.ChatID: externalTarget, "allowed": decision.Allowed, "failed_gate": decision.FailedGate, "reason": decision.Reason}
+		if alias, ok := where[logfields.ChatAlias]; ok && alias != "" {
+			fields[logfields.ChatAlias] = alias
+		}
 		if decision.Allowed {
 			logrus.WithFields(fields).Debug("bot authorization decision")
 			return false

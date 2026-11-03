@@ -3,6 +3,7 @@ package imbot
 import (
 	"context"
 	"fmt"
+	"github.com/tingly-dev/tingly-box/remote/logfields"
 	"net/http"
 	"strings"
 	"sync"
@@ -81,7 +82,7 @@ func (h *FeishuRegHandler) QRStart(c *gin.Context) {
 	if !strings.HasPrefix(botUUID, "temp-") {
 		existing, err := h.settingsStore.GetSettingsByUUID(botUUID)
 		if err != nil {
-			logrus.WithError(err).WithField("bot", botUUID).Error("Failed to check bot existence")
+			logrus.WithError(err).WithField(logfields.BotUUID, botUUID).Error("Failed to check bot existence")
 			apierr.Message(c, http.StatusInternalServerError, "Failed to validate bot")
 			return
 		}
@@ -140,17 +141,17 @@ func (h *FeishuRegHandler) QRStart(c *gin.Context) {
 		case feishu.RegistrationConfirmed:
 			sess.result = result
 			sess.status = "confirmed"
-			logrus.WithField("bot", botUUID).Info("Feishu one-click registration succeeded")
+			logrus.WithField(logfields.BotUUID, botUUID).Info("Feishu one-click registration succeeded")
 		case feishu.RegistrationDenied:
 			sess.status = "denied"
-			logrus.WithError(err).WithField("bot", botUUID).Warn("Feishu one-click registration denied")
+			logrus.WithError(err).WithField(logfields.BotUUID, botUUID).Warn("Feishu one-click registration denied")
 		case feishu.RegistrationExpired:
 			sess.status = "expired"
-			logrus.WithError(err).WithField("bot", botUUID).Warn("Feishu one-click registration expired")
+			logrus.WithError(err).WithField(logfields.BotUUID, botUUID).Warn("Feishu one-click registration expired")
 		default:
 			sess.status = "error"
 			sess.errMsg = err.Error()
-			logrus.WithError(err).WithField("bot", botUUID).Warn("Feishu one-click registration failed")
+			logrus.WithError(err).WithField(logfields.BotUUID, botUUID).Warn("Feishu one-click registration failed")
 		}
 	}()
 
@@ -223,7 +224,7 @@ func (h *FeishuRegHandler) QRStatus(c *gin.Context) {
 			sess.savedUUID, sess.saveErr = h.saveCredentials(sess, result, platform)
 		})
 		if sess.saveErr != nil {
-			logrus.WithError(sess.saveErr).WithField("bot", botUUID).Error("Failed to save Feishu credentials")
+			logrus.WithError(sess.saveErr).WithField(logfields.BotUUID, botUUID).Error("Failed to save Feishu credentials")
 			c.JSON(http.StatusInternalServerError, FeishuRegStatusResponse{
 				Success: false,
 				Error:   "Failed to save credentials",
@@ -313,7 +314,7 @@ func (h *FeishuRegHandler) saveCredentials(sess *feishuRegSession, result *feish
 		if err := h.settingsStore.UpdateSettings(existing.UUID, existing); err != nil {
 			return "", fmt.Errorf("update bot setting: %w", err)
 		}
-		logrus.WithField("bot", existing.UUID).Info("Feishu credentials updated via one-click registration")
+		logrus.WithField(logfields.BotUUID, existing.UUID).Info("Feishu credentials updated via one-click registration")
 		return existing.UUID, nil
 	}
 
@@ -328,7 +329,7 @@ func (h *FeishuRegHandler) saveCredentials(sess *feishuRegSession, result *feish
 	if err != nil {
 		return "", fmt.Errorf("create bot setting: %w", err)
 	}
-	logrus.WithField("bot", created.UUID).Info("Feishu bot created via one-click registration")
+	logrus.WithField(logfields.BotUUID, created.UUID).Info("Feishu bot created via one-click registration")
 	return created.UUID, nil
 }
 

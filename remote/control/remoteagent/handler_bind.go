@@ -2,6 +2,7 @@ package remoteagent
 
 import (
 	"fmt"
+	"github.com/tingly-dev/tingly-box/remote/logfields"
 	"os"
 	"path/filepath"
 	"slices"
@@ -73,7 +74,7 @@ func (h *BotHandler) completeBind(hCtx HandlerContext, projectPath string) {
 	}
 	// Remember it for /dir, and as the chat's folder after a restart.
 	if err := h.chatStore.BindProject(hCtx.ChatID, string(hCtx.Platform), expandedPath, hCtx.SenderID); err != nil {
-		logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to remember the chat's folder")
+		logrus.WithError(err).WithFields(logfields.Chat(hCtx.BotUUID, hCtx.ChatID, "")).Warn("Failed to remember the chat's folder")
 	}
 	logrus.Infof("Chat moved to a folder: chat=%s path=%s", hCtx.ChatID, expandedPath)
 	h.SendText(hCtx, fmt.Sprintf("📁 %s\nYour next message starts a new session here.", expandedPath))

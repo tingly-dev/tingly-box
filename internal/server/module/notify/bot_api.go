@@ -26,6 +26,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/tingly-dev/tingly-box/remote/logfields"
 	"net/http"
 	"time"
 
@@ -175,7 +176,7 @@ func (h *BotAPIHandler) Notify(c *gin.Context) {
 	}
 	externalChatID, decision, err := h.resolveAuthorizedTarget(c.Request.Context(), botUUID, req.Target, req.ChatID)
 	if err != nil {
-		logrus.WithError(err).WithField("bot", botUUID).Warn("bot notify target resolution failed")
+		logrus.WithError(err).WithField(logfields.BotUUID, botUUID).Warn("bot notify target resolution failed")
 		apierr.Message(c, http.StatusInternalServerError, "target resolution failed")
 		return
 	}
@@ -216,8 +217,8 @@ func (h *BotAPIHandler) Notify(c *gin.Context) {
 
 	if err := ch.Send(ctx, target, notification); err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{
-			"bot":     botUUID,
-			"chat_id": externalChatID,
+			logfields.BotUUID: botUUID,
+			"chat_id":         externalChatID,
 		}).Warn("bot notify push failed")
 		h.auditLog(botUUID, "bot.notify.error", map[string]any{
 			"chat_id": externalChatID,
@@ -252,7 +253,7 @@ func (h *BotAPIHandler) Interact(c *gin.Context) {
 	}
 	externalChatID, decision, err := h.resolveAuthorizedTarget(c.Request.Context(), botUUID, req.Target, req.ChatID)
 	if err != nil {
-		logrus.WithError(err).WithField("bot", botUUID).Warn("bot interact target resolution failed")
+		logrus.WithError(err).WithField(logfields.BotUUID, botUUID).Warn("bot interact target resolution failed")
 		apierr.Message(c, http.StatusInternalServerError, "target resolution failed")
 		return
 	}
@@ -390,7 +391,7 @@ func (h *BotAPIHandler) ListChats(c *gin.Context) {
 
 	chats, err := h.chats.ListChats(botUUID, includeDisabled)
 	if err != nil {
-		logrus.WithError(err).WithField("bot", botUUID).Warn("bot chats list failed")
+		logrus.WithError(err).WithField(logfields.BotUUID, botUUID).Warn("bot chats list failed")
 		apierr.Message(c, http.StatusInternalServerError, "chat listing failed")
 		return
 	}
@@ -424,7 +425,7 @@ func (h *BotAPIHandler) DeleteChat(c *gin.Context) {
 			apierr.Message(c, http.StatusNotFound, "chat not found")
 			return
 		}
-		logrus.WithError(err).WithFields(logrus.Fields{"bot": botUUID, "chat_id": chatID}).Warn("bot chat delete failed")
+		logrus.WithError(err).WithFields(logrus.Fields{logfields.BotUUID: botUUID, "chat_id": chatID}).Warn("bot chat delete failed")
 		apierr.Message(c, http.StatusInternalServerError, "chat delete failed")
 		return
 	}
@@ -467,7 +468,7 @@ func (h *BotAPIHandler) SetChatDisabled(c *gin.Context) {
 			apierr.Message(c, http.StatusNotFound, "chat not found")
 			return
 		}
-		logrus.WithError(err).WithFields(logrus.Fields{"bot": botUUID, "chat_id": chatID}).Warn("bot chat disable failed")
+		logrus.WithError(err).WithFields(logrus.Fields{logfields.BotUUID: botUUID, "chat_id": chatID}).Warn("bot chat disable failed")
 		apierr.Message(c, http.StatusInternalServerError, "chat update failed")
 		return
 	}

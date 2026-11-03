@@ -1142,15 +1142,22 @@ func notFoundAs(err error) error {
 }
 
 // SyncDirectChatName applies the peer's platform name to a Direct Chat's
-// default alias. It is a no-op for an empty name and for a user-set alias.
-func (s *BotAccessStore) SyncDirectChatName(ctx context.Context, botUUID, chatID, name string) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+// default alias and returns the alias now in effect. It is a no-op for an
+// empty name and for a user-set alias.
+func (s *BotAccessStore) SyncDirectChatName(ctx context.Context, botUUID, chatID, name string) (string, error) {
+	var alias string
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var chat remoteDirectChatRecord
 		if err := tx.Where("id = ? AND bot_uuid = ?", chatID, botUUID).First(&chat).Error; err != nil {
 			return notFoundAs(err)
 		}
-		return syncDirectChatAlias(tx, &chat, name)
+		if err := syncDirectChatAlias(tx, &chat, name); err != nil {
+			return err
+		}
+		alias = chat.Alias
+		return nil
 	})
+	return alias, err
 }
 
 func syncDirectChatAlias(tx *gorm.DB, chat *remoteDirectChatRecord, name string) error {

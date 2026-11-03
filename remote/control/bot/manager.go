@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"fmt"
+	"github.com/tingly-dev/tingly-box/remote/logfields"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -181,11 +182,11 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatS
 				source = "platform default"
 			}
 			logrus.WithFields(logrus.Fields{
-				"uuid":       setting.UUID,
-				"name":       setting.Name,
-				"platform":   setting.Platform,
-				"source":     source,
-				"expires_at": expiresAt.Format(time.RFC3339),
+				logfields.BotUUID: setting.UUID,
+				logfields.BotName: setting.Name,
+				"platform":        setting.Platform,
+				"source":          source,
+				"expires_at":      expiresAt.Format(time.RFC3339),
 			}).Warnf("Pairing code: %s — DM /pair %s within %s",
 				code, code, time.Until(expiresAt).Round(time.Second))
 			fmt.Fprintf(os.Stderr,
@@ -421,10 +422,10 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	if rb, exists := m.running[uuid]; exists {
 		if rb.stopped {
 			// Bot is stopping, wait for it to finish
-			logrus.WithField("uuid", uuid).Debug("Bot is stopping, cannot start yet")
+			logrus.WithField(logfields.BotUUID, uuid).Debug("Bot is stopping, cannot start yet")
 			return fmt.Errorf("bot is stopping, please try again later")
 		}
-		logrus.WithField("uuid", uuid).Debug("Bot already running")
+		logrus.WithField(logfields.BotUUID, uuid).Debug("Bot already running")
 		return nil
 	}
 
@@ -446,9 +447,9 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	// credentials" into something an operator can act on.
 	if missing := imbot.MissingAuthKeys(platform, auth); len(missing) > 0 {
 		logrus.WithFields(logrus.Fields{
-			"uuid":     uuid,
-			"platform": platform,
-			"missing":  strings.Join(missing, ", "),
+			logfields.BotUUID: uuid,
+			"platform":        platform,
+			"missing":         strings.Join(missing, ", "),
 		}).Warn("Bot is missing required credentials, not starting")
 		return fmt.Errorf("bot for platform %s is missing required credentials: %s",
 			platform, strings.Join(missing, ", "))
@@ -464,9 +465,9 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	mounted := m.mountedConsumers(s)
 	if len(mounted) == 0 {
 		logrus.WithFields(logrus.Fields{
-			"uuid":     uuid,
-			"name":     name,
-			"platform": platform,
+			logfields.BotUUID: uuid,
+			logfields.BotName: name,
+			"platform":        platform,
 		}).Info("Bot has no active mount, not starting")
 		return nil
 	}
@@ -490,7 +491,7 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	}
 	go m.runBotSupervised(ctx, cancel, uuid, s, chatStore, mounted, pairing, channels, accessStore, authorizer, onAccountName, doneChan)
 
-	logrus.WithField("uuid", uuid).WithField("name", name).WithField("platform", platform).Info("Bot started")
+	logrus.WithField(logfields.BotUUID, uuid).WithField(logfields.BotName, name).WithField("platform", platform).Info("Bot started")
 	return nil
 }
 
@@ -527,23 +528,23 @@ func (m *Manager) runBotSupervised(
 		if r := recover(); r != nil {
 			stack := string(debug.Stack())
 			logrus.WithFields(logrus.Fields{
-				"uuid":     uuid,
-				"name":     s.Name,
-				"platform": s.Platform,
-				"panic":    fmt.Sprintf("%v", r),
-				"stack":    stack,
+				logfields.BotUUID: uuid,
+				logfields.BotName: s.Name,
+				"platform":        s.Platform,
+				"panic":           fmt.Sprintf("%v", r),
+				"stack":           stack,
 			}).Error("Bot goroutine panicked; isolated from main process")
 		}
 	}()
 
 	if err := runBotWithSettings(ctx, s, chatStore, consumers, pairing, channels, accessStore, authorizer, onAccountName); err != nil {
 		if imbot.IsPanicError(err) {
-			logrus.WithError(err).WithField("uuid", uuid).Error("Bot receive loop panicked; closed for clean restart by reconcile")
+			logrus.WithError(err).WithField(logfields.BotUUID, uuid).Error("Bot receive loop panicked; closed for clean restart by reconcile")
 		} else {
-			logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
+			logrus.WithError(err).WithField(logfields.BotUUID, uuid).Warn("Bot stopped with error")
 		}
 	}
-	logrus.WithField("uuid", uuid).Info("Bot stopped")
+	logrus.WithField(logfields.BotUUID, uuid).Info("Bot stopped")
 }
 
 // Stop stops a bot by UUID
@@ -552,7 +553,7 @@ func (m *Manager) Stop(uuid string) {
 	defer m.mu.Unlock()
 
 	if rb, exists := m.running[uuid]; exists {
-		logrus.WithField("uuid", uuid).Info("Stopping bot")
+		logrus.WithField(logfields.BotUUID, uuid).Info("Stopping bot")
 		rb.stopped = true // Mark as stopping
 		rb.cancel()
 		// Don't delete from map yet — let the goroutine clean up when it
@@ -580,8 +581,8 @@ func (m *Manager) WaitForStop(uuid string, timeout time.Duration) bool {
 		return true
 	case <-time.After(timeout):
 		logrus.WithFields(logrus.Fields{
-			"uuid":    uuid,
-			"timeout": timeout.String(),
+			logfields.BotUUID: uuid,
+			"timeout":         timeout.String(),
 		}).Warn("Timeout waiting for bot to stop; goroutine may still be running and could leak resources or duplicate connections on restart")
 		return false
 	}
@@ -607,7 +608,7 @@ func (m *Manager) StartEnabled(ctx context.Context) error {
 			continue
 		}
 		if err := m.Start(ctx, setting.UUID); err != nil {
-			logrus.WithError(err).WithField("uuid", setting.UUID).Warn("Failed to start bot")
+			logrus.WithError(err).WithField(logfields.BotUUID, setting.UUID).Warn("Failed to start bot")
 		}
 	}
 
@@ -620,7 +621,7 @@ func (m *Manager) StopAll() {
 	defer m.mu.Unlock()
 
 	for uuid, rb := range m.running {
-		logrus.WithField("uuid", uuid).Info("Stopping bot")
+		logrus.WithField(logfields.BotUUID, uuid).Info("Stopping bot")
 		rb.stopped = true // Mark as stopping
 		rb.cancel()
 		// Don't delete from map - let goroutines clean up
@@ -651,7 +652,7 @@ func (m *Manager) Sync(ctx context.Context) error {
 	for uuid := range shouldRun {
 		if !m.IsRunning(uuid) {
 			if err := m.Start(ctx, uuid); err != nil {
-				logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to start bot during sync")
+				logrus.WithError(err).WithField(logfields.BotUUID, uuid).Warn("Failed to start bot during sync")
 			}
 		}
 	}
@@ -660,7 +661,7 @@ func (m *Manager) Sync(ctx context.Context) error {
 	m.mu.Lock()
 	for uuid := range m.running {
 		if !shouldRun[uuid] {
-			logrus.WithField("uuid", uuid).Info("Stopping bot during sync (disabled or no active mount)")
+			logrus.WithField(logfields.BotUUID, uuid).Info("Stopping bot during sync (disabled or no active mount)")
 			// Mark as stopping and cancel
 			if rb, exists := m.running[uuid]; exists {
 				rb.stopped = true

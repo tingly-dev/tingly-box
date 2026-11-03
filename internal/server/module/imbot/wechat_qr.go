@@ -3,6 +3,7 @@ package imbot
 
 import (
 	"fmt"
+	"github.com/tingly-dev/tingly-box/remote/logfields"
 	"net/http"
 	"strings"
 	"sync"
@@ -114,12 +115,12 @@ func (h *WeChatQRLoginHandler) QRStart(c *gin.Context) {
 	if !strings.HasPrefix(botUUID, "temp-") {
 		existing, err := h.settingsStore.GetSettingsByUUID(botUUID)
 		if err != nil {
-			logrus.WithError(err).WithField("bot", botUUID).Error("Failed to check bot existence")
+			logrus.WithError(err).WithField(logfields.BotUUID, botUUID).Error("Failed to check bot existence")
 			apierr.Message(c, http.StatusInternalServerError, "Failed to validate bot")
 			return
 		}
 		if existing.UUID == "" {
-			logrus.WithField("bot", botUUID).Warn("Bot not found for QR login")
+			logrus.WithField(logfields.BotUUID, botUUID).Warn("Bot not found for QR login")
 			apierr.Message(c, http.StatusNotFound, "Bot not found")
 			return
 		}
@@ -127,7 +128,7 @@ func (h *WeChatQRLoginHandler) QRStart(c *gin.Context) {
 
 	// Check rate limit
 	if !h.checkRateLimit(botUUID) {
-		logrus.WithField("bot", botUUID).Warn("QR request rate limit exceeded")
+		logrus.WithField(logfields.BotUUID, botUUID).Warn("QR request rate limit exceeded")
 		c.JSON(http.StatusTooManyRequests, gin.H{
 			"error":       "Too many QR code requests. Please wait a moment before trying again.",
 			"retry_after": int(rateLimitWindow.Seconds()),
@@ -138,7 +139,7 @@ func (h *WeChatQRLoginHandler) QRStart(c *gin.Context) {
 	// Fetch QR code
 	qrResp, err := h.qrClient.GetBotQRCode(c.Request.Context(), botType)
 	if err != nil {
-		logrus.WithError(err).WithField("bot", botUUID).Error("Failed to get QR code")
+		logrus.WithError(err).WithField(logfields.BotUUID, botUUID).Error("Failed to get QR code")
 		apierr.Message(c, http.StatusInternalServerError, "Failed to get QR code")
 		return
 	}
@@ -155,9 +156,9 @@ func (h *WeChatQRLoginHandler) QRStart(c *gin.Context) {
 		botPlatform: req.BotPlatform,
 	}
 	logrus.WithFields(logrus.Fields{
-		"botUUID":        botUUID,
-		"qrID":           qrResp.Qrcode,
-		"total_sessions": len(h.sessions),
+		logfields.BotUUID: botUUID,
+		"qrID":            qrResp.Qrcode,
+		"total_sessions":  len(h.sessions),
 	}).Info("QR session stored")
 	h.mu.Unlock()
 
@@ -187,10 +188,10 @@ func (h *WeChatQRLoginHandler) QRStatus(c *gin.Context) {
 	h.mu.RUnlock()
 
 	logrus.WithFields(logrus.Fields{
-		"botUUID":        botUUID,
-		"qrID":           qrID,
-		"session_exists": exists,
-		"total_sessions": totalSessions,
+		logfields.BotUUID: botUUID,
+		"qrID":            qrID,
+		"session_exists":  exists,
+		"total_sessions":  totalSessions,
 	}).Info("QR status check")
 
 	if !exists {
@@ -200,9 +201,9 @@ func (h *WeChatQRLoginHandler) QRStatus(c *gin.Context) {
 
 	if session.qrID != qrID {
 		logrus.WithFields(logrus.Fields{
-			"botUUID":       botUUID,
-			"expected_qrID": session.qrID,
-			"provided_qrID": qrID,
+			logfields.BotUUID: botUUID,
+			"expected_qrID":   session.qrID,
+			"provided_qrID":   qrID,
 		}).Warn("QR ID mismatch")
 		apierr.Message(c, http.StatusNotFound, "QR ID mismatch")
 		return
@@ -245,7 +246,7 @@ func (h *WeChatQRLoginHandler) QRStatus(c *gin.Context) {
 		// Save credentials to database (create bot if it doesn't exist yet)
 		realUUID, err := h.saveCredentials(session, statusResp)
 		if err != nil {
-			logrus.WithError(err).WithField("bot", botUUID).Error("Failed to save credentials")
+			logrus.WithError(err).WithField(logfields.BotUUID, botUUID).Error("Failed to save credentials")
 			c.JSON(http.StatusInternalServerError, QRStatusResponse{
 				Success: false,
 				Error:   "Failed to save credentials",
@@ -316,8 +317,8 @@ func (h *WeChatQRLoginHandler) saveCredentials(session *qrSession, status *weixi
 			return "", fmt.Errorf("update bot setting: %w", err)
 		}
 		logrus.WithFields(logrus.Fields{
-			"bot":    existing.UUID,
-			"bot_id": status.IlinkBotID,
+			logfields.BotUUID:    existing.UUID,
+			logfields.IlinkBotID: status.IlinkBotID,
 		}).Info("Weixin credentials updated")
 		return existing.UUID, nil
 	}
@@ -339,8 +340,8 @@ func (h *WeChatQRLoginHandler) saveCredentials(session *qrSession, status *weixi
 		return "", fmt.Errorf("create bot setting: %w", err)
 	}
 	logrus.WithFields(logrus.Fields{
-		"bot":    created.UUID,
-		"bot_id": status.IlinkBotID,
+		logfields.BotUUID:    created.UUID,
+		logfields.IlinkBotID: status.IlinkBotID,
 	}).Info("Weixin bot created with credentials")
 	return created.UUID, nil
 }

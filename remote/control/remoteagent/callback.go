@@ -3,6 +3,7 @@ package remoteagent
 import (
 	"context"
 	"fmt"
+	"github.com/tingly-dev/tingly-box/remote/logfields"
 	"os"
 
 	"github.com/sirupsen/logrus"
@@ -213,7 +214,7 @@ func (h *BotHandler) handleCreateConfirm(hCtx HandlerContext, path string) {
 func editDirectoryBrowserMessage(ctx context.Context, bot imbot.Bot, chatID string, msgID string, text string) {
 	ref := imbot.MessageRef{ChatID: chatID, MessageID: msgID}
 	if !imbot.RestateOrIgnore(ctx, bot, ref, imbot.RestateOptions{Text: text}) {
-		logrus.WithField("chatID", chatID).WithField("messageID", msgID).
+		logrus.WithField(logfields.ChatID, chatID).WithField("message_id", msgID).
 			Debug("Could not restate directory browser message")
 	}
 }

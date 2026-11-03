@@ -1,6 +1,7 @@
 package imbot
 
 import (
+	"github.com/tingly-dev/tingly-box/remote/logfields"
 	"net/http"
 	"time"
 
@@ -28,11 +29,11 @@ func resolveRequirePairing(s db.Settings) bool {
 // came from a chat command or the web UI.
 func logPairAudit(c *gin.Context, action, uuid, message string) {
 	logrus.WithFields(logrus.Fields{
-		"action":    action,
-		"user_id":   c.GetString(constant.CtxKeyUserID),
-		"client_ip": c.ClientIP(),
-		"bot_uuid":  uuid,
-		"by":        "web",
+		"action":          action,
+		"user_id":         c.GetString(constant.CtxKeyUserID),
+		"client_ip":       c.ClientIP(),
+		logfields.BotUUID: uuid,
+		"by":              "web",
 	}).Info(message)
 }
 

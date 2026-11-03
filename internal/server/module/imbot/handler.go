@@ -3,6 +3,7 @@ package imbot
 import (
 	"context"
 	"fmt"
+	"github.com/tingly-dev/tingly-box/remote/logfields"
 	"maps"
 	"net/http"
 	"strings"
@@ -202,14 +203,14 @@ func (h *Handler) CreateSettings(c *gin.Context) {
 		}
 	}
 
-	logrus.WithField("uuid", created.UUID).WithField("platform", created.Platform).Info("ImBot settings created")
+	logrus.WithField(logfields.BotUUID, created.UUID).WithField("platform", created.Platform).Info("ImBot settings created")
 
 	// Start the bot if enabled
 	if created.Enabled {
 		if h.botMgr != nil {
 			ctx := context.Background()
 			if err := h.botMgr.StartBot(ctx, created.UUID); err != nil {
-				logrus.WithError(err).WithField("uuid", created.UUID).Warn("Failed to start bot after creation")
+				logrus.WithError(err).WithField(logfields.BotUUID, created.UUID).Warn("Failed to start bot after creation")
 			}
 		}
 	}
@@ -347,7 +348,7 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 		return
 	}
 
-	logrus.WithField("uuid", uuid).Info("ImBot settings updated")
+	logrus.WithField(logfields.BotUUID, uuid).Info("ImBot settings updated")
 
 	// Reconcile from the explicit BotCapability source of truth.
 	if h.botMgr != nil {
@@ -360,11 +361,11 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 		go func() {
 			if shouldRun {
 				if err := h.botMgr.StartBot(ctx, uuid); err != nil {
-					logrus.WithError(err).WithField("uuid", uuid).Error("Failed to start bot after settings update")
+					logrus.WithError(err).WithField(logfields.BotUUID, uuid).Error("Failed to start bot after settings update")
 				}
 			} else {
 				if err := h.botMgr.StopBot(uuid); err != nil {
-					logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to stop bot after settings update")
+					logrus.WithError(err).WithField(logfields.BotUUID, uuid).Warn("Failed to stop bot after settings update")
 				}
 			}
 		}()
@@ -403,7 +404,7 @@ func (h *Handler) DeleteSettings(c *gin.Context) {
 	if h.botMgr != nil {
 		go func() {
 			if err := h.botMgr.StopBot(uuid); err != nil {
-				logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to stop bot during delete (continuing anyway)")
+				logrus.WithError(err).WithField(logfields.BotUUID, uuid).Warn("Failed to stop bot during delete (continuing anyway)")
 			}
 		}()
 	}
@@ -413,7 +414,7 @@ func (h *Handler) DeleteSettings(c *gin.Context) {
 		return
 	}
 
-	logrus.WithField("uuid", uuid).Info("ImBot settings deleted")
+	logrus.WithField(logfields.BotUUID, uuid).Info("ImBot settings deleted")
 
 	response := DeleteResponse{
 		Success: true,
@@ -442,7 +443,7 @@ func (h *Handler) ToggleSettings(c *gin.Context) {
 		return
 	}
 
-	logrus.WithField("uuid", uuid).WithField("enabled", newStatus).Info("ImBot settings toggled")
+	logrus.WithField(logfields.BotUUID, uuid).WithField("enabled", newStatus).Info("ImBot settings toggled")
 
 	// Notify bot manager to start or stop the bot
 	if h.botMgr != nil {
@@ -450,12 +451,12 @@ func (h *Handler) ToggleSettings(c *gin.Context) {
 		if newStatus {
 			// Start the bot
 			if err := h.botMgr.StartBot(ctx, uuid); err != nil {
-				logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to start bot after toggle")
+				logrus.WithError(err).WithField(logfields.BotUUID, uuid).Warn("Failed to start bot after toggle")
 			}
 		} else {
 			// Stop the bot
 			if err := h.botMgr.StopBot(uuid); err != nil {
-				logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to stop bot after toggle")
+				logrus.WithError(err).WithField(logfields.BotUUID, uuid).Warn("Failed to stop bot after toggle")
 			}
 		}
 	}
@@ -592,12 +593,12 @@ func (h *Handler) RestartBot(c *gin.Context) {
 	}
 
 	if err := h.botMgr.RestartBot(c.Request.Context(), uuid); err != nil {
-		logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to restart bot")
+		logrus.WithError(err).WithField(logfields.BotUUID, uuid).Warn("Failed to restart bot")
 		apierr.Message(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	logrus.WithField("uuid", uuid).Info("Bot restarted via admin API")
+	logrus.WithField(logfields.BotUUID, uuid).Info("Bot restarted via admin API")
 	c.JSON(http.StatusOK, gin.H{"success": true, "uuid": uuid, "running": h.botMgr.IsRunning(uuid)})
 }
 

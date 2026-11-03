@@ -2,6 +2,7 @@ package remoteagent
 
 import (
 	"context"
+	"github.com/tingly-dev/tingly-box/remote/logfields"
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
@@ -12,7 +13,7 @@ import (
 func (h *BotHandler) SendText(hCtx HandlerContext, text string) {
 	b := h.botFromCtx(hCtx)
 	if b == nil {
-		logrus.WithField("chatID", hCtx.ChatID).Warn("SendText: no bot available")
+		logrus.WithFields(logfields.Chat(hCtx.BotUUID, hCtx.ChatID, "")).Warn("SendText: no bot available")
 		return
 	}
 	opts := &imbot.SendMessageOptions{
@@ -23,7 +24,7 @@ func (h *BotHandler) SendText(hCtx HandlerContext, text string) {
 	resp, err := b.SendMessage(context.Background(), hCtx.ChatID, opts)
 	_ = resp
 	if err != nil {
-		logrus.WithError(err).Warn("Failed to send message")
+		logrus.WithError(err).WithFields(logfields.Chat(hCtx.BotUUID, hCtx.ChatID, "")).Warn("Failed to send message")
 	}
 }
 

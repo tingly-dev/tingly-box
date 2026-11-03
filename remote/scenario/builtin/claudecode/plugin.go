@@ -18,6 +18,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/tingly-dev/tingly-box/remote/logfields"
 	"maps"
 	"strings"
 	"time"
@@ -105,9 +106,9 @@ func (p *Plugin) Trigger(ctx context.Context, ev scenario.Event, rt scenario.Run
 			})
 		}()
 		rt.Audit("claude_code.push", map[string]any{
-			"event":    input.HookEventName,
-			"channel":  ch.ID(),
-			"platform": ch.Platform(),
+			"event":           input.HookEventName,
+			logfields.BotUUID: ch.ID(),
+			"platform":        ch.Platform(),
 		})
 		return scenario.Outcome{Handled: true}, nil
 	}
@@ -130,11 +131,11 @@ func (p *Plugin) Trigger(ctx context.Context, ev scenario.Event, rt scenario.Run
 	go p.run(ch, target, ix, input, policy, budget, rt)
 
 	rt.Audit("claude_code.interactive.start", map[string]any{
-		"interaction_id": id,
-		"event":          input.HookEventName,
-		"tool_name":      input.ToolName,
-		"channel":        ch.ID(),
-		"platform":       ch.Platform(),
+		"interaction_id":  id,
+		"event":           input.HookEventName,
+		"tool_name":       input.ToolName,
+		logfields.BotUUID: ch.ID(),
+		"platform":        ch.Platform(),
 	})
 
 	return scenario.Outcome{

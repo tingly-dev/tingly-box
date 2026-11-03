@@ -3,6 +3,7 @@ package imbot
 import (
 	"context"
 	"fmt"
+	"github.com/tingly-dev/tingly-box/remote/logfields"
 	"sync"
 	"time"
 
@@ -93,9 +94,9 @@ func NewBotManager(ctx context.Context, cfg *config.Config, channelRegistry *cha
 	// @username) as its default name; a name the user set is never replaced.
 	internalMgr.SetAccountNameSink(func(uuid, name string) {
 		if wrote, err := store.SetNameIfEmpty(uuid, name); err != nil {
-			logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to store the bot's platform account name")
+			logrus.WithError(err).WithField(logfields.BotUUID, uuid).Warn("Failed to store the bot's platform account name")
 		} else if wrote {
-			logrus.WithFields(logrus.Fields{"uuid": uuid, "name": name}).Info("Bot named after its platform account")
+			logrus.WithFields(logrus.Fields{logfields.BotUUID: uuid, logfields.BotName: name}).Info("Bot named after its platform account")
 		}
 	})
 	// Wire the channel registry BEFORE periodicBotSync's goroutine gets a
@@ -140,20 +141,20 @@ func (bm *BotManager) StartBot(ctx context.Context, uuid string) error {
 
 	// Check if already running
 	if bm.manager.IsRunning(uuid) {
-		logrus.WithField("uuid", uuid).Debug("Bot already running")
+		logrus.WithField(logfields.BotUUID, uuid).Debug("Bot already running")
 		return nil
 	}
 
 	// Start the bot
 	if err := bm.manager.Start(ctx, uuid); err != nil {
-		logrus.WithError(err).WithField("uuid", uuid).Error("Failed to start bot")
+		logrus.WithError(err).WithField(logfields.BotUUID, uuid).Error("Failed to start bot")
 		return fmt.Errorf("failed to start bot: %w", err)
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"uuid":     uuid,
-		"name":     settings.Name,
-		"platform": settings.Platform,
+		logfields.BotUUID: uuid,
+		logfields.BotName: settings.Name,
+		"platform":        settings.Platform,
 	}).Info("Bot started successfully")
 
 	return nil
@@ -194,9 +195,9 @@ func (bm *BotManager) StopBot(uuid string) error {
 	bm.mu.Lock()
 
 	logrus.WithFields(logrus.Fields{
-		"uuid":     uuid,
-		"name":     settings.Name,
-		"platform": settings.Platform,
+		logfields.BotUUID: uuid,
+		logfields.BotName: settings.Name,
+		"platform":        settings.Platform,
 	}).Info("Bot stopped successfully")
 
 	return nil
@@ -264,12 +265,12 @@ func (bm *BotManager) StartAllEnabled(ctx context.Context) error {
 	for _, s := range settings {
 		if s.Enabled {
 			logrus.WithFields(logrus.Fields{
-				"uuid":     s.UUID,
-				"name":     s.Name,
-				"platform": s.Platform,
+				logfields.BotUUID: s.UUID,
+				logfields.BotName: s.Name,
+				"platform":        s.Platform,
 			}).Info("Starting bot")
 			if err := bm.manager.Start(ctx, s.UUID); err != nil {
-				logrus.WithError(err).WithField("uuid", s.UUID).Warn("Failed to start bot")
+				logrus.WithError(err).WithField(logfields.BotUUID, s.UUID).Warn("Failed to start bot")
 				errorCount++
 			} else {
 				startedCount++
