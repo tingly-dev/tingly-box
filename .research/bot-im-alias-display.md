@@ -91,7 +91,7 @@ The user decided on the `平台 · 群 · alias · id` display (which superseded
 | Hidden bot/chat ids on several surfaces (§3 class I) | Id missing | Id is now a mandatory segment; where it is shortened, a copy path must exist |
 | Priority order | Display bugs first | Naming-model backend fix (P1) before the shared display component; P0 bug fixes optional and independent |
 
-Nothing in the inventory itself was wrong; the *ranking* changes: "names are empty or wiped at the source" is now the first thing to fix because the new format depends on it.
+Implementation status of these findings is in the design doc §14. Nothing in the inventory itself was wrong; the *ranking* changes: "names are empty or wiped at the source" is now the first thing to fix because the new format depends on it.
 
 ---
 

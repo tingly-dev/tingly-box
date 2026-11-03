@@ -1,6 +1,6 @@
 # Bot / IM display convention: `平台 · 群 · alias · id`
 
-> Status: **proposal** (nothing implemented). Inventory and evidence: [`.research/bot-im-alias-display.md`](../.research/bot-im-alias-display.md), cited below as R-A / R-B / R-C (its Parts A, B, C).
+> Status: **partly implemented** on branch `tp/audit-and-design-bot-im-alias-di-c6b317` (see §14); not merged. Inventory and evidence: [`.research/bot-im-alias-display.md`](../.research/bot-im-alias-display.md), cited below as R-A / R-B / R-C (its Parts A, B, C).
 > Judged against [`ux-principles.md`](./ux-principles.md); checklist at the end.
 > Related: [`bot-arch.md`](./bot-arch.md), [`bot-capability-access-control.md`](./bot-capability-access-control.md), [`projects-im.md`](./projects-im.md), [`logging.md`](./logging.md).
 
@@ -409,3 +409,26 @@ Screenshots were taken in frontend mock mode (headless Chromium, mock data exten
 | [new-2](./images/bot-im-alias-display/new-2-confirm-and-picker.png) | Delete confirm naming the chat with its external id; test-send picker where input and options use the same label |
 | [new-3](./images/bot-im-alias-display/new-3-projects.png) | Projects tag and message-source line; group tags with and without alias; the icon-only platform form under a bot header (D6) |
 
+## 14. Implementation status and deviations (2026-11-03)
+
+Built on the branch, with tests (Go: `remote/access`, `internal/db`, `imbot/core`, `remote/control/remoteagent`; frontend: `@tingly/ui`, Projects package, `imHost`):
+
+| Phase | State | Notes |
+|---|---|---|
+| P0 bug fixes | done | delete confirm no longer shows the internal uuid; picker input/option agree; aliases reach the Notify graph; `chat_title` is sent on bind; the host implements the lookup the transcript already called |
+| P1 naming model | done | `alias_source` / `display_name_source`, one-time backfill, N1–N5 enforced and tested; Feishu adapter returns no name instead of the sender id |
+| P1b bot names | done | no `"<platform> Bot"` defaults (QR flows, CLI, UI); explicit empty name clears; an unnamed bot takes the adapter's account name on connect (Telegram, Discord, Slack) |
+| P2 resolver + API | **changed** | see below |
+| P3 shared UI | done | `EntityLabel`, `shortId`, `entityText` in `@tingly/ui`; `useEntityLabels` in the app; applied to Bots table, Remote and Notify cards, Access dialog, notify picker/confirm/graph nodes, Projects tags, source lines, IM settings, bind dialog; ~12 toasts now name the entity |
+| P4 text channels | **partly done** | `/help` names the bot, pairing confirmation names the bot, imbot logs carry `[imbot <platform>/<short id>]`, the stderr pairing banner includes the uuid, CLI says `/pair` and labels the index column `#` |
+| P5 lifecycle | not started | Feishu/Weixin/WeCom sender names (D1), dangling-reference cleanup (D2), persisted audit events |
+
+Deviations from the plan above (decided while building):
+
+- **No server `DisplayRef` / `*_ref` API fields (§5).** Once platform names are stored as default aliases (P1), the alias is already on `DirectChat` / `Group`, so the client resolves labels from lists it already loads (`useEntityLabels`, and the host's lazily filled chat index for Projects). Only `alias_source` was added to the API. A server resolver is only needed for the persisted-audit and CLI cases still open in P5.
+- **Bots have no `name_source`.** A bot's name is only filled when empty and never refreshed, so provenance would carry no information.
+- **Projects `chatKey` still ignores the bot.** A binding is unique per `(platform, chat_id)` on the server, so adding the bot to the key would hide a real conflict instead of fixing one.
+- **Graph nodes use the compact form.** In the Notify graph the platform is the preceding node and the `Group` tag is on the node, so the node shows alias over short id (the D6 icon form taken to its end).
+- **`logfields` helper not built.** Only the highest-value log change (per-bot adapter prefix) is done; normalising `uuid|bot|botUUID|channel` field names across ~80 sites is deferred.
+- **`/status` unchanged.** The Projects module cannot resolve bot or profile names without a host hook; left for P5.
+- **Display of a group alias in the Remote card is truncated in narrow columns** (the id is shortened first only past 20 characters); acceptable for now.
