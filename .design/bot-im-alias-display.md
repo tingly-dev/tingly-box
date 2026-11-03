@@ -4,7 +4,7 @@
 > Judged against [`ux-principles.md`](./ux-principles.md); checklist at the end.
 > Related: [`bot-arch.md`](./bot-arch.md), [`bot-capability-access-control.md`](./bot-capability-access-control.md), [`projects-im.md`](./projects-im.md), [`logging.md`](./logging.md).
 
-**Status markers.** Every section below is tagged **[DECIDED]** (stated by the user on 2026-11-03, treat as fixed), **[DERIVED]** (follows directly from a decided rule; change only if the rule changes) or **[PROPOSED]** (my recommendation; the user can override). Section 10 lists every [PROPOSED] default in one table.
+**Status markers.** Every section below is tagged **[DECIDED]** (stated by the user on 2026-11-03, treat as fixed), **[DERIVED]** (follows directly from a decided rule; change only if the rule changes) or **[PROPOSED]** (my recommendation; the user can override). Section 10 lists every open question with the default taken. After the 2026-11-03 delegation the remaining [PROPOSED] tags are implementation details that I may adjust while building; I record any change in §12.
 
 ## 0. Decisions already made (user, 2026-11-03) [DECIDED]
 
@@ -18,7 +18,7 @@
 2. **Naming model:** if the platform supplies a name, store it as the default alias. If it supplies none, leave the alias empty and display the id until the user sets an alias.
 3. **Bots follow the naming model (D4):** by default a bot's name is its platform account name (e.g. Telegram `@username`). If the platform gives no name, the name stays empty and the bot displays by id. The old generated `"<platform> Bot"` default is dropped.
 
-Not yet decided by the user: how the `群` segment renders (D5), the icon form of the platform segment under a bot header (D6), and the four open questions D1/D2/D3/D7. All have proposed defaults in §10.
+4. **Delegation (2026-11-03):** the user delegated the remaining open points to me ("alias display的工作自主推进"). I took my proposed defaults for D1, D2, D3, D5, D6 and D7 and they are now **DECIDED (delegated)**: they stand unless the user overrides them. The §10 table keeps the reasoning.
 
 ## 1. Problem [context]
 
@@ -330,9 +330,9 @@ The display effect the user is after lands with P3; P1 and P2 are what make it s
 - **Log cost.** Name lookups per log line must come from the in-memory bot setting already in scope, not a DB read. imbot adapters get the identity once at construction; a bot rename affects the prefix after restart, while the uuid stays correct.
 - **Scope.** Sharing keys / API tokens are out of scope: no bot/IM relation (R §1).
 
-## 10. Remaining questions, with a recommended default for each [all PROPOSED until the user confirms]
+## 10. Remaining questions and the defaults taken [DECIDED (delegated 2026-11-03): defaults below stand unless the user overrides]
 
-The user's main concern is the display effect, so these are sorted by whether they block it. Each has a default I will use unless overridden. **Status of every row: PROPOSED, not yet confirmed.**
+The user's main concern is the display effect, so these are sorted by whether they block it. Each has a default I will use unless overridden. **Status of every row: DECIDED (D4 by the user; the rest delegated to me and resolved with the recommended default).**
 
 The four questions the user was asked about (Feishu scopes, deleted entities, bot naming itself in IM, PR split) are **D1, D2, D3, D7**. D4, D5, D6 are points I found while applying the user's format and rule.
 
@@ -343,17 +343,17 @@ The four questions the user was asked about (Feishu scopes, deleted entities, bo
 | # | Question | Recommended default | Why it matters |
 |---|---|---|---|
 | D4 (mine) — **DECIDED** | Bots: when the name is empty, should the platform account name (Telegram `@username` etc.) become the default alias (§4.5), or stay empty and show only `Telegram · …456789`? | **Decided:** store the platform account name when the adapter exposes one; otherwise empty. Stop writing `"<platform> Bot"`. | Decides what an unnamed bot looks like everywhere. |
-| D5 (mine) | **How the `群` segment renders.** It is now the second segment (the earlier trailing `[group]` no longer applies). Options: (a) localised word — `群` in zh, `Group` in en (ru: `Группа`); (b) icon only (users/people icon); (c) word plus icon. Also: show the platform's own kind (`supergroup`, `channel`, `topic`) instead? | **(a) localised word**, rendered in the UI as a small muted outlined chip right after the platform; plain text (logs, CLI, IM, toasts) uses the bare word: `Feishu · 群 · Dev team · oc_a1…9z`. A word reads in every channel, including text-only ones where an icon cannot appear, and an icon next to the platform icon would be two pictures in a row that users must decode. Use the generic word, not platform kinds: the data model only knows direct vs group. | Affects the component and i18n strings. |
+| D5 (mine) — **DECIDED (delegated)** | **How the `群` segment renders.** It is now the second segment (the earlier trailing `[group]` no longer applies). Options: (a) localised word — `群` in zh, `Group` in en (ru: `Группа`); (b) icon only (users/people icon); (c) word plus icon. Also: show the platform's own kind (`supergroup`, `channel`, `topic`) instead? | **(a) localised word**, rendered in the UI as a small muted outlined chip right after the platform; plain text (logs, CLI, IM, toasts) uses the bare word: `Feishu · 群 · Dev team · oc_a1…9z`. A word reads in every channel, including text-only ones where an icon cannot appear, and an icon next to the platform icon would be two pictures in a row that users must decode. Use the generic word, not platform kinds: the data model only knows direct vs group. | Affects the component and i18n strings. |
 
 ### Can wait (a default exists, nothing on the display path depends on it)
 
 | # | Question | Recommended default | Blocks display? |
 |---|---|---|---|
-| D1 | **Feishu / Weixin / WeCom names.** Real sender names on Feishu need contact-API permission on the user's app; Weixin/WeCom may expose none. | Do not require new scopes in the first iteration. Platforms that already return names (Telegram, Discord, Slack, DingTalk) work immediately. For Feishu, try a lazy lookup and fall back to the id on permission error (one warning, not per message). Weixin/WeCom stay id-only. The `platform · id` format already covers them. Which Feishu scope and API call is needed is UNVERIFIED. | No. Falls back to the id. |
-| D2 | **Deleted entities.** Keep a last-known-alias snapshot, or show only the id? And on bot delete: cascade-delete Projects bindings? | Show `platform · id (deleted)`; no new snapshot column (the existing `chat_title`, filled at bind time, is a free fallback). Do not cascade-delete bindings in this work; they render as unresolved. Cleanup is a separate change. | No, the unresolved rendering is already specified in §3.4. |
-| D3 | **Should the bot name itself in IM** (`/status`, `/help`, pairing replies)? These labels are visible to everyone in the chat. | Yes for the bot's own label (it is the account the user is talking to). Chat alias only in DMs, because an alias is an operator's private note and a group member would see it. | No, it lives in P4. |
-| D6 (mine) | **Platform segment under a bot header.** The user asked for the format everywhere; in a per-bot list the platform repeats on every row. | Keep the segment, rendered as the platform icon (text in the tooltip) in lists already grouped under a bot header. Full text everywhere else. Still fits the new order: the row reads `[icon] · 群 · alias · id`, so on group rows the `群` chip becomes the first readable token, which matches the "important information first" intent. Order is unchanged, only the platform's form changes. | No, a single prop on the component. |
-| D7 | **PR split.** | PR0 = P0 bug fixes (optional, immediate). PR1 = P1 naming model (backend, small, correctness). PR2 = P2 + P3, the visible display change. PR3 = P4 text channels. | No. |
+| D1 — **DECIDED (delegated)** | **Feishu / Weixin / WeCom names.** Real sender names on Feishu need contact-API permission on the user's app; Weixin/WeCom may expose none. | Do not require new scopes in the first iteration. Platforms that already return names (Telegram, Discord, Slack, DingTalk) work immediately. For Feishu, try a lazy lookup and fall back to the id on permission error (one warning, not per message). Weixin/WeCom stay id-only. The `platform · id` format already covers them. Which Feishu scope and API call is needed is UNVERIFIED. | No. Falls back to the id. |
+| D2 — **DECIDED (delegated)** | **Deleted entities.** Keep a last-known-alias snapshot, or show only the id? And on bot delete: cascade-delete Projects bindings? | Show `platform · id (deleted)`; no new snapshot column (the existing `chat_title`, filled at bind time, is a free fallback). Do not cascade-delete bindings in this work; they render as unresolved. Cleanup is a separate change. | No, the unresolved rendering is already specified in §3.4. |
+| D3 — **DECIDED (delegated)** | **Should the bot name itself in IM** (`/status`, `/help`, pairing replies)? These labels are visible to everyone in the chat. | Yes for the bot's own label (it is the account the user is talking to). Chat alias only in DMs, because an alias is an operator's private note and a group member would see it. | No, it lives in P4. |
+| D6 (mine) — **DECIDED (delegated)** | **Platform segment under a bot header.** The user asked for the format everywhere; in a per-bot list the platform repeats on every row. | Keep the segment, rendered as the platform icon (text in the tooltip) in lists already grouped under a bot header. Full text everywhere else. Still fits the new order: the row reads `[icon] · 群 · alias · id`, so on group rows the `群` chip becomes the first readable token, which matches the "important information first" intent. Order is unchanged, only the platform's form changes. | No, a single prop on the component. |
+| D7 — **DECIDED (delegated)** | **PR split.** | PR0 = P0 bug fixes (optional, immediate). PR1 = P1 naming model (backend, small, correctness). PR2 = P2 + P3, the visible display change. PR3 = P4 text channels. | No. |
 
 ## 11. UX-principles checklist (`ux-principles.md`)
 
@@ -377,14 +377,14 @@ The four questions the user was asked about (Feishu scopes, deleted entities, bo
 | 2026-11-03 | Long ids may be shortened or omitted in display, with another way to get the full id | DECIDED | user |
 | 2026-11-03 | Platform name stored as default alias; no name → empty alias, show id, until the user sets one | DECIDED | user |
 | 2026-11-03 | A user-set alias is never overwritten by inbound names; an empty inbound name never wipes a value | DECIDED (requirement relayed by coordinator from the user's decision) | coordinator |
-| 2026-11-03 | D1 Feishu/Weixin/WeCom names: no new scopes in v1, fall back to id | PROPOSED | me |
-| 2026-11-03 | D2 Deleted entities: `platform · id (deleted)`, no snapshot column, no cascade | PROPOSED | me |
-| 2026-11-03 | D3 Bot names itself in IM; chat alias only in DMs | PROPOSED | me |
+| 2026-11-03 | D1 Feishu/Weixin/WeCom names: no new scopes in v1, fall back to id | DECIDED (delegated by the user) | me |
+| 2026-11-03 | D2 Deleted entities: `platform · id (deleted)`, no snapshot column, no cascade | DECIDED (delegated by the user) | me |
+| 2026-11-03 | D3 Bot names itself in IM; chat alias only in DMs | DECIDED (delegated by the user) | me |
 | 2026-11-03 | D4 Bot default name from platform account, else empty; drop `"<platform> Bot"` | DECIDED (user confirmed) | user |
 | 2026-11-03 | D5 (old) `[type]` is literal `[group]`, localised | WITHDRAWN (trailing type removed by the new order) | me |
-| 2026-11-03 | D5 `群` segment renders as a localised word (`群` / `Group`), small chip in the UI, bare word in text | PROPOSED | me |
-| 2026-11-03 | D6 Platform segment as icon under a bot header (checked: still fits the new order) | PROPOSED | me |
-| 2026-11-03 | D7 PR split PR0/PR1/PR2/PR3 | PROPOSED | me |
+| 2026-11-03 | D5 `群` segment renders as a localised word (`群` / `Group`), small chip in the UI, bare word in text | DECIDED (delegated by the user) | me |
+| 2026-11-03 | D6 Platform segment as icon under a bot header (checked: still fits the new order) | DECIDED (delegated by the user) | me |
+| 2026-11-03 | D7 PR split PR0/PR1/PR2/PR3 | DECIDED (delegated by the user) | me |
 
 ## 13. Visuals
 
