@@ -1593,6 +1593,11 @@ export interface components {
             instructions: string;
             /** @description Field main_thread_id */
             main_thread_id?: string;
+            /**
+             * Format: int64
+             * @description Field max_running_threads
+             */
+            max_running_threads?: number;
             /** @description Field name */
             name: string;
             /** @description Field path */
@@ -1644,6 +1649,16 @@ export interface components {
             base_url: string;
             /** @description Field cli_path */
             cli_path: string;
+            /**
+             * Format: int64
+             * @description Field default_max_running_threads
+             */
+            default_max_running_threads: number;
+            /**
+             * Format: int64
+             * @description Field max_running_threads_limit
+             */
+            max_running_threads_limit: number;
         };
         ProjectSummary: {
             /**
@@ -1672,6 +1687,11 @@ export interface components {
             instructions: string;
             /** @description Field main_thread_id */
             main_thread_id?: string;
+            /**
+             * Format: int64
+             * @description Field max_running_threads
+             */
+            max_running_threads?: number;
             /** @description Field name */
             name: string;
             /** @description Field path */
@@ -1920,6 +1940,8 @@ export interface components {
             profile_override: string;
             /** @description Field project_id */
             project_id: string;
+            /** @description Field queued */
+            queued?: boolean;
             /** @description Field repo_path */
             repo_path?: string;
             /** @description Field reported_model */
@@ -2110,6 +2132,11 @@ export interface components {
             goal?: string;
             /** @description Field instructions */
             instructions?: string;
+            /**
+             * Format: int64
+             * @description Field max_running_threads
+             */
+            max_running_threads?: number;
             /** @description Field name */
             name?: string;
             /** @description Field paused */

@@ -196,9 +196,10 @@ export const en = {
         group: { waiting: 'Waiting on you', failed: 'Failed', ready: 'Ready for review', working: 'Working', idle: 'Idle', resolved: 'Resolved' },
     },
     thread: {
-        status: { waiting: 'Waiting on you', ready: 'Ready for review', working: 'Working', idle: 'Idle', resolved: 'Resolved', failed: 'Failed' },
+        status: { waiting: 'Waiting on you', ready: 'Ready for review', working: 'Working', queued: 'Queued', idle: 'Idle', resolved: 'Resolved', failed: 'Failed' },
         commits_one: '{{count}} commit', commits_other: '{{count}} commits',
         files_one: '{{count}} file', files_other: '{{count}} files',
+        queuedSubtitle: 'Waiting for a free slot — starts when another thread finishes',
         noRepo: 'No repository — files go to the Library', fromBase: 'from {{base}}', uncommitted: 'uncommitted changes',
         copyCd: 'Copy cd command to the worktree', back: 'Back to Overview',
         editTitle: 'Rename thread',
@@ -230,6 +231,9 @@ export const en = {
         origin: { upload: 'added', output: 'from a thread' },
     },
     projectSettings: {
+        maxRunning: 'Threads running at once',
+        maxRunningHelp: 'Extra threads wait in line and start as soon as a running one finishes. Lowering this never stops a running thread.',
+        maxRunningDefault: 'Default ({{count}})', maxRunningDefaultPlain: 'Default', maxRunningUnlimited: 'Unlimited',
         worktree: 'Use a worktree for each thread',
         worktreeHelp: 'When off, new threads share the repository directory and current branch. Their changes are visible to each other. Existing threads keep their working directories.',
         title: 'Project settings', tabGeneral: 'General', tabMemory: 'Memory', tabEnvironment: 'Environment', tabUsage: 'Usage',

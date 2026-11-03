@@ -37,10 +37,34 @@ var (
 	ErrNoFailedTurn = errors.New("the thread has no failed turn to retry")
 )
 
-// MaxRunningPerProject caps concurrently running turns in one project. Turns
-// beyond it wait their turn. Preferences such as "at most two at a time"
-// are the coordinator's to follow; this is only the safety net.
+// MaxRunningPerProject is how many turns run at once in a project that sets
+// no limit of its own (Project.MaxRunningThreads 0). Turns beyond the limit
+// wait their turn, oldest first.
 const MaxRunningPerProject = 4
+
+// MaxRunningThreadsLimit is the largest limit a project can set; for more,
+// choose unlimited.
+const MaxRunningThreadsLimit = 100
+
+// RunningLimit is how many turns may run at once under p, 0 for no limit.
+// A folder has no setting of its own: all folders share MaxRunningSessions.
+func RunningLimit(p *db.Project) int {
+	switch {
+	case p.Type == db.ProjectFolder:
+		return MaxRunningSessions
+	case p.MaxRunningThreads < 0:
+		return 0
+	case p.MaxRunningThreads == 0:
+		return MaxRunningPerProject
+	}
+	return p.MaxRunningThreads
+}
+
+// ValidMaxRunningThreads reports whether n is a value a project can be set to:
+// 0 (the default), db.MaxRunningUnlimited, or 1..MaxRunningThreadsLimit.
+func ValidMaxRunningThreads(n int) bool {
+	return n == db.MaxRunningUnlimited || (n >= 0 && n <= MaxRunningThreadsLimit)
+}
 
 // MaxRunningSessions caps concurrently running folder threads, which share
 // one limit across all folders. It matches the resident process pool.
@@ -116,7 +140,7 @@ type Threads struct {
 	// The engine knows a thread by its Claude Code session id.
 	sessionOfThread map[string]string
 	threadOfSession map[string]string
-	slots           map[string]chan struct{}
+	slots           map[string]*limiter
 	threads         map[string]*sync.Mutex // serializes writes to one thread row
 	// allowed holds tools the user allowed for the rest of a thread.
 	allowed map[string]map[string]bool
@@ -127,7 +151,7 @@ type Threads struct {
 type activeThread struct {
 	cancel  context.CancelFunc // gives up waiting for a slot
 	current *queued            // the message of the turn in flight
-	slot    chan struct{}      // held while current runs
+	slot    *limiter           // held while current runs
 	queue   []queued
 	stopped bool
 }
@@ -211,7 +235,7 @@ func NewThreads(store *db.Store, layout Layout, hub *Hub, agents Agents, env Thr
 		store: store, layout: layout, hub: hub, env: env,
 		active: map[string]*activeThread{}, turns: map[string]*turnTally{}, prompts: map[string]*threadPrompter{},
 		sessionOfThread: map[string]string{}, threadOfSession: map[string]string{},
-		slots: map[string]chan struct{}{}, threads: map[string]*sync.Mutex{},
+		slots: map[string]*limiter{}, threads: map[string]*sync.Mutex{},
 		allowed: map[string]map[string]bool{}, folders: map[string]bool{},
 	}
 	m.engine = engine.New(engine.Config{
@@ -287,10 +311,11 @@ func threadPermissionMode(p *db.Project, t *db.Thread) string {
 }
 
 func queuedNote(p *db.Project) string {
+	n := RunningLimit(p)
 	if p.Type == db.ProjectFolder {
-		return fmt.Sprintf("Queued: %d folder threads are already running.", MaxRunningSessions)
+		return fmt.Sprintf("Queued: %d folder threads are already running.", n)
 	}
-	return fmt.Sprintf("Queued: %d threads are already running in this project.", MaxRunningPerProject)
+	return fmt.Sprintf("Queued: %d threads are already running in this project (its limit). It starts when one finishes.", n)
 }
 
 func permissionMode(p *db.Project) string {
@@ -300,21 +325,34 @@ func permissionMode(p *db.Project) string {
 	return DefaultPermissionMode
 }
 
-// slot is the running-turn limit of a project, or of all folder threads
-// together (key "").
-func (m *Threads) slot(key string) chan struct{} {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	s, ok := m.slots[key]
-	if !ok {
-		n := MaxRunningPerProject
-		if key == "" {
-			n = MaxRunningSessions
-		}
-		s = make(chan struct{}, n)
-		m.slots[key] = s
+// slot is the running-turn limiter of p's project, or of all folder threads
+// together (key ""), set to p's current limit.
+func (m *Threads) slot(p *db.Project) *limiter {
+	key := p.ID
+	if p.Type == db.ProjectFolder {
+		key = ""
 	}
-	return s
+	limit := RunningLimit(p)
+	m.mu.Lock()
+	l, ok := m.slots[key]
+	if !ok {
+		l = newLimiter(limit)
+		m.slots[key] = l
+	}
+	m.mu.Unlock()
+	if ok {
+		l.setLimit(limit)
+	}
+	return l
+}
+
+// ApplyLimit makes a project's running limit take effect now: raising it
+// starts waiting turns, lowering it leaves running turns alone.
+func (m *Threads) ApplyLimit(p *db.Project) { m.slot(p) }
+
+// setQueued marks whether t's next turn waits for a slot.
+func (m *Threads) setQueued(threadID string, queued bool) {
+	_, _ = m.update(threadID, func(t *db.Thread) { t.Queued = queued })
 }
 
 func (m *Threads) rowLock(threadID string) *sync.Mutex {
@@ -693,27 +731,25 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	m.mu.Lock()
 	a.cancel = cancel
 	m.mu.Unlock()
-	slotKey := p.ID
-	if folder {
-		slotKey = ""
-	}
-	slot := m.slot(slotKey)
-	select {
-	case slot <- struct{}{}:
-	default:
+	slot := m.slot(p)
+	waited := false
+	err = slot.acquire(ctx, func() {
+		waited = true
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: queuedNote(p)})
-		select {
-		case slot <- struct{}{}:
-		case <-ctx.Done():
-			m.giveUp(threadID, a)
-			return
-		}
+		m.setQueued(threadID, true)
+	})
+	if waited {
+		m.setQueued(threadID, false)
+	}
+	if err != nil {
+		m.giveUp(threadID, a)
+		return
 	}
 
 	m.mu.Lock()
 	if a.stopped {
 		m.mu.Unlock()
-		<-slot
+		slot.release()
 		m.giveUp(threadID, a)
 		return
 	}
@@ -734,7 +770,7 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 		m.mu.Lock()
 		a.slot = nil
 		m.mu.Unlock()
-		<-slot
+		slot.release()
 		m.giveUp(threadID, a)
 		return
 	}
@@ -749,7 +785,7 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 		a.queue = append([]queued{*a.current}, a.queue...)
 		a.current, a.slot = nil, nil
 		m.mu.Unlock()
-		<-slot
+		slot.release()
 		m.next(threadID)
 	}
 }
@@ -879,7 +915,7 @@ func (m *Threads) turnEnded(threadID string, end engine.TurnEnd) {
 
 	m.mu.Lock()
 	a := m.active[threadID]
-	var slot chan struct{}
+	var slot *limiter
 	if a != nil && !end.Unsolicited {
 		slot, a.slot = a.slot, nil
 		if end.NotSent && a.current != nil {
@@ -892,7 +928,7 @@ func (m *Threads) turnEnded(threadID string, end engine.TurnEnd) {
 	delete(m.turns, threadID)
 	m.mu.Unlock()
 	if slot != nil {
-		<-slot
+		slot.release()
 	}
 
 	if !end.NotSent {
@@ -1266,7 +1302,7 @@ func (m *Threads) Recover() {
 	}
 	for _, t := range threads {
 		_, _ = m.update(t.ID, func(t *db.Thread) {
-			t.Status, t.WaitReason = db.ThreadWaiting, "Interrupted when tingly-project stopped. Send a message to continue."
+			t.Status, t.WaitReason, t.Queued = db.ThreadWaiting, "Interrupted when tingly-project stopped. Send a message to continue.", false
 		})
 	}
 	// Failures were recorded as waiting before failed was a status.

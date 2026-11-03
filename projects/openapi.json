@@ -3556,6 +3556,11 @@
             "type": "string",
             "description": "Field main_thread_id"
           },
+          "max_running_threads": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads"
+          },
           "name": {
             "type": "string",
             "description": "Field name"
@@ -3701,11 +3706,23 @@
           "cli_path": {
             "type": "string",
             "description": "Field cli_path"
+          },
+          "default_max_running_threads": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field default_max_running_threads"
+          },
+          "max_running_threads_limit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads_limit"
           }
         },
         "required": [
           "cli_path",
-          "base_url"
+          "base_url",
+          "default_max_running_threads",
+          "max_running_threads_limit"
         ]
       },
       "ProjectSummary": {
@@ -3752,6 +3769,11 @@
           "main_thread_id": {
             "type": "string",
             "description": "Field main_thread_id"
+          },
+          "max_running_threads": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads"
           },
           "name": {
             "type": "string",
@@ -4272,6 +4294,10 @@
             "type": "string",
             "description": "Field project_id"
           },
+          "queued": {
+            "type": "boolean",
+            "description": "Field queued"
+          },
           "repo_path": {
             "type": "string",
             "description": "Field repo_path"
@@ -4654,6 +4680,11 @@
           "instructions": {
             "type": "string",
             "description": "Field instructions"
+          },
+          "max_running_threads": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads"
           },
           "name": {
             "type": "string",

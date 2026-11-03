@@ -418,7 +418,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 </Box>
                 <Box sx={{ pl: hideTitle ? 0.5 : 4.5 }}>
                     <MetaLine items={[
-                        <ThreadState status={thread.status} />,
+                        <ThreadState status={thread.status} queued={thread.queued} />,
                         <Box component="span" title={t('threadSettings.lastModel')} sx={{ ...mono, overflowWrap: 'anywhere' }}>
                             {t('threadSettings.lastModel')}: {observedModel || t('threadSettings.modelUnknown')}
                         </Box>,

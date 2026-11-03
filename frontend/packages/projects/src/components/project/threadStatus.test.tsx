@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Thread } from '../../client';
-import { stateTone, ThreadBadges, ThreadState } from './threadStatus';
+import { stateTone, ThreadBadges, ThreadState, ThreadSubtitle } from './threadStatus';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, o?: { count?: number }) => (o?.count != null ? `${key}:${o.count}` : key) }) }));
 afterEach(cleanup);
@@ -25,6 +25,28 @@ describe('ThreadState', () => {
         rerender(<ThreadState status="waiting" compact />);
         expect(screen.queryByText('thread.status.waiting')).toBeNull();
         expect(document.querySelector('[data-status="waiting"]')?.getAttribute('title')).toBe('thread.status.waiting');
+    });
+});
+
+describe('a queued thread', () => {
+    it('reads Queued, not Working, and does not spin', () => {
+        const { rerender } = render(<ThreadState status="working" queued />);
+        expect(screen.getByText('thread.status.queued')).toBeTruthy();
+        expect(screen.queryByText('thread.status.working')).toBeNull();
+        expect(document.querySelector('[data-status="queued"]')).toBeTruthy();
+        expect(document.querySelector('[style*="spin"], [class*="spin"]')).toBeNull();
+        rerender(<ThreadState status="working" />);
+        expect(screen.getByText('thread.status.working')).toBeTruthy();
+    });
+
+    it('ignores a stale queued flag once the thread is no longer working', () => {
+        render(<ThreadState status="idle" queued />);
+        expect(screen.getByText('thread.status.idle')).toBeTruthy();
+    });
+
+    it('says why it waits in the subtitle', () => {
+        render(<ThreadSubtitle thread={thread({ status: 'working', queued: true, last_report: 'earlier report' })} />);
+        expect(screen.getByText('thread.queuedSubtitle')).toBeTruthy();
     });
 });
 
