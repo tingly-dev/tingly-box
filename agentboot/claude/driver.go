@@ -144,17 +144,27 @@ func (d *Driver) Prepare(ctx context.Context, prompt string, opts agentboot.Exec
 	var initialInput <-chan any
 	if format == agentboot.OutputFormatStreamJSON {
 		builder := NewStreamPromptBuilder()
-		builder.AddUserMessage(prompt)
-		ch := builder.Close()
-		// Convert chan map[string]any to chan any
-		anyC := make(chan any, 100)
-		go func() {
-			defer close(anyC)
-			for m := range ch {
-				anyC <- m
-			}
-		}()
-		initialInput = anyC
+		if prompt == "" {
+			// Recovery launch (ResumeInterruptedTurn): we inject no message
+			// of our own — the CLI replays the interrupted turn from its
+			// transcript. Stdin must stay open: an immediate EOF would end
+			// a --print stream-json process before it recovers anything.
+			// The runner's own shutdown path closes stdin when the turn
+			// (or the session) ends.
+			initialInput = make(chan any)
+		} else {
+			builder.AddUserMessage(prompt)
+			ch := builder.Close()
+			// Convert chan map[string]any to chan any
+			anyC := make(chan any, 100)
+			go func() {
+				defer close(anyC)
+				for m := range ch {
+					anyC <- m
+				}
+			}()
+			initialInput = anyC
+		}
 	}
 
 	// Resolve working directory

@@ -31,6 +31,7 @@ import {
     IconPaperclip,
     IconPencil,
     IconPictureInPictureOn,
+    IconRefresh,
     IconPlayerStopFilled,
     IconStack2,
     IconStarFilled,
@@ -66,6 +67,7 @@ export const OverviewPane = tablerMui(IconLayoutSidebarRight);
 export const Question = tablerMui(IconMessageCircleQuestion);
 export const DiffIcon = tablerMui(IconFileDiff);
 export const Spinner = tablerMui(IconLoader2);
+export const Refresh = tablerMui(IconRefresh);
 export const HandStop = tablerMui(IconHandStop);
 export const NewFolder = tablerMui(IconFolderPlus);
 export const CircleDashed = tablerMui(IconCircleDashed);

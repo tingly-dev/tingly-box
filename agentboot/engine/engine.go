@@ -127,6 +127,8 @@ type Engine struct {
 	// launchSignature), so a changed setting restarts it instead of being
 	// silently ignored.
 	launch map[string]launchState
+	// lastTurn remembers each session's latest turn for Retry (turn.go).
+	lastTurn map[string]lastTurn
 	// residents holds the Conductor of each pooled process (resident.go).
 	residents map[string]*resident
 	// live is each session's running background tasks (tasks.go).
@@ -170,6 +172,7 @@ func New(cfg Config) *Engine {
 		onTurnEnd:      cfg.OnTurnEnd,
 		runs:           map[string]*run{},
 		launch:         map[string]launchState{},
+		lastTurn:       map[string]lastTurn{},
 		residents:      map[string]*resident{},
 		live:           map[string][]TaskBrief{},
 		stopKeepAlive:  make(chan struct{}),

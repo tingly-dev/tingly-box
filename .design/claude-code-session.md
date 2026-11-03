@@ -399,6 +399,85 @@ through the runner-internal wiring the one-shot path relies on.
   execution failure, and the dead session is dropped from the pool so the
   *next* message starts clean.
 
+**Pre-output auto-retry (2026-11-03).** The above sharpens into a two-way
+split, implemented at `agentboot` level and shared by both paths:
+
+- **Pre-output failures** (launch failure, startup crash, stream ended
+  without a result — `agentboot.PreOutputFailure`, gated on the failed
+  attempt having produced *no* output events) are now retried
+  automatically on the persistent path (the one Projects uses):
+  `Engine.runPersistentTurn` relaunches the first turn by
+  re-`Open`ing (with no output there is no Claude session id, so the
+  retry is a fresh launch) bounded by `maxPreOutputRetries` (2) with a
+  short fixed pause, and returns `handled=true` even when the retry
+  also fails — never a one-shot re-run after a persistent turn was
+  attempted. Nothing was streamed and no tool ran, so a retry cannot
+  double-execute anything. The one-shot `AgentService.Run` does not
+  retry; it is only the engine's fallback when nothing was sent.
+- **Post-output failures** (anything after the first event, and any
+  `ResultError`) are never retried, exactly as before: side effects may
+  exist. The mid-turn-crash paragraph above still governs them.
+
+**Mid-turn crash recovery — natural resume, not re-send (2026-11-03).**
+The "mid-turn crash is never retried" rule above still holds in the sense
+that the *host* never re-sends the user's message. But a crash with output
+already seen means staged work is on disk (Claude Code writes its transcript
+incrementally), and the CLI has a documented recovery primitive for exactly
+this: `CLAUDE_CODE_RESUME_INTERRUPTED_TURN=1` + `--resume <session-id>` —
+the CLI detects the unfinished turn in the transcript, replays its prompt
+itself, and continues it without re-running interrupted tool calls
+(CLI-guaranteed; changelog carries multiple fixes enforcing "don't re-run
+finished turns"). Verified empirically against CLI 2.1.303: kill a process
+mid-turn (3 tool calls done, no `result`), resume with the env var and a
+stdin that stays open with no message injected → the turn continues and
+completes `result: success`.
+
+`Engine.runPersistentTurn` now does exactly that, once, when a persistent
+session terminates mid-turn with output seen: Evict → re-`Open` with
+`opts.Resume=true`, `CLAUDE_CODE_RESUME_INTERRUPTED_TURN=1` in `opts.Env`,
+and an **empty prompt**. `claude.Driver.Prepare` treats an empty prompt in
+stream-json mode as "hold stdin open, inject no message" — an immediately
+closed stdin would EOF the `--print` process before recovery; the runner's
+own shutdown closes stdin at turn end. A recovery that also fails surfaces
+the error — one attempt, no loop. The launch bookkeeping records the
+recovery launch's own signature (the env var changes `launchSignature`).
+
+**Manual retry — the same recovery behind a button (2026-11-03).** The
+recovery is also a user action. `Engine.Retry(id, dir, launch)` re-runs a
+session's *failed* turn without adding anything to the transcript: the
+engine remembers each session's latest turn (`lastTurn`: prompt, failed,
+outputSeen — armed on failure, cleared on a clean turn, untouched by Evict
+so the pre-output retry loop's own evictions don't disarm it). Retry picks
+the relaunch by what the failure was: output seen → the recovery launch
+above (resume, env var, empty prompt — the CLI replays the interrupted
+turn); no output → the prompt never reached Claude, so the recorded prompt
+is sent again as a fresh turn. Projects exposes it as
+`POST /api/v1/threads/{id}/retry` (`Threads.Retry`, gated on
+`ThreadFailed` + not busy, reusing `begin`'s launch-options builder
+`turnLaunch`), with a Retry button on the thread's failed banner
+(`ThreadPanel`). The host never re-sends the user's message either way —
+the "mid-turn crash is never retried" rule now reads "never re-sent";
+recovery is the only path back.
+
+Supporting facts (from the same research): every stream message carries
+`session_id` from `system(init)` on (so the host always knows what to
+resume); SIGTERM mid-turn leaves the turn unfinished with no `result`
+(crash discriminator); in-process API retries are tunable via
+`CLAUDE_CODE_MAX_RETRIES` / `CLAUDE_CODE_RETRY_WATCHDOG` /
+`API_TIMEOUT_MS`; the `api_retry` stream event uses fields
+`attempt`/`max_retries`/`retry_delay_ms`/`error_status`/`error`.
+
+**TODO (unattended-run tuning, not yet wired):** for long-running or
+unattended sessions, consider setting the CLI's own retry knobs at launch —
+`CLAUDE_CODE_RETRY_WATCHDOG=1` (indefinite 429/529 retry, backoff to 5min;
+sub-vars `_MAX_WAIT_MS`/`_MAX_USAGE_LIMIT_WAIT_MS`), a raised
+`CLAUDE_CODE_MAX_RETRIES` (default 10, cap 15), and `API_TIMEOUT_MS` — so
+transient API failures resolve inside one process instead of costing a
+host-level relaunch. The `api_retry` notice itself is already surfaced in
+the transcript (converter, 2026-11-03); decide per-profile whether the
+watchdog env ships by default or as a setting (ux-principles §5/§6:
+resource/cost blast radius deserves an explicit choice).
+
 **Bot setting**: `persistent_session` (`*bool`, default unset = off) landed
 end-to-end — `db.ImBotSettingsRecord`/`db.Settings` →
 `imbot.CreateRequest`/`UpdateRequest` → `bot.BotSetting.IsPersistentSession()`

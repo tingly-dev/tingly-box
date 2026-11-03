@@ -208,6 +208,7 @@ export const zh: Dict<typeof en> = {
         copyCd: '复制进入 worktree 的 cd 命令', back: '返回 Overview',
         editTitle: '重命名线程',
         review: 'Review 改动', resolve: '标记为已解决', reopen: '重新打开', showTask: '查看任务', hideTask: '收起任务',
+        retry: '重试本轮',
         showTrajectory: '查看轨迹', showChat: '查看对话', expandTools: '展开所有工具调用', collapseTools: '折叠工具调用',
         fromCoordinator: '协调者', allowThread: '本线程都允许 {{tool}}', loadEarlier: '显示更早的消息',
         placeholder: '直接给这个线程发消息…', queuePlaceholder: '给这个线程发消息——它会在下一步读到…',
