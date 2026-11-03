@@ -337,11 +337,11 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         {/* Slots and plugins live in the connection card: they are
                             per-connection settings, set alongside the URL. Rows
                             use pt:1 so the gaps match the card's edge rhythm. */}
-                        {slotRouting && (
-                            <Box sx={{ px: 2, pt: 1 }}>{slots.slotsRow}</Box>
-                        )}
                         {slotRouting && agent.defaultProfileSwitch && (
                             <ClaudeCodeDefaultProfileSwitch onChanged={slots.reload} />
+                        )}
+                        {slotRouting && (
+                            <Box sx={{ px: 2, pt: 1 }}>{slots.slotsRow}</Box>
                         )}
                         <Box sx={{ px: 2, pt: 1 }}>{pluginsRow}</Box>
                     </Box>

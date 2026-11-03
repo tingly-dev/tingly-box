@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Box, Button, Divider, ListItemText, Menu, MenuItem, Typography } from '@mui/material';
+import { Box, Chip, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import ConfigRow from '@/components/ConfigRow';
-import { Check, ExpandMore } from '@/components/icons';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { api } from '@/services/api';
 import { notify } from '@/utils/notify';
@@ -21,17 +20,17 @@ interface Props {
 }
 
 /**
- * "Apply profile…" on the default Claude Code config: the default takes a copy
- * of a profile's routing in one pick, the profile stays as it is, and
- * "Restore my default" brings back what the default was before the first switch.
- * Only the default page renders this — profiles have no such control.
+ * "Switch" row of the default Claude Code config: what the default routes like.
+ * One chip for its own routing and one per profile; the lit chip is the current
+ * one, any other chip copies that profile's routing into the default (the profile
+ * itself is never changed), and the own chip restores what the default was before
+ * the first switch. Only the default page renders this — profiles have no such row.
  */
 const ClaudeCodeDefaultProfileSwitch: React.FC<Props> = ({ onChanged }) => {
     const { t } = useTranslation();
     const { getProfiles } = useProfileContext();
     const profiles = getProfiles('claude_code');
     const [status, setStatus] = useState<DefaultSwitchStatus | null>(null);
-    const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     const [busy, setBusy] = useState(false);
 
     const load = useCallback(async () => {
@@ -49,7 +48,6 @@ const ClaudeCodeDefaultProfileSwitch: React.FC<Props> = ({ onChanged }) => {
     if (profiles.length === 0 && !status?.switched) return null;
 
     const run = async (call: () => Promise<any>, successKey: string, name?: string) => {
-        setAnchor(null);
         setBusy(true);
         try {
             const result = await call();
@@ -67,52 +65,60 @@ const ClaudeCodeDefaultProfileSwitch: React.FC<Props> = ({ onChanged }) => {
         }
     };
 
-    const summary = !status?.switched
-        ? t('claudeCode.defaultSwitch.own')
-        : !status.profile_exists
-            ? t('claudeCode.defaultSwitch.profileDeleted', { name: status.profile_name })
-            : status.in_sync
-                ? t('claudeCode.defaultSwitch.mirrors', { name: status.profile_name })
-                : t('claudeCode.defaultSwitch.edited', { name: status.profile_name });
+    const switched = !!status?.switched;
+    const ownOn = !switched;
+    // The profile the default was copied from is gone: no chip is lit, say why.
+    const orphan = switched && !status?.profile_exists;
 
     return (
         <Box sx={{ px: 2, pt: 1 }}>
             <ConfigRow
-                activeTab="profile"
+                activeTab="switch"
                 onTabChange={() => undefined}
                 tabs={[{
-                    key: 'profile',
+                    key: 'switch',
                     label: t('claudeCode.defaultSwitch.label'),
                     content: (
-                        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                            <Typography variant="body2" color="text.secondary">{summary}</Typography>
-                            <Button
-                                size="small"
-                                disabled={busy}
-                                endIcon={<ExpandMore fontSize="small" />}
-                                sx={{ textTransform: 'none', py: 0 }}
-                                onClick={(e) => setAnchor(e.currentTarget)}
-                            >
-                                {t('claudeCode.defaultSwitch.apply')}
-                            </Button>
-                            <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
-                                {profiles.map(profile => (
-                                    <MenuItem
+                        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.75 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ mr: 0.5 }}>
+                                {t('claudeCode.defaultSwitch.lead')}
+                            </Typography>
+                            <Tooltip arrow title={t(ownOn ? 'claudeCode.defaultSwitch.ownOn' : 'claudeCode.defaultSwitch.ownOff')}>
+                                <Chip
+                                    size="small"
+                                    label={t('claudeCode.defaultSwitch.own')}
+                                    color={ownOn ? 'primary' : 'default'}
+                                    variant={ownOn ? 'filled' : 'outlined'}
+                                    disabled={busy}
+                                    onClick={ownOn ? undefined : () => void run(() => api.restoreClaudeCodeDefault(), 'claudeCode.defaultSwitch.restored')}
+                                />
+                            </Tooltip>
+                            {profiles.map(profile => {
+                                const current = switched && status?.profile_id === profile.id;
+                                const edited = current && !status?.in_sync;
+                                const clickable = !current || edited;
+                                return (
+                                    <Tooltip
                                         key={profile.id}
-                                        selected={status?.switched && status.profile_id === profile.id}
-                                        onClick={() => void run(() => api.switchClaudeCodeDefaultToProfile(profile.id), 'claudeCode.defaultSwitch.applied', profile.name)}
+                                        arrow
+                                        title={t(edited ? 'claudeCode.defaultSwitch.profileEdited' : current ? 'claudeCode.defaultSwitch.profileOn' : 'claudeCode.defaultSwitch.profileOff')}
                                     >
-                                        <ListItemText primary={profile.name} />
-                                        {status?.switched && status.profile_id === profile.id && status.in_sync && <Check fontSize="small" sx={{ ml: 2 }} />}
-                                    </MenuItem>
-                                ))}
-                                {status?.switched && <Divider />}
-                                {status?.switched && (
-                                    <MenuItem onClick={() => void run(() => api.restoreClaudeCodeDefault(), 'claudeCode.defaultSwitch.restored')}>
-                                        <ListItemText primary={t('claudeCode.defaultSwitch.restore')} secondary={t('claudeCode.defaultSwitch.restoreHint')} />
-                                    </MenuItem>
-                                )}
-                            </Menu>
+                                        <Chip
+                                            size="small"
+                                            label={edited ? t('claudeCode.defaultSwitch.editedLabel', { name: profile.name }) : profile.name}
+                                            color={current ? 'primary' : 'default'}
+                                            variant={current ? 'filled' : 'outlined'}
+                                            disabled={busy}
+                                            onClick={clickable ? () => void run(() => api.switchClaudeCodeDefaultToProfile(profile.id), 'claudeCode.defaultSwitch.applied', profile.name) : undefined}
+                                        />
+                                    </Tooltip>
+                                );
+                            })}
+                            {orphan && (
+                                <Typography variant="caption" color="text.secondary">
+                                    {t('claudeCode.defaultSwitch.profileDeleted', { name: status?.profile_name })}
+                                </Typography>
+                            )}
                         </Box>
                     ),
                 }]}
