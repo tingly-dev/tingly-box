@@ -61,6 +61,8 @@ export interface ImChatInfo {
     /** The id to display (the platform prefix stripped). */
     displayId: string;
     group: boolean;
+    /** The host has listed every bot and chat and this one is no longer among them (or its bot is gone). */
+    deleted?: boolean;
 }
 
 /** A chat a bot has seen: a person's private chat or a group. */
@@ -89,8 +91,12 @@ export interface ImHost {
     platformLabel?: (platform: string) => string;
     /** A platform's logo at `size` px; defaults to a coloured initial. */
     platformIcon?: (platform: string, size: number, colored?: boolean) => ReactNode;
-    /** What the host knows about a chat it has seen: alias, bare id and whether it is a group. */
-    chatInfo?: (platform: string, chatId: string) => ImChatInfo | undefined;
+    /**
+     * What the host knows about a chat it has seen: alias, bare id and whether
+     * it is a group. `botUuid` (a binding's bot) lets the host also say the bot
+     * itself is gone. Undefined while it does not know yet.
+     */
+    chatInfo?: (platform: string, chatId: string, botUuid?: string) => ImChatInfo | undefined;
     /** Lets views re-render when `chatInfo` learns more (the host loads its chats lazily). */
     subscribeChatInfo?: (onChange: () => void) => () => void;
     chatInfoVersion?: () => number;

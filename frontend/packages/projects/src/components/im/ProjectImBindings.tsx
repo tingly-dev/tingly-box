@@ -107,11 +107,11 @@ export function useProjectIm(target: ImTarget | null): ProjectIm | null {
 function Tag({ binding, onUnbind }: { binding: ChannelBinding; onUnbind: () => void }) {
     const { t } = useTranslation('projects');
     const chatText = useImChatText();
-    const title = chatText({ platform: binding.platform, chatId: binding.chat_id, alias: binding.chat_title });
+    const title = chatText({ platform: binding.platform, chatId: binding.chat_id, alias: binding.chat_title, botUuid: binding.bot_uuid });
     return (
         <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, height: 26, pl: 1, pr: 0.25, borderRadius: radius.pill, border: 1, borderColor: 'divider', bgcolor: 'action.hover', minWidth: 0, maxWidth: 260 }}>
             <Box title={title} sx={{ minWidth: 0, fontSize: fontSizes.sm, fontWeight: 500, display: 'flex' }}>
-                <ImChatLabel platform={binding.platform} chatId={binding.chat_id} alias={binding.chat_title} />
+                <ImChatLabel platform={binding.platform} chatId={binding.chat_id} alias={binding.chat_title} botUuid={binding.bot_uuid} />
             </Box>
             <Tooltip title={t('im.tags.unbind', { chat: title })}>
                 <IconButton size="small" onClick={onUnbind} aria-label={t('im.tags.unbind', { chat: title })} sx={{ p: 0.25, color: 'text.secondary', '&:hover': { color: 'error.main' } }}>
@@ -127,7 +127,7 @@ function MoreTags({ bindings, onUnbind }: { bindings: ChannelBinding[]; onUnbind
     const { t } = useTranslation('projects');
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     const chatText = useImChatText();
-    const bindingText = (b: ChannelBinding) => chatText({ platform: b.platform, chatId: b.chat_id, alias: b.chat_title });
+    const bindingText = (b: ChannelBinding) => chatText({ platform: b.platform, chatId: b.chat_id, alias: b.chat_title, botUuid: b.bot_uuid });
     return (
         <>
             <Button size="small" color="inherit" onClick={(e) => setAnchor(e.currentTarget)} aria-haspopup="menu" aria-label={t('im.tags.label')}
@@ -137,7 +137,7 @@ function MoreTags({ bindings, onUnbind }: { bindings: ChannelBinding[]; onUnbind
             <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
                 {bindings.map((b) => (
                     <MenuItem key={b.id} onClick={() => { setAnchor(null); onUnbind(b); }} aria-label={t('im.tags.unbind', { chat: bindingText(b) })}>
-                        <ListItemText primary={<ImChatLabel platform={b.platform} chatId={b.chat_id} alias={b.chat_title} />} slotProps={{ primary: { noWrap: true, sx: { maxWidth: 260 } } }} />
+                        <ListItemText primary={<ImChatLabel platform={b.platform} chatId={b.chat_id} alias={b.chat_title} botUuid={b.bot_uuid} />} slotProps={{ primary: { noWrap: true, sx: { maxWidth: 260 } } }} />
                         <Close sx={{ fontSize: 14, ml: 1.5, color: 'text.secondary' }} />
                     </MenuItem>
                 ))}

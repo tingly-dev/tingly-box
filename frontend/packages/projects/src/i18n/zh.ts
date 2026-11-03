@@ -59,6 +59,7 @@ export const zh: Dict<typeof en> = {
             pickProject: '把 {{chat}} 绑定到', pickPlaceholder: '选择项目或目录', noProjects: '先创建一个项目或目录。',
             moveDone: '{{chat}} 已改绑到 {{project}}',
         },
+        deleted: '（已删除）',
         sourceFrom: '来自',
         group: '群',
         sourcePlatform: '来自 {{platform}}',

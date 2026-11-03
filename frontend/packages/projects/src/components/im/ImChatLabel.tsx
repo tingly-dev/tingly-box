@@ -12,6 +12,8 @@ interface ChatRefProps {
     kind?: 'direct' | 'group';
     /** A name the caller already has: a chat list's alias, or a binding's saved `chat_title`. */
     alias?: string;
+    /** The bot a binding points at, so a deleted bot is noticed too. */
+    botUuid?: string;
 }
 
 /** Segments of `平台 · 群 · alias · id` for one chat, resolved through the host when it knows the chat. */
@@ -25,9 +27,10 @@ function useChatSegments() {
     const { t } = useTranslation('projects');
     const platformLabel = usePlatformLabel();
     const groupLabel = t('im.group');
-    return ({ platform, chatId, kind, alias }: ChatRefProps) => {
-        const info = im?.chatInfo?.(platform, chatId);
+    return ({ platform, chatId, kind, alias, botUuid }: ChatRefProps) => {
+        const info = im?.chatInfo?.(platform, chatId, botUuid);
         return {
+            deleted: info?.deleted ?? false,
             platform: platformLabel(platform),
             group: kind ? kind === 'group' : info?.group ?? false,
             alias: info?.alias ?? alias ?? '',
@@ -39,10 +42,12 @@ function useChatSegments() {
 
 /** `平台 · 群 · alias · id` as plain text, for toasts and aria-labels. */
 export function useImChatText(): (chat: ChatRefProps) => string {
+    const { t } = useTranslation('projects');
     const segments = useChatSegments();
     return (chat) => {
-        const { groupLabel, ...parts } = segments(chat);
-        return entityText(parts, { groupLabel });
+        const { groupLabel, deleted, ...parts } = segments(chat);
+        const text = entityText(parts, { groupLabel });
+        return deleted ? `${text} ${t('im.deleted')}` : text;
     };
 }
 
@@ -54,10 +59,12 @@ export function useImChatText(): (chat: ChatRefProps) => string {
 export function ImChatLabel({ platformAs = 'icon', copy = false, ...chat }: ChatRefProps & { platformAs?: 'icon' | 'text'; copy?: boolean }) {
     const { t } = useTranslation('projects');
     const segments = useChatSegments();
-    const { groupLabel, ...parts } = segments(chat);
+    const { groupLabel, deleted, ...parts } = segments(chat);
     return (
         <EntityLabel
             {...parts}
+            resolved={!deleted}
+            deletedLabel={t('im.deleted')}
             groupLabel={groupLabel}
             platformIcon={<PlatformMark platform={chat.platform} size={14} colored />}
             platformAs={platformAs}

@@ -27,6 +27,10 @@ const listeners = new Set<() => void>();
 let infoVersion = 0;
 let indexedAt = 0;
 let indexing = false;
+// True only when the last full refresh listed every bot and every one of its
+// chats: only then may a missing chat be called deleted.
+let indexComplete = false;
+let indexedBots = new Set<string>();
 const STALE_MS = 60_000;
 
 const infoOf = (c: ImChat): ImChatInfo => ({ alias: c.alias, displayId: bareId(c.platform, c.chatId), group: c.kind === 'group' });
@@ -57,26 +61,33 @@ export async function refreshChatIndex(): Promise<void> {
     indexing = true;
     try {
         const bots = await listBots();
-        const lists = await Promise.all(bots.map((b) => fetchChats(b).catch(() => [] as ImChat[])));
+        const results = await Promise.all(bots.map((b) => fetchChats(b).then((r) => r, () => ({ chats: [] as ImChat[], complete: false }))));
         const next = new Map<string, ImChatInfo>();
-        merge(next, lists.flat());
+        merge(next, results.flatMap((r) => r.chats));
         chatIndex.clear();
         next.forEach((v, k) => chatIndex.set(k, v));
+        indexedBots = new Set(bots.map((b) => b.uuid));
+        indexComplete = results.every((r) => r.complete);
         publish();
     } catch {
-        // keep the last index
+        // keep the last index; it is no longer known to be complete
+        indexComplete = false;
     } finally {
         indexedAt = Date.now();
         indexing = false;
     }
 }
 
-const chatInfo = (platform: string, chatId: string): ImChatInfo | undefined => {
+const chatInfo = (platform: string, chatId: string, botUuid?: string): ImChatInfo | undefined => {
     if (!indexing && Date.now() - indexedAt > STALE_MS) {
         indexedAt = Date.now();
         void refreshChatIndex();
     }
-    return chatIndex.get(chatKeyOf(platform, chatId));
+    const info = chatIndex.get(chatKeyOf(platform, chatId));
+    if (info) return botUuid && indexComplete && !indexedBots.has(botUuid) ? { ...info, deleted: true } : info;
+    // Not listed: deleted only when everything was listed and it still is not there.
+    if (indexComplete) return { displayId: bareId(platform, chatId), group: false, deleted: true };
+    return undefined;
 };
 
 async function listBots(): Promise<ImBot[]> {
@@ -89,7 +100,7 @@ async function listBots(): Promise<ImBot[]> {
     });
 }
 
-async function fetchChats(bot: ImBot): Promise<ImChat[]> {
+async function fetchChats(bot: ImBot): Promise<{ chats: ImChat[]; complete: boolean }> {
     // Private chats and groups are separate lists; either failing leaves the other.
     const [direct, groups] = await Promise.allSettled([listBotDirectChats(bot.uuid), listBotGroups(bot.uuid)]);
     const chats: ImChat[] = [];
@@ -120,11 +131,11 @@ async function fetchChats(bot: ImBot): Promise<ImChat[]> {
             });
         }
     }
-    return chats;
+    return { chats, complete: direct.status === 'fulfilled' && groups.status === 'fulfilled' };
 }
 
 async function listChats(bot: ImBot): Promise<ImChat[]> {
-    const chats = await fetchChats(bot);
+    const { chats } = await fetchChats(bot);
     remember(chats);
     return chats;
 }

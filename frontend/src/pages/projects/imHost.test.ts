@@ -1,23 +1,33 @@
-import { describe, expect, it, vi } from 'vitest';
-import { imHost } from './imHost';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { imHost, refreshChatIndex } from './imHost';
+
+const m = vi.hoisted(() => ({ groupsFail: false, bots: [{ uuid: 'bot', name: 'Bot', platform: 'telegram', enabled: true }] }));
 
 vi.mock('@/components/bot/BotAccessDialog', () => ({ default: () => null }));
 vi.mock('@/constants/platformGuides', () => ({ PLATFORM_BRAND_ICONS: {}, platformDisplayName: (id: string) => id.charAt(0).toUpperCase() + id.slice(1) }));
 vi.mock('@/i18n', () => ({ default: { t: (_key: string, options: { defaultValue: string }) => options.defaultValue } }));
+vi.mock('@/services/imbotApi', () => ({ imbotApi: { getImBotSettingsList: async () => ({ success: true, settings: m.bots }) } }));
 vi.mock('@/services/botApi', () => ({
     listBotDirectChats: async () => ({ chats: [
         { chat: { platform: 'telegram', external_chat_id: 'telegram:123', alias: 'Alice', peer_actor_id: 'actor' } },
         { chat: { platform: 'telegram', external_chat_id: 'telegram:456', alias: '  ', peer_actor_id: 'actor' } },
     ] }),
-    listBotGroups: async () => ({ groups: [
-        { platform: 'telegram', external_group_id: 'telegram:789', alias: 'Team', name: 'Platform name' },
-        { platform: 'telegram', external_group_id: 'telegram:987', name: 'Platform name' },
-    ] }),
+    listBotGroups: async () => {
+        if (m.groupsFail) throw new Error('boom');
+        return { groups: [
+            { platform: 'telegram', external_group_id: 'telegram:789', alias: 'Team', name: 'Platform name' },
+            { platform: 'telegram', external_group_id: 'telegram:987', name: 'Platform name' },
+        ] };
+    },
 }));
 
+const bot = { uuid: 'bot', name: 'Bot', platform: 'telegram', online: true };
+
 describe('Projects IM host', () => {
+    beforeEach(() => { m.groupsFail = false; });
+
     it('titles chats as 平台 · 群 · alias · id, with the group name as default alias and the id when unnamed', async () => {
-        const chats = await imHost.listChats({ uuid: 'bot', name: 'Bot', platform: 'telegram', online: true });
+        const chats = await imHost.listChats(bot);
         expect(chats.map((chat) => chat.title)).toEqual([
             'Telegram · Alice · 123',
             'Telegram · 456',
@@ -28,8 +38,21 @@ describe('Projects IM host', () => {
     });
 
     it('answers chat lookups for bindings and message sources after a listing', async () => {
-        await imHost.listChats({ uuid: 'bot', name: 'Bot', platform: 'telegram', online: true });
+        await imHost.listChats(bot);
         expect(imHost.chatInfo?.('telegram', 'telegram:789')).toEqual({ alias: 'Team', displayId: '789', group: true });
         expect(imHost.chatInfo?.('telegram', 'telegram:456')).toEqual({ alias: undefined, displayId: '456', group: false });
+    });
+
+    it('calls a chat or bot deleted only after a complete listing that no longer has it', async () => {
+        await refreshChatIndex();
+        expect(imHost.chatInfo?.('telegram', 'telegram:gone')).toEqual({ displayId: 'gone', group: false, deleted: true });
+        expect(imHost.chatInfo?.('telegram', 'telegram:123', 'bot')?.deleted).toBeUndefined();
+        expect(imHost.chatInfo?.('telegram', 'telegram:123', 'deleted-bot')?.deleted).toBe(true);
+    });
+
+    it('does not guess "deleted" when a listing was incomplete', async () => {
+        m.groupsFail = true;
+        await refreshChatIndex();
+        expect(imHost.chatInfo?.('telegram', 'telegram:gone')).toBeUndefined();
     });
 });

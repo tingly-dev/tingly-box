@@ -55,6 +55,7 @@ export const en = {
             pickProject: 'Move {{chat}} to', pickPlaceholder: 'Choose a project or folder', noProjects: 'Create a project or folder first.',
             moveDone: '{{chat}} moved to {{project}}',
         },
+        deleted: '(deleted)',
         sourceFrom: 'From',
         group: 'Group',
         sourcePlatform: 'From {{platform}}',

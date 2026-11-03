@@ -76,6 +76,19 @@ describe('project IM bindings', () => {
         fireEvent.click(screen.getByRole('button', { name: 'im.bind.submit' }));
         await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:3', bot_uuid: 'b1', chat_title: expect.any(String), project_id: 'f1' }));
     });
+    it('shows a bound chat by its alias and id, and marks one the host no longer has as deleted', async () => {
+        m.list.mockResolvedValue([binding('cb1', 'telegram:1', 'yz', 'p1'), binding('cb2', 'telegram:2', 'Gone chat', 'p1')]);
+        const h = host([]);
+        h.im!.chatInfo = (_platform, chatId) => (chatId === 'telegram:2'
+            ? { displayId: '2', group: false, deleted: true }
+            : { alias: 'Alice (ops)', displayId: '1', group: false });
+        show(h);
+        const labels = await screen.findAllByTestId('entity-label');
+        expect(labels[0]).toHaveTextContent('Alice (ops)·1');
+        expect(labels[0]).not.toHaveTextContent('im.deleted');
+        expect(labels[1]).toHaveTextContent('im.deleted');
+        expect(labels[1]).toHaveTextContent('2');
+    });
     it('shows only this project\'s chats and unbinds one with its ×', async () => {
         show(host([]));
         expect(await screen.findByText('yz')).toBeInTheDocument();
