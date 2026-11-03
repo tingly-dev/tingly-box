@@ -244,6 +244,41 @@ func TestEnsureCurrentBuiltinRules_AddsHaikuFromTemplate(t *testing.T) {
 	}
 }
 
+func TestEnsureCurrentBuiltinRules_DoesNotResurrectDeletedRules(t *testing.T) {
+	c := &Config{
+		Rules: []typ.Rule{
+			{UUID: RuleUUIDBuiltinCC, Scenario: typ.ScenarioClaudeCode, Services: []*loadbalance.Service{svc("p1")}},
+		},
+	}
+
+	// First boot after the release offers every desktop template once.
+	if !ensureCurrentBuiltinRules(c) {
+		t.Fatal("first run should report a change")
+	}
+	if c.findRuleByUUID(RuleUUIDBuiltinClaudeDesktopOpus47) == nil {
+		t.Fatal("expected opus47 desktop rule to be seeded")
+	}
+
+	// The user deletes the desktop rules.
+	kept := c.Rules[:0]
+	for _, r := range c.Rules {
+		if r.Scenario != typ.ScenarioClaudeDesktop {
+			kept = append(kept, r)
+		}
+	}
+	c.Rules = kept
+
+	// Later boots / upgrades must not bring them back.
+	if ensureCurrentBuiltinRules(c) {
+		t.Error("second run should be a no-op")
+	}
+	for _, r := range c.Rules {
+		if r.Scenario == typ.ScenarioClaudeDesktop {
+			t.Errorf("deleted desktop rule %q was resurrected", r.UUID)
+		}
+	}
+}
+
 func TestMigrate20260606_DefaultsXcodeSkipUsage(t *testing.T) {
 	// NewConfig runs Migrate, which applies migrate20260606.
 	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
