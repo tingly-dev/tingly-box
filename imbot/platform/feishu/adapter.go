@@ -68,9 +68,10 @@ func (a *Adapter) AdaptMessage(ctx context.Context, event MessageEventDetail) (*
 // extractSender extracts sender info from Feishu SenderDetail
 func (a *Adapter) extractSender(detail SenderDetail) core.Sender {
 	return core.Sender{
-		ID:          detail.SenderID,
-		DisplayName: detail.SenderID, // In production, fetch user info
-		Raw:         make(map[string]interface{}),
+		ID: detail.SenderID,
+		// The event carries only an open_id. Leave the name empty rather than
+		// echoing the id: callers treat "" as "no name" and fall back to the id.
+		Raw: make(map[string]interface{}),
 	}
 }
 
