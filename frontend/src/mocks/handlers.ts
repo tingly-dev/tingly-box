@@ -4134,6 +4134,28 @@ export const handlers = [
         })
     }),
 
+    http.post('/api/v1/scenario/:scenario/profiles/:profileId/duplicate', async ({ params, request }) => {
+        const { profileId } = params as { profileId: string }
+        const body = await request.json().catch(() => ({})) as any
+        const source = mockClaudeCodeProfiles.find(p => p.id === profileId)
+        if (!source) {
+            return HttpResponse.json({ success: false, error: 'profile not found' }, { status: 404 })
+        }
+        const name = body.name || `${source.name}-copy`
+        if (mockClaudeCodeProfiles.some(p => p.name === name)) {
+            return HttpResponse.json({ success: false, error: `profile name '${name}' already exists` }, { status: 400 })
+        }
+        const copy = {
+            ...source,
+            id: `profile-${Date.now()}`,
+            name,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        }
+        mockClaudeCodeProfiles.push(copy)
+        return HttpResponse.json({ success: true, data: copy })
+    }),
+
     http.put('/api/v1/scenario/:scenario/profiles/:profileId', async ({ params, request }) => {
         const { scenario, profileId } = params as { scenario: string; profileId: string }
         const body = await request.json() as any

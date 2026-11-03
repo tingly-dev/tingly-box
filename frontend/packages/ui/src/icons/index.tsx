@@ -42,6 +42,7 @@ import {
     IconEdit,
     IconFileDescription,
     IconCopy,
+    IconCopyPlus,
     IconClipboard,
     IconKey,
     IconArrowUpRight,
@@ -200,6 +201,7 @@ export const Search = tablerMui(IconSearch);
 export const Refresh = tablerMui(IconRefresh);
 export const RestartAlt = tablerMui(IconReload);
 export const ContentCopy = tablerMui(IconCopy);
+export const Duplicate = tablerMui(IconCopyPlus);
 export const ContentPaste = tablerMui(IconClipboard);
 export const Upload = tablerMui(IconUpload);
 export const Download = tablerMui(IconDownload);

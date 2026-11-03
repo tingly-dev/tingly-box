@@ -307,7 +307,13 @@ export default {
       "profileRenamed": "Профиль переименован",
       "profileDeleted": "Профиль удалён",
       "renameFailed": "Не удалось переименовать профиль",
-      "deleteFailed": "Не удалось удалить профиль"
+      "deleteFailed": "Не удалось удалить профиль",
+      "duplicateProfile": "Дублировать профиль",
+      "duplicateTitle": "Дублировать профиль",
+      "duplicateDescription": "Создаёт новый профиль с теми же правилами моделей, флагами и переопределениями Claude Code. {{name}} не меняется.",
+      "duplicateAction": "Дублировать",
+      "profileDuplicated": "Профиль продублирован",
+      "duplicateFailed": "Не удалось продублировать профиль"
     },
     "defaultModeLabel": "Режим по умолчанию"
   },
