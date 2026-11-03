@@ -119,8 +119,10 @@ func (c *Config) ResolveProviderModels(forceRefresh, forceUpstream bool, uid str
 	// the result; a plain read waits only modelListReadWait and then serves a
 	// stand-in while the fetch finishes in the background.
 	fetching := false
+	var fetchErr error
 	if forceRefresh || forceUpstream {
-		if err := c.fetchAndSaveAPIModels(provider, forceUpstream); err == nil {
+		fetchErr = c.fetchAndSaveAPIModels(provider, forceUpstream)
+		if fetchErr == nil {
 			if fresh := c.modelManager.GetModels(uid); len(fresh) > 0 {
 				return finalize(fresh, ModelListSourceAPI), nil
 			}
@@ -129,6 +131,7 @@ func (c *Config) ResolveProviderModels(forceRefresh, forceUpstream bool, uid str
 		done := c.fetchModelsInBackground(provider)
 		select {
 		case err := <-done:
+			fetchErr = err
 			if err == nil {
 				if fresh := c.modelManager.GetModels(uid); len(fresh) > 0 {
 					return finalize(fresh, ModelListSourceAPI), nil
@@ -141,6 +144,16 @@ func (c *Config) ResolveProviderModels(forceRefresh, forceUpstream bool, uid str
 	withFetching := func(r ResolvedModels) ResolvedModels {
 		r.Fetching = fetching
 		return r
+	}
+
+	// An unsupported endpoint cannot refresh an old API list. Use the same
+	// embedded catalog on reads and manual refreshes when one is available.
+	// Transient failures still prefer the last successful upstream list.
+	var unsupported *client.ErrModelsEndpointNotSupported
+	if errors.As(fetchErr, &unsupported) && c.templateManager != nil {
+		if tmpl, err := c.templateManager.GetEmbeddedModelsForProvider(provider); err == nil && len(tmpl) > 0 {
+			return withFetching(finalize(tmpl, ModelListSourceTemplate)), nil
+		}
 	}
 
 	// Step 3b: the cache only expired and the refetch failed (upstream briefly
