@@ -104,7 +104,7 @@ Projects 创建每个 Thread 时已构造 `agentboot.ExecutionOptions`；可以�
 - Projects 启动 Claude Code 时自动追加独立的本地 HTTP MCP 配置；每个 Thread 使用独立的随机能力地址。原有 MCP 配置保留，工具的目标 Thread 由服务端确定。此实现未复用 TB MCP Profile，以保证 Projects 单独运行时也可使用。
 - `send_file(path, caption?)` 读取当前工作目录或项目 Library 内的普通文件，复制到 Library，并持久化为会话消息。Project Thread 的产物也会显示在 Project 对话，标注来源。协调者不在第一版接入范围内。
 - 发送时按现有绑定查找 IM 目标，经 `imchannel.SendFile`（`remote/channel/imchannel/imchannel.go`）把本地文件以 `file://` 附件交给 imbot 适配器。支持上传的平台见下表；Slack / Discord / WhatsApp 没有真实上传，返回明确的投递错误，Web 中的文件仍保留。失败会写日志（`projects: send file to IM chat`）并在 Thread 中显示错误消息，目前没有逐目标投递状态或重试。
-- 已覆盖 MCP 协议调用、文件持久化、路径约束及 Tingly 渠道的文件内容和改绑场景，以及各适配器对模拟平台 API 的发送请求（见下表“已验证”）。真实 Claude 模型调用及除飞书 / Web 外各平台的实际上传仍需在有相应凭据的环境验证。
+- 已覆盖 MCP 协议调用、文件持久化、路径约束及 Tingly 渠道的文件内容和改绑场景，以及各适配器对模拟平台 API 的发送请求（见下表“状态”）。真实 Claude 模型调用及除飞书 / Web 外各平台的实际上传仍需在有相应凭据的环境验证。
 
 ## 各平台状态（IM 适配器）
 
@@ -117,7 +117,7 @@ IM 侧约定：适配器收到 `Media[0]`（`image` 或 `document`，URL 为绝�
 | 钉钉 | 图片（jpg/jpeg/png/gif/bmp），其他作为文件；≤20MB（客户端限制，文档值） | `oapi /media/upload` 得 media_id → 机器人 OpenAPI：群聊 `groupMessages/send`，单聊 `oToMessages/batchSend`；msgKey `sampleImageMsg` / `sampleFile`；说明用 `sampleText` | **已修复，测试验证**（模拟钉钉服务端的请求体）；未实机 | 此前：白名单拒绝 + 适配器是总返回错误的空壳 + text+media 走文本路径丢附件。`sampleFile.fileType` 官方文档只列了 xlsx/pdf/zip/rar/doc/docx，其他扩展名未验证；群聊/单聊首次需对方先发过一条消息（需 conversation/staff id） |
 | 微信（Weixin ilink） | 图片、视频、语音、其他作为文件 | SDK `UploadMediaToCDN`（AES 加密 + getuploadurl + CDN）后 `sendmessage`；说明另发文本 | **已修复，测试验证**（模拟 ilink 服务端：getuploadurl、CDN、sendmessage、context_token）；未实机 | 此前：被白名单拒绝；说明文字丢失；`SendFile` 未带回复上下文 token（主动发送会 ret=-2） |
 | 企业微信（WeCom 智能机器人） | 图片（png/jpg/jpeg/gif），其他作为文件 | 经 WebSocket 分片上传（init/chunk/finish）得 media_id → `SendMedia` 按 media_id 发送；说明另发文本 | **已修复，测试验证**（SDK 接口替身）；未实机 | 此前：被白名单拒绝，且适配器从不上传，缺 `wecom_media_id` 时 SDK 直接报错。SDK 层上传另有其自身测试 |
-| Telegram | 图片（sendPhoto），其他 sendDocument | 本地文件直接 multipart 上传，说明作为 caption | 未验证（代码路径完整，有适配器测试） | — |
+| Telegram | 图片（sendPhoto），其他 sendDocument | 本地文件直接 multipart 上传，说明作为 caption | 未验证（代码路径完整；用户未反馈） | — |
 | Tingly（内置测试渠道） | 任意 | 进程内传输，记录文件内容 | 测试验证 | harness 用 |
 | Slack | — | 适配器只把 URL 当文本发送（占位） | 不支持（白名单拒绝） | 需实现 `files.getUploadURLExternal` 流程 |
 | Discord | — | 适配器用空 Reader 构造 File（占位） | 不支持（白名单拒绝） | 需实现 multipart 上传 |
