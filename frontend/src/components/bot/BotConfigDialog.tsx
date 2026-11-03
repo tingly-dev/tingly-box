@@ -160,7 +160,7 @@ const BotConfigDialog: React.FC<BotConfigDialogProps> = ({
             }
 
             const data = {
-                name: nameDraft.trim() || `${platformDraft} Bot`,
+                name: nameDraft.trim(),
                 platform: platformDraft,
                 auth_type: platformConfig.auth_type,
                 auth: authDraft,
@@ -249,7 +249,7 @@ const BotConfigDialog: React.FC<BotConfigDialogProps> = ({
                                 onChange={(key, value) => setAuthDraft(prev => ({ ...prev, [key]: value }))}
                                 disabled={saving}
                                 botUUID={targetUuid ?? undefined}
-                                botName={nameDraft || `${platformDraft} Bot`}
+                                botName={nameDraft.trim()}
                                 onBindingComplete={async (realUUID) => {
                                     // After QR scan: set the real UUID and reload credentials
                                     setTargetUuid(realUUID);
@@ -274,7 +274,7 @@ const BotConfigDialog: React.FC<BotConfigDialogProps> = ({
                             onChange={(e) => setNameDraft(e.target.value)}
                             fullWidth
                             size="small"
-                            helperText={t('remoteControl.dialog.aliasHelper', { defaultValue: 'Optional: a friendly name for this bot configuration.' })}
+                            helperText={t('remoteControl.dialog.aliasHelper', { defaultValue: 'Optional. Leave empty to use the bot\'s platform account name.' })}
                             disabled={saving}
                         />
 

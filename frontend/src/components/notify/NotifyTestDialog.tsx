@@ -1,7 +1,8 @@
 import {Send as SendIcon} from '@/components/icons';
 import {api} from '@/services/api';
 import {notify} from '@/utils/notify';
-import {fontMono} from '@/theme/fonts';
+import {EntityLabel} from '@tingly/ui';
+import {useEntityLabels} from '@/components/entity/useEntityLabels';
 import type {NotifyTarget} from '@/types/bot';
 import {MARKDOWN_STRESS_BODY} from '@/components/notify/markdownStressBody';
 import {
@@ -48,6 +49,13 @@ type Level = (typeof LEVELS)[number];
 
 const NotifyTestDialog: React.FC<NotifyTestDialogProps> = ({open, botUUID, botName, targets, initialTargetID, onClose}) => {
     const {t} = useTranslation();
+    const entities = useEntityLabels();
+    const targetProps = useCallback((target: NotifyTarget) => (
+        target.kind === 'group'
+            ? entities.group({platform: target.platform ?? '', external_group_id: target.external_id, alias: target.alias})
+            : entities.chat({platform: target.platform ?? '', external_chat_id: target.external_id, alias: target.alias})
+    ), [entities]);
+    const targetText = useCallback((target: NotifyTarget) => entities.text(targetProps(target)), [entities, targetProps]);
 
     const [targetID, setTargetID] = useState('');
     const [title, setTitle] = useState('');
@@ -85,12 +93,12 @@ const NotifyTestDialog: React.FC<NotifyTestDialogProps> = ({open, botUUID, botNa
         });
         setSending(false);
         if (result.error) {
-            notify.error(t('notify.test.sendFailed', {defaultValue: 'Send failed: {{error}}', error: result.error}));
+            notify.error(t('notify.test.sendFailed', {defaultValue: 'Send to {{chat}} failed: {{error}}', chat: targetText(selected), error: result.error}));
             return;
         }
-        notify.success(t('notify.test.sent', {defaultValue: 'Notification sent'}));
+        notify.success(t('notify.test.sent', {defaultValue: 'Notification sent to {{chat}}', chat: targetText(selected)}));
         onClose();
-    }, [botUUID, targetID, title, body, level, onClose, t, targets]);
+    }, [botUUID, targetID, title, body, level, onClose, t, targets, targetText]);
 
     return (
         <Dialog open={open} onClose={sending ? undefined : onClose} fullWidth maxWidth="sm">
@@ -105,7 +113,7 @@ const NotifyTestDialog: React.FC<NotifyTestDialogProps> = ({open, botUUID, botNa
                     <Autocomplete
                         size="small"
                         options={targets}
-                        getOptionLabel={(target) => target.name || target.external_id}
+                        getOptionLabel={(target) => targetText(target)}
                         value={targets.find((target) => target.id === targetID) ?? null}
                         onChange={(_e, value) => setTargetID(value?.id ?? '')}
                         renderOption={(props, option) => {
@@ -114,12 +122,7 @@ const NotifyTestDialog: React.FC<NotifyTestDialogProps> = ({open, botUUID, botNa
                             return (
                                 <li key={key ?? target.id} {...optionProps}>
                                     <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
-                                        <Typography component="span" sx={{fontFamily: fontMono}}>
-                                            {target.external_id}
-                                        </Typography>
-                                        <Typography component="span" variant="caption" color="text.secondary">
-                                            {target.kind === 'group' ? t('notify.target.group', {defaultValue: 'Group'}) : t('notify.target.direct', {defaultValue: 'Direct'})}
-                                        </Typography>
+                                        <EntityLabel {...targetProps(target)} />
                                         {target.is_paired && (
                                             <Typography component="span" variant="caption" sx={{color: 'success.main'}}>
                                                 {t('notify.test.paired', {defaultValue: 'paired'})}

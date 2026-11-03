@@ -17,6 +17,8 @@ export interface UseBotToggleOptions {
     /** Invoked with the toggled bot's UUID after a successful toggle, so the
      *  caller can refresh or patch its own view. */
     onDone?: (uuid: string) => void | Promise<void>;
+    /** Names the bot in toasts (`平台 · alias · id`); falls back to the uuid. */
+    describe?: (uuid: string) => string;
 }
 
 export interface UseBotToggleResult {
@@ -30,7 +32,7 @@ export interface UseBotToggleResult {
     isToggling: (uuid: string) => boolean;
 }
 
-export function useBotToggle({onDone}: UseBotToggleOptions = {}): UseBotToggleResult {
+export function useBotToggle({onDone, describe}: UseBotToggleOptions = {}): UseBotToggleResult {
     const {t} = useTranslation();
     const [togglingUuid, setTogglingUuid] = useState<string | null>(null);
 
@@ -41,8 +43,8 @@ export function useBotToggle({onDone}: UseBotToggleOptions = {}): UseBotToggleRe
             if (result?.success) {
                 notify.success(
                     enabled
-                        ? t('bots.toggle.enabled', {defaultValue: 'Bot enabled'})
-                        : t('bots.toggle.disabled', {defaultValue: 'Bot disabled'}),
+                        ? t('bots.toggle.enabled', {defaultValue: 'Enabled {{bot}}', bot: describe?.(uuid) ?? uuid})
+                        : t('bots.toggle.disabled', {defaultValue: 'Disabled {{bot}}', bot: describe?.(uuid) ?? uuid}),
                 );
                 await onDone?.(uuid);
             } else {
@@ -57,7 +59,7 @@ export function useBotToggle({onDone}: UseBotToggleOptions = {}): UseBotToggleRe
         } finally {
             setTogglingUuid(null);
         }
-    }, [onDone, t]);
+    }, [onDone, describe, t]);
 
     const isToggling = useCallback((uuid: string) => togglingUuid === uuid, [togglingUuid]);
 

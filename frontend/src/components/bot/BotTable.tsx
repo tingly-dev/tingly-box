@@ -1,8 +1,9 @@
-import {ContentCopy as CopyIcon, Delete as DeleteIcon, Edit as EditIcon, RestartAlt as RestartIcon} from '@/components/icons';
+import {Delete as DeleteIcon, Edit as EditIcon, RestartAlt as RestartIcon} from '@/components/icons';
 import ConfirmPopover from '@/components/ConfirmPopover';
 import {capabilityEnabled} from '@/types/bot';
 import type {BotSettings} from '@/types/bot';
-import {notify} from '@/utils/notify';
+import {EntityLabel} from '@tingly/ui';
+import {useEntityLabels} from '@/components/entity/useEntityLabels';
 import {
     Box,
     Chip,
@@ -21,8 +22,6 @@ import {
 import {useCallback, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {Link as RouterLink} from 'react-router-dom';
-import { fontMono } from '@/theme/fonts';
-import { writeToClipboard } from '@/utils/clipboard';
 
 // BotTable is the RESOURCE table for connected bots — the table counterpart
 // of ApiKeyTable, replacing the former BotCard. Every bot, across every
@@ -69,6 +68,7 @@ const BotTable: React.FC<BotTableProps> = ({
     onCapabilityClick,
 }) => {
     const {t} = useTranslation();
+    const entities = useEntityLabels();
 
     const [deleteModal, setDeleteModal] = useState<{anchorEl: HTMLElement | null; bot: BotSettings | null}>({
         anchorEl: null,
@@ -85,16 +85,6 @@ const BotTable: React.FC<BotTableProps> = ({
         if (uuid) onDelete(uuid);
     }, [deleteModal.bot, onDelete]);
 
-    const handleCopyUuid = useCallback(async (uuid: string) => {
-        if (!uuid) return;
-        try {
-            await writeToClipboard(uuid);
-            notify.success(t('bots.table.uuidCopied', {defaultValue: 'Bot UUID copied'}));
-        } catch {
-            notify.error(t('bots.table.uuidCopyFailed', {defaultValue: 'Copy failed — check clipboard permissions'}));
-        }
-    }, [t]);
-
     return (
         <>
             <TableContainer
@@ -105,9 +95,7 @@ const BotTable: React.FC<BotTableProps> = ({
                     <TableHead>
                         <TableRow sx={{bgcolor: 'action.hover'}}>
                             <TableCell sx={col(120)}>{t('bots.table.status', {defaultValue: 'Status'})}</TableCell>
-                            <TableCell sx={col(150)}>{t('bots.table.name', {defaultValue: 'Name'})}</TableCell>
-                            <TableCell sx={col(180)}>{t('bots.table.botId', {defaultValue: 'Bot UUID'})}</TableCell>
-                            <TableCell sx={col(100)}>{t('bots.table.platform', {defaultValue: 'Platform'})}</TableCell>
+                            <TableCell sx={col(430)}>{t('bots.table.bot', {defaultValue: 'Bot'})}</TableCell>
                             <TableCell sx={col(170)}>{t('bots.table.capabilities', {defaultValue: 'Capabilities'})}</TableCell>
                             <TableCell sx={col(200, {textAlign: 'right'})}>{t('bots.table.actions', {defaultValue: 'Actions'})}</TableCell>
                         </TableRow>
@@ -153,54 +141,10 @@ const BotTable: React.FC<BotTableProps> = ({
                                             />
                                         </Stack>
                                     </TableCell>
-                                    {/* Name */}
+                                    {/* Bot: 平台 · alias · id in one cell; the full uuid is the
+                                        copy value (the notify/interact API takes it as :bot). */}
                                     <TableCell>
-                                        <Tooltip title={bot.name || bot.platform}>
-                                            <Typography variant="body2" noWrap sx={{fontWeight: 600, maxWidth: 160}}>
-                                                {bot.name || bot.platform}
-                                            </Typography>
-                                        </Tooltip>
-                                    </TableCell>
-                                    {/* Bot UUID — the identifier notify/interact takes in the path
-                                        (:bot), copyable. Icon + text on one row (mirrors ApiKeyTable's
-                                        API Key cell); UUID truncates with the full value in the tooltip.
-                                        Labeled "Bot UUID" (not "Bot ID") to split the name collision with
-                                        the Chat ID surfaced by BotChatsButton — ux-principles #3. */}
-                                    <TableCell>
-                                        <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
-                                            <Tooltip title={t('bots.table.copyUuid', {defaultValue: 'Copy Bot UUID'})}>
-                                                <span>
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={() => handleCopyUuid(bot.uuid!)}
-                                                        disabled={!bot.uuid}
-                                                        sx={{p: 0.25, flexShrink: 0}}
-                                                    >
-                                                        <CopyIcon fontSize="inherit"/>
-                                                    </IconButton>
-                                                </span>
-                                            </Tooltip>
-                                            <Tooltip title={bot.uuid}>
-                                                <Typography
-                                                    variant="caption"
-                                                    component="span"
-                                                    sx={{
-                                                        fontFamily: fontMono,
-                                                        color: 'text.secondary',
-                                                        overflow: 'hidden',
-                                                        textOverflow: 'ellipsis',
-                                                        whiteSpace: 'nowrap',
-                                                        minWidth: 0,
-                                                    }}
-                                                >
-                                                    {bot.uuid}
-                                                </Typography>
-                                            </Tooltip>
-                                        </Stack>
-                                    </TableCell>
-                                    {/* Platform */}
-                                    <TableCell>
-                                        <Chip label={bot.platform} size="small"/>
+                                        <EntityLabel {...entities.bot(bot)} copy/>
                                     </TableCell>
                                     {/* Capability chips open the selected bot’s settings. */}
                                     <TableCell>
@@ -271,17 +215,12 @@ const BotTable: React.FC<BotTableProps> = ({
                         <Box key={bot.uuid} sx={{p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1.5}}>
                             <Stack direction="row" sx={{alignItems: 'flex-start', justifyContent: 'space-between', gap: 1}}>
                                 <Box sx={{minWidth: 0}}>
-                                    <Typography variant="body2" noWrap sx={{fontWeight: 600}}>{bot.name || bot.platform}</Typography>
-                                    <Chip label={bot.platform} size="small" sx={{mt: 0.75}}/>
+                                    <EntityLabel {...entities.bot(bot)} copy/>
                                 </Box>
                                 <Stack direction="row" spacing={0.75} sx={{alignItems: 'center'}}>
                                     <Switch checked={isActive} onChange={() => onBotToggle(bot.uuid!, !isActive)} size="small" color="success" disabled={toggling}/>
                                     <Chip label={isActive ? t('common.on', {defaultValue: 'On'}) : t('common.off', {defaultValue: 'Off'})} size="small" color={isActive ? 'success' : 'default'} variant={isActive ? 'filled' : 'outlined'} sx={statusChipSx}/>
                                 </Stack>
-                            </Stack>
-                            <Stack direction="row" spacing={0.5} sx={{alignItems: 'center', mt: 1.25, minWidth: 0}}>
-                                <Typography variant="caption" noWrap sx={{fontFamily: fontMono, color: 'text.secondary', flex: 1}}>{bot.uuid}</Typography>
-                                <IconButton size="small" onClick={() => handleCopyUuid(bot.uuid!)} disabled={!bot.uuid}><CopyIcon fontSize="inherit"/></IconButton>
                             </Stack>
                             <Stack direction="row" spacing={0.75} sx={{mt: 1, flexWrap: 'wrap'}}>
                                 <Chip {...(onCapabilityClick ? {onClick: () => onCapabilityClick(bot, 'remote_control')} : {component: RouterLink, to: '/remote-agent', clickable: true})} label={t('bots.card.remoteAgentChip', {defaultValue: 'Remote'})} size="small" variant={isMounted ? 'filled' : 'outlined'} color={isMounted ? 'primary' : 'default'}/>
@@ -302,7 +241,7 @@ const BotTable: React.FC<BotTableProps> = ({
                 title={t('remoteControl.card.deleteTitle', {defaultValue: 'Delete Bot Configuration'})}
                 description={t('remoteControl.card.deleteConfirm', {
                     defaultValue: 'Are you sure you want to delete "{{name}}"? This action cannot be undone.',
-                    name: deleteModal.bot?.name || deleteModal.bot?.platform,
+                    name: deleteModal.bot ? entities.botText(deleteModal.bot) : '',
                 })}
                 confirmLabel={t('remoteControl.card.delete', {defaultValue: 'Delete'})}
                 confirmColor="error"

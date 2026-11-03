@@ -1,3 +1,5 @@
+import { EntityLabel } from '@tingly/ui';
+import { useEntityLabels } from '@/components/entity/useEntityLabels';
 import {
     Delete as DeleteIcon,
     Edit as EditIcon,
@@ -61,6 +63,7 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
     isRestarting = false,
 }) => {
     const {t} = useTranslation();
+    const entities = useEntityLabels();
     const isMounted = capabilityEnabled(bot,'remote_control');
     const isEnabled = bot.enabled ?? true;
     const ccProfileId = ccProfileIdFromDefaultAgent(bot.default_agent);
@@ -130,7 +133,7 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                     {BrandIcon && <BrandIcon size={24} grayscale={!isActive}/>}
                     <Box sx={{minWidth: 0}}>
                         <Typography noWrap variant="subtitle2" sx={{fontWeight: 600, color: isActive ? 'text.primary' : 'text.secondary'}}>
-                            {bot.name || bot.platform}
+                            <EntityLabel {...entities.bot(bot)} platformIcon={undefined} copy />
                         </Typography>
                         <Typography noWrap variant="caption" sx={{display: 'block', color: statusColor}}>
                             {status}
@@ -218,7 +221,7 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
             <ConfirmDialog
                 open={deleteModalOpen}
                 title={t('remoteControl.card.deleteTitle', { defaultValue: 'Delete Bot Configuration' })}
-                description={t('remoteControl.card.deleteConfirm', { defaultValue: 'Are you sure you want to delete "{{name}}"? This action cannot be undone.', name: bot.name || bot.platform })}
+                description={t('remoteControl.card.deleteConfirm', { defaultValue: 'Are you sure you want to delete "{{name}}"? This action cannot be undone.', name: entities.botText(bot) })}
                 confirmLabel={t('remoteControl.card.delete', { defaultValue: 'Delete' })}
                 confirmColor="error"
                 onClose={() => setDeleteModalOpen(false)}

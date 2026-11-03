@@ -1,3 +1,4 @@
+import { useEntityLabels } from '@/components/entity/useEntityLabels';
 import {
     ContentCopy as CopyIcon,
     Info as InfoIcon,
@@ -39,6 +40,7 @@ interface Props {
 
 const PairingCodePanel: React.FC<Props> = ({ bot, revealByDefault = false }) => {
     const { t } = useTranslation();
+    const entities = useEntityLabels();
     const required = useMemo(() => isPairingRequired(bot), [bot]);
 
     const [loading, setLoading] = useState(false);
@@ -88,11 +90,11 @@ const PairingCodePanel: React.FC<Props> = ({ bot, revealByDefault = false }) => 
         if (!code) return;
         try {
             await writeToClipboard(`/pair ${code}`);
-            notify.success(t('remoteControl.pairing.copied', { defaultValue: 'Pairing command copied' }));
+            notify.success(t('remoteControl.pairing.copied', { defaultValue: 'Pairing command copied for {{bot}}', bot: entities.botText(bot) }));
         } catch {
             notify.error(t('remoteControl.pairing.copyFailed', { defaultValue: 'Copy failed — check clipboard permissions' }));
         }
-    }, [code, t]);
+    }, [code, t, entities, bot]);
 
     const handleRotate = useCallback(async () => {
         if (!bot.uuid) return;
@@ -105,14 +107,14 @@ const PairingCodePanel: React.FC<Props> = ({ bot, revealByDefault = false }) => 
                 setExpiresAt(res.expires_at || '');
                 setMessage('');
                 setRevealed(true);
-                notify.success(t('remoteControl.pairing.rotated', { defaultValue: 'Pairing code rotated' }));
+                notify.success(t('remoteControl.pairing.rotated', { defaultValue: 'Pairing code rotated for {{bot}}', bot: entities.botText(bot) }));
             } else {
                 notify.error(res.error || res.message || t('remoteControl.pairing.rotateFailed', { defaultValue: 'Rotate failed' }));
             }
         } finally {
             setLoading(false);
         }
-    }, [bot.uuid, t]);
+    }, [bot, t, entities]);
 
     if (!required) return null;
 

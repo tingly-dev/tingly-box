@@ -48,7 +48,8 @@ export interface NotifyTarget {
     id: string;
     kind: 'direct_chat' | 'group';
     external_id: string;
-    name?: string;
+    /** The chat's alias (user-set, or the platform's name as default); empty when neither exists. */
+    alias?: string;
     platform?: string;
     is_paired?: boolean;
     blocked: boolean;

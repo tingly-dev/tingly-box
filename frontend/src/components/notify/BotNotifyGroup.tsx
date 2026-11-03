@@ -27,6 +27,8 @@ import {useCallback, useEffect, useState} from 'react';
 import {PLATFORM_BRAND_ICONS} from '@/constants/platformGuides';
 import {writeToClipboard} from '@/utils/clipboard';
 import {useTranslation} from 'react-i18next';
+import {EntityLabel, bareId} from '@tingly/ui';
+import {useEntityLabels} from '@/components/entity/useEntityLabels';
 
 // BotNotifyGroup is one bot's panel on the IM Notify page: a header (name +
 // platform + the enabled switch that governs whether this bot can be driven)
@@ -111,6 +113,14 @@ const ProbeResultLine: React.FC<{result: ChatProbeResult; onDismiss: () => void}
 
 const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isToggling}) => {
     const {t} = useTranslation();
+    const entities = useEntityLabels();
+    // A Notify target in the shared `平台 · 群 · alias · id` convention.
+    const targetProps = useCallback((target: NotifyTarget) => (
+        target.kind === 'group'
+            ? entities.group({platform: target.platform ?? '', external_group_id: target.external_id, alias: target.alias})
+            : entities.chat({platform: target.platform ?? '', external_chat_id: target.external_id, alias: target.alias})
+    ), [entities]);
+    const targetText = useCallback((target: NotifyTarget) => entities.text(targetProps(target)), [entities, targetProps]);
     const capabilityOn = capabilityEnabled(bot, 'notify');
     const enabled = (bot.enabled ?? true) && capabilityOn;
 
@@ -121,6 +131,7 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
     const [showDisabled, setShowDisabled] = useState(false);
     const [busyTarget, setBusyTarget] = useState<string | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+    const deleteTargetItem = targets.find((candidate) => candidate.id === deleteTarget);
 
     const loadChats = useCallback(async () => {
         if (!bot.uuid) return;
@@ -138,6 +149,7 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                 id: detail.chat.id,
                 kind: 'direct_chat',
                 external_id: detail.chat.external_chat_id,
+                alias: detail.chat.alias,
                 platform: detail.chat.platform,
                 is_paired: Boolean(detail.chat.peer_actor_id),
                 blocked: detail.chat.blocked,
@@ -148,7 +160,7 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                 id: detail.group.id,
                 kind: 'group',
                 external_id: detail.group.external_group_id,
-                name: detail.group.name,
+                alias: detail.group.alias || detail.group.name,
                 platform: detail.group.platform,
                 blocked: detail.group.blocked,
                 can_notify: detail.capabilities.notify === 'allow',
@@ -178,10 +190,10 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
         }
     }, [enabled, loadChats]);
 
-    const handleCopy = useCallback(async (targetID: string) => {
+    const handleCopy = useCallback(async (target: NotifyTarget) => {
         try {
-            await writeToClipboard(targetID);
-            notify.success(t('notify.chat.copied', {defaultValue: 'Target UUID copied'}));
+            await writeToClipboard(target.external_id);
+            notify.success(t('notify.chat.copied', {defaultValue: 'Chat ID copied: {{chat}}', chat: targetText(target)}));
         } catch {
             notify.error(t('notify.chat.copyFailed', {defaultValue: 'Copy failed — check clipboard permissions'}));
         }
@@ -210,10 +222,10 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
         }
         setBusyTarget(null);
         notify.success(blocked
-            ? t('notify.target.blocked', {defaultValue: 'Target blocked'})
-            : t('notify.target.unblocked', {defaultValue: 'Target unblocked'}));
+            ? t('notify.target.blocked', {defaultValue: 'Blocked {{chat}}', chat: targetText(target)})
+            : t('notify.target.unblocked', {defaultValue: 'Unblocked {{chat}}', chat: targetText(target)}));
         setTargets(prev => prev.map(item => item.id === target.id ? {...item, blocked} : item));
-    }, [bot.uuid, t]);
+    }, [bot.uuid, t, targetText]);
 
     const handleDelete = useCallback(async (chatID: string) => {
         if (!bot.uuid) return;
@@ -230,9 +242,9 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
         }
         setBusyTarget(null);
         setDeleteTarget(null);
-        notify.success(t('notify.chat.deleted', {defaultValue: 'Chat deleted'}));
+        notify.success(t('notify.chat.deleted', {defaultValue: 'Deleted {{chat}}', chat: targetText(chat)}));
         setTargets(prev => prev.filter(target => target.id !== chatID));
-    }, [bot.uuid, targets, t]);
+    }, [bot.uuid, targets, t, targetText]);
 
     // The capability probe runner — owns firing notify/confirm against a chat
     // and the per-(chat,capability) results. Lives at the group level so a
@@ -311,7 +323,7 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                     {BrandIcon && <BrandIcon size={24} grayscale={!enabled}/>}
                     <Box sx={{minWidth: 0}}>
                         <Typography noWrap variant="subtitle2" sx={{fontWeight: 600, color: enabled ? 'text.primary' : 'text.secondary'}}>
-                            {bot.name || bot.platform}
+                            <EntityLabel {...entities.bot(bot)} platformIcon={undefined} copy />
                         </Typography>
                         <Typography noWrap variant="caption" sx={{display: 'block', color: statusColor}}>
                             {status}
@@ -427,10 +439,12 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                                             {/* The chat leaf. */}
                                             <NodeContainer>
                                                 <ChatNode
-                                                    chatID={target.external_id}
+                                                    chatID={bareId(target.platform ?? '', target.external_id)}
+                                                    fullChatID={target.external_id}
                                                     targetID={target.id}
                                                     kind={target.kind}
-                                                    name={target.name}
+                                                    alias={target.alias}
+                                                    labelText={targetText(target)}
                                                     isPaired={target.is_paired}
                                                     active={enabled}
                                                     blocked={target.blocked}
@@ -509,8 +523,8 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                                                     </Box>
 
                                                     {/* Lifecycle zone: copy · disable · delete. */}
-                                                    <Tooltip title={t('notify.group.copyChatId', {defaultValue: 'Copy internal target UUID'})}>
-                                                        <IconButton size="small" onClick={() => handleCopy(target.id)}>
+                                                    <Tooltip title={t('notify.group.copyChatId', {defaultValue: 'Copy chat ID'})}>
+                                                        <IconButton size="small" onClick={() => handleCopy(target)}>
                                                             <CopyIcon fontSize="small" />
                                                         </IconButton>
                                                     </Tooltip>
@@ -590,7 +604,11 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                 title={t('notify.group.deleteChatTitle', {defaultValue: 'Delete this chat?'})}
                 description={
                     <>
-                        <Typography variant="body2" sx={{fontFamily: fontMono, mb: 1}}>{deleteTarget}</Typography>
+                        {deleteTargetItem && (
+                            <Box sx={{mb: 1}}>
+                                <EntityLabel {...targetProps(deleteTargetItem)} copy />
+                            </Box>
+                        )}
                         <Typography variant="body2">
                             {t('notify.group.deleteChatBody', {
                                 defaultValue: 'Its pairing, whitelist, and project binding are removed. If it messages the bot again it re-registers as a brand-new chat (re-pairing required when pairing is enforced). Session history is untouched. To block it instead, use Disable.',
@@ -608,7 +626,7 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
             <NotifyTestDialog
                 open={testTargetID !== null}
                 botUUID={bot.uuid!}
-                botName={bot.name || bot.platform}
+                botName={entities.botText(bot)}
                 targets={activeTargets.filter(target => target.can_notify)}
                 initialTargetID={testTargetID ?? undefined}
                 onClose={closeTest}
