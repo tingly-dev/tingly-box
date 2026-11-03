@@ -1,9 +1,8 @@
-import { BotTable, BotConfigDialog, BotAccessDialog } from '@/components/bot';
+import { BotTable, BotConfigDialog } from '@/components/bot';
 import EmptyState from '@/components/EmptyState';
 import { PageLayout } from '@/components/PageLayout';
 import CollapsibleGuide from '@/components/remote-control/CollapsibleGuide';
 import UnifiedCard from '@/components/UnifiedCard';
-import type { BotSettings } from '@/types/bot';
 import { useBotList } from '@/hooks/useBotList';
 import { useBotToggle } from '@/hooks/useBotToggle';
 import { useNotify } from '@/hooks/useNotify';
@@ -22,8 +21,6 @@ interface PlatformBotPageProps {
 const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBotPageProps) => {
     const { t } = useTranslation();
     const [searchParams, setSearchParams] = useSearchParams();
-
-	const [accessBot,setAccessBot]=useState<BotSettings|null>(null);
 
     // Add/Edit dialog state — the dialog itself is the shared BotConfigDialog.
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -132,7 +129,6 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                         onRestart={(uuid) => handleBotRestart(uuid)}
                         isToggling={isToggling}
                         isRestarting={isRestarting}
-						onManageAccess={(bot)=>setAccessBot(bot)}
                     />
                 )}
             </UnifiedCard>
@@ -154,7 +150,6 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                 onSaved={loadBotSettings}
                 notify={showNotification}
             />
-            <BotAccessDialog open={Boolean(accessBot)} bot={accessBot} onClose={()=>setAccessBot(null)} onChanged={loadBotSettings}/>
         </PageLayout>
     );
 };

@@ -44,7 +44,6 @@ import {
     IconCopy,
     IconClipboard,
     IconKey,
-    IconRestore,
     IconArrowUpRight,
     IconExternalLink,
     IconMapPin,
@@ -199,7 +198,7 @@ export const DeleteSweep = tablerMui(IconTrashX);
 export const Edit = tablerMui(IconEdit);
 export const Search = tablerMui(IconSearch);
 export const Refresh = tablerMui(IconRefresh);
-export const RestartAlt = tablerMui(IconRestore);
+export const RestartAlt = tablerMui(IconReload);
 export const ContentCopy = tablerMui(IconCopy);
 export const ContentPaste = tablerMui(IconClipboard);
 export const Upload = tablerMui(IconUpload);
