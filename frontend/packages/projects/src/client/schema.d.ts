@@ -1651,11 +1651,6 @@ export interface components {
             cli_path: string;
             /**
              * Format: int64
-             * @description Field default_max_running_threads
-             */
-            default_max_running_threads: number;
-            /**
-             * Format: int64
              * @description Field max_running_threads_limit
              */
             max_running_threads_limit: number;

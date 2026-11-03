@@ -3707,11 +3707,6 @@
             "type": "string",
             "description": "Field cli_path"
           },
-          "default_max_running_threads": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field default_max_running_threads"
-          },
           "max_running_threads_limit": {
             "type": "integer",
             "format": "int64",
@@ -3721,7 +3716,6 @@
         "required": [
           "cli_path",
           "base_url",
-          "default_max_running_threads",
           "max_running_threads_limit"
         ]
       },

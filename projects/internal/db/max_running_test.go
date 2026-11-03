@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestProjectsFromBeforeTheRunningLimitLoadAsDefaultAndSaveTheSetting(t *testing.T) {
+func TestProjectsFromBeforeTheRunningLimitLoadAsNoLimitAndSaveTheSetting(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "projects.db")
 	store, err := Open(path)
 	require.NoError(t, err)
@@ -34,12 +34,12 @@ func TestProjectsFromBeforeTheRunningLimitLoadAsDefaultAndSaveTheSetting(t *test
 	require.NoError(t, err)
 	got, err := store.GetProject(p.ID)
 	require.NoError(t, err)
-	assert.Zero(t, got.MaxRunningThreads, "no setting reads as the default")
+	assert.Zero(t, got.MaxRunningThreads, "no setting reads as 0, no limit")
 	gotThread, err := store.GetThread(th.ID)
 	require.NoError(t, err)
 	assert.False(t, gotThread.Queued)
 
-	for _, n := range []int{3, MaxRunningUnlimited, 0} {
+	for _, n := range []int{3, 0, 8} {
 		got.MaxRunningThreads = n
 		require.NoError(t, store.SaveProject(got))
 		reloaded, err := store.GetProject(p.ID)
@@ -49,14 +49,14 @@ func TestProjectsFromBeforeTheRunningLimitLoadAsDefaultAndSaveTheSetting(t *test
 	require.NoError(t, store.Close())
 }
 
-func TestProjectJSONWithoutTheRunningLimitDecodesAsDefault(t *testing.T) {
+func TestProjectJSONWithoutTheRunningLimitDecodesAsNoLimit(t *testing.T) {
 	var p Project
 	require.NoError(t, json.Unmarshal([]byte(`{"id":"x","name":"Old","type":"project"}`), &p))
 	assert.Zero(t, p.MaxRunningThreads)
 	out, err := json.Marshal(Project{Name: "Default"})
 	require.NoError(t, err)
-	assert.NotContains(t, string(out), "max_running_threads", "the default is not written out")
-	out, err = json.Marshal(Project{MaxRunningThreads: MaxRunningUnlimited})
+	assert.NotContains(t, string(out), "max_running_threads", "no limit is not written out")
+	out, err = json.Marshal(Project{MaxRunningThreads: 5})
 	require.NoError(t, err)
-	assert.Contains(t, string(out), `"max_running_threads":-1`)
+	assert.Contains(t, string(out), `"max_running_threads":5`)
 }

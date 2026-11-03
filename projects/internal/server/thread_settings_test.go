@@ -52,7 +52,7 @@ func TestProjectRunningLimitIsValidatedAndStored(t *testing.T) {
 	require.Equal(t, 201, c.do("POST", "/projects", map[string]any{"name": "P"}, &p))
 	assert.Zero(t, p.MaxRunningThreads)
 
-	for _, n := range []int{2, -1, 100, 0} {
+	for _, n := range []int{2, 100, 0} {
 		var out db.Project
 		require.Equal(t, 200, c.do("PATCH", "/projects/"+p.ID, map[string]any{"max_running_threads": n}, &out), n)
 		assert.Equal(t, n, out.MaxRunningThreads)
@@ -61,7 +61,7 @@ func TestProjectRunningLimitIsValidatedAndStored(t *testing.T) {
 		assert.Equal(t, n, saved.MaxRunningThreads)
 	}
 	require.Equal(t, 200, c.do("PATCH", "/projects/"+p.ID, map[string]any{"max_running_threads": 5}, nil))
-	for _, bad := range []any{-2, 101, 1000000, "many", 1.5} {
+	for _, bad := range []any{-1, 101, 1000000, "many", 1.5} {
 		assert.Equal(t, 400, c.do("PATCH", "/projects/"+p.ID, map[string]any{"max_running_threads": bad}, nil), bad)
 	}
 	saved, err := store.GetProject(p.ID)
@@ -69,11 +69,9 @@ func TestProjectRunningLimitIsValidatedAndStored(t *testing.T) {
 	assert.Equal(t, 5, saved.MaxRunningThreads, "a rejected value changes nothing")
 
 	var rtime struct {
-		Default int `json:"default_max_running_threads"`
-		Limit   int `json:"max_running_threads_limit"`
+		Limit int `json:"max_running_threads_limit"`
 	}
 	require.Equal(t, 200, c.do("GET", "/projects/runtime", nil, &rtime))
-	assert.Equal(t, 4, rtime.Default)
 	assert.Equal(t, 100, rtime.Limit)
 }
 

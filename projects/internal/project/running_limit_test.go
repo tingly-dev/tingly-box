@@ -14,15 +14,15 @@ import (
 
 func TestRunningLimitResolvesTheSetting(t *testing.T) {
 	proj := func(n int) *db.Project { return &db.Project{Type: db.ProjectProject, MaxRunningThreads: n} }
-	assert.Equal(t, MaxRunningPerProject, RunningLimit(proj(0)), "a project without the setting keeps today's cap")
+	assert.Zero(t, RunningLimit(proj(0)), "0, also a project without the setting, means no limit")
 	assert.Equal(t, 7, RunningLimit(proj(7)))
-	assert.Zero(t, RunningLimit(proj(db.MaxRunningUnlimited)), "0 means no limit")
+	assert.Zero(t, RunningLimit(proj(-3)), "a stray negative value is no limit, not a deadlock")
 	assert.Equal(t, MaxRunningSessions, RunningLimit(&db.Project{Type: db.ProjectFolder, MaxRunningThreads: 2}), "folders share their own cap")
 
-	for _, n := range []int{-1, 0, 1, MaxRunningThreadsLimit} {
+	for _, n := range []int{0, 1, MaxRunningThreadsLimit} {
 		assert.True(t, ValidMaxRunningThreads(n), n)
 	}
-	for _, n := range []int{-2, -100, MaxRunningThreadsLimit + 1} {
+	for _, n := range []int{-1, -100, MaxRunningThreadsLimit + 1} {
 		assert.False(t, ValidMaxRunningThreads(n), n)
 	}
 }
@@ -135,26 +135,9 @@ func TestProjectLimitQueuesExtraThreadsAndStartsThemWhenASlotFrees(t *testing.T)
 	waitStatus(t, g.store, c.ID, db.ThreadIdle)
 }
 
-func TestProjectWithoutASettingKeepsTheDefaultCap(t *testing.T) {
-	g := newGatedFixture(t)
-	var threads []*db.Thread
-	for i := range MaxRunningPerProject + 1 {
-		threads = append(threads, g.start(t, string(rune('a'+i))))
-	}
-	for range MaxRunningPerProject {
-		<-g.started
-	}
-	g.waitQueued(t, threads[MaxRunningPerProject], true)
-	g.expectNoStart(t)
-	for i := range threads {
-		g.finish(string(rune('a' + i)))
-	}
-}
-
-func TestUnlimitedProjectRunsEveryThreadAtOnce(t *testing.T) {
-	g := newGatedFixture(t)
-	g.setLimit(t, db.MaxRunningUnlimited)
-	n := MaxRunningPerProject + 3
+func TestProjectWithoutALimitRunsEveryThreadAtOnce(t *testing.T) {
+	g := newGatedFixture(t) // MaxRunningThreads is 0, as for a project from before the setting
+	n := 7
 	for i := range n {
 		g.start(t, string(rune('a'+i)))
 	}
@@ -167,6 +150,22 @@ func TestUnlimitedProjectRunsEveryThreadAtOnce(t *testing.T) {
 	}
 	for i := range n {
 		g.finish(string(rune('a' + i)))
+	}
+}
+
+func TestSettingTheLimitBackToZeroReleasesEveryQueuedThread(t *testing.T) {
+	g := newGatedFixture(t)
+	g.setLimit(t, 1)
+	g.start(t, "a")
+	b, c := g.start(t, "b"), g.start(t, "c")
+	g.expectStarted(t, "a")
+	g.waitQueued(t, b, true)
+	g.waitQueued(t, c, true)
+
+	g.setLimit(t, 0)
+	g.expectStarted(t, "b", "c")
+	for _, task := range []string{"a", "b", "c"} {
+		g.finish(task)
 	}
 }
 

@@ -232,8 +232,8 @@ export const en = {
     },
     projectSettings: {
         maxRunning: 'Threads running at once',
-        maxRunningHelp: 'Extra threads wait in line and start as soon as a running one finishes. Lowering this never stops a running thread.',
-        maxRunningDefault: 'Default ({{count}})', maxRunningDefaultPlain: 'Default', maxRunningUnlimited: 'Unlimited',
+        maxRunningHelp: '0 means no limit. Otherwise extra threads wait in line and start as soon as a running one finishes. Lowering this never stops a running thread.',
+        maxRunningInvalid: 'Enter a whole number from 0 to {{max}}.',
         worktree: 'Use a worktree for each thread',
         worktreeHelp: 'When off, new threads share the repository directory and current branch. Their changes are visible to each other. Existing threads keep their working directories.',
         title: 'Project settings', tabGeneral: 'General', tabMemory: 'Memory', tabEnvironment: 'Environment', tabUsage: 'Usage',

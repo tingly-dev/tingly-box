@@ -237,8 +237,8 @@ export const zh: Dict<typeof en> = {
     },
     projectSettings: {
         maxRunning: '同时运行的线程数',
-        maxRunningHelp: '超出的线程会排队，有线程结束后立即开始。调低该值不会停止正在运行的线程。',
-        maxRunningDefault: '默认（{{count}}）', maxRunningDefaultPlain: '默认', maxRunningUnlimited: '不限',
+        maxRunningHelp: '0 表示不限制。否则超出的线程会排队，有线程结束后立即开始。调低该值不会停止正在运行的线程。',
+        maxRunningInvalid: '请输入 0 到 {{max}} 的整数。',
         worktree: '为每个线程使用 worktree',
         worktreeHelp: '关闭后，新线程共享仓库目录和当前分支，彼此可以看到对方的更改。已有线程保留原工作目录。',
         title: '项目设置', tabGeneral: '通用', tabMemory: '记忆', tabEnvironment: '环境', tabUsage: '用量',

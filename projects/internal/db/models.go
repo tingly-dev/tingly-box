@@ -46,8 +46,8 @@ type Project struct {
 	// DisableWorktree makes new threads share the selected repository checkout.
 	DisableWorktree bool `json:"disable_worktree,omitempty"`
 	// MaxRunningThreads caps how many of the project's threads run at once;
-	// the rest wait their turn. 0 is the default cap, MaxRunningUnlimited no
-	// cap, anything above 0 that many. Rows from before the field read as 0.
+	// the rest wait their turn. 0 means no cap, which is also how rows from
+	// before the field read.
 	MaxRunningThreads int        `json:"max_running_threads,omitempty"`
 	Paused            bool       `json:"paused"`
 	Starred           bool       `json:"starred"`
@@ -55,9 +55,6 @@ type Project struct {
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
 }
-
-// MaxRunningUnlimited is Project.MaxRunningThreads for "no cap".
-const MaxRunningUnlimited = -1
 
 // Project types.
 const (
