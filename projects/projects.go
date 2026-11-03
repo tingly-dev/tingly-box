@@ -22,9 +22,13 @@ import (
 	"github.com/tingly-dev/tingly-box/projects/internal/project"
 	"github.com/tingly-dev/tingly-box/projects/internal/server"
 	"github.com/tingly-dev/tingly-box/projects/internal/server/module"
+	projectmod "github.com/tingly-dev/tingly-box/projects/internal/server/module/project"
 	"github.com/tingly-dev/tingly-box/projects/llm"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
+
+// DirectoryAuthenticatedKey may be set only after the host has authenticated the request.
+const DirectoryAuthenticatedKey = projectmod.DirectoryAuthenticatedKey
 
 // Host is what Projects needs from the server embedding it.
 type Host interface {
