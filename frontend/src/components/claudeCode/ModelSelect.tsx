@@ -5,7 +5,7 @@ import {Box, MenuItem, Select, Stack, Typography} from '@mui/material';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {fontMono, fontSizes} from '@/theme/fonts';
-import {composerPickerLabelSx, composerPickerSx} from '@tingly/projects';
+import {composerPickerLabelSx, composerPickerMenuProps, composerPickerSx} from '@tingly/projects';
 
 interface ModelSelectProps {
     // The profile whose tiers are offered ('' is the main routing).
@@ -73,6 +73,7 @@ const ModelSelect = ({profile, value, onChange, disabled}: ModelSelectProps) => 
                 </Stack>
             )}
             sx={composerPickerSx}
+            MenuProps={composerPickerMenuProps}
         >
             {tiers.map((tier) => (
                 <MenuItem key={tier.alias} value={tier.alias}>

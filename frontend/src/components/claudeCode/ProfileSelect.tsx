@@ -3,7 +3,7 @@ import {useProfileContext} from '@/contexts/ProfileContext';
 import {MenuItem, Select, Stack, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
 import { fontMono } from '@/theme/fonts';
-import {composerPickerLabelSx, composerPickerSx} from '@tingly/projects';
+import {composerPickerLabelSx, composerPickerMenuProps, composerPickerSx} from '@tingly/projects';
 
 interface ProfileSelectProps {
     value: string;
@@ -43,6 +43,7 @@ const ProfileSelect = ({value, onChange, disabled}: ProfileSelectProps) => {
                 </Stack>
             )}
             sx={composerPickerSx}
+            MenuProps={composerPickerMenuProps}
         >
             <MenuItem value="">{defaultLabel}</MenuItem>
             {profiles.map((p) => (

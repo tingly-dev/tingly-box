@@ -2,7 +2,7 @@ import { MenuItem, Select, Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { api, unwrap } from '../../client';
 import { ExpandMore, Lock } from '../icons';
-import { composerPickerLabelSx, composerPickerSx } from '../composerPicker';
+import { composerPickerLabelSx, composerPickerMenuProps, composerPickerSx } from '../composerPicker';
 
 interface Props {
     value: string;
@@ -39,6 +39,7 @@ export function PermissionModeSelect({ value, modes, onChange, disabled, allowIn
                 </Stack>
             )}
             sx={composerPickerSx}
+            MenuProps={composerPickerMenuProps}
         >
             {allowInherit && <MenuItem value="">{inherit}</MenuItem>}
             {modes.map((m) => <MenuItem key={m} value={m}>{t(`session.mode.${m}`, { defaultValue: m })}</MenuItem>)}
