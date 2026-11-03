@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/open-dingtalk/dingtalk-stream-sdk-go/chatbot"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
@@ -247,4 +248,77 @@ func TestSendMessage_ErrorsAreSurfaced(t *testing.T) {
 			t.Fatal("want error")
 		}
 	})
+}
+
+func TestOnChatBotMessage_RecordsConversationForOpenAPI(t *testing.T) {
+	f := &fakeDingTalk{}
+	bot := newTestBot(t, f)
+	bot.adapter = NewAdapter(bot.Config())
+
+	dm := &chatbot.BotCallbackDataModel{ConversationId: "cidDM", ConversationType: "1", SenderStaffId: "staffA", SessionWebhook: "https://hook/dm", Msgtype: "text", Text: chatbot.BotCallbackDataTextModel{Content: "hi"}}
+	grp := &chatbot.BotCallbackDataModel{ConversationId: "cidGrp", ConversationType: "2", SenderStaffId: "staffB", SessionWebhook: "https://hook/grp", Msgtype: "text", Text: chatbot.BotCallbackDataTextModel{Content: "hi"}}
+	for _, d := range []*chatbot.BotCallbackDataModel{dm, grp} {
+		if _, err := bot.onChatBotMessage(context.Background(), d); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	p := writeFile(t, "a.txt", "x")
+	media := []core.MediaAttachment{{Type: "document", URL: "file://" + p, Filename: "a.txt"}}
+	for _, id := range []string{"cidDM", "cidGrp"} {
+		if _, err := bot.SendMessage(context.Background(), id, &core.SendMessageOptions{Media: media}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if f.sends[0].Path != "/v1.0/robot/oToMessages/batchSend" || f.sends[1].Path != "/v1.0/robot/groupMessages/send" {
+		t.Errorf("routing = %s, %s", f.sends[0].Path, f.sends[1].Path)
+	}
+	if users, _ := f.sends[0].Body["userIds"].([]any); len(users) != 1 || users[0] != "staffA" {
+		t.Errorf("userIds = %v", f.sends[0].Body["userIds"])
+	}
+}
+
+func TestSendMessage_CaptionFailureAfterAttachmentIsReported(t *testing.T) {
+	calls := 0
+	f := &fakeDingTalk{}
+	f.sendFn = func(w http.ResponseWriter) {
+		calls++
+		if calls == 2 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`boom`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"processQueryKey":"k"}`))
+	}
+	bot := newTestBot(t, f)
+	bot.convMap["c"] = conversation{}
+	p := writeFile(t, "a.txt", "x")
+	_, err := bot.SendMessage(context.Background(), "c", &core.SendMessageOptions{
+		Text:  "cap",
+		Media: []core.MediaAttachment{{Type: "document", URL: "file://" + p}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "attachment sent but description failed") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestErrorsDoNotLeakCredentials(t *testing.T) {
+	bot, err := NewDingTalkBot(&core.Config{
+		Platform: core.PlatformDingTalk,
+		Auth:     core.AuthConfig{Type: "oauth", ClientID: "robot-key", ClientSecret: "TOPSECRET"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bot.MarkReady()
+	bot.oapiBase, bot.apiBase = "http://127.0.0.1:1", "http://127.0.0.1:1"
+	bot.convMap["c"] = conversation{}
+	p := writeFile(t, "a.txt", "x")
+	_, err = bot.SendMessage(context.Background(), "c", &core.SendMessageOptions{Media: []core.MediaAttachment{{Type: "document", URL: "file://" + p}}})
+	if err == nil {
+		t.Fatal("want error")
+	}
+	if strings.Contains(err.Error(), "TOPSECRET") || strings.Contains(err.Error(), "appsecret") {
+		t.Fatalf("error leaks the app secret: %v", err)
+	}
 }

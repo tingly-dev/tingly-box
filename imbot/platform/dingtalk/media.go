@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -46,6 +47,17 @@ const (
 // Anything else (webp, svg, ...) goes up as a plain file so it still arrives.
 var dingtalkImageExts = map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".bmp": true}
 
+// scrubURLError drops the request URL that net/http embeds in its errors: the
+// token and upload calls carry appsecret / access_token in the query string, and
+// these errors end up in logs and in the chat's error message.
+func scrubURLError(err error) error {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		return fmt.Errorf("%s: %w", ue.Op, ue.Err)
+	}
+	return err
+}
+
 // sendMedia uploads each attachment to DingTalk and sends it through the robot
 // OpenAPI. The stream-mode session webhook cannot carry images or files, and it
 // expires, so it is not used here. Caption text follows as its own message.
@@ -71,11 +83,10 @@ func (b *Bot) sendMedia(ctx context.Context, conversationID string, opts *core.S
 	}
 
 	if opts.Text != "" {
-		if err := b.ValidateTextLength(opts.Text); err != nil {
-			return nil, fmt.Errorf("attachment sent but description failed: %w", err)
-		}
-		if _, err := b.robotSend(ctx, conversationID, conv, msgKeyText, map[string]string{"content": opts.Text}); err != nil {
-			return nil, fmt.Errorf("attachment sent but description failed: %w", err)
+		for _, chunk := range b.ChunkText(opts.Text) {
+			if _, err := b.robotSend(ctx, conversationID, conv, msgKeyText, map[string]string{"content": chunk}); err != nil {
+				return nil, fmt.Errorf("attachment sent but description failed: %w", err)
+			}
 		}
 	}
 
@@ -153,6 +164,10 @@ func (b *Bot) uploadMedia(ctx context.Context, path, name, mediaType string) (st
 
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
+	// DingTalk's examples send type both in the query and as a form field.
+	if err := mw.WriteField("type", mediaType); err != nil {
+		return "", err
+	}
 	part, err := mw.CreateFormFile("media", name)
 	if err != nil {
 		return "", err
@@ -173,7 +188,7 @@ func (b *Bot) uploadMedia(ctx context.Context, path, name, mediaType string) (st
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("dingtalk upload: http: %w", err)
+		return "", fmt.Errorf("dingtalk upload: http: %w", scrubURLError(err))
 	}
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(resp.Body)
@@ -239,7 +254,7 @@ func (b *Bot) robotSend(ctx context.Context, conversationID string, conv convers
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", core.WrapError(fmt.Errorf("dingtalk send: http: %w", err), core.PlatformDingTalk, core.ErrPlatformError)
+		return "", core.WrapError(fmt.Errorf("dingtalk send: http: %w", scrubURLError(err)), core.PlatformDingTalk, core.ErrPlatformError)
 	}
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(resp.Body)

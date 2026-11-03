@@ -261,7 +261,7 @@ func (b *Bot) getAccessToken(ctx context.Context) (string, error) {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("get token request: %w", err)
+		return "", fmt.Errorf("get token request: %w", scrubURLError(err))
 	}
 	defer resp.Body.Close()
 

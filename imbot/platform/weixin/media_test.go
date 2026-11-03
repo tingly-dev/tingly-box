@@ -160,3 +160,36 @@ func TestSendMessage_MediaErrorsAreSurfaced(t *testing.T) {
 		t.Error("nothing should have been sent")
 	}
 }
+
+func TestSendMessage_CaptionFailureAfterAttachmentIsReported(t *testing.T) {
+	f := &fakeIlink{}
+	srv := f.server(t)
+	inner := srv.Config.Handler
+	var mu sync.Mutex
+	n := 0
+	srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/ilink/bot/sendmessage" {
+			mu.Lock()
+			n++
+			fail := n == 2
+			mu.Unlock()
+			if fail {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+		}
+		inner.ServeHTTP(w, r)
+	})
+	bot := newMediaTestBot(t, srv.URL)
+	p := filepath.Join(t.TempDir(), "a.pdf")
+	if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := bot.SendMessage(context.Background(), "u", &core.SendMessageOptions{
+		Text:  "cap",
+		Media: []core.MediaAttachment{{Type: "document", URL: "file://" + p, Filename: "a.pdf"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "attachment sent but description failed") {
+		t.Fatalf("err = %v", err)
+	}
+}

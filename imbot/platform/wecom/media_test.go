@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/imbot/core"
@@ -145,5 +146,28 @@ func TestSendMessage_MediaErrorsAreSurfaced(t *testing.T) {
 		Media: []core.MediaAttachment{{Type: "document", URL: "file:///no/such"}},
 	}); err == nil {
 		t.Fatal("missing file must surface")
+	}
+}
+
+type failTextOut struct{ fakeOut }
+
+func (f *failTextOut) Send(context.Context, *types.OutboundMessage) (*types.OutboundResult, error) {
+	return nil, errors.New("text failed")
+}
+
+func TestSendMessage_CaptionFailureAfterAttachmentIsReported(t *testing.T) {
+	out := &failTextOut{}
+	bot := newMediaBot(t, &out.fakeOut)
+	bot.out = out
+	p := tempFile(t, "a.pdf")
+	_, err := bot.SendMessage(context.Background(), "c", &core.SendMessageOptions{
+		Text:  "cap",
+		Media: []core.MediaAttachment{{Type: "document", URL: "file://" + p}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "attachment sent but description failed") {
+		t.Fatalf("err = %v", err)
+	}
+	if len(out.media) != 1 {
+		t.Errorf("attachment must have been sent first, media=%d", len(out.media))
 	}
 }
