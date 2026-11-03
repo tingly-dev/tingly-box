@@ -59,7 +59,7 @@ func (f *sessionToolsMCP) config(threadID string) (string, error) {
 	}
 	path := "/" + hex.EncodeToString(token[:])
 	srv := mcp.NewServer(&mcp.Implementation{Name: "tingly-projects", Version: "1.0.0"}, nil)
-	mcp.AddTool(srv, &mcp.Tool{Name: "send_file", Description: "Publish a file to this conversation so the user can see it."}, func(ctx context.Context, _ *mcp.CallToolRequest, args sendFileArgs) (*mcp.CallToolResult, sendFileResult, error) {
+	mcp.AddTool(srv, &mcp.Tool{Name: "send_file", Description: f.sendFileDescription(threadID)}, func(ctx context.Context, _ *mcp.CallToolRequest, args sendFileArgs) (*mcp.CallToolResult, sendFileResult, error) {
 		if args.Path == "" {
 			return nil, sendFileResult{}, fmt.Errorf("path is required")
 		}
@@ -90,6 +90,23 @@ func (f *sessionToolsMCP) config(threadID string) (string, error) {
 	}
 	f.configs[threadID] = file.Name()
 	return file.Name(), nil
+}
+
+// sendFileDescription is what the model reads about send_file, including where
+// it may save the file; the output directory is created so a write into it
+// needs no mkdir.
+func (f *sessionToolsMCP) sendFileDescription(threadID string) string {
+	desc := "Publish a file to this conversation so the user can see it."
+	t, err := f.service.Store.GetThread(threadID)
+	if err != nil {
+		return desc
+	}
+	p, err := f.service.Store.GetProject(t.ProjectID)
+	if err != nil {
+		return desc
+	}
+	_ = os.MkdirAll(threadOutputDir(f.service.Layout, p, t), 0o755)
+	return desc + " " + ArtifactGuidance(f.service.Layout, p, t)
 }
 
 func (f *sessionToolsMCP) serveHTTP(w http.ResponseWriter, r *http.Request) {
