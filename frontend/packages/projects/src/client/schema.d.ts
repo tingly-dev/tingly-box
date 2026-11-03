@@ -204,6 +204,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/directories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Browse non-hidden directories under the server user home
+         * @description Browse non-hidden directories under the server user home
+         */
+        post: operations["apiV1ProjectsDirectoriesPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/events": {
         parameters: {
             query?: never;
@@ -1149,6 +1169,18 @@ export interface components {
         BindingsResponse: {
             /** @description Field bindings */
             bindings: components["schemas"]["ChannelBinding"][];
+        };
+        BrowseDirectoriesRequest: {
+            /** @description Field path */
+            path: string;
+        };
+        BrowseDirectoriesResponse: {
+            /** @description Field directories */
+            directories: string[];
+            /** @description Field home */
+            home: string;
+            /** @description Field path */
+            path: string;
         };
         ChannelBinding: {
             /** @description Field bot_uuid */
@@ -2410,6 +2442,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OKResponse"];
+                };
+            };
+        };
+    };
+    apiV1ProjectsDirectoriesPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowseDirectoriesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowseDirectoriesResponse"];
                 };
             };
         };

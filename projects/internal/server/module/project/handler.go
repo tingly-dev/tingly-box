@@ -181,6 +181,10 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.GET("/projects/runtime", h.runtime, tag,
 		swagger.WithDescription("What threads run on: the Claude Code CLI and the gateway it is pointed at"),
 		swagger.WithResponseModel(ProjectRuntimeResponse{}))
+	api.POST("/projects/directories", h.browseDirectories, tag,
+		swagger.WithDescription("Browse non-hidden directories under the server user home"),
+		swagger.WithRequestModel(BrowseDirectoriesRequest{}),
+		swagger.WithResponseModel(BrowseDirectoriesResponse{}))
 	api.POST("/projects/repos/inspect", h.inspectRepo, tag,
 		swagger.WithDescription("Check a local repository path and return its root and current branch"),
 		swagger.WithRequestModel(InspectRepoRequest{}),

@@ -505,6 +505,39 @@
         }
       }
     },
+    "/api/v1/projects/directories": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Browse non-hidden directories under the server user home",
+        "description": "Browse non-hidden directories under the server user home",
+        "operationId": "apiV1ProjectsDirectoriesPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrowseDirectoriesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowseDirectoriesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/events": {
       "get": {
         "tags": [
@@ -2564,6 +2597,43 @@
         },
         "required": [
           "bindings"
+        ]
+      },
+      "BrowseDirectoriesRequest": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "BrowseDirectoriesResponse": {
+        "type": "object",
+        "properties": {
+          "directories": {
+            "type": "array",
+            "description": "Field directories",
+            "items": {
+              "type": "string"
+            }
+          },
+          "home": {
+            "type": "string",
+            "description": "Field home"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "home",
+          "path",
+          "directories"
         ]
       },
       "ChannelBinding": {

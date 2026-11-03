@@ -64,6 +64,7 @@ export const zh: Dict<typeof en> = {
         sourcePlatform: '来自 {{platform}}',
         sourceBot: '来自 Bot',
     },
+    directory: { title: '选择目录', browse: '浏览', select: '选择此目录', help: '浏览服务器用户主目录中的非隐藏目录。也可以手动输入其他路径。', loading: '正在加载…', empty: '这里没有目录。', failed: '无法浏览此目录。' },
     workdir: {
         title: '工作目录', add: '添加工作目录', actions: '目录操作', remove: '从侧栏移除',
         removeTitle: '移除此目录？', removeConfirm: '移除',
