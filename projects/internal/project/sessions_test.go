@@ -23,7 +23,7 @@ func TestFolderThreadRunsInItsFolder(t *testing.T) {
 		return nil
 	})
 	folder := t.TempDir()
-	s, err := f.startFolder(folder, FolderThreadSpec{Task: "what is here?", PermissionMode: "plan"})
+	s, err := f.startFolder(folder, FolderThreadSpec{Task: "what is here?", PermissionMode: "plan", Effort: "high"})
 	require.NoError(t, err)
 	folderProject, err := f.store.FindFolder(folder)
 	require.NoError(t, err)
@@ -41,6 +41,8 @@ func TestFolderThreadRunsInItsFolder(t *testing.T) {
 	assert.Equal(t, "default-model", spec.Model)
 	assert.Equal(t, folder, spec.ProjectPath)
 	assert.Equal(t, "plan", spec.PermissionMode)
+	assert.Equal(t, "high", spec.Effort)
+	assert.Equal(t, "high", got.EffortOverride)
 	assert.Empty(t, spec.AppendSystemPrompt, "no project instructions")
 	assert.Equal(t, f.threads.layout.SessionSettingsFile(s.ID), spec.SettingsPath, "a session reads its own uploads")
 	assert.Contains(t, spec.Env, "ANTHROPIC_BASE_URL=http://gw")
@@ -82,6 +84,8 @@ func TestSessionNeedsAFolderAndAMode(t *testing.T) {
 	}
 	_, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "x", PermissionMode: "yolo"})
 	assert.ErrorIs(t, err, ErrBadPermission)
+	_, err = f.startFolder(t.TempDir(), FolderThreadSpec{Task: "x", Effort: "invalid"})
+	assert.Error(t, err)
 	_, err = f.startFolder(t.TempDir(), FolderThreadSpec{Task: "  "})
 	assert.Error(t, err)
 }
@@ -467,4 +471,46 @@ func TestSessionWithBackgroundTasksIsNotDone(t *testing.T) {
 
 	store.Append(sid, changed())
 	waitStatus(t, f.store, s.ID, db.ThreadIdle)
+}
+
+func TestFolderThreadEffortAppliesOnNextTurnAndHandoff(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
+	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "start"})
+	require.NoError(t, err)
+	waitStatus(t, f.store, s.ID, db.ThreadIdle)
+	assert.Empty(t, f.agent.Launches()[0].Effort)
+	_, err = f.threads.SetEffort(s.ID, "high")
+	require.NoError(t, err)
+	_, err = f.threads.Send(context.Background(), s.ID, "continue", Source{}, nil)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		th, e := f.store.GetThread(s.ID)
+		return e == nil && th.Turns >= 2 && th.Status == db.ThreadIdle
+	}, 5*time.Second, 10*time.Millisecond)
+	assert.Equal(t, "high", f.agent.Launches()[1].Effort)
+	cmd, err := f.threads.Handoff(s.ID)
+	require.NoError(t, err)
+	assert.Contains(t, cmd, "--effort high")
+}
+
+func TestArchiveRunningSessionStopsAndStaysArchived(t *testing.T) {
+	started := make(chan struct{})
+	f := newFixture(t, func(turn *enginetest.Turn) error {
+		close(started)
+		<-turn.Ctx.Done()
+		return turn.Ctx.Err()
+	})
+	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "long"})
+	require.NoError(t, err)
+	<-started
+	archived, err := f.threads.ArchiveSession(s.ID)
+	require.NoError(t, err)
+	require.NotNil(t, archived.ArchivedAt)
+	assert.Eventually(t, func() bool { return !f.threads.Running(s.ID) }, 5*time.Second, 10*time.Millisecond)
+	got, err := f.store.GetThread(s.ID)
+	require.NoError(t, err)
+	assert.NotNil(t, got.ArchivedAt)
+	assert.Equal(t, db.ThreadIdle, got.Status)
+	_, err = f.threads.Send(context.Background(), s.ID, "continue", Source{}, nil)
+	assert.ErrorIs(t, err, ErrThreadArchived)
 }

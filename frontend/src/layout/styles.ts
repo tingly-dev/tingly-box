@@ -11,6 +11,7 @@ import {
     activityItemPaddingX,
     activityItemPaddingY,
     activityItemRadius,
+    footerHeight,
     headerHeight,
 } from './constants';
 import { Z_INDEX } from '../constants/zIndex';
@@ -144,8 +145,16 @@ export const activityRailSx: SxProps<Theme> = {
     display: 'flex',
     flexDirection: 'column',
     bgcolor: 'background.paper',
-    borderRight: '1px solid',
-    borderColor: 'divider',
+    '&::after': {
+        content: '""',
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        bottom: footerHeight,
+        borderRight: '1px solid',
+        borderColor: 'divider',
+        pointerEvents: 'none',
+    },
 };
 
 /** Expand handle on the ActivityBar — only shown when the Sidebar is collapsed.

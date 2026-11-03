@@ -164,6 +164,9 @@ func (s *Server) apiModules(ctx context.Context, schema bool) []module.Module {
 		if sm != nil && sm.RemoteChats() != nil {
 			chatDisabled = sm.RemoteChats().IsChatDisabled
 		}
+		if sm != nil && sm.BotAccess() != nil {
+			chatBridge.SetTargetBlocked(sm.BotAccess().IsExternalTargetBlocked)
+		}
 		chatBridge.Bind(app, s.channelRegistry, s.projectsEnabled, start, chatDisabled)
 		mods = append(mods, projectsmodule.NewHandler(app, s.projectsEnabled, start))
 		if !schema {

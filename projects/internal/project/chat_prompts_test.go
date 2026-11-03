@@ -210,13 +210,13 @@ func TestAQuestionIsAnsweredByReplying(t *testing.T) {
 	require.NoError(t, err)
 
 	asked := sink.next(t)
-	assert.Equal(t, "[#1 DB] Which database?\n  1. Postgres: for production\n  2. SQLite\nReply with a number or your own answer.", asked.text,
+	assert.Equal(t, "Which database?\n  1. Postgres: for production\n  2. SQLite\nReply with a number or your own answer.\n\n[#1 DB]", asked.text,
 		"a question has no buttons, even where the chat could show them")
 
 	handled, err := svc.PostFromChannel("telegram", "own", "2", nil)
 	require.NoError(t, err)
 	require.True(t, handled)
-	assert.Equal(t, "[#1 DB] chose SQLite", sink.next(t).text)
+	assert.Equal(t, "chose SQLite\n\n[#1 DB]", sink.next(t).text)
 	_, _, waiting := svc.Relay.Awaiting("telegram", "own")
 	assert.False(t, waiting, "answered: the next message is a message again")
 }
@@ -228,13 +228,13 @@ func TestAChatWithoutButtonsAnswersAnApprovalByReplying(t *testing.T) {
 	assert.Equal(t, "up", sink.nextPrompt(t).chatID)
 	asked := sink.next(t)
 	assert.Equal(t, "own", asked.chatID)
-	assert.Equal(t, "[#1 Ship] Approve: Run `make deploy`\nReply y to allow, always to allow it for this thread, n to deny, or say what to do instead.", asked.text)
+	assert.Equal(t, "Approve: Run `make deploy`\nReply y to allow, always to allow it for this thread, n to deny, or say what to do instead.\n\n[#1 Ship]", asked.text)
 
 	handled, err := svc.PostFromChannel("telegram", "own", "y", nil)
 	require.NoError(t, err)
 	require.True(t, handled)
 	assert.Equal(t, "up", sink.nextRestate(t).chatID, "only prompts with buttons are restated")
-	assert.Equal(t, "[#1 Ship] deployed", sink.next(t).text)
+	assert.Equal(t, "deployed\n\n[#1 Ship]", sink.next(t).text)
 }
 
 func TestOtherWordsDenyAnApprovalAndSayWhy(t *testing.T) {
@@ -258,7 +258,7 @@ func TestOtherWordsDenyAnApprovalAndSayWhy(t *testing.T) {
 	handled, err := svc.PostFromChannel("telegram", "own", "not on a Friday", nil)
 	require.NoError(t, err)
 	require.True(t, handled)
-	assert.Equal(t, "[#1 Ship] stopped", sink.next(t).text)
+	assert.Equal(t, "stopped\n\n[#1 Ship]", sink.next(t).text)
 	assert.Contains(t, reason, "not on a Friday")
 }
 

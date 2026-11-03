@@ -3,6 +3,7 @@ package remoteagent
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -12,7 +13,7 @@ import (
 
 // RegisterBuiltinCommands registers the chat commands
 // (.design/remote-into-projects.md, "命令精简"): which folder (/cd, /dir),
-// the session commands Projects runs, /help, and access (/bind, /join, which
+// the session commands Projects runs, /help, and access (/pair, /join, which
 // /help does not list). The registry is also what a platform shows as its
 // command menu.
 func RegisterBuiltinCommands(registry *imbot.CommandRegistry, botHandler BotHandlerAdapter) error {
@@ -20,6 +21,7 @@ func RegisterBuiltinCommands(registry *imbot.CommandRegistry, botHandler BotHand
 		newHelpCommand(botHandler),
 		newCdCommand(botHandler),
 		newDirCommand(botHandler),
+		newProjectCommand(botHandler),
 		newPairBindCommand(botHandler),
 		newJoinCommand(botHandler),
 	}
@@ -48,6 +50,8 @@ type BotHandlerAdapter interface {
 
 	// ListChatProjectPaths lists the folders a chat used, most recent first.
 	ListChatProjectPaths(chatID string) ([]string, error)
+	RememberFolderList(chatID string, paths []string)
+	FolderList(chatID string) []string
 
 	// IsWhitelisted checks if a group is whitelisted
 	IsWhitelisted(groupID string) bool
@@ -63,12 +67,13 @@ type BotHandlerAdapter interface {
 	// RunSessionCommand runs one of sessionCommands in Projects and tells the
 	// chat the result.
 	RunSessionCommand(ctx *imbot.HandlerContext, name, arg string)
+	RunProjectDirectory(ctx *imbot.HandlerContext, arg string)
 }
 
 const (
 	usageCd       = "Usage: /cd <path|number>"
 	usageJoin     = "Usage: /join <group_id|@username|invite_link>"
-	usagePairBind = "Usage: /bind <code>"
+	usagePairBind = "Usage: /pair <code>"
 )
 
 func sendCommandText(adapter BotHandlerAdapter, ctx *imbot.HandlerContext, text string) error {
@@ -138,6 +143,16 @@ func newHelpCommand(adapter BotHandlerAdapter) imbot.Command {
 		MustBuild()
 }
 
+func newProjectCommand(adapter BotHandlerAdapter) imbot.Command {
+	return imbot.NewCommand("cmd-project", "project", "List projects, or switch to a project coordinator").
+		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
+			arg, _ := joinedArgs(args)
+			adapter.RunProjectDirectory(ctx, arg)
+			return nil
+		}).
+		WithCategory("project").WithPriority(84).MustBuild()
+}
+
 func newCdCommand(adapter BotHandlerAdapter) imbot.Command {
 	return imbot.NewCommand("cmd-cd", "cd", "Work in another folder").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
@@ -157,12 +172,19 @@ func newCdCommand(adapter BotHandlerAdapter) imbot.Command {
 // where the chat is now.
 func changeDir(adapter BotHandlerAdapter, ctx *imbot.HandlerContext, input string) error {
 	if idx, ok := parsePositiveInt(input); ok {
-		paths, err := adapter.ListChatProjectPaths(ctx.ChatID)
-		if err != nil {
-			return sendCommandTextf(adapter, ctx, "Failed to list folders: %v", err)
+		paths := adapter.FolderList(ctx.ChatID)
+		if len(paths) == 0 {
+			return sendCommandText(adapter, ctx, "Use /dir to list folders first.")
 		}
 		if idx < 1 || idx > len(paths) {
 			return sendCommandTextf(adapter, ctx, "No folder %d (there are %d). /dir lists them.", idx, len(paths))
+		}
+		current, err := adapter.ListChatProjectPaths(ctx.ChatID)
+		if err != nil {
+			return sendCommandTextf(adapter, ctx, "Failed to list folders: %v", err)
+		}
+		if !slices.Contains(current, paths[idx-1]) {
+			return sendCommandText(adapter, ctx, "That folder is no longer available. Use /dir to refresh the list.")
 		}
 		return adapter.SetProjectPath(ctx.ChatID, paths[idx-1])
 	}
@@ -202,13 +224,17 @@ func parsePositiveInt(s string) (int, bool) {
 }
 
 func newDirCommand(adapter BotHandlerAdapter) imbot.Command {
-	return imbot.NewCommand("cmd-dir", "dir", "List the folders this chat used, or switch to one").
+	return imbot.NewCommand("cmd-dir", "dir", "List registered folders, or switch to one").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			if input, ok := joinedArgs(args); ok {
 				return changeDir(adapter, ctx, input)
 			}
 			currentPath, _ := adapter.GetProjectPath(ctx.ChatID)
-			paths, _ := adapter.ListChatProjectPaths(ctx.ChatID)
+			paths, err := adapter.ListChatProjectPaths(ctx.ChatID)
+			if err != nil {
+				return sendCommandTextf(adapter, ctx, "Failed to list folders: %v", err)
+			}
+			adapter.RememberFolderList(ctx.ChatID, paths)
 			text := buildDirText(currentPath, paths)
 
 			caps := imbot.GetPlatformCapabilities(string(ctx.Platform))
@@ -279,16 +305,17 @@ func newJoinCommand(adapter BotHandlerAdapter) imbot.Command {
 		MustBuild()
 }
 
-// newPairBindCommand registers the `/bind <code>` command used by an end-user
+// newPairBindCommand registers the `/pair <code>` command used by an end-user
 // to pair their direct chat with the bot. It is the only command an unpaired
 // chat is allowed to invoke when RequirePairing is on.
 func newPairBindCommand(adapter BotHandlerAdapter) imbot.Command {
-	return imbot.NewCommand("cmd-pair-bind", "bind",
+	return imbot.NewCommand("cmd-pair-bind", "pair",
 		"Pair this chat with the bot using the operator's pairing code").
+		WithAliases("bind").
 		Hidden().
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			if !ctx.IsDirectMessage {
-				return sendCommandText(adapter, ctx, "/bind only works in a direct message.")
+				return sendCommandText(adapter, ctx, "/pair only works in a direct message.")
 			}
 			code, ok := parsePairBindCode(args)
 			if !ok {

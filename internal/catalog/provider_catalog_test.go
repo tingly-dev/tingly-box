@@ -607,6 +607,12 @@ func TestEmbeddedGatewayProtocolEndpoints(t *testing.T) {
 			anthropicBaseURL:       "https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/anthropic",
 			supportsModelsEndpoint: false,
 		},
+		{
+			id:                     "runcrate-ai",
+			openAIBaseURL:          "https://api.runcrate.ai/v1",
+			anthropicBaseURL:       "https://api.runcrate.ai",
+			supportsModelsEndpoint: true,
+		},
 	}
 
 	for _, tt := range tests {

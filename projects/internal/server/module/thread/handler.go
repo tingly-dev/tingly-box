@@ -37,6 +37,8 @@ type CreateThreadRequest struct {
 	Title       string   `json:"title,omitempty"`
 	// Model is empty for the host's default.
 	Model string `json:"model,omitempty"`
+	// Effort applies to the first turn; empty uses the CLI default.
+	Effort string `json:"effort,omitempty" enum:",low,medium,high,max"`
 	// PermissionMode is empty to inherit the default (acceptEdits).
 	PermissionMode string `json:"permission_mode,omitempty"`
 	// Profile is the host's launch profile; empty for its default. Only
@@ -114,12 +116,18 @@ type PermissionModeRequest struct {
 // ProfileRequest sets the launch profile of a folder thread's next turn.
 type ProfileRequest struct {
 	Profile string `json:"profile"`
+	Inherit bool   `json:"inherit,omitempty"`
 }
 
 // ModelRequest sets the model of the thread's next turn. Empty restores the
 // project default for a worker, or the host profile's default for a folder.
 type ModelRequest struct {
 	Model string `json:"model"`
+}
+
+// EffortRequest selects the next turn's effort; empty restores inheritance.
+type EffortRequest struct {
+	Effort string `json:"effort" enum:",low,medium,high,max"`
 }
 
 // TitleRequest renames a thread.
@@ -216,11 +224,17 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.POST("/threads/:id/stop", h.stop, tag,
 		swagger.WithDescription("Interrupt the running turn; the process and its background tasks survive"),
 		swagger.WithResponseModel(db.Thread{}))
-	api.POST("/threads/:id/archive", h.archive, tag,
-		swagger.WithDescription("Archive (resolve) the thread; it stays readable and can be reopened"),
+	api.POST("/threads/:id/resolve", h.resolve, tag,
+		swagger.WithDescription("Resolve the thread; it stays readable and can be reopened"),
+		swagger.WithResponseModel(db.Thread{}))
+	api.POST("/threads/:id/archive", h.archiveSession, tag,
+		swagger.WithDescription("Archive a folder session, stopping its process without resolving it"),
+		swagger.WithResponseModel(db.Thread{}))
+	api.POST("/threads/:id/restore", h.restoreSession, tag,
+		swagger.WithDescription("Restore an archived folder session without changing its status"),
 		swagger.WithResponseModel(db.Thread{}))
 	api.POST("/threads/:id/reopen", h.reopen, tag,
-		swagger.WithDescription("Reopen an archived thread"),
+		swagger.WithDescription("Reopen a resolved thread"),
 		swagger.WithResponseModel(db.Thread{}))
 	api.PUT("/threads/:id/auto-answer", h.setAutoAnswer, tag,
 		swagger.WithDescription("Set when the thread answers a question with its suggested option by itself"),
@@ -237,6 +251,10 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.PUT("/threads/:id/model", h.setModel, tag,
 		swagger.WithDescription("Set the model of the thread's next turn; empty restores its project or host profile default"),
 		swagger.WithRequestModel(ModelRequest{}),
+		swagger.WithResponseModel(db.Thread{}))
+	api.PUT("/threads/:id/effort", h.setEffort, tag,
+		swagger.WithDescription("Set the thread's next-turn effort; empty restores its default"),
+		swagger.WithRequestModel(EffortRequest{}),
 		swagger.WithResponseModel(db.Thread{}))
 	api.PUT("/threads/:id/title", h.setTitle, tag,
 		swagger.WithDescription("Rename the thread"),
@@ -270,7 +288,7 @@ func fail(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, db.ErrNotFound):
 		apierr.Store(c, err, "thread")
-	case errors.Is(err, rt.ErrPaused), errors.Is(err, rt.ErrArchived), errors.Is(err, rt.ErrResolved), errors.Is(err, rt.ErrNoPrompt),
+	case errors.Is(err, rt.ErrPaused), errors.Is(err, rt.ErrArchived), errors.Is(err, rt.ErrThreadArchived), errors.Is(err, rt.ErrResolved), errors.Is(err, rt.ErrNoPrompt),
 		errors.Is(err, rt.ErrTaskNotRunning), errors.Is(err, rt.ErrBusy):
 		apierr.Message(c, http.StatusConflict, err.Error())
 	case errors.Is(err, rt.ErrTaskOutputUnset), errors.Is(err, os.ErrNotExist):
@@ -344,7 +362,7 @@ func (h *Handler) create(c *gin.Context) {
 		return
 	}
 	t, err := h.svc.Threads.StartFolderThread(rt.FolderThreadSpec{
-		ProjectID: c.Param("id"), Task: req.Content, Attachments: atts, Title: req.Title, Model: req.Model,
+		ProjectID: c.Param("id"), Task: req.Content, Attachments: atts, Title: req.Title, Model: req.Model, Effort: req.Effort,
 		PermissionMode: req.PermissionMode, Profile: req.Profile,
 	})
 	if err != nil {
@@ -522,7 +540,7 @@ func (h *Handler) reply(c *gin.Context, id string) {
 	c.JSON(http.StatusOK, t)
 }
 
-func (h *Handler) archive(c *gin.Context) {
+func (h *Handler) resolve(c *gin.Context) {
 	cur, ok := h.worker(c)
 	if !ok {
 		return
@@ -533,6 +551,50 @@ func (h *Handler) archive(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, t)
+}
+
+// folderSession limits the independent archive flag to folder sessions.
+func (h *Handler) folderSession(c *gin.Context) (*db.Thread, bool) {
+	t, ok := h.worker(c)
+	if !ok {
+		return nil, false
+	}
+	p, err := h.svc.Store.GetProject(t.ProjectID)
+	if err != nil {
+		fail(c, err)
+		return nil, false
+	}
+	if p.Type != db.ProjectFolder {
+		apierr.BadRequest(c, "only folder sessions can be archived here")
+		return nil, false
+	}
+	return t, true
+}
+
+func (h *Handler) archiveSession(c *gin.Context) {
+	t, ok := h.folderSession(c)
+	if !ok {
+		return
+	}
+	out, err := h.svc.Threads.ArchiveSession(t.ID)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *Handler) restoreSession(c *gin.Context) {
+	t, ok := h.folderSession(c)
+	if !ok {
+		return
+	}
+	out, err := h.svc.Threads.RestoreSession(t.ID)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
 }
 
 func (h *Handler) reopen(c *gin.Context) {
@@ -622,7 +684,13 @@ func (h *Handler) setProfile(c *gin.Context) {
 	if !ok {
 		return
 	}
-	out, err := h.svc.Threads.SetProfile(c.Request.Context(), t.ID, req.Profile)
+	var out *db.Thread
+	var err error
+	if p, e := h.svc.Store.GetProject(t.ProjectID); e == nil && p.Type == db.ProjectProject {
+		out, err = h.svc.Threads.SetWorkerProfile(c.Request.Context(), t.ID, req.Profile, req.Inherit)
+	} else {
+		out, err = h.svc.Threads.SetProfile(c.Request.Context(), t.ID, req.Profile)
+	}
 	if err != nil {
 		fail(c, err)
 		return
@@ -640,6 +708,23 @@ func (h *Handler) setModel(c *gin.Context) {
 		return
 	}
 	out, err := h.svc.Threads.SetModel(c.Request.Context(), t.ID, req.Model)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *Handler) setEffort(c *gin.Context) {
+	var req EffortRequest
+	if !apierr.Bind(c, &req) {
+		return
+	}
+	t, ok := h.worker(c)
+	if !ok {
+		return
+	}
+	out, err := h.svc.Threads.SetEffort(t.ID, req.Effort)
 	if err != nil {
 		fail(c, err)
 		return

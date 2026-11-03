@@ -3,6 +3,7 @@ import { Box, Button, Chip, IconButton, TextField, Tooltip, Typography } from '@
 import { useTranslation } from 'react-i18next';
 import { api, unwrap } from '../../client';
 import { Branch, Close, Warning } from '../icons';
+import { DirectoryPicker } from '../common/DirectoryPicker';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
@@ -24,6 +25,7 @@ export function RepoField({ value, onChange }: { value: RepoEntry[]; onChange: (
     const [path, setPath] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const [browsing, setBrowsing] = useState(false);
 
     const add = async () => {
         const p = path.trim();
@@ -84,10 +86,12 @@ export function RepoField({ value, onChange }: { value: RepoEntry[]; onChange: (
                     helperText={error ?? undefined}
                     slotProps={{ htmlInput: { style: { ...mono, fontSize: fontSizes.base }, spellCheck: false } }}
                 />
+                <Button variant="outlined" onClick={() => setBrowsing(true)} sx={{ flexShrink: 0, height: 40 }}>{t('directory.browse')}</Button>
                 <Button variant="outlined" onClick={() => void add()} disabled={!path.trim() || busy} sx={{ flexShrink: 0, height: 40 }}>
                     {t('repo.add')}
                 </Button>
             </Box>
+            {browsing && <DirectoryPicker onClose={() => setBrowsing(false)} onSelect={(selected) => { setPath(selected); setError(null); setBrowsing(false); }} />}
         </Box>
     );
 }

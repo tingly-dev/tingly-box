@@ -37,6 +37,7 @@ export function PlacementMenu({ overview, thread, onOverview, onThread, overview
                 {item(overview === 'top', t('placement.top'), () => onOverview('top'))}
                 <Divider />
                 <ListSubheader sx={{ lineHeight: '32px', bgcolor: 'transparent', fontWeight: 600, color: 'text.primary', fontSize: fontSizes.sm }}>{t('placement.thread')}</ListSubheader>
+                {item(!overviewFloat && thread === 'main', t('placement.main'), () => { onOverviewFloat(false); onThread('main'); })}
                 {item(!locked && !overviewFloat && thread === 'side', t('placement.side'), () => { onOverviewFloat(false); onThread('side'); }, locked)}
                 {item(!locked && !overviewFloat && thread === 'float', t('placement.float'), () => { onOverviewFloat(false); onThread('float'); }, locked)}
                 {item(!locked && overviewFloat, t('placement.overviewFloat'), () => { onThread('side'); onOverviewFloat(true); }, locked || overview !== 'side')}

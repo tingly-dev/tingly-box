@@ -24,7 +24,7 @@ function Dot({ color }: { color: string }) {
  * binding or moving a chat to a project. Bot connection and access control
  * stay the host's (the "Access control" button opens its dialog).
  */
-export default function ImSettingsPage() {
+export default function ImSettingsPage({ setupPath }: { setupPath?: string } = {}) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const { im, paths, embedded } = useProjectsHost();
@@ -32,8 +32,7 @@ export default function ImSettingsPage() {
     const { bots, chats, reload } = useImChats(!!im);
     const { bindings, byChat, bind } = useChannelBindings(!!im);
     const directory = useProjectDirectory(!!im);
-    // A chat is bound to a project from here; a folder is bound by one of its threads, from its page.
-    const bindable = useMemo(() => [...directory.values()].filter((p) => !isFolder(p)), [directory]);
+    const bindable = useMemo(() => [...directory.values()], [directory]);
     const [accessBot, setAccessBot] = useState<ImBot | null>(null);
     const [moving, setMoving] = useState<ImChat | null>(null);
 
@@ -60,6 +59,18 @@ export default function ImSettingsPage() {
             <Box sx={{ maxWidth: 1040, mx: 'auto', px: { xs: 2, md: embedded ? 3 : 4 }, pt: embedded ? { xs: 2, md: 3 } : { xs: 7, md: 5 }, pb: 6 }}>
                 <PageHeader title={t('im.settings.title')} subtitle={t('im.settings.intro')} icon={<ChatBubble />} sx={{ mb: 3 }} />
 
+                {setupPath && (
+                    <Surface sx={{ p: 2, mb: 2 }}>
+                        <Typography sx={{ fontWeight: 600, mb: 0.5 }}>{t('im.settings.getStarted', { defaultValue: 'Get started with IM' })}</Typography>
+                        <Typography color="text.secondary" sx={{ mb: 1.5 }}>
+                            {t('im.settings.getStartedSteps', { defaultValue: '1. Connect a bot. 2. Message it and grant access. 3. Bind the chat to a project below.' })}
+                        </Typography>
+                        <Button component={RouterLink} to={setupPath} variant="outlined" size="small">
+                            {t('im.settings.manageBots', { defaultValue: 'Connect or manage bots' })}
+                        </Button>
+                    </Surface>
+                )}
+
                 {loading ? (
                     <Skeleton variant="rounded" height={180} />
                 ) : bots.length === 0 ? (
@@ -71,7 +82,7 @@ export default function ImSettingsPage() {
                             return (
                                 <Surface key={bot.uuid} padding={0} sx={{ overflow: 'hidden' }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, px: 2, py: 1.5, borderBottom: rows.length > 0 ? 1 : 0, borderColor: 'divider' }}>
-                                        <PlatformMark platform={bot.platform} size={24} />
+                                        <PlatformMark platform={bot.platform} size={24} colored={rows.some((chat) => !!byChat.get(chatKey(chat.platform, chat.chatId)))} />
                                         <Box sx={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'baseline', columnGap: 1.5, rowGap: 0.25, flexWrap: 'wrap' }}>
                                             <Typography noWrap sx={{ fontWeight: 600 }}>{bot.name}</Typography>
                                             <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary', display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
@@ -102,6 +113,10 @@ export default function ImSettingsPage() {
                                                         const place = b ? directory.get(b.project_id) : undefined;
                                                         // A thread other than the project's main one is opened on its own.
                                                         const thread = b && place && b.thread_id !== place.main_thread_id ? `?thread=${encodeURIComponent(b.thread_id)}` : '';
+                                                        const folderPath = place && isFolder(place) ? paths.folder(place.path) : '';
+                                                        const destination = folderPath
+                                                            ? `${folderPath}${b?.thread_id && !b.folder ? `${folderPath.includes('?') ? '&' : '?'}session=${encodeURIComponent(b.thread_id)}` : ''}`
+                                                            : `${paths.project(b?.project_id ?? '')}${thread}`;
                                                         return (
                                                             <TableRow key={chatKey(c.platform, c.chatId)}>
                                                                 <TableCell sx={{ pl: 2 }}>
@@ -110,12 +125,18 @@ export default function ImSettingsPage() {
                                                                 </TableCell>
                                                                 <TableCell>
                                                                     {b?.project_id ? (
-                                                                        <Link component={RouterLink} to={`${paths.project(b.project_id)}${thread}`} underline="hover" color="text.primary" noWrap sx={{ display: 'block', fontSize: fontSizes.base }}>
+                                                                        <Link component={RouterLink} to={destination} underline="hover" color="text.primary" noWrap sx={{ display: 'block', fontSize: fontSizes.base }}>
                                                                             {place?.name ?? t('im.place.elsewhere')}
                                                                         </Link>
                                                                     ) : (
                                                                         <Typography color="text.disabled" sx={{ fontSize: fontSizes.base }}>{t('im.settings.notBound')}</Typography>
                                                                     )}
+                                                                    {b?.target_thread_id && <Typography noWrap color="text.secondary" sx={{ fontSize: fontSizes.sm }}>
+                                                                        {t('im.focus.boundSession', { number: b.target_seq, title: b.target_title || b.target_thread_id })}
+                                                                    </Typography>}
+                                                                    {b?.project_id && <Typography noWrap color="text.secondary" sx={{ fontSize: fontSizes.sm }}>
+                                                                        {b.folder || !b.thread_id ? t('im.focus.nextSession') : b.focus_agent === 'llm' ? t('im.focus.coordinator') : t('im.focus.thread', { number: b.focus_seq, title: b.focus_title || b.thread_id })}
+                                                                    </Typography>}
                                                                 </TableCell>
                                                                 <TableCell sx={{ whiteSpace: 'nowrap' }}>
                                                                     <Typography component="span" sx={{ fontSize: fontSizes.base, display: 'inline-flex', alignItems: 'center', gap: 0.75, color: 'text.secondary' }}>

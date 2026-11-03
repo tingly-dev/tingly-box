@@ -43,7 +43,8 @@ type probeParams struct {
 	// Raw is the caller's own request (E2ERequest.Request), already decoded
 	// with the SDK type of its protocol; nil = build the fixture. The
 	// builders only fill what the target decides on top of it.
-	Raw any
+	Raw             any
+	DecisionRequest json.RawMessage
 	// ClaudeCodePreamble: the real target is a Claude Code OAuth provider, so
 	// add the Claude Code system preamble even on a loopback client.
 	ClaudeCodePreamble bool

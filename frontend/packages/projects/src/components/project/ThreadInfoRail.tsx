@@ -141,7 +141,8 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
                 <Fact label={t('rail.folder')}>{thread.cwd}</Fact>
                 {branch && <Fact label={t('rail.branch')}>{branch}</Fact>}
                 {configuredModel && <Fact label={t('threadSettings.configuredModel')}>{configuredModel}</Fact>}
-                {thread.model && <Fact label={t(folder ? 'rail.model' : 'threadSettings.lastModel')}>{[thread.profile, thread.model].filter(Boolean).join(' · ')}</Fact>}
+                {folder && thread.model && <Fact label={t('threadSettings.configuredModel')}>{[thread.profile, thread.model].filter(Boolean).join(' · ')}</Fact>}
+                {thread.reported_model && <Fact label={t('threadSettings.lastModel')}>{thread.reported_model}</Fact>}
                 {permission && <Fact label={t('rail.permissions')}>{permission}</Fact>}
             </RailCard>
             {(hasTokens || thread.turns > 0) && (

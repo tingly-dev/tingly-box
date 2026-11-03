@@ -15,6 +15,8 @@ import { fontMono } from '@/theme/fonts';
 
 interface Props {
     open: boolean;
+    /** Render access controls inside the parent surface. */
+    inline?: boolean;
     bot: BotSettings | null;
     onClose: () => void;
     onChanged?: () => void;
@@ -38,10 +40,15 @@ type ChatControl = 'control' | 'none' | 'blocked';
 
 const rowSx = {p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1.5} as const;
 
+function AccessEditor({inline, open, onClose, children}: {inline: boolean; open: boolean; onClose: () => void; children: ReactNode}) {
+    if (inline) return open ? <Box sx={{mt: 1.5, border: 1, borderColor: 'divider', borderRadius: 1.5}}>{children}</Box> : null;
+    return <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">{children}</Dialog>;
+}
+
 const rowHeader = (title: ReactNode, id: string) => (
     <Box sx={{minWidth: 0}}>
         <Typography sx={{fontWeight: 600}}>{title}</Typography>
-        <Typography variant="caption" sx={{fontFamily: fontMono, color: 'text.primary', overflowWrap: 'anywhere'}}>{id}</Typography>
+        {title !== id && <Typography variant="caption" sx={{fontFamily: fontMono, color: 'text.primary', overflowWrap: 'anywhere'}}>{id}</Typography>}
     </Box>
 );
 
@@ -66,7 +73,7 @@ const remoteRows = (allow: boolean) => {
     ];
 };
 
-const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAccess}: Props) => {
+const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAccess, inline = false}: Props) => {
     const {t} = useTranslation();
     const remoteOnly = scope === 'remote_control';
     const shared = remoteOnly ? remoteAccess : undefined;
@@ -79,6 +86,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
     const [actorGroup, setActorGroup] = useState<BotGroupDetail | null>(null);
     const [externalActorID, setExternalActorID] = useState('');
     const [actorName, setActorName] = useState('');
+    const [rename, setRename] = useState<{kind: 'chat' | 'group'; id: string; alias: string} | null>(null);
 
     const botUuid = bot?.uuid;
     const loadOwn = useCallback(async () => {
@@ -138,10 +146,27 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
         if (chat.chat.blocked) await api.setBotDirectChatBlocked(bot!.uuid!, chat.chat.id, false);
     });
 
+    const renameEditor = (
+        <AccessEditor inline={inline} open={Boolean(rename)} onClose={() => setRename(null)}>
+            <DialogTitle>{t('botAccess.rename', {defaultValue: 'Rename'})}</DialogTitle>
+            <DialogContent>{error && <Alert severity="error">{error}</Alert>}<TextField autoFocus fullWidth sx={{mt: 1}}
+                label={t('botAccess.alias', {defaultValue: 'Alias'})}
+                helperText={t('botAccess.aliasHint', {defaultValue: 'Leave empty to use the platform name or ID.'})}
+                value={rename?.alias || ''} onChange={(event) => setRename((current) => current && {...current, alias: event.target.value})}/></DialogContent>
+            <DialogActions>
+                <Button onClick={() => setRename(null)}>{t('common.cancel', {defaultValue: 'Cancel'})}</Button>
+                <Button disabled={saving} variant="contained" onClick={() => void mutate(async () => {
+                    if (!rename || !bot?.uuid) return;
+                    if (rename.kind === 'chat') await api.setBotDirectChatAlias(bot.uuid, rename.id, rename.alias);
+                    else await api.setBotGroupAlias(bot.uuid, rename.id, rename.alias);
+                    setRename(null);
+                })}>{t('common.save', {defaultValue: 'Save'})}</Button>
+            </DialogActions>
+        </AccessEditor>
+    );
+
     const chatHeader = (chat: DirectChatDetail) => rowHeader(
-        chat.chat.peer_actor_id
-            ? t('botAccess.pairedPerson', {defaultValue: 'Paired person'})
-            : t('botAccess.unpairedChat', {defaultValue: 'Unpaired chat'}),
+        chat.chat.alias || chat.chat.external_chat_id,
         chat.chat.external_chat_id,
     );
 
@@ -151,15 +176,18 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
         const canPair = Boolean(chat.chat.peer_actor_id);
         return (
             <Box key={chat.chat.id} sx={rowSx}>
-                <Stack direction={{xs: 'column', sm: 'row'}} sx={{justifyContent: 'space-between', alignItems: {sm: 'center'}, gap: 1}}>
-                    {chatHeader(chat)}
+                <Stack direction={inline ? 'column' : {xs: 'column', sm: 'row'}} sx={{justifyContent: 'space-between', alignItems: inline ? 'stretch' : {sm: 'center'}, gap: 1}}>
+                    <Stack direction="row" sx={{alignItems: 'center'}} spacing={1}>
+                        {chatHeader(chat)}
+                        <Button size="small" onClick={() => { setActorGroup(null); setRename({kind: 'chat', id: chat.chat.id, alias: chat.chat.alias || ''}); }}>{t('botAccess.rename', {defaultValue: 'Rename'})}</Button>
+                    </Stack>
                     <ToggleButtonGroup
                         exclusive
                         size="small"
                         color="primary"
                         sx={{
-                            width: {xs: '100%', sm: 'auto'},
-                            '& .MuiToggleButton-root': {flex: {xs: 1, sm: 'none'}, whiteSpace: 'nowrap', textTransform: 'none', px: {xs: 0.5, sm: 1.5}},
+                            width: inline ? '100%' : {xs: '100%', sm: 'auto'},
+                            '& .MuiToggleButton-root': {flex: inline ? 1 : {xs: 1, sm: 'none'}, whiteSpace: 'nowrap', textTransform: 'none', px: {xs: 0.5, sm: 1.5}},
                         }}
                         value={value}
                         disabled={saving}
@@ -183,6 +211,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                         {t('botAccess.partial', {defaultValue: 'Partly allowed, so permission prompts can\'t be answered. Choose Can control to repair.'})}
                     </Typography>
                 )}
+                {inline && rename?.kind === 'chat' && rename.id === chat.chat.id && renameEditor}
             </Box>
         );
     };
@@ -192,7 +221,10 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
         return (
             <Box key={chat.chat.id} sx={rowSx}>
                 <Stack direction={{xs: 'column', sm: 'row'}} sx={{justifyContent: 'space-between', gap: 1}}>
-                    {chatHeader(chat)}
+                    <Stack direction="row" sx={{alignItems: 'center'}} spacing={1}>
+                        {chatHeader(chat)}
+                        <Button size="small" onClick={() => { setActorGroup(null); setRename({kind: 'chat', id: chat.chat.id, alias: chat.chat.alias || ''}); }}>{t('botAccess.rename', {defaultValue: 'Rename'})}</Button>
+                    </Stack>
                     <Stack direction="row" spacing={1} sx={{flexWrap: 'wrap', alignItems: 'center'}}>
                         {state === 'on' && <Chip size="small" color="primary" label={t('botAccess.chipRemote', {defaultValue: 'Remote Control'})}/>}
                         {state === 'off' && <Chip size="small" label={t('botAccess.chipNoRemote', {defaultValue: 'No Remote Control'})}/>}
@@ -226,6 +258,42 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
         );
     };
 
+    const actorEditor = (
+        <AccessEditor inline={inline} open={Boolean(actorGroup)} onClose={() => setActorGroup(null)}>
+            <DialogTitle>{t('botAccess.addActorTitle', {defaultValue: 'Add authorized actor'})}</DialogTitle>
+            <DialogContent>
+                <Stack spacing={2} sx={{pt: 1}}>
+                    <Alert severity="info">{t('botAccess.addActorInfo', {defaultValue: 'This grants Start and Approve in this Group. Privileged access stays denied.'})}</Alert>
+                    <TextField
+                        autoFocus
+                        label={t('botAccess.actorId', {defaultValue: 'Platform actor ID'})}
+                        value={externalActorID}
+                        onChange={(event) => setExternalActorID(event.target.value)}
+                        helperText={t('botAccess.actorIdHint', {defaultValue: 'Use the concrete user ID reported by the IM platform.'})}
+                    />
+                    <TextField
+                        label={t('botAccess.displayName', {defaultValue: 'Display name (optional)'})}
+                        value={actorName}
+                        onChange={(event) => setActorName(event.target.value)}
+                    />
+                </Stack>
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={() => setActorGroup(null)}>{t('common.cancel', {defaultValue: 'Cancel'})}</Button>
+                <Button
+                    variant="contained"
+                    disabled={!externalActorID.trim() || saving}
+                    onClick={() => void mutate(async () => {
+                        await api.addBotGroupActor(bot!.uuid!, actorGroup!.group.id, externalActorID.trim(), externalActorID.trim(), actorName.trim() || undefined);
+                        setActorGroup(null);
+                    })}
+                >
+                    {t('botAccess.addController', {defaultValue: 'Add controller'})}
+                </Button>
+            </DialogActions>
+        </AccessEditor>
+    );
+
     const groupRow = ({group, capabilities: groupCaps, actors}: BotGroupDetail) => {
         const remoteAllowed = groupCaps.remote_control === 'allow';
         const nobody = remoteAllowed && actors.length === 0;
@@ -238,8 +306,11 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
         );
         return (
             <Box key={group.id} sx={rowSx}>
-                <Stack direction={{xs: 'column', sm: 'row'}} sx={{justifyContent: 'space-between', gap: 1}}>
-                    {rowHeader(group.name || t('botAccess.group', {defaultValue: 'Group'}), group.external_group_id)}
+                <Stack direction={inline ? 'column' : {xs: 'column', sm: 'row'}} sx={{justifyContent: 'space-between', gap: 1}}>
+                    <Stack direction="row" sx={{alignItems: 'center'}} spacing={1}>
+                        {rowHeader(group.alias || group.name || group.external_group_id, group.external_group_id)}
+                        <Button size="small" onClick={() => { setActorGroup(null); setRename({kind: 'group', id: group.id, alias: group.alias || ''}); }}>{t('botAccess.rename', {defaultValue: 'Rename'})}</Button>
+                    </Stack>
                     <Stack direction="row">
                         {!remoteOnly && capSwitch('notify', t('botAccess.notify', {defaultValue: 'Notify'}))}
                         {capSwitch('remote_control', t('botAccess.remoteControl', {defaultValue: 'Remote Control'}))}
@@ -253,6 +324,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                         </Typography>
                         {actors.map(({actor}) => <Chip key={actor.id} size="small" label={actor.display_name || actor.external_actor_id}/>)}
                         <Button size="small" onClick={() => {
+                            setRename(null);
                             setActorGroup({group, capabilities: groupCaps, actors});
                             setExternalActorID('');
                             setActorName('');
@@ -261,20 +333,22 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                         </Button>
                     </Stack>
                 )}
+                {inline && rename?.kind === 'group' && rename.id === group.id && renameEditor}
+                {inline && actorGroup?.group.id === group.id && actorEditor}
             </Box>
         );
     };
 
     const name = bot?.name || bot?.platform || '';
 
-    return <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-        <DialogTitle sx={{display: 'flex', alignItems: 'center', gap: 1}}>
+    const content = <>
+        {!inline && <DialogTitle sx={{display: 'flex', alignItems: 'center', gap: 1}}>
             <Security color="primary"/>
             {remoteOnly
                 ? t('botAccess.titleRemote', {defaultValue: 'Who can control {{name}}', name})
                 : t('botAccess.titleAll', {defaultValue: '{{name}} access', name})}
-        </DialogTitle>
-        <DialogContent dividers>
+        </DialogTitle>}
+        <DialogContent dividers={!inline} sx={inline ? { px: 0, py: 1 } : undefined}>
             <Stack spacing={3}>
                 {remoteOnly ? (
                     // The next action for adding someone, handed over as the
@@ -337,41 +411,16 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                 </>}
             </Stack>
         </DialogContent>
-        <DialogActions><Button onClick={onClose}>{t('common.close', {defaultValue: 'Close'})}</Button></DialogActions>
-        <Dialog open={Boolean(actorGroup)} onClose={() => setActorGroup(null)} fullWidth maxWidth="xs">
-            <DialogTitle>{t('botAccess.addActorTitle', {defaultValue: 'Add authorized actor'})}</DialogTitle>
-            <DialogContent>
-                <Stack spacing={2} sx={{pt: 1}}>
-                    <Alert severity="info">{t('botAccess.addActorInfo', {defaultValue: 'This grants Start and Approve in this Group. Privileged access stays denied.'})}</Alert>
-                    <TextField
-                        autoFocus
-                        label={t('botAccess.actorId', {defaultValue: 'Platform actor ID'})}
-                        value={externalActorID}
-                        onChange={(event) => setExternalActorID(event.target.value)}
-                        helperText={t('botAccess.actorIdHint', {defaultValue: 'Use the concrete user ID reported by the IM platform.'})}
-                    />
-                    <TextField
-                        label={t('botAccess.displayName', {defaultValue: 'Display name (optional)'})}
-                        value={actorName}
-                        onChange={(event) => setActorName(event.target.value)}
-                    />
-                </Stack>
-            </DialogContent>
-            <DialogActions>
-                <Button onClick={() => setActorGroup(null)}>{t('common.cancel', {defaultValue: 'Cancel'})}</Button>
-                <Button
-                    variant="contained"
-                    disabled={!externalActorID.trim() || saving}
-                    onClick={() => void mutate(async () => {
-                        await api.addBotGroupActor(bot!.uuid!, actorGroup!.group.id, externalActorID.trim(), externalActorID.trim(), actorName.trim() || undefined);
-                        setActorGroup(null);
-                    })}
-                >
-                    {t('botAccess.addController', {defaultValue: 'Add controller'})}
-                </Button>
-            </DialogActions>
-        </Dialog>
-    </Dialog>;
+        {!inline && <DialogActions><Button onClick={onClose}>{t('common.close', {defaultValue: 'Close'})}</Button></DialogActions>}
+    </>;
+
+    return <>
+        {inline ? (open && content) : <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">{content}</Dialog>}
+        {!inline && renameEditor}
+
+        {!inline && actorEditor}
+
+    </>;
 };
 
 export default BotAccessDialog;

@@ -10,10 +10,7 @@ import {
     Event as IconCalendarEvent,
     Add as IconPlus,
     TextSnippet as IconFileText,
-    RemoteControl as IconRemote,
-    Robot as IconRobot,
     Terminal as IconTerminal,
-    Bell as IconBell,
     Bolt as IconBolt,
     Settings as IconSettings,
     License as IconLicense,
@@ -45,7 +42,6 @@ import { useImageProfiles } from '@/pages/image/profiles/imageProfileStore';
 import { useTeamContext } from '@/contexts/TeamContext';
 import { orderTeams, teamPath } from '@/utils/team';
 import type { ActivityItem, NavItem, NavItemBase } from './types';
-import { useBotPlatformSummary } from './useBotPlatformSummary';
 import { useProjectsWaiting } from './useProjectsWaiting';
 import ThumbImage from '@/pages/image/components/ThumbImage';
 import { THUMB_EDGE_BADGE } from '@/pages/image/components/imageThumbnails';
@@ -71,7 +67,6 @@ export function useActivityItems(): ActivityItem[] {
     const imageProfiles = useImageProfiles();
     const mcpProfiles = useMCPProfiles();
     const { teams } = useTeamContext();
-    const botSummary = useBotPlatformSummary();
 
     const [hiddenScenarios, setHiddenScenarios] = useState<Set<string>>(() => getHiddenScenarios());
     useEffect(() => {
@@ -93,21 +88,6 @@ export function useActivityItems(): ActivityItem[] {
             window.removeEventListener('storage', sync);
         };
     }, []);
-    // Aggregate across every platform for the Bots row's count — the
-    // per-platform breakdown lives on the Bots page itself, not in the nav
-    // (see .design/bot-arch.md §10). A trailing "2/3" on the label's line
-    // rather than a second line, so the row matches its one-line siblings.
-    const botOverviewCount = useMemo(() => {
-        const totals = Object.values(botSummary).reduce(
-            (acc, s) => ({ active: acc.active + s.active, total: acc.total + s.total }),
-            { active: 0, total: 0 }
-        );
-        return totals.total > 0 ? {
-            value: `${totals.active}/${totals.total}`,
-            title: t('layout.botsRunning', { defaultValue: '{{active}} of {{total}} bots running', active: totals.active, total: totals.total }),
-        } : undefined;
-    }, [botSummary, t]);
-
     const promptMenuItems = useMemo(() => {
         const items: NavItem[] = [];
         if (skillIde) {
@@ -340,44 +320,22 @@ export function useActivityItems(): ActivityItem[] {
             // plain working folders (.design/projects.md). Its sidebar lists
             // the projects and folders themselves (ProjectsNav), not pages.
             // The dot says a thread waits on you.
-            ...(enableProjects ? [{
+            ...([{
                 key: 'projects',
                 icon: <IconFolder sx={{ fontSize: 22 }} />,
-                label: t('layout.projects'),
+                label: t('layout.workspace', { defaultValue: 'Workspace' }),
                 defaultPath: '/projects',
                 attention: projectsWaiting ? t('layout.projectsWaiting') : undefined,
-                sidebar: (onNavigate: () => void) => (
+                sidebar: enableProjects ? (onNavigate: () => void) => (
                     <Suspense fallback={null}>
                         <ProjectsNav onNavigate={onNavigate} />
                     </Suspense>
-                ),
+                ) : undefined,
                 children: [
-                    { path: '/projects', label: t('layout.projects'), match: (p: string) => p === '/projects' || p.startsWith('/projects/') },
+                    { path: '/projects', label: t('layout.projects'), match: (p: string) => p === '/projects' || p.startsWith('/projects/') || p === '/bots' || p.startsWith('/bots/') || p.startsWith('/remote-agent') || p === '/notify' },
                 ],
-            }] as ActivityItem[] : []),
+            }] as ActivityItem[]),
             // ── Power-ups: what extends an agent beyond plain model routing ──
-            // IM — one rail icon for the whole domain, named after where the
-            // user is (their chats) rather than the implementation ("Bots").
-            // Bot is the front door (every connected bot, every
-            // platform, credentials live there); Remote Control and Notify are
-            // the purposes mounted onto those bots. New purposes append here
-            // as new rows — the rail icon never grows. See bot-arch.md §10.
-            // (key stays 'bots' — internal id, not user-visible.)
-            // Shown with Projects: one switch turns on Projects and chatting
-            // with Claude Code from IM (.design/remote-into-projects.md); bots
-            // keep running and notifying while it is off.
-            ...(enableProjects ? [{
-                key: 'bots' as const,
-                icon: <IconRemote sx={{ fontSize: 22 }} />,
-                label: t('layout.remote'),
-                defaultPath: '/bots/overview',
-                children: [
-                    { path: '/bots/overview', label: t('layout.bots', { defaultValue: 'Bots' }), icon: <IconRobot sx={{ fontSize: 20 }} />, count: botOverviewCount },
-                    { type: 'divider' },
-                    { path: '/remote-agent', label: t('layout.remoteControl', { defaultValue: 'Remote Control' }), icon: <IconTerminal sx={{ fontSize: 20 }} />, match: (p) => p.startsWith('/remote-agent') },
-                    { path: '/notify', label: t('layout.notify', { defaultValue: 'IM Notify' }), icon: <IconBell sx={{ fontSize: 20 }} /> },
-                ] as NavItem[],
-            }] as ActivityItem[] : []),
             // Power-ups — one rail item for the opt-in features that act on
             // requests rather than being somewhere you work: Guardrails, the
             // Prompt pages, Bench, and Tools. Optional features remain controlled by
@@ -440,5 +398,5 @@ export function useActivityItems(): ActivityItem[] {
         ];
 
         return items;
-    }, [t, promptMenuItems, enableGuardrails, enableBench, enableProjects, projectsWaiting, profiles, imageProfiles, mcpProfiles, teams, botSummary, hiddenScenarios, pinnedScenarios, vmodelOff]);
+    }, [t, promptMenuItems, enableGuardrails, enableBench, enableProjects, projectsWaiting, profiles, imageProfiles, mcpProfiles, teams, hiddenScenarios, pinnedScenarios, vmodelOff]);
 }

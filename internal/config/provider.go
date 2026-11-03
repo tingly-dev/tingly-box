@@ -383,7 +383,7 @@ func (c *Config) removeProviderServicesFromRules(providerUUID string) {
 
 	// Save if any rules were modified
 	if needsSave {
-		if err := c.Save(); err != nil {
+		if err := c.saveLocked(); err != nil {
 			logrus.WithError(err).Error("Failed to save config after removing provider services from rules")
 		} else {
 			logrus.WithField("rules_updated", len(updatedRuleUUIDs)).Info("Successfully cleaned up rules after provider deletion")

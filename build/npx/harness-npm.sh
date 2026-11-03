@@ -267,7 +267,7 @@ ls "$(npm_mods "$CLI_PREFIX")/tingly-box/node_modules/@tingly-dev" 2>/dev/null |
 
 set_cache_env "$FRESH/cache-cli"
 OUT="$(env "${CACHE_ENV[@]}" "$(npm_bin "$CLI_PREFIX" tingly-box)" version 2>&1)"
-echo "$OUT" | grep -q "Installing binary from @tingly-dev/tingly-box-.*@$VERSION" && ! echo "$OUT" | grep -q "Downloading" \
+echo "$OUT" | grep -q "preparing Tingly Box from @tingly-dev/tingly-box-.*@$VERSION" && ! echo "$OUT" | grep -q "Downloading" \
 	&& pass "first run installed the binary from the platform package, nothing downloaded" || { fail "first run did not use the platform package"; echo "$OUT" | head -5; }
 echo "$OUT" | grep -Eq "Version:[[:space:]]+${TAG}[[:space:]]*\$" \
 	&& pass "the binary reports $TAG (built from this tree)" || { fail "binary version is not $TAG"; echo "$OUT" | grep Version; }

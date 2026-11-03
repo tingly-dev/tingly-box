@@ -78,6 +78,32 @@ func TestDeleteChannelBinding(t *testing.T) {
 	assert.Empty(t, left)
 }
 
+func TestPendingFolderBindingMovesAwayFromOldThread(t *testing.T) {
+	s := newStore(t)
+	old, oldThread := newProject(t, s, "old")
+	folder, err := s.OpenFolder(t.TempDir(), "")
+	require.NoError(t, err)
+	b := &ChannelBinding{Platform: "telegram", ChatID: "42", ThreadID: oldThread.ID}
+	require.NoError(t, s.UpsertChannelBinding(b))
+	require.NoError(t, s.SetChannelBindingFolder("telegram", "42", "Alice", folder.Path, "", "bot-1"))
+	pending, err := s.ListChannelBindings(BindingFilter{ProjectID: folder.ID})
+	require.NoError(t, err)
+	require.Len(t, pending, 1)
+	assert.Equal(t, "Alice", pending[0].ChatTitle)
+	assert.Equal(t, "bot-1", pending[0].BotUUID)
+	oldBindings, err := s.ListChannelBindingsOf([]string{oldThread.ID})
+	require.NoError(t, err)
+	assert.Empty(t, oldBindings, "old thread replies must not reach a chat moved to a folder")
+	_, err = s.DeleteProjectChannelBindings(old.ID)
+	require.NoError(t, err)
+	_, err = s.GetChannelBinding("telegram", "42")
+	require.NoError(t, err, "archiving the old project must not remove the moved chat")
+	_, err = s.DeleteProjectChannelBindings(folder.ID)
+	require.NoError(t, err)
+	_, err = s.GetChannelBinding("telegram", "42")
+	assert.ErrorIs(t, err, ErrNotFound)
+}
+
 func TestThreadEventKeepsItsSource(t *testing.T) {
 	s := newStore(t)
 	_, main := newProject(t, s, "P")

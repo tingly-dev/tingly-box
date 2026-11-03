@@ -16,6 +16,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/decision"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/vision/imagegen"
@@ -152,8 +153,7 @@ func (c *OpenAIClient) EmbeddingsNew(ctx context.Context, req openai.EmbeddingNe
 }
 
 // DecisionsNew posts a decision request to {APIBase}/decisions and returns the
-// raw JSON answer. The Decisions API has no SDK types (its schema is not
-// public), so the body travels opaquely; auth, proxy, and error handling come
+// raw JSON answer. The body travels opaquely; auth, proxy, and error handling come
 // from the same SDK client as every other OpenAI endpoint. Upstream errors are
 // returned as *openai.Error and keep their HTTP status.
 func (c *OpenAIClient) DecisionsNew(ctx context.Context, body []byte) ([]byte, error) {
@@ -164,24 +164,19 @@ func (c *OpenAIClient) DecisionsNew(ctx context.Context, body []byte) ([]byte, e
 	return out, err
 }
 
-// decisionsTarget resolves where a provider serves decisions. Most vendors expose
-// {APIBase}/decisions (override is nil). Two host the same body elsewhere, so
-// they override the base URL for this request (the SDK ignores absolute paths):
-//   - TypeSafe (Jev native): https://api.typesafe.ai/v1/systemone
-//   - OpenRouter (alpha):    https://openrouter.ai/api/alpha/decisions
+// decisionsTarget falls back to {APIBase}/decisions for unknown hosts. Fixed
+// vendor endpoints override the base URL because the SDK resolves relative paths.
 func decisionsTarget(apiBase string) (path string, override []option.RequestOption) {
 	u, err := url.Parse(apiBase)
 	if err != nil {
 		return "decisions", nil
 	}
-	root := u.Scheme + "://" + u.Host
-	switch strings.ToLower(u.Hostname()) {
-	case "api.typesafe.ai":
-		return "systemone", []option.RequestOption{option.WithBaseURL(root + "/v1/")}
-	case "openrouter.ai":
-		return "decisions", []option.RequestOption{option.WithBaseURL(root + "/api/alpha/")}
+	target := decision.ResolveTarget(apiBase)
+	if target.BasePath != "" {
+		root := u.Scheme + "://" + u.Host
+		return target.Endpoint, []option.RequestOption{option.WithBaseURL(root + target.BasePath)}
 	}
-	return "decisions", nil
+	return target.Endpoint, nil
 }
 
 // ImagesGenerate creates a new image generation request. Most providers speak

@@ -94,6 +94,8 @@ export const api = {
     listBotCapabilities: botApi.listBotCapabilities,
     setBotCapability: botApi.setBotCapability,
     listBotDirectChats: botApi.listBotDirectChats,
+    setBotDirectChatAlias: botApi.setBotDirectChatAlias,
+    setBotGroupAlias: botApi.setBotGroupAlias,
     setBotDirectChatBlocked: botApi.setBotDirectChatBlocked,
     deleteBotDirectChat: botApi.deleteBotDirectChat,
     setBotDirectChatPermission: botApi.setBotDirectChatPermission,

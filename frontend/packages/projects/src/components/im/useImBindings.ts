@@ -13,8 +13,7 @@ const POLL_MS = 15_000;
 export const chatKey = (platform: string, chatId: string) => `${platform}\u0000${chatId}`;
 
 /**
- * Where a chat is bound: a project (it resolves to the project's main thread;
- * not for a folder) or one thread, which is how a folder is bound.
+ * Where a chat is bound: a project, a folder, or one thread.
  */
 export type BindTarget = { project_id: string } | { thread_id: string };
 
@@ -55,8 +54,8 @@ export function useChannelBindings(enabled: boolean) {
         };
     }, [enabled]);
 
-    const bind = useCallback(async (chat: { platform: string; chatId: string }, target: BindTarget) => {
-        const b = await bindChannel({ platform: chat.platform, chat_id: chat.chatId, ...target });
+    const bind = useCallback(async (chat: { platform: string; chatId: string; botUuid: string }, target: BindTarget) => {
+        const b = await bindChannel({ platform: chat.platform, chat_id: chat.chatId, bot_uuid: chat.botUuid, ...target });
         window.dispatchEvent(new Event(IM_BINDINGS_CHANGED));
         return b;
     }, []);

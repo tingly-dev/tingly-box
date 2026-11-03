@@ -88,6 +88,9 @@ export default {
     "saved": "Saved"
   },
   "layout": {
+    "workspace": "Workspace",
+    "workspaceTip": { "title": "Meet Workspace", "text": "Organize projects, work in directories and connect IM chats in one place." },
+    "workspaceGate": { "title": "Enable Workspace", "text": "Enable the Workspace power-up to use projects, workdirs and IM chats.", "enable": "Enable Workspace", "error": "Could not enable Workspace. Please try again." },
     "projects": "Projects",
     "projectsWaiting": "Claude is waiting on you",
     "appTitle": "Tingly Box",
@@ -133,6 +136,7 @@ export default {
       "expand": "Expand sidebar"
     },
     // One-time callouts pointing at a control (components/CoachMark).
+    "featureSwitch": { "disable": "Turn off {{name}}", "disabledTitle": "{{name}} is off", "disabledText": "You can turn it back on in Preferences → Power-ups.", "teamTitle": "Team is on", "teamText": "Team is enabled by default. Use this button to turn it off." },
     "coachMarks": {
       "gotIt": "Got it",
       "agentVisibility": {
@@ -191,6 +195,7 @@ export default {
     "imagePlayground": "Playground",
     "remoteControl": "Remote Control",
     "notify": "IM Notify",
+    "imBots": "IM Bots",
     "bots": "Bots",
     "overview": "Overview",
     "platforms": {

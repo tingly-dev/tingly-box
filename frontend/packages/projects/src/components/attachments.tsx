@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Box, ButtonBase, Typography } from '@mui/material';
+import { Box, ButtonBase, Dialog, DialogContent, DialogTitle, IconButton, Typography } from '@mui/material';
+import { Close } from '@tingly/ui/icons';
 import { useTranslation } from 'react-i18next';
 import { apiFetch, type Attachment } from '../client';
 import { Description } from './icons';
@@ -66,6 +67,7 @@ function useStoredFile(owner: AttachOwner, path: string, enabled: boolean): stri
 
 function AttachmentChip({ owner, item }: { owner: AttachOwner; item: Attachment }) {
     const { t } = useTranslation('projects');
+    const [previewOpen, setPreviewOpen] = useState(false);
     const image = isImage(item);
     const src = useStoredFile(owner, item.path, image);
     const open = async () => {
@@ -75,9 +77,20 @@ function AttachmentChip({ owner, item }: { owner: AttachOwner; item: Attachment 
     };
     if (image && src) {
         return (
-            <ButtonBase onClick={() => void open()} aria-label={item.name} sx={{ borderRadius: radius.row, overflow: 'hidden', border: 1, borderColor: 'divider' }}>
-                <Box component="img" src={src} alt={item.name} sx={{ display: 'block', maxHeight: 120, maxWidth: 200, objectFit: 'cover' }} />
-            </ButtonBase>
+            <>
+                <ButtonBase onClick={() => setPreviewOpen(true)} aria-label={item.name} sx={{ borderRadius: radius.row, overflow: 'hidden', border: 1, borderColor: 'divider' }}>
+                    <Box component="img" src={src} alt={item.name} sx={{ display: 'block', maxHeight: 120, maxWidth: 200, objectFit: 'cover' }} />
+                </ButtonBase>
+                <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} maxWidth="lg" fullWidth aria-labelledby="attachment-preview-title">
+                    <DialogTitle id="attachment-preview-title" sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
+                        <Typography component="span" noWrap sx={{ flex: 1 }}>{item.name}</Typography>
+                        <IconButton onClick={() => setPreviewOpen(false)} aria-label={t('common.close')}><Close /></IconButton>
+                    </DialogTitle>
+                    <DialogContent sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', bgcolor: 'action.hover', minHeight: 200 }}>
+                        <Box component="img" src={src} alt={item.name} sx={{ display: 'block', maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain' }} />
+                    </DialogContent>
+                </Dialog>
+            </>
         );
     }
     const gone = src === null;

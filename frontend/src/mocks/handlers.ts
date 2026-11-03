@@ -184,7 +184,7 @@ const mockStandardProviderCatalog: MockProviderCatalogEntry[] = [
         provider: {
             uuid: 'mock-provider-tingly-box', name: 'Tingly',
             api_base: 'https://box.example.com/tingly/claude_code', api_style: 'anthropic', auth_type: 'api_key',
-            token: 'tingly-****wxyz', enabled: true, proxy_url: '',
+            token: 'tingly-****wxyz', enabled: true, proxy_url: 'http://proxy.example.com:8080',
             api_base_openai: null, api_base_anthropic: 'https://box.example.com/tingly/claude_code',
         },
         models: ['claude-sonnet-5', 'claude-opus-4-8'],
@@ -205,7 +205,7 @@ const mockStandardProviderCatalog: MockProviderCatalogEntry[] = [
         provider: {
             uuid: 'mock-provider-openai', name: 'OpenAI',
             api_base: 'https://api.openai.com/v1', api_style: 'openai', auth_type: 'api_key',
-            token: 'sk-****efgh', enabled: true, proxy_url: '',
+            token: 'sk-****efgh', enabled: true, proxy_url: 'http://127.0.0.1:7890',
             api_base_openai: 'https://api.openai.com/v1', api_base_anthropic: null,
         },
         models: [
@@ -282,9 +282,9 @@ const mockOAuthExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISO
 const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
     {
         provider: {
-            uuid: 'mock-oauth-claude-code', name: 'Claude Code OAuth',
+            uuid: 'mock-oauth-claude-code', name: 'Claude Code',
             api_base: 'https://api.anthropic.com', api_style: 'anthropic', auth_type: 'oauth',
-            token: '', enabled: true, proxy_url: '',
+            token: '', enabled: true, proxy_url: 'http://127.0.0.1:7890',
             api_base_openai: null, api_base_anthropic: null,
             oauth_detail: {
                 access_token: 'mock-claude-code-access-token',
@@ -299,7 +299,7 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
     },
     {
         provider: {
-            uuid: 'mock-oauth-gemini', name: 'Gemini CLI OAuth',
+            uuid: 'mock-oauth-gemini', name: 'Gemini CLI',
             api_base: 'https://cloudcode-pa.googleapis.com', api_style: 'openai', auth_type: 'oauth',
             token: '', enabled: true, proxy_url: '',
             api_base_openai: null, api_base_anthropic: null,
@@ -316,7 +316,7 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
     },
     {
         provider: {
-            uuid: 'mock-oauth-antigravity', name: 'Antigravity OAuth',
+            uuid: 'mock-oauth-antigravity', name: 'Antigravity',
             api_base: 'https://cloudcode-pa.googleapis.com', api_style: 'openai', auth_type: 'oauth',
             token: '', enabled: true, proxy_url: '',
             api_base_openai: null, api_base_anthropic: null,
@@ -333,7 +333,7 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
     },
     {
         provider: {
-            uuid: 'mock-oauth-qwen-code', name: 'Qwen Code OAuth',
+            uuid: 'mock-oauth-qwen-code', name: 'Qwen Code',
             api_base: 'https://portal.qwen.ai/v1', api_style: 'openai', auth_type: 'oauth',
             token: '', enabled: true, proxy_url: '',
             api_base_openai: null, api_base_anthropic: null,
@@ -350,9 +350,9 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
     },
     {
         provider: {
-            uuid: 'mock-oauth-codex', name: 'Codex OAuth',
+            uuid: 'mock-oauth-codex', name: 'Codex',
             api_base: 'https://chatgpt.com/backend-api', api_style: 'openai', auth_type: 'oauth',
-            token: '', enabled: true, proxy_url: '',
+            token: '', enabled: true, proxy_url: 'socks5://127.0.0.1:1080',
             api_base_openai: null, api_base_anthropic: null,
             oauth_detail: {
                 access_token: 'mock-codex-access-token',
@@ -368,7 +368,7 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
     },
     {
         provider: {
-            uuid: 'mock-oauth-kimi-code', name: 'Kimi Code OAuth',
+            uuid: 'mock-oauth-kimi-code', name: 'Kimi Code',
             api_base: 'https://api.kimi.com/coding/v1', api_style: 'openai', auth_type: 'oauth',
             token: '', enabled: true, proxy_url: '',
             api_base_openai: null, api_base_anthropic: null,
@@ -386,7 +386,7 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
     },
     {
         provider: {
-            uuid: 'mock-oauth-testing', name: 'Mock OAuth',
+            uuid: 'mock-oauth-testing', name: 'Mock',
             api_base: 'https://oauth-mock.mock.beeceptor.com', api_style: 'openai', auth_type: 'oauth',
             token: '', enabled: true, proxy_url: '',
             api_base_openai: null, api_base_anthropic: null,
@@ -404,7 +404,7 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
     {
         // Dual-endpoint OAuth issuer (ZCode): one URL per protocol.
         provider: {
-            uuid: 'mock-oauth-zcode', name: 'ZCode OAuth',
+            uuid: 'mock-oauth-zcode', name: 'ZCode',
             api_base: 'https://api.z.ai/api/anthropic', api_style: 'anthropic', auth_type: 'oauth',
             token: '', enabled: true, proxy_url: '',
             api_base_openai: 'https://api.z.ai/api/coding/paas/v4', api_base_anthropic: 'https://api.z.ai/api/anthropic',
@@ -421,7 +421,7 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
     },
     {
         provider: {
-            uuid: 'mock-oauth-workbuddy', name: 'WorkBuddy OAuth',
+            uuid: 'mock-oauth-workbuddy', name: 'WorkBuddy',
             api_base: 'https://copilot.tencent.com', api_style: 'openai', auth_type: 'oauth',
             token: '', enabled: true, proxy_url: '', api_base_openai: null, api_base_anthropic: null,
             oauth_detail: {
@@ -1378,7 +1378,7 @@ const mockQuotas: Record<string, any> = {
     // It must not report 0% — that reads as untouched and safe to spend against.
     'mock-oauth-claude-code': {
         provider_uuid: 'mock-oauth-claude-code',
-        provider_name: 'Claude Code OAuth',
+        provider_name: 'Claude Code',
         provider_type: 'anthropic',
         fetched_at: now.toISOString(),
         expires_at: inOneHour,
@@ -1443,7 +1443,7 @@ const mockQuotas: Record<string, any> = {
     // reported 17.5% here and hidden which model is actually running down.
     'mock-oauth-gemini': {
         provider_uuid: 'mock-oauth-gemini',
-        provider_name: 'Gemini CLI OAuth',
+        provider_name: 'Gemini CLI',
         provider_type: 'gemini',
         fetched_at: now.toISOString(),
         expires_at: inOneHour,
@@ -1495,7 +1495,7 @@ const mockQuotas: Record<string, any> = {
     // a card removes it and refills the windows — see the use handler below.
     'mock-oauth-zcode': {
         provider_uuid: 'mock-oauth-zcode',
-        provider_name: 'ZCode OAuth',
+        provider_name: 'ZCode',
         provider_type: 'glm',
         fetched_at: now.toISOString(),
         expires_at: inOneHour,
@@ -1538,7 +1538,7 @@ const mockQuotas: Record<string, any> = {
     // 100 credits and the entry goes away, like the real endpoint.
     'mock-oauth-workbuddy': {
         provider_uuid: 'mock-oauth-workbuddy',
-        provider_name: 'WorkBuddy OAuth',
+        provider_name: 'WorkBuddy',
         provider_type: 'workbuddy',
         fetched_at: now.toISOString(),
         expires_at: inOneHour,
@@ -1569,7 +1569,7 @@ const mockQuotas: Record<string, any> = {
     // rescues nor gates the account.
     'mock-oauth-codex': {
         provider_uuid: 'mock-oauth-codex',
-        provider_name: 'Codex OAuth',
+        provider_name: 'Codex',
         provider_type: 'codex',
         fetched_at: now.toISOString(),
         expires_at: inOneHour,
@@ -1783,7 +1783,7 @@ const mockQuotas: Record<string, any> = {
     // topping up, so it reports no recovery time and sorts after the allowances.
     'mock-oauth-kimi-code': {
         provider_uuid: 'mock-oauth-kimi-code',
-        provider_name: 'Kimi Code OAuth',
+        provider_name: 'Kimi Code',
         provider_type: 'kimi_code',
         fetched_at: now.toISOString(),
         expires_at: inOneHour,

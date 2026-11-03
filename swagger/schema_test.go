@@ -21,6 +21,18 @@ func newTestManager(t *testing.T) *RouteManager {
 	return rm
 }
 
+func TestExplicitNullableField(t *testing.T) {
+	type Model struct {
+		Limit    *int64 `json:"limit" nullable:"true"`
+		Optional *int64 `json:"optional,omitempty"`
+	}
+	schema := newSchemaGen(VersionV3).modelSchema(Model{})
+	assert.True(t, schema.Properties["limit"].Nullable)
+	assert.Equal(t, "integer", schema.Properties["limit"].Type)
+	assert.False(t, schema.Properties["optional"].Nullable)
+	assert.False(t, newSchemaGen(VersionV2).modelSchema(Model{}).Properties["limit"].Nullable)
+}
+
 // Generation must be deterministic: repeated generation of the same routes
 // (including the tags section) yields byte-identical output.
 func TestGenerateOpenAPIDeterministic(t *testing.T) {

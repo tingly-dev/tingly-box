@@ -69,8 +69,6 @@ const WeixinPage = lazy(() => import('@/pages/bots/WeixinPage'));
 const WeComPage = lazy(() => import('@/pages/bots/WeComPage'));
 const QQPage = lazy(() => import('@/pages/bots/QQPage'));
 const BotOverviewPage = lazy(() => import('@/pages/bots/BotOverviewPage'));
-const RemoteAgentPage = lazy(() => import('@/pages/remote-agent/RemoteAgentPage'));
-const NotifyPage = lazy(() => import('@/pages/notify/NotifyPage'));
 // Projects' pages come from @tingly/projects; this wrapper gives them Tingly
 // Box's fetch, routes and strings (.design/projects.md §3).
 const ProjectsRoute = lazy(() => import('@/pages/projects/ProjectsRoute'));
@@ -81,17 +79,17 @@ const HubPage = lazy(() => import('@/pages/HubPage'));
 
 // LegacyRemoteAgentRedirect keeps old per-platform bookmarks working
 // (/remote-agent/:platform and the older /remote-control/*): Remote Control
-// is one page listing every bot now, so they all land on it.
+// settings now live on the bot overview, so they all land there.
 const LegacyRemoteAgentRedirect = () => {
     const location = useLocation();
-    return <Navigate to={`/remote-agent${location.search}`} replace />;
+    return <Navigate to={`/bots/overview${location.search}`} replace />;
 };
 
 // The original Remote Coder surface has been replaced by Remote Control.
 // Keep bookmarks useful without exposing the retired pages and their dead API calls.
 const LegacyRemoteCoderRedirect = () => {
     const location = useLocation();
-    return <Navigate to={`/remote-agent${location.search}`} replace />;
+    return <Navigate to={`/bots/overview${location.search}`} replace />;
 };
 
 export const appRoutes = (
@@ -196,16 +194,16 @@ export const appRoutes = (
             <Route path="/bots/weixin" element={<WeixinPage />} />
             <Route path="/bots/wecom" element={<WeComPage />} />
             <Route path="/bots/qq" element={<QQPage />} />
-            {/* IM Notify — the other purpose mounted on a bot's channel. */}
-            <Route path="/notify" element={<NotifyPage />} />
+            {/* Legacy capability URLs land on the bot overview. */}
+            <Route path="/notify" element={<Navigate to="/bots/overview" replace />} />
             {/* Projects — a coordinator running Claude Code threads; its own
                 rail item (useActivityItems). */}
             <Route path="/projects" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="list" /></ExperimentalFeatureGate>} />
             <Route path="/projects/folder" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="folder" /></ExperimentalFeatureGate>} />
             <Route path="/projects/im" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="im" /></ExperimentalFeatureGate>} />
             <Route path="/projects/:id" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="project" /></ExperimentalFeatureGate>} />
-            {/* Remote Control — one page, every bot (see RemoteAgentPage). */}
-            <Route path="/remote-agent" element={<RemoteAgentPage />} />
+            {/* Legacy Remote Control URL. */}
+            <Route path="/remote-agent" element={<LegacyRemoteAgentRedirect />} />
             {/* Back-compat: per-platform pages and the pre-split /remote-control/* */}
             <Route path="/remote-agent/:platform" element={<LegacyRemoteAgentRedirect />} />
             <Route path="/remote-control/*" element={<LegacyRemoteAgentRedirect />} />

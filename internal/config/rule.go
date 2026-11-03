@@ -109,7 +109,7 @@ func (c *Config) AddRule(rule typ.Rule) error {
 
 	// If not found, append new config
 	c.Rules = append(c.Rules, rule)
-	return c.Save()
+	return c.saveLocked()
 }
 
 func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
@@ -162,7 +162,7 @@ func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
 	for i, rc := range c.Rules {
 		if rc.UUID == uid {
 			c.Rules[i] = rule
-			return c.Save()
+			return c.saveLocked()
 		}
 	}
 
@@ -186,7 +186,7 @@ func (c *Config) AddRequestConfig(reqConfig typ.Rule) error {
 
 	// No existing rule, append new one
 	c.Rules = append(c.Rules, reqConfig)
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetRequestConfigs returns all Rules
@@ -355,7 +355,7 @@ func (c *Config) SetRequestConfigs(requestConfigs []typ.Rule) error {
 	ensureRuleUUIDs(requestConfigs)
 	c.Rules = requestConfigs
 
-	return c.Save()
+	return c.saveLocked()
 }
 
 // UpdateRequestConfigAt updates the Rule at the given index
@@ -374,7 +374,7 @@ func (c *Config) UpdateRequestConfigAt(index int, reqConfig typ.Rule) error {
 	ensureRuleUUID(&reqConfig)
 
 	c.Rules[index] = reqConfig
-	return c.Save()
+	return c.saveLocked()
 }
 
 // UpdateRequestConfigByRequestModel updates a Rule by its request model name
@@ -390,7 +390,7 @@ func (c *Config) UpdateRequestConfigByRequestModel(requestModel string, reqConfi
 			}
 			ensureRuleUUID(&reqConfig)
 			c.Rules[i] = reqConfig
-			return c.Save()
+			return c.saveLocked()
 		}
 	}
 
@@ -409,7 +409,7 @@ func (c *Config) UpdateRequestConfigByUUID(uuid string, reqConfig typ.Rule) erro
 				reqConfig.UUID = uuid
 			}
 			c.Rules[i] = reqConfig
-			return c.Save()
+			return c.saveLocked()
 		}
 	}
 
@@ -429,14 +429,14 @@ func (c *Config) AddOrUpdateRequestConfigByRequestModel(reqConfig typ.Rule) erro
 			}
 			ensureRuleUUID(&reqConfig)
 			c.Rules[i] = reqConfig
-			return c.Save()
+			return c.saveLocked()
 		}
 	}
 
 	// Rule not found, add new one
 	ensureRuleUUID(&reqConfig)
 	c.Rules = append(c.Rules, reqConfig)
-	return c.Save()
+	return c.saveLocked()
 }
 
 // IsTacticValid checks if the tactic params are valid (not zero values)
@@ -481,7 +481,7 @@ func (c *Config) DeleteRule(ruleUUID string) error {
 	}
 
 	c.Rules = append(c.Rules[:index], c.Rules[index+1:]...)
-	return c.Save()
+	return c.saveLocked()
 }
 
 // validateSmartRoutingRules rejects invalid configured predicates before saving a rule.

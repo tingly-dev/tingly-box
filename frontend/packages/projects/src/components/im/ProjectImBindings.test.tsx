@@ -12,7 +12,7 @@ vi.mock('../../client', async (actual) => ({ ...(await actual<typeof import('../
 
 // A project's chats are bound to its main thread, named m<project>.
 const binding = (id: string, chat_id: string, chat_title: string, project_id: string): ChannelBinding => ({
-    id, platform: 'telegram', chat_id, chat_title, project_id, thread_id: `m${project_id}`, created_at: '', updated_at: '', verbose: false,
+    id, platform: 'telegram', bot_uuid: 'b1', chat_id, chat_title, project_id, thread_id: `m${project_id}`, created_at: '', updated_at: '', verbose: false,
 });
 
 const summary = (id: string, name: string, over: Record<string, unknown> = {}) => ({ id, name, type: 'project', main_thread_id: `m${id}`, threads: { waiting: 0, working: 0, ready: 0, idle: 0, resolved: 0 }, ...over });
@@ -27,14 +27,14 @@ const host = (chats: ImChat[], bots = [{ uuid: 'b1', name: 'Bot', platform: 'tel
     im: { listBots: async () => bots, listChats: async () => chats },
 });
 
-function Harness() {
-    const im = useProjectIm({ threadId: 'mp1', projectId: 'p1', name: 'Alpha' });
+function Harness({ folder = false }: { folder?: boolean }) {
+    const im = useProjectIm(folder ? { projectId: 'f1', name: 'Folder', folder: true } : { threadId: 'mp1', projectId: 'p1', name: 'Alpha' });
     if (!im) return <div>no im</div>;
     return <><ProjectImTags im={im} />{im.dialog}</>;
 }
 
-const show = (h: ProjectsHost) => render(
-    <MemoryRouter><ProjectsHostProvider host={h}><Harness /></ProjectsHostProvider></MemoryRouter>,
+const show = (h: ProjectsHost, folder = false) => render(
+    <MemoryRouter><ProjectsHostProvider host={h}><Harness folder={folder} /></ProjectsHostProvider></MemoryRouter>,
 );
 
 beforeEach(() => {
@@ -52,6 +52,30 @@ afterEach(() => {
 });
 
 describe('project IM bindings', () => {
+    it('keeps a project binding visible when the chat focuses a project thread', async () => {
+        m.list.mockResolvedValue([{ ...binding('focused', 'tg:1', 'yz', 'p1'), thread_id: 'worker-1', target_project_id: 'p1' }]);
+        show(host([chat('tg:1', 'yz')]));
+        expect(await screen.findByText('yz')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /im\.tags\.bind/ }));
+        expect(await screen.findByText('im.bind.noChatsTitle')).toBeInTheDocument();
+    });
+    it('allows moving a chat from a specific session to its folder', async () => {
+        m.list.mockResolvedValue([{ ...binding('session', 'tg:1', 'yz', 'f1'), thread_id: 'session1', target_project_id: 'f1', target_thread_id: 'session1' }]);
+        show(host([chat('tg:1', 'yz')]), true);
+        fireEvent.click(await screen.findByRole('button', { name: /im\.tags\.bind/ }));
+        fireEvent.click(await screen.findByRole('radio', { name: /yz/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'im.bind.submit' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:1', bot_uuid: 'b1', project_id: 'f1' }));
+    });
+    it('binds a chat to a folder before a session exists and shows pending bindings', async () => {
+        m.list.mockResolvedValue([{ ...binding('pending', 'tg:1', 'yz', 'f1'), thread_id: '', folder: '/work' }]);
+        show(host([chat('tg:1', 'yz'), chat('tg:3', 'Free')]), true);
+        expect(await screen.findByText('yz')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /im\.tags\.bind/ }));
+        fireEvent.click(await screen.findByRole('radio', { name: /Free/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'im.bind.submit' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:3', bot_uuid: 'b1', project_id: 'f1' }));
+    });
     it('shows only this project\'s chats and unbinds one with its ×', async () => {
         show(host([]));
         expect(await screen.findByText('yz')).toBeInTheDocument();
@@ -85,8 +109,21 @@ describe('project IM bindings', () => {
         expect(submit).toBeDisabled();
         fireEvent.click(radios[2]);
         fireEvent.click(submit);
-        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:2', project_id: 'p1' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:2', bot_uuid: 'b1', project_id: 'p1' }));
         expect(m.notify).toHaveBeenCalledWith(expect.stringContaining('im.bind.moved'), 'success');
+    });
+
+    it('allows selecting another bot for the same chat and thread', async () => {
+        const bots = [{ uuid: 'b1', name: 'First bot', platform: 'telegram', online: true }, { uuid: 'b2', name: 'Second bot', platform: 'telegram', online: true }];
+        const h = host([], bots);
+        h.im!.listChats = async (bot) => [chat('tg:1', 'yz', { botUuid: bot.uuid })];
+        show(h);
+        fireEvent.click(await screen.findByRole('button', { name: /im\.tags\.bind/ }));
+        const dialog = await screen.findByRole('dialog');
+        const other = await within(dialog).findByRole('radio', { name: /Second bot/ });
+        fireEvent.click(other);
+        fireEvent.click(within(dialog).getByRole('button', { name: 'im.bind.submit' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:1', bot_uuid: 'b2', project_id: 'p1' }));
     });
 
     it('says why there is nothing to bind', async () => {

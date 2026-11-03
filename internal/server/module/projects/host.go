@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
@@ -46,7 +47,12 @@ func (h *Host) WithRoutePreview(routes *statusline.Handler) *Host {
 
 // ClientFor talks Anthropic Messages to the gateway's claude_code scenario
 // with the model token; an empty model means the scenario's default tier.
-func (h *Host) ClientFor(_ context.Context, model string) (llm.Client, string, error) {
+func (h *Host) ClientFor(ctx context.Context, model string) (llm.Client, string, error) {
+	for _, alias := range agent.ClaudeCodeTierAliases {
+		if model == alias && h.CheckLaunch(ctx, "", model) == nil {
+			return h.ClientForProfile(ctx, "", model)
+		}
+	}
 	if model == "" {
 		model = h.cc.ClaudeCodeDefaultModel()
 	}
@@ -105,4 +111,33 @@ func (h *Host) gatewayURL() string {
 		port = 12580
 	}
 	return fmt.Sprintf("http://%s:%d", h.cfg.GetServerHost(), port)
+}
+
+// ClientForProfile resolves the same profile and tier that Claude Code uses.
+func (h *Host) ClientForProfile(ctx context.Context, profile, model string) (llm.Client, string, error) {
+	env, err := h.claudeEnv(ctx, profile)
+	if err != nil {
+		return nil, "", err
+	}
+	tiers := agent.ClaudeCodeTiersFromEnv(env)
+	selected := ""
+	for _, tier := range tiers.Tiers {
+		if tier.Alias == model {
+			selected = tier.Model
+			break
+		}
+	}
+	if selected == "" {
+		return nil, "", fmt.Errorf("model %q is unavailable in profile %q", model, profile)
+	}
+	token := env["ANTHROPIC_AUTH_TOKEN"]
+	if token == "" {
+		token = env["ANTHROPIC_API_KEY"]
+	}
+	base := env["ANTHROPIC_BASE_URL"]
+	if base == "" || token == "" {
+		return nil, "", fmt.Errorf("profile %q has incomplete routing", profile)
+	}
+	c, err := llm.New(llm.Connection{APIStyle: llm.StyleAnthropic, BaseURL: base, APIKey: token})
+	return c, selected, err
 }

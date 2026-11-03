@@ -67,6 +67,17 @@ func TestAuthorizationGateKeepsUnpairedDirectPeerDeniedWhenPairingRequired(t *te
 	require.Empty(t, chats[0].PeerActorID)
 }
 
+func TestAuthorizationGateAllowsPairingCommandsForUnpairedDirectPeer(t *testing.T) {
+	sm, setting, msg := directAuthorizationFixture(t)
+	gate := bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), true, nil, nil)
+	for _, text := range []string{"/pair CODE", "/bind CODE"} {
+		msg.Content = imbot.NewTextContent(text)
+		require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID), text)
+	}
+	msg.Content = imbot.NewTextContent("/pairing CODE")
+	require.True(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID))
+}
+
 func TestAuthorizationGateMigratesLegacyPairedDirectPeer(t *testing.T) {
 	sm, setting, msg := directAuthorizationFixture(t)
 	require.NoError(t, sm.RemoteChats().SetPaired(msg.Recipient.ID, setting.Platform, setting.UUID, msg.Sender.ID))
@@ -142,4 +153,22 @@ func TestAuthorizationGateProjectPromptNeedsApprove(t *testing.T) {
 	require.NoError(t, sm.BotAccess().SetDirectChatPermission(context.Background(),
 		setting.UUID, chats[0].ID, access.CapabilityRemoteControl, access.ActionRemoteControlApprove, access.EffectAllow))
 	require.False(t, gate(press, imbot.Platform(setting.Platform), setting.UUID))
+}
+
+func TestPendingApprovalDoesNotGrantDirectoryOrProjectAccess(t *testing.T) {
+	sm, setting, msg := directAuthorizationFixture(t)
+	gate := bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), false, nil, nil)
+	require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID), "first message pairs the chat")
+	pending := func(string) (access.CapabilityName, access.ActionName) {
+		return access.CapabilityRemoteControl, access.ActionRemoteControlApprove
+	}
+	gate = bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), false, pending, nil)
+	for _, text := range []string{"/dir", "/dir 1", "/project", "/project 1", "/cd /tmp"} {
+		m := msg
+		m.Content = imbot.NewTextContent(text)
+		require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "%s must require privileged access", text)
+	}
+	m := msg
+	m.Payload = imbot.NewPayload("project", "switch", "/tmp")
+	require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "folder buttons must require privileged access")
 }

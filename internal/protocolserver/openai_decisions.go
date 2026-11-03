@@ -9,6 +9,7 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
+	"github.com/tingly-dev/tingly-box/internal/decision"
 	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -19,8 +20,7 @@ import (
 //
 // Decisions are a native OpenAI endpoint ({APIBase}/decisions), not a new
 // provider style: the request rides the OpenAI client, and the only special
-// handling is that the body is opaque JSON (the upstream schema is not
-// public) of which the gateway reads and rewrites just "model". Like
+// handling identifies and, where supported, converts decision dialects. Like
 // embeddings it is non-streaming, skips the chat transform chain, and is
 // reachable from any scenario that declares TransportOpenAI or
 // TransportDecisions (the dedicated `decisions` scenario).
@@ -39,6 +39,11 @@ func (ph *ProtocolHandler) HandleOpenAIDecisions(c *gin.Context) {
 		decisionBadRequest(c, "Failed to read request body: "+err.Error())
 		return
 	}
+	dialect, err := decision.Request(body)
+	if err != nil {
+		decisionBadRequest(c, err.Error())
+		return
+	}
 	requestModel, err := decisionRequestModel(body)
 	if err != nil {
 		decisionBadRequest(c, err.Error())
@@ -49,6 +54,11 @@ func (ph *ProtocolHandler) HandleOpenAIDecisions(c *gin.Context) {
 	if err != nil {
 		decisionBadRequest(c, err.Error())
 		return
+	}
+	// Decisions bypasses the chat dispatch chain that normally emits this
+	// diagnostic header. debugHeaderGuard limits it to local probes.
+	if c.GetHeader("X-Tingly-Debug-Routing") == "1" && rule != nil {
+		c.Header("X-Tingly-Matched-Rule", rule.UUID)
 	}
 	// Single-shot endpoints share content-free selection (no smart routing).
 	provider, selectedService, err := ph.selectServiceForEmbeddings(c, scenarioType, rule)
@@ -65,7 +75,16 @@ func (ph *ProtocolHandler) HandleOpenAIDecisions(c *gin.Context) {
 	}
 
 	actualModel := selectedService.Model
-	upstreamBody, err := sjson.SetBytes(body, "model", actualModel)
+	target := decision.ResolveTarget(provider.APIBase).Dialect
+	if provider.AuthType == typ.AuthTypeVirtual {
+		target = decision.SystemOne
+	}
+	upstreamBody, conversion, err := decision.ConvertRequest(body, dialect, target)
+	if err != nil {
+		decisionBadRequest(c, "decision conversion: "+err.Error())
+		return
+	}
+	upstreamBody, err = sjson.SetBytes(upstreamBody, "model", actualModel)
 	if err != nil {
 		decisionBadRequest(c, "Invalid request body: "+err.Error())
 		return
@@ -87,6 +106,23 @@ func (ph *ProtocolHandler) HandleOpenAIDecisions(c *gin.Context) {
 	}
 
 	ph.trackUsageWithTokenUsage(c, decisionUsage(resp), nil)
+	if conversion != nil {
+		resp, err = conversion.ConvertResponse(resp)
+		if err != nil {
+			writeErrorResponse(c, http.StatusBadGateway, ErrorResponse{Error: ErrorDetail{
+				Message: "invalid upstream decision response: " + err.Error(), Type: "api_error",
+			}})
+			return
+		}
+	}
+	responseDialect := decision.Response(resp)
+	if dialect != decision.Unknown && responseDialect != decision.Unknown && dialect != responseDialect {
+		writeErrorResponse(c, http.StatusBadGateway, ErrorResponse{Error: ErrorDetail{
+			Message: "upstream returned an incompatible decision response format; protocol conversion is not configured",
+			Type:    "api_error",
+		}})
+		return
+	}
 	c.Data(http.StatusOK, "application/json", decisionEchoModel(resp, requestModel))
 }
 
@@ -96,8 +132,7 @@ func decisionBadRequest(c *gin.Context, msg string) {
 	})
 }
 
-// decisionRequestModel returns the requested model — the only field the
-// gateway needs (for routing). Everything else stays opaque.
+// decisionRequestModel returns the requested model for rule routing.
 func decisionRequestModel(body []byte) (string, error) {
 	if !gjson.ValidBytes(body) {
 		return "", fmt.Errorf("invalid request body: not valid JSON")
@@ -113,8 +148,16 @@ func decisionRequestModel(body []byte) (string, error) {
 // response (prompt/completion or input/output spellings); zero when absent.
 func decisionUsage(body []byte) *protocol.TokenUsage {
 	u := gjson.GetBytes(body, "usage")
-	in := u.Get("prompt_tokens").Int() + u.Get("input_tokens").Int()
-	out := u.Get("completion_tokens").Int() + u.Get("output_tokens").Int()
+	read := func(keys ...string) int64 {
+		for _, key := range keys {
+			if value := u.Get(key); value.Type == gjson.Number {
+				return value.Int()
+			}
+		}
+		return 0
+	}
+	in := read("input_tokens", "inputTokens", "prompt_tokens")
+	out := read("output_tokens", "outputTokens", "completion_tokens")
 	return protocol.NewTokenUsageWithCache(int(in), int(out), 0)
 }
 

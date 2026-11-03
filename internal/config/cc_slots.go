@@ -57,7 +57,7 @@ func (c *Config) SetClaudeCodeSlot(scenario typ.RuleScenario, slot string, enabl
 	if rule != nil {
 		out = *rule
 	}
-	return out, c.Save()
+	return out, c.saveLocked()
 }
 
 // SetAllClaudeCodeSlots splits every slot off the default rule, or hands them
@@ -72,7 +72,7 @@ func (c *Config) SetAllClaudeCodeSlots(scenario typ.RuleScenario, enabled bool) 
 	if err := c.setAllCCSlotsLocked(scenario, enabled); err != nil {
 		return err
 	}
-	return c.Save()
+	return c.saveLocked()
 }
 
 // setAllCCSlotsLocked splits (or merges) every slot, without the checks and the save.

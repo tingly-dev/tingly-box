@@ -570,6 +570,32 @@ func TestThreadWorktreeIsInTheRepository(t *testing.T) {
 	waitStatus(t, f.store, th.ID, db.ThreadIdle)
 }
 
+func TestThreadsShareRepositoryWhenWorktreesDisabled(t *testing.T) {
+	f := newFixture(t, func(*enginetest.Turn) error { return nil })
+	f.project.DisableWorktree = true
+	first, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "First", Task: "x"})
+	require.NoError(t, err)
+	second, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Second", Task: "y"})
+	require.NoError(t, err)
+	assert.Equal(t, f.repo, first.Cwd)
+	assert.Equal(t, first.Cwd, second.Cwd)
+	assert.Empty(t, first.Branch)
+	assert.Empty(t, second.Branch)
+	assert.Contains(t, threadSystemPrompt(f.threads.layout, f.project, first), "shared repository checkout")
+	_, err = f.threads.Merge(context.Background(), first.ID)
+	require.Error(t, err)
+	_, err = f.threads.Diff(context.Background(), first.ID)
+	require.Error(t, err)
+	f.project.DisableWorktree = false
+	third, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Third", Task: "z"})
+	require.NoError(t, err)
+	assert.NotEqual(t, f.repo, third.Cwd)
+	assert.NotEmpty(t, third.Branch)
+	saved, err := f.store.GetThread(first.ID)
+	require.NoError(t, err)
+	assert.Equal(t, f.repo, saved.Cwd)
+}
+
 // When the repository cannot hold the worktree, the thread still starts, in
 // the data directory, and the thread says so.
 func TestThreadWorktreeFallsBackToDataDir(t *testing.T) {

@@ -16,6 +16,8 @@ export default {
       "background": "в фоне",
       "callFailed": "сбой",
       "checklist": "Ход работы",
+      "checklistEmpty": "Нет текущих задач",
+      "checklistHistory": "Предыдущие группы задач ({{count}})",
       "checklistCount": "Готово {{done}} из {{total}}",
       "decline": "Отклонить",
       "deny": "Запретить",

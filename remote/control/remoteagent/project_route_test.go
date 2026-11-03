@@ -260,7 +260,7 @@ func Test_BoundChatCommandsGoToItsProject(t *testing.T) {
 	assert.NotContains(t, help.Text, "/threads")
 
 	// The old commands are gone, and a bare "stop" is a message.
-	for _, text := range []string{"/bash ls", "/resume", "/project", "/threads", "/focus 2", "/back", "/quiet", "/interrupt", "/mock"} {
+	for _, text := range []string{"/bash ls", "/resume", "/threads", "/focus 2", "/back", "/quiet", "/interrupt", "/mock"} {
 		chat.Drain()
 		chat.SendText(text)
 		chat.WaitText(3*time.Second).AssertContains(t, "Unknown command")
@@ -355,7 +355,7 @@ func Test_ProjectsOffTurnsChatOff(t *testing.T) {
 	chat.SendText("@cc fix it")
 	chat.WaitText(3*time.Second).AssertContains(t, "Turn on Projects")
 	chat.Drain()
-	chat.SendText("/bind 123456")
+	chat.SendText("/pair 123456")
 	ev := chat.WaitText(3 * time.Second)
 	assert.NotContains(t, ev.Text, "Turn on Projects", "pairing is not chat control")
 	assert.Empty(t, router.inbound())

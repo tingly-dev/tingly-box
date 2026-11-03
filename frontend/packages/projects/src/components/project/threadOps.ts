@@ -12,9 +12,11 @@ export interface ThreadOps {
     unqueue: (id: string) => Promise<unknown>;
     respond: (requestId: string, allow: boolean, remember: boolean, answer?: string, answers?: Record<string, string>) => Promise<unknown>;
     stop: () => Promise<unknown>;
-    /** Archive (resolve) the thread; it stays readable and can be reopened. */
+    /** Resolve the thread; it stays readable and can be reopened. */
     finish: () => Promise<unknown>;
     reopen: () => Promise<unknown>;
+    archiveSession: () => Promise<unknown>;
+    restoreSession: () => Promise<unknown>;
     /** Release a folder thread to a terminal: the command that resumes it. */
     handoff: () => Promise<string>;
     /** Rename the thread; the renamed thread comes back. */
@@ -32,8 +34,10 @@ export function threadOps(id: string): ThreadOps {
             ...path, body: { request_id, allow, scope: remember ? 'thread' : 'once', answer: answer || undefined, answers: answers && Object.keys(answers).length ? answers : undefined },
         })),
         stop: () => unwrap(api.POST('/api/v1/threads/{id}/stop', path)),
-        finish: () => unwrap(api.POST('/api/v1/threads/{id}/archive', path)),
+        finish: () => unwrap(api.POST('/api/v1/threads/{id}/resolve', path)),
         reopen: () => unwrap(api.POST('/api/v1/threads/{id}/reopen', path)),
+        archiveSession: () => unwrap(api.POST('/api/v1/threads/{id}/archive', path)),
+        restoreSession: () => unwrap(api.POST('/api/v1/threads/{id}/restore', path)),
         handoff: async () => (await unwrap(api.POST('/api/v1/threads/{id}/handoff', path))).command,
         setTitle: (title) => unwrap(api.PUT('/api/v1/threads/{id}/title', { ...path, body: { title } })),
         setAutoAnswer: (auto_answer) => unwrap(api.PUT('/api/v1/threads/{id}/auto-answer', { ...path, body: { auto_answer } })),

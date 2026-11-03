@@ -38,6 +38,8 @@ func threadSystemPrompt(l Layout, p *db.Project, t *db.Thread) string {
 	if t.Branch != "" {
 		fmt.Fprintf(&b, "- You are on branch %s (from %s) in your own worktree (%s). Commit your work to this branch when it is done and verified. Do not merge, force-push, or touch other branches.\n", t.Branch, t.BaseBranch, t.Cwd)
 		b.WriteString("- Open a pull request only when the task, the project instructions or the user ask for one: push your own branch and open it against the base branch, following the repo's PR template, and put its link in your report. If you cannot, report the failure and its cause as an error and leave the commits on the branch. Never merge it yourself.\n")
+	} else if t.RepoPath != "" {
+		fmt.Fprintf(&b, "- You work directly in the shared repository checkout %s. Other threads may work there concurrently; coordinate changes and do not overwrite their work. Do not assume changes belong solely to you or create commits unless requested.\n", t.Cwd)
 	} else {
 		fmt.Fprintf(&b, "- This thread has no repository. Write deliverables (documents, data, scripts) under %s so they appear in the project Library.\n", l.OutputDir(p.ID, slugify(t.Title)))
 	}

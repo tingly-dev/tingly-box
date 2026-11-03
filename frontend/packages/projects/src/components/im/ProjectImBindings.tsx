@@ -15,14 +15,15 @@ import { radius } from '@tingly/ui/theme/radius';
 /**
  * What a header binds chats to: a thread, named for the dialog. A project's
  * conversation is its main thread and is bound as the project (the server
- * resolves it); a folder cannot be bound as a project, so its open thread is
- * bound by id.
+ * resolves it); a folder can be bound directly or through an open session.
  */
 export interface ImTarget {
-    threadId: string;
+    threadId?: string;
     name: string;
     /** Set for a project's main thread. */
     projectId?: string;
+    /** A folder can be selected before a session exists. */
+    folder?: boolean;
 }
 
 /** The IM chats bound to one thread, and what the header needs to show and change them. */
@@ -79,7 +80,7 @@ export function useProjectIm(target: ImTarget | null): ProjectIm | null {
 
     if (!im || !target) return null;
     return {
-        mine: bindings && bindings.filter((b) => b.thread_id === threadId),
+        mine: bindings && bindings.filter((b) => projectId ? b.project_id === projectId : b.target_thread_id === threadId || (!b.target_project_id && b.thread_id === threadId && !b.folder)),
         open: () => setDialogOpen(true),
         unbind: onUnbind,
         chatTitle: (platform, chatId) => byChat.get(chatKey(platform, chatId))?.chat_title || undefined,
@@ -87,9 +88,12 @@ export function useProjectIm(target: ImTarget | null): ProjectIm | null {
             <BindChatDialog
                 open={dialogOpen}
                 threadId={threadId}
+                folderId={target.folder ? projectId : undefined}
+                projectId={!target.folder ? projectId : undefined}
                 targetName={projectName}
                 chats={chats}
                 hasBots={(bots ?? []).length > 0}
+                bots={bots ?? []}
                 byChat={byChat}
                 directory={directory}
                 onClose={() => setDialogOpen(false)}
@@ -108,7 +112,7 @@ function Tag({ binding, onUnbind }: { binding: ChannelBinding; onUnbind: () => v
     const title = tagTitle(binding);
     return (
         <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, height: 26, pl: 1, pr: 0.25, borderRadius: radius.pill, border: 1, borderColor: 'divider', bgcolor: 'action.hover', minWidth: 0, maxWidth: 180 }}>
-            <PlatformMark platform={binding.platform} size={14} />
+            <PlatformMark platform={binding.platform} size={14} colored />
             <Typography noWrap title={title} sx={{ fontSize: fontSizes.sm, fontWeight: 500, minWidth: 0 }}>{title}</Typography>
             <Tooltip title={t('im.tags.unbind', { chat: title })}>
                 <IconButton size="small" onClick={onUnbind} aria-label={t('im.tags.unbind', { chat: title })} sx={{ p: 0.25, color: 'text.secondary', '&:hover': { color: 'error.main' } }}>
@@ -132,7 +136,7 @@ function MoreTags({ bindings, onUnbind }: { bindings: ChannelBinding[]; onUnbind
             <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
                 {bindings.map((b) => (
                     <MenuItem key={b.id} onClick={() => { setAnchor(null); onUnbind(b); }} aria-label={t('im.tags.unbind', { chat: tagTitle(b) })}>
-                        <ListItemIcon><PlatformMark platform={b.platform} size={16} /></ListItemIcon>
+                        <ListItemIcon><PlatformMark platform={b.platform} size={16} colored /></ListItemIcon>
                         <ListItemText primary={tagTitle(b)} slotProps={{ primary: { noWrap: true, sx: { maxWidth: 200 } } }} />
                         <Close sx={{ fontSize: 14, ml: 1.5, color: 'text.secondary' }} />
                     </MenuItem>

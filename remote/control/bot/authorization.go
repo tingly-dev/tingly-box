@@ -25,12 +25,26 @@ func isPairingBootstrap(msg imbot.Message) bool {
 		return false
 	}
 	t := strings.TrimSpace(msg.GetText())
-	return t == "/bind" || strings.HasPrefix(t, "/bind ") || strings.HasPrefix(t, "/bind\t")
+	return t == "/pair" || strings.HasPrefix(t, "/pair ") || strings.HasPrefix(t, "/pair\t") || t == "/bind" || strings.HasPrefix(t, "/bind ") || strings.HasPrefix(t, "/bind\t")
 }
 
 func inboundAction(msg imbot.Message, pendingCapability access.CapabilityName, pendingAction access.ActionName) (access.CapabilityName, access.ActionName) {
-	// "pj" answers a Projects thread's approval or question: the same act as
-	// answering an @cc prompt ("perm").
+	// Filesystem navigation always requires privileged access, even while a
+	// separate approval is pending in the same chat.
+	if msg.IsCallback() && (msg.Payload.Name() == "project" || msg.Payload.Name() == "bind" || (msg.Payload.Name() == "action" && (msg.Payload.Arg(1) == "bind" || msg.Payload.Arg(1) == "project"))) {
+		return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
+	}
+	if msg.IsMediaContent() {
+		return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
+	}
+	text := strings.ToLower(strings.TrimSpace(msg.GetText()))
+	for _, prefix := range []string{"/cd", "/dir", "/project", "/bind-project", "/project switch", "/shell", "/bash"} {
+		if text == prefix || strings.HasPrefix(text, prefix+" ") {
+			return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
+		}
+	}
+	// A Projects/Claude approval button or an ordinary reply to a pending
+	// approval uses the approval action rather than the session-start action.
 	if msg.IsCallback() && (msg.Payload.Name() == "perm" || msg.Payload.Name() == "pj") || pendingAction != "" {
 		if pendingCapability == "" {
 			pendingCapability = access.CapabilityRemoteControl
@@ -39,15 +53,6 @@ func inboundAction(msg imbot.Message, pendingCapability access.CapabilityName, p
 			pendingAction = access.ActionRemoteControlApprove
 		}
 		return pendingCapability, pendingAction
-	}
-	if msg.IsMediaContent() {
-		return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
-	}
-	text := strings.ToLower(strings.TrimSpace(msg.GetText()))
-	for _, prefix := range []string{"/cd", "/bind-project", "/project switch", "/shell", "/bash"} {
-		if text == prefix || strings.HasPrefix(text, prefix+" ") {
-			return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
-		}
 	}
 	return access.CapabilityRemoteControl, access.ActionRemoteControlStart
 }

@@ -15,5 +15,11 @@ export const sessionSlots: SessionSlots = {
             <ModelSelect disabled={disabled} profile={value.profile} value={value.model} onChange={(model) => onChange({...value, model})}/>
         </>
     ),
+    workerLaunchPickers: ({profileOverride, projectProfile, model, onChange, disabled}) => (
+        <>
+            <ProfileSelect disabled={disabled} allowInherit inherited={profileOverride === null} value={profileOverride ?? projectProfile} onInherit={() => onChange(null, '')} onChange={(profile) => onChange(profile, '')}/>
+            <ModelSelect disabled={disabled} profile={profileOverride ?? projectProfile} value={model} onChange={(next) => onChange(profileOverride, next)}/>
+        </>
+    ),
     statusLine: ({session, events}) => <SessionStatusLine session={session} events={events}/>,
 };

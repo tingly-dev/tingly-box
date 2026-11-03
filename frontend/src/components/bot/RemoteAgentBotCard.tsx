@@ -25,7 +25,6 @@ import {PLATFORM_BRAND_ICONS} from '@/constants/platformGuides';
 import type {ProfileInfo} from '@/contexts/ProfileContext';
 import RemoteControlGraph from './RemoteControlGraph';
 import BotAccessDialog from './BotAccessDialog';
-import PairingCodePanel from './PairingCodePanel';
 import {useRemoteAccess} from './useRemoteAccess';
 import {useState} from 'react';
 import {useTranslation} from 'react-i18next';
@@ -49,9 +48,7 @@ interface RemoteAgentBotCardProps {
 // The switch decides whether this bot's chats can use Claude Code. Below it,
 // the bot's route (RemoteControlGraph): who can send messages in → this bot →
 // Claude Code → the profile it runs under; each node opens its editor. Access and
-// pairing live in the Access work surface opened from the entry node, which
-// reads this card's own access data, so authorization has one source of
-// truth. Edit / restart / delete stay here so the page is self-sufficient.
+// pairing are shown in the route using this card’s access data. Edit / restart / delete stay here so the page is self-sufficient.
 const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
     bot,
     onMountToggle,
@@ -70,7 +67,6 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
 
     const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-    const [accessDialogOpen, setAccessDialogOpen] = useState(false);
 
     // Off when this purpose isn't live: unmounted, or the bot itself is
     // disabled. An off card is quiet rather than struck through: no paper
@@ -179,12 +175,8 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                 <Box sx={{px: 2, pb: 1}}>
                     <Alert
                         severity="warning"
-                        action={<Button color="inherit" size="small" onClick={() => setAccessDialogOpen(true)}>
-                            {t('remoteAgent.card.manageAccess', {defaultValue: 'Manage access'})}
-                        </Button>}
                     >
                         {noticeText}
-                        {pairing && access.pendingChats.length === 0 && <PairingCodePanel bot={bot} revealByDefault/>}
                     </Alert>
                 </Box>
             )}
@@ -218,11 +210,7 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                         onBotClick={isRestarting ? undefined : onEdit}
                         ccProfiles={ccProfiles}
                         onCCProfileClick={onCCProfileClick}
-                        directChatCount={access.controllers.length}
-                        groupCount={access.controllingGroups.length}
-                        accessLoading={access.loading}
-                        accessError={access.error}
-                        onAccessClick={() => setAccessDialogOpen(true)}
+                        accessContent={<BotAccessDialog inline scope="remote_control" remoteAccess={access} open bot={bot} onClose={() => {}} />}
                     />
                 </Box>
             </Collapse>
@@ -235,13 +223,6 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                 confirmColor="error"
                 onClose={() => setDeleteModalOpen(false)}
                 onConfirm={() => { setDeleteModalOpen(false); onDelete(); }}
-            />
-            <BotAccessDialog
-                scope="remote_control"
-                remoteAccess={access}
-                open={accessDialogOpen}
-                bot={bot}
-                onClose={() => setAccessDialogOpen(false)}
             />
         </Box>
     );

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Box, Button, IconButton, Link, Skeleton, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, IconButton, Link, MenuItem, Radio, RadioGroup, Select, Skeleton, Stack, Tooltip, Typography } from '@mui/material';
 import { Link as RouterLink, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, isFolder, type components, unwrap, type Project, type Thread, type ThreadEvent } from '../client';
@@ -18,7 +18,7 @@ import { FloatingWindow } from '../components/workspace/FloatingWindow';
 import { OverviewBand } from '../components/workspace/OverviewBand';
 import { PlacementMenu } from '../components/workspace/PlacementMenu';
 import { WorkspaceLayout, useWorkspacePane } from '../components/workspace/WorkspaceLayout';
-import { FloatWindow, Pause, Settings, Star, StarBorder } from '../components/icons';
+import { ExpandMore, FloatWindow, Folder, Pause, Settings, Star, StarBorder } from '../components/icons';
 import { useNotify } from '../hooks/useNotify';
 import { useProjectEvents, type ProjectEvent } from '../hooks/useProjectEvents';
 import { useTranscript } from '../hooks/useTranscript';
@@ -26,6 +26,7 @@ import { usePlacement } from '../hooks/usePlacement';
 import { useProjectsHost } from '../host/ProjectsHost';
 import { readLocal, writeLocal } from '../utils/storage';
 import { needsUser } from '../components/project/threadStatus';
+import { composerPickerLabelSx, composerPickerMenuProps, composerPickerSx } from '../components/composerPicker';
 
 
 // The permission modes a project can give its threads (the server refuses others).
@@ -47,7 +48,7 @@ export default function ProjectPage() {
     const { t } = useTranslation('projects');
     const navigate = useNavigate();
     const notify = useNotify();
-    const { onProjectsChanged: refresh, paths: routes, embedded } = useProjectsHost();
+    const { onProjectsChanged: refresh, paths: routes, embedded, session } = useProjectsHost();
     const [params, setParams] = useSearchParams();
     const threadId = params.get('thread') ?? '';
 
@@ -70,13 +71,22 @@ export default function ProjectPage() {
     // Overview; at most one window, since picking another thread only swaps it.
     const [overviewFloatId, setOverviewFloatId] = useState<string | null>(null);
     const floatedFromOverview = placement.overviewFloat && overviewAt === 'side' && !!threadId && overviewFloatId === threadId;
-    const threadAt = pane.narrow || overviewAt === 'top' ? 'side' : floatedFromOverview ? 'float' : placement.thread;
+    const threadAt = pane.narrow ? 'main' : floatedFromOverview ? 'float' : overviewAt === 'top' && placement.thread !== 'main' ? 'side' : placement.thread;
     const remember = (key: string, set: (v: boolean) => void) => (v: boolean) => {
         writeLocal(key, v ? '1' : '0');
         set(v);
     };
     const setWindow = remember('overviewWindowOpen', setWindowOpen);
     const setBand = remember('overviewBandOpen', setBandOpen);
+    const [worktreeChoice, setWorktreeChoice] = useState<{ projectId: string; shared: boolean } | null>(null);
+    const worktreeReply = useRef<((choice: boolean | null) => void) | null>(null);
+    useEffect(() => () => { worktreeReply.current?.(null); worktreeReply.current = null; }, [id]);
+    const answerWorktree = (choice: boolean | null) => {
+        const reply = worktreeReply.current;
+        worktreeReply.current = null;
+        setWorktreeChoice(null);
+        reply?.(choice);
+    };
     const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
     const [memoryKey, setMemoryKey] = useState(0);
     const [libraryKey, setLibraryKey] = useState(0);
@@ -185,7 +195,8 @@ export default function ProjectPage() {
             p.set('thread', tid);
             return p;
         });
-        pane.reveal();
+        if (threadAt === 'side') pane.reveal();
+        else if (pane.narrow) pane.setDrawerOpen(false);
     };
     const openFromOverview = (tid: string) => {
         setOverviewFloatId(tid);
@@ -193,13 +204,13 @@ export default function ProjectPage() {
     };
     const dockThread = () => {
         setOverviewFloatId(null);
-        placement.setThread('side');
+        placement.setThread('main');
     };
     const closeThread = () => setParams((p) => {
         p.delete('thread');
         return p;
     });
-    const patch = async (body: Pick<components['schemas']['UpdateProjectRequest'], 'starred' | 'paused' | 'archived' | 'coordinator_model' | 'thread_model' | 'coordinator_effort' | 'thread_effort' | 'thread_permission_mode'>) => {
+    const patch = async (body: Pick<components['schemas']['UpdateProjectRequest'], 'starred' | 'paused' | 'archived' | 'coordinator_model' | 'thread_model' | 'coordinator_profile' | 'thread_profile' | 'coordinator_effort' | 'thread_effort' | 'thread_permission_mode' | 'disable_worktree'>) => {
         if (projectSaving.current) return;
         projectSaving.current = true;
         setSavingDefaults(true);
@@ -256,8 +267,26 @@ export default function ProjectPage() {
             canSend={settings.canSend}
             configuredModel={selected?.model_override || `${t('threadSettings.projectDefault')} · ${project?.thread_model || t('threadSettings.defaultModel')}`}
             permissionLabel={selected?.permission_mode ? t(`session.mode.${selected.permission_mode}`, { defaultValue: selected.permission_mode }) : `${t('threadSettings.projectDefault')} · ${t(`session.mode.${project?.thread_permission_mode || 'acceptEdits'}`)}`}
+            modelControl={selected && (
+                session?.workerLaunchPickers ? session.workerLaunchPickers({ profileOverride: selected.profile_override ?? null, projectProfile: project?.thread_profile ?? '', model: selected.model_override || (selected.profile_override == null ? project?.thread_model : '') || '', disabled: blocked || selected.status === 'resolved' || settings.saving, onChange: (profile, model) => void settings.setWorkerLaunch(profile, model) }) : <ThreadSettingsPickers show="model" value={{ profile: '', model: selected.model_override ?? '' }} permissionMode={selected.permission_mode ?? ''}
+                    modes={modes} disabled={blocked || selected.status === 'resolved' || settings.saving}
+                    defaultModel={project?.thread_model} defaultPermissionMode={project?.thread_permission_mode || 'acceptEdits'}
+                    onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
+            )}
+            belowComposer={selected && !session?.workerLaunchPickers && !!(selected.profile_override ?? project?.thread_profile) && (
+                <Alert severity="warning" action={<Button color="inherit" size="small" disabled={settings.saving} onClick={() => void settings.setWorkerLaunch('', '')}>{t('threadSettings.useConnection')}</Button>}>
+                    {t('threadSettings.threadProfileUnavailable')}
+                </Alert>
+            )}
+            effortControl={selected && (
+                <EffortPicker value={selected.effort_override || ''}
+                    defaultLabel={`${t('threadSettings.projectDefault')} · ${project?.thread_effort ? t(`effort.${project.thread_effort}`) : t('effort.default')}`}
+                    defaultDisplayLabel={project?.thread_effort ? t(`effort.${project.thread_effort}`) : t('effort.default')}
+                    disabled={blocked || selected.status === 'resolved' || settings.saving}
+                    onChange={(value) => void settings.setEffort(value as components['schemas']['EffortRequest']['effort'])} />
+            )}
             composerContext={selected && (
-                <ThreadSettingsPickers value={{ profile: '', model: selected.model_override ?? '' }} permissionMode={selected.permission_mode ?? ''}
+                <ThreadSettingsPickers show="permission" value={{ profile: '', model: selected.model_override ?? '' }} permissionMode={selected.permission_mode ?? ''}
                     modes={modes} disabled={blocked || selected.status === 'resolved' || settings.saving}
                     defaultModel={project?.thread_model} defaultPermissionMode={project?.thread_permission_mode || 'acceptEdits'}
                     onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
@@ -338,7 +367,9 @@ export default function ProjectPage() {
                 top={overviewAt === 'top' ? (
                     <OverviewBand threads={threads} selectedId={threadId} open={bandOpen} onToggle={() => setBand(!bandOpen)} onOpen={openThread} onLibrary={() => setLibraryWindow(true)} />
                 ) : undefined}
-                main={messages === null ? (
+                main={<Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                    <Box sx={{ flex: 1, minHeight: 0, display: threadId && threadAt === 'main' ? 'none' : 'flex', flexDirection: 'column' }}>
+                    {messages === null ? (
                     <Box sx={{ flex: 1, p: 3 }}><Skeleton variant="rounded" height={80} /></Box>
                 ) : (
                     <ConversationPane
@@ -349,16 +380,36 @@ export default function ProjectPage() {
                         threads={threadMap}
                         busy={busy}
                         disabled={blocked || !project || savingDefaults}
-                        disabledReason={banner}
+                        disabledReason={<>
+                            {banner}
+                            {!session?.launchPickers && project?.coordinator_profile && <Alert severity="warning" sx={{ mb: 1 }} action={<Button color="inherit" size="small" disabled={savingDefaults} onClick={() => void patch({ coordinator_profile: '', coordinator_model: '' })}>{t('threadSettings.useConnection')}</Button>}>{t('threadSettings.coordinatorProfileUnavailable')}</Alert>}
+                            {!session?.launchPickers && project?.thread_profile && <Alert severity="warning" sx={{ mb: 1 }} action={<Button color="inherit" size="small" disabled={savingDefaults} onClick={() => void patch({ thread_profile: '', thread_model: '' })}>{t('threadSettings.useConnection')}</Button>}>{t('threadSettings.defaultProfileUnavailable')}</Alert>}
+                        </>}
                         threadId={mainThreadId}
                         model={project?.coordinator_model}
-                        onModelChange={(m) => void patch({ coordinator_model: m })}
+                        onModelChange={session?.launchPickers ? undefined : (m) => void patch({ coordinator_model: m })}
+                        modelControl={project && session?.launchPickers?.({ value: { profile: project.coordinator_profile || '', model: project.coordinator_model || '' }, disabled: blocked || savingDefaults, onChange: (next) => void patch({ coordinator_profile: next.profile, coordinator_model: next.model }) })}
                         effort={project?.coordinator_effort}
                         onEffortChange={(e) => void patch({ coordinator_effort: e as EffortLevel })}
                         composerContext={project && (
                             // Defaults stay project-scoped; the selected worker's overrides are in its own panel.
                             <>
                                 <Typography variant="caption" color="text.secondary" title={t('threadSettings.defaultsHelp')}>{t('threadSettings.defaults')}</Typography>
+                                <Tooltip title={t('projectSettings.worktreeHelp')}>
+                                    <Select
+                                        size="small" variant="standard" disableUnderline IconComponent={ExpandMore}
+                                        value={project.disable_worktree ? 'shared' : 'worktree'}
+                                        inputProps={{ 'aria-label': t('threadSettings.worktreeMode') }}
+                                        disabled={blocked || savingDefaults}
+                                        onChange={(e) => void patch({ disable_worktree: e.target.value === 'shared' })}
+                                        renderValue={(value) => <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}><Folder /><Typography noWrap sx={composerPickerLabelSx}>{t(`threadSettings.workspace.${value}`)}</Typography></Stack>}
+                                        sx={composerPickerSx}
+                                        MenuProps={composerPickerMenuProps}
+                                    >
+                                        <MenuItem value="worktree">{t('threadSettings.workspace.worktree')}</MenuItem>
+                                        <MenuItem value="shared">{t('threadSettings.workspace.shared')}</MenuItem>
+                                    </Select>
+                                </Tooltip>
                                 <PermissionModeSelect
                                     value={project.thread_permission_mode || 'acceptEdits'}
                                     modes={THREAD_MODES}
@@ -367,15 +418,13 @@ export default function ProjectPage() {
                                     disabled={blocked || savingDefaults}
                                     onChange={(m) => void patch({ thread_permission_mode: m as ThreadMode })}
                                 />
-                                <ModelPicker
+                                {session?.launchPickers ? session.launchPickers({ value: { profile: project.thread_profile || '', model: project.thread_model || '' }, disabled: blocked || savingDefaults, onChange: (next) => void patch({ thread_profile: next.profile, thread_model: next.model }) }) : <ModelPicker
                                     source="projects"
-                                    label={t('conversation.threadModel')}
                                     value={project.thread_model}
                                     disabled={blocked || savingDefaults}
                                     onChange={(m) => void patch({ thread_model: m })}
-                                />
+                                />}
                                 <EffortPicker
-                                    label={t('conversation.threadEffort')}
                                     value={project.thread_effort || ''}
                                     disabled={blocked || savingDefaults}
                                     onChange={(e) => void patch({ thread_effort: e as EffortLevel })}
@@ -387,6 +436,19 @@ export default function ProjectPage() {
                         onSend={async (text, attachments) => {
                             if (projectSaving.current) return false;
                             try {
+                                if (readLocal('worktreeNoticeSeen') !== '1' && project) {
+                                    const choice = await new Promise<boolean | null>((resolve) => {
+                                        worktreeReply.current = resolve;
+                                        setWorktreeChoice({ projectId: id, shared: !!project.disable_worktree });
+                                    });
+                                    if (choice === null) return false;
+                                    if (choice !== !!project.disable_worktree) {
+                                        const saved = await unwrap(api.PATCH('/api/v1/projects/{id}', { params: { path: { id } }, body: { disable_worktree: choice } }));
+                                        setProject((current) => current?.id === saved.id ? saved : current);
+                                        refresh();
+                                    }
+                                    writeLocal('worktreeNoticeSeen', '1');
+                                }
                                 await unwrap(api.POST('/api/v1/threads/{id}/messages', { params: { path: { id: mainThreadId } }, body: { content: text, attachments: attachments.map((a) => a.path) } }));
                                 setBusy(true);
                                 // The message shows at once; the reply streams in over the event stream.
@@ -416,7 +478,10 @@ export default function ProjectPage() {
                             }
                         }}
                     />
-                )}
+                    )}
+                    </Box>
+                    {threadAt === 'main' && threadEl}
+                </Box>}
             />
 
             <FloatingWindow
@@ -453,6 +518,18 @@ export default function ProjectPage() {
                 {threadEl}
             </FloatingWindow>
 
+            <Dialog open={worktreeChoice !== null && worktreeChoice.projectId === id} onClose={() => answerWorktree(null)} aria-labelledby="worktree-notice-title" maxWidth="sm" fullWidth>
+                <DialogTitle id="worktree-notice-title">{t('worktreeNotice.title')}</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>{t('worktreeNotice.description')}</DialogContentText>
+                    <RadioGroup value={worktreeChoice?.shared ? 'shared' : 'worktree'} onChange={(e) => setWorktreeChoice({ projectId: id, shared: e.target.value === 'shared' })} sx={{ mt: 1 }}>
+                        <FormControlLabel value="worktree" control={<Radio />} label={t('worktreeNotice.worktree')} />
+                        <FormControlLabel value="shared" control={<Radio />} label={t('worktreeNotice.shared')} />
+                    </RadioGroup>
+                    <DialogContentText>{t('worktreeNotice.changeLater')}</DialogContentText>
+                </DialogContent>
+                <DialogActions><Button onClick={() => answerWorktree(null)}>{t('common.cancel')}</Button><Button variant="contained" onClick={() => answerWorktree(worktreeChoice?.shared ?? null)}>{t('worktreeNotice.continue')}</Button></DialogActions>
+            </Dialog>
             {im?.dialog}
 
             {project && settingsTab && (

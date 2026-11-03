@@ -145,3 +145,14 @@ func TestHostChecksModelTiers(t *testing.T) {
 	assert.Error(t, h.CheckLaunch(ctx, "", "gpt-5"))
 	assert.Error(t, h.CheckLaunch(ctx, "no-such-profile", ""))
 }
+
+func TestHostCoordinatorProfileUsesProfileRouting(t *testing.T) {
+	h := NewHost(newConfig(t))
+	_, model, err := h.ClientForProfile(context.Background(), "", "")
+	require.NoError(t, err)
+	assert.NotEmpty(t, model)
+	_, _, err = h.ClientForProfile(context.Background(), "no-such-profile", "")
+	require.Error(t, err)
+	_, _, err = h.ClientForProfile(context.Background(), "", "not-a-tier")
+	require.Error(t, err)
+}

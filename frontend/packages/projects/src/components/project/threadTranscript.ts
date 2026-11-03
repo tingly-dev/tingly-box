@@ -61,6 +61,9 @@ export function threadTranscript(events: ThreadEvent[], running: boolean, author
             case 'user': {
                 const pl = parse<{ attachments?: TranscriptEntry['attachments']; injected?: boolean }>(e.payload);
                 const entry: TranscriptEntry = { role: 'user', content: e.content, author: author(e), attachments: pl?.attachments, timestamp };
+                if (e.source === 'im') {
+                    entry.imSource = { platform: e.source_platform ?? '', chatId: e.source_chat_id ?? '' };
+                }
                 if (pl?.injected) {
                     entry.pending = true;
                     unread.push(entry);
@@ -74,6 +77,9 @@ export function threadTranscript(events: ThreadEvent[], running: boolean, author
             case 'assistant':
                 if (!e.parent) markRead();
                 entries.push({ role: 'assistant', content: e.content, timestamp });
+                break;
+            case 'file':
+                entries.push({ role: 'assistant', content: e.content, attachments: parse<{ attachments?: TranscriptEntry['attachments'] }>(e.payload)?.attachments, timestamp });
                 break;
             case 'report': {
                 // The turn's summary repeats its last reply: show it once.

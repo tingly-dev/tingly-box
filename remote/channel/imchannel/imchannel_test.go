@@ -15,6 +15,7 @@ type fakeSender struct {
 	lastText      string
 	lastParseMode imbot.ParseMode
 	lastMetadata  map[string]any
+	lastMedia     []imbot.MediaAttachment
 	err           error
 }
 
@@ -24,11 +25,27 @@ func (s *fakeSender) SendMessage(ctx context.Context, target string, opts *imbot
 		s.lastText = opts.Text
 		s.lastParseMode = opts.ParseMode
 		s.lastMetadata = opts.Metadata
+		s.lastMedia = opts.Media
 	}
 	if s.err != nil {
 		return nil, s.err
 	}
 	return &imbot.SendResult{MessageID: "m1"}, nil
+}
+
+func TestSendFileToFeishuAndLark(t *testing.T) {
+	for _, platform := range []string{"feishu", "lark"} {
+		t.Run(platform, func(t *testing.T) {
+			s := &fakeSender{}
+			c := New("bot", platform, s, nil, nil)
+			if err := c.SendFile(context.Background(), "ou_user", "/tmp/image.png", "image.png", "image/png", "caption"); err != nil {
+				t.Fatal(err)
+			}
+			if s.lastTarget != "ou_user" || s.lastText != "caption" || s.lastParseMode != imbot.ParseModeMarkdown || len(s.lastMedia) != 1 || s.lastMedia[0].Type != "image" || s.lastMedia[0].URL != "file:///tmp/image.png" {
+				t.Fatalf("unexpected message: target=%q text=%q media=%+v", s.lastTarget, s.lastText, s.lastMedia)
+			}
+		})
+	}
 }
 
 type fakePrompter struct {

@@ -3,6 +3,7 @@ package remoteagent
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"github.com/tingly-dev/tingly-box/imbot"
 	bot2 "github.com/tingly-dev/tingly-box/remote/control/bot"
@@ -31,7 +32,10 @@ type BotHandler struct {
 
 	// projectRouter hands chats to Projects; nil, or switched off, leaves
 	// chats with access and notifications only. See project_route.go.
-	projectRouter ProjectRouter
+	projectRouter  ProjectRouter
+	projectListsMu sync.Mutex
+	projectLists   map[string][]ProjectChoice
+	folderLists    map[string][]string
 }
 
 // HandlerContext contains per-message context data

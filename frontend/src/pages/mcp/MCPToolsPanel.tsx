@@ -129,7 +129,7 @@ export default function MCPToolsPanel({
                                       ? workspace('fixConnection', 'Fix connection')
                                       : advisor
                                         ? workspace('configureAdvisor', 'Configure Advisor model')
-                                        : workspace('connectionSettings', 'Settings')}
+                                        : workspace('connectionSettingsShort', 'Settings')}
                             </Button>
                         </Stack>
                         <Stack sx={{ px: 2, pb: 1.5, gap: 1 }}>

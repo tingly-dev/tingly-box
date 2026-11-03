@@ -94,6 +94,7 @@ export function ProviderQuotaPanel({ onNavigate }: { onNavigate: (path: string) 
                 borderRadius: 2,
                 bgcolor: 'background.paper',
                 flex: 1,
+                minWidth: 0,
                 minHeight: 0,
                 display: 'flex',
                 flexDirection: 'column',
@@ -168,14 +169,21 @@ export function ProviderQuotaPanel({ onNavigate }: { onNavigate: (path: string) 
                                 <ButtonBase
                                     onClick={() => onNavigate(SHELL_ROUTES.credentials)}
                                     sx={{
+                                        flex: 1,
                                         minWidth: 0,
                                         justifyContent: 'flex-start',
                                         borderRadius: 1,
                                         '&:hover .hub-provider-name': { color: 'primary.main' },
                                     }}
                                 >
-                                    <ProviderLabel provider={provider} gap={0.75}>
-                                        <Typography className="hub-provider-name" variant="body2" sx={{ fontWeight: 500 }} noWrap>
+                                    <ProviderLabel provider={provider} gap={0.75} sx={{ width: '100%' }}>
+                                        <Typography
+                                            className="hub-provider-name"
+                                            variant="body2"
+                                            title={provider.name || provider.uuid}
+                                            sx={{ minWidth: 0, fontWeight: 500 }}
+                                            noWrap
+                                        >
                                             {provider.name || provider.uuid}
                                         </Typography>
                                     </ProviderLabel>

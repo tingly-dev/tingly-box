@@ -85,6 +85,9 @@ export default {
     "saved": "已保存"
   },
   "layout": {
+    "workspace": "工作区",
+    "workspaceTip": { "title": "认识工作区", "text": "在一处管理项目、工作目录和 IM 聊天。" },
+    "workspaceGate": { "title": "开启工作区", "text": "开启工作区扩展功能后，即可使用项目、工作目录和 IM 聊天。", "enable": "开启工作区", "error": "无法开启工作区，请重试。" },
     "projects": "项目",
     "projectsWaiting": "有线程或会话在等你处理",
     "appTitle": "Tingly Box",
@@ -130,6 +133,7 @@ export default {
       "doneEditing": "完成",
       "expand": "展开侧边栏"
     },
+    "featureSwitch": { "disable": "关闭 {{name}}", "disabledTitle": "{{name}} 已关闭", "disabledText": "你可以在偏好设置 → 扩展中重新开启。", "teamTitle": "Team 已开启", "teamText": "Team 默认开启，可以点击此按钮关闭。" },
     "coachMarks": {
       "gotIt": "知道了",
       "agentVisibility": {
@@ -188,6 +192,7 @@ export default {
     "imagePlayground": "Playground",
     "remoteControl": "远程控制",
     "notify": "IM 通知",
+    "imBots": "IM 机器人",
     "bots": "机器人",
     "overview": "概览",
     "platforms": {

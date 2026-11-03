@@ -36,7 +36,7 @@ func TestFolderThreadEndToEnd(t *testing.T) {
 	assert.Equal(t, f.ID, again.ID)
 
 	var s db.Thread
-	require.Equal(t, 201, c.do("POST", "/projects/"+f.ID+"/threads", map[string]any{"content": "explain this folder", "permission_mode": "plan"}, &s))
+	require.Equal(t, 201, c.do("POST", "/projects/"+f.ID+"/threads", map[string]any{"content": "explain this folder", "permission_mode": "plan", "effort": "high"}, &s))
 	assert.Equal(t, f.ID, s.ProjectID)
 	assert.Equal(t, folder, s.Cwd)
 
@@ -50,6 +50,8 @@ func TestFolderThreadEndToEnd(t *testing.T) {
 		return detail.Thread.Status == db.ThreadIdle
 	}, 5*time.Second, 20*time.Millisecond)
 	assert.Equal(t, "plan", detail.Thread.PermissionMode)
+	assert.Equal(t, "high", detail.Thread.EffortOverride)
+	assert.Equal(t, "high", a.Launches()[0].Effort)
 	assert.NotNil(t, detail.BackgroundTasks)
 	var evs struct {
 		Events []db.ThreadEvent `json:"events"`
@@ -95,7 +97,7 @@ func TestFolderThreadEndToEnd(t *testing.T) {
 	assert.Contains(t, handoff.Command, "claude --resume "+s.SessionID)
 	assert.Equal(t, 409, c.do("POST", "/threads/"+s.ID+"/tasks/task1/stop", nil, &e))
 	assert.Equal(t, 400, c.do("GET", "/threads/"+s.ID+"/tasks/bad.id/output", nil, &e))
-	assert.Equal(t, 200, c.do("POST", "/threads/"+s.ID+"/archive", nil, &out))
+	assert.Equal(t, 200, c.do("POST", "/threads/"+s.ID+"/resolve", nil, &out))
 	assert.Equal(t, db.ThreadResolved, out.Status)
 	assert.Equal(t, 409, c.do("POST", "/threads/"+s.ID+"/messages", map[string]any{"content": "late"}, &e))
 	assert.Equal(t, 200, c.do("POST", "/threads/"+s.ID+"/reopen", nil, &out))
@@ -118,4 +120,46 @@ func TestFolderThreadEndToEnd(t *testing.T) {
 	require.Len(t, archived.Projects, 1)
 	assert.Equal(t, f.ID, archived.Projects[0].ID)
 	assert.Equal(t, 409, c.do("POST", "/threads/"+s.ID+"/messages", map[string]any{"content": "after archive"}, &e))
+}
+
+func TestFolderSessionArchiveAndResolveAreIndependent(t *testing.T) {
+	a := &enginetest.Agent{}
+	store, c := newServer(t, &project.Agents{Service: a.Service()})
+	f := db.Project{Type: db.ProjectFolder, Path: t.TempDir(), Name: "folder"}
+	require.NoError(t, store.CreateProject(&f))
+	s := db.Thread{ProjectID: f.ID, Agent: db.AgentClaudeCode, Status: db.ThreadWaiting, WaitReason: "stale request", Cwd: f.Path, SessionID: "test-session"}
+	require.NoError(t, store.CreateThread(&s))
+
+	var out db.Thread
+	require.Equal(t, 200, c.do("POST", "/threads/"+s.ID+"/archive", nil, &out))
+	require.NotNil(t, out.ArchivedAt)
+	assert.Equal(t, db.ThreadIdle, out.Status)
+	assert.Empty(t, out.WaitReason)
+	assert.Nil(t, out.ResolvedAt)
+	counts, err := store.ProjectThreadCounts(f.ID)
+	require.NoError(t, err)
+	assert.Equal(t, db.ThreadCounts{}, counts)
+	var failure map[string]any
+	assert.Equal(t, 409, c.do("POST", "/threads/"+s.ID+"/messages", map[string]any{"content": "hello"}, &failure))
+	var list struct {
+		Threads []db.Thread `json:"threads"`
+	}
+	require.Equal(t, 200, c.do("GET", "/projects/"+f.ID+"/threads", nil, &list))
+	require.Len(t, list.Threads, 1)
+	assert.NotNil(t, list.Threads[0].ArchivedAt)
+
+	out = db.Thread{}
+	require.Equal(t, 200, c.do("POST", "/threads/"+s.ID+"/restore", nil, &out))
+	assert.Nil(t, out.ArchivedAt)
+	assert.Equal(t, db.ThreadIdle, out.Status)
+	require.Equal(t, 200, c.do("POST", "/threads/"+s.ID+"/resolve", nil, &out))
+	assert.Equal(t, db.ThreadResolved, out.Status)
+	require.Equal(t, 200, c.do("POST", "/threads/"+s.ID+"/archive", nil, &out))
+	assert.Equal(t, db.ThreadResolved, out.Status)
+	assert.NotNil(t, out.ArchivedAt)
+	out = db.Thread{}
+	require.Equal(t, 200, c.do("POST", "/threads/"+s.ID+"/restore", nil, &out))
+	assert.Nil(t, out.ArchivedAt)
+	assert.Equal(t, db.ThreadResolved, out.Status)
+	assert.NotNil(t, out.ResolvedAt)
 }

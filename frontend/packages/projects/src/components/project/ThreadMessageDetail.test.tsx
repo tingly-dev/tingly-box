@@ -1,13 +1,19 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as renderWithHost, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Thread, ThreadEvent } from '../../client';
 import { ThreadPanel } from './ThreadPanel';
 import { readLocal } from '../../utils/storage';
+import { ProjectsHostProvider } from '../../host/ProjectsHost';
+
+const host = { paths: { list: '/', project: () => '/', folder: () => '/' } };
+const render = (ui: React.ReactElement) => renderWithHost(ui, {
+    wrapper: ({ children }) => <ProjectsHostProvider host={host}>{children}</ProjectsHostProvider>,
+});
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, opts?: { defaultValue?: string }) => opts?.defaultValue ?? key }) }));
 const respond = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('./threadOps', () => ({ threadOps: () => ({ respond }) }));
-vi.mock('../ThreadComposer', () => ({ ThreadComposer: () => <div>Composer</div> }));
+vi.mock('../ThreadComposer', () => ({ ThreadComposer: ({ leftSlot }: { leftSlot?: React.ReactNode }) => <div>Composer{leftSlot}</div> }));
 vi.mock('./DiffDialog', () => ({ DiffDialog: () => null }));
 vi.mock('./ComposerStrip', () => ({ ComposerStrip: () => null }));
 vi.mock('../Markdown', () => ({ Markdown: ({ text }: { text: string }) => <div>{text}</div>, CodeBlock: () => null }));
@@ -26,6 +32,12 @@ const events = [
 const props = { projectId: 'p', threadId: 't', thread, events, running: true, disabled: false, onBack: () => {} };
 
 describe('thread message detail integration', () => {
+    it.each([false, true])('shows the IM source for a message (folder=%s)', (folder) => {
+        const fromIM = event('im', 'user', 'Hello from IM', { source: 'im', source_platform: 'telegram', source_chat_id: '42' });
+        render(<ThreadPanel {...props} events={[fromIM, event('web', 'user', 'Hello from web')]} folder={folder} />);
+        expect(screen.getByText('Hello from IM').parentElement?.parentElement).toHaveTextContent('im.source');
+        expect(screen.getByText('Hello from web').parentElement?.parentElement).not.toHaveTextContent('im.source');
+    });
     it.each([false, true])('filters paired calls but retains the actual response path (folder=%s)', async (folder) => {
         const requestId = `permission-${folder}`;
         const currentEvents = events.map((e) => e.kind === 'approval' ? { ...e, payload: e.payload!.replace('permission', requestId) } : e);
@@ -44,4 +56,25 @@ describe('thread message detail integration', () => {
         fireEvent.click(screen.getByRole('button', { name: 'messageDetail.detailed' }));
         expect(readLocal('thread.messageDetail')).toBe('detailed');
     });
+});
+
+it('distinguishes a reported model from a folder session’s configured model', () => {
+    const view = render(<ThreadPanel {...props} thread={{ ...thread, model: 'chosen-alias', reported_model: 'reported-worker-model' }} />);
+    expect(screen.getByText('threadSettings.lastModel: reported-worker-model')).toBeVisible();
+    view.rerender(<ThreadPanel {...props} thread={{ ...thread, model: 'chosen-alias' }} />);
+    expect(screen.getByText('threadSettings.lastModel: threadSettings.modelUnknown')).toBeVisible();
+    view.unmount();
+    const usage = event('usage', 'usage', '', { payload: JSON.stringify({ model: 'provider-model' }) });
+    render(<ThreadPanel {...props} folder thread={{ ...thread, model: 'configured-alias', reported_model: 'provider-model' }} events={[usage]} />);
+    expect(screen.getByText('threadSettings.lastModel: provider-model')).toBeVisible();
+    expect(screen.queryByText('threadSettings.lastModel: configured-alias')).not.toBeInTheDocument();
+});
+
+
+it.each([false, true])('shows model and permission controls in the composer without a settings disclosure (folder=%s)', (folder) => {
+    render(<ThreadPanel {...props} folder={folder} modelControl={<button>Model control</button>} effortControl={<button>Effort control</button>} composerContext={<button>Permission control</button>} />);
+    expect(screen.getByRole('button', { name: 'Model control' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Effort control' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Permission control' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /composer.settings/ })).not.toBeInTheDocument();
 });

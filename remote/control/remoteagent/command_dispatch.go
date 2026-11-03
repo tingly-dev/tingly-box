@@ -49,7 +49,7 @@ func buildDirText(currentPath string, paths []string) string {
 		buf.WriteString("This chat has not picked a folder.\n\n")
 	}
 	if len(paths) > 0 {
-		buf.WriteString("Folders this chat used:\n")
+		buf.WriteString("Registered folders:\n")
 		for i, path := range paths {
 			marker := ""
 			if path == currentPath {
@@ -88,9 +88,15 @@ func buildDirKeyboard(currentPath string, paths []string) imbot.InlineKeyboardMa
 // handleDirMenu answers the "project" button of an action menu with the /dir
 // list. It always runs from a button, so it always has buttons.
 func (h *BotHandler) handleDirMenu(hCtx HandlerContext) {
-	currentPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
-	paths, _ := h.chatStore.ListChatProjectPaths(hCtx.ChatID)
-	_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
+	adapter := NewBotHandlerAdapter(h)
+	currentPath, _ := adapter.GetProjectPath(hCtx.ChatID)
+	paths, err := adapter.ListChatProjectPaths(hCtx.ChatID)
+	if err != nil {
+		h.SendText(hCtx, "Could not list folders: "+err.Error())
+		return
+	}
+	adapter.RememberFolderList(hCtx.ChatID, paths)
+	_, err = hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
 		Text:    buildDirText(currentPath, paths),
 		Actions: buildDirKeyboard(currentPath, paths).ToActionSet(),
 	})

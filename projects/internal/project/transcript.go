@@ -68,7 +68,7 @@ func (s threadStore) Append(sid string, e engine.Entry) {
 			s.tally(id, func(t *turnTally) {
 				t.inputTokens += u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens
 				t.outputTokens += u.OutputTokens
-				if u.Model != "" {
+				if u.Model != "" && e.Parent == "" {
 					t.model = u.Model
 				}
 			})

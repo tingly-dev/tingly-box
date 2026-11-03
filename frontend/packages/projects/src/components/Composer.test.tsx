@@ -9,6 +9,16 @@ beforeEach(() => { mobile.value = false; });
 afterEach(cleanup);
 
 describe('Composer', () => {
+    it('keeps secondary settings available without crowding the composer', () => {
+        render(<Composer onSend={vi.fn()} contextCollapsible context={<span>Permission options</span>} />);
+        const toggle = screen.getByRole('button', { name: 'composer.settings' });
+        expect(toggle).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryByText('Permission options')).not.toBeInTheDocument();
+        fireEvent.click(toggle);
+        expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByText('Permission options')).toBeVisible();
+    });
+
     it('clears at once and puts a refused message back while the box is still empty', async () => {
         const send = vi.fn().mockResolvedValueOnce(false);
         render(<Composer placeholder="Reply" onSend={send} />);

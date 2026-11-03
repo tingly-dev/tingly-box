@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import type {TranscriptEntry} from './model';
-import {agentReport, approvalSubject, buildTranscript, firstNewBlock, formatTokens, latestTodos, pendingRequestId, requestOutcome, toolSummary, workingState} from './model';
+import {agentReport, approvalSubject, buildTranscript, firstNewBlock, formatTokens, latestTodos, todoGroups, pendingRequestId, requestOutcome, toolSummary, workingState} from './model';
 
 const msg = (m: Partial<TranscriptEntry>): TranscriptEntry => ({content: '', timestamp: '2026-01-01T00:00:00Z', ...m});
 
@@ -267,5 +267,76 @@ describe('latestTodos', () => {
     it('is undefined without a usable list', () => {
         expect(latestTodos(buildTranscript([msg({role: 'user', content: 'go'}), write('a', 'nope')]))).toBeUndefined();
         expect(latestTodos(buildTranscript([msg({role: 'user', content: 'go'})]))).toBeUndefined();
+    });
+});
+
+
+describe('task checklist', () => {
+    const event = (name: string, input: unknown, result: string, isError = false): TranscriptEntry[] => [
+        msg({kind: 'tool_use', content: name, request_id: name + result, payload: input}),
+        msg({kind: 'tool_result', content: result, request_id: name + result, payload: {is_error: isError}}),
+    ];
+    it('folds successful creates, updates and deletions by task ID', () => {
+        const blocks = buildTranscript([
+            ...event('TaskCreate', {subject: 'Build', activeForm: 'Building'}, 'Task #1 created successfully: Build'),
+            ...event('TaskCreate', {subject: 'Test'}, 'Task #2 created successfully: Test'),
+            ...event('TaskUpdate', {taskId: '1', status: 'in_progress'}, 'Updated task #1'),
+            ...event('TaskUpdate', {taskId: '2', status: 'deleted'}, 'Updated task #2'),
+            ...event('TaskUpdate', {taskId: '1', status: 'completed'}, 'failed', true),
+        ]);
+        expect(latestTodos(blocks)).toEqual([{content: 'Build', activeForm: 'Building', status: 'in_progress'}]);
+    });
+    it('reads list and get text results and clears an empty list', () => {
+        const list = event('TaskList', {}, '#1 [pending] Build\n#2 [completed] Test');
+        const get = event('TaskGet', {taskId: '1'}, 'Task #1: Build\nStatus: in_progress\nDescription: Work');
+        expect(latestTodos(buildTranscript([...list, ...get]))).toEqual([
+            {content: 'Build', activeForm: undefined, status: 'in_progress'},
+            {content: 'Test', activeForm: undefined, status: 'completed'},
+        ]);
+        expect(latestTodos(buildTranscript([...list, ...event('TaskList', {}, 'No tasks found')]))).toBeUndefined();
+    });
+});
+
+
+describe('progress groups', () => {
+    const call = (id: string, name: string, input: unknown, result = 'ok') => ({type: 'tool' as const, id, name, input, result, isError: false});
+    const groups = (...steps: ReturnType<typeof call>[]) => todoGroups([{type: 'activity', steps}]);
+    it('starts a group only after completion and keeps updates with their task', () => {
+        const result = groups(
+            call('a', 'TaskCreate', {subject: 'First'}, 'Task #1 created successfully: First'),
+            call('b', 'TaskCreate', {subject: 'Also first'}, 'Task #2 created successfully: Also first'),
+            call('c', 'TaskUpdate', {taskId: '1', status: 'completed'}),
+            call('d', 'TaskUpdate', {taskId: '2', status: 'completed'}),
+            call('e', 'TaskCreate', {subject: 'Second'}, 'Task #3 created successfully: Second'),
+            call('f', 'TaskUpdate', {taskId: '1', status: 'in_progress'}),
+            call('g', 'TaskList', {}, '#1 [in_progress] First\n#2 [completed] Also first\n#3 [pending] Second'),
+        );
+        expect(result.map((g) => g.todos.map((x) => [x.content, x.status]))).toEqual([
+            [['First', 'in_progress'], ['Also first', 'completed']], [['Second', 'pending']],
+        ]);
+    });
+    it('treats overlapping TodoWrite snapshots as one group, and a new list after completion as another', () => {
+        const write = (id: string, todos: unknown) => call(id, 'TodoWrite', {todos});
+        const result = groups(
+            write('a', [{content: 'Plan', status: 'pending'}]),
+            write('b', [{content: 'Plan', status: 'completed'}]),
+            write('c', [{content: 'Plan', status: 'completed'}, {content: 'Build', status: 'pending'}]),
+            write('d', [{content: 'Plan', status: 'completed'}, {content: 'Build', status: 'completed'}]),
+            write('e', [{content: 'New work', status: 'pending'}]),
+        );
+        expect(result.map((g) => g.todos.map((x) => x.content))).toEqual([['Plan', 'Build'], ['New work']]);
+    });
+    it('keeps previous groups available when the current group is cleared', () => {
+        const result = groups(
+            call('a', 'TaskCreate', {subject: 'Earlier'}, 'Task #1 created successfully: Earlier'),
+            call('b', 'TaskUpdate', {taskId: '1', status: 'completed'}),
+            call('c', 'TaskCreate', {subject: 'Current'}, 'Task #2 created successfully: Current'),
+            call('d', 'TaskUpdate', {taskId: '2', status: 'deleted'}),
+        );
+        expect(result.map((group) => group.todos.map((item) => item.content))).toEqual([['Earlier'], []]);
+    });
+    it('does not create a group from a failed create', () => {
+        const steps = [call('a', 'TaskCreate', {subject: 'First'}, 'Task #1 created successfully: First'), call('b', 'TaskUpdate', {taskId: '1', status: 'completed'}), {...call('c', 'TaskCreate', {subject: 'Failed'}), isError: true}];
+        expect(groups(...steps)).toHaveLength(1);
     });
 });

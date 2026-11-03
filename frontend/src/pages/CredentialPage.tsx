@@ -1,4 +1,7 @@
 import ApiKeyTable from '@/components/ApiKeyTable.tsx';
+import { sortCredentials, type CredentialSort } from '@/components/credential/sortCredentials';
+import { providerIconId } from '@/utils/providerIcon';
+import { getServiceProvidersSync, useProviderCatalogLoaded } from '@/services/serviceProviders';
 import ConnectAIDialogs from '@/components/ConnectAIDialogs';
 import EmptyState from '@/components/EmptyState';
 import OAuthDialog from '@/components/OAuthDialog.tsx';
@@ -9,7 +12,8 @@ import Surface from '@/components/Surface';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
 import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
 import { useProviderDialog } from '@/hooks/useProviderDialog';
-import { Add, VpnKey } from '@/components/icons';
+import { IconArrowsSort, IconLayoutGrid, IconList, IconTable } from '@tabler/icons-react';
+import { Add, Check, VpnKey } from '@/components/icons';
 import {
     Alert,
     Box,
@@ -21,7 +25,13 @@ import {
     DialogTitle,
     Divider,
     Stack,
+    IconButton,
+    Menu,
+    MenuItem,
     Typography,
+    ToggleButton,
+    ToggleButtonGroup,
+    Tooltip,
 } from '@mui/material';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
@@ -29,6 +39,19 @@ import { useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { useNotify } from '@/hooks/useNotify';
 import { fontSizes } from '@/theme/fonts';
+
+type CredentialView = 'table' | 'list' | 'card';
+const VIEW_STORAGE_KEY = 'tb.credentials.view';
+const SORT_STORAGE_KEY = 'tb.credentials.sort';
+
+const readCredentialView = (): CredentialView => {
+    try {
+        const saved = localStorage.getItem(VIEW_STORAGE_KEY);
+        return saved === 'list' || saved === 'card' || saved === 'table' ? saved : 'table';
+    } catch {
+        return 'table';
+    }
+};
 
 const SectionTitle = ({ label, count }: { label: string; count: number }) => (
     <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.5 }}>
@@ -40,9 +63,25 @@ const SectionTitle = ({ label, count }: { label: string; count: number }) => (
 const CredentialPage = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const [providers, setProviders] = useState<any[]>([]);
+    const [view, setView] = useState<CredentialView>(readCredentialView);
+    const changeView = (next: CredentialView | null) => {
+        if (!next) return;
+        setView(next);
+        try { localStorage.setItem(VIEW_STORAGE_KEY, next); } catch { /* View remains usable if storage is unavailable. */ }
+    };
+    const [sort, setSort] = useState<CredentialSort>(() => {
+        try { return localStorage.getItem(SORT_STORAGE_KEY) === 'provider' ? 'provider' : 'name'; } catch { return 'name'; }
+    });
+    const changeSort = (next: CredentialSort) => {
+        setSort(next);
+        try { localStorage.setItem(SORT_STORAGE_KEY, next); } catch { /* Sorting works without storage. */ }
+    };
+    useProviderCatalogLoaded();
+    const providerCatalog = getServiceProvidersSync();
+    const [sortAnchor, setSortAnchor] = useState<HTMLElement | null>(null);
     const [loading, setLoading] = useState(true);
     const notify = useNotify();
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
 
     // Reauthorize dialog state (page-local: re-authenticates an existing OAuth
     // provider in place — the shared Connect AI flow only covers adding).
@@ -150,10 +189,10 @@ const CredentialPage = () => {
     };
 
     const { apiKeyProviders, oauthProviders, credentialCounts } = useMemo(() => {
-        const apiKeys = providers.filter((p: any) => p.auth_type !== 'oauth' && p.auth_type !== 'vmodel');
-        const oauth = providers.filter((p: any) => p.auth_type === 'oauth');
+        const apiKeys = sortCredentials(providers.filter((p: any) => p.auth_type !== 'oauth' && p.auth_type !== 'vmodel'), i18n.resolvedLanguage, sort, providerIconId);
+        const oauth = sortCredentials(providers.filter((p: any) => p.auth_type === 'oauth'), i18n.resolvedLanguage, sort, providerIconId);
         return { apiKeyProviders: apiKeys, oauthProviders: oauth, credentialCounts: { apiKeys: apiKeys.length, oauth: oauth.length, total: apiKeys.length + oauth.length } };
-    }, [providers]);
+    }, [providers, i18n.resolvedLanguage, sort, providerCatalog]);
 
     return (
         <PageLayout loading={loading}>
@@ -166,7 +205,20 @@ const CredentialPage = () => {
                     // Empty: the landing below carries Connect AI — one CTA, not two.
                     // The provider catalog is reached from inside Connect AI.
                     actions={credentialCounts.total === 0 ? undefined : (
-                        <Button variant="contained" startIcon={<Add />} onClick={handleConnectAIClick} size="small" sx={{ minWidth: 150 }}>{t('templateActions.connectAI')}</Button>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
+                            <Tooltip title={`${t('credentialPage.sortBy')}: ${t(sort === 'name' ? 'credentialPage.sortName' : 'credentialPage.sortProvider')}`}>
+                                <IconButton aria-label={t('credentialPage.sortBy')} aria-haspopup="menu" aria-expanded={Boolean(sortAnchor)} onClick={event => setSortAnchor(event.currentTarget)} size="small" sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 0.75 }}><IconArrowsSort size={18}/></IconButton>
+                            </Tooltip>
+                            <Menu anchorEl={sortAnchor} open={Boolean(sortAnchor)} onClose={() => setSortAnchor(null)}>
+                                {(['name', 'provider'] as const).map(option => <MenuItem key={option} selected={sort === option} onClick={() => { changeSort(option); setSortAnchor(null); }} sx={{ minWidth: 155, justifyContent: 'space-between', gap: 2 }}>{t(option === 'name' ? 'credentialPage.sortName' : 'credentialPage.sortProvider')}{sort === option && <Check fontSize="small"/>}</MenuItem>)}
+                            </Menu>
+                            <ToggleButtonGroup size="small" exclusive value={view} onChange={(_, next: CredentialView | null) => changeView(next)} aria-label={t('credentialPage.viewMode')}>
+                                <ToggleButton value="table" aria-label={t('credentialPage.tableView')}><Tooltip title={t('credentialPage.tableView')}><IconTable size={18}/></Tooltip></ToggleButton>
+                                <ToggleButton value="list" aria-label={t('credentialPage.listView')}><Tooltip title={t('credentialPage.listView')}><IconList size={18}/></Tooltip></ToggleButton>
+                                <ToggleButton value="card" aria-label={t('credentialPage.cardView')}><Tooltip title={t('credentialPage.cardView')}><IconLayoutGrid size={18}/></Tooltip></ToggleButton>
+                            </ToggleButtonGroup>
+                            <Button variant="contained" startIcon={<Add />} onClick={handleConnectAIClick} size="small" sx={{ minWidth: 150 }}>{t('templateActions.connectAI')}</Button>
+                        </Stack>
                     )}
                 />
 
@@ -195,13 +247,13 @@ const CredentialPage = () => {
                             {credentialCounts.oauth > 0 && (
                                 <Box>
                                     <SectionTitle label={t('credentialPage.sectionOAuth')} count={credentialCounts.oauth}/>
-                                    <OAuthTable providers={oauthProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onRefreshToken={handleRefreshToken} onReauthorize={handleReauthorize} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota} onQuotaRedeem={redeemReward}/>
+                                    <OAuthTable view={view} providers={oauthProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onRefreshToken={handleRefreshToken} onReauthorize={handleReauthorize} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota} onQuotaRedeem={redeemReward}/>
                                 </Box>
                             )}
                             {credentialCounts.apiKeys > 0 && (
                                 <Box>
                                     <SectionTitle label={t('credentialPage.sectionApiKeys')} count={credentialCounts.apiKeys}/>
-                                    <ApiKeyTable providers={apiKeyProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota} onQuotaRedeem={redeemReward}/>
+                                    <ApiKeyTable view={view} providers={apiKeyProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota} onQuotaRedeem={redeemReward}/>
                                 </Box>
                             )}
                         </Stack>

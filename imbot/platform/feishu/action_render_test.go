@@ -59,6 +59,25 @@ func TestBuildActionCardWithoutActions(t *testing.T) {
 	}
 }
 
+func TestBuildActionCardUsesMarkdownElement(t *testing.T) {
+	out, err := buildActionCard("# Heading\n\n- item", core.NewActionSet()).String()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var card struct {
+		Elements []struct {
+			Tag     string `json:"tag"`
+			Content string `json:"content"`
+		} `json:"elements"`
+	}
+	if err := json.Unmarshal([]byte(out), &card); err != nil {
+		t.Fatal(err)
+	}
+	if len(card.Elements) != 1 || card.Elements[0].Tag != "markdown" || card.Elements[0].Content != "# Heading\n\n- item" {
+		t.Fatalf("unexpected card elements: %s", out)
+	}
+}
+
 // TestBuildActionCardTier3Fallback covers the escape-hatch contract: an action
 // carrying another platform's Tier 3 payload must degrade here per its
 // FallbackPolicy, not vanish and not leak the other platform's shape.

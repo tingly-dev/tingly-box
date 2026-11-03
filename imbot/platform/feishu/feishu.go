@@ -411,14 +411,14 @@ func (b *Bot) SendMessage(ctx context.Context, target string, opts *core.SendMes
 	// section is a future enhancement.
 	core.ResolveTextFromSegments(opts, core.GetPlatformCapabilities(core.PlatformFeishu).EffectiveThinkingRender())
 
-	// Handle text/card message
-	if opts.Text != "" {
-		return b.sendText(ctx, target, opts)
-	}
-
 	// Handle media
 	if len(opts.Media) > 0 {
 		return b.sendMedia(ctx, target, opts)
+	}
+
+	// Handle text/card message
+	if opts.Text != "" {
+		return b.sendText(ctx, target, opts)
 	}
 
 	return nil, core.NewBotError(core.ErrUnknown, "no content to send", false)
@@ -460,14 +460,21 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 	var msgType string
 	var content string
 
-	if opts.ParseMode == core.ParseModeMarkdown {
-		// For Lark/Feishu, markdown in card needs to be wrapped in div element
-		// MessageCardLarkMd implements MessageCardText interface
+	if opts.ParseMode == core.ParseModeMarkdown && b.domain == DomainFeishu {
+		// Feishu's rich-text md node supports CommonMark and GFM, including
+		// tables, which the older interactive card markdown does not render.
+		msgType = "post"
+		body := map[string]any{"zh_cn": map[string]any{"content": [][]map[string]string{{{"tag": "md", "text": opts.Text}}}}}
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("build markdown message: %w", err)
+		}
+		content = string(encoded)
+	} else if opts.ParseMode == core.ParseModeMarkdown {
 		msgType = "interactive"
 		cardJson, err := larkcard.NewMessageCard().
 			Elements([]larkcard.MessageCardElement{
-				larkcard.NewMessageCardDiv().
-					Text(larkcard.NewMessageCardLarkMd().Content(opts.Text)),
+				larkcard.NewMessageCardMarkdown().Content(opts.Text),
 			}).
 			String()
 		if err != nil {
@@ -492,7 +499,7 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 		Build()
 
 	b.Logger().Debug("Sending message request: target=%s, msgType=%s, receiveIdType=%s", target, msgType, getReceiveIdType(target))
-	resp, err := b.client.Message.Create(context.Background(), req)
+	resp, err := b.client.Message.Create(ctx, req)
 
 	if err != nil {
 		b.Logger().Error("Failed to send message: %v", err)
@@ -512,14 +519,6 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 		MessageID: messageID,
 		Timestamp: 0,
 	}, nil
-}
-
-// sendMedia sends media
-func (b *Bot) sendMedia(ctx context.Context, target string, opts *core.SendMessageOptions) (*core.SendResult, error) {
-	if len(opts.Media) == 0 {
-		return nil, core.NewBotError(core.ErrUnknown, "no media to send", false)
-	}
-	return nil, core.NewMediaNotSupportedError(core.Platform(b.domain), opts.Media[0].Type)
 }
 
 // extractMessageIDFromResponse extracts the message ID from a Lark API response

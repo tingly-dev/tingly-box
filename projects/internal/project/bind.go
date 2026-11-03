@@ -15,9 +15,6 @@ import (
 // Errors for channel bindings.
 var (
 	ErrBindingInvalid = errors.New("platform, chat_id and one of thread_id or project_id are required")
-	// ErrBindFolder is for binding a folder by project id: a folder has no
-	// main thread, so the chat is bound to one of its threads.
-	ErrBindFolder = errors.New("a folder has no main thread; bind one of its threads (thread_id)")
 	// ErrNotThisChat is for a chat answering a thread it is not bound to,
 	// directly or through an ancestor.
 	ErrNotThisChat = errors.New("this chat is not bound to that thread")
@@ -26,7 +23,7 @@ var (
 // BindChannel binds an IM chat to a thread; a chat that is already bound
 // moves. A project id stands for the project's main thread. title is an
 // optional display name for the chat.
-func (s *Service) BindChannel(platform, chatID, title, threadID, projectID string) (*db.ChannelBinding, error) {
+func (s *Service) BindChannel(platform, chatID, title, threadID, projectID string, botUUID ...string) (*db.ChannelBinding, error) {
 	platform, chatID = strings.TrimSpace(platform), strings.TrimSpace(chatID)
 	threadID, projectID = strings.TrimSpace(threadID), strings.TrimSpace(projectID)
 	if platform == "" || chatID == "" || (threadID == "") == (projectID == "") {
@@ -44,7 +41,13 @@ func (s *Service) BindChannel(platform, chatID, title, threadID, projectID strin
 			return nil, err
 		}
 		if p.Type == db.ProjectFolder {
-			return nil, ErrBindFolder
+			if p.ArchivedAt != nil {
+				return nil, ErrArchived
+			}
+			if err := s.ChannelToFolder(platform, chatID, title, p.Path, "", false, botUUID...); err != nil {
+				return nil, err
+			}
+			return s.Store.GetChannelBinding(platform, chatID)
 		}
 		if t, err = s.Store.GetThread(p.MainThreadID); err != nil {
 			return nil, err
@@ -58,6 +61,13 @@ func (s *Service) BindChannel(platform, chatID, title, threadID, projectID strin
 		return nil, ErrArchived
 	}
 	b := &db.ChannelBinding{Platform: platform, ChatID: chatID, ChatTitle: strings.TrimSpace(title), ThreadID: t.ID}
+	b.TargetProjectID = p.ID
+	if threadID != "" && p.Type == db.ProjectFolder {
+		b.TargetThreadID = t.ID
+	}
+	if len(botUUID) > 0 {
+		b.BotUUID = strings.TrimSpace(botUUID[0])
+	}
 	if err := s.Store.UpsertChannelBinding(b); err != nil {
 		return nil, err
 	}
@@ -119,7 +129,7 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 			return true, err
 		}
 	}
-	if p.Type == db.ProjectFolder && (b.NewThread || t.Status == db.ThreadResolved) {
+	if p.Type == db.ProjectFolder && (b.NewThread || t.Status == db.ThreadResolved || t.ArchivedAt != nil) {
 		atts, err := s.adoptChannelFiles(t.ProjectID, files)
 		if err != nil {
 			return true, err
@@ -206,15 +216,10 @@ func (s *Service) startFromChannel(b *db.ChannelBinding, prev *db.Thread, projec
 	} else if s.Threads.Launchable(b.Profile) {
 		spec.Profile = b.Profile
 	}
-	t, err := s.Threads.StartFolderThread(spec)
-	if err != nil {
-		return nil, err
-	}
-	nb := &db.ChannelBinding{Platform: b.Platform, ChatID: b.ChatID, ThreadID: t.ID}
-	if err := s.Store.UpsertChannelBinding(nb); err != nil {
-		return nil, err
-	}
-	return t, nil
+	return s.Threads.startFolderThread(spec, func(t *db.Thread) error {
+		nb := &db.ChannelBinding{Platform: b.Platform, ChatID: b.ChatID, ThreadID: t.ID, TargetProjectID: t.ProjectID, TargetThreadID: b.TargetThreadID}
+		return s.Store.UpsertChannelBinding(nb)
+	})
 }
 
 // answerFromText answers a request a chat was asked with the chat's reply
@@ -251,9 +256,17 @@ func (s *Service) answerFromText(threadID, requestID, text string) (done bool, e
 // that already has a binding is left as it is, which is how a chat that
 // never talked gets its first folder. profile is the launch profile a chat
 // that never talked starts its first thread under.
-func (s *Service) ChannelToFolder(platform, chatID, title, folder, profile string, ifNew bool) error {
+func (s *Service) ChannelToFolder(platform, chatID, title, folder, profile string, ifNew bool, botUUID ...string) error {
 	path, err := CleanFolder(folder)
 	if err != nil {
+		return err
+	}
+	// Use the same spelling as a registered folder, including symlinks and
+	// case-insensitive filesystems, so pending bindings remain visible there.
+	path = db.CanonicalPath(path)
+	if p, err := s.Store.FindFolder(path); err == nil {
+		path = p.Path
+	} else if !errors.Is(err, db.ErrNotFound) {
 		return err
 	}
 	if ifNew {
@@ -263,7 +276,7 @@ func (s *Service) ChannelToFolder(platform, chatID, title, folder, profile strin
 			return err
 		}
 	}
-	return s.Store.SetChannelBindingFolder(platform, chatID, title, path, strings.TrimSpace(profile))
+	return s.Store.SetChannelBindingFolder(platform, chatID, title, path, strings.TrimSpace(profile), botUUID...)
 }
 
 // AnswerFromChannel answers a thread's pending approval with the button a

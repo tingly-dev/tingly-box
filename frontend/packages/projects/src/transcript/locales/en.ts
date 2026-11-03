@@ -16,6 +16,8 @@ export default {
       "background": "background",
       "callFailed": "failed",
       "checklist": "Progress",
+      "checklistEmpty": "No current tasks",
+      "checklistHistory": "Previous task groups ({{count}})",
       "checklistCount": "{{done}} of {{total}} done",
       "decline": "Decline",
       "deny": "Deny",

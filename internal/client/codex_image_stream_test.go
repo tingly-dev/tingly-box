@@ -2,10 +2,12 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
@@ -97,5 +99,31 @@ func TestParseImageGenerationStream_NoImageCarriesUpstreamReason(t *testing.T) {
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tc.want)
 		})
+	}
+}
+
+// A completed response is terminal even when the SSE transport stays open.
+func TestParseImageGenerationStreamReturnsOnCompleted(t *testing.T) {
+	reader, writer := io.Pipe()
+	defer writer.Close()
+	go func() {
+		_, _ = io.WriteString(writer, "data: "+doneFinal+"\n\ndata: {\"type\":\"response.completed\",\"sequence_number\":4}\n\n")
+	}()
+	stream := ssestream.NewStream[responses.ResponseStreamEventUnion](ssestream.NewDecoder(&http.Response{
+		StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"text/event-stream"}}, Body: reader,
+	}), nil)
+	result := make(chan error, 1)
+	go func() {
+		resp, err := (&CodexClient{}).parseImageGenerationStream(context.Background(), stream)
+		if err == nil && (len(resp.Data) != 1 || resp.Data[0].B64JSON != "FINAL") {
+			err = fmt.Errorf("unexpected response: %+v", resp)
+		}
+		result <- err
+	}()
+	select {
+	case err := <-result:
+		require.NoError(t, err)
+	case <-time.After(time.Second):
+		t.Fatal("parser waited for the transport after response.completed")
 	}
 }

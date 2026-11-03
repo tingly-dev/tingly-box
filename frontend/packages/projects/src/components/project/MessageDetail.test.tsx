@@ -105,6 +105,7 @@ describe('manager message detail', () => {
         await act(async () => fireEvent.click(screen.getByRole('button', { name: 'conversation.start' })));
         expect(p.onStartSuggestions).toHaveBeenCalledWith('suggest', [0]);
         expect(screen.getByRole('button', { name: 'evidence.png' })).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'threadSettings.settings' }));
         expect(screen.getByRole('button', { name: 'Switch control' })).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Switch model' }));
         expect(p.onModelChange).toHaveBeenCalledWith('next-model');

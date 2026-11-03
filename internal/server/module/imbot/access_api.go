@@ -556,3 +556,25 @@ func (h *Handler) DeleteRoute(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, OKResponse{OK: true})
 }
+
+type AliasUpdateRequest struct {
+	Alias *string `json:"alias"`
+}
+
+func (h *Handler) putTargetAlias(c *gin.Context, kind, param string) {
+	if !h.requireAccess(c) {
+		return
+	}
+	var req AliasUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.Alias == nil {
+		apierr.Message(c, http.StatusBadRequest, "alias is required")
+		return
+	}
+	if err := h.accessStore.SetTargetAlias(c.Request.Context(), c.Param("bot"), c.Param(param), kind, *req.Alias); err != nil {
+		accessError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, OKResponse{OK: true})
+}
+func (h *Handler) PutDirectChatAlias(c *gin.Context) { h.putTargetAlias(c, "chat", "chat") }
+func (h *Handler) PutGroupAlias(c *gin.Context)      { h.putTargetAlias(c, "group", "group") }

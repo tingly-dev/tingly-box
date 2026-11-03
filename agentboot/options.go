@@ -72,6 +72,8 @@ type ExecutionOptions struct {
 	// Model selection (per-execution override)
 	Model         string
 	FallbackModel string
+	// Effort is the Claude Code reasoning effort for this execution.
+	Effort string
 
 	// Execution control
 	MaxTurns int
@@ -81,7 +83,10 @@ type ExecutionOptions struct {
 	DisallowedTools []string
 
 	// MCP servers (per-execution override)
-	MCPServers      map[string]interface{}
+	MCPServers map[string]interface{}
+	// MCPConfigPath is an additional Claude MCP config file, useful for
+	// credentials that must not appear in process arguments.
+	MCPConfigPath   string
 	StrictMcpConfig bool
 
 	// System prompts (per-execution override)

@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -426,8 +427,8 @@ func (b *Bot) PlatformInfo() *core.PlatformInfo {
 	return core.NewPlatformInfoFor(core.PlatformTelegram)
 }
 
-// sendText sends a text message
-func (b *Bot) sendText(ctx context.Context, chatID int64, opts *core.SendMessageOptions) (*core.SendResult, error) {
+// telegramFormattedText applies the same formatting to messages and captions.
+func telegramFormattedText(opts *core.SendMessageOptions) (string, models.ParseMode, []models.MessageEntity) {
 	var parseMode models.ParseMode
 	var text string = opts.Text
 	var entities []models.MessageEntity
@@ -458,6 +459,13 @@ func (b *Bot) sendText(ctx context.Context, chatID int64, opts *core.SendMessage
 			parseMode = models.ParseModeHTML
 		}
 	}
+
+	return text, parseMode, entities
+}
+
+// sendText sends a text message.
+func (b *Bot) sendText(ctx context.Context, chatID int64, opts *core.SendMessageOptions) (*core.SendResult, error) {
+	text, parseMode, entities := telegramFormattedText(opts)
 
 	// Chunk text first (handles long messages)
 	chunks := b.ChunkText(text)
@@ -528,29 +536,42 @@ func (b *Bot) sendMedia(ctx context.Context, chatID int64, opts *core.SendMessag
 	}
 
 	media := opts.Media[0]
+	var input models.InputFile = &models.InputFileString{Data: media.URL}
+	if parsed, parseErr := url.Parse(media.URL); parseErr == nil && parsed.Scheme == "file" {
+		if parsed.Host != "" || !strings.HasPrefix(parsed.Path, "/") {
+			return nil, fmt.Errorf("invalid local file URL")
+		}
+		file, openErr := os.Open(parsed.Path)
+		if openErr != nil {
+			return nil, openErr
+		}
+		defer file.Close()
+		input = &models.InputFileUpload{Filename: media.Filename, Data: file}
+	}
 
 	var sentMsg *models.Message
 	var err error
+	caption, parseMode, entities := telegramFormattedText(opts)
 
 	if media.Type == "image" || media.Type == "sticker" {
 		// Send as photo
 		params := &tgbot.SendPhotoParams{
 			ChatID: chatID,
-			Photo:  &models.InputFileString{Data: media.URL},
+			Photo:  input,
 		}
-		if opts.Text != "" {
-			params.Caption = opts.Text
-		}
+		params.Caption = caption
+		params.ParseMode = parseMode
+		params.CaptionEntities = entities
 		sentMsg, err = b.api.SendPhoto(b.ctx, params)
 	} else {
 		// Send as document
 		params := &tgbot.SendDocumentParams{
 			ChatID:   chatID,
-			Document: &models.InputFileString{Data: media.URL},
+			Document: input,
 		}
-		if opts.Text != "" {
-			params.Caption = opts.Text
-		}
+		params.Caption = caption
+		params.ParseMode = parseMode
+		params.CaptionEntities = entities
 		sentMsg, err = b.api.SendDocument(b.ctx, params)
 	}
 

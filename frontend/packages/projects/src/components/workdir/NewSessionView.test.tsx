@@ -13,13 +13,16 @@ it('submits selected settings, locks pickers during creation and retains draft a
     const create = vi.fn(() => new Promise<boolean>((r) => { finish = r; }));
     render(<ProjectsHostProvider host={host}><NewSessionView initialFolder="/repo" folders={['/repo']} permissionModes={['plan']} onCreate={create} onAttach={vi.fn()} /></ProjectsHostProvider>);
     fireEvent.click(screen.getByRole('button', { name: 'choose-model' }));
+    fireEvent.click(screen.getByRole('button', { name: 'effort.default' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /effort.high/ }));
     fireEvent.mouseDown(screen.getByRole('combobox'));
     fireEvent.click(screen.getByRole('option', { name: 'session.mode.plan' }));
     const input = screen.getByPlaceholderText('session.promptPlaceholder');
     fireEvent.change(input, { target: { value: 'task' } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    expect(create).toHaveBeenCalledWith('/repo', 'task', 'plan', { profile: '', model: 'chosen-model' }, []);
+    expect(create).toHaveBeenCalledWith('/repo', 'task', 'plan', { profile: '', model: 'chosen-model' }, [], 'high');
     expect(screen.getByRole('button', { name: 'chosen-model' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'effort.high' })).toBeDisabled();
     expect(screen.getByRole('button', { name: /session.folder:/ })).toBeDisabled();
     expect(screen.getByRole('combobox')).toHaveAttribute('aria-disabled', 'true');
     expect(input).not.toBeDisabled();
@@ -30,7 +33,7 @@ it('submits selected settings, locks pickers during creation and retains draft a
     expect(input).toHaveValue('edited task');
     expect(screen.getByRole('button', { name: 'chosen-model' })).not.toBeDisabled();
     fireEvent.keyDown(input, { key: 'Enter' });
-    expect(create).toHaveBeenLastCalledWith('/repo', 'edited task', 'plan', { profile: '', model: 'chosen-model' }, []);
+    expect(create).toHaveBeenLastCalledWith('/repo', 'edited task', 'plan', { profile: '', model: 'chosen-model' }, [], 'high');
     await act(async () => finish(true));
     expect(input).toHaveValue('');
 });

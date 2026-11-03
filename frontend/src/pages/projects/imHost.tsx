@@ -22,7 +22,7 @@ const PLATFORM_NAMES: Record<string, string> = {
 const platformLabel = (platform: string) =>
     i18n.t(`layout.platforms.${platform}`, { defaultValue: PLATFORM_NAMES[platform] ?? platform });
 
-// External chat ids are "telegram:123456789"; the platform is already on screen.
+// External chat ids may include the platform prefix.
 const bareId = (platform: string, id: string) => (id.startsWith(`${platform}:`) ? id.slice(platform.length + 1) : id);
 
 async function listBots(): Promise<ImBot[]> {
@@ -45,8 +45,7 @@ async function listChats(bot: ImBot): Promise<ImChat[]> {
                 botUuid: bot.uuid,
                 platform: chat.platform,
                 chatId: chat.external_chat_id,
-                // The Remote API has no display name for a private chat; its id is what it has.
-                title: bareId(chat.platform, chat.external_chat_id),
+                title: `${platformLabel(chat.platform)} · ${chat.alias?.trim() || bareId(chat.platform, chat.external_chat_id)}`,
                 kind: 'direct',
                 state: chat.blocked ? 'blocked' : chat.peer_actor_id ? 'ok' : 'unpaired',
             });
@@ -58,7 +57,7 @@ async function listChats(bot: ImBot): Promise<ImChat[]> {
                 botUuid: bot.uuid,
                 platform: g.platform,
                 chatId: g.external_group_id,
-                title: g.name || bareId(g.platform, g.external_group_id),
+                title: `${platformLabel(g.platform)} · ${g.alias?.trim() || bareId(g.platform, g.external_group_id)}`,
                 kind: 'group',
                 state: g.blocked ? 'blocked' : 'ok',
             });
@@ -77,9 +76,9 @@ export const imHost: ImHost = {
     listBots,
     listChats,
     platformLabel,
-    platformIcon: (platform, size) => {
+    platformIcon: (platform, size, colored) => {
         const Icon = PLATFORM_BRAND_ICONS[platform];
-        return Icon ? <Icon size={size} /> : null;
+        return Icon ? <Icon size={size} grayscale={!colored} /> : null;
     },
     accessDialog: ({ bot, onClose }) => <AccessDialog bot={bot} onClose={onClose} />,
 };

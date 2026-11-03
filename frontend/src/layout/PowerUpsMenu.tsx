@@ -29,6 +29,7 @@ import { useBotPlatformSummary } from './useBotPlatformSummary';
 import { SCENARIOS, useHiddenScenarios } from '@/pages/scenario/scenarioRegistry';
 import { Z_INDEX } from '../constants/zIndex';
 import { fontSizes } from '@/theme/fonts';
+import { announceFeatureDisabled } from './featureNotice';
 
 interface PowerUp {
     key: string;
@@ -124,7 +125,7 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             key: 'projects',
             feature: 'projects' as const,
             icon: <IconFolder sx={iconSx} />,
-            name: t('system.experimentalFeatures.projects'),
+            name: t('layout.workspace', { defaultValue: 'Workspace' }),
             description: t('system.experimentalFeatures.enableProjects'),
             path: '/projects',
             stage: 'beta' as const,
@@ -167,13 +168,26 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
     ];
 
     const toggle = async (p: PowerUp) => {
-        if (p.onToggle) return p.onToggle();
+        if (p.onToggle) {
+            p.onToggle();
+            if (p.enabled && (p.key === 'team' || p.key === 'imagegen')) {
+                onClose();
+                onNavigate?.();
+                announceFeatureDisabled(p.name);
+            }
+            return;
+        }
         if (!p.feature) return;
         setFailed(false);
         setUpdating(p.feature);
         try {
             const result = await api.setScenarioFlag('_global', p.feature, !p.enabled);
             if (!result.success) throw new Error('Feature update was rejected');
+            if (p.feature === 'projects' && p.enabled) {
+                onClose();
+                onNavigate?.();
+                announceFeatureDisabled(p.name);
+            }
         } catch (error) {
             console.error(`Failed to set ${p.feature}:`, error);
             setFailed(true);

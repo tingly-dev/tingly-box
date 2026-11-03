@@ -18,13 +18,14 @@ import (
 // it or to any ancestor, to answer by replying (an approval also has buttons
 // where the host can show them, ChannelPrompter, restated once the request is
 // settled wherever it was answered). Messages go out one at a time, in the order
-// they finished. Each starts with where it comes from: `[project name]` for a
+// they finished. Each includes where it comes from: `[project name]` for a
 // project conversation, `[#N title]` for any other thread. A chat that turned
 // on /verbose also hears each step of its own thread's turns (Step).
 type Relay struct {
-	store    *db.Store
-	sink     ChannelSink
-	prompter ChannelPrompter
+	store       *db.Store
+	sink        ChannelSink
+	prompter    ChannelPrompter
+	OnFileError func(threadID, platform, chatID, name string, err error)
 
 	mu      sync.Mutex
 	queue   []relayJob
@@ -68,6 +69,28 @@ type relayJob struct {
 	// settle, when set, is a request id: the prompts sent for it are
 	// restated with text added, and nothing new is sent.
 	settle string
+	file   *relayFile
+}
+
+type relayFile struct{ path, name, mediaType string }
+
+// File publishes to chats focused on the thread or one of its ancestors.
+func (r *Relay) File(t db.Thread, path string, a Attachment, caption string) {
+	if r == nil || r.sink == nil {
+		return
+	}
+	if _, ok := r.sink.(ChannelFileSender); !ok {
+		return
+	}
+	lineage, err := r.store.Lineage(t.ID)
+	if err != nil {
+		return
+	}
+	ids := make([]string, len(lineage))
+	for i, ancestor := range lineage {
+		ids[i] = ancestor.ID
+	}
+	r.enqueueJob(relayJob{threadIDs: ids, tag: threadTag(t.Seq, t.Title), text: caption, file: &relayFile{path: path, name: a.Name, mediaType: a.Type}})
 }
 
 // NewRelay builds the relay; sink may be nil, which makes every call a no-op.
@@ -383,9 +406,20 @@ func (r *Relay) deliver(job relayJob) {
 		}
 		tag = p.Name
 	}
-	text := "[" + tag + "] " + job.text
 	for _, b := range bindings {
-		ctx, cancel := context.WithTimeout(context.Background(), relaySendTimeout)
+		text := job.text + "\n\n[" + tag + "]"
+		ctx, cancel := context.WithTimeout(withChannelBot(context.Background(), b.BotUUID), relaySendTimeout)
+		if job.file != nil {
+			err := r.sink.(ChannelFileSender).SendChannelFile(ctx, b.Platform, b.ChatID, job.file.path, job.file.name, job.file.mediaType, text)
+			if err != nil {
+				logrus.WithError(err).WithFields(logrus.Fields{"platform": b.Platform, "chat_id": b.ChatID}).Warn("projects: send file to IM chat")
+				if r.OnFileError != nil {
+					r.OnFileError(job.threadIDs[0], b.Platform, b.ChatID, job.file.name, err)
+				}
+			}
+			cancel()
+			continue
+		}
 		if job.request != nil {
 			r.await(b, *job.request)
 		}

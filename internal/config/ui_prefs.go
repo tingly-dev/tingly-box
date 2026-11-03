@@ -38,6 +38,7 @@ func (c *Config) PatchUIPrefs(patch map[string]json.RawMessage) (map[string]json
 	}
 
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.UIPrefs == nil {
 		c.UIPrefs = make(map[string]json.RawMessage)
 	}
@@ -48,10 +49,13 @@ func (c *Config) PatchUIPrefs(patch map[string]json.RawMessage) (map[string]json
 		}
 		c.UIPrefs[k] = append(json.RawMessage(nil), v...)
 	}
-	c.mu.Unlock()
 
-	if err := c.Save(); err != nil {
+	if err := c.saveLocked(); err != nil {
 		return nil, err
 	}
-	return c.GetUIPrefs(), nil
+	out := make(map[string]json.RawMessage, len(c.UIPrefs))
+	for k, v := range c.UIPrefs {
+		out[k] = append(json.RawMessage(nil), v...)
+	}
+	return out, nil
 }

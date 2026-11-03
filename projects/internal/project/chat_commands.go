@@ -146,6 +146,23 @@ func (s *Service) folderCommand(b *db.ChannelBinding, name, arg string) (handled
 	where := db.FolderName(b.Folder)
 	next := fmt.Sprintf("Your next message starts a new session in %s.", where)
 	switch name {
+	case ChatSession:
+		p, err := s.Store.FindFolder(b.Folder)
+		if errors.Is(err, db.ErrNotFound) {
+			return true, "No sessions in this folder yet. " + next, nil
+		}
+		if err != nil {
+			return true, "", err
+		}
+		if p.ArchivedAt != nil {
+			return true, "", ErrArchived
+		}
+		if arg == "" {
+			reply, err := s.threadList(&db.Thread{}, p)
+			return true, reply, err
+		}
+		reply, err := s.focus(b, p, arg)
+		return true, reply, err
 	case ChatNew:
 		if arg == "" {
 			return true, next, nil
@@ -180,7 +197,7 @@ func (s *Service) folderCommand(b *db.ChannelBinding, name, arg string) (handled
 // that runs, and whether the chat hears each step.
 func (s *Service) status(b *db.ChannelBinding) (string, error) {
 	var lines []string
-	if b.ThreadID != "" {
+	if b.ThreadID != "" && b.Folder == "" {
 		t, p, err := s.boundThread(b)
 		if err != nil {
 			return "", err
@@ -200,6 +217,7 @@ func (s *Service) status(b *db.ChannelBinding) (string, error) {
 		}
 	}
 	if b.Folder != "" {
+		lines = append(lines, "Folder: "+b.Folder)
 		lines = append(lines, "Next message: a new session in "+b.Folder)
 	}
 	verbose := "off"

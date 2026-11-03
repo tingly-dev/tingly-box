@@ -2,22 +2,24 @@ package remoteagent
 
 import "testing"
 
-// TestPairingHelpers_isBindCommand exercises the parser used by the gate.
-func TestPairingHelpers_isBindCommand(t *testing.T) {
+// TestPairingHelpers_isPairCommand exercises the parser used by the gate.
+func TestPairingHelpers_isPairCommand(t *testing.T) {
 	cases := map[string]bool{
-		"/bind":           true,
-		"/bind ":          true,
-		"/bind ABCD-EFGH": true,
-		"  /bind ABCD":    true, // helper trims internally
-		"/binding":        false,
+		"/pair":           true,
+		"/pair ":          true,
+		"/pair ABCD-EFGH": true,
+		"  /pair ABCD":    true, // helper trims internally
+		"/pairing":        false,
 		"hello":           false,
 		"/cd /tmp":        false,
-		"/bind\tABCD":     true,
+		"/pair\tABCD":     true,
+		"/bind ABCD":      true, // compatibility for existing pairing instructions
+		"/binding":        false,
 	}
 	for input, want := range cases {
 		t.Run(input, func(t *testing.T) {
-			if got := isBindCommand(input); got != want {
-				t.Fatalf("isBindCommand(%q)=%v want %v", input, got, want)
+			if got := isPairCommand(input); got != want {
+				t.Fatalf("isPairCommand(%q)=%v want %v", input, got, want)
 			}
 		})
 	}

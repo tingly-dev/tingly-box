@@ -30,6 +30,7 @@ type SwaggerLicense struct {
 // Note: This is the common subset that works for both versions
 type Schema struct {
 	Type                 string            `json:"type,omitempty"`
+	Nullable             bool              `json:"nullable,omitempty"`
 	Format               string            `json:"format,omitempty"`
 	Title                string            `json:"title,omitempty"`
 	Description          string            `json:"description,omitempty"`

@@ -12,6 +12,7 @@ import (
 type CommonOptions struct {
 	Model                string
 	FallbackModel        string
+	Effort               string
 	MaxTurns             int
 	CustomSystemPrompt   string
 	AppendSystemPrompt   string
@@ -20,6 +21,7 @@ type CommonOptions struct {
 	AllowedTools         []string
 	DisallowedTools      []string
 	MCPServers           map[string]interface{}
+	MCPConfigPath        string
 	StrictMcpConfig      bool
 	PermissionMode       string
 	SettingsPath         string
@@ -40,6 +42,10 @@ func BuildCommonArgs(config Config, opts CommonOptions) []string {
 	}
 	if opts.Model != "" {
 		args = append(args, "--model", opts.Model)
+	}
+
+	if opts.Effort != "" {
+		args = append(args, "--effort", opts.Effort)
 	}
 
 	// Fallback model - only from opts (config doesn't have this in original)
@@ -141,10 +147,16 @@ func buildMCPArgs(config Config, opts CommonOptions) []string {
 		maps.Copy(mcpServers, opts.MCPServers)
 	}
 
+	if len(mcpServers) > 0 || opts.MCPConfigPath != "" {
+		args = append(args, "--mcp-config")
+	}
 	if len(mcpServers) > 0 {
 		mcpConfig := map[string]interface{}{"mcpServers": mcpServers}
 		mcpJSON, _ := json.Marshal(mcpConfig)
-		args = append(args, "--mcp-config", string(mcpJSON))
+		args = append(args, string(mcpJSON))
+	}
+	if opts.MCPConfigPath != "" {
+		args = append(args, opts.MCPConfigPath)
 	}
 
 	// Strict MCP config

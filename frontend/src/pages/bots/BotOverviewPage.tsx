@@ -1,16 +1,23 @@
-import { BotTable, BotConfigDialog, PlatformPicker, BotAccessDialog } from '@/components/bot';
+import { BotTable, BotConfigDialog, PlatformPicker, RemoteAgentBotCard } from '@/components/bot';
 import EmptyState from '@/components/EmptyState';
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import CollapsibleGuide from '@/components/remote-control/CollapsibleGuide';
 import { BOT_PLATFORM_IDS, PLATFORM_BRAND_ICONS, platformDisplayName, usePlatformGuide } from '@/constants/platformGuides';
 import { countBotsByPlatform } from '@/types/bot';
-import type { BotSettings } from '@/types/bot';
 import { useBotList } from '@/hooks/useBotList';
 import { useBotToggle } from '@/hooks/useBotToggle';
 import { useNotify } from '@/hooks/useNotify';
 import { Add, ListAlt } from '@/components/icons';
-import { Box, Button, CircularProgress } from '@mui/material';
+import { Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, IconButton } from '@mui/material';
+import { Close } from '@/components/icons';
+import BotNotifyGroup from '@/components/notify/BotNotifyGroup';
+import NotifyGuide from '@/components/notify/NotifyGuide';
+import GuideAction from '@/components/GuideAction';
+import CCProfileDialog from '@/components/bot/CCProfileDialog';
+import { useProfileContext } from '@/contexts/ProfileContext';
+import { api } from '@/services/api';
+import { defaultAgentForCCProfile } from '@/types/bot';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -33,7 +40,11 @@ const BotOverviewPage = () => {
     const [dialogMode, setDialogMode] = useState<'add' | 'edit'>('add');
     const [dialogEditUuid, setDialogEditUuid] = useState<string | null>(null);
     const [dialogPlatformId, setDialogPlatformId] = useState('telegram');
-    const [accessBot, setAccessBot] = useState<BotSettings | null>(null);
+    const [capability, setCapability] = useState<{ uuid: string; name: 'remote_control' | 'notify' } | null>(null);
+    const [capabilityBusy, setCapabilityBusy] = useState(false);
+    const [profileOpen, setProfileOpen] = useState(false);
+    const { getProfiles } = useProfileContext();
+    const profiles = getProfiles('claude_code');
 
     const notify = useNotify();
 
@@ -127,6 +138,14 @@ const BotOverviewPage = () => {
     // Toggle uses the shared useBotToggle hook (same op across all bot pages).
     const {toggle: handleBotToggle, isToggling} = useBotToggle({onDone: loadBotSettings});
 
+    const selectedBot = bots.find((bot) => bot.uuid === capability?.uuid);
+    const toggleCapability = async (uuid: string, name: 'remote_control' | 'notify', enabled: boolean) => {
+        setCapabilityBusy(true);
+        try { await api.setBotCapability(uuid, name, enabled); await loadBotSettings(); }
+        catch (error) { showNotification(error instanceof Error ? error.message : 'Failed to update capability', 'error'); }
+        finally { setCapabilityBusy(false); }
+    };
+
     const platformName = selectedPlatform === 'all' ? '' : platformDisplayName(selectedPlatform, t);
 
     return (
@@ -141,51 +160,53 @@ const BotOverviewPage = () => {
             }
         >
             <PlatformPicker items={pickerItems} value={selectedPlatform} onChange={selectPlatform} />
-            <UnifiedCard
-                title={selectedPlatform === 'all'
-                    ? t('bots.overview.allConnections', { defaultValue: 'All connections' })
-                    : t('bots.overview.platformTitle', { defaultValue: '{{platform}} Bots', platform: platformName })}
-                subtitle={t('bots.overview.subtitle', {
-                    defaultValue: `${filteredBots.length} bot${filteredBots.length !== 1 ? 's' : ''} connected`,
-                    count: filteredBots.length,
-                })}
-                size="full"
-                sx={{ mb: 2 }}
-                titleHeadingLevel={2}
-            >
-                {botLoading ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                        <CircularProgress />
-                    </Box>
-                ) : filteredBots.length === 0 ? (
-                    <EmptyState
-                        title={t('bots.overview.emptyTitle', { defaultValue: 'No bots connected yet' })}
-                        description={t('bots.overview.emptyDescription', { defaultValue: 'Connect a bot to drive Claude Code from chat (Remote) or deliver notifications (Notify).' })}
-                        primaryAction={{
-                            label: t('bots.overview.connectBot', { defaultValue: 'Connect a bot' }),
-                            onClick: openAddDialog,
-                        }}
-                    />
-                ) : (
-                    <BotTable
-                        bots={filteredBots}
-                        onEdit={(uuid, platformId) => openEditDialog(uuid, platformId!)}
-                        onDelete={(uuid) => handleDeleteBot(uuid)}
-                        onBotToggle={(uuid, enabled) => handleBotToggle(uuid, enabled)}
-                        onRestart={(uuid) => handleBotRestart(uuid)}
-                        isToggling={isToggling}
-                        isRestarting={isRestarting}
-                        onManageAccess={setAccessBot}
+            <Box role="region" id="bot-platform-panel" aria-labelledby={`bot-platform-${selectedPlatform}`} sx={{minWidth: 0}}>
+                <UnifiedCard
+                    title={selectedPlatform === 'all'
+                        ? t('bots.overview.allConnections', { defaultValue: 'All connections' })
+                        : t('bots.overview.platformTitle', { defaultValue: '{{platform}} Bots', platform: platformName })}
+                    subtitle={t('bots.overview.subtitle', {
+                        defaultValue: `${filteredBots.length} bot${filteredBots.length !== 1 ? 's' : ''} connected`,
+                        count: filteredBots.length,
+                    })}
+                    size="full"
+                    sx={{ mb: 2 }}
+                    titleHeadingLevel={2}
+                >
+                    {botLoading ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                            <CircularProgress />
+                        </Box>
+                    ) : filteredBots.length === 0 ? (
+                        <EmptyState
+                            title={t('bots.overview.emptyTitle', { defaultValue: 'No bots connected yet' })}
+                            description={t('bots.overview.emptyDescription', { defaultValue: 'Connect a bot to drive Claude Code from chat (Remote) or deliver notifications (Notify).' })}
+                            primaryAction={{
+                                label: t('bots.overview.connectBot', { defaultValue: 'Connect a bot' }),
+                                onClick: openAddDialog,
+                            }}
+                        />
+                    ) : (
+                        <BotTable
+                            bots={filteredBots}
+                            onEdit={(uuid, platformId) => openEditDialog(uuid, platformId!)}
+                            onDelete={(uuid) => handleDeleteBot(uuid)}
+                            onBotToggle={(uuid, enabled) => handleBotToggle(uuid, enabled)}
+                            onRestart={(uuid) => handleBotRestart(uuid)}
+                            isToggling={isToggling}
+                            isRestarting={isRestarting}
+                            onCapabilityClick={(bot, name) => bot.uuid && setCapability({ uuid: bot.uuid, name })}
+                        />
+                    )}
+                </UnifiedCard>
+                {!botLoading && selectedPlatform !== 'all' && guideConfig?.guide && (
+                    <CollapsibleGuide
+                        platformName={platformName}
+                        platformGuide={guideConfig.guide}
+                        defaultExpanded={filteredBots.length === 0}
                     />
                 )}
-            </UnifiedCard>
-            {!botLoading && selectedPlatform !== 'all' && guideConfig?.guide && (
-                <CollapsibleGuide
-                    platformName={platformName}
-                    platformGuide={guideConfig.guide}
-                    defaultExpanded={filteredBots.length === 0}
-                />
-            )}
+            </Box>
             {/* Shared add/edit dialog for the bot resource. Locked to the
                 selected platform when browsing one; unlocked under "All" so
                 the user picks a platform in the dialog itself. */}
@@ -200,12 +221,20 @@ const BotOverviewPage = () => {
                 onSaved={loadBotSettings}
                 notify={showNotification}
             />
-            <BotAccessDialog
-                open={Boolean(accessBot)}
-                bot={accessBot}
-                onClose={() => setAccessBot(null)}
-                onChanged={loadBotSettings}
-            />
+            <Dialog open={!!capability && !!selectedBot} onClose={() => setCapability(null)} fullWidth maxWidth="lg">
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    {capability?.name === 'notify' ? t('notify.title', { defaultValue: 'IM Notify' }) : t('remoteAgent.pageTitle', { defaultValue: 'Remote Control' })}
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        {capability?.name === 'notify' && <GuideAction label={t('notify.guide.action', { defaultValue: 'API guide' })} title={t('notify.guide.title', { defaultValue: 'IM Notify API Guide' })} description={t('notify.guide.description', { defaultValue: 'Authentication, request examples, and target IDs' })}><NotifyGuide /></GuideAction>}
+                        <IconButton aria-label={t('common.close', { defaultValue: 'Close' })} onClick={() => setCapability(null)}><Close /></IconButton>
+                    </Box>
+                </DialogTitle>
+                <DialogContent>
+                    {selectedBot && capability?.name === 'notify' && <BotNotifyGroup bot={selectedBot} onToggle={(uuid, enabled) => void toggleCapability(uuid, 'notify', enabled)} isToggling={capabilityBusy} />}
+                    {selectedBot && capability?.name === 'remote_control' && <RemoteAgentBotCard bot={selectedBot} onMountToggle={(enabled) => void toggleCapability(selectedBot.uuid!, 'remote_control', enabled)} ccProfiles={profiles} onCCProfileClick={() => setProfileOpen(true)} onEdit={() => { setCapability(null); openEditDialog(selectedBot.uuid!, selectedBot.platform!); }} onRestart={() => handleBotRestart(selectedBot.uuid!)} onDelete={() => { setCapability(null); handleDeleteBot(selectedBot.uuid!); }} isToggling={capabilityBusy} isRestarting={isRestarting(selectedBot.uuid!)} />}
+                </DialogContent>
+            </Dialog>
+            <CCProfileDialog open={profileOpen} bot={selectedBot ?? null} profiles={profiles} onClose={() => setProfileOpen(false)} onSelect={async (uuid, profileId) => { const result = await api.updateImBotSetting(uuid, { default_agent: defaultAgentForCCProfile(profileId) }); if (!result?.success) throw new Error(result?.error || 'Failed to update profile'); await loadBotSettings(); }} />
         </PageLayout>
     );
 };

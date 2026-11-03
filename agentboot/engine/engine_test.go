@@ -75,6 +75,14 @@ func TestLaunchSignature_ChangesWhenTheSettingsFileChanges(t *testing.T) {
 	}
 }
 
+func TestLaunchSignatureChangesWhenMCPChanges(t *testing.T) {
+	a := agentboot.ExecutionOptions{MCPServers: map[string]interface{}{"projects": map[string]interface{}{"url": "http://localhost/one"}}}
+	b := agentboot.ExecutionOptions{MCPServers: map[string]interface{}{"projects": map[string]interface{}{"url": "http://localhost/two"}}}
+	if launchSignature(a) == launchSignature(b) {
+		t.Fatal("MCP configuration changes must restart the resident process")
+	}
+}
+
 // recorder collects OnTurnEnd calls.
 type recorder struct{ ends chan TurnEnd }
 
@@ -250,5 +258,11 @@ func TestInject_WithoutARunningTurnIsNotInjectable(t *testing.T) {
 	e, _, _ := newScripted(t, func(*enginetest.Turn) error { return nil }, nil)
 	if err := e.Inject("none", "hello"); !errors.Is(err, ErrNotInjectable) {
 		t.Fatalf("Inject = %v, want ErrNotInjectable", err)
+	}
+}
+
+func TestLaunchSignatureChangesForEffort(t *testing.T) {
+	if launchSignature(agentboot.ExecutionOptions{Effort: "low"}) == launchSignature(agentboot.ExecutionOptions{Effort: "high"}) {
+		t.Fatal("a changed effort must restart the resident process before the next turn")
 	}
 }
