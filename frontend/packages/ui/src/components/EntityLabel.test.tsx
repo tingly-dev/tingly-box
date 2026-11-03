@@ -43,7 +43,7 @@ describe('EntityLabel', () => {
     it('can hide the platform text for rows under a bot header while keeping it accessible', () => {
         render(<EntityLabel platform="Telegram" platformIcon={<i data-testid="icon" />} platformAs="icon" alias="Alice" id="1" />);
         const el = screen.getByTestId('entity-label');
-        expect(el.textContent).toBe('·Alice·1');
+        expect(el.textContent).toBe('Alice·1');
         expect(screen.getByTestId('icon')).toBeTruthy();
         expect(el.getAttribute('aria-label')).toBe('Telegram · Alice · 1');
     });

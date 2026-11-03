@@ -4,6 +4,7 @@ import {NODE_LAYER_STYLES, StyledBotGraphNode} from './styles';
 import NodeTag from './NodeTag';
 import NodeTooltip from './NodeTooltip';
 import {fontMono} from '@/theme/fonts';
+import {shortId} from '@tingly/ui';
 
 // ChatNode is a leaf of the notify routing graph: one chat a bot's channel can
 // deliver to. Shares StyledBotGraphNode with the rest of the remote/notify
@@ -36,6 +37,8 @@ export interface ChatNodeProps {
 
 const ChatNode: React.FC<ChatNodeProps> = ({chatID, fullChatID, kind = 'direct_chat', alias, labelText, targetID, isPaired, projectPath, updatedAt, active = true, blocked = false}) => {
     const {t} = useTranslation();
+    // Long platform ids are shortened here; the tooltip carries the full one.
+    const shownId = shortId(kind === 'group' ? 'group' : 'direct', chatID).text;
     return (
         <StyledBotGraphNode active={active && !blocked}>
             {/* Top layer identifies the real platform conversation; the tooltip
@@ -66,11 +69,11 @@ const ChatNode: React.FC<ChatNodeProps> = ({chatID, fullChatID, kind = 'direct_c
                                 textDecoration: blocked ? 'line-through' : 'none',
                             }}
                         >
-                            {alias || chatID}
+                            {alias || shownId}
                         </Typography>
                         {alias && (
                             <Typography variant="caption" noWrap sx={{fontFamily: fontMono, maxWidth: 190, color: 'text.secondary'}}>
-                                {chatID}
+                                {shownId}
                             </Typography>
                         )}
                     </Box>

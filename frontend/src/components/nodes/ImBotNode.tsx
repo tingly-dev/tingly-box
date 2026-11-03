@@ -1,3 +1,4 @@
+import {entityText, shortId} from '@tingly/ui';
 import {Box, styled} from '@mui/material';
 import {
     SMALL_NODE_STYLES,
@@ -62,7 +63,8 @@ const ImBotNode: React.FC<ImBotNodeProps> = ({imbot, active = true, onClick, var
     // platformDisplayName builds every platform's guide to read one name, so
     // memoize it rather than paying that on every graph re-render.
     const platformLabel = useMemo(() => platformDisplayName(imbot.platform, t), [imbot.platform, t]);
-    const name = imbot.name || 'Bot';
+    // No alias: the (short) id takes the name's place instead of a hard-coded "Bot".
+    const name = imbot.name || (imbot.uuid ? shortId('bot', imbot.uuid).text : platformLabel);
     const BrandIcon = PLATFORM_BRAND_ICONS[imbot.platform || ''];
     const labelSx = {
         ...NODE_LAYER_STYLES.typography,
@@ -79,7 +81,7 @@ const ImBotNode: React.FC<ImBotNodeProps> = ({imbot, active = true, onClick, var
             title={
                 <>
                     <Box component="span" sx={{fontWeight: 600}}>
-                        {imbot.name || platformLabel}
+                        {entityText({platform: platformLabel, alias: imbot.name, id: imbot.uuid ?? ''}, {kind: 'bot', shorten: false})}
                     </Box>
                     {imbot.uuid && (
                         <>
@@ -103,7 +105,7 @@ const ImBotNode: React.FC<ImBotNodeProps> = ({imbot, active = true, onClick, var
                     <>
                         {/* Top - bot name (the identity the notify API targets) */}
                         <Box sx={NODE_LAYER_STYLES.topLayer}>
-                            <Box component="span" sx={{...labelSx, fontStyle: !imbot.name ? 'italic' : 'normal', textAlign: 'center', lineHeight: 1.1}}>
+                            <Box component="span" sx={{...labelSx, textAlign: 'center', lineHeight: 1.1}}>
                                 {name}
                             </Box>
                         </Box>

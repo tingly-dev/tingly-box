@@ -239,12 +239,12 @@ const sessionEvents = (s: (typeof sessions)[number]) => {
 // and unbinding work within a mock session.
 type Binding = { id: string; platform: string; chat_id: string; bot_uuid?: string; chat_title: string; project_id: string; thread_id: string; created_at: string; updated_at: string }
 const bindings: Binding[] = [
-    { id: 'cb-1', platform: 'telegram', chat_id: 'telegram:123456789', chat_title: '123456789', project_id: 'p-latency', thread_id: 'main-p-latency', created_at: ago(60 * 30), updated_at: ago(60 * 30) },
+    { id: 'cb-1', platform: 'telegram', chat_id: 'telegram:123456789', chat_title: 'Alice (ops)', project_id: 'p-latency', thread_id: 'main-p-latency', created_at: ago(60 * 30), updated_at: ago(60 * 30) },
     { id: 'cb-2', platform: 'telegram', chat_id: 'telegram:-10024681012', chat_title: 'Release Crew', project_id: 'p-docs', thread_id: 'main-p-docs', created_at: ago(60 * 48), updated_at: ago(60 * 48) },
 ]
 // What the Remote mocks call a chat, to title a new binding.
 const mockChatTitles: Record<string, string> = {
-    'telegram:123456789': '123456789', 'telegram:987654321': '987654321', 'telegram:-10024681012': 'Release Crew',
+    'telegram:123456789': 'Alice (ops)', 'telegram:987654321': '987654321', 'telegram:-10024681012': 'Release Crew',
     'feishu:oc_mock_chat_0001': 'Platform team',
 }
 

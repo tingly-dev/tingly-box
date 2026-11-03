@@ -64,6 +64,8 @@ export const EntityLabel = ({
     const short = shortId(entityKind, id);
     const full = entityText({ platform, group, alias: aliasText, id }, { groupLabel, shorten: false, kind: entityKind });
     const idAnchor = aliasText === '';
+    // With the platform drawn as a logo alone, the first segment after it needs no separator.
+    const iconOnly = platformAs === 'icon' && Boolean(platformIcon);
 
     const idNode = (
         <Box
@@ -97,7 +99,7 @@ export const EntityLabel = ({
             </Tooltip>
             {group && (
                 <>
-                    <Sep />
+                    {!iconOnly && <Sep />}
                     <Box
                         component="span"
                         sx={{
@@ -117,13 +119,13 @@ export const EntityLabel = ({
             )}
             {aliasText !== '' && (
                 <>
-                    <Sep />
+                    {!(iconOnly && !group) && <Sep />}
                     <Box component="span" sx={{ fontWeight: 600, color: 'text.primary', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {aliasText}
                     </Box>
                 </>
             )}
-            <Sep />
+            {!(iconOnly && !group && aliasText === '') && <Sep />}
             {idTooltip ? <Tooltip title={idTooltip}>{idNode}</Tooltip> : idNode}
             {!resolved && (
                 <Box component="span" sx={{ fontSize: '0.75rem', color: 'warning.main', flexShrink: 0 }}>{deletedLabel}</Box>
