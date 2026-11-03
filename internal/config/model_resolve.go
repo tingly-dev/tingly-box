@@ -59,6 +59,9 @@ const (
 //
 //	cache (DB) → VModel (virtual) → upstream API → stale cache → embedded template
 //
+// If the endpoint is explicitly unsupported, its embedded template takes
+// precedence over an old upstream cache when available.
+//
 // When forceRefresh is false, a fresh-enough DB cache short-circuits the
 // chain; when true the cache is bypassed and upstream is re-queried (the
 // manual "refresh models" action). The returned list is canonically sorted.
@@ -156,14 +159,11 @@ func (c *Config) ResolveProviderModels(forceRefresh, forceUpstream bool, uid str
 		}
 	}
 
-	// Step 3b: the cache only expired and the refetch failed (upstream briefly
-	// unreachable, e.g. another tingly-box restarting). Serve the last real
-	// list rather than dropping to the template or nothing. A manual refresh
-	// skips this so its failure is still reported.
-	if !forceRefresh && !forceUpstream {
-		if stale := c.modelManager.GetStaleModels(uid); len(stale) > 0 {
-			return withFetching(finalize(stale, ModelListSourceCache)), nil
-		}
+	// Step 3b: on a temporary failure keep the last real list for both reads
+	// and refreshes. Otherwise refresh can show a template that disappears on
+	// the next read. The fetch failure is recorded separately for diagnostics.
+	if stale := c.modelManager.GetStaleModels(uid); len(stale) > 0 {
+		return withFetching(finalize(stale, ModelListSourceCache)), nil
 	}
 
 	// Step 4: Embedded template fallback (live, never persisted). It is a

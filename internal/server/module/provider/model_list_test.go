@@ -93,8 +93,10 @@ func TestGetProviderModelsByUUID_Codex_EmptyCache_UsesTemplate(t *testing.T) {
 
 	require.True(t, resp.Success)
 	assert.Equal(t, ModelCacheSourceTemplate, resp.Data.Source)
-	assert.NotEmpty(t, resp.Data.Models)
-	assert.Contains(t, resp.Data.Models, "gpt-5.5")
+	template, err := cfg.GetTemplateManager().GetEmbeddedModelsForProvider(provider)
+	require.NoError(t, err)
+	require.NotEmpty(t, template)
+	assert.ElementsMatch(t, template, resp.Data.Models)
 }
 
 // TestUpdateProviderModelsByUUID_Codex_ReturnsTemplateModels is a regression
@@ -122,8 +124,10 @@ func TestUpdateProviderModelsByUUID_Codex_ReturnsTemplateModels(t *testing.T) {
 	var resp ProviderModelsResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	require.True(t, resp.Success)
-	assert.NotEmpty(t, resp.Data.Models, "codex refresh must fall back to template models, not return an empty list")
-	assert.Contains(t, resp.Data.Models, "gpt-5.5")
+	template, err := cfg.GetTemplateManager().GetEmbeddedModelsForProvider(provider)
+	require.NoError(t, err)
+	require.NotEmpty(t, template)
+	assert.ElementsMatch(t, template, resp.Data.Models, "codex refresh must return the embedded template")
 }
 
 // A refresh of an unsupported Codex endpoint returns the embedded catalog.
