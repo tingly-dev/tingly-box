@@ -36,15 +36,18 @@ func UsableName(name, externalID string) string {
 // It returns the alias and source to store and whether anything changes.
 //
 //   - no usable name: nothing changes (an empty name never wipes a value);
-//   - a user-set alias is kept (the platform name only refreshes a cache the
-//     caller keeps elsewhere);
+//   - an alias that is user-set, or of unknown origin, is kept (the platform
+//     name only refreshes a cache the caller keeps elsewhere);
 //   - otherwise the platform name becomes the default alias.
 func PlatformAliasUpdate(currentAlias, currentSource, name, externalID string) (alias, source string, changed bool) {
 	usable := UsableName(name, externalID)
 	if usable == "" {
 		return currentAlias, currentSource, false
 	}
-	if currentAlias != "" && currentSource == AliasSourceUser {
+	// A non-empty alias whose source is not "platform" is the user's (or of
+	// unknown origin): protect it. Only an empty alias or one we know came from
+	// the platform may be replaced.
+	if currentAlias != "" && currentSource != AliasSourcePlatform {
 		return currentAlias, currentSource, false
 	}
 	if currentAlias == usable && currentSource == AliasSourcePlatform {

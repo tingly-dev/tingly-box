@@ -236,3 +236,43 @@ func TestBotNameCanBeClearedExplicitly(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, got.Name)
 }
+
+func TestNamingMigrationEchoCleanupDoesNotTreatLikeWildcardsOrCaseAsEchoes(t *testing.T) {
+	sm, store, bot := newNamingStore(t)
+	db := store.db
+	require.NoError(t, db.Exec(`ALTER TABLE remote_actors DROP COLUMN display_name_source`).Error)
+	require.NoError(t, db.Exec(`INSERT INTO remote_actors (id,bot_uuid,platform,external_actor_id,display_name,created_at,updated_at) VALUES
+		('w1',?,'telegram','x:abc','a_c',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
+		('w2',?,'slack','slack:u1','U1',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
+		('w3',?,'slack','slack:u2','u2',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
+		('w4',?,'telegram','42','42',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`, bot.UUID, bot.UUID, bot.UUID, bot.UUID).Error)
+	require.NoError(t, migrateNamingModel(db))
+	names := map[string]string{}
+	var rows []remoteActorRecord
+	require.NoError(t, db.Find(&rows).Error)
+	for _, r := range rows {
+		names[r.ID] = r.DisplayName
+	}
+	require.Equal(t, "a_c", names["w1"], "'_' is not a wildcard")
+	require.Equal(t, "U1", names["w2"], "a different-case name is a real name")
+	require.Empty(t, names["w3"], "the bare part after 'platform:' is an echo")
+	require.Empty(t, names["w4"], "the id itself is an echo")
+	_ = sm
+}
+
+func TestNamingMigrationIsAtomicPerTable(t *testing.T) {
+	_, store, bot := newNamingStore(t)
+	db := store.db
+	require.NoError(t, db.Exec(`ALTER TABLE remote_groups DROP COLUMN alias_source`).Error)
+	require.NoError(t, db.Exec(`INSERT INTO remote_groups (id,bot_uuid,platform,external_group_id,alias,name,created_at,updated_at) VALUES ('g1',?,'telegram','-1','Prod','Plat',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`, bot.UUID).Error)
+	// A backfill that fails must roll the new column back with it, so the next start retries.
+	require.NoError(t, db.Exec(`CREATE TRIGGER fail_backfill BEFORE UPDATE ON remote_groups BEGIN SELECT RAISE(ABORT, 'boom'); END`).Error)
+	require.Error(t, migrateNamingModel(db))
+	require.False(t, db.Migrator().HasColumn(&remoteGroupRecord{}, "alias_source"), "a failed backfill must not leave the column behind")
+	require.NoError(t, db.Exec(`DROP TRIGGER fail_backfill`).Error)
+	require.NoError(t, migrateNamingModel(db))
+	var g remoteGroupRecord
+	require.NoError(t, db.Where("id = 'g1'").First(&g).Error)
+	require.Equal(t, "Prod", g.Alias)
+	require.Equal(t, access.AliasSourceUser, g.AliasSource)
+}

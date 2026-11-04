@@ -35,6 +35,7 @@ func TestPlatformAliasUpdate(t *testing.T) {
 		{"user alias is never overwritten", "Boss", AliasSourceUser, "Alice", "Boss", AliasSourceUser, false},
 		{"same platform name is a no-op", "Alice", AliasSourcePlatform, "Alice", "Alice", AliasSourcePlatform, false},
 		{"legacy alias without source is replaceable only when empty", "", "", "Alice", "Alice", AliasSourcePlatform, true},
+		{"an alias of unknown origin is protected like a user alias", "Prod", "", "Alice", "Prod", "", false},
 	}
 	for _, c := range cases {
 		alias, src, changed := PlatformAliasUpdate(c.alias, c.source, c.name, "ou_x")

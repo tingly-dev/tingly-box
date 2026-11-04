@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"github.com/tingly-dev/tingly-box/imbot/core"
+	"sync"
 	"testing"
 	"time"
 )
 
 type fakeFetcher struct {
+	mu      sync.Mutex
 	users   map[string]string
 	chats   map[string]string
 	err     error
@@ -17,11 +19,15 @@ type fakeFetcher struct {
 }
 
 func (f *fakeFetcher) userName(_ context.Context, idType, id string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.calls++
 	f.lastTyp = idType
 	return f.users[id], f.err
 }
 func (f *fakeFetcher) chatName(_ context.Context, id string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.calls++
 	return f.chats[id], f.err
 }
@@ -122,4 +128,67 @@ func TestAddNamesFillsSenderAndGroupTitle(t *testing.T) {
 
 	(&Bot{}).addNames(context.Background(), grp)
 	b.addNames(context.Background(), nil)
+}
+
+func TestOnePersonOutsideTheContactScopeDoesNotSwitchOffLookupsForEveryone(t *testing.T) {
+	f := &fakeFetcher{users: map[string]string{"ou_ok": "Alice"}}
+	d := newNameDirectory(f, nil)
+	// A per-person failure (not errNoPermission) is cached for that person only.
+	f.err = errors.New("feishu contact lookup: code 41050")
+	d.UserName(context.Background(), "open_id", "ou_stranger")
+	f.err = nil
+	if got := d.UserName(context.Background(), "open_id", "ou_ok"); got != "Alice" {
+		t.Fatalf("other people must still be looked up, got %q", got)
+	}
+	for code := range feishuPermissionCodes {
+		if code == 41050 || code == 99992402 {
+			t.Fatalf("code %d is per-person/field, not an app scope problem", code)
+		}
+	}
+}
+
+type slowFetcher struct {
+	fakeFetcher
+	release chan struct{}
+	started chan struct{}
+}
+
+func (s *slowFetcher) userName(ctx context.Context, idType, id string) (string, error) {
+	s.mu.Lock()
+	s.calls++
+	s.mu.Unlock()
+	s.started <- struct{}{}
+	<-s.release
+	return "Alice", nil
+}
+
+func TestConcurrentMessagesFromOnePersonShareOneLookup(t *testing.T) {
+	f := &slowFetcher{release: make(chan struct{}), started: make(chan struct{}, 8)}
+	d := newNameDirectory(f, nil)
+	done := make(chan string, 3)
+	for i := 0; i < 3; i++ {
+		go func() { done <- d.UserName(context.Background(), "open_id", "ou_1") }()
+	}
+	<-f.started
+	time.Sleep(30 * time.Millisecond) // let the other two reach the shared call
+	close(f.release)
+	for i := 0; i < 3; i++ {
+		if got := <-done; got != "Alice" {
+			t.Fatalf("got %q", got)
+		}
+	}
+	if f.calls != 1 {
+		t.Fatalf("three concurrent messages must cost one lookup, got %d", f.calls)
+	}
+}
+
+func TestNameCacheIsBounded(t *testing.T) {
+	f := &fakeFetcher{users: map[string]string{}}
+	d := newNameDirectory(f, nil)
+	for i := 0; i < maxCachedNames+50; i++ {
+		d.UserName(context.Background(), "open_id", "ou_"+string(rune('a'+i%26))+string(rune('A'+(i/26)%26))+string(rune('0'+i/676)))
+	}
+	if len(d.cache) > maxCachedNames {
+		t.Fatalf("cache grew to %d", len(d.cache))
+	}
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	larkcard "github.com/larksuite/oapi-sdk-go/v3/card"
@@ -293,18 +294,28 @@ func (b *Bot) addNames(ctx context.Context, msg *core.Message) {
 	if b.names == nil || msg == nil {
 		return
 	}
+	var wg sync.WaitGroup
 	if msg.Sender.ID != "" && msg.Sender.DisplayName == "" {
 		idType := "open_id"
 		if userID, _ := msg.Metadata["sender_user_id"].(string); userID != "" {
 			idType = "user_id"
 		}
-		msg.Sender.DisplayName = b.names.UserName(ctx, idType, msg.Sender.ID)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			msg.Sender.DisplayName = b.names.UserName(ctx, idType, msg.Sender.ID)
+		}()
 	}
 	if chatType, _ := msg.Metadata["chat_type"].(core.ChatType); chatType != core.ChatTypeDirect && msg.Recipient.DisplayName == "" {
 		if chatID, _ := msg.Metadata["original_chat_id"].(string); chatID != "" {
-			msg.Recipient.DisplayName = b.names.ChatName(ctx, chatID)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				msg.Recipient.DisplayName = b.names.ChatName(ctx, chatID)
+			}()
 		}
 	}
+	wg.Wait()
 }
 
 // convertLarkMessageToCore converts a Lark P2MessageReceiveV1 event to core.Message
