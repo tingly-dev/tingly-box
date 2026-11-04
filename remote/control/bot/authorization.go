@@ -24,7 +24,7 @@ func isPairingBootstrap(msg imbot.Message) bool {
 	if !msg.IsDirectMessage() || !msg.IsTextContent() {
 		return false
 	}
-	cmd, ok := imbot.ParseSlashCommand(msg.GetText())
+	cmd, ok := imbot.ParseSlashCommand(msg.GetText(), false)
 	return ok && (cmd.Name == "pair" || cmd.Name == "bind")
 }
 
@@ -43,7 +43,7 @@ func inboundAction(msg imbot.Message, pendingCapability access.CapabilityName, p
 	if msg.IsMediaContent() {
 		return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
 	}
-	if cmd, ok := imbot.ParseSlashCommand(msg.GetText()); ok && privilegedCommands[cmd.Name] {
+	if cmd, ok := imbot.ParseSlashCommand(msg.GetText(), msg.IsGroupMessage()); ok && privilegedCommands[cmd.Name] {
 		return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
 	}
 	// A Projects/Claude approval button or an ordinary reply to a pending

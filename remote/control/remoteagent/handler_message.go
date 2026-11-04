@@ -67,8 +67,9 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	// Without Projects a chat has access only: pairing and /join (and the
 	// notifications the host sends).
 	text := hCtx.Text()
+	group := msg.IsGroupMessage()
 	if !h.projectsOn() {
-		if isPairCommand(text) || isJoinCommand(text) {
+		if isPairCommand(text, group) || isJoinCommand(text, group) {
 			h.handleSlashCommand(hCtx, text)
 			return
 		}
@@ -93,7 +94,7 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	}
 
 	// A chat typing a path for the directory browser.
-	cmd, isCommand := imbot.ParseSlashCommand(text)
+	cmd, isCommand := imbot.ParseSlashCommand(text, group)
 	if h.directoryBrowser.IsWaitingInput(hCtx.ChatID) && !isCommand {
 		h.handleCustomPathInput(hCtx)
 		return
@@ -103,7 +104,7 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	// are the registry's; nothing else is a command. The old agent words
 	// ("@cc fix it", "/tb hi") are not commands: they go on as messages.
 	if isCommand && stripAgentPrefix(cmd.Text()) == cmd.Text() {
-		if name, arg, ok := projectCommand(text); ok {
+		if name, arg, ok := projectCommand(text, group); ok {
 			h.runProjectCommand(hCtx, name, arg)
 			return
 		}
@@ -159,7 +160,7 @@ func (h *BotHandler) handlePairingGate(hCtx HandlerContext) bool {
 	if h.chatStore.IsChatPaired(hCtx.ChatID, hCtx.BotUUID) {
 		return false
 	}
-	if isPairCommand(hCtx.Text()) {
+	if isPairCommand(hCtx.Text(), false) {
 		// Fall through so the /pair handler can verify the code.
 		return false
 	}

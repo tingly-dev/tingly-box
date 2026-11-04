@@ -78,14 +78,19 @@ func TestAuthorizationGateAllowsPairingCommandsForUnpairedDirectPeer(t *testing.
 	require.True(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID))
 }
 
-// Telegram groups send /pair@bot, Slack and Discord prefix a mention: an
-// unpaired chat must still be able to pair itself.
-func TestAuthorizationGateAllowsDecoratedPairingCommands(t *testing.T) {
+// Pairing happens in a direct chat, where only the plain command counts:
+// whitespace and a full-width slash are fine, a mention or the bot's suffix
+// make it ordinary text, which an unpaired chat may not send.
+func TestAuthorizationGateReadsPairingCommandsAsDirectChatText(t *testing.T) {
 	sm, setting, msg := directAuthorizationFixture(t)
 	gate := bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), true, nil, nil)
-	for _, text := range []string{"/pair@tingly_bot CODE", " /pair CODE", "<@U123> /pair CODE", "／pair CODE"} {
+	for _, text := range []string{" /pair CODE", "/pair   CODE  ", "\uff0fpair CODE", "\u00a0/bind CODE"} {
 		msg.Content = imbot.NewTextContent(text)
 		require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID), text)
+	}
+	for _, text := range []string{"@tingly_bot /pair CODE", "<@U123> /pair CODE", "/pair@tingly_bot CODE"} {
+		msg.Content = imbot.NewTextContent(text)
+		require.True(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID), text)
 	}
 }
 
@@ -187,27 +192,48 @@ func TestPendingApprovalDoesNotGrantDirectoryOrProjectAccess(t *testing.T) {
 	require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "folder buttons must require privileged access")
 }
 
-// A paired chat is not privileged until the operator grants it. The
-// commands that need it must stay denied however the platform decorates them
-// (Telegram's /dir@bot, a Slack or Discord mention, a Feishu placeholder, a
-// full-width slash, a leading space): a decorated command must not slip past
-// as an ordinary message.
-func TestAuthorizationGatePrivilegedCommandsStayDeniedWhenDecorated(t *testing.T) {
+// A paired chat is not privileged until the operator grants it, so the
+// commands that need it stay denied in a direct chat however they are spaced.
+// Only the plain command counts there: with a mention or the bot's suffix it
+// is ordinary text, which the chat may send.
+func TestAuthorizationGatePrivilegedCommandsInDirectChat(t *testing.T) {
 	sm, setting, msg := directAuthorizationFixture(t)
 	gate := bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), false, nil, nil)
 	require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID), "first message pairs the chat")
 	for _, text := range []string{
-		"/dir", "/DIR", " /dir", "/dir@tingly_bot", "/dir@tingly_bot 1", "@tingly_bot /dir",
-		"<@U123> /dir", "<@!123> /cd /tmp", "@tingly_bot/dir", "<@U123>/dir", "  /dir   ", "/dir   1", "@_user_1 /project", "／dir", "/cd@tingly_bot /tmp", "/bash ls",
+		"/dir", "/DIR", " /dir", "/dir   1", "\t/dir\n", "\u00a0/dir", "\uff0fdir", "/cd /tmp", "/cd   /tmp  ", "/project", "/bash ls",
 	} {
 		m := msg
 		m.Content = imbot.NewTextContent(text)
 		require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "%q must require privileged access", text)
 	}
-	for _, text := range []string{"/status", "/help@tingly_bot", "@tingly_bot /new hello", "/directory"} {
+	for _, text := range []string{
+		"/status", "/directory", "@tingly_bot /dir", "@tingly_bot/dir", "<@U123> /dir", "<@U123>/dir", "@_user_1 /dir", "/dir@tingly_bot",
+	} {
 		m := msg
 		m.Content = imbot.NewTextContent(text)
-		require.False(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "%q needs no privileged access", text)
+		require.False(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "%q is ordinary text in a direct chat", text)
+	}
+}
+
+// In a group the same command arrives with the bot mentioned, and every
+// form of it needs privileged access: the gate must not read it as ordinary
+// text.
+func TestInboundActionPrivilegedCommandsInGroup(t *testing.T) {
+	group := func(text string) imbot.Message {
+		return imbot.Message{ChatType: imbot.ChatTypeGroup, Content: imbot.NewTextContent(text)}
+	}
+	for _, text := range []string{
+		"/dir", "/DIR", " /dir", "/dir   1", "/dir@tingly_bot", "/dir@tingly_bot 1", "@tingly_bot /dir", "@tingly_bot/dir",
+		"@tingly_bot   /cd /tmp", "<@U123> /dir", "<@!123> /cd /tmp", "<@U123>/dir", "@_user_1 /project", "@_user_1/project",
+		"\uff0fdir", "/cd@tingly_bot /tmp", "@tingly_bot /bash ls",
+	} {
+		_, action := bot.InboundAction(group(text), "", "")
+		require.Equal(t, access.ActionRemoteControlPrivileged, action, "%q must require privileged access", text)
+	}
+	for _, text := range []string{"/status", "/help@tingly_bot", "@tingly_bot /new hello", "/directory", "@tingly_bot hello"} {
+		_, action := bot.InboundAction(group(text), "", "")
+		require.Equal(t, access.ActionRemoteControlStart, action, "%q needs no privileged access", text)
 	}
 }
 
@@ -223,7 +249,7 @@ func TestAuthorizationGateDeniedPrivilegedCommandTellsTheChat(t *testing.T) {
 	require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID), "first message pairs the chat")
 	require.Empty(t, told)
 
-	for _, text := range []string{"/dir", "/dir@tingly_bot", "/cd /tmp", "/project"} {
+	for _, text := range []string{"/dir", "\uff0fdir", "/cd /tmp", "/project"} {
 		m := msg
 		m.Content = imbot.NewTextContent(text)
 		require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), text)
@@ -245,7 +271,7 @@ func TestAuthorizationGateDeniedPrivilegedCommandTellsTheChat(t *testing.T) {
 		access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged, access.EffectAllow))
 	told = nil
 	m := msg
-	m.Content = imbot.NewTextContent("/dir@tingly_bot")
+	m.Content = imbot.NewTextContent("\uff0fdir")
 	require.False(t, gate(m, imbot.Platform(setting.Platform), setting.UUID))
 	require.Empty(t, told)
 }

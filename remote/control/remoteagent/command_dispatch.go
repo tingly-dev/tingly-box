@@ -17,7 +17,7 @@ const cmdJoinPrimary = "/join"
 // handleSlashCommand runs a slash command from the registry; it reports
 // false for one the registry does not have.
 func (h *BotHandler) handleSlashCommand(hCtx HandlerContext, text string) bool {
-	cmd, ok := imbot.ParseSlashCommand(text)
+	cmd, ok := imbot.ParseSlashCommand(text, hCtx.Message.IsGroupMessage())
 	if !ok || h.commandRegistry == nil {
 		return false
 	}

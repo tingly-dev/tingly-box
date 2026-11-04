@@ -18,7 +18,7 @@ func TestPairingHelpers_isPairCommand(t *testing.T) {
 	}
 	for input, want := range cases {
 		t.Run(input, func(t *testing.T) {
-			if got := isPairCommand(input); got != want {
+			if got := isPairCommand(input, false); got != want {
 				t.Fatalf("isPairCommand(%q)=%v want %v", input, got, want)
 			}
 		})

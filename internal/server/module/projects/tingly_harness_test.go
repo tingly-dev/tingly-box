@@ -494,7 +494,7 @@ func TestTinglyRegisteredDirectories(t *testing.T) {
 	// A regular paired chat has start permission but not privileged filesystem
 	// access. /dir must not reveal the registered paths until it is granted,
 	// and must say why instead of looking broken.
-	for _, text := range []string{"/dir", "/dir@tingly_bot", "/project"} {
+	for _, text := range []string{"/dir", "\uff0fdir", "/project"} {
 		chat.SendText(text)
 		denied := chat.WaitText(10 * time.Second)
 		denied.AssertContains(t, "privileged access")

@@ -9,14 +9,14 @@ import (
 )
 
 // isPairCommand reports whether text is a (well-formed-enough) /pair invocation.
-func isPairCommand(text string) bool {
-	cmd, ok := imbot.ParseSlashCommand(text)
+func isPairCommand(text string, group bool) bool {
+	cmd, ok := imbot.ParseSlashCommand(text, group)
 	return ok && (cmd.Name == "pair" || cmd.Name == "bind")
 }
 
 // isJoinCommand reports whether text is a /join invocation.
-func isJoinCommand(text string) bool {
-	cmd, ok := imbot.ParseSlashCommand(text)
+func isJoinCommand(text string, group bool) bool {
+	cmd, ok := imbot.ParseSlashCommand(text, group)
 	return ok && "/"+cmd.Name == cmdJoinPrimary
 }
 

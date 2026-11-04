@@ -288,8 +288,8 @@ func (h *BotHandler) projectDirectory(hCtx HandlerContext, arg string) {
 // projectCommand reads a chat command that Projects runs: /new and /stop
 // (with an optional argument), /clear, /session [N], /status, /verbose
 // [on|off] and /yolo. ok is false for anything else.
-func projectCommand(text string) (name, arg string, ok bool) {
-	cmd, ok := imbot.ParseSlashCommand(text)
+func projectCommand(text string, group bool) (name, arg string, ok bool) {
+	cmd, ok := imbot.ParseSlashCommand(text, group)
 	if !ok {
 		return "", "", false
 	}

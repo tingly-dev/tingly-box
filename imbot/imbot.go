@@ -370,8 +370,8 @@ func NewCommand(id, name, description string) *core.CommandBuilder {
 
 // ParseSlashCommand reads a slash command from a chat message, whatever the
 // platform wrapped around it (see core.ParseSlashCommand).
-func ParseSlashCommand(text string) (core.SlashCommand, bool) {
-	return core.ParseSlashCommand(text)
+func ParseSlashCommand(text string, group bool) (core.SlashCommand, bool) {
+	return core.ParseSlashCommand(text, group)
 }
 
 // NewCommandRegistry creates a new command registry.

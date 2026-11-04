@@ -37,9 +37,15 @@ var feishuMention = regexp.MustCompile(`^@_user_\d+`)
 // WeCom and WhatsApp "@mybot /dir", DingTalk " /dir" (a leading space), and
 // Chinese keyboards type "／dir" (a full-width slash). ok is false for a
 // message that is not a command after all of that is taken off.
-func ParseSlashCommand(text string) (cmd SlashCommand, ok bool) {
+//
+// Only a group has these decorations: people @mention the bot there to say
+// who they mean. A direct chat has one party, so there only a plain "/name
+// args" is a command (whitespace and a full-width slash tolerated); "@bot
+// /dir" and "/dir@bot" are ordinary text there. group is the message's chat
+// type (Message.IsGroupMessage).
+func ParseSlashCommand(text string, group bool) (cmd SlashCommand, ok bool) {
 	t := trimChat(text)
-	for {
+	for group {
 		next, stripped := stripMention(t)
 		if !stripped {
 			break
@@ -60,7 +66,10 @@ func ParseSlashCommand(text string) (cmd SlashCommand, ok bool) {
 	if i := strings.IndexFunc(head, unicode.IsSpace); i >= 0 {
 		head, rest = head[:i], head[i:]+" "+rest
 	}
-	name, _, _ := strings.Cut(head, "@")
+	name := head
+	if group {
+		name, _, _ = strings.Cut(head, "@")
+	}
 	return SlashCommand{Name: strings.ToLower(name), Args: trimChat(rest)}, true
 }
 
