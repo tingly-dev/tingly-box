@@ -55,10 +55,9 @@ export function ListRow({ mark, title, subtitle, badges, meta, end, selected, un
                 <Typography noWrap component="div" sx={{ fontSize: fontSizes.base, fontWeight: unseen ? 650 : 500, color: 'text.primary' }}>{title}</Typography>
                 {subtitle != null && <Typography noWrap component="div" sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{subtitle}</Typography>}
                 {stacked && (badges != null || meta != null) && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 1, rowGap: 0.25, mt: 0.5 }}>
                         {badges}
-                        <Box sx={{ flex: 1 }} />
-                        {meta != null && <Typography component="span" sx={{ flexShrink: 0, fontSize: fontSizes.sm, color: 'text.disabled' }}>{meta}</Typography>}
+                        {meta != null && <Typography component="span" sx={{ flexShrink: 0, ml: 'auto', fontSize: fontSizes.sm, color: 'text.disabled' }}>{meta}</Typography>}
                     </Box>
                 )}
             </Box>
