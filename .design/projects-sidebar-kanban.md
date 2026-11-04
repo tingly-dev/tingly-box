@@ -46,3 +46,27 @@ open/selected behaviour.
 `components/NavKanban.tsx` (board and loader), `components/workdir/sessionRows.ts` (shared groups and
 rows), `components/workspace/StatusGroups.tsx` (`outlined`), `components/ProjectsSidebar.tsx` (switch,
 persistence, `ProjectsSidebarSection.extra` slot), `components/NavTree.tsx` (`sessionHref`).
+
+## Resizing the top band
+
+"Top" is the Overview placement `top` (see [projects-placement.md](./projects-placement.md)): `OverviewBand`,
+one column per status under the page header. Its thread area can now be stretched.
+
+- **Handle on the edge that faces the content**: the band's lower edge, over the conversation. Drag down to
+  grow, up to shrink; double-click resets; focus it and use ArrowDown/ArrowUp (Shift for bigger steps).
+  The side pane's left-edge handle (`PaneResizer`) and this one are the same component (`EdgeResizer`
+  in `project/PaneResizer.tsx`), so look, behaviour, keyboard and a11y (`role="separator"`) cannot diverge.
+- **Default is unchanged**: until the user drags, the columns fit their content up to 152px of cards, as
+  before. The first drag starts from the height they have now (no jump). Once set, the height is fixed and
+  the cards scroll inside it. Resetting (or dragging back to the default) returns to "fit the content".
+- **Clamp**: at least 96px; at most 480px and never so tall that the conversation keeps less than 240px
+  (`clampBand`, measured against the page column, the window until measured). A shorter window clamps the
+  saved height for now and it comes back when there is room, like the pane's width.
+- **Remembered per browser** (`tingly-project.overviewBandHeight`), like the placement, the open/closed
+  state of the band and the pane width.
+- **Lists vs kanban**: the band is already the board (one column per status) and has no list mode, so
+  there is nothing to switch; the sidebar's List | Kanban choice is independent. The sidebar kanban's
+  lanes are not resizable (they are as tall as their cards and the sidebar scrolls).
+- **Left sidebar**: not resizable today and left that way. Its 200px width is a constant of the host shell
+  (`frontend/src/layout`) shared by every activity panel, not Projects'; making it draggable is a
+  host-wide layout change. The right side pane was already resizable.

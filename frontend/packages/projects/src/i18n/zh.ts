@@ -141,6 +141,7 @@ export const zh: Dict<typeof en> = {
     },
     project: {
         resizePane: '拖动调整宽度，双击恢复默认。',
+        resizeBand: '拖动调整线程列表高度，双击恢复默认。',
         name: '名称', namePlaceholder: '例如：支付 API 延迟', nameHelp: '限定为一条你会持续往里加任务的工作流。',
         goal: '目标（可选）', goalPlaceholder: '例如：把 API p95 延迟控制在 200 ms 以内', goalHelp: '一句话，协调者会朝它推进。',
         repos: '仓库（可选）',
