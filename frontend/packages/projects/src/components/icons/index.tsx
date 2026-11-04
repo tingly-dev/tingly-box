@@ -20,6 +20,7 @@ import {
     IconHandStop,
     IconHistoryToggle,
     IconLayoutKanban,
+    IconLayoutRows,
     IconLayoutSidebarLeftCollapse,
     IconLayoutSidebarLeftExpand,
     IconLayoutSidebarRight,
@@ -76,3 +77,4 @@ export const FloatWindow = tablerMui(IconPictureInPictureOn);
 export const Minimize = tablerMui(IconMinus);
 export const LayoutIcon = tablerMui(IconLayout2);
 export const Kanban = tablerMui(IconLayoutKanban);
+export const KanbanRows = tablerMui(IconLayoutRows);

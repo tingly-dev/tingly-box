@@ -8,7 +8,7 @@ import { useNotify } from '../../hooks/useNotify';
 import { formatBytes, timeAgo } from '../../utils/format';
 import { STATUS_ORDER, ThreadBadges, ThreadSubtitle, needsUser } from './threadStatus';
 import { StatusGroups } from '../workspace/StatusGroups';
-import { StatusColumns } from '../workspace/StatusColumns';
+import { StatusBoard } from '../workspace/StatusBoard';
 import { useThreadsView, ViewSwitch, type ThreadsView } from '../workspace/ViewSwitch';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
@@ -17,11 +17,11 @@ const mono = { fontFamily: fontMono } as const;
 
 function ThreadGroups({ threads, selectedId, onOpen, view }: { threads: Thread[]; selectedId?: string; onOpen: (id: string) => void; view: ThreadsView }) {
     const { t, i18n } = useTranslation('projects');
-    if (view === 'kanban') {
-        // The same columns as the top band, filling the pane; wider than the pane they scroll sideways.
+    if (view !== 'list') {
+        // The board takes the pane's width and grows downward: the pane scrolls vertically, never sideways.
         return threads.length === 0
             ? <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>{t('overview.noThreads')}</Typography>
-            : <StatusColumns threads={threads} selectedId={selectedId} onOpen={onOpen} resolved="column" stacked rowSx={{ height: '100%', pt: 1.5, boxSizing: 'border-box' }} />;
+            : <StatusBoard threads={threads} selectedId={selectedId} onOpen={onOpen} orientation={view} />;
     }
     const groups = STATUS_ORDER.map((status) => ({
         key: status, label: t(`overview.group.${status}`), collapsed: status === 'resolved',
@@ -142,7 +142,7 @@ export function OverviewPane({ projectId, threads, onOpen, libraryKey, selectedI
                 </Tabs>
                 {tab === 'threads' && <ViewSwitch view={view} onChange={setView} />}
             </Box>
-            <Box sx={{ flex: 1, minHeight: 0, overflowY: view === 'kanban' && tab === 'threads' ? 'hidden' : 'auto' }}>
+            <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
                 {tab === 'threads' ? <ThreadGroups threads={threads} selectedId={selectedId} onOpen={onOpen} view={view} /> : <Library projectId={projectId} refreshKey={libraryKey} />}
             </Box>
         </Box>

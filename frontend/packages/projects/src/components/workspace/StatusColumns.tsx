@@ -11,27 +11,35 @@ interface Props {
     threads: Thread[];
     selectedId?: string;
     onOpen: (id: string) => void;
-    /** `column`: finished work is a column too. `count`: only its heading stays, the list is where to read it. */
-    resolved: 'column' | 'count';
     /** Cards a column shows before it scrolls; unset, a column fills the height it is given. */
     listMaxHeight?: number;
     rowRef?: Ref<HTMLDivElement>;
-    /** Narrow cards: the time and badges sit under the title, so the title keeps its width. */
-    stacked?: boolean;
     /** The row's own size: a fixed height, or room to fill. */
     rowSx?: object;
 }
 
+/** One thread as an outlined card; the band's columns and the Overview's boards all draw it. */
+export function ThreadCard({ thread, selectedId, onOpen, stacked }: { thread: Thread; selectedId?: string; onOpen: (id: string) => void; stacked?: boolean }) {
+    const { i18n } = useTranslation('projects');
+    return (
+        <ListRow outlined stacked={stacked} selected={thread.id === selectedId} onClick={() => onOpen(thread.id)}
+            title={thread.title} subtitle={<ThreadSubtitle thread={thread} />} badges={<ThreadBadges thread={thread} />} meta={timeAgo(thread.updated_at, i18n.language)} />
+    );
+}
+
 /**
- * Threads as a board: one column per status, what needs the user first, each
+ * Threads as the top band's board: one column per status, what needs the user first, each
  * thread an outlined card (the Overview's band and its kanban view draw the
- * same columns). Columns with no threads are left out.
+ * same card). Columns with no threads are left out. It is the band's fixed-height
+ * layout: the columns sit side by side and each scrolls inside; the Overview
+ * pane uses `StatusBoard`, which scrolls one way only.
  */
-export function StatusColumns({ threads, selectedId, onOpen, resolved, listMaxHeight, stacked, rowRef, rowSx }: Props) {
-    const { t, i18n } = useTranslation('projects');
+export function StatusColumns({ threads, selectedId, onOpen, listMaxHeight, rowRef, rowSx }: Props) {
+    const { t } = useTranslation('projects');
     const groups = STATUS_ORDER.map((s) => ({ key: s, list: threads.filter((th) => th.status === s) })).filter((g) => g.list.length > 0);
-    const columns = resolved === 'column' ? groups : groups.filter((g) => g.key !== 'resolved');
-    const finished = resolved === 'count' ? groups.find((g) => g.key === 'resolved')?.list.length ?? 0 : 0;
+    const columns = groups.filter((g) => g.key !== 'resolved');
+    // Finished work is only counted here; the Overview pane is where to read it.
+    const finished = groups.find((g) => g.key === 'resolved')?.list.length ?? 0;
     if (columns.length === 0) return null;
     return (
         <Box ref={rowRef} sx={{ display: 'flex', gap: 1.5, px: 2, pb: 1.5, overflowX: 'auto', ...rowSx }}>
@@ -40,8 +48,7 @@ export function StatusColumns({ threads, selectedId, onOpen, resolved, listMaxHe
                     <Box sx={{ mb: 0.75 }}><StatusHeading label={t(`overview.group.${g.key}`)} status={g.key} count={g.list.length} /></Box>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, overflowY: 'auto', minHeight: 0, ...(listMaxHeight == null ? { flex: 1 } : { maxHeight: listMaxHeight }) }}>
                         {g.list.map((th) => (
-                            <ListRow key={th.id} outlined stacked={stacked} selected={th.id === selectedId} onClick={() => onOpen(th.id)}
-                                title={th.title} subtitle={<ThreadSubtitle thread={th} />} badges={<ThreadBadges thread={th} />} meta={timeAgo(th.updated_at, i18n.language)} />
+                            <ThreadCard key={th.id} thread={th} selectedId={selectedId} onOpen={onOpen} />
                         ))}
                     </Box>
                 </Box>

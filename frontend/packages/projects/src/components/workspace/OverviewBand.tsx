@@ -82,7 +82,7 @@ export function OverviewBand({ threads, selectedId, open, onToggle, onOpen, onLi
                 </Tooltip>
             </Box>
             {open && shown.length > 0 && (
-                <StatusColumns threads={threads} selectedId={selectedId} onOpen={onOpen} resolved="count"
+                <StatusColumns threads={threads} selectedId={selectedId} onOpen={onOpen}
                     rowRef={columns} rowSx={height != null ? { height } : undefined} listMaxHeight={height == null ? 152 : undefined} />
             )}
             {open && shown.length > 0 && <BandResizer height={height ?? fit} onHeight={setStored} onCommit={commit} />}
