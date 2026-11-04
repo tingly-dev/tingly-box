@@ -318,6 +318,71 @@ type LibraryEntry struct {
 	Origin string `json:"origin"`
 }
 
+// cleanLibraryRel trims the outer slashes of a library-relative path and
+// refuses empty, "." and ".." segments and hidden (dot) ones, so a request
+// can neither climb out of the library nor reach scratch space such as .tmp.
+func cleanLibraryRel(rel string) (string, error) {
+	rel = strings.Trim(filepath.ToSlash(rel), "/")
+	if rel == "" {
+		return "", nil
+	}
+	for _, part := range strings.Split(rel, "/") {
+		if part == "" || part == "." || part == ".." || strings.HasPrefix(part, ".") {
+			return "", fmt.Errorf("%w %q", ErrInvalidLibraryPath, rel)
+		}
+	}
+	return rel, nil
+}
+
+// noLibrarySymlinks refuses a library-relative path when any component of it,
+// the last included, is a symlink, so the library never serves or lists
+// anything through a link, inside the library or out of it. A component that
+// does not exist yields the Lstat error (fs.ErrNotExist).
+func noLibrarySymlinks(root, rel string) error {
+	p := root
+	for _, part := range strings.Split(rel, "/") {
+		p = filepath.Join(p, part)
+		info, err := os.Lstat(p)
+		if err != nil {
+			return err
+		}
+		if info.Mode()&fs.ModeSymlink != 0 {
+			return fmt.Errorf("%w %q", ErrInvalidLibraryPath, rel)
+		}
+	}
+	return nil
+}
+
+// LibraryFile resolves a library-relative path to an existing regular file
+// that may be served or deleted over HTTP. It applies the same checks as the
+// tree listing: no "..", no hidden (dot) segments, no symlinks (neither the
+// file nor an ancestor). A path that is invalid
+// wraps ErrInvalidLibraryPath; a missing file, or a folder, wraps
+// fs.ErrNotExist.
+func (l Layout) LibraryFile(projectID, rel string) (string, error) {
+	root := l.LibraryDir(projectID)
+	rel, err := cleanLibraryRel(rel)
+	if err != nil {
+		return "", err
+	}
+	if rel == "" {
+		return "", fmt.Errorf("%w %q", ErrInvalidLibraryPath, rel)
+	}
+	p, err := l.LibraryPath(projectID, rel)
+	if err != nil {
+		return "", fmt.Errorf("%w %q", ErrInvalidLibraryPath, rel)
+	}
+	if err := noLibrarySymlinks(root, rel); err != nil {
+		return "", err
+	}
+	if info, err := os.Lstat(p); err != nil {
+		return "", err
+	} else if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("%q is not a file: %w", rel, fs.ErrNotExist)
+	}
+	return p, nil
+}
+
 // ListLibraryDir lists one level of the library: rel is a library-relative
 // directory ("" is the root). Folders come first, then files, each by name.
 // Hidden (dot) entries, such as the threads' .tmp, and symlinks are left out,
@@ -325,14 +390,12 @@ type LibraryEntry struct {
 // library or into scratch space. A library that does not exist yet is empty.
 func (l Layout) ListLibraryDir(projectID, rel string) ([]LibraryEntry, error) {
 	root := l.LibraryDir(projectID)
-	rel = strings.Trim(filepath.ToSlash(rel), "/")
+	rel, err := cleanLibraryRel(rel)
+	if err != nil {
+		return nil, err
+	}
 	dir := root
 	if rel != "" {
-		for _, part := range strings.Split(rel, "/") {
-			if part == "" || part == "." || part == ".." || strings.HasPrefix(part, ".") {
-				return nil, fmt.Errorf("%w %q", ErrInvalidLibraryPath, rel)
-			}
-		}
 		p, err := l.LibraryPath(projectID, rel)
 		if err != nil {
 			return nil, fmt.Errorf("%w %q", ErrInvalidLibraryPath, rel)
@@ -352,13 +415,10 @@ func (l Layout) ListLibraryDir(projectID, rel string) ([]LibraryEntry, error) {
 		}
 		return nil, fmt.Errorf("%w: %q", ErrNotDirectory, rel)
 	}
-	// An ancestor symlink would also lead out of the library.
-	if real, err := filepath.EvalSymlinks(dir); err != nil {
-		return nil, err
-	} else if realRoot, err := filepath.EvalSymlinks(root); err != nil {
-		return nil, err
-	} else if r, err := filepath.Rel(realRoot, real); err != nil || r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
-		return nil, fmt.Errorf("%w %q", ErrInvalidLibraryPath, rel)
+	if rel != "" {
+		if err := noLibrarySymlinks(root, rel); err != nil {
+			return nil, err
+		}
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {

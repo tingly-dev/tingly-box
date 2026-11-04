@@ -1,6 +1,7 @@
 package project
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -55,8 +56,9 @@ func TestListLibraryDirRefusesAnythingOutsideTheLibrary(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(outside, "secret"), []byte("s"), 0o644))
 	require.NoError(t, os.Symlink(outside, filepath.Join(lib, "link")))
 	require.NoError(t, os.Symlink(filepath.Join(lib, "notes.md"), filepath.Join(lib, "alias.md")))
+	require.NoError(t, os.Symlink(filepath.Join(lib, "outputs"), filepath.Join(lib, "out-alias")))
 
-	for _, rel := range []string{"..", "../p", "outputs/../..", "/etc", "outputs/../../..", ".tmp", ".tmp/t1", ".hidden", "outputs/.x", "link", "notes.md", "nope"} {
+	for _, rel := range []string{"out-alias", "out-alias/run-2", "..", "../p", "outputs/../..", "/etc", "outputs/../../..", ".tmp", ".tmp/t1", ".hidden", "outputs/.x", "link", "notes.md", "nope"} {
 		_, err := l.ListLibraryDir("p", rel)
 		assert.Error(t, err, rel)
 	}
@@ -83,4 +85,38 @@ func TestListLibraryDirErrorKinds(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNotDirectory)
 	_, err = l.ListLibraryDir("p", "..")
 	assert.ErrorIs(t, err, ErrInvalidLibraryPath)
+}
+
+func TestLibraryFileResolvesOnlyRegularFilesInsideTheLibrary(t *testing.T) {
+	l, lib := seedLibrary(t)
+	outside := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(outside, "secret"), []byte("s"), 0o644))
+	require.NoError(t, os.Symlink(outside, filepath.Join(lib, "linkdir")))
+	require.NoError(t, os.Symlink(filepath.Join(outside, "secret"), filepath.Join(lib, "secret-link")))
+	require.NoError(t, os.Symlink(filepath.Join(lib, "notes.md"), filepath.Join(lib, "alias.md")))
+	require.NoError(t, os.Symlink(filepath.Join(lib, "outputs"), filepath.Join(lib, "out-alias")))
+
+	for _, rel := range []string{"notes.md", "/notes.md", "outputs/run-1/report.md"} {
+		p, err := l.LibraryFile("p", rel)
+		require.NoError(t, err, rel)
+		assert.FileExists(t, p)
+	}
+
+	// Escapes, hidden entries and any symlink (the file itself or an ancestor) are invalid.
+	for _, rel := range []string{"..", "../p/notes.md", "outputs/../../p/notes.md", "outputs/../notes.md", "./notes.md", "outputs//run-2/a.txt",
+		".hidden", ".tmp/t1/scratch", "outputs/.x", "linkdir/secret", "secret-link", "alias.md", "out-alias/run-2/a.txt"} {
+		_, err := l.LibraryFile("p", rel)
+		assert.ErrorIs(t, err, ErrInvalidLibraryPath, rel)
+	}
+
+	// Missing files and folders are simply not found.
+	for _, rel := range []string{"nope", "outputs", "outputs/run-1", "/etc/passwd", ""} {
+		_, err := l.LibraryFile("p", rel)
+		require.Error(t, err, rel)
+		assert.False(t, errors.Is(err, ErrInvalidLibraryPath) && rel == "nope", rel)
+	}
+	_, err := l.LibraryFile("p", "nope")
+	assert.ErrorIs(t, err, os.ErrNotExist)
+	_, err = l.LibraryFile("p", "outputs")
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }

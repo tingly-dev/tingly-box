@@ -784,23 +784,32 @@ func saveUpload(open func() (multipartFile, error), dst string) error {
 	return err
 }
 
-func (h *Handler) downloadLibrary(c *gin.Context) {
-	path, err := h.svc.Layout.LibraryPath(c.Param("id"), c.Query("path"))
-	if err != nil {
+// libraryFile resolves the request's library file with the same access checks
+// as the tree listing, and answers 400 or 404 itself when it cannot.
+func (h *Handler) libraryFile(c *gin.Context) (string, bool) {
+	path, err := h.svc.Layout.LibraryFile(c.Param("id"), c.Query("path"))
+	switch {
+	case err == nil:
+		return path, true
+	case errors.Is(err, rt.ErrInvalidLibraryPath):
 		apierr.BadRequest(c, err.Error())
-		return
-	}
-	if st, err := os.Stat(path); err != nil || st.IsDir() {
+	default:
 		apierr.Message(c, http.StatusNotFound, "file not found")
+	}
+	return "", false
+}
+
+func (h *Handler) downloadLibrary(c *gin.Context) {
+	path, ok := h.libraryFile(c)
+	if !ok {
 		return
 	}
 	c.FileAttachment(path, filepath.Base(path))
 }
 
 func (h *Handler) deleteLibrary(c *gin.Context) {
-	path, err := h.svc.Layout.LibraryPath(c.Param("id"), c.Query("path"))
-	if err != nil {
-		apierr.BadRequest(c, err.Error())
+	path, ok := h.libraryFile(c)
+	if !ok {
 		return
 	}
 	if err := os.Remove(path); err != nil {
