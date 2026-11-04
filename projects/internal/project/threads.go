@@ -145,7 +145,7 @@ type Threads struct {
 	threadOfSession map[string]string
 	slots           map[string]*limiter
 	threads         map[string]*sync.Mutex // serializes writes to one thread row
-	// allowed holds tools the user allowed for the rest of a thread.
+	// allowed holds what the user allowed for the rest of a thread (allowKey).
 	allowed map[string]map[string]bool
 }
 
@@ -1487,19 +1487,34 @@ func newThreadPrompter(m *Threads, threadID string) *threadPrompter {
 	return &threadPrompter{m: m, threadID: threadID, pending: map[string]*pending{}}
 }
 
-func (m *Threads) isAllowed(threadID, tool string) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.allowed[threadID][tool]
+// allowKey is what "allow for this thread" remembers about a request: the tool,
+// except for Bash, which is the exact command. Allowing one Bash command must
+// not allow every other the thread runs. False means there is nothing safe to
+// remember (a Bash call without a command), so the answer allows this call only.
+func allowKey(tool string, input map[string]any) (string, bool) {
+	if tool != "Bash" {
+		return tool, true
+	}
+	cmd, _ := input["command"].(string)
+	if cmd = strings.TrimSpace(cmd); cmd == "" {
+		return "", false
+	}
+	return tool + "\x00" + cmd, true
 }
 
-func (m *Threads) allow(threadID, tool string) {
+func (m *Threads) isAllowed(threadID, key string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.allowed[threadID][key]
+}
+
+func (m *Threads) allow(threadID, key string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.allowed[threadID] == nil {
 		m.allowed[threadID] = map[string]bool{}
 	}
-	m.allowed[threadID][tool] = true
+	m.allowed[threadID][key] = true
 }
 
 type requestPayload struct {
@@ -1666,7 +1681,8 @@ wait:
 }
 
 func (p *threadPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalRequestEvent) (agentboot.ApprovalResponse, error) {
-	if p.m.isAllowed(p.threadID, req.ToolName) {
+	key, scopable := allowKey(req.ToolName, req.Input)
+	if scopable && p.m.isAllowed(p.threadID, key) {
 		return agentboot.ApprovalResponse{Approved: true}, nil
 	}
 	id := req.ID
@@ -1679,8 +1695,8 @@ func (p *threadPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalR
 	if err != nil {
 		return agentboot.ApprovalResponse{Approved: false, Reason: "not answered"}, nil
 	}
-	if ans.Allow && ans.Scope == "thread" {
-		p.m.allow(p.threadID, req.ToolName)
+	if ans.Allow && ans.Scope == "thread" && scopable {
+		p.m.allow(p.threadID, key)
 	}
 	reason := ""
 	if !ans.Allow {
