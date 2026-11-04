@@ -120,4 +120,61 @@ describe('ProjectsSidebar', () => {
         await screen.findByRole('region', { name: 'nav.projects' });
         expect(screen.queryByRole('link', { name: /im\.title/ })).not.toBeInTheDocument();
     });
+
+    describe('kanban view', () => {
+        const threads = [
+            { id: 't-run', title: 'Running one', status: 'working', updated_at: '2026-10-22T00:00:00Z', cwd: '/home/me/app' },
+            { id: 't-wait', title: 'Waiting one', status: 'waiting', wait_reason: 'Pick a colour', updated_at: '2026-10-21T00:00:00Z', cwd: '/home/me/app' },
+            { id: 't-done', title: 'Done one', status: 'resolved', updated_at: '2026-10-20T00:00:00Z', cwd: '/home/me/app' },
+            { id: 't-ready', title: 'Ready one', status: 'ready', updated_at: '2026-10-19T00:00:00Z', cwd: '/home/me/app' },
+        ];
+        const board = (path = '/f?path=%2Fhome%2Fme%2Fapp') => {
+            const h = host([folder('f-app', '/home/me/app', 1, 1)]);
+            list.mockImplementation((p: string) => Promise.resolve({
+                data: p.endsWith('/threads') ? { threads } : { projects: [folder('f-app', '/home/me/app', 1, 1)] },
+                response: new Response(),
+            }));
+            return show(h, path, { showWorkdirs: true });
+        };
+
+        it('starts as the list, switches to a board of status lanes and remembers the choice', async () => {
+            board();
+            const toggle = await screen.findByRole('group', { name: 'sidebar.view.label' });
+            expect(within(toggle).getByRole('button', { name: 'sidebar.view.list' })).toHaveAttribute('aria-pressed', 'true');
+            expect(await screen.findByRole('link', { name: /Running one/ })).toBeInTheDocument();
+            expect(screen.queryByTestId('kanban')).not.toBeInTheDocument();
+
+            fireEvent.click(within(toggle).getByRole('button', { name: 'sidebar.view.kanban' }));
+            expect(localStorage.getItem('tingly-project.nav.sessionsView')).toBe('kanban');
+            const waiting = await screen.findByRole('region', { name: 'session.group.waiting' });
+            expect(within(waiting).getByText('Waiting one')).toBeInTheDocument();
+            // The wait reason and the folder sit on the card, as on the folder page.
+            expect(within(waiting).getByText('app · Pick a colour')).toBeInTheDocument();
+            expect(within(screen.getByRole('region', { name: 'session.group.working' })).getByText('Running one')).toBeInTheDocument();
+            // Ready for review sits with idle; finished work starts folded.
+            expect(within(screen.getByRole('region', { name: 'session.group.idle' })).getByText('Ready one')).toBeInTheDocument();
+            expect(screen.getByText('Done one')).not.toBeVisible();
+            expect(screen.queryByRole('region', { name: 'session.group.failed' })).not.toBeInTheDocument();
+            expect(screen.queryByRole('link', { name: /Running one/ })).not.toBeInTheDocument();
+
+            // A fresh sidebar comes back as the board.
+            cleanup();
+            board();
+            expect(await screen.findByRole('region', { name: 'session.group.waiting' })).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'sidebar.view.kanban' })).toHaveAttribute('aria-pressed', 'true');
+        });
+
+        it('opens a card like a list row and marks the open session', async () => {
+            localStorage.setItem('tingly-project.nav.sessionsView', 'kanban');
+            board();
+            const card = (await screen.findByText('Running one')).closest('[role="button"]') as HTMLElement;
+            expect(card).not.toHaveAttribute('aria-current');
+            fireEvent.click(card);
+            await waitFor(() => expect(screen.getByText('Running one').closest('[role="button"]')).toHaveAttribute('aria-current', 'page'));
+            expect(screen.getByText('Waiting one').closest('[role="button"]')).not.toHaveAttribute('aria-current');
+            // Back to the list: the same session is the open one there.
+            fireEvent.click(screen.getByRole('button', { name: 'sidebar.view.list' }));
+            expect(await screen.findByRole('link', { name: /Running one/ })).toHaveAttribute('aria-current', 'page');
+        });
+    });
 });

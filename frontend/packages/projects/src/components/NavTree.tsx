@@ -21,6 +21,9 @@ const ROW_SX = {
     '&:hover': { backgroundColor: 'action.hover' },
 } as const;
 
+/** Where a session opens: its folder's page with the session picked. */
+export const sessionHref = (folderHref: string, id: string) => `${folderHref}${folderHref.includes('?') ? '&' : '?'}session=${encodeURIComponent(id)}`;
+
 const rank = (th: Thread) => (needsUser(th.status) ? 0 : th.status === 'working' ? 1 : th.status === 'resolved' ? 3 : 2);
 
 /** Needs-you first, then running, then the latest; archived ones last. */
@@ -211,7 +214,7 @@ export function NavTree({ items, activeId, openSession, to, onNavigate, revision
                         openSession={activeId === f.id ? openSession : null}
                         revision={(revisions[f.id] ?? 0) + reconnect}
                         to={href}
-                        sessionTo={(id) => `${href}${href.includes('?') ? '&' : '?'}session=${encodeURIComponent(id)}`}
+                        sessionTo={(id) => sessionHref(href, id)}
                         onNavigate={onNavigate}
                     />
                 );

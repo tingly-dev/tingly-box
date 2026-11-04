@@ -1,13 +1,16 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Badge, Box, Divider, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from '@mui/material';
+import { Badge, Box, Divider, IconButton, List, ListItemButton, ListItemIcon, ListItemText, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
 import { NAV_ROW_SX, navRowSelectedSx, navRowTextSlotProps } from '@tingly/ui/theme/nav';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import type { ProjectSummary } from '../client';
 import { useProjectList } from '../hooks/useProjectList';
-import { Add, ChatBubble, Folder, Stack, Star } from './icons';
+import { Add, ChatBubble, Folder, Kanban, Stack, Star, ViewList } from './icons';
 import { useProjectsHost } from '../host/ProjectsHost';
+import { NavKanban } from './NavKanban';
 import { NavTree } from './NavTree';
+import { readLocal, writeLocal } from '../utils/storage';
 
 /** One row of a sidebar section: a place the user can open. */
 export interface ProjectsSidebarRow {
@@ -38,6 +41,8 @@ export interface ProjectsSidebarSection {
     title: string;
     /** Where the title links to: the section's overview page. */
     to?: string;
+    /** Controls between the title and the "+" (a view switch). */
+    extra?: ReactNode;
     /** A "+" next to the title. */
     action?: { label: string; onClick: () => void };
     rows: ProjectsSidebarRow[];
@@ -60,6 +65,35 @@ export interface ProjectsSidebarProps {
     imRows?: ProjectsSidebarRow[];
     /** Called after a row or link is followed (closes a host's mobile drawer). */
     onNavigate?: () => void;
+}
+
+export type SessionsView = 'list' | 'kanban';
+const VIEW_KEY = 'nav.sessionsView';
+
+/** How the sidebar lays out sessions, remembered per browser; the list until chosen. */
+function useSessionsView(): [SessionsView, (v: SessionsView) => void] {
+    const [view, setView] = useState<SessionsView>(() => (readLocal(VIEW_KEY) === 'kanban' ? 'kanban' : 'list'));
+    return [view, (v) => {
+        writeLocal(VIEW_KEY, v);
+        setView(v);
+    }];
+}
+
+function ViewSwitch({ view, onChange }: { view: SessionsView; onChange: (v: SessionsView) => void }) {
+    const { t } = useTranslation('projects');
+    const button = (value: SessionsView, label: string, icon: ReactNode) => (
+        <Tooltip title={label}>
+            <ToggleButton value={value} aria-label={label} sx={{ p: 0.375, border: 0, borderRadius: 1, color: 'text.disabled', '& svg': { fontSize: 16 }, '&.Mui-selected': { color: 'text.primary', bgcolor: 'action.selected' } }}>
+                {icon}
+            </ToggleButton>
+        </Tooltip>
+    );
+    return (
+        <ToggleButtonGroup exclusive size="small" value={view} aria-label={t('sidebar.view.label')} onChange={(_, v: SessionsView | null) => v && onChange(v)} sx={{ gap: 0.25, mr: 0.5 }}>
+            {button('list', t('sidebar.view.list'), <ViewList />)}
+            {button('kanban', t('sidebar.view.kanban'), <Kanban />)}
+        </ToggleButtonGroup>
+    );
 }
 
 /** How many IM bots the host has, for the sidebar's IM row; null until known or when there is no IM. */
@@ -93,6 +127,7 @@ function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection;
                         {title}
                     </Box>
                 ) : title}
+                {section.extra}
                 {section.action && (
                     <Tooltip title={section.action.label}>
                         <IconButton size="small" aria-label={section.action.label} onClick={section.action.onClick} sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}>
@@ -155,6 +190,7 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
     const { projects, folders } = useProjectList(showProjects || showWorkdirs, (ev) => {
         if (ev.type === 'thread') setRevisions((r) => ({ ...r, [ev.project_id]: (r[ev.project_id] ?? 0) + 1 }));
     }, () => setReconnect((n) => n + 1));
+    const [sessionsView, setSessionsView] = useSessionsView();
     const [params] = useSearchParams();
     const scope = location.pathname === paths.folder().split('?')[0] ? params.get('path') ?? '' : undefined;
 
@@ -198,10 +234,16 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
                 onNavigate?.();
             },
         },
+        extra: folders?.length ? <ViewSwitch view={sessionsView} onChange={setSessionsView} /> : undefined,
         rows: [],
-        content: folders?.length ? <NavTree items={folders} activeId={folders.find((f) => f.path === scope)?.id}
-            openSession={scope === undefined ? null : params.get('session')} to={(f) => paths.folder(f.path ?? '')}
-            onNavigate={onNavigate} revisions={revisions} reconnect={reconnect} /> : undefined,
+        content: folders?.length ? (() => {
+            const tree = {
+                items: folders, activeId: folders.find((f) => f.path === scope)?.id,
+                openSession: scope === undefined ? null : params.get('session'), to: (f: ProjectSummary) => paths.folder(f.path ?? ''),
+                onNavigate, revisions, reconnect,
+            };
+            return sessionsView === 'kanban' ? <NavKanban {...tree} /> : <NavTree {...tree} />;
+        })() : undefined,
         empty: folders ? t('sidebar.noWorkdirs') : undefined,
     } : null;
 

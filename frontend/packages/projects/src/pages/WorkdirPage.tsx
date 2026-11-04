@@ -15,7 +15,8 @@ import { uploadAttachments } from '../components/attachments';
 import { ProjectImTags, useProjectIm } from '../components/im/ProjectImBindings';
 import { IM_BINDINGS_CHANGED } from '../components/im/useImBindings';
 import { ThreadPanel } from '../components/project/ThreadPanel';
-import { StatusGroups, type StatusGroup } from '../components/workspace/StatusGroups';
+import { StatusGroups } from '../components/workspace/StatusGroups';
+import { sessionGroups, sessionRow } from '../components/workdir/sessionRows';
 import { WorkspaceLayout, useWorkspacePane } from '../components/workspace/WorkspaceLayout';
 import { MoreVert } from '../components/icons';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -24,7 +25,7 @@ import { useProjectEvents, type ProjectEvent } from '../hooks/useProjectEvents';
 import { useProjectList } from '../hooks/useProjectList';
 import { useTranscript } from '../hooks/useTranscript';
 import { useProjectsHost, type SessionLaunch } from '../host/ProjectsHost';
-import { folderName, timeAgo } from '../utils/format';
+import { folderName } from '../utils/format';
 import { needsUser } from '../components/project/threadStatus';
 
 /** Replace the session with the same id, else add it first (newest first). */
@@ -45,15 +46,6 @@ function changesLiveTasks(e: ThreadEvent): boolean {
         return false;
     }
 }
-
-const GROUPS: { key: string; collapsed?: boolean }[] = [
-    { key: 'waiting' },
-    { key: 'failed' },
-    { key: 'working' },
-    { key: 'idle' },
-    { key: 'resolved', collapsed: true },
-    { key: 'archived', collapsed: true },
-];
 
 /**
  * A working folder (a project of type folder): Claude Code sitting in a plain
@@ -294,15 +286,8 @@ export default function WorkdirPage() {
         }
     };
 
-    const groups: StatusGroup[] = GROUPS.map((g) => ({ key: g.key, label: t(`session.group.${g.key}`), collapsed: g.collapsed }));
-    const rows = useMemo(() => (sessions ?? []).map((s) => ({
-        id: s.id,
-        group: s.archived_at ? 'archived' : s.status === 'ready' ? 'idle' : s.status,
-        title: s.title,
-        subtitle: [scope ? '' : folderName(s.cwd), !s.archived_at && needsUser(s.status) ? s.wait_reason : ''].filter(Boolean).join(' · ') || undefined,
-        meta: timeAgo(s.updated_at, i18n.language),
-        selected: s.id === sessionId,
-    })), [sessions, scope, sessionId, i18n.language]);
+    const groups = sessionGroups((key) => t(`session.group.${key}`));
+    const rows = useMemo(() => (sessions ?? []).map((s) => sessionRow(s, { withFolder: !scope, locale: i18n.language, selected: s.id === sessionId })), [sessions, scope, sessionId, i18n.language]);
     const waitingHere = (sessions ?? []).some((s) => !s.archived_at && needsUser(s.status));
     // With a session open on a wide screen the list becomes the first card of the thread's info rail, so the page has one right column.
     const merged = !!sessionId && !pane.narrow;

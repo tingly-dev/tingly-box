@@ -41,15 +41,16 @@ export function StatusHeading({ label, status, count }: { label: string; status:
     );
 }
 
-function Row({ row, onOpen }: { row: StatusRow; onOpen: (id: string) => void }) {
-    return <ListRow title={row.title} subtitle={row.subtitle} badges={row.badges} meta={row.meta} selected={row.selected} unseen={row.unseen} onClick={() => onOpen(row.id)} />;
+function Row({ row, onOpen, outlined }: { row: StatusRow; onOpen: (id: string) => void; outlined?: boolean }) {
+    return <ListRow outlined={outlined} title={row.title} subtitle={row.subtitle} badges={row.badges} meta={row.meta} selected={row.selected} unseen={row.unseen} onClick={() => onOpen(row.id)} />;
 }
 
 /**
  * Work grouped by status, most urgent first: a project's threads, a working
- * directory's sessions. Groups with no rows are left out.
+ * directory's sessions. Groups with no rows are left out. `outlined` draws each
+ * row as a card, so the groups read as the lanes of a board.
  */
-export function StatusGroups({ groups, rows, onOpen, empty }: { groups: StatusGroup[]; rows: StatusRow[]; onOpen: (id: string) => void; empty?: ReactNode }) {
+export function StatusGroups({ groups, rows, onOpen, empty, outlined }: { groups: StatusGroup[]; rows: StatusRow[]; onOpen: (id: string) => void; empty?: ReactNode; outlined?: boolean }) {
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
     if (rows.length === 0) {
         return <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>{empty}</Typography>;
@@ -73,7 +74,9 @@ export function StatusGroups({ groups, rows, onOpen, empty }: { groups: StatusGr
                             {g.collapsed && <ExpandMore sx={{ fontSize: 16, color: 'text.secondary', transform: open ? 'rotate(180deg)' : 'none' }} />}
                         </Box>
                         <Collapse in={open}>
-                            {list.map((r) => <Row key={r.id} row={r} onOpen={onOpen} />)}
+                            <Box sx={outlined ? { display: 'flex', flexDirection: 'column', gap: 0.75, px: 1 } : undefined}>
+                                {list.map((r) => <Row key={r.id} row={r} onOpen={onOpen} outlined={outlined} />)}
+                            </Box>
                         </Collapse>
                     </Box>
                 );
