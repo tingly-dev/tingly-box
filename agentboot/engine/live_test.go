@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -214,12 +213,7 @@ func TestEngine_PermissionRulesApplyLiveWithoutRestart(t *testing.T) {
 	})
 	e, rec := p.engine(t)
 	settings := filepath.Join(t.TempDir(), "settings.json")
-	write := func(doc string) {
-		t.Helper()
-		if err := os.WriteFile(settings, []byte(doc), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
+	write := func(doc string) { rewriteSettings(t, settings, doc) }
 	turn := func(prompt string, resume bool, mode string) {
 		t.Helper()
 		opts := agentboot.ExecutionOptions{Model: "m", PermissionMode: mode, SettingsPath: settings}

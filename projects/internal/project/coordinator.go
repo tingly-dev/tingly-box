@@ -186,10 +186,7 @@ func (c *Coordinator) onReport(r Report) {
 	// message instead of a folded line and then a comment. A failure or a
 	// question for the user is always said, and so is everything while the
 	// coordinator cannot answer.
-	switch {
-	case r.Kind == ReportStalled:
-	case r.Kind == ReportFinished && !down:
-	default:
+	if r.Kind != ReportStalled && !(r.Kind == ReportFinished && !down) {
 		c.final(ev)
 	}
 	if down {

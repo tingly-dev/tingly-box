@@ -32,8 +32,7 @@ func grantAutoGit(doc map[string]any, p *db.Project, t *db.Thread) {
 		for _, flags := range []string{"", "-u ", "--set-upstream "} {
 			allow = append(allow, "Bash(git push "+flags+"origin "+t.Branch+")")
 		}
-		list, _ := perms["allow"].([]any)
-		perms["allow"] = appendUnique(list, allow...)
+		addRules(perms, "allow", allow...)
 	}
 	ask := []string{
 		"Bash(gh pr create)", "Bash(gh pr create *)",
@@ -47,8 +46,7 @@ func grantAutoGit(doc map[string]any, p *db.Project, t *db.Thread) {
 			ask = append(ask, "Bash(git push origin "+base+")", "Bash(git push origin "+base+" *)")
 		}
 	}
-	list, _ := perms["ask"].([]any)
-	perms["ask"] = appendUnique(list, ask...)
+	addRules(perms, "ask", ask...)
 }
 
 // ruleSafe reports whether name can sit inside a permission rule's

@@ -2,7 +2,6 @@ package project
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,16 +14,8 @@ import (
 
 func settingsPerms(t *testing.T, path string) (allow, ask []string) {
 	t.Helper()
-	b, err := os.ReadFile(path)
-	require.NoError(t, err)
-	var doc struct {
-		Permissions struct {
-			Allow []string `json:"allow"`
-			Ask   []string `json:"ask"`
-		} `json:"permissions"`
-	}
-	require.NoError(t, json.Unmarshal(b, &doc))
-	return doc.Permissions.Allow, doc.Permissions.Ask
+	perms, _ := readSettings(t, path)["permissions"].(map[string]any)
+	return strs(t, perms["allow"]), strs(t, perms["ask"])
 }
 
 func TestAutoModeThreadMayPushItsOwnBranchAndAsksToPublish(t *testing.T) {

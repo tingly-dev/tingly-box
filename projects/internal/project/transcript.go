@@ -157,10 +157,7 @@ func (m *Threads) syncBackground(t *db.Thread, e engine.Entry) {
 		case len(ev.Tasks) > 0 && (t.Status == db.ThreadIdle || t.Status == db.ThreadReady):
 			t.Status = db.ThreadWorking
 		case len(ev.Tasks) == 0 && t.Status == db.ThreadWorking:
-			t.Status = db.ThreadIdle
-			if t.CommitsAhead > 0 {
-				t.Status = db.ThreadReady
-			}
+			t.Status = restingStatus(t.CommitsAhead)
 		}
 	})
 }

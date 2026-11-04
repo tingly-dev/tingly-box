@@ -29,6 +29,14 @@ func tasksChanged(tasks ...map[string]string) engine.Entry {
 	return engine.Entry{Kind: engine.KindTask, Payload: payload}
 }
 
+func waitFirstTurn(t *testing.T, f *testFixture, threadID string) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		got, _ := f.store.GetThread(threadID)
+		return got != nil && got.Turns == 1
+	}, 5*time.Second, 10*time.Millisecond)
+}
+
 func (f *testFixture) noReport(t *testing.T, within time.Duration) {
 	t.Helper()
 	select {
@@ -46,10 +54,7 @@ func TestWorkerReportWaitsForBackgroundTasks(t *testing.T) {
 	tasks.Store(1)
 	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "review it"})
 	require.NoError(t, err)
-	require.Eventually(t, func() bool {
-		got, _ := f.store.GetThread(th.ID)
-		return got != nil && got.Turns == 1
-	}, 5*time.Second, 10*time.Millisecond)
+	waitFirstTurn(t, f, th.ID)
 
 	f.noReport(t, 200*time.Millisecond)
 	got, err := f.store.GetThread(th.ID)
@@ -77,10 +82,7 @@ func TestFollowUpTurnReplacesTheHeldReport(t *testing.T) {
 	tasks.Store(1)
 	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "review it"})
 	require.NoError(t, err)
-	require.Eventually(t, func() bool {
-		got, _ := f.store.GetThread(th.ID)
-		return got != nil && got.Turns == 1
-	}, 5*time.Second, 10*time.Millisecond)
+	waitFirstTurn(t, f, th.ID)
 
 	tasks.Store(0)
 	threadStore{f.threads}.Append(f.threads.sessionOf(th.ID), tasksChanged())
@@ -114,4 +116,46 @@ func TestNeedsInputIsNotHeldForBackgroundTasks(t *testing.T) {
 	require.NoError(t, err)
 	rep := f.report(t)
 	assert.Equal(t, ReportNeedsInput, rep.Kind)
+}
+
+func TestHeldReportIsReleasedSoonWhenTheTasksEndedBeforeItWasHeld(t *testing.T) {
+	var looks atomic.Int64
+	f, _ := backgroundFixture(t, func(turn *enginetest.Turn) error {
+		turn.Say("Reviewers finished.", 1, 1)
+		return nil
+	})
+	// settle sees a task; by the time the report is held the task is gone and
+	// its end event has already come and found nothing to release.
+	f.threads.backgroundCount = func(string) int {
+		if looks.Add(1) == 1 {
+			return 1
+		}
+		return 0
+	}
+	f.threads.HoldMax = time.Hour
+	_, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "review it"})
+	require.NoError(t, err)
+	rep := f.report(t)
+	assert.Equal(t, "Reviewers finished.", rep.Text)
+}
+
+func TestAnOlderHoldTimerDoesNotReleaseANewerReport(t *testing.T) {
+	f, tasks := backgroundFixture(t, func(turn *enginetest.Turn) error {
+		turn.Say("first", 1, 1)
+		return nil
+	})
+	tasks.Store(1)
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "review it"})
+	require.NoError(t, err)
+	waitFirstTurn(t, f, th.ID)
+
+	// A report held for 100ms is dropped (the follow-up turn settled); a newer
+	// one held for an hour must not be released by the first one's timer.
+	f.threads.dropHeldReport(th.ID)
+	f.threads.HoldMax = 100 * time.Millisecond
+	f.threads.hold(Report{Thread: *th, Kind: ReportFinished, Text: "old"})
+	f.threads.dropHeldReport(th.ID)
+	f.threads.HoldMax = time.Hour
+	f.threads.hold(Report{Thread: *th, Kind: ReportFinished, Text: "new"})
+	f.noReport(t, 400*time.Millisecond)
 }

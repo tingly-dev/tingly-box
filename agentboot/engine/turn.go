@@ -497,42 +497,45 @@ func (e *Engine) setLaunch(sessionID string, st launchState) {
 // read once when the process starts.
 var liveSettingsKeys = []string{"permissions", "autoMode"}
 
-// readSettingsFile parses the settings file at path. ok is false if it cannot
-// be read or is not a JSON object.
-func readSettingsFile(path string) (doc map[string]json.RawMessage, raw []byte, ok bool) {
+// splitSettings reads the settings file at path and separates the permission
+// rules a running process takes live from the rest. rest is what only a
+// restart changes: the file's other keys as canonical JSON, or its raw bytes
+// when it is not a JSON object (nil if it cannot be read). live is the rules as
+// canonical JSON, "" if there are none.
+func splitSettings(path string) (rest []byte, live string) {
 	if path == "" {
-		return nil, nil, false
+		return nil, ""
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, nil, false
+		return nil, ""
 	}
+	var doc map[string]json.RawMessage
 	if json.Unmarshal(raw, &doc) != nil {
-		return nil, raw, false
+		return raw, ""
 	}
-	return doc, raw, true
-}
-
-// liveSettings is the part of opts' settings file a running process takes
-// live: its permission rules, as canonical JSON ("" if there are none). The
-// process reads the file only at its start, so this is what it has been given
-// once it started, and what applyLive pushes when it changes.
-func liveSettings(opts agentboot.ExecutionOptions) string {
-	doc, _, ok := readSettingsFile(opts.SettingsPath)
-	if !ok {
-		return ""
-	}
-	live := map[string]json.RawMessage{}
+	rules := map[string]json.RawMessage{}
 	for _, k := range liveSettingsKeys {
-		if v, has := doc[k]; has {
-			live[k] = v
+		if v, ok := doc[k]; ok {
+			rules[k] = v
+			delete(doc, k)
 		}
 	}
-	if len(live) == 0 {
-		return ""
+	rest, _ = json.Marshal(doc)
+	if len(rules) > 0 {
+		b, _ := json.Marshal(rules)
+		live = string(b)
 	}
-	b, _ := json.Marshal(live)
-	return string(b)
+	return rest, live
+}
+
+// liveSettings is the permission rules of opts' settings file, as a running
+// process takes them live ("" if there are none). The process reads the file
+// only at its start, so this is what it has been given once it started, and
+// what applyLive pushes when it changes.
+func liveSettings(opts agentboot.ExecutionOptions) string {
+	_, live := splitSettings(opts.SettingsPath)
+	return live
 }
 
 // liveDelta is the settings to send to take a process from have to want
@@ -570,14 +573,8 @@ func launchSignature(opts agentboot.ExecutionOptions) string {
 	env := append([]string(nil), opts.Env...)
 	sort.Strings(env)
 	settings := opts.SettingsPath
-	if doc, raw, ok := readSettingsFile(settings); ok || raw != nil {
-		if ok {
-			for _, k := range liveSettingsKeys {
-				delete(doc, k)
-			}
-			raw, _ = json.Marshal(doc)
-		}
-		sum := sha256.Sum256(raw)
+	if rest, _ := splitSettings(settings); rest != nil {
+		sum := sha256.Sum256(rest)
 		settings += "@" + hex.EncodeToString(sum[:])
 	}
 	mcpConfig, _ := json.Marshal(opts.MCPServers)

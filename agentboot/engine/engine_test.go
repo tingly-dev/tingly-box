@@ -275,12 +275,17 @@ func TestLaunchSignatureChangesForEffort(t *testing.T) {
 	}
 }
 
-func writeSettings(t *testing.T, doc string) string {
+func rewriteSettings(t *testing.T, path, doc string) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "settings.json")
 	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func writeSettings(t *testing.T, doc string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "settings.json")
+	rewriteSettings(t, path, doc)
 	return path
 }
 
@@ -289,9 +294,7 @@ func writeSettings(t *testing.T, doc string) string {
 func TestLaunchSignature_IgnoresPermissionRules(t *testing.T) {
 	path := writeSettings(t, "{}")
 	sig := func(doc string) string {
-		if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		rewriteSettings(t, path, doc)
 		return launchSignature(agentboot.ExecutionOptions{SettingsPath: path})
 	}
 	base := sig(`{"env":{"A":"1"},"permissions":{"allow":["Bash(a)"]}}`)

@@ -134,7 +134,7 @@ type Threads struct {
 	stalled map[string]bool
 	// held holds the finished report of a worker whose turn ended while it
 	// still had background tasks (background.go).
-	held map[string]Report
+	held map[string]*heldReport
 	// folders caches which projects are folders (a project's type never changes).
 	folders map[string]bool
 	active  map[string]*activeThread
@@ -239,7 +239,7 @@ func NewThreads(store *db.Store, layout Layout, hub *Hub, agents Agents, env Thr
 		active: map[string]*activeThread{}, turns: map[string]*turnTally{}, prompts: map[string]*threadPrompter{},
 		sessionOfThread: map[string]string{}, threadOfSession: map[string]string{},
 		slots: map[string]*limiter{}, threads: map[string]*sync.Mutex{},
-		allowed: map[string]map[string]bool{}, folders: map[string]bool{}, held: map[string]Report{},
+		allowed: map[string]map[string]bool{}, folders: map[string]bool{}, held: map[string]*heldReport{},
 	}
 	m.engine = engine.New(engine.Config{
 		Agent:     agents.Service,
@@ -1014,9 +1014,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 	if tally == nil {
 		tally = &turnTally{}
 	}
-	m.mu.Lock()
-	delete(m.held, threadID)
-	m.mu.Unlock()
+	m.dropHeldReport(threadID)
 	t, err := m.store.GetThread(threadID)
 	if err != nil {
 		return
@@ -1072,10 +1070,8 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 				// when they end (background.go).
 				t.Status = db.ThreadWorking
 				held = !session
-			} else if stats.CommitsAhead > 0 {
-				t.Status = db.ThreadReady
 			} else {
-				t.Status = db.ThreadIdle
+				t.Status = restingStatus(stats.CommitsAhead)
 			}
 		}
 		if report.Text != "" {
