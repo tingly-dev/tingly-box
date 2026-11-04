@@ -230,6 +230,16 @@ export default {
       "mergeAll": "全部合并",
       "failed": "更新 slot 失败"
     },
+    "useProfile": {
+      "label": "使用方案",
+      "chipHint": "把默认配置换成此方案的副本；此方案本身不会改动",
+      "dialogTitle": "使用方案“{{name}}”",
+      "dialogBody": "默认配置将被方案“{{name}}”的副本覆盖；“{{name}}”本身不会改动。",
+      "dialogWarning": "当前默认配置不会被保存；如需保留，请先把它复制为方案。",
+      "confirm": "使用方案",
+      "done": "默认配置已改用方案“{{name}}”",
+      "failed": "使用方案失败"
+    },
     "applyFailed": "应用配置失败",
     "configPath": "将环境配置添加到 Claude Code 配置文件",
     "copyConfig": "配置",

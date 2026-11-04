@@ -66,6 +66,15 @@ export const scenarioApi = {
         }));
     },
 
+    // Overwrite the default Claude Code routing with a copy of a profile's (id or name).
+    copyProfileToClaudeCodeDefault: async (profile: string): Promise<any> => {
+        return controlApi((client, headers) => client.POST('/api/v1/scenario/{scenario}/claude-code/use-profile', {
+            headers,
+            params: {path: {scenario: 'claude_code'}},
+            body: {profile},
+        }));
+    },
+
     // Scenario descriptors (includes supports_profiles flag)
     getScenarioDescriptors: async (): Promise<any> => {
         return controlApi((client, headers) => client.GET('/api/v1/scenario-descriptors', {headers}));

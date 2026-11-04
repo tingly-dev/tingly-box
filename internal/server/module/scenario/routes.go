@@ -126,6 +126,13 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 		swagger.WithResponseModel(ClaudeCodeSlotsResponse{}),
 	)
 
+	router.POST("/scenario/:scenario/claude-code/use-profile", h.UseClaudeCodeProfile,
+		swagger.WithDescription("Overwrite the default Claude Code routing with a copy of a profile's; the profile is not changed and the default's previous routing is not kept (only the claude_code scenario)"),
+		swagger.WithTags("scenarios"),
+		swagger.WithRequestModel(ClaudeCodeUseProfileRequest{}),
+		swagger.WithResponseModel(ClaudeCodeUseProfileResponse{}),
+	)
+
 	router.GET("/scenario/:scenario/models", h.GetClaudeCodeModels,
 		swagger.WithDescription("List the model tiers Claude Code can be asked for under the main routing or a profile, each with its current route"),
 		swagger.WithTags("scenarios"),

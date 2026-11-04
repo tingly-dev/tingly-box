@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -479,5 +481,52 @@ func TestScenarioUpdateResponseStructure(t *testing.T) {
 
 	if response.Data.Scenario != "claude_code" {
 		t.Errorf("expected Scenario 'claude_code', got %q", response.Data.Scenario)
+	}
+}
+
+func TestUseClaudeCodeProfileEndpoint(t *testing.T) {
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := cfg.CreateProfile(typ.ScenarioClaudeCode, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profiled := typ.ProfiledScenarioName(typ.ScenarioClaudeCode, profile.ID)
+	profileRule := cfg.GetRuleByUUID("builtin:" + string(profiled) + ":cc")
+	if profileRule == nil {
+		t.Fatal("profile has no cc rule")
+	}
+	provider := &typ.Provider{UUID: "work-prov", Name: "work-prov", APIBase: "https://example.invalid", APIStyle: protocol.APIStyleOpenAI, Token: "k", Enabled: true}
+	if err := cfg.AddProvider(provider); err != nil {
+		t.Fatal(err)
+	}
+	profileRule.Services = append(profileRule.Services, &loadbalance.Service{Provider: provider.UUID, Model: "work-model", Active: true})
+	if err := cfg.UpdateRule(profileRule.UUID, *profileRule); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := NewHandler(cfg, &mockRemoteControlController{})
+	router := gin.New()
+	router.POST("/scenario/:scenario/claude-code/use-profile", handler.UseClaudeCodeProfile)
+	post := func(scenario, body string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/scenario/"+scenario+"/claude-code/use-profile", bytes.NewBufferString(body)))
+		return w
+	}
+
+	// Only the default can use a profile: not a profile, not another scenario.
+	assert.Equal(t, http.StatusBadRequest, post(string(profiled), `{"profile":"work"}`).Code)
+	assert.Equal(t, http.StatusBadRequest, post("openai", `{"profile":"work"}`).Code)
+	assert.Equal(t, http.StatusBadRequest, post("claude_code", `{}`).Code)
+	assert.Equal(t, http.StatusNotFound, post("claude_code", `{"profile":"missing"}`).Code)
+	assert.Empty(t, cfg.GetRuleByUUID("builtin:claude_code:cc").Services, "a refused request changes nothing")
+
+	w := post("claude_code", `{"profile":"`+profile.ID+`"}`)
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	mainRule := cfg.GetRuleByUUID("builtin:claude_code:cc")
+	if assert.NotNil(t, mainRule) && assert.NotEmpty(t, mainRule.Services) {
+		assert.Equal(t, "work-model", mainRule.Services[0].Model)
 	}
 }

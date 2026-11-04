@@ -254,6 +254,16 @@ export default {
       "mergeAll": "Merge all",
       "failed": "Failed to update the slot"
     },
+    "useProfile": {
+      "label": "Use profile",
+      "chipHint": "Make the default config a copy of this profile; the profile is not changed",
+      "dialogTitle": "Use profile \"{{name}}\"",
+      "dialogBody": "The default config will be overwritten with a copy of profile \"{{name}}\". \"{{name}}\" itself is not changed.",
+      "dialogWarning": "The current default config is not saved — to keep it, copy it as a profile first.",
+      "confirm": "Use profile",
+      "done": "Default now uses profile \"{{name}}\"",
+      "failed": "Failed to use the profile"
+    },
     "applyFailed": "Failed to apply configurations",
     "configPath": "Add env config to Claude Code config file",
     "copyConfig": "Config",

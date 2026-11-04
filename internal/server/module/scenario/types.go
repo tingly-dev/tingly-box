@@ -117,3 +117,13 @@ type ClaudeCodeSlotsResponse struct {
 	Success bool                `json:"success"`
 	Data    ClaudeCodeSlotsData `json:"data"`
 }
+
+// ClaudeCodeUseProfileRequest names the profile (ID or name) whose routing the
+// default Claude Code config is overwritten with.
+type ClaudeCodeUseProfileRequest struct {
+	Profile string `json:"profile" binding:"required" example:"p1"`
+}
+
+type ClaudeCodeUseProfileResponse struct {
+	Success bool `json:"success"`
+}

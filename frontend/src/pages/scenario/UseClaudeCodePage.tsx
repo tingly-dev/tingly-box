@@ -107,6 +107,7 @@ const claudeCode: AgentPageDescriptor = {
     clientConfigTool: 'claude',
     context1M: true,
     slotRouting: { unifiedRuleUuid: 'builtin:claude_code:cc' },
+    useProfileRow: true,
     setup: {
         kind: 'auto',
         apply: (t, ctx) => applyClaudeConfig(t, derivedPrefs(ctx), false),
