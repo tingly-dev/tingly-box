@@ -97,6 +97,7 @@ export function useNow(on: boolean): number {
     const [now, setNow] = useState(() => serverNow());
     useEffect(() => {
         if (!on) return;
+        setNow(serverNow());
         const id = setInterval(() => setNow(serverNow()), 1000);
         return () => clearInterval(id);
     }, [on]);

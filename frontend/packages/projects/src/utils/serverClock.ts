@@ -10,16 +10,16 @@ let known = false;
 // Date has whole-second resolution and is truncated, so the real time is
 // about half a second later.
 const HEADER_MIDPOINT_MS = 500;
-// Responses differ by about a second from latency and truncation; only a
-// larger change is the clock moving.
-const JITTER_MS = 1500;
 
+// Latency, a cached response (its Date is when it was first made) and
+// truncation all make a sample read the server as further behind than it
+// is, never ahead. So the best estimate is the largest offset seen.
 export function noteServerDate(header: string | null | undefined): void {
     if (!header) return;
     const at = Date.parse(header);
     if (Number.isNaN(at)) return;
     const next = at + HEADER_MIDPOINT_MS - Date.now();
-    if (!known || Math.abs(next - offset) > JITTER_MS) {
+    if (!known || next > offset) {
         offset = next;
         known = true;
     }

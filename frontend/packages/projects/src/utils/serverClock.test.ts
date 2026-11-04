@@ -21,11 +21,12 @@ test('serverNow is the browser clock before any response and ignores a bad heade
     expect(serverNow()).toBe(Date.now());
 });
 
-test('a second of jitter between responses does not move the clock', () => {
+test('a slower or cached response does not pull the clock back', () => {
     vi.useFakeTimers({ now: Date.parse('2026-11-04T13:48:53Z') });
     noteServerDate('Wed, 04 Nov 2026 13:48:53 GMT');
     const first = serverNow();
     vi.advanceTimersByTime(10_000);
-    noteServerDate('Wed, 04 Nov 2026 13:49:04 GMT');
+    // A cached answer made an hour ago.
+    noteServerDate('Wed, 04 Nov 2026 12:48:53 GMT');
     expect(serverNow() - first).toBe(10_000);
 });
