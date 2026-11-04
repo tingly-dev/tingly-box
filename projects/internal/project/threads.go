@@ -551,9 +551,10 @@ func (m *Threads) writeSettings(p *db.Project, t *db.Thread) error {
 }
 
 // writeFileIfChanged replaces path with data only when its content differs,
-// through a rename, so a Claude Code process that has the file open never
-// reads it half written, and an unchanged file keeps its launch signature
-// (a changed one restarts the thread's resident process).
+// through a rename, so a reader never sees it half written. The resident
+// process reads the file only when it starts; permission rules that changed
+// reach it as a control request instead (agentboot/engine applyLive), and
+// never restart it.
 func writeFileIfChanged(path string, data []byte, perm os.FileMode) error {
 	if old, err := os.ReadFile(path); err == nil && string(old) == string(data) {
 		return nil

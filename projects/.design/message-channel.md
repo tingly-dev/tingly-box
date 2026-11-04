@@ -214,6 +214,25 @@ Web 已有卡片的状态和 `LastReport`。增加：
 4. **已实现**：auto 模式线程的 settings（`git_access.go`）：allow `git push [-u|--set-upstream] origin <本线程分支>`；ask `gh pr create|merge`、`gh issue create`、推到 base/main/master、`--force/-f/--force-with-lease`、`--delete`。只在线程的有效权限模式为 auto 时写；settings 文件现在每回合重写，所以事后切到 auto 也生效。其余形状的 push 仍交给分类器（笼统的 push ask 会盖过 allow），要靠 P3 的 hook 接住。分支名含括号、星号、空白时不写 allow 规则。
 5. **已实现**：D 的简化版：Bash 的“本线程都允许”只记**那一条命令原文**（去掉首尾空白后逐字匹配），其他工具仍按工具名。没有 `permission_suggestions` 的前缀规则、也没用 `updatedPermissions`（`addRules` 留给以后）。IM 里的按钮对 Bash 改叫“Allow this command for this thread”。**网页端按钮文案仍是 “Always allow {{tool}} here”（`thread.allowThread`），对 Bash 已不准确，需要前端跟进**（本次没改前端）。
 
+**设置怎么应用（常驻进程不重启；用户决定：“不应该重启，应该通过 stream 消息注入或者等待下一轮激活”）**
+
+线程的设置文件每回合开始前重写（只在内容变化时，经 rename 原子替换）。`claude` 进程只在**启动时**读 `--settings` 文件，之后改文件对它没有任何作用（实测，见 `agentboot/claude/ref/live-control.md` 的 “Settings”）。所以每一种变化走哪条路：
+
+| 变化 | 怎么应用 | 进程重启？ |
+| --- | --- | --- |
+| 权限模式（default / acceptEdits / auto / plan …） | `set_permission_mode` 控制请求（`applyLive`，原有） | 否；进程拒绝时才回退到重启（原有行为） |
+| 模型 | `set_model` 控制请求（原有） | 否；同上 |
+| **权限规则**：`permissions.allow/ask/deny/additionalDirectories`、`autoMode.*`（含 P1 的 auto 模式 git 规则、library 授权） | 下一轮开始前 `apply_flag_settings` 控制请求，只发变化的顶层键；已验证实际生效：加规则后同一命令不再提示，别的命令仍提示，清空后又提示 | **否**；后台任务不受影响 |
+| 规则被进程拒绝（太旧、不支持的 CLI） | 不推送，规则等进程下次自然启动（空闲 10 分钟回收后用 `--resume` 重开）再生效；下一轮再试一次 | 否 |
+| 环境变量、网关路由、profile 的其余设置、MCP 配置、effort、entrypoint | 只能在启动时读 | 是（原有；变了才重启，且这类变化在 UI 上本来就是显式改动） |
+
+要点和限制：
+
+- **只能加不能减**：推送的层叠在进程启动时读到的文件内容之上，数组取并集。启动时文件里已有的规则（例如先在 default 模式启动、没有 git 规则）后来被删掉，要等下次启动才真正消失。反过来，启动时没有、后来才加的规则（例如中途切到 auto 后新增的 git 规则）当轮就生效。对这里的规则集这是无害的方向：多出来的 ask 只会多问一次，多出来的 allow 只限本线程分支。
+- **启动签名不含规则**：`launchSignature` 里设置文件的哈希去掉 `permissions` 和 `autoMode` 两个键再算，所以改规则不会让进程被驱逐（这正是之前“每回合重写 settings 会重启并带走后台任务”的风险）。文件解析不了时仍按整个内容哈希。
+- **何时生效**：规则在回合之间推送（引擎在启动一轮前对比并发送），所以进程正在跑后台任务时空闲着也可以推；正在回合中的进程要等它下一轮。
+- **验证**：`agentboot/claude/ref/live-settings-spike.py` 用真实 CLI 2.1.259 加本地脚本模型验证了以上语义；`agentboot/engine` 的 `TestEngine_PermissionRulesApplyLiveWithoutRestart` 用替身进程验证“改规则不重启、模式切换仍走 `set_permission_mode`、被拒绝不重启且下轮重试、改 env 仍重启”。
+
 P1 没有用真实 Claude Code 验证：规则是否真的在 auto 模式下保留并免分类（P0 第 5 条）仍待实验。
 
 **P2 分级与交互**
