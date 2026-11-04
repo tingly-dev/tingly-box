@@ -9,6 +9,7 @@ import { useNotify } from '../../hooks/useNotify';
 import { readLocal, writeLocal } from '../../utils/storage';
 import { formatBytes, timeAgo } from '../../utils/format';
 import { LazyTree } from '../common/LazyTree';
+import { LibraryPreview, previewKind, type PreviewFile } from './LibraryPreview';
 
 const mono = { fontFamily: fontMono } as const;
 
@@ -36,7 +37,7 @@ function useExpanded(projectId: string): [string[], (paths: string[]) => void] {
 
 /**
  * The project library as a tree of its folders and files. A folder's
- * contents are fetched when it is opened; files can be downloaded or deleted.
+ * contents are fetched when it is opened; files can be previewed (images and text), downloaded or deleted.
  */
 export function Library({ projectId, refreshKey }: { projectId: string; refreshKey: number }) {
     const { t, i18n } = useTranslation('projects');
@@ -46,6 +47,7 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
     const [uploading, setUploading] = useState(false);
     const [tick, setTick] = useState(0);
     const [expanded, setExpanded] = useExpanded(projectId);
+    const [preview, setPreview] = useState<PreviewFile | null>(null);
 
     const load = useCallback(async (path: string): Promise<Node[]> => {
         const res = await apiFetch(`/api/v1/projects/${projectId}/library/tree?path=${encodeURIComponent(path)}`);
@@ -113,6 +115,7 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
                 expanded={expanded}
                 onExpandedChange={setExpanded}
                 refreshKey={refreshKey + tick}
+                onActivate={(n) => { if (previewKind(n.name)) setPreview({ path: n.path, name: n.name, size: n.size }); }}
                 empty={<Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>{t('library.empty')}</Typography>}
                 renderMeta={(n) => n.kind === 'file' ? `${formatBytes(n.size)} · ${timeAgo(n.updated_at, i18n.language, true)}` : null}
                 renderActions={(n, { tabIndex }) => n.kind === 'file' && (
@@ -130,6 +133,7 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
                     </>
                 )}
             />
+            <LibraryPreview projectId={projectId} file={preview} onClose={() => setPreview(null)} onDownload={(p) => void download(p)} />
         </Box>
     );
 }
