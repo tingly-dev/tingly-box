@@ -32,7 +32,7 @@ func (s *Service) Create(ctx context.Context, spec NewProjectSpec) (*db.Project,
 	if err != nil {
 		return nil, err
 	}
-	p := &db.Project{Name: name, Goal: strings.TrimSpace(spec.Goal), Repos: repos, ThreadPermissionMode: DefaultPermissionMode}
+	p := &db.Project{Name: name, Goal: strings.TrimSpace(spec.Goal), Repos: repos, ThreadPermissionMode: DefaultPermissionMode, MaxRunningThreads: db.DefaultMaxRunningThreads}
 	main := &db.Thread{Origin: "user"}
 	if err := s.Store.CreateProjectWithMain(p, main, s.Layout.Root); err != nil {
 		return nil, err
@@ -69,6 +69,9 @@ func (s *Service) Save(p *db.Project) error {
 		return saveErr
 	}
 	s.Hub.Publish(Event{Type: EventProject, ProjectID: p.ID, Data: p})
+	if s.Threads != nil {
+		s.Threads.ApplyLimit(p)
+	}
 	if notice != nil {
 		s.Coordinator.publishEvent(p.ID, notice)
 		if !p.Paused && p.ArchivedAt == nil {
@@ -101,6 +104,9 @@ func configurationChanges(a, b *db.Project) []string {
 	}
 	if a.DisableWorktree != b.DisableWorktree {
 		fields = append(fields, "thread worktree mode")
+	}
+	if a.MaxRunningThreads != b.MaxRunningThreads {
+		fields = append(fields, "thread concurrency limit")
 	}
 	if !slices.Equal(a.Repos, b.Repos) {
 		fields = append(fields, "repositories")

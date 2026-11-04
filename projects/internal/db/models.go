@@ -44,13 +44,22 @@ type Project struct {
 	// ThreadPermissionMode is the Claude Code permission mode threads run in.
 	ThreadPermissionMode string `gorm:"size:40" json:"thread_permission_mode"`
 	// DisableWorktree makes new threads share the selected repository checkout.
-	DisableWorktree bool       `json:"disable_worktree,omitempty"`
-	Paused          bool       `json:"paused"`
-	Starred         bool       `json:"starred"`
-	ArchivedAt      *time.Time `json:"archived_at,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	DisableWorktree bool `json:"disable_worktree,omitempty"`
+	// MaxRunningThreads caps how many of the project's threads run at once
+	// (1..100); the rest wait their turn. A project starts at
+	// DefaultMaxRunningThreads, and Open gives rows from before the field the
+	// same. A folder does not use it.
+	MaxRunningThreads int        `json:"max_running_threads"`
+	Paused            bool       `json:"paused"`
+	Starred           bool       `json:"starred"`
+	ArchivedAt        *time.Time `json:"archived_at,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
+
+// DefaultMaxRunningThreads is how many threads a project runs at once until
+// its owner changes it.
+const DefaultMaxRunningThreads = 4
 
 // Project types.
 const (
@@ -102,6 +111,9 @@ type Thread struct {
 	Status string `gorm:"size:20;index" json:"status"`
 	// WaitReason says why a waiting thread needs the user.
 	WaitReason string `gorm:"type:text" json:"wait_reason,omitempty"`
+	// Queued is true while a working thread's turn waits for a free slot under
+	// its project's running limit; it has not started yet.
+	Queued bool `json:"queued,omitempty"`
 	// Origin is coordinator, suggestion or user.
 	Origin     string `gorm:"size:20" json:"origin"`
 	RepoPath   string `gorm:"type:text" json:"repo_path,omitempty"`

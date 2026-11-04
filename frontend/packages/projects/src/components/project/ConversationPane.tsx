@@ -53,8 +53,8 @@ export function ThreadCard({ thread, onOpen }: { thread: Thread; onOpen: (id: st
                     '&:focus-visible': { boxShadow: (th) => `inset 0 0 0 2px ${th.palette.primary.main}` },
                 }}
             >
-                <Box component="span" title={t(`thread.status.${thread.status}`)} sx={{ display: 'inline-flex', flexShrink: 0 }}>
-                    <ThreadStateMark status={thread.status} />
+                <Box component="span" title={t(`thread.status.${thread.status === 'working' && thread.queued ? 'queued' : thread.status}`)} sx={{ display: 'inline-flex', flexShrink: 0 }}>
+                    <ThreadStateMark status={thread.status} queued={thread.queued} />
                 </Box>
                 <Typography noWrap sx={{ flex: { xs: 1, sm: '0 1 auto' }, minWidth: 0, maxWidth: { sm: '45%' }, fontSize: fontSizes.base, fontWeight: 600, color: 'text.primary' }}>{thread.title}</Typography>
                 {/* On a phone the line keeps the title; the thread holds the rest. */}

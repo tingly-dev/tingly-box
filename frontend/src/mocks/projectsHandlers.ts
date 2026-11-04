@@ -16,7 +16,7 @@ type Proj = {
     name: string; goal: string; instructions: string; paused: boolean; starred: boolean
     repos: { path: string; base_branch: string }[]; coordinator_model: string; thread_model: string
     coordinator_effort: string; thread_effort: string
-    thread_permission_mode: string; created_at: string; updated_at: string; archived_at?: string
+    thread_permission_mode: string; max_running_threads: number; created_at: string; updated_at: string; archived_at?: string
 }
 
 const projects: Proj[] = [
@@ -24,19 +24,19 @@ const projects: Proj[] = [
         id: 'p-latency', type: 'project', main_thread_id: 'main-p-latency', name: 'Payments API latency', goal: 'Get p99 of /charge under 300 ms without dropping retries.',
         instructions: 'Keep changes behind the existing feature flags.', paused: false, starred: true,
         repos: [repo('/Users/me/code/payments-api'), repo('/Users/me/code/payments-sdk')],
-        coordinator_model: 'sonnet', thread_model: 'claude-haiku-4-5', coordinator_effort: 'medium', thread_effort: 'high', thread_permission_mode: 'acceptEdits',
+        coordinator_model: 'sonnet', thread_model: 'claude-haiku-4-5', coordinator_effort: 'medium', thread_effort: 'high', thread_permission_mode: 'acceptEdits', max_running_threads: 4,
         created_at: ago(60 * 26), updated_at: ago(4),
     },
     {
         id: 'p-docs', type: 'project', main_thread_id: 'main-p-docs', name: 'Docs refresh', goal: 'Every public endpoint documented with a runnable example.',
         instructions: '', paused: false, starred: false, repos: [repo('/Users/me/code/website')],
-        coordinator_model: 'claude-sonnet-4-5', thread_model: 'claude-haiku-4-5', coordinator_effort: '', thread_effort: '', thread_permission_mode: 'default',
+        coordinator_model: 'claude-sonnet-4-5', thread_model: 'claude-haiku-4-5', coordinator_effort: '', thread_effort: '', thread_permission_mode: 'default', max_running_threads: 4,
         created_at: ago(60 * 24 * 5), updated_at: ago(60 * 3),
     },
     {
         id: 'p-migrate', type: 'project', main_thread_id: 'main-p-migrate', name: 'Postgres 17 migration', goal: 'Move every service off Postgres 13 with zero downtime.',
         instructions: '', paused: true, starred: false, repos: [repo('/Users/me/code/infra')],
-        coordinator_model: 'claude-sonnet-4-5', thread_model: 'claude-sonnet-4-5', coordinator_effort: '', thread_effort: 'max', thread_permission_mode: 'default',
+        coordinator_model: 'claude-sonnet-4-5', thread_model: 'claude-sonnet-4-5', coordinator_effort: '', thread_effort: 'max', thread_permission_mode: 'default', max_running_threads: 2,
         created_at: ago(60 * 24 * 12), updated_at: ago(60 * 24 * 2),
     },
 ]
@@ -44,7 +44,7 @@ const projects: Proj[] = [
 // Working folders: projects of type folder (no goal, memory or main thread).
 const folderProject = (id: string, path: string, min: number): Proj => ({
     id, type: 'folder', path, name: path.split('/').pop() ?? path, goal: '', instructions: '', paused: false, starred: false, repos: [],
-    coordinator_model: '', thread_model: '', coordinator_effort: '', thread_effort: '', thread_permission_mode: '', created_at: ago(60 * 24 * 3), updated_at: ago(min),
+    coordinator_model: '', thread_model: '', coordinator_effort: '', thread_effort: '', thread_permission_mode: '', max_running_threads: 0, created_at: ago(60 * 24 * 3), updated_at: ago(min),
 })
 projects.push(
     folderProject('f-notes', '/Users/me/code/notes-app', 2),
@@ -63,6 +63,8 @@ const threads = [
     thread({ id: 't-pool', title: 'Tune the DB connection pool', status: 'waiting', task: 'Profile /charge and size the connection pool for peak load.', wait_reason: 'Allow `go test ./... -run Bench` to run against staging?', turns: 9, input_tokens: 182_000, output_tokens: 9_400, commits_ahead: 1, files_changed: 2, updated_at: ago(4) }),
     thread({ id: 't-cache', title: 'Cache idempotency keys in Redis', status: 'ready', task: 'Move idempotency-key lookups from Postgres to Redis with a 24h TTL.', last_report: 'Lookups moved to Redis behind `IDEMPOTENCY_REDIS`. p99 for /charge drops from 410 ms to 260 ms in the load test. Tests pass.', turns: 14, input_tokens: 240_000, output_tokens: 15_100, commits_ahead: 3, files_changed: 6, updated_at: ago(18) }),
     thread({ id: 't-sdk', title: 'Retry budget in the SDK', status: 'working', task: 'Cap client retries with a token bucket so retries cannot amplify an outage.', repo_path: '/Users/me/code/payments-sdk', turns: 5, input_tokens: 64_000, output_tokens: 3_100, files_changed: 1, uncommitted: true, updated_at: ago(1) }),
+    // Over the project's limit: its turn waits for a free slot.
+    thread({ id: 't-queued', title: 'Audit logging for refunds', status: 'working', queued: true, task: 'Add audit log entries for every refund path.', updated_at: ago(0) }),
     thread({ id: 't-backoff', title: 'Pick a retry backoff', status: 'waiting', task: 'Choose how the SDK backs off between retries and wire it in.', repo_path: '/Users/me/code/payments-sdk', wait_reason: 'Which backoff should retries use?', turns: 3, input_tokens: 38_000, output_tokens: 1_900, updated_at: ago(2) }),
     thread({ id: 't-trace', title: 'Add tracing spans to /charge', status: 'resolved', task: 'Add OpenTelemetry spans around each downstream call in /charge.', turns: 7, input_tokens: 90_000, output_tokens: 6_200, commits_ahead: 2, files_changed: 4, merged_at: ago(60 * 20), resolved_at: ago(60 * 20), updated_at: ago(60 * 20) }),
 ]
@@ -406,7 +408,7 @@ export const projectsHandlers = [
         { id: 'sonnet', display_name: 'Claude Sonnet 4.5', provider_model: 'claude-sonnet-4-5', provider_name: 'anthropic-primary' },
         { id: 'claude-haiku-4-5', display_name: 'Claude Haiku 4.5' },
     ] })),
-    http.get('/api/v1/projects/runtime', () => HttpResponse.json({ cli_path: '/usr/local/bin/claude', base_url: 'http://localhost:12580/tingly/claude_code' })),
+    http.get('/api/v1/projects/runtime', () => HttpResponse.json({ cli_path: '/usr/local/bin/claude', base_url: 'http://localhost:12580/tingly/claude_code', max_running_threads_limit: 100 })),
     http.get('/api/v1/projects/:id', ({ params }) => {
         const p = find(params.id as string)
         if (!p) return notFound()

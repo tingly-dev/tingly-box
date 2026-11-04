@@ -73,9 +73,12 @@ type UpdateProjectRequest struct {
 	ThreadEffort         *string   `json:"thread_effort,omitempty" enum:",low,medium,high,max"`
 	ThreadPermissionMode *string   `json:"thread_permission_mode,omitempty" enum:"default,acceptEdits,auto,bypassPermissions"`
 	DisableWorktree      *bool     `json:"disable_worktree,omitempty"`
-	Starred              *bool     `json:"starred,omitempty"`
-	Paused               *bool     `json:"paused,omitempty"`
-	Archived             *bool     `json:"archived,omitempty"`
+	// MaxRunningThreads is how many threads of the project may run at once;
+	// the rest wait. 1..100; a new project starts at 4.
+	MaxRunningThreads *int  `json:"max_running_threads,omitempty"`
+	Starred           *bool `json:"starred,omitempty"`
+	Paused            *bool `json:"paused,omitempty"`
+	Archived          *bool `json:"archived,omitempty"`
 }
 
 // RecoverCoordinatorRequest resolves an interrupted input after reviewing its effects.
@@ -152,6 +155,8 @@ type ProjectRuntimeResponse struct {
 	// BaseURL is the gateway threads send model calls to; empty when
 	// Claude Code uses its own login.
 	BaseURL string `json:"base_url"`
+	// MaxRunningThreadsLimit is the most threads a project can be limited to.
+	MaxRunningThreadsLimit int `json:"max_running_threads_limit"`
 }
 
 // OKResponse acknowledges an action.
@@ -325,7 +330,7 @@ func (h *Handler) models(c *gin.Context) {
 
 func (h *Handler) runtime(c *gin.Context) {
 	env, _ := h.svc.Host.ThreadEnv(c.Request.Context())
-	resp := ProjectRuntimeResponse{CLIPath: rt.ClaudeCLIPath()}
+	resp := ProjectRuntimeResponse{CLIPath: rt.ClaudeCLIPath(), MaxRunningThreadsLimit: rt.MaxRunningThreadsLimit}
 	for _, kv := range env {
 		if v, ok := strings.CutPrefix(kv, "ANTHROPIC_BASE_URL="); ok {
 			resp.BaseURL = v
@@ -406,7 +411,7 @@ func (h *Handler) update(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if p.Type == db.ProjectFolder && (req.Repos != nil || req.ThreadModel != nil || req.ThreadEffort != nil || req.ThreadProfile != nil || req.CoordinatorProfile != nil || req.DisableWorktree != nil) {
+	if p.Type == db.ProjectFolder && (req.Repos != nil || req.ThreadModel != nil || req.ThreadEffort != nil || req.ThreadProfile != nil || req.CoordinatorProfile != nil || req.DisableWorktree != nil || req.MaxRunningThreads != nil) {
 		apierr.BadRequest(c, "repository and project thread settings do not apply to a folder")
 		return
 	}
@@ -495,6 +500,13 @@ func (h *Handler) update(c *gin.Context) {
 	}
 	if req.DisableWorktree != nil {
 		p.DisableWorktree = *req.DisableWorktree
+	}
+	if req.MaxRunningThreads != nil {
+		if !rt.ValidMaxRunningThreads(*req.MaxRunningThreads) {
+			apierr.BadRequest(c, fmt.Sprintf("max_running_threads must be a whole number from 1 to %d", rt.MaxRunningThreadsLimit))
+			return
+		}
+		p.MaxRunningThreads = *req.MaxRunningThreads
 	}
 	if req.Starred != nil {
 		p.Starred = *req.Starred

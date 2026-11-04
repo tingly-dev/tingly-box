@@ -201,9 +201,10 @@ export const zh: Dict<typeof en> = {
         group: { waiting: '等你处理', failed: '失败', ready: '可以 review', working: '进行中', idle: '空闲', resolved: '已解决' },
     },
     thread: {
-        status: { waiting: '等你处理', ready: '可以 review', working: '进行中', idle: '空闲', resolved: '已解决', failed: '失败' },
+        status: { waiting: '等你处理', ready: '可以 review', working: '进行中', queued: '排队中', idle: '空闲', resolved: '已解决', failed: '失败' },
         commits_one: '{{count}} 个提交', commits_other: '{{count}} 个提交',
         files_one: '{{count}} 个文件', files_other: '{{count}} 个文件',
+        queuedSubtitle: '等待空闲名额——其他线程结束后自动开始',
         noRepo: '无仓库——文件放入文件库', fromBase: '基于 {{base}}', uncommitted: '有未提交的改动',
         copyCd: '复制进入 worktree 的 cd 命令', back: '返回 Overview',
         editTitle: '重命名线程',
@@ -235,6 +236,9 @@ export const zh: Dict<typeof en> = {
         origin: { upload: '上传', output: '线程产出' },
     },
     projectSettings: {
+        maxRunning: '同时运行的线程数',
+        maxRunningHelp: '新项目默认为 4。超出的线程会排队，有线程结束后立即开始。调低该值不会停止正在运行的线程。',
+        maxRunningInvalid: '请输入 1 到 {{max}} 的整数。',
         worktree: '为每个线程使用 worktree',
         worktreeHelp: '关闭后，新线程共享仓库目录和当前分支，彼此可以看到对方的更改。已有线程保留原工作目录。',
         title: '项目设置', tabGeneral: '通用', tabMemory: '记忆', tabEnvironment: '环境', tabUsage: '用量',

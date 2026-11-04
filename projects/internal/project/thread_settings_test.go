@@ -16,16 +16,24 @@ import (
 
 func TestWorkerLaunchReadsDefaultsAndOverridesAfterWaitingForCapacity(t *testing.T) {
 	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
-	slot := f.threads.slot(f.project.ID)
-	for range MaxRunningPerProject {
-		slot <- struct{}{}
+	const limit = 2
+	f.project.MaxRunningThreads = limit
+	require.NoError(t, f.store.SaveProject(f.project))
+	slot := f.threads.slot(f.project)
+	for range limit {
+		require.NoError(t, slot.acquire(context.Background(), nil))
 	}
 	// Cleanup must release blocked launches even if an assertion fails.
-	defer func() {
-		for len(slot) > 0 {
-			<-slot
+	released := false
+	release := func() {
+		if !released {
+			released = true
+			for range limit {
+				slot.release()
+			}
 		}
-	}()
+	}
+	defer release()
 	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "queued"})
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
@@ -41,7 +49,7 @@ func TestWorkerLaunchReadsDefaultsAndOverridesAfterWaitingForCapacity(t *testing
 	require.NoError(t, err)
 	p.ThreadModel, p.ThreadPermissionMode = "fresh-default", "auto"
 	require.NoError(t, f.store.SaveProject(p))
-	<-slot
+	release()
 	f.report(t)
 	waitStatus(t, f.store, th.ID, db.ThreadIdle)
 	launches := f.agent.Launches()

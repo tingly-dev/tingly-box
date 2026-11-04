@@ -33,12 +33,13 @@ const dot = { width: 8, height: 8, borderRadius: '50%', boxSizing: 'border-box' 
 /** The mark of a state, in a 14px slot: a filled dot for what needs the user
  * (amber) or failed (red), a spinner for work, a ring for ready, a check for
  * done. */
-export function ThreadStateMark({ status }: { status: string }) {
+export function ThreadStateMark({ status, queued }: { status: string; queued?: boolean }) {
     const sx = { fontSize: 14 };
     let mark;
     switch (status) {
         case 'working':
-            mark = <Spinner sx={{ ...sx, animation: 'spin 1s linear infinite' }} />;
+            // A queued turn has not started: a still dashed ring, not the spinner.
+            mark = queued ? <CircleDashed sx={sx} /> : <Spinner sx={{ ...sx, animation: 'spin 1s linear infinite' }} />;
             break;
         case 'ready':
             mark = <Box component="span" sx={{ ...dot, border: '1.5px solid currentColor' }} />;
@@ -63,17 +64,18 @@ export function ThreadStateMark({ status }: { status: string }) {
 /** One state, one look, wherever a thread's status shows: its mark (the only
  * coloured part) and its word unless `compact` (the word then sits in the
  * title attribute). */
-export function ThreadState({ status, compact }: { status: string; compact?: boolean }) {
+export function ThreadState({ status, compact, queued }: { status: string; compact?: boolean; queued?: boolean }) {
     const { t } = useTranslation('projects');
-    const word = t(`thread.status.${status}`);
+    const isQueued = status === 'working' && !!queued;
+    const word = t(`thread.status.${isQueued ? 'queued' : status}`);
     return (
         <Box
             component="span"
-            data-status={status}
+            data-status={isQueued ? 'queued' : status}
             title={compact ? word : undefined}
             sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, flexShrink: 0, fontSize: fontSizes.sm, fontWeight: 500, whiteSpace: 'nowrap', color: status === 'waiting' ? 'text.primary' : 'text.secondary' }}
         >
-            <ThreadStateMark status={status} />
+            <ThreadStateMark status={status} queued={isQueued} />
             {!compact && word}
         </Box>
     );
@@ -99,6 +101,7 @@ export function InlineCode({ text }: { text: string }) {
 export function ThreadSubtitle({ thread }: { thread: Thread }) {
     const { t } = useTranslation('projects');
     if (needsUser(thread.status) && thread.wait_reason) return <InlineCode text={thread.wait_reason} />;
+    if (thread.status === 'working' && thread.queued) return <>{t('thread.queuedSubtitle')}</>;
     const report = (thread.last_report || '').split('\n').find((l) => l.trim() !== '');
     if (report) return <InlineCode text={report.replace(/^#+\s*/, '')} />;
     if (thread.branch) return <>{thread.branch}</>;

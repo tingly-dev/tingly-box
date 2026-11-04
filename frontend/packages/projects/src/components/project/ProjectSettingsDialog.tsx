@@ -18,6 +18,8 @@ import { radius } from '@tingly/ui/theme/radius';
 export type SettingsTab = 'general' | 'memory' | 'environment' | 'usage';
 
 const MAX_INSTRUCTIONS = 16000;
+// Until the server reports its limit (/projects/runtime).
+const MAX_RUNNING_FALLBACK = 100;
 const mono = { fontFamily: fontMono } as const;
 
 type Patch = NonNullable<paths['/api/v1/projects/{id}']['patch']['requestBody']>['content']['application/json'];
@@ -49,7 +51,14 @@ function General({ project, patch }: { project: Project; patch: (p: Patch) => Pr
     const [threadModel, setThreadModel] = useState(project.thread_model);
     const [mode, setMode] = useState<Mode>((project.thread_permission_mode || 'acceptEdits') as Mode);
     const [disableWorktree, setDisableWorktree] = useState(!!project.disable_worktree);
-    const dirty = disableWorktree !== !!project.disable_worktree || name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model || mode !== (project.thread_permission_mode || 'acceptEdits');
+    const [maxRunning, setMaxRunning] = useState(String(project.max_running_threads));
+    const [maxLimit, setMaxLimit] = useState(MAX_RUNNING_FALLBACK);
+    useEffect(() => {
+        unwrap(api.GET('/api/v1/projects/runtime')).then((r) => setMaxLimit(r.max_running_threads_limit)).catch(() => {});
+    }, []);
+    const runningValue = /^\d+$/.test(maxRunning.trim()) ? Number(maxRunning) : NaN;
+    const runningInvalid = !(runningValue >= 1 && runningValue <= maxLimit);
+    const dirty = (!runningInvalid && runningValue !== project.max_running_threads) || disableWorktree !== !!project.disable_worktree || name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model || mode !== (project.thread_permission_mode || 'acceptEdits');
 
     return (
         <Stack spacing={2.5}>
@@ -62,12 +71,15 @@ function General({ project, patch }: { project: Project; patch: (p: Patch) => Pr
                     <MenuItem key={m} value={m}><Box component="span" sx={{ ...mono, fontSize: fontSizes.base, mr: 1 }}>{m}</Box>{t(`projectSettings.mode.${m}`)}</MenuItem>
                 ))}
             </TextField>
+            <TextField label={t('projectSettings.maxRunning')} value={maxRunning} onChange={(e) => setMaxRunning(e.target.value)} error={runningInvalid}
+                helperText={runningInvalid ? t('projectSettings.maxRunningInvalid', { max: maxLimit }) : t('projectSettings.maxRunningHelp')}
+                slotProps={{ htmlInput: { inputMode: 'numeric', 'aria-label': t('projectSettings.maxRunning') } }} />
             <Box>
                 <FormControlLabel control={<Switch checked={!disableWorktree} onChange={(e) => setDisableWorktree(!e.target.checked)} />} label={t('projectSettings.worktree')} />
                 <Typography variant="body2" color="text.secondary">{t('projectSettings.worktreeHelp')}</Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <Button variant="contained" disabled={!dirty || !name.trim()} onClick={() => void patch({ name, goal, coordinator_model: coord, thread_model: threadModel, thread_permission_mode: mode, disable_worktree: disableWorktree })}>{t('common.save')}</Button>
+                <Button variant="contained" disabled={!dirty || !name.trim() || runningInvalid} onClick={() => void patch({ name, goal, coordinator_model: coord, thread_model: threadModel, thread_permission_mode: mode, disable_worktree: disableWorktree, max_running_threads: runningValue })}>{t('common.save')}</Button>
             </Box>
             <Divider />
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
