@@ -136,6 +136,7 @@ export const en = {
     },
     project: {
         resizePane: 'Drag to resize. Double-click to reset.',
+        resizeBand: 'Drag to resize the thread list. Double-click to reset.',
         name: 'Name', namePlaceholder: 'e.g. Payments API latency', nameHelp: 'Scope it to one stream of work you will keep adding to.',
         goal: 'Goal (optional)', goalPlaceholder: 'e.g. Hold p95 API latency under 200 ms', goalHelp: 'One line. The coordinator works toward it.',
         repos: 'Repositories (optional)',
@@ -191,6 +192,7 @@ export const en = {
     },
     band: { collapse: 'Collapse', expand: 'Expand' },
     overview: {
+        view: { label: 'View', list: 'List', kanban: 'Kanban' },
         threads: 'Threads', threadsWaiting: 'Threads · {{count}} waiting', library: 'Library',
         noThreads: 'No threads yet. Send work in the conversation and they will appear here.',
         group: { waiting: 'Waiting on you', failed: 'Failed', ready: 'Ready for review', working: 'Working', idle: 'Idle', resolved: 'Resolved' },

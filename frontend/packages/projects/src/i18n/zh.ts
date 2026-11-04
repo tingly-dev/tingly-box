@@ -141,6 +141,7 @@ export const zh: Dict<typeof en> = {
     },
     project: {
         resizePane: '拖动调整宽度，双击恢复默认。',
+        resizeBand: '拖动调整线程列表高度，双击恢复默认。',
         name: '名称', namePlaceholder: '例如：支付 API 延迟', nameHelp: '限定为一条你会持续往里加任务的工作流。',
         goal: '目标（可选）', goalPlaceholder: '例如：把 API p95 延迟控制在 200 ms 以内', goalHelp: '一句话，协调者会朝它推进。',
         repos: '仓库（可选）',
@@ -196,6 +197,7 @@ export const zh: Dict<typeof en> = {
     },
     band: { collapse: '折起', expand: '展开' },
     overview: {
+        view: { label: '视图', list: '列表', kanban: '看板' },
         threads: '线程', threadsWaiting: '线程 · {{count}} 个等你处理', library: '文件库',
         noThreads: '还没有线程。在对话里发送工作，线程会出现在这里。',
         group: { waiting: '等你处理', failed: '失败', ready: '可以 review', working: '进行中', idle: '空闲', resolved: '已解决' },

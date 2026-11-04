@@ -19,6 +19,7 @@ import {
     IconGitMerge,
     IconHandStop,
     IconHistoryToggle,
+    IconLayoutKanban,
     IconLayoutSidebarLeftCollapse,
     IconLayoutSidebarLeftExpand,
     IconLayoutSidebarRight,
@@ -74,3 +75,4 @@ export const CircleDashed = tablerMui(IconCircleDashed);
 export const FloatWindow = tablerMui(IconPictureInPictureOn);
 export const Minimize = tablerMui(IconMinus);
 export const LayoutIcon = tablerMui(IconLayout2);
+export const Kanban = tablerMui(IconLayoutKanban);
