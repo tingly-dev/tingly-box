@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -108,6 +109,13 @@ type WriteMemoryRequest struct {
 type LibraryResponse struct {
 	Dir   string           `json:"dir"`
 	Files []rt.LibraryFile `json:"files"`
+}
+
+// LibraryTreeResponse lists one directory of the library.
+type LibraryTreeResponse struct {
+	Dir     string            `json:"dir"`
+	Path    string            `json:"path"`
+	Entries []rt.LibraryEntry `json:"entries"`
 }
 
 // UsageResponse is token use by model and by thread.
@@ -240,6 +248,10 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.GET("/projects/:id/library", h.listLibrary, tag,
 		swagger.WithDescription("List library files (uploads and thread outputs)"),
 		swagger.WithResponseModel(LibraryResponse{}))
+	api.GET("/projects/:id/library/tree", h.libraryTree, tag,
+		swagger.WithDescription("List one directory level of the library (folders first); expand a folder by asking for its path"),
+		swagger.WithQuery("path", "string", "Library-relative directory; empty is the library root"),
+		swagger.WithResponseModel(LibraryTreeResponse{}))
 	api.POST("/projects/:id/library", h.uploadLibrary, tag,
 		swagger.WithDescription("Upload files (multipart field \"files\") to the library"),
 		swagger.WithResponseModel(LibraryResponse{}))
@@ -641,6 +653,27 @@ func (h *Handler) listLibrary(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, LibraryResponse{Dir: h.svc.Layout.LibraryDir(p.ID), Files: files})
+}
+
+func (h *Handler) libraryTree(c *gin.Context) {
+	p, ok := h.project(c)
+	if !ok {
+		return
+	}
+	rel := c.Query("path")
+	entries, err := h.svc.Layout.ListLibraryDir(p.ID, rel)
+	switch {
+	case errors.Is(err, rt.ErrInvalidLibraryPath), errors.Is(err, rt.ErrNotDirectory):
+		apierr.BadRequest(c, err.Error())
+		return
+	case errors.Is(err, fs.ErrNotExist):
+		apierr.Message(c, http.StatusNotFound, "folder not found")
+		return
+	case err != nil:
+		apierr.Message(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, LibraryTreeResponse{Dir: h.svc.Layout.LibraryDir(p.ID), Path: strings.Trim(rel, "/"), Entries: entries})
 }
 
 // maxUpload caps one uploaded library file.

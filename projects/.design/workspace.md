@@ -87,7 +87,7 @@
 ├── memory/                  项目记忆；autoMemoryDirectory 指向这里
 ├── library/uploads/         上传（项目与文件夹项目一致）
 ├── library/outputs/<slug>/  无仓库线程的产出
-├── library/.tmp/<thread-id>/ 线程的 TMPDIR（Library 页不显示，resolve 时清理）
+├── library/.tmp/<thread-id>/ 线程的 TMPDIR（Library 页不显示，resolve 时清理；Library 树见 library-tree.md）
 └── threads/<id>.settings.json
 
 <repo>/.claude/worktrees/<slug>-<id6>/   新线程的 cwd（有仓库）

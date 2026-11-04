@@ -297,3 +297,104 @@ func (l Layout) LibraryPath(projectID, rel string) (string, error) {
 	}
 	return p, nil
 }
+
+var (
+	// ErrInvalidLibraryPath is returned for a path outside the library or into a hidden directory.
+	ErrInvalidLibraryPath = errors.New("invalid library path")
+	// ErrNotDirectory is returned when a listing is asked of a file.
+	ErrNotDirectory = errors.New("not a directory")
+)
+
+// LibraryEntry is one file or folder directly inside a library directory.
+type LibraryEntry struct {
+	Name string `json:"name"`
+	// Path is relative to the library root, with forward slashes.
+	Path string `json:"path"`
+	// Kind is "dir" or "file".
+	Kind      string    `json:"kind"`
+	Size      int64     `json:"size"`
+	UpdatedAt time.Time `json:"updated_at"`
+	// Origin is "upload" or "output" (under outputs/, written by a thread).
+	Origin string `json:"origin"`
+}
+
+// ListLibraryDir lists one level of the library: rel is a library-relative
+// directory ("" is the root). Folders come first, then files, each by name.
+// Hidden (dot) entries, such as the threads' .tmp, and symlinks are left out,
+// and a hidden or escaping rel is refused, so the tree never leads outside the
+// library or into scratch space. A library that does not exist yet is empty.
+func (l Layout) ListLibraryDir(projectID, rel string) ([]LibraryEntry, error) {
+	root := l.LibraryDir(projectID)
+	rel = strings.Trim(filepath.ToSlash(rel), "/")
+	dir := root
+	if rel != "" {
+		for _, part := range strings.Split(rel, "/") {
+			if part == "" || part == "." || part == ".." || strings.HasPrefix(part, ".") {
+				return nil, fmt.Errorf("%w %q", ErrInvalidLibraryPath, rel)
+			}
+		}
+		p, err := l.LibraryPath(projectID, rel)
+		if err != nil {
+			return nil, fmt.Errorf("%w %q", ErrInvalidLibraryPath, rel)
+		}
+		dir = p
+	}
+	info, err := os.Lstat(dir)
+	if err != nil {
+		if rel == "" && errors.Is(err, fs.ErrNotExist) {
+			return []LibraryEntry{}, nil
+		}
+		return nil, err
+	}
+	if !info.IsDir() {
+		if info.Mode()&fs.ModeSymlink != 0 {
+			return nil, fmt.Errorf("%w %q", ErrInvalidLibraryPath, rel)
+		}
+		return nil, fmt.Errorf("%w: %q", ErrNotDirectory, rel)
+	}
+	// An ancestor symlink would also lead out of the library.
+	if real, err := filepath.EvalSymlinks(dir); err != nil {
+		return nil, err
+	} else if realRoot, err := filepath.EvalSymlinks(root); err != nil {
+		return nil, err
+	} else if r, err := filepath.Rel(realRoot, real); err != nil || r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
+		return nil, fmt.Errorf("%w %q", ErrInvalidLibraryPath, rel)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	out := []LibraryEntry{}
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".") || e.Type()&fs.ModeSymlink != 0 {
+			continue
+		}
+		fi, err := e.Info()
+		if err != nil {
+			continue
+		}
+		p := e.Name()
+		if rel != "" {
+			p = rel + "/" + p
+		}
+		entry := LibraryEntry{Name: e.Name(), Path: p, Kind: "file", UpdatedAt: fi.ModTime(), Origin: "upload"}
+		if e.IsDir() {
+			entry.Kind = "dir"
+		} else if fi.Mode().IsRegular() {
+			entry.Size = fi.Size()
+		} else {
+			continue
+		}
+		if p == "outputs" || strings.HasPrefix(p, "outputs/") {
+			entry.Origin = "output"
+		}
+		out = append(out, entry)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if (out[i].Kind == "dir") != (out[j].Kind == "dir") {
+			return out[i].Kind == "dir"
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out, nil
+}

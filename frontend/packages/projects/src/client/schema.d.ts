@@ -440,6 +440,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/library/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List one directory level of the library (folders first); expand a folder by asking for its path
+         * @description List one directory level of the library (folders first); expand a folder by asking for its path
+         */
+        get: operations["apiV1ProjectsIdLibraryTreeGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/memory": {
         parameters: {
             query?: never;
@@ -1424,6 +1444,26 @@ export interface components {
             /** @description Field root */
             root?: string;
         };
+        LibraryEntry: {
+            /** @description Field kind */
+            kind: string;
+            /** @description Field name */
+            name: string;
+            /** @description Field origin */
+            origin: string;
+            /** @description Field path */
+            path: string;
+            /**
+             * Format: int64
+             * @description Field size
+             */
+            size: number;
+            /**
+             * Format: date-time
+             * @description Field updated_at
+             */
+            updated_at: string;
+        };
         LibraryFile: {
             /** @description Field origin */
             origin: string;
@@ -1445,6 +1485,14 @@ export interface components {
             dir: string;
             /** @description Field files */
             files: components["schemas"]["LibraryFile"][];
+        };
+        LibraryTreeResponse: {
+            /** @description Field dir */
+            dir: string;
+            /** @description Field entries */
+            entries: components["schemas"]["LibraryEntry"][];
+            /** @description Field path */
+            path: string;
         };
         MemoryFile: {
             /** @description Field name */
@@ -2871,6 +2919,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OKResponse"];
+                };
+            };
+        };
+    };
+    apiV1ProjectsIdLibraryTreeGet: {
+        parameters: {
+            query?: {
+                /** @description Library-relative directory; empty is the library root */
+                path?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryTreeResponse"];
                 };
             };
         };

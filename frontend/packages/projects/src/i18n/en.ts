@@ -227,10 +227,11 @@ export const en = {
             now: 'Right away', nowHelp: 'The thread goes with the suggestion at once. You can still correct it with a message.',
         },
     },
+    tree: { loading: 'Loading…', emptyFolder: 'Empty folder', retry: 'Try again', failed: 'Could not load this folder.' },
     library: {
         intro: 'Files you add are readable by every thread. Threads without a repository deliver their files here.',
         add: 'Add files', empty: 'No files yet.', download: 'Download', copyPath: 'Copy folder path',
-        origin: { upload: 'added', output: 'from a thread' },
+        tree: 'Library files',
     },
     projectSettings: {
         maxRunning: 'Threads running at once',
