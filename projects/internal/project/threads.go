@@ -562,6 +562,7 @@ func (m *Threads) grantProjectAccess(doc map[string]any, p *db.Project, t *db.Th
 	}
 	addDirectories(doc, dirs...)
 	grantLibrary(doc, m.layout.LibraryDir(p.ID))
+	grantAutoGit(doc, p, t)
 }
 
 // Send gives a Claude Code thread a message; src says who sent it. A busy
@@ -705,6 +706,10 @@ func (m *Threads) turnLaunch(ctx context.Context, threadID string, t *db.Thread,
 	if !folder {
 		opts.AppendSystemPrompt = threadSystemPrompt(m.layout, p, t)
 		if settings == "" {
+			// The permission mode may have changed since Start wrote the file.
+			if err := m.writeSettings(p, t); err != nil {
+				logrus.WithError(err).WithField("thread_id", t.ID).Warn("projects: cannot refresh thread settings")
+			}
 			opts.SettingsPath = m.layout.SettingsFile(p.ID, t.ID)
 		}
 	} else if path, err := m.sessionSettings(p, t, settings); err == nil {
