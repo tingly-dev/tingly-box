@@ -1673,8 +1673,14 @@ export interface components {
             updated_at: string;
         };
         ProjectDetailResponse: {
+            coordinator?: components["schemas"]["Thread"];
             /** @description Field coordinator_busy */
             coordinator_busy: boolean;
+            /**
+             * Format: int64
+             * @description Field coordinator_queued
+             */
+            coordinator_queued: number;
             /** @description Field coordinator_recovery */
             coordinator_recovery?: string;
             counts: components["schemas"]["ThreadCounts"];
@@ -1929,9 +1935,29 @@ export interface components {
             branch?: string;
             /**
              * Format: int64
+             * @description Field cache_read_tokens
+             */
+            cache_read_tokens: number;
+            /**
+             * Format: int64
+             * @description Field cache_write_tokens
+             */
+            cache_write_tokens: number;
+            /**
+             * Format: int64
              * @description Field commits_ahead
              */
             commits_ahead: number;
+            /**
+             * Format: int64
+             * @description Field context_tokens
+             */
+            context_tokens: number;
+            /**
+             * Format: int64
+             * @description Field context_window
+             */
+            context_window: number;
             /**
              * Format: date-time
              * @description Field created_at
@@ -1957,6 +1983,16 @@ export interface components {
             input_tokens: number;
             /** @description Field last_report */
             last_report?: string;
+            /**
+             * Format: date-time
+             * @description Field last_turn_at
+             */
+            last_turn_at?: string;
+            /**
+             * Format: int64
+             * @description Field last_turn_ms
+             */
+            last_turn_ms: number;
             /**
              * Format: date-time
              * @description Field merged_at

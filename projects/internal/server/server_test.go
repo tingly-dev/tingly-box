@@ -298,6 +298,40 @@ func TestCoordinatorRecoveryEndpoint(t *testing.T) {
 	require.Empty(t, after.Recovery)
 }
 
+func TestProjectDetailCarriesTheCoordinatorStatus(t *testing.T) {
+	store, c := newServer(t, commitAgents())
+	var p db.Project
+	require.Equal(t, 201, c.do("POST", "/projects", map[string]any{"name": "Status"}, &p))
+	main, err := store.GetThread(p.MainThreadID)
+	require.NoError(t, err)
+	main.Turns, main.ReportedModel = 3, "cc-model"
+	main.AddUsage(db.Usage{Input: 900, Output: 50, CacheRead: 700, ContextTokens: 800, ContextWindow: 200000, DurationMS: 2500}, time.Now().UTC())
+	require.NoError(t, store.SaveThread(main))
+	require.NoError(t, store.AddCoordinatorInput(p.ID, &db.ThreadEvent{ThreadID: p.MainThreadID, Kind: db.EvUser, Content: "one"}))
+	require.NoError(t, store.AddCoordinatorInput(p.ID, &db.ThreadEvent{ThreadID: p.MainThreadID, Kind: db.EvUser, Content: "two"}))
+	var got struct {
+		Coordinator struct {
+			Turns         int    `json:"turns"`
+			InputTokens   int64  `json:"input_tokens"`
+			CacheRead     int64  `json:"cache_read_tokens"`
+			ContextTokens int64  `json:"context_tokens"`
+			ContextWindow int    `json:"context_window"`
+			LastTurnMS    int64  `json:"last_turn_ms"`
+			ReportedModel string `json:"reported_model"`
+		} `json:"coordinator"`
+		Queued int `json:"coordinator_queued"`
+	}
+	require.Equal(t, 200, c.do("GET", "/projects/"+p.ID, nil, &got))
+	require.Equal(t, 3, got.Coordinator.Turns)
+	require.EqualValues(t, 900, got.Coordinator.InputTokens)
+	require.EqualValues(t, 700, got.Coordinator.CacheRead)
+	require.EqualValues(t, 800, got.Coordinator.ContextTokens)
+	require.Equal(t, 200000, got.Coordinator.ContextWindow)
+	require.EqualValues(t, 2500, got.Coordinator.LastTurnMS)
+	require.Equal(t, "cc-model", got.Coordinator.ReportedModel)
+	require.Equal(t, 2, got.Queued)
+}
+
 func TestProjectEndToEnd(t *testing.T) {
 	fake := &fakeAnthropic{reply: func(body map[string]any) (string, string, any) {
 		msgs, _ := body["messages"].([]any)

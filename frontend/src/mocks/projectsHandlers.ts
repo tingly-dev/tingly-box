@@ -52,21 +52,34 @@ projects.push(
     folderProject('f-scratch', '/Users/me/scratch', 60 * 30),
 )
 
+// What a thread's turns spent, derived from its turn count and tokens so every mock thread carries a plausible status.
+const usageOf = (o: { turns?: unknown; input_tokens?: unknown; updated_at?: unknown }) => {
+    const turns = Number(o.turns ?? 0)
+    const input = Number(o.input_tokens ?? 0)
+    return {
+        cache_read_tokens: Math.round(input * 0.72), cache_write_tokens: Math.round(input * 0.04),
+        context_tokens: turns > 0 ? Math.min(188_000, 24_000 + turns * 11_000) : 0, context_window: 200_000,
+        last_turn_ms: turns > 0 ? 2_400 + turns * 1_300 : 0, last_turn_at: turns > 0 ? (o.updated_at as string) : undefined,
+    }
+}
+
 const thread = (o: Partial<Record<string, unknown>> & { id: string; title: string; status: string; task: string }) => ({
     project_id: 'p-latency', parent_id: 'main-p-latency', seq: 1, agent: 'claude-code', origin: 'coordinator', commits_ahead: 0, files_changed: 0, input_tokens: 0, output_tokens: 0,
     turns: 0, uncommitted: false, cwd: `/Users/me/.tingly-box/projects/p-latency/threads/${o.id}`,
     repo_path: '/Users/me/code/payments-api', base_branch: 'main', branch: `projects/${o.id}`,
-    model: 'claude-sonnet-4-5', reported_model: 'claude-sonnet-4-5', created_at: ago(90), updated_at: ago(5), ...o,
+    model: 'claude-sonnet-4-5', reported_model: 'claude-sonnet-4-5', created_at: ago(90), updated_at: ago(5), session_id: `${(o.id as string).length.toString(16).padStart(2, '0')}c9d5e7a-4b1e-4f7a-9d0e-5a2b7c3d8e9f`,
+    cache_read_tokens: 0, cache_write_tokens: 0, context_tokens: 0, context_window: 0, last_turn_ms: 0, ...o,
 })
+const threadWithUsage = (o: Parameters<typeof thread>[0]) => { const t = thread(o); return { ...t, ...usageOf(t), ...o } }
 
 const threads = [
-    thread({ id: 't-pool', title: 'Tune the DB connection pool', status: 'waiting', task: 'Profile /charge and size the connection pool for peak load.', wait_reason: 'Allow `go test ./... -run Bench` to run against staging?', turns: 9, input_tokens: 182_000, output_tokens: 9_400, commits_ahead: 1, files_changed: 2, updated_at: ago(4) }),
-    thread({ id: 't-cache', title: 'Cache idempotency keys in Redis', status: 'ready', task: 'Move idempotency-key lookups from Postgres to Redis with a 24h TTL.', last_report: 'Lookups moved to Redis behind `IDEMPOTENCY_REDIS`. p99 for /charge drops from 410 ms to 260 ms in the load test. Tests pass.', turns: 14, input_tokens: 240_000, output_tokens: 15_100, commits_ahead: 3, files_changed: 6, updated_at: ago(18) }),
-    thread({ id: 't-sdk', title: 'Retry budget in the SDK', status: 'working', task: 'Cap client retries with a token bucket so retries cannot amplify an outage.', repo_path: '/Users/me/code/payments-sdk', turns: 5, input_tokens: 64_000, output_tokens: 3_100, files_changed: 1, uncommitted: true, updated_at: ago(1) }),
+    threadWithUsage({ id: 't-pool', title: 'Tune the DB connection pool', status: 'waiting', task: 'Profile /charge and size the connection pool for peak load.', wait_reason: 'Allow `go test ./... -run Bench` to run against staging?', turns: 9, input_tokens: 182_000, output_tokens: 9_400, commits_ahead: 1, files_changed: 2, updated_at: ago(4) }),
+    threadWithUsage({ id: 't-cache', title: 'Cache idempotency keys in Redis', status: 'ready', task: 'Move idempotency-key lookups from Postgres to Redis with a 24h TTL.', last_report: 'Lookups moved to Redis behind `IDEMPOTENCY_REDIS`. p99 for /charge drops from 410 ms to 260 ms in the load test. Tests pass.', turns: 14, input_tokens: 240_000, output_tokens: 15_100, commits_ahead: 3, files_changed: 6, updated_at: ago(18) }),
+    threadWithUsage({ id: 't-sdk', title: 'Retry budget in the SDK', status: 'working', task: 'Cap client retries with a token bucket so retries cannot amplify an outage.', repo_path: '/Users/me/code/payments-sdk', turns: 5, input_tokens: 64_000, output_tokens: 3_100, files_changed: 1, uncommitted: true, updated_at: ago(1) }),
     // Over the project's limit: its turn waits for a free slot.
-    thread({ id: 't-queued', title: 'Audit logging for refunds', status: 'working', queued: true, task: 'Add audit log entries for every refund path.', updated_at: ago(0) }),
-    thread({ id: 't-backoff', title: 'Pick a retry backoff', status: 'waiting', task: 'Choose how the SDK backs off between retries and wire it in.', repo_path: '/Users/me/code/payments-sdk', wait_reason: 'Which backoff should retries use?', turns: 3, input_tokens: 38_000, output_tokens: 1_900, updated_at: ago(2) }),
-    thread({ id: 't-trace', title: 'Add tracing spans to /charge', status: 'resolved', task: 'Add OpenTelemetry spans around each downstream call in /charge.', turns: 7, input_tokens: 90_000, output_tokens: 6_200, commits_ahead: 2, files_changed: 4, merged_at: ago(60 * 20), resolved_at: ago(60 * 20), updated_at: ago(60 * 20) }),
+    threadWithUsage({ id: 't-queued', title: 'Audit logging for refunds', status: 'working', queued: true, task: 'Add audit log entries for every refund path.', updated_at: ago(0) }),
+    threadWithUsage({ id: 't-backoff', title: 'Pick a retry backoff', status: 'waiting', task: 'Choose how the SDK backs off between retries and wire it in.', repo_path: '/Users/me/code/payments-sdk', wait_reason: 'Which backoff should retries use?', turns: 3, input_tokens: 38_000, output_tokens: 1_900, updated_at: ago(2) }),
+    threadWithUsage({ id: 't-trace', title: 'Add tracing spans to /charge', status: 'resolved', task: 'Add OpenTelemetry spans around each downstream call in /charge.', turns: 7, input_tokens: 90_000, output_tokens: 6_200, commits_ahead: 2, files_changed: 4, merged_at: ago(60 * 20), resolved_at: ago(60 * 20), updated_at: ago(60 * 20) }),
 ]
 
 // A thread's transcript: the coordinator's brief, then what the thread did.
@@ -197,15 +210,30 @@ const folderId = (cwd: string) => projects.find((p) => p.type === 'folder' && p.
 const session = (o: Partial<Record<string, unknown>> & { id: string; title: string; status: string; task: string; cwd: string }) => ({
     project_id: folderId(o.cwd), seq: 1, agent: 'claude-code', origin: 'user', permission_mode: '' as string | undefined, profile: '' as string | undefined, commits_ahead: 0, files_changed: 0, input_tokens: 0, output_tokens: 0, turns: 1,
     uncommitted: false, model: '' as string | undefined, repo_path: '', base_branch: '', branch: '', session_id: o.id,
-    created_at: ago(120), updated_at: ago(8), ...o,
+    created_at: ago(120), updated_at: ago(8),
+    cache_read_tokens: 0, cache_write_tokens: 0, context_tokens: 0, context_window: 0, last_turn_ms: 0, ...o,
 })
+const sessionWithUsage = (o: Parameters<typeof session>[0]) => { const t = session(o); return { ...t, ...usageOf(t), ...o } }
 
 const sessions = [
-    session({ id: 's-dark', title: 'Add a dark mode toggle', status: 'waiting', cwd: '/Users/me/code/notes-app', head_branch: 'main', task: 'Add a dark mode toggle to the settings page and remember it.', wait_reason: 'Approve: Run `npm test`', input_tokens: 48_000, output_tokens: 2_900, updated_at: ago(2) }),
-    session({ id: 's-links', title: 'Fix the broken links check', status: 'working', cwd: '/Users/me/code/website', head_branch: 'fix/link-anchors', task: 'The link checker fails on anchors. Fix it.', updated_at: ago(1) }),
-    session({ id: 's-readme', title: 'Rewrite the README intro', status: 'idle', cwd: '/Users/me/code/website', head_branch: 'main', task: 'Rewrite the README intro in plain language.', permission_mode: 'plan', input_tokens: 21_000, output_tokens: 1_500, updated_at: ago(50) }),
-    session({ id: 's-old', title: 'Rename the config keys', status: 'resolved', cwd: '/Users/me/scratch', task: 'Rename the config keys to snake_case.', resolved_at: ago(60 * 30), updated_at: ago(60 * 30) }),
+    sessionWithUsage({ id: 's-dark', title: 'Add a dark mode toggle', status: 'waiting', cwd: '/Users/me/code/notes-app', head_branch: 'main', task: 'Add a dark mode toggle to the settings page and remember it.', wait_reason: 'Approve: Run `npm test`', input_tokens: 48_000, output_tokens: 2_900, updated_at: ago(2) }),
+    sessionWithUsage({ id: 's-links', title: 'Fix the broken links check', status: 'working', cwd: '/Users/me/code/website', head_branch: 'fix/link-anchors', task: 'The link checker fails on anchors. Fix it.', updated_at: ago(1) }),
+    sessionWithUsage({ id: 's-readme', title: 'Rewrite the README intro', status: 'idle', cwd: '/Users/me/code/website', head_branch: 'main', task: 'Rewrite the README intro in plain language.', permission_mode: 'plan', input_tokens: 21_000, output_tokens: 1_500, updated_at: ago(50) }),
+    sessionWithUsage({ id: 's-old', title: 'Rename the config keys', status: 'resolved', cwd: '/Users/me/scratch', task: 'Rename the config keys to snake_case.', resolved_at: ago(60 * 30), updated_at: ago(60 * 30) }),
 ]
+
+// The project's main thread, with the coordinator session's own usage.
+const coordinatorOf = (p: Proj) => {
+    const turns = p.id === 'p-latency' ? 23 : 6
+    const input = p.id === 'p-latency' ? 1_240_000 : 210_000
+    const updated_at = ago(p.id === 'p-latency' ? 3 : 20)
+    return {
+        ...thread({ id: p.main_thread_id!, title: p.name, status: 'idle', task: '', turns, input_tokens: input, output_tokens: Math.round(input / 28), updated_at }),
+        ...usageOf({ turns, input_tokens: input, updated_at }), agent: 'llm', project_id: p.id, parent_id: '', branch: '', repo_path: '', cwd: `/Users/me/.tingly-project/projects/${p.id}`,
+        reported_model: 'claude-sonnet-4-5', session_id: '7d1f3a90-2c4e-4b7a-8e61-0a9b5c2d4f13',
+        context_tokens: p.id === 'p-latency' ? 112_000 : 41_000,
+    }
+}
 
 const stoppedTasks = new Set<string>()
 
@@ -424,7 +452,7 @@ export const projectsHandlers = [
     http.get('/api/v1/projects/:id', ({ params }) => {
         const p = find(params.id as string)
         if (!p) return notFound()
-        return HttpResponse.json({ project: p, threads: p.id === 'p-latency' ? threads : p.type === 'folder' ? sessions.filter((x) => x.project_id === p.id) : [], counts: counts(p.id), coordinator_busy: false })
+        return HttpResponse.json({ project: p, threads: p.id === 'p-latency' ? threads : p.type === 'folder' ? sessions.filter((x) => x.project_id === p.id) : [], counts: counts(p.id), coordinator_busy: p.id === 'p-docs', coordinator_queued: p.id === 'p-docs' ? 1 : 0, coordinator: p.type === 'folder' ? undefined : coordinatorOf(p) })
     }),
     http.patch('/api/v1/projects/:id', async ({ params, request }) => {
         const p = find(params.id as string)
@@ -455,7 +483,7 @@ export const projectsHandlers = [
         if (!f || f.type !== 'folder') return HttpResponse.json({ error: 'only a folder starts threads directly' }, { status: 400 })
         const body = (await request.json()) as { content: string; effort?: string; permission_mode?: string; profile?: string; model?: string }
         const s = session({ id: `s-${Date.now()}`, title: body.content.slice(0, 60), status: 'working', cwd: f.path!, task: body.content, permission_mode: body.permission_mode, effort_override: body.effort, profile: body.profile, model: body.model, turns: 0, updated_at: ago(0) })
-        sessions.unshift(s)
+        sessions.unshift({ ...s, ...usageOf(s), last_turn_at: undefined } as (typeof sessions)[number])
         return HttpResponse.json(s, { status: 201 })
     }),
     // The live event stream: an empty stream that ends at once (the page

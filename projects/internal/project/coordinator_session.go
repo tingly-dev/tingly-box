@@ -2,10 +2,12 @@ package project
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/tingly-dev/tingly-box/agentboot"
@@ -31,6 +33,7 @@ type coordinatorSessionRun struct {
 	userTriggered bool
 	live          *db.ThreadEvent
 	initErr       error
+	tally         turnTally
 }
 
 type coordinatorSessionStore struct{ sessions *coordinatorSessions }
@@ -61,6 +64,17 @@ func (s coordinatorSessionStore) Append(id string, entry engine.Entry) {
 				run.initErr = err
 				s.sessions.mu.Unlock()
 			}
+		}
+		return
+	}
+	if entry.Kind == engine.KindUsage {
+		var u engine.TurnUsage
+		if json.Unmarshal(entry.Payload, &u) == nil {
+			s.sessions.mu.Lock()
+			if run := s.sessions.runs[id]; run != nil {
+				run.tally.addUsage(u, entry.Parent == "")
+			}
+			s.sessions.mu.Unlock()
 		}
 		return
 	}
@@ -204,8 +218,11 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 	case <-ctx.Done():
 		s.engine.Stop(main.SessionID)
 		end = <-run.end
+		s.recordUsage(main, run)
 		return ctx.Err()
 	}
+	// A turn that failed or was stopped still spent tokens.
+	s.recordUsage(main, run)
 	if end.Err != nil {
 		return end.Err
 	}
@@ -239,4 +256,17 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 		}
 	}
 	return nil
+}
+
+// recordUsage adds the turn's tokens to the main thread: the coordinator's
+// status in the side panel reads them. A failed save only costs the numbers.
+func (s *coordinatorSessions) recordUsage(main *db.Thread, run *coordinatorSessionRun) {
+	s.mu.Lock()
+	tally := run.tally
+	s.mu.Unlock()
+	main.AddUsage(tally.usage, time.Now().UTC())
+	if tally.model != "" {
+		main.ReportedModel = tally.model
+	}
+	_ = s.c.store.SaveThreadUsage(main)
 }

@@ -2,54 +2,14 @@ import { useState, type ReactNode } from 'react';
 import { Box, Button, CircularProgress, Collapse, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { getReadableAccent } from '@tingly/ui/theme/status';
-import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { api, unwrap, type Thread } from '../../client';
 import { Cancel, CheckCircle, ChevronRight, DiffIcon, ExpandMore, PlayerStop, Robot, Terminal } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
-import { formatTokens } from '../../utils/format';
-import { readLocal, writeLocal } from '../../utils/storage';
 import { formatDuration, useNow } from '../workdir/BackgroundTasksPanel';
 import type { BackgroundTaskRow } from '../workdir/backgroundTasks';
-import { radius } from '@tingly/ui/theme/radius';
-
-/** How wide a thread panel must be to carry the rail beside the conversation. */
-export const RAIL_MIN_PANEL = 880;
-export const RAIL_WIDTH = 288;
-
-const mono = { fontFamily: fontMono, fontSize: fontSizes.sm } as const;
-
-/** A card of the rail: a title the user can fold, remembered per browser. */
-function RailCard({ id, title, aside, defaultOpen = true, children }: { id: string; title: string; aside?: ReactNode; defaultOpen?: boolean; children: ReactNode }) {
-    const key = `thread.rail.${id}`;
-    const [open, setOpen] = useState(() => (readLocal(key) ?? (defaultOpen ? '1' : '0')) === '1');
-    const toggle = () => {
-        writeLocal(key, open ? '0' : '1');
-        setOpen(!open);
-    };
-    return (
-        <Box component="section" aria-label={title} sx={{ border: 1, borderColor: 'divider', borderRadius: radius.card, bgcolor: 'background.paper' }}>
-            <Box role="button" tabIndex={0} aria-expanded={open} onClick={toggle} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
-                sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1.5, py: 1, cursor: 'pointer', userSelect: 'none' }}>
-                <Typography sx={{ fontSize: fontSizes.sm, fontWeight: 600, color: 'text.primary' }}>{title}</Typography>
-                {open ? <ExpandMore sx={{ fontSize: 16, color: 'text.secondary' }} /> : <ChevronRight sx={{ fontSize: 16, color: 'text.secondary' }} />}
-                <Box sx={{ flex: 1 }} />
-                {aside != null && <Typography component="span" sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{aside}</Typography>}
-            </Box>
-            <Collapse in={open}>
-                <Box sx={{ px: 1.5, pb: 1.25 }}>{children}</Box>
-            </Collapse>
-        </Box>
-    );
-}
-
-function Fact({ label, children }: { label: string; children: ReactNode }) {
-    return (
-        <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1.5, py: 0.25, fontSize: fontSizes.sm }}>
-            <Box component="span" sx={{ color: 'text.secondary', flexShrink: 0 }}>{label}</Box>
-            <Box component="span" sx={{ ...mono, color: 'text.primary', minWidth: 0, textAlign: 'right', overflowWrap: 'anywhere' }}>{children}</Box>
-        </Box>
-    );
-}
+import { ThreadStateMark } from './threadStatus';
+import { ContextMeter, Fact, InfoRailFrame, RailCard, TurnFacts, UsageCard, shortSession } from './infoRail';
 
 const isRunning = (task: BackgroundTaskRow) => task.status === 'running' && !task.ended;
 
@@ -127,16 +87,25 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
     const [showFinished, setShowFinished] = useState(false);
     const running = tasks.filter(isRunning);
     const finished = tasks.filter((x) => !isRunning(x));
-    const hasTokens = thread.input_tokens > 0 || thread.output_tokens > 0;
     const hasChanges = !!thread.branch || thread.commits_ahead > 0 || thread.uncommitted || !!thread.merged_at;
     const branch = thread.branch && (thread.base_branch ? `${thread.base_branch} → ${thread.branch}` : thread.branch);
     return (
-        <Box component="aside" aria-label={t('rail.title')} sx={{ width: RAIL_WIDTH, flexShrink: 0, borderLeft: 1, borderColor: 'divider', bgcolor: 'background.default', p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.25, overflowY: 'auto', minHeight: 0 }}>
+        <InfoRailFrame label={t('rail.title')}>
             {top != null && (
                 <RailCard id="sessions" title={t('session.sessions')}>
                     <Box sx={{ mx: -0.75, maxHeight: 320, overflowY: 'auto' }}>{top}</Box>
                 </RailCard>
             )}
+            <RailCard id="status" title={t('rail.status')}>
+                <Fact label={t('rail.state')}>
+                    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                        <ThreadStateMark status={thread.status} queued={thread.queued} />
+                        {t(`thread.status.${thread.status === 'working' && thread.queued ? 'queued' : thread.status}`)}
+                    </Box>
+                </Fact>
+                <ContextMeter thread={thread} />
+                <TurnFacts thread={thread} />
+            </RailCard>
             <RailCard id="env" title={t('rail.environment')}>
                 <Fact label={t('rail.folder')}>{thread.cwd}</Fact>
                 {branch && <Fact label={t('rail.branch')}>{branch}</Fact>}
@@ -144,13 +113,9 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
                 {folder && thread.model && <Fact label={t('threadSettings.configuredModel')}>{[thread.profile, thread.model].filter(Boolean).join(' · ')}</Fact>}
                 {thread.reported_model && <Fact label={t('threadSettings.lastModel')}>{thread.reported_model}</Fact>}
                 {permission && <Fact label={t('rail.permissions')}>{permission}</Fact>}
+                {thread.session_id && <Fact label={t('rail.session')} title={thread.session_id}>{shortSession(thread.session_id)}</Fact>}
             </RailCard>
-            {(hasTokens || thread.turns > 0) && (
-                <RailCard id="usage" title={t('rail.usage')} defaultOpen={false} aside={hasTokens ? `${formatTokens(thread.input_tokens + thread.output_tokens)}` : undefined}>
-                    {hasTokens && <Fact label={t('rail.tokens')}>{formatTokens(thread.input_tokens)} / {formatTokens(thread.output_tokens)}</Fact>}
-                    {thread.turns > 0 && <Fact label={t('rail.turns')}>{thread.turns}</Fact>}
-                </RailCard>
-            )}
+            <UsageCard thread={thread} />
             {hasChanges && (
                 <RailCard id="changes" title={t('rail.changes')}>
                     {thread.merged_at
@@ -181,6 +146,6 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
                     )}
                 </RailCard>
             )}
-        </Box>
+        </InfoRailFrame>
     );
 }

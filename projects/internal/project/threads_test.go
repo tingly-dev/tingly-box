@@ -120,6 +120,8 @@ func TestThreadCommitsBecomeReadyAndMerge(t *testing.T) {
 	assert.Equal(t, 1, got.CommitsAhead)
 	assert.Equal(t, 1, got.FilesChanged)
 	assert.EqualValues(t, 10, got.InputTokens)
+	assert.EqualValues(t, 6, got.ContextTokens, "context is the prompt size of the turn's last call")
+	assert.NotNil(t, got.LastTurnAt)
 	assert.Equal(t, "default-model", got.Model)
 
 	spec := f.agent.Launches()[0]

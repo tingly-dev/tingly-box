@@ -5,6 +5,7 @@
  * `@mui/icons-material` directly.
  */
 import {
+    IconActivity,
     IconArchiveOff,
     IconArrowUp,
     IconCircleDashed,
@@ -68,6 +69,7 @@ export const Branch = tablerMui(IconGitBranch);
 export const Merge = tablerMui(IconGitMerge);
 export const GitCommit = tablerMui(IconGitCommit);
 export const OverviewPane = tablerMui(IconLayoutSidebarRight);
+export const Activity = tablerMui(IconActivity);
 export const Question = tablerMui(IconMessageCircleQuestion);
 export const DiffIcon = tablerMui(IconFileDiff);
 export const Spinner = tablerMui(IconLoader2);

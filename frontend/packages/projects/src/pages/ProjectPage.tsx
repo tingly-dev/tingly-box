@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, IconButton, Link, MenuItem, Radio, RadioGroup, Select, Skeleton, Stack, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, IconButton, Link, MenuItem, Popover, Radio, RadioGroup, Select, Skeleton, Stack, Tooltip, Typography } from '@mui/material';
 import { Link as RouterLink, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, isFolder, type components, unwrap, type Project, type Thread, type ThreadEvent } from '../client';
@@ -14,11 +14,13 @@ import { ProjectSettingsDialog, type SettingsTab } from '../components/project/P
 import { ProjectImTags, useProjectIm } from '../components/im/ProjectImBindings';
 import { IM_BINDINGS_CHANGED } from '../components/im/useImBindings';
 import { ThreadPanel } from '../components/project/ThreadPanel';
+import { CoordinatorInfoRail } from '../components/project/CoordinatorInfoRail';
+import { useInfoRail } from '../components/project/infoRail';
 import { FloatingWindow } from '../components/workspace/FloatingWindow';
 import { OverviewBand } from '../components/workspace/OverviewBand';
 import { PlacementMenu } from '../components/workspace/PlacementMenu';
 import { WorkspaceLayout, useWorkspacePane } from '../components/workspace/WorkspaceLayout';
-import { ExpandMore, FloatWindow, Folder, Pause, Settings, Star, StarBorder } from '../components/icons';
+import { Activity, ExpandMore, FloatWindow, Folder, Pause, Settings, Star, StarBorder } from '../components/icons';
 import { useNotify } from '../hooks/useNotify';
 import { useProjectEvents, type ProjectEvent } from '../hooks/useProjectEvents';
 import { useTranscript } from '../hooks/useTranscript';
@@ -43,6 +45,9 @@ function upsert<T extends { id: string }>(list: T[], item: T): T[] {
     return next;
 }
 
+/** The conversation is at its best from about this wide; with the rail beside it, it needs this much room. */
+const COORDINATOR_RAIL_MIN_PANEL = 820;
+
 export default function ProjectPage() {
     const { id = '' } = useParams();
     const { t } = useTranslation('projects');
@@ -56,6 +61,11 @@ export default function ProjectPage() {
     const [threads, setThreads] = useState<Thread[]>([]);
     // The project conversation: the main thread's events.
     const [busy, setBusy] = useState(false);
+    // The coordinator's own status, for the rail beside the conversation.
+    const [coordinator, setCoordinator] = useState<Thread | undefined>(undefined);
+    const [queued, setQueued] = useState(0);
+    const { ref: railRef, wide: railWide, on: railOn, toggle: toggleRail } = useInfoRail(COORDINATOR_RAIL_MIN_PANEL, id);
+    const [railAnchor, setRailAnchor] = useState<HTMLElement | null>(null);
     const [recovery, setRecovery] = useState('');
     const [recoveryAction, setRecoveryAction] = useState<'retry' | 'skip' | null>(null);
     const [recovering, setRecovering] = useState(false);
@@ -114,6 +124,8 @@ export default function ProjectPage() {
             setProject(d.project);
             setThreads(d.threads);
             setBusy(d.coordinator_busy);
+            setCoordinator(d.coordinator);
+            setQueued(d.coordinator_queued ?? 0);
             setRecovery(d.coordinator_recovery ?? '');
             setError(null);
         } catch (e) {
@@ -339,6 +351,10 @@ export default function ProjectPage() {
             ? { onClick: () => setBand(!bandOpen), expanded: bandOpen }
             : undefined;
 
+    const coordinatorRail = (floating: boolean) => project && (
+        <CoordinatorInfoRail project={project} coordinator={coordinator} busy={busy} needsRecovery={!!recovery} queued={queued} threads={threads} floating={floating} />
+    );
+
     return (
         <>
             <WorkspaceLayout
@@ -367,6 +383,15 @@ export default function ProjectPage() {
                         {/* Wide screens keep the bound chats in the header; narrow ones get their own row below it. */}
                         {im && <Box sx={{ display: { xs: 'none', md: 'flex' }, minWidth: 0, flexShrink: 1 }}><ProjectImTags im={im} /></Box>}
                         {canPlace && <PlacementMenu overview={placement.overview} thread={placement.thread} onOverview={placement.setOverview} onThread={placement.setThread} overviewFloat={placement.overviewFloat} onOverviewFloat={placement.setOverviewFloat} />}
+                        {!(threadId && threadAt === 'main') && (
+                            <Tooltip title={t(railWide && railOn ? 'rail.coordinatorHide' : 'rail.coordinatorShow')}>
+                                <IconButton size="small" aria-label={t(railWide && railOn ? 'rail.coordinatorHide' : 'rail.coordinatorShow')}
+                                    aria-expanded={railWide ? railOn : !!railAnchor}
+                                    onClick={(e) => { if (railWide) toggleRail(); else setRailAnchor(e.currentTarget); }}>
+                                    <Activity fontSize="small" color={railWide && railOn ? 'primary' : 'inherit'} />
+                                </IconButton>
+                            </Tooltip>
+                        )}
                         <Tooltip title={project.starred ? t('common.unstar') : t('common.star')}>
                             <IconButton size="small" onClick={() => void patch({ starred: !project.starred })}>{project.starred ? <Star fontSize="small" color="primary" /> : <StarBorder fontSize="small" />}</IconButton>
                         </Tooltip>
@@ -387,7 +412,7 @@ export default function ProjectPage() {
                     <OverviewBand threads={threads} selectedId={threadId} open={bandOpen} onToggle={() => setBand(!bandOpen)} onOpen={openThread} onLibrary={() => setLibraryWindow(true)} />
                 ) : undefined}
                 main={<Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                    <Box sx={{ flex: 1, minHeight: 0, display: threadId && threadAt === 'main' ? 'none' : 'flex', flexDirection: 'column' }}>
+                    <Box ref={railRef} sx={{ flex: 1, minHeight: 0, minWidth: 0, display: threadId && threadAt === 'main' ? 'none' : 'flex' }}>
                     {messages === null ? (
                     <Box sx={{ flex: 1, p: 3 }}><Skeleton variant="rounded" height={80} /></Box>
                 ) : (
@@ -504,6 +529,7 @@ export default function ProjectPage() {
                         }}
                     />
                     )}
+                    {project && railWide && railOn && coordinatorRail(false)}
                     </Box>
                     {threadAt === 'main' && threadEl}
                 </Box>}
@@ -556,6 +582,10 @@ export default function ProjectPage() {
                 <DialogActions><Button onClick={() => answerWorktree(null)}>{t('common.cancel')}</Button><Button variant="contained" onClick={() => answerWorktree(worktreeChoice?.shared ?? null)}>{t('worktreeNotice.continue')}</Button></DialogActions>
             </Dialog>
             {im?.dialog}
+            <Popover open={!!railAnchor && !railWide} anchorEl={railAnchor} onClose={() => setRailAnchor(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
+                {coordinatorRail(true)}
+            </Popover>
 
             {project && settingsTab && (
                 <ProjectSettingsDialog
