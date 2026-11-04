@@ -114,13 +114,7 @@ const ProbeResultLine: React.FC<{result: ChatProbeResult; onDismiss: () => void}
 const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isToggling}) => {
     const {t} = useTranslation();
     const entities = useEntityLabels();
-    // A Notify target in the shared `平台 · alias · 群 · id` convention.
-    const targetProps = useCallback((target: NotifyTarget) => (
-        target.kind === 'group'
-            ? entities.group({platform: target.platform ?? '', external_group_id: target.external_id, alias: target.alias})
-            : entities.chat({platform: target.platform ?? '', external_chat_id: target.external_id, alias: target.alias})
-    ), [entities]);
-    const targetText = useCallback((target: NotifyTarget) => entities.text(targetProps(target)), [entities, targetProps]);
+    const targetText = useCallback((target: NotifyTarget) => entities.text(entities.target(target)), [entities]);
     const capabilityOn = capabilityEnabled(bot, 'notify');
     const enabled = (bot.enabled ?? true) && capabilityOn;
 
@@ -606,7 +600,7 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                     <>
                         {deleteTargetItem && (
                             <Box sx={{mb: 1}}>
-                                <EntityLabel {...targetProps(deleteTargetItem)} copy />
+                                <EntityLabel {...entities.target(deleteTargetItem)} copy />
                             </Box>
                         )}
                         <Typography variant="body2">

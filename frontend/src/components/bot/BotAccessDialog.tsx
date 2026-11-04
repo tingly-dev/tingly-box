@@ -173,7 +173,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                 <Stack direction={inline ? 'column' : {xs: 'column', sm: 'row'}} sx={{justifyContent: 'space-between', alignItems: inline ? 'stretch' : {sm: 'center'}, gap: 1}}>
                     <Stack direction="row" sx={{alignItems: 'center'}} spacing={1}>
                         {chatHeader(chat)}
-                        <Button size="small" onClick={() => { setActorGroup(null); setRename({kind: 'chat', id: chat.chat.id, alias: chat.chat.alias || '', label: entities.chatText(chat.chat)}); }}>{t('botAccess.rename', {defaultValue: 'Rename'})}</Button>
+                        <Button size="small" onClick={() => { setActorGroup(null); setRename({kind: 'chat', id: chat.chat.id, alias: chat.chat.alias || '', label: entities.text(entities.chat(chat.chat))}); }}>{t('botAccess.rename', {defaultValue: 'Rename'})}</Button>
                     </Stack>
                     <ToggleButtonGroup
                         exclusive
@@ -217,7 +217,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                 <Stack direction={{xs: 'column', sm: 'row'}} sx={{justifyContent: 'space-between', gap: 1}}>
                     <Stack direction="row" sx={{alignItems: 'center'}} spacing={1}>
                         {chatHeader(chat)}
-                        <Button size="small" onClick={() => { setActorGroup(null); setRename({kind: 'chat', id: chat.chat.id, alias: chat.chat.alias || '', label: entities.chatText(chat.chat)}); }}>{t('botAccess.rename', {defaultValue: 'Rename'})}</Button>
+                        <Button size="small" onClick={() => { setActorGroup(null); setRename({kind: 'chat', id: chat.chat.id, alias: chat.chat.alias || '', label: entities.text(entities.chat(chat.chat))}); }}>{t('botAccess.rename', {defaultValue: 'Rename'})}</Button>
                     </Stack>
                     <Stack direction="row" spacing={1} sx={{flexWrap: 'wrap', alignItems: 'center'}}>
                         {state === 'on' && <Chip size="small" color="primary" label={t('botAccess.chipRemote', {defaultValue: 'Remote Control'})}/>}
@@ -303,7 +303,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                 <Stack direction={inline ? 'column' : {xs: 'column', sm: 'row'}} sx={{justifyContent: 'space-between', gap: 1}}>
                     <Stack direction="row" sx={{alignItems: 'center'}} spacing={1}>
                         <EntityLabel {...entities.group(group)} platformAs="icon" copy />
-                        <Button size="small" onClick={() => { setActorGroup(null); setRename({kind: 'group', id: group.id, alias: group.alias || '', label: entities.groupText(group)}); }}>{t('botAccess.rename', {defaultValue: 'Rename'})}</Button>
+                        <Button size="small" onClick={() => { setActorGroup(null); setRename({kind: 'group', id: group.id, alias: group.alias || '', label: entities.text(entities.group(group))}); }}>{t('botAccess.rename', {defaultValue: 'Rename'})}</Button>
                     </Stack>
                     <Stack direction="row">
                         {!remoteOnly && capSwitch('notify', t('botAccess.notify', {defaultValue: 'Notify'}))}

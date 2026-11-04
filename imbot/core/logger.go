@@ -88,13 +88,6 @@ func BotTag(platform Platform, uuid string) string {
 	return string(platform) + "/" + id
 }
 
-// BotLogPrefix is the log prefix that says which bot a line belongs to:
-// "[imbot telegram/…456789]". Without it, two bots on one platform write
-// indistinguishable lines.
-func BotLogPrefix(platform Platform, uuid string) string {
-	return "[imbot " + BotTag(platform, uuid) + "]"
-}
-
 // NewLoggerWithPrefix creates a new logger with a custom prefix
 func NewLoggerWithPrefix(prefix string, level LogLevel, timestamps bool) Logger {
 	return &defaultLogger{

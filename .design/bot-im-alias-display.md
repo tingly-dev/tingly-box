@@ -412,6 +412,14 @@ Screenshots were taken in frontend mock mode (headless Chromium, mock data exten
 | [new-2](./images/bot-im-alias-display/new-2-confirm-and-picker.png) | Delete confirm naming the chat with its external id; test-send picker where input and options use the same label |
 | [new-3](./images/bot-im-alias-display/new-3-projects.png) | Projects tag and message-source line; group tags with and without alias; the icon-only platform form under a bot header (D6) |
 
+**Built (real UI, mock mode, current order)**
+
+| Image | What it shows |
+|---|---|
+| [ui-2](./images/bot-im-alias-display/ui-2-notify-chats.png) | Notify graph: aliased chats, group node, long id shortened with the full id in the tooltip |
+| [ui-7](./images/bot-im-alias-display/ui-7-projects-im-settings.png) | Projects IM settings: `Release Crew · Group · -10024681012`, an unnamed Feishu group, copy buttons |
+| [ui-9](./images/bot-im-alias-display/ui-9-project-docs-deleted-tag.png) | Project header tags: compact form, and a chat deleted in Remote marked `(deleted)` |
+
 ## 14. Implementation status and deviations (2026-11-03)
 
 Built on the branch with tests (Go: `remote/access`, `remote/logfields`, `internal/db`, `imbot/core`, `imbot/platform/feishu`, `remote/control/{bot,remoteagent}`; frontend: `@tingly/ui`, the Projects package, `imHost`). `openapi.json` was regenerated in an isolated HOME and `pnpm gen:api` run; the generated file also picked up routes that were missing from the committed one before this work.

@@ -50,12 +50,7 @@ type Level = (typeof LEVELS)[number];
 const NotifyTestDialog: React.FC<NotifyTestDialogProps> = ({open, botUUID, botName, targets, initialTargetID, onClose}) => {
     const {t} = useTranslation();
     const entities = useEntityLabels();
-    const targetProps = useCallback((target: NotifyTarget) => (
-        target.kind === 'group'
-            ? entities.group({platform: target.platform ?? '', external_group_id: target.external_id, alias: target.alias})
-            : entities.chat({platform: target.platform ?? '', external_chat_id: target.external_id, alias: target.alias})
-    ), [entities]);
-    const targetText = useCallback((target: NotifyTarget) => entities.text(targetProps(target)), [entities, targetProps]);
+    const targetText = useCallback((target: NotifyTarget) => entities.text(entities.target(target)), [entities]);
 
     const [targetID, setTargetID] = useState('');
     const [title, setTitle] = useState('');
@@ -122,7 +117,7 @@ const NotifyTestDialog: React.FC<NotifyTestDialogProps> = ({open, botUUID, botNa
                             return (
                                 <li key={key ?? target.id} {...optionProps}>
                                     <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
-                                        <EntityLabel {...targetProps(target)} />
+                                        <EntityLabel {...entities.target(target)} />
                                         {target.is_paired && (
                                             <Typography component="span" variant="caption" sx={{color: 'success.main'}}>
                                                 {t('notify.test.paired', {defaultValue: 'paired'})}

@@ -61,7 +61,7 @@ func newBotLogger(config *Config) Logger {
 	if config.Logging != nil {
 		level, timestamps = ParseLogLevel(config.Logging.Level), config.Logging.Timestamps
 	}
-	return NewLoggerWithPrefix(BotLogPrefix(config.Platform, config.UUID), level, timestamps)
+	return NewLoggerWithPrefix("[imbot "+BotTag(config.Platform, config.UUID)+"]", level, timestamps)
 }
 
 // UUID returns the bot's unique identifier

@@ -2,6 +2,7 @@ import { useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { bareId, entityText, type EntityKind, type EntityLabelProps } from '@tingly/ui';
 import { PLATFORM_BRAND_ICONS, platformDisplayName } from '@/constants/platformGuides';
+import type { NotifyTarget } from '@/types/bot';
 
 // Adapters from the bot / IM API shapes to the segments of the shared display
 // convention `平台 · alias · 群 · id` (.design/bot-im-alias-display.md §3).
@@ -19,14 +20,12 @@ export interface EntityLabels {
     bot: (bot: BotRef) => EntityProps;
     chat: (chat: ChatRef) => EntityProps;
     group: (group: GroupRef) => EntityProps;
-    /** A chat/group reference that may no longer exist (binding, route target): same segments, flagged by the caller. */
-    ref: (platform: string, externalId: string, opts?: { alias?: string; group?: boolean }) => EntityProps;
-    /** Plain text for toasts, confirms and aria-labels. */
+    /** A Notify target (direct chat or group). */
+    target: (target: NotifyTarget) => EntityProps;
+    /** Plain text for toasts, confirms and aria-labels: `text(entities.chat(c))`. */
     text: (props: EntityProps, opts?: { shorten?: boolean }) => string;
+    /** Shorthand for the most common case. */
     botText: (bot: BotRef) => string;
-    chatText: (chat: ChatRef) => string;
-    groupText: (group: GroupRef) => string;
-    icon: (platform: string, size?: number) => ReactNode;
 }
 
 export function useEntityLabels(): EntityLabels {
@@ -45,7 +44,7 @@ export function useEntityLabels(): EntityLabels {
             const Brand = PLATFORM_BRAND_ICONS[platform];
             return Brand ? <Brand size={size} /> : null;
         };
-        const ref: EntityLabels['ref'] = (platform, externalId, opts) => ({
+        const ref = (platform: string, externalId: string, opts?: { alias?: string; group?: boolean }): EntityProps => ({
             ...common,
             platform: platformName(platform),
             group: opts?.group,
@@ -64,17 +63,15 @@ export function useEntityLabels(): EntityLabels {
             ...common,
             platform: platformName(b.platform),
             alias: b.name,
-            id: b.uuid ?? "",
+            id: b.uuid ?? '',
             kind: 'bot',
             platformIcon: icon(b.platform ?? ''),
         });
         const chat: EntityLabels['chat'] = (c) => ref(c.platform, c.external_chat_id, { alias: c.alias });
         const group: EntityLabels['group'] = (g) => ref(g.platform, g.external_group_id, { alias: g.alias || g.name, group: true });
-        return {
-            bot, chat, group, ref, text, icon,
-            botText: (b) => text(bot(b)),
-            chatText: (c) => text(chat(c)),
-            groupText: (g) => text(group(g)),
-        };
+        const target: EntityLabels['target'] = (x) => (x.kind === 'group'
+            ? group({ platform: x.platform ?? '', external_group_id: x.external_id, alias: x.alias })
+            : chat({ platform: x.platform ?? '', external_chat_id: x.external_id, alias: x.alias }));
+        return { bot, chat, group, target, text, botText: (b) => text(bot(b)) };
     }, [t]);
 }

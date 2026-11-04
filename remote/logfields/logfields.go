@@ -25,19 +25,6 @@ const (
 	IlinkBotID = "ilink_bot_id"
 )
 
-// Bot returns the identity fields of a bot. An empty name is left out rather
-// than logged as "".
-func Bot(uuid, name, platform string) logrus.Fields {
-	f := logrus.Fields{BotUUID: uuid}
-	if name != "" {
-		f[BotName] = name
-	}
-	if platform != "" {
-		f[Platform] = platform
-	}
-	return f
-}
-
 // Chat returns the identity fields of a chat on a bot.
 func Chat(botUUID, chatID, alias string) logrus.Fields {
 	f := logrus.Fields{BotUUID: botUUID, ChatID: chatID}
