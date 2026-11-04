@@ -33,7 +33,6 @@ export const zh: Dict<typeof en> = {
     im: {
         title: '绑定',
         bots_one: '{{count}} 个机器人', bots_other: '{{count}} 个机器人',
-        chatKind: { direct: '私聊', group: '群聊' },
         tags: { label: '已绑定的 IM', bind: '绑定聊天', unbind: '解绑 {{chat}}', more: '+{{count}}', manage: 'IM 聊天' },
         place: { none: '现在没有绑定', at: '现在绑定在 {{place}}', atFolder: '现在绑定在目录 {{place}}', elsewhere: '另一个项目' },
         focus: { project: '项目', folder: '目录', coordinator: '当前与协调者对话', nextSession: '等待新会话', thread: '当前对话：#{{number}} · {{title}}', boundSession: '绑定会话：#{{number}} · {{title}}' },
@@ -60,7 +59,9 @@ export const zh: Dict<typeof en> = {
             pickProject: '把 {{chat}} 绑定到', pickPlaceholder: '选择项目或目录', noProjects: '先创建一个项目或目录。',
             moveDone: '{{chat}} 已改绑到 {{project}}',
         },
-        source: '来自 {{platform}} · {{chat}}',
+        deleted: '（已删除）',
+        sourceFrom: '来自',
+        group: '群',
         sourcePlatform: '来自 {{platform}}',
         sourceBot: '来自 Bot',
     },

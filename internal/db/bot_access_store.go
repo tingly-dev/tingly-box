@@ -34,14 +34,15 @@ type botCapabilityRecord struct {
 func (botCapabilityRecord) TableName() string { return "bot_capabilities" }
 
 type remoteActorRecord struct {
-	ID              string    `gorm:"column:id;primaryKey"`
-	BotUUID         string    `gorm:"column:bot_uuid;not null"`
-	Platform        string    `gorm:"column:platform;not null"`
-	ExternalActorID string    `gorm:"column:external_actor_id;not null"`
-	DisplayName     string    `gorm:"column:display_name"`
-	LastSeenAt      time.Time `gorm:"column:last_seen_at"`
-	CreatedAt       time.Time `gorm:"column:created_at;not null"`
-	UpdatedAt       time.Time `gorm:"column:updated_at;not null"`
+	ID                string    `gorm:"column:id;primaryKey"`
+	BotUUID           string    `gorm:"column:bot_uuid;not null"`
+	Platform          string    `gorm:"column:platform;not null"`
+	ExternalActorID   string    `gorm:"column:external_actor_id;not null"`
+	DisplayName       string    `gorm:"column:display_name"`
+	DisplayNameSource string    `gorm:"column:display_name_source"`
+	LastSeenAt        time.Time `gorm:"column:last_seen_at"`
+	CreatedAt         time.Time `gorm:"column:created_at;not null"`
+	UpdatedAt         time.Time `gorm:"column:updated_at;not null"`
 }
 
 func (remoteActorRecord) TableName() string { return "remote_actors" }
@@ -52,6 +53,7 @@ type remoteDirectChatRecord struct {
 	Platform       string     `gorm:"column:platform;not null"`
 	ExternalChatID string     `gorm:"column:external_chat_id;not null"`
 	Alias          string     `gorm:"column:alias"`
+	AliasSource    string     `gorm:"column:alias_source"`
 	PeerActorID    *string    `gorm:"column:peer_actor_id"`
 	Blocked        bool       `gorm:"column:blocked;not null"`
 	PairedAt       *time.Time `gorm:"column:paired_at"`
@@ -78,6 +80,7 @@ type remoteGroupRecord struct {
 	Platform        string    `gorm:"column:platform;not null"`
 	ExternalGroupID string    `gorm:"column:external_group_id;not null"`
 	Alias           string    `gorm:"column:alias"`
+	AliasSource     string    `gorm:"column:alias_source"`
 	Name            string    `gorm:"column:name"`
 	Blocked         bool      `gorm:"column:blocked;not null"`
 	ProjectPath     string    `gorm:"column:project_path"`
@@ -185,7 +188,7 @@ func migrateBotAccessTables(db *gorm.DB) error {
 			return err
 		}
 	}
-	return nil
+	return migrateNamingModel(db)
 }
 
 func validEffect(effect access.AccessEffect) bool {
@@ -237,26 +240,51 @@ func (s *BotAccessStore) AnyCapabilityEnabled(ctx context.Context, botUUID strin
 	return count > 0, err
 }
 
-func upsertActor(tx *gorm.DB, botUUID, platform, externalID, displayName string) (remoteActorRecord, error) {
+// upsertActor records a sighting of an actor and reconciles its display name.
+// source is access.AliasSourceUser for a name typed by an operator and
+// access.AliasSourcePlatform for one the platform reported. Invariants:
+// an empty (or id-echo) name never overwrites a stored name, and a platform
+// name never overwrites a user-set one.
+func upsertActor(tx *gorm.DB, botUUID, platform, externalID, displayName, source string) (remoteActorRecord, error) {
 	if botUUID == "" || platform == "" || externalID == "" {
 		return remoteActorRecord{}, fmt.Errorf("actor identity is required")
 	}
+	name := access.UsableName(displayName, externalID)
 	now := time.Now().UTC()
-	row := remoteActorRecord{ID: uuid.NewString(), BotUUID: botUUID, Platform: platform, ExternalActorID: externalID, DisplayName: displayName, LastSeenAt: now, CreatedAt: now, UpdatedAt: now}
-	err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "bot_uuid"}, {Name: "platform"}, {Name: "external_actor_id"}}, DoUpdates: clause.Assignments(map[string]any{"display_name": displayName, "last_seen_at": now, "updated_at": now})}).Create(&row).Error
+	row := remoteActorRecord{ID: uuid.NewString(), BotUUID: botUUID, Platform: platform, ExternalActorID: externalID, LastSeenAt: now, CreatedAt: now, UpdatedAt: now}
+	if name != "" {
+		row.DisplayName, row.DisplayNameSource = name, source
+	}
+	err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "bot_uuid"}, {Name: "platform"}, {Name: "external_actor_id"}}, DoUpdates: clause.Assignments(map[string]any{"last_seen_at": now, "updated_at": now})}).Create(&row).Error
 	if err != nil {
 		return remoteActorRecord{}, err
 	}
 	var stored remoteActorRecord
-	err = tx.Where("bot_uuid = ? AND platform = ? AND external_actor_id = ?", botUUID, platform, externalID).First(&stored).Error
-	return stored, err
+	if err := tx.Where("bot_uuid = ? AND platform = ? AND external_actor_id = ?", botUUID, platform, externalID).First(&stored).Error; err != nil {
+		return remoteActorRecord{}, err
+	}
+	if name == "" {
+		return stored, nil
+	}
+	userSet := stored.DisplayNameSource == access.AliasSourceUser && stored.DisplayName != ""
+	if source != access.AliasSourceUser && userSet {
+		return stored, nil
+	}
+	if stored.DisplayName == name && stored.DisplayNameSource == source {
+		return stored, nil
+	}
+	if err := tx.Model(&remoteActorRecord{}).Where("id = ?", stored.ID).Updates(map[string]any{"display_name": name, "display_name_source": source, "updated_at": now}).Error; err != nil {
+		return remoteActorRecord{}, err
+	}
+	stored.DisplayName, stored.DisplayNameSource = name, source
+	return stored, nil
 }
 
 func (s *BotAccessStore) UpsertActor(ctx context.Context, actor access.Actor) (access.Actor, error) {
 	var row remoteActorRecord
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var err error
-		row, err = upsertActor(tx, actor.BotUUID, actor.Platform, actor.ExternalActorID, actor.DisplayName)
+		row, err = upsertActor(tx, actor.BotUUID, actor.Platform, actor.ExternalActorID, actor.DisplayName, access.AliasSourcePlatform)
 		return err
 	})
 	if err != nil {
@@ -266,7 +294,7 @@ func (s *BotAccessStore) UpsertActor(ctx context.Context, actor access.Actor) (a
 }
 
 func actorFromRecord(r remoteActorRecord) access.Actor {
-	return access.Actor{ID: r.ID, BotUUID: r.BotUUID, Platform: r.Platform, ExternalActorID: r.ExternalActorID, DisplayName: r.DisplayName, LastSeenAt: r.LastSeenAt, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	return access.Actor{ID: r.ID, BotUUID: r.BotUUID, Platform: r.Platform, ExternalActorID: r.ExternalActorID, DisplayName: r.DisplayName, DisplayNameSource: r.DisplayNameSource, LastSeenAt: r.LastSeenAt, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 
 func putDirectPermission(tx *gorm.DB, chatID string, capability access.CapabilityName, action access.ActionName, effect access.AccessEffect) error {
@@ -321,7 +349,7 @@ func directFromRecord(r remoteDirectChatRecord) access.DirectChat {
 	if r.PeerActorID != nil {
 		peer = *r.PeerActorID
 	}
-	return access.DirectChat{ID: r.ID, BotUUID: r.BotUUID, Platform: r.Platform, ExternalChatID: r.ExternalChatID, Alias: r.Alias, PeerActorID: peer, Blocked: r.Blocked, PairedAt: r.PairedAt, ProjectPath: r.ProjectPath, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	return access.DirectChat{ID: r.ID, BotUUID: r.BotUUID, Platform: r.Platform, ExternalChatID: r.ExternalChatID, Alias: r.Alias, AliasSource: r.AliasSource, PeerActorID: peer, Blocked: r.Blocked, PairedAt: r.PairedAt, ProjectPath: r.ProjectPath, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 
 func (s *BotAccessStore) PairDirectChat(ctx context.Context, chatID, externalActorID, displayName string) error {
@@ -330,12 +358,15 @@ func (s *BotAccessStore) PairDirectChat(ctx context.Context, chatID, externalAct
 		if err := tx.Where("id = ?", chatID).First(&chat).Error; err != nil {
 			return err
 		}
-		actor, err := upsertActor(tx, chat.BotUUID, chat.Platform, externalActorID, displayName)
+		actor, err := upsertActor(tx, chat.BotUUID, chat.Platform, externalActorID, displayName, access.AliasSourcePlatform)
 		if err != nil {
 			return err
 		}
 		now := time.Now().UTC()
 		if err := tx.Model(&chat).Updates(map[string]any{"peer_actor_id": actor.ID, "paired_at": now, "updated_at": now}).Error; err != nil {
+			return err
+		}
+		if err := syncDirectChatAlias(tx, &chat, actor.DisplayName); err != nil {
 			return err
 		}
 		for _, a := range []access.ActionName{access.ActionAccess, access.ActionRemoteControlStart, access.ActionRemoteControlApprove} {
@@ -477,15 +508,19 @@ func (s *BotAccessStore) UnpairDirectChat(ctx context.Context, botUUID, id strin
 func (s *BotAccessStore) DiscoverGroup(ctx context.Context, botUUID, platform, externalGroupID, name string) (access.Group, error) {
 	var row remoteGroupRecord
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		name = access.UsableName(name, externalGroupID)
 		err := tx.Where("bot_uuid = ? AND platform = ? AND external_group_id = ?", botUUID, platform, externalGroupID).First(&row).Error
 		if err == nil {
-			return nil
+			return refreshGroupName(tx, &row, name)
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
 		now := time.Now().UTC()
 		row = remoteGroupRecord{ID: uuid.NewString(), BotUUID: botUUID, Platform: platform, ExternalGroupID: externalGroupID, Name: name, CreatedAt: now, UpdatedAt: now}
+		if name != "" {
+			row.Alias, row.AliasSource = name, access.AliasSourcePlatform
+		}
 		if err := tx.Create(&row).Error; err != nil {
 			return err
 		}
@@ -503,7 +538,7 @@ func (s *BotAccessStore) DiscoverGroup(ctx context.Context, botUUID, platform, e
 	return groupFromRecord(row), nil
 }
 func groupFromRecord(r remoteGroupRecord) access.Group {
-	return access.Group{ID: r.ID, BotUUID: r.BotUUID, Platform: r.Platform, ExternalGroupID: r.ExternalGroupID, Alias: r.Alias, Name: r.Name, Blocked: r.Blocked, ProjectPath: r.ProjectPath, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	return access.Group{ID: r.ID, BotUUID: r.BotUUID, Platform: r.Platform, ExternalGroupID: r.ExternalGroupID, Alias: r.Alias, AliasSource: r.AliasSource, Name: r.Name, Blocked: r.Blocked, ProjectPath: r.ProjectPath, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 func (s *BotAccessStore) ListGroups(ctx context.Context, botUUID string) ([]access.Group, error) {
 	var rows []remoteGroupRecord
@@ -606,7 +641,7 @@ func (s *BotAccessStore) AddGroupActor(ctx context.Context, botUUID, groupID, ex
 			return err
 		}
 		var err error
-		actor, err = upsertActor(tx, botUUID, group.Platform, externalActorID, displayName)
+		actor, err = upsertActor(tx, botUUID, group.Platform, externalActorID, displayName, access.AliasSourceUser)
 		if err != nil {
 			return err
 		}
@@ -1050,23 +1085,108 @@ func (s *BotAccessStore) IsExternalTargetBlocked(ctx context.Context, botUUID, p
 	return n > 0, nil
 }
 
-// SetTargetAlias changes only the user-facing label, scoped to its bot.
+// SetTargetAlias sets the operator's alias for a Direct Chat or Group, scoped
+// to its bot. A non-empty alias is authoritative (source "user") and is never
+// replaced by a platform name. An empty alias clears the override and falls
+// back to the platform's own name when one is known (the group's name, or the
+// peer's display name), else to no alias.
 func (s *BotAccessStore) SetTargetAlias(ctx context.Context, botUUID, id, kind, alias string) error {
-	var model any
-	switch kind {
-	case "chat":
-		model = &remoteDirectChatRecord{}
-	case "group":
-		model = &remoteGroupRecord{}
-	default:
+	alias = strings.TrimSpace(alias)
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		now := time.Now().UTC()
+		var model any
+		fallback := ""
+		switch kind {
+		case "chat":
+			model = &remoteDirectChatRecord{}
+			var chat remoteDirectChatRecord
+			if err := tx.Where("id = ? AND bot_uuid = ?", id, botUUID).First(&chat).Error; err != nil {
+				return notFoundAs(err)
+			}
+			if alias == "" && chat.PeerActorID != nil {
+				var actor remoteActorRecord
+				if err := tx.Where("id = ?", *chat.PeerActorID).First(&actor).Error; err == nil {
+					fallback = access.UsableName(actor.DisplayName, actor.ExternalActorID)
+				}
+			}
+		case "group":
+			model = &remoteGroupRecord{}
+			var group remoteGroupRecord
+			if err := tx.Where("id = ? AND bot_uuid = ?", id, botUUID).First(&group).Error; err != nil {
+				return notFoundAs(err)
+			}
+			if alias == "" {
+				fallback = access.UsableName(group.Name, group.ExternalGroupID)
+			}
+		default:
+			return ErrAccessTargetNotFound
+		}
+		update := map[string]any{"updated_at": now}
+		switch {
+		case alias != "":
+			update["alias"], update["alias_source"] = alias, access.AliasSourceUser
+		case fallback != "":
+			update["alias"], update["alias_source"] = fallback, access.AliasSourcePlatform
+		default:
+			update["alias"], update["alias_source"] = "", ""
+		}
+		return tx.Model(model).Where("id = ? AND bot_uuid = ?", id, botUUID).Updates(update).Error
+	})
+}
+
+func notFoundAs(err error) error {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return ErrAccessTargetNotFound
 	}
-	result := s.db.WithContext(ctx).Model(model).Where("id = ? AND bot_uuid = ?", id, botUUID).Updates(map[string]any{"alias": strings.TrimSpace(alias), "updated_at": time.Now().UTC()})
-	if result.Error != nil {
-		return result.Error
+	return err
+}
+
+// SyncDirectChatName applies the peer's platform name to a Direct Chat's
+// default alias and returns the alias now in effect. It is a no-op for an
+// empty name and for a user-set alias.
+func (s *BotAccessStore) SyncDirectChatName(ctx context.Context, botUUID, chatID, name string) (string, error) {
+	var alias string
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var chat remoteDirectChatRecord
+		if err := tx.Where("id = ? AND bot_uuid = ?", chatID, botUUID).First(&chat).Error; err != nil {
+			return notFoundAs(err)
+		}
+		if err := syncDirectChatAlias(tx, &chat, name); err != nil {
+			return err
+		}
+		alias = chat.Alias
+		return nil
+	})
+	return alias, err
+}
+
+func syncDirectChatAlias(tx *gorm.DB, chat *remoteDirectChatRecord, name string) error {
+	alias, source, changed := access.PlatformAliasUpdate(chat.Alias, chat.AliasSource, name, chat.ExternalChatID)
+	if !changed {
+		return nil
 	}
-	if result.RowsAffected == 0 {
-		return ErrAccessTargetNotFound
+	chat.Alias, chat.AliasSource = alias, source
+	return tx.Model(&remoteDirectChatRecord{}).Where("id = ?", chat.ID).Updates(map[string]any{"alias": alias, "alias_source": source, "updated_at": time.Now().UTC()}).Error
+}
+
+// refreshGroupName keeps Group.Name current and, while the alias is only a
+// platform default, keeps the alias in step with it.
+func refreshGroupName(tx *gorm.DB, row *remoteGroupRecord, name string) error {
+	if name == "" {
+		return nil
 	}
-	return nil
+	update := map[string]any{}
+	if row.Name != name {
+		update["name"] = name
+		row.Name = name
+	}
+	if alias, source, changed := access.PlatformAliasUpdate(row.Alias, row.AliasSource, name, row.ExternalGroupID); changed {
+		update["alias"], update["alias_source"] = alias, source
+		row.Alias, row.AliasSource = alias, source
+	}
+	if len(update) == 0 {
+		return nil
+	}
+	update["updated_at"] = time.Now().UTC()
+	return tx.Model(&remoteGroupRecord{}).Where("id = ?", row.ID).Updates(update).Error
 }

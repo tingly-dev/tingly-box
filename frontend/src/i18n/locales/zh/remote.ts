@@ -55,15 +55,15 @@ export default {
       "botDisabled": "Bot 已停用",
       "toggleFailed": "切换 Bot 状态失败：{{error}}",
       "toggleFailedGeneric": "切换 Bot 状态失败",
-      "botRestarted": "Bot 已重启",
+      "botRestarted": "已重启 {{bot}}",
       "restartFailed": "重启 Bot 失败：{{error}}",
       "restartFailedGeneric": "重启 Bot 失败",
-      "botDeleted": "Bot 删除成功",
+      "botDeleted": "已删除 {{bot}}",
       "deleteFailed": "删除 Bot 失败：{{error}}",
       "deleteFailedGeneric": "删除 Bot 失败",
       "cwdUpdateFailed": "更新工作目录失败",
-      "remoteAgentOff": "远程控制已停用",
-      "remoteAgentOn": "远程控制已启用"
+      "remoteAgentOff": "已为 {{bot}} 停用远程控制",
+      "remoteAgentOn": "已为 {{bot}} 启用远程控制"
     },
     "guide": {
       "title": "{{platform}} 配置指南",
@@ -104,9 +104,9 @@ export default {
       "copy": "复制",
       "rotateTooltip": "轮换（当前配对码将失效）",
       "noActiveCode": "暂无有效配对码 —— Bot 可能已停止运行，或该配对码已被使用。点击「轮换」生成新的配对码。",
-      "copied": "配对指令已复制",
+      "copied": "已复制 {{bot}} 的配对命令",
       "copyFailed": "复制失败 —— 请检查剪贴板权限",
-      "rotated": "配对码已轮换",
+      "rotated": "{{bot}} 的配对码已轮换",
       "rotateFailed": "轮换失败",
       "fetchFailed": "获取配对码失败"
     },
@@ -260,7 +260,7 @@ export default {
     "subtitle": "把 {{platform}} Bot 挂载给远程控制，通过聊天操控 Claude Code / SmartGuide，并配置 Agent 行为。Bot 连接本身在机器人页面管理。",
     "notify": {
       "agentSettingsSaved": "Agent 设置已保存",
-      "ccProfileUpdated": "Claude Code 配置方案已更新",
+      "ccProfileUpdated": "{{bot}}：Claude Code 配置方案已更新",
       "ccProfileUpdateFailed": "更新 Claude Code 配置方案失败",
     },
     "pageTitle": "远程控制",
@@ -304,6 +304,7 @@ export default {
     "table": {
       "access": "访问权限",
       "actions": "操作",
+      "bot": "机器人",
       "botId": "Bot UUID",
       "capabilities": "能力",
       "chatIdCopied": "Chat ID 已复制",
@@ -324,13 +325,15 @@ export default {
       "uuidCopyFailed": "复制失败 —— 请检查剪贴板权限"
     },
     "toggle": {
-      "disabled": "Bot 已停用",
-      "enabled": "Bot 已启用",
+      "disabled": "已停用 {{bot}}",
+      "enabled": "已启用 {{bot}}",
       "failed": "切换 Bot 状态失败：{{error}}",
       "failedGeneric": "切换 Bot 状态失败"
     }
   },
   "botAccess": {
+    "alias": "别名",
+    "aliasHint": "留空则使用平台名称或 ID。",
     "actorId": "平台用户 ID",
     "actorIdHint": "填写 IM 平台上报的真实用户 ID。",
     "actors": "{{count}} 个已授权成员",
@@ -376,8 +379,16 @@ export default {
     "remoteControl": "遥控",
     "titleAll": "{{name}} 的访问权限",
     "titleRemote": "谁能遥控 {{name}}",
+    "rename": "重命名",
     "unpairedChat": "未配对的会话",
     "unpairedHint": "请先配对 —— 未配对的会话无法授予遥控权限。"
+  },
+  "entity": {
+    "copied": "已复制",
+    "copyId": "复制 ID",
+    "deleted": "（已删除）",
+    "group": "群",
+    "noAlias": "未设置别名"
   },
   "notify": {
     "title": "IM 通知",
@@ -391,22 +402,23 @@ export default {
     "loadFailed": "加载通知目标失败",
     "toggleFailed": "更新通知设置失败",
     "chat": {
-      "copied": "目标 UUID 已复制",
+      "copied": "已复制 Chat ID：{{chat}}",
       "copyFailed": "复制失败 —— 请检查剪贴板权限",
-      "deleted": "会话已删除"
+      "deleted": "已删除 {{chat}}",
+      "internalUuid": "内部目标 UUID"
     },
     "target": {
       "direct": "私聊",
       "group": "群组",
-      "blocked": "目标已屏蔽",
-      "unblocked": "目标已解除屏蔽"
+      "blocked": "已屏蔽 {{chat}}",
+      "unblocked": "已解除屏蔽 {{chat}}"
     },
     "probe": {
       "showRaw": "查看原始载荷"
     },
     "group": {
       "allowAndTest": "允许通知并测试",
-      "copyChatId": "复制内部目标 UUID",
+      "copyChatId": "复制 Chat ID",
       "custom": "自定义",
       "customHint": "编写自定义消息（自由格式）",
       "deleteChat": "删除这条私聊记录",
@@ -478,8 +490,8 @@ export default {
       "bodyField": "正文（markdown）",
       "resetMarkdown": "重置为 markdown 示例",
       "send": "发送",
-      "sent": "通知已发送",
-      "sendFailed": "发送失败：{{error}}",
+      "sent": "通知已发送到 {{chat}}",
+      "sendFailed": "发送到 {{chat}} 失败：{{error}}",
       "paired": "已配对"
     }
   },
