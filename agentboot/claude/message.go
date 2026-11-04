@@ -81,7 +81,7 @@ func (m *SystemMessage) RetryDelayMS() int64 {
 	if m.DelayMS > 0 {
 		return m.DelayMS
 	}
-	return int64(intFromMap(m.Raw, "delay_ms", "delayMs", "delayMS", "retry_after_ms", "retryAfterMs"))
+	return int64(intFromMap(m.Raw, "retry_delay_ms", "delay_ms", "delayMs", "delayMS", "retry_after_ms", "retryAfterMs"))
 }
 
 // RetryReason returns a human-readable reason for the retry, if the CLI

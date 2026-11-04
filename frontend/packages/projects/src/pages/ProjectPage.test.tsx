@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 import ProjectPage from './ProjectPage';
@@ -21,6 +21,21 @@ const a = { id: 'a', project_id: 'p', model: 'observed-upstream', status: 'idle'
 const b = { id: 'b', project_id: 'p', model_override: 'sibling-choice', status: 'idle' };
 function Switch() { const nav = useNavigate(); return <button onClick={() => nav('/projects/p?thread=b')}>switch</button>; }
 afterEach(() => { cleanup(); localStorage.clear(); vi.clearAllMocks(); });
+
+it('asks before retrying an interrupted coordinator input', async () => {
+    m.get.mockImplementation(async (url: string) => ({ data: url === '/api/v1/projects/{id}'
+        ? { project: p, threads: [], coordinator_busy: false, coordinator_recovery: 'input-1' }
+        : url.endsWith('permission-modes') ? { modes: [] } : {}, response: new Response() }));
+    m.post.mockResolvedValue({ data: { project: p, threads: [], coordinator_busy: false }, response: new Response() });
+    render(<MemoryRouter initialEntries={['/projects/p']}><ProjectsHostProvider host={host}><Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes></ProjectsHostProvider></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'conversation.recoveryRetry' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('conversation.recoveryRetryConfirm')).toBeInTheDocument();
+    expect(m.post).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'conversation.recoveryRetry' }));
+    await waitFor(() => expect(m.post).toHaveBeenCalledWith('/api/v1/projects/{id}/coordinator/recover', { params: { path: { id: 'p' } }, body: { input_id: 'input-1', action: 'retry' } }));
+    await waitFor(() => expect(screen.queryByText('conversation.recoveryMessage')).not.toBeInTheDocument());
+});
 
 it('uses independent worker values, guards saves across thread switching and never patches project defaults', async () => {
     m.get.mockImplementation(async (url: string, options: { params?: { path: { id: string } } }) => ({ data:

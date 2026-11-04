@@ -56,6 +56,9 @@ export default function ProjectPage() {
     const [threads, setThreads] = useState<Thread[]>([]);
     // The project conversation: the main thread's events.
     const [busy, setBusy] = useState(false);
+    const [recovery, setRecovery] = useState('');
+    const [recoveryAction, setRecoveryAction] = useState<'retry' | 'skip' | null>(null);
+    const [recovering, setRecovering] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const pane = useWorkspacePane();
     // IM chats bound to this project (null when the host has no IM).
@@ -111,6 +114,7 @@ export default function ProjectPage() {
             setProject(d.project);
             setThreads(d.threads);
             setBusy(d.coordinator_busy);
+            setRecovery(d.coordinator_recovery ?? '');
             setError(null);
         } catch (e) {
             setError((e as Error).message);
@@ -161,6 +165,7 @@ export default function ProjectPage() {
             }
             case 'coordinator':
                 setBusy((ev.data as { busy: boolean }).busy);
+                if (!(ev.data as { busy: boolean }).busy) void load();
                 break;
             case 'project': {
                 const d = ev.data as Project & { memory?: string };
@@ -169,7 +174,21 @@ export default function ProjectPage() {
                 break;
             }
         }
-    }, [threadId, mainThreadId, applyMain, editMain, applyOpened]);
+    }, [threadId, mainThreadId, applyMain, editMain, applyOpened, load]);
+
+    const resolveRecovery = async () => {
+        if (!recovery || !recoveryAction) return;
+        setRecovering(true);
+        try {
+            await unwrap(api.POST('/api/v1/projects/{id}/coordinator/recover', {
+                params: { path: { id } }, body: { input_id: recovery, action: recoveryAction },
+            }));
+            setRecovery('');
+            setRecoveryAction(null);
+        } catch (e) {
+            notify((e as Error).message, 'error');
+        } finally { setRecovering(false); }
+    };
 
     useProjectEvents(id, onEvent, () => {
         void load();
@@ -379,9 +398,15 @@ export default function ProjectPage() {
                         onLoadEarlier={conversation.loadEarlier}
                         threads={threadMap}
                         busy={busy}
-                        disabled={blocked || !project || savingDefaults}
+                        disabled={blocked || !project || savingDefaults || !!recovery}
                         disabledReason={<>
                             {banner}
+                            {recovery && <Alert severity="warning" sx={{ mb: 1 }} action={<Stack direction="row"><Button color="inherit" size="small" onClick={() => setRecoveryAction('retry')}>{t('conversation.recoveryRetry')}</Button><Button color="inherit" size="small" onClick={() => setRecoveryAction('skip')}>{t('conversation.recoverySkip')}</Button></Stack>}>{t('conversation.recoveryMessage')}</Alert>}
+                            <Dialog open={recoveryAction !== null} onClose={() => setRecoveryAction(null)}>
+                                <DialogTitle>{t('conversation.recoveryTitle')}</DialogTitle>
+                                <DialogContent><DialogContentText>{t(recoveryAction === 'retry' ? 'conversation.recoveryRetryConfirm' : 'conversation.recoverySkipConfirm')}</DialogContentText></DialogContent>
+                                <DialogActions><Button onClick={() => setRecoveryAction(null)}>{t('common.cancel')}</Button><Button disabled={recovering} onClick={() => void resolveRecovery()}>{t(recoveryAction === 'retry' ? 'conversation.recoveryRetry' : 'conversation.recoverySkip')}</Button></DialogActions>
+                            </Dialog>
                             {!session?.launchPickers && project?.coordinator_profile && <Alert severity="warning" sx={{ mb: 1 }} action={<Button color="inherit" size="small" disabled={savingDefaults} onClick={() => void patch({ coordinator_profile: '', coordinator_model: '' })}>{t('threadSettings.useConnection')}</Button>}>{t('threadSettings.coordinatorProfileUnavailable')}</Alert>}
                             {!session?.launchPickers && project?.thread_profile && <Alert severity="warning" sx={{ mb: 1 }} action={<Button color="inherit" size="small" disabled={savingDefaults} onClick={() => void patch({ thread_profile: '', thread_model: '' })}>{t('threadSettings.useConnection')}</Button>}>{t('threadSettings.defaultProfileUnavailable')}</Alert>}
                         </>}

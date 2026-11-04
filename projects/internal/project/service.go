@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 	"github.com/tingly-dev/tingly-box/projects/llm"
 )
@@ -66,6 +67,9 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 	}
 	svc.sessionToolsMCP = &sessionToolsMCP{service: svc}
 	threads.SessionToolsConfig = svc.sessionToolsMCP.config
+	if agents.Service != nil {
+		coord.sessions = newCoordinatorSessions(coord, host, svc.sessionToolsMCP, agents)
+	}
 	return svc
 }
 
@@ -73,6 +77,17 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 // then stops every thread's turn and process.
 func (s *Service) Start(ctx context.Context) {
 	s.Threads.Recover()
+	if s.Coordinator.sessions != nil {
+		if err := s.Store.RecoverCoordinatorInputs(); err != nil {
+			logrus.WithError(err).Error("recover coordinator inputs")
+		} else if ids, err := s.Store.CoordinatorProjectsWithInputs(); err != nil {
+			logrus.WithError(err).Error("list coordinator inputs")
+		} else {
+			for _, id := range ids {
+				s.Coordinator.schedule(id, func(q *queue) { q.config = true })
+			}
+		}
+	}
 	go func() {
 		tick := time.NewTicker(time.Minute)
 		defer tick.Stop()
@@ -93,6 +108,7 @@ func (s *Service) Start(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				s.Coordinator.shutdown(shutdown)
 				s.Threads.Shutdown(shutdown)
 				_ = s.CloseTools(shutdown)
 				cancel()
@@ -105,6 +121,7 @@ func (s *Service) Start(ctx context.Context) {
 
 // CloseTools stops the local MCP service after the thread processes stop.
 func (s *Service) CloseTools(ctx context.Context) error {
+	if s.Coordinator != nil { s.Coordinator.shutdown(ctx) }
 	if s.sessionToolsMCP != nil {
 		return s.sessionToolsMCP.close(ctx)
 	}

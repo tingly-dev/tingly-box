@@ -54,7 +54,6 @@ func NewAgentService(config Config, options ...ServiceOption) (*AgentService, er
 	if config.StreamBufferSize == 0 {
 		config.StreamBufferSize = 100
 	}
-
 	service := &AgentService{
 		config: config,
 		agents: make(map[AgentType]Agent),

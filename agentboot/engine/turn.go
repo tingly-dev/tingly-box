@@ -12,12 +12,37 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/claude"
 )
 
 // turnTimeout bounds one turn. Coding tasks run far longer than a chat
 // reply, so this is looser than a plain chat default.
 const turnTimeout = 2 * time.Hour
+
+// maxPreOutputRetries bounds the automatic relaunch of a first turn that
+// failed strictly pre-output; preOutputPause is the fixed wait between
+// attempts. Pre-output failures are launch flakes and startup crashes, not
+// sustained outages, so a short fixed pause beats a backoff curve.
+const (
+	maxPreOutputRetries = 2
+	preOutputPause      = 500 * time.Millisecond
+)
+
+// retryPause waits preOutputPause unless ctx ends first. It reports false
+// when the context was canceled — the caller should give up rather than
+// start another attempt.
+func retryPause(ctx context.Context) bool {
+	timer := time.NewTimer(preOutputPause)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
 
 // Start claims session id for one turn, records prompt as the user's
 // message, marks the session running and runs the turn in the background in
@@ -47,6 +72,9 @@ func (e *Engine) Start(id, dir, prompt string, resume bool, launch Launch) bool 
 	// tell the page there is nothing to poll for.
 	e.store.Append(id, Entry{Role: "user", Content: prompt, Timestamp: time.Now()})
 	e.store.SetRunning(id)
+	e.mu.Lock()
+	e.lastTurn[id] = lastTurn{prompt: prompt}
+	e.mu.Unlock()
 
 	go e.runTurn(turnCtx, id, dir, prompt, resume, launch, prompter, cancel, done)
 	return true
@@ -81,6 +109,7 @@ func (e *Engine) runTurn(ctx context.Context, sessionID, projectPath, prompt str
 				end.NotSent, werr = true, nil
 			}
 			end.Err, end.Stopped = e.finishTurn(ctx, sessionID, werr, nil)
+			e.settleTurn(sessionID, prompt, end.Err)
 			return
 		}
 	}
@@ -89,11 +118,52 @@ func (e *Engine) runTurn(ctx context.Context, sessionID, projectPath, prompt str
 	opts.Store = settled
 	conv := newConverter()
 	sink := func(raw any) { e.record(sessionID, conv, raw) }
-	_, werr = e.agent.Run(ctx, agentboot.RunRequest{ProjectPath: projectPath, Prompt: prompt, Opts: opts}, prompter, sink)
+	res, werr := e.agent.Run(ctx, agentboot.RunRequest{ProjectPath: projectPath, Prompt: prompt, Opts: opts}, prompter, sink)
 	// A one-shot process exits with its turn, and its background tasks
 	// with it.
 	e.clearTasks(sessionID)
 	end.Err, end.Stopped = e.finishTurn(ctx, sessionID, werr, settled)
+	e.settleTurn(sessionID, prompt, end.Err)
+	if end.Err != nil {
+		// The host may retry this turn: whether output was seen decides
+		// between resuming the interrupted turn and re-sending the prompt.
+		e.markTurnOutput(sessionID, res != nil && len(res.Events) > 0)
+	}
+}
+
+// lastTurn remembers a session's most recent turn for Retry: the prompt it
+// ran ("" for a recovery launch), whether it ended in failure, and whether
+// the agent produced any output before failing.
+type lastTurn struct {
+	prompt     string
+	failed     bool
+	outputSeen bool
+}
+
+// settleTurn records the outcome of a turn: a failure arms Retry, a clean
+// turn clears the record — there is nothing to retry.
+func (e *Engine) settleTurn(id, prompt string, err error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if err == nil {
+		delete(e.lastTurn, id)
+		return
+	}
+	if lt, ok := e.lastTurn[id]; ok {
+		lt.prompt, lt.failed = prompt, true
+		e.lastTurn[id] = lt
+	}
+}
+
+// markTurnOutput notes whether the failed turn produced any output, the
+// gate that decides how Retry relaunches.
+func (e *Engine) markTurnOutput(id string, seen bool) {
+	e.mu.Lock()
+	if lt, ok := e.lastTurn[id]; ok {
+		lt.outputSeen = seen
+		e.lastTurn[id] = lt
+	}
+	e.mu.Unlock()
 }
 
 // settleStore notes whether the runner recorded a one-shot turn's outcome.
@@ -153,21 +223,34 @@ func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, 
 
 	e.store.SetRunning(sessionID)
 	if !found {
-		opened, operr := e.agent.Open(ctx, "", projectPath, prompt, opts)
-		if operr != nil {
+		// A first turn that failed strictly pre-output (launch flake,
+		// startup crash, network error before the agent produced anything)
+		// is safe to relaunch: no output was streamed, no tool ran, and
+		// with no output there is no Claude session id to resume — each
+		// attempt is a fresh launch of the same prompt. Bounded retries
+		// with a short fixed pause. A retry that also fails returns the
+		// final error with handled=true (the turn ran on a persistent
+		// process) — never falling through to a one-shot re-run; see
+		// .design/claude-code-session.md §5.4.
+		for attempt := 0; ; attempt++ {
+			res, werr = e.openPersistentTurn(ctx, sessionID, projectPath, prompt, opts, want, prompter)
+			if werr == nil || attempt >= maxPreOutputRetries ||
+				!agentboot.PreOutputFailure(werr) || (res != nil && res.c.TurnOutputSeen()) {
+				break
+			}
+			logrus.WithError(werr).Warnf("engine: pre-output failure on session %s's first turn (attempt %d), relaunching", sessionID, attempt+1)
+			e.Evict(sessionID)
+			e.store.SetRunning(sessionID)
+			if !retryPause(ctx) {
+				break
+			}
+		}
+		if res == nil {
+			// No process ever started (or the pool refused it): the
+			// existing fallback contract applies — nothing was sent, so a
+			// one-shot turn can still take the message.
 			return nil, false
 		}
-		if perr := e.pool.Open(ctx, sessionID, opened); perr != nil {
-			closeCtx, cancel := context.WithTimeout(context.Background(), agentboot.SessionCloseTimeout)
-			_ = opened.Close(closeCtx)
-			cancel()
-			return nil, false
-		}
-		e.mu.Lock()
-		e.launch[sessionID] = want
-		e.mu.Unlock()
-		res = e.newResident(sessionID, opened)
-		_, werr = res.c.Await(ctx, prompter)
 	} else {
 		_, werr = res.c.RunTurn(ctx, prompt, prompter)
 		switch {
@@ -191,15 +274,100 @@ func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, 
 		// A crash mid-turn: drop the pool's stale bookkeeping now rather
 		// than waiting for the next Acquire to self-heal it.
 		e.pool.Remove(sessionID)
-	} else {
+
+		// The crash happened with staged work on disk (any output seen
+		// means the session reached the transcript): recover it naturally
+		// instead of failing the turn. --resume replays the interrupted
+		// turn from the transcript — the user's message is never re-sent
+		// — and interrupted tool calls are not re-run (CLI-guaranteed).
+		// One attempt only: a recovery that also fails surfaces the error.
+		if agentboot.PreOutputFailure(werr) && res.c.TurnOutputSeen() {
+			logrus.WithError(werr).Warnf("engine: session %s crashed mid-turn, resuming the interrupted turn", sessionID)
+			recRes, recErr := e.recoverInterruptedTurn(ctx, sessionID, projectPath, opts, want, prompter)
+			if recErr == nil {
+				werr = nil
+				res = recRes
+			} else {
+				werr = recErr
+			}
+		}
+	} else if werr == nil || res.c.Session().Status() != agentboot.SessionStateTerminated {
+		// Not a mid-turn crash (clean turn, or a ResultError on a live
+		// session): the session stays pooled — count the activity.
 		e.pool.Touch(sessionID)
 	}
 	if werr == nil {
 		e.store.SetCompleted(sessionID, "")
 	} else {
 		e.store.SetFailed(sessionID, werr.Error())
+		// The host may retry this turn: whether output was seen decides
+		// between resuming the interrupted turn and re-sending the prompt.
+		e.markTurnOutput(sessionID, res.c.TurnOutputSeen())
 	}
 	return werr, true
+}
+
+// recoverInterruptedTurn relaunches a persistent process that crashed
+// mid-turn, recovering the interrupted turn instead of failing it. The
+// relaunch resumes the same Claude session (the engine pins the Claude
+// session id to the engine's own at first launch, so --resume <sessionID>
+// finds it) with CLAUDE_CODE_RESUME_INTERRUPTED_TURN set: the CLI replays
+// the interrupted turn's prompt from its transcript — the host's prompt is
+// empty, injecting no message — and continues it without re-running
+// interrupted tool calls.
+func (e *Engine) recoverInterruptedTurn(ctx context.Context, sessionID, projectPath string, opts agentboot.ExecutionOptions, want launchState, prompter agentboot.Prompter) (*resident, error) {
+	e.Evict(sessionID)
+	e.store.SetRunning(sessionID)
+
+	recOpts := opts
+	recOpts.Resume = true
+	recOpts.Env = append(append([]string(nil), opts.Env...), claude.EnvResumeInterruptedTurn+"=1")
+	recWant := launchState{sig: launchSignature(recOpts), model: opts.Model, mode: opts.PermissionMode}
+	return e.openPersistentTurn(ctx, sessionID, projectPath, "", recOpts, recWant, prompter)
+}
+
+// Retry re-runs a failed turn without adding anything to the transcript.
+// How it relaunches depends on the failed turn (settleTurn/markTurnOutput):
+// output seen means staged work reached the CLI's transcript, so the
+// relaunch resumes the same Claude session with
+// CLAUDE_CODE_RESUME_INTERRUPTED_TURN and an empty prompt — the CLI replays
+// the interrupted turn itself, exactly like the automatic mid-turn recovery.
+// No output means the prompt never reached Claude, so the recorded prompt is
+// sent again as a fresh turn. It returns false when the session is busy or
+// has no failed turn to retry; like Start, the claim is atomic.
+func (e *Engine) Retry(id, dir string, launch Launch) bool {
+	e.mu.Lock()
+	if _, busy := e.runs[id]; busy {
+		e.mu.Unlock()
+		return false
+	}
+	failed, ok := e.lastTurn[id]
+	if !ok || !failed.failed {
+		e.mu.Unlock()
+		return false
+	}
+	delete(e.lastTurn, id)
+	turnCtx, cancel := context.WithTimeout(context.Background(), turnTimeout)
+	prompter := newWebPrompter(id, e.store)
+	done := make(chan struct{})
+	e.runs[id] = &run{cancel: cancel, prompter: prompter, done: done}
+	e.mu.Unlock()
+
+	prompt, resume := "", true
+	if !failed.outputSeen {
+		prompt, resume = failed.prompt, false
+	} else if launch != nil {
+		base := launch
+		launch = func(ctx context.Context) agentboot.ExecutionOptions {
+			opts := base(ctx)
+			opts.Env = append(opts.Env, claude.EnvResumeInterruptedTurn+"=1")
+			return opts
+		}
+	}
+	e.store.SetRunning(id)
+
+	go e.runTurn(turnCtx, id, dir, prompt, resume, launch, prompter, cancel, done)
+	return true
 }
 
 // finishTurn applies the two corrections both the one-shot and persistent
@@ -230,6 +398,29 @@ func (e *Engine) finishTurn(ctx context.Context, sessionID string, werr error, s
 		e.appendError(sessionID, werr.Error())
 	}
 	return werr, false
+}
+
+// openPersistentTurn starts a fresh persistent process for sessionID's first
+// turn (prompt submitted via Open's InitialInput), registers it with the pool
+// and the launch bookkeeping, and awaits the turn. A nil resident means
+// nothing was sent — the caller falls back to a one-shot turn.
+func (e *Engine) openPersistentTurn(ctx context.Context, sessionID, projectPath, prompt string, opts agentboot.ExecutionOptions, want launchState, prompter agentboot.Prompter) (*resident, error) {
+	opened, operr := e.agent.Open(ctx, "", projectPath, prompt, opts)
+	if operr != nil {
+		return nil, operr
+	}
+	if perr := e.pool.Open(ctx, sessionID, opened); perr != nil {
+		closeCtx, cancel := context.WithTimeout(context.Background(), agentboot.SessionCloseTimeout)
+		_ = opened.Close(closeCtx)
+		cancel()
+		return nil, perr
+	}
+	e.mu.Lock()
+	e.launch[sessionID] = want
+	e.mu.Unlock()
+	res := e.newResident(sessionID, opened)
+	_, werr := res.c.Await(ctx, prompter)
+	return res, werr
 }
 
 // launchState is what a resident process runs with: sig is what only a

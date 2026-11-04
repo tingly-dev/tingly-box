@@ -30,7 +30,12 @@ type Bot struct {
 	cancel     context.CancelFunc
 	wg         sync.WaitGroup
 	mu         sync.RWMutex
-	webhookMap map[string]string // conversationID -> webhook URL
+	webhookMap map[string]string       // conversationID -> webhook URL
+	convMap    map[string]conversation // conversationID -> OpenAPI addressing
+
+	// REST bases; overridable so tests can point at a local server.
+	oapiBase string
+	apiBase  string
 
 	// access token cache for REST API calls (e.g. reactions)
 	tokenMu     sync.Mutex
@@ -58,6 +63,9 @@ func NewDingTalkBot(config *core.Config) (*Bot, error) {
 	bot := &Bot{
 		BaseBot:    core.NewBaseBot(config),
 		webhookMap: make(map[string]string),
+		convMap:    make(map[string]conversation),
+		oapiBase:   defaultOAPIBase,
+		apiBase:    defaultAPIBase,
 	}
 
 	return bot, nil
@@ -146,6 +154,7 @@ func (b *Bot) onChatBotMessage(ctx context.Context, data *chatbot.BotCallbackDat
 	if data.SessionWebhook != "" {
 		b.webhookMap[data.ConversationId] = data.SessionWebhook
 	}
+	b.convMap[data.ConversationId] = conversation{direct: data.ConversationType == "1", staffID: data.SenderStaffId}
 	b.mu.Unlock()
 
 	// Use adapter to convert platform message to core message
@@ -172,14 +181,14 @@ func (b *Bot) SendMessage(ctx context.Context, target string, opts *core.SendMes
 	// segments render as a quoted block (Dimmed).
 	core.ResolveTextFromSegments(opts, core.GetPlatformCapabilities(core.PlatformDingTalk).EffectiveThinkingRender())
 
-	// Handle text message
-	if opts.Text != "" {
-		return b.sendText(ctx, target, opts)
-	}
-
-	// Handle media
+	// Media first: its text is a caption, and sending only the text would drop
+	// the attachment silently.
 	if len(opts.Media) > 0 {
 		return b.sendMedia(ctx, target, opts)
+	}
+
+	if opts.Text != "" {
+		return b.sendText(ctx, target, opts)
 	}
 
 	return nil, core.NewBotError(core.ErrUnknown, "no content to send", false)
@@ -244,7 +253,7 @@ func (b *Bot) getAccessToken(ctx context.Context) (string, error) {
 	clientID := b.Config().Auth.ClientID
 	clientSecret := b.Config().Auth.ClientSecret
 
-	url := fmt.Sprintf("https://oapi.dingtalk.com/gettoken?appkey=%s&appsecret=%s", clientID, clientSecret)
+	url := fmt.Sprintf("%s/gettoken?appkey=%s&appsecret=%s", b.oapiBase, clientID, clientSecret)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
@@ -252,7 +261,7 @@ func (b *Bot) getAccessToken(ctx context.Context) (string, error) {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("get token request: %w", err)
+		return "", fmt.Errorf("get token request: %w", scrubURLError(err))
 	}
 	defer resp.Body.Close()
 
@@ -324,34 +333,6 @@ func (b *Bot) sendText(ctx context.Context, conversationID string, opts *core.Se
 
 	b.UpdateLastActivity()
 	return lastResult, nil
-}
-
-// sendMedia sends media using SDK's ChatbotReplier
-func (b *Bot) sendMedia(ctx context.Context, conversationID string, opts *core.SendMessageOptions) (*core.SendResult, error) {
-	// Get webhook URL for this conversation
-	b.mu.RLock()
-	webhookURL, ok := b.webhookMap[conversationID]
-	b.mu.RUnlock()
-
-	if !ok || webhookURL == "" {
-		return nil, core.NewBotError(core.ErrPlatformError, "no webhook URL for conversation; must receive a message first", false)
-	}
-
-	if len(opts.Media) == 0 {
-		return nil, core.NewBotError(core.ErrUnknown, "no media to send", false)
-	}
-
-	media := opts.Media[0]
-
-	// Note: Stream mode webhook doesn't support direct media upload
-	// Media needs to be uploaded first via REST API to get media ID
-	// then sent using the appropriate message type
-	switch media.Type {
-	case "image", "video", "audio", "document":
-		return nil, core.NewBotError(core.ErrMediaNotSupported, fmt.Sprintf("media type %s requires upload via REST API first", media.Type), false)
-	default:
-		return nil, core.NewBotError(core.ErrMediaNotSupported, fmt.Sprintf("unsupported media type: %s", media.Type), false)
-	}
 }
 
 // getChatType converts DingTalk conversation type to core.ChatType

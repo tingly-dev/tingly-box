@@ -5563,6 +5563,50 @@
         }
       }
     },
+    "/api/v1/projects/{id}/coordinator/recover": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Resolve an interrupted coordinator input; retry may repeat side effects",
+        "description": "Resolve an interrupted coordinator input; retry may repeat side effects",
+        "operationId": "apiV1ProjectsIdCoordinatorRecoverPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoverCoordinatorRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/events": {
       "get": {
         "tags": [
@@ -8823,6 +8867,49 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/retry": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Re-run the failed turn: a crashed turn resumes from the agent's own transcript (the message is not re-sent), a turn that never reached the agent is sent again",
+        "description": "Re-run the failed turn: a crashed turn resumes from the agent's own transcript (the message is not re-sent), a turn that never reached the agent is sent again",
+        "operationId": "apiV1ThreadsIdRetryPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "no failed turn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -17918,6 +18005,10 @@
             "type": "boolean",
             "description": "Field coordinator_busy"
           },
+          "coordinator_recovery": {
+            "type": "string",
+            "description": "Field coordinator_recovery"
+          },
           "counts": {
             "$ref": "#/components/schemas/ThreadCounts"
           },
@@ -18668,6 +18759,27 @@
         },
         "required": [
           "success"
+        ]
+      },
+      "RecoverCoordinatorRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Field action",
+            "enum": [
+              "retry",
+              "skip"
+            ]
+          },
+          "input_id": {
+            "type": "string",
+            "description": "Field input_id"
+          }
+        },
+        "required": [
+          "input_id",
+          "action"
         ]
       },
       "RedeemResponse": {

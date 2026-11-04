@@ -68,7 +68,9 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 		if opts.Store != nil && opts.SessionID != "" {
 			opts.Store.SetFailed(opts.SessionID, err.Error())
 		}
-		return nil, fmt.Errorf("start process: %w", err)
+		// A launch failure is a pre-output process failure: wrap it as a
+		// ProcessError so [PreOutputFailure] recognizes it as retryable.
+		return nil, newProcessError(r.driver.Type(), fmt.Errorf("start process: %w", err))
 	}
 	if opts.Store != nil && opts.SessionID != "" {
 		opts.Store.SetRunning(opts.SessionID)

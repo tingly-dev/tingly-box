@@ -17,7 +17,7 @@ import (
 
 // When the cached list has expired and the upstream refetch fails (e.g. an
 // upstream tingly-box restarting), the read path serves the last real list
-// instead of an empty one; a manual refresh still reports the failure.
+// instead of an empty one, for both reads and manual refreshes.
 func TestResolveProviderModels_ExpiredCache_FetchFails_ServesStale(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "unavailable", http.StatusServiceUnavailable)
@@ -54,7 +54,8 @@ func TestResolveProviderModels_ExpiredCache_FetchFails_ServesStale(t *testing.T)
 
 	refreshed, err := cfg.ResolveProviderModels(true, false, p.UUID)
 	require.NoError(t, err)
-	assert.Empty(t, refreshed.Models, "manual refresh must not mask the failure with the stale list")
+	assert.Equal(t, ModelListSourceCache, refreshed.Source)
+	assert.Equal(t, []string{"tb-model"}, refreshed.Models)
 }
 
 // A manual refresh invalidates the cache even when the upstream call fails:

@@ -16,6 +16,7 @@ import (
 //
 //	<root>/<project>/memory/MEMORY.md, memory/*.md
 //	<root>/<project>/library/...           uploads; threads write outputs/<thread>/
+//	<root>/<project>/library/.tmp/<thread>/ a thread's TMPDIR (hidden from the Library tab)
 //	<root>/<project>/threads/<thread>/     each new thread's working directory (older ones keep theirs)
 //	<root>/<project>/threads/<thread>.settings.json
 type Layout struct {
@@ -36,6 +37,14 @@ func (l Layout) LibraryDir(projectID string) string {
 // OutputDir is where a thread writes deliverables that are not code.
 func (l Layout) OutputDir(projectID, slug string) string {
 	return filepath.Join(l.LibraryDir(projectID), "outputs", slug)
+}
+
+// TmpDir is a thread's scratch directory, used as its TMPDIR. It sits inside
+// the library, so the thread may write there and send_file may read from it,
+// but under a dot directory so ListLibrary does not show scratch files. It is
+// keyed by thread id (unlike OutputDir's title slug, which can repeat).
+func (l Layout) TmpDir(projectID, threadID string) string {
+	return filepath.Join(l.LibraryDir(projectID), ".tmp", threadID)
 }
 
 // ThreadDir is a project thread's working directory: its worktree, or a

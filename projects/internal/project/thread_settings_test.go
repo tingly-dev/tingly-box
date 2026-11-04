@@ -195,7 +195,7 @@ func TestWorkerProfileInheritanceAndOverride(t *testing.T) {
 	data, err := os.ReadFile(spec.SettingsPath)
 	require.NoError(t, err)
 	assert.Contains(t, string(data), `"X":"profile"`)
-	assert.Contains(t, string(data), `"allow":["Read"]`)
+	assert.Contains(t, string(data), `"allow":["Read","Read(//`)
 	assert.Contains(t, string(data), `/data`)
 	assert.Contains(t, string(data), f.threads.layout.MemoryDir(f.project.ID))
 	cmd, err := f.threads.Handoff(th.ID)

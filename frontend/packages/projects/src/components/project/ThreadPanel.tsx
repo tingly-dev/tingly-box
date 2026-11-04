@@ -12,7 +12,7 @@ import { HeldMessages, heldMessages } from './HeldMessages';
 import { AttachmentChips, uploadAttachments, type AttachOwner } from '../attachments';
 import { CodeBlock, Markdown } from '../Markdown';
 import { ConfirmDialog, CopyIconButton } from '@tingly/ui';
-import { ArrowBack, DiffIcon, MoreVert, Robot, Stream, Terminal, Warning } from '../icons';
+import { ArrowBack, DiffIcon, MoreVert, Refresh, Robot, Stream, Terminal, Warning } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { formatTokens } from '../../utils/format';
 import { DiffDialog } from './DiffDialog';
@@ -443,7 +443,15 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 {needsUser(thread.status) && thread.wait_reason && !pendingRequestId && (
                     <Box sx={{ mt: 1, display: 'flex', alignItems: 'flex-start', gap: 1, px: 1.25, py: 0.75, borderRadius: radius.row, bgcolor: 'action.hover', fontSize: fontSizes.md, color: 'text.primary', overflowWrap: 'anywhere' }}>
                         <Box sx={{ pt: '3px' }}><ThreadStateMark status={thread.status} /></Box>
-                        <Box>{thread.wait_reason}</Box>
+                        <Box sx={{ flex: 1 }}>{thread.wait_reason}</Box>
+                        {/* A failed turn is retried where it failed: the agent resumes it from its own transcript, no message re-sent. */}
+                        {thread.status === 'failed' && (
+                            <Button size="small" color="inherit" variant="outlined" startIcon={<Refresh sx={{ fontSize: '16px !important' }} />}
+                                disabled={acting}
+                                onClick={() => { void act(ops.retry).then((ok) => { if (ok) onRefresh?.(); }); }}>
+                                {t('thread.retry')}
+                            </Button>
+                        )}
                     </Box>
                 )}
             </Box>

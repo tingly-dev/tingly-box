@@ -59,8 +59,14 @@ func (s *Service) Save(p *db.Project) error {
 			Payload: jsonString(map[string]bool{"settings_changed": true}),
 		}
 	}
-	if err := s.Store.SaveProjectWithEvent(p, notice); err != nil {
-		return err
+	var saveErr error
+	if s.Coordinator != nil && s.Coordinator.sessions != nil && notice != nil && !p.Paused && p.ArchivedAt == nil {
+		saveErr = s.Store.SaveProjectWithCoordinatorInput(p, notice)
+	} else {
+		saveErr = s.Store.SaveProjectWithEvent(p, notice)
+	}
+	if saveErr != nil {
+		return saveErr
 	}
 	s.Hub.Publish(Event{Type: EventProject, ProjectID: p.ID, Data: p})
 	if notice != nil {
@@ -107,8 +113,19 @@ func (s *Service) SetPaused(p *db.Project, paused bool) error {
 	p.Paused = paused
 	if paused {
 		s.Threads.StopProject(p.ID)
+		if s.Coordinator != nil && s.Coordinator.sessions != nil {
+			if main, err := s.Store.GetThread(p.MainThreadID); err == nil && main.SessionID != "" {
+				s.Coordinator.sessions.engine.Stop(main.SessionID)
+			}
+		}
 	}
-	return s.Save(p)
+	if err := s.Save(p); err != nil {
+		return err
+	}
+	if !paused && s.Coordinator != nil && s.Coordinator.sessions != nil && p.MainThreadID != "" {
+		s.Coordinator.schedule(p.ID, func(q *queue) { q.config = true })
+	}
+	return nil
 }
 
 // SetArchived archives (stopping its threads) or unarchives a project or a
@@ -121,11 +138,22 @@ func (s *Service) SetArchived(p *db.Project, archived bool) error {
 		now := time.Now()
 		p.ArchivedAt = &now
 		s.Threads.StopProject(p.ID)
+		if s.Coordinator != nil && s.Coordinator.sessions != nil {
+			if main, err := s.Store.GetThread(p.MainThreadID); err == nil && main.SessionID != "" {
+				s.Coordinator.sessions.engine.Stop(main.SessionID)
+			}
+		}
 	} else {
 		p.ArchivedAt = nil
 	}
-	if err := s.Save(p); err != nil || !archived {
+	if err := s.Save(p); err != nil {
 		return err
+	}
+	if !archived {
+		if s.Coordinator != nil && s.Coordinator.sessions != nil && p.MainThreadID != "" {
+			s.Coordinator.schedule(p.ID, func(q *queue) { q.config = true })
+		}
+		return nil
 	}
 	_, err := s.Store.DeleteProjectChannelBindings(p.ID)
 	return err

@@ -69,7 +69,7 @@ func newTinglyProjectsHarness(t *testing.T) *tinglyProjectsHarness {
 	gin.SetMode(gin.TestMode)
 	cli := filepath.Join(t.TempDir(), "claude")
 	script := "#!" + python + `
-import json, sys
+import json, re, sys
 if '--version' in sys.argv:
     print('2.1.218 (Claude Code)')
     sys.exit(0)
@@ -86,7 +86,11 @@ for line in sys.stdin:
         print(json.dumps({'type':'control_request','request_id':'permission-1','request':{'subtype':'can_use_tool','tool_name':'Bash','input':{'command':'echo harness'}}}), flush=True)
         response = json.loads(sys.stdin.readline())
         text += ' approved' if response.get('response', {}).get('response', {}).get('behavior') == 'allow' else ' rejected'
-    out = 'Harness reply: ' + str(text)
+    if '--system-prompt' in sys.argv:
+        events = re.findall(r'<event[^>]*trust="principal"[^>]*>\n(.*?)\n</event>', str(text), re.DOTALL)
+        out = 'You said: ' + (events[-1] if events else str(text))
+    else:
+        out = 'Harness reply: ' + str(text)
     print(json.dumps({'type':'assistant','message':{'id':'msg','type':'message','role':'assistant','model':'harness','content':[{'type':'text','text':out}],'usage':{'input_tokens':1,'output_tokens':1}}}), flush=True)
     print(json.dumps({'type':'result','subtype':'success','is_error':False,'result':out}), flush=True)
 `

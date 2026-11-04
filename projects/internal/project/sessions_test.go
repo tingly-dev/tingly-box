@@ -312,7 +312,8 @@ func TestSessionLaunchesUnderItsProfile(t *testing.T) {
 	assert.Contains(t, string(merged), `"/data"`)
 	assert.Contains(t, string(merged), f.threads.layout.LibraryDir(s.ProjectID))
 	assert.Contains(t, string(merged), `"autoMemoryDirectory":"`+f.threads.layout.MemoryDir(s.ProjectID)+`"`, "memory is the project's, not the cwd's")
-	assert.Empty(t, spec.Env)
+	dir := f.threads.layout.TmpDir(s.ProjectID, s.ID)
+	assert.ElementsMatch(t, []string{"TMPDIR=" + dir, "TMP=" + dir, "TEMP=" + dir}, spec.Env, "a profile adds nothing but the thread's temp dir")
 	assert.Empty(t, spec.Model, "the profile decides when no model is picked")
 
 	// Back to the default routing with a tier; a profile that cannot run

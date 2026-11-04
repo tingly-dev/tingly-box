@@ -127,7 +127,7 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
   - **显式收尾**：协调者的每个轮次以三种方式之一结束：回复用户、调用做事的工具、或调用 `no_update` 工具表示无需发言。`no_update` 只对线程汇报和 check-in 轮次有效，立即结束轮次；用户消息触发的轮次调用它会被拒绝（用户的消息必须有回应）。旧模型回复 `NO_UPDATE` 文本在汇报轮次仍然静默（兼容）。用户消息触发的轮次如果什么都没做就结束，会被提醒一次，仍然为空则结束，保证循环有界。
   - **改名**：目标变了协调者用 `rename_thread` 改卡片标题，不动分支和历史，也不开新一轮。
   - 未做：用真实模型验证回复预算和信封是否真的被遵守（harness 阶段 4）。
-- **目录权限**：生成 settings 文件，`permissions.additionalDirectories` = [library, memory, 其他仓库]，`--settings` 传入。
+- **目录权限**：生成 settings 文件，`permissions.additionalDirectories` = [library, memory, 其他仓库]，`--settings` 传入；library 另有 `allow` 规则和 auto 模式分类器条目，见 `workspace.md`「共享上传目录（library）的授权」。
 - **连接**：全局连接为 Anthropic 风格时，线程继承它（`ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN`），即默认走 Tingly Box；否则用本机 `claude` 自己的登录。
 - **权限模式**：默认 `acceptEdits`（编辑自动通过，命令等需审批 → Waiting on you）；项目设置可改为 `auto` / `bypassPermissions`。
 - **审批**：prompter 把请求记为线程事件、线程进入 `waiting`、阻塞等待用户在线程里回答（权限审批不超时）；"本线程同类都允许"按工具名记住。
@@ -136,9 +136,12 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 - **一轮结束后**：读取 git 状态（领先提交数、改动文件数）→ 定状态 → 记一条 `report` 事件 → 通知协调者。
 
 ### 4.5 协调者
+
+> **现行设计**：Coordinator 的会话、输入投递、共享路径和恢复方案见 [coordinator-session.md](coordinator-session.md)。以下保留初版设计背景；其中“每回合按最近 40 条事件重建模型上下文”、工具循环和配置变更的旧描述已由该文档取代，不是当前实现。
 - 每个项目一个串行队列；触发源：用户消息、线程汇报（完成 / 需要输入 / 失败）、项目运行配置变更。
 - **配置变更**：保存名称、Goal、Instructions、仓库、模型或权限模式时，在同一事务中写入主线程的 `system` 事件（`source=system`），经现有队列合并通知协调者。协调者按新配置重新评估待办，无事则保持安静；收藏与重复保存不触发模型，暂停或归档时只记录变更。每轮模型请求重新读取配置并解析模型；执行工具前再次检查，若响应生成期间配置已变，先返回工具错误让模型重新规划。仓库变更作用于新线程，已有线程的 worktree 不搬迁。
 - **按需构建上下文**（与官方一致：基于最近消息、线程表和记忆，而不是全量历史）：系统提示 = 角色 + Goal + Instructions + MEMORY.md + 仓库列表 + 线程表（id、标题、状态、最近汇报摘要）；消息 = 最近 N 条项目对话。
+  - **读窗口之外的对话**：窗口按条数截断（最近 40 条），被截断时系统提示末尾会说明“更早的消息存在”。读取工具按**来源**分，同一来源只有一个工具，读法用参数区分，不重叠：`read_conversation`（主对话：默认从窗口最老的一条往前，`before` 翻页，`contains` 按文字搜索，最多回看 1000 条，`id` 读指定一条全文）、`get_thread`（某个线程：状态头加 `before` 翻页和 `full`）、`list_threads`（含已归档和旧线程，补线程表只显示 30 个的缺口，可按 `status`、`contains` 过滤）。三层上限，效果类似 grep / ls 的输出：单条上限（预览 600 字，`full` 或 `id` 为 4000 字）、总量上限（预览 6000 字，`full` 12000 字）、条目上限（默认 20，最多 40）。放不下的从最老的一端隐去，结果末尾明说“隐去了 N 条，用 `contains` 收窄或用 `before=<id>` 接着读”，被截断的单条也带“用 `id` 读全文”的提示，模型不会把被截断的结果当成全部。结果作为 relay 信封返回，是被引用的历史而不是用户此刻的话；其中的消息 id 可用于 `cite`（仅限最近 200 条）。这对应官方协调者按需拉取历史的做法。仍然没有滚动摘要：窗口外的内容要靠协调者主动读或写进记忆。
 - **工具**：`start_thread`、`propose_threads`、`message_thread`、`get_thread`、`resolve_thread`、`remember`、`forget`、`update_instructions`。
 - **路由规则**（提示词）：快速问题就地答；新工作开线程；同领域的后续交给已有线程并说明交给了谁；一条多任务拆多线程；用户表达的协调偏好（先提议、最多 N 个并行、更新简短……）用 `remember` 记下并遵守。
 - 线程汇报触发的协调者回合：简短更新，只在完成、受阻或需要用户时发言。
