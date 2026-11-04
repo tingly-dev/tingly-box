@@ -11318,6 +11318,10 @@
             "type": "string",
             "description": "Field display_name"
           },
+          "display_name_source": {
+            "type": "string",
+            "description": "Field display_name_source"
+          },
           "external_actor_id": {
             "type": "string",
             "description": "Field external_actor_id"
@@ -13785,6 +13789,10 @@
             "type": "string",
             "description": "Field alias"
           },
+          "alias_source": {
+            "type": "string",
+            "description": "Field alias_source"
+          },
           "blocked": {
             "type": "boolean",
             "description": "Field blocked"
@@ -14666,6 +14674,10 @@
           "alias": {
             "type": "string",
             "description": "Field alias"
+          },
+          "alias_source": {
+            "type": "string",
+            "description": "Field alias_source"
           },
           "blocked": {
             "type": "boolean",
@@ -18093,6 +18105,11 @@
             "type": "string",
             "description": "Field main_thread_id"
           },
+          "max_running_threads": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads"
+          },
           "name": {
             "type": "string",
             "description": "Field name"
@@ -18156,6 +18173,7 @@
           "coordinator_effort",
           "thread_effort",
           "thread_permission_mode",
+          "max_running_threads",
           "paused",
           "starred",
           "created_at",
@@ -18238,11 +18256,17 @@
           "cli_path": {
             "type": "string",
             "description": "Field cli_path"
+          },
+          "max_running_threads_limit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads_limit"
           }
         },
         "required": [
           "cli_path",
-          "base_url"
+          "base_url",
+          "max_running_threads_limit"
         ]
       },
       "ProjectSummary": {
@@ -18289,6 +18313,11 @@
           "main_thread_id": {
             "type": "string",
             "description": "Field main_thread_id"
+          },
+          "max_running_threads": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads"
           },
           "name": {
             "type": "string",
@@ -18356,6 +18385,7 @@
           "coordinator_effort",
           "thread_effort",
           "thread_permission_mode",
+          "max_running_threads",
           "paused",
           "starred",
           "created_at",
@@ -21080,6 +21110,10 @@
             "type": "string",
             "description": "Field project_id"
           },
+          "queued": {
+            "type": "boolean",
+            "description": "Field queued"
+          },
           "repo_path": {
             "type": "string",
             "description": "Field repo_path"
@@ -22015,6 +22049,11 @@
           "instructions": {
             "type": "string",
             "description": "Field instructions"
+          },
+          "max_running_threads": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads"
           },
           "name": {
             "type": "string",
