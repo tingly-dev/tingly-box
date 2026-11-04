@@ -238,6 +238,17 @@ func (s *Store) SaveThread(t *Thread) error {
 	return s.db.Save(t).Error
 }
 
+// SaveThreadUsage writes only what a turn's usage changed. A caller holding an
+// older copy of the thread cannot clobber its other columns with it.
+func (s *Store) SaveThreadUsage(t *Thread) error {
+	return s.db.Model(&Thread{}).Where("id = ?", t.ID).UpdateColumns(map[string]any{
+		"input_tokens": t.InputTokens, "output_tokens": t.OutputTokens,
+		"cache_read_tokens": t.CacheReadTokens, "cache_write_tokens": t.CacheWriteTokens,
+		"context_tokens": t.ContextTokens, "context_window": t.ContextWindow,
+		"last_turn_ms": t.LastTurnMS, "last_turn_at": t.LastTurnAt, "reported_model": t.ReportedModel,
+	}).Error
+}
+
 // SetThreadTitle renames a thread without bumping its UpdatedAt: a metadata
 // edit keeps the thread's place in "recently updated".
 func (s *Store) SetThreadTitle(id, title string) error {

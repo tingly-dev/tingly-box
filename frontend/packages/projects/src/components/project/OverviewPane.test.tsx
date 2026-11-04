@@ -95,3 +95,26 @@ describe('OverviewPane view', () => {
         expect(other).not.toHaveAttribute('aria-current');
     });
 });
+
+describe('OverviewPane status tab', () => {
+    it('offers Status as a third tab beside Threads and Library when the coordinator has a status', () => {
+        render(<OverviewPane projectId="p" threads={threads} onOpen={vi.fn()} libraryKey={0} status={<div>coordinator status</div>} />);
+        expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['overview.threadsWaiting:3', 'overview.library', 'overview.status']);
+        expect(screen.queryByText('coordinator status')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('tab', { name: 'overview.status' }));
+        expect(screen.getByText('coordinator status')).toBeInTheDocument();
+        // The thread list's view switch belongs to the Threads tab only.
+        expect(screen.queryByRole('button', { name: 'overview.view.list' })).not.toBeInTheDocument();
+    });
+
+    it('opens on the tab asked for, as a window does', () => {
+        render(<OverviewPane projectId="p" threads={threads} onOpen={vi.fn()} libraryKey={0} initialTab="status" status={<div>coordinator status</div>} />);
+        expect(screen.getByRole('tab', { name: 'overview.status', selected: true })).toBeInTheDocument();
+        expect(screen.getByText('coordinator status')).toBeInTheDocument();
+    });
+
+    it('has no Status tab without one', () => {
+        show();
+        expect(screen.queryByRole('tab', { name: 'overview.status' })).not.toBeInTheDocument();
+    });
+});

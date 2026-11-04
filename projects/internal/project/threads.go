@@ -225,11 +225,24 @@ func (m *Threads) isFolder(projectID string) bool {
 
 // turnTally is what a turn's transcript entries add up to, for its report.
 type turnTally struct {
-	text         string // the main conversation's last text
-	inputTokens  int64
-	outputTokens int64
-	model        string
-	launchModel  string
+	text        string // the main conversation's last text
+	usage       db.Usage
+	model       string
+	launchModel string
+}
+
+// addUsage folds a "usage" entry in; main is false for a subagent's.
+func (t *turnTally) addUsage(u engine.TurnUsage, main bool) {
+	t.usage.Input += u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens
+	t.usage.Output += u.OutputTokens
+	t.usage.CacheRead += u.CacheReadTokens
+	t.usage.CacheWrite += u.CacheWriteTokens
+	if main {
+		if u.Model != "" {
+			t.model = u.Model
+		}
+		t.usage.ContextTokens, t.usage.ContextWindow, t.usage.DurationMS = u.ContextTokens, u.ContextWindow, u.DurationMS
+	}
 }
 
 // NewThreads builds the thread manager.
@@ -1033,8 +1046,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 	t, _ = m.update(threadID, func(t *db.Thread) {
 		t.Turns++
 		t.ReportedModel = tally.model
-		t.InputTokens += tally.inputTokens
-		t.OutputTokens += tally.outputTokens
+		t.AddUsage(tally.usage, time.Now().UTC())
 		// A session's Model is the owner's pick; a project thread shows the
 		// model that answered.
 		switch {

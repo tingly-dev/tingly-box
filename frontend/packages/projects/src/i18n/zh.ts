@@ -27,7 +27,7 @@ export const zh: Dict<typeof en> = {
         newChat: '新对话', chats: '对话', projects: '项目', recentChats: '最近对话',
         settings: '设置', noChats: '还没有对话', collapse: '收起侧栏', expand: '展开侧栏',
     },
-    rail: { title: '线程详情', environment: '环境', folder: '目录', branch: '分支', model: '模型', permissions: '权限', usage: '用量', tokens: 'Token 输入 / 输出', turns: '轮数', changes: '改动', noCommits: '还没有提交', finished_one: '{{count}} 个已完成', finished_other: '{{count}} 个已完成', hide: '隐藏详情', show: '显示详情' },
+    rail: { title: '线程详情', environment: '环境', folder: '目录', branch: '分支', model: '模型', permissions: '权限', usage: '用量', tokens: 'Token 输入 / 输出', turns: '轮数', changes: '改动', noCommits: '还没有提交', finished_one: '{{count}} 个已完成', finished_other: '{{count}} 个已完成', hide: '隐藏详情', show: '显示详情', status: '状态', state: '当前', context: '上下文', contextEmpty: '还没有回合', contextTitle: '最近一次模型调用时上下文的占用', lastTurn: '上一轮耗时', lastActive: '最近活动', cache: '缓存读 / 写', cacheTitle: '从缓存读取 / 写入缓存的提示词 token', cacheHitLabel: '缓存命中', cacheHitTitle: '提示词 token 中由缓存提供的比例', session: '会话', queued: '排队中', queuedTitle: '在当前回合后面等待的消息、线程汇报和设置变更', threads: '线程', noThreads: '还没有线程', effort: '推理强度', coordinatorHide: '隐藏协调者状态' },
     sidebar: { showOlder_one: '显示更早的 {{count}} 个…', showOlder_other: '显示更早的 {{count}} 个…', fold: '收起 {{name}}', unfold: '展开 {{name}}', activity: '{{running}} 个运行中 · {{waiting}} 个在等你', running_one: '{{count}} 个运行中', running_other: '{{count}} 个运行中', recent: '最近的会话', noWorkdirs: '还没有工作目录', sessionsWaiting_one: '{{count}} 个会话在等你', sessionsWaiting_other: '{{count}} 个会话在等你', noProjects: '还没有项目', waiting_one: '{{count}} 个线程在等你', waiting_other: '{{count}} 个线程在等你' },
     // IM 聊天绑定到项目（TEP #2143，.design/projects-im.md）。
     im: {
@@ -198,7 +198,7 @@ export const zh: Dict<typeof en> = {
     band: { collapse: '折起', expand: '展开' },
     overview: {
         view: { label: '视图', list: '列表', vertical: '竖向看板', horizontal: '横向看板' },
-        threads: '线程', threadsWaiting: '线程 · {{count}} 个等你处理', library: '文件库',
+        threads: '线程', threadsWaiting: '线程 · {{count}} 个等你处理', status: '状态', library: '文件库',
         noThreads: '还没有线程。在对话里发送工作，线程会出现在这里。',
         group: { waiting: '等你处理', failed: '失败', ready: '可以 review', working: '进行中', idle: '空闲', resolved: '已解决' },
     },

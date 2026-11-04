@@ -17,7 +17,8 @@ import { useNotify } from '../../hooks/useNotify';
 import { formatTokens } from '../../utils/format';
 import { DiffDialog } from './DiffDialog';
 import { ComposerStrip } from './ComposerStrip';
-import { RAIL_MIN_PANEL, ThreadInfoRail } from './ThreadInfoRail';
+import { ThreadInfoRail } from './ThreadInfoRail';
+import { RAIL_MIN_PANEL, useInfoRail } from './infoRail';
 import { LoadEarlier } from './LoadEarlier';
 import { needsUser, ThreadBadges, ThreadState, ThreadStateMark } from './threadStatus';
 import { ThreadTitle } from './ThreadTitle';
@@ -109,21 +110,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     const [menu, setMenu] = useState<HTMLElement | null>(null);
     const [taskOpen, setTaskOpen] = useState(false);
     // The info rail sits beside the conversation when the panel is wide enough; the user can hide it.
-    const panelRef = useRef<HTMLDivElement>(null);
-    const [wide, setWide] = useState(false);
-    const [railOn, setRailOn] = useState(() => readLocal('thread.rail') !== '0');
-    useEffect(() => {
-        const el = panelRef.current;
-        if (!el || typeof ResizeObserver === 'undefined') return;
-        const ro = new ResizeObserver(([entry]) => setWide(entry.contentRect.width >= railMinPanel));
-        ro.observe(el);
-        return () => ro.disconnect();
-        // The panel's box exists once the thread has loaded.
-    }, [!!thread, railMinPanel]);
-    const toggleRail = () => {
-        writeLocal('thread.rail', railOn ? '0' : '1');
-        setRailOn(!railOn);
-    };
+    const { ref: panelRef, wide, on: railOn, toggle: toggleRail } = useInfoRail(railMinPanel, !!thread);
     const rail = wide && (railOn || railTop != null);
     // Chat and Trajectory read the same transcript; the choice and whether
     // every tool call starts open are remembered per browser.

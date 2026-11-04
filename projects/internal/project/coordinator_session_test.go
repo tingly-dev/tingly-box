@@ -49,3 +49,36 @@ func TestCoordinatorSessionResumesAcrossMessages(t *testing.T) {
 	require.Equal(t, launches[0].SessionID, launches[1].SessionID)
 	require.NotEmpty(t, launches[0].MCPConfigPath)
 }
+
+func TestCoordinatorTurnsAddUpOnTheMainThread(t *testing.T) {
+	store, err := db.Open(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+	agent := &enginetest.Agent{Script: func(turn *enginetest.Turn) error { turn.Init("default-model"); turn.Say("done", 30, 4); return nil }}
+	svc := NewService(store, Layout{Root: t.TempDir()}, Agents{Service: agent.Service()}, coordinatorSessionTestHost{fakeLLM: &fakeLLM{}})
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		svc.Threads.Shutdown(ctx)
+		_ = svc.CloseTools(ctx)
+	})
+	p, err := svc.Create(context.Background(), NewProjectSpec{Name: "Project"})
+	require.NoError(t, err)
+	for i := 0; i < 2; i++ {
+		_, err := svc.Coordinator.Post(p.ID, "hello", nil, Source{})
+		require.NoError(t, err)
+		want := i + 1
+		require.Eventually(t, func() bool {
+			events, _ := store.ListThreadEvents(p.MainThreadID)
+			return countKind(events, db.EvAssistant) == want && !svc.Coordinator.Busy(p.ID)
+		}, 5*time.Second, 10*time.Millisecond)
+	}
+	main, err := store.GetThread(p.MainThreadID)
+	require.NoError(t, err)
+	require.Equal(t, 2, main.Turns)
+	require.EqualValues(t, 60, main.InputTokens)
+	require.EqualValues(t, 8, main.OutputTokens)
+	require.EqualValues(t, 30, main.ContextTokens)
+	require.NotNil(t, main.LastTurnAt)
+	require.Equal(t, "default-model", main.ReportedModel)
+}

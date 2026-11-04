@@ -4,7 +4,7 @@ import { Link as RouterLink, Navigate, useNavigate, useParams, useSearchParams }
 import { useTranslation } from 'react-i18next';
 import { api, isFolder, type components, unwrap, type Project, type Thread, type ThreadEvent } from '../client';
 import { ConversationPane } from '../components/project/ConversationPane';
-import { OverviewPane } from '../components/project/OverviewPane';
+import { OverviewPane, type OverviewTab } from '../components/project/OverviewPane';
 import { ModelPicker } from '../components/ModelPicker';
 import { EffortPicker } from '../components/EffortPicker';
 import { loadPermissionModes, PermissionModeSelect } from '../components/workdir/PermissionModeSelect';
@@ -14,6 +14,7 @@ import { ProjectSettingsDialog, type SettingsTab } from '../components/project/P
 import { ProjectImTags, useProjectIm } from '../components/im/ProjectImBindings';
 import { IM_BINDINGS_CHANGED } from '../components/im/useImBindings';
 import { ThreadPanel } from '../components/project/ThreadPanel';
+import { CoordinatorStatus } from '../components/project/CoordinatorStatus';
 import { FloatingWindow } from '../components/workspace/FloatingWindow';
 import { OverviewBand } from '../components/workspace/OverviewBand';
 import { PlacementMenu } from '../components/workspace/PlacementMenu';
@@ -56,6 +57,9 @@ export default function ProjectPage() {
     const [threads, setThreads] = useState<Thread[]>([]);
     // The project conversation: the main thread's events.
     const [busy, setBusy] = useState(false);
+    // The coordinator's own status, for the Overview's Status tab.
+    const [coordinator, setCoordinator] = useState<Thread | undefined>(undefined);
+    const [queued, setQueued] = useState(0);
     const [recovery, setRecovery] = useState('');
     const [recoveryAction, setRecoveryAction] = useState<'retry' | 'skip' | null>(null);
     const [recovering, setRecovering] = useState(false);
@@ -67,7 +71,8 @@ export default function ProjectPage() {
     // The Overview as a window or a band opens and closes with the header button; remembered per browser.
     const [windowOpen, setWindowOpen] = useState(() => readLocal('overviewWindowOpen') !== '0');
     const [bandOpen, setBandOpen] = useState(() => readLocal('overviewBandOpen') !== '0');
-    const [libraryWindow, setLibraryWindow] = useState(false);
+    // With the Overview as a band, Library and Status each open in a window of their own.
+    const [bandWindow, setBandWindow] = useState<'library' | 'status' | null>(null);
     // A narrow screen has one surface: the drawer. With the Overview on top the thread sits below it.
     const overviewAt = pane.narrow ? 'side' : placement.overview;
     // The thread picked in the side-pane Overview while "float from the Overview" is on. It floats over the
@@ -114,6 +119,8 @@ export default function ProjectPage() {
             setProject(d.project);
             setThreads(d.threads);
             setBusy(d.coordinator_busy);
+            setCoordinator(d.coordinator);
+            setQueued(d.coordinator_queued ?? 0);
             setRecovery(d.coordinator_recovery ?? '');
             setError(null);
         } catch (e) {
@@ -326,8 +333,9 @@ export default function ProjectPage() {
             )}
         />
     ) : null;
-    const overviewEl = (initialTab?: 'threads' | 'library') => (
-        <OverviewPane projectId={id} threads={threads} onOpen={openFromOverview} libraryKey={libraryKey} selectedId={threadId} initialTab={initialTab} />
+    const overviewEl = (initialTab?: OverviewTab) => (
+        <OverviewPane key={initialTab} projectId={id} threads={threads} onOpen={openFromOverview} libraryKey={libraryKey} selectedId={threadId} initialTab={initialTab}
+            status={project && <CoordinatorStatus project={project} coordinator={coordinator} queued={queued} threads={threads} />} />
     );
     const threadInSide = !!threadEl && threadAt === 'side';
     // The side pane holds the Overview, or the open thread in its place; with the
@@ -384,7 +392,7 @@ export default function ProjectPage() {
                 sideAlwaysOpen={overviewAt !== 'side'}
                 paneToggle={paneToggle}
                 top={overviewAt === 'top' ? (
-                    <OverviewBand threads={threads} selectedId={threadId} open={bandOpen} onToggle={() => setBand(!bandOpen)} onOpen={openThread} onLibrary={() => setLibraryWindow(true)} />
+                    <OverviewBand threads={threads} selectedId={threadId} open={bandOpen} onToggle={() => setBand(!bandOpen)} onOpen={openThread} onLibrary={() => setBandWindow('library')} onStatus={() => setBandWindow('status')} />
                 ) : undefined}
                 main={<Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                     <Box sx={{ flex: 1, minHeight: 0, display: threadId && threadAt === 'main' ? 'none' : 'flex', flexDirection: 'column' }}>
@@ -521,13 +529,13 @@ export default function ProjectPage() {
                 {overviewEl()}
             </FloatingWindow>
             <FloatingWindow
-                open={overviewAt !== 'side' && libraryWindow}
-                title={t('overview.library')}
-                storageKey="library"
+                open={overviewAt !== 'side' && bandWindow !== null}
+                title={t(bandWindow === 'status' ? 'overview.status' : 'overview.library')}
+                storageKey={bandWindow === 'status' ? 'status' : 'library'}
                 defaultSize={{ w: 460, h: 480 }}
-                onClose={() => setLibraryWindow(false)}
+                onClose={() => setBandWindow(null)}
             >
-                {overviewEl('library')}
+                {overviewEl(bandWindow ?? 'library')}
             </FloatingWindow>
             <FloatingWindow
                 open={threadAt === 'float' && !!threadEl}

@@ -63,6 +63,13 @@ func (s *Store) CoordinatorProjectsWithInputs() ([]string, error) {
 	return ids, err
 }
 
+// PendingCoordinatorInputs counts the inputs waiting behind the running turn.
+func (s *Store) PendingCoordinatorInputs(projectID string) (int, error) {
+	var n int64
+	err := s.db.Model(&CoordinatorInput{}).Where("project_id = ? AND state = ?", projectID, CoordinatorPending).Count(&n).Error
+	return int(n), err
+}
+
 func (s *Store) UncertainCoordinatorInput(projectID string) (string, error) {
 	var input CoordinatorInput
 	err := s.db.Where("project_id = ? AND state = ?", projectID, CoordinatorUncertain).Order("created_at ASC, rowid ASC").First(&input).Error

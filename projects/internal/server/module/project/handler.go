@@ -42,6 +42,12 @@ type ProjectDetailResponse struct {
 	// CoordinatorBusy is true while the coordinator is working on a turn.
 	CoordinatorBusy     bool   `json:"coordinator_busy"`
 	CoordinatorRecovery string `json:"coordinator_recovery,omitempty"`
+	// Coordinator is the project's main thread: the conversation's session,
+	// with its turns, token use and context fill, for the status panel.
+	Coordinator *db.Thread `json:"coordinator,omitempty"`
+	// CoordinatorQueued counts inputs (messages, thread reports, settings
+	// changes) waiting behind the running turn.
+	CoordinatorQueued int `json:"coordinator_queued"`
 }
 
 // CreateProjectRequest is the New project dialog, or opens a folder.
@@ -411,7 +417,40 @@ func (h *Handler) get(c *gin.Context) {
 		apierr.Store(c, err, "coordinator recovery")
 		return
 	}
-	c.JSON(http.StatusOK, ProjectDetailResponse{Project: *p, Threads: threads, Counts: db.CountsOf(m), CoordinatorBusy: h.svc.Coordinator.Busy(p.ID), CoordinatorRecovery: recovery})
+	queued, err := h.svc.Store.PendingCoordinatorInputs(p.ID)
+	if err != nil {
+		apierr.Store(c, err, "coordinator queue")
+		return
+	}
+	var coordinator *db.Thread
+	if p.MainThreadID != "" {
+		if coordinator, err = h.svc.Store.GetThread(p.MainThreadID); err != nil && !errors.Is(err, db.ErrNotFound) {
+			apierr.Store(c, err, "coordinator")
+			return
+		}
+	}
+	busy := h.svc.Coordinator.Busy(p.ID)
+	c.JSON(http.StatusOK, ProjectDetailResponse{Project: *p, Threads: threads, Counts: db.CountsOf(m), CoordinatorBusy: busy, CoordinatorRecovery: recovery, Coordinator: coordinatorView(coordinator, busy, recovery), CoordinatorQueued: queued})
+}
+
+// coordinatorView gives the main thread a thread's own status, so the page reads
+// the coordinator like any thread: working during a turn, waiting on the user
+// while an interrupted input needs a decision, otherwise idle. The row itself
+// does not track this; the coordinator's queue does.
+func coordinatorView(main *db.Thread, busy bool, recovery string) *db.Thread {
+	if main == nil {
+		return nil
+	}
+	view := *main
+	switch {
+	case recovery != "":
+		view.Status, view.WaitReason = db.ThreadWaiting, "An interrupted message needs your decision."
+	case busy:
+		view.Status, view.WaitReason = db.ThreadWorking, ""
+	default:
+		view.Status, view.WaitReason = db.ThreadIdle, ""
+	}
+	return &view
 }
 
 func (h *Handler) update(c *gin.Context) {

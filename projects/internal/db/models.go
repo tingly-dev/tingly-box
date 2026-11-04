@@ -143,8 +143,19 @@ type Thread struct {
 	FilesChanged   int    `json:"files_changed"`
 	Uncommitted    bool   `json:"uncommitted"`
 	Turns          int    `json:"turns"`
-	InputTokens    int64  `json:"input_tokens"`
-	OutputTokens   int64  `json:"output_tokens"`
+	// InputTokens is every prompt token sent, cache hits and writes included;
+	// CacheReadTokens and CacheWriteTokens say how much of it they were.
+	InputTokens      int64 `json:"input_tokens"`
+	OutputTokens     int64 `json:"output_tokens"`
+	CacheReadTokens  int64 `json:"cache_read_tokens"`
+	CacheWriteTokens int64 `json:"cache_write_tokens"`
+	// ContextTokens is how full the context was on the last turn's last call;
+	// ContextWindow is the model's window when Claude Code reported it (0: unknown).
+	ContextTokens int64 `json:"context_tokens"`
+	ContextWindow int   `json:"context_window"`
+	// LastTurnMS and LastTurnAt are how long the last turn took and when it ended.
+	LastTurnMS int64      `json:"last_turn_ms"`
+	LastTurnAt *time.Time `json:"last_turn_at,omitempty"`
 	// Profile is a folder thread's launch profile, named by the host
 	// (Tingly Box: a Claude Code profile); empty for the host's default.
 	Profile string `gorm:"size:100" json:"profile,omitempty"`
@@ -305,4 +316,30 @@ func EventRole(kind string) string {
 		return RoleSystem
 	}
 	return RoleAssistant
+}
+
+// Usage is what one turn spent, as it lands on a thread.
+type Usage struct {
+	// Input counts every prompt token, cached ones included.
+	Input, Output, CacheRead, CacheWrite int64
+	ContextTokens                        int64
+	ContextWindow                        int
+	DurationMS                           int64
+}
+
+// AddUsage adds a finished turn's usage to the thread. The context figures
+// are the latest turn's, and a turn that never reached the model leaves them.
+func (t *Thread) AddUsage(u Usage, at time.Time) {
+	t.InputTokens += u.Input
+	t.OutputTokens += u.Output
+	t.CacheReadTokens += u.CacheRead
+	t.CacheWriteTokens += u.CacheWrite
+	if u.ContextTokens > 0 {
+		t.ContextTokens = u.ContextTokens
+	}
+	if u.ContextWindow > 0 {
+		t.ContextWindow = u.ContextWindow
+	}
+	t.LastTurnMS = u.DurationMS
+	t.LastTurnAt = &at
 }

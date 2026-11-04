@@ -23,7 +23,7 @@ export const en = {
         newChat: 'New chat', chats: 'Chats', projects: 'Projects', recentChats: 'Recent chats',
         settings: 'Settings', noChats: 'No chats yet', collapse: 'Close sidebar', expand: 'Open sidebar',
     },
-    rail: { title: 'Thread details', environment: 'Environment', folder: 'Folder', branch: 'Branch', model: 'Model', permissions: 'Permissions', usage: 'Usage', tokens: 'Tokens in / out', turns: 'Turns', changes: 'Changes', noCommits: 'No commits yet', finished_one: '{{count}} finished', finished_other: '{{count}} finished', hide: 'Hide details', show: 'Show details' },
+    rail: { title: 'Thread details', environment: 'Environment', folder: 'Folder', branch: 'Branch', model: 'Model', permissions: 'Permissions', usage: 'Usage', tokens: 'Tokens in / out', turns: 'Turns', changes: 'Changes', noCommits: 'No commits yet', finished_one: '{{count}} finished', finished_other: '{{count}} finished', hide: 'Hide details', show: 'Show details', status: 'Status', state: 'State', context: 'Context', contextEmpty: 'No turn yet', contextTitle: 'How full the context was on the last model call', lastTurn: 'Last turn', lastActive: 'Last active', cache: 'Cache read / write', cacheTitle: 'Prompt tokens served from the cache / written to it', cacheHitLabel: 'Cache hit', cacheHitTitle: 'Share of prompt tokens served from the cache', session: 'Session', queued: 'Queued', queuedTitle: 'Messages, thread reports and settings changes waiting behind the running turn', threads: 'Threads', noThreads: 'No threads yet', effort: 'Effort', coordinatorHide: 'Hide coordinator status' },
     sidebar: { showOlder_one: 'Show {{count}} older…', showOlder_other: 'Show {{count}} older…', fold: 'Fold {{name}}', unfold: 'Unfold {{name}}', activity: '{{running}} running · {{waiting}} waiting', running_one: '{{count}} running', running_other: '{{count}} running', recent: 'Recent sessions', noWorkdirs: 'No working folders yet', sessionsWaiting_one: '{{count}} session waits on you', sessionsWaiting_other: '{{count}} sessions wait on you', noProjects: 'No projects yet', waiting_one: '{{count}} thread waits on you', waiting_other: '{{count}} threads wait on you' },
     // IM chats bound to projects (TEP #2143, .design/projects-im.md).
     im: {
@@ -193,7 +193,7 @@ export const en = {
     band: { collapse: 'Collapse', expand: 'Expand' },
     overview: {
         view: { label: 'View', list: 'List', vertical: 'Vertical kanban', horizontal: 'Horizontal kanban' },
-        threads: 'Threads', threadsWaiting: 'Threads · {{count}} waiting', library: 'Library',
+        threads: 'Threads', threadsWaiting: 'Threads · {{count}} waiting', status: 'Status', library: 'Library',
         noThreads: 'No threads yet. Send work in the conversation and they will appear here.',
         group: { waiting: 'Waiting on you', failed: 'Failed', ready: 'Ready for review', working: 'Working', idle: 'Idle', resolved: 'Resolved' },
     },
