@@ -4,7 +4,7 @@
 // Projects' own and do not pass through here.
 import { useState } from 'react';
 import type { ImBot, ImChat, ImChatInfo, ImHost } from '@tingly/projects';
-import { bareId, entityText } from '@tingly/ui';
+import { bareId, entityText, shortId } from '@tingly/ui';
 import BotAccessDialog from '@/components/bot/BotAccessDialog';
 import { PLATFORM_BRAND_ICONS, platformDisplayName } from '@/constants/platformGuides';
 import i18n from '@/i18n';
@@ -20,17 +20,23 @@ const platformLabel = (platform: string) => platformDisplayName(platform, i18n.t
 
 // What the host knows about each chat it has listed, so a binding or a message
 // that only holds a chat id can still be shown as `平台 · alias · 群 · id`.
-// Filled by every chat listing and, lazily, on the first lookup.
-const chatIndex = new Map<string, ImChatInfo>();
+// Every bot's latest listing is kept; the lookup index is rebuilt from them, so
+// a cleared alias or a vanished chat is not kept alive by an older listing.
 const chatKeyOf = (platform: string, chatId: string) => `${platform}\u0000${chatId}`;
 const listeners = new Set<() => void>();
 let infoVersion = 0;
-let indexedAt = 0;
-let indexing = false;
-// True only when the last full refresh listed every bot and every one of its
-// chats: only then may a missing chat be called deleted.
+let perBot = new Map<string, ImChat[]>();
+const chatIndex = new Map<string, ImChatInfo>();
+// Set only by a full refresh that listed every bot and all of its chats: the
+// one state in which a missing chat may be called deleted.
 let indexComplete = false;
 let indexedBots = new Set<string>();
+let indexedAt = 0; // when the last successful full refresh finished
+let requestedAt = 0; // throttle for the background refresh
+let indexing = false;
+let refreshAgain = false;
+// chats first seen missing from a complete listing, and which refresh saw it.
+const firstMissing = new Map<string, number>();
 const STALE_MS = 60_000;
 
 const infoOf = (c: ImChat): ImChatInfo => ({ alias: c.alias, displayId: bareId(c.platform, c.chatId), group: c.kind === 'group' });
@@ -40,64 +46,87 @@ const publish = () => {
     listeners.forEach((fn) => fn());
 };
 
-// Two bots can see the same chat: keep the entry that carries a name.
-const merge = (into: Map<string, ImChatInfo>, chats: ImChat[]) => {
-    for (const c of chats) {
-        const key = chatKeyOf(c.platform, c.chatId);
-        const info = infoOf(c);
-        if (!into.has(key) || info.alias || !into.get(key)?.alias) into.set(key, info);
+/** Rebuilds the lookup from every bot's latest listing. Two bots can see one chat: the entry with a name wins. */
+const rebuild = () => {
+    chatIndex.clear();
+    for (const chats of perBot.values()) {
+        for (const c of chats) {
+            const key = chatKeyOf(c.platform, c.chatId);
+            const info = infoOf(c);
+            if (!chatIndex.has(key) || (info.alias && !chatIndex.get(key)?.alias)) chatIndex.set(key, info);
+        }
     }
+    chatIndex.forEach((_, key) => firstMissing.delete(key));
 };
 
-/** Records one bot's chat listing (replacing what was known about those chats). */
-const remember = (chats: ImChat[]) => {
-    merge(chatIndex, chats);
+/** Records one bot's chat listing (replacing what was known about that bot's chats). */
+const remember = (botUuid: string, chats: ImChat[]) => {
+    perBot.set(botUuid, chats);
+    rebuild();
     publish();
 };
 
 /** Re-reads every bot's chats and replaces the index (after a rename, or when it has gone stale). */
 export async function refreshChatIndex(): Promise<void> {
-    if (indexing) return;
+    if (indexing) {
+        refreshAgain = true; // a rename during a refresh must still be read
+        return;
+    }
     indexing = true;
     try {
         const bots = await listBots();
         const results = await Promise.all(bots.map((b) => fetchChats(b).then((r) => r, () => ({ chats: [] as ImChat[], complete: false }))));
-        const next = new Map<string, ImChatInfo>();
-        merge(next, results.flatMap((r) => r.chats));
-        chatIndex.clear();
-        next.forEach((v, k) => chatIndex.set(k, v));
+        perBot = new Map(bots.map((b, i) => [b.uuid, results[i].chats]));
         indexedBots = new Set(bots.map((b) => b.uuid));
         indexComplete = results.every((r) => r.complete);
+        rebuild();
+        indexedAt = Date.now();
         publish();
     } catch {
         // keep the last index; it is no longer known to be complete
         indexComplete = false;
     } finally {
-        indexedAt = Date.now();
         indexing = false;
+        if (refreshAgain) {
+            refreshAgain = false;
+            void refreshChatIndex();
+        }
     }
 }
 
 const chatInfo = (platform: string, chatId: string, botUuid?: string): ImChatInfo | undefined => {
-    if (!indexing && Date.now() - indexedAt > STALE_MS) {
-        indexedAt = Date.now();
+    if (!indexing && Date.now() - requestedAt > STALE_MS) {
+        requestedAt = Date.now();
         void refreshChatIndex();
     }
-    const info = chatIndex.get(chatKeyOf(platform, chatId));
-    if (info) return botUuid && indexComplete && !indexedBots.has(botUuid) ? { ...info, deleted: true } : info;
-    // Not listed: deleted only when everything was listed and it still is not there.
-    if (indexComplete) return { displayId: bareId(platform, chatId), group: false, deleted: true };
-    return undefined;
+    const key = chatKeyOf(platform, chatId);
+    const info = chatIndex.get(key);
+    const botGone = Boolean(botUuid) && indexComplete && !indexedBots.has(botUuid!);
+    if (info) return botGone ? { ...info, deleted: true } : info;
+    if (!indexComplete) return undefined;
+    // Missing from a complete listing. A chat that appeared since that listing
+    // must not be called deleted, so confirm with a later complete listing.
+    const first = firstMissing.get(key);
+    if (first === undefined) {
+        firstMissing.set(key, indexedAt);
+        void refreshChatIndex();
+        return undefined;
+    }
+    return indexedAt > first ? { displayId: bareId(platform, chatId), group: false, deleted: true } : undefined;
 };
 
 async function listBots(): Promise<ImBot[]> {
     const res = await imbotApi.getImBotSettingsList();
     if (!res?.success || !Array.isArray(res.settings)) throw new Error(res?.error || 'failed to list bots');
     knownBots.clear();
-    return (res.settings as BotSettings[]).filter((b) => !!b.uuid).map((b) => {
+    const bots = (res.settings as BotSettings[]).filter((b) => !!b.uuid).map((b) => {
         knownBots.set(b.uuid!, b);
-        return { uuid: b.uuid!, name: b.name || platformLabel(b.platform), platform: b.platform, online: b.enabled !== false };
+        // An unnamed bot is shown by its short id (the platform is printed next to the name).
+        return { uuid: b.uuid!, name: b.name?.trim() || shortId('bot', b.uuid!).text, platform: b.platform, online: b.enabled !== false };
     });
+    // A bot the index has not seen: what it says about deleted bots is out of date.
+    if (bots.some((b) => !indexedBots.has(b.uuid))) indexComplete = false;
+    return bots;
 }
 
 async function fetchChats(bot: ImBot): Promise<{ chats: ImChat[]; complete: boolean }> {
@@ -136,7 +165,7 @@ async function fetchChats(bot: ImBot): Promise<{ chats: ImChat[]; complete: bool
 
 async function listChats(bot: ImBot): Promise<ImChat[]> {
     const { chats } = await fetchChats(bot);
-    remember(chats);
+    remember(bot.uuid, chats);
     return chats;
 }
 

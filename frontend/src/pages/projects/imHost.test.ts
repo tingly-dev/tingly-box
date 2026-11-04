@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { imHost, refreshChatIndex } from './imHost';
 
-const m = vi.hoisted(() => ({ groupsFail: false, bots: [{ uuid: 'bot', name: 'Bot', platform: 'telegram', enabled: true }] }));
+const m = vi.hoisted(() => ({ groupsFail: false, aliasOf123: 'Alice', bots: [{ uuid: 'bot', name: 'Bot', platform: 'telegram', enabled: true }] as { uuid: string; name: string; platform: string; enabled: boolean }[] }));
 
 vi.mock('@/components/bot/BotAccessDialog', () => ({ default: () => null }));
 vi.mock('@/constants/platformGuides', () => ({ PLATFORM_BRAND_ICONS: {}, platformDisplayName: (id: string) => id.charAt(0).toUpperCase() + id.slice(1) }));
@@ -9,7 +9,7 @@ vi.mock('@/i18n', () => ({ default: { t: (_key: string, options: { defaultValue:
 vi.mock('@/services/imbotApi', () => ({ imbotApi: { getImBotSettingsList: async () => ({ success: true, settings: m.bots }) } }));
 vi.mock('@/services/botApi', () => ({
     listBotDirectChats: async () => ({ chats: [
-        { chat: { platform: 'telegram', external_chat_id: 'telegram:123', alias: 'Alice', peer_actor_id: 'actor' } },
+        { chat: { platform: 'telegram', external_chat_id: 'telegram:123', alias: m.aliasOf123, peer_actor_id: 'actor' } },
         { chat: { platform: 'telegram', external_chat_id: 'telegram:456', alias: '  ', peer_actor_id: 'actor' } },
     ] }),
     listBotGroups: async () => {
@@ -43,11 +43,29 @@ describe('Projects IM host', () => {
         expect(imHost.chatInfo?.('telegram', 'telegram:456')).toEqual({ alias: undefined, displayId: '456', group: false });
     });
 
-    it('calls a chat or bot deleted only after a complete listing that no longer has it', async () => {
+    it('calls a chat deleted only after two complete listings both lack it', async () => {
         await refreshChatIndex();
-        expect(imHost.chatInfo?.('telegram', 'telegram:gone')).toEqual({ displayId: 'gone', group: false, deleted: true });
+        // First miss: a chat that appeared since the listing must not be called deleted.
+        expect(imHost.chatInfo?.('telegram', 'telegram:gone')).toBeUndefined();
+        await vi.waitFor(() => expect(imHost.chatInfo?.('telegram', 'telegram:gone')).toEqual({ displayId: 'gone', group: false, deleted: true }));
         expect(imHost.chatInfo?.('telegram', 'telegram:123', 'bot')?.deleted).toBeUndefined();
         expect(imHost.chatInfo?.('telegram', 'telegram:123', 'deleted-bot')?.deleted).toBe(true);
+    });
+
+    it('shows an unnamed bot by its short id, not just the platform', async () => {
+        m.bots = [{ uuid: '1730600044998877665-imbot', name: '', platform: 'telegram', enabled: true }];
+        const bots = await imHost.listBots();
+        expect(bots[0].name).toBe('…877665');
+        m.bots = [{ uuid: 'bot', name: 'Bot', platform: 'telegram', enabled: true }];
+    });
+
+    it('a listing that no longer has an alias replaces the old one', async () => {
+        await imHost.listChats(bot);
+        expect(imHost.chatInfo?.('telegram', 'telegram:123')?.alias).toBe('Alice');
+        m.aliasOf123 = '';
+        await imHost.listChats(bot);
+        expect(imHost.chatInfo?.('telegram', 'telegram:123')?.alias).toBeUndefined();
+        m.aliasOf123 = 'Alice';
     });
 
     it('does not guess "deleted" when a listing was incomplete', async () => {

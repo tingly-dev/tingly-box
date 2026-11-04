@@ -61,6 +61,11 @@ describe('EntityLabel', () => {
         expect(screen.getByTestId('entity-label').textContent).toBe('Telegram·123456789');
     });
 
+    it('draws no separator next to a missing platform', () => {
+        render(<EntityLabel platform="" alias="Alice" id="42" />);
+        expect(screen.getByTestId('entity-label').textContent).toBe('Alice·42');
+    });
+
     it('shortens bot ids by their distinguishing tail', () => {
         render(<EntityLabel platform="Telegram" kind="bot" alias="@ops_bot" id="1730600000123456789-imbot" />);
         expect(screen.getByTestId('entity-label').textContent).toBe('Telegram·@ops_bot·…456789');

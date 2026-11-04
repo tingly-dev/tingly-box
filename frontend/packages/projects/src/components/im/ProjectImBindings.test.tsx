@@ -91,6 +91,16 @@ describe('project IM bindings', () => {
         expect(labels[1]).toHaveTextContent('im.deleted');
         expect(labels[1]).toHaveTextContent('Gone chat');
     });
+    it('lets the host\'s answer win over a stale saved title, and hides a title that is just the id', async () => {
+        m.list.mockResolvedValue([binding('cb1', 'telegram:1', 'Old name', 'p1'), binding('cb2', 'telegram:2', '2', 'p1')]);
+        const h = host([]);
+        // The host knows chat 1 and says it has no alias now (cleared); chat 2 is unknown to it.
+        h.im!.chatInfo = (_p, chatId) => (chatId === 'telegram:1' ? { displayId: '1', group: false } : undefined);
+        show(h);
+        const labels = await screen.findAllByTestId('entity-label');
+        expect(labels[0]).toHaveAttribute('title', 'Telegram · 1');
+        expect(labels[1]).toHaveAttribute('title', 'Telegram · 2');
+    });
     it('shows only this project\'s chats and unbinds one with its ×', async () => {
         show(host([]));
         expect(await screen.findByText('yz')).toBeInTheDocument();

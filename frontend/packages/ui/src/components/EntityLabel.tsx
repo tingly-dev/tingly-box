@@ -1,6 +1,6 @@
 import { Box, Tooltip } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { fontMono } from '../theme/fonts';
 import { entityText, shortId, type EntityKind, type EntityParts } from '../utils/entityLabel';
 import { CopyIconButton } from './CopyIconButton';
@@ -92,6 +92,49 @@ export const EntityLabel = ({
     const fullId = copyValue ?? id;
     const idTooltip = short.shortened ? fullId : idAnchor ? unnamedHint : undefined;
 
+    // Segments in display order. Empty ones are never built, so no separator is
+    // ever drawn next to a missing segment; a platform drawn as a logo alone
+    // flows straight into the next segment without one.
+    const platformNode = (
+        <Tooltip title={platformAs === 'icon' ? platform : ''}>
+            <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: 'text.secondary', flexShrink: 0 }}>
+                {platformIcon}
+                {platformAs === 'text' || !platformIcon ? platform : null}
+            </Box>
+        </Tooltip>
+    );
+    const groupNode = (
+        <Box
+            component="span"
+            sx={{
+                fontSize: '0.6875rem',
+                lineHeight: '17px',
+                px: 0.875,
+                color: 'text.secondary',
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 9,
+                flexShrink: 0,
+            }}
+        >
+            {groupLabel}
+        </Box>
+    );
+    const segments: { key: string; node: ReactNode; joinsNext?: boolean }[] = [];
+    if (platform !== '' || platformIcon) segments.push({ key: 'platform', node: platformNode, joinsNext: iconOnly });
+    if (aliasText !== '') {
+        segments.push({
+            key: 'alias',
+            node: (
+                <Box component="span" sx={{ fontWeight: 600, color: 'text.primary', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {aliasText}
+                </Box>
+            ),
+        });
+    }
+    if (group) segments.push({ key: 'group', node: groupNode });
+    if (showId) segments.push({ key: 'id', node: idTooltip ? <Tooltip title={idTooltip}>{idNode}</Tooltip> : idNode });
+
     return (
         <Box
             component="span"
@@ -100,42 +143,12 @@ export const EntityLabel = ({
             data-testid="entity-label"
             sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, minWidth: 0, maxWidth: '100%', whiteSpace: 'nowrap', ...sx }}
         >
-            <Tooltip title={platformAs === 'icon' ? platform : ''}>
-                <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: 'text.secondary', flexShrink: 0 }}>
-                    {platformIcon}
-                    {platformAs === 'text' || !platformIcon ? platform : null}
-                </Box>
-            </Tooltip>
-            {aliasText !== '' && (
-                <>
-                    {!iconOnly && <Sep />}
-                    <Box component="span" sx={{ fontWeight: 600, color: 'text.primary', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {aliasText}
-                    </Box>
-                </>
-            )}
-            {group && (
-                <>
-                    {!(iconOnly && aliasText === '') && <Sep />}
-                    <Box
-                        component="span"
-                        sx={{
-                            fontSize: '0.6875rem',
-                            lineHeight: '17px',
-                            px: 0.875,
-                            color: 'text.secondary',
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            borderRadius: 9,
-                            flexShrink: 0,
-                        }}
-                    >
-                        {groupLabel}
-                    </Box>
-                </>
-            )}
-            {showId && !(iconOnly && !group && aliasText === '') && <Sep />}
-            {showId && (idTooltip ? <Tooltip title={idTooltip}>{idNode}</Tooltip> : idNode)}
+            {segments.map((seg, i) => (
+                <Fragment key={seg.key}>
+                    {i > 0 && !segments[i - 1].joinsNext && <Sep />}
+                    {seg.node}
+                </Fragment>
+            ))}
             {!resolved && (
                 <Box component="span" sx={{ fontSize: '0.75rem', color: 'warning.main', flexShrink: 0 }}>{deletedLabel}</Box>
             )}

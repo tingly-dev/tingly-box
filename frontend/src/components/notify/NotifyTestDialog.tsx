@@ -7,6 +7,7 @@ import type {NotifyTarget} from '@/types/bot';
 import {MARKDOWN_STRESS_BODY} from '@/components/notify/markdownStressBody';
 import {
     Autocomplete,
+    createFilterOptions,
     Button,
     CircularProgress,
     Dialog,
@@ -109,6 +110,8 @@ const NotifyTestDialog: React.FC<NotifyTestDialogProps> = ({open, botUUID, botNa
                         size="small"
                         options={targets}
                         getOptionLabel={(target) => targetText(target)}
+                        // Search the full label: the shown id may be shortened.
+                        filterOptions={createFilterOptions<NotifyTarget>({stringify: (target) => entities.text(entities.target(target), {shorten: false})})}
                         value={targets.find((target) => target.id === targetID) ?? null}
                         onChange={(_e, value) => setTargetID(value?.id ?? '')}
                         renderOption={(props, option) => {

@@ -29,12 +29,18 @@ function useChatSegments() {
     const groupLabel = t('im.group');
     return ({ platform, chatId, kind, alias, botUuid }: ChatRefProps) => {
         const info = im?.chatInfo?.(platform, chatId, botUuid);
+        const id = info?.displayId ?? bareId(platform, chatId);
+        // The host's answer is authoritative while it knows the chat (a cleared
+        // alias must not come back from a stale caller copy); the caller's alias
+        // is the fallback for a chat the host no longer lists.
+        const named = (info && !info.deleted ? info.alias : alias)?.trim() ?? '';
         return {
             deleted: info?.deleted ?? false,
             platform: platformLabel(platform),
             group: kind ? kind === 'group' : info?.group ?? false,
-            alias: info?.alias ?? alias ?? '',
-            id: info?.displayId ?? bareId(platform, chatId),
+            // A saved title that is just the id adds nothing next to the id itself.
+            alias: named === id || named === chatId ? '' : named,
+            id,
             groupLabel,
         };
     };
