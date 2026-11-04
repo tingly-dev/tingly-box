@@ -3797,7 +3797,10 @@ export const handlers = [
                 },
                 {
                     chat: {id: 'direct-2', bot_uuid: 'mock-bot', platform: 'telegram', external_chat_id: 'telegram:987654321', peer_actor_id: 'actor-2', blocked: false},
-                    permissions: [],
+                    permissions: params.bot === 'mock-bot-001' ? [
+                        ...remote,
+                        {capability: 'remote_control', action: 'remote_control.privileged', effect: 'allow'},
+                    ] : [],
                 },
             ],
         })
@@ -3812,9 +3815,20 @@ export const handlers = [
     ] : []})),
     http.get('/api/v1/bots/:bot/groups/:group', () => HttpResponse.json({
         group: {id: 'group-1', bot_uuid: 'mock-bot', platform: 'telegram', external_group_id: 'telegram:-10024681012', name: 'Release Crew', blocked: false},
-        capabilities: {notify: 'allow', remote_control: 'deny'},
-        actors: [],
+        capabilities: {notify: 'allow', remote_control: 'allow'},
+        actors: [
+            {actor: {id: 'actor-g1', external_actor_id: 'telegram:555', display_name: 'Maya'}, label: 'Controller', permissions: [
+                {capability: 'remote_control', action: 'remote_control.start', effect: 'allow'},
+                {capability: 'remote_control', action: 'remote_control.approve', effect: 'allow'},
+            ]},
+            {actor: {id: 'actor-g2', external_actor_id: 'telegram:777', display_name: 'Ivan'}, label: 'Controller', permissions: [
+                {capability: 'remote_control', action: 'remote_control.start', effect: 'allow'},
+                {capability: 'remote_control', action: 'remote_control.approve', effect: 'allow'},
+                {capability: 'remote_control', action: 'remote_control.privileged', effect: 'allow'},
+            ]},
+        ],
     })),
+    http.put('/api/v1/bots/:bot/groups/:group/actors/:actor/permissions/:capability/:action', () => HttpResponse.json({ok: true})),
     http.put('/api/v1/bots/:bot/groups/:group/capabilities/:capability', () => HttpResponse.json({ok: true})),
     http.put('/api/v1/bots/:bot/groups/:group/blocked', () => HttpResponse.json({ok: true})),
 

@@ -223,7 +223,7 @@ Remote 页面保留，只去掉 SmartGuide 模型和“常驻会话”这类作�
 - 单聊：只有朴素的 `/xxx 参数` 是命令；`@bot /dir`、`<@U1> /dir` 是普通文本，会被发给会话；`/dir@bot` 的名字就是 `dir@bot`，回 “Unknown command”。
 - 两者都容忍：命令前后空白（含 NBSP、全角空格、零宽字符）、命令后一个或多个空格、全角斜杠 `／`；参数里的内部空格原样保留。`@cc`/`@tb`/`@mock` 不是 mention，后面跟命令也不算命令。
 
-`/cd`、`/dir`、`/project` 需要 `remote_control.privileged`，而配对只写 start + approve、privileged 显式 deny，管理 UI 也只会写 deny（见 `bot-capability-access-control.md`）。所以新配对的聊天跑这几条会被授权闸门拒绝。拒绝不能沉默（沉默的表现就是“命令不生效”）：聊天本来能 start 却缺 privileged 时，机器人回一句需要高级权限、请找机器人所有者；连 start 都没有的聊天仍然什么都不回。**未决**：配对默认是否授予 privileged，或 UI 是否提供授予入口，要由产品定。
+权限（2026-11-04 重划，详见 `bot-capability-access-control.md` §6.2.1）：直聊里**选择**运维注册的文件夹和项目（`/dir`、`/dir N`、`/project`、`/project N`、文件夹按钮）只需 start；**命名自由路径**（`/cd <路径>`、`/dir <路径>`、目录浏览器）和发文件需要 `remote_control.privileged`（界面里叫“任意文件夹和文件”，管理界面可按聊天、按群成员开关）；群聊里这几条命令全部需要它，因为群共用一个工作目录。拒绝时机器人回一句指向该开关，不再沉默。`/help` 只列聊天能跑的命令。
 
 `@N <话>` 保留（不是命令）。`/bind`、`/join`（接入层）照旧，不进帮助。删掉：`/bash`（Claude Code 自己能跑命令）、`/mock`、
 `/resume`（并入 `/session`；在 Projects 外开的 CLI 会话不列）、`/p`、`/threads`、`/focus`、`/back`、`/interrupt` `/s` `/i`、

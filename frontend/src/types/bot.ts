@@ -192,6 +192,19 @@ export function chatCanControl(chat: DirectChatDetail): boolean {
         && remoteChatState(chat) === 'on';
 }
 
+// chatPrivileged: the "Any folder and files" grant — switching to a free path
+// and sending files. Picking from the registered folders and projects does not
+// need it.
+export function chatPrivileged(chat: DirectChatDetail): boolean {
+    return chatPermissionAllowed(chat, 'remote_control', 'remote_control.privileged');
+}
+
+// actorPrivileged: the same grant for one member of a Group.
+export function actorPrivileged(actor: GroupActor): boolean {
+    return actor.permissions.some((permission) =>
+        permission.capability === 'remote_control' && permission.action === 'remote_control.privileged' && permission.effect === 'allow');
+}
+
 // groupCanControl: someone in this Group can drive the bot right now — Remote
 // Control allowed on the group AND at least one actor granted both start and
 // approve. Remote allowed on a group with no such actor still lets nobody in.

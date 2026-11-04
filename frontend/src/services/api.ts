@@ -105,6 +105,7 @@ export const api = {
     setBotGroupBlocked: botApi.setBotGroupBlocked,
     setBotGroupCapability: botApi.setBotGroupCapability,
     addBotGroupActor: botApi.addBotGroupActor,
+    setBotGroupActorPermission: botApi.setBotGroupActorPermission,
     listBotChats: botApi.listBotChats,
     notifyBot: botApi.notifyBot,
     interactBot: botApi.interactBot,

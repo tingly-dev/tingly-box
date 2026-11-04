@@ -414,12 +414,26 @@ approval button              → remote_control.approve
 /cd, file access, shell      → remote_control.start + remote_control.privileged
 ```
 
-特权命令是 `/cd`、`/dir`、`/project`、`/bind-project`、`/shell`、`/bash`、文件和文件夹按钮。命令按
-`imbot.ParseSlashCommand(text, group)` 识别，`group` 是入站消息的聊天类型：群聊里 `/dir@bot`、`@bot /dir`、
+特权动作（2026-11-04 重新划分，见 6.2.1）：在**直聊**里，从运维注册的文件夹和项目中**选择**只需 `remote_control.start`：
+`/dir`、`/dir N`、`/project`、`/project N`、文件夹列表按钮和菜单的 project 按钮。需要 `remote_control.privileged` 的是
+**命名一个自由路径**的事：`/cd <路径>`、`/dir <路径>`、目录浏览器（`bind:*`、`action:bind`）和发文件。**群聊**里工作目录
+被全体成员共用，所以 `/cd`、`/dir`、`/project` 及相关按钮仍全部需要 privileged。`/dir` 的参数只有“空”或
+`bot.ParseListNumber` 认的正整数才算选择，否则当作路径——闸门与命令处理器共用这一个函数，不会出现闸门放行、
+处理器却当路径用的情况。`/shell`、`/bash`、`/bind-project` 已不是命令，从列表里删掉。
+
+命令按 `imbot.ParseSlashCommand(text, group)` 识别，`group` 是入站消息的聊天类型：群聊里 `/dir@bot`、`@bot /dir`、
 `@bot/dir`、`<@U1> /dir`、全角 `／dir` 与 `/dir` 同级；单聊里只有朴素的 `/dir`（容忍空白和全角斜杠），
 带 mention 的写法是普通文本。闸门与 `HandleMessage` 必须用同一个解析器、同一个 group，否则特权命令会被当成
-`remote_control.start`。被拒的特权动作如果聊天本来可以 start，闸门会回一句“需要高级权限”，不再沉默
-（沉默等于命令坏了）；连 start 都没有的聊天不回，避免向未授权方泄露信息。
+`remote_control.start`。选择类命令在有待答审批时仍按 start 判断（待审批只用于普通回复，不会把 `/cd` 变成 approve）。
+
+被拒的特权动作如果聊天本来可以 start，闸门会回一句“需要‘任意文件夹和文件’权限”，指向管理界面里同名的开关
+（Remote > Who can control this bot），不再沉默；连 start 都没有的聊天不回，避免向未授权方泄露信息。
+`/help` 只列聊天能跑的命令：没有 privileged 的直聊不列 `/cd`，`/dir` 只写 `[N]`；没有 privileged 的群聊不列
+`/cd`、`/dir`、`/project`。宿主通过 context 把 `bot.PrivilegeChecker`（与闸门同一个 authorizer）交给 consumer。
+
+**管理界面**：`BotAccessDialog` 里每个能遥控的直聊有一个“任意文件夹和文件”开关（单行写 `remote_control.privileged`），
+群里每个已授权成员各有一个。开关只在聊天可遥控时可用；“可遥控”预设保留已有的授权，“无权限”和“仅通知”
+连同授权一起收回，授权从不作为副作用被打开。
 
 #### 6.2.1 为什么 `/cd`、`/dir`、`/project` 是特权（审查记录，2026-11-04）
 
@@ -479,7 +493,7 @@ remote-control privileged 访问”。理由在同一 PR 改的 `remote-into-pro
 （都限于运维注册的目录和项目）；`/cd <路径>`、`/dir <路径>`、“Another folder” 按钮、发文件保持特权。
 群聊保持现状（切换仍特权），直到 “Privileged controller” 预设存在。同时：UI 增加直聊的授予入口并让拒绝提示
 指向它；`/help` 不再向没有该权限的聊天列出 `/cd`；`privilegedCommands` 里已删除的 `/shell`、`/bash`、
-`/bind-project` 可清理。**这是产品决定，尚未实现。**
+`/bind-project` 可清理。**已采纳并实现（YZ，2026-11-04）**：直聊的选择类命令降为 start，自由路径与发文件保持特权，群聊不变；管理界面新增“任意文件夹和文件”开关（直聊每个聊天、群里每个成员）；`/help` 按权限过滤；拒绝提示指向该开关。
 
 ### 6.3 Why Interact is not a top-level Capability
 
