@@ -42,7 +42,9 @@ type CreateRequest struct {
 
 // UpdateRequest represents the request to update ImBot settings
 type UpdateRequest struct {
-	Name           string            `json:"name,omitempty"`
+	// Name is a pointer so that an explicit empty string clears the name
+	// (the bot then shows by its platform account name or id); omitted leaves it.
+	Name           *string           `json:"name,omitempty"`
 	Platform       string            `json:"platform,omitempty"`
 	AuthType       string            `json:"auth_type,omitempty"`
 	Auth           map[string]string `json:"auth,omitempty"`

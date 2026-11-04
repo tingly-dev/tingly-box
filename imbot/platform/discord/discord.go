@@ -89,6 +89,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 	b.UpdateConnected(true)
 	b.EmitConnected()
 	b.Logger().Info("Discord bot connected: %s", b.session.State.User.Username)
+	b.SetAccountName(b.session.State.User.Username)
 
 	return nil
 }

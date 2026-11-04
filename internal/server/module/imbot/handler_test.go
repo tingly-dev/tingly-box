@@ -149,14 +149,15 @@ func TestCreateRequestStructure(t *testing.T) {
 func TestUpdateRequestStructure(t *testing.T) {
 	enabled := true
 
+	name := "Updated Bot"
 	request := UpdateRequest{
-		Name:     "Updated Bot",
+		Name:     &name,
 		Platform: "discord",
 		Enabled:  &enabled,
 	}
 
-	if request.Name != "Updated Bot" {
-		t.Errorf("expected Name 'Updated Bot', got %q", request.Name)
+	if request.Name == nil || *request.Name != "Updated Bot" {
+		t.Errorf("expected Name 'Updated Bot', got %v", request.Name)
 	}
 
 	if request.Platform != "discord" {
