@@ -33,6 +33,8 @@ type Bot struct {
 	// callbacks encodes outbound action payloads into callback_data and
 	// resolves them again on the way back. See callback_codec.go.
 	callbacks *callbackVault
+	// username is the bot's own @name, read when it connects; empty until then.
+	username string
 }
 
 type MenuButtonType string
@@ -137,6 +139,9 @@ func (b *Bot) Connect(ctx context.Context) error {
 	if err != nil {
 		b.Logger().Error("Failed to get bot info: %v", err)
 	} else {
+		b.mu.Lock()
+		b.username = me.Username
+		b.mu.Unlock()
 		b.Logger().Info("Telegram bot connected: @%s", me.Username)
 	}
 
@@ -423,6 +428,13 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 }
 
 // PlatformInfo returns platform information
+// Username is the bot's own @name without the "@", or "" before it connects.
+func (b *Bot) Username() string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.username
+}
+
 func (b *Bot) PlatformInfo() *core.PlatformInfo {
 	return core.NewPlatformInfoFor(core.PlatformTelegram)
 }

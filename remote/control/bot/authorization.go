@@ -141,6 +141,30 @@ func inboundAction(msg imbot.Message, pendingCapability access.CapabilityName, p
 
 // authorizationGate is the one production inbound seam for text, callbacks,
 // and files. A denied message is claimed here and cannot reach a Capability.
+// AddressedToAnotherBot reports whether a group command carries the name of a
+// bot other than this one ("/new@otherbot" in a Telegram group with two bots).
+// own is this bot's @name, "" when the platform does not tell it (then nothing
+// is said to be for another bot). Such a command is not this bot's to run or
+// to answer.
+func AddressedToAnotherBot(msg imbot.Message, own string) bool {
+	if own == "" || !msg.IsGroupMessage() {
+		return false
+	}
+	cmd, ok := imbot.ParseSlashCommand(msg.GetText(), true)
+	return ok && cmd.Target != "" && cmd.Target != strings.ToLower(own)
+}
+
+// IgnoreCommandsForOtherBots is the first handler of a bot's chain: it claims
+// (and so drops, without a word) a group command addressed to another bot,
+// before the access gate can answer it or a consumer run it. A platform that
+// does not expose the bot's own name is never filtered.
+func IgnoreCommandsForOtherBots(mgr *imbot.Manager) OnMessage {
+	return func(msg imbot.Message, platform imbot.Platform, botUUID string) bool {
+		self, ok := mgr.GetBot(botUUID, platform).(interface{ Username() string })
+		return ok && AddressedToAnotherBot(msg, self.Username())
+	}
+}
+
 // AuthorizationGate builds the inbound authorization seam. notifyDenied, when
 // non-nil, is invoked with the denied action for two denials that must not be
 // silent:
@@ -221,7 +245,10 @@ func AuthorizationGate(store AccessStore, authorizer access.Authorizer, legacyCh
 			}
 		} else {
 			logrus.WithFields(fields).Debug("bot authorization decision")
-			if action == access.ActionRemoteControlPrivileged && notifyDenied != nil {
+			// A file posted in a group is ordinary chatter, not a request to the
+			// bot; only commands and buttons there earn a reply.
+			chatter := msg.IsGroupMessage() && msg.IsMediaContent()
+			if action == access.ActionRemoteControlPrivileged && notifyDenied != nil && !chatter {
 				start := authorizer.Evaluate(ctx, access.AuthorizationRequest{BotUUID: botUUID, Target: target, ActorID: actor.ID, Capability: capability, Action: access.ActionRemoteControlStart})
 				if start.Allowed {
 					notifyDenied(msg, platform, botUUID, action)

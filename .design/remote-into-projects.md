@@ -221,6 +221,8 @@ Remote 页面保留，只去掉 SmartGuide 模型和“常驻会话”这类作�
 
 - 群聊：去掉开头的 mention（`<@U1>`、`@_user_1`、`@name`）和命令名后的 `@bot` 后缀，`@bot /dir` 与 `@bot/dir` 都认。
 - 单聊：只有朴素的 `/xxx 参数` 是命令；`@bot /dir`、`<@U1> /dir` 是普通文本，会被发给会话；`/dir@bot` 的名字就是 `dir@bot`，回 “Unknown command”。
+- 群里 `/cmd@botB` 是发给 botB 的：解析器把后缀放进 `SlashCommand.Target`，机器人链的第一个处理器 `bot.IgnoreCommandsForOtherBots` 在 Target 不是自己的 `@name` 时静默丢弃（Telegram 的 bot 连接后通过 `Username()` 暴露自己的名字；拿不到名字的平台不过滤）。这样同群两个 bot 时，`/new@otherbot` 不会在本 bot 上执行，也不会收到“需要权限”的提示。
+- 群里发的文件是普通聊天：没有特权时照样不放行，但不回“需要权限”（直聊的文件仍会回，因为那是对 bot 的请求）。
 - 两者都容忍：命令前后空白（含 NBSP、全角空格、零宽字符）、命令后一个或多个空格、全角斜杠 `／`；参数里的内部空格原样保留。`@cc`/`@tb`/`@mock` 不是 mention，后面跟命令也不算命令。
 
 权限（2026-11-04 重划，详见 `bot-capability-access-control.md` §6.2.1）：直聊里**选择**运维注册的文件夹和项目（`/dir`、`/dir N`、`/project`、`/project N`、文件夹按钮）只需 start；**命名自由路径**（`/cd <路径>`、`/dir <路径>`、目录浏览器）和发文件需要 `remote_control.privileged`（界面里叫“任意文件夹和文件”，管理界面可按聊天、按群成员开关）；群聊里这几条命令全部需要它，因为群共用一个工作目录。拒绝时机器人回一句指向该开关，不再沉默。`/help` 只列聊天能跑的命令。

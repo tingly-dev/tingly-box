@@ -394,3 +394,64 @@ func TestPrivilegeCheckerTravelsInTheContext(t *testing.T) {
 func TestDeniedPrivilegedTextNamesTheSwitch(t *testing.T) {
 	require.Contains(t, bot.DeniedActionText(access.ActionRemoteControlPrivileged), "Any folder and files")
 }
+
+// A command with another bot's name on it is not for this bot: nothing here
+// runs it or answers it. A command for this bot, or with no name on it, is.
+func TestAddressedToAnotherBot(t *testing.T) {
+	group := func(text string) imbot.Message {
+		return imbot.Message{ChatType: imbot.ChatTypeGroup, Content: imbot.NewTextContent(text)}
+	}
+	direct := imbot.Message{ChatType: imbot.ChatTypeDirect, Content: imbot.NewTextContent("/dir@otherbot")}
+	for _, tt := range []struct {
+		msg  imbot.Message
+		own  string
+		want bool
+	}{
+		{group("/new@otherbot"), "tingly_bot", true},
+		{group("/dir@OtherBot 1"), "Tingly_Bot", true},
+		{group("@tingly_bot /dir@otherbot"), "tingly_bot", true},
+		{group("/new@tingly_bot"), "tingly_bot", false},
+		{group("/new@Tingly_Bot"), "tingly_bot", false},
+		{group("/new"), "tingly_bot", false},
+		{group("hello@otherbot"), "tingly_bot", false},
+		{group("/new@otherbot"), "", false},
+		{direct, "tingly_bot", false},
+	} {
+		require.Equal(t, tt.want, bot.AddressedToAnotherBot(tt.msg, tt.own), "%q as %q", tt.msg.GetText(), tt.own)
+	}
+}
+
+// A file posted in a group is ordinary chatter, not a request to the bot: it
+// is not let through, but the bot does not answer it either. In a direct chat
+// it is a request, so the sender is told.
+func TestAuthorizationGateDoesNotAnswerFilesInGroups(t *testing.T) {
+	sm, setting, msg := directAuthorizationFixture(t)
+	told := 0
+	notify := func(imbot.Message, imbot.Platform, string, access.ActionName) { told++ }
+	gate := bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), false, nil, notify)
+	require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID), "first message pairs the chat")
+
+	file := msg
+	file.Content = imbot.NewMediaContent([]imbot.MediaAttachment{{Type: "document", URL: "x"}}, "")
+	require.True(t, gate(file, imbot.Platform(setting.Platform), setting.UUID))
+	require.Equal(t, 1, told, "a direct chat's file earns the notice")
+
+	// The same sender in a group that may start runs: a posted file is chatter.
+	ctx := context.Background()
+	group, err := sm.BotAccess().DiscoverGroup(ctx, setting.UUID, setting.Platform, "group-1", "eng")
+	require.NoError(t, err)
+	require.NoError(t, sm.BotAccess().SetGroupCapability(ctx, setting.UUID, group.ID, access.CapabilityRemoteControl, access.EffectAllow))
+	_, err = sm.BotAccess().AddGroupActor(ctx, setting.UUID, group.ID, msg.Sender.ID, "alice", "Controller")
+	require.NoError(t, err)
+	told = 0
+	groupFile := file
+	groupFile.ChatType = imbot.ChatTypeGroup
+	groupFile.Recipient = imbot.Recipient{ID: "group-1", DisplayName: "eng"}
+	require.True(t, gate(groupFile, imbot.Platform(setting.Platform), setting.UUID), "still not let through")
+	require.Zero(t, told, "and not answered")
+
+	groupCmd := groupFile
+	groupCmd.Content = imbot.NewTextContent("/cd /tmp")
+	require.True(t, gate(groupCmd, imbot.Platform(setting.Platform), setting.UUID))
+	require.Equal(t, 1, told, "a group command is a request, so it is answered")
+}

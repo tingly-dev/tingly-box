@@ -14,6 +14,9 @@ type SlashCommand struct {
 	Name string
 	// Args is what follows the name, trimmed.
 	Args string
+	// Target is the bot a group command is addressed to ("/dir@MyBot"),
+	// lower-case; empty when it names none. A direct chat has no such suffix.
+	Target string
 }
 
 // Text is the command in its plain "/name args" form.
@@ -66,11 +69,11 @@ func ParseSlashCommand(text string, group bool) (cmd SlashCommand, ok bool) {
 	if i := strings.IndexFunc(head, unicode.IsSpace); i >= 0 {
 		head, rest = head[:i], head[i:]+" "+rest
 	}
-	name := head
+	name, target := head, ""
 	if group {
-		name, _, _ = strings.Cut(head, "@")
+		name, target, _ = strings.Cut(head, "@")
 	}
-	return SlashCommand{Name: strings.ToLower(name), Args: trimChat(rest)}, true
+	return SlashCommand{Name: strings.ToLower(name), Args: trimChat(rest), Target: strings.ToLower(target)}, true
 }
 
 // stripMention takes one leading mention off text, if there is one before a
