@@ -1,72 +1,70 @@
-# Projects sidebar: kanban view for sessions
+# Project thread list: kanban view and a resizable top band
 
 > Status: implemented. Touches `frontend/packages/projects` only; no backend or API change.
+> Context: [projects-placement.md](./projects-placement.md) (where the Overview lives).
 
 ## What
 
-The Workdirs section of the Projects sidebar lists each working folder with its sessions (`NavTree`).
-Its header now has a two-button switch, **List | Kanban**. Kanban replaces the folder tree with one board
-of every folder's sessions, grouped by status. It is still the sidebar: same width, same section, same
-open/selected behaviour.
+A project's threads are listed by the **Overview**: in the side pane (default), a floating window, or as a
+band at the top. Two additions:
 
-## Decisions
+1. **List | Kanban** in the Overview's Threads tab (side pane and window). Kanban draws the threads as
+   columns by status, one outlined card per thread.
+2. The **top band's** thread area can be stretched by dragging its lower edge.
 
-- **One style source.** The board is not a new look. It is `StatusGroups` (the folder page's and Overview's
-  grouped list) with a new `outlined` prop that draws each row with `ListRow`'s existing `outlined` card
-  look (the one `OverviewBand` already uses). Groups, labels (`session.group.*`), collapsed defaults
-  (Resolved/Archived fold) and the row text (`folder · wait reason`, time) come from
-  `workdir/sessionRows.ts`, which `WorkdirPage` now shares, so the two surfaces cannot drift.
-  The status mark sits on the lane heading (as in `OverviewBand`); cards do not repeat it.
-- **Stacked lanes, not horizontal columns.** The sidebar is 200px; side-by-side columns would show one
-  column at a time and hide what waits. Vertical lanes, most urgent first (waiting, failed, working,
-  idle, resolved, archived), show everything in one scroll. Rejected: horizontally scrolling columns.
-- **One board across folders, not one per folder.** Kanban's value is "what needs me across everything".
-  Each card names its folder in the subtitle; the tree stays available in List view. Cost: the board
-  loads the sessions of every folder (the tree only loads open folders); it refetches a folder when its
-  counts change, like the tree.
-- **Remembered per browser** in localStorage via the package's `readLocal/writeLocal`
-  (`tingly-project.nav.sessionsView`), like the folder fold state. `uiPrefs` belongs to the Tingly Box
-  host, and the Projects package must not depend on it. Default is List, so nothing changes for
-  existing users.
-- **Open behaviour.** A card is a `ListRow` button (click, Enter, Space) that navigates to the same
-  `?session=` URL the tree row links to (`sessionHref`) and calls `onNavigate`. The open session is the
-  `selected` card (`aria-current="page"`). Cards are buttons, not anchors, so open-in-new-tab is not
-  available (same as the Overview rows).
-- **No drag and drop.** A thread's status comes from the agent (working, waiting, failed) or from
-  explicit actions (resolve, reopen); it is not a free label. Dropping a card on a lane would have no
-  meaning and would suggest a capability that does not exist.
-- **Left out:** background-task child rows (shown under a working session in the tree) and the per-folder
-  "Show older" cap. The sidebar tree has no unread state today, so none is added.
-- **i18n.** `sidebar.view.{label,list,kanban}` and `sidebar.noSessions` in en and zh. The Projects
-  package ships only en and zh (the host adds only those two bundles to the `projects` namespace);
-  Russian falls back to English like every other Projects string.
+## List | Kanban
 
-## Files
-
-`components/NavKanban.tsx` (board and loader), `components/workdir/sessionRows.ts` (shared groups and
-rows), `components/workspace/StatusGroups.tsx` (`outlined`), `components/ProjectsSidebar.tsx` (switch,
-persistence, `ProjectsSidebarSection.extra` slot), `components/NavTree.tsx` (`sessionHref`).
+- **Same board as the top band.** The band was already a kanban (one column per status). Its columns are
+  now one component, `workspace/StatusColumns`, used by the band and by the pane's kanban view, so the two
+  cannot look different. The list view is unchanged (`StatusGroups`).
+- **Columns follow the thread statuses**, most urgent first: Waiting on you, Failed, Ready for review,
+  Working, Idle, Resolved. Empty columns are left out. There is no "queued" status on a thread (queued
+  messages are events, shown in the conversation), so Working is just Working. Resolved is a column in the
+  pane; the band keeps showing only its count, as before.
+- **Columns side by side, scrolling sideways, not stacked lanes.** The pane is 360 to 960px wide and
+  full height, so real columns fit and each scrolls on its own. At the default 440px one and a half
+  columns show and the rest scroll; widening the pane (it was already draggable) shows more.
+  Alternative rejected: stacked lanes, which read as the list with boxes round the rows.
+- **Cards are `ListRow outlined` + `stacked`**: title, then the subtitle (what it waits on, last report,
+  branch), then commit/merged badges and the time. `stacked` is new and only the pane uses it: in a
+  220px column the badges and time beside the title left it a letter or two. The band keeps the
+  one-line card. The status mark is on the column heading (as in the band), not on every card.
+- **Opening is unchanged**: a card calls the same `onOpen(thread id)` as a row; the open thread is the
+  `selected` card (`aria-current="page"`), keyboard Enter/Space work (ListRow).
+- **Persistence**: `tingly-project.overview.view` (`list` | `kanban`) in localStorage through the package's
+  `readLocal/writeLocal`, like the pane width and placement. `uiPrefs` is Tingly Box's host-only store and
+  the package must not depend on it. Default List.
+- **No drag and drop.** A thread's status is the agent's (working, waiting, failed) or the result of an
+  explicit action (resolve, reopen), not a free label, so dropping a card on a column would mean nothing.
+- **The Workdirs folder sidebar has no kanban.** An earlier version added one there (stacked lanes). It
+  was dropped: the request was about a project's threads, the folder tree already groups sessions per
+  folder, and a second board with a different layout would be one more thing to learn.
+- **i18n**: `overview.view.{label,list,kanban}`, `project.resizeBand`, in en and zh. The Projects package
+  ships only en and zh (the host loads only those two into the `projects` namespace), so Russian falls
+  back to English like every other Projects string.
 
 ## Resizing the top band
 
-"Top" is the Overview placement `top` (see [projects-placement.md](./projects-placement.md)): `OverviewBand`,
-one column per status under the page header. Its thread area can now be stretched.
-
 - **Handle on the edge that faces the content**: the band's lower edge, over the conversation. Drag down to
   grow, up to shrink; double-click resets; focus it and use ArrowDown/ArrowUp (Shift for bigger steps).
-  The side pane's left-edge handle (`PaneResizer`) and this one are the same component (`EdgeResizer`
-  in `project/PaneResizer.tsx`), so look, behaviour, keyboard and a11y (`role="separator"`) cannot diverge.
-- **Default is unchanged**: until the user drags, the columns fit their content up to 152px of cards, as
-  before. The first drag starts from the height they have now (no jump). Once set, the height is fixed and
-  the cards scroll inside it. Resetting (or dragging back to the default) returns to "fit the content".
+  The side pane's left-edge handle and this one are one component (`EdgeResizer` in
+  `project/PaneResizer.tsx`), so look, behaviour, keyboard and a11y (`role="separator"`) cannot diverge.
+- **Default unchanged**: until the user drags, the columns fit their content up to 152px of cards. The first
+  drag starts from the height they have now (no jump). Once set, the height is fixed and the cards scroll
+  inside it. Resetting (or dragging back to the default) returns to "fit the content".
 - **Clamp**: at least 96px; at most 480px and never so tall that the conversation keeps less than 240px
-  (`clampBand`, measured against the page column, the window until measured). A shorter window clamps the
+  (`clampBand`, measured against the page column; the window until measured). A shorter window clamps the
   saved height for now and it comes back when there is room, like the pane's width.
-- **Remembered per browser** (`tingly-project.overviewBandHeight`), like the placement, the open/closed
-  state of the band and the pane width.
-- **Lists vs kanban**: the band is already the board (one column per status) and has no list mode, so
-  there is nothing to switch; the sidebar's List | Kanban choice is independent. The sidebar kanban's
-  lanes are not resizable (they are as tall as their cards and the sidebar scrolls).
-- **Left sidebar**: not resizable today and left that way. Its 200px width is a constant of the host shell
-  (`frontend/src/layout`) shared by every activity panel, not Projects'; making it draggable is a
-  host-wide layout change. The right side pane was already resizable.
+- **Remembered per browser** (`tingly-project.overviewBandHeight`).
+- **List vs kanban at the top**: the band is the kanban; it has no list mode, so the switch does not
+  appear there. The pane's choice is independent.
+- **Left navigation sidebar**: not resizable today and left that way. Its 200px width is a constant of the
+  host shell (`frontend/src/layout`), shared by every activity panel, not Projects'; making it draggable is
+  a host-wide layout change. The right side pane was already resizable.
+
+## Files
+
+`workspace/StatusColumns.tsx` (the board), `workspace/ViewSwitch.tsx` (switch and persistence),
+`project/OverviewPane.tsx` (switch and view), `workspace/OverviewBand.tsx` (uses the board, owns the band
+height), `project/PaneResizer.tsx` (`EdgeResizer`, `PaneResizer`, `BandResizer`, `clampBand`),
+`ListRow.tsx` (`stacked`).

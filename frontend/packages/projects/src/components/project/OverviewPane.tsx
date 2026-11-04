@@ -8,13 +8,21 @@ import { useNotify } from '../../hooks/useNotify';
 import { formatBytes, timeAgo } from '../../utils/format';
 import { STATUS_ORDER, ThreadBadges, ThreadSubtitle, needsUser } from './threadStatus';
 import { StatusGroups } from '../workspace/StatusGroups';
+import { StatusColumns } from '../workspace/StatusColumns';
+import { useThreadsView, ViewSwitch, type ThreadsView } from '../workspace/ViewSwitch';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 const mono = { fontFamily: fontMono } as const;
 
-function ThreadGroups({ threads, selectedId, onOpen }: { threads: Thread[]; selectedId?: string; onOpen: (id: string) => void }) {
+function ThreadGroups({ threads, selectedId, onOpen, view }: { threads: Thread[]; selectedId?: string; onOpen: (id: string) => void; view: ThreadsView }) {
     const { t, i18n } = useTranslation('projects');
+    if (view === 'kanban') {
+        // The same columns as the top band, filling the pane; wider than the pane they scroll sideways.
+        return threads.length === 0
+            ? <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>{t('overview.noThreads')}</Typography>
+            : <StatusColumns threads={threads} selectedId={selectedId} onOpen={onOpen} resolved="column" stacked rowSx={{ height: '100%', pt: 1.5, boxSizing: 'border-box' }} />;
+    }
     const groups = STATUS_ORDER.map((status) => ({
         key: status, label: t(`overview.group.${status}`), collapsed: status === 'resolved',
     }));
@@ -124,14 +132,18 @@ export function OverviewPane({ projectId, threads, onOpen, libraryKey, selectedI
     const { t } = useTranslation('projects');
     const [tab, setTab] = useState<'threads' | 'library'>(initialTab);
     const waiting = threads.filter((th) => needsUser(th.status)).length;
+    const [view, setView] = useThreadsView();
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-            <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ px: 1, minHeight: 44, borderBottom: 1, borderColor: 'divider', '& .MuiTab-root': { minHeight: 44 } }}>
-                <Tab value="threads" label={waiting > 0 ? t('overview.threadsWaiting', { count: waiting }) : t('overview.threads')} />
-                <Tab value="library" label={t('overview.library')} />
-            </Tabs>
-            <Box sx={{ flex: 1, overflowY: 'auto' }}>
-                {tab === 'threads' ? <ThreadGroups threads={threads} selectedId={selectedId} onOpen={onOpen} /> : <Library projectId={projectId} refreshKey={libraryKey} />}
+            <Box sx={{ display: 'flex', alignItems: 'center', pr: 1.5, borderBottom: 1, borderColor: 'divider' }}>
+                <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ flex: 1, minWidth: 0, px: 1, minHeight: 44, '& .MuiTab-root': { minHeight: 44 } }}>
+                    <Tab value="threads" label={waiting > 0 ? t('overview.threadsWaiting', { count: waiting }) : t('overview.threads')} />
+                    <Tab value="library" label={t('overview.library')} />
+                </Tabs>
+                {tab === 'threads' && <ViewSwitch view={view} onChange={setView} />}
+            </Box>
+            <Box sx={{ flex: 1, minHeight: 0, overflowY: view === 'kanban' && tab === 'threads' ? 'hidden' : 'auto' }}>
+                {tab === 'threads' ? <ThreadGroups threads={threads} selectedId={selectedId} onOpen={onOpen} view={view} /> : <Library projectId={projectId} refreshKey={libraryKey} />}
             </Box>
         </Box>
     );

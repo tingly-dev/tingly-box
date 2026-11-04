@@ -20,6 +20,8 @@ interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'title' | 'onClick'
     unseen?: boolean;
     /** Draw it as a bordered card (a column of the Overview band). */
     outlined?: boolean;
+    /** Badges and meta under the text instead of beside it, for a narrow card. */
+    stacked?: boolean;
     onClick?: () => void;
 }
 
@@ -29,7 +31,7 @@ interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'title' | 'onClick'
  * background tasks all use it, so the same level of information sits in the
  * same place with the same type.
  */
-export function ListRow({ mark, title, subtitle, badges, meta, end, selected, unseen, outlined, onClick, sx, ...rest }: Props & { sx?: object }) {
+export function ListRow({ mark, title, subtitle, badges, meta, end, selected, unseen, outlined, stacked, onClick, sx, ...rest }: Props & { sx?: object }) {
     return (
         <Box
             role={onClick ? 'button' : undefined}
@@ -52,9 +54,16 @@ export function ListRow({ mark, title, subtitle, badges, meta, end, selected, un
             <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography noWrap component="div" sx={{ fontSize: fontSizes.base, fontWeight: unseen ? 650 : 500, color: 'text.primary' }}>{title}</Typography>
                 {subtitle != null && <Typography noWrap component="div" sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{subtitle}</Typography>}
+                {stacked && (badges != null || meta != null) && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                        {badges}
+                        <Box sx={{ flex: 1 }} />
+                        {meta != null && <Typography component="span" sx={{ flexShrink: 0, fontSize: fontSizes.sm, color: 'text.disabled' }}>{meta}</Typography>}
+                    </Box>
+                )}
             </Box>
-            {badges}
-            {meta != null && <Typography component="span" sx={{ flexShrink: 0, fontSize: fontSizes.sm, color: 'text.disabled', minWidth: 28, textAlign: 'right' }}>{meta}</Typography>}
+            {!stacked && badges}
+            {!stacked && meta != null && <Typography component="span" sx={{ flexShrink: 0, fontSize: fontSizes.sm, color: 'text.disabled', minWidth: 28, textAlign: 'right' }}>{meta}</Typography>}
             {end}
         </Box>
     );
