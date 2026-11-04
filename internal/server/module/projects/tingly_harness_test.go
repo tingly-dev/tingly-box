@@ -491,24 +491,9 @@ func TestTinglyRegisteredDirectories(t *testing.T) {
 	h.call("POST", "/projects", map[string]any{"type": "folder", "path": first}, &f1)
 	h.call("POST", "/projects", map[string]any{"type": "folder", "path": second}, &f2)
 	h.call("PATCH", "/projects/"+f2.ID, map[string]any{"archived": true}, nil)
-	// A regular paired chat has start permission but not privileged filesystem
-	// access. /dir must not reveal the registered paths until it is granted,
-	// and must say why instead of looking broken.
-	for _, text := range []string{"/dir", "\uff0fdir", "/project"} {
-		chat.SendText(text)
-		denied := chat.WaitText(10 * time.Second)
-		denied.AssertContains(t, "privileged access")
-		require.NotContains(t, denied.Text, first)
-	}
-	chat.SendCallback("old-message", "project:switch:"+first)
-	chat.WaitText(10*time.Second).AssertContains(t, "privileged access")
-	current, err := h.bridge.CurrentFolder(context.Background(), "tingly", chat.ChatID)
-	require.NoError(t, err)
-	require.Equal(t, h.workdir, current, "unprivileged callbacks cannot switch folders")
-	targets, err := h.stores.BotAccess().ListDirectChats(context.Background(), h.chosenID)
-	require.NoError(t, err)
-	require.Len(t, targets, 1)
-	require.NoError(t, h.stores.BotAccess().SetDirectChatPermission(context.Background(), h.chosenID, targets[0].ID, access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged, access.EffectAllow))
+	// A regular paired chat has start permission but not privileged access. It
+	// may still pick among the folders the operator registered: /dir lists
+	// them, /dir N and the buttons switch.
 	chat.SendText("/dir")
 	result := chat.WaitText(10 * time.Second)
 	result.AssertContains(t, "Registered folders:").AssertContains(t, first).AssertContains(t, h.workdir)
@@ -523,12 +508,45 @@ func TestTinglyRegisteredDirectories(t *testing.T) {
 		}
 	}
 	require.NotEmpty(t, number)
+	// /help offers only what the chat can run.
+	chat.SendText("/help")
+	help := chat.WaitText(10*time.Second).AssertContains(t, "/dir [N]")
+	require.NotContains(t, help.Text, "/cd")
+	// A free path needs the permission, and the chat is told which one
+	// instead of the command looking broken.
+	free := t.TempDir()
+	for _, text := range []string{"/cd " + free, "\uff0fcd " + free, "/dir " + free} {
+		chat.SendText(text)
+		chat.WaitText(10*time.Second).AssertContains(t, "Any folder and files")
+	}
+	chat.SendCallback("old-message", "action:bind")
+	chat.WaitText(10*time.Second).AssertContains(t, "Any folder and files")
+	current, err := h.bridge.CurrentFolder(context.Background(), "tingly", chat.ChatID)
+	require.NoError(t, err)
+	require.Equal(t, h.workdir, current, "a free path did not move the chat")
 	// A newly registered folder must not change an already displayed number.
 	h.call("POST", "/projects", map[string]any{"type": "folder", "path": t.TempDir()}, nil)
 	chat.SendText("/dir " + number)
 	chat.WaitText(10*time.Second).AssertContains(t, first)
 	chat.SendText("new directory message")
 	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: new directory message")
+	current, err = h.bridge.CurrentFolder(context.Background(), "tingly", chat.ChatID)
+	require.NoError(t, err)
+	require.Equal(t, first, current, "the registered folder was picked without the permission")
+
+	// With the permission a free path works too.
+	targets, err := h.stores.BotAccess().ListDirectChats(context.Background(), h.chosenID)
+	require.NoError(t, err)
+	require.Len(t, targets, 1)
+	require.NoError(t, h.stores.BotAccess().SetDirectChatPermission(context.Background(), h.chosenID, targets[0].ID, access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged, access.EffectAllow))
+	chat.SendText("/help")
+	chat.WaitText(10*time.Second).AssertContains(t, "/cd <path>")
+	chat.SendText("/cd " + free)
+	chat.WaitText(10*time.Second).AssertContains(t, free)
+	current, err = h.bridge.CurrentFolder(context.Background(), "tingly", chat.ChatID)
+	require.NoError(t, err)
+	require.Equal(t, free, current)
+
 	// A button on an old list must not switch to a folder after it is archived.
 	h.call("PATCH", "/projects/"+f1.ID, map[string]any{"archived": true}, nil)
 	chat.SendCallback("old-message", "project:switch:"+first)
@@ -540,10 +558,7 @@ func TestTinglyProjectsAndFoldersAreDistinct(t *testing.T) {
 	chat := h.env.NewUser("picker-user").OpenDM(h.chosenID)
 	chat.SendText("start")
 	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: start")
-	targets, err := h.stores.BotAccess().ListDirectChats(context.Background(), h.chosenID)
-	require.NoError(t, err)
-	require.Len(t, targets, 1)
-	require.NoError(t, h.stores.BotAccess().SetDirectChatPermission(context.Background(), h.chosenID, targets[0].ID, access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged, access.EffectAllow))
+	// Choosing a project needs only start: no privileged grant here.
 	var project, archived struct {
 		ID string `json:"id"`
 	}

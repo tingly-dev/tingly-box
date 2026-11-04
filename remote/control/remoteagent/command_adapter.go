@@ -150,6 +150,15 @@ func (a *botHandlerAdapter) RunProjectDirectory(ctx *imbot.HandlerContext, arg s
 	a.handler.projectDirectory(HandlerContext{Bot: ctx.Bot, BotUUID: a.handler.botSetting.UUID, ChatID: ctx.ChatID, SenderID: ctx.SenderID, Platform: ctx.Platform}, arg)
 }
 
+// HasPrivilegedAccess asks the host's access policy whether this chat may use
+// privileged actions; a host without one lets every command show.
+func (a *botHandlerAdapter) HasPrivilegedAccess(ctx *imbot.HandlerContext) bool {
+	if a.handler.privileged == nil {
+		return true
+	}
+	return a.handler.privileged(ctx.Platform, a.handler.botSetting.UUID, ctx.ChatID, ctx.SenderID, !ctx.IsDirectMessage)
+}
+
 // InitCommandRegistry initializes the command registry with built-in commands.
 func (h *BotHandler) InitCommandRegistry() error {
 	registry := imbot.NewCommandRegistry()

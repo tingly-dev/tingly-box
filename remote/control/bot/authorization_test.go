@@ -174,6 +174,9 @@ func TestAuthorizationGateProjectPromptNeedsApprove(t *testing.T) {
 	require.False(t, gate(press, imbot.Platform(setting.Platform), setting.UUID))
 }
 
+// A pending approval answers approve prompts only: it must not let a chat
+// walk the filesystem (privileged), and the folder/project pickers still need
+// start.
 func TestPendingApprovalDoesNotGrantDirectoryOrProjectAccess(t *testing.T) {
 	sm, setting, msg := directAuthorizationFixture(t)
 	gate := bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), false, nil, nil)
@@ -182,37 +185,95 @@ func TestPendingApprovalDoesNotGrantDirectoryOrProjectAccess(t *testing.T) {
 		return access.CapabilityRemoteControl, access.ActionRemoteControlApprove
 	}
 	gate = bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), false, pending, nil)
-	for _, text := range []string{"/dir", "/dir 1", "/project", "/project 1", "/cd /tmp"} {
+	for _, text := range []string{"/cd /tmp", "/dir /tmp", "/dir ~/work"} {
 		m := msg
 		m.Content = imbot.NewTextContent(text)
 		require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "%s must require privileged access", text)
 	}
+	for _, payload := range []imbot.Payload{imbot.NewPayload("bind", "custom"), imbot.NewPayload("bind", "select"), imbot.NewPayload("action", "bind")} {
+		m := msg
+		m.Payload = payload
+		require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "%v must require privileged access", payload)
+	}
+
+	chats, err := sm.BotAccess().ListDirectChats(context.Background(), setting.UUID)
+	require.NoError(t, err)
+	require.NoError(t, sm.BotAccess().SetDirectChatPermission(context.Background(),
+		setting.UUID, chats[0].ID, access.CapabilityRemoteControl, access.ActionRemoteControlStart, access.EffectDeny))
+	for _, text := range []string{"/dir", "/dir 1", "/project", "/project 1"} {
+		m := msg
+		m.Content = imbot.NewTextContent(text)
+		require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "%s needs start, an approve-only chat cannot use it", text)
+	}
 	m := msg
 	m.Payload = imbot.NewPayload("project", "switch", "/tmp")
-	require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "folder buttons must require privileged access")
+	require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "the folder button needs start")
 }
 
-// A paired chat is not privileged until the operator grants it, so the
-// commands that need it stay denied in a direct chat however they are spaced.
-// Only the plain command counts there: with a mention or the bot's suffix it
-// is ordinary text, which the chat may send.
+// A paired chat is not privileged until the operator grants it. Choosing among
+// the folders and projects the operator registered needs only start; a free
+// path (/cd, /dir <path>, the directory browser) and file sends need
+// privileged. Only the plain command counts in a direct chat: with a mention
+// or the bot's suffix it is ordinary text, which the chat may send.
 func TestAuthorizationGatePrivilegedCommandsInDirectChat(t *testing.T) {
 	sm, setting, msg := directAuthorizationFixture(t)
 	gate := bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), false, nil, nil)
 	require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID), "first message pairs the chat")
 	for _, text := range []string{
-		"/dir", "/DIR", " /dir", "/dir   1", "\t/dir\n", "\u00a0/dir", "\uff0fdir", "/cd /tmp", "/cd   /tmp  ", "/project", "/bash ls",
+		"/cd /tmp", "/cd   /tmp  ", " /cd /tmp", "\uff0fcd /tmp", "/cd", "/dir /tmp", "/dir ~/work", "/dir ../x", "/dir 0", "/dir 1 2", "/dir 1a", "/dir -1", "/dir   path with  spaces",
 	} {
 		m := msg
 		m.Content = imbot.NewTextContent(text)
 		require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "%q must require privileged access", text)
 	}
 	for _, text := range []string{
-		"/status", "/directory", "@tingly_bot /dir", "@tingly_bot/dir", "<@U123> /dir", "<@U123>/dir", "@_user_1 /dir", "/dir@tingly_bot",
+		"/dir", "/DIR", " /dir", "\t/dir\n", "\u00a0/dir", "\uff0fdir", "/dir 1", "/dir   2  ", "/project", "/project 1",
+		"/status", "/directory", "/bash ls", "/shell ls",
+		"@tingly_bot /cd /tmp", "@tingly_bot/dir /tmp", "<@U123> /dir /tmp", "<@U123>/dir", "@_user_1 /dir", "/dir@tingly_bot", "/cd@tingly_bot /tmp",
 	} {
 		m := msg
 		m.Content = imbot.NewTextContent(text)
-		require.False(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "%q is ordinary text in a direct chat", text)
+		require.False(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "%q needs only start in a direct chat", text)
+	}
+}
+
+// The buttons follow the commands: the folder list buttons and the menu's
+// project button are the registered pickers, everything that browses or names
+// a free path is privileged.
+func TestInboundActionButtonsInDirectChat(t *testing.T) {
+	press := func(group bool, segments ...string) imbot.Message {
+		m := imbot.Message{ChatType: imbot.ChatTypeDirect, Payload: imbot.NewPayload(segments...)}
+		if group {
+			m.ChatType = imbot.ChatTypeGroup
+		}
+		return m
+	}
+	start := []imbot.Message{press(false, "project", "switch", "/tmp"), press(false, "action", "project")}
+	privileged := []imbot.Message{
+		press(false, "action", "bind"), press(false, "bind", "dir", "x"), press(false, "bind", "up"), press(false, "bind", "select"),
+		press(false, "bind", "custom"), press(false, "bind", "create", "/tmp/x"), press(false, "bind", "cancel"),
+	}
+	for _, m := range start {
+		_, action := bot.InboundAction(m, "", "")
+		require.Equal(t, access.ActionRemoteControlStart, action, "%v", m.Payload)
+		_, action = bot.InboundAction(m, access.CapabilityRemoteControl, access.ActionRemoteControlApprove)
+		require.Equal(t, access.ActionRemoteControlStart, action, "%v: a pending approval does not change what the picker needs", m.Payload)
+	}
+	for _, m := range privileged {
+		_, action := bot.InboundAction(m, "", "")
+		require.Equal(t, access.ActionRemoteControlPrivileged, action, "%v", m.Payload)
+	}
+	// In a group nothing of this lowers: every button stays privileged.
+	for _, m := range append(append([]imbot.Message{}, start...), privileged...) {
+		m.ChatType = imbot.ChatTypeGroup
+		_, action := bot.InboundAction(m, "", "")
+		require.Equal(t, access.ActionRemoteControlPrivileged, action, "group %v", m.Payload)
+	}
+	// Files stay privileged everywhere.
+	for _, chatType := range []imbot.ChatType{imbot.ChatTypeDirect, imbot.ChatTypeGroup} {
+		m := imbot.Message{ChatType: chatType, Content: imbot.NewMediaContent([]imbot.MediaAttachment{{URL: "x"}}, "")}
+		_, action := bot.InboundAction(m, "", "")
+		require.Equal(t, access.ActionRemoteControlPrivileged, action, "%v files", chatType)
 	}
 }
 
@@ -226,12 +287,12 @@ func TestInboundActionPrivilegedCommandsInGroup(t *testing.T) {
 	for _, text := range []string{
 		"/dir", "/DIR", " /dir", "/dir   1", "/dir@tingly_bot", "/dir@tingly_bot 1", "@tingly_bot /dir", "@tingly_bot/dir",
 		"@tingly_bot   /cd /tmp", "<@U123> /dir", "<@!123> /cd /tmp", "<@U123>/dir", "@_user_1 /project", "@_user_1/project",
-		"\uff0fdir", "/cd@tingly_bot /tmp", "@tingly_bot /bash ls",
+		"\uff0fdir", "/cd@tingly_bot /tmp", "/project", "/project 1", "/dir /tmp",
 	} {
 		_, action := bot.InboundAction(group(text), "", "")
 		require.Equal(t, access.ActionRemoteControlPrivileged, action, "%q must require privileged access", text)
 	}
-	for _, text := range []string{"/status", "/help@tingly_bot", "@tingly_bot /new hello", "/directory", "@tingly_bot hello"} {
+	for _, text := range []string{"/status", "/help@tingly_bot", "@tingly_bot /new hello", "/directory", "@tingly_bot hello", "/bash ls"} {
 		_, action := bot.InboundAction(group(text), "", "")
 		require.Equal(t, access.ActionRemoteControlStart, action, "%q needs no privileged access", text)
 	}
@@ -249,19 +310,28 @@ func TestAuthorizationGateDeniedPrivilegedCommandTellsTheChat(t *testing.T) {
 	require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID), "first message pairs the chat")
 	require.Empty(t, told)
 
-	for _, text := range []string{"/dir", "\uff0fdir", "/cd /tmp", "/project"} {
+	for _, text := range []string{"/cd /tmp", "\uff0fcd /tmp", "/dir /tmp", "/dir ~/work"} {
 		m := msg
 		m.Content = imbot.NewTextContent(text)
 		require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), text)
 	}
 	press := msg
-	press.Payload = imbot.NewPayload("project", "switch", "/tmp")
+	press.Payload = imbot.NewPayload("action", "bind")
 	require.True(t, gate(press, imbot.Platform(setting.Platform), setting.UUID))
 	require.Equal(t, []access.ActionName{
 		access.ActionRemoteControlPrivileged, access.ActionRemoteControlPrivileged, access.ActionRemoteControlPrivileged,
 		access.ActionRemoteControlPrivileged, access.ActionRemoteControlPrivileged,
 	}, told)
-	require.Contains(t, bot.DeniedActionText(access.ActionRemoteControlPrivileged), "privileged")
+
+	// The registered pickers need only start, so they run and nothing is said.
+	told = nil
+	for _, text := range []string{"/dir", "/dir 1", "/project", "/project 1"} {
+		m := msg
+		m.Content = imbot.NewTextContent(text)
+		require.False(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), text)
+	}
+	require.Empty(t, told)
+	require.Contains(t, bot.DeniedActionText(access.ActionRemoteControlPrivileged), "Any folder and files")
 
 	// Once granted the command goes through and nothing is said.
 	chats, err := sm.BotAccess().ListDirectChats(context.Background(), setting.UUID)
@@ -271,7 +341,7 @@ func TestAuthorizationGateDeniedPrivilegedCommandTellsTheChat(t *testing.T) {
 		access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged, access.EffectAllow))
 	told = nil
 	m := msg
-	m.Content = imbot.NewTextContent("\uff0fdir")
+	m.Content = imbot.NewTextContent("\uff0fcd /tmp")
 	require.False(t, gate(m, imbot.Platform(setting.Platform), setting.UUID))
 	require.Empty(t, told)
 }
@@ -287,8 +357,40 @@ func TestAuthorizationGateDeniedChatGetsNoPrivilegedNotice(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, sm.BotAccess().SetDirectChatPermission(context.Background(), setting.UUID, chats[0].ID,
 		access.CapabilityRemoteControl, access.ActionRemoteControlStart, access.EffectDeny))
-	m := msg
-	m.Content = imbot.NewTextContent("/dir")
-	require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID))
+	for _, text := range []string{"/dir", "/cd /tmp"} {
+		m := msg
+		m.Content = imbot.NewTextContent(text)
+		require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), text)
+	}
 	require.Zero(t, told)
+}
+
+// The privilege check behind /help asks the same authorizer as the gate.
+func TestPrivilegeCheckerFollowsThePrivilegedPermission(t *testing.T) {
+	sm, setting, msg := directAuthorizationFixture(t)
+	gate := bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), false, nil, nil)
+	require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID), "first message pairs the chat")
+	check := bot.NewPrivilegeChecker(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()))
+	platform := imbot.Platform(setting.Platform)
+	require.False(t, check(platform, setting.UUID, msg.Recipient.ID, msg.Sender.ID, false), "paired, not privileged")
+
+	chats, err := sm.BotAccess().ListDirectChats(context.Background(), setting.UUID)
+	require.NoError(t, err)
+	require.Len(t, chats, 1)
+	require.NoError(t, sm.BotAccess().SetDirectChatPermission(context.Background(), setting.UUID, chats[0].ID,
+		access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged, access.EffectAllow))
+	require.True(t, check(platform, setting.UUID, msg.Recipient.ID, msg.Sender.ID, false))
+	require.False(t, check(platform, setting.UUID, msg.Recipient.ID, "someone-else", false), "another actor in the chat is not the peer")
+}
+
+func TestPrivilegeCheckerTravelsInTheContext(t *testing.T) {
+	require.Nil(t, bot.PrivilegeCheckerFrom(context.Background()))
+	called := false
+	ctx := bot.WithPrivilegeChecker(context.Background(), func(imbot.Platform, string, string, string, bool) bool { called = true; return true })
+	require.True(t, bot.PrivilegeCheckerFrom(ctx)("p", "b", "c", "s", false))
+	require.True(t, called)
+}
+
+func TestDeniedPrivilegedTextNamesTheSwitch(t *testing.T) {
+	require.Contains(t, bot.DeniedActionText(access.ActionRemoteControlPrivileged), "Any folder and files")
 }

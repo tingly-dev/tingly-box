@@ -28,23 +28,102 @@ func isPairingBootstrap(msg imbot.Message) bool {
 	return ok && (cmd.Name == "pair" || cmd.Name == "bind")
 }
 
-// privilegedCommands are the chat commands that reach the filesystem or a
-// shell; running one needs remote_control.privileged.
-var privilegedCommands = map[string]bool{
-	"cd": true, "dir": true, "project": true, "bind-project": true, "shell": true, "bash": true,
+// ParseListNumber reads "2" from a command's argument: the number of an entry
+// in the list the chat was last shown (/dir, /project). ok is false for
+// anything else, and the argument is then a path. The gate and the command
+// handlers share this, so what the gate lets through as "pick from the list" is
+// exactly what the handler treats as a pick.
+func ParseListNumber(s string) (int, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, false
+	}
+	n := 0
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return 0, false
+		}
+		n = n*10 + int(r-'0')
+		if n > 1<<20 {
+			return 0, false
+		}
+	}
+	if n < 1 {
+		return 0, false
+	}
+	return n, true
+}
+
+// commandAction is the remote_control action a folder or project command needs,
+// or "" for any other command. The pickers (/dir, /dir N, /project,
+// /project N) only choose among the folders and projects the operator
+// registered, so a chat that may start runs may use them in a direct chat.
+// Anything that names a free path (/cd, /dir <path>) needs privileged. In a
+// group the working folder is shared by every member, so every folder or
+// project command there stays privileged.
+func commandAction(cmd imbot.SlashCommand, group bool) access.ActionName {
+	switch cmd.Name {
+	case "cd":
+		return access.ActionRemoteControlPrivileged
+	case "dir":
+		if group {
+			return access.ActionRemoteControlPrivileged
+		}
+		if _, ok := ParseListNumber(cmd.Args); ok || cmd.Args == "" {
+			return access.ActionRemoteControlStart
+		}
+		return access.ActionRemoteControlPrivileged
+	case "project":
+		if group {
+			return access.ActionRemoteControlPrivileged
+		}
+		return access.ActionRemoteControlStart
+	}
+	return ""
+}
+
+// buttonAction is the same for the buttons: the folder list and the menu's
+// project button are the pickers; the directory browser ("bind"), which walks
+// the filesystem, is privileged. In a group every one of them is.
+func buttonAction(payload imbot.Payload, group bool) access.ActionName {
+	switch payload.Name() {
+	case "bind":
+		return access.ActionRemoteControlPrivileged
+	case "project":
+		if group {
+			return access.ActionRemoteControlPrivileged
+		}
+		return access.ActionRemoteControlStart
+	case "action":
+		switch payload.Arg(1) {
+		case "bind":
+			return access.ActionRemoteControlPrivileged
+		case "project":
+			if group {
+				return access.ActionRemoteControlPrivileged
+			}
+			return access.ActionRemoteControlStart
+		}
+	}
+	return ""
 }
 
 func inboundAction(msg imbot.Message, pendingCapability access.CapabilityName, pendingAction access.ActionName) (access.CapabilityName, access.ActionName) {
-	// Filesystem navigation always requires privileged access, even while a
-	// separate approval is pending in the same chat.
-	if msg.IsCallback() && (msg.Payload.Name() == "project" || msg.Payload.Name() == "bind" || (msg.Payload.Name() == "action" && (msg.Payload.Arg(1) == "bind" || msg.Payload.Arg(1) == "project"))) {
-		return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
+	group := msg.IsGroupMessage()
+	// Folder and project navigation is decided before a pending approval, so
+	// an approval prompt waiting in the chat never turns /cd into an approve.
+	if msg.IsCallback() {
+		if action := buttonAction(msg.Payload, group); action != "" {
+			return access.CapabilityRemoteControl, action
+		}
 	}
 	if msg.IsMediaContent() {
 		return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
 	}
-	if cmd, ok := imbot.ParseSlashCommand(msg.GetText(), msg.IsGroupMessage()); ok && privilegedCommands[cmd.Name] {
-		return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
+	if cmd, ok := imbot.ParseSlashCommand(msg.GetText(), group); ok {
+		if action := commandAction(cmd, group); action != "" {
+			return access.CapabilityRemoteControl, action
+		}
 	}
 	// A Projects/Claude approval button or an ordinary reply to a pending
 	// approval uses the approval action rather than the session-start action.
@@ -156,7 +235,7 @@ func AuthorizationGate(store AccessStore, authorizer access.Authorizer, legacyCh
 // DeniedActionText is what a chat is told when its action is denied.
 func DeniedActionText(action access.ActionName) string {
 	if action == access.ActionRemoteControlPrivileged {
-		return "⚠️ This needs privileged access (folders, files and shell), which this chat does not have. Ask the bot owner to grant it to this chat."
+		return "⚠️ This needs the “Any folder and files” permission, which this chat does not have. Ask the bot owner to turn it on for this chat in Tingly Box (Remote > Who can control this bot)."
 	}
 	return "⚠️ You are not authorized to answer this request. Ask the bot owner to grant the approve permission for this chat."
 }

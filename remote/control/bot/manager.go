@@ -97,6 +97,9 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatS
 	// Bind the bot's behavior through the injected consumers. This is the
 	// decoupling seam: the lifecycle here knows nothing about what a
 	// consumer does with chats — each consumer owns its own machinery.
+	if accessStore != nil && authorizer != nil {
+		ctx = WithPrivilegeChecker(ctx, NewPrivilegeChecker(accessStore, authorizer))
+	}
 	attachedList := make([]*Attached, 0, len(consumers))
 	for _, consumer := range consumers {
 		attached, err := consumer.Attach(ctx, setting, manager, prompter, chatStore, pairing)
