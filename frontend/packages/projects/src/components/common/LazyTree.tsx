@@ -170,9 +170,9 @@ export function LazyTree<N extends TreeNode>({ ariaLabel, load, expanded, onExpa
                         aria-expanded={isDir ? open : undefined} data-path={node.path} tabIndex={isCurrent ? 0 : -1}
                         ref={(el: HTMLElement | null) => { if (el) rows.current.set(node.path, el); else rows.current.delete(node.path); }}
                         onFocus={(e) => { if (e.target === e.currentTarget) setFocused(node.path); }}
-                        onClick={() => { setFocused(node.path); if (isDir) toggle(node.path); }}
+                        onClick={() => { setFocused(node.path); if (isDir) toggle(node.path); else onActivate?.(node); }}
                         sx={{
-                            display: 'flex', alignItems: 'center', gap: 0.75, minHeight: 34, pr: 1, pl: pad(depth), borderRadius: radius.card, cursor: isDir ? 'pointer' : 'default', outline: 'none',
+                            display: 'flex', alignItems: 'center', gap: 0.75, minHeight: 34, pr: 1, pl: pad(depth), borderRadius: radius.card, cursor: isDir || onActivate ? 'pointer' : 'default', outline: 'none',
                             '&:hover': { bgcolor: 'action.hover' }, '&:focus-visible': { outline: 2, outlineStyle: 'solid', outlineColor: 'primary.main', outlineOffset: -2 },
                             // Invisible actions must not catch clicks; touch has no hover, so they stay shown there.
                             '& .act': { opacity: 0, pointerEvents: 'none' },

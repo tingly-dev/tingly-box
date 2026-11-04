@@ -23,8 +23,18 @@ Overview 的 Library 页把项目资料库显示成可展开的目录树，而�
 - 行内操作（下载、删除）只对文件显示；鼠标悬停或键盘聚焦时替换右侧的大小和时间。不可见时不接收点击；触屏设备没有 hover，操作一直显示。键盘上只有当前行的操作在 tab 顺序里。
 - 与“添加目录”选择器（`DirectoryPicker`）的关系：它是按列钻取的对话框，不是树，且只浏览服务器 home，不能直接复用成树。这里沿用它的图标（Folder / ChevronRight）、加载/错误/重试的交互和 i18n 词汇；`DirectoryPicker` 本身未改动。
 
+## 文件预览
+
+点击（或在行上按 Enter）图片或文本文件，打开一个模态预览（`components/project/LibraryPreview.tsx`）；其他类型仍只有下载。`LazyTree` 因此给文件行加了点击 → `onActivate`（此前只有键盘 Enter 触发）；行内的下载/删除按钮不会触发预览。
+
+1. **不新增后端接口。** 预览走现有的 `GET /library/file`，经 `apiFetch`（宿主的认证照常生效），取回 blob 后展示；该接口的 `Content-Disposition: attachment` 对 `fetch` 没有影响，所以不需要 inline 模式。路径检查因此也是同一套（`LibraryPath`）。
+2. **图片**：png / jpg / jpeg / gif / webp / svg，用 `<img src=blob:>` 展示，blob 的类型由扩展名决定（`image/svg+xml` 等）。SVG 作为图片加载，脚本不会执行，也永远不会作为标记内联进页面。关闭后释放 object URL。
+3. **文本**：md / txt / json / csv / yaml / 常见源码扩展名，以纯文本（`<pre>`，保留换行）展示，**不渲染 Markdown**——渲染会加载文档里的远程图片、链接，对“看一眼文件内容”来说得不偿失。
+4. **大小上限**：图片 25 MB，文本 512 KB（按树里的 `size` 判断，超过时不发请求），改为提示“文件太大”并给出下载按钮。加载中显示转圈，失败显示服务器返回的错误。
+5. **键盘与焦点**：MUI Dialog——Esc 关闭、焦点进入对话框并被限制在其中、关闭后回到触发它的行；头部有下载和关闭按钮。
+
 ## 没做
 
-- 文件预览（原来也只有下载）。
+- 预览 PDF、视频及其他类型；Markdown 渲染预览；图片缩放/翻页。
 - 在某个文件夹里上传（上传仍进资料库根）。
 - 删除文件夹（后端 `DELETE` 只删文件，文件夹行不提供删除）。

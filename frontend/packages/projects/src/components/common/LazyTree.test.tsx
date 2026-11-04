@@ -123,3 +123,13 @@ it('reloads every loaded folder when refreshed, keeping the rows meanwhile', asy
     expect(screen.getByText('a.txt')).toBeInTheDocument();
     fs.outputs = fs.outputs.slice(0, 2);
 });
+
+it('activates a file on click, and a folder only toggles', async () => {
+    const onActivate = vi.fn();
+    render(<Harness load={loader()} onActivate={onActivate} />);
+    fireEvent.click(await screen.findByText('outputs'));
+    await screen.findByText('a.txt');
+    expect(onActivate).not.toHaveBeenCalled();
+    fireEvent.click(item('a.txt'));
+    expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({ path: 'outputs/a.txt' }));
+});

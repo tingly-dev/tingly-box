@@ -231,7 +231,7 @@ export const en = {
     library: {
         intro: 'Files you add are readable by every thread. Threads without a repository deliver their files here.',
         add: 'Add files', empty: 'No files yet.', download: 'Download', copyPath: 'Copy folder path',
-        tree: 'Library files',
+        tree: 'Library files', tooLarge: 'This file is too large to preview.', previewFailed: 'Could not load this file.',
     },
     projectSettings: {
         maxRunning: 'Threads running at once',

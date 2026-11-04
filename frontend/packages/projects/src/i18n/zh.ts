@@ -236,7 +236,7 @@ export const zh: Dict<typeof en> = {
     library: {
         intro: '你添加的文件每个线程都能读取。没有仓库的线程会把产出放在这里。',
         add: '添加文件', empty: '还没有文件。', download: '下载', copyPath: '复制文件夹路径',
-        tree: '资料库文件',
+        tree: '资料库文件', tooLarge: '文件太大，无法预览。', previewFailed: '无法加载此文件。',
     },
     projectSettings: {
         maxRunning: '同时运行的线程数',
