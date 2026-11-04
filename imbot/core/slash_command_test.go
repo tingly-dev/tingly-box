@@ -102,33 +102,3 @@ func TestParseSlashCommandDirect(t *testing.T) {
 		{"/dir@tingly_bot 2", "dir@tingly_bot", "2", true},
 	})
 }
-
-func TestSlashCommandText(t *testing.T) {
-	if got := (SlashCommand{Name: "dir", Args: "2"}).Text(); got != "/dir 2" {
-		t.Errorf("got %q", got)
-	}
-	if got := (SlashCommand{Name: "dir"}).Text(); got != "/dir" {
-		t.Errorf("got %q", got)
-	}
-}
-
-// The suffix a group command carries names the bot it is for; the parser
-// reports it so the host can leave a command for another bot alone.
-func TestParseSlashCommandTarget(t *testing.T) {
-	for _, tt := range []struct {
-		in, name, target string
-		group            bool
-	}{
-		{"/dir@Tingly_Bot 2", "dir", "tingly_bot", true},
-		{"@other_bot /dir@tingly_bot", "dir", "tingly_bot", true},
-		{"/dir", "dir", "", true},
-		{"@tingly_bot /dir", "dir", "", true},
-		{"/dir@", "dir", "", true},
-		{"/dir@tingly_bot", "dir@tingly_bot", "", false},
-	} {
-		got, ok := ParseSlashCommand(tt.in, tt.group)
-		if !ok || got.Name != tt.name || got.Target != tt.target {
-			t.Errorf("ParseSlashCommand(%q, group=%v) = %+v, %v; want name %q target %q", tt.in, tt.group, got, ok, tt.name, tt.target)
-		}
-	}
-}

@@ -176,7 +176,27 @@ func (b *Bot) handleMessageUpdate(ctx context.Context, api *tgbot.Bot, update *m
 		return
 	}
 
+	// With several bots in one group a command is addressed by name
+	// ("/new@otherbot"); it is not this bot's to run or answer.
+	b.mu.RLock()
+	own := b.username
+	b.mu.RUnlock()
+	if coreMessage.IsGroupMessage() && addressedToOtherBot(coreMessage.GetText(), own) {
+		return
+	}
+
 	b.EmitMessage(*coreMessage)
+}
+
+// addressedToOtherBot reports whether text is a command with another bot's
+// name on it. own is this bot's @name; while it is unknown nothing is filtered.
+func addressedToOtherBot(text, own string) bool {
+	head, _, _ := strings.Cut(strings.TrimSpace(text), " ")
+	if own == "" || !strings.HasPrefix(head, "/") {
+		return false
+	}
+	_, target, found := strings.Cut(head, "@")
+	return found && target != "" && !strings.EqualFold(target, own)
 }
 
 // handleCallbackQueryUpdate handles incoming callback query updates
@@ -428,13 +448,6 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 }
 
 // PlatformInfo returns platform information
-// Username is the bot's own @name without the "@", or "" before it connects.
-func (b *Bot) Username() string {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-	return b.username
-}
-
 func (b *Bot) PlatformInfo() *core.PlatformInfo {
 	return core.NewPlatformInfoFor(core.PlatformTelegram)
 }

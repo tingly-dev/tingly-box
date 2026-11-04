@@ -112,7 +112,7 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatS
 		attachedList = append(attachedList, attached)
 	}
 	handlers := make([]OnMessage, 0, len(attachedList)+3)
-	handlers = append(handlers, IgnoreCommandsForOtherBots(manager), DisabledChatGate(chatStore))
+	handlers = append(handlers, DisabledChatGate(chatStore))
 	// Persist the WeChat reply-context token per chat so proactive
 	// notifications (which have no inbound message to copy from) can replay a
 	// valid context after a bot restart. Never claims the message — runs,

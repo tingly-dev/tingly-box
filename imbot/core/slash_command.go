@@ -14,9 +14,6 @@ type SlashCommand struct {
 	Name string
 	// Args is what follows the name, trimmed.
 	Args string
-	// Target is the bot a group command is addressed to ("/dir@MyBot"),
-	// lower-case; empty when it names none. A direct chat has no such suffix.
-	Target string
 }
 
 // Text is the command in its plain "/name args" form.
@@ -58,22 +55,20 @@ func ParseSlashCommand(text string, group bool) (cmd SlashCommand, ok bool) {
 	if t == "" {
 		return SlashCommand{}, false
 	}
-	if t[0] != '/' {
-		r := []rune(t)
-		if r[0] != '\uff0f' {
-			return SlashCommand{}, false
-		}
-		t = "/" + string(r[1:])
+	if rest, ok := strings.CutPrefix(t, "\uff0f"); ok {
+		t = "/" + rest
+	} else if t[0] != '/' {
+		return SlashCommand{}, false
 	}
 	head, rest, _ := strings.Cut(t[1:], " ")
 	if i := strings.IndexFunc(head, unicode.IsSpace); i >= 0 {
 		head, rest = head[:i], head[i:]+" "+rest
 	}
-	name, target := head, ""
+	name := head
 	if group {
-		name, target, _ = strings.Cut(head, "@")
+		name, _, _ = strings.Cut(head, "@")
 	}
-	return SlashCommand{Name: strings.ToLower(name), Args: trimChat(rest), Target: strings.ToLower(target)}, true
+	return SlashCommand{Name: strings.ToLower(name), Args: trimChat(rest)}, true
 }
 
 // stripMention takes one leading mention off text, if there is one before a
@@ -83,12 +78,12 @@ func stripMention(t string) (string, bool) {
 	if t == "" {
 		return t, false
 	}
-	var loc []int
-	switch {
-	case angleMention.MatchString(t):
-		loc = angleMention.FindStringIndex(t)
-	case feishuMention.MatchString(t):
+	loc := angleMention.FindStringIndex(t)
+	if loc == nil {
 		loc = feishuMention.FindStringIndex(t)
+	}
+	switch {
+	case loc != nil:
 	case t[0] == '@':
 		end := strings.IndexFunc(t[1:], func(r rune) bool {
 			return unicode.IsSpace(r) || r == '/' || r == '\uff0f' || r == '@' || r == '<'

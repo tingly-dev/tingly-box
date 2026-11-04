@@ -177,7 +177,7 @@ func newCdCommand(adapter BotHandlerAdapter) imbot.Command {
 // current one) or the number of a folder /dir listed. SetProjectPath says
 // where the chat is now.
 func changeDir(adapter BotHandlerAdapter, ctx *imbot.HandlerContext, input string) error {
-	if idx, ok := parsePositiveInt(input); ok {
+	if idx, ok := bot.ParseListNumber(input); ok {
 		paths := adapter.FolderList(ctx.ChatID)
 		if len(paths) == 0 {
 			return sendCommandText(adapter, ctx, "Use /dir to list folders first.")
@@ -205,11 +205,6 @@ func changeDir(adapter BotHandlerAdapter, ctx *imbot.HandlerContext, input strin
 	}
 	return adapter.SetProjectPath(ctx.ChatID, expandedPath)
 }
-
-// parsePositiveInt reads the number of a listed entry. It is the gate's own
-// parser (bot.ParseListNumber): what the gate lets through as a pick from the
-// list must be exactly what the handler treats as one, and never as a path.
-func parsePositiveInt(s string) (int, bool) { return bot.ParseListNumber(s) }
 
 func newDirCommand(adapter BotHandlerAdapter) imbot.Command {
 	return imbot.NewCommand("cmd-dir", "dir", "List registered folders, or switch to one").

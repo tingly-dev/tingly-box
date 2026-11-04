@@ -1,7 +1,7 @@
 import { Security } from '@/components/icons';
 import { api } from '@/services/api';
 import type {BotCapability, BotGroupDetail, BotSettings, DirectChatDetail, CapabilityName, GroupActor} from '@/types/bot';
-import { actorPrivileged, chatCanControl, chatPermissionAllowed, chatPrivileged, isPairingRequired, remoteChatState } from '@/types/bot';
+import { actorAllowed, chatCanControl, chatPermissionAllowed, isPairingRequired, remoteChatState } from '@/types/bot';
 import {
     Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
     DialogTitle, Divider, FormControlLabel, Stack, Switch, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
@@ -38,6 +38,10 @@ interface Props {
 
 type ChatControl = 'control' | 'none' | 'blocked';
 
+// The one grant above start + approve: switching to a free path, sending files.
+const PRIVILEGED = 'remote_control.privileged';
+const privilegedOn = (chat: DirectChatDetail) => chatPermissionAllowed(chat, 'remote_control', PRIVILEGED);
+
 const rowSx = {p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1.5} as const;
 
 function AccessEditor({inline, open, onClose, children}: {inline: boolean; open: boolean; onClose: () => void; children: ReactNode}) {
@@ -71,7 +75,7 @@ const remoteRows = (allow: boolean, keepPrivileged: boolean) => {
         {capability: 'remote_control', action: 'access', effect},
         {capability: 'remote_control', action: 'remote_control.start', effect},
         {capability: 'remote_control', action: 'remote_control.approve', effect},
-        {capability: 'remote_control', action: 'remote_control.privileged', effect: allow && keepPrivileged ? 'allow' as const : 'deny' as const},
+        {capability: 'remote_control', action: PRIVILEGED, effect: allow && keepPrivileged ? 'allow' as const : 'deny' as const},
     ];
 };
 
@@ -135,7 +139,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
     const setPreset = (chat: DirectChatDetail, preset: 'full' | 'notify') => mutate(async () => {
         const notifyRows = ['access', 'notify.receive', 'notify.reply'].map((action) =>
             ({capability: 'notify', action, effect: 'allow' as const}));
-        await api.setBotDirectChatPermissions(bot!.uuid!, chat.chat.id, [...notifyRows, ...remoteRows(preset === 'full', chatPrivileged(chat))]);
+        await api.setBotDirectChatPermissions(bot!.uuid!, chat.chat.id, [...notifyRows, ...remoteRows(preset === 'full', privilegedOn(chat))]);
     });
     const setChatControl = (chat: DirectChatDetail, next: ChatControl) => mutate(async () => {
         if (next === 'blocked') {
@@ -144,14 +148,14 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
         }
         // Rows first, unblock second: if the rows write fails, a chat being
         // cut off must stay blocked rather than come back with its old allows.
-        await api.setBotDirectChatPermissions(bot!.uuid!, chat.chat.id, remoteRows(next === 'control', chatPrivileged(chat)));
+        await api.setBotDirectChatPermissions(bot!.uuid!, chat.chat.id, remoteRows(next === 'control', privilegedOn(chat)));
         if (chat.chat.blocked) await api.setBotDirectChatBlocked(bot!.uuid!, chat.chat.id, false);
     });
 
     const setChatPrivileged = (chat: DirectChatDetail, on: boolean) => mutate(() =>
-        api.setBotDirectChatPermission(bot!.uuid!, chat.chat.id, 'remote_control', 'remote_control.privileged', on ? 'allow' : 'deny'));
+        api.setBotDirectChatPermission(bot!.uuid!, chat.chat.id, 'remote_control', PRIVILEGED, on ? 'allow' : 'deny'));
     const setActorPrivileged = (group: BotGroupDetail['group'], actor: GroupActor['actor'], on: boolean) => mutate(() =>
-        api.setBotGroupActorPermission(bot!.uuid!, group.id, actor.id, 'remote_control', 'remote_control.privileged', on ? 'allow' : 'deny'));
+        api.setBotGroupActorPermission(bot!.uuid!, group.id, actor.id, 'remote_control', PRIVILEGED, on ? 'allow' : 'deny'));
 
     // "Any folder and files": the one grant above start + approve. Picking from
     // the registered folders and projects works without it.
@@ -159,7 +163,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
         <Box sx={{mt: 0.5}}>
             <FormControlLabel
                 sx={{m: 0}}
-                control={<Switch size="small" checked={chatPrivileged(chat)} disabled={saving || !chatCanControl(chat)}
+                control={<Switch size="small" checked={privilegedOn(chat)} disabled={saving || !chatCanControl(chat)}
                     onChange={(_, on) => void setChatPrivileged(chat, on)}/>}
                 label={t('botAccess.privileged', {defaultValue: 'Any folder and files'})}
             />
@@ -366,7 +370,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                             <FormControlLabel
                                 key={member.actor.id}
                                 sx={{display: 'flex', m: 0}}
-                                control={<Switch size="small" checked={actorPrivileged(member)} disabled={saving}
+                                control={<Switch size="small" checked={actorAllowed(member, PRIVILEGED)} disabled={saving}
                                     onChange={(_, on) => void setActorPrivileged(group, member.actor, on)}/>}
                                 label={`${member.actor.display_name || member.actor.external_actor_id} · ${t('botAccess.privileged', {defaultValue: 'Any folder and files'})}`}
                             />

@@ -81,11 +81,6 @@ type ProjectFile struct {
 // SetProjectRouter plugs in the router; nil turns chat control off.
 func (h *BotHandler) SetProjectRouter(r ProjectRouter) { h.projectRouter = r }
 
-// SetPrivilegeChecker plugs in the host's answer to "may this chat use
-// privileged actions" (a host with an access policy sets it through the
-// context the consumer is attached with). Without one /help lists everything.
-func (h *BotHandler) SetPrivilegeChecker(check bot2.PrivilegeChecker) { h.privileged = check }
-
 // chatControlOff is what a chat hears while Projects is switched off.
 const chatControlOff = "Chatting with Claude Code from here is off. Turn on Projects in Tingly Box to use it."
 
@@ -275,7 +270,7 @@ func (h *BotHandler) projectDirectory(hCtx HandlerContext, arg string) {
 		h.SendText(hCtx, out.String())
 		return
 	}
-	n, valid := parsePositiveInt(arg)
+	n, valid := bot2.ParseListNumber(arg)
 	h.projectListsMu.Lock()
 	list := append([]ProjectChoice(nil), h.projectLists[hCtx.ChatID]...)
 	h.projectListsMu.Unlock()

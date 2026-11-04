@@ -71,20 +71,6 @@ func NewHandler(ctx context.Context, cfg *config.Config, channelRegistry *channe
 	return h, nil
 }
 
-// NewAccessHandler serves the bot access API (capabilities, direct chats,
-// groups, actors, permissions) over an access store, with no bot manager and
-// no settings store; every other route answers 503. It is for hosts that need
-// the access API without connecting real bots, such as the IM/Projects
-// integration harness, which grants permissions through the same routes the
-// admin UI calls.
-func NewAccessHandler(accessStore *db.BotAccessStore) *Handler {
-	h := &Handler{accessStore: accessStore}
-	if accessStore != nil {
-		h.authorizer = access.NewEvaluator(accessStore)
-	}
-	return h
-}
-
 // ListSettings returns all ImBot configurations
 func (h *Handler) ListSettings(c *gin.Context) {
 	if h.store == nil {

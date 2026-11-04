@@ -22,17 +22,12 @@ and privileged-access enforcement (including directory buttons). Unit tests alon
 relay and persistence failure paths. Add integration cases here when behavior
 crosses the bot/Projects boundary.
 
-Slash-command scenarios (`tingly_slash_commands_test.go`) drive the real
-authorization gate and chat handler and grant permissions through the access
-API the admin UI calls (the harness mounts it next to Projects): picking
-registered folders and projects at start level, free paths and files denied
-with a notice until `remote_control.privileged` is granted (and denied again when
-it is revoked), plain commands with extra whitespace or a full-width slash, and
-in a group the decorated forms (`/dir@bot`, `@bot /dir`, `@bot/dir`, `<@U1> /dir`,
-`<@!1> /dir`, `@_user_1 /dir`) needing the grant. Platform mention formats are
-simulated by sending that text through the Tingly transport; the harness cannot
-show whether the Telegram, Slack, Discord, Feishu, WeCom, WhatsApp or DingTalk
-adapters deliver exactly that text, because those adapters do not run here.
+Slash-command scenarios (`tingly_slash_commands_test.go`) cover the real gate
+and chat handler: registered pickers at start level, free paths denied with a
+notice until `remote_control.privileged` is granted, plain commands in a direct
+chat, and the decorated group forms. Mention formats are simulated by sending
+that text through the Tingly transport; the real Telegram, Slack, Discord,
+Feishu, WeCom, WhatsApp and DingTalk adapters do not run here.
 
 This is not a replacement for platform-specific Telegram/Feishu/Weixin tests,
 real Claude Code compatibility tests, or end-to-end validation of file uploads,

@@ -54,56 +54,46 @@ func ParseListNumber(s string) (int, bool) {
 	return n, true
 }
 
-// commandAction is the remote_control action a folder or project command needs,
-// or "" for any other command. The pickers (/dir, /dir N, /project,
-// /project N) only choose among the folders and projects the operator
-// registered, so a chat that may start runs may use them in a direct chat.
-// Anything that names a free path (/cd, /dir <path>) needs privileged. In a
-// group the working folder is shared by every member, so every folder or
-// project command there stays privileged.
+// pickerAction is what choosing among the folders and projects the operator
+// registered needs: start in a direct chat, privileged in a group, where every
+// member shares the one working folder. Naming a free path (/cd, /dir <path>)
+// or browsing the filesystem always needs privileged.
+func pickerAction(group bool) access.ActionName {
+	if group {
+		return access.ActionRemoteControlPrivileged
+	}
+	return access.ActionRemoteControlStart
+}
+
+// commandAction is the action a folder or project command needs, or "" for any
+// other command.
 func commandAction(cmd imbot.SlashCommand, group bool) access.ActionName {
 	switch cmd.Name {
 	case "cd":
 		return access.ActionRemoteControlPrivileged
 	case "dir":
-		if group {
-			return access.ActionRemoteControlPrivileged
-		}
-		if _, ok := ParseListNumber(cmd.Args); ok || cmd.Args == "" {
-			return access.ActionRemoteControlStart
+		if _, isNumber := ParseListNumber(cmd.Args); isNumber || cmd.Args == "" {
+			return pickerAction(group)
 		}
 		return access.ActionRemoteControlPrivileged
 	case "project":
-		if group {
-			return access.ActionRemoteControlPrivileged
-		}
-		return access.ActionRemoteControlStart
+		return pickerAction(group)
 	}
 	return ""
 }
 
-// buttonAction is the same for the buttons: the folder list and the menu's
-// project button are the pickers; the directory browser ("bind"), which walks
-// the filesystem, is privileged. In a group every one of them is.
+// buttonAction is the same for buttons: the folder list and the menu's project
+// button are pickers, the directory browser is not.
 func buttonAction(payload imbot.Payload, group bool) access.ActionName {
-	switch payload.Name() {
+	name := payload.Name()
+	if name == "action" { // a menu button: action:<name>
+		name = payload.Arg(1)
+	}
+	switch name {
 	case "bind":
 		return access.ActionRemoteControlPrivileged
 	case "project":
-		if group {
-			return access.ActionRemoteControlPrivileged
-		}
-		return access.ActionRemoteControlStart
-	case "action":
-		switch payload.Arg(1) {
-		case "bind":
-			return access.ActionRemoteControlPrivileged
-		case "project":
-			if group {
-				return access.ActionRemoteControlPrivileged
-			}
-			return access.ActionRemoteControlStart
-		}
+		return pickerAction(group)
 	}
 	return ""
 }
@@ -141,30 +131,6 @@ func inboundAction(msg imbot.Message, pendingCapability access.CapabilityName, p
 
 // authorizationGate is the one production inbound seam for text, callbacks,
 // and files. A denied message is claimed here and cannot reach a Capability.
-// AddressedToAnotherBot reports whether a group command carries the name of a
-// bot other than this one ("/new@otherbot" in a Telegram group with two bots).
-// own is this bot's @name, "" when the platform does not tell it (then nothing
-// is said to be for another bot). Such a command is not this bot's to run or
-// to answer.
-func AddressedToAnotherBot(msg imbot.Message, own string) bool {
-	if own == "" || !msg.IsGroupMessage() {
-		return false
-	}
-	cmd, ok := imbot.ParseSlashCommand(msg.GetText(), true)
-	return ok && cmd.Target != "" && cmd.Target != strings.ToLower(own)
-}
-
-// IgnoreCommandsForOtherBots is the first handler of a bot's chain: it claims
-// (and so drops, without a word) a group command addressed to another bot,
-// before the access gate can answer it or a consumer run it. A platform that
-// does not expose the bot's own name is never filtered.
-func IgnoreCommandsForOtherBots(mgr *imbot.Manager) OnMessage {
-	return func(msg imbot.Message, platform imbot.Platform, botUUID string) bool {
-		self, ok := mgr.GetBot(botUUID, platform).(interface{ Username() string })
-		return ok && AddressedToAnotherBot(msg, self.Username())
-	}
-}
-
 // AuthorizationGate builds the inbound authorization seam. notifyDenied, when
 // non-nil, is invoked with the denied action for two denials that must not be
 // silent:
