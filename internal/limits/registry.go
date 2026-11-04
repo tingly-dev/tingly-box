@@ -64,10 +64,45 @@ func (r Reason) String() string {
 	return out
 }
 
+// Scope says which kind of entity a Subject is, so a blocked verdict can name
+// who is exhausted (the person, the team, the upstream).
+type Scope uint8
+
+const (
+	ScopeAcct Scope = 1 << iota
+	ScopeSvc
+	ScopeModel
+	ScopeUser
+	ScopeTeam
+)
+
+// ScopeActor is the set of request-start scopes (before routing).
+const ScopeActor = ScopeUser | ScopeTeam
+
+func (s Scope) String() string {
+	var out string
+	add := func(n string) {
+		if out != "" {
+			out += "+"
+		}
+		out += n
+	}
+	for _, e := range []struct {
+		s Scope
+		n string
+	}{{ScopeAcct, "account"}, {ScopeSvc, "service"}, {ScopeModel, "model"}, {ScopeUser, "user"}, {ScopeTeam, "team"}} {
+		if s&e.s != 0 {
+			add(e.n)
+		}
+	}
+	return out
+}
+
 // Subject is one counted entity (an account or one rule's share of it) and the
 // limits that apply to it.
 type Subject struct {
 	Key    string
+	Scope  Scope
 	Limits ai.Limits
 	// Quota is the provider UUID whose upstream quota Limits.QuotaPercent is
 	// checked against. Empty = no quota check.
@@ -78,6 +113,8 @@ type Subject struct {
 type Verdict struct {
 	State   State
 	Reasons Reason
+	// Scopes is the set of subject scopes that are blocked (hard limit hit).
+	Scopes Scope
 	// Pressure is the largest used/limit ratio across all dimensions
 	// (1.0 = at the hard limit; 0 when nothing is limited).
 	Pressure float64
@@ -236,7 +273,7 @@ func (r *Registry) assessLocked(subjects []Subject, quota []quotaEntry, now time
 			}
 			rt := float64(inflight) / float64(l.MaxConcurrent)
 			if inflight >= l.MaxConcurrent {
-				v.State, v.Reasons = StateBlocked, v.Reasons|ReasonConcurrency
+				v.State, v.Reasons, v.Scopes = StateBlocked, v.Reasons|ReasonConcurrency, v.Scopes|s.Scope
 				if v.RetryAfter < defaultRetryAfter {
 					v.RetryAfter = defaultRetryAfter
 				}
@@ -259,7 +296,7 @@ func (r *Registry) assessLocked(subjects []Subject, quota []quotaEntry, now time
 				rt = maxf(rt, float64(toks)/float64(l.MaxTokens))
 			}
 			if rt >= 1 {
-				v.State, v.Reasons = StateBlocked, v.Reasons|ReasonUsage
+				v.State, v.Reasons, v.Scopes = StateBlocked, v.Reasons|ReasonUsage, v.Scopes|s.Scope
 				if w != nil {
 					if ra := w.freeIn(now); ra > v.RetryAfter {
 						v.RetryAfter = ra
@@ -272,7 +309,7 @@ func (r *Registry) assessLocked(subjects []Subject, quota []quotaEntry, now time
 		if quota != nil && quota[i].ok && l.QuotaPercent > 0 {
 			rt := quota[i].pct / float64(l.QuotaPercent)
 			if rt >= 1 {
-				v.State, v.Reasons = StateBlocked, v.Reasons|ReasonQuota
+				v.State, v.Reasons, v.Scopes = StateBlocked, v.Reasons|ReasonQuota, v.Scopes|s.Scope
 				if v.RetryAfter < time.Minute {
 					v.RetryAfter = time.Minute
 				}
@@ -391,6 +428,31 @@ func (r *Registry) Stat(key string) Stat {
 		st.Requests, st.Tokens = c.win.sums(clock.Now())
 	}
 	return st
+}
+
+// Keys lists the keys of all live counters starting with prefix.
+func (r *Registry) Keys(prefix string) []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []string
+	for k := range r.counters {
+		if len(k) >= len(prefix) && k[:len(prefix)] == prefix {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
+// WindowEmpty reports whether the key has no usage recorded in a window of the
+// limit's current length, i.e. whether warm-starting it would not double count.
+func (r *Registry) WindowEmpty(key string, l ai.Limits) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c := r.counters[key]
+	if c == nil || c.win == nil || c.win.length != l.Window() {
+		return true
+	}
+	return c.win.empty(clock.Now())
 }
 
 // Reap force-releases permits held longer than the leak-guard hold time and

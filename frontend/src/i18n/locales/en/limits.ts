@@ -31,6 +31,30 @@ export default {
     "button": "Limits",
     "buttonTooltip": "Concurrency & usage limits",
     "save": "Save",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "saved": "Limits saved",
+    "saveFailed": "Failed to save limits",
+    "inheritedFromTeam": "No personal limit is set. This person currently follows the team's per-member default.",
+    "overflow": {
+      "label": "When the concurrency limit is hit",
+      "hint": "A used-up usage budget always answers 429 with Retry-After.",
+      "queue": "Wait in line, then 429",
+      "reject": "Reject with 429 immediately",
+      "timeout": "Max wait (seconds)"
+    },
+    "team": {
+      "title": "Limits for {{team}}",
+      "explain": "Limits apply on top of account and rule limits and before a request is routed. Each cap is checked independently; the strictest one decides.",
+      "whole": "Whole team",
+      "wholeHint": "Everyone in the team shares this budget.",
+      "member": "Each member",
+      "memberHint": "Every member gets their own counter with these limits. A personal limit on a key overrides it.",
+      "button": "Limits",
+      "buttonTooltip": "Team and per-member limits"
+    },
+  "person": {
+      "title": "Limits for {{name}}",
+      "hint": "Caps what this key's user may use, across every account and model. The team's limits still apply."
+    }
   }
 };

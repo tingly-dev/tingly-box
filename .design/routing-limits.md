@@ -1,6 +1,6 @@
 # Routing limits: account, person, team and model concurrency & usage operators
 
-Status: **implemented** (backend, API, UI, smart-routing positions). Code: `ai/limits.go`, `internal/limits/`, `internal/routing/{limits,stage_limits}.go`, `internal/protocolserver/limits.go`, `internal/server/{limits.go,module/limits/}`, frontend `src/components/limits/`. Research: [`.research/routing-concurrency-usage-operators.md`](../.research/routing-concurrency-usage-operators.md).
+Status: **implemented** (backend, API, UI, smart-routing positions). Code: `ai/limits.go`, `internal/limits/`, `internal/routing/{limits,limits_actor,stage_limits}.go`, `internal/db/limit_policy_store.go`, `internal/protocolserver/limits.go`, `internal/server/{limits.go,module/limits/}`, frontend `src/components/limits/`. Person / team / model scopes: §10 (implemented). Research: [`.research/routing-concurrency-usage-operators.md`](../.research/routing-concurrency-usage-operators.md).
 Related: [tier-routing.md](./tier-routing.md) (pipeline, breaker, affinity), [team.md](./team.md) (Team scopes),
 [quota-semantics.md](./quota-semantics.md) (upstream quota), [usage-tracking.md](./usage-tracking.md),
 [rule-storage.md](./rule-storage.md).
@@ -349,8 +349,38 @@ plus one stage.
 | `model` as candidate subject | Request-model (rule) scope | The rule *is* the request model; an upstream-model cap across rules/accounts is the new information. |
 | No `ignore` for actor scopes | Same three policies everywhere | A per-person quota that can be ignored is not a quota. |
 
+### 10.9 Implementation notes (as built)
+
+- **Packages.** `ai.LimitPolicy` (+ `NormalizePolicy`) is the shared type; `db.LimitPolicyStore` (table
+  `limit_policies`, in-memory mirror, wired into `StoreManager`) implements `routing.PolicyResolver`;
+  `routing.LimitsGuard.AdmitActor` is gate 1, called from `SimpleSelector.SelectService` right after the
+  selection context is built and before the pipeline; `Subjects()` adds the `model:` subject to gate 2.
+- **Lease slots.** The actor permit lives under lease key `actor`; candidate permits under their service id.
+  Failover's `lease.Release(failedServiceID)` therefore never drops it (test `TestFailoverKeepsActorPermit`).
+- **Idempotence flag** `CtxKeyLimitActorDone`: set on first admission so a second selection in the same
+  request does not double count. `count_tokens` pre-sets it: that helper call is exempt from person/team
+  budgets (it still takes an account permit while it runs).
+- **Overflow values.** Stored `overflow` ∈ `queue|reject`; anything else (including `ignore`) normalizes to
+  `queue`. `queue_timeout_seconds` 0 = default 15 s. With two blocked actor scopes the stricter wins (reject
+  beats queue, shorter timeout).
+- **Identity refs.** `user` policy ref = sharing key `user_id`; enterprise-context callers use
+  `euser:<id>`. `euser:` windows are not warm-started (usage records only carry the key's `user_id`).
+  A team's members are derived from `api_tokens` (`ListTokensForTeam`) — no new membership table.
+- **Warm start.** At boot every stored policy is warm-started; saving a policy via the API warm-starts it
+  too, guarded by `Registry.WindowEmpty` so re-saving never double counts. Per-member templates seed each
+  member that has no explicit `user` policy from `usage_records` grouped by `user_id`.
+- **API.** `GET /limit-policies`, `PUT|DELETE /limit-policies/{kind}/{ref}`; `GET /limits/status` now also
+  returns `user`/`team`/`model` entries (with `label`, `team_id`, `inherited_from`) plus one `user` entry per
+  member key of a team with a template and a `team_member:<team>` entry for the template itself.
+- **Errors.** 429 `rate_limit_error` with `error.code` = `user_limit_exceeded` | `team_limit_exceeded` |
+  `upstream_limit_exceeded`, `Retry-After`.
+- **UI.** Team page header "Limits" → one dialog with *Whole team* and *Each member* blocks (saved
+  together; an emptied block clears its policy). Team Keys table → per-key "Limits" action (highlighted when
+  a personal policy exists) with an inherited-from-template notice and live readout. Provider/service
+  editors unchanged. Model limits: API only.
+
 ## 11. Not built (explicitly)
 
-Model-limit editor UI; scenario-wide caps; per-IP caps for anonymous traffic; weighted fair queuing between
+Model-limit editor UI (the `model` policy kind works through the API and the status list); scenario-wide caps; per-IP caps for anonymous traffic; weighted fair queuing between
 members; external (multi-instance) counter store; grouping several keys under one member (identity is
 `user_id`, one per key, until a member entity exists).

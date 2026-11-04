@@ -957,33 +957,80 @@ type UsageMinute struct {
 // providerUUID is required; model and ruleUUID narrow it when non-empty
 // (service-level limits are scoped to rule+provider+model).
 func (us *UsageStore) UsageMinutesSince(providerUUID, model, ruleUUID string, since time.Time) ([]UsageMinute, error) {
-	us.mu.RLock()
-	defer us.mu.RUnlock()
-
-	q := us.db.Model(&UsageRecord{}).
-		Select("strftime('%Y-%m-%d %H:%M:00', timestamp) AS minute, COUNT(*) AS requests, COALESCE(SUM(total_tokens), 0) AS tokens").
-		Where("provider_uuid = ? AND timestamp >= ?", providerUUID, since)
+	filters := map[string]string{"provider_uuid": providerUUID}
 	if model != "" {
-		q = q.Where("model = ?", model)
+		filters["model"] = model
 	}
 	if ruleUUID != "" {
-		q = q.Where("rule_uuid = ?", ruleUUID)
+		filters["rule_uuid"] = ruleUUID
+	}
+	return us.UsageMinutesWhere(filters, since)
+}
+
+// UsageMinutesWhere is UsageMinutesSince over any whitelisted column filters
+// (user_id, team_id, model, provider_uuid, rule_uuid, ...): the warm start of
+// person / team / model limits.
+func (us *UsageStore) UsageMinutesWhere(filters map[string]string, since time.Time) ([]UsageMinute, error) {
+	us.mu.RLock()
+	defer us.mu.RUnlock()
+	if err := validateFilterColumns(filters); err != nil {
+		return nil, err
 	}
 	var rows []struct {
 		Minute   string
 		Requests int64
 		Tokens   int64
 	}
-	if err := q.Group("minute").Scan(&rows).Error; err != nil {
+	err := us.db.Model(&UsageRecord{}).
+		Select(minuteSelect).
+		Scopes(withinTimeRange(since, time.Time{}), withColumnFilters(filters)).
+		Group("minute").Scan(&rows).Error
+	if err != nil {
 		return nil, err
 	}
 	out := make([]UsageMinute, 0, len(rows))
 	for _, r := range rows {
-		at, err := time.Parse("2006-01-02 15:04:05", r.Minute)
-		if err != nil {
-			continue
+		if m, ok := minuteBucket(r.Minute, r.Requests, r.Tokens); ok {
+			out = append(out, m)
 		}
-		out = append(out, UsageMinute{At: at.UTC().Add(30 * time.Second), Requests: r.Requests, Tokens: r.Tokens})
 	}
 	return out, nil
+}
+
+// UsageMinutesByUser is UsageMinutesWhere grouped per user_id for one team:
+// the warm start of a per-member limit template, whose counters are per person.
+func (us *UsageStore) UsageMinutesByUser(teamID string, since time.Time) (map[string][]UsageMinute, error) {
+	us.mu.RLock()
+	defer us.mu.RUnlock()
+	var rows []struct {
+		UserID   string
+		Minute   string
+		Requests int64
+		Tokens   int64
+	}
+	err := us.db.Model(&UsageRecord{}).
+		Select("user_id, "+minuteSelect).
+		Where("team_id = ? AND user_id <> ''", teamID).
+		Scopes(withinTimeRange(since, time.Time{})).
+		Group("user_id, minute").Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := map[string][]UsageMinute{}
+	for _, r := range rows {
+		if m, ok := minuteBucket(r.Minute, r.Requests, r.Tokens); ok {
+			out[r.UserID] = append(out[r.UserID], m)
+		}
+	}
+	return out, nil
+}
+
+const minuteSelect = "strftime('%Y-%m-%d %H:%M:00', timestamp) AS minute, COUNT(*) AS requests, COALESCE(SUM(total_tokens), 0) AS tokens"
+
+func minuteBucket(minute string, requests, tokens int64) (UsageMinute, bool) {
+	at, err := time.Parse("2006-01-02 15:04:05", minute)
+	if err != nil {
+		return UsageMinute{}, false
+	}
+	return UsageMinute{At: at.UTC().Add(30 * time.Second), Requests: requests, Tokens: tokens}, true
 }

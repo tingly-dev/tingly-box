@@ -47,3 +47,21 @@ describe('rule update payload', () => {
         expect(payload.services[0].limits).toEqual({max_concurrent: 2});
     });
 });
+
+describe('PolicyLimitsFields (person / team)', () => {
+    it('hides steering, and offers overflow only once a concurrency cap is set', async () => {
+        const {default: PolicyLimitsFields} = await import('./PolicyLimitsFields');
+        const onChange = vi.fn();
+        const {rerender} = render(
+            <PolicyLimitsFields value={{limits: {}, overflow: 'queue'}} onChange={onChange}/>,
+        );
+        expect(screen.queryByLabelText('limits.softPercent')).toBeNull();
+        expect(screen.queryByText('limits.overflow.label')).toBeNull();
+
+        rerender(<PolicyLimitsFields value={{limits: {max_concurrent: 2}, overflow: 'queue'}} onChange={onChange}/>);
+        expect(screen.getByLabelText('limits.overflow.timeout')).toBeTruthy();
+
+        rerender(<PolicyLimitsFields value={{limits: {max_concurrent: 2}, overflow: 'reject'}} onChange={onChange}/>);
+        expect(screen.queryByLabelText('limits.overflow.timeout')).toBeNull();
+    });
+});

@@ -31,6 +31,30 @@ export default {
     "button": "限额",
     "buttonTooltip": "并发与用量限额",
     "save": "保存",
-    "cancel": "取消"
+    "cancel": "取消",
+    "saved": "限额已保存",
+    "saveFailed": "保存限额失败",
+    "inheritedFromTeam": "此人没有单独限额，目前沿用 Team 的“每位成员默认限额”。",
+    "overflow": {
+      "label": "达到并发上限时",
+      "hint": "用量额度用完时一律返回 429 并带 Retry-After。",
+      "queue": "排队等待，超时后返回 429",
+      "reject": "立即返回 429",
+      "timeout": "最长等待（秒）"
+    },
+    "team": {
+      "title": "{{team}} 的限额",
+      "explain": "限额叠加在账号和规则限额之上，并且在请求被路由之前检查。各项上限独立判断，以最严格的为准。",
+      "whole": "整个 Team",
+      "wholeHint": "Team 内所有人共用这份额度。",
+      "member": "每位成员",
+      "memberHint": "每位成员各自独立计数，使用这里的限额；单个 Key 上设置的个人限额会覆盖它。",
+      "button": "限额",
+      "buttonTooltip": "Team 与成员限额"
+    },
+  "person": {
+      "title": "{{name}} 的限额",
+      "hint": "限制此 Key 的使用者在所有账号和模型上的总用量；Team 的限额仍然同时生效。"
+    }
   }
 };

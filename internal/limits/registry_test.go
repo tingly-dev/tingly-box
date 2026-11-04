@@ -299,3 +299,108 @@ func TestNormalize(t *testing.T) {
 	require.Equal(t, 100, l.QuotaPercent)
 	require.Equal(t, 0, l.WindowSeconds) // no budget -> window dropped
 }
+
+func subj(key string, scope Scope, l ai.Limits) Subject {
+	return Subject{Key: key, Scope: scope, Limits: l}
+}
+
+func TestVerdictNamesBlockedScope(t *testing.T) {
+	r := NewRegistry()
+	user := subj("user:u1", ScopeUser, ai.Limits{MaxConcurrent: 1})
+	team := subj("team:t1", ScopeTeam, ai.Limits{MaxConcurrent: 10})
+	p, _ := r.TryAcquire([]Subject{user, team}, false)
+	require.NotNil(t, p)
+
+	_, v := r.TryAcquire([]Subject{user, team}, false)
+	require.Equal(t, StateBlocked, v.State)
+	require.Equal(t, ScopeUser, v.Scopes, "only the person's cap is hit, not the team's")
+	require.Equal(t, "user", v.Scopes.String())
+	require.True(t, v.ConcurrencyOnly())
+}
+
+// Two gates share one lease: if the second gate fails nothing the first gate
+// took leaks once the request's lease is released, and a failed TryAcquire
+// itself leaves every counter untouched.
+func TestStagedAcquireRollsBackThroughLease(t *testing.T) {
+	r := NewRegistry()
+	user := subj("user:u1", ScopeUser, ai.Limits{MaxConcurrent: 2})
+	team := subj("team:t1", ScopeTeam, ai.Limits{MaxConcurrent: 5})
+	acct := subj("acct:a", ScopeAcct, ai.Limits{MaxConcurrent: 1})
+
+	// someone else already holds the only account slot
+	other, _ := r.TryAcquire([]Subject{acct}, false)
+	require.NotNil(t, other)
+
+	lease := NewLease()
+	actor, _ := r.TryAcquire([]Subject{user, team}, false) // gate 1 passes
+	require.NotNil(t, actor)
+	lease.Hold("actor", actor)
+	require.Equal(t, 1, r.Stat("user:u1").Inflight)
+
+	cand, v := r.TryAcquire([]Subject{acct}, false) // gate 2 blocked
+	require.Nil(t, cand)
+	require.Equal(t, ScopeAcct, v.Scopes)
+	require.Equal(t, 1, r.Stat("acct:a").Inflight, "failed acquire must not count")
+	require.Equal(t, 1, r.Stat("user:u1").Inflight, "gate 1 still held until the lease closes")
+
+	lease.ReleaseAll() // the request ends with a 429
+	require.Equal(t, 0, r.Stat("user:u1").Inflight)
+	require.Equal(t, 0, r.Stat("team:t1").Inflight)
+	require.Equal(t, 1, r.Stat("acct:a").Inflight, "the other request's slot is untouched")
+}
+
+// One call over mixed scopes is all-or-nothing: a blocked team cap must not
+// leave the person's slot taken.
+func TestAllOrNothingAcrossActorAndTeam(t *testing.T) {
+	r := NewRegistry()
+	user := subj("user:u1", ScopeUser, ai.Limits{MaxConcurrent: 3})
+	team := subj("team:t1", ScopeTeam, ai.Limits{MaxConcurrent: 1})
+	p, _ := r.TryAcquire([]Subject{team}, false) // another member fills the team
+	require.NotNil(t, p)
+
+	q, v := r.TryAcquire([]Subject{user, team}, false)
+	require.Nil(t, q)
+	require.Equal(t, ScopeTeam, v.Scopes)
+	require.Equal(t, 0, r.Stat("user:u1").Inflight)
+	require.Equal(t, int64(0), r.Stat("user:u1").Requests, "no request counted for the person either")
+}
+
+func TestPerUserUsageWindowIsIndependent(t *testing.T) {
+	fc := useFakeClock(t)
+	r := NewRegistry()
+	l := ai.Limits{MaxTokens: 1000, WindowSeconds: 600}
+	alice := subj("user:alice", ScopeUser, l)
+	bob := subj("user:bob", ScopeUser, l)
+
+	p, _ := r.TryAcquire([]Subject{alice}, false)
+	require.NotNil(t, p)
+	r.Record([]Subject{alice}, 1000)
+	p.Release()
+
+	_, v := r.TryAcquire([]Subject{alice}, false)
+	require.Equal(t, StateBlocked, v.State)
+	require.Equal(t, ReasonUsage, v.Reasons)
+	require.False(t, v.ConcurrencyOnly(), "an exhausted budget must never be queued")
+	require.InDelta(t, 600, v.RetryAfter.Seconds(), 15)
+
+	pb, vb := r.TryAcquire([]Subject{bob}, false)
+	require.NotNil(t, pb, "another person is unaffected")
+	require.Equal(t, StateOK, vb.State)
+
+	fc.advance(601 * time.Second)
+	pa, _ := r.TryAcquire([]Subject{alice}, false)
+	require.NotNil(t, pa, "window rolled off")
+}
+
+func TestKeysAndWindowEmpty(t *testing.T) {
+	useFakeClock(t)
+	r := NewRegistry()
+	l := ai.Limits{MaxRequests: 5, WindowSeconds: 60}
+	require.True(t, r.WindowEmpty("user:u1", l))
+	p, _ := r.TryAcquire([]Subject{subj("user:u1", ScopeUser, l), subj("team:t1", ScopeTeam, l)}, false)
+	require.NotNil(t, p)
+	require.False(t, r.WindowEmpty("user:u1", l))
+	require.ElementsMatch(t, []string{"user:u1"}, r.Keys("user:"))
+	require.ElementsMatch(t, []string{"team:t1"}, r.Keys("team:"))
+	require.True(t, r.WindowEmpty("user:u1", ai.Limits{MaxRequests: 5, WindowSeconds: 120}), "different window length = different window")
+}

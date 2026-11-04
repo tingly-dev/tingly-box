@@ -19,6 +19,8 @@ interface LimitsEditorProps {
     onChange: (next: Limits) => void;
     /** Provider-level only: stop at an upstream quota percentage. */
     showQuota?: boolean;
+    /** Steering threshold; meaningless for a person/team (nothing to steer to). Default true. */
+    showSoft?: boolean;
     disabled?: boolean;
 }
 
@@ -33,7 +35,7 @@ function numField(v?: number): string {
 }
 
 /** Compact editor for ai.Limits (concurrency cap, usage budget per window, steering thresholds). */
-export default function LimitsEditor({value, onChange, showQuota = false, disabled}: LimitsEditorProps) {
+export default function LimitsEditor({value, onChange, showQuota = false, showSoft = true, disabled}: LimitsEditorProps) {
     const {t} = useTranslation();
     const v = value ?? {};
     const hasBudget = !!(v.max_requests || v.max_tokens);
@@ -75,16 +77,18 @@ export default function LimitsEditor({value, onChange, showQuota = false, disabl
                 />
             </Box>
             <Typography variant="caption" color="text.secondary" sx={{mt: -1}}>{t('limits.maxTokensHint')}</Typography>
-            <TextField
-                size="small" type="number" disabled={disabled}
-                label={t('limits.softPercent')} helperText={t('limits.softPercentHint')}
-                value={numField(v.soft_percent)}
-                onChange={(e) => {
-                    const n = parseCount(e.target.value);
-                    set({soft_percent: n && n < 100 ? n : undefined});
-                }}
-                slotProps={{htmlInput: {min: 1, max: 99, 'aria-label': t('limits.softPercent')}}}
-            />
+            {showSoft && (
+                <TextField
+                    size="small" type="number" disabled={disabled}
+                    label={t('limits.softPercent')} helperText={t('limits.softPercentHint')}
+                    value={numField(v.soft_percent)}
+                    onChange={(e) => {
+                        const n = parseCount(e.target.value);
+                        set({soft_percent: n && n < 100 ? n : undefined});
+                    }}
+                    slotProps={{htmlInput: {min: 1, max: 99, 'aria-label': t('limits.softPercent')}}}
+                />
+            )}
             {showQuota && (
                 <TextField
                     size="small" type="number" disabled={disabled}

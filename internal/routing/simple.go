@@ -68,6 +68,13 @@ func (s *SimpleSelector) SelectService(
 	// Build context (session ID resolved internally)
 	ctx := NewSelectionContext(rule, req, c, scenario)
 
+	// Gate 1 (person / team limits) runs before routing: no upstream choice can
+	// fix the caller's own cap. A rejection here ends the request; the permit
+	// it may already hold is released by the limits middleware.
+	if err := s.selector.limits.AdmitActor(c, ctx); err != nil {
+		return nil, nil, err
+	}
+
 	// Execute pipeline; with limits on, also take the account permit and
 	// re-select if another request won the last slot in the meantime.
 	result, err := s.selectAndAcquire(c, ctx)

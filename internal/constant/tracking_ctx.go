@@ -34,6 +34,7 @@ const (
 	CtxKeyLBServiceID    = "tracking_lb_service_id"    // string (selected upstream, e.g. "provider-uuid:model")
 	CtxKeyLBTactic       = "tracking_lb_tactic"        // string (tactic name, e.g. "random")
 	CtxKeyLimitLease     = "tracking_limit_lease"      // *limits.Lease (per-request account permits)
+	CtxKeyLimitActorDone = "tracking_limit_actor_done" // bool: the person/team gate already ran (or must be skipped) for this request
 	CtxKeyTraceID        = "tracking_trace_id"         // string (OTel trace id, set only when the request span is sampled)
 	// CtxKeyOperation is the gen_ai.operation.name for the endpoint, declared
 	// once where the route is registered so the metrics and trace pipelines
