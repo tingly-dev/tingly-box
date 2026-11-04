@@ -54,7 +54,9 @@ func TestMentionSendsOneMessageToThatThread(t *testing.T) {
 	assert.Equal(t, "add the edge case", evs[len(evs)-1].Content)
 	assert.Equal(t, db.SourceIM, evs[len(evs)-1].Source)
 	assert.Equal(t, f.project.MainThreadID, boundOf(t, f, "1"), "the chat stays where it was")
-	assert.Contains(t, sink.next(t).text, "Finished: ok\n\n[#1 Worker]", "the reply comes back as the thread's report")
+	got := sink.next(t).text
+	assert.Contains(t, got, "Echo: ok", "the reply comes back as the coordinator's answer to the thread's report")
+	assert.NotContains(t, got, "Finished:", "no folded line of its own")
 
 	_, err = svc.PostFromChannel("telegram", "1", "@9 hello", nil)
 	assert.ErrorIs(t, err, ErrNoSuchThread)

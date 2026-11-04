@@ -83,10 +83,17 @@ func waitQuiet(t *testing.T, f *testFixture, svc *Service, threadID string) {
 
 func channelFixtureWith(t *testing.T, script func(turn *enginetest.Turn) error) (*testFixture, *Service, *fakeSink) {
 	t.Helper()
-	f := newFixture(t, script)
-	src := &fakeLLM{fn: func(req llm.Request) llm.Result {
+	return channelFixtureReplying(t, script, func(req llm.Request) llm.Result {
 		return llm.Result{Text: "Echo: " + lastUserText(req)}
-	}}
+	})
+}
+
+// channelFixtureReplying is channelFixtureWith with the coordinator's model
+// answering through reply.
+func channelFixtureReplying(t *testing.T, script func(turn *enginetest.Turn) error, reply func(llm.Request) llm.Result) (*testFixture, *Service, *fakeSink) {
+	t.Helper()
+	f := newFixture(t, script)
+	src := &fakeLLM{fn: reply}
 	coord := NewCoordinator(f.store, f.threads.layout, f.threads.hub, f.threads, src)
 	t.Cleanup(func() { settleCoordinator(coord) })
 	sink := newFakeSink()
@@ -304,11 +311,11 @@ func TestWorkerTurnEndReachesChatsBoundToThatThreadOnly(t *testing.T) {
 	require.NoError(t, err)
 
 	// The chat on the worker hears its reply once; the chat on the main thread
-	// hears the coordinator (the folded report and its own reply), never the
-	// worker's raw text as well.
+	// hears the coordinator's reply alone, never a folded line of the report
+	// or the worker's raw text as well.
 	byChat := map[string][]string{}
 	deadline := time.After(5 * time.Second)
-	for len(byChat["own"]) < 1 || len(byChat["up"]) < 2 {
+	for len(byChat["own"]) < 1 || len(byChat["up"]) < 1 {
 		select {
 		case m := <-sink.ch:
 			byChat[m.chatID] = append(byChat[m.chatID], m.text)
@@ -320,7 +327,9 @@ func TestWorkerTurnEndReachesChatsBoundToThatThreadOnly(t *testing.T) {
 	tag := fmt.Sprintf("\n\n[#%d Worker]", th.Seq)
 	assert.Equal(t, []string{"ok" + tag}, byChat["own"], "the worker's final text, named by its number and title")
 	assert.NotContains(t, byChat["up"], "ok"+tag)
-	assert.Contains(t, byChat["up"], "Finished: ok"+tag)
+	require.Len(t, byChat["up"], 1)
+	assert.Contains(t, byChat["up"][0], "Echo: ok")
+	assert.NotContains(t, byChat["up"][0], "Finished:")
 }
 
 func TestWorkerFailureReachesItsChatAsAnError(t *testing.T) {
