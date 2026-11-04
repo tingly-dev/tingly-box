@@ -547,7 +547,35 @@ func (m *Threads) writeSettings(p *db.Project, t *db.Thread) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(jsonString(settings)), 0o644)
+	return writeFileIfChanged(path, []byte(jsonString(settings)), 0o644)
+}
+
+// writeFileIfChanged replaces path with data only when its content differs,
+// through a rename, so a Claude Code process that has the file open never
+// reads it half written, and an unchanged file keeps its launch signature
+// (a changed one restarts the thread's resident process).
+func writeFileIfChanged(path string, data []byte, perm os.FileMode) error {
+	if old, err := os.ReadFile(path); err == nil && string(old) == string(data) {
+		return nil
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp*")
+	if err != nil {
+		return err
+	}
+	_, err = tmp.Write(data)
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Chmod(tmp.Name(), perm)
+	}
+	if err == nil {
+		err = os.Rename(tmp.Name(), path)
+	}
+	if err != nil {
+		_ = os.Remove(tmp.Name())
+	}
+	return err
 }
 
 // grantProjectAccess adds the directories every project thread works with to
@@ -1402,7 +1430,7 @@ const (
 )
 
 // AutoAnswerAfter is how long a question waits under AutoAnswerDelay.
-var AutoAnswerAfter = 10 * time.Minute
+var AutoAnswerAfter = 5 * time.Minute
 
 // ValidAutoAnswer reports whether mode is a setting; empty is the default.
 func ValidAutoAnswer(mode string) bool {

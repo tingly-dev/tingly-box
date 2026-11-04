@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -101,4 +102,32 @@ func TestGrantAutoGitKeepsTheHostsRulesAndSkipsUnsafeBranches(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 1, count, "no duplicates")
+}
+
+func TestWriteSettingsLeavesAnUnchangedFileAlone(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Fix login", Task: "fix"})
+	require.NoError(t, err)
+	f.report(t)
+	path := f.threads.layout.SettingsFile(f.project.ID, th.ID)
+	before, err := os.Stat(path)
+	require.NoError(t, err)
+
+	require.NoError(t, f.threads.writeSettings(f.project, th))
+	same, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.True(t, os.SameFile(before, same), "identical content is not rewritten")
+
+	f.project.ThreadPermissionMode = "auto"
+	require.NoError(t, f.threads.writeSettings(f.project, th))
+	changed, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.False(t, os.SameFile(before, changed), "new content replaces the file in one rename")
+	_, ask := settingsPerms(t, path)
+	assert.Contains(t, ask, "Bash(gh pr create *)")
+	entries, err := os.ReadDir(filepath.Dir(path))
+	require.NoError(t, err)
+	for _, e := range entries {
+		assert.NotContains(t, e.Name(), ".tmp", "no temp file is left behind")
+	}
 }

@@ -226,7 +226,7 @@ export const zh: Dict<typeof en> = {
         autoAnswer: {
             title: '自动回答', change: '更改', menuTitle: '问题带有推荐答案时',
             off: '关闭', offHelp: '每个问题都等你回答。',
-            delay: '10 分钟后', delayHelp: '10 分钟内没回答，线程就按推荐答案继续工作。',
+            delay: '5 分钟后', delayHelp: '5 分钟内没回答，线程就按推荐答案继续工作。',
             now: '立即', nowHelp: '线程立即按推荐答案继续。之后仍可以发消息纠正。',
         },
     },

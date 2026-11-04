@@ -14,7 +14,7 @@ import (
 // Defaults for Threads.HoldGrace and Threads.HoldMax.
 const (
 	DefaultHoldGrace = 15 * time.Second
-	DefaultHoldMax   = 30 * time.Minute
+	DefaultHoldMax   = 10 * time.Minute
 )
 
 func (m *Threads) hasBackground(threadID string) bool {

@@ -221,7 +221,7 @@ export const en = {
         autoAnswer: {
             title: 'Auto-answer', change: 'Change', menuTitle: 'When a question has a suggested answer',
             off: 'Off', offHelp: 'Every question waits for you.',
-            delay: 'After 10 min', delayHelp: 'If you don’t answer within 10 minutes, the thread goes with the suggestion and keeps working.',
+            delay: 'After 5 min', delayHelp: 'If you don’t answer within 5 minutes, the thread goes with the suggestion and keeps working.',
             now: 'Right away', nowHelp: 'The thread goes with the suggestion at once. You can still correct it with a message.',
         },
     },
