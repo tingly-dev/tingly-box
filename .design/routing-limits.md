@@ -1,4 +1,4 @@
-# Routing limits: account concurrency & usage operators
+# Routing limits: account, person, team and model concurrency & usage operators
 
 Status: **implemented** (backend, API, UI, smart-routing positions). Code: `ai/limits.go`, `internal/limits/`, `internal/routing/{limits,stage_limits}.go`, `internal/protocolserver/limits.go`, `internal/server/{limits.go,module/limits/}`, frontend `src/components/limits/`. Research: [`.research/routing-concurrency-usage-operators.md`](../.research/routing-concurrency-usage-operators.md).
 Related: [tier-routing.md](./tier-routing.md) (pipeline, breaker, affinity), [team.md](./team.md) (Team scopes),
@@ -19,8 +19,8 @@ Control routing by two signals that nothing in the gateway reacts to today:
 Generic: usable in any rule / scope. Teams are the main consumer but the routing layer has no Team concept —
 a Team scope is just rules (`team.md`), so limits compose with it for free (§5).
 
-Non-goals: billing/credit enforcement for sharing keys (per-key budgets), cross-instance coordination,
-per-user fairness inside a Team, replacing the breaker/health mechanisms (they stay the *reactive* layer;
+Non-goals: billing/credit enforcement, cross-instance coordination, fair-share scheduling between members of
+a Team (caps only, no weighted queues), replacing the breaker/health mechanisms (they stay the *reactive* layer;
 limits are the *proactive* one).
 
 ## 2. Concepts
@@ -142,9 +142,8 @@ No Team-specific code in routing. Concretely:
 - Overflow policy is per rule, so each Team picks queue vs reject.
 - `usage_records.team_id` is untouched; the warm start for `svc:` keys filters by `rule_uuid`.
 
-Open (not built): one aggregate cap across *all* a Team's rules/models (needs a scope-level limit record,
-e.g. on the Team row, with key `scope:<scenario>`; the Registry already supports arbitrary keys, only the
-resolver and a Team-page editor are missing).
+Aggregate caps for a Team (whole team, or per member) and caps per person are the actor scopes of §10; this
+section only covers what an account/rule-level limit gives a Team on its own.
 
 ## 6. Config / API / UI surface
 
@@ -210,3 +209,148 @@ waiter wake-up/timeout/cancel, retry-after. `internal/routing`: stage filter (ok
 candidates, tier composition, affinity pin declined), policies (queue wakes, queue timeout→error, reject,
 ignore), selector acquire/exclude loop. `protocolserver`: lease middleware releases on normal/panic/cancel,
 failover releases + re-acquires, 429 mapping. `db`: provider `limits` round trip, warm-start query.
+
+Actor scopes (§10): `internal/limits` — staged lease (actor permit + candidate permit) released together,
+failed second-stage acquire leaves the first stage's counters untouched, per-user window with fake clock,
+template vs override resolution. `internal/routing` — actor gate queue/reject per policy, team + user
+conjunction, usage block never queues, gate idempotent per request, failover keeps the actor permit.
+`protocolserver` — sharing-key identity → subjects, streaming request holds user concurrency until the
+stream ends / client cancels, 429 error codes. `db` — policy CRUD + cache, per-user warm-start query.
+
+## 10. Limit scopes beyond account and rule (person, team, model)
+
+Account and rule limits answer "how much may this *upstream* take". The next question — "how much may this
+*person* / this *team* / this *model* take" — is a different axis: it does not depend on which account the
+request lands on, so it must not live on `Provider` or on a rule (a rule is just a model name in a scope).
+This section stacks it on §2–§4 without changing them.
+
+### 10.1 What identity exists today (research)
+
+| Credential | What the gateway knows | Notes |
+|---|---|---|
+| Sharing Key (`tb-share-…`) | `api_tokens` row: `user_id` (a fresh UUID **per key**), `team_id`, `display_name`. Auth middleware sets `CtxKeyUserID` + `CtxKeyTeamID`. | There is no member/person entity. Today one key == one `user_id` == one "person". If keys are ever grouped under a member, grouping by `user_id` already works. |
+| Global model token | `CtxKeyUserID = DefaultAdminUserID`; `CtxKeyTeamID` empty (set to default only on `/tingly/team`). | The admin; a policy on it rate-limits the whole global token. |
+| Enterprise context JWT | `CtxKeyEnterpriseUserID` (+ department, tier). | Only with the global token; an external identity. |
+| Usage records | `usage_records.user_id`, `team_id`, `model` are indexed columns. | Source of truth for warm start. |
+
+Teams have **no member list**: membership is "has a key bound to the team". The raw key string is also the
+`token_id`, so it must never be used as a limits key or shown in status — `user_id` is the non-secret handle.
+
+### 10.2 Subjects ("scopes")
+
+`Subject` (§2) gains a scope; every subject has the same `ai.Limits` and key shape `<scope>:<ref>`:
+
+| Scope | Key | Who it protects | Known at | Config home |
+|---|---|---|---|---|
+| `acct` | `acct:<providerUUID>` | the upstream credential | after pick (per candidate) | `Provider.Limits` (§2) |
+| `svc` | `svc:<ruleUUID>/<prov>/<model>` | one rule's share of an account | after pick (per candidate) | `Service.Limits` (§2) |
+| `model` | `model:<upstream model>` | a model across *all* accounts/rules (e.g. cap opus) | after pick (per candidate) | policy `model` |
+| `user` | `user:<user_id>` / `euser:<enterprise id>` | one person (today: one sharing key) | request start | policy `user`, or inherited from `team_member` |
+| `team` | `team:<team_id>` | everyone in a team together | request start | policy `team` |
+
+**Per-member default.** Keys get a fresh `user_id`, so an admin cannot pre-create a per-person policy before
+the key exists. Policy kind `team_member` (ref = team id) is a *template*: every distinct `user_id` seen in
+that team gets its own counter `user:<uid>` governed by that template ("each member: 2 concurrent, 1M
+tokens / 5 h"). An explicit `user` policy for that `user_id` **replaces** the inherited template for the same
+key (override, not stacking) — otherwise a raised limit for one heavy user could never take effect.
+
+### 10.3 Policy storage (one generic table)
+
+`limit_policies(kind, ref, limits JSON, overflow, queue_timeout_seconds, updated_at)`, unique `(kind, ref)`,
+`kind ∈ user | team | team_member | model`. Chosen over adding columns to `teams` / `api_tokens`: one store, one
+API and one editor for all kinds; no schema change to auth tables; `model` has no owning row anyway.
+`LimitPolicyStore` mirrors the table in memory (like Team/APIToken stores) because resolution is on the
+request path; writes update the cache before returning, so an edit applies to the next request.
+Account and rule limits stay where §2 put them (credential/rule properties, no migration).
+
+### 10.4 Evaluation order and stacking
+
+A request passes two gates, in this order:
+
+```
+1. ACTOR GATE   (request start, before routing)      user  +  team          all must pass
+2. CANDIDATE    (LimitStage → pick → acquire)        acct  +  svc  +  model all must pass
+```
+
+- **Every applicable subject must pass (conjunction).** There is no "which limit wins" arbitration: the
+  most restrictive one blocks. The verdict records the *scope that blocked* (`Reasons` + `Scope`), so the
+  error and logs say whether the person, the team or the upstream is exhausted.
+- **Order matters only for what we can do about a block.** A user/team block cannot be fixed by choosing
+  another account, so it is checked first and never reaches routing (no wasted selection, no account
+  permit taken then dropped). An `acct`/`svc`/`model` block can be routed around, so it filters candidates.
+- **Pressure/soft steering applies to candidate subjects only.** `soft_percent` is ignored for `user`/`team`
+  (there is nothing to steer to); the UI hides it for those scopes. `quota_percent` stays account-only.
+
+### 10.5 Atomic acquire, staging and rollback
+
+The registry already acquires a *list* of subjects all-or-nothing under one lock (nothing is incremented
+unless every subject passes; `TestAllOrNothingAcrossSubjects`). The two gates are two such lists, and a
+request owns two permits in the same per-request `Lease`:
+
+1. `AdmitActor`: `TryAcquire([user…, team])` → one permit stored under lease key `actor` (idempotent per
+   request via a gin flag, so a second `SelectService` call in one request does not double-count).
+2. Selection + `TryAcquire([acct, svc, model])` → candidate permit under the service id (§3, unchanged).
+3. Failover releases only the *candidate* permit of the failed attempt; the actor permit stays (the person
+   made one request). Account windows count every upstream attempt; person/team windows count requests.
+
+Rollback is structural, not manual: if step 2 fails for good (no candidate, 429, race exhaustion), nothing
+is explicitly undone — `limitsMiddleware`'s `defer lease.ReleaseAll()` releases the actor permit (and the
+lease closes, so a late `Hold` releases immediately). A failed `TryAcquire` has already incremented
+nothing, so there is no half-acquired state anywhere. Tokens are recorded at completion to the actor
+subjects *and* the final service's subjects.
+
+### 10.6 Overflow per subject
+
+§2's overflow policy is a property of the candidate *pool* (rule flag). Actor scopes get their own, stored on
+the policy (`overflow`, `queue_timeout_seconds`) because a per-person cap is a fairness/quota decision, not a
+routing one:
+
+| Block | Default | Allowed | Behaviour |
+|---|---|---|---|
+| user/team **concurrency** | `queue`, 15 s | `queue`, `reject` | wait for one of that person's/team's requests to finish, else 429 |
+| user/team **usage window** | `reject` (forced) | — | a window will not free up in seconds: 429 + `Retry-After` = time to oldest bucket expiry |
+| acct / svc / model | rule flag (§2) | queue / reject / ignore | unchanged; `ignore` is **not** offered to actor scopes (it would defeat the cap) |
+
+429 body distinguishes scope: `error.type = rate_limit_error`, `error.code = user_limit_exceeded |
+team_limit_exceeded | upstream_limit_exceeded`, message names the dimension. The queue wait budget is shared
+between the actor gate and the candidate stage so one request never waits longer than the larger timeout
+plus one stage.
+
+### 10.7 Configuration, status, observability
+
+- API (control plane, `/api/v1`): `GET /limit-policies?kind=&ref=`, `PUT /limit-policies/{kind}/{ref}`
+  (body: `limits`, `overflow`, `queue_timeout_seconds`; an empty `limits` object deletes), `DELETE …`.
+  Validation: `kind` in the closed set; `user` ref must be an existing key's `user_id`, `team`/`team_member`
+  ref an existing team, `model` ref non-empty; `soft_percent`/`quota_percent` rejected for actor kinds.
+- UI: **Team page** — "Team limits" (whole team) and "Per-member limits" (template) dialogs; **Team Keys
+  table** — a per-key "Limits" action (this person), labelled with the key's display name, with live
+  in-flight / window readout; model limits are API-only for now (see §11).
+- Status: `GET /limits/status` additionally lists scopes `user`, `team`, `model`; each entry carries
+  `scope`, `ref`, a human `label` (team name / key display name), `inherited_from` (`team_member` for
+  template-governed members) and the live counters. Per-user counters created from a template appear
+  automatically as members make requests. Logs: `routing_limit_actor_*` (admitted/queued/rejected).
+- **Per-instance caveat, now with a sharper edge.** Counters are in memory per process, so with N gateway
+  instances a per-person cap is effectively N×. For accounts that is a capacity-planning nuisance; for a
+  *person* cap it is a fairness/quota leak. Mitigations: (a) the registry is the single seam — an external
+  counter store (Redis/SQLite-backed) could implement the same `Acquire/Release/Record/Assess` surface; (b)
+  usage windows self-heal on restart from `usage_records` (shared DB if instances share it) — token/request
+  budgets are therefore *approximately* global when the DB is shared and warm start is re-run; concurrency
+  is not. Not built; documented as the deliberate boundary, matching the breaker (`tier-routing.md`).
+
+### 10.8 Alternatives considered (scopes)
+
+| Decision | Alternative | Why not |
+|---|---|---|
+| Generic `limit_policies` table | Columns on `teams`/`api_tokens`; limits on the key itself | Touches auth tables; no home for `model`; three editors. A key-level column is attractive for "one key = one person" but would hard-wire that mapping, which is the thing most likely to change. |
+| `team_member` template + `user` override | Only explicit per-user policies | Keys are created with fresh UUIDs, so per-person policies would have to be created after each key — the common case ("every member gets X") would be manual. |
+| Actor gate *before* routing | Treat user/team as extra candidate subjects | They don't vary per candidate: they'd be re-evaluated per candidate, mis-attribute a person's cap to "this account is full", and make failover/queue semantics ambiguous. |
+| Conjunction (all must pass) | Priority/override chain between scopes | Caps protect different things; a team cap must hold even if a person's cap is generous. Override exists only where one subject key has two definitions (`user` vs `team_member`). |
+| Person identity = `user_id` | Key display name / token id | Display names are editable and non-unique; token id is the secret. |
+| `model` as candidate subject | Request-model (rule) scope | The rule *is* the request model; an upstream-model cap across rules/accounts is the new information. |
+| No `ignore` for actor scopes | Same three policies everywhere | A per-person quota that can be ignored is not a quota. |
+
+## 11. Not built (explicitly)
+
+Model-limit editor UI; scenario-wide caps; per-IP caps for anonymous traffic; weighted fair queuing between
+members; external (multi-instance) counter store; grouping several keys under one member (identity is
+`user_id`, one per key, until a member entity exists).
