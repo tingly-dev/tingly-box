@@ -65,7 +65,8 @@ func ParseSlashCommand(text string) (cmd SlashCommand, ok bool) {
 }
 
 // stripMention takes one leading mention off text, if there is one before a
-// slash command; "@bot hello" stays as it is, and so do the agent words.
+// slash command, with or without a space between them ("@bot /dir",
+// "@bot/dir"); "@bot hello" stays as it is, and so do the agent words.
 func stripMention(t string) (string, bool) {
 	if t == "" {
 		return t, false
@@ -77,14 +78,17 @@ func stripMention(t string) (string, bool) {
 	case feishuMention.MatchString(t):
 		loc = feishuMention.FindStringIndex(t)
 	case t[0] == '@':
-		word, _, _ := strings.Cut(t, " ")
-		if i := strings.IndexFunc(word, unicode.IsSpace); i >= 0 {
-			word = word[:i]
-		}
-		if agentWords[strings.ToLower(word)] {
+		end := strings.IndexFunc(t[1:], func(r rune) bool {
+			return unicode.IsSpace(r) || r == '/' || r == '\uff0f' || r == '@' || r == '<'
+		})
+		if end < 0 {
 			return t, false
 		}
-		loc = []int{0, len(word)}
+		end++
+		if agentWords[strings.ToLower(t[:end])] {
+			return t, false
+		}
+		loc = []int{0, end}
 	default:
 		return t, false
 	}

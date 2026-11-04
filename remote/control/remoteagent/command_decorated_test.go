@@ -32,6 +32,12 @@ func Test_DecoratedCommandsStillRun(t *testing.T) {
 		{"<@!123456> /status", "status:"},
 		{"@_user_1 /status", "status:"},
 		{"／status", "status:"},
+		{"@tingly_bot/status", "status:"},
+		{"<@U123ABC>/status", "status:"},
+		{"@_user_1/status", "status:"},
+		{"@tingly_bot    /status   ", "status:"},
+		{"  /status\n", "status:"},
+		{"/new    fix   the  bug  ", "new:fix   the  bug"},
 		{"/new@tingly_bot fix the login bug", "new:fix the login bug"},
 		{"@tingly_bot /stop #2", "stop:#2"},
 		{"/session@tingly_bot 3", "session:3"},
@@ -62,7 +68,7 @@ func Test_DecoratedRegistryCommandsStillRun(t *testing.T) {
 		chat.SendText(text)
 		chat.WaitText(3*time.Second).AssertContains(t, "Your ID:")
 	}
-	for _, text := range []string{"/dir@tingly_bot", " /dir", "@tingly_bot /dir", "<@U1> /dir", "@_user_1 /dir", "／dir", "/DIR"} {
+	for _, text := range []string{"@tingly_bot/dir", "<@U1>/dir", "  /dir   ", "/dir@tingly_bot", " /dir", "@tingly_bot /dir", "<@U1> /dir", "@_user_1 /dir", "／dir", "/DIR"} {
 		chat.Drain()
 		chat.SendText(text)
 		chat.WaitText(3*time.Second).AssertContains(t, "folder")

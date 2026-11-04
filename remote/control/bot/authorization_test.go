@@ -198,7 +198,7 @@ func TestAuthorizationGatePrivilegedCommandsStayDeniedWhenDecorated(t *testing.T
 	require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID), "first message pairs the chat")
 	for _, text := range []string{
 		"/dir", "/DIR", " /dir", "/dir@tingly_bot", "/dir@tingly_bot 1", "@tingly_bot /dir",
-		"<@U123> /dir", "<@!123> /cd /tmp", "@_user_1 /project", "／dir", "/cd@tingly_bot /tmp", "/bash ls",
+		"<@U123> /dir", "<@!123> /cd /tmp", "@tingly_bot/dir", "<@U123>/dir", "  /dir   ", "/dir   1", "@_user_1 /project", "／dir", "/cd@tingly_bot /tmp", "/bash ls",
 	} {
 		m := msg
 		m.Content = imbot.NewTextContent(text)
