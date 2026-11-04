@@ -115,7 +115,7 @@ func TestFreeTeamCopyName(t *testing.T) {
 
 	long := strings.Repeat("é", 100) // 200 bytes
 	name := freeTeamCopyName(long, nil)
-	assert.LessOrEqual(t, len(name), maxTeamNameBytes)
+	assert.LessOrEqual(t, len(name), db.MaxTeamNameBytes)
 	assert.True(t, strings.HasSuffix(name, " copy"))
 }
 
@@ -144,17 +144,23 @@ func TestDeleteTeam_RefusedKeepsRouting(t *testing.T) {
 	assert.Error(t, cfg.DeleteTeam(db.DefaultTeamID))
 }
 
-func TestDropOrphanTeamScopes(t *testing.T) {
+func TestDropOrphanTeamScopesOnce(t *testing.T) {
 	cfg := newSlotTestConfig(t)
 	live := newTeamWithRouting(t, cfg, "Live")
 	cfg.Rules = append(cfg.Rules, typ.Rule{UUID: "orphan", Scenario: "team:deleted-long-ago", RequestModel: "m"})
 	cfg.Scenarios = append(cfg.Scenarios, typ.ScenarioConfig{Scenario: "team:also-deleted"})
 	baseRules := len(rulesOf(cfg, typ.ScenarioTeam))
+	cfg.MigrationsCompleted = nil
 
-	require.True(t, dropOrphanTeamScopes(cfg))
+	require.True(t, dropOrphanTeamScopesOnce(cfg))
 	assert.Empty(t, rulesOf(cfg, "team:deleted-long-ago"))
 	assert.Nil(t, cfg.GetScenarioConfig("team:also-deleted"))
 	assert.Len(t, rulesOf(cfg, db.TeamScenario(live.ID)), 1, "live teams keep routing")
 	assert.Len(t, rulesOf(cfg, typ.ScenarioTeam), baseRules, "the Default team's bare scope is never an orphan")
-	assert.False(t, dropOrphanTeamScopes(cfg), "a no-op once nothing is orphaned")
+
+	// Once: routing of a team the (restored or recreated) team DB does not
+	// know is not swept on a later boot.
+	cfg.Rules = append(cfg.Rules, typ.Rule{UUID: "orphan-2", Scenario: "team:unknown-to-store", RequestModel: "m"})
+	assert.False(t, dropOrphanTeamScopesOnce(cfg))
+	assert.Len(t, rulesOf(cfg, "team:unknown-to-store"), 1)
 }

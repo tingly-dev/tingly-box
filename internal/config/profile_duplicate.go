@@ -88,6 +88,15 @@ func (c *Config) DuplicateProfile(baseScenario typ.RuleScenario, sourceID, name 
 	return cloneProfileMeta(meta), nil
 }
 
+// firstFree returns the first candidate(1), candidate(2), ... that ok accepts.
+func firstFree(candidate func(n int) string, ok func(string) bool) string {
+	for n := 1; ; n++ {
+		if name := candidate(n); ok(name) {
+			return name
+		}
+	}
+}
+
 // freeCopyName returns "<source>-copy", then "<source>-copy-2", ... — the
 // first one that is a valid profile name and not taken. Characters a profile
 // name cannot hold (legacy names) become '-'.
@@ -96,14 +105,16 @@ func freeCopyName(source string, profiles []typ.ProfileMeta) string {
 	if stem == "" {
 		stem = "profile"
 	}
-	for n := 1; ; n++ {
-		candidate := stem + "-copy"
-		if n > 1 {
-			candidate = fmt.Sprintf("%s-copy-%d", stem, n)
-		}
-		taken := slices.ContainsFunc(profiles, func(p typ.ProfileMeta) bool { return p.Name == candidate })
-		if !taken && typ.ValidateProfileName(candidate) == nil {
-			return candidate
-		}
-	}
+	return firstFree(
+		func(n int) string {
+			if n == 1 {
+				return stem + "-copy"
+			}
+			return fmt.Sprintf("%s-copy-%d", stem, n)
+		},
+		func(name string) bool {
+			return !slices.ContainsFunc(profiles, func(p typ.ProfileMeta) bool { return p.Name == name }) &&
+				typ.ValidateProfileName(name) == nil
+		},
+	)
 }

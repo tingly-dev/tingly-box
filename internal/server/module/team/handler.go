@@ -2,6 +2,7 @@ package team
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 
@@ -77,11 +78,9 @@ func (h *Handler) Duplicate(c *gin.Context) {
 		return
 	}
 	var req TeamDuplicateRequest
-	if c.Request.ContentLength != 0 {
-		if err := c.ShouldBindJSON(&req); err != nil {
-			apierr.Send(c, http.StatusBadRequest, err, "invalid_request_error")
-			return
-		}
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		apierr.Send(c, http.StatusBadRequest, err, "invalid_request_error")
+		return
 	}
 	record, err := h.config.DuplicateTeam(c.Param("team_id"), req.Name)
 	if err != nil {

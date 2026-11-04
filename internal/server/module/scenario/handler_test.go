@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -336,11 +337,18 @@ func TestDuplicateProfileEndpoint(t *testing.T) {
 	assert.Equal(t, http.StatusOK, main.Code, main.Body.String())
 	assert.Contains(t, main.Body.String(), `"from-main"`)
 
+	// A chunked body with nothing in it (ContentLength -1) is empty too.
+	chunked := httptest.NewRequest(http.MethodPost, "/scenario/claude_code/profiles/"+profile.ID+"/duplicate", io.NopCloser(bytes.NewReader(nil)))
+	chunked.ContentLength = -1
+	chunkedW := httptest.NewRecorder()
+	router.ServeHTTP(chunkedW, chunked)
+	assert.Equal(t, http.StatusOK, chunkedW.Code, chunkedW.Body.String())
+
 	assert.Equal(t, http.StatusOK, post(profile.ID, `{"name":"named"}`).Code)
 	assert.Equal(t, http.StatusBadRequest, post(profile.ID, `{"name":"work"}`).Code, "taken name")
 	assert.Equal(t, http.StatusBadRequest, post(profile.ID, `{"name":"not valid"}`).Code)
 	assert.Equal(t, http.StatusNotFound, post("p99", `{}`).Code, "unknown source")
-	assert.Len(t, cfg.GetProfiles(typ.ScenarioClaudeCode), 4)
+	assert.Len(t, cfg.GetProfiles(typ.ScenarioClaudeCode), 5)
 }
 
 func TestScenarioTypes(t *testing.T) {

@@ -22,6 +22,10 @@ const (
 	DefaultTeamName = "Default"
 )
 
+// MaxTeamNameBytes is the longest team name the store accepts (the name column
+// is size:128 too).
+const MaxTeamNameBytes = 128
+
 var legacyDefaultTeamNames = []string{"Default Team", "default"}
 
 // TeamScenario is the routing scope a team's rules live under. The default
@@ -111,8 +115,8 @@ func validateTeamName(name string) error {
 	if strings.TrimSpace(name) == "" {
 		return errors.New("team name cannot be empty")
 	}
-	if len(name) > 128 {
-		return errors.New("team name cannot exceed 128 characters")
+	if len(name) > MaxTeamNameBytes {
+		return fmt.Errorf("team name cannot exceed %d characters", MaxTeamNameBytes)
 	}
 	return nil
 }

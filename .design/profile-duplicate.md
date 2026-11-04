@@ -40,8 +40,11 @@ config's "current mode" rule set, which no longer exists.
 - **Deleting a team removes its routing** (`Config.DeleteTeam`): copies make
   teams with rules common, and a deleted team's `team:<id>` rules would
   otherwise linger unreachable. The store decides first (default team, keys
-  left), so a refused delete changes nothing. The baseline migration
-  `drop-orphan-team-scopes` sweeps routing of teams that no longer exist.
+  left), so a refused delete changes nothing. A one-time migration
+  (`20261104-drop-orphan-team-scopes`) sweeps routing of teams that no longer
+  exist. It is once-only on purpose: the team store is a different database
+  from the config, and a restored or recreated team DB would otherwise make
+  every live team's routing look orphaned on each boot.
 - **Names.** Profile: optional; empty picks `<name>-copy`, `-copy-2`, … (a
   profile name is also a URL alias, so unsafe characters become `-`). Team:
   free text, unique, ≤128 bytes; empty picks `<name> copy`, `<name> copy 2`, …

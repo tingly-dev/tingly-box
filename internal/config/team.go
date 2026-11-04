@@ -12,9 +12,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// maxTeamNameBytes mirrors the team store's name limit.
-const maxTeamNameBytes = 128
-
 func (c *Config) teamStore() (*db.TeamStore, error) {
 	sm := c.StoreManager()
 	if sm == nil || sm.Team() == nil {
@@ -68,21 +65,23 @@ func (c *Config) DuplicateTeam(sourceID, name string) (*db.TeamRecord, error) {
 // freeTeamCopyName returns "<source> copy", then "<source> copy 2", ... — the
 // first name no team uses, trimmed to the store's length limit.
 func freeTeamCopyName(source string, teams []db.TeamRecord) string {
-	for n := 1; ; n++ {
-		suffix := " copy"
-		if n > 1 {
-			suffix = fmt.Sprintf(" copy %d", n)
-		}
-		stem := source
-		for len(stem)+len(suffix) > maxTeamNameBytes {
-			_, size := utf8.DecodeLastRuneInString(stem)
-			stem = stem[:len(stem)-size]
-		}
-		candidate := stem + suffix
-		if !slices.ContainsFunc(teams, func(t db.TeamRecord) bool { return t.Name == candidate }) {
-			return candidate
-		}
-	}
+	return firstFree(
+		func(n int) string {
+			suffix := " copy"
+			if n > 1 {
+				suffix = fmt.Sprintf(" copy %d", n)
+			}
+			stem := source
+			for len(stem)+len(suffix) > db.MaxTeamNameBytes {
+				_, size := utf8.DecodeLastRuneInString(stem)
+				stem = stem[:len(stem)-size]
+			}
+			return stem + suffix
+		},
+		func(name string) bool {
+			return !slices.ContainsFunc(teams, func(t db.TeamRecord) bool { return t.Name == name })
+		},
+	)
 }
 
 // DeleteTeam deletes a team and the routing that lives under it ("team:<id>"
@@ -105,19 +104,23 @@ func (c *Config) DeleteTeam(id string) error {
 	return c.saveLocked()
 }
 
-// dropOrphanTeamScopes removes routing left behind by teams that no longer
-// exist: deleted before DeleteTeam cleaned up after itself, or whose cleanup
-// save failed. The team store is authoritative and loaded before migrations;
-// it always holds the default team, so an empty list means it was not read
-// and nothing is touched. Baseline: a no-op once nothing is orphaned.
-func dropOrphanTeamScopes(c *Config) bool {
-	if c.storeManager == nil || c.storeManager.Team() == nil {
+// dropOrphanTeamScopesOnce removes routing left behind by teams deleted before
+// DeleteTeam cleaned up after itself. It runs once, not on every boot: the team
+// store is a different database from the config, and a restored or recreated
+// team DB would otherwise make every live team's routing look orphaned. The
+// store always holds the default team, so an empty list means it was not read;
+// then nothing is touched and the sweep stays pending.
+func dropOrphanTeamScopesOnce(c *Config) bool {
+	const marker = "20261104"
+	if c.hasMigrationCompleted(marker) || c.storeManager == nil || c.storeManager.Team() == nil {
 		return false
 	}
 	records := c.storeManager.Team().List()
 	if len(records) == 0 {
 		return false
 	}
+	c.markMigrationCompleted(marker)
+
 	live := map[typ.RuleScenario]bool{}
 	for _, team := range records {
 		live[db.TeamScenario(team.ID)] = true
@@ -137,5 +140,5 @@ func dropOrphanTeamScopes(c *Config) bool {
 		c.removeScopeLocked(scope)
 		logrus.WithField("scenario", scope).Info("Dropped routing of a deleted team")
 	}
-	return len(orphans) > 0
+	return true
 }

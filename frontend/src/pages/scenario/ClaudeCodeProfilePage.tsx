@@ -51,6 +51,7 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import DuplicateDialog from '@/components/DuplicateDialog';
 import { suggestProfileCopyName } from '@/utils/copyName';
+import { useDuplicateProfile } from '@/pages/scenario/hooks/useDuplicateProfile';
 
 const BASE_SCENARIO = 'claude_code';
 
@@ -97,6 +98,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     const [renameProfileOpen, setRenameProfileOpen] = useState(false);
     const [deleteProfileOpen, setDeleteProfileOpen] = useState(false);
     const [duplicateOpen, setDuplicateOpen] = useState(false);
+    const duplicateProfile = useDuplicateProfile();
     const [renameName, setRenameName] = useState('');
     const [isProfileMutating, setIsProfileMutating] = useState(false);
     const [appVersion, setAppVersion] = useState('');
@@ -161,24 +163,6 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
         } finally {
             setIsProfileMutating(false);
         }
-    };
-
-    // Duplicate profile handler: lands on the copy; the dialog stays open on failure so the name can be fixed.
-    const handleDuplicateProfile = async (name: string): Promise<boolean> => {
-        if (!profileId) return false;
-        try {
-            const result = await api.duplicateProfile(BASE_SCENARIO, profileId, name);
-            if (result.success) {
-                showNotification(t('claudeCode.profile.profileDuplicated'), 'success');
-                refreshProfiles();
-                navigate(`/agent/claude_code/profile/${result.data.id}`);
-                return true;
-            }
-            showNotification(`${t('claudeCode.profile.duplicateFailed')}: ${result.error || 'Unknown error'}`, 'error');
-        } catch {
-            showNotification(t('claudeCode.profile.duplicateFailed'), 'error');
-        }
-        return false;
     };
 
     // Delete profile handler
@@ -532,7 +516,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                     description={t('claudeCode.profile.duplicateDescription', { name: currentProfile?.name || profileId || '', interpolation: { escapeValue: false } })}
                     label={t('claudeCode.profile.profileName')}
                     initialName={suggestProfileCopyName(currentProfile?.name || '', getProfiles(BASE_SCENARIO).map(p => p.name))}
-                    onSubmit={handleDuplicateProfile}
+                    onSubmit={(name) => duplicateProfile(profileId || '', name)}
                 />
                 <ConfirmDialog
                     open={deleteProfileOpen}
