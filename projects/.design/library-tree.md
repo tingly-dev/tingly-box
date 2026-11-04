@@ -25,16 +25,37 @@ Overview 的 Library 页把项目资料库显示成可展开的目录树，而�
 
 ## 文件预览
 
-点击（或在行上按 Enter）图片或文本文件，打开一个模态预览（`components/project/LibraryPreview.tsx`）；其他类型仍只有下载。`LazyTree` 因此给文件行加了点击 → `onActivate`（此前只有键盘 Enter 触发）；行内的下载/删除按钮不会触发预览。
+点击（或在行上按 Enter）可预览的文件，打开一个模态预览（`components/project/LibraryPreview.tsx`）；其余类型只有下载。`LazyTree` 因此给文件行加了点击 → `onActivate`（此前只有键盘 Enter 触发）；行内的下载/删除按钮不会触发预览。
 
-1. **不新增后端接口。** 预览走现有的 `GET /library/file`，经 `apiFetch`（宿主的认证照常生效），取回 blob 后展示；该接口的 `Content-Disposition: attachment` 对 `fetch` 没有影响，所以不需要 inline 模式。路径检查因此也是同一套（`LibraryPath`）。
-2. **图片**：png / jpg / jpeg / gif / webp / svg，用 `<img src=blob:>` 展示，blob 的类型由扩展名决定（`image/svg+xml` 等）。SVG 作为图片加载，脚本不会执行，也永远不会作为标记内联进页面。关闭后释放 object URL。
-3. **文本**：md / txt / json / csv / yaml / 常见源码扩展名，以纯文本（`<pre>`，保留换行）展示，**不渲染 Markdown**——渲染会加载文档里的远程图片、链接，对“看一眼文件内容”来说得不偿失。
-4. **大小上限**：图片 25 MB，文本 512 KB（按树里的 `size` 判断，超过时不发请求），改为提示“文件太大”并给出下载按钮。加载中显示转圈，失败显示服务器返回的错误。
-5. **键盘与焦点**：MUI Dialog——Esc 关闭、焦点进入对话框并被限制在其中、关闭后回到触发它的行；头部有下载和关闭按钮。
+### 可预览的类型（白名单，按扩展名，不区分大小写）
+
+| 类别 | 扩展名 | 怎么展示 |
+|---|---|---|
+| 位图 | png、jpg、jpeg、gif、webp | `<img src=blob:>` |
+| 纯文本 | md、markdown、txt、log、json、csv、yaml、yml、toml、ini | `<pre>` 里的 React 文本节点 |
+
+**其余一律只能下载**，包括：
+
+- **SVG（svg、svgz）**：它是文档，可含脚本、`<foreignObject>`、外部引用。放进 `<img>` 时浏览器通常会禁用脚本和外部加载，但这依赖宿主（Web、桌面 webview）各自的实现，无法在每个宿主证明安全，所以不预览。
+- **HTML / XML / CSS / JS / Shell 等标记或可执行文本**：虽然放进 `<pre>` 也是安全的，仍不列入，避免白名单随“看起来像文本”扩张。
+- PDF、压缩包、其他二进制：照旧下载。
+
+### 为什么这样是安全的
+
+1. **不新增后端接口。** 预览走现有的 `GET /library/file`，经 `apiFetch`（宿主的认证照常生效），取回 blob；`Content-Disposition: attachment` 对 `fetch` 没有影响，不需要 inline 模式。路径检查因此是同一套。
+2. **类型由我们决定，不信服务器。** 图片的 blob 类型取自白名单里扩展名对应的 MIME（`image/png` 等），不用响应头的 `Content-Type`。
+3. **魔数校验（`sniffImage`）。** 在创建 object URL 之前，检查文件头是否真是扩展名声称的格式（PNG 8 字节签名、JPEG `FF D8 FF`、GIF87a/89a、`RIFF…WEBP`）。名为 `.png` 实则是 HTML/SVG 的文件不会交给浏览器，只显示“无法预览，请下载”。
+4. **`<img>` 解码失败时安全降级。** `onError` 时去掉图片并显示同样的提示（例如宿主 CSP 不允许 `blob:` 图片时）。关闭后释放 object URL。
+5. **文本只作为文本。** 内容以 React 文本节点放入 `<pre>`：不解析 HTML、不渲染 Markdown、没有链接，远程图片和链接也不会被加载。含 NUL 字节的“文本”按二进制处理，不预览。
+6. **大小上限**：图片 25 MB，文本 512 KB（按树里的 `size` 判断，超过时不发请求），改为提示“文件太大”并给出下载按钮。加载中显示转圈，失败显示服务器返回的错误。
+7. **键盘与焦点**：MUI Dialog——Esc 关闭、焦点进入对话框并被限制在其中、关闭后回到触发它的行；头部有下载和关闭按钮。
+
+## 已知的后端缺口（未改）
+
+`GET /library/file` 只做 `LibraryPath` 检查，没有像树列表那样拒绝点开头路径和符号链接。预览没有扩大这一暴露面（下载本来就能取到同样的文件），但应另行收紧。
 
 ## 没做
 
-- 预览 PDF、视频及其他类型；Markdown 渲染预览；图片缩放/翻页。
+- 预览 SVG、PDF、视频及其他类型；Markdown 渲染预览；图片缩放/翻页。
 - 在某个文件夹里上传（上传仍进资料库根）。
 - 删除文件夹（后端 `DELETE` 只删文件，文件夹行不提供删除）。
