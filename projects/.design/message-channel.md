@@ -1,6 +1,6 @@
 # Projects 消息通道：线程、Coordinator 与用户（IM / Web）
 
-> 状态：提案，仅讨论，未实现。相关：[coordinator-session.md](./coordinator-session.md)、[../../.design/projects-im.md](../../.design/projects-im.md)（M3 审批进 IM、M4 点名线程）、
+> 状态：提案。**P1 已由用户确认并实现**（见“分阶段计划”里 P1 一节），其余阶段仍是提案、待决定。相关：[coordinator-session.md](./coordinator-session.md)、[../../.design/projects-im.md](../../.design/projects-im.md)（M3 审批进 IM、M4 点名线程）、
 > TEP #2412（引用回复直达线程，分支 `tp/file-tep-for-reply-routing-to-th-364d02`，未合并）、[../../agentboot/claude/ref/live-control.md](../../agentboot/claude/ref/live-control.md)。
 > 代码引用基于 main `586611a5a`。
 
@@ -139,7 +139,7 @@ Web 已有卡片的状态和 `LastReport`。增加：
 
 **A. 把高影响命令改成 ask（预防，复用现有审批卡）**
 
-线程设置文件里（`grantProjectAccess` 同一个地方）为 auto 模式追加 `permissions.ask`，如 `Bash(git push *)`、`Bash(gh pr create *)`、`Bash(gh issue create *)`、`Bash(gh pr merge *)`。文档说明 ask 规则在 auto 模式下总会提示、分类器不能自动放行；`-p` 下提示走 `--permission-prompt-tool`，也就是现有的 `threadPrompter` → IM/Web 审批卡，用户点“允许”即可。
+线程设置文件里（`grantProjectAccess` 同一个地方）为 auto 模式追加 `permissions.ask`，如 `Bash(gh pr create *)`、`Bash(gh issue create *)`、`Bash(gh pr merge *)`。（**不能**再加 `Bash(git push *)`：规则按 deny、ask、allow 的顺序取第一个命中，笼统的 push ask 会连 B 里预批准的本分支 push 一起拦住；实现时 push 只按形状 ask，见 P1。）文档说明 ask 规则在 auto 模式下总会提示、分类器不能自动放行；`-p` 下提示走 `--permission-prompt-tool`，也就是现有的 `threadPrompter` → IM/Web 审批卡，用户点“允许”即可。
 - 优点：几乎不改管线；批准对象就是那一次具体的调用，展示的是真实命令。
 - 局限：规则匹配命令原文，`git -C dir push`、`git -c k=v push` 之类写法会漏过去落到分类器；补一个 `PreToolUse` command hook 做全文匹配并返回 `ask` 可以堵上（hook 由宿主写进同一份 settings）。
 
@@ -206,12 +206,15 @@ Web 已有卡片的状态和 `LastReport`。增加：
 4. `permission_denials` 在结果里的真实形状；有宿主提示工具时达到 3/20 阈值的行为；
 5. 窄 allow 规则 `Bash(git push origin tp/x)` 在 auto 模式下是否保留且免分类。
 
-**P1 快赢（低风险，各自独立可合并）**
-1. `settle`：工作线程回合结束时有后台任务 → 保持 working、不汇报。
-2. `onReport` 不再直接 `final`；折叠行仅在 coordinator 不可用时回退。
-3. 线程 prompt：不要为“稍后汇报”结束回合；回合汇报只写最终结果。
-4. auto 模式线程的 settings：B（本线程分支的 push 预批准）+ A（ask 规则）。
-5. D：Bash 的“本线程都允许”改为范围规则或隐藏。
+**P1 快赢（低风险，各自独立可合并）——用户已确认（“p1 小改动可以先做，甚至堆叠”），除第 3 项外已实现，每项一个提交，可单独评审或丢弃**
+
+1. **已实现**：`settle`：工作线程回合结束时有后台任务 → 保持 working、汇报先扣下（`background.go`）。接续回合（Claude 在后台任务结束后自起的回合）的汇报取代它；没有接续回合时，最后一个任务结束 15 秒后放出（`Threads.HoldGrace`），任务一直不结束则 30 分钟后放出（`HoldMax`）。`NEEDS_INPUT` 和失败不扣。
+2. **已实现**：`Coordinator.onReport` 不再先发折叠的 `[#N] Finished: …`：coordinator 在线时，finished 汇报只经 coordinator 的回复进 chat（`no_update` 即不发）。与提案的差别：失败和 `NEEDS_INPUT` 仍先发折叠行（它们需要人处理，且带 `@N` 回复提示）；coordinator 不可用（暂停、归档、出错）时 finished 也回退到折叠行。coordinator 提示加了一句：用户的 chat 不会再收到别的关于完成线程的消息，有结果（PR、文件、答案）就说一两句。
+3. **未做**（不在确认范围）：线程 prompt 改为不要为“稍后汇报”结束回合、回合汇报只写最终结果。
+4. **已实现**：auto 模式线程的 settings（`git_access.go`）：allow `git push [-u|--set-upstream] origin <本线程分支>`；ask `gh pr create|merge`、`gh issue create`、推到 base/main/master、`--force/-f/--force-with-lease`、`--delete`。只在线程的有效权限模式为 auto 时写；settings 文件现在每回合重写，所以事后切到 auto 也生效。其余形状的 push 仍交给分类器（笼统的 push ask 会盖过 allow），要靠 P3 的 hook 接住。分支名含括号、星号、空白时不写 allow 规则。
+5. **已实现**：D 的简化版：Bash 的“本线程都允许”只记**那一条命令原文**（去掉首尾空白后逐字匹配），其他工具仍按工具名。没有 `permission_suggestions` 的前缀规则、也没用 `updatedPermissions`（`addRules` 留给以后）。IM 里的按钮对 Bash 改叫“Allow this command for this thread”。**网页端按钮文案仍是 “Always allow {{tool}} here”（`thread.allowThread`），对 Bash 已不准确，需要前端跟进**（本次没改前端）。
+
+P1 没有用真实 Claude Code 验证：规则是否真的在 auto 模式下保留并免分类（P0 第 5 条）仍待实验。
 
 **P2 分级与交互**
 1. 分级模型落到 `Report`（带 tier），`set_progress` 与卡片进度行；
