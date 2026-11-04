@@ -10,9 +10,9 @@ describe('EntityLabel', () => {
         expect(el.getAttribute('aria-label')).toBe('Telegram · Alice · 123456789');
     });
 
-    it('puts the group segment second', () => {
+    it('puts the group segment after the alias', () => {
         render(<EntityLabel platform="Feishu" group groupLabel="群" alias="Dev team" id="oc_1" />);
-        expect(screen.getByTestId('entity-label').textContent).toBe('Feishu·群·Dev team·oc_1');
+        expect(screen.getByTestId('entity-label').textContent).toBe('Feishu·Dev team·群·oc_1');
     });
 
     it('drops the alias segment and its separator when there is none, and never renders blank', () => {
@@ -51,8 +51,8 @@ describe('EntityLabel', () => {
     it('compact leaves the id out when there is an alias but keeps the full label reachable', () => {
         render(<EntityLabel platform="Feishu" group groupLabel="群" alias="Dev team" id="oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5" compact />);
         const el = screen.getByTestId('entity-label');
-        expect(el.textContent).toBe('Feishu·群·Dev team');
-        expect(el.getAttribute('title')).toBe('Feishu · 群 · Dev team · oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5');
+        expect(el.textContent).toBe('Feishu·Dev team·群');
+        expect(el.getAttribute('title')).toBe('Feishu · Dev team · 群 · oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5');
         expect(el.getAttribute('aria-label')).toBe(el.getAttribute('title'));
     });
 

@@ -19,7 +19,7 @@ const knownBots = new Map<string, BotSettings>();
 const platformLabel = (platform: string) => platformDisplayName(platform, i18n.t.bind(i18n));
 
 // What the host knows about each chat it has listed, so a binding or a message
-// that only holds a chat id can still be shown as `平台 · 群 · alias · id`.
+// that only holds a chat id can still be shown as `平台 · alias · 群 · id`.
 // Filled by every chat listing and, lazily, on the first lookup.
 const chatIndex = new Map<string, ImChatInfo>();
 const chatKeyOf = (platform: string, chatId: string) => `${platform}\u0000${chatId}`;

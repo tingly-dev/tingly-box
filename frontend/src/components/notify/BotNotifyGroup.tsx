@@ -114,7 +114,7 @@ const ProbeResultLine: React.FC<{result: ChatProbeResult; onDismiss: () => void}
 const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isToggling}) => {
     const {t} = useTranslation();
     const entities = useEntityLabels();
-    // A Notify target in the shared `平台 · 群 · alias · id` convention.
+    // A Notify target in the shared `平台 · alias · 群 · id` convention.
     const targetProps = useCallback((target: NotifyTarget) => (
         target.kind === 'group'
             ? entities.group({platform: target.platform ?? '', external_group_id: target.external_id, alias: target.alias})

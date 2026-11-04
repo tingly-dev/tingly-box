@@ -26,13 +26,13 @@ const bot = { uuid: 'bot', name: 'Bot', platform: 'telegram', online: true };
 describe('Projects IM host', () => {
     beforeEach(() => { m.groupsFail = false; });
 
-    it('titles chats as 平台 · 群 · alias · id, with the group name as default alias and the id when unnamed', async () => {
+    it('titles chats as 平台 · alias · 群 · id, with the group name as default alias and the id when unnamed', async () => {
         const chats = await imHost.listChats(bot);
         expect(chats.map((chat) => chat.title)).toEqual([
             'Telegram · Alice · 123',
             'Telegram · 456',
-            'Telegram · Group · Team · 789',
-            'Telegram · Group · Platform name · 987',
+            'Telegram · Team · Group · 789',
+            'Telegram · Platform name · Group · 987',
         ]);
         expect(chats.map((chat) => chat.alias)).toEqual(['Alice', undefined, 'Team', 'Platform name']);
     });

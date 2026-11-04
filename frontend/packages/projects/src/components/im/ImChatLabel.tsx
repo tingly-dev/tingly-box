@@ -16,7 +16,7 @@ interface ChatRefProps {
     botUuid?: string;
 }
 
-/** Segments of `平台 · 群 · alias · id` for one chat, resolved through the host when it knows the chat. */
+/** Segments of `平台 · alias · 群 · id` for one chat, resolved through the host when it knows the chat. */
 const noSubscribe = () => () => {};
 const noVersion = () => 0;
 
@@ -40,7 +40,7 @@ function useChatSegments() {
     };
 }
 
-/** `平台 · 群 · alias · id` as plain text, for toasts and aria-labels. */
+/** `平台 · alias · 群 · id` as plain text, for toasts and aria-labels. */
 export function useImChatText(): (chat: ChatRefProps) => string {
     const { t } = useTranslation('projects');
     const segments = useChatSegments();

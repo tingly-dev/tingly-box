@@ -1,5 +1,5 @@
 // Display convention for platform-scoped bot / IM entities:
-//   平台 · 群 · alias · id
+//   平台 · alias · 群 · id
 // Any empty or inapplicable segment is dropped together with its separator.
 // See .design/bot-im-alias-display.md §3.
 
@@ -65,8 +65,8 @@ export function entityText(parts: EntityParts, options: EntityTextOptions = {}):
     const id = shorten ? shortId(kind, parts.id).text : parts.id;
     const segments = [
         parts.platform,
-        parts.group ? groupLabel : '',
         parts.alias?.trim() ?? '',
+        parts.group ? groupLabel : '',
         id,
     ];
     return segments.filter((s) => s !== '').join(' · ');

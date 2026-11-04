@@ -40,7 +40,7 @@ const Sep = () => (
 );
 
 /**
- * `平台 · 群 · alias · id`. Presentational only: the caller resolves the
+ * `平台 · alias · 群 · id`. Presentational only: the caller resolves the
  * segments. Segments that are empty or do not apply are dropped with their
  * separator; the id takes the anchor position when there is no alias, so a
  * row never looks empty. The id may be shortened but the full id is always
@@ -106,9 +106,17 @@ export const EntityLabel = ({
                     {platformAs === 'text' || !platformIcon ? platform : null}
                 </Box>
             </Tooltip>
-            {group && (
+            {aliasText !== '' && (
                 <>
                     {!iconOnly && <Sep />}
+                    <Box component="span" sx={{ fontWeight: 600, color: 'text.primary', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {aliasText}
+                    </Box>
+                </>
+            )}
+            {group && (
+                <>
+                    {!(iconOnly && aliasText === '') && <Sep />}
                     <Box
                         component="span"
                         sx={{
@@ -123,14 +131,6 @@ export const EntityLabel = ({
                         }}
                     >
                         {groupLabel}
-                    </Box>
-                </>
-            )}
-            {aliasText !== '' && (
-                <>
-                    {!(iconOnly && !group) && <Sep />}
-                    <Box component="span" sx={{ fontWeight: 600, color: 'text.primary', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {aliasText}
                     </Box>
                 </>
             )}

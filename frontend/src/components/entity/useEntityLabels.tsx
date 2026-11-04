@@ -4,7 +4,7 @@ import { bareId, entityText, type EntityKind, type EntityLabelProps } from '@tin
 import { PLATFORM_BRAND_ICONS, platformDisplayName } from '@/constants/platformGuides';
 
 // Adapters from the bot / IM API shapes to the segments of the shared display
-// convention `平台 · 群 · alias · id` (.design/bot-im-alias-display.md §3).
+// convention `平台 · alias · 群 · id` (.design/bot-im-alias-display.md §3).
 
 export interface BotRef { uuid?: string; name?: string; platform?: string }
 export interface ChatRef { platform: string; external_chat_id: string; alias?: string }

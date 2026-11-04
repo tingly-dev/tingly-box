@@ -33,10 +33,10 @@ describe('bareId', () => {
 });
 
 describe('entityText', () => {
-    it('renders 平台 · 群 · alias · id and omits empty or inapplicable segments', () => {
+    it('renders 平台 · alias · 群 · id and omits empty or inapplicable segments', () => {
         expect(entityText({ platform: 'Telegram', alias: 'Alice', id: '123456789' })).toBe('Telegram · Alice · 123456789');
         expect(entityText({ platform: 'Telegram', id: '123456789' })).toBe('Telegram · 123456789');
-        expect(entityText({ platform: 'Feishu', group: true, alias: 'Dev team', id: 'oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5' }, { groupLabel: '群' })).toBe('Feishu · 群 · Dev team · oc_a1b…d4e5');
+        expect(entityText({ platform: 'Feishu', group: true, alias: 'Dev team', id: 'oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5' }, { groupLabel: '群' })).toBe('Feishu · Dev team · 群 · oc_a1b…d4e5');
         expect(entityText({ platform: 'Feishu', group: true, id: 'oc_1' })).toBe('Feishu · Group · oc_1');
         expect(entityText({ platform: 'Telegram', alias: '  ', id: '42' })).toBe('Telegram · 42');
     });

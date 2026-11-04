@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
-<title>Bot/IM display mockup: 平台 · 群 · alias · id</title>
+<title>Bot/IM display mockup: 平台 · alias · 群 · id</title>
 <style>
   :root { --text:#1f2937; --muted:#6b7280; --faint:#9ca3af; --line:#e5e7eb; --primary:#2563eb; --chip:#eef2f7; --warn:#b45309; }
   * { box-sizing:border-box; }
@@ -59,11 +59,11 @@
 <!-- ============ SHOT A: format + lists ============ -->
 <div id="shotA">
   <div class="card">
-    <h2>Format: 平台 · 群 · alias · id</h2>
+    <h2>Format: 平台 · alias · 群 · id</h2>
     <div class="legend">
       <div>平台<small>platform display name</small></div>
-      <div>群<small>group chats only</small></div>
       <div>alias<small>omitted if empty</small></div>
+      <div>群<small>group chats only</small></div>
       <div>id<small>always; shortened if long, full id on copy/hover</small></div>
     </div>
     <div class="note">Any empty or inapplicable segment is dropped with its separator. The id takes the anchor position when there is no alias.</div>
@@ -93,7 +93,7 @@
     <div class="row"><span class="ref tg"><span class="plat"><i></i>Telegram</span><span class="sep">·</span><span class="alias">Alice (ops)</span><span class="sep">·</span><span class="id">123456789</span><span class="copy"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></span></span><span class="tag">direct chat, alias</span></div>
     <div class="row"><span class="ref fs"><span class="plat"><i></i>Feishu</span><span class="sep">·</span><span class="id anchor">oc_mock_chat_0001</span><span class="copy"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></span></span><span class="tag">direct chat, no alias</span></div>
     <div class="row rel" style="min-height:96px;align-items:flex-start">
-      <span class="ref fs" style="margin-top:6px"><span class="plat"><i></i>Feishu</span><span class="sep">·</span><span class="grp">群</span><span class="sep">·</span><span class="alias">Dev team</span><span class="sep">·</span><span class="id">oc_a1b2…d4e5</span><span class="copy" style="background:#eef2ff;border-color:#93a8f5"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></span></span>
+      <span class="ref fs" style="margin-top:6px"><span class="plat"><i></i>Feishu</span><span class="sep">·</span><span class="alias">Dev team</span><span class="sep">·</span><span class="grp">群</span><span class="sep">·</span><span class="id">oc_a1b2…d4e5</span><span class="copy" style="background:#eef2ff;border-color:#93a8f5"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></span></span>
       <span class="tag" style="margin-top:6px">group, long id shortened</span>
       <div class="tip" style="left:318px;top:34px">
         Chat ID <code>oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5</code><br>
@@ -101,7 +101,7 @@
         <span class="dim">Internal target UUID: group-1</span>
       </div>
     </div>
-    <div class="row"><span class="ref tg"><span class="plat"><i></i>Telegram</span><span class="sep">·</span><span class="grp">群</span><span class="sep">·</span><span class="alias">Releases</span><span class="sep">·</span><span class="id">-10024681012</span><span class="copy"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></span></span><span class="tag">group, alias, short id shown in full</span></div>
+    <div class="row"><span class="ref tg"><span class="plat"><i></i>Telegram</span><span class="sep">·</span><span class="alias">Releases</span><span class="sep">·</span><span class="grp">群</span><span class="sep">·</span><span class="id">-10024681012</span><span class="copy"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></span></span><span class="tag">group, alias, short id shown in full</span></div>
     <div class="row"><span class="ref tg" style="opacity:.9"><span class="plat"><i></i>Telegram</span><span class="sep">·</span><span class="id anchor">55512345</span><span class="del">(deleted)</span></span><span class="tag">referenced chat no longer exists</span></div>
   </div>
 </div>
@@ -128,7 +128,7 @@
         </div>
         <div class="opt sel"><span class="ref tg"><span class="plat"><i></i>Telegram</span><span class="sep">·</span><span class="alias">Alice (ops)</span><span class="sep">·</span><span class="id">123456789</span></span><span class="tag">paired</span></div>
         <div class="opt"><span class="ref tg"><span class="plat"><i></i>Telegram</span><span class="sep">·</span><span class="alias">Bob (on-call)</span><span class="sep">·</span><span class="id">987654321</span></span><span class="tag">paired</span></div>
-        <div class="opt"><span class="ref tg"><span class="plat"><i></i>Telegram</span><span class="sep">·</span><span class="grp">群</span><span class="sep">·</span><span class="alias">Releases</span><span class="sep">·</span><span class="id">-10024681012</span></span></div>
+        <div class="opt"><span class="ref tg"><span class="plat"><i></i>Telegram</span><span class="sep">·</span><span class="alias">Releases</span><span class="sep">·</span><span class="grp">群</span><span class="sep">·</span><span class="id">-10024681012</span></span></div>
       </div>
       <div class="note">Today: name in the input, raw <code>telegram:-10024681012</code> in the list, alias nowhere.</div>
     </div>
@@ -150,7 +150,7 @@
     </div>
     <div class="note" style="margin-top:14px">Bound-chat tag for a group chat on another project:</div>
     <div class="bar" style="margin-top:8px">
-      <span class="chip"><span class="ref fs"><span class="plat"><i></i>Feishu</span><span class="sep">·</span><span class="grp">群</span><span class="sep">·</span><span class="alias">Dev team</span><span class="sep">·</span><span class="id">oc_a1b2…d4e5</span></span><span class="x">×</span></span>
+      <span class="chip"><span class="ref fs"><span class="plat"><i></i>Feishu</span><span class="sep">·</span><span class="alias">Dev team</span><span class="sep">·</span><span class="grp">群</span><span class="sep">·</span><span class="id">oc_a1b2…d4e5</span></span><span class="x">×</span></span>
       <span class="chip"><span class="ref fs"><span class="plat"><i></i>Feishu</span><span class="sep">·</span><span class="grp">群</span><span class="sep">·</span><span class="id anchor">oc_9f8e…77aa</span></span><span class="x">×</span></span>
       <span class="note" style="margin:0">no alias: the id takes the anchor</span>
     </div>
@@ -159,8 +159,8 @@
     <h2>Under a bot header the platform collapses to its icon (D6, proposed)</h2>
     <div style="font-weight:600;margin-bottom:6px" class="ref tg"><span class="plat"><i></i></span>@ops_claude_bot <span class="pill">Telegram · Connected</span></div>
     <div class="row" style="border-top:1px solid var(--line)"><span class="ref tg"><span class="plat"><i></i></span><span class="alias">Alice (ops)</span><span class="sep">·</span><span class="id">123456789</span><span class="copy"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></span></span><span class="tag">Payments API latency</span></div>
-    <div class="row"><span class="ref tg"><span class="plat"><i></i></span><span class="grp">群</span><span class="sep">·</span><span class="alias">Releases</span><span class="sep">·</span><span class="id">-10024681012</span><span class="copy"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></span></span><span class="tag">Docs refresh</span></div>
-    <div class="note">On group rows the 群 chip becomes the first readable token.</div>
+    <div class="row"><span class="ref tg"><span class="plat"><i></i></span><span class="alias">Releases</span><span class="sep">·</span><span class="grp">群</span><span class="sep">·</span><span class="id">-10024681012</span><span class="copy"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></span></span><span class="tag">Docs refresh</span></div>
+    <div class="note">Under a bot header the platform is a logo; a group row reads alias, then the 群 chip, then the id.</div>
   </div>
 </div>
 </body></html>

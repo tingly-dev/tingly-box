@@ -65,7 +65,7 @@ Two ID spaces collide under the word "chat id": the **external** platform id (wh
 - Projects IM text: `[#<seq> <title>]` thread tag, project/folder name first, `#N` as the handle the user types (`projects/internal/project/relay.go`, `chat_commands.go`).
 - `Message.GetSenderDisplayName()` (`imbot/core/message.go:243`): the one existing “name else id” resolver; nothing in `remote/**` calls it.
 - `manager.go:172-181` logs `uuid + name + platform` as fields: the right log shape.
-- Tension between `.design/ux-principles.md` §5 (“show the concrete value, not the alias”) and alias-first display: resolved by the user's `平台 · 群 · alias · id` format, which shows both (see the design doc §0, §3).
+- Tension between `.design/ux-principles.md` §5 (“show the concrete value, not the alias”) and alias-first display: resolved by the user's `平台 · alias · 群 · id` format, which shows both (see the design doc §0, §3).
 
 ## 5. Not verified
 
@@ -78,7 +78,7 @@ Two ID spaces collide under the word "chat id": the **external** platform id (wh
 
 ## 6. Effect of the decisions on these findings (2026-11-03)
 
-The user decided on the `平台 · 群 · alias · id` display (which superseded an earlier `平台 · alias · id [type]` the same day; the segment order does not change any finding below), on storing the platform name as the default alias, and on bots defaulting to their platform account name (design doc §0). That changes how several findings above should be read:
+The user decided on the `平台 · alias · 群 · id` display (which superseded an earlier `平台 · alias · id [type]` the same day; the segment order does not change any finding below), on storing the platform name as the default alias, and on bots defaulting to their platform account name (design doc §0). That changes how several findings above should be read:
 
 | Finding | Before | After the decisions |
 |---|---|---|
