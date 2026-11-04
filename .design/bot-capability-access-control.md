@@ -414,6 +414,12 @@ approval button              → remote_control.approve
 /cd, file access, shell      → remote_control.start + remote_control.privileged
 ```
 
+特权命令是 `/cd`、`/dir`、`/project`、`/bind-project`、`/shell`、`/bash`、文件和文件夹按钮。命令按
+`imbot.ParseSlashCommand` 识别，`/dir@bot`、`@bot /dir`、`<@U1> /dir`、全角 `／dir` 与 `/dir` 同级；
+闸门与 `HandleMessage` 必须用同一个解析器，否则装饰过的特权命令会被当成 `remote_control.start`。
+被拒的特权动作如果聊天本来可以 start，闸门会回一句“需要高级权限”，不再沉默（沉默等于命令坏了）；
+连 start 都没有的聊天不回，避免向未授权方泄露信息。
+
 ### 6.3 Why Interact is not a top-level Capability
 
 Interaction 是 Transport 的 `Prompt/Reply` 原语，会被两个 Capability 使用：

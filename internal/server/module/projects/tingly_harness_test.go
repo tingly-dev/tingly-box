@@ -492,13 +492,16 @@ func TestTinglyRegisteredDirectories(t *testing.T) {
 	h.call("POST", "/projects", map[string]any{"type": "folder", "path": second}, &f2)
 	h.call("PATCH", "/projects/"+f2.ID, map[string]any{"archived": true}, nil)
 	// A regular paired chat has start permission but not privileged filesystem
-	// access. /dir must not reveal the registered paths until it is granted.
-	chat.SendText("/dir")
-	chat.ExpectNoEvent(300*time.Millisecond, tingly.EventSend)
-	chat.SendText("/project")
-	chat.ExpectNoEvent(300*time.Millisecond, tingly.EventSend)
+	// access. /dir must not reveal the registered paths until it is granted,
+	// and must say why instead of looking broken.
+	for _, text := range []string{"/dir", "/dir@tingly_bot", "/project"} {
+		chat.SendText(text)
+		denied := chat.WaitText(10 * time.Second)
+		denied.AssertContains(t, "privileged access")
+		require.NotContains(t, denied.Text, first)
+	}
 	chat.SendCallback("old-message", "project:switch:"+first)
-	chat.ExpectNoEvent(300*time.Millisecond, tingly.EventSend)
+	chat.WaitText(10*time.Second).AssertContains(t, "privileged access")
 	current, err := h.bridge.CurrentFolder(context.Background(), "tingly", chat.ChatID)
 	require.NoError(t, err)
 	require.Equal(t, h.workdir, current, "unprivileged callbacks cannot switch folders")

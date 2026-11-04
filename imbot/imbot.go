@@ -106,6 +106,7 @@ type (
 	HandlerContext  = core.HandlerContext
 	CommandRegistry = core.CommandRegistry
 	CommandBuilder  = core.CommandBuilder
+	SlashCommand    = core.SlashCommand
 )
 
 // Re-export core constants
@@ -365,6 +366,12 @@ func URLCardAction(id, label, url string) *core.CardActionBuilder {
 // NewCommand creates a new command builder.
 func NewCommand(id, name, description string) *core.CommandBuilder {
 	return core.NewCommandBuilder(id, name, description)
+}
+
+// ParseSlashCommand reads a slash command from a chat message, whatever the
+// platform wrapped around it (see core.ParseSlashCommand).
+func ParseSlashCommand(text string) (core.SlashCommand, bool) {
+	return core.ParseSlashCommand(text)
 }
 
 // NewCommandRegistry creates a new command registry.

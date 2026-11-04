@@ -78,6 +78,17 @@ func TestAuthorizationGateAllowsPairingCommandsForUnpairedDirectPeer(t *testing.
 	require.True(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID))
 }
 
+// Telegram groups send /pair@bot, Slack and Discord prefix a mention: an
+// unpaired chat must still be able to pair itself.
+func TestAuthorizationGateAllowsDecoratedPairingCommands(t *testing.T) {
+	sm, setting, msg := directAuthorizationFixture(t)
+	gate := bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), true, nil, nil)
+	for _, text := range []string{"/pair@tingly_bot CODE", " /pair CODE", "<@U123> /pair CODE", "／pair CODE"} {
+		msg.Content = imbot.NewTextContent(text)
+		require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID), text)
+	}
+}
+
 func TestAuthorizationGateMigratesLegacyPairedDirectPeer(t *testing.T) {
 	sm, setting, msg := directAuthorizationFixture(t)
 	require.NoError(t, sm.RemoteChats().SetPaired(msg.Recipient.ID, setting.Platform, setting.UUID, msg.Sender.ID))
@@ -116,7 +127,10 @@ func TestAuthorizationGateDeniedPromptReplyNotifiesUser(t *testing.T) {
 	}
 	notified := 0
 	gate = bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), false, pendingApprove,
-		func(imbot.Message, imbot.Platform, string) { notified++ })
+		func(_ imbot.Message, _ imbot.Platform, _ string, action access.ActionName) {
+			require.Equal(t, access.ActionRemoteControlApprove, action)
+			notified++
+		})
 
 	reply := msg
 	reply.Content = imbot.NewTextContent("2")
@@ -171,4 +185,84 @@ func TestPendingApprovalDoesNotGrantDirectoryOrProjectAccess(t *testing.T) {
 	m := msg
 	m.Payload = imbot.NewPayload("project", "switch", "/tmp")
 	require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "folder buttons must require privileged access")
+}
+
+// A paired chat is not privileged until the operator grants it. The
+// commands that need it must stay denied however the platform decorates them
+// (Telegram's /dir@bot, a Slack or Discord mention, a Feishu placeholder, a
+// full-width slash, a leading space): a decorated command must not slip past
+// as an ordinary message.
+func TestAuthorizationGatePrivilegedCommandsStayDeniedWhenDecorated(t *testing.T) {
+	sm, setting, msg := directAuthorizationFixture(t)
+	gate := bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), false, nil, nil)
+	require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID), "first message pairs the chat")
+	for _, text := range []string{
+		"/dir", "/DIR", " /dir", "/dir@tingly_bot", "/dir@tingly_bot 1", "@tingly_bot /dir",
+		"<@U123> /dir", "<@!123> /cd /tmp", "@_user_1 /project", "／dir", "/cd@tingly_bot /tmp", "/bash ls",
+	} {
+		m := msg
+		m.Content = imbot.NewTextContent(text)
+		require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "%q must require privileged access", text)
+	}
+	for _, text := range []string{"/status", "/help@tingly_bot", "@tingly_bot /new hello", "/directory"} {
+		m := msg
+		m.Content = imbot.NewTextContent(text)
+		require.False(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), "%q needs no privileged access", text)
+	}
+}
+
+// A privileged command the chat may not run is answered, not dropped: the
+// silent drop made /dir and /cd look broken in every freshly paired chat.
+func TestAuthorizationGateDeniedPrivilegedCommandTellsTheChat(t *testing.T) {
+	sm, setting, msg := directAuthorizationFixture(t)
+	var told []access.ActionName
+	notify := func(_ imbot.Message, _ imbot.Platform, _ string, action access.ActionName) {
+		told = append(told, action)
+	}
+	gate := bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), false, nil, notify)
+	require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID), "first message pairs the chat")
+	require.Empty(t, told)
+
+	for _, text := range []string{"/dir", "/dir@tingly_bot", "/cd /tmp", "/project"} {
+		m := msg
+		m.Content = imbot.NewTextContent(text)
+		require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID), text)
+	}
+	press := msg
+	press.Payload = imbot.NewPayload("project", "switch", "/tmp")
+	require.True(t, gate(press, imbot.Platform(setting.Platform), setting.UUID))
+	require.Equal(t, []access.ActionName{
+		access.ActionRemoteControlPrivileged, access.ActionRemoteControlPrivileged, access.ActionRemoteControlPrivileged,
+		access.ActionRemoteControlPrivileged, access.ActionRemoteControlPrivileged,
+	}, told)
+	require.Contains(t, bot.DeniedActionText(access.ActionRemoteControlPrivileged), "privileged")
+
+	// Once granted the command goes through and nothing is said.
+	chats, err := sm.BotAccess().ListDirectChats(context.Background(), setting.UUID)
+	require.NoError(t, err)
+	require.Len(t, chats, 1)
+	require.NoError(t, sm.BotAccess().SetDirectChatPermission(context.Background(), setting.UUID, chats[0].ID,
+		access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged, access.EffectAllow))
+	told = nil
+	m := msg
+	m.Content = imbot.NewTextContent("/dir@tingly_bot")
+	require.False(t, gate(m, imbot.Platform(setting.Platform), setting.UUID))
+	require.Empty(t, told)
+}
+
+// A chat that may not even start a run learns nothing from the bot.
+func TestAuthorizationGateDeniedChatGetsNoPrivilegedNotice(t *testing.T) {
+	sm, setting, msg := directAuthorizationFixture(t)
+	told := 0
+	notify := func(imbot.Message, imbot.Platform, string, access.ActionName) { told++ }
+	gate := bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), false, nil, notify)
+	require.False(t, gate(msg, imbot.Platform(setting.Platform), setting.UUID), "first message pairs the chat")
+	chats, err := sm.BotAccess().ListDirectChats(context.Background(), setting.UUID)
+	require.NoError(t, err)
+	require.NoError(t, sm.BotAccess().SetDirectChatPermission(context.Background(), setting.UUID, chats[0].ID,
+		access.CapabilityRemoteControl, access.ActionRemoteControlStart, access.EffectDeny))
+	m := msg
+	m.Content = imbot.NewTextContent("/dir")
+	require.True(t, gate(m, imbot.Platform(setting.Platform), setting.UUID))
+	require.Zero(t, told)
 }

@@ -17,11 +17,11 @@ const cmdJoinPrimary = "/join"
 // handleSlashCommand runs a slash command from the registry; it reports
 // false for one the registry does not have.
 func (h *BotHandler) handleSlashCommand(hCtx HandlerContext, text string) bool {
-	fields := strings.Fields(text)
-	if len(fields) == 0 || h.commandRegistry == nil {
+	cmd, ok := imbot.ParseSlashCommand(text)
+	if !ok || h.commandRegistry == nil {
 		return false
 	}
-	name := strings.ToLower(strings.TrimPrefix(fields[0], "/"))
+	name := cmd.Name
 	if name == "" {
 		name = "help"
 	}
@@ -30,10 +30,10 @@ func (h *BotHandler) handleSlashCommand(hCtx HandlerContext, text string) bool {
 		return false
 	}
 	cmdCtx := imbot.NewHandlerContext(hCtx.Bot, hCtx.ChatID, hCtx.SenderID, hCtx.Platform).
-		WithText(text).
+		WithText(cmd.Text()).
 		WithDirectMessage(hCtx.IsDirect()).
 		WithMessageID(hCtx.MessageID)
-	if err := handler(cmdCtx, fields[1:]); err != nil {
+	if err := handler(cmdCtx, strings.Fields(cmd.Args)); err != nil {
 		logrus.WithError(err).WithField("command", name).Error("Command handler failed")
 	}
 	return true

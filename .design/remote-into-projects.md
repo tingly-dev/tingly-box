@@ -217,6 +217,10 @@ Remote 页面保留，只去掉 SmartGuide 模型和“常驻会话”这类作�
 | `/verbose on\|off` | Projects | 见“要补的能力”② |
 | `/yolo` | Projects | 当前会话在 `bypassPermissions` 和继承的模式之间切换（YZ：保留）；`/new`、`/cd` 开的新会话沿用它 |
 
+命令的读法（2026-11-04）：各平台把同一条命令装饰得不一样——Telegram 群 `/dir@bot`、Slack/Discord `<@U1> /dir`、飞书 `@_user_1 /dir`、企微/WhatsApp `@bot /dir`、钉钉前导空格、中文输入法全角 `／dir`。**只有一个解析器** `imbot.ParseSlashCommand`（`imbot/core/slash_command.go`），`HandleMessage`、`projectCommand`、`/pair` 判断和授权闸门的特权命令判断都用它；任何一处自己切字符串都会让装饰过的命令在某一层失效，而授权闸门没认出来的特权命令会被当成普通消息放行。`@cc`/`@tb`/`@mock` 不是 mention，后面跟命令也不算命令。
+
+`/cd`、`/dir`、`/project` 需要 `remote_control.privileged`，而配对只写 start + approve、privileged 显式 deny，管理 UI 也只会写 deny（见 `bot-capability-access-control.md`）。所以新配对的聊天跑这几条会被授权闸门拒绝。拒绝不能沉默（沉默的表现就是“命令不生效”）：聊天本来能 start 却缺 privileged 时，机器人回一句需要高级权限、请找机器人所有者；连 start 都没有的聊天仍然什么都不回。**未决**：配对默认是否授予 privileged，或 UI 是否提供授予入口，要由产品定。
+
 `@N <话>` 保留（不是命令）。`/bind`、`/join`（接入层）照旧，不进帮助。删掉：`/bash`（Claude Code 自己能跑命令）、`/mock`、
 `/resume`（并入 `/session`；在 Projects 外开的 CLI 会话不列）、`/p`、`/threads`、`/focus`、`/back`、`/interrupt` `/s` `/i`、
 `/quiet` `/noverbose`、`/h`，以及裸词 `stop`（现在是普通消息）。

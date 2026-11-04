@@ -24,8 +24,14 @@ func isPairingBootstrap(msg imbot.Message) bool {
 	if !msg.IsDirectMessage() || !msg.IsTextContent() {
 		return false
 	}
-	t := strings.TrimSpace(msg.GetText())
-	return t == "/pair" || strings.HasPrefix(t, "/pair ") || strings.HasPrefix(t, "/pair\t") || t == "/bind" || strings.HasPrefix(t, "/bind ") || strings.HasPrefix(t, "/bind\t")
+	cmd, ok := imbot.ParseSlashCommand(msg.GetText())
+	return ok && (cmd.Name == "pair" || cmd.Name == "bind")
+}
+
+// privilegedCommands are the chat commands that reach the filesystem or a
+// shell; running one needs remote_control.privileged.
+var privilegedCommands = map[string]bool{
+	"cd": true, "dir": true, "project": true, "bind-project": true, "shell": true, "bash": true,
 }
 
 func inboundAction(msg imbot.Message, pendingCapability access.CapabilityName, pendingAction access.ActionName) (access.CapabilityName, access.ActionName) {
@@ -37,11 +43,8 @@ func inboundAction(msg imbot.Message, pendingCapability access.CapabilityName, p
 	if msg.IsMediaContent() {
 		return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
 	}
-	text := strings.ToLower(strings.TrimSpace(msg.GetText()))
-	for _, prefix := range []string{"/cd", "/dir", "/project", "/bind-project", "/project switch", "/shell", "/bash"} {
-		if text == prefix || strings.HasPrefix(text, prefix+" ") {
-			return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
-		}
+	if cmd, ok := imbot.ParseSlashCommand(msg.GetText()); ok && privilegedCommands[cmd.Name] {
+		return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
 	}
 	// A Projects/Claude approval button or an ordinary reply to a pending
 	// approval uses the approval action rather than the session-start action.
@@ -59,13 +62,19 @@ func inboundAction(msg imbot.Message, pendingCapability access.CapabilityName, p
 
 // authorizationGate is the one production inbound seam for text, callbacks,
 // and files. A denied message is claimed here and cannot reach a Capability.
-// AuthorizationGate builds the inbound authorization seam. notifyDeniedPromptReply,
-// when non-nil, is invoked for a denied message that was answering this bot's
-// own pending prompt (pendingForChat reported a pending action for the chat).
-// Such a denial must not be silent: the bot itself posted the prompt into the
-// chat, so telling the sender they cannot answer it leaks nothing and prevents
-// a dead-end where the prompt hangs until timeout with no explanation.
-func AuthorizationGate(store AccessStore, authorizer access.Authorizer, legacyChats ChatStoreInterface, requirePairing bool, pendingForChat func(string) (access.CapabilityName, access.ActionName), notifyDeniedPromptReply func(msg imbot.Message, platform imbot.Platform, botUUID string)) OnMessage {
+// AuthorizationGate builds the inbound authorization seam. notifyDenied, when
+// non-nil, is invoked with the denied action for two denials that must not be
+// silent:
+//   - a message answering this bot's own pending prompt (pendingForChat
+//     reported a pending action for the chat): the bot itself posted the
+//     prompt, so telling the sender they cannot answer it leaks nothing and
+//     prevents a dead-end where the prompt hangs until timeout.
+//   - a privileged command or button (/cd, /dir, folder buttons) from a chat
+//     that may otherwise use the bot (it is allowed to start): a paired chat
+//     is not privileged until the operator says so, and without a word the
+//     command just looks broken. A chat that cannot even start still gets
+//     nothing.
+func AuthorizationGate(store AccessStore, authorizer access.Authorizer, legacyChats ChatStoreInterface, requirePairing bool, pendingForChat func(string) (access.CapabilityName, access.ActionName), notifyDenied func(msg imbot.Message, platform imbot.Platform, botUUID string, action access.ActionName)) OnMessage {
 	return func(msg imbot.Message, platform imbot.Platform, botUUID string) bool {
 		if store == nil || authorizer == nil {
 			return false
@@ -128,12 +137,26 @@ func AuthorizationGate(store AccessStore, authorizer access.Authorizer, legacyCh
 		}
 		if pendingAction != "" {
 			logrus.WithFields(fields).Warn("bot authorization denied a reply to this bot's pending prompt")
-			if notifyDeniedPromptReply != nil {
-				notifyDeniedPromptReply(msg, platform, botUUID)
+			if notifyDenied != nil {
+				notifyDenied(msg, platform, botUUID, action)
 			}
 		} else {
 			logrus.WithFields(fields).Debug("bot authorization decision")
+			if action == access.ActionRemoteControlPrivileged && notifyDenied != nil {
+				start := authorizer.Evaluate(ctx, access.AuthorizationRequest{BotUUID: botUUID, Target: target, ActorID: actor.ID, Capability: capability, Action: access.ActionRemoteControlStart})
+				if start.Allowed {
+					notifyDenied(msg, platform, botUUID, action)
+				}
+			}
 		}
 		return true
 	}
+}
+
+// DeniedActionText is what a chat is told when its action is denied.
+func DeniedActionText(action access.ActionName) string {
+	if action == access.ActionRemoteControlPrivileged {
+		return "⚠️ This needs privileged access (folders, files and shell), which this chat does not have. Ask the bot owner to grant it to this chat."
+	}
+	return "⚠️ You are not authorized to answer this request. Ask the bot owner to grant the approve permission for this chat."
 }

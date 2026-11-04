@@ -2,25 +2,22 @@ package remoteagent
 
 import (
 	"errors"
-	"strings"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
 )
 
 // isPairCommand reports whether text is a (well-formed-enough) /pair invocation.
 func isPairCommand(text string) bool {
-	t := strings.TrimSpace(text)
-	if t == "/pair" {
-		return true
-	}
-	return strings.HasPrefix(t, "/pair ") || strings.HasPrefix(t, "/pair\t") || t == "/bind" || strings.HasPrefix(t, "/bind ") || strings.HasPrefix(t, "/bind\t")
+	cmd, ok := imbot.ParseSlashCommand(text)
+	return ok && (cmd.Name == "pair" || cmd.Name == "bind")
 }
 
 // isJoinCommand reports whether text is a /join invocation.
 func isJoinCommand(text string) bool {
-	head, _, _ := strings.Cut(strings.TrimSpace(text), " ")
-	return head == cmdJoinPrimary
+	cmd, ok := imbot.ParseSlashCommand(text)
+	return ok && "/"+cmd.Name == cmdJoinPrimary
 }
 
 // pairingHintMessage returns the user-facing prompt sent when an unpaired

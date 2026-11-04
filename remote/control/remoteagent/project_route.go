@@ -289,14 +289,16 @@ func (h *BotHandler) projectDirectory(hCtx HandlerContext, arg string) {
 // (with an optional argument), /clear, /session [N], /status, /verbose
 // [on|off] and /yolo. ok is false for anything else.
 func projectCommand(text string) (name, arg string, ok bool) {
-	head, rest, _ := strings.Cut(strings.TrimSpace(text), " ")
-	rest = strings.TrimSpace(rest)
-	switch head = strings.ToLower(head); head {
-	case "/new", "/stop", "/session", "/verbose":
-		return strings.TrimPrefix(head, "/"), rest, true
-	case "/clear", "/status", "/yolo":
-		if rest == "" {
-			return strings.TrimPrefix(head, "/"), "", true
+	cmd, ok := imbot.ParseSlashCommand(text)
+	if !ok {
+		return "", "", false
+	}
+	switch cmd.Name {
+	case "new", "stop", "session", "verbose":
+		return cmd.Name, cmd.Args, true
+	case "clear", "status", "yolo":
+		if cmd.Args == "" {
+			return cmd.Name, "", true
 		}
 	}
 	return "", "", false

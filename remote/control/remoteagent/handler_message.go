@@ -3,7 +3,6 @@ package remoteagent
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -94,7 +93,8 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	}
 
 	// A chat typing a path for the directory browser.
-	if h.directoryBrowser.IsWaitingInput(hCtx.ChatID) && !strings.HasPrefix(text, "/") {
+	cmd, isCommand := imbot.ParseSlashCommand(text)
+	if h.directoryBrowser.IsWaitingInput(hCtx.ChatID) && !isCommand {
 		h.handleCustomPathInput(hCtx)
 		return
 	}
@@ -102,14 +102,13 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	// Commands: Projects runs the session ones; /cd, /dir, /help and access
 	// are the registry's; nothing else is a command. The old agent words
 	// ("@cc fix it", "/tb hi") are not commands: they go on as messages.
-	if strings.HasPrefix(text, "/") && stripAgentPrefix(text) == text {
+	if isCommand && stripAgentPrefix(cmd.Text()) == cmd.Text() {
 		if name, arg, ok := projectCommand(text); ok {
 			h.runProjectCommand(hCtx, name, arg)
 			return
 		}
 		if !h.handleSlashCommand(hCtx, text) {
-			head, _, _ := strings.Cut(text, " ")
-			h.SendText(hCtx, "Unknown command "+head+". /help lists what works here.")
+			h.SendText(hCtx, "Unknown command /"+cmd.Name+". /help lists what works here.")
 		}
 		return
 	}
