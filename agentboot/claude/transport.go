@@ -134,6 +134,8 @@ func (t *Transport) EncodeControlRequest(reqID string, req agentboot.ControlRequ
 		body = map[string]any{"subtype": ControlRequestSubtypeSetModel, "model": model}
 	case agentboot.SetPermissionModeRequest:
 		body = map[string]any{"subtype": ControlRequestSubtypeSetPermissionMode, "mode": r.Mode}
+	case agentboot.ApplySettingsRequest:
+		body = map[string]any{"subtype": ControlRequestSubtypeApplyFlagSettings, "settings": r.Settings}
 	default:
 		return nil
 	}

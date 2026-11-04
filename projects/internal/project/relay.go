@@ -200,11 +200,20 @@ func (r *Relay) NeedsUser(t db.Thread, request db.ThreadEvent) {
 	if request.Kind == db.EvApproval {
 		job.prompt = &ChannelPrompt{ThreadID: t.ID, RequestID: p.RequestID, Text: approvalBody(request, p), Choices: []ChannelChoice{
 			{Value: ChoiceAllow, Label: "Allow"},
-			{Value: ChoiceAllowThread, Label: "Allow for this thread"},
+			{Value: ChoiceAllowThread, Label: allowThreadLabel(p.Tool)},
 			{Value: ChoiceDeny, Label: "Deny"},
 		}}
 	}
 	r.enqueueJob(job)
+}
+
+// allowThreadLabel is the button that remembers an approval for the thread: a
+// Bash approval is remembered for that command only (allowKey).
+func allowThreadLabel(tool string) string {
+	if tool == "Bash" {
+		return "Allow this command for this thread"
+	}
+	return "Allow for this thread"
 }
 
 // Settled restates the prompts a request was sent as with how it ended, so a

@@ -41,6 +41,12 @@ func grantLibrary(doc map[string]any, library string) {
 	doc["autoMode"] = auto
 }
 
+// addRules adds rules to the list under key in perms, skipping duplicates.
+func addRules(perms map[string]any, key string, rules ...string) {
+	list, _ := perms[key].([]any)
+	perms[key] = appendUnique(list, rules...)
+}
+
 func permissionsOf(doc map[string]any) map[string]any {
 	perms, _ := doc["permissions"].(map[string]any)
 	if perms == nil {

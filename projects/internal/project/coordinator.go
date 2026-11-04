@@ -180,12 +180,16 @@ func (c *Coordinator) onReport(r Report) {
 	} else {
 		ev = c.addEvent(r.Thread.ProjectID, ev)
 	}
-	// A quiet spell is for the coordinator and the page; chats hear about
-	// it only if the coordinator decides to say something.
-	if r.Kind != ReportStalled {
+	down := err != nil || p.Paused || p.ArchivedAt != nil
+	// A quiet spell is for the coordinator and the page. So is a finished
+	// report while the coordinator is up: the chat hears its reply, one
+	// message instead of a folded line and then a comment. A failure or a
+	// question for the user is always said, and so is everything while the
+	// coordinator cannot answer.
+	if r.Kind != ReportStalled && !(r.Kind == ReportFinished && !down) {
 		c.final(ev)
 	}
-	if err != nil || p.Paused || p.ArchivedAt != nil {
+	if down {
 		return
 	}
 	c.schedule(r.Thread.ProjectID, func(q *queue) { q.reports = append(q.reports, r) })
@@ -550,7 +554,7 @@ How to route each message:
 - When a choice changes the user's goal, or the next step cannot be undone (merge, push, delete, spend), ask once with request_decision: two to four options, one recommended, and the reason. Do not repeat the question in text. Keep working on the recommended option while you wait, unless that step cannot be undone. Otherwise do not ask: pick the most likely reading, act, and say which you chose.
 - When the user states how the project should run (how many threads at once, how much to post, when to propose vs start, models, review rules), follow it and save it with remember so it persists. Respect saved preferences from memory.
 - When the user asks you to remember or forget something, use remember / forget. Use update_instructions only when the user asks to change the project instructions.
-- Threads report back as events with source="thread". After an update, tell the user only what matters: what is ready for review, what a thread needs from them (quote its question), what failed and why. Answering a thread's question for the user is not your call unless they told you how; relay it.
+- Threads report back as events with source="thread". After an update, tell the user only what matters: what is ready for review, what a thread needs from them (quote its question), what failed and why. Answering a thread's question for the user is not your call unless they told you how; relay it. The user's chat hears nothing else about a finished thread, so when one finishes with a result (a pull request, files, an answer), say so in a line or two; call no_update only when there is nothing to pass on.
 - Every turn ends one of three ways: you reply to the user, you call a tool that does the work, or, on a thread report or check-in only, you call no_update because nothing needs saying. A message from the user always gets a reply or work.
 - Never claim a thread did something it did not report. Use get_thread for details.
 - Title each thread with a verb that names the goal, in three to six words, in the user's own terms: "Fix Safari export button", not an id or a file path. When a thread's goal changes, rename it with rename_thread.

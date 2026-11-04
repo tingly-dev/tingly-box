@@ -103,7 +103,7 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 
 ### 4.4 线程运行
 - 线程用 `agentboot/engine` 跑，和原来 Tingly Box 的 Desk 是同一个会话引擎（Desk 现已并入 Projects，成为工作目录）（`claude` CLI，stream-json，`--resume` 续会话，`PermissionPromptTool: stdio`）。引擎负责进程、转换和后台任务；本仓库只做线程这一层：排队、项目并发上限、线程内审批、每轮汇报。引擎按 Claude 会话 id 认线程（`Thread.SessionID`）。
-- **常驻进程**：每个线程保留一个常驻 `claude` 进程（池上限 10，空闲 10 分钟回收，之后的轮次带 `--resume` 重开）。后台任务（后台命令、子代理）因此能活过发起它的那一轮；任务结束后 Claude 自己接着跑的那一轮，照常定状态、汇报协调者。Stop 只中断当前轮，不杀进程；Resolve 才关掉进程。
+- **常驻进程**：每个线程保留一个常驻 `claude` 进程（池上限 10，空闲 10 分钟回收，之后的轮次带 `--resume` 重开）。后台任务（后台命令、子代理）因此能活过发起它的那一轮；任务结束后 Claude 自己接着跑的那一轮，照常定状态、汇报协调者。Stop 只中断当前轮，不杀进程；Resolve 才关掉进程。**改设置不重启进程**：模型和权限模式用 `set_model` / `set_permission_mode` 控制请求即时切换；线程设置文件里的权限规则（`permissions`、`autoMode`）在下一轮开始前用 `apply_flag_settings` 控制请求推送给存活的进程（`agentboot/engine` 的 `applyLive`），启动签名不再包含它们。进程拒绝推送（太旧的 CLI）时不重启，规则等进程下次自然启动（空闲回收后）再生效，下一轮会再试一次。只有环境变量、网关、profile 的其余设置、MCP 配置这类启动时才读的内容变了才重启。详见 `message-channel.md` 的“设置怎么应用”。
 - **事件**：引擎的对话记录条目转成线程事件（`transcript.go`）：主对话的文字、工具调用和结果照旧；子代理内部步骤带上所属的 Agent 调用（`parent`）一起存下，主对话分页不含它们，打开子代理时再读；思考不显示；后台任务结束时留一行系统事件。
 - 测试用 `agentboot/engine/enginetest` 的脚本替身，另有一个用 agentboot fixture 跑真实 Claude 驱动的用例。
 - **工作区**：项目有仓库 → `git worktree add -b tp/<slug>-<id6> <worktree> <base>`；没有仓库 → 空目录。
@@ -131,7 +131,7 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 - **连接**：全局连接为 Anthropic 风格时，线程继承它（`ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN`），即默认走 Tingly Box；否则用本机 `claude` 自己的登录。
 - **权限模式**：默认 `acceptEdits`（编辑自动通过，命令等需审批 → Waiting on you）；项目设置可改为 `auto` / `bypassPermissions`。
 - **审批**：prompter 把请求记为线程事件、线程进入 `waiting`、阻塞等待用户在线程里回答（权限审批不超时）；"本线程同类都允许"按工具名记住。
-- **自动回答问题**（AskUserQuestion）：每个线程一个设置 `auto_answer`：`off` / `delay` / `now`，空为按种类的默认值（项目线程 `delay`，用户多半不在；工作目录会话 `off`，用户多半在看）。只有每个子问题都有标了 “(Recommended)” 的选项、且都不是多选时才会自动回答，其余照旧等人。`delay` 在提问 10 分钟后按推荐项回答，`now` 立即回答；待回答事件带 `auto_at`，卡片写明“几点前没回答就按 X 继续”，自动回答后事件带 `auto: true`，记录里标“已按推荐答案自动回答”。改设置时正在等的问题按新设置重新计时。官方的决策卡也是“推荐一项、没人回答就按它继续”，这里只是把等待时长做成可选。未定：协调者是否要在汇报里提到这次猜测。
+- **自动回答问题**（AskUserQuestion）：每个线程一个设置 `auto_answer`：`off` / `delay` / `now`，空为按种类的默认值（项目线程 `delay`，用户多半不在；工作目录会话 `off`，用户多半在看）。只有每个子问题都有标了 “(Recommended)” 的选项、且都不是多选时才会自动回答，其余照旧等人。`delay` 在提问 5 分钟后按推荐项回答（早于常驻进程 10 分钟的空闲回收，免得回答时进程已被收掉），`now` 立即回答；待回答事件带 `auto_at`，卡片写明“几点前没回答就按 X 继续”，自动回答后事件带 `auto: true`，记录里标“已按推荐答案自动回答”。改设置时正在等的问题按新设置重新计时。官方的决策卡也是“推荐一项、没人回答就按它继续”，这里只是把等待时长做成可选。未定：协调者是否要在汇报里提到这次猜测。
 - **消息排队**：线程忙时收到的消息（用户或协调者）排队，当前轮结束后依次执行。
 - **一轮结束后**：读取 git 状态（领先提交数、改动文件数）→ 定状态 → 记一条 `report` 事件 → 通知协调者。
 

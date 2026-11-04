@@ -116,6 +116,9 @@ const (
 	// with a success control_response and apply from the next turn.
 	ControlRequestSubtypeSetModel          = "set_model"
 	ControlRequestSubtypeSetPermissionMode = "set_permission_mode"
+	// ControlRequestSubtypeApplyFlagSettings layers settings over the running
+	// process (see agentboot.ApplySettingsRequest).
+	ControlRequestSubtypeApplyFlagSettings = "apply_flag_settings"
 )
 
 // Control-response subtypes

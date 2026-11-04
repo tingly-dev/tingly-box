@@ -174,8 +174,8 @@ func TestApprovalWaitsOnUser(t *testing.T) {
 			turn.Say("Not allowed to run tests.", 1, 1)
 			return nil
 		}
-		// A second Bash call is allowed for the rest of the thread.
-		resp2, _ := turn.Approve("req-2", "Bash", map[string]any{"command": "make lint"})
+		// The same command is allowed for the rest of the thread.
+		resp2, _ := turn.Approve("req-2", "Bash", map[string]any{"command": "make test"})
 		turn.Say(map[bool]string{true: "Tests and lint pass.", false: "lint blocked"}[resp2.Approved], 1, 1)
 		return nil
 	})

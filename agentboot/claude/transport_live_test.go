@@ -37,6 +37,8 @@ func TestTransport_EncodesLiveControlRequests(t *testing.T) {
 	assert.Equal(t, map[string]any{"subtype": "set_model", "model": "m"}, req(agentboot.SetModelRequest{Model: "m"}))
 	assert.Equal(t, map[string]any{"subtype": "set_model", "model": "default"}, req(agentboot.SetModelRequest{}))
 	assert.Equal(t, map[string]any{"subtype": "set_permission_mode", "mode": "plan"}, req(agentboot.SetPermissionModeRequest{Mode: "plan"}))
+	rules := map[string]any{"permissions": map[string]any{"allow": []any{"Bash(git push origin tp/x)"}}}
+	assert.Equal(t, map[string]any{"subtype": "apply_flag_settings", "settings": rules}, req(agentboot.ApplySettingsRequest{Settings: rules}))
 }
 
 func TestTransport_DecodesControlResponses(t *testing.T) {

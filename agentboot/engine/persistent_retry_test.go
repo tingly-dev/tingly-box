@@ -125,14 +125,15 @@ func (s *fakePersistentSession) TurnOutputSeen() bool {
 	return s.outputEmitted
 }
 
-func (s *fakePersistentSession) Send(context.Context, string) error              { return nil }
-func (s *fakePersistentSession) Inject(context.Context, string) error            { return nil }
-func (s *fakePersistentSession) SetModel(context.Context, string) error          { return nil }
-func (s *fakePersistentSession) SetPermissionMode(context.Context, string) error { return nil }
-func (s *fakePersistentSession) Respond(string, agentboot.ControlResponse) error { return nil }
-func (s *fakePersistentSession) Interrupt(context.Context) error                 { return nil }
-func (s *fakePersistentSession) StopTask(context.Context, string) error          { return nil }
-func (s *fakePersistentSession) Close(context.Context) error                     { return nil }
+func (s *fakePersistentSession) Send(context.Context, string) error                  { return nil }
+func (s *fakePersistentSession) Inject(context.Context, string) error                { return nil }
+func (s *fakePersistentSession) SetModel(context.Context, string) error              { return nil }
+func (s *fakePersistentSession) SetPermissionMode(context.Context, string) error     { return nil }
+func (s *fakePersistentSession) ApplySettings(context.Context, map[string]any) error { return nil }
+func (s *fakePersistentSession) Respond(string, agentboot.ControlResponse) error     { return nil }
+func (s *fakePersistentSession) Interrupt(context.Context) error                     { return nil }
+func (s *fakePersistentSession) StopTask(context.Context, string) error              { return nil }
+func (s *fakePersistentSession) Close(context.Context) error                         { return nil }
 
 func newPersistentRetryEngine(t *testing.T, agent *fakePersistentAgent) (*Engine, chan TurnEnd) {
 	t.Helper()

@@ -119,10 +119,22 @@ type Threads struct {
 	// StallAfter is how long a running thread may show no activity before
 	// the coordinator is told; zero means DefaultStallAfter.
 	StallAfter time.Duration
+	// HoldGrace is how long a held report waits for the follow-up turn Claude
+	// starts when a background task ends; zero means DefaultHoldGrace.
+	HoldGrace time.Duration
+	// HoldMax is the longest a report is held for background tasks that never
+	// end; zero means DefaultHoldMax.
+	HoldMax time.Duration
+	// backgroundCount replaces the engine's count of a thread's running
+	// background tasks; tests only.
+	backgroundCount func(threadID string) int
 
 	mu sync.Mutex
 	// stalled holds the running threads already reported as quiet.
 	stalled map[string]bool
+	// held holds the finished report of a worker whose turn ended while it
+	// still had background tasks (background.go).
+	held map[string]*heldReport
 	// folders caches which projects are folders (a project's type never changes).
 	folders map[string]bool
 	active  map[string]*activeThread
@@ -133,7 +145,7 @@ type Threads struct {
 	threadOfSession map[string]string
 	slots           map[string]*limiter
 	threads         map[string]*sync.Mutex // serializes writes to one thread row
-	// allowed holds tools the user allowed for the rest of a thread.
+	// allowed holds what the user allowed for the rest of a thread (allowKey).
 	allowed map[string]map[string]bool
 }
 
@@ -227,7 +239,7 @@ func NewThreads(store *db.Store, layout Layout, hub *Hub, agents Agents, env Thr
 		active: map[string]*activeThread{}, turns: map[string]*turnTally{}, prompts: map[string]*threadPrompter{},
 		sessionOfThread: map[string]string{}, threadOfSession: map[string]string{},
 		slots: map[string]*limiter{}, threads: map[string]*sync.Mutex{},
-		allowed: map[string]map[string]bool{}, folders: map[string]bool{},
+		allowed: map[string]map[string]bool{}, folders: map[string]bool{}, held: map[string]*heldReport{},
 	}
 	m.engine = engine.New(engine.Config{
 		Agent:     agents.Service,
@@ -535,7 +547,36 @@ func (m *Threads) writeSettings(p *db.Project, t *db.Thread) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(jsonString(settings)), 0o644)
+	return writeFileIfChanged(path, []byte(jsonString(settings)), 0o644)
+}
+
+// writeFileIfChanged replaces path with data only when its content differs,
+// through a rename, so a reader never sees it half written. The resident
+// process reads the file only when it starts; permission rules that changed
+// reach it as a control request instead (agentboot/engine applyLive), and
+// never restart it.
+func writeFileIfChanged(path string, data []byte, perm os.FileMode) error {
+	if old, err := os.ReadFile(path); err == nil && string(old) == string(data) {
+		return nil
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp*")
+	if err != nil {
+		return err
+	}
+	_, err = tmp.Write(data)
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Chmod(tmp.Name(), perm)
+	}
+	if err == nil {
+		err = os.Rename(tmp.Name(), path)
+	}
+	if err != nil {
+		_ = os.Remove(tmp.Name())
+	}
+	return err
 }
 
 // grantProjectAccess adds the directories every project thread works with to
@@ -550,6 +591,7 @@ func (m *Threads) grantProjectAccess(doc map[string]any, p *db.Project, t *db.Th
 	}
 	addDirectories(doc, dirs...)
 	grantLibrary(doc, m.layout.LibraryDir(p.ID))
+	grantAutoGit(doc, p, t)
 }
 
 // Send gives a Claude Code thread a message; src says who sent it. A busy
@@ -693,6 +735,10 @@ func (m *Threads) turnLaunch(ctx context.Context, threadID string, t *db.Thread,
 	if !folder {
 		opts.AppendSystemPrompt = threadSystemPrompt(m.layout, p, t)
 		if settings == "" {
+			// The permission mode may have changed since Start wrote the file.
+			if err := m.writeSettings(p, t); err != nil {
+				logrus.WithError(err).WithField("thread_id", t.ID).Warn("projects: cannot refresh thread settings")
+			}
 			opts.SettingsPath = m.layout.SettingsFile(p.ID, t.ID)
 		}
 	} else if path, err := m.sessionSettings(p, t, settings); err == nil {
@@ -968,6 +1014,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 	if tally == nil {
 		tally = &turnTally{}
 	}
+	m.dropHeldReport(threadID)
 	t, err := m.store.GetThread(threadID)
 	if err != nil {
 		return
@@ -982,6 +1029,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		head = HeadBranch(context.Background(), t.Cwd)
 	}
 	report := Report{Kind: ReportFinished, Text: strings.TrimSpace(tally.text)}
+	held := false
 	t, _ = m.update(threadID, func(t *db.Thread) {
 		t.Turns++
 		t.ReportedModel = tally.model
@@ -1016,13 +1064,14 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 			if mm := needsInputRe.FindStringSubmatch(report.Text); mm != nil && !session {
 				t.Status, t.WaitReason = db.ThreadWaiting, strings.TrimSpace(mm[1])
 				report.Kind = ReportNeedsInput
-			} else if session && len(m.engine.BackgroundTasks(m.sessionOf(threadID))) > 0 {
+			} else if m.hasBackground(threadID) {
 				// The turn is over but its process still runs background tasks.
+				// A worker's report waits for the follow-up turn Claude starts
+				// when they end (background.go).
 				t.Status = db.ThreadWorking
-			} else if stats.CommitsAhead > 0 {
-				t.Status = db.ThreadReady
+				held = !session
 			} else {
-				t.Status = db.ThreadIdle
+				t.Status = restingStatus(stats.CommitsAhead)
 			}
 		}
 		if report.Text != "" {
@@ -1043,6 +1092,11 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvReport, Content: report.Text, Payload: jsonString(map[string]any{
 			"status": t.Status, "commits_ahead": stats.CommitsAhead, "files_changed": stats.FilesChanged, "uncommitted": stats.Uncommitted,
 		})})
+	}
+	if held {
+		report.Thread = *t
+		m.hold(report)
+		return
 	}
 	if report.Kind != "" && m.OnReply != nil {
 		report.Thread = *t
@@ -1373,7 +1427,7 @@ const (
 )
 
 // AutoAnswerAfter is how long a question waits under AutoAnswerDelay.
-var AutoAnswerAfter = 10 * time.Minute
+var AutoAnswerAfter = 5 * time.Minute
 
 // ValidAutoAnswer reports whether mode is a setting; empty is the default.
 func ValidAutoAnswer(mode string) bool {
@@ -1458,19 +1512,34 @@ func newThreadPrompter(m *Threads, threadID string) *threadPrompter {
 	return &threadPrompter{m: m, threadID: threadID, pending: map[string]*pending{}}
 }
 
-func (m *Threads) isAllowed(threadID, tool string) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.allowed[threadID][tool]
+// allowKey is what "allow for this thread" remembers about a request: the tool,
+// except for Bash, which is the exact command. Allowing one Bash command must
+// not allow every other the thread runs. False means there is nothing safe to
+// remember (a Bash call without a command), so the answer allows this call only.
+func allowKey(tool string, input map[string]any) (string, bool) {
+	if tool != "Bash" {
+		return tool, true
+	}
+	cmd, _ := input["command"].(string)
+	if cmd = strings.TrimSpace(cmd); cmd == "" {
+		return "", false
+	}
+	return tool + "\x00" + cmd, true
 }
 
-func (m *Threads) allow(threadID, tool string) {
+func (m *Threads) isAllowed(threadID, key string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.allowed[threadID][key]
+}
+
+func (m *Threads) allow(threadID, key string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.allowed[threadID] == nil {
 		m.allowed[threadID] = map[string]bool{}
 	}
-	m.allowed[threadID][tool] = true
+	m.allowed[threadID][key] = true
 }
 
 type requestPayload struct {
@@ -1637,7 +1706,8 @@ wait:
 }
 
 func (p *threadPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalRequestEvent) (agentboot.ApprovalResponse, error) {
-	if p.m.isAllowed(p.threadID, req.ToolName) {
+	key, scopable := allowKey(req.ToolName, req.Input)
+	if scopable && p.m.isAllowed(p.threadID, key) {
 		return agentboot.ApprovalResponse{Approved: true}, nil
 	}
 	id := req.ID
@@ -1650,8 +1720,8 @@ func (p *threadPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalR
 	if err != nil {
 		return agentboot.ApprovalResponse{Approved: false, Reason: "not answered"}, nil
 	}
-	if ans.Allow && ans.Scope == "thread" {
-		p.m.allow(p.threadID, req.ToolName)
+	if ans.Allow && ans.Scope == "thread" && scopable {
+		p.m.allow(p.threadID, key)
 	}
 	reason := ""
 	if !ans.Allow {
