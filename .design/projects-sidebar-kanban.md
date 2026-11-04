@@ -36,9 +36,10 @@ band at the top. Two additions:
   the package must not depend on it. Default List.
 - **No drag and drop.** A thread's status is the agent's (working, waiting, failed) or the result of an
   explicit action (resolve, reopen), not a free label, so dropping a card on a column would mean nothing.
-- **The Workdirs folder sidebar has no kanban.** An earlier version added one there (stacked lanes). It
-  was dropped: the request was about a project's threads, the folder tree already groups sessions per
-  folder, and a second board with a different layout would be one more thing to learn.
+- **The left Workdirs tree is unchanged: no kanban there.** An earlier iteration added a switch and stacked
+  lanes to it; it was reverted on the user's call (the board belongs to a project's thread list, the tree
+  keeps its folder-and-sessions look). `NavTree`, `ProjectsSidebar`, `WorkdirPage` and `StatusGroups` are
+  identical to `main`; a test guards that the section has no switch.
 - **i18n**: `overview.view.{label,list,kanban}`, `project.resizeBand`, in en and zh. The Projects package
   ships only en and zh (the host loads only those two into the `projects` namespace), so Russian falls
   back to English like every other Projects string.

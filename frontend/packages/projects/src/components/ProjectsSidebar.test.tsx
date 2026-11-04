@@ -120,4 +120,16 @@ describe('ProjectsSidebar', () => {
         await screen.findByRole('region', { name: 'nav.projects' });
         expect(screen.queryByRole('link', { name: /im\.title/ })).not.toBeInTheDocument();
     });
+    it('keeps the Workdirs section a plain tree: no view switch, no kanban', async () => {
+        const h = host([folder('f-app', '/home/me/app', 1, 0)]);
+        list.mockImplementation((path: string) => Promise.resolve({
+            data: path.endsWith('/threads') ? { threads: [{ id: 't1', title: 'One', status: 'waiting', updated_at: '2026-10-22T00:00:00Z' }] } : { projects: [folder('f-app', '/home/me/app', 1, 0)] },
+            response: new Response(),
+        }));
+        show(h, '/f?path=%2Fhome%2Fme%2Fapp', { showWorkdirs: true });
+        const region = await screen.findByRole('region', { name: 'workdir.title' });
+        expect(await within(region).findByRole('link', { name: /One/ })).toBeInTheDocument();
+        expect(within(region).queryByRole('group')).not.toBeInTheDocument();
+        expect(within(region).queryByRole('button', { name: /kanban|view/i })).not.toBeInTheDocument();
+    });
 });
