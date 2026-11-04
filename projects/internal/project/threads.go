@@ -119,10 +119,22 @@ type Threads struct {
 	// StallAfter is how long a running thread may show no activity before
 	// the coordinator is told; zero means DefaultStallAfter.
 	StallAfter time.Duration
+	// HoldGrace is how long a held report waits for the follow-up turn Claude
+	// starts when a background task ends; zero means DefaultHoldGrace.
+	HoldGrace time.Duration
+	// HoldMax is the longest a report is held for background tasks that never
+	// end; zero means DefaultHoldMax.
+	HoldMax time.Duration
+	// backgroundCount replaces the engine's count of a thread's running
+	// background tasks; tests only.
+	backgroundCount func(threadID string) int
 
 	mu sync.Mutex
 	// stalled holds the running threads already reported as quiet.
 	stalled map[string]bool
+	// held holds the finished report of a worker whose turn ended while it
+	// still had background tasks (background.go).
+	held map[string]Report
 	// folders caches which projects are folders (a project's type never changes).
 	folders map[string]bool
 	active  map[string]*activeThread
@@ -227,7 +239,7 @@ func NewThreads(store *db.Store, layout Layout, hub *Hub, agents Agents, env Thr
 		active: map[string]*activeThread{}, turns: map[string]*turnTally{}, prompts: map[string]*threadPrompter{},
 		sessionOfThread: map[string]string{}, threadOfSession: map[string]string{},
 		slots: map[string]*limiter{}, threads: map[string]*sync.Mutex{},
-		allowed: map[string]map[string]bool{}, folders: map[string]bool{},
+		allowed: map[string]map[string]bool{}, folders: map[string]bool{}, held: map[string]Report{},
 	}
 	m.engine = engine.New(engine.Config{
 		Agent:     agents.Service,
@@ -968,6 +980,9 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 	if tally == nil {
 		tally = &turnTally{}
 	}
+	m.mu.Lock()
+	delete(m.held, threadID)
+	m.mu.Unlock()
 	t, err := m.store.GetThread(threadID)
 	if err != nil {
 		return
@@ -982,6 +997,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		head = HeadBranch(context.Background(), t.Cwd)
 	}
 	report := Report{Kind: ReportFinished, Text: strings.TrimSpace(tally.text)}
+	held := false
 	t, _ = m.update(threadID, func(t *db.Thread) {
 		t.Turns++
 		t.ReportedModel = tally.model
@@ -1016,9 +1032,12 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 			if mm := needsInputRe.FindStringSubmatch(report.Text); mm != nil && !session {
 				t.Status, t.WaitReason = db.ThreadWaiting, strings.TrimSpace(mm[1])
 				report.Kind = ReportNeedsInput
-			} else if session && len(m.engine.BackgroundTasks(m.sessionOf(threadID))) > 0 {
+			} else if m.hasBackground(threadID) {
 				// The turn is over but its process still runs background tasks.
+				// A worker's report waits for the follow-up turn Claude starts
+				// when they end (background.go).
 				t.Status = db.ThreadWorking
+				held = !session
 			} else if stats.CommitsAhead > 0 {
 				t.Status = db.ThreadReady
 			} else {
@@ -1043,6 +1062,11 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvReport, Content: report.Text, Payload: jsonString(map[string]any{
 			"status": t.Status, "commits_ahead": stats.CommitsAhead, "files_changed": stats.FilesChanged, "uncommitted": stats.Uncommitted,
 		})})
+	}
+	if held {
+		report.Thread = *t
+		m.hold(report)
+		return
 	}
 	if report.Kind != "" && m.OnReply != nil {
 		report.Thread = *t

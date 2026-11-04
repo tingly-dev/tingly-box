@@ -80,9 +80,7 @@ func (s threadStore) Append(sid string, e engine.Entry) {
 		// Every thread keeps task events: a subagent's card reads its state
 		// from them. A project thread also gets a line when one ends.
 		s.m.addEvent(t, &db.ThreadEvent{Kind: db.EvTask, Payload: string(e.Payload), RequestID: e.RequestID, Parent: e.Parent})
-		if session {
-			s.m.syncBackground(t, e)
-		}
+		s.m.syncBackground(t, e)
 		if note := taskNote(e); note != "" && !session {
 			ev = &db.ThreadEvent{Kind: db.EvSystem, Content: note}
 		}
@@ -140,6 +138,12 @@ func taskNote(e engine.Entry) string {
 func (m *Threads) syncBackground(t *db.Thread, e engine.Entry) {
 	var ev engine.TaskEvent
 	if json.Unmarshal(e.Payload, &ev) != nil || ev.Event != "background_tasks_changed" {
+		return
+	}
+	if !m.isFolder(t.ProjectID) {
+		if len(ev.Tasks) == 0 {
+			m.releaseSoon(t.ID, m.holdGrace())
+		}
 		return
 	}
 	m.mu.Lock()
