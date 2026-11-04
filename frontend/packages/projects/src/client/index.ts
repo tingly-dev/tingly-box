@@ -52,7 +52,7 @@ export function setApiFetch(f: typeof fetch | undefined) {
 
 async function observedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const res = await hostFetch(input, init);
-    noteServerDate(res.headers.get('Date'));
+    noteServerDate(res.headers.get('Date'), res.headers.get('Age'));
     return res;
 }
 

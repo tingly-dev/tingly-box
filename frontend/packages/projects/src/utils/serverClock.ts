@@ -10,16 +10,18 @@ let known = false;
 // Date has whole-second resolution and is truncated, so the real time is
 // about half a second later.
 const HEADER_MIDPOINT_MS = 500;
+// Truncation and latency move each sample by about a second; only a larger
+// change is a clock that moved (either side was synced or stepped).
+const DEADBAND_MS = 1500;
 
-// Latency, a cached response (its Date is when it was first made) and
-// truncation all make a sample read the server as further behind than it
-// is, never ahead. So the best estimate is the largest offset seen.
-export function noteServerDate(header: string | null | undefined): void {
-    if (!header) return;
-    const at = Date.parse(header);
+// A cached response carries the Date of when it was first made: skipped
+// when the response says it was cached.
+export function noteServerDate(date: string | null | undefined, age?: string | null): void {
+    if (!date || (age && age !== '0')) return;
+    const at = Date.parse(date);
     if (Number.isNaN(at)) return;
     const next = at + HEADER_MIDPOINT_MS - Date.now();
-    if (!known || next > offset) {
+    if (!known || Math.abs(next - offset) > DEADBAND_MS) {
         offset = next;
         known = true;
     }
