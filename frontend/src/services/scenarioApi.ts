@@ -66,28 +66,12 @@ export const scenarioApi = {
         }));
     },
 
-    // Whether the default Claude Code routing is switched to a profile's.
-    getClaudeCodeDefaultSwitch: async (): Promise<any> => {
-        return controlApi((client, headers) => client.GET('/api/v1/scenario/{scenario}/claude-code/default-switch', {
-            headers,
-            params: {path: {scenario: 'claude_code'}},
-        }));
-    },
-
-    // Make the default Claude Code routing a copy of a profile's (id or name).
-    switchClaudeCodeDefaultToProfile: async (profile: string): Promise<any> => {
-        return controlApi((client, headers) => client.PUT('/api/v1/scenario/{scenario}/claude-code/default-switch', {
+    // Overwrite the default Claude Code routing with a copy of a profile's (id or name).
+    copyProfileToClaudeCodeDefault: async (profile: string): Promise<any> => {
+        return controlApi((client, headers) => client.POST('/api/v1/scenario/{scenario}/claude-code/use-profile', {
             headers,
             params: {path: {scenario: 'claude_code'}},
             body: {profile},
-        }));
-    },
-
-    // Put the default Claude Code routing back as it was before the first switch.
-    restoreClaudeCodeDefault: async (): Promise<any> => {
-        return controlApi((client, headers) => client.DELETE('/api/v1/scenario/{scenario}/claude-code/default-switch', {
-            headers,
-            params: {path: {scenario: 'claude_code'}},
         }));
     },
 

@@ -1,7 +1,7 @@
 # Claude Code: use a profile as the default
 
-Status: **simplified design proposed, not implemented.** The branch still has v1
-(copy + persisted snapshot + "restore"); this document replaces it.
+Status: implemented. (An earlier snapshot-and-restore design was dropped before
+merging: copy and switch are both explicit user actions, so nothing is stored.)
 
 ## Problem
 
@@ -15,8 +15,7 @@ Two separate, explicit user actions; the product does nothing behind their back.
 
 - **Copy** — keep the default's current config as a profile. This is the
   "Duplicate as profile" action of the profile-copy work
-  (`.design/profile-duplicate.md` on `tp/reimplement-profile-copy-from-ol-958f2e`);
-  this feature adds nothing to it.
+  (`.design/profile-duplicate.md`); this feature adds nothing to it.
 - **Switch** — make the default a copy of profile X's config. X is never changed
   and stays independent afterwards. The default's previous config is
   **overwritten**; if the user wants it back, they copied it first.
@@ -53,7 +52,7 @@ Success toast: `Default now uses profile "ds"`. No lit chip: the row is an actio
 ## Backend
 
 ```
-POST /api/v1/scenario/claude_code/default/switch   {profile: "p1"}   → 200
+POST /api/v1/scenario/{scenario}/claude-code/use-profile   {profile: "p1"}   → 200
 ```
 
 `Config.UseProfileAsDefault(profile)`: validate (the profile exists and has
@@ -61,20 +60,22 @@ routing — otherwise the default would end up unrouted; nothing is written on a
 refusal), then overwrite the default's `cc` and slot rules with deep copies of the
 profile's (services, LB tactic, smart routing, rule flags; a slot the profile has
 not split is switched off so it follows the default again), save, and undo in
-memory if the save fails. Only the main scenario is accepted; profile scopes and
-other scenarios are rejected.
+memory if the save fails. Only `scenario = claude_code` is accepted (profile
+scopes and other scenarios: 400); an unknown profile is 404.
 
 Not copied: the profile's scenario flags and Claude Code overrides (`env`,
 `unset_env`, `default_mode`) — those are gateway-wide / per-launch settings that
 would rewrite `~/.claude/settings.json`, not routing.
 
-## Relation to the profile-copy branch
+## Relation to the profile-copy work
 
-No code dependency any more: the switch does not call `DuplicateProfile`. The
-branches only touch the same files (`routes.go`, `types.go`, `openapi.json` —
-regenerate, not merge —, the `agent.ts` i18n blocks, `mocks/handlers.ts`), so
-either can land first. The dialog text mentions copying; wording stays correct
-whether or not the copy button has landed.
+No code dependency: `UseProfileAsDefault` does not call `DuplicateProfile`; it
+only reuses `deepCopyJSON` from `scope_clone.go` and `ErrProfileNotFound`. The
+confirm dialog points at the existing "Duplicate as profile" button.
+
+The existing client-config status (`Config out of date · N differences`) reacts to
+the changed rules as after any slot change; the user re-applies the Claude Code
+settings file as usual. Switching does not rewrite `~/.claude/settings.json`.
 
 ## Wording
 
@@ -95,15 +96,10 @@ No "restore" anywhere.
 
 (ru follows the same keys.)
 
-## What happens to v1 (unmerged, nothing to migrate)
+## Code
 
-- **Removed:** `Config.ClaudeCodeDefaultSwitch` (and the `claude_code_default_switch`
-  key), `RestoreClaudeCodeDefault`, `GET`/`DELETE …/default-switch`, the status
-  struct, the "(edited)" / "(deleted)" chip states and their i18n keys, the
-  routing-equality helper.
-- **Kept:** the rule-overwrite loop (`copyCCRoutingDeep`, slot split/merge) becomes
-  `UseProfileAsDefault`; the chip row, `useSlotRouting.reload`, API wrapper and mock
-  handler shrink to the one POST.
-- **Tests:** replace snapshot/restore/persistence tests with: overwrite copies
-  routing and slot split/merge, source profile untouched and unaliased, a
-  rejected switch changes nothing, non-default scopes refused.
+`internal/config/cc_default_switch.go` (`UseProfileAsDefault`, tests in
+`cc_default_switch_test.go`), `internal/server/module/scenario/handler_default_switch.go`,
+`frontend/src/pages/scenario/components/ClaudeCodeUseProfile.tsx` (shown by
+`AgentPage` when the descriptor sets `useProfileRow`, i.e. Claude Code's main
+page only).

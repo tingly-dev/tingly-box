@@ -1,62 +1,39 @@
 package scenario
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 	"github.com/tingly-dev/tingly-box/internal/server/module/bind"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// defaultSwitchReady rejects everything but the main Claude Code scenario:
-// only the default configuration can be switched to a profile.
-func (h *Handler) defaultSwitchReady(c *gin.Context) bool {
+// UseClaudeCodeProfile overwrites the default Claude Code routing with a copy of
+// a profile's. Only the main claude_code scenario can be switched.
+func (h *Handler) UseClaudeCodeProfile(c *gin.Context) {
 	if h.config == nil {
 		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
-		return false
+		return
 	}
 	if typ.RuleScenario(c.Param("scenario")) != typ.ScenarioClaudeCode {
-		apierr.Failure(c, http.StatusBadRequest, "only the default Claude Code configuration can be switched to a profile")
-		return false
-	}
-	return true
-}
-
-// GetClaudeCodeDefaultSwitch reports whether the default is switched to a profile.
-func (h *Handler) GetClaudeCodeDefaultSwitch(c *gin.Context) {
-	if !h.defaultSwitchReady(c) {
+		apierr.Failure(c, http.StatusBadRequest, "only the default Claude Code configuration can use a profile")
 		return
 	}
-	c.JSON(http.StatusOK, ClaudeCodeDefaultSwitchResponse{Success: true, Data: h.config.GetClaudeCodeDefaultSwitch()})
-}
-
-// SwitchClaudeCodeDefault makes the default Claude Code routing a copy of a profile's.
-func (h *Handler) SwitchClaudeCodeDefault(c *gin.Context) {
-	if !h.defaultSwitchReady(c) {
-		return
-	}
-	var req ClaudeCodeDefaultSwitchRequest
+	var req ClaudeCodeUseProfileRequest
 	if !bind.JSON(c, &req, apierr.Failure) {
 		return
 	}
-	status, err := h.config.SwitchClaudeCodeDefaultToProfile(req.Profile)
-	if err != nil {
-		apierr.Failure(c, http.StatusBadRequest, err.Error())
+	if err := h.config.UseProfileAsDefault(req.Profile); err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, config.ErrProfileNotFound) {
+			status = http.StatusNotFound
+		}
+		apierr.Failure(c, status, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, ClaudeCodeDefaultSwitchResponse{Success: true, Data: status})
-}
-
-// RestoreClaudeCodeDefault puts the default's own routing back.
-func (h *Handler) RestoreClaudeCodeDefault(c *gin.Context) {
-	if !h.defaultSwitchReady(c) {
-		return
-	}
-	if err := h.config.RestoreClaudeCodeDefault(); err != nil {
-		apierr.Failure(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, ClaudeCodeDefaultSwitchResponse{Success: true, Data: h.config.GetClaudeCodeDefaultSwitch()})
+	c.JSON(http.StatusOK, ClaudeCodeUseProfileResponse{Success: true})
 }

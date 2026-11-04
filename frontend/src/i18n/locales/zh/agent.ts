@@ -230,20 +230,15 @@ export default {
       "mergeAll": "全部合并",
       "failed": "更新 slot 失败"
     },
-    "defaultSwitch": {
-      "label": "使用配置",
-      "lead": "把方案的配置复制到默认配置：",
-      "own": "默认自己的",
-      "ownOn": "默认配置正在使用自己的配置",
-      "ownOff": "恢复默认配置自己的配置（第一次复制之前的样子）",
-      "profileOn": "默认配置当前使用的是此方案的配置",
-      "profileOff": "把此方案的配置复制到默认配置；方案本身不会改动",
-      "profileEdited": "复制之后默认配置又被修改过；点击重新复制此方案的配置",
-      "editedLabel": "{{name}}（已改）",
-      "profileDeleted": "配置复制自方案“{{name}}”（该方案已删除）",
-      "applied": "已把方案“{{name}}”的配置复制到默认配置",
-      "restored": "已恢复默认配置自己的配置",
-      "failed": "修改默认配置失败"
+    "useProfile": {
+      "label": "使用方案",
+      "chipHint": "把默认配置换成此方案的副本；此方案本身不会改动",
+      "dialogTitle": "使用方案“{{name}}”",
+      "dialogBody": "默认配置将被方案“{{name}}”的副本覆盖；“{{name}}”本身不会改动。",
+      "dialogWarning": "当前默认配置不会被保存；如需保留，请先把它复制为方案。",
+      "confirm": "使用方案",
+      "done": "默认配置已改用方案“{{name}}”",
+      "failed": "使用方案失败"
     },
     "applyFailed": "应用配置失败",
     "configPath": "将环境配置添加到 Claude Code 配置文件",

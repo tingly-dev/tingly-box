@@ -6813,6 +6813,50 @@
         }
       }
     },
+    "/api/v1/scenario/{scenario}/claude-code/use-profile": {
+      "post": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Overwrite the default Claude Code routing with a copy of a profile's; the profile is not changed and the default's previous routing is not kept (only the claude_code scenario)",
+        "description": "Overwrite the default Claude Code routing with a copy of a profile's; the profile is not changed and the default's previous routing is not kept (only the claude_code scenario)",
+        "operationId": "apiV1ScenarioScenarioClaude-codeUse-profilePost",
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaudeCodeUseProfileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeCodeUseProfileResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/scenario/{scenario}/flag/{flag}": {
       "get": {
         "tags": [
@@ -12797,6 +12841,31 @@
         "required": [
           "success",
           "data"
+        ]
+      },
+      "ClaudeCodeUseProfileRequest": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "string",
+            "description": "Field profile",
+            "example": "p1"
+          }
+        },
+        "required": [
+          "profile"
+        ]
+      },
+      "ClaudeCodeUseProfileResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success"
         ]
       },
       "ClaudeConfigResponse": {

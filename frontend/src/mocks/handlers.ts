@@ -1065,15 +1065,6 @@ if (isNewcomer) {
     }
 }
 
-// Default Claude Code switched to a profile (mock state).
-let mockDefaultSwitch: { originalServices: any[]; profileId: string } | null = null
-const mockDefaultSwitchStatus = () => {
-    const profile = mockDefaultSwitch && mockClaudeCodeProfiles.find(item => item.id === mockDefaultSwitch!.profileId)
-    return mockDefaultSwitch
-        ? { switched: true, profile_id: mockDefaultSwitch.profileId, profile_name: profile?.name ?? mockDefaultSwitch.profileId, profile_exists: !!profile, in_sync: !!profile }
-        : { switched: false, profile_exists: false, in_sync: false }
-}
-
 // Claude Code slots with a rule of their own, per scenario (mock state).
 const mockCCSlots: Record<string, string[]> = {}
 
@@ -2714,31 +2705,15 @@ export const handlers = [
         return HttpResponse.json({ success: true, data: { slots: mockCCSlots[scenario], rule } })
     }),
 
-    // Default Claude Code switched to a profile's routing (mock: only the main rule's services are copied).
-    http.get('/api/v1/scenario/:scenario/claude-code/default-switch', () => {
-        return HttpResponse.json({ success: true, data: mockDefaultSwitchStatus() })
-    }),
-
-    http.put('/api/v1/scenario/:scenario/claude-code/default-switch', async ({ request }) => {
+    // The default Claude Code routing overwritten with a copy of a profile's (mock: the main rule's services).
+    http.post('/api/v1/scenario/:scenario/claude-code/use-profile', async ({ request }) => {
         const { profile } = await request.json() as { profile: string }
         const found = mockClaudeCodeProfiles.find(item => item.id === profile || item.name === profile)
-        if (!found) return HttpResponse.json({ success: false, error: `profile "${profile}" not found` }, { status: 400 })
+        if (!found) return HttpResponse.json({ success: false, error: `profile "${profile}" not found` }, { status: 404 })
         const main = getMockRulesForScenario('claude_code').find(r => r.uuid === 'builtin:claude_code:cc') ?? getMockRulesForScenario('claude_code')[0]
         const source = getMockRulesForScenario(`claude_code:${found.id}`)[0]
-        if (main && source) {
-            if (!mockDefaultSwitch) mockDefaultSwitch = { originalServices: structuredClone(main.services ?? []), profileId: found.id }
-            main.services = structuredClone(source.services ?? [])
-            mockDefaultSwitch.profileId = found.id
-        }
-        return HttpResponse.json({ success: true, data: mockDefaultSwitchStatus() })
-    }),
-
-    http.delete('/api/v1/scenario/:scenario/claude-code/default-switch', () => {
-        if (!mockDefaultSwitch) return HttpResponse.json({ success: false, error: 'the default Claude Code configuration has not been switched to a profile' }, { status: 400 })
-        const main = getMockRulesForScenario('claude_code').find(r => r.uuid === 'builtin:claude_code:cc') ?? getMockRulesForScenario('claude_code')[0]
-        if (main) main.services = mockDefaultSwitch.originalServices
-        mockDefaultSwitch = null
-        return HttpResponse.json({ success: true, data: mockDefaultSwitchStatus() })
+        if (main && source) main.services = structuredClone(source.services ?? [])
+        return HttpResponse.json({ success: true })
     }),
 
     // Scenario config (per-scenario UI prefs incl. unified vs. separate mode)

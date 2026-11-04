@@ -254,20 +254,15 @@ export default {
       "mergeAll": "Merge all",
       "failed": "Failed to update the slot"
     },
-    "defaultSwitch": {
-      "label": "Use config",
-      "lead": "copy a profile's config into the default:",
-      "own": "Default's own",
-      "ownOn": "The default is using its own config",
-      "ownOff": "Restore the default's own config, as it was before the first copy",
-      "profileOn": "The default currently has this profile's config",
-      "profileOff": "Copy this profile's config into the default; the profile itself is not changed",
-      "profileEdited": "The default was edited after copying; click to copy this profile's config again",
-      "editedLabel": "{{name}} (edited)",
-      "profileDeleted": "config copied from profile \"{{name}}\" (deleted)",
-      "applied": "Copied the config of profile \"{{name}}\" into the default",
-      "restored": "Restored the default's own config",
-      "failed": "Failed to change the default config"
+    "useProfile": {
+      "label": "Use profile",
+      "chipHint": "Make the default config a copy of this profile; the profile is not changed",
+      "dialogTitle": "Use profile \"{{name}}\"",
+      "dialogBody": "The default config will be overwritten with a copy of profile \"{{name}}\". \"{{name}}\" itself is not changed.",
+      "dialogWarning": "The current default config is not saved — to keep it, copy it as a profile first.",
+      "confirm": "Use profile",
+      "done": "Default now uses profile \"{{name}}\"",
+      "failed": "Failed to use the profile"
     },
     "applyFailed": "Failed to apply configurations",
     "configPath": "Add env config to Claude Code config file",

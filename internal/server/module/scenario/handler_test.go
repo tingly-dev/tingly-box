@@ -484,7 +484,7 @@ func TestScenarioUpdateResponseStructure(t *testing.T) {
 	}
 }
 
-func TestClaudeCodeDefaultSwitchEndpoints(t *testing.T) {
+func TestUseClaudeCodeProfileEndpoint(t *testing.T) {
 	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
@@ -509,36 +509,24 @@ func TestClaudeCodeDefaultSwitchEndpoints(t *testing.T) {
 
 	handler := NewHandler(cfg, &mockRemoteControlController{})
 	router := gin.New()
-	route := "/scenario/:scenario/claude-code/default-switch"
-	router.GET(route, handler.GetClaudeCodeDefaultSwitch)
-	router.PUT(route, handler.SwitchClaudeCodeDefault)
-	router.DELETE(route, handler.RestoreClaudeCodeDefault)
-	call := func(method, scenario, body string) *httptest.ResponseRecorder {
+	router.POST("/scenario/:scenario/claude-code/use-profile", handler.UseClaudeCodeProfile)
+	post := func(scenario, body string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
-		router.ServeHTTP(w, httptest.NewRequest(method, "/scenario/"+scenario+"/claude-code/default-switch", bytes.NewBufferString(body)))
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/scenario/"+scenario+"/claude-code/use-profile", bytes.NewBufferString(body)))
 		return w
 	}
 
-	assert.Contains(t, call(http.MethodGet, "claude_code", "").Body.String(), `"switched":false`)
+	// Only the default can use a profile: not a profile, not another scenario.
+	assert.Equal(t, http.StatusBadRequest, post(string(profiled), `{"profile":"work"}`).Code)
+	assert.Equal(t, http.StatusBadRequest, post("openai", `{"profile":"work"}`).Code)
+	assert.Equal(t, http.StatusBadRequest, post("claude_code", `{}`).Code)
+	assert.Equal(t, http.StatusNotFound, post("claude_code", `{"profile":"missing"}`).Code)
+	assert.Empty(t, cfg.GetRuleByUUID("builtin:claude_code:cc").Services, "a refused request changes nothing")
 
-	// Only the default can be switched: not a profile, not another scenario.
-	assert.Equal(t, http.StatusBadRequest, call(http.MethodPut, string(profiled), `{"profile":"work"}`).Code)
-	assert.Equal(t, http.StatusBadRequest, call(http.MethodPut, "openai", `{"profile":"work"}`).Code)
-	assert.Equal(t, http.StatusBadRequest, call(http.MethodPut, "claude_code", `{"profile":"missing"}`).Code)
-	assert.Equal(t, http.StatusBadRequest, call(http.MethodDelete, "claude_code", "").Code, "nothing to restore yet")
-
-	w := call(http.MethodPut, "claude_code", `{"profile":"`+profile.ID+`"}`)
+	w := post("claude_code", `{"profile":"`+profile.ID+`"}`)
 	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), `"switched":true`)
-	assert.Contains(t, w.Body.String(), `"profile_name":"work"`)
-	assert.Contains(t, w.Body.String(), `"in_sync":true`)
 	mainRule := cfg.GetRuleByUUID("builtin:claude_code:cc")
 	if assert.NotNil(t, mainRule) && assert.NotEmpty(t, mainRule.Services) {
 		assert.Equal(t, "work-model", mainRule.Services[0].Model)
 	}
-
-	w = call(http.MethodDelete, "claude_code", "")
-	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), `"switched":false`)
-	assert.Empty(t, cfg.GetRuleByUUID("builtin:claude_code:cc").Services)
 }
