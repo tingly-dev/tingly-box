@@ -178,6 +178,18 @@ const library = [
     { path: 'charge-flamegraph.svg', origin: 'user', size: 182_330, updated_at: ago(60 * 22) },
 ]
 
+// The Library tree: path → one level of entries (folders first; the real
+// server hides dot entries such as the threads' .tmp).
+const entry = (path: string, kind: 'dir' | 'file', size = 0, min = 60) => ({ name: path.split('/').pop()!, path, kind, size, updated_at: ago(min), origin: path.startsWith('outputs') ? 'output' : 'upload' })
+const libraryTree: Record<string, ReturnType<typeof entry>[]> = {
+    '': [entry('outputs', 'dir', 0, 18), entry('uploads', 'dir', 0, 60 * 22), entry('baseline-p99.csv', 'file', 31_204, 60 * 5), entry('charge-flamegraph.svg', 'file', 182_330, 60 * 22)],
+    outputs: [entry('outputs/load-test-2026-10-14', 'dir', 0, 18), entry('outputs/redis-keys', 'dir', 0, 60 * 3), entry('outputs/summary.md', 'file', 2_410, 40)],
+    'outputs/load-test-2026-10-14': [entry('outputs/load-test-2026-10-14/charts', 'dir', 0, 18), entry('outputs/load-test-2026-10-14/report.md', 'file', 4_812, 18), entry('outputs/load-test-2026-10-14/results.json', 'file', 96_020, 19)],
+    'outputs/load-test-2026-10-14/charts': [entry('outputs/load-test-2026-10-14/charts/p99.png', 'file', 54_300, 18), entry('outputs/load-test-2026-10-14/charts/throughput.png', 'file', 61_870, 18)],
+    'outputs/redis-keys': [entry('outputs/redis-keys/design.md', 'file', 3_120, 60 * 3)],
+    uploads: [entry('uploads/incident-2026-10-02.pdf', 'file', 842_000, 60 * 22), entry('uploads/slo-targets.xlsx', 'file', 18_950, 60 * 30)],
+}
+
 // Folder threads: Claude Code in plain folders (projects of type folder). One
 // waits on an approval, one is working, one finished, one is archived.
 const folderId = (cwd: string) => projects.find((p) => p.type === 'folder' && p.path === cwd)?.id ?? ''
@@ -452,6 +464,13 @@ export const projectsHandlers = [
         new HttpResponse('', { headers: { 'Content-Type': 'text/event-stream' } })),
     http.get('/api/v1/projects/:id/library', ({ params }) =>
         HttpResponse.json({ dir: `/Users/me/.tingly-box/projects/${params.id}/library`, files: params.id === 'p-latency' ? library : [] })),
+    http.get('/api/v1/projects/:id/library/tree', ({ params, request }) => {
+        const path = new URL(request.url).searchParams.get('path') ?? ''
+        const entries = params.id === 'p-latency' ? libraryTree[path] : path === '' ? [] : undefined
+        return entries
+            ? HttpResponse.json({ dir: `/Users/me/.tingly-box/projects/${params.id}/library`, path, entries })
+            : HttpResponse.json({ error: 'folder not found' }, { status: 404 })
+    }),
     http.get('/api/v1/projects/:id/memory', ({ params }) => HttpResponse.json({ dir: `/Users/me/.tingly-box/projects/${params.id}/memory`, files: [] })),
     http.get('/api/v1/projects/:id/usage', () => HttpResponse.json({ by_model: [], by_thread: [] })),
 ]

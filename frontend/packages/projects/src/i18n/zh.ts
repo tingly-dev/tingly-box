@@ -232,10 +232,11 @@ export const zh: Dict<typeof en> = {
             now: '立即', nowHelp: '线程立即按推荐答案继续。之后仍可以发消息纠正。',
         },
     },
+    tree: { loading: '加载中…', emptyFolder: '空文件夹', retry: '重试', failed: '无法加载此文件夹。' },
     library: {
         intro: '你添加的文件每个线程都能读取。没有仓库的线程会把产出放在这里。',
         add: '添加文件', empty: '还没有文件。', download: '下载', copyPath: '复制文件夹路径',
-        origin: { upload: '上传', output: '线程产出' },
+        tree: '资料库文件',
     },
     projectSettings: {
         maxRunning: '同时运行的线程数',

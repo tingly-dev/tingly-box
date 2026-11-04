@@ -12,6 +12,7 @@ import {
     IconFileUpload,
     IconFolder,
     IconFolderOff,
+    IconFolderOpen,
     IconFolderPlus,
     IconFolderShare,
     IconGitBranch,
@@ -51,6 +52,7 @@ export const Unarchive = tablerMui(IconArchiveOff);
 export const Folder = tablerMui(IconFolder);
 export const DriveFileMove = tablerMui(IconFolderShare);
 export const FolderOff = tablerMui(IconFolderOff);
+export const FolderOpen = tablerMui(IconFolderOpen);
 export const ChatBubble = tablerMui(IconMessage);
 export const Forum = tablerMui(IconMessages);
 export const ArrowUpward = tablerMui(IconArrowUp);

@@ -999,6 +999,48 @@
         }
       }
     },
+    "/api/v1/projects/{id}/library/tree": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "List one directory level of the library (folders first); expand a folder by asking for its path",
+        "description": "List one directory level of the library (folders first); expand a folder by asking for its path",
+        "operationId": "apiV1ProjectsIdLibraryTreeGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Library-relative directory; empty is the library root",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryTreeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/memory": {
       "get": {
         "tags": [
@@ -3188,6 +3230,45 @@
           "ok"
         ]
       },
+      "LibraryEntry": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "origin": {
+            "type": "string",
+            "description": "Field origin"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field size"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field updated_at"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "kind",
+          "size",
+          "updated_at",
+          "origin"
+        ]
+      },
       "LibraryFile": {
         "type": "object",
         "properties": {
@@ -3235,6 +3316,31 @@
         "required": [
           "dir",
           "files"
+        ]
+      },
+      "LibraryTreeResponse": {
+        "type": "object",
+        "properties": {
+          "dir": {
+            "type": "string",
+            "description": "Field dir"
+          },
+          "entries": {
+            "type": "array",
+            "description": "Field entries",
+            "items": {
+              "$ref": "#/components/schemas/LibraryEntry"
+            }
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "dir",
+          "path",
+          "entries"
         ]
       },
       "MemoryFile": {
