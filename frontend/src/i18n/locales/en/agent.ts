@@ -301,7 +301,15 @@ export default {
       "profileRenamed": "Profile renamed",
       "profileDeleted": "Profile deleted",
       "renameFailed": "Failed to rename profile",
-      "deleteFailed": "Failed to delete profile"
+      "deleteFailed": "Failed to delete profile",
+      "duplicateProfile": "Duplicate profile",
+      "duplicateTitle": "Duplicate Profile",
+      "duplicateDescription": "Creates a new profile with the same model rules, flags and Claude Code overrides. {{name}} stays unchanged.",
+      "profileDuplicated": "Profile duplicated",
+      "duplicateFailed": "Failed to duplicate profile",
+      "duplicateMain": "Duplicate as profile",
+      "duplicateMainTitle": "Duplicate as Profile",
+      "duplicateMainDescription": "Creates a profile with the same model rules and flags as the main Claude Code configuration. The main configuration stays unchanged."
     },
     "defaultModeLabel": "Default Mode"
   },

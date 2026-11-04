@@ -3191,6 +3191,22 @@ export const handlers = [
         return HttpResponse.json(team, {status: 201})
     }),
 
+    http.post('/api/v1/teams/:teamId/duplicate', async ({params, request}) => {
+        const body = await request.json().catch(() => ({})) as any
+        const source = mockTeams.find((team) => team.id === params.teamId)
+        if (!source) return HttpResponse.json({error: {message: `team '${params.teamId}' not found`, type: 'invalid_request_error'}}, {status: 404})
+        const name = body.name || `${source.name} copy`
+        if (mockTeams.some((team) => team.name === name)) {
+            return HttpResponse.json({error: {message: `team name '${name}' already exists`, type: 'invalid_request_error'}}, {status: 409})
+        }
+        const used = new Set(mockTeams.map((team) => /^t(\d+)$/.exec(team.slug)?.[1]).filter(Boolean).map(Number))
+        let number = 1
+        while (used.has(number)) number++
+        const team = {id: crypto.randomUUID(), name, slug: `t${number}`, enabled: true, is_default: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString()}
+        mockTeams = [...mockTeams, team]
+        return HttpResponse.json(team, {status: 201})
+    }),
+
     http.put('/api/v1/teams/:teamId', async ({params, request}) => {
         const body = await request.json() as any
         mockTeams = mockTeams.map((team) => team.id === params.teamId ? {...team, ...body, updated_at: new Date().toISOString()} : team)
@@ -4132,6 +4148,31 @@ export const handlers = [
             success: true,
             data: newProfile,
         })
+    }),
+
+    http.post('/api/v1/scenario/:scenario/profiles/:profileId/duplicate', async ({ params, request }) => {
+        const { profileId } = params as { profileId: string }
+        const body = await request.json().catch(() => ({})) as any
+        // "default" is the main Claude Code config.
+        const source = profileId === 'default'
+            ? { name: 'default', unified: true, description: '' }
+            : mockClaudeCodeProfiles.find(p => p.id === profileId)
+        if (!source) {
+            return HttpResponse.json({ success: false, error: 'profile not found' }, { status: 404 })
+        }
+        const name = body.name || `${source.name}-copy`
+        if (mockClaudeCodeProfiles.some(p => p.name === name)) {
+            return HttpResponse.json({ success: false, error: `profile name '${name}' already exists` }, { status: 400 })
+        }
+        const copy = {
+            ...source,
+            id: `profile-${Date.now()}`,
+            name,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        }
+        mockClaudeCodeProfiles.push(copy)
+        return HttpResponse.json({ success: true, data: copy })
     }),
 
     http.put('/api/v1/scenario/:scenario/profiles/:profileId', async ({ params, request }) => {

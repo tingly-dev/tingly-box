@@ -23,6 +23,7 @@ import { copyableTextStyle } from '@/styles/textStyles';
 import { ContentCopy as ContentCopyIcon } from '@/components/icons';
 import { Delete as DeleteIcon } from '@/components/icons';
 import { Edit as EditIcon } from '@/components/icons';
+import { Duplicate as DuplicateIcon } from '@/components/icons';
 import { Info as InfoIcon } from '@/components/icons';
 import { Terminal as TerminalIcon } from '@/components/icons';
 import Switch from '@mui/material/Switch';
@@ -48,6 +49,9 @@ import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPage
 import ClaudeCodeProfileOverrides, { type ClaudeCodeProfileSettingsArtifact } from './components/ClaudeCodeProfileOverrides';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import DuplicateDialog from '@/components/DuplicateDialog';
+import { suggestProfileCopyName } from '@/utils/copyName';
+import { useDuplicateProfile } from '@/pages/scenario/hooks/useDuplicateProfile';
 
 const BASE_SCENARIO = 'claude_code';
 
@@ -93,6 +97,8 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     const [logOpen, setLogOpen] = useState(false);
     const [renameProfileOpen, setRenameProfileOpen] = useState(false);
     const [deleteProfileOpen, setDeleteProfileOpen] = useState(false);
+    const [duplicateOpen, setDuplicateOpen] = useState(false);
+    const duplicateProfile = useDuplicateProfile();
     const [renameName, setRenameName] = useState('');
     const [isProfileMutating, setIsProfileMutating] = useState(false);
     const [appVersion, setAppVersion] = useState('');
@@ -236,6 +242,11 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                         <Tooltip title={t('claudeCode.profile.renameProfile')}>
                             <IconButton size="small" aria-label={t('claudeCode.profile.renameProfile')} onClick={() => { setRenameName(currentProfile?.name || ''); setRenameProfileOpen(true); }}>
                                 <EditIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title={t('claudeCode.profile.duplicateProfile')}>
+                            <IconButton size="small" aria-label={t('claudeCode.profile.duplicateProfile')} onClick={() => setDuplicateOpen(true)}>
+                                <DuplicateIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                             </IconButton>
                         </Tooltip>
                         <Tooltip title={t('claudeCode.profile.deleteProfile')}>
@@ -498,6 +509,15 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                     </DialogActions>
                 </Dialog>
 
+                <DuplicateDialog
+                    open={duplicateOpen}
+                    onClose={() => setDuplicateOpen(false)}
+                    title={t('claudeCode.profile.duplicateTitle')}
+                    description={t('claudeCode.profile.duplicateDescription', { name: currentProfile?.name || profileId || '', interpolation: { escapeValue: false } })}
+                    label={t('claudeCode.profile.profileName')}
+                    initialName={suggestProfileCopyName(currentProfile?.name || '', getProfiles(BASE_SCENARIO).map(p => p.name))}
+                    onSubmit={(name) => duplicateProfile(profileId || '', name)}
+                />
                 <ConfirmDialog
                     open={deleteProfileOpen}
                     onClose={() => setDeleteProfileOpen(false)}

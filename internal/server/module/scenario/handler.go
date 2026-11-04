@@ -2,6 +2,8 @@ package scenario
 
 import (
 	"context"
+	"errors"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -380,15 +382,49 @@ func (h *Handler) CreateProfile(c *gin.Context) {
 		return
 	}
 
-	// Auto-generate the Claude Code settings file for the new profile so it is
-	// immediately usable without manual configuration.
+	h.materializeNewProfileSettings(c, scenario, meta)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": meta})
+}
+
+// materializeNewProfileSettings writes a new profile's Claude Code settings
+// file so it is usable right away without manual configuration; a failure is
+// only logged.
+func (h *Handler) materializeNewProfileSettings(c *gin.Context, scenario typ.RuleScenario, meta typ.ProfileMeta) {
 	profiledScenario := string(typ.ProfiledScenarioName(scenario, meta.ID))
 	baseURL := middleware.BaseURLFromRequest(c, h.config.GetServerPort())
 	apiKey := h.config.GetModelToken()
-	if _, settingsErr := agent.MaterializeCCProfileSettings(h.config, baseURL, apiKey, profiledScenario, meta); settingsErr != nil {
-		logrus.WithError(settingsErr).Warn("failed to create Claude Code settings for new profile")
+	if _, err := agent.MaterializeCCProfileSettings(h.config, baseURL, apiKey, profiledScenario, meta); err != nil {
+		logrus.WithError(err).Warn("failed to create Claude Code settings for new profile")
+	}
+}
+
+// DuplicateProfile copies a profile (":id" = "default" is the main
+// configuration) into a new one; the source is untouched.
+func (h *Handler) DuplicateProfile(c *gin.Context) {
+	if h.config == nil {
+		apierr.Failure(c, http.StatusInternalServerError, "config not available")
+		return
 	}
 
+	// The name is optional, so an empty body is fine.
+	var req ProfileDuplicateRequest
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		apierr.Failure(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	scenario := typ.RuleScenario(c.Param("scenario"))
+	meta, err := h.config.DuplicateProfile(scenario, c.Param("id"), req.Name)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, config.ErrProfileNotFound) {
+			status = http.StatusNotFound
+		}
+		apierr.Failure(c, status, err.Error())
+		return
+	}
+
+	h.materializeNewProfileSettings(c, scenario, meta)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": meta})
 }
 

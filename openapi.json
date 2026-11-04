@@ -7342,6 +7342,59 @@
         }
       }
     },
+    "/api/v1/scenario/{scenario}/profiles/{id}/duplicate": {
+      "post": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Copy a profile (rules, flags and Claude Code overrides) into a new profile",
+        "description": "Copy a profile (rules, flags and Claude Code overrides) into a new profile",
+        "operationId": "apiV1ScenarioScenarioProfilesIdDuplicatePost",
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileDuplicateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/scenario/{scenario}/route": {
       "get": {
         "tags": [
@@ -7913,6 +7966,50 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/teams/{team_id}/duplicate": {
+      "post": {
+        "tags": [
+          "teams"
+        ],
+        "summary": "Duplicate a team's routing into a new team; sharing keys are not copied",
+        "description": "Duplicate a team's routing into a new team; sharing keys are not copied",
+        "operationId": "apiV1TeamsTeam_idDuplicatePost",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamDuplicateRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
@@ -17803,6 +17900,16 @@
           "name"
         ]
       },
+      "ProfileDuplicateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name",
+            "example": "work-copy"
+          }
+        }
+      },
       "ProfileRequest": {
         "type": "object",
         "properties": {
@@ -20743,6 +20850,16 @@
           "truncated",
           "size"
         ]
+      },
+      "TeamDuplicateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name",
+            "example": "Research copy"
+          }
+        }
       },
       "TeamInfo": {
         "type": "object",

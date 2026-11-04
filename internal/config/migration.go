@@ -61,6 +61,7 @@ var migrationSteps = []migrationStep{
 	{"20261022-claude-code-unified-slot-rules", kindOnce, "2026-10-22", resetUnifiedSlotRulesOnce},
 	{"20261023-claude-code-fold-separate", kindOnce, "2026-10-23", foldClaudeCodeSeparateOnce},
 	{"20261024-claude-code-short-request-models", kindOnce, "2026-10-24", shortenClaudeCodeRequestModelsOnce},
+	{"20261104-drop-orphan-team-scopes", kindOnce, "2026-11-04", dropOrphanTeamScopesOnce},
 	{"20260712-drop-unsupported-smart-routing", kindDated, "2026-07-12", migrate20260712},
 	{"20260606-xcode-skip-usage", kindOnce, "2026-06-06", defaultXcodeSkipUsageOnce},
 	{"20260610-builtin-rule-flags", kindOnce, "2026-06-10", defaultBuiltinRuleFlagsOnce},

@@ -37,6 +37,15 @@ export const profileApi = {
         }));
     },
 
+    // Copy a profile into a new one. An empty name lets the backend pick a free "<name>-copy".
+    duplicateProfile: async (scenario: string, id: string, name?: string): Promise<any> => {
+        return controlApi((client, headers) => client.POST('/api/v1/scenario/{scenario}/profiles/{id}/duplicate', {
+            headers,
+            params: {path: {scenario, id}},
+            body: name ? {name} : {},
+        }));
+    },
+
     updateProfile: async (scenario: string, id: string, name: string, unified?: boolean): Promise<any> => {
         const body: { name?: string; unified?: boolean } = {};
         if (name) {

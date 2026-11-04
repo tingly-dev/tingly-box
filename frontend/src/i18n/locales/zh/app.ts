@@ -50,6 +50,7 @@ export default {
     "save": "保存",
     "delete": "删除",
     "edit": "编辑",
+    "duplicate": "复制",
     "confirm": "确认",
     "loading": "加载中...",
     "enabled": "已启用",

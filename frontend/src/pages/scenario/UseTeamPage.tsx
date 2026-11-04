@@ -6,7 +6,9 @@ import {
     DialogContent, DialogTitle, FormControlLabel, IconButton, Stack, Switch,
     TextField, Tooltip,
 } from '@mui/material';
-import {Delete, Edit, HelpOutline, Info as IconInfo} from '@/components/icons';
+import {Delete, Duplicate, Edit, HelpOutline, Info as IconInfo} from '@/components/icons';
+import DuplicateDialog from '@/components/DuplicateDialog';
+import {suggestTeamCopyName} from '@/utils/copyName';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useNavigate, useParams} from 'react-router-dom';
@@ -116,6 +118,22 @@ const UseTeamPageContent: React.FC = () => {
         notify.success(wasEnabled ? t('teams.disabled') : t('teams.enabled'));
     };
 
+    const [duplicateOpen, setDuplicateOpen] = useState(false);
+    // Copies the Team's routing into a new Team (its keys stay behind) and lands on it;
+    // the dialog stays open on failure so the name can be fixed.
+    const duplicateTeam = async (name: string): Promise<boolean> => {
+        if (!currentTeam) return false;
+        const result = await api.duplicateTeam(currentTeam.id, name);
+        if (!result.success) {
+            notify.error(result.error?.message || t('teams.duplicateFailed'));
+            return false;
+        }
+        await refresh();
+        navigate(`/agent/team/${result.data.slug}`);
+        notify.success(t('teams.duplicated'));
+        return true;
+    };
+
     const deleteTeam = async () => {
         if (!currentTeam) return;
         const ok = await runTeamAction(
@@ -175,6 +193,12 @@ const UseTeamPageContent: React.FC = () => {
                                 <Tooltip title={t('teams.editTeam')}>
                                     <IconButton size="small" aria-label={t('teams.editTeam')} onClick={openEditor}>
                                         <Edit fontSize="small" sx={{color: 'text.secondary'}} />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title={t('teams.duplicateTeam')}>
+                                    <IconButton size="small" aria-label={t('teams.duplicateTeam')}
+                                                onClick={() => setDuplicateOpen(true)}>
+                                        <Duplicate fontSize="small" sx={{color: 'text.secondary'}} />
                                     </IconButton>
                                 </Tooltip>
                                 {!currentTeam.is_default && (
@@ -284,6 +308,16 @@ const UseTeamPageContent: React.FC = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            <DuplicateDialog
+                open={duplicateOpen}
+                onClose={() => setDuplicateOpen(false)}
+                title={t('teams.duplicateTitle')}
+                description={t('teams.duplicateDescription', {team: currentTeam?.name, interpolation: {escapeValue: false}})}
+                label={t('teams.name')}
+                initialName={suggestTeamCopyName(currentTeam?.name ?? '', teams.map(team => team.name))}
+                onSubmit={duplicateTeam}
+            />
 
             <ConfirmDialog
                 open={deleteOpen}

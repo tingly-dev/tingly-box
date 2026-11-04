@@ -13,7 +13,8 @@ export const SCENARIO_HEADER_CONTENT_MAX_WIDTH = 960;
 /**
  * UnifiedCard header title block shared by the agent pages and the pages
  * that keep their own structure (Team, Profile, Image API): the card title
- * plus an optional i18n-keyed info tooltip and an addon (config status).
+ * plus an optional i18n-keyed info tooltip and an addon (a config status or
+ * a small action such as "Duplicate as profile").
  */
 export const ScenarioCardHeader: React.FC<{ title: string; tooltipKey?: string; addon?: React.ReactNode }> = ({ title, tooltipKey, addon }) => {
     const { t } = useTranslation();

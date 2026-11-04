@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -287,6 +288,67 @@ func TestProfileClaudeConfigLifecycle(t *testing.T) {
 	assert.Contains(t, deleteResult.Body.String(), `"hasOverrides":false`)
 	cleared, _ := cfg.GetProfile(typ.ScenarioClaudeCode, profile.ID)
 	assert.Nil(t, cleared.ClaudeCode)
+}
+
+func TestDuplicateProfileEndpoint(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := cfg.CreateProfile(typ.ScenarioClaudeCode, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	handler := NewHandler(cfg, &mockRemoteControlController{})
+	router := gin.New()
+	router.POST("/scenario/:scenario/profiles/:id/duplicate", handler.DuplicateProfile)
+	post := func(id, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/scenario/claude_code/profiles/"+id+"/duplicate", bytes.NewReader([]byte(body)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w
+	}
+
+	// An empty body is fine: the name is picked.
+	w := post(profile.ID, "")
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var resp struct {
+		Data typ.ProfileMeta `json:"data"`
+	}
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "work-copy", resp.Data.Name)
+	assert.NotEqual(t, profile.ID, resp.Data.ID)
+	copyScenario := typ.ProfiledScenarioName(typ.ScenarioClaudeCode, resp.Data.ID)
+	assert.NotEmpty(t, cfg.ClaudeCodeRuleUUID(copyScenario, "cc"))
+
+	// The copy gets its generated settings file, like a created profile.
+	settingsPath, _, err := agent.InspectCCProfileSettings(resp.Data.ID, resp.Data.Name)
+	assert.NoError(t, err)
+	_, statErr := os.Stat(settingsPath)
+	assert.NoError(t, statErr)
+
+	// "default" copies the main Claude Code config.
+	main := post("default", `{"name":"from-main"}`)
+	assert.Equal(t, http.StatusOK, main.Code, main.Body.String())
+	assert.Contains(t, main.Body.String(), `"from-main"`)
+
+	// A chunked body with nothing in it (ContentLength -1) is empty too.
+	chunked := httptest.NewRequest(http.MethodPost, "/scenario/claude_code/profiles/"+profile.ID+"/duplicate", io.NopCloser(bytes.NewReader(nil)))
+	chunked.ContentLength = -1
+	chunkedW := httptest.NewRecorder()
+	router.ServeHTTP(chunkedW, chunked)
+	assert.Equal(t, http.StatusOK, chunkedW.Code, chunkedW.Body.String())
+
+	assert.Equal(t, http.StatusOK, post(profile.ID, `{"name":"named"}`).Code)
+	assert.Equal(t, http.StatusBadRequest, post(profile.ID, `{"name":"work"}`).Code, "taken name")
+	assert.Equal(t, http.StatusBadRequest, post(profile.ID, `{"name":"not valid"}`).Code)
+	assert.Equal(t, http.StatusNotFound, post("p99", `{}`).Code, "unknown source")
+	assert.Len(t, cfg.GetProfiles(typ.ScenarioClaudeCode), 5)
 }
 
 func TestScenarioTypes(t *testing.T) {

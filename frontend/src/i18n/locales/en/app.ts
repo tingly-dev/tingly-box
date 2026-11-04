@@ -53,6 +53,7 @@ export default {
     "save": "Save",
     "delete": "Delete",
     "edit": "Edit",
+    "duplicate": "Duplicate",
     "confirm": "Confirm",
     "loading": "Loading...",
     "enabled": "Enabled",

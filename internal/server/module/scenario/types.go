@@ -32,6 +32,11 @@ type ProfileCreateRequest struct {
 	Unified bool   `json:"unified,omitempty"` // Deprecated and ignored: Claude Code has no modes (TEP-2197)
 }
 
+// ProfileDuplicateRequest represents the request to copy a profile
+type ProfileDuplicateRequest struct {
+	Name string `json:"name,omitempty" example:"work-copy"` // Optional; empty picks a free "<source>-copy" name
+}
+
 // ProfileUpdateRequest represents the request to update a profile
 type ProfileUpdateRequest struct {
 	Name    string `json:"name,omitempty"`
