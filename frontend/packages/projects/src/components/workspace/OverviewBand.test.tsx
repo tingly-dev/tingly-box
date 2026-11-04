@@ -16,8 +16,20 @@ const threads = [
     { id: 'b', title: 'Running one', status: 'working', updated_at: '2026-10-21T00:00:00Z' },
 ] as Thread[];
 
-const show = () => render(<OverviewBand threads={threads} open onToggle={() => {}} onOpen={() => {}} onLibrary={() => {}} />);
+const show = () => render(<OverviewBand threads={threads} open onToggle={() => {}} onOpen={() => {}} onLibrary={() => {}} onStatus={() => {}} />);
 const handle = () => screen.getByRole('separator', { name: 'project.resizeBand' });
+
+describe('OverviewBand buttons', () => {
+    it('opens the Library and the Status', () => {
+        const onLibrary = vi.fn();
+        const onStatus = vi.fn();
+        render(<OverviewBand threads={threads} open onToggle={() => {}} onOpen={() => {}} onLibrary={onLibrary} onStatus={onStatus} />);
+        fireEvent.click(screen.getByRole('button', { name: 'overview.library' }));
+        fireEvent.click(screen.getByRole('button', { name: 'overview.status' }));
+        expect(onLibrary).toHaveBeenCalledTimes(1);
+        expect(onStatus).toHaveBeenCalledTimes(1);
+    });
+});
 
 describe('OverviewBand resizing', () => {
     it('fits its content until resized, then keeps the height per browser', () => {
@@ -58,7 +70,7 @@ describe('OverviewBand resizing', () => {
     });
 
     it('has no handle while closed', () => {
-        render(<OverviewBand threads={threads} open={false} onToggle={() => {}} onOpen={() => {}} onLibrary={() => {}} />);
+        render(<OverviewBand threads={threads} open={false} onToggle={() => {}} onOpen={() => {}} onLibrary={() => {}} onStatus={() => {}} />);
         expect(screen.queryByRole('separator')).not.toBeInTheDocument();
     });
 });

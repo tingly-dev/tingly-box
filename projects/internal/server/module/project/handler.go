@@ -429,7 +429,28 @@ func (h *Handler) get(c *gin.Context) {
 			return
 		}
 	}
-	c.JSON(http.StatusOK, ProjectDetailResponse{Project: *p, Threads: threads, Counts: db.CountsOf(m), CoordinatorBusy: h.svc.Coordinator.Busy(p.ID), CoordinatorRecovery: recovery, Coordinator: coordinator, CoordinatorQueued: queued})
+	busy := h.svc.Coordinator.Busy(p.ID)
+	c.JSON(http.StatusOK, ProjectDetailResponse{Project: *p, Threads: threads, Counts: db.CountsOf(m), CoordinatorBusy: busy, CoordinatorRecovery: recovery, Coordinator: coordinatorView(coordinator, busy, recovery), CoordinatorQueued: queued})
+}
+
+// coordinatorView gives the main thread a thread's own status, so the page reads
+// the coordinator like any thread: working during a turn, waiting on the user
+// while an interrupted input needs a decision, otherwise idle. The row itself
+// does not track this; the coordinator's queue does.
+func coordinatorView(main *db.Thread, busy bool, recovery string) *db.Thread {
+	if main == nil {
+		return nil
+	}
+	view := *main
+	switch {
+	case recovery != "":
+		view.Status, view.WaitReason = db.ThreadWaiting, "An interrupted message needs your decision."
+	case busy:
+		view.Status, view.WaitReason = db.ThreadWorking, ""
+	default:
+		view.Status, view.WaitReason = db.ThreadIdle, ""
+	}
+	return &view
 }
 
 func (h *Handler) update(c *gin.Context) {

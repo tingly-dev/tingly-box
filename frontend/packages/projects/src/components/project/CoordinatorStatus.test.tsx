@@ -1,9 +1,9 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Project, Thread } from '../../client';
-import { CoordinatorInfoRail } from './CoordinatorInfoRail';
+import { CoordinatorStatus } from './CoordinatorStatus';
 
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, o?: { count?: number; pct?: number }) => (o?.pct != null ? `${key}:${o.pct}` : key), i18n: { language: 'en' } }) }));
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
 
 afterEach(() => {
     cleanup();
@@ -13,16 +13,16 @@ afterEach(() => {
 const project = { id: 'p', name: 'Pay', coordinator_model: 'sonnet', coordinator_effort: 'high' } as Project;
 const worker = (status: string): Thread => ({ id: status, status } as Thread);
 const coordinator = (o: Partial<Thread> = {}): Thread => ({
-    id: 'main', turns: 4, input_tokens: 90000, output_tokens: 6000, cache_read_tokens: 72000, cache_write_tokens: 3000,
+    id: 'main', status: 'idle', turns: 4, input_tokens: 90000, output_tokens: 6000, cache_read_tokens: 72000, cache_write_tokens: 3000,
     context_tokens: 57500, context_window: 200000, last_turn_ms: 4200, last_turn_at: new Date().toISOString(), reported_model: 'sonnet-4', session_id: '1c9d5e7a-0000-4000-8000-000000000000', ...o,
 } as Thread);
-const props = { project, busy: false, needsRecovery: false, queued: 0, threads: [] as Thread[] };
+const props = { project, queued: 0, threads: [] as Thread[] };
 
-describe('CoordinatorInfoRail', () => {
-    it('shows state, context fill, turns and the last turn', () => {
-        render(<CoordinatorInfoRail {...props} busy coordinator={coordinator()} queued={2} />);
+describe('CoordinatorStatus', () => {
+    it('reads the coordinator through the same Status card a thread has', () => {
+        render(<CoordinatorStatus {...props} coordinator={coordinator({ status: 'working' })} queued={2} />);
         const status = screen.getByRole('region', { name: 'rail.status' });
-        expect(within(status).getByText('rail.coordinatorState.working')).toBeInTheDocument();
+        expect(within(status).getByText('thread.status.working')).toBeInTheDocument();
         expect(within(status).getByText('57.5k / 200k · 29%')).toBeInTheDocument();
         expect(within(status).getByRole('progressbar', { name: 'rail.context' })).toHaveAttribute('aria-valuenow', '29');
         expect(within(status).getByText('4')).toBeInTheDocument();
@@ -30,14 +30,14 @@ describe('CoordinatorInfoRail', () => {
         expect(within(status).getByText('2')).toBeInTheDocument();
     });
 
-    it('says when the coordinator waits on a recovery decision, and hides an empty queue', () => {
-        render(<CoordinatorInfoRail {...props} needsRecovery coordinator={coordinator()} />);
-        expect(screen.getByText('rail.coordinatorState.recovery')).toBeInTheDocument();
+    it('shows a recovery decision as waiting on you, and hides an empty queue', () => {
+        render(<CoordinatorStatus {...props} coordinator={coordinator({ status: 'waiting' })} />);
+        expect(screen.getByText('thread.status.waiting')).toBeInTheDocument();
         expect(screen.queryByText('rail.queued')).not.toBeInTheDocument();
     });
 
     it('counts threads by what they need, and carries usage with the cache hit rate', () => {
-        render(<CoordinatorInfoRail {...props} coordinator={coordinator()} threads={[worker('working'), worker('working'), worker('waiting'), worker('failed'), worker('ready')]} />);
+        render(<CoordinatorStatus {...props} coordinator={coordinator()} threads={[worker('working'), worker('working'), worker('waiting'), worker('failed'), worker('ready')]} />);
         const threads = screen.getByRole('region', { name: 'rail.threads' });
         expect(within(threads).getByText('thread.status.working').nextSibling).toHaveTextContent('2');
         expect(within(threads).getByText('thread.status.waiting').nextSibling).toHaveTextContent('2');
@@ -49,8 +49,8 @@ describe('CoordinatorInfoRail', () => {
     });
 
     it('still renders before the first turn', () => {
-        render(<CoordinatorInfoRail {...props} coordinator={coordinator({ turns: 0, input_tokens: 0, output_tokens: 0, context_tokens: 0, last_turn_ms: 0, last_turn_at: undefined, reported_model: undefined })} />);
-        expect(screen.getByText('rail.coordinatorState.idle')).toBeInTheDocument();
+        render(<CoordinatorStatus {...props} coordinator={coordinator({ turns: 0, input_tokens: 0, output_tokens: 0, context_tokens: 0, last_turn_ms: 0, last_turn_at: undefined, reported_model: undefined })} />);
+        expect(screen.getByText('thread.status.idle')).toBeInTheDocument();
         expect(screen.getByText('rail.contextEmpty')).toBeInTheDocument();
         expect(screen.queryByRole('region', { name: 'rail.usage' })).not.toBeInTheDocument();
     });

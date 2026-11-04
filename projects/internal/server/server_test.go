@@ -332,6 +332,29 @@ func TestProjectDetailCarriesTheCoordinatorStatus(t *testing.T) {
 	require.Equal(t, 2, got.Queued)
 }
 
+func TestCoordinatorStatusReadsLikeAThreadsStatus(t *testing.T) {
+	store, c := newServer(t, commitAgents())
+	var p db.Project
+	require.Equal(t, 201, c.do("POST", "/projects", map[string]any{"name": "State"}, &p))
+	var detail struct {
+		Coordinator struct {
+			Status     string `json:"status"`
+			WaitReason string `json:"wait_reason"`
+		} `json:"coordinator"`
+	}
+	require.Equal(t, 200, c.do("GET", "/projects/"+p.ID, nil, &detail))
+	require.Equal(t, db.ThreadIdle, detail.Coordinator.Status)
+
+	event := &db.ThreadEvent{ThreadID: p.MainThreadID, Kind: db.EvUser, Content: "interrupted"}
+	require.NoError(t, store.AddCoordinatorInput(p.ID, event))
+	input, err := store.ClaimCoordinatorInput(p.ID)
+	require.NoError(t, err)
+	require.NoError(t, store.FinishCoordinatorInput(input.ID, false))
+	require.Equal(t, 200, c.do("GET", "/projects/"+p.ID, nil, &detail))
+	require.Equal(t, db.ThreadWaiting, detail.Coordinator.Status, "an interrupted input waits on the user, as a thread's question does")
+	require.NotEmpty(t, detail.Coordinator.WaitReason)
+}
+
 func TestProjectEndToEnd(t *testing.T) {
 	fake := &fakeAnthropic{reply: func(body map[string]any) (string, string, any) {
 		msgs, _ := body["messages"].([]any)

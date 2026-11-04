@@ -10,8 +10,8 @@ vi.mock('../client', async (actual) => ({ ...await actual<typeof import('../clie
 vi.mock('../hooks/useProjectEvents', () => ({ useProjectEvents: vi.fn() }));
 vi.mock('../hooks/useTranscript', () => ({ useTranscript: () => ({ events: [], apply: vi.fn(), edit: vi.fn(), catchUp: vi.fn() }) }));
 vi.mock('../components/project/ConversationPane', () => ({ ConversationPane: ({ composerContext, disabledReason, onSend }: { composerContext: React.ReactNode; disabledReason: React.ReactNode; onSend: (text: string, attachments: never[]) => Promise<boolean> }) => <div data-testid="defaults">{disabledReason}{composerContext}<button onClick={() => void onSend("hello", [])}>send message</button></div> }));
-vi.mock('../components/project/OverviewPane', () => ({ OverviewPane: ({ onOpen }: { onOpen: (id: string) => void }) => <button onClick={() => onOpen('a')}>open thread</button> }));
-vi.mock('../components/workspace/WorkspaceLayout', () => ({ useWorkspacePane: () => ({ narrow: false, reveal: vi.fn() }), WorkspaceLayout: ({ main, side, actions }: { main: React.ReactNode; side: React.ReactNode; actions?: React.ReactNode }) => <>{actions}{main}{side}</> }));
+vi.mock('../components/project/OverviewPane', () => ({ OverviewPane: ({ onOpen, status }: { onOpen: (id: string) => void; status?: React.ReactNode }) => <><button onClick={() => onOpen('a')}>open thread</button><div data-testid="overview-status">{status}</div></> }));
+vi.mock('../components/workspace/WorkspaceLayout', () => ({ useWorkspacePane: () => ({ narrow: false, reveal: vi.fn() }), WorkspaceLayout: ({ main, side }: { main: React.ReactNode; side: React.ReactNode }) => <>{main}{side}</> }));
 vi.mock('../hooks/usePlacement', () => ({ usePlacement: () => m.placement }));
 vi.mock('../components/project/ThreadPanel', () => ({ ThreadPanel: ({ composerContext, modelControl, effortControl, belowComposer, settingsSaving, canSend, onBack }: { composerContext: React.ReactNode; modelControl: React.ReactNode; effortControl: React.ReactNode; belowComposer: React.ReactNode; settingsSaving: boolean; canSend: () => boolean; onBack: () => void }) => <div data-testid="thread" data-saving={settingsSaving} data-can-send={canSend()}><button onClick={onBack}>back</button>{modelControl}{effortControl}{composerContext}{belowComposer}</div> }));
 vi.mock('../components/ModelPicker', () => ({ ModelPicker: ({ value, defaultLabel, disabled, onChange }: { value: string; defaultLabel?: string; disabled?: boolean; onChange: (v: string) => void }) => <button disabled={disabled} onClick={() => onChange('worker-choice')}>{value || defaultLabel}</button> }));
@@ -37,17 +37,18 @@ it('asks before retrying an interrupted coordinator input', async () => {
     await waitFor(() => expect(screen.queryByText('conversation.recoveryMessage')).not.toBeInTheDocument());
 });
 
-it('opens the coordinator status from the header when there is no room beside the conversation', async () => {
-    const main = { id: 'main', project_id: 'p', turns: 5, input_tokens: 1000, output_tokens: 200, cache_read_tokens: 500, cache_write_tokens: 0, context_tokens: 57500, context_window: 200000, last_turn_ms: 4200 };
+it('hands the coordinator status to the Overview as its Status tab', async () => {
+    const main = { id: 'main', project_id: 'p', status: 'working', turns: 5, input_tokens: 1000, output_tokens: 200, cache_read_tokens: 500, cache_write_tokens: 0, context_tokens: 57500, context_window: 200000, last_turn_ms: 4200 };
     m.get.mockImplementation(async (url: string) => ({ data: url === '/api/v1/projects/{id}'
         ? { project: p, threads: [a], coordinator: main, coordinator_busy: true, coordinator_queued: 3 }
         : url.endsWith('permission-modes') ? { modes: [] } : {}, response: new Response() }));
     render(<MemoryRouter initialEntries={['/projects/p']}><ProjectsHostProvider host={host}><Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes></ProjectsHostProvider></MemoryRouter>);
-    fireEvent.click(await screen.findByRole('button', { name: 'rail.coordinatorShow' }));
-    const rail = await screen.findByRole('complementary', { name: 'rail.coordinatorTitle' });
-    expect(within(rail).getByText('rail.coordinatorState.working')).toBeInTheDocument();
-    expect(within(rail).getByText('57.5k / 200k · 29%')).toBeInTheDocument();
-    expect(within(rail).getByText('3')).toBeInTheDocument();
+    const status = await screen.findByTestId('overview-status');
+    await waitFor(() => expect(within(status).getByText('57.5k / 200k · 29%')).toBeInTheDocument());
+    const card = within(status).getByRole('region', { name: 'rail.status' });
+    expect(within(card).getByText('thread.status.working')).toBeInTheDocument();
+    expect(within(card).getByText('3')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'rail.coordinatorShow' })).not.toBeInTheDocument();
 });
 
 it('uses independent worker values, guards saves across thread switching and never patches project defaults', async () => {

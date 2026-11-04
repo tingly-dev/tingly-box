@@ -30,33 +30,40 @@ behind a popover.
 - Clicking a task row scrolls the conversation to the call that started it.
   Output and subagent detail still live in `BackgroundTasksPanel`.
 
-## Coordinator rail (`CoordinatorInfoRail`)
+## Coordinator status (the Overview's Status tab)
 
-The project conversation had no rail: only the Overview pane (threads, library)
-sat beside it, and nothing told the user whether the coordinator was working,
-how full its context was or what it had spent. It now has the same kind of rail,
-built from the same parts (`infoRail.tsx`: `RailCard`, `Fact`, `ContextMeter`,
-`TurnFacts`, `UsageCard`).
+The project conversation had no status at all: only the Overview pane (threads,
+library) sat beside it, and nothing told the user whether the coordinator was
+working, how full its context was or what it had spent. The coordinator is a
+Claude Code session like a thread or a folder session, so it gets the same
+cards, not a column of its own.
 
-- Beside the conversation when that area is at least 820px wide (the Overview
-  pane takes its share first, so on a laptop with the pane open this is
-  borderline). The header's activity button turns it on and off (the same
-  `thread.rail` switch as a thread's "Hide details"); when there is no room
-  beside the conversation, the same button opens the rail as a popover instead,
-  so the status is always one click away. The button hides while a thread
-  covers the conversation.
-- Cards: Status (Working / Idle / Needs your decision when an interrupted input
-  waits for recovery; Queued count; Context; Turns; Last turn; Last active),
-  Threads (working, waiting on you incl. failed, ready for review, resolved),
-  Model (configured, last reported, effort, session id), Usage.
-- Decided: the coordinator's usage lives on its main `Thread` row like any
-  other thread's, not in a new table. `GET /projects/{id}` returns it as
-  `coordinator` plus `coordinator_queued` (inputs in state `pending`); the page
-  already re-reads the detail whenever the coordinator stops being busy, so the
-  numbers refresh each turn without a new event.
-- Not done: the rail is not shown in a floating/narrow layout other than the
-  popover, and "active threads" is a count by state, not a list (the Overview
-  is the list).
+- **Where:** a third tab, "Status", in the Overview next to Threads | Library
+  (`OverviewPane`, `status` prop; no prop, no tab). The Overview already lives in
+  the side pane, in a floating window, or as a band, and the tab comes with it:
+  side pane and window show all three tabs; with the band, a "Status" button
+  next to "Library" opens a floating window on that tab (`bandWindow`). There is
+  no header toggle, no popover and no column beside the conversation. An earlier
+  version had a rail beside the conversation; it was dropped because it took
+  room from the conversation and duplicated the pane's place.
+- **Cards:** the thread rail's Status and Usage cards (`StatusCard`,
+  `UsageCard` in `infoRail.tsx`: one implementation for coordinator, project
+  threads and folder sessions, including their fold state), plus Threads
+  (working, waiting on you incl. failed, ready for review, resolved) and Model
+  (configured, last reported, effort, session id), which only the coordinator
+  has. The coordinator's queued-input count is an extra row of its Status card.
+- **One data path:** `GET /projects/{id}` returns the main thread as
+  `coordinator`, with the status of a thread. The row does not track it; the
+  handler (`coordinatorView`) gives it `working` while the coordinator's queue
+  runs a turn, `waiting` (with a reason) while an interrupted input needs a
+  recovery decision, otherwise `idle`. The page therefore reads state, tokens and
+  context from a `Thread` exactly as it does for any thread, with no
+  coordinator-only rendering. `coordinator_queued` (inputs in state `pending`)
+  is the one coordinator-only number. The page already re-reads the detail
+  whenever the coordinator stops being busy, so the numbers refresh each turn.
+- **Usage on the row:** like every thread, the coordinator's usage lives on its
+  main `Thread` row (`Thread.AddUsage`), through the same `turnTally` the worker
+  threads use; no new table.
 
 ## Status fields
 
@@ -65,7 +72,7 @@ all live on `db.Thread`, set by `Thread.AddUsage` when a turn ends.
 
 | Field | Meaning | Source |
 | --- | --- | --- |
-| `status` / `queued` | idle, working, waiting, ready, failed, resolved; waiting for a slot | thread store (threads, sessions); coordinator: `coordinator_busy` + `coordinator_recovery` |
+| `status` / `queued` | idle, working, waiting, ready, failed, resolved; waiting for a slot | thread store (threads, sessions); coordinator: derived from its queue and recovery state by the project detail handler |
 | `turns` | completed turns | existing |
 | `input_tokens`, `output_tokens` | summed over the turn's API calls; input includes cache reads and writes | `engine.TurnUsage` ("usage" entry, from Claude's `result` and its per-call assistant usage) |
 | `cache_read_tokens`, `cache_write_tokens` | how much of the input the cache served / stored; hit rate = read / input | same |

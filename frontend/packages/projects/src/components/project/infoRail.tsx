@@ -5,6 +5,7 @@ import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import type { Thread } from '../../client';
 import { ChevronRight, ExpandMore } from '../icons';
+import { ThreadStateMark } from './threadStatus';
 import { formatTokens, timeAgo } from '../../utils/format';
 import { cacheHitPct, contextFill, formatTurnDuration } from '../../utils/usage';
 import { readLocal, writeLocal } from '../../utils/storage';
@@ -39,13 +40,10 @@ export function useInfoRail(minPanel: number, watch: unknown): { ref: RefObject<
     return { ref, wide, on, toggle };
 }
 
-/** The rail's frame: beside the conversation, or `floating` inside a popover when there is no room beside it. */
-export function InfoRailFrame({ label, floating = false, children }: { label: string; floating?: boolean; children: ReactNode }) {
+/** The rail's frame beside a thread's conversation. */
+export function InfoRailFrame({ label, children }: { label: string; children: ReactNode }) {
     return (
-        <Box component="aside" aria-label={label} sx={{
-            width: RAIL_WIDTH, flexShrink: 0, bgcolor: 'background.default', p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.25, overflowY: 'auto', minHeight: 0,
-            ...(floating ? { maxHeight: '70vh' } : { borderLeft: 1, borderColor: 'divider' }),
-        }}>
+        <Box component="aside" aria-label={label} sx={{ width: RAIL_WIDTH, flexShrink: 0, borderLeft: 1, borderColor: 'divider', bgcolor: 'background.default', p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.25, overflowY: 'auto', minHeight: 0 }}>
             {children}
         </Box>
     );
@@ -113,6 +111,28 @@ export function TurnFacts({ thread }: { thread: Thread }) {
             {thread.last_turn_ms > 0 && <Fact label={t('rail.lastTurn')}>{formatTurnDuration(thread.last_turn_ms)}</Fact>}
             {last && <Fact label={t('rail.lastActive')} title={new Date(last).toLocaleString()}>{timeAgo(last, i18n.language)}</Fact>}
         </>
+    );
+}
+
+/**
+ * How a thread stands: its state, how full its context is, its turns. The
+ * coordinator's main thread, a project thread and a folder session all read
+ * through this card; `children` are facts only one of them has (the coordinator's queue).
+ */
+export function StatusCard({ thread, children }: { thread: Thread; children?: ReactNode }) {
+    const { t } = useTranslation('projects');
+    return (
+        <RailCard id="status" title={t('rail.status')}>
+            <Fact label={t('rail.state')}>
+                <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                    <ThreadStateMark status={thread.status} queued={thread.queued} />
+                    {t(`thread.status.${thread.status === 'working' && thread.queued ? 'queued' : thread.status}`)}
+                </Box>
+            </Fact>
+            {children}
+            <ContextMeter thread={thread} />
+            <TurnFacts thread={thread} />
+        </RailCard>
     );
 }
 

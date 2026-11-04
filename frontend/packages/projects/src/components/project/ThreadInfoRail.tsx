@@ -8,8 +8,7 @@ import { Cancel, CheckCircle, ChevronRight, DiffIcon, ExpandMore, PlayerStop, Ro
 import { useNotify } from '../../hooks/useNotify';
 import { formatDuration, useNow } from '../workdir/BackgroundTasksPanel';
 import type { BackgroundTaskRow } from '../workdir/backgroundTasks';
-import { ThreadStateMark } from './threadStatus';
-import { ContextMeter, Fact, InfoRailFrame, RailCard, TurnFacts, UsageCard, shortSession } from './infoRail';
+import { Fact, InfoRailFrame, RailCard, StatusCard, UsageCard, shortSession } from './infoRail';
 
 const isRunning = (task: BackgroundTaskRow) => task.status === 'running' && !task.ended;
 
@@ -96,16 +95,7 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
                     <Box sx={{ mx: -0.75, maxHeight: 320, overflowY: 'auto' }}>{top}</Box>
                 </RailCard>
             )}
-            <RailCard id="status" title={t('rail.status')}>
-                <Fact label={t('rail.state')}>
-                    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
-                        <ThreadStateMark status={thread.status} queued={thread.queued} />
-                        {t(`thread.status.${thread.status === 'working' && thread.queued ? 'queued' : thread.status}`)}
-                    </Box>
-                </Fact>
-                <ContextMeter thread={thread} />
-                <TurnFacts thread={thread} />
-            </RailCard>
+            <StatusCard thread={thread} />
             <RailCard id="env" title={t('rail.environment')}>
                 <Fact label={t('rail.folder')}>{thread.cwd}</Fact>
                 {branch && <Fact label={t('rail.branch')}>{branch}</Fact>}

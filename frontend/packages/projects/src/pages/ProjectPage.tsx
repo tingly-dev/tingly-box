@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, IconButton, Link, MenuItem, Popover, Radio, RadioGroup, Select, Skeleton, Stack, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, IconButton, Link, MenuItem, Radio, RadioGroup, Select, Skeleton, Stack, Tooltip, Typography } from '@mui/material';
 import { Link as RouterLink, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, isFolder, type components, unwrap, type Project, type Thread, type ThreadEvent } from '../client';
 import { ConversationPane } from '../components/project/ConversationPane';
-import { OverviewPane } from '../components/project/OverviewPane';
+import { OverviewPane, type OverviewTab } from '../components/project/OverviewPane';
 import { ModelPicker } from '../components/ModelPicker';
 import { EffortPicker } from '../components/EffortPicker';
 import { loadPermissionModes, PermissionModeSelect } from '../components/workdir/PermissionModeSelect';
@@ -14,13 +14,12 @@ import { ProjectSettingsDialog, type SettingsTab } from '../components/project/P
 import { ProjectImTags, useProjectIm } from '../components/im/ProjectImBindings';
 import { IM_BINDINGS_CHANGED } from '../components/im/useImBindings';
 import { ThreadPanel } from '../components/project/ThreadPanel';
-import { CoordinatorInfoRail } from '../components/project/CoordinatorInfoRail';
-import { useInfoRail } from '../components/project/infoRail';
+import { CoordinatorStatus } from '../components/project/CoordinatorStatus';
 import { FloatingWindow } from '../components/workspace/FloatingWindow';
 import { OverviewBand } from '../components/workspace/OverviewBand';
 import { PlacementMenu } from '../components/workspace/PlacementMenu';
 import { WorkspaceLayout, useWorkspacePane } from '../components/workspace/WorkspaceLayout';
-import { Activity, ExpandMore, FloatWindow, Folder, Pause, Settings, Star, StarBorder } from '../components/icons';
+import { ExpandMore, FloatWindow, Folder, Pause, Settings, Star, StarBorder } from '../components/icons';
 import { useNotify } from '../hooks/useNotify';
 import { useProjectEvents, type ProjectEvent } from '../hooks/useProjectEvents';
 import { useTranscript } from '../hooks/useTranscript';
@@ -45,9 +44,6 @@ function upsert<T extends { id: string }>(list: T[], item: T): T[] {
     return next;
 }
 
-/** The conversation is at its best from about this wide; with the rail beside it, it needs this much room. */
-const COORDINATOR_RAIL_MIN_PANEL = 820;
-
 export default function ProjectPage() {
     const { id = '' } = useParams();
     const { t } = useTranslation('projects');
@@ -61,11 +57,9 @@ export default function ProjectPage() {
     const [threads, setThreads] = useState<Thread[]>([]);
     // The project conversation: the main thread's events.
     const [busy, setBusy] = useState(false);
-    // The coordinator's own status, for the rail beside the conversation.
+    // The coordinator's own status, for the Overview's Status tab.
     const [coordinator, setCoordinator] = useState<Thread | undefined>(undefined);
     const [queued, setQueued] = useState(0);
-    const { ref: railRef, wide: railWide, on: railOn, toggle: toggleRail } = useInfoRail(COORDINATOR_RAIL_MIN_PANEL, id);
-    const [railAnchor, setRailAnchor] = useState<HTMLElement | null>(null);
     const [recovery, setRecovery] = useState('');
     const [recoveryAction, setRecoveryAction] = useState<'retry' | 'skip' | null>(null);
     const [recovering, setRecovering] = useState(false);
@@ -77,7 +71,8 @@ export default function ProjectPage() {
     // The Overview as a window or a band opens and closes with the header button; remembered per browser.
     const [windowOpen, setWindowOpen] = useState(() => readLocal('overviewWindowOpen') !== '0');
     const [bandOpen, setBandOpen] = useState(() => readLocal('overviewBandOpen') !== '0');
-    const [libraryWindow, setLibraryWindow] = useState(false);
+    // With the Overview as a band, Library and Status each open in a window of their own.
+    const [bandWindow, setBandWindow] = useState<'library' | 'status' | null>(null);
     // A narrow screen has one surface: the drawer. With the Overview on top the thread sits below it.
     const overviewAt = pane.narrow ? 'side' : placement.overview;
     // The thread picked in the side-pane Overview while "float from the Overview" is on. It floats over the
@@ -338,8 +333,9 @@ export default function ProjectPage() {
             )}
         />
     ) : null;
-    const overviewEl = (initialTab?: 'threads' | 'library') => (
-        <OverviewPane projectId={id} threads={threads} onOpen={openFromOverview} libraryKey={libraryKey} selectedId={threadId} initialTab={initialTab} />
+    const overviewEl = (initialTab?: OverviewTab) => (
+        <OverviewPane key={initialTab} projectId={id} threads={threads} onOpen={openFromOverview} libraryKey={libraryKey} selectedId={threadId} initialTab={initialTab}
+            status={project && <CoordinatorStatus project={project} coordinator={coordinator} queued={queued} threads={threads} />} />
     );
     const threadInSide = !!threadEl && threadAt === 'side';
     // The side pane holds the Overview, or the open thread in its place; with the
@@ -350,10 +346,6 @@ export default function ProjectPage() {
         : overviewAt === 'top'
             ? { onClick: () => setBand(!bandOpen), expanded: bandOpen }
             : undefined;
-
-    const coordinatorRail = (floating: boolean) => project && (
-        <CoordinatorInfoRail project={project} coordinator={coordinator} busy={busy} needsRecovery={!!recovery} queued={queued} threads={threads} floating={floating} />
-    );
 
     return (
         <>
@@ -383,15 +375,6 @@ export default function ProjectPage() {
                         {/* Wide screens keep the bound chats in the header; narrow ones get their own row below it. */}
                         {im && <Box sx={{ display: { xs: 'none', md: 'flex' }, minWidth: 0, flexShrink: 1 }}><ProjectImTags im={im} /></Box>}
                         {canPlace && <PlacementMenu overview={placement.overview} thread={placement.thread} onOverview={placement.setOverview} onThread={placement.setThread} overviewFloat={placement.overviewFloat} onOverviewFloat={placement.setOverviewFloat} />}
-                        {!(threadId && threadAt === 'main') && (
-                            <Tooltip title={t(railWide && railOn ? 'rail.coordinatorHide' : 'rail.coordinatorShow')}>
-                                <IconButton size="small" aria-label={t(railWide && railOn ? 'rail.coordinatorHide' : 'rail.coordinatorShow')}
-                                    aria-expanded={railWide ? railOn : !!railAnchor}
-                                    onClick={(e) => { if (railWide) toggleRail(); else setRailAnchor(e.currentTarget); }}>
-                                    <Activity fontSize="small" color={railWide && railOn ? 'primary' : 'inherit'} />
-                                </IconButton>
-                            </Tooltip>
-                        )}
                         <Tooltip title={project.starred ? t('common.unstar') : t('common.star')}>
                             <IconButton size="small" onClick={() => void patch({ starred: !project.starred })}>{project.starred ? <Star fontSize="small" color="primary" /> : <StarBorder fontSize="small" />}</IconButton>
                         </Tooltip>
@@ -409,10 +392,10 @@ export default function ProjectPage() {
                 sideAlwaysOpen={overviewAt !== 'side'}
                 paneToggle={paneToggle}
                 top={overviewAt === 'top' ? (
-                    <OverviewBand threads={threads} selectedId={threadId} open={bandOpen} onToggle={() => setBand(!bandOpen)} onOpen={openThread} onLibrary={() => setLibraryWindow(true)} />
+                    <OverviewBand threads={threads} selectedId={threadId} open={bandOpen} onToggle={() => setBand(!bandOpen)} onOpen={openThread} onLibrary={() => setBandWindow('library')} onStatus={() => setBandWindow('status')} />
                 ) : undefined}
                 main={<Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                    <Box ref={railRef} sx={{ flex: 1, minHeight: 0, minWidth: 0, display: threadId && threadAt === 'main' ? 'none' : 'flex' }}>
+                    <Box sx={{ flex: 1, minHeight: 0, display: threadId && threadAt === 'main' ? 'none' : 'flex', flexDirection: 'column' }}>
                     {messages === null ? (
                     <Box sx={{ flex: 1, p: 3 }}><Skeleton variant="rounded" height={80} /></Box>
                 ) : (
@@ -529,7 +512,6 @@ export default function ProjectPage() {
                         }}
                     />
                     )}
-                    {project && railWide && railOn && coordinatorRail(false)}
                     </Box>
                     {threadAt === 'main' && threadEl}
                 </Box>}
@@ -547,13 +529,13 @@ export default function ProjectPage() {
                 {overviewEl()}
             </FloatingWindow>
             <FloatingWindow
-                open={overviewAt !== 'side' && libraryWindow}
-                title={t('overview.library')}
-                storageKey="library"
+                open={overviewAt !== 'side' && bandWindow !== null}
+                title={t(bandWindow === 'status' ? 'overview.status' : 'overview.library')}
+                storageKey={bandWindow === 'status' ? 'status' : 'library'}
                 defaultSize={{ w: 460, h: 480 }}
-                onClose={() => setLibraryWindow(false)}
+                onClose={() => setBandWindow(null)}
             >
-                {overviewEl('library')}
+                {overviewEl(bandWindow ?? 'library')}
             </FloatingWindow>
             <FloatingWindow
                 open={threadAt === 'float' && !!threadEl}
@@ -582,10 +564,6 @@ export default function ProjectPage() {
                 <DialogActions><Button onClick={() => answerWorktree(null)}>{t('common.cancel')}</Button><Button variant="contained" onClick={() => answerWorktree(worktreeChoice?.shared ?? null)}>{t('worktreeNotice.continue')}</Button></DialogActions>
             </Dialog>
             {im?.dialog}
-            <Popover open={!!railAnchor && !railWide} anchorEl={railAnchor} onClose={() => setRailAnchor(null)}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
-                {coordinatorRail(true)}
-            </Popover>
 
             {project && settingsTab && (
                 <ProjectSettingsDialog

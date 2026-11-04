@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Box, Tab, Tabs, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Thread } from '../../client';
@@ -27,9 +27,11 @@ function ThreadGroups({ threads, selectedId, onOpen, view }: { threads: Thread[]
     return <StatusGroups groups={groups} rows={rows} onOpen={onOpen} empty={t('overview.noThreads')} />;
 }
 
-export function OverviewPane({ projectId, threads, onOpen, libraryKey, selectedId, initialTab = 'threads' }: { projectId: string; threads: Thread[]; onOpen: (id: string) => void; libraryKey: number; selectedId?: string; initialTab?: 'threads' | 'library' }) {
+export type OverviewTab = 'threads' | 'library' | 'status';
+
+export function OverviewPane({ projectId, threads, onOpen, libraryKey, selectedId, initialTab = 'threads', status }: { projectId: string; threads: Thread[]; onOpen: (id: string) => void; libraryKey: number; selectedId?: string; initialTab?: OverviewTab; /** The coordinator's status; without it the tab is not offered. */ status?: ReactNode }) {
     const { t } = useTranslation('projects');
-    const [tab, setTab] = useState<'threads' | 'library'>(initialTab);
+    const [tab, setTab] = useState<OverviewTab>(initialTab);
     const waiting = threads.filter((th) => needsUser(th.status)).length;
     const [view, setView] = useThreadsView();
     return (
@@ -38,11 +40,12 @@ export function OverviewPane({ projectId, threads, onOpen, libraryKey, selectedI
                 <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ flex: 1, minWidth: 0, px: 1, minHeight: 44, '& .MuiTab-root': { minHeight: 44 } }}>
                     <Tab value="threads" label={waiting > 0 ? t('overview.threadsWaiting', { count: waiting }) : t('overview.threads')} />
                     <Tab value="library" label={t('overview.library')} />
+                    {status != null && <Tab value="status" label={t('overview.status')} />}
                 </Tabs>
                 {tab === 'threads' && <ViewSwitch view={view} onChange={setView} />}
             </Box>
             <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
-                {tab === 'threads' ? <ThreadGroups threads={threads} selectedId={selectedId} onOpen={onOpen} view={view} /> : <Library key={projectId} projectId={projectId} refreshKey={libraryKey} />}
+                {tab === 'threads' ? <ThreadGroups threads={threads} selectedId={selectedId} onOpen={onOpen} view={view} /> : tab === 'status' && status != null ? status : <Library key={projectId} projectId={projectId} refreshKey={libraryKey} />}
             </Box>
         </Box>
     );
