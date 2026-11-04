@@ -100,10 +100,16 @@ type SetModelRequest struct{ Model string }
 // SetPermissionModeRequest switches the permission mode of the running process.
 type SetPermissionModeRequest struct{ Mode string }
 
+// ApplySettingsRequest layers settings (permission rules, say) over those the
+// running process started with. Each top-level key replaces what an earlier
+// request set for that key; the process's own start-up settings stay under it.
+type ApplySettingsRequest struct{ Settings map[string]any }
+
 func (InterruptRequest) isControlRequest()         {}
 func (StopTaskRequest) isControlRequest()          {}
 func (SetModelRequest) isControlRequest()          {}
 func (SetPermissionModeRequest) isControlRequest() {}
+func (ApplySettingsRequest) isControlRequest()     {}
 
 // ControlRejectedError is the agent's error answer to a control request.
 type ControlRejectedError struct{ Message string }

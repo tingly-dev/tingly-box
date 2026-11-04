@@ -199,7 +199,7 @@ func (s *settleStore) SetFailed(id, errMsg string) bool {
 // session status transitions are driven directly.
 func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, prompt string, opts agentboot.ExecutionOptions, prompter agentboot.Prompter) (werr error, handled bool) {
 	sig := launchSignature(opts)
-	want := launchState{sig: sig, model: opts.Model, mode: opts.PermissionMode}
+	want := launchState{sig: sig, model: opts.Model, mode: opts.PermissionMode, live: liveSettings(opts)}
 	persistentSession, found := e.pool.Acquire(sessionID)
 	res, conducted := e.residentFor(sessionID)
 	if found && (!conducted || res.c.Session() != persistentSession) {
@@ -322,7 +322,7 @@ func (e *Engine) recoverInterruptedTurn(ctx context.Context, sessionID, projectP
 	recOpts := opts
 	recOpts.Resume = true
 	recOpts.Env = append(append([]string(nil), opts.Env...), claude.EnvResumeInterruptedTurn+"=1")
-	recWant := launchState{sig: launchSignature(recOpts), model: opts.Model, mode: opts.PermissionMode}
+	recWant := launchState{sig: launchSignature(recOpts), model: opts.Model, mode: opts.PermissionMode, live: liveSettings(recOpts)}
 	return e.openPersistentTurn(ctx, sessionID, projectPath, "", recOpts, recWant, prompter)
 }
 
@@ -424,10 +424,13 @@ func (e *Engine) openPersistentTurn(ctx context.Context, sessionID, projectPath,
 }
 
 // launchState is what a resident process runs with: sig is what only a
-// restart changes (launchSignature), model and mode are what a live control
-// request changes.
+// restart changes (launchSignature), model, mode and live are what a live
+// control request changes.
 type launchState struct {
 	sig, model, mode string
+	// live is the permission rules of the settings file (liveSettings) the
+	// process has been given: read at its start, then pushed by applyLive.
+	live string
 }
 
 // liveControlTimeout bounds applyLive; a process that does not answer in
@@ -438,17 +441,28 @@ const liveControlTimeout = 5 * time.Second
 type liveController interface {
 	SetModel(ctx context.Context, model string) error
 	SetPermissionMode(ctx context.Context, mode string) error
+	ApplySettings(ctx context.Context, settings map[string]any) error
 }
 
 // applyLive brings res's model and permission mode to want without a
-// restart. It reports false if a change could not be applied, in which case
-// the caller restarts the process, which picks the settings up at launch.
+// restart. It reports false if a model or mode change could not be applied,
+// in which case the caller restarts the process, which picks them up at
+// launch. Permission rules never restart it: a change the process refuses
+// waits for its next start, and is tried again with the next turn.
 func (e *Engine) applyLive(sessionID string, res liveController, have, want launchState) bool {
-	if have.model == want.model && have.mode == want.mode {
+	if have.model == want.model && have.mode == want.mode && have.live == want.live {
 		return true
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), liveControlTimeout)
 	defer cancel()
+	if have.live != want.live {
+		if err := res.ApplySettings(ctx, liveDelta(have.live, want.live)); err != nil {
+			logrus.WithError(err).WithField("session_id", sessionID).Warn("engine: permission rules not applied to the running process; they take effect when it next starts")
+		} else {
+			have.live = want.live
+			e.setLaunch(sessionID, have)
+		}
+	}
 	if have.model != want.model {
 		if err := res.SetModel(ctx, want.model); err != nil {
 			return false
@@ -477,21 +491,94 @@ func (e *Engine) setLaunch(sessionID string, st launchState) {
 	e.mu.Unlock()
 }
 
+// liveSettingsKeys are the top-level settings keys a running process takes
+// without a restart, through an apply_flag_settings control request: the
+// permission rules. The rest of a settings file (env, model, hooks, ...) is
+// read once when the process starts.
+var liveSettingsKeys = []string{"permissions", "autoMode"}
+
+// readSettingsFile parses the settings file at path. ok is false if it cannot
+// be read or is not a JSON object.
+func readSettingsFile(path string) (doc map[string]json.RawMessage, raw []byte, ok bool) {
+	if path == "" {
+		return nil, nil, false
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, nil, false
+	}
+	if json.Unmarshal(raw, &doc) != nil {
+		return nil, raw, false
+	}
+	return doc, raw, true
+}
+
+// liveSettings is the part of opts' settings file a running process takes
+// live: its permission rules, as canonical JSON ("" if there are none). The
+// process reads the file only at its start, so this is what it has been given
+// once it started, and what applyLive pushes when it changes.
+func liveSettings(opts agentboot.ExecutionOptions) string {
+	doc, _, ok := readSettingsFile(opts.SettingsPath)
+	if !ok {
+		return ""
+	}
+	live := map[string]json.RawMessage{}
+	for _, k := range liveSettingsKeys {
+		if v, has := doc[k]; has {
+			live[k] = v
+		}
+	}
+	if len(live) == 0 {
+		return ""
+	}
+	b, _ := json.Marshal(live)
+	return string(b)
+}
+
+// liveDelta is the settings to send to take a process from have to want
+// (both from liveSettings). A key replaces what was sent for it before, and a
+// key that is gone is sent empty. The process keeps the rules it started
+// with underneath, so a rule that was in its file at start cannot be taken
+// back before it restarts.
+func liveDelta(have, want string) map[string]any {
+	parse := func(s string) map[string]json.RawMessage {
+		m := map[string]json.RawMessage{}
+		_ = json.Unmarshal([]byte(s), &m)
+		return m
+	}
+	h, w := parse(have), parse(want)
+	out := map[string]any{}
+	for k, v := range w {
+		out[k] = v
+	}
+	for k := range h {
+		if _, still := w[k]; !still {
+			out[k] = map[string]any{}
+		}
+	}
+	return out
+}
+
 // launchSignature captures the launch-time settings a persistent process
-// cannot change once started. Model and permission mode are not in it: they
-// are changed live (applyLive). Env is sorted because hosts often build it
-// from a map. A settings file keeps its path when its content is edited
-// (a profile, say), so its content is part of the signature, not just the
-// path.
+// cannot change once started. Model, permission mode and the settings file's
+// permission rules are not in it: they are changed live (applyLive), and a
+// change to them must never restart a process that may be running background
+// tasks. Env is sorted because hosts often build it from a map. A settings
+// file keeps its path when its content is edited (a profile, say), so the
+// rest of its content is part of the signature, not just the path.
 func launchSignature(opts agentboot.ExecutionOptions) string {
 	env := append([]string(nil), opts.Env...)
 	sort.Strings(env)
 	settings := opts.SettingsPath
-	if settings != "" {
-		if b, err := os.ReadFile(settings); err == nil {
-			sum := sha256.Sum256(b)
-			settings += "@" + hex.EncodeToString(sum[:])
+	if doc, raw, ok := readSettingsFile(settings); ok || raw != nil {
+		if ok {
+			for _, k := range liveSettingsKeys {
+				delete(doc, k)
+			}
+			raw, _ = json.Marshal(doc)
 		}
+		sum := sha256.Sum256(raw)
+		settings += "@" + hex.EncodeToString(sum[:])
 	}
 	mcpConfig, _ := json.Marshal(opts.MCPServers)
 	if opts.MCPConfigPath != "" {

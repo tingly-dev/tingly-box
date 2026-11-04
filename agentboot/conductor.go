@@ -155,6 +155,12 @@ func (c *Conductor) SetPermissionMode(ctx context.Context, mode string) error {
 	return c.session.SetPermissionMode(ctx, mode)
 }
 
+// ApplySettings layers settings over the running process; see
+// [PersistentSession.ApplySettings].
+func (c *Conductor) ApplySettings(ctx context.Context, settings map[string]any) error {
+	return c.session.ApplySettings(ctx, settings)
+}
+
 // StopTask stops one background task; see [PersistentSession.StopTask].
 func (c *Conductor) StopTask(ctx context.Context, taskID string) error {
 	return c.session.StopTask(ctx, taskID)

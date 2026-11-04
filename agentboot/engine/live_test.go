@@ -3,7 +3,10 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -179,5 +182,123 @@ func TestEngine_ModelAndModeChangeLiveButSettingsRestart(t *testing.T) {
 	turn("three", true, agentboot.ExecutionOptions{Model: "b", PermissionMode: "plan", Env: []string{"ANTHROPIC_BASE_URL=http://other"}})
 	if n := len(p.factory.Starts()); n != 2 {
 		t.Fatalf("a changed environment started %d processes in total, want 2", n)
+	}
+}
+
+// Editing a thread's permission rules between turns reaches the running
+// process as an apply_flag_settings request, never as a restart (a restart
+// would end the background tasks it is running); the mode switch beside it
+// still goes through set_permission_mode. A launch-time key still restarts.
+func TestEngine_PermissionRulesApplyLiveWithoutRestart(t *testing.T) {
+	var reject atomic.Bool
+	p := newLiveProc(t, func(h *process.FakeHandle, dec *json.Decoder, in chan map[string]any) {
+		for {
+			v := read(dec, in)
+			if v == nil {
+				h.FinishOutput()
+				h.SignalExit(nil)
+				return
+			}
+			switch v["type"] {
+			case "control_request":
+				resp := map[string]any{"subtype": "success", "request_id": v["request_id"]}
+				if v["request"].(map[string]any)["subtype"] == "apply_flag_settings" && reject.Load() {
+					resp = map[string]any{"subtype": "error", "request_id": v["request_id"], "error": "Unsupported control request subtype: apply_flag_settings"}
+				}
+				send(t, h, map[string]any{"type": "control_response", "response": resp})
+			case "user":
+				send(t, h, map[string]any{"type": "system", "subtype": "init", "session_id": "s1"})
+				result(t, h)
+			}
+		}
+	})
+	e, rec := p.engine(t)
+	settings := filepath.Join(t.TempDir(), "settings.json")
+	write := func(doc string) {
+		t.Helper()
+		if err := os.WriteFile(settings, []byte(doc), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	turn := func(prompt string, resume bool, mode string) {
+		t.Helper()
+		opts := agentboot.ExecutionOptions{Model: "m", PermissionMode: mode, SettingsPath: settings}
+		if !e.Start("id", t.TempDir(), prompt, resume, func(context.Context) agentboot.ExecutionOptions { return opts }) {
+			t.Fatal("Start refused")
+		}
+		rec.wait(t)
+	}
+	drain := func() []map[string]any {
+		var out []map[string]any
+		for {
+			select {
+			case v := <-p.in:
+				if v["type"] == "control_request" {
+					out = append(out, v["request"].(map[string]any))
+				}
+			case <-time.After(100 * time.Millisecond):
+				return out
+			}
+		}
+	}
+	starts := func() int { return len(p.factory.Starts()) }
+
+	write(`{"env":{"A":"1"},"permissions":{"allow":["Bash(a)"]}}`)
+	turn("one", false, "default")
+	drain()
+
+	// Rules edited while the process is idle: pushed, not restarted.
+	write(`{"env":{"A":"1"},"permissions":{"allow":["Bash(a)","Bash(git push origin tp/x)"],"ask":["Bash(gh pr create *)"]},"autoMode":{"allow":["x"]}}`)
+	turn("two", true, "default")
+	got := drain()
+	if len(got) != 1 || got[0]["subtype"] != "apply_flag_settings" {
+		t.Fatalf("control requests = %v, want one apply_flag_settings", got)
+	}
+	sent, _ := json.Marshal(got[0]["settings"])
+	if string(sent) != `{"autoMode":{"allow":["x"]},"permissions":{"allow":["Bash(a)","Bash(git push origin tp/x)"],"ask":["Bash(gh pr create *)"]}}` {
+		t.Fatalf("settings sent = %s", sent)
+	}
+	if starts() != 1 {
+		t.Fatalf("a rule change started %d processes, want 1", starts())
+	}
+
+	// Unchanged rules send nothing.
+	turn("three", true, "default")
+	if got := drain(); len(got) != 0 {
+		t.Fatalf("unchanged rules sent %v", got)
+	}
+
+	// A mode switch and a rule change together: both live.
+	write(`{"env":{"A":"1"}}`)
+	turn("four", true, "plan")
+	var subtypes []string
+	for _, r := range drain() {
+		subtypes = append(subtypes, r["subtype"].(string))
+	}
+	if len(subtypes) != 2 || subtypes[0] != "apply_flag_settings" || subtypes[1] != "set_permission_mode" {
+		t.Fatalf("control requests = %v, want apply_flag_settings and set_permission_mode", subtypes)
+	}
+	if starts() != 1 {
+		t.Fatalf("a mode and rule change started %d processes, want 1", starts())
+	}
+
+	// A process that refuses the push keeps running; the push is tried again.
+	reject.Store(true)
+	write(`{"env":{"A":"1"},"permissions":{"allow":["Bash(b)"]}}`)
+	turn("five", true, "plan")
+	turn("six", true, "plan")
+	got = drain()
+	if len(got) != 2 {
+		t.Fatalf("a refused rule push was tried %d times over two turns, want 2", len(got))
+	}
+	if starts() != 1 {
+		t.Fatalf("a refused rule push started %d processes, want 1", starts())
+	}
+
+	// A launch-time key in the same file still restarts the process.
+	write(`{"env":{"A":"2"},"permissions":{"allow":["Bash(b)"]}}`)
+	turn("seven", true, "plan")
+	if starts() != 2 {
+		t.Fatalf("a changed env started %d processes in total, want 2", starts())
 	}
 }

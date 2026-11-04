@@ -87,6 +87,11 @@ type PersistentSession interface {
 	// SetPermissionMode switches the permission mode like SetModel does.
 	SetPermissionMode(ctx context.Context, mode string) error
 
+	// ApplySettings layers settings over the running process like SetModel
+	// switches its model: permission rules take effect from the next tool
+	// call, with no restart (see [ApplySettingsRequest] for how keys merge).
+	ApplySettings(ctx context.Context, settings map[string]any) error
+
 	// Respond answers a pending ApprovalRequestEvent/AskRequestEvent from
 	// the in-flight turn, exactly like [ExecutionHandle.Respond].
 	Respond(reqID string, resp ControlResponse) error
@@ -223,6 +228,10 @@ func (s *persistentSession) SetModel(ctx context.Context, model string) error {
 
 func (s *persistentSession) SetPermissionMode(ctx context.Context, mode string) error {
 	return s.control(ctx, SetPermissionModeRequest{Mode: mode})
+}
+
+func (s *persistentSession) ApplySettings(ctx context.Context, settings map[string]any) error {
+	return s.control(ctx, ApplySettingsRequest{Settings: settings})
 }
 
 func (s *persistentSession) Respond(reqID string, resp ControlResponse) error {
