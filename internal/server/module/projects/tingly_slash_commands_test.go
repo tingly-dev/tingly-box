@@ -166,11 +166,11 @@ func TestTinglyDirectChatFreePathNeedsPrivilegedGrant(t *testing.T) {
 	h.setChatPrivileged(t, chat, true)
 	chat.Drain()
 	chat.SendText("/cd " + free)
-	chat.WaitText(10 * time.Second).AssertContains(t, free)
+	chat.WaitText(10*time.Second).AssertContains(t, free)
 	require.Equal(t, free, h.currentFolder(t, chat))
 	other := t.TempDir()
 	chat.SendText("/dir   " + other)
-	chat.WaitText(10 * time.Second).AssertContains(t, other)
+	chat.WaitText(10*time.Second).AssertContains(t, other)
 	require.Equal(t, other, h.currentFolder(t, chat))
 	chat.Drain()
 	chat.SendText("/help")
@@ -306,7 +306,7 @@ func TestTinglyGroupDecoratedFolderCommandsNeedPrivileged(t *testing.T) {
 	// A mention in front of ordinary text is still a message for the session.
 	chat.Drain()
 	chat.SendText("@tingly_bot what is in here?")
-	chat.WaitText(10 * time.Second).AssertContains(t, "Harness reply: @tingly_bot what is in here?")
+	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: @tingly_bot what is in here?")
 
 	// With the permission every decorated form works, through the API the
 	// admin switch calls, and taking it away stops them again.
