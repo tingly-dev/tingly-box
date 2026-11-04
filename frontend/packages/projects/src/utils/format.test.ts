@@ -1,4 +1,6 @@
+import { afterEach } from 'vitest';
 import { formatBytes, formatTokens, timeAgo } from './format';
+import { noteServerDate, resetServerClock } from './serverClock';
 import { estimateTokens } from './tokens';
 
 test('formatTokens shows concrete compact values', () => {
@@ -25,4 +27,17 @@ test('timeAgo survives a locale tag Intl rejects', () => {
     const iso = new Date(Date.now() - 120_000).toISOString();
     expect(() => timeAgo(iso, 'en-US@posix')).not.toThrow();
     expect(timeAgo(iso, 'en-US')).toBe('2 minutes ago');
+});
+
+describe('timeAgo on a server clock that differs from the browser', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+        resetServerClock();
+    });
+
+    test('measures against the server clock', () => {
+        vi.useFakeTimers({ now: Date.parse('2026-11-04T13:48:53Z') });
+        noteServerDate('Wed, 04 Nov 2026 13:45:49 GMT');
+        expect(timeAgo('2026-11-04T13:45:39Z', 'en-US')).toBe('10 seconds ago');
+    });
 });

@@ -5,6 +5,7 @@ import {createMemoryDraftStorage} from './context';
 import Transcript, {SubagentFocus} from './Transcript';
 import type {ActivityStep, TranscriptBlock, TranscriptEntry} from './model';
 import {buildTranscript} from './model';
+import {noteServerDate, resetServerClock} from '../utils/serverClock';
 
 vi.mock('react-i18next', () => ({useTranslation: () => ({t: (_key: string, opts: {defaultValue: string; count?: number}) => opts.defaultValue.replace('{{count}}', String(opts.count)).replace('Read 1 files', 'Read 1 file').replace('ran 1 commands', 'ran 1 command').replace('edited 1 files', 'edited 1 file')})}));
 // A fresh store per test; within one, it outlives unmounts like the host's does.
@@ -251,7 +252,20 @@ describe('tool calls', () => {
 });
 
 describe('working line', () => {
-    afterEach(() => vi.useRealTimers());
+    afterEach(() => {
+        vi.useRealTimers();
+        resetServerClock();
+    });
+
+    it('counts from the ask on the server clock when the browser clock is ahead of it', () => {
+        // The server stamped the ask at 00:00:00 by its own clock, which runs
+        // 3m behind the browser's: a follow-up must not open at "Thinking 3m".
+        vi.useFakeTimers({now: Date.parse('2026-10-04T00:03:02Z'), toFake: ['Date', 'setInterval', 'clearInterval']});
+        noteServerDate('Sun, 04 Oct 2026 00:00:00 GMT');
+        renderEntries([msg({role: 'user', content: 'and then?', timestamp: '2026-10-04T00:00:00Z'})], {working: true});
+        expect(screen.getByRole('status')).not.toHaveTextContent('3m');
+        expect(screen.getByRole('status')).toHaveTextContent(/[0-3]s$/);
+    });
 
     it('names what the turn does and how long it has run since the ask', () => {
         vi.useFakeTimers({now: Date.parse('2026-10-04T00:01:05Z'), toFake: ['Date', 'setInterval', 'clearInterval']});
