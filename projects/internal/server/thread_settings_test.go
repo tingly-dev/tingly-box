@@ -50,9 +50,9 @@ func TestProjectRunningLimitIsValidatedAndStored(t *testing.T) {
 	store, c := newServer(t, quietAgents())
 	var p db.Project
 	require.Equal(t, 201, c.do("POST", "/projects", map[string]any{"name": "P"}, &p))
-	assert.Zero(t, p.MaxRunningThreads)
+	assert.Equal(t, db.DefaultMaxRunningThreads, p.MaxRunningThreads, "a new project starts at the default")
 
-	for _, n := range []int{2, 100, 0} {
+	for _, n := range []int{2, 100, 1} {
 		var out db.Project
 		require.Equal(t, 200, c.do("PATCH", "/projects/"+p.ID, map[string]any{"max_running_threads": n}, &out), n)
 		assert.Equal(t, n, out.MaxRunningThreads)
@@ -61,7 +61,7 @@ func TestProjectRunningLimitIsValidatedAndStored(t *testing.T) {
 		assert.Equal(t, n, saved.MaxRunningThreads)
 	}
 	require.Equal(t, 200, c.do("PATCH", "/projects/"+p.ID, map[string]any{"max_running_threads": 5}, nil))
-	for _, bad := range []any{-1, 101, 1000000, "many", 1.5} {
+	for _, bad := range []any{0, -1, 101, 1000000, "many", 1.5} {
 		assert.Equal(t, 400, c.do("PATCH", "/projects/"+p.ID, map[string]any{"max_running_threads": bad}, nil), bad)
 	}
 	saved, err := store.GetProject(p.ID)

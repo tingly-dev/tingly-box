@@ -14,15 +14,17 @@ import (
 
 func TestRunningLimitResolvesTheSetting(t *testing.T) {
 	proj := func(n int) *db.Project { return &db.Project{Type: db.ProjectProject, MaxRunningThreads: n} }
-	assert.Zero(t, RunningLimit(proj(0)), "0, also a project without the setting, means no limit")
+	assert.Equal(t, 4, RunningLimit(proj(4)))
 	assert.Equal(t, 7, RunningLimit(proj(7)))
-	assert.Zero(t, RunningLimit(proj(-3)), "a stray negative value is no limit, not a deadlock")
+	for _, n := range []int{0, -3} {
+		assert.Equal(t, db.DefaultMaxRunningThreads, RunningLimit(proj(n)), "%d is never \"no limit\"", n)
+	}
 	assert.Equal(t, MaxRunningSessions, RunningLimit(&db.Project{Type: db.ProjectFolder, MaxRunningThreads: 2}), "folders share their own cap")
 
-	for _, n := range []int{0, 1, MaxRunningThreadsLimit} {
+	for _, n := range []int{1, 4, MaxRunningThreadsLimit} {
 		assert.True(t, ValidMaxRunningThreads(n), n)
 	}
-	for _, n := range []int{-1, -100, MaxRunningThreadsLimit + 1} {
+	for _, n := range []int{0, -1, MaxRunningThreadsLimit + 1} {
 		assert.False(t, ValidMaxRunningThreads(n), n)
 	}
 }
@@ -135,37 +137,26 @@ func TestProjectLimitQueuesExtraThreadsAndStartsThemWhenASlotFrees(t *testing.T)
 	waitStatus(t, g.store, c.ID, db.ThreadIdle)
 }
 
-func TestProjectWithoutALimitRunsEveryThreadAtOnce(t *testing.T) {
-	g := newGatedFixture(t) // MaxRunningThreads is 0, as for a project from before the setting
-	n := 7
-	for i := range n {
-		g.start(t, string(rune('a'+i)))
+func TestProjectWithoutAValidSettingRunsTheDefaultFour(t *testing.T) {
+	g := newGatedFixture(t) // stored straight through the store: MaxRunningThreads is 0
+	n := db.DefaultMaxRunningThreads
+	var threads []*db.Thread
+	for i := range n + 1 {
+		threads = append(threads, g.start(t, string(rune('a'+i))))
 	}
 	for range n {
 		select {
 		case <-g.started:
 		case <-time.After(5 * time.Second):
-			t.Fatal("not every thread started")
+			t.Fatal("the default number of threads did not start")
 		}
 	}
-	for i := range n {
+	g.waitQueued(t, threads[n], true)
+	g.expectNoStart(t)
+	g.finish("a")
+	g.expectStarted(t, string(rune('a'+n)))
+	for i := 1; i <= n; i++ {
 		g.finish(string(rune('a' + i)))
-	}
-}
-
-func TestSettingTheLimitBackToZeroReleasesEveryQueuedThread(t *testing.T) {
-	g := newGatedFixture(t)
-	g.setLimit(t, 1)
-	g.start(t, "a")
-	b, c := g.start(t, "b"), g.start(t, "c")
-	g.expectStarted(t, "a")
-	g.waitQueued(t, b, true)
-	g.waitQueued(t, c, true)
-
-	g.setLimit(t, 0)
-	g.expectStarted(t, "b", "c")
-	for _, task := range []string{"a", "b", "c"} {
-		g.finish(task)
 	}
 }
 

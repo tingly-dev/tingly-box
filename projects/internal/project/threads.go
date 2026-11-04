@@ -37,22 +37,25 @@ var (
 	ErrNoFailedTurn = errors.New("the thread has no failed turn to retry")
 )
 
-// MaxRunningThreadsLimit is the largest limit a project can set; for more,
-// set none (0).
+// MaxRunningThreadsLimit is the largest limit a project can set. There is
+// no unlimited setting.
 const MaxRunningThreadsLimit = 100
 
-// RunningLimit is how many turns may run at once under p, 0 for no limit.
-// A folder has no setting of its own: all folders share MaxRunningSessions.
+// RunningLimit is how many turns may run at once under p. A folder has no
+// setting of its own: all folders share MaxRunningSessions. A project without
+// a valid setting gets the default, never "no limit".
 func RunningLimit(p *db.Project) int {
 	if p.Type == db.ProjectFolder {
 		return MaxRunningSessions
 	}
-	return max(p.MaxRunningThreads, 0)
+	if p.MaxRunningThreads < 1 {
+		return db.DefaultMaxRunningThreads
+	}
+	return p.MaxRunningThreads
 }
 
-// ValidMaxRunningThreads reports whether n is a value a project can be set to:
-// 0 (no limit) or 1..MaxRunningThreadsLimit.
-func ValidMaxRunningThreads(n int) bool { return n >= 0 && n <= MaxRunningThreadsLimit }
+// ValidMaxRunningThreads reports whether n is a value a project can be set to.
+func ValidMaxRunningThreads(n int) bool { return n >= 1 && n <= MaxRunningThreadsLimit }
 
 // MaxRunningSessions caps concurrently running folder threads, which share
 // one limit across all folders. It matches the resident process pool.

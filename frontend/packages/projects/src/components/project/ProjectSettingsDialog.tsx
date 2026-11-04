@@ -51,14 +51,14 @@ function General({ project, patch }: { project: Project; patch: (p: Patch) => Pr
     const [threadModel, setThreadModel] = useState(project.thread_model);
     const [mode, setMode] = useState<Mode>((project.thread_permission_mode || 'acceptEdits') as Mode);
     const [disableWorktree, setDisableWorktree] = useState(!!project.disable_worktree);
-    const [maxRunning, setMaxRunning] = useState(String(project.max_running_threads ?? 0));
+    const [maxRunning, setMaxRunning] = useState(String(project.max_running_threads));
     const [maxLimit, setMaxLimit] = useState(MAX_RUNNING_FALLBACK);
     useEffect(() => {
         unwrap(api.GET('/api/v1/projects/runtime')).then((r) => setMaxLimit(r.max_running_threads_limit)).catch(() => {});
     }, []);
     const runningValue = /^\d+$/.test(maxRunning.trim()) ? Number(maxRunning) : NaN;
-    const runningInvalid = !(runningValue >= 0 && runningValue <= maxLimit);
-    const dirty = (!runningInvalid && runningValue !== (project.max_running_threads ?? 0)) || disableWorktree !== !!project.disable_worktree || name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model || mode !== (project.thread_permission_mode || 'acceptEdits');
+    const runningInvalid = !(runningValue >= 1 && runningValue <= maxLimit);
+    const dirty = (!runningInvalid && runningValue !== project.max_running_threads) || disableWorktree !== !!project.disable_worktree || name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model || mode !== (project.thread_permission_mode || 'acceptEdits');
 
     return (
         <Stack spacing={2.5}>

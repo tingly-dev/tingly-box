@@ -8,7 +8,7 @@ vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, o?: 
 vi.mock('../../client', async (actual) => ({ ...await actual<typeof import('../../client')>(), api: { GET: m.get, PATCH: m.patch } }));
 vi.mock('../../hooks/useModels', () => ({ useModels: () => ({ models: [] }) }));
 const host = { paths: { list: '/projects', project: (id: string) => `/projects/${id}`, folder: () => '/folders' } };
-const project = { id: 'p', type: 'project', name: 'P', goal: '', instructions: '', repos: [], coordinator_model: '', thread_model: '' };
+const project = { id: 'p', type: 'project', name: 'P', goal: '', instructions: '', repos: [], coordinator_model: '', thread_model: '', max_running_threads: 4 };
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 function open(p: Record<string, unknown> = project) {
@@ -19,9 +19,9 @@ function open(p: Record<string, unknown> = project) {
 }
 const save = () => screen.getByRole('button', { name: 'common.save' });
 
-it('shows a project without the setting as a plain 0 and explains that 0 is no limit', () => {
+it('shows the stored limit as a plain number, 4 for a new project', () => {
     const field = open();
-    expect(field.value).toBe('0');
+    expect(field.value).toBe('4');
     expect(screen.getByText('projectSettings.maxRunningHelp')).toBeTruthy();
     expect(save()).toBeDisabled();
 });
@@ -33,18 +33,11 @@ it('saves a chosen limit', async () => {
     await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: expect.objectContaining({ max_running_threads: 2 }) }));
 });
 
-it('sends 0 to remove a limit', async () => {
-    const field = open({ ...project, max_running_threads: 3 });
-    fireEvent.change(field, { target: { value: '0' } });
-    fireEvent.click(save());
-    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: expect.objectContaining({ max_running_threads: 0 }) }));
-});
-
-it('refuses anything but a whole number from 0 to the server limit', async () => {
+it('refuses anything but a whole number from 1 to the server limit; there is no unlimited', async () => {
     const field = open({ ...project, max_running_threads: 3 });
     expect(field.value).toBe('3');
     await waitFor(() => expect(m.get).toHaveBeenCalled());
-    for (const bad of ['-1', '1.5', 'many', '', '101']) {
+    for (const bad of ['0', '-1', '1.5', 'many', '', '101']) {
         fireEvent.change(field, { target: { value: bad } });
         expect(save(), bad).toBeDisabled();
         expect(screen.getByText('projectSettings.maxRunningInvalid:100'), bad).toBeTruthy();

@@ -45,16 +45,21 @@ type Project struct {
 	ThreadPermissionMode string `gorm:"size:40" json:"thread_permission_mode"`
 	// DisableWorktree makes new threads share the selected repository checkout.
 	DisableWorktree bool `json:"disable_worktree,omitempty"`
-	// MaxRunningThreads caps how many of the project's threads run at once;
-	// the rest wait their turn. 0 means no cap, which is also how rows from
-	// before the field read.
-	MaxRunningThreads int        `json:"max_running_threads,omitempty"`
+	// MaxRunningThreads caps how many of the project's threads run at once
+	// (1..100); the rest wait their turn. A project starts at
+	// DefaultMaxRunningThreads, and Open gives rows from before the field the
+	// same. A folder does not use it.
+	MaxRunningThreads int        `json:"max_running_threads"`
 	Paused            bool       `json:"paused"`
 	Starred           bool       `json:"starred"`
 	ArchivedAt        *time.Time `json:"archived_at,omitempty"`
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
 }
+
+// DefaultMaxRunningThreads is how many threads a project runs at once until
+// its owner changes it.
+const DefaultMaxRunningThreads = 4
 
 // Project types.
 const (

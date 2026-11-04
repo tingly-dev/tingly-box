@@ -1597,7 +1597,7 @@ export interface components {
              * Format: int64
              * @description Field max_running_threads
              */
-            max_running_threads?: number;
+            max_running_threads: number;
             /** @description Field name */
             name: string;
             /** @description Field path */
@@ -1686,7 +1686,7 @@ export interface components {
              * Format: int64
              * @description Field max_running_threads
              */
-            max_running_threads?: number;
+            max_running_threads: number;
             /** @description Field name */
             name: string;
             /** @description Field path */

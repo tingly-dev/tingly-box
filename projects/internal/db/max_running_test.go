@@ -1,7 +1,6 @@
 package db
 
 import (
-	"encoding/json"
 	"path/filepath"
 	"testing"
 
@@ -11,12 +10,14 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestProjectsFromBeforeTheRunningLimitLoadAsNoLimitAndSaveTheSetting(t *testing.T) {
+func TestProjectsFromBeforeTheRunningLimitLoadAsTheDefaultAndSaveTheSetting(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "projects.db")
 	store, err := Open(path)
 	require.NoError(t, err)
 	p := &Project{Name: "Old", Type: ProjectProject}
 	require.NoError(t, store.CreateProjectWithMain(p, &Thread{Origin: "user"}, ""))
+	folder, err := store.OpenFolder(t.TempDir(), "")
+	require.NoError(t, err)
 	th := &Thread{ProjectID: p.ID, Agent: AgentClaudeCode, Status: ThreadWorking}
 	require.NoError(t, store.CreateThread(th))
 	require.NoError(t, store.Close())
@@ -34,12 +35,15 @@ func TestProjectsFromBeforeTheRunningLimitLoadAsNoLimitAndSaveTheSetting(t *test
 	require.NoError(t, err)
 	got, err := store.GetProject(p.ID)
 	require.NoError(t, err)
-	assert.Zero(t, got.MaxRunningThreads, "no setting reads as 0, no limit")
+	assert.Equal(t, DefaultMaxRunningThreads, got.MaxRunningThreads, "a project from before the setting gets the default")
+	gotFolder, err := store.GetProject(folder.ID)
+	require.NoError(t, err)
+	assert.Zero(t, gotFolder.MaxRunningThreads, "a folder does not use the setting")
 	gotThread, err := store.GetThread(th.ID)
 	require.NoError(t, err)
 	assert.False(t, gotThread.Queued)
 
-	for _, n := range []int{3, 0, 8} {
+	for _, n := range []int{3, 8} {
 		got.MaxRunningThreads = n
 		require.NoError(t, store.SaveProject(got))
 		reloaded, err := store.GetProject(p.ID)
@@ -49,14 +53,19 @@ func TestProjectsFromBeforeTheRunningLimitLoadAsNoLimitAndSaveTheSetting(t *test
 	require.NoError(t, store.Close())
 }
 
-func TestProjectJSONWithoutTheRunningLimitDecodesAsNoLimit(t *testing.T) {
-	var p Project
-	require.NoError(t, json.Unmarshal([]byte(`{"id":"x","name":"Old","type":"project"}`), &p))
-	assert.Zero(t, p.MaxRunningThreads)
-	out, err := json.Marshal(Project{Name: "Default"})
+func TestOpenRepairsAProjectWithoutAValidRunningLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "projects.db")
+	store, err := Open(path)
 	require.NoError(t, err)
-	assert.NotContains(t, string(out), "max_running_threads", "no limit is not written out")
-	out, err = json.Marshal(Project{MaxRunningThreads: 5})
+	p := &Project{Name: "Zero", Type: ProjectProject}
+	require.NoError(t, store.CreateProjectWithMain(p, &Thread{Origin: "user"}, ""))
+	require.Zero(t, p.MaxRunningThreads, "the store itself sets no default")
+	require.NoError(t, store.Close())
+
+	store, err = Open(path)
 	require.NoError(t, err)
-	assert.Contains(t, string(out), `"max_running_threads":5`)
+	defer store.Close()
+	got, err := store.GetProject(p.ID)
+	require.NoError(t, err)
+	assert.Equal(t, DefaultMaxRunningThreads, got.MaxRunningThreads)
 }
