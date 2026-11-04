@@ -7,6 +7,7 @@ import { api, unwrap, type components } from '../../client';
 import { Block, Cancel, CheckCircle, ChevronRight, ExpandMore, PlayerStop, Robot, Terminal } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { formatBytes, formatTokens, timeAgo } from '../../utils/format';
+import { serverNow } from '../../utils/serverClock';
 import type { BackgroundTaskRow } from './backgroundTasks';
 import { radius } from '@tingly/ui/theme/radius';
 import { ListRow } from '../ListRow';
@@ -93,10 +94,11 @@ export function formatDuration(ms: number): string {
 
 /** The current time, ticking every second while on, so a running task's elapsed time moves. */
 export function useNow(on: boolean): number {
-    const [now, setNow] = useState(() => Date.now());
+    const [now, setNow] = useState(() => serverNow());
     useEffect(() => {
         if (!on) return;
-        const id = setInterval(() => setNow(Date.now()), 1000);
+        setNow(serverNow());
+        const id = setInterval(() => setNow(serverNow()), 1000);
         return () => clearInterval(id);
     }, [on]);
     return now;

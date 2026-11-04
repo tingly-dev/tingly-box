@@ -2,6 +2,7 @@
 // hand-edit schema.d.ts; regenerate it with `task codegen`.
 import createClient from 'openapi-fetch';
 import type { components, paths } from './schema';
+import { noteServerDate } from '../utils/serverClock';
 
 export type { components, paths };
 type S = components['schemas'];
@@ -38,22 +39,29 @@ export type ProjectRuntime = S['ProjectRuntimeResponse'];
 
 export type BackgroundTask = S['BackgroundTask'];
 
-let hostFetch: typeof fetch = (input, init) => globalThis.fetch(input, init);
+const browserFetch: typeof fetch = (input, init) => globalThis.fetch(input, init);
+let hostFetch: typeof fetch = browserFetch;
 
 /**
  * Sets the fetch every API call goes through, so an embedding host can add
  * its authentication. Undefined restores the browser's fetch.
  */
 export function setApiFetch(f: typeof fetch | undefined) {
-    hostFetch = f ?? ((input, init) => globalThis.fetch(input, init));
+    hostFetch = f ?? browserFetch;
+}
+
+async function observedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const res = await hostFetch(input, init);
+    noteServerDate(res.headers.get('Date'), res.headers.get('Age'));
+    return res;
 }
 
 /** fetch through the host's fetch, for calls the typed client cannot make (streams, downloads). */
 export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-    return hostFetch(input, init);
+    return observedFetch(input, init);
 }
 
-export const api = createClient<paths>({ baseUrl: '', fetch: (req) => hostFetch(req) });
+export const api = createClient<paths>({ baseUrl: '', fetch: (req) => observedFetch(req) });
 
 /** Error carrying the server's `{"error": "..."}` message. */
 export class ApiError extends Error {

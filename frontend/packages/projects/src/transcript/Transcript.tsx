@@ -13,6 +13,7 @@ import type {ActivityStep, RequestBlock, RequestOutcome, TaskState, ThinkingStep
 import {CHECKLIST_TOOL, FOLD_MIN_CALLS, agentReport, agentStatus, approvalSubject, askQuestions, firstNewBlock, formatTokens, todoGroups, requestOutcome, summarizeRun, toolSummary, workingState} from './model';
 import Markdown from './Markdown';
 import QuestionCard from './QuestionCard';
+import {serverNow} from '../utils/serverClock';
 import { radius } from '@tingly/ui/theme/radius';
 import { conversationText, messageSpacing, userBubble, userMessageWidth } from './conversationStyles';
 import {conciseBlock, type MessageDetail} from './messageDetail';
@@ -771,9 +772,9 @@ const useSubagentSteps = (call: string, open: boolean) => {
 const WorkingLine = ({blocks}: {blocks: TranscriptBlock[]}) => {
     const {t} = useTranslation();
     const {verb, since} = workingState(blocks);
-    const [now, setNow] = useState(() => Date.now());
+    const [now, setNow] = useState(() => serverNow());
     useEffect(() => {
-        const timer = setInterval(() => setNow(Date.now()), 1000);
+        const timer = setInterval(() => setNow(serverNow()), 1000);
         return () => clearInterval(timer);
     }, []);
     const start = since ? Date.parse(since) : NaN;
