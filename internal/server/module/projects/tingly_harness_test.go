@@ -25,6 +25,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly/testenv"
 	hostdb "github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/server/module"
+	imbotmodule "github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
 	"github.com/tingly-dev/tingly-box/remote/access"
 	"github.com/tingly-dev/tingly-box/remote/channel"
@@ -187,7 +188,11 @@ for line in sys.stdin:
 	require.Eventually(t, func() bool { return reg.Len() == 2 }, 5*time.Second, 10*time.Millisecond)
 	app.Start(env.Context())
 	router := gin.New()
-	module.Mount(&module.Routes{Manager: swagger.NewRouteManager(router)}, NewHandler(app, func() bool { return true }, nil))
+	routes := swagger.NewRouteManager(router)
+	// The access API is mounted next to Projects so a test grants permissions
+	// through the routes the admin UI calls.
+	module.Mount(&module.Routes{Manager: routes, V1: routes.NewGroup("api", "v1", "")},
+		NewHandler(app, func() bool { return true }, nil), imbotmodule.NewAccessHandler(stores.BotAccess()))
 	call := func(method, path string, body any, out any) {
 		t.Helper()
 		data, err := json.Marshal(body)
