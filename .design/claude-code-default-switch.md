@@ -1,4 +1,4 @@
-# Claude Code: switch the default to a profile's config
+# Claude Code: use a profile as the default
 
 Status: **simplified design proposed, not implemented.** The branch still has v1
 (copy + persisted snapshot + "restore"); this document replaces it.
@@ -33,21 +33,21 @@ will be overwritten and points at Copy.
 A row on the default Claude Code page only (profiles never show it), above Slots:
 
 ```
-Switch to config   [ ds ]  [ sonnet ]  [ codex ]
+Use profile   [ ds ]  [ sonnet ]  [ codex ]
 ```
 
 One chip per profile; hidden when there are no profiles. Clicking a chip opens
 one confirm:
 
 ```
-Switch to "ds"
-The default config will be overwritten with a copy of "ds". "ds" itself is not changed.
+Use profile "ds"
+The default config will be overwritten with a copy of profile "ds". "ds" itself is not changed.
 The current default config is not saved — to keep it, copy it as a profile first.
 
-                                   [Cancel]  [Switch]
+                                   [Cancel]  [Use profile]
 ```
 
-Success toast: `Switched to "ds"`. No lit chip: the row is an action, not a status
+Success toast: `Default now uses profile "ds"`. No lit chip: the row is an action, not a status
 (a derived "which profile equals the default" indicator can come later if wanted).
 
 ## Backend
@@ -78,19 +78,22 @@ whether or not the copy button has landed.
 
 ## Wording
 
+The user-facing verb is **use a profile** (the product's word for a named config
+is "profile" / zh 方案), not "use config"; "switch" stays in code and the doc only.
+No "restore" anywhere.
+
 | | en | zh |
 |---|---|---|
-| row label | Switch to config | 切换到配置 |
-| chip tooltip | Make the default config a copy of this one; this one is not changed | 把默认配置换成此配置的副本；此配置本身不会改动 |
-| dialog title | Switch to "{{name}}" | 切换到“{{name}}” |
-| dialog body | The default config will be overwritten with a copy of "{{name}}". "{{name}}" itself is not changed. | 默认配置将被“{{name}}”的副本覆盖；“{{name}}”本身不会改动。 |
-| dialog warning | The current default config is not saved — to keep it, copy it as a profile first. | 当前默认配置不会被保存；如需保留，请先把它复制为配置。 |
-| confirm | Switch | 切换 |
-| toast | Switched to "{{name}}" | 已切换到“{{name}}” |
-| failure | Failed to switch the default config | 切换默认配置失败 |
+| row label | Use profile | 使用方案 |
+| chip tooltip | Make the default config a copy of this profile; the profile is not changed | 把默认配置换成此方案的副本；此方案本身不会改动 |
+| dialog title | Use profile "{{name}}" | 使用方案“{{name}}” |
+| dialog body | The default config will be overwritten with a copy of profile "{{name}}". "{{name}}" itself is not changed. | 默认配置将被方案“{{name}}”的副本覆盖；“{{name}}”本身不会改动。 |
+| dialog warning | The current default config is not saved — to keep it, copy it as a profile first. | 当前默认配置不会被保存；如需保留，请先把它复制为方案。 |
+| confirm | Use profile | 使用方案 |
+| toast | Default now uses profile "{{name}}" | 默认配置已改用方案“{{name}}” |
+| failure | Failed to use the profile | 使用方案失败 |
 
-(ru follows the same keys.) zh says 配置 here while the rest of the zh UI says
-方案 for profiles — one concept, two words; settle which word wins separately.
+(ru follows the same keys.)
 
 ## What happens to v1 (unmerged, nothing to migrate)
 

@@ -81,7 +81,7 @@
 | [claude-code.md](./claude-code.md) | Claude Code — design index | 入口索引；会话与 OAuth 兼容层独立 |
 | [claude-code-config.md](./claude-code-config.md) | Claude Code Quick Config: Design and Decisions | 设计说明；局部实施状态见正文 |
 | [claude-code-slots.md](./claude-code-slots.md) | Claude Code: per-slot rules (no modes) | 已实现（TEP #2197）；取代 unified/separate 模式 |
-| [claude-code-default-switch.md](./claude-code-default-switch.md) | Claude Code: switch the default to a profile's config | 简化提案：显式覆盖，无备份无还原；v1 在分支上，未合并 |
+| [claude-code-default-switch.md](./claude-code-default-switch.md) | Claude Code: use a profile as the default | 简化提案：显式覆盖，无备份无还原；v1 在分支上，未合并 |
 | [cursor.md](./cursor.md) | Cursor Scenario — the public-URL constraint | 设计说明；局部实施状态见正文 |
 | [opencode-session.md](./opencode-session.md) | OpenCode Zen session header | 设计说明；局部实施状态见正文 |
 | [opencode-quota.md](./opencode-quota.md) | OpenCode（Zen / Go）配额方案 | 设计说明；局部实施状态见正文 |
