@@ -30,6 +30,10 @@ Tingly Box **connects any agent to any model** — for you and your whole team, 
   * Shared team endpoint with centrally managed model rules
   * Dedicated keys per member, with data isolated per user
   * Per-member usage tracking
+* **Cache First**
+  * One of the best protocol implementation, support translate cross each others
+  * Care about the cache, efficient and cost-effective
+  * Edge-cloud relay for sustained performance.
 * **Power-ups**
   * Guardrails, MCP Gateway, and Usage Analytics
   * Image API — image generation and editing through the same gateway, with a built-in playground
