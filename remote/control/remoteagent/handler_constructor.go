@@ -42,6 +42,7 @@ func NewBotHandler(
 		store:            store,
 		pairing:          pairing,
 	}
+	handler.privileged = bot2.PrivilegeCheckerFrom(ctx)
 	handler.InitCommandRegistry()
 	return handler
 }

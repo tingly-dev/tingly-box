@@ -24,23 +24,95 @@ func isPairingBootstrap(msg imbot.Message) bool {
 	if !msg.IsDirectMessage() || !msg.IsTextContent() {
 		return false
 	}
-	t := strings.TrimSpace(msg.GetText())
-	return t == "/pair" || strings.HasPrefix(t, "/pair ") || strings.HasPrefix(t, "/pair\t") || t == "/bind" || strings.HasPrefix(t, "/bind ") || strings.HasPrefix(t, "/bind\t")
+	cmd, ok := imbot.ParseSlashCommand(msg.GetText(), false)
+	return ok && (cmd.Name == "pair" || cmd.Name == "bind")
+}
+
+// ParseListNumber reads "2" from a command's argument: the number of an entry
+// in the list the chat was last shown (/dir, /project). ok is false for
+// anything else, and the argument is then a path. The gate and the command
+// handlers share this, so what the gate lets through as "pick from the list" is
+// exactly what the handler treats as a pick.
+func ParseListNumber(s string) (int, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, false
+	}
+	n := 0
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return 0, false
+		}
+		n = n*10 + int(r-'0')
+		if n > 1<<20 {
+			return 0, false
+		}
+	}
+	if n < 1 {
+		return 0, false
+	}
+	return n, true
+}
+
+// pickerAction is what choosing among the folders and projects the operator
+// registered needs: start in a direct chat, privileged in a group, where every
+// member shares the one working folder. Naming a free path (/cd, /dir <path>)
+// or browsing the filesystem always needs privileged.
+func pickerAction(group bool) access.ActionName {
+	if group {
+		return access.ActionRemoteControlPrivileged
+	}
+	return access.ActionRemoteControlStart
+}
+
+// commandAction is the action a folder or project command needs, or "" for any
+// other command.
+func commandAction(cmd imbot.SlashCommand, group bool) access.ActionName {
+	switch cmd.Name {
+	case "cd":
+		return access.ActionRemoteControlPrivileged
+	case "dir":
+		if _, isNumber := ParseListNumber(cmd.Args); isNumber || cmd.Args == "" {
+			return pickerAction(group)
+		}
+		return access.ActionRemoteControlPrivileged
+	case "project":
+		return pickerAction(group)
+	}
+	return ""
+}
+
+// buttonAction is the same for buttons: the folder list and the menu's project
+// button are pickers, the directory browser is not.
+func buttonAction(payload imbot.Payload, group bool) access.ActionName {
+	name := payload.Name()
+	if name == "action" { // a menu button: action:<name>
+		name = payload.Arg(1)
+	}
+	switch name {
+	case "bind":
+		return access.ActionRemoteControlPrivileged
+	case "project":
+		return pickerAction(group)
+	}
+	return ""
 }
 
 func inboundAction(msg imbot.Message, pendingCapability access.CapabilityName, pendingAction access.ActionName) (access.CapabilityName, access.ActionName) {
-	// Filesystem navigation always requires privileged access, even while a
-	// separate approval is pending in the same chat.
-	if msg.IsCallback() && (msg.Payload.Name() == "project" || msg.Payload.Name() == "bind" || (msg.Payload.Name() == "action" && (msg.Payload.Arg(1) == "bind" || msg.Payload.Arg(1) == "project"))) {
-		return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
+	group := msg.IsGroupMessage()
+	// Folder and project navigation is decided before a pending approval, so
+	// an approval prompt waiting in the chat never turns /cd into an approve.
+	if msg.IsCallback() {
+		if action := buttonAction(msg.Payload, group); action != "" {
+			return access.CapabilityRemoteControl, action
+		}
 	}
 	if msg.IsMediaContent() {
 		return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
 	}
-	text := strings.ToLower(strings.TrimSpace(msg.GetText()))
-	for _, prefix := range []string{"/cd", "/dir", "/project", "/bind-project", "/project switch", "/shell", "/bash"} {
-		if text == prefix || strings.HasPrefix(text, prefix+" ") {
-			return access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged
+	if cmd, ok := imbot.ParseSlashCommand(msg.GetText(), group); ok {
+		if action := commandAction(cmd, group); action != "" {
+			return access.CapabilityRemoteControl, action
 		}
 	}
 	// A Projects/Claude approval button or an ordinary reply to a pending
@@ -59,13 +131,19 @@ func inboundAction(msg imbot.Message, pendingCapability access.CapabilityName, p
 
 // authorizationGate is the one production inbound seam for text, callbacks,
 // and files. A denied message is claimed here and cannot reach a Capability.
-// AuthorizationGate builds the inbound authorization seam. notifyDeniedPromptReply,
-// when non-nil, is invoked for a denied message that was answering this bot's
-// own pending prompt (pendingForChat reported a pending action for the chat).
-// Such a denial must not be silent: the bot itself posted the prompt into the
-// chat, so telling the sender they cannot answer it leaks nothing and prevents
-// a dead-end where the prompt hangs until timeout with no explanation.
-func AuthorizationGate(store AccessStore, authorizer access.Authorizer, legacyChats ChatStoreInterface, requirePairing bool, pendingForChat func(string) (access.CapabilityName, access.ActionName), notifyDeniedPromptReply func(msg imbot.Message, platform imbot.Platform, botUUID string)) OnMessage {
+// AuthorizationGate builds the inbound authorization seam. notifyDenied, when
+// non-nil, is invoked with the denied action for two denials that must not be
+// silent:
+//   - a message answering this bot's own pending prompt (pendingForChat
+//     reported a pending action for the chat): the bot itself posted the
+//     prompt, so telling the sender they cannot answer it leaks nothing and
+//     prevents a dead-end where the prompt hangs until timeout.
+//   - a privileged command or button (/cd, /dir, folder buttons) from a chat
+//     that may otherwise use the bot (it is allowed to start): a paired chat
+//     is not privileged until the operator says so, and without a word the
+//     command just looks broken. A chat that cannot even start still gets
+//     nothing.
+func AuthorizationGate(store AccessStore, authorizer access.Authorizer, legacyChats ChatStoreInterface, requirePairing bool, pendingForChat func(string) (access.CapabilityName, access.ActionName), notifyDenied func(msg imbot.Message, platform imbot.Platform, botUUID string, action access.ActionName)) OnMessage {
 	return func(msg imbot.Message, platform imbot.Platform, botUUID string) bool {
 		if store == nil || authorizer == nil {
 			return false
@@ -128,12 +206,29 @@ func AuthorizationGate(store AccessStore, authorizer access.Authorizer, legacyCh
 		}
 		if pendingAction != "" {
 			logrus.WithFields(fields).Warn("bot authorization denied a reply to this bot's pending prompt")
-			if notifyDeniedPromptReply != nil {
-				notifyDeniedPromptReply(msg, platform, botUUID)
+			if notifyDenied != nil {
+				notifyDenied(msg, platform, botUUID, action)
 			}
 		} else {
 			logrus.WithFields(fields).Debug("bot authorization decision")
+			// A file posted in a group is ordinary chatter, not a request to the
+			// bot; only commands and buttons there earn a reply.
+			chatter := msg.IsGroupMessage() && msg.IsMediaContent()
+			if action == access.ActionRemoteControlPrivileged && notifyDenied != nil && !chatter {
+				start := authorizer.Evaluate(ctx, access.AuthorizationRequest{BotUUID: botUUID, Target: target, ActorID: actor.ID, Capability: capability, Action: access.ActionRemoteControlStart})
+				if start.Allowed {
+					notifyDenied(msg, platform, botUUID, action)
+				}
+			}
 		}
 		return true
 	}
+}
+
+// DeniedActionText is what a chat is told when its action is denied.
+func DeniedActionText(action access.ActionName) string {
+	if action == access.ActionRemoteControlPrivileged {
+		return "⚠️ This needs the “Any folder and files” permission, which this chat does not have. Ask the bot owner to turn it on for this chat in Tingly Box (Remote > Who can control this bot)."
+	}
+	return "⚠️ You are not authorized to answer this request. Ask the bot owner to grant the approve permission for this chat."
 }

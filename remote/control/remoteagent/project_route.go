@@ -8,6 +8,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot"
+	bot2 "github.com/tingly-dev/tingly-box/remote/control/bot"
 )
 
 // ProjectRouter is how a chat talks to Claude Code: through Projects, where
@@ -269,7 +270,7 @@ func (h *BotHandler) projectDirectory(hCtx HandlerContext, arg string) {
 		h.SendText(hCtx, out.String())
 		return
 	}
-	n, valid := parsePositiveInt(arg)
+	n, valid := bot2.ParseListNumber(arg)
 	h.projectListsMu.Lock()
 	list := append([]ProjectChoice(nil), h.projectLists[hCtx.ChatID]...)
 	h.projectListsMu.Unlock()
@@ -288,15 +289,17 @@ func (h *BotHandler) projectDirectory(hCtx HandlerContext, arg string) {
 // projectCommand reads a chat command that Projects runs: /new and /stop
 // (with an optional argument), /clear, /session [N], /status, /verbose
 // [on|off] and /yolo. ok is false for anything else.
-func projectCommand(text string) (name, arg string, ok bool) {
-	head, rest, _ := strings.Cut(strings.TrimSpace(text), " ")
-	rest = strings.TrimSpace(rest)
-	switch head = strings.ToLower(head); head {
-	case "/new", "/stop", "/session", "/verbose":
-		return strings.TrimPrefix(head, "/"), rest, true
-	case "/clear", "/status", "/yolo":
-		if rest == "" {
-			return strings.TrimPrefix(head, "/"), "", true
+func projectCommand(text string, group bool) (name, arg string, ok bool) {
+	cmd, ok := imbot.ParseSlashCommand(text, group)
+	if !ok {
+		return "", "", false
+	}
+	switch cmd.Name {
+	case "new", "stop", "session", "verbose":
+		return cmd.Name, cmd.Args, true
+	case "clear", "status", "yolo":
+		if cmd.Args == "" {
+			return cmd.Name, "", true
 		}
 	}
 	return "", "", false

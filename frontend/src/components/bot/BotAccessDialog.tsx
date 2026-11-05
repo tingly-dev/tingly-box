@@ -1,7 +1,7 @@
 import { Security } from '@/components/icons';
 import { api } from '@/services/api';
-import type {BotCapability, BotGroupDetail, BotSettings, DirectChatDetail, CapabilityName} from '@/types/bot';
-import { chatCanControl, chatPermissionAllowed, isPairingRequired, remoteChatState } from '@/types/bot';
+import type {BotCapability, BotGroupDetail, BotSettings, DirectChatDetail, CapabilityName, GroupActor} from '@/types/bot';
+import { actorAllowed, chatCanControl, chatPermissionAllowed, isPairingRequired, remoteChatState } from '@/types/bot';
 import {
     Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
     DialogTitle, Divider, FormControlLabel, Stack, Switch, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
@@ -38,6 +38,10 @@ interface Props {
 
 type ChatControl = 'control' | 'none' | 'blocked';
 
+// The one grant above start + approve: switching to a free path, sending files.
+const PRIVILEGED = 'remote_control.privileged';
+const privilegedOn = (chat: DirectChatDetail) => chatPermissionAllowed(chat, 'remote_control', PRIVILEGED);
+
 const rowSx = {p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1.5} as const;
 
 function AccessEditor({inline, open, onClose, children}: {inline: boolean; open: boolean; onClose: () => void; children: ReactNode}) {
@@ -62,14 +66,16 @@ const section = (title: string, hint: string, body: ReactNode) => (
 
 // Remote rows are always written as one atomic batch: a partial failure must
 // never leave start=allow with approve=deny, which silently breaks permission
-// replies. Privileged stays denied from the UI.
-const remoteRows = (allow: boolean) => {
+// replies. "Any folder and files" (privileged) has its own switch: giving
+// control back keeps whatever the chat already has, taking control away takes
+// the grant with it, and it is never turned on as a side effect.
+const remoteRows = (allow: boolean, keepPrivileged: boolean) => {
     const effect = allow ? 'allow' as const : 'deny' as const;
     return [
         {capability: 'remote_control', action: 'access', effect},
         {capability: 'remote_control', action: 'remote_control.start', effect},
         {capability: 'remote_control', action: 'remote_control.approve', effect},
-        {capability: 'remote_control', action: 'remote_control.privileged', effect: 'deny' as const},
+        {capability: 'remote_control', action: PRIVILEGED, effect: allow && keepPrivileged ? 'allow' as const : 'deny' as const},
     ];
 };
 
@@ -133,7 +139,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
     const setPreset = (chat: DirectChatDetail, preset: 'full' | 'notify') => mutate(async () => {
         const notifyRows = ['access', 'notify.receive', 'notify.reply'].map((action) =>
             ({capability: 'notify', action, effect: 'allow' as const}));
-        await api.setBotDirectChatPermissions(bot!.uuid!, chat.chat.id, [...notifyRows, ...remoteRows(preset === 'full')]);
+        await api.setBotDirectChatPermissions(bot!.uuid!, chat.chat.id, [...notifyRows, ...remoteRows(preset === 'full', privilegedOn(chat))]);
     });
     const setChatControl = (chat: DirectChatDetail, next: ChatControl) => mutate(async () => {
         if (next === 'blocked') {
@@ -142,9 +148,32 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
         }
         // Rows first, unblock second: if the rows write fails, a chat being
         // cut off must stay blocked rather than come back with its old allows.
-        await api.setBotDirectChatPermissions(bot!.uuid!, chat.chat.id, remoteRows(next === 'control'));
+        await api.setBotDirectChatPermissions(bot!.uuid!, chat.chat.id, remoteRows(next === 'control', privilegedOn(chat)));
         if (chat.chat.blocked) await api.setBotDirectChatBlocked(bot!.uuid!, chat.chat.id, false);
     });
+
+    const setChatPrivileged = (chat: DirectChatDetail, on: boolean) => mutate(() =>
+        api.setBotDirectChatPermission(bot!.uuid!, chat.chat.id, 'remote_control', PRIVILEGED, on ? 'allow' : 'deny'));
+    const setActorPrivileged = (group: BotGroupDetail['group'], actor: GroupActor['actor'], on: boolean) => mutate(() =>
+        api.setBotGroupActorPermission(bot!.uuid!, group.id, actor.id, 'remote_control', PRIVILEGED, on ? 'allow' : 'deny'));
+
+    // "Any folder and files": the one grant above start + approve. Picking from
+    // the registered folders and projects works without it.
+    const privilegedSwitch = (chat: DirectChatDetail) => (
+        <Box sx={{mt: 0.5}}>
+            <FormControlLabel
+                sx={{m: 0}}
+                control={<Switch size="small" checked={privilegedOn(chat)} disabled={saving || !chatCanControl(chat)}
+                    onChange={(_, on) => void setChatPrivileged(chat, on)}/>}
+                label={t('botAccess.privileged', {defaultValue: 'Any folder and files'})}
+            />
+            <Typography variant="caption" sx={{display: 'block', color: 'text.secondary'}}>
+                {chatCanControl(chat)
+                    ? t('botAccess.privilegedHint', {defaultValue: 'Lets this chat switch to any folder by path (/cd) and send files. Picking from your registered folders and projects (/dir, /project) works without it.'})
+                    : t('botAccess.privilegedNeedsControl', {defaultValue: 'Choose Can control first.'})}
+            </Typography>
+        </Box>
+    );
 
     const renameEditor = (
         <AccessEditor inline={inline} open={Boolean(rename)} onClose={() => setRename(null)}>
@@ -211,6 +240,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                         {t('botAccess.partial', {defaultValue: 'Partly allowed, so permission prompts can\'t be answered. Choose Can control to repair.'})}
                     </Typography>
                 )}
+                {privilegedSwitch(chat)}
                 {inline && rename?.kind === 'chat' && rename.id === chat.chat.id && renameEditor}
             </Box>
         );
@@ -246,6 +276,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                         />
                     </Stack>
                 </Stack>
+                {privilegedSwitch(chat)}
                 <Stack direction="row" spacing={1} sx={{mt: 1}}>
                     <Button size="small" disabled={saving || !chat.chat.peer_actor_id} onClick={() => void setPreset(chat, 'full')}>
                         {t('botAccess.fullAccess', {defaultValue: 'Full access'})}
@@ -263,7 +294,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
             <DialogTitle>{t('botAccess.addActorTitle', {defaultValue: 'Add authorized actor'})}</DialogTitle>
             <DialogContent>
                 <Stack spacing={2} sx={{pt: 1}}>
-                    <Alert severity="info">{t('botAccess.addActorInfo', {defaultValue: 'This grants Start and Approve in this Group. Privileged access stays denied.'})}</Alert>
+                    <Alert severity="info">{t('botAccess.addActorInfo', {defaultValue: 'This grants Start and Approve in this Group. Turn on Any folder and files for them afterwards if they should also use /cd, /dir and /project here.'})}</Alert>
                     <TextField
                         autoFocus
                         label={t('botAccess.actorId', {defaultValue: 'Platform actor ID'})}
@@ -332,6 +363,22 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                             {t('botAccess.addActor', {defaultValue: 'Add actor'})}
                         </Button>
                     </Stack>
+                )}
+                {remoteAllowed && actors.length > 0 && (
+                    <Box sx={{mt: 0.5}}>
+                        {actors.map((member) => (
+                            <FormControlLabel
+                                key={member.actor.id}
+                                sx={{display: 'flex', m: 0}}
+                                control={<Switch size="small" checked={actorAllowed(member, PRIVILEGED)} disabled={saving}
+                                    onChange={(_, on) => void setActorPrivileged(group, member.actor, on)}/>}
+                                label={`${member.actor.display_name || member.actor.external_actor_id} · ${t('botAccess.privileged', {defaultValue: 'Any folder and files'})}`}
+                            />
+                        ))}
+                        <Typography variant="caption" sx={{display: 'block', color: 'text.secondary'}}>
+                            {t('botAccess.privilegedGroupHint', {defaultValue: 'In a group, /cd, /dir and /project all need this, because everyone in the group shares one working folder.'})}
+                        </Typography>
+                    </Box>
                 )}
                 {inline && rename?.kind === 'group' && rename.id === group.id && renameEditor}
                 {inline && actorGroup?.group.id === group.id && actorEditor}

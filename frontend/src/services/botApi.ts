@@ -161,6 +161,13 @@ export const addBotGroupActor = (botUUID: string, groupID: string, actorID: stri
         body: {external_actor_id: externalActorID, display_name: displayName, label: 'Controller'},
     }));
 
+export const setBotGroupActorPermission = (botUUID: string, groupID: string, actorID: string, capability: string, action: string, effect: 'allow' | 'deny') =>
+    botAccessCall((client, headers) => client.PUT('/api/v1/bots/{bot}/groups/{group}/actors/{actor}/permissions/{capability}/{action}', {
+        headers,
+        params: {path: {bot: botUUID, group: groupID, actor: actorID, capability, action}},
+        body: {effect},
+    }));
+
 // ========== General bot interaction (notify / interact / wait) ==========
 // See .design/bot-interaction-api.md. Distinct from the access-control calls
 // above: these resolve with `{..., error}` rather than throwing, matching

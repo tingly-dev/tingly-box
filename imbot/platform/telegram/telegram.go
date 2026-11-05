@@ -33,6 +33,8 @@ type Bot struct {
 	// callbacks encodes outbound action payloads into callback_data and
 	// resolves them again on the way back. See callback_codec.go.
 	callbacks *callbackVault
+	// username is the bot's own @name, read when it connects; empty until then.
+	username string
 }
 
 type MenuButtonType string
@@ -137,6 +139,9 @@ func (b *Bot) Connect(ctx context.Context) error {
 	if err != nil {
 		b.Logger().Error("Failed to get bot info: %v", err)
 	} else {
+		b.mu.Lock()
+		b.username = me.Username
+		b.mu.Unlock()
 		b.Logger().Info("Telegram bot connected: @%s", me.Username)
 	}
 
@@ -171,7 +176,27 @@ func (b *Bot) handleMessageUpdate(ctx context.Context, api *tgbot.Bot, update *m
 		return
 	}
 
+	// With several bots in one group a command is addressed by name
+	// ("/new@otherbot"); it is not this bot's to run or answer.
+	b.mu.RLock()
+	own := b.username
+	b.mu.RUnlock()
+	if coreMessage.IsGroupMessage() && addressedToOtherBot(coreMessage.GetText(), own) {
+		return
+	}
+
 	b.EmitMessage(*coreMessage)
+}
+
+// addressedToOtherBot reports whether text is a command with another bot's
+// name on it. own is this bot's @name; while it is unknown nothing is filtered.
+func addressedToOtherBot(text, own string) bool {
+	head, _, _ := strings.Cut(strings.TrimSpace(text), " ")
+	if own == "" || !strings.HasPrefix(head, "/") {
+		return false
+	}
+	_, target, found := strings.Cut(head, "@")
+	return found && target != "" && !strings.EqualFold(target, own)
 }
 
 // handleCallbackQueryUpdate handles incoming callback query updates

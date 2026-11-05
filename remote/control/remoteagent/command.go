@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/remote/control/bot"
 )
 
 // RegisterBuiltinCommands registers the chat commands
@@ -68,6 +69,11 @@ type BotHandlerAdapter interface {
 	// chat the result.
 	RunSessionCommand(ctx *imbot.HandlerContext, name, arg string)
 	RunProjectDirectory(ctx *imbot.HandlerContext, arg string)
+
+	// HasPrivilegedAccess reports whether the chat's sender may use privileged
+	// actions (the "Any folder and files" permission); true when the host has
+	// no access policy.
+	HasPrivilegedAccess(ctx *imbot.HandlerContext) bool
 }
 
 const (
@@ -136,7 +142,7 @@ func newHelpCommand(adapter BotHandlerAdapter) imbot.Command {
 	return imbot.NewCommand("cmd-help", "help", "Show what this chat can do").
 		WithAliases("start").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
-			return sendCommandText(adapter, ctx, helpText(ctx.SenderID, ctx.ChatID))
+			return sendCommandText(adapter, ctx, helpText(ctx.SenderID, ctx.ChatID, adapter.HasPrivilegedAccess(ctx), !ctx.IsDirectMessage))
 		}).
 		WithCategory("system").
 		WithPriority(100).
@@ -171,7 +177,7 @@ func newCdCommand(adapter BotHandlerAdapter) imbot.Command {
 // current one) or the number of a folder /dir listed. SetProjectPath says
 // where the chat is now.
 func changeDir(adapter BotHandlerAdapter, ctx *imbot.HandlerContext, input string) error {
-	if idx, ok := parsePositiveInt(input); ok {
+	if idx, ok := bot.ParseListNumber(input); ok {
 		paths := adapter.FolderList(ctx.ChatID)
 		if len(paths) == 0 {
 			return sendCommandText(adapter, ctx, "Use /dir to list folders first.")
@@ -198,29 +204,6 @@ func changeDir(adapter BotHandlerAdapter, ctx *imbot.HandlerContext, input strin
 		return sendCommandTextf(adapter, ctx, "Path validation failed: %v", err)
 	}
 	return adapter.SetProjectPath(ctx.ChatID, expandedPath)
-}
-
-// parsePositiveInt parses a string into a positive integer (>= 1). Returns
-// (0, false) on any non-numeric input or non-positive values.
-func parsePositiveInt(s string) (int, bool) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0, false
-	}
-	n := 0
-	for _, r := range s {
-		if r < '0' || r > '9' {
-			return 0, false
-		}
-		n = n*10 + int(r-'0')
-		if n > 1<<20 {
-			return 0, false
-		}
-	}
-	if n < 1 {
-		return 0, false
-	}
-	return n, true
 }
 
 func newDirCommand(adapter BotHandlerAdapter) imbot.Command {

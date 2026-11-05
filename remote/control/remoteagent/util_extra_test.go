@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/tingly-dev/tingly-box/remote/control/bot"
 )
 
 func TestExpandPathFrom_Absolute(t *testing.T) {
@@ -74,9 +76,9 @@ func TestParsePositiveInt(t *testing.T) {
 		{"abc", 0, false},
 	}
 	for _, tt := range tests {
-		got, ok := parsePositiveInt(tt.in)
+		got, ok := bot.ParseListNumber(tt.in)
 		if got != tt.want || ok != tt.wantOk {
-			t.Errorf("parsePositiveInt(%q) = (%d,%v), want (%d,%v)", tt.in, got, ok, tt.want, tt.wantOk)
+			t.Errorf("ParseListNumber(%q) = (%d,%v), want (%d,%v)", tt.in, got, ok, tt.want, tt.wantOk)
 		}
 	}
 }

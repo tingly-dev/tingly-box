@@ -217,6 +217,8 @@ Remote 页面保留，只去掉 SmartGuide 模型和“常驻会话”这类作�
 | `/verbose on\|off` | Projects | 见“要补的能力”② |
 | `/yolo` | Projects | 当前会话在 `bypassPermissions` 和继承的模式之间切换（YZ：保留）；`/new`、`/cd` 开的新会话沿用它 |
 
+命令的读法与权限（2026-11-04，YZ，详见 `bot-capability-access-control.md` §6.2）：**@ 只存在于群聊**——群里同一条命令各平台装饰不同（Telegram `/dir@bot`、Slack/Discord `<@U1> /dir`、飞书 `@_user_1 /dir`、企微/WhatsApp `@bot /dir`、钉钉前导空格、全角 `／dir`），单聊只认朴素的 `/xxx`；解析只在 `imbot.ParseSlashCommand(text, group)`，闸门和处理器必须传同一个 group。Telegram 群里发给别的 bot 的 `/cmd@otherbot` 由 Telegram 适配器丢弃。直聊里选择已注册的文件夹和项目只需 start，自由路径（`/cd <路径>`、`/dir <路径>`、目录浏览器）和发文件需要 `remote_control.privileged`（界面“任意文件夹和文件”），群聊里全部需要；拒绝时回一句指向该开关，`/help` 只列聊天能跑的命令。
+
 `@N <话>` 保留（不是命令）。`/bind`、`/join`（接入层）照旧，不进帮助。删掉：`/bash`（Claude Code 自己能跑命令）、`/mock`、
 `/resume`（并入 `/session`；在 Projects 外开的 CLI 会话不列）、`/p`、`/threads`、`/focus`、`/back`、`/interrupt` `/s` `/i`、
 `/quiet` `/noverbose`、`/h`，以及裸词 `stop`（现在是普通消息）。

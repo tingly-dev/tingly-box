@@ -32,7 +32,10 @@ type BotHandler struct {
 
 	// projectRouter hands chats to Projects; nil, or switched off, leaves
 	// chats with access and notifications only. See project_route.go.
-	projectRouter  ProjectRouter
+	projectRouter ProjectRouter
+	// privileged tells /help whether a chat may use privileged actions; nil
+	// when the host has no access policy.
+	privileged     bot2.PrivilegeChecker
 	projectListsMu sync.Mutex
 	projectLists   map[string][]ProjectChoice
 	folderLists    map[string][]string

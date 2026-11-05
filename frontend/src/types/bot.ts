@@ -192,15 +192,20 @@ export function chatCanControl(chat: DirectChatDetail): boolean {
         && remoteChatState(chat) === 'on';
 }
 
+// actorAllowed reports whether a Group member has an explicit allow row for a
+// remote_control action.
+export function actorAllowed(actor: GroupActor, action: string): boolean {
+    return actor.permissions.some((permission) =>
+        permission.capability === 'remote_control' && permission.action === action && permission.effect === 'allow');
+}
+
 // groupCanControl: someone in this Group can drive the bot right now — Remote
 // Control allowed on the group AND at least one actor granted both start and
 // approve. Remote allowed on a group with no such actor still lets nobody in.
 export function groupCanControl(detail: BotGroupDetail): boolean {
-    const allowed = (actor: GroupActor, action: string) => actor.permissions.some((permission) =>
-        permission.capability === 'remote_control' && permission.action === action && permission.effect === 'allow');
     return !detail.group.blocked
         && detail.capabilities.remote_control === 'allow'
-        && detail.actors.some((actor) => allowed(actor, 'remote_control.start') && allowed(actor, 'remote_control.approve'));
+        && detail.actors.some((actor) => actorAllowed(actor, 'remote_control.start') && actorAllowed(actor, 'remote_control.approve'));
 }
 
 // isRemoteAgentMounted reports whether the remote_agent purpose is mounted on a

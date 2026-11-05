@@ -22,6 +22,13 @@ and privileged-access enforcement (including directory buttons). Unit tests alon
 relay and persistence failure paths. Add integration cases here when behavior
 crosses the bot/Projects boundary.
 
+Slash-command scenarios (`tingly_slash_commands_test.go`) cover the real gate
+and chat handler: registered pickers at start level, free paths denied with a
+notice until `remote_control.privileged` is granted, plain commands in a direct
+chat, and the decorated group forms. Mention formats are simulated by sending
+that text through the Tingly transport; the real Telegram, Slack, Discord,
+Feishu, WeCom, WhatsApp and DingTalk adapters do not run here.
+
 This is not a replacement for platform-specific Telegram/Feishu/Weixin tests,
 real Claude Code compatibility tests, or end-to-end validation of file uploads,
 network failures, and every possible session command.

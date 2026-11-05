@@ -97,6 +97,9 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatS
 	// Bind the bot's behavior through the injected consumers. This is the
 	// decoupling seam: the lifecycle here knows nothing about what a
 	// consumer does with chats — each consumer owns its own machinery.
+	if accessStore != nil && authorizer != nil {
+		ctx = WithPrivilegeChecker(ctx, NewPrivilegeChecker(accessStore, authorizer))
+	}
 	attachedList := make([]*Attached, 0, len(consumers))
 	for _, consumer := range consumers {
 		attached, err := consumer.Attach(ctx, setting, manager, prompter, chatStore, pairing)
@@ -131,14 +134,12 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatS
 				action = access.ActionName(value)
 			}
 			return capability, action
-		}, func(msg imbot.Message, platform imbot.Platform, botUUID string) {
+		}, func(msg imbot.Message, platform imbot.Platform, botUUID string, action access.ActionName) {
 			b := manager.GetBot(botUUID, platform)
 			if b == nil {
 				return
 			}
-			opts := &imbot.SendMessageOptions{
-				Text: "⚠️ You are not authorized to answer this request. Ask the bot owner to grant the approve permission for this chat.",
-			}
+			opts := &imbot.SendMessageOptions{Text: DeniedActionText(action)}
 			ForwardReplyContext(opts, msg)
 			_, _ = b.SendMessage(ctx, msg.GetReplyTarget(), opts)
 		}))
