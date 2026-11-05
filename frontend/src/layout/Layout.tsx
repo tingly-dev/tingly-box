@@ -77,7 +77,7 @@ const LayoutInner = ({ children }: LayoutProps) => {
     // Projects' pages are work surfaces that lay out their own spacing
     // (full-height split views), so they get the content area edge to edge,
     // clear of the mobile menu bar only.
-    const isProjectsPage = location.pathname === '/projects' || location.pathname.startsWith('/projects/');
+    const isProjectsPage = location.pathname === '/workspace' || location.pathname === '/projects' || location.pathname.startsWith('/projects/');
 
     const isActive = (path: string) => location.pathname === path;
     const isChildActive = (children?: ActivityItem['children']) =>

@@ -325,7 +325,7 @@ export function useActivityItems(): ActivityItem[] {
                 key: 'projects',
                 icon: <IconFolder sx={{ fontSize: 22 }} />,
                 label: t('layout.workspace', { defaultValue: 'Workspace' }),
-                defaultPath: '/projects',
+                defaultPath: '/workspace',
                 attention: projectsWaiting ? t('layout.projectsWaiting') : undefined,
                 sidebar: enableProjects ? (onNavigate: () => void) => (
                     <Suspense fallback={null}>
@@ -333,7 +333,7 @@ export function useActivityItems(): ActivityItem[] {
                     </Suspense>
                 ) : undefined,
                 children: [
-                    { path: '/projects', label: t('layout.projects'), match: (p: string) => p === '/projects' || p.startsWith('/projects/') || p === '/bots' || p.startsWith('/bots/') || p.startsWith('/remote-agent') || p === '/notify' },
+                    { path: '/workspace', label: t('layout.projects'), match: (p: string) => p === '/workspace' || p === '/projects' || p.startsWith('/projects/') || p === '/bots' || p.startsWith('/bots/') || p.startsWith('/remote-agent') || p === '/notify' },
                 ],
             }] as ActivityItem[]),
             // ── Power-ups: what extends an agent beyond plain model routing ──

@@ -198,6 +198,7 @@ export const appRoutes = (
             <Route path="/notify" element={<Navigate to="/bots/overview" replace />} />
             {/* Projects — a coordinator running Claude Code threads; its own
                 rail item (useActivityItems). */}
+            <Route path="/workspace" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="home" /></ExperimentalFeatureGate>} />
             <Route path="/projects" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="list" /></ExperimentalFeatureGate>} />
             <Route path="/projects/folder" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="folder" /></ExperimentalFeatureGate>} />
             <Route path="/projects/im" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="im" /></ExperimentalFeatureGate>} />

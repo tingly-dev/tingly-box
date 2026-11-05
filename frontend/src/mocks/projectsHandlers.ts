@@ -1,4 +1,5 @@
 import { http, HttpResponse } from 'msw'
+import { resolveMockDataProfile } from './mockConfig'
 
 // Mock-mode data for Projects (/api/v1/projects and /api/v1/threads,
 // @tingly/projects): a few projects in different states, one of them with a
@@ -421,6 +422,8 @@ export const projectsHandlers = [
         const url = new URL(request.url)
         const q = (url.searchParams.get('q') ?? '').toLowerCase()
         const archived = url.searchParams.get('archived') === 'true'
+        // A newcomer (?mockData=newcomer) has no projects or folders yet.
+        if (resolveMockDataProfile() === 'newcomer') return HttpResponse.json({ projects: [] })
         // Projects and folders in one list, each with its type.
         const list = projects
             .filter((p) => !!p.archived_at === archived)
