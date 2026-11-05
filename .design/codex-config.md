@@ -340,7 +340,7 @@ Codex's built-in `image_gen` tool posts to `{base_url}/images/generations` and `
 
 Quick Config does **not** create a rule for it. Add one by hand, or the tool gets a "not configured" error:
 
-1. Agent -> Codex -> add a rule with request model `gpt-image-2` (a wildcard such as `gpt-image-*` also matches).
+1. In the Codex scenario's rules, add a rule with request model `gpt-image-2` (a wildcard such as `gpt-image-*` also matches; rule matching is `MatchRuleByModelAndScenario`).
 2. Point it at a Codex (ChatGPT OAuth) provider, model `gpt-image-2`.
 3. For GIF, also turn on Codex's own flag (`[features] image_generation_animation = true`, off by default upstream). GIF is experimental: it was built from Codex's source and not yet captured live.
 
