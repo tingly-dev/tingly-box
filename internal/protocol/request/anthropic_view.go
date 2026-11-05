@@ -284,14 +284,31 @@ func convertAnthropicViewToOpenAIRequest(view anthropicRequestView, isStreaming 
 	openaiReq.MaxTokens = openai.Opt(view.MaxTokens)
 
 	// Convert messages
+	toolIDs := mapAnthropicToolIDs(view.Messages)
 	for _, msg := range view.Messages {
 		switch msg.Role {
 		case anthropic.MessageParamRoleUser:
 			// User messages may contain tool_result blocks - need special handling
-			openaiReq.Messages = append(openaiReq.Messages, convertAnthropicViewUserToOpenAI(msg.Content)...)
+			converted := convertAnthropicViewUserToOpenAI(msg.Content)
+			index := 0
+			for _, block := range msg.Content {
+				if block.OfToolResult != nil {
+					converted[index].OfTool.ToolCallID = toolIDs[block.OfToolResult.ToolUseID]
+					index++
+				}
+			}
+			openaiReq.Messages = append(openaiReq.Messages, converted...)
 		case anthropic.MessageParamRoleAssistant:
 			// Convert assistant message with potential tool_use blocks
-			openaiReq.Messages = append(openaiReq.Messages, convertAnthropicViewAssistantToOpenAI(msg.Content))
+			converted := convertAnthropicViewAssistantToOpenAI(msg.Content)
+			index := 0
+			for _, block := range msg.Content {
+				if block.OfToolUse != nil {
+					converted.OfAssistant.ToolCalls[index].OfFunction.ID = toolIDs[block.OfToolUse.ID]
+					index++
+				}
+			}
+			openaiReq.Messages = append(openaiReq.Messages, converted)
 		}
 	}
 
