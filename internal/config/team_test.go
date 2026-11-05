@@ -164,3 +164,45 @@ func TestDropOrphanTeamScopesOnce(t *testing.T) {
 	assert.False(t, dropOrphanTeamScopesOnce(cfg))
 	assert.Len(t, rulesOf(cfg, "team:unknown-to-store"), 1)
 }
+
+// A duplicate copies each source rule's affinity as stored: a team that turned
+// it off (or a pre-default rule that never had it) stays off, one with a custom
+// window keeps it, and duplicating never re-seeds the creation default.
+func TestDuplicateTeam_CopiesAffinitySetting(t *testing.T) {
+	cfg := newSlotTestConfig(t)
+	src := newTeamWithRouting(t, cfg, "Research")
+	scope := db.TeamScenario(src.ID)
+	cfg.Rules = append(cfg.Rules,
+		typ.Rule{UUID: "aff-on", Scenario: scope, RequestModel: "on", Flags: typ.RuleFlags{SessionAffinity: 600}},
+		typ.Rule{UUID: "aff-default", Scenario: scope, RequestModel: "default", Flags: typ.RuleFlags{SessionAffinity: defaultSessionAffinitySeconds}},
+	)
+
+	dup, err := cfg.DuplicateTeam(src.ID, "")
+	require.NoError(t, err)
+
+	byModel := map[string]int{}
+	for _, r := range rulesOf(cfg, db.TeamScenario(dup.ID)) {
+		byModel[r.RequestModel] = r.Flags.SessionAffinity
+	}
+	assert.Equal(t, map[string]int{"gpt-x": 0, "on": 600, "default": 1800}, byModel)
+}
+
+// Existing team rules are not backfilled by any migration: session_affinity is
+// a plain int with omitempty, so "never set" and "explicitly off" are both 0
+// in storage and cannot be told apart. Overwriting would risk re-enabling a
+// deliberate off, so only rules created from now on get the default.
+func TestMigrate_LeavesExistingTeamRuleAffinityAlone(t *testing.T) {
+	c := &Config{
+		Rules: []typ.Rule{
+			{UUID: "team-off", Scenario: typ.ScenarioTeam, RequestModel: "a"},
+			{UUID: "team-scoped-off", Scenario: "team:t1", RequestModel: "b"},
+			{UUID: "team-custom", Scenario: "team:t1", RequestModel: "c", Flags: typ.RuleFlags{SessionAffinity: 90}},
+		},
+	}
+	for _, step := range migrationSteps {
+		step.fn(c)
+	}
+	assert.Zero(t, c.Rules[0].Flags.SessionAffinity)
+	assert.Zero(t, c.Rules[1].Flags.SessionAffinity)
+	assert.Equal(t, 90, c.Rules[2].Flags.SessionAffinity)
+}

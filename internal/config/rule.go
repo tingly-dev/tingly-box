@@ -17,7 +17,8 @@ const (
 // GetEffectiveAffinity returns the effective affinity TTL for a rule.
 // session_affinity is rule-only — there is no scenario-level inheritance.
 // The built-in Claude Code / Claude Desktop / Codex rules seed 1800s by
-// default (init + migration); every other rule is disabled unless it sets
+// default (init + migration), and new Team rules get it at creation
+// (applyScenarioCreateDefaults); every other rule is disabled unless it sets
 // an explicit value. Returns 0 (disabled) when the rule's value is 0.
 func (c *Config) GetEffectiveAffinity(rule *typ.Rule) time.Duration {
 	if rule.Flags.SessionAffinity > 0 {
@@ -38,8 +39,12 @@ func (c *Config) GetEffectiveAffinity(rule *typ.Rule) time.Duration {
 // mid-conversation system-role messages that strict Anthropic-compatible
 // providers reject (ClaudeCodeCompat) and Claude Code's injected billing header
 // that must not leak upstream (CleanHeader). Default both on so team rules work
-// out of the box. Only seed when the caller sent no flags at all, so an explicit
-// payload that sets any flag is left untouched.
+// out of the box. They also get the 30-minute session affinity the built-in
+// agent rules have: a team's clients keep a conversation on one upstream, so
+// prompt-cache hits survive. This covers every team scope ("team" and
+// "team:<id>"). Only seed when the caller sent no flags at all, so an explicit
+// payload that sets any flag is left untouched; existing rules are never
+// back-filled (see .design/team.md).
 //
 // Cursor: every request routed through /tingly/cursor is, by construction,
 // from the Cursor IDE — that's the whole point of giving it its own scenario
@@ -50,6 +55,7 @@ func applyScenarioCreateDefaults(rule *typ.Rule) {
 	if rule.Scenario.Is(typ.ScenarioTeam) && rule.Flags.IsZero() {
 		rule.Flags.ClaudeCodeCompat = true
 		rule.Flags.CleanHeader = true
+		rule.Flags.SessionAffinity = defaultSessionAffinitySeconds
 	}
 	if rule.Scenario.Is(typ.ScenarioCursor) && rule.Flags.IsZero() {
 		rule.Flags.CursorCompat = true
