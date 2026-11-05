@@ -1,6 +1,9 @@
 package server
 
 import (
+	"archive/zip"
+	"bytes"
+	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -186,4 +189,102 @@ func TestUploadsNeverFollowLinksOutOfTheLibrary(t *testing.T) {
 	assert.Len(t, entries, 1, "nothing was created outside the library")
 	b, _ := os.ReadFile(filepath.Join(outside, "victim"))
 	assert.Equal(t, "orig", string(b))
+}
+
+func TestLibraryArchiveStreamsAFolderAsAZip(t *testing.T) {
+	root := t.TempDir()
+	_, c := newServerAt(t, nil, root)
+	var p db.Project
+	require.Equal(t, http.StatusCreated, c.do("POST", "/projects", map[string]any{"name": "zip"}, &p))
+	lib := project.Layout{Root: root}.LibraryDir(p.ID)
+	outside := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(outside, "secret"), []byte("SECRET"), 0o644))
+	for f, body := range map[string]string{"outputs/run 1/report.md": "# r", "outputs/run 1/data/rows.csv": "a,b", "outputs/run 1/.hidden": "no", "outputs/other.txt": "o", ".tmp/t/x": "no", "a.md": "a"} {
+		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(lib, f)), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(lib, f), []byte(body), 0o644))
+	}
+	require.NoError(t, os.Symlink(filepath.Join(outside, "secret"), filepath.Join(lib, "outputs/run 1/leak.txt")))
+
+	archive := func(rel string) (*http.Response, []byte) {
+		resp, err := http.Get(c.base + "/projects/" + p.ID + "/library/archive?path=" + url.QueryEscape(rel))
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		return resp, body
+	}
+
+	resp, body := archive("outputs/run 1")
+	require.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, "application/zip", resp.Header.Get("Content-Type"))
+	assert.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+	disp, params, err := mime.ParseMediaType(resp.Header.Get("Content-Disposition"))
+	require.NoError(t, err)
+	assert.Equal(t, "attachment", disp)
+	assert.Equal(t, "run 1.zip", params["filename"])
+	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	require.NoError(t, err)
+	got := map[string]string{}
+	for _, f := range zr.File {
+		rc, err := f.Open()
+		require.NoError(t, err)
+		b, _ := io.ReadAll(rc)
+		rc.Close()
+		got[f.Name] = string(b)
+	}
+	assert.Equal(t, map[string]string{"report.md": "# r", "data/rows.csv": "a,b"}, got)
+
+	// The root downloads too, when it fits.
+	resp, body = archive("")
+	require.Equal(t, 200, resp.StatusCode)
+	_, params, _ = mime.ParseMediaType(resp.Header.Get("Content-Disposition"))
+	assert.Equal(t, "library.zip", params["filename"])
+	zr, err = zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	require.NoError(t, err)
+	assert.Len(t, zr.File, 4)
+	assert.NotContains(t, string(body), "SECRET")
+
+	// Refused before anything is streamed.
+	for _, bad := range []string{"..", "outputs/../..", ".tmp", ".tmp/t", "a.md"} {
+		resp, body := archive(bad)
+		assert.Equal(t, 400, resp.StatusCode, bad)
+		assert.Contains(t, string(body), `"error"`, bad)
+		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"), bad)
+	}
+	// Nothing to download is said, not sent as an empty zip: a folder of only
+	// empty folders, hidden entries and links.
+	require.NoError(t, os.MkdirAll(filepath.Join(lib, "hollow/inner"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(lib, "hollow/.git"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(lib, "hollow/.git/x"), []byte("x"), 0o644))
+	resp, body = archive("hollow")
+	assert.Equal(t, 400, resp.StatusCode)
+	assert.Contains(t, string(body), "no files to download")
+
+	resp, _ = archive("nope")
+	assert.Equal(t, 404, resp.StatusCode)
+	resp, _ = archive("/etc")
+	assert.Equal(t, 404, resp.StatusCode)
+	assert.Equal(t, 404, c.do("GET", "/projects/missing/library/archive", nil, nil))
+}
+
+func TestLibraryArchiveOverTheLimitsIs413WithTheReason(t *testing.T) {
+	root := t.TempDir()
+	_, c := newServerAt(t, nil, root)
+	var p db.Project
+	require.Equal(t, http.StatusCreated, c.do("POST", "/projects", map[string]any{"name": "big"}, &p))
+	lib := project.Layout{Root: root}.LibraryDir(p.ID)
+	require.NoError(t, os.MkdirAll(filepath.Join(lib, "many"), 0o755))
+	for i := 0; i <= project.MaxArchiveFiles; i++ {
+		require.NoError(t, os.WriteFile(filepath.Join(lib, "many", fmt.Sprintf("f%03d", i)), []byte("x"), 0o644))
+	}
+	require.NoError(t, os.MkdirAll(filepath.Join(lib, "fat"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(lib, "fat/f.bin"), make([]byte, project.MaxArchiveBytes+1), 0o644))
+
+	var e struct {
+		Error string `json:"error"`
+	}
+	require.Equal(t, http.StatusRequestEntityTooLarge, c.do("GET", "/projects/"+p.ID+"/library/archive?path=many", nil, &e))
+	assert.Contains(t, e.Error, "100 files")
+	require.Equal(t, http.StatusRequestEntityTooLarge, c.do("GET", "/projects/"+p.ID+"/library/archive?path=fat", nil, &e))
+	assert.Contains(t, e.Error, "10 MB")
 }

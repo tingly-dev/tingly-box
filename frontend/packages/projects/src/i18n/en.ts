@@ -246,7 +246,7 @@ export const en = {
     tree: { loading: 'Loading…', emptyFolder: 'Empty folder', retry: 'Try again', failed: 'Could not load this folder.' },
     library: {
         intro: 'Files you add are readable by every thread. Threads without a repository deliver their files here.',
-        add: 'Add files', empty: 'No files yet.', download: 'Download', copyPath: 'Copy folder path',
+        add: 'Add files', empty: 'No files yet.', download: 'Download', downloadZip: 'Download as zip', copyPath: 'Copy folder path',
         tree: 'Library files', tooLarge: 'This file is too large to preview.', notPreviewable: 'This file can’t be previewed. Download it instead.',
         previousImage: 'Previous image', nextImage: 'Next image',
     },

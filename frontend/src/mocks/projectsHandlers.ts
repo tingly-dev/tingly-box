@@ -511,6 +511,13 @@ export const projectsHandlers = [
         if (path.endsWith('.png')) return new HttpResponse(Uint8Array.from(atob(chartPng), (c) => c.charCodeAt(0)), { headers: { 'Content-Type': 'image/png' } })
         return new HttpResponse(libraryText(path), { headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
     }),
+    // A folder zip: `uploads` is "too big", to show the server's message as a toast; the rest is an empty zip.
+    http.get('/api/v1/projects/:id/library/archive', ({ request }) => {
+        const path = new URL(request.url).searchParams.get('path') ?? ''
+        if (path === 'uploads') return HttpResponse.json({ error: 'this folder is larger than 10 MB (a zip download is limited to 100 files and 10 MB)' }, { status: 413 })
+        const emptyZip = Uint8Array.from([0x50, 0x4b, 0x05, 0x06, ...new Array(18).fill(0)])
+        return new HttpResponse(emptyZip, { headers: { 'Content-Type': 'application/zip' } })
+    }),
     http.get('/api/v1/projects/:id/memory', ({ params }) => HttpResponse.json({ dir: `/Users/me/.tingly-box/projects/${params.id}/memory`, files: [] })),
     http.get('/api/v1/projects/:id/usage', () => HttpResponse.json({ by_model: [], by_thread: [] })),
 ]

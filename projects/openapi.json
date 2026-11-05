@@ -917,6 +917,48 @@
         }
       }
     },
+    "/api/v1/projects/{id}/library/archive": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Download a library folder as a zip (at most 100 files and 10 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.",
+        "description": "Download a library folder as a zip (at most 100 files and 10 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.",
+        "operationId": "apiV1ProjectsIdLibraryArchiveGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Library-relative folder; empty is the library root",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/library/file": {
       "get": {
         "tags": [

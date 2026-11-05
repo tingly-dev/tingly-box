@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -259,6 +260,9 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithDescription("List one directory level of the library (folders first); expand a folder by asking for its path"),
 		swagger.WithQuery("path", "string", "Library-relative directory; empty is the library root"),
 		swagger.WithResponseModel(LibraryTreeResponse{}))
+	api.GET("/projects/:id/library/archive", h.archiveLibrary, tag,
+		swagger.WithDescription("Download a library folder as a zip (at most 100 files and 10 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out."),
+		swagger.WithQuery("path", "string", "Library-relative folder; empty is the library root"))
 	api.POST("/projects/:id/library", h.uploadLibrary, tag,
 		swagger.WithDescription("Upload files (multipart field \"files\") to the library"),
 		swagger.WithResponseModel(LibraryResponse{}))
@@ -797,6 +801,51 @@ func (h *Handler) downloadLibrary(c *gin.Context) {
 	}
 	defer f.Close()
 	module.ServeDownload(c, f, info)
+}
+
+// archiveLibrary streams a library folder as a zip. The folder is counted
+// first, so a refusal (bad path, missing, too big) is a JSON error before any
+// of the zip is sent; nothing is written to disk.
+func (h *Handler) archiveLibrary(c *gin.Context) {
+	p, ok := h.project(c)
+	if !ok {
+		return
+	}
+	a, err := h.svc.Layout.OpenLibraryArchive(p.ID, c.Query("path"))
+	var tooBig *rt.ArchiveLimitError
+	switch {
+	case errors.As(err, &tooBig):
+		apierr.Message(c, http.StatusRequestEntityTooLarge, err.Error())
+		return
+	case errors.Is(err, rt.ErrInvalidLibraryPath), errors.Is(err, rt.ErrNotDirectory):
+		apierr.BadRequest(c, err.Error())
+		return
+	case errors.Is(err, fs.ErrNotExist):
+		apierr.Message(c, http.StatusNotFound, "folder not found")
+		return
+	case err != nil:
+		apierr.Message(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer a.Close()
+	if len(a.Files()) == 0 {
+		apierr.BadRequest(c, "this folder has no files to download")
+		return
+	}
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": a.Filename()}))
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Status(http.StatusOK)
+	// Headers are out by now. Ending the response normally would give the
+	// client a truncated zip as a success, so the connection is closed
+	// instead and the download fails (a panic with http.ErrAbortHandler would
+	// do that too, but gin.Recovery swallows it).
+	if err := a.Stream(c.Writer); err != nil {
+		_ = c.Error(err)
+		if conn, _, herr := c.Writer.Hijack(); herr == nil {
+			_ = conn.Close()
+		}
+	}
 }
 
 func (h *Handler) deleteLibrary(c *gin.Context) {
