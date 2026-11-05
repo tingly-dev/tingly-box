@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 
@@ -270,4 +271,59 @@ func TestCodexImagesEdit_GIFOutputWithMaskIsRefused(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "mask")
 	assert.Empty(t, requests())
+}
+
+// The ChatGPT backend's errors are not always OpenAI-shaped: {"detail": "..."},
+// {"error": "text"} and plain text all occur. Whatever the shape, the upstream's
+// own words must reach the caller, with the status unchanged.
+func TestCodexImages_UpstreamErrorBodyShapesAreSurfaced(t *testing.T) {
+	for _, tc := range []struct {
+		name, contentType, body, want string
+	}{
+		{"detail string", "application/json", `{"detail":"Unsupported output format gif"}`, "Unsupported output format gif"},
+		{"detail object", "application/json", `{"detail":{"code":"feature_disabled","message":"gif is not enabled"}}`, "gif is not enabled"},
+		{"flat error string", "application/json", `{"error":"flat string reason"}`, "flat string reason"},
+		{"message only", "application/json", `{"message":"message only reason"}`, "message only reason"},
+		{"openai shape is unchanged", "application/json", `{"error":{"message":"openai shaped reason","code":"x"}}`, "openai shaped reason"},
+		{"plain text", "text/plain", "gateway says no", "gateway says no"},
+		{"unknown json keeps the raw text", "application/json", `{"foo":"bar","n":1}`, `"foo":"bar"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", tc.contentType)
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer srv.Close()
+			oc := openai.NewClient(
+				option.WithBaseURL(srv.URL+"/backend-api/"),
+				option.WithAPIKey("test"),
+				option.WithHTTPClient(&http.Client{Transport: &codexRoundTripper{RoundTripper: http.DefaultTransport}}),
+			)
+			c := &CodexClient{OpenAIClient: &OpenAIClient{client: oc}}
+			ctx := imagegen.WithOutputOptions(context.Background(), imagegen.OutputOptions{Format: imagefmt.GIF})
+
+			_, err := c.ImagesGenerate(ctx, openai.ImageGenerateParams{Prompt: "x", Model: "gpt-image-2"})
+			require.Error(t, err)
+			failure := protocol.ClassifyUpstreamFailure(err, http.StatusInternalServerError)
+			assert.Equal(t, http.StatusBadRequest, failure.Status)
+			assert.Contains(t, failure.Message+" "+err.Error(), tc.want)
+
+			req := openai.ImageEditParams{Prompt: "x", Model: "gpt-image-2"}
+			req.Image.OfFile = openai.File(bytes.NewReader(testPNGBytes), "in.png", "image/png")
+			_, err = c.ImagesEdit(context.Background(), req)
+			require.Error(t, err)
+			assert.Contains(t, protocol.ClassifyUpstreamFailure(err, 500).Message+" "+err.Error(), tc.want)
+		})
+	}
+}
+
+func TestNormalizeCodexImageErrorBody(t *testing.T) {
+	assert.Equal(t, `{"error":{"message":"m"}}`, string(normalizeCodexImageErrorBody([]byte(`{"error":{"message":"m"}}`))), "openai-shaped bodies are untouched")
+	assert.Empty(t, normalizeCodexImageErrorBody(nil), "an empty body stays empty")
+	long := strings.Repeat("x", 5000)
+	out := normalizeCodexImageErrorBody([]byte(long))
+	assert.Less(t, len(out), 2500, "a huge body is cut")
+	assert.True(t, gjson.ValidBytes(out))
+	assert.Equal(t, "upstream_error", gjson.GetBytes(out, "error.type").String())
 }

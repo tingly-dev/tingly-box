@@ -2,11 +2,14 @@ package client
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -98,6 +101,9 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 	// retries as a dropped connection — re-sending a policy-blocked prompt —
 	// and the gateway reports as network_error / 502.
 	if resp.StatusCode != http.StatusOK {
+		if imagesEndpoint {
+			normalizeCodexImageErrorResponse(req.Context(), resp)
+		}
 		return resp, nil
 	}
 
@@ -443,4 +449,67 @@ func rewriteCodexAPIPath(path string) (string, codexProtocol) {
 	default:
 		return path, codexProtocolResponsesSSE
 	}
+}
+
+// maxCodexImageErrorBody bounds how much of an upstream error body is read and
+// carried into the error message.
+const maxCodexImageErrorBody = 2000
+
+// normalizeCodexImageErrorResponse rewrites a non-200 response from the Codex
+// images endpoints so the SDK's error carries the upstream's own words. The
+// ChatGPT backend does not always answer in OpenAI's {"error":{"message"}}
+// shape ({"detail": "..."}, {"error": "text"} and plain text occur); the SDK
+// would otherwise report an empty message or a decode failure and the real
+// reason would be lost. The status code is untouched.
+func normalizeCodexImageErrorResponse(ctx context.Context, resp *http.Response) {
+	if resp.Body == nil {
+		return
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	_ = resp.Body.Close()
+	if err != nil {
+		raw = nil
+	}
+	body := normalizeCodexImageErrorBody(raw)
+	logrus.WithContext(ctx).Warnf("[Codex] images endpoint answered %d: %s", resp.StatusCode, truncateString(string(raw), maxCodexImageErrorBody))
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	resp.ContentLength = int64(len(body))
+	resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	if len(body) > 0 {
+		resp.Header.Set("Content-Type", "application/json")
+	}
+}
+
+// normalizeCodexImageErrorBody returns body unchanged when it is already an
+// OpenAI-shaped error with a message; otherwise an OpenAI-shaped error whose
+// message is the upstream text. An empty body stays empty.
+func normalizeCodexImageErrorBody(raw []byte) []byte {
+	text := strings.TrimSpace(string(raw))
+	if text == "" {
+		return nil
+	}
+	if gjson.Valid(text) {
+		parsed := gjson.Parse(text)
+		if parsed.Get("error.message").Exists() && strings.TrimSpace(parsed.Get("error.message").String()) != "" {
+			return raw
+		}
+		for _, path := range []string{"detail.message", "detail", "message", "error"} {
+			if v := parsed.Get(path); v.Exists() && v.Type == gjson.String && strings.TrimSpace(v.String()) != "" {
+				text = v.String()
+				break
+			}
+		}
+	}
+	out, _ := json.Marshal(map[string]any{"error": map[string]any{
+		"message": truncateString(text, maxCodexImageErrorBody),
+		"type":    "upstream_error",
+	}})
+	return out
+}
+
+func truncateString(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
 }
