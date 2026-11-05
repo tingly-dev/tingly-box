@@ -32,7 +32,8 @@ Overview 的 Library 页把项目资料库显示成可展开的目录树，而�
 | 类别 | 扩展名 | 怎么展示 |
 |---|---|---|
 | 位图 | png、jpg、jpeg、gif、webp | `<img src=blob:>` |
-| 纯文本 | md、markdown、txt、log、json、csv、yaml、yml、toml、ini | `<pre>` 里的 React 文本节点 |
+| Markdown | md、markdown | 渲染（见下一节“Markdown 预览”） |
+| 纯文本 | txt、log、json、csv、yaml、yml、toml、ini | `<pre>` 里的 React 文本节点 |
 
 **其余一律只能下载**，包括：
 
@@ -46,9 +47,37 @@ Overview 的 Library 页把项目资料库显示成可展开的目录树，而�
 2. **类型由我们决定，不信服务器。** 图片的 blob 类型取自白名单里扩展名对应的 MIME（`image/png` 等），不用响应头的 `Content-Type`。
 3. **魔数校验（`sniffImage`）。** 在创建 object URL 之前，检查文件头是否真是扩展名声称的格式（PNG 8 字节签名、JPEG `FF D8 FF`、GIF87a/89a、`RIFF…WEBP`）。名为 `.png` 实则是 HTML/SVG 的文件不会交给浏览器，只显示“无法预览，请下载”。
 4. **`<img>` 解码失败时安全降级。** `onError` 时去掉图片并显示同样的提示（例如宿主 CSP 不允许 `blob:` 图片时）。关闭后释放 object URL。
-5. **文本只作为文本。** 内容以 React 文本节点放入 `<pre>`：不解析 HTML、不渲染 Markdown、没有链接，远程图片和链接也不会被加载。含 NUL 字节的“文本”按二进制处理，不预览。
+5. **文本只作为文本。** 除 md/markdown 外，内容以 React 文本节点放入 `<pre>`：不解析 HTML、不渲染 Markdown、没有链接，远程图片和链接也不会被加载。含 NUL 字节的“文本”按二进制处理，不预览。
 6. **大小上限**：图片 25 MB，文本 512 KB（按树里的 `size` 判断，超过时不发请求），改为提示“文件太大”并给出下载按钮。加载中显示转圈，失败显示服务器返回的错误。
 7. **键盘与焦点**：MUI Dialog——Esc 关闭、焦点进入对话框并被限制在其中、关闭后回到触发它的行；头部有下载和关闭按钮。
+
+### Markdown 预览
+
+`.md` / `.markdown` 用与项目对话（`ConversationPane`）相同的渲染器：`components/Markdown.tsx` 的 `<Markdown conversation safe>`（react-markdown + remark-gfm，代码块带高亮和复制按钮，样式是 `conversationStyles` 的 `conversationMarkdown`，和线程 Transcript 的 Markdown 是同一套阅读样式，已有测试逐项比对）。仍受 512 KB 上限约束；其余文本类型照旧 `<pre>`。
+
+文件是别人（线程里的 agent、上传者）写的，所以多了 `safe` 模式；对话里的渲染保持原样，不受影响。与对话渲染的差别：
+
+| | 对话回复 | 资料库预览（`safe`） |
+|---|---|---|
+| 原始 HTML | 作为文本显示，不执行（react-markdown 不带 rehype-raw） | 相同 |
+| 链接协议 | react-markdown 默认白名单（http、https、irc、ircs、mailto、xmpp，外加相对地址和锚点） | 只有 http、https、mailto；`javascript:`、`data:`、`file:`、`blob:`、相对路径、`//host`、`#锚点` 一律去掉目标，只留文字（渲染成 `<span>`） |
+| 链接属性 | `target=_blank rel="noreferrer"` | `target=_blank rel="noopener noreferrer"` |
+| 图片 | 照常 `<img>`，会请求远程地址 | **从不渲染 `<img>`，也不发请求**：用斜体的 alt 文字占位（没有 alt 时是 `[image]`），http(s) 的地址只放在 `title` 提示里，不是链接——这样 `[![badge](…)](…)` 也不会出现嵌套 `<a>` |
+
+HTML 标签（`<script>`、`<iframe>`、`<img onerror>`、`<style>`、`<form>`、事件属性）因此只会作为文字出现。测试：`LibraryPreview.test.tsx` 里有原始 HTML、12 种链接协议变体、远程/内联/相对/引用式图片、嵌套徽章链接的用例；把 `safe` 去掉后这些用例会失败（已手动验证）。
+
+未做：渲染/源码切换。想看原文只能下载。
+
+### 图片切换
+
+打开图片预览后，可在**同一文件夹**的图片之间切换（只算图片，按树里的顺序，即服务器返回的顺序；其他文件和 SVG 跳过，子文件夹和父文件夹的图片不算）：
+
+- 键盘：← / ↑ 上一张，→ / ↓ 下一张；带 Alt/Ctrl/Meta/Shift 的不处理（Alt+← 是浏览器后退）。非图片预览里方向键不拦截，照常滚动文本。
+- 头部有上一张/下一张按钮和“n / m”（`aria-live=polite`）。文件夹里只有一张图时都不显示。
+- **到头就停，不循环**：第一张时“上一张”置灰，最后一张时“下一张”置灰，方向键无效。循环会让“我看完了”没有信号，并且 n / m 与按键方向对不上。
+- Esc 照常关闭，焦点回到最初打开预览的那一行（不是切换后的那一张）。切换到头时刚点击的按钮被禁用，焦点会被拉回对话框，保证方向键和 Esc 继续有效。
+- 切换时前一张的 object URL 被释放；快速连续切换只显示最后一张（沿用 `live` 标志）。
+- 兄弟列表由 `Library` 在打开时从 `load()` 缓存的该文件夹列表里取出，`LibraryPreview` 只接收 `siblings` 和 `onNavigate`，不自己请求目录。
 
 ## 文件访问：用标准库的 `os.Root`，只在上面加自己的策略
 
@@ -84,6 +113,6 @@ Overview 的 Library 页把项目资料库显示成可展开的目录树，而�
 
 ## 没做
 
-- 预览 SVG、PDF、视频及其他类型；Markdown 渲染预览；图片缩放/翻页。
+- 预览 SVG、PDF、视频及其他类型；图片缩放；Markdown 的源码/渲染切换；预加载相邻图片。
 - 在某个文件夹里上传（上传仍进资料库根）。
 - 删除文件夹（后端 `DELETE` 只删文件，文件夹行不提供删除）。
