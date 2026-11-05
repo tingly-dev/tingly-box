@@ -124,9 +124,14 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 	}
 	// A chat that was asked something answers it with its next message
 	// (other than an @N one, or one with files).
-	if threadID, requestID, ok := s.Relay.Awaiting(platform, chatID); ok && len(files) == 0 {
-		if done, err := s.answerFromText(threadID, requestID, text); done {
-			return true, err
+	// A decision card only takes an option's number or label, so a card the
+	// chat left open never keeps a later approval or question from being
+	// answered: the oldest request that takes the reply gets it.
+	if len(files) == 0 {
+		for _, q := range s.Relay.awaitingAll(platform, chatID) {
+			if done, err := s.answerFromText(q.threadID, q.requestID, text, src); done {
+				return true, err
+			}
 		}
 	}
 	if p.Type == db.ProjectFolder && (b.NewThread || t.Status == db.ThreadResolved || t.ArchivedAt != nil) {
@@ -225,7 +230,19 @@ func (s *Service) startFromChannel(b *db.ChannelBinding, prev *db.Thread, projec
 // answerFromText answers a request a chat was asked with the chat's reply
 // (chat_answer.go). done is false when the request is no longer waiting, and
 // the message is then an ordinary one.
-func (s *Service) answerFromText(threadID, requestID, text string) (done bool, err error) {
+func (s *Service) answerFromText(threadID, requestID, text string, src Source) (done bool, err error) {
+	if _, d, isDecision := s.Coordinator.pendingDecision(threadID, requestID); isDecision {
+		// Only an option's number or label answers a card; any other words
+		// are an ordinary message to the coordinator, and the card stays open.
+		i, ok := d.optionOfReply(text)
+		if !ok {
+			return false, nil
+		}
+		if _, err := s.Coordinator.Choose(context.Background(), threadID, requestID, i, src); err != nil {
+			return true, err
+		}
+		return true, nil
+	}
 	ev, ok := s.Threads.PendingRequest(threadID, requestID)
 	if !ok {
 		s.Relay.forget(requestID)
@@ -302,6 +319,23 @@ func (s *Service) AnswerFromChannel(platform, chatID, threadID, requestID, value
 	}
 	if !bound {
 		return "", ErrNotThisChat
+	}
+	if _, _, isDecision := s.Coordinator.pendingDecision(threadID, requestID); isDecision {
+		i, ok := optionOfChoice(value)
+		if !ok {
+			return "", fmt.Errorf("unknown choice %q", value)
+		}
+		_, err := s.Coordinator.Choose(context.Background(), threadID, requestID, i, Source{Kind: db.SourceIM, Platform: platform, ChatID: chatID})
+		switch {
+		case errors.Is(err, ErrDecided):
+			return "This was already answered.", nil
+		case err != nil:
+			return "", err
+		}
+		return "", nil
+	}
+	if m, err := s.Store.GetThreadEvent(requestID); err == nil && m.Kind == db.EvDecision && m.ThreadID == threadID {
+		return "This was already answered.", nil
 	}
 	ev, ok := s.Threads.PendingRequest(threadID, requestID)
 	if !ok {

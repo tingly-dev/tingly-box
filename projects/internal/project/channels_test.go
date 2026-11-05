@@ -99,6 +99,7 @@ func channelFixtureReplying(t *testing.T, script func(turn *enginetest.Turn) err
 	sink := newFakeSink()
 	relay := NewRelay(f.store, sink)
 	coord.OnFinal = relay.Message
+	coord.OnDecided = relay.Decided
 	f.threads.OnWait = relay.NeedsUser
 	f.threads.OnSettled = relay.Settled
 	f.threads.OnReply = relay.ThreadReply

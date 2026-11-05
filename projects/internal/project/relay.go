@@ -115,10 +115,61 @@ func (r *Relay) Message(e db.ThreadEvent) {
 		}
 	case db.EvThreadUpdate:
 		tag, text = foldThreadUpdate(e)
+	case db.EvDecision:
+		r.decision(e)
+		return
 	}
 	if text != "" {
 		r.enqueue([]string{e.ThreadID}, tag, text)
 	}
+}
+
+// decision asks the chats bound to the conversation to pick an option of a
+// decision card: with a button per option where the chat can show them,
+// otherwise as numbered text to answer by replying. The card's id is the
+// request id, so the answer goes through AnswerFromChannel and the chat's
+// next message, like any request.
+func (r *Relay) decision(e db.ThreadEvent) {
+	var d Decision
+	if json.Unmarshal([]byte(e.Payload), &d) != nil || d.Chosen != nil || len(d.Options) == 0 {
+		return
+	}
+	choices := make([]ChannelChoice, len(d.Options))
+	for i, o := range d.Options {
+		label := o.Label
+		if i == d.Recommended {
+			label += " (recommended)"
+		}
+		choices[i] = ChannelChoice{Value: choiceValue(i), Label: label}
+	}
+	r.enqueueJob(relayJob{
+		threadIDs: []string{e.ThreadID},
+		text:      d.chatText() + "\n" + d.replyHint(),
+		request:   &pendingRequest{threadID: e.ThreadID, requestID: e.ID},
+		prompt:    &ChannelPrompt{ThreadID: e.ThreadID, RequestID: e.ID, Text: d.chatText(), Choices: choices},
+	})
+}
+
+// Decided restates the decision card in the chats it was shown to, with the
+// option chosen and where, so none offers buttons for it any more, and stops
+// taking the chats' next message as its answer.
+func (r *Relay) Decided(e db.ThreadEvent, src Source) {
+	if r == nil || r.sink == nil {
+		return
+	}
+	var d Decision
+	if json.Unmarshal([]byte(e.Payload), &d) != nil || d.Chosen == nil || *d.Chosen >= len(d.Options) {
+		return
+	}
+	r.forget(e.ID)
+	if r.prompter == nil {
+		return
+	}
+	where := " on the web"
+	if src.Kind == db.SourceIM {
+		where = " in a chat"
+	}
+	r.enqueueJob(relayJob{settle: e.ID, text: join("Answered"+where, d.Options[*d.Chosen].Label)})
 }
 
 // ThreadReply relays the end of a turn of a non-main thread (a worker or a
@@ -247,6 +298,17 @@ func (r *Relay) Awaiting(platform, chatID string) (threadID, requestID string, o
 		return "", "", false
 	}
 	return reqs[0].threadID, reqs[0].requestID, true
+}
+
+// awaitingAll returns every request a chat was asked that is not settled,
+// oldest first.
+func (r *Relay) awaitingAll(platform, chatID string) []pendingRequest {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]pendingRequest(nil), r.awaiting[chatKey(platform, chatID)]...)
 }
 
 // forget drops a settled request from every chat that was asked it.

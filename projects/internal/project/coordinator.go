@@ -47,6 +47,10 @@ type Coordinator struct {
 	// OnFinal is called with each finished coordinator reply, thread report
 	// and error, once, in order. It must not block.
 	OnFinal func(db.ThreadEvent)
+	// OnDecided is called once a decision card is answered, with the card and
+	// where the answer came from, so chats that were shown it can restate it.
+	// It must not block.
+	OnDecided func(db.ThreadEvent, Source)
 
 	mu     sync.Mutex
 	queues map[string]*queue

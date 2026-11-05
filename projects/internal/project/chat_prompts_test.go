@@ -78,6 +78,7 @@ func promptFixture(t *testing.T, script func(turn *enginetest.Turn) error) (*tes
 	sink := newPromptSink()
 	relay := NewRelay(f.store, sink)
 	svc.Coordinator.OnFinal = relay.Message
+	svc.Coordinator.OnDecided = relay.Decided
 	f.threads.OnWait = relay.NeedsUser
 	f.threads.OnSettled = relay.Settled
 	f.threads.OnReply = relay.ThreadReply

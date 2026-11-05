@@ -56,9 +56,12 @@ func TestSendActionsAndRestate(t *testing.T) {
 }
 
 func TestSendActionsWithoutButtons(t *testing.T) {
-	// WeChat has no inline buttons; its chats get a line of text instead.
-	c := New("bot", "weixin", &fakeSender{}, nil, nil)
-	if _, err := c.SendActions(context.Background(), "42", "x", nil); !errors.Is(err, ErrNoButtons) {
-		t.Fatalf("err = %v, want ErrNoButtons", err)
+	// WeChat and DingTalk have no inline buttons; their chats get text instead
+	// (an approval or a decision card to answer by replying).
+	for _, platform := range []string{"weixin", "dingtalk"} {
+		c := New("bot", platform, &fakeSender{}, nil, nil)
+		if _, err := c.SendActions(context.Background(), "42", "x", nil); !errors.Is(err, ErrNoButtons) {
+			t.Fatalf("%s: err = %v, want ErrNoButtons", platform, err)
+		}
 	}
 }

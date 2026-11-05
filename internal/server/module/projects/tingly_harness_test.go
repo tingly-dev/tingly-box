@@ -54,6 +54,7 @@ type tinglyProjectsHarness struct {
 	otherID, chosenID string
 	workdir           string
 	enabled           *atomic.Bool
+	registry          *channel.Registry
 	call              func(string, string, any, any)
 }
 
@@ -73,6 +74,18 @@ import json, re, sys
 if '--version' in sys.argv:
     print('2.1.218 (Claude Code)')
     sys.exit(0)
+def call_tool(name, args):
+    import urllib.request
+    path = sys.argv[sys.argv.index('--mcp-config') + 1]
+    url = json.load(open(path))['mcpServers']['tingly-projects']['url']
+    def post(body, sid=None):
+        h = {'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream'}
+        if sid: h['Mcp-Session-Id'] = sid
+        r = urllib.request.urlopen(urllib.request.Request(url, json.dumps(body).encode(), h))
+        return r.headers.get('Mcp-Session-Id'), r.read().decode()
+    sid, _ = post({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': {'name': 'harness', 'version': '1'}}})
+    post({'jsonrpc': '2.0', 'method': 'notifications/initialized'}, sid)
+    return post({'jsonrpc': '2.0', 'id': 2, 'method': 'tools/call', 'params': {'name': name, 'arguments': args}}, sid)[1]
 for line in sys.stdin:
     msg = json.loads(line)
     if msg.get('type') != 'user': continue
@@ -89,6 +102,9 @@ for line in sys.stdin:
     if '--system-prompt' in sys.argv:
         events = re.findall(r'<event[^>]*trust="principal"[^>]*>\n(.*?)\n</event>', str(text), re.DOTALL)
         out = 'You said: ' + (events[-1] if events else str(text))
+        if events and events[-1] == 'ask decision':
+            reply = call_tool('request_decision', {'question': 'Ship it now?', 'options': [{'label': 'Ship', 'consequence': 'goes to prod'}, {'label': 'Wait', 'consequence': 'one more review'}], 'recommended': 1, 'reason': 'reviewers are still reading'})
+            out = 'Decision asked' if 'asked the user' in reply else 'Decision failed: ' + reply
     else:
         out = 'Harness reply: ' + str(text)
     print(json.dumps({'type':'assistant','message':{'id':'msg','type':'message','role':'assistant','model':'harness','content':[{'type':'text','text':out}],'usage':{'input_tokens':1,'output_tokens':1}}}), flush=True)
@@ -201,7 +217,7 @@ for line in sys.stdin:
 			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), out))
 		}
 	}
-	return &tinglyProjectsHarness{env: env, bridge: bridge, stores: stores, otherID: otherID, chosenID: chosenID, workdir: workdir, enabled: enabled, call: call}
+	return &tinglyProjectsHarness{env: env, bridge: bridge, stores: stores, otherID: otherID, chosenID: chosenID, workdir: workdir, enabled: enabled, registry: reg, call: call}
 }
 
 func TestTinglySessionIMRoundTrip(t *testing.T) {

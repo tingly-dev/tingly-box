@@ -37,7 +37,7 @@
 
 - 线程审批/提问：`threadPrompter.wait` → `OnWait` → `Relay.NeedsUser`，直接发给绑定在线程**及其祖先**上的 chat，审批带“允许 / 本线程都允许 / 拒绝”按钮，先答为准，`Settled` 把按钮消息改写成结果。这条路径**已经是直达**，没有 coordinator 参与。
 - 但周边仍被转述：`NEEDS_INPUT:` 行结束的回合走普通汇报路径（折叠成 “Needs you … Reply with @N”，再加 coordinator 评论）；审批被回答后，线程继续跑，回合结束又是一条汇报。
-- 决策卡（`request_decision`，`decision.go`）：`ask()` 写 `EvDecision` 并调 `c.final`，但 `Relay.Message` 的 switch 只处理 assistant / error / thread_update，**`EvDecision` 不会发到 IM**（Web 才有卡片；我读代码得出，没跑测试验证，见“待核实”）。用户在 Web 点选项后，`Choose` 把选项文字作为**用户消息**发给 coordinator，触发完整回合：coordinator 必须回复（用户消息回合不允许 `no_update`），随后 `message_thread(cite)` 通知线程，线程回合结束又是汇报——一次点击产生 3–4 条聊天消息。
+- 决策卡（`request_decision`，`decision.go`）：`ask()` 写 `EvDecision` 并调 `c.final`。**原先 `Relay.Message` 的 switch 只处理 assistant / error / thread_update，`EvDecision` 到不了 IM**（已用测试复现：绑定了项目的 chat 一条消息也收不到，Web 才有卡片）——所以权限请求能到钉钉、决策卡到不了。已修，见“决策卡进 IM（已实现）”。用户在 Web 点选项后，`Choose` 把选项文字作为**用户消息**发给 coordinator，触发完整回合：coordinator 必须回复（用户消息回合不允许 `no_update`），随后 `message_thread(cite)` 通知线程，线程回合结束又是汇报——一次点击产生 3–4 条聊天消息（回声问题仍待“设计二”解决）。
 
 ### 权限与 auto 模式
 
@@ -116,7 +116,7 @@ Web 已有卡片的状态和 `LastReport`。增加：
 | 审批（工具权限） | 线程 `can_use_tool` | 已直达，有按钮 | 保留；改写时附上“线程已继续”；之后回合的普通汇报按分级处理 |
 | 提问（AskUserQuestion） | 线程 | 已直达；单选 ≤8 项有按钮 | 保留 |
 | `NEEDS_INPUT:` 行 | 线程回合文本 | 走汇报 + coordinator | 升级为 T0 交互项：卡片/消息带“回复即作答”，答案**直接**成为用户对线程的消息（`source=im`，无 coordinator 前缀），和 TEP #2412 的引用回复路径一致；coordinator 得到备注 |
-| 决策卡 | coordinator | Web 才有；点击变成用户消息触发整回合 | IM 也渲染按钮；点击后：记录选择、卡片就地改写 `Chosen: X`，coordinator 收到**动作型**输入（见下） |
+| 决策卡 | coordinator | ~~Web 才有~~ 已进 IM（按钮或编号文字）；点击变成用户消息触发整回合 | IM 也渲染按钮；点击后：记录选择、卡片就地改写 `Chosen: X`，coordinator 收到**动作型**输入（见下） |
 | 分类器拒绝 | 线程（auto 模式） | 无 | 设计三：转成审批项 |
 
 ### 去掉回声
@@ -260,7 +260,20 @@ P1 没有用真实 Claude Code 验证：规则是否真的在 auto 模式下保�
 
 ## 待核实（本文未验证）
 
-- 决策卡是否真的不会出现在 IM（读代码：`Relay.Message` 不处理 `EvDecision`；没有测试覆盖）。
+- 决策卡进 IM 已核实并修复（见“决策卡进 IM（已实现）”）；未在真实钉钉/飞书/Telegram 上验证。
 - 所有关于 Claude Code 行为的结论来自官方文档，未在真实 CLI 上跑过；`--permission-prompt-tool stdio` 的行为文档只有暗示（P0）。
 - `PermissionDenial` 的真实 JSON 形状按我对 SDK 的了解写成 `tool_name/tool_use_id/tool_input`，需要实测。
 - 本文未改动任何产品代码；TEP #2412 分支尚未合并，涉及它的部分以其提交说明和 `.design/projects-im.md` 里的描述为准。
+
+## 决策卡进 IM（已实现）
+
+根因：`Relay.Message`（`internal/project/relay.go`）按事件种类分发，没有 `EvDecision` 分支，而 `Coordinator.ask` 只经 `OnFinal → Relay.Message` 出站；权限请求走另一条路（`OnWait → Relay.NeedsUser`），所以只有它到 IM。
+
+现在：
+
+- `Relay.decision` 把卡片当作一个**请求**发给绑定在该项目主线程上的 chat：请求 id 是卡片事件 id，`pendingRequest{主线程, 事件 id}`。支持按钮的平台（`ChannelPrompter` 且平台能力含 interaction：Telegram、Feishu/Lark 等）每个选项一个按钮，值为 `o<N>`，推荐项标 `(recommended)`；不支持按钮的平台（`PlatformCapabilities.SupportsInteraction()` 为假：钉钉、Discord、Slack、WhatsApp 等，`ErrNoButtons`）和没有 prompter 的宿主，收到带编号的文字卡 + “Reply 1 or 2 to choose.”。文字含上下文、每项后果、推荐理由。
+- 回答有两条路，都落到同一个 `Coordinator.Choose`：① 按钮回调 `pj` → `RouteAnswer` → `Service.AnswerFromChannel`（要求该 chat 绑定在卡片所属的主线程或其祖先上，否则 `ErrNotThisChat`；已答返回 “This was already answered.”）；② 文字回复：`PostFromChannel` 里该 chat 的待答请求依次尝试，卡片只认选项的**编号或标签**（忽略大小写和句末标点），其它文字是普通消息、卡片继续开着，也不会挡住同一 chat 里之后的审批/提问的文字回答。
+- 答案作为**用户消息**（`source=im`，只有标签本身，不带 coordinator 措辞）交给 coordinator，与 Web 点击一致；`Coordinator.OnDecided → Relay.Decided` 把各 chat 里的卡片改写为 “Answered in a chat/on the web: <标签>”，并忘掉待答记录。Web 先答同样会改写 IM 里的卡片。
+- 信任：能答卡片的只有绑定了该会话的 chat（按钮路径在 `AnswerFromChannel` 校验，文字路径经 chat 的配对/白名单门）。已知缺口（未改，影响审批按钮同理）：按钮回调不经 `handleInboundGate`，在群里是“chat 已绑定”这一级，不区分群成员。
+
+测试：`internal/project/decision_im_test.go`（按钮、纯文字、无 prompter 宿主、点按钮答复、越权、文字编号/标签、Web 先答、未答卡片不挡审批）；`internal/server/module/projects/tingly_decision_test.go`（`TestTinglyDecision*`：真实 MCP `request_decision` → bot → Tingly 传输；按钮、用 `buttonless` 包装模拟钉钉式无按钮平台、他人 chat 越权）；`imchannel` 里断言 dingtalk/weixin 的 `SendActions` 为 `ErrNoButtons`。

@@ -15,7 +15,7 @@ question requests). Neither real IM credentials nor a model account are needed.
 The script requires Python 3 and a POSIX executable; tests skip if unavailable.
 
 The suite covers web/IM round trips for a folder session and coordinator,
-selected-bot routing and rebinding, first-message session creation, `/new` and
+selected-bot routing and rebinding, coordinator decision cards (buttons, and numbered text with a reply for a platform without buttons, simulated by hiding the channel's `SendActions`), first-message session creation, `/new` and
 `/verbose`, permission approvals and denials, text answers to questions, feature
 switching, blocked-chat delivery, `/dir` folder selection, `/project` coordinator selection,
 and privileged-access enforcement (including directory buttons). Unit tests alongside it cover individual
