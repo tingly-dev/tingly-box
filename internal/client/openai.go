@@ -199,6 +199,18 @@ func (c *OpenAIClient) ImagesGenerate(ctx context.Context, req openai.ImageGener
 		}
 		return resp.ToOpenAI(), nil
 	default:
+		// The SDK request type has no frame fields, so the GIF controls ride
+		// along as extra fields for an upstream that understands them.
+		if opts := imagegen.OutputOptionsFrom(ctx); opts.IsGIF() {
+			extra := map[string]any{}
+			if opts.FrameCount != 0 {
+				extra["frame_count"] = opts.FrameCount
+			}
+			if opts.FrameDurationMS != 0 {
+				extra["frame_duration_ms"] = opts.FrameDurationMS
+			}
+			req.SetExtraFields(extra)
+		}
 		return c.client.Images.Generate(ctx, req)
 	}
 }

@@ -12,6 +12,9 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/internal/vision/imagefmt"
+	"github.com/tingly-dev/tingly-box/internal/vision/imagegen"
 )
 
 // Codex-native images protocol.
@@ -68,6 +71,63 @@ type codexImageEditRequest struct {
 	Background string            `json:"background,omitempty"`
 	Quality    string            `json:"quality,omitempty"`
 	Size       string            `json:"size,omitempty"`
+	codexGIFFields
+}
+
+// codexGIFFields are the animated-output controls Codex added to both images
+// endpoints (codex-rs GifOptions, openai/codex#59073). They are sent only for
+// output_format "gif"; every other request omits all three, as the Codex CLI does.
+type codexGIFFields struct {
+	OutputFormat    string `json:"output_format,omitempty"`
+	FrameCount      int    `json:"frame_count,omitempty"`
+	FrameDurationMS int    `json:"frame_duration_ms,omitempty"`
+}
+
+func newCodexGIFFields(o imagegen.OutputOptions) codexGIFFields {
+	if !o.IsGIF() {
+		return codexGIFFields{}
+	}
+	return codexGIFFields{OutputFormat: string(imagefmt.GIF), FrameCount: o.FrameCount, FrameDurationMS: o.FrameDurationMS}
+}
+
+// codexImageGenerateRequest mirrors codex-rs ImageGenerationRequest.
+type codexImageGenerateRequest struct {
+	Prompt     string `json:"prompt"`
+	Model      string `json:"model"`
+	Background string `json:"background,omitempty"`
+	Quality    string `json:"quality,omitempty"`
+	Size       string `json:"size,omitempty"`
+	codexGIFFields
+}
+
+// imagesGenerateNative serves an image generation request on the Codex-native
+// images/generations endpoint. It is used only for animated GIF output, which
+// the Responses image_generation tool cannot express; every other request
+// keeps the Responses path (see .design/image-output-formats.md §3.4).
+func (c *CodexClient) imagesGenerateNative(ctx context.Context, req openai.ImageGenerateParams, opts imagegen.OutputOptions) (*openai.ImagesResponse, error) {
+	logrus.WithContext(ctx).Debugf("[Codex] Using native images/generations endpoint for GIF output, model: %s", req.Model)
+
+	body := &codexImageGenerateRequest{
+		Prompt:         req.Prompt,
+		Model:          strings.TrimSuffix(string(req.Model), fastModelSuffix),
+		Background:     defaultCodexImageOption(string(req.Background)),
+		Quality:        normalizeCodexImageQuality(string(req.Quality)),
+		Size:           defaultCodexImageOption(string(req.Size)),
+		codexGIFFields: newCodexGIFFields(opts),
+	}
+
+	return fanOutCodexImages(ctx, codexImageCount(req.N), func(ctx context.Context) (*openai.ImagesResponse, error) {
+		var resp openai.ImagesResponse
+		reqOpts := []option.RequestOption{option.WithHeader("x-codex-image-turn-id", uuid.NewString())}
+		if err := c.Client().Post(ctx, "images/generations", body, &resp, reqOpts...); err != nil {
+			return nil, fmt.Errorf("codex image generation failed: %w", err)
+		}
+		if len(resp.Data) == 0 {
+			return nil, fmt.Errorf("codex image generation returned no image data")
+		}
+		logrus.WithContext(ctx).Infof("[Codex] Native image generation succeeded, images: %d", len(resp.Data))
+		return &resp, nil
+	})
 }
 
 // ImagesEdit serves an OpenAI /images/edits request against the Codex-native
@@ -76,7 +136,11 @@ type codexImageEditRequest struct {
 func (c *CodexClient) ImagesEdit(ctx context.Context, req openai.ImageEditParams) (*openai.ImagesResponse, error) {
 	// A mask has no representation in this protocol, so it decides the surface
 	// (codex_images_responses.go). Everything else stays on the proven endpoint.
+	opts := imagegen.OutputOptionsFrom(ctx)
 	if resolveCodexImageEditRoute(req.Mask != nil) == codexImageEditRouteResponses {
+		if opts.IsGIF() {
+			return nil, fmt.Errorf("animated GIF output cannot be combined with a mask: Codex's native edit endpoint has no mask support")
+		}
 		return c.imagesEditViaResponses(ctx, req)
 	}
 
@@ -86,6 +150,12 @@ func (c *CodexClient) ImagesEdit(ctx context.Context, req openai.ImageEditParams
 	if err != nil {
 		return nil, err
 	}
+	for i, in := range codexReq.Images {
+		if strings.HasPrefix(in.ImageURL, "data:image/gif;") {
+			return nil, fmt.Errorf("input image %d is a GIF: Codex cannot edit a GIF directly; pass a PNG spritesheet of its frames instead", i)
+		}
+	}
+	codexReq.codexGIFFields = newCodexGIFFields(opts)
 
 	// One image per call, n calls in parallel (codex_images_fanout.go). The
 	// body is built once — the reference readers are single-use — and reused.

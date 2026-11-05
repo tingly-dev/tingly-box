@@ -21,6 +21,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/vision/imagefmt"
+	"github.com/tingly-dev/tingly-box/internal/vision/imagegen"
 )
 
 // HandleOpenAIImageGeneration serves OpenAI-compatible image generation requests
@@ -98,6 +99,23 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 		return
 	}
 
+	outputOpts, err := imagegen.ParseOutputOptionsJSON(bodyBytes)
+	if err == nil && req.N.Valid() {
+		err = checkImageOutputCount(outputOpts, req.N.Value)
+	}
+	if err != nil {
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+	if outputOpts.Format != "" {
+		req.OutputFormat = openai.ImageGenerateParamsOutputFormat(outputOpts.Format)
+	}
+
 	requestModel := req.Model
 	responseModel := requestModel
 
@@ -127,11 +145,22 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	// dual URL configured, route there natively to avoid a transform.
 	provider = provider.ResolveStyle(protocol.APIStyleOpenAI)
 
+	if err := checkImageOutputSupport(provider, outputOpts, false); err != nil {
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
 	actualModel := selectedService.Model
 	req.Model = openai.ImageModel(actualModel)
 
 	sessionID := resolveSessionID(c, &req)
 	c.Request = c.Request.WithContext(typ.WithSessionID(c.Request.Context(), sessionID))
+	c.Request = c.Request.WithContext(imagegen.WithOutputOptions(c.Request.Context(), outputOpts))
 
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, false)
 
