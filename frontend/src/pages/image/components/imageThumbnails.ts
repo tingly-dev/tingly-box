@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchBlob } from '@tingly/vision';
+import { thumbnailType } from './imageOutput';
 
 // Small copies of the session's images, for every place that shows one at a
 // fraction of its size: overview tiles, reference badges, the source strip.
@@ -51,11 +52,18 @@ const canThumbnail = (): boolean => typeof createImageBitmap === 'function'
     && typeof URL.createObjectURL === 'function';
 
 const render = async (src: string, edge: number): Promise<string> => {
-    const bitmap = await createImageBitmap(await fetchBlob(src));
+    const source = await fetchBlob(src);
+    // A GIF is never handed back as is (a tile would animate, or be flattened
+    // by a lossy re-encode): its thumbnail is a lossless still of the first
+    // frame. The animated original is what the lightbox shows.
+    const type = thumbnailType(source.type);
+    const bitmap = await createImageBitmap(source);
     try {
-        const scale = edge / Math.max(bitmap.width, bitmap.height);
-        // Already small: the original is the thumbnail.
-        if (scale >= 1) return src;
+        const fit = edge / Math.max(bitmap.width, bitmap.height);
+        // Already small: the original is the thumbnail (a GIF still is drawn
+        // at its own size, never enlarged).
+        if (fit >= 1 && type === 'image/webp') return src;
+        const scale = Math.min(1, fit);
         const canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.round(bitmap.width * scale));
         canvas.height = Math.max(1, Math.round(bitmap.height * scale));
@@ -63,7 +71,7 @@ const render = async (src: string, edge: number): Promise<string> => {
         if (!context) return src;
         context.imageSmoothingQuality = 'high';
         context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.86));
+        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, type === 'image/webp' ? 0.86 : undefined));
         if (!blob) return src;
         const url = URL.createObjectURL(blob);
         created.add(url);

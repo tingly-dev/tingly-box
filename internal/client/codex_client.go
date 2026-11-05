@@ -16,6 +16,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/vision/imagegen"
 )
 
 // guard
@@ -122,6 +123,12 @@ func (c *CodexClient) ResponsesNewStreaming(ctx context.Context, req responses.R
 // as ChatGPT backend API does not support the standard /images/generations endpoint.
 // Persistence of generated images is handled by the server layer, not the client.
 func (c *CodexClient) ImagesGenerate(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error) {
+	// Animated GIF is the one output the Responses tool cannot produce; it goes
+	// to the native endpoint. Everything else keeps the proven Responses path.
+	if opts := imagegen.OutputOptionsFrom(ctx); opts.IsGIF() {
+		return c.imagesGenerateNative(ctx, req, opts)
+	}
+
 	logrus.WithContext(ctx).Debugf("[Codex] Using Responses API for image generation, model: %s", req.Model)
 
 	// Build Responses API request; it carries no image count, so n > 1 is
@@ -429,8 +436,9 @@ func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGener
 
 	// Determine output format
 	outputFormat := "png"
-	if req.ResponseFormat != "" {
-		outputFormat = string(req.ResponseFormat)
+	switch f := string(req.OutputFormat); f {
+	case "jpeg", "webp":
+		outputFormat = f
 	}
 
 	// Build image_generation tool

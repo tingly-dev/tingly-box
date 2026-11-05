@@ -21,4 +21,21 @@ describe('conversation attachments', () => {
         fireEvent.click(within(dialog).getByRole('button', { name: 'common.close' }));
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     });
+
+    it('never renders an SVG as an image, whatever the chip says', async () => {
+        const { apiFetch } = await import('../client');
+        vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:svg'), revokeObjectURL: vi.fn() }));
+        render(<AttachmentChips owner={{ threadId: 'thread' }} items={[{ name: 'logo.svg', path: 'logo.svg', type: 'image/svg+xml', size: 5 }]} />);
+        const chip = await screen.findByRole('button');
+        expect(within(chip).queryByRole('img')).toBeNull();
+        expect(chip).toHaveTextContent('logo.svg');
+        expect(apiFetch).not.toHaveBeenCalled();
+    });
+
+    it('previews a GIF like any other raster image', async () => {
+        vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:gif'), revokeObjectURL: vi.fn() }));
+        render(<AttachmentChips owner={{ threadId: 'thread' }} items={[{ name: 'loop.gif', path: 'loop.gif', type: 'image/gif', size: 5 }]} />);
+        const button = await screen.findByRole('button', { name: 'loop.gif' });
+        await waitFor(() => expect(within(button).getByRole('img')).toHaveAttribute('src', 'blob:gif'));
+    });
 });

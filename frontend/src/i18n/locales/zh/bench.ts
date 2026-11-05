@@ -162,6 +162,13 @@ export default {
     "size": "尺寸",
     "quality": "质量",
     "count": "数量",
+    "outputFormat": {
+      "label": "格式",
+      "frames": "帧数",
+      "duration": "每帧时长（毫秒）",
+      "gifHint": "实验性功能，仅限 Codex —— 上游对动图 GIF 的支持尚未验证。",
+      "editsHint": "带参考图时走 images/edits，目前还不支持输出格式 —— 这次会按默认格式返回。"
+    },
     "generate": "生成",
     "generateAnother": "再生成一批 · {{count}} 个进行中",
     "generatingNew": "正在生成新图像…",

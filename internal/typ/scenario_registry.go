@@ -117,7 +117,17 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}
-	case ScenarioCodex, ScenarioOpenCode, ScenarioPi, ScenarioWorkBuddy, ScenarioXcode, ScenarioVSCode, ScenarioCursor:
+	case ScenarioCodex:
+		// Codex's built-in image tool posts to {base}/images/generations and
+		// /images/edits on the provider it is configured with, so the codex
+		// scenario carries the image transport too (.design/image-output-formats.md).
+		return ScenarioDescriptor{
+			ID:                 scenario,
+			SupportedTransport: []ScenarioTransport{TransportOpenAI, TransportImageGen},
+			AllowRuleBinding:   true,
+			AllowDirectPathUse: true,
+		}
+	case ScenarioOpenCode, ScenarioPi, ScenarioWorkBuddy, ScenarioXcode, ScenarioVSCode, ScenarioCursor:
 		return ScenarioDescriptor{
 			ID:                 scenario,
 			SupportedTransport: []ScenarioTransport{TransportOpenAI},

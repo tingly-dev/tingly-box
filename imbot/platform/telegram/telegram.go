@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -572,6 +573,20 @@ func (b *Bot) sendMedia(ctx context.Context, chatID int64, opts *core.SendMessag
 		}
 		defer file.Close()
 		input = &models.InputFileUpload{Filename: media.Filename, Data: file}
+
+		// A local file is only a photo if its bytes are one. SVG, GIF and
+		// anything unrecognised go out as a document: sendPhoto rejects SVG and
+		// would flatten a GIF.
+		if media.Type == "image" || media.Type == "sticker" {
+			head := make([]byte, 512)
+			n, _ := io.ReadFull(file, head)
+			if _, seekErr := file.Seek(0, io.SeekStart); seekErr != nil {
+				return nil, seekErr
+			}
+			if kind, _ := core.ClassifyMedia(head[:n], media.Filename, media.MimeType); kind != "image" {
+				media.Type = "document"
+			}
+		}
 	}
 
 	var sentMsg *models.Message

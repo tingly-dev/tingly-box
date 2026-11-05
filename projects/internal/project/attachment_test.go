@@ -73,3 +73,28 @@ func TestLongUploadNameIsCut(t *testing.T) {
 	_, err = l.ResolveAttachments("p1", []string{a.Path})
 	assert.NoError(t, err)
 }
+
+func TestAttachmentTypeComesFromBytesNotJustTheName(t *testing.T) {
+	l := Layout{Root: t.TempDir()}
+	require.NoError(t, l.Ensure("p1"))
+
+	svg := `<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`
+	cases := []struct {
+		name, body, want string
+	}{
+		{"real.png", "\x89PNG\r\n\x1a\nxx", "image/png"},
+		{"anim.gif", "GIF89a\x01\x00\x01\x00", "image/gif"},
+		{"mislabeled.png", "GIF89a\x01\x00\x01\x00", "image/gif"},
+		{"mislabeled.jpg", "\x89PNG\r\n\x1a\nxx", "image/png"},
+		{"pic.svg", svg, "image/svg+xml"},
+		{"sneaky.png", svg, "image/svg+xml"},
+		{"sneaky2.gif", `<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"/>`, "image/svg+xml"},
+		{"notes.txt", "hello", "text/plain"},
+		{"opaque.png", "png", "image/png"},
+	}
+	for _, c := range cases {
+		a, err := l.SaveAttachment("p1", c.name, strings.NewReader(c.body), 0)
+		require.NoError(t, err, c.name)
+		assert.Equal(t, c.want, a.Type, c.name)
+	}
+}

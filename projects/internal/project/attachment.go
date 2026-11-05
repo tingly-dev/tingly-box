@@ -1,6 +1,7 @@
 package project
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -221,17 +222,50 @@ func cleanUploadName(name string) string {
 }
 
 func (l Layout) sniffType(projectID, rel, name string) string {
+	var head []byte
+	if f, _, err := l.OpenLibraryFile(projectID, rel); err == nil {
+		buf := make([]byte, 512)
+		n, _ := io.ReadFull(f, buf)
+		f.Close()
+		head = buf[:n]
+	}
+	// The bytes outrank the name for the types a client may render: a GIF
+	// saved as .png is a GIF, and an SVG hiding under any name is an SVG.
+	if t := rasterType(head); t != "" {
+		return t
+	}
+	if looksLikeSVG(head) {
+		return "image/svg+xml"
+	}
 	if t := mime.TypeByExtension(strings.ToLower(filepath.Ext(name))); t != "" {
 		return strings.SplitN(t, ";", 2)[0]
 	}
-	f, _, err := l.OpenLibraryFile(projectID, rel)
-	if err != nil {
+	if len(head) == 0 {
 		return "application/octet-stream"
 	}
-	defer f.Close()
-	buf := make([]byte, 512)
-	n, _ := f.Read(buf)
-	return strings.SplitN(http.DetectContentType(buf[:n]), ";", 2)[0]
+	return strings.SplitN(http.DetectContentType(head), ";", 2)[0]
+}
+
+func rasterType(b []byte) string {
+	switch {
+	case bytes.HasPrefix(b, []byte("\x89PNG\r\n\x1a\n")):
+		return "image/png"
+	case bytes.HasPrefix(b, []byte{0xFF, 0xD8, 0xFF}):
+		return "image/jpeg"
+	case bytes.HasPrefix(b, []byte("GIF87a")), bytes.HasPrefix(b, []byte("GIF89a")):
+		return "image/gif"
+	case len(b) >= 12 && bytes.HasPrefix(b, []byte("RIFF")) && bytes.Equal(b[8:12], []byte("WEBP")):
+		return "image/webp"
+	}
+	return ""
+}
+
+func looksLikeSVG(b []byte) bool {
+	head := bytes.ToLower(bytes.TrimLeft(b, "\xef\xbb\xbf \t\r\n"))
+	if !bytes.HasPrefix(head, []byte("<")) {
+		return false
+	}
+	return bytes.Contains(head, []byte("<svg"))
 }
 
 func humanSize(n int64) string {

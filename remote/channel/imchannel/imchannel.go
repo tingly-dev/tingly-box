@@ -15,11 +15,13 @@ package imchannel
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/url"
-	"strings"
+	"os"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/control/ask"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
@@ -40,6 +42,19 @@ var fileUploadPlatforms = map[string]bool{
 	"dingtalk": true, "weixin": true, "wecom": true,
 }
 
+// readHead returns the first bytes of a local file for type sniffing, or nil
+// when it cannot be read (the adapter reports the real error on upload).
+func readHead(path string) []byte {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	buf := make([]byte, 512)
+	n, _ := io.ReadFull(f, buf)
+	return buf[:n]
+}
+
 // SendFile delivers local file contents on platforms with file upload support.
 func (c *Channel) SendFile(ctx context.Context, chatID, path, name, mediaType, caption string) error {
 	if c.sender == nil {
@@ -48,10 +63,7 @@ func (c *Channel) SendFile(ctx context.Context, chatID, path, name, mediaType, c
 	if !fileUploadPlatforms[c.platform] {
 		return fmt.Errorf("file upload is not supported by %s", c.platform)
 	}
-	kind := "document"
-	if strings.HasPrefix(mediaType, "image/") {
-		kind = "image"
-	}
+	kind, mediaType := core.ClassifyMedia(readHead(path), name, mediaType)
 	u := (&url.URL{Scheme: "file", Path: path}).String()
 	_, err := c.sender.SendMessage(ctx, chatID, &imbot.SendMessageOptions{
 		Text:      caption,

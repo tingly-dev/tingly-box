@@ -1,6 +1,7 @@
 package assembler
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/openai/openai-go/v3/responses"
@@ -595,11 +596,12 @@ func TestResponsesAssembler_ImageGenerationInProgress(t *testing.T) {
 	}
 }
 
-// TestResponsesAssembler_ImageGenerationPartialImage tests partial image accumulation
+// TestResponsesAssembler_ImageGenerationPartialImage: each partial_image_b64 is a
+// complete standalone image (a progressive preview), not a chunk of one, so a
+// later partial replaces the earlier one.
 func TestResponsesAssembler_ImageGenerationPartialImage(t *testing.T) {
 	assembler := NewResponsesAssembler()
 
-	// Simulate partial image chunks
 	events := []responses.ResponseStreamEventUnion{
 		{
 			Type:              "response.image_generation_call.partial_image",
@@ -623,9 +625,9 @@ func TestResponsesAssembler_ImageGenerationPartialImage(t *testing.T) {
 		}
 	}
 
-	expected := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAADRsF0YAAAAZElEQVQoz2NgQAUc"
+	expected := "CAYAAAADRsF0YAAAAZElEQVQoz2NgQAUc"
 	if assembler.ImageDataAt(0) != expected {
-		t.Errorf("expected image data '%s', got '%s'", expected, assembler.ImageDataAt(0))
+		t.Errorf("expected the last partial '%s', got '%s'", expected, assembler.ImageDataAt(0))
 	}
 
 	if !assembler.HasImage() {
@@ -693,8 +695,8 @@ func TestResponsesAssembler_ImageGenerationFullFlow(t *testing.T) {
 		assembler.Accumulate(event)
 	}
 
-	if assembler.ImageDataAt(0) != "base64data1base64data2" {
-		t.Errorf("expected concatenated image data, got '%s'", assembler.ImageDataAt(0))
+	if assembler.ImageDataAt(0) != "base64data2" {
+		t.Errorf("expected the last partial image, got '%s'", assembler.ImageDataAt(0))
 	}
 
 	if assembler.ImageCallIDAt(0) != "img-123" {
@@ -784,16 +786,16 @@ func TestResponsesAssembler_MultipleImages(t *testing.T) {
 	}
 
 	// Check first image
-	if assembler.ImageDataAt(0) != "image0_part1image0_part2" {
-		t.Errorf("expected 'image0_part1image0_part2' at index 0, got '%s'", assembler.ImageDataAt(0))
+	if assembler.ImageDataAt(0) != "image0_part2" {
+		t.Errorf("expected 'image0_part2' at index 0, got '%s'", assembler.ImageDataAt(0))
 	}
 	if assembler.ImageCallIDAt(0) != "img-0" {
 		t.Errorf("expected call ID 'img-0' at index 0, got '%s'", assembler.ImageCallIDAt(0))
 	}
 
 	// Check second image
-	if assembler.ImageDataAt(1) != "image1_part1image1_part2" {
-		t.Errorf("expected 'image1_part1image1_part2' at index 1, got '%s'", assembler.ImageDataAt(1))
+	if assembler.ImageDataAt(1) != "image1_part2" {
+		t.Errorf("expected 'image1_part2' at index 1, got '%s'", assembler.ImageDataAt(1))
 	}
 	if assembler.ImageCallIDAt(1) != "img-1" {
 		t.Errorf("expected call ID 'img-1' at index 1, got '%s'", assembler.ImageCallIDAt(1))
@@ -812,8 +814,8 @@ func TestResponsesAssembler_MultipleImages(t *testing.T) {
 	}
 
 	// Verify first image data at index 0
-	if assembler.ImageDataAt(0) != "image0_part1image0_part2" {
-		t.Errorf("expected 'image0_part1image0_part2' at index 0, got '%s'", assembler.ImageDataAt(0))
+	if assembler.ImageDataAt(0) != "image0_part2" {
+		t.Errorf("expected 'image0_part2' at index 0, got '%s'", assembler.ImageDataAt(0))
 	}
 
 	// Verify first call ID at index 0
@@ -846,5 +848,101 @@ func TestResponsesAssembler_FinishIncompleteWithAccumulatedOutput(t *testing.T) 
 	}
 	if result.Output[0].Content[0].Text != "partial answer" {
 		t.Errorf("expected accumulated text, got %q", result.Output[0].Content[0].Text)
+	}
+}
+
+// imageEvent decodes a raw SSE payload the way the SDK does, so union-typed
+// fields (the done item's result) are populated.
+func imageEvent(t *testing.T, raw string) responses.ResponseStreamEventUnion {
+	t.Helper()
+	var event responses.ResponseStreamEventUnion
+	if err := json.Unmarshal([]byte(raw), &event); err != nil {
+		t.Fatalf("decode %s: %v", raw, err)
+	}
+	return event
+}
+
+const (
+	pngB64   = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+	jpegB64  = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBD"
+	gifB64   = "R0lGODlhAQABAAAAACw="
+	partial0 = `{"type":"response.image_generation_call.partial_image","item_id":"ig_1","output_index":0,"partial_image_index":0,"partial_image_b64":"` + pngB64 + `","sequence_number":1}`
+	partial1 = `{"type":"response.image_generation_call.partial_image","item_id":"ig_1","output_index":0,"partial_image_index":1,"partial_image_b64":"` + jpegB64 + `","sequence_number":2}`
+)
+
+// A streamed image with several partials ends up as the last complete image,
+// never as the partials glued together.
+func TestResponsesAssembler_MultiPartialStreamEndsAsLastCompleteImage(t *testing.T) {
+	assembler := NewResponsesAssembler()
+	for _, raw := range []string{
+		`{"type":"response.image_generation_call.in_progress","item_id":"ig_1","output_index":0,"sequence_number":0}`,
+		partial0,
+		partial1,
+		`{"type":"response.image_generation_call.partial_image","item_id":"ig_1","output_index":0,"partial_image_index":2,"partial_image_b64":"` + gifB64 + `","sequence_number":3}`,
+	} {
+		assembler.Accumulate(imageEvent(t, raw))
+	}
+
+	if got := assembler.ImageDataAt(0); got != gifB64 {
+		t.Errorf("expected the last partial %q, got %q", gifB64, got)
+	}
+	if got := assembler.ImageCallIDAt(0); got != "ig_1" {
+		t.Errorf("expected call id ig_1, got %q", got)
+	}
+	if assembler.ImageCount() != 1 {
+		t.Errorf("expected 1 image, got %d", assembler.ImageCount())
+	}
+}
+
+// The final result in the done item is the image, even when its status still
+// reads "generating"; it wins over every preview, whatever order they arrive.
+func TestResponsesAssembler_DoneResultWinsOverPartials(t *testing.T) {
+	done := `{"type":"response.output_item.done","output_index":0,"sequence_number":9,"item":{"type":"image_generation_call","id":"ig_1","status":"generating","result":"` + gifB64 + `"}}`
+
+	assembler := NewResponsesAssembler()
+	for _, raw := range []string{partial0, partial1, done} {
+		assembler.Accumulate(imageEvent(t, raw))
+	}
+	if got := assembler.ImageDataAt(0); got != gifB64 {
+		t.Errorf("expected the done result %q, got %q", gifB64, got)
+	}
+
+	// A preview that arrives after the final result must not displace it.
+	late := NewResponsesAssembler()
+	for _, raw := range []string{partial0, done, partial1} {
+		late.Accumulate(imageEvent(t, raw))
+	}
+	if got := late.ImageDataAt(0); got != gifB64 {
+		t.Errorf("a late partial replaced the final result: got %q", got)
+	}
+}
+
+// Without a final result the last preview is what there is.
+func TestResponsesAssembler_LastPartialWithoutDoneResult(t *testing.T) {
+	assembler := NewResponsesAssembler()
+	done := `{"type":"response.output_item.done","output_index":0,"sequence_number":9,"item":{"type":"image_generation_call","id":"ig_1","status":"failed"}}`
+	for _, raw := range []string{partial0, partial1, done} {
+		assembler.Accumulate(imageEvent(t, raw))
+	}
+	if got := assembler.ImageDataAt(0); got != jpegB64 {
+		t.Errorf("expected the last partial %q, got %q", jpegB64, got)
+	}
+}
+
+// Two images in one response stay separate and each keeps its own last image.
+func TestResponsesAssembler_PartialsPerOutputIndexStaySeparate(t *testing.T) {
+	assembler := NewResponsesAssembler()
+	for _, raw := range []string{
+		`{"type":"response.image_generation_call.partial_image","item_id":"a","output_index":0,"partial_image_index":0,"partial_image_b64":"` + pngB64 + `"}`,
+		`{"type":"response.image_generation_call.partial_image","item_id":"b","output_index":1,"partial_image_index":0,"partial_image_b64":"` + jpegB64 + `"}`,
+		`{"type":"response.image_generation_call.partial_image","item_id":"a","output_index":0,"partial_image_index":1,"partial_image_b64":"` + gifB64 + `"}`,
+	} {
+		assembler.Accumulate(imageEvent(t, raw))
+	}
+	if got := assembler.ImageDataAt(0); got != gifB64 {
+		t.Errorf("index 0: expected %q, got %q", gifB64, got)
+	}
+	if got := assembler.ImageDataAt(1); got != jpegB64 {
+		t.Errorf("index 1: expected %q, got %q", jpegB64, got)
 	}
 }

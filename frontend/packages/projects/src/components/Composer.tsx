@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { Box, Button, CircularProgress, IconButton, InputBase, ListItemText, Menu, MenuItem, Paper, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Attachment } from '../client';
-import { isLongText, lineCount, pastedTextFile } from './attachments';
+import { isLongText, isPreviewableImageType, lineCount, pastedTextFile } from './attachments';
 import { ArrowUpward, Attach, Close, Description, ExpandMore, Stop } from './icons';
 import { ModelPicker } from './ModelPicker';
 import { EffortPicker } from './EffortPicker';
@@ -137,7 +137,7 @@ export function Composer({
             key: nextKey.current++,
             name: f.name || 'file',
             lines: pastedLines,
-            preview: f.type.startsWith('image/') ? URL.createObjectURL(f) : undefined,
+            preview: isPreviewableImageType(f.type) ? URL.createObjectURL(f) : undefined,
         }));
         setFiles((cur) => [...cur, ...added]);
         const drop = (keys: number[]) => setFiles((cur) => cur.filter((f) => {

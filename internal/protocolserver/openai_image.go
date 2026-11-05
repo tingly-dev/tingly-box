@@ -20,6 +20,8 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/vision/imagefmt"
+	"github.com/tingly-dev/tingly-box/internal/vision/imagegen"
 )
 
 // HandleOpenAIImageGeneration serves OpenAI-compatible image generation requests
@@ -97,6 +99,23 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 		return
 	}
 
+	outputOpts, err := imagegen.ParseOutputOptionsJSON(bodyBytes)
+	if err == nil && req.N.Valid() {
+		err = checkImageOutputCount(outputOpts, req.N.Value)
+	}
+	if err != nil {
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+	if outputOpts.Format != "" {
+		req.OutputFormat = openai.ImageGenerateParamsOutputFormat(outputOpts.Format)
+	}
+
 	requestModel := req.Model
 	responseModel := requestModel
 
@@ -126,11 +145,22 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	// dual URL configured, route there natively to avoid a transform.
 	provider = provider.ResolveStyle(protocol.APIStyleOpenAI)
 
+	if err := checkImageOutputSupport(provider, outputOpts, false); err != nil {
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
 	actualModel := selectedService.Model
 	req.Model = openai.ImageModel(actualModel)
 
 	sessionID := resolveSessionID(c, &req)
 	c.Request = c.Request.WithContext(typ.WithSessionID(c.Request.Context(), sessionID))
+	c.Request = c.Request.WithContext(imagegen.WithOutputOptions(c.Request.Context(), outputOpts))
 
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, false)
 
@@ -155,6 +185,8 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 
 	usage := protocol.NewTokenUsageWithCache(int(resp.Usage.InputTokens), int(resp.Usage.OutputTokens), 0)
 	ph.trackUsageWithTokenUsage(c, usage, nil)
+
+	annotateImageFormat(resp)
 
 	// Persist generated images under the config image directory (best-effort).
 	ph.persistImageGeneration(&req, resp)
@@ -272,16 +304,24 @@ func (ph *ProtocolHandler) persistImages(resp *openai.ImagesResponse, promptMeta
 		if img.B64JSON == "" {
 			continue
 		}
+
+		// The bytes decide the file type. Anything that is not a known raster
+		// format (an SVG or HTML page returned by a misbehaving upstream, say)
+		// is never written to disk.
+		format, ok := imagefmt.SniffBase64(img.B64JSON)
+		if !ok {
+			logrus.Warnf("[ImageGen] Not persisting image %d: bytes are not png/jpeg/webp/gif", i)
+			continue
+		}
 		if !ensureDir() {
 			return
 		}
 
-		var filename string
-		if i == 0 {
-			filename = fmt.Sprintf("%s.png", timestamp)
-		} else {
-			filename = fmt.Sprintf("%s-%d.png", timestamp, i)
+		stem := timestamp
+		if i > 0 {
+			stem = fmt.Sprintf("%s-%d", timestamp, i)
 		}
+		filename := stem + format.Ext()
 		imagePath := filepath.Join(dateDir, filename)
 
 		imageData, err := base64.StdEncoding.DecodeString(img.B64JSON)
@@ -301,10 +341,22 @@ func (ph *ProtocolHandler) persistImages(resp *openai.ImagesResponse, promptMeta
 			continue
 		}
 
-		promptPath := filepath.Join(dateDir, strings.Replace(filename, ".png", ".txt", 1))
+		promptPath := filepath.Join(dateDir, stem+".txt")
 		if err := os.WriteFile(promptPath, []byte(promptMeta), 0600); err != nil {
 			logrus.Errorf("[ImageGen] Failed to write prompt file: %v", err)
 			continue
 		}
+	}
+}
+
+// annotateImageFormat sets resp.OutputFormat from the first image's bytes so
+// the response reports what was actually returned, whatever was requested or
+// whatever the upstream claimed. Unrecognised bytes leave the field untouched.
+func annotateImageFormat(resp *openai.ImagesResponse) {
+	if resp == nil || len(resp.Data) == 0 {
+		return
+	}
+	if format, ok := imagefmt.SniffBase64(resp.Data[0].B64JSON); ok {
+		resp.OutputFormat = openai.ImagesResponseOutputFormat(format)
 	}
 }

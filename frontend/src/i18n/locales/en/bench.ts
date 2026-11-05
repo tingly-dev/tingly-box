@@ -162,6 +162,13 @@ export default {
     "size": "Size",
     "quality": "Quality",
     "count": "N",
+    "outputFormat": {
+      "label": "Format",
+      "frames": "Frames",
+      "duration": "Frame duration (ms)",
+      "gifHint": "Experimental, Codex only — animated GIF support upstream is unverified.",
+      "editsHint": "References use images/edits, which does not take an output format yet — this run will return the default."
+    },
     "generate": "Generate",
     "generateAnother": "Generate another · {{count}} running",
     "generatingNew": "Generating new images…",

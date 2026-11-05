@@ -46,7 +46,11 @@ export async function uploadAttachments(owner: AttachOwner, files: File[]): Prom
     return body.attachments ?? [];
 }
 
-const isImage = (a: { type: string }) => a.type.startsWith('image/');
+// Only these raster types are drawn. SVG is a document that can carry script and
+// external references, so it stays a download chip like any other file.
+const PREVIEWABLE_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp']);
+export const isPreviewableImageType = (type: string) => PREVIEWABLE_IMAGE_TYPES.has(type.toLowerCase());
+const isImage = (a: { type: string }) => isPreviewableImageType(a.type);
 
 /** Loads a stored file through the host's fetch (so its auth applies); null once it is gone. */
 function useStoredFile(owner: AttachOwner, path: string, enabled: boolean): string | null | undefined {

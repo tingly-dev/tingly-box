@@ -21,6 +21,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/vision/imagegen"
 )
 
 // maxImageEditFormMemory caps how much of a multipart image-edit upload is
@@ -69,7 +70,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageEdit(c *gin.Context) {
 		return
 	}
 
-	req, err := parseImageEditRequest(c)
+	req, outputOpts, err := parseImageEditRequestWithOptions(c)
 	if err != nil {
 		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -109,11 +110,22 @@ func (ph *ProtocolHandler) HandleOpenAIImageEdit(c *gin.Context) {
 	// dual URL configured, route there natively to avoid a transform.
 	provider = provider.ResolveStyle(protocol.APIStyleOpenAI)
 
+	if err := checkImageOutputSupport(provider, outputOpts, true); err != nil {
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
 	actualModel := selectedService.Model
 	req.Model = openai.ImageModel(actualModel)
 
 	sessionID := resolveSessionID(c, req)
 	c.Request = c.Request.WithContext(typ.WithSessionID(c.Request.Context(), sessionID))
+	c.Request = c.Request.WithContext(imagegen.WithOutputOptions(c.Request.Context(), outputOpts))
 
 	SetTrackingContext(c, rule, provider, actualModel, string(responseModel), false)
 
@@ -135,6 +147,8 @@ func (ph *ProtocolHandler) HandleOpenAIImageEdit(c *gin.Context) {
 	usage := protocol.NewTokenUsageWithCache(int(resp.Usage.InputTokens), int(resp.Usage.OutputTokens), 0)
 	ph.trackUsageWithTokenUsage(c, usage, nil)
 
+	annotateImageFormat(resp)
+
 	// Persist edited images under the config image directory (best-effort).
 	ph.persistImageEdit(req, resp)
 
@@ -144,41 +158,55 @@ func (ph *ProtocolHandler) HandleOpenAIImageEdit(c *gin.Context) {
 // parseImageEditRequest decodes the inbound request into ImageEditParams,
 // dispatching on Content-Type, and validates the required fields.
 func parseImageEditRequest(c *gin.Context) (*openai.ImageEditParams, error) {
+	req, _, err := parseImageEditRequestWithOptions(c)
+	return req, err
+}
+
+// parseImageEditRequestWithOptions is parseImageEditRequest plus the output
+// controls (output_format, frame_count, frame_duration_ms) the SDK request
+// type cannot carry.
+func parseImageEditRequestWithOptions(c *gin.Context) (*openai.ImageEditParams, imagegen.OutputOptions, error) {
 	var (
-		req *openai.ImageEditParams
-		err error
+		req  *openai.ImageEditParams
+		opts imagegen.OutputOptions
+		err  error
 	)
 	if strings.HasPrefix(c.ContentType(), "multipart/form-data") {
-		req, err = parseImageEditMultipart(c)
+		req, opts, err = parseImageEditMultipart(c)
 	} else {
-		req, err = parseImageEditJSON(c)
+		req, opts, err = parseImageEditJSON(c)
 	}
 	if err != nil {
-		return nil, err
+		return nil, imagegen.OutputOptions{}, err
 	}
 
 	if string(req.Model) == "" {
-		return nil, fmt.Errorf("Model is required")
+		return nil, imagegen.OutputOptions{}, fmt.Errorf("Model is required")
 	}
 	if req.Prompt == "" {
-		return nil, fmt.Errorf("Prompt is required")
+		return nil, imagegen.OutputOptions{}, fmt.Errorf("Prompt is required")
 	}
 	if req.Image.OfFile == nil && len(req.Image.OfFileArray) == 0 {
-		return nil, fmt.Errorf("At least one input image is required")
+		return nil, imagegen.OutputOptions{}, fmt.Errorf("At least one input image is required")
 	}
-	return req, nil
+	if req.N.Valid() {
+		if err := checkImageOutputCount(opts, req.N.Value); err != nil {
+			return nil, imagegen.OutputOptions{}, err
+		}
+	}
+	return req, opts, nil
 }
 
 // parseImageEditMultipart parses the standard OpenAI multipart wire format.
 // Image files may arrive under "image" (repeated) or "image[]" — both spellings
 // are used in the wild across SDKs and curl examples.
-func parseImageEditMultipart(c *gin.Context) (*openai.ImageEditParams, error) {
+func parseImageEditMultipart(c *gin.Context) (*openai.ImageEditParams, imagegen.OutputOptions, error) {
 	if err := c.Request.ParseMultipartForm(maxImageEditFormMemory); err != nil {
-		return nil, fmt.Errorf("failed to parse multipart form: %s", err.Error())
+		return nil, imagegen.OutputOptions{}, fmt.Errorf("failed to parse multipart form: %s", err.Error())
 	}
 	form := c.Request.MultipartForm
 	if form == nil {
-		return nil, fmt.Errorf("empty multipart form")
+		return nil, imagegen.OutputOptions{}, fmt.Errorf("empty multipart form")
 	}
 
 	var fileHeaders []*multipart.FileHeader
@@ -186,14 +214,14 @@ func parseImageEditMultipart(c *gin.Context) (*openai.ImageEditParams, error) {
 		fileHeaders = append(fileHeaders, form.File[key]...)
 	}
 	if len(fileHeaders) == 0 {
-		return nil, fmt.Errorf("at least one image file is required (field \"image\" or \"image[]\")")
+		return nil, imagegen.OutputOptions{}, fmt.Errorf("at least one image file is required (field \"image\" or \"image[]\")")
 	}
 
 	req := &openai.ImageEditParams{}
 	for _, fh := range fileHeaders {
 		data, err := readMultipartFile(fh)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read image %q: %s", fh.Filename, err.Error())
+			return nil, imagegen.OutputOptions{}, fmt.Errorf("failed to read image %q: %s", fh.Filename, err.Error())
 		}
 		contentType := fh.Header.Get("Content-Type")
 		if contentType == "" || contentType == "application/octet-stream" {
@@ -210,7 +238,7 @@ func parseImageEditMultipart(c *gin.Context) (*openai.ImageEditParams, error) {
 	if masks := form.File["mask"]; len(masks) > 0 {
 		data, err := readMultipartFile(masks[0])
 		if err != nil {
-			return nil, fmt.Errorf("failed to read mask: %s", err.Error())
+			return nil, imagegen.OutputOptions{}, fmt.Errorf("failed to read mask: %s", err.Error())
 		}
 		req.Mask = openai.File(bytes.NewReader(data), masks[0].Filename, "image/png")
 	}
@@ -236,19 +264,27 @@ func parseImageEditMultipart(c *gin.Context) (*openai.ImageEditParams, error) {
 	if v := formValue("n"); v != "" {
 		n, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("invalid n: %s", v)
+			return nil, imagegen.OutputOptions{}, fmt.Errorf("invalid n: %s", v)
 		}
 		req.N = param.NewOpt(n)
 	}
 	if v := formValue("output_compression"); v != "" {
 		oc, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("invalid output_compression: %s", v)
+			return nil, imagegen.OutputOptions{}, fmt.Errorf("invalid output_compression: %s", v)
 		}
 		req.OutputCompression = param.NewOpt(oc)
 	}
 
-	return req, nil
+	outputOpts, err := imagegen.ParseOutputOptionsForm(formValue("output_format"), formValue("frame_count"), formValue("frame_duration_ms"))
+	if err != nil {
+		return nil, imagegen.OutputOptions{}, err
+	}
+	if outputOpts.Format != "" {
+		req.OutputFormat = openai.ImageEditParamsOutputFormat(outputOpts.Format)
+	}
+
+	return req, outputOpts, nil
 }
 
 func readMultipartFile(fh *multipart.FileHeader) ([]byte, error) {
@@ -299,15 +335,15 @@ func (i *imageEditJSONImages) UnmarshalJSON(data []byte) error {
 // parseImageEditJSON parses the JSON convenience encoding. Remote http(s)
 // image URLs are intentionally rejected: the gateway does not fetch arbitrary
 // URLs on behalf of callers (SSRF), it only decodes inline content.
-func parseImageEditJSON(c *gin.Context) (*openai.ImageEditParams, error) {
+func parseImageEditJSON(c *gin.Context) (*openai.ImageEditParams, imagegen.OutputOptions, error) {
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read request body: %s", err.Error())
+		return nil, imagegen.OutputOptions{}, fmt.Errorf("failed to read request body: %s", err.Error())
 	}
 
 	var jsonReq imageEditJSONRequest
 	if err := json.Unmarshal(bodyBytes, &jsonReq); err != nil {
-		return nil, fmt.Errorf("invalid request body: %s", err.Error())
+		return nil, imagegen.OutputOptions{}, fmt.Errorf("invalid request body: %s", err.Error())
 	}
 
 	req := &openai.ImageEditParams{
@@ -333,7 +369,7 @@ func parseImageEditJSON(c *gin.Context) (*openai.ImageEditParams, error) {
 	for idx, s := range jsonReq.Image {
 		data, contentType, err := decodeInlineImage(s)
 		if err != nil {
-			return nil, fmt.Errorf("invalid image[%d]: %s", idx, err.Error())
+			return nil, imagegen.OutputOptions{}, fmt.Errorf("invalid image[%d]: %s", idx, err.Error())
 		}
 		name := "image-" + strconv.Itoa(idx) + extensionForImageContentType(contentType)
 		file := openai.File(bytes.NewReader(data), name, contentType)
@@ -350,7 +386,7 @@ func parseImageEditJSON(c *gin.Context) (*openai.ImageEditParams, error) {
 	if strings.TrimSpace(jsonReq.Mask) != "" {
 		data, contentType, err := decodeInlineImage(jsonReq.Mask)
 		if err != nil {
-			return nil, fmt.Errorf("invalid mask: %s", err.Error())
+			return nil, imagegen.OutputOptions{}, fmt.Errorf("invalid mask: %s", err.Error())
 		}
 		if contentType == "" {
 			contentType = "image/png"
@@ -358,7 +394,15 @@ func parseImageEditJSON(c *gin.Context) (*openai.ImageEditParams, error) {
 		req.Mask = openai.File(bytes.NewReader(data), "mask"+extensionForImageContentType(contentType), contentType)
 	}
 
-	return req, nil
+	outputOpts, err := imagegen.ParseOutputOptionsJSON(bodyBytes)
+	if err != nil {
+		return nil, imagegen.OutputOptions{}, err
+	}
+	if outputOpts.Format != "" {
+		req.OutputFormat = openai.ImageEditParamsOutputFormat(outputOpts.Format)
+	}
+
+	return req, outputOpts, nil
 }
 
 // decodeInlineImage decodes a data URL or bare base64 string into image bytes
