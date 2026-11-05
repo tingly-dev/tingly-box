@@ -2,7 +2,7 @@
 // (a submenu), feedback and the version live together here instead of as four stacked rail buttons
 // (.design/ui-redesign.md §3.2 — they are set-once preferences, and the rail
 // ran out of room at 900px). The same controls stay on System › General.
-import { AppRegistration as IconApps, ChevronRight as IconChevronRight, MessageReport as IconMessageReport, OpenInNew as IconOpenInNew, Settings as IconSettings } from '@/components/icons';
+import { AppRegistration as IconApps, ChevronRight as IconChevronRight, MessageReport as IconMessageReport, OpenInNew as IconOpenInNew, Settings as IconSettings, TextSnippet as IconFileText } from '@/components/icons';
 import { displayVersion } from '@/utils/version';
 import { Box, Divider, MenuItem, MenuList, Popover, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -130,6 +130,10 @@ export const PreferencesMenu: React.FC<PreferencesMenuProps> = ({ anchorEl, onCl
                 <MenuItem component={RouterLink} to="/system" onClick={onClose} sx={{ gap: 1.5 }}>
                     <IconSettings sx={{ fontSize: 18 }} />
                     <Typography variant="body2">{t('layout.activityBar.allSettings')}</Typography>
+                </MenuItem>
+                <MenuItem component={RouterLink} to="/system/logs" onClick={onClose} sx={{ gap: 1.5 }}>
+                    <IconFileText sx={{ fontSize: 18 }} />
+                    <Typography variant="body2">{t('layout.logs')}</Typography>
                 </MenuItem>
                 <MenuItem component="a" href={FEEDBACK_URL} target="_blank" rel="noopener noreferrer" onClick={onClose} sx={{ gap: 1.5 }}>
                     <IconMessageReport sx={{ fontSize: 18 }} />

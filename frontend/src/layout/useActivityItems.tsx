@@ -312,6 +312,7 @@ export function useActivityItems(): ActivityItem[] {
                     { path: '/image/idea-to-prompt', label: t('ideaPrompt.title', { defaultValue: 'Idea to Prompt' }), icon: <IconWriting sx={{ fontSize: 20 }} /> },
                     { path: '/image/to-prompt', label: t('imagePrompt.title', { defaultValue: 'Image to Prompt' }), icon: <IconPhotoScan sx={{ fontSize: 20 }} /> },
                     { path: '/image/library', label: t('imageLibrary.title', { defaultValue: 'Library' }), icon: <IconLibraryPhoto sx={{ fontSize: 20 }} /> },
+                    { type: 'divider' },
                     { path: '/image/api', label: t('layout.nav.useImageGen', { defaultValue: 'Image API' }), icon: <IconPlug sx={{ fontSize: 20 }} /> },
                 ],
             }] as ActivityItem[] : []),
