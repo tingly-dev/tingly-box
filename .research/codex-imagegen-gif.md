@@ -24,6 +24,8 @@ Method: read the `openai/codex` source on `main` through `gh api`, plus web sear
 - Model guidance (`imagegen_gif_description.md`): simple looping GIFs only, 2-16 frames; to edit one, build a spritesheet of equal-size cells and pass that through `referenced_image_paths`; do not pass the GIF itself as the edit input.
 - Not verified: whether `api.openai.com/v1/images/generations` accepts `output_format: "gif"`. The public reference lists `output_format` as `png | jpeg | webp` and says it is supported for GPT image models only. Whether the ChatGPT/Codex backend renders true animation or assembles frames server-side is also unknown (the spritesheet advice suggests the latter).
 
+- A second, differently shaped GIF interface exists on the ChatGPT side (reported by the user from a ChatGPT answer, not read in any source): the model-facing tool `image_gen.text2im` takes `animation: {rows, columns, frame_count, frame_duration_ms}`, i.e. a spritesheet grid plus frame timing, whereas Codex's open-source tool and wire have `gif: {frame_count, frame_duration_ms}` / `output_format:"gif"` with no `rows` / `columns`. The same note says GIF is "static multi-frame sheet, then assembled", which matches the spritesheet advice in `imagegen_gif_description.md`. Unverified: which of the two shapes the ChatGPT/Codex backend `images/generations` endpoint really accepts, and whether the backend needs the grid. Our implementation follows the open-source Codex wire, so it can only be as right as that wire is.
+
 ## 3. SVG
 
 - No `svg` string in any file of the imagegen extension (`tool.rs`, `artifact.rs`, `extension.rs`, `backend.rs`), and `GeneratedImageFormat` has only `Png` and `Gif`.

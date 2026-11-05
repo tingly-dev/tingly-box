@@ -83,8 +83,11 @@ func TestCodexImagesGenerate_GIFUsesNativeEndpoint(t *testing.T) {
 	assert.Equal(t, "gif", gjson.GetBytes(b, "output_format").String())
 	assert.EqualValues(t, 6, gjson.GetBytes(b, "frame_count").Int())
 	assert.EqualValues(t, 150, gjson.GetBytes(b, "frame_duration_ms").Int())
-	assert.Equal(t, "1024x1024", gjson.GetBytes(b, "size").String())
-	assert.Equal(t, "high", gjson.GetBytes(b, "quality").String())
+	// Codex's own GIF request always carries size/quality "auto" and an opaque
+	// or transparent background, never an explicit size or "auto" background.
+	assert.Equal(t, "auto", gjson.GetBytes(b, "size").String())
+	assert.Equal(t, "auto", gjson.GetBytes(b, "quality").String())
+	assert.Equal(t, "opaque", gjson.GetBytes(b, "background").String())
 	assert.False(t, gjson.GetBytes(b, "stream").Exists(), "the native endpoint is plain JSON")
 	assert.False(t, gjson.GetBytes(b, "tools").Exists())
 }
@@ -102,6 +105,57 @@ func TestCodexImagesGenerate_GIFDefaultsOmitFrameFields(t *testing.T) {
 	assert.False(t, gjson.GetBytes(b, "frame_duration_ms").Exists())
 	assert.Equal(t, "auto", gjson.GetBytes(b, "size").String())
 	assert.Equal(t, "auto", gjson.GetBytes(b, "quality").String())
+	assert.Equal(t, "opaque", gjson.GetBytes(b, "background").String())
+}
+
+func TestCodexImagesGenerate_GIFRequestMatchesCodexsOwnShape(t *testing.T) {
+	for _, tc := range []struct{ name, background, want string }{
+		{"unset is opaque", "", "opaque"},
+		{"auto is opaque", "auto", "opaque"},
+		{"opaque", "opaque", "opaque"},
+		{"transparent is kept", "transparent", "transparent"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, requests := fakeCodexBackend(t)
+			ctx := imagegen.WithOutputOptions(context.Background(), imagegen.OutputOptions{Format: imagefmt.GIF})
+			_, err := c.ImagesGenerate(ctx, openai.ImageGenerateParams{
+				Prompt: "x", Model: "gpt-image-2",
+				Size: openai.ImageGenerateParamsSize1536x1024, Quality: openai.ImageGenerateParamsQualityLow,
+				Background: openai.ImageGenerateParamsBackground(tc.background),
+			})
+			require.NoError(t, err)
+			b := requests()[0].body
+			assert.Equal(t, tc.want, gjson.GetBytes(b, "background").String())
+			assert.Equal(t, "auto", gjson.GetBytes(b, "size").String(), "an explicit size is not forwarded for GIF")
+			assert.Equal(t, "auto", gjson.GetBytes(b, "quality").String())
+		})
+	}
+}
+
+// An upstream 400 with no usable JSON body must still leave the operator
+// something to go on: the request ids and content type from the response.
+func TestCodexImagesGenerate_GIFEmptyBodyRejectionCarriesResponseDetail(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("x-codex-imagegen-request-id", "req-abc123")
+		w.Header().Set("x-request-id", "gw-77")
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer srv.Close()
+	oc := openai.NewClient(
+		option.WithBaseURL(srv.URL+"/backend-api/"),
+		option.WithAPIKey("test"),
+		option.WithHTTPClient(&http.Client{Transport: &codexRoundTripper{RoundTripper: http.DefaultTransport}}),
+	)
+	c := &CodexClient{OpenAIClient: &OpenAIClient{client: oc}}
+
+	ctx := imagegen.WithOutputOptions(context.Background(), imagegen.OutputOptions{Format: imagefmt.GIF})
+	_, err := c.ImagesGenerate(ctx, openai.ImageGenerateParams{Prompt: "x", Model: "gpt-image-2"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "req-abc123")
+	assert.Contains(t, err.Error(), "gw-77")
+	assert.Contains(t, err.Error(), "empty response body")
+	assert.Equal(t, http.StatusBadRequest, protocol.ClassifyUpstreamFailure(err, http.StatusInternalServerError).Status, "classification by status is unchanged")
 }
 
 func TestCodexImagesGenerate_GIFFansOutForN(t *testing.T) {
@@ -180,6 +234,9 @@ func TestCodexImagesEdit_GIFOutputGoesToTheNativeEndpoint(t *testing.T) {
 	assert.Equal(t, "gif", gjson.GetBytes(b, "output_format").String())
 	assert.EqualValues(t, 8, gjson.GetBytes(b, "frame_count").Int())
 	assert.EqualValues(t, 100, gjson.GetBytes(b, "frame_duration_ms").Int())
+	assert.Equal(t, "opaque", gjson.GetBytes(b, "background").String(), "Codex never sends an auto background for GIF")
+	assert.Equal(t, "auto", gjson.GetBytes(b, "size").String())
+	assert.Equal(t, "auto", gjson.GetBytes(b, "quality").String())
 }
 
 func TestCodexImagesEdit_PNGRequestsStayUnchanged(t *testing.T) {

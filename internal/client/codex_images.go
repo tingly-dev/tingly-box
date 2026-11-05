@@ -3,6 +3,8 @@ package client
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -83,6 +85,44 @@ type codexGIFFields struct {
 	FrameDurationMS int    `json:"frame_duration_ms,omitempty"`
 }
 
+// applyCodexGIFShape gives a GIF request the exact shape Codex's own imagegen
+// tool sends (codex-rs ext/image-generation/src/tool.rs): quality and size
+// "auto", and a background that is "transparent" only when asked for, "opaque"
+// otherwise. Codex never sends "auto" or an explicit size for a GIF, so neither
+// is forwarded; the backend chooses the sheet layout.
+func applyCodexGIFShape(background, quality, size *string, requestedBackground string) {
+	*background = "opaque"
+	if requestedBackground == "transparent" {
+		*background = "transparent"
+	}
+	*quality = "auto"
+	*size = "auto"
+}
+
+// describeCodexImageResponse names what the upstream said when its error body
+// carried no JSON the SDK could parse (an empty 400 reads as "body=" and nothing
+// else): the content type and the request ids, so the failure can be traced.
+func describeCodexImageResponse(err error) string {
+	var apiErr *openai.Error
+	if !errors.As(err, &apiErr) || apiErr.Response == nil {
+		return ""
+	}
+	var parts []string
+	for _, name := range []string{"Content-Type", "X-Codex-Imagegen-Request-Id", "X-Request-Id", "Cf-Ray"} {
+		if v := apiErr.Response.Header.Get(name); v != "" {
+			parts = append(parts, strings.ToLower(name)+"="+v)
+		}
+	}
+	detail := strings.Join(parts, " ")
+	if apiErr.RawJSON() == "" {
+		return " (empty response body; " + detail + ")"
+	}
+	if detail == "" {
+		return ""
+	}
+	return " (" + detail + ")"
+}
+
 func newCodexGIFFields(o imagegen.OutputOptions) codexGIFFields {
 	if !o.IsGIF() {
 		return codexGIFFields{}
@@ -110,17 +150,20 @@ func (c *CodexClient) imagesGenerateNative(ctx context.Context, req openai.Image
 	body := &codexImageGenerateRequest{
 		Prompt:         req.Prompt,
 		Model:          strings.TrimSuffix(string(req.Model), fastModelSuffix),
-		Background:     defaultCodexImageOption(string(req.Background)),
-		Quality:        normalizeCodexImageQuality(string(req.Quality)),
-		Size:           defaultCodexImageOption(string(req.Size)),
 		codexGIFFields: newCodexGIFFields(opts),
+	}
+	applyCodexGIFShape(&body.Background, &body.Quality, &body.Size, string(req.Background))
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		if raw, err := json.Marshal(body); err == nil {
+			logrus.WithContext(ctx).Debugf("[Codex] native images/generations request body: %s", raw)
+		}
 	}
 
 	return fanOutCodexImages(ctx, codexImageCount(req.N), func(ctx context.Context) (*openai.ImagesResponse, error) {
 		var resp openai.ImagesResponse
 		reqOpts := []option.RequestOption{option.WithHeader("x-codex-image-turn-id", uuid.NewString())}
 		if err := c.Client().Post(ctx, "images/generations", body, &resp, reqOpts...); err != nil {
-			return nil, fmt.Errorf("codex image generation failed: %w", err)
+			return nil, fmt.Errorf("codex image generation failed: %w%s", err, describeCodexImageResponse(err))
 		}
 		if len(resp.Data) == 0 {
 			return nil, fmt.Errorf("codex image generation returned no image data")
@@ -156,6 +199,9 @@ func (c *CodexClient) ImagesEdit(ctx context.Context, req openai.ImageEditParams
 		}
 	}
 	codexReq.codexGIFFields = newCodexGIFFields(opts)
+	if opts.IsGIF() {
+		applyCodexGIFShape(&codexReq.Background, &codexReq.Quality, &codexReq.Size, codexReq.Background)
+	}
 
 	// One image per call, n calls in parallel (codex_images_fanout.go). The
 	// body is built once — the reference readers are single-use — and reused.
@@ -168,7 +214,7 @@ func (c *CodexClient) ImagesEdit(ctx context.Context, req openai.ImageEditParams
 			option.WithHeader("x-codex-image-turn-id", uuid.NewString()),
 		}
 		if err := c.Client().Post(ctx, "images/edits", codexReq, &resp, opts...); err != nil {
-			return nil, fmt.Errorf("codex image edit failed: %w", err)
+			return nil, fmt.Errorf("codex image edit failed: %w%s", err, describeCodexImageResponse(err))
 		}
 		if len(resp.Data) == 0 {
 			return nil, fmt.Errorf("codex image edit returned no image data")
