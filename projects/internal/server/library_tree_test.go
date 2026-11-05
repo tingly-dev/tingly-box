@@ -1,10 +1,13 @@
 package server
 
 import (
+	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -52,4 +55,135 @@ func TestLibraryTreeListsOneLevelAndRefusesEscapes(t *testing.T) {
 	assert.Equal(t, 404, c.do("GET", "/projects/"+p.ID+"/library/tree?path=nope", nil, nil))
 	assert.Equal(t, 400, c.do("GET", "/projects/"+p.ID+"/library/tree?path=a.md", nil, nil))
 	assert.Equal(t, 404, c.do("GET", "/projects/missing/library/tree", nil, nil))
+}
+
+func TestLibraryFileDownloadAndDeleteApplyTheSameChecksAsTheTree(t *testing.T) {
+	root := t.TempDir()
+	_, c := newServerAt(t, nil, root)
+	var p db.Project
+	require.Equal(t, http.StatusCreated, c.do("POST", "/projects", map[string]any{"name": "files"}, &p))
+	lib := project.Layout{Root: root}.LibraryDir(p.ID)
+	outside := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(outside, "secret"), []byte("s"), 0o644))
+	for _, f := range []string{"a.md", "outputs/run/report.md", ".tmp/t/x"} {
+		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(lib, f)), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(lib, f), []byte("x"), 0o644))
+	}
+	require.NoError(t, os.Symlink(outside, filepath.Join(lib, "linkdir")))
+	require.NoError(t, os.Symlink(filepath.Join(outside, "secret"), filepath.Join(lib, "leak.txt")))
+
+	file := func(rel string) string { return "/projects/" + p.ID + "/library/file?path=" + url.QueryEscape(rel) }
+	assert.Equal(t, 200, c.do("GET", file("a.md"), nil, nil))
+	assert.Equal(t, 200, c.do("GET", file("outputs/run/report.md"), nil, nil))
+	for _, bad := range []string{"..", "../x", "outputs/../../x", ".tmp/t/x", "linkdir/secret", "leak.txt"} {
+		assert.Equal(t, 400, c.do("GET", file(bad), nil, nil), "GET "+bad)
+		assert.Equal(t, 400, c.do("DELETE", file(bad), nil, nil), "DELETE "+bad)
+	}
+	assert.Equal(t, 404, c.do("GET", file("nope"), nil, nil))
+	assert.Equal(t, 404, c.do("GET", file("outputs"), nil, nil))
+	assert.Equal(t, 404, c.do("DELETE", file("outputs"), nil, nil))
+
+	// Nothing refused was touched.
+	assert.FileExists(t, filepath.Join(lib, ".tmp/t/x"))
+	assert.FileExists(t, filepath.Join(outside, "secret"))
+	assert.DirExists(t, filepath.Join(lib, "outputs"))
+
+	assert.Equal(t, 200, c.do("DELETE", file("a.md"), nil, nil))
+	assert.NoFileExists(t, filepath.Join(lib, "a.md"))
+}
+
+func TestLibraryFileRefusesEncodedAndOddPaths(t *testing.T) {
+	root := t.TempDir()
+	_, c := newServerAt(t, nil, root)
+	var p db.Project
+	require.Equal(t, http.StatusCreated, c.do("POST", "/projects", map[string]any{"name": "odd"}, &p))
+	lib := project.Layout{Root: root}.LibraryDir(p.ID)
+	require.NoError(t, os.MkdirAll(lib, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(lib, "a.md"), []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(filepath.Dir(lib), "outside.md"), []byte("OUT"), 0o644))
+
+	get := func(rawQuery string) int {
+		code, body := c.fetch("/projects/" + p.ID + "/library/file?path=" + rawQuery)
+		assert.NotContains(t, body, "OUT", rawQuery)
+		return code
+	}
+	// Decoded once by the server: ../outside.md in various spellings.
+	for _, q := range []string{"..%2Foutside.md", "%2e%2e/outside.md", "%2e%2e%2foutside.md", "%2E%2E%2Foutside.md", "..%5Coutside.md", "a.md%00", "%00", "%2Fetc%2Fpasswd%00", ".%2Foutside.md", "..%252foutside.md"} {
+		assert.Contains(t, []int{400, 404}, get(q), q)
+	}
+	// Refused as invalid, specifically.
+	for _, q := range []string{"..%2Foutside.md", "%2e%2e%2foutside.md", "a.md%00", ".%2Fa.md"} {
+		assert.Equal(t, 400, get(q), q)
+	}
+	// Absolute paths stay inside the library, so there is nothing there.
+	assert.Equal(t, 404, get("%2Fetc%2Fpasswd"))
+	assert.Equal(t, 404, get("A.MD")) // not a.md on a case-sensitive file system
+}
+
+func TestLibraryDownloadServesTheOpenedFileAsAnAttachment(t *testing.T) {
+	root := t.TempDir()
+	_, c := newServerAt(t, nil, root)
+	var p db.Project
+	require.Equal(t, http.StatusCreated, c.do("POST", "/projects", map[string]any{"name": "dl"}, &p))
+	lib := project.Layout{Root: root}.LibraryDir(p.ID)
+	require.NoError(t, os.MkdirAll(lib, 0o755))
+	for name, body := range map[string]string{"page.html": "<script>alert(1)</script>", "index.html": "<h1>i</h1>", "报告.txt": "0123456789"} {
+		require.NoError(t, os.WriteFile(filepath.Join(lib, name), []byte(body), 0o644))
+	}
+
+	do := func(name string, hdr map[string]string) *http.Response {
+		req, err := http.NewRequest("GET", c.base+"/projects/"+p.ID+"/library/file?path="+url.QueryEscape(name), nil)
+		require.NoError(t, err)
+		for k, v := range hdr {
+			req.Header.Set(k, v)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		t.Cleanup(func() { resp.Body.Close() })
+		return resp
+	}
+	resp := do("page.html", nil)
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.True(t, strings.HasPrefix(resp.Header.Get("Content-Disposition"), "attachment;"), resp.Header.Get("Content-Disposition"))
+	assert.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+
+	// A file named index.html is a file, not a redirect to its folder.
+	resp = do("index.html", nil)
+	assert.Equal(t, 200, resp.StatusCode)
+	b, _ := io.ReadAll(resp.Body)
+	assert.Equal(t, "<h1>i</h1>", string(b))
+
+	resp = do("报告.txt", map[string]string{"Range": "bytes=2-4"})
+	assert.Equal(t, 206, resp.StatusCode)
+	b, _ = io.ReadAll(resp.Body)
+	assert.Equal(t, "234", string(b))
+	_, params, err := mime.ParseMediaType(resp.Header.Get("Content-Disposition"))
+	require.NoError(t, err)
+	assert.Equal(t, "报告.txt", params["filename"])
+}
+
+func TestUploadsNeverFollowLinksOutOfTheLibrary(t *testing.T) {
+	root := t.TempDir()
+	_, c := newServerAt(t, nil, root)
+	var p db.Project
+	require.Equal(t, http.StatusCreated, c.do("POST", "/projects", map[string]any{"name": "up"}, &p))
+	lib := project.Layout{Root: root}.LibraryDir(p.ID)
+	outside := t.TempDir()
+	require.NoError(t, os.MkdirAll(lib, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(outside, "victim"), []byte("orig"), 0o644))
+	// A thread left links in the library.
+	require.NoError(t, os.Symlink(outside, filepath.Join(lib, "uploads")))
+	require.NoError(t, os.Symlink(filepath.Join(outside, "victim"), filepath.Join(lib, "victim")))
+
+	code, _ := c.upload("/projects/"+p.ID+"/library", "victim", "pwned")
+	assert.Equal(t, 400, code)
+	code, _ = c.upload("/projects/"+p.ID+"/library", ".env", "x")
+	assert.Equal(t, 400, code)
+	code, _ = c.upload("/projects/"+p.ID+"/attachments", "shot.png", "pwned")
+	assert.GreaterOrEqual(t, code, 400)
+
+	entries, _ := os.ReadDir(outside)
+	assert.Len(t, entries, 1, "nothing was created outside the library")
+	b, _ := os.ReadFile(filepath.Join(outside, "victim"))
+	assert.Equal(t, "orig", string(b))
 }

@@ -850,14 +850,15 @@ func (h *Handler) downloadAttachment(c *gin.Context) {
 		apierr.BadRequest(c, "invalid attachment path")
 		return
 	}
-	path, err := h.svc.Layout.AttachmentPath(p, t, rel)
+	f, info, err := h.svc.Layout.OpenAttachment(p, t, rel)
 	if err != nil {
-		apierr.BadRequest(c, err.Error())
+		if errors.Is(err, rt.ErrInvalidLibraryPath) {
+			apierr.BadRequest(c, err.Error())
+		} else {
+			apierr.Message(c, http.StatusNotFound, "file not found")
+		}
 		return
 	}
-	if st, err := os.Stat(path); err != nil || st.IsDir() {
-		apierr.Message(c, http.StatusNotFound, "file not found")
-		return
-	}
-	c.FileAttachment(path, filepath.Base(path))
+	defer f.Close()
+	module.ServeDownload(c, f, info)
 }

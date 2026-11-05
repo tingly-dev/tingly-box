@@ -50,9 +50,37 @@ Overview 的 Library 页把项目资料库显示成可展开的目录树，而�
 6. **大小上限**：图片 25 MB，文本 512 KB（按树里的 `size` 判断，超过时不发请求），改为提示“文件太大”并给出下载按钮。加载中显示转圈，失败显示服务器返回的错误。
 7. **键盘与焦点**：MUI Dialog——Esc 关闭、焦点进入对话框并被限制在其中、关闭后回到触发它的行；头部有下载和关闭按钮。
 
-## 已知的后端缺口（未改）
+## 文件访问：用标准库的 `os.Root`，只在上面加自己的策略
 
-`GET /library/file` 只做 `LibraryPath` 检查，没有像树列表那样拒绝点开头路径和符号链接。预览没有扩大这一暴露面（下载本来就能取到同样的文件），但应另行收紧。
+资料库里的文件会被线程（不可信的 agent）写入，线程可以留下符号链接、FIFO、同名替换。所以“请求路径 → 磁盘”这一步不能靠“先检查字符串、再按路径打开”。
+
+### 评估过的标准件（Go 1.26，gin v1.12）
+
+| 候选 | 结论 |
+|---|---|
+| `os.Root`（`os.OpenRoot`） | **采用。** 在解析路径的同时拒绝 `..` 和指向根外的符号链接（含绝对链接），没有检查与使用之间的间隙（TOCTOU）；Windows 上还拒绝 `NUL` 等保留名。缺口：允许指向根**内**的符号链接，也不挡隐藏目录——这两点是我们的策略，叠在上面。 |
+| `os.OpenInRoot` | 等价于 OpenRoot + Open，但每次调用都重开根；我们还要 Lstat/ReadDir/Remove/MkdirAll，直接持有 `*os.Root`。 |
+| `filepath.IsLocal` | **采用，仅作词法预检**（拒绝绝对路径、`..`、空、Windows 保留名与盘符）。只看字符串，不看磁盘，所以不能单独用。`Localize` 是把斜杠路径转成 OS 路径，用不上。 |
+| `http.Dir` / `http.FS` + `fs.Sub` / `fs.ValidPath` | 不采用。`http.Dir` 会跟随符号链接且文档明说不防逃逸；`fs.ValidPath` 与 IsLocal 等价但更弱（不管 Windows），而且 `http.FileServer` 会把 `/index.html` 重定向。`os.Root.FS()` 也行，但我们不要目录列表、要自己的状态码。 |
+| gin `c.File` / `FileAttachment` / `FileFromFS` / `Static` | 不采用。`File`/`FileAttachment` 内部是 `http.ServeFile(path)`：**按路径重新打开**，会把前面做过的检查作废，并对 `index.html` 重定向；`FileFromFS` 取决于传入的 `http.FileSystem`（`gin.Dir` 同样跟随链接）。gin 没有“按已打开句柄发送”的现成方法，所以用 `http.ServeContent`（支持 Range、条件请求）自己写 Content-Disposition。 |
+
+### 实现（`internal/project/library_root.go`）
+
+- `cleanLibraryRel`：去掉首尾 `/`，拒绝 NUL、`filepath.IsLocal` 不通过、空/`.`/`..`/以 `.` 开头的段。（`%2e%2e` 之类由 HTTP 层解码一次后得到 `..`，同样被拒；解码两次才成立的 `%252e` 只是一个字面文件名，找不到即 404。）
+- `noLibrarySymlinks`：路径上**每一级**（含文件本身）用 `root.Lstat` 检查，任何符号链接（包括指回资料库内的）都拒绝，防止线程把 `.tmp/…` 别名到可见位置。
+- `OpenLibraryFile` / `RemoveLibraryFile` / `WriteLibraryFile` / `ListLibraryDir` / `OpenAttachment` 都经过上面两步 + `os.Root`：
+  - 只服务/删除普通文件（FIFO 在打开前就被拒，否则会一直阻塞）；打开后再 `Lstat` 一次，用 `os.SameFile` 确认打开的仍是该路径指向的文件（被换成链接则拒绝）。
+  - 下载按**已打开的句柄**发送（`module.ServeDownload`）：类型取扩展名、`X-Content-Type-Options: nosniff`、`attachment`，`index.html` 之类也只是普通文件。
+  - 写入：`uploads/` 被换成指向外部的链接时，上传和线程附件不会写出资料库；已存在的目标是链接则拒绝；隐藏名（`.env`）拒绝并返回 400（它本来就不会出现在目录树里）。
+- 响应码：路径无效 → 400，不存在/是文件夹/特殊文件 → 404。`DELETE` 因此不能再删空文件夹（前端本来就没有）。
+
+### 残余风险（已知，接受）
+
+检查之间的窗口里，有资料库写权限的一方可以把某一级换成**指向资料库内部**的链接。`os.Root` 保证这仍出不去资料库，最坏是读到同一资料库里的另一个文件（如别的线程的 `.tmp`）；并且需要已经能写这个资料库。`ReadDir` 的条目信息也都用 `root.Lstat` 取，不走路径。Windows 上 `Root` 另外拒绝保留设备名；Linux 上反斜杠只是普通文件名字符。
+
+### 测试
+
+`library_tree_test.go`：符号链接（绝对/相对/指回库内/目录）、`..` 与编码变体、NUL、绝对路径、Windows 风格路径、大小写、竞态（并发把文件和目录在“普通”与“指向库外的链接”之间来回替换，内容永远不含库外数据；朴素的 `os.ReadFile(路径)` 实现会被这个测试抓到）、写入不穿透链接。`server/library_tree_test.go`：HTTP 层的编码路径、响应头与 Range、`index.html`、非 ASCII 文件名、上传不跟随链接、附件下载拒绝链接。
 
 ## 没做
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -733,13 +734,12 @@ func (h *Handler) uploadLibrary(c *gin.Context) {
 			apierr.BadRequest(c, fmt.Sprintf("%s is larger than 200 MB", fh.Filename))
 			return
 		}
-		dst, err := h.svc.Layout.LibraryPath(p.ID, filepath.Base(fh.Filename))
-		if err != nil {
-			apierr.BadRequest(c, err.Error())
-			return
-		}
-		if err := saveUpload(func() (multipartFile, error) { return fh.Open() }, dst); err != nil {
-			apierr.Message(c, http.StatusInternalServerError, err.Error())
+		if err := h.saveUpload(p.ID, fh); err != nil {
+			if errors.Is(err, rt.ErrInvalidLibraryPath) {
+				apierr.BadRequest(c, err.Error())
+			} else {
+				apierr.Message(c, http.StatusInternalServerError, err.Error())
+			}
 			return
 		}
 	}
@@ -766,45 +766,41 @@ func (h *Handler) uploadAttachments(c *gin.Context) {
 	c.JSON(http.StatusCreated, rt.AttachmentsResponse{Attachments: atts})
 }
 
-func saveUpload(open func() (multipartFile, error), dst string) error {
-	src, err := open()
+func (h *Handler) saveUpload(projectID string, fh *multipart.FileHeader) error {
+	src, err := fh.Open()
 	if err != nil {
 		return err
 	}
 	defer src.Close()
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-	_, err = io.Copy(out, src)
+	_, err = h.svc.Layout.WriteLibraryFile(projectID, filepath.Base(fh.Filename), src, false)
 	return err
 }
 
-func (h *Handler) downloadLibrary(c *gin.Context) {
-	path, err := h.svc.Layout.LibraryPath(c.Param("id"), c.Query("path"))
-	if err != nil {
+// libraryErr answers a failed library file lookup: 400 for a path the library
+// refuses, 404 for one that does not exist.
+func libraryErr(c *gin.Context, err error) {
+	if errors.Is(err, rt.ErrInvalidLibraryPath) {
 		apierr.BadRequest(c, err.Error())
 		return
 	}
-	if st, err := os.Stat(path); err != nil || st.IsDir() {
-		apierr.Message(c, http.StatusNotFound, "file not found")
+	apierr.Message(c, http.StatusNotFound, "file not found")
+}
+
+// downloadLibrary serves the file from the handle it opened under the
+// library's access checks (not by re-opening its path), as an attachment.
+func (h *Handler) downloadLibrary(c *gin.Context) {
+	f, info, err := h.svc.Layout.OpenLibraryFile(c.Param("id"), c.Query("path"))
+	if err != nil {
+		libraryErr(c, err)
 		return
 	}
-	c.FileAttachment(path, filepath.Base(path))
+	defer f.Close()
+	module.ServeDownload(c, f, info)
 }
 
 func (h *Handler) deleteLibrary(c *gin.Context) {
-	path, err := h.svc.Layout.LibraryPath(c.Param("id"), c.Query("path"))
-	if err != nil {
-		apierr.BadRequest(c, err.Error())
-		return
-	}
-	if err := os.Remove(path); err != nil {
-		apierr.Message(c, http.StatusNotFound, "file not found")
+	if err := h.svc.Layout.RemoveLibraryFile(c.Param("id"), c.Query("path")); err != nil {
+		libraryErr(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, OKResponse{OK: true})

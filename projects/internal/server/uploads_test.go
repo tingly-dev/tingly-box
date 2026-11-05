@@ -86,3 +86,32 @@ func TestFolderThreadsShareUploadsOverHTTP(t *testing.T) {
 	_, err = os.Stat(filepath.Join(root, f.ID, "library", "uploads"))
 	assert.NoError(t, err, "uploads live in the folder project's library")
 }
+
+// An attachment is read through the same checks as the Library: one swapped for a link is refused.
+func TestAttachmentDownloadRefusesLinks(t *testing.T) {
+	a := &enginetest.Agent{Script: func(turn *enginetest.Turn) error { turn.Say("ok", 1, 1); return nil }}
+	root := t.TempDir()
+	_, c := newServerAt(t, &project.Agents{Service: a.Service()}, root)
+	var f db.Project
+	require.Equal(t, 200, c.do("POST", "/projects", map[string]any{"type": "folder", "path": t.TempDir()}, &f))
+	code, atts := c.upload("/projects/"+f.ID+"/attachments", "log.txt", "boom")
+	require.Equal(t, 201, code)
+	var s db.Thread
+	require.Equal(t, 201, c.do("POST", "/projects/"+f.ID+"/threads", map[string]any{"content": "look", "attachments": []string{atts[0].Path}}, &s))
+	get := func() (int, string) {
+		return c.fetch("/threads/" + s.ID + "/attachments/file?path=" + url.QueryEscape(atts[0].Path))
+	}
+	code, body := get()
+	require.Equal(t, 200, code)
+	assert.Equal(t, "boom", body)
+
+	outside := filepath.Join(t.TempDir(), "secret")
+	require.NoError(t, os.WriteFile(outside, []byte("SECRET"), 0o644))
+	stored, err := project.Layout{Root: root}.LibraryPath(f.ID, atts[0].Path)
+	require.NoError(t, err)
+	require.NoError(t, os.Remove(stored))
+	require.NoError(t, os.Symlink(outside, stored))
+	code, body = get()
+	assert.Equal(t, 400, code)
+	assert.NotContains(t, body, "SECRET")
+}
