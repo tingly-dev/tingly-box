@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Box, IconButton, Tooltip, useTheme } from '@mui/material';
 import { Highlight, themes } from 'prism-react-renderer';
@@ -40,8 +40,30 @@ export function CodeBlock({ code, language }: { code: string; language: string }
     );
 }
 
-/** Renders assistant Markdown (GFM) with highlighted, copyable code blocks. */
-export const Markdown = memo(function Markdown({ text, conversation = false }: { text: string; conversation?: boolean }) {
+// Targets a `safe` document may link to; everything else (javascript:, data:,
+// file:, relative paths, anchors) loses its target and is shown as plain text.
+const SAFE_URL = /^(https?|mailto):/i;
+const safeUrl = (url: string) => (SAFE_URL.test(url) ? url : '');
+
+const safeComponents: Components = {
+    a: ({ node: _node, href, children }) => href
+        ? <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+        : <span>{children}</span>,
+    // A remote image is a request the document's author chooses, so it is never made: the alt text stands in.
+    img: ({ node: _node, alt, src }) => (
+        <Box component="span" title={typeof src === 'string' && /^https?:/i.test(src) ? src : undefined} sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+            {alt || '[image]'}
+        </Box>
+    ),
+};
+
+/**
+ * Renders assistant Markdown (GFM) with highlighted, copyable code blocks.
+ * `safe` is for documents nobody here wrote (a file in the library): links
+ * are limited to http, https and mailto and open without opener or referrer,
+ * and images are never loaded.
+ */
+export const Markdown = memo(function Markdown({ text, conversation = false, safe = false }: { text: string; conversation?: boolean; safe?: boolean }) {
     return (
         <Box
             sx={conversation ? {
@@ -72,8 +94,10 @@ export const Markdown = memo(function Markdown({ text, conversation = false }: {
         >
             <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
+                urlTransform={safe ? safeUrl : undefined}
                 components={{
                     a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
+                    ...(safe ? safeComponents : {}),
                     pre: ({ children }) => <>{children}</>,
                     code: ({ className, children }) => {
                         const match = /language-(\w+)/.exec(className || '');

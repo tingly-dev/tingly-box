@@ -15,6 +15,8 @@ const mono = { fontFamily: fontMono } as const;
 
 type Node = LibraryEntry & { kind: 'dir' | 'file' };
 
+const toPreview = (n: Node): PreviewFile => ({ path: n.path, name: n.name, size: n.size });
+
 /** The folders left open in a project's library, kept in this browser. */
 function useExpanded(projectId: string): [string[], (paths: string[]) => void] {
     const key = `library.expanded.${projectId}`;
@@ -37,7 +39,7 @@ function useExpanded(projectId: string): [string[], (paths: string[]) => void] {
 
 /**
  * The project library as a tree of its folders and files. A folder's
- * contents are fetched when it is opened; files can be previewed (images and text), downloaded or deleted.
+ * contents are fetched when it is opened; files can be previewed (images, Markdown and text), downloaded or deleted.
  */
 export function Library({ projectId, refreshKey }: { projectId: string; refreshKey: number }) {
     const { t, i18n } = useTranslation('projects');
@@ -48,12 +50,16 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
     const [tick, setTick] = useState(0);
     const [expanded, setExpanded] = useExpanded(projectId);
     const [preview, setPreview] = useState<PreviewFile | null>(null);
+    // The images of the previewed file's folder, in the order the tree lists them.
+    const [images, setImages] = useState<PreviewFile[]>([]);
+    const listed = useRef(new Map<string, Node[]>());
 
     const load = useCallback(async (path: string): Promise<Node[]> => {
         const res = await apiFetch(`/api/v1/projects/${projectId}/library/tree?path=${encodeURIComponent(path)}`);
         if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? res.statusText);
         const tree = (await res.json()) as LibraryTree;
         if (path === '') setDir(tree.dir);
+        listed.current.set(path, tree.entries as Node[]);
         return tree.entries as Node[];
     }, [projectId]);
 
@@ -115,7 +121,13 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
                 expanded={expanded}
                 onExpandedChange={setExpanded}
                 refreshKey={refreshKey + tick}
-                onActivate={(n) => { if (previewKind(n.name)) setPreview({ path: n.path, name: n.name, size: n.size }); }}
+                onActivate={(n) => {
+                    const kind = previewKind(n.name);
+                    if (!kind) return;
+                    const folder = n.path.includes('/') ? n.path.slice(0, n.path.lastIndexOf('/')) : '';
+                    setImages(kind === 'image' ? (listed.current.get(folder) ?? []).filter((e) => e.kind === 'file' && previewKind(e.name) === 'image').map(toPreview) : []);
+                    setPreview(toPreview(n));
+                }}
                 empty={<Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>{t('library.empty')}</Typography>}
                 renderMeta={(n) => n.kind === 'file' ? `${formatBytes(n.size)} · ${timeAgo(n.updated_at, i18n.language, true)}` : null}
                 renderActions={(n, { tabIndex }) => n.kind === 'file' && (
@@ -133,7 +145,7 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
                     </>
                 )}
             />
-            <LibraryPreview projectId={projectId} file={preview} onClose={() => setPreview(null)} onDownload={(p) => void download(p)} />
+            <LibraryPreview projectId={projectId} file={preview} siblings={images} onNavigate={setPreview} onClose={() => setPreview(null)} onDownload={(p) => void download(p)} />
         </Box>
     );
 }
