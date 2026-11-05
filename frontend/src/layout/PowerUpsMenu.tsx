@@ -127,7 +127,7 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             icon: <IconFolder sx={iconSx} />,
             name: t('layout.workspace', { defaultValue: 'Workspace' }),
             description: t('system.experimentalFeatures.enableProjects'),
-            path: '/projects',
+            path: '/workspace',
             stage: 'beta' as const,
             enabled: enableProjects,
             enabledNotice: t('system.experimentalFeatures.projectsEnabledInfo'),

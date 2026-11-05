@@ -8,6 +8,7 @@ export type { Thread, ThreadEvent } from './client';
 export { default as ProjectsPage } from './pages/ProjectsPage';
 export { default as ProjectPage } from './pages/ProjectPage';
 export { default as WorkdirPage } from './pages/WorkdirPage';
+export { default as WorkspaceHomePage } from './pages/WorkspaceHomePage';
 export { default as ImSettingsPage } from './pages/ImSettingsPage';
 export {
     ProjectsSidebar,
