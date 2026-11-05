@@ -333,3 +333,14 @@ so the "Force reasoning summaries" toggle is now the catalog-only pref
   `mergeCodexConfig` deletes it from the top level on the next apply (managed
   profiles are rebuilt, so they never carry it). `ReadCodexConfig` also restores
   the pref from the applied catalog.
+
+## Codex image tool: add a `gpt-image-2` rule (2026-11-05)
+
+Codex's built-in `image_gen` tool posts to `{base_url}/images/generations` and `/images/edits` of the provider it runs against, always with model `gpt-image-2`. With the Tingly Box Codex config that is `/tingly/codex/images/*`, which the `codex` scenario now accepts (animated GIF output and the other formats: `image-output-formats.md`).
+
+Quick Config does **not** create a rule for it. Add one by hand, or the tool gets a "not configured" error:
+
+1. Agent -> Codex -> add a rule with request model `gpt-image-2` (a wildcard such as `gpt-image-*` also matches).
+2. Point it at a Codex (ChatGPT OAuth) provider, model `gpt-image-2`.
+3. For GIF, also turn on Codex's own flag (`[features] image_generation_animation = true`, off by default upstream). GIF is experimental: it was built from Codex's source and not yet captured live.
+

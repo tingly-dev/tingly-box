@@ -1,6 +1,6 @@
 # Image output formats: GIF through the gateway, SVG kept inert
 
-> Status: **design, not implemented.** Tracks TEP #2432. Capability research and sources: [`../.research/codex-imagegen-gif.md`](../.research/codex-imagegen-gif.md).
+> Status: **phases 1, 2 and 4 implemented, phase 0 (live capture) and phase 3 live checks still open** — see §11 for what was built and where it differs from the options below. Tracks TEP #2432. Capability research and sources: [`../.research/codex-imagegen-gif.md`](../.research/codex-imagegen-gif.md).
 > Read first: [`image-edit.md`](./image-edit.md) (Codex native images protocol, §3.4 deferred native generation), [`projects-published-files.md`](./projects-published-files.md) (send_file and IM delivery), [`projects/.design/library-tree.md`](../projects/.design/library-tree.md) (Library preview allowlist), [`codex-auth.md`](./codex-auth.md), [`ux-principles.md`](./ux-principles.md).
 
 ## 1. Problem and scope
@@ -77,7 +77,7 @@ The request decoder drops unknown fields, so extras must be parsed explicitly. O
 | B. SDK extra fields | `req.SetExtraFields(...)` so the SDK re-marshals them | no signature change; reaches OpenAI-compatible upstreams unchanged | invisible coupling; Codex client must read them back out of `ExtraFields()`; easy to lose in a copy |
 | C. Raw body passthrough for Codex | forward the original JSON to `codex/images/generations` | zero translation | skips validation, model rewrite, `n` fan-out, quality mapping |
 
-**Recommend A, plus B only inside the OpenAI-compatible client** so a public-API GIF (if it exists) reaches upstream. Codex client reads the typed extras. Same extras struct is parsed by the edit handler (multipart form fields and JSON mirror).
+**Recommend A, plus B only inside the OpenAI-compatible client** so a public-API GIF (if it exists) reaches upstream. Codex client reads the typed extras. Same extras struct is parsed by the edit handler (multipart form fields and JSON mirror). *As built:* the parsed options travel in the request context instead of a new parameter (see §11), which keeps the `OpenAIClientInterface` signatures unchanged.
 
 ### 3.4 Codex provider: which upstream path
 
@@ -101,7 +101,7 @@ Two coupled gaps: the scenario gate, and the model rule.
 | S-b | Route `/tingly/codex/**/images/*` to the `imagegen` scenario's rules | user configures images once (matches "smart defaults over toggles") | scenario `codex` stops meaning one thing; usage attribution splits; harder to explain |
 | S-c | Document manual setup only | no code | fails the UX-first bar: the headline feature silently 400s |
 
-**Recommend S-a**, with the auto-created rule limited to the Codex OAuth provider. If the user has no Codex provider the endpoint returns a 400 that says which rule is missing. Open question Q2.
+**Recommend S-a**, with the auto-created rule limited to the Codex OAuth provider. If the user has no Codex provider the endpoint returns a 400 that says which rule is missing. Open question Q2. *Decided:* S-a without the auto-created rule; the user adds the `gpt-image-2` rule by hand (`codex-config.md`, last section).
 
 ## 4. Gateway response and persistence
 
@@ -156,7 +156,7 @@ Add `core.ClassifyMedia(path, mime) MediaKind` in `imbot/core` (imbot already de
 
 | Platform | GIF plan | Evidence level |
 |---|---|---|
-| Telegram | kind `animation` -> `SendAnimation` (exists in `go-telegram/bot` v1.23.0); fall back to `SendDocument` if rejected | method exists; behaviour unverified live |
+| Telegram | *Decided:* GIF goes as a document like everywhere else; `SendAnimation` (exists in `go-telegram/bot` v1.23.0) is a later option once it can be tried live | method exists; behaviour unverified live |
 | Feishu / Lark | `image` (GIF is in the adapter's image list, `feishu/media.go:17-27`) | list verified in code; animation behaviour unverified |
 | DingTalk | `image` (`.gif` in list, `dingtalk/media.go:46-48`), 20 MB cap from #2401 | unverified live |
 | WeChat | `image` (`weixin.go:392-394`) | unverified live |
@@ -227,7 +227,7 @@ Manual / live (cannot be done by CI): one captured real Codex GIF request and re
 | Phase | Content | Why this order |
 |---|---|---|
 | 0. Spike (no product code) | Capture a real Codex GIF exchange (needs a ChatGPT account with the flag); check whether `api.openai.com` accepts `gif`; confirm the base path Codex uses for `images/*` through Tingly Box; confirm recorder behaviour for base64 bodies | Every later phase depends on facts we have only from source reading |
-| 1. Format correctness | `imagefmt`; sniff-based extension and `output_format`; fix `codex_client.go` format mix-up; output_format validation (no GIF yet); assembler partial fix; `ClassifyMedia` + Telegram SVG guard; playground mime generalization | Pure fixes, valuable without GIF, and they de-risk phase 2 |
+| 1. Format correctness | `imagefmt`; sniff-based extension and `output_format`; fix `codex_client.go` format mix-up; output_format validation (no GIF yet); `ClassifyMedia` + Telegram SVG guard; playground mime generalization. The assembler partial-image fix was deferred (§11). | Pure fixes, valuable without GIF, and they de-risk phase 2 |
 | 2. GIF through the gateway | Extras struct; capability table + failover filter; hybrid Codex path P3; edit path fields; `codex` scenario `TransportImageGen` + auto rule (S-a) | The feature itself |
 | 3. Projects / IM | Telegram `SendAnimation`; per-platform live matrix; `projects-published-files.md` table; D1 doc snippet | Needs phase 1 classification and a real GIF from phase 2 |
 | 4. UI and follow-ups | Playground Format control; `/models` capability metadata (#1774); decide on `generate_image` Projects tool (D2) and Responses-to-Anthropic image handling as separate TEPs | Depends on proven backend |
@@ -245,3 +245,32 @@ Deferred on purpose: Responses `image_generation_call` conversion to Anthropic (
 7. **Motion and accessibility:** autoplay in the Library preview vs `prefers-reduced-motion`.
 8. **Recording and logs:** do the request recorder and usage logs keep full base64 image bodies today? If so, truncation is a prerequisite (not verified).
 9. **Retention:** `configDir/image/` grows with 32 MiB GIFs; is there a cleanup policy (`image-library.md` §7 mentions the idea, not an implementation)?
+
+## 11. As built (2026-11-05)
+
+Three stacked commits on top of this design: format detection from bytes, GIF through the gateway, and the Image page selector. Go and frontend tests for each were written first against faked upstreams; nothing was run against a real Codex account (phase 0 is still open), so **GIF is experimental and Codex-only** in the UI and in the error messages.
+
+### Decisions that differ from, or settle, the options above
+
+| Topic | Decision |
+|---|---|
+| Carrying `frame_count` / `frame_duration_ms` (§3.3) | The handler parses them next to the typed SDK request (`imagegen.ParseOutputOptionsJSON` / `...Form`) and puts the result in the request context (`imagegen.WithOutputOptions`); clients read it with `OutputOptionsFrom`. The OpenAI-compatible client turns it into SDK extra fields. No interface change. |
+| Codex path (§3.4) | Hybrid (P3): GIF -> native `POST codex/images/generations` (`imagesGenerateNative`); everything else stays on the Responses tool. The tool now sends the request's `output_format` (jpeg/webp, else png); it used to send `response_format`. Edit already used the native endpoint and now also carries the GIF fields; a GIF input image and GIF output with a mask are refused with a clear message. |
+| `codex` scenario (§3.5) | `TransportImageGen` added, so `/tingly/codex/images/*` and `/tingly/codex/v1/images/*` pass the gate. **No `gpt-image-2` rule is auto-created**: the Codex CLI's tool hardcodes that model, so the user adds a rule (request model `gpt-image-2`, or `gpt-image-*`, scenario Codex, pointing at a Codex provider). Without one the CLI gets "not configured". Documented in `codex-config.md`. |
+| Capability (§3.2) | Only GIF is gated: Codex (generate and edit) yes; OpenAI-compatible generation yes (experimental pass-through, so a Tingly Box in front of a Codex-backed gateway keeps working), OpenAI-compatible edit no (multipart cannot carry the frame fields); DashScope, MiniMax, xAI, Qianfan and unknown no. A refused GIF is a 400 naming the provider. png/jpeg/webp stay lenient; the response reports the sniffed truth. |
+| Validation | Unknown `output_format` (incl. svg) -> 400; frame fields without `gif` -> 400; ranges 2-16 and 20-2000; `n` at most 4 for GIF. Both generation and edit (JSON and multipart). |
+| Response and persistence | `output_format` in the response and the saved extension come from the first bytes. Bytes that are not png/jpeg/webp/gif are not written to disk. The sidecar `.txt` shares the image stem. |
+| IM delivery | `core.ClassifyMedia` (imbot) decides from bytes: PNG/JPEG/WebP/BMP -> image; **GIF and SVG -> document** on every platform (Feishu, DingTalk, WeCom already honour the type; WeChat uses it first). Telegram also checks local files itself, so SVG/GIF/unknown never go through `sendPhoto`. `SendAnimation` is not used. |
+| Projects | Attachment MIME comes from the bytes (raster, or an SVG hiding under any name); the chat chips and the composer draw only png/jpeg/gif/webp/bmp, so an SVG is a download chip. The Library preview (#2429) and the download headers (`attachment`, `nosniff`) already matched §6.4 and were not changed. |
+| Image page | Format select (png default, jpeg, webp, gif) plus frames and duration under gif, en/zh/ru, experimental hint. The request is unchanged for png. Results carry `{b64, mime}` from the response `output_format` or the sniffed header; GIF thumbnails are a lossless first-frame still, the lightbox shows the animation. **Limitation:** edits with reference images go out as multipart through the SDK, which cannot carry the format fields, so a run with references returns the default format and the panel says so. |
+| Assembler partial images | Not changed. `openai_responses_assembler.go` still concatenates `partial_image` chunks, but its tests assert that behaviour while `codex_client.go` and its tests treat each partial as a standalone image. Which is right needs a decision (and a real stream); left as a follow-up. |
+
+### Not done
+- Phase 0: no real Codex GIF request or response was captured; the native generations body follows `codex-rs/codex-api/src/images.rs`. If the live backend differs, `codexImageGenerateRequest` is the one place to adjust.
+- Live IM checks for GIF/SVG on each platform and per-platform size caps.
+- Image page: GIF edits, and a capability-aware hide of the GIF option (needs #1774).
+- Recorder and usage logs were not checked for full base64 bodies (Q8).
+- Retention of `configDir/image/` (Q9).
+
+### Tests added
+`internal/vision/imagefmt`, `internal/vision/imagegen/output_test.go`, `internal/client/codex_images_gif_test.go` and `openai_images_gif_test.go` (fake Codex and OpenAI-compatible upstreams), `internal/protocolserver/image_format_test.go` and `image_output_test.go` (persistence, scenario gate, validation, GIF pass-through and refusal through the real route chain), `imbot/core/media_classify_test.go`, `imbot/platform/telegram/media_kind_test.go`, `remote/channel/imchannel` (kind from bytes on five platforms), `projects/internal/project/attachment_test.go`, `frontend/packages/projects` attachment chips, and the Image page `imageOutput.test.ts` / `imageGenSession.test.ts`.
