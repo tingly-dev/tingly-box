@@ -172,6 +172,7 @@ func (c *Coordinator) listThreads(p *db.Project, status, contains string, limit 
 	if err != nil {
 		return "", err
 	}
+	c.threads.Annotate(threads)
 	if limit <= 0 {
 		limit = readItems
 	}
@@ -189,7 +190,7 @@ func (c *Coordinator) listThreads(p *db.Project, status, contains string, limit 
 			continue
 		}
 		matched++
-		line := fmt.Sprintf("- %s %q status=%s updated=%s", short(t.ID), t.Title, t.Status, stamp(t.UpdatedAt))
+		line := fmt.Sprintf("- %s %q status=%s%s updated=%s", short(t.ID), t.Title, t.Status, tasksNote(t.RunningTasks), stamp(t.UpdatedAt))
 		if t.LastReport != "" {
 			line += " last report: " + clip(strings.ReplaceAll(t.LastReport, "\n", " "), 200)
 		}

@@ -2032,6 +2032,11 @@ export interface components {
             resolved_at?: string;
             /**
              * Format: int64
+             * @description Field running_tasks
+             */
+            running_tasks: number;
+            /**
+             * Format: int64
              * @description Field seq
              */
             seq: number;

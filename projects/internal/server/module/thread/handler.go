@@ -309,6 +309,7 @@ func (h *Handler) thread(c *gin.Context) (*db.Thread, bool) {
 		fail(c, err)
 		return nil, false
 	}
+	t.RunningTasks = h.svc.Threads.RunningTasks(t.ID)
 	return t, true
 }
 
@@ -351,6 +352,7 @@ func (h *Handler) list(c *gin.Context) {
 	if threads == nil {
 		threads = []db.Thread{}
 	}
+	h.svc.Threads.Annotate(threads)
 	c.JSON(http.StatusOK, ThreadsResponse{Threads: threads})
 }
 
@@ -463,6 +465,7 @@ func (h *Handler) send(c *gin.Context) {
 		fail(c, err)
 		return
 	}
+	t.RunningTasks = h.svc.Threads.RunningTasks(t.ID)
 	c.JSON(http.StatusOK, t)
 }
 
@@ -553,6 +556,7 @@ func (h *Handler) reply(c *gin.Context, id string) {
 		fail(c, err)
 		return
 	}
+	t.RunningTasks = h.svc.Threads.RunningTasks(t.ID)
 	c.JSON(http.StatusOK, t)
 }
 

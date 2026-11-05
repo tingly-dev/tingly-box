@@ -2,7 +2,7 @@ import { Box } from '@mui/material';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { getReadableAccent } from '@tingly/ui/theme/status';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle, CircleDashed, GitCommit, Merge, Spinner } from '../icons';
+import { CheckCircle, CircleDashed, GitCommit, Merge, Spinner, Stream } from '../icons';
 import type { Thread } from '../../client';
 import { radius } from '@tingly/ui/theme/radius';
 
@@ -102,6 +102,8 @@ export function ThreadSubtitle({ thread }: { thread: Thread }) {
     const { t } = useTranslation('projects');
     if (needsUser(thread.status) && thread.wait_reason) return <InlineCode text={thread.wait_reason} />;
     if (thread.status === 'working' && thread.queued) return <>{t('thread.queuedSubtitle')}</>;
+    // A report from an earlier turn would read as the news; what it runs now is.
+    if (thread.status === 'working' && thread.running_tasks > 0) return <>{t('thread.tasksSubtitle', { count: thread.running_tasks })}</>;
     const report = (thread.last_report || '').split('\n').find((l) => l.trim() !== '');
     if (report) return <InlineCode text={report.replace(/^#+\s*/, '')} />;
     if (thread.branch) return <>{thread.branch}</>;
@@ -117,22 +119,33 @@ const pill = {
 /** A thread's work at a glance, as small pills: its commits, or that it was
  * merged. Nothing for a thread without a branch; the details sit in the
  * tooltip, so the pill stays one icon and one word wherever it shows. */
-export function ThreadBadges({ thread }: { thread: Thread }) {
+export function ThreadBadges({ thread, tasks: showTasks = true }: { thread: Thread; /** False where the tasks already have their own control (the open thread's header). */ tasks?: boolean }) {
     const { t } = useTranslation('projects');
+    const tasks = showTasks && thread.running_tasks > 0 && (
+        <Box component="span" title={t('thread.tasksSubtitle', { count: thread.running_tasks })} sx={pill}>
+            <Stream />{t('thread.tasksBadge', { count: thread.running_tasks })}
+        </Box>
+    );
     if (thread.merged_at) {
         return (
-            <Box component="span" title={t('thread.mergedInto', { base: thread.base_branch })}
-                sx={pill}>
-                <Merge />{t('thread.mergedBadge')}
-            </Box>
+            <>
+                <Box component="span" title={t('thread.mergedInto', { base: thread.base_branch })}
+                    sx={pill}>
+                    <Merge />{t('thread.mergedBadge')}
+                </Box>
+                {tasks}
+            </>
         );
     }
-    if (!thread.branch || thread.commits_ahead === 0) return null;
+    if (!thread.branch || thread.commits_ahead === 0) return tasks || null;
     return (
-        <Box component="span"
-            title={[thread.branch, t('thread.commits', { count: thread.commits_ahead }), t('thread.files', { count: thread.files_changed })].filter(Boolean).join(' · ')}
-            sx={pill}>
-            <GitCommit />{t('thread.commits', { count: thread.commits_ahead })}
-        </Box>
+        <>
+            <Box component="span"
+                title={[thread.branch, t('thread.commits', { count: thread.commits_ahead }), t('thread.files', { count: thread.files_changed })].filter(Boolean).join(' · ')}
+                sx={pill}>
+                <GitCommit />{t('thread.commits', { count: thread.commits_ahead })}
+            </Box>
+            {tasks}
+        </>
     );
 }

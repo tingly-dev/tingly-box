@@ -40,12 +40,15 @@ func (e *Engine) newResident(sessionID string, ps agentboot.PersistentSession) *
 		},
 		OnTerminated: func(string) {
 			e.mu.Lock()
-			if e.residents[sessionID] == r {
+			gone := e.residents[sessionID] == r
+			if gone {
 				delete(e.residents, sessionID)
-				// Its background tasks ended with it.
-				delete(e.live, sessionID)
 			}
 			e.mu.Unlock()
+			if gone {
+				// Its background tasks ended with it.
+				e.clearTasks(sessionID)
+			}
 		},
 	})
 	e.mu.Lock()
@@ -63,6 +66,7 @@ func (e *Engine) record(sessionID string, conv *converter, raw any) {
 		return
 	}
 	for _, m := range conv.messages(raw) {
+		e.trackTasks(sessionID, m)
 		e.store.Append(sessionID, m)
 		e.noteTask(sessionID, m)
 	}

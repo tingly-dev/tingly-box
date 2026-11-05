@@ -243,9 +243,10 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
         return b?.type === 'request' ? b.message.autoAt : undefined;
     }, [blocks, pendingRequestId]);
 
-    const tasks = useMemo(() => session
-        ? backgroundTasks(threadTranscript(events ?? [], running, () => undefined).entries, liveTasks)
-        : [], [session, events, running, liveTasks]);
+    const tasks = useMemo(() => backgroundTasks(threadTranscript(events ?? [], running, () => undefined).entries, liveTasks),
+        [events, running, liveTasks]);
+    // A folder session always has its tasks panel; a project thread only while it has tasks to show.
+    const hasTasks = session || tasks.length > 0;
 
     // Scroll the conversation to a message and flash it: "where did this
     // come from" is one click from the trajectory and the tasks panel.
@@ -364,7 +365,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         </Tooltip>
                     )}
                     {/* While work runs in the background it names itself. */}
-                    {session && liveTasks.length > 0 && !rail && (
+                    {liveTasks.length > 0 && !rail && (
                         <Tooltip title={t('session.backgroundTasks')}>
                             <Button size="small" variant="outlined" color="inherit" startIcon={<Stream sx={{ fontSize: '16px !important' }} />} onClick={(e) => setTasksAnchor(e.currentTarget)}
                                 sx={{ borderRadius: radius.pill, borderColor: 'divider', color: 'text.secondary', py: 0, px: 1.25, minWidth: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>
@@ -379,7 +380,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         <MenuItem onClick={() => { setMenu(null); setFocus(null); setView(view === 'chat' ? 'trajectory' : 'chat'); }}>{view === 'chat' ? t('thread.showTrajectory') : t('thread.showChat')}</MenuItem>
                         {view === 'chat' && detail === 'detailed' && <MenuItem onClick={() => { setMenu(null); toggleExpand(); }}>{expandAll ? t('thread.collapseTools') : t('thread.expandTools')}</MenuItem>}
                         {/* The panel opens where the menu was, under the More button. */}
-                        {session && !rail && <MenuItem onClick={() => { setTasksAnchor(menu); setMenu(null); }}>{t('session.backgroundTasks')}</MenuItem>}
+                        {hasTasks && !rail && <MenuItem onClick={() => { setTasksAnchor(menu); setMenu(null); }}>{t('session.backgroundTasks')}</MenuItem>}
                         {wide && railTop == null && <MenuItem onClick={() => { setMenu(null); toggleRail(); }}>{railOn ? t('rail.hide') : t('rail.show')}</MenuItem>}
                         {subagents && <MenuItem onClick={() => { setAgentsAnchor(menu); setMenu(null); }}>{t('subagents.title')}</MenuItem>}
                         {session && !thread.archived_at && thread.status !== 'resolved' && (
@@ -413,7 +414,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         !thread.branch && !session && t('thread.noRepo'),
                         // The work, as badges whose details hover out (the
                         // rail's Changes card carries them in full).
-                        <ThreadBadges thread={thread} />,
+                        <ThreadBadges thread={thread} tasks={false} />,
                         thread.uncommitted && (
                             <Tooltip title={t('thread.uncommitted')}>
                                 <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
@@ -545,7 +546,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 </Box>
             </Box>
             <DiffDialog thread={thread} open={diffOpen} onClose={() => setDiffOpen(false)} />
-            {session && (
+            {hasTasks && (
                 <Popover open={!!tasksAnchor} anchorEl={tasksAnchor} onClose={() => setTasksAnchor(null)}
                     anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
                     <BackgroundTasksPanel sessionId={threadId} tasks={tasks} onChanged={() => onRefresh?.()} onReveal={(call) => void openInChat({ call })} />

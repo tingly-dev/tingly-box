@@ -4452,6 +4452,11 @@
             "format": "date-time",
             "description": "Field resolved_at"
           },
+          "running_tasks": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field running_tasks"
+          },
           "seq": {
             "type": "integer",
             "format": "int64",
@@ -4500,6 +4505,7 @@
           "title",
           "task",
           "status",
+          "running_tasks",
           "origin",
           "cwd",
           "profile_override",

@@ -164,6 +164,7 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 		if err != nil {
 			return err
 		}
+		s.c.threads.Annotate(threads)
 		fmt.Fprintf(&prompt, "\nCurrent project context:\n%s\n", coordinatorSystemPrompt(s.c.layout, p, threads, event.CreatedAt))
 	}
 	for _, m := range renderHistory([]db.ThreadEvent{*event}, s.c.layout.LibraryDir(p.ID)) {

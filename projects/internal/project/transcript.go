@@ -136,23 +136,28 @@ func (m *Threads) syncBackground(t *db.Thread, e engine.Entry) {
 	if json.Unmarshal(e.Payload, &ev) != nil || ev.Event != "background_tasks_changed" {
 		return
 	}
+	// The engine's set, not this event's: a late event cannot undo a newer one.
+	running := m.RunningTasks(t.ID)
 	if !m.isFolder(t.ProjectID) {
-		if len(ev.Tasks) == 0 {
+		if running == 0 {
 			m.releaseSoon(t.ID, m.holdGrace())
 		}
+		// The set changed: the thread's card and rail show how many run.
+		m.republish(t.ID)
 		return
 	}
 	m.mu.Lock()
 	_, turn := m.active[t.ID]
 	m.mu.Unlock()
 	if turn {
+		m.republish(t.ID)
 		return
 	}
 	_, _ = m.update(t.ID, func(t *db.Thread) {
 		switch {
-		case len(ev.Tasks) > 0 && (t.Status == db.ThreadIdle || t.Status == db.ThreadReady):
+		case running > 0 && (t.Status == db.ThreadIdle || t.Status == db.ThreadReady):
 			t.Status = db.ThreadWorking
-		case len(ev.Tasks) == 0 && t.Status == db.ThreadWorking:
+		case running == 0 && t.Status == db.ThreadWorking:
 			t.Status = restingStatus(t.CommitsAhead)
 		}
 	})

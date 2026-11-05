@@ -413,6 +413,7 @@ func (h *Handler) get(c *gin.Context) {
 	if threads == nil {
 		threads = []db.Thread{}
 	}
+	h.svc.Threads.Annotate(threads)
 	recovery, err := h.svc.Store.UncertainCoordinatorInput(p.ID)
 	if err != nil {
 		apierr.Store(c, err, "coordinator recovery")

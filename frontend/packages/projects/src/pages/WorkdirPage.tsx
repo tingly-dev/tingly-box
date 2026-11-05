@@ -7,6 +7,7 @@ import { api, unwrap, type Attachment, type BackgroundTask, type Project, type T
 import { AddWorkdirDialog } from '../components/workdir/AddWorkdirDialog';
 import { NewSessionView } from '../components/workdir/NewSessionView';
 import { loadPermissionModes } from '../components/workdir/PermissionModeSelect';
+import { changesLiveTasks } from '../components/workdir/backgroundTasks';
 import { ThreadSettingsPickers } from '../components/ThreadSettingsPickers';
 import { EffortPicker } from '../components/EffortPicker';
 import type { components } from '../client';
@@ -34,16 +35,6 @@ function upsert<T extends { id: string }>(list: T[], item: T): T[] {
     const next = list.slice();
     next[i] = item;
     return next;
-}
-
-/** Whether a task event changes the set of running background tasks (progress does not). */
-function changesLiveTasks(e: ThreadEvent): boolean {
-    try {
-        const ev = (JSON.parse(e.payload ?? '{}') as { event?: string }).event;
-        return ev === 'background_tasks_changed' || ev === 'task_notification' || ev === 'task_completed';
-    } catch {
-        return false;
-    }
 }
 
 const GROUPS: { key: string; collapsed?: boolean }[] = [
@@ -190,7 +181,7 @@ export default function WorkdirPage() {
             const e = ev.data as ThreadEvent;
             if (e.thread_id !== sessionId) return;
             transcript.apply(e);
-            if (e.kind === 'task' && changesLiveTasks(e)) void loadTasks(sessionId);
+            if (changesLiveTasks(e)) void loadTasks(sessionId);
         };
         onOpen.current = () => {
             void loadSessions();

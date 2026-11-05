@@ -292,6 +292,10 @@ func (m *Threads) sessionOf(threadID string) string {
 	if err != nil {
 		return ""
 	}
+	if t.SessionID == "" {
+		// Not started yet: nothing to remember, and "" must not name a thread.
+		return ""
+	}
 	m.mu.Lock()
 	m.sessionOfThread[threadID], m.threadOfSession[t.SessionID] = t.SessionID, threadID
 	m.mu.Unlock()
@@ -384,6 +388,7 @@ func (m *Threads) rowLock(threadID string) *sync.Mutex {
 
 // publish tells open pages a thread changed, with its project's fresh counts.
 func (m *Threads) publish(t *db.Thread) {
+	t.RunningTasks = m.RunningTasks(t.ID)
 	ev := Event{Type: EventThread, ProjectID: t.ProjectID, Data: t}
 	if c, err := m.store.ProjectThreadCounts(t.ProjectID); err == nil {
 		ev.Threads = &c
