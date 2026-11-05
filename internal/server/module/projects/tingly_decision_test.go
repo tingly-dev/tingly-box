@@ -144,4 +144,3 @@ func TestTinglyDecisionCardIsAnsweredOnlyByItsOwnConversation(t *testing.T) {
 	chat.WaitText(10*time.Second).AssertContains(t, "You said: Ship")
 	require.Equal(t, 0, chosenOption(t, h, main))
 }
-
