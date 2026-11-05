@@ -123,6 +123,7 @@ HTML 标签（`<script>`、`<iframe>`、`<img onerror>`、`<style>`、`<form>`�
 - **上限（暂定，之后再看）**：解压后总大小不超过 10 MB，文件数不超过 100。常量是 `project.MaxArchiveFiles` / `project.MaxArchiveBytes`（`internal/project/library_archive.go`），改这里即可。**恰好等于上限允许，多 1 个文件或多 1 字节就拒绝。**
 - 先预扫描（`Layout.OpenLibraryArchive`）：数文件、累加大小，**一旦超过任一上限就停止**（所以大目录不会被整棵遍历），然后在发送任何内容之前返回错误。超限是 **413**，消息说明是文件数还是大小以及上限，例如 `this folder has more than 100 files (a zip download is limited to 100 files and 10 MB)`；因为提前停止，消息不含实际总数。错误体仍是 `{"error": "..."}`，前端直接把它当 toast 显示。
 - 通过后用 `archive/zip` 直接写入响应（`LibraryArchive.Stream`），不落临时文件。头：`Content-Type: application/zip`、`Content-Disposition: attachment; filename="<文件夹名>.zip"`（根为 `library.zip`；非 ASCII 名由 `mime.FormatMediaType` 编成 `filename*`）、`X-Content-Type-Options: nosniff`。
+- 文件夹里没有可下载的文件（只有空文件夹、隐藏项或链接）：**400** `this folder has no files to download`，而不是静默给一个空 zip。
 - 其余错误码与目录树一致：路径越界/隐藏/符号链接/不是文件夹 → 400，不存在 → 404。
 
 ### 策略（与文件下载同一套，走同一个 `os.Root`）
@@ -131,7 +132,7 @@ HTML 标签（`<script>`、`<iframe>`、`<img onerror>`、`<style>`、`<form>`�
 - 遍历时跳过：以 `.` 开头的条目（`.tmp` 等）、符号链接（包括指回库内的）、非普通文件（FIFO、设备）。每个条目都用 `root.Lstat` 判断，不走路径。不含空文件夹（只有文件才进 zip）。
 - 条目名相对于所请求的文件夹，用正斜杠，来自实际目录项，所以不含 `..` 或绝对路径；含反斜杠或 NUL 的文件名被跳过（有的解压工具把反斜杠当分隔符，没法安全存放）。顺序按名字排序，输出稳定。
 - 预扫描与发送之间文件可能变化：发送时重新 `Lstat`、打开并用 `os.SameFile` 确认仍是计数时的那个普通文件（被换成链接则跳过），并且每个文件最多读取计数时的大小，所以 zip 不会超出已检查的上限。
-- 发送已开始后出错（例如客户端断开）只能截断响应；zip 不完整，客户端解压会失败，不会得到一份看似完整的错误文件。
+- 发送已开始后出错：响应头已发出，正常结束会让客户端把截断的 zip 当成功。所以处理函数直接关闭连接（`Hijack` 后 `Close`），下载失败而不是得到一份残缺文件。（`panic(http.ErrAbortHandler)` 也能做到，但 `gin.Recovery` 会吞掉它。）这条路径没有自动化测试：测试里造不出写入中途失败。
 
 ### 前端
 

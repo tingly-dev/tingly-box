@@ -251,6 +251,15 @@ func TestLibraryArchiveStreamsAFolderAsAZip(t *testing.T) {
 		assert.Contains(t, string(body), `"error"`, bad)
 		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"), bad)
 	}
+	// Nothing to download is said, not sent as an empty zip: a folder of only
+	// empty folders, hidden entries and links.
+	require.NoError(t, os.MkdirAll(filepath.Join(lib, "hollow/inner"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(lib, "hollow/.git"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(lib, "hollow/.git/x"), []byte("x"), 0o644))
+	resp, body = archive("hollow")
+	assert.Equal(t, 400, resp.StatusCode)
+	assert.Contains(t, string(body), "no files to download")
+
 	resp, _ = archive("nope")
 	assert.Equal(t, 404, resp.StatusCode)
 	resp, _ = archive("/etc")

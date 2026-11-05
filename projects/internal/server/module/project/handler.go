@@ -828,13 +828,23 @@ func (h *Handler) archiveLibrary(c *gin.Context) {
 		return
 	}
 	defer a.Close()
+	if len(a.Files()) == 0 {
+		apierr.BadRequest(c, "this folder has no files to download")
+		return
+	}
 	c.Header("Content-Type", "application/zip")
 	c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": a.Filename()}))
 	c.Header("X-Content-Type-Options", "nosniff")
 	c.Status(http.StatusOK)
-	// Headers are sent by now; a failure here can only cut the stream short.
+	// Headers are out by now. Ending the response normally would give the
+	// client a truncated zip as a success, so the connection is closed
+	// instead and the download fails (a panic with http.ErrAbortHandler would
+	// do that too, but gin.Recovery swallows it).
 	if err := a.Stream(c.Writer); err != nil {
 		_ = c.Error(err)
+		if conn, _, herr := c.Writer.Hijack(); herr == nil {
+			_ = conn.Close()
+		}
 	}
 }
 

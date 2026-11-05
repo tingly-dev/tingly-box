@@ -116,7 +116,9 @@ func (a *LibraryArchive) scan(dir, rel, prefix string, total *int64) error {
 		if strings.HasPrefix(name, ".") || strings.ContainsAny(name, `\`+"\x00") {
 			continue
 		}
-		fi, err := a.root.Lstat(filepath.Join(dir, name))
+		// Info is an lstat relative to the open directory, so it neither
+		// follows a link nor resolves the whole path again.
+		fi, err := e.Info()
 		if err != nil {
 			continue
 		}
