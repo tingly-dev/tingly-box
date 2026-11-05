@@ -135,6 +135,8 @@ func (ph *ProtocolHandler) HandleOpenAIImageEdit(c *gin.Context) {
 	usage := protocol.NewTokenUsageWithCache(int(resp.Usage.InputTokens), int(resp.Usage.OutputTokens), 0)
 	ph.trackUsageWithTokenUsage(c, usage, nil)
 
+	annotateImageFormat(resp)
+
 	// Persist edited images under the config image directory (best-effort).
 	ph.persistImageEdit(req, resp)
 

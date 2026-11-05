@@ -2,6 +2,8 @@ package imchannel
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/imbot"
@@ -249,5 +251,45 @@ func TestPromptCancelMappedToStatusCancelled(t *testing.T) {
 	}
 	if reply.Selected != "" {
 		t.Fatalf("cancelled reply should not set Selected, got %q", reply.Selected)
+	}
+}
+
+func TestSendFileKindComesFromBytes(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name string, data []byte) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	cases := []struct {
+		name     string
+		file     string
+		data     []byte
+		declared string
+		wantType string
+		wantMIME string
+	}{
+		{"png", "a.png", []byte("\x89PNG\r\n\x1a\nxx"), "image/png", "image", "image/png"},
+		{"gif is a document", "a.gif", []byte("GIF89a\x01\x00\x01\x00"), "image/gif", "document", "image/gif"},
+		{"gif under a png name is still a document", "b.png", []byte("GIF89a\x01\x00\x01\x00"), "image/png", "document", "image/gif"},
+		{"svg is a document", "a.svg", []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`), "image/svg+xml", "document", "image/svg+xml"},
+		{"svg under a png name is a document", "c.png", []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`), "image/png", "document", "application/octet-stream"},
+	}
+	for _, platform := range []string{"telegram", "feishu", "dingtalk", "weixin", "wecom"} {
+		for _, c := range cases {
+			t.Run(platform+"/"+c.name, func(t *testing.T) {
+				s := &fakeSender{}
+				ch := New("bot", platform, s, nil, nil)
+				path := write(c.file, c.data)
+				if err := ch.SendFile(context.Background(), "chat", path, c.file, c.declared, ""); err != nil {
+					t.Fatal(err)
+				}
+				if len(s.lastMedia) != 1 || s.lastMedia[0].Type != c.wantType || s.lastMedia[0].MimeType != c.wantMIME {
+					t.Fatalf("media = %+v, want type %q mime %q", s.lastMedia, c.wantType, c.wantMIME)
+				}
+			})
+		}
 	}
 }
