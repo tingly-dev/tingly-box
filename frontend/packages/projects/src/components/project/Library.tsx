@@ -39,7 +39,7 @@ function useExpanded(projectId: string): [string[], (paths: string[]) => void] {
 
 /**
  * The project library as a tree of its folders and files. A folder's
- * contents are fetched when it is opened; files can be previewed (images, Markdown and text), downloaded or deleted.
+ * contents are fetched when it is opened; files can be previewed (images, Markdown and text), downloaded or deleted, and a folder downloaded as a zip.
  */
 export function Library({ projectId, refreshKey }: { projectId: string; refreshKey: number }) {
     const { t, i18n } = useTranslation('projects');
@@ -80,21 +80,24 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
     };
 
     // Through apiFetch rather than a plain link, so the host's
-    // authentication applies to downloads too.
-    const download = async (path: string) => {
+    // authentication applies to downloads too, and a refusal (a folder over
+    // the zip limits, say) is shown as the server's own message.
+    const save = async (url: string, filename: string) => {
         try {
-            const res = await apiFetch(`/api/v1/projects/${projectId}/library/file?path=${encodeURIComponent(path)}`);
+            const res = await apiFetch(url);
             if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? res.statusText);
-            const url = URL.createObjectURL(await res.blob());
+            const blobUrl = URL.createObjectURL(await res.blob());
             const a = document.createElement('a');
-            a.href = url;
-            a.download = path.split('/').pop() || path;
+            a.href = blobUrl;
+            a.download = filename;
             a.click();
-            setTimeout(() => URL.revokeObjectURL(url), 0);
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
         } catch (e) {
             notify((e as Error).message, 'error');
         }
     };
+    const download = (path: string) => save(`/api/v1/projects/${projectId}/library/file?path=${encodeURIComponent(path)}`, path.split('/').pop() || path);
+    const downloadZip = (n: Node) => save(`/api/v1/projects/${projectId}/library/archive?path=${encodeURIComponent(n.path)}`, `${n.name}.zip`);
 
     return (
         <Box sx={{ p: 1.5 }}>
@@ -130,7 +133,11 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
                 }}
                 empty={<Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>{t('library.empty')}</Typography>}
                 renderMeta={(n) => n.kind === 'file' ? `${formatBytes(n.size)} · ${timeAgo(n.updated_at, i18n.language, true)}` : null}
-                renderActions={(n, { tabIndex }) => n.kind === 'file' && (
+                renderActions={(n, { tabIndex }) => n.kind === 'dir' ? (
+                    <Tooltip title={t('library.downloadZip')}>
+                        <IconButton size="small" tabIndex={tabIndex} aria-label={t('library.downloadZip')} onClick={() => void downloadZip(n)}><Download fontSize="small" /></IconButton>
+                    </Tooltip>
+                ) : (
                     <>
                         <Tooltip title={t('library.download')}>
                             <IconButton size="small" tabIndex={tabIndex} aria-label={t('library.download')} onClick={() => void download(n.path)}><Download fontSize="small" /></IconButton>

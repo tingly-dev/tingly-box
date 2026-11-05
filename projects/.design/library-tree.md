@@ -20,7 +20,7 @@ Overview 的 Library 页把项目资料库显示成可展开的目录树，而�
 - `components/common/LazyTree.tsx`：通用的懒加载树。`load(dir)` 返回一层节点，已展开的路径由父组件持有（受控），所以可以记忆。遵循 WAI-ARIA tree：单个 tab stop（roving tabindex）、上下箭头移动、右箭头展开/进入第一个子项、左箭头收起/回到父项、Home/End、Enter/空格切换文件夹或触发 `onActivate`。
 - 展开状态按项目存在 localStorage（`tingly-project.library.expanded.<projectId>`），重新进入时先加载根，再沿已记住的路径逐层加载；已不存在的路径在父目录加载后被清掉。
 - 刷新（上传、删除后）重新请求所有已加载的目录，期间保留旧行，不闪烁。
-- 行内操作（下载、删除）只对文件显示；鼠标悬停或键盘聚焦时替换右侧的大小和时间。不可见时不接收点击；触屏设备没有 hover，操作一直显示。键盘上只有当前行的操作在 tab 顺序里。
+- 行内操作：文件有下载、删除，文件夹只有“下载为 zip”（见“文件夹下载为 zip”）；鼠标悬停或键盘聚焦时替换右侧的大小和时间。不可见时不接收点击；触屏设备没有 hover，操作一直显示。键盘上只有当前行的操作在 tab 顺序里。
 - 与“添加目录”选择器（`DirectoryPicker`）的关系：它是按列钻取的对话框，不是树，且只浏览服务器 home，不能直接复用成树。这里沿用它的图标（Folder / ChevronRight）、加载/错误/重试的交互和 i18n 词汇；`DirectoryPicker` 本身未改动。
 
 ## 文件预览
@@ -109,7 +109,39 @@ HTML 标签（`<script>`、`<iframe>`、`<img onerror>`、`<style>`、`<form>`�
 
 ### 测试
 
-`library_tree_test.go`：符号链接（绝对/相对/指回库内/目录）、`..` 与编码变体、NUL、绝对路径、Windows 风格路径、大小写、竞态（并发把文件和目录在“普通”与“指向库外的链接”之间来回替换，内容永远不含库外数据；朴素的 `os.ReadFile(路径)` 实现会被这个测试抓到）、写入不穿透链接。`server/library_tree_test.go`：HTTP 层的编码路径、响应头与 Range、`index.html`、非 ASCII 文件名、上传不跟随链接、附件下载拒绝链接。
+`library_tree_test.go`：符号链接（绝对/相对/指回库内/目录）、`..` 与编码变体、NUL、绝对路径、Windows 风格路径、大小写、竞态（并发把文件和目录在“普通”与“指向库外的链接”之间来回替换，内容永远不含库外数据；朴素的 `os.ReadFile(路径)` 实现会被这个测试抓到）、写入不穿透链接。`library_archive_test.go`（zip）：恰好在/超过文件数与字节上限、嵌套文件夹与跨文件求和、点开头与符号链接被跳过、条目名安全、路径越界被拒、内容往返、计数后文件变大或被换成链接。`server/library_tree_test.go`：HTTP 层的编码路径、响应头与 Range、`index.html`、非 ASCII 文件名、上传不跟随链接、附件下载拒绝链接。
+
+## 文件夹下载为 zip
+
+文件夹行的行内操作里有“下载为 zip”。资料库根没有行，所以界面上不提供根的下载（后端允许，见下）；决定是不为根做特殊处理，只靠上限。
+
+### 接口
+
+`GET /projects/:id/library/archive?path=<folder>`（`path` 为空是资料库根）。
+
+- **格式只有 zip**，没有 tar.gz。
+- **上限（暂定，之后再看）**：解压后总大小不超过 10 MB，文件数不超过 100。常量是 `project.MaxArchiveFiles` / `project.MaxArchiveBytes`（`internal/project/library_archive.go`），改这里即可。**恰好等于上限允许，多 1 个文件或多 1 字节就拒绝。**
+- 先预扫描（`Layout.OpenLibraryArchive`）：数文件、累加大小，**一旦超过任一上限就停止**（所以大目录不会被整棵遍历），然后在发送任何内容之前返回错误。超限是 **413**，消息说明是文件数还是大小以及上限，例如 `this folder has more than 100 files (a zip download is limited to 100 files and 10 MB)`；因为提前停止，消息不含实际总数。错误体仍是 `{"error": "..."}`，前端直接把它当 toast 显示。
+- 通过后用 `archive/zip` 直接写入响应（`LibraryArchive.Stream`），不落临时文件。头：`Content-Type: application/zip`、`Content-Disposition: attachment; filename="<文件夹名>.zip"`（根为 `library.zip`；非 ASCII 名由 `mime.FormatMediaType` 编成 `filename*`）、`X-Content-Type-Options: nosniff`。
+- 其余错误码与目录树一致：路径越界/隐藏/符号链接/不是文件夹 → 400，不存在 → 404。
+
+### 策略（与文件下载同一套，走同一个 `os.Root`）
+
+- 请求路径经 `cleanLibraryRel` + `noLibrarySymlinks`，与 `ListLibraryDir` 完全一样。
+- 遍历时跳过：以 `.` 开头的条目（`.tmp` 等）、符号链接（包括指回库内的）、非普通文件（FIFO、设备）。每个条目都用 `root.Lstat` 判断，不走路径。不含空文件夹（只有文件才进 zip）。
+- 条目名相对于所请求的文件夹，用正斜杠，来自实际目录项，所以不含 `..` 或绝对路径；含反斜杠或 NUL 的文件名被跳过（有的解压工具把反斜杠当分隔符，没法安全存放）。顺序按名字排序，输出稳定。
+- 预扫描与发送之间文件可能变化：发送时重新 `Lstat`、打开并用 `os.SameFile` 确认仍是计数时的那个普通文件（被换成链接则跳过），并且每个文件最多读取计数时的大小，所以 zip 不会超出已检查的上限。
+- 发送已开始后出错（例如客户端断开）只能截断响应；zip 不完整，客户端解压会失败，不会得到一份看似完整的错误文件。
+
+### 前端
+
+`Library.tsx` 的文件下载和 zip 下载共用 `save(url, filename)`：经 `apiFetch`（宿主认证照常），失败时把服务器的 `error` 当 toast（`useNotify`），成功则用 blob 触发保存；文件名为 `<文件夹名>.zip`。文案 `library.downloadZip`（en / zh）。因为上限是 10 MB，整份读成 blob 可以接受；如果以后放宽上限，需要改成直接的浏览器下载。
+
+### 没做
+
+- 根目录的入口（根没有行）。
+- tar.gz；包含空文件夹；进度显示。
+- 上限可配置（目前是常量）。
 
 ## 没做
 
