@@ -18,21 +18,37 @@ const (
 	DefaultHoldMax   = 10 * time.Minute
 )
 
-func (m *Threads) runningTasks(threadID string) int {
+// RunningTasks is how many background tasks the thread's process runs now.
+func (m *Threads) RunningTasks(threadID string) int {
 	if m.backgroundCount != nil {
 		return m.backgroundCount(threadID)
 	}
 	return len(m.engine.BackgroundTasks(m.sessionOf(threadID)))
 }
 
-func (m *Threads) hasBackground(threadID string) bool { return m.runningTasks(threadID) > 0 }
+func (m *Threads) hasBackground(threadID string) bool { return m.RunningTasks(threadID) > 0 }
+
+// republish tells open pages about a thread whose stored row did not change
+// (its running-task count is read live), without touching updated_at.
+func (m *Threads) republish(threadID string) {
+	l := m.rowLock(threadID)
+	l.Lock()
+	defer l.Unlock()
+	if t, err := m.store.GetThread(threadID); err == nil {
+		m.publish(t)
+	}
+}
 
 // Annotate fills in each thread's RunningTasks from the live processes.
 // Everything that sends threads out (the API, events, the coordinator's
 // view) goes through it, so a count means the same everywhere.
 func (m *Threads) Annotate(ts []db.Thread) {
 	for i := range ts {
-		ts[i].RunningTasks = m.runningTasks(ts[i].ID)
+		if m.backgroundCount != nil {
+			ts[i].RunningTasks = m.backgroundCount(ts[i].ID)
+		} else {
+			ts[i].RunningTasks = len(m.engine.BackgroundTasks(ts[i].SessionID))
+		}
 	}
 }
 

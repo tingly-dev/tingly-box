@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -466,10 +467,15 @@ func TestSessionWithBackgroundTasksIsNotDone(t *testing.T) {
 	}
 	store := threadStore{f.threads}
 	sid := f.threads.sessionOf(s.ID)
+	// The engine updates its live set before the event reaches the store; stand in for it.
+	var running atomic.Int64
+	f.threads.backgroundCount = func(string) int { return int(running.Load()) }
 
+	running.Store(1)
 	store.Append(sid, changed(map[string]string{"task_id": "b1", "task_type": "local_bash", "description": "dev server"}))
 	waitStatus(t, f.store, s.ID, db.ThreadWorking)
 
+	running.Store(0)
 	store.Append(sid, changed())
 	waitStatus(t, f.store, s.ID, db.ThreadIdle)
 }

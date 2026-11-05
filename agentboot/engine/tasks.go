@@ -101,7 +101,9 @@ func (e *Engine) clearTasks(id string) {
 	had := len(e.live[id]) > 0
 	delete(e.live, id)
 	e.mu.Unlock()
-	if had {
+	if had && len(e.BackgroundTasks(id)) == 0 {
+		// A restarted process may already have reported its own tasks; the
+		// consumers read the live set, so the event only says "look again".
 		payload, _ := json.Marshal(TaskEvent{Event: "background_tasks_changed", Tasks: []TaskRef{}})
 		e.store.Append(id, Entry{Kind: KindTask, Payload: payload, Timestamp: time.Now()})
 	}

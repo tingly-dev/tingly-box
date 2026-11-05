@@ -235,3 +235,61 @@ func TestCoordinatorSeesWhichThreadsRunBackgroundTasks(t *testing.T) {
 	assert.NotContains(t, s, "background_tasks=0")
 	assert.Contains(t, s, "report comes when they end")
 }
+
+// A turn in flight decides its own end, but the page still has to learn that
+// the task count changed.
+func TestFolderSessionTaskChangePublishesDuringATurn(t *testing.T) {
+	f, tasks := backgroundFixture(t, func(*enginetest.Turn) error { return nil })
+	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "x"})
+	require.NoError(t, err)
+	waitStatus(t, f.store, s.ID, db.ThreadIdle)
+
+	ch, cancel := f.threads.hub.Subscribe(AllProjects)
+	defer cancel()
+	f.threads.mu.Lock()
+	f.threads.active[s.ID] = &activeThread{}
+	f.threads.mu.Unlock()
+	tasks.Store(2)
+	threadStore{f.threads}.Append(f.threads.sessionOf(s.ID), tasksChanged(map[string]string{"task_id": "b1"}, map[string]string{"task_id": "b2"}))
+	nextThreadEvent(t, ch, func(x db.Thread) bool { return x.ID == s.ID && x.RunningTasks == 2 })
+}
+
+// The count is not stored: a task starting or ending must not move the thread
+// to the top of "recently updated".
+func TestTaskChangeKeepsTheThreadsPlace(t *testing.T) {
+	f, tasks := backgroundFixture(t, func(turn *enginetest.Turn) error {
+		turn.Say("Reviewers are running.", 1, 1)
+		return nil
+	})
+	f.threads.HoldMax = time.Hour
+	tasks.Store(1)
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "review it"})
+	require.NoError(t, err)
+	waitFirstTurn(t, f, th.ID)
+	before, err := f.store.GetThread(th.ID)
+	require.NoError(t, err)
+
+	time.Sleep(20 * time.Millisecond)
+	ch, cancel := f.threads.hub.Subscribe(AllProjects)
+	defer cancel()
+	tasks.Store(3)
+	threadStore{f.threads}.Append(f.threads.sessionOf(th.ID), tasksChanged())
+	nextThreadEvent(t, ch, func(x db.Thread) bool { return x.ID == th.ID && x.RunningTasks == 3 })
+	after, err := f.store.GetThread(th.ID)
+	require.NoError(t, err)
+	assert.True(t, before.UpdatedAt.Equal(after.UpdatedAt), "updated_at moved from %v to %v", before.UpdatedAt, after.UpdatedAt)
+}
+
+// A thread with no session yet (a project's conversation) must not pin an
+// empty session id in the lookup caches.
+func TestSessionOfDoesNotCacheAMissingSession(t *testing.T) {
+	f, _ := backgroundFixture(t, func(*enginetest.Turn) error { return nil })
+	th := &db.Thread{ProjectID: f.project.ID, Origin: "user", Agent: db.AgentClaudeCode}
+	require.NoError(t, f.store.CreateThread(th))
+	assert.Empty(t, f.threads.sessionOf(th.ID))
+	assert.Empty(t, f.threads.threadOf(""), "the empty session must not map to a thread")
+
+	th.SessionID = "sess-1"
+	require.NoError(t, f.store.SaveThread(th))
+	assert.Equal(t, "sess-1", f.threads.sessionOf(th.ID))
+}

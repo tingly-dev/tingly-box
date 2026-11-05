@@ -804,7 +804,7 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, call llm.ToolC
 		}
 		lines, oldest, hidden := fit(entries, in.Full, func(id string) string { return "get_thread full for the whole" })
 		lines += footer(hidden, more, oldest, "get_thread")
-		t.RunningTasks = c.threads.runningTasks(t.ID)
+		t.RunningTasks = c.threads.RunningTasks(t.ID)
 		return envelope(trustRelay, fmt.Sprintf("thread %s %q status=%s%s branch=%s base=%s commits_ahead=%d files_changed=%d waiting_on=%q\ntask: %s\nlast report: %s\nrecent transcript:\n%s",
 			short(t.ID), t.Title, t.Status, tasksNote(t.RunningTasks), orNone(t.Branch), orNone(t.BaseBranch), t.CommitsAhead, t.FilesChanged, t.WaitReason,
 			clip(t.Task, 1500), clip(t.LastReport, 2000), lines), "source", "thread", "kind", "get_thread"), false, nil

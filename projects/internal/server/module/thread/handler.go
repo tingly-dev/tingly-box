@@ -309,7 +309,7 @@ func (h *Handler) thread(c *gin.Context) (*db.Thread, bool) {
 		fail(c, err)
 		return nil, false
 	}
-	t.RunningTasks = len(h.svc.Threads.BackgroundTasks(t.ID))
+	t.RunningTasks = h.svc.Threads.RunningTasks(t.ID)
 	return t, true
 }
 
@@ -386,9 +386,7 @@ func (h *Handler) get(c *gin.Context) {
 	if !ok {
 		return
 	}
-	tasks := h.svc.Threads.BackgroundTasks(t.ID)
-	t.RunningTasks = len(tasks)
-	c.JSON(http.StatusOK, ThreadDetailResponse{Thread: *t, Running: h.svc.Threads.Running(t.ID), BackgroundTasks: tasks})
+	c.JSON(http.StatusOK, ThreadDetailResponse{Thread: *t, Running: h.svc.Threads.Running(t.ID), BackgroundTasks: h.svc.Threads.BackgroundTasks(t.ID)})
 }
 
 func (h *Handler) events(c *gin.Context) {
@@ -467,7 +465,7 @@ func (h *Handler) send(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	t.RunningTasks = len(h.svc.Threads.BackgroundTasks(t.ID))
+	t.RunningTasks = h.svc.Threads.RunningTasks(t.ID)
 	c.JSON(http.StatusOK, t)
 }
 
@@ -558,7 +556,7 @@ func (h *Handler) reply(c *gin.Context, id string) {
 		fail(c, err)
 		return
 	}
-	t.RunningTasks = len(h.svc.Threads.BackgroundTasks(t.ID))
+	t.RunningTasks = h.svc.Threads.RunningTasks(t.ID)
 	c.JSON(http.StatusOK, t)
 }
 

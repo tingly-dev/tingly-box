@@ -59,6 +59,7 @@ export default function ProjectPage() {
     // The project conversation: the main thread's events.
     const [busy, setBusy] = useState(false);
     const [liveTasks, setLiveTasks] = useState<BackgroundTask[]>([]);
+    const openThreadId = useRef(threadId);
     // The coordinator's own status, for the Overview's Status tab.
     const [coordinator, setCoordinator] = useState<Thread | undefined>(undefined);
     const [queued, setQueued] = useState(0);
@@ -134,7 +135,8 @@ export default function ProjectPage() {
         try {
             const d = await unwrap(api.GET('/api/v1/threads/{id}', { params: { path: { id: tid } } }));
             setThreads((list) => upsert(list, d.thread));
-            setLiveTasks(d.background_tasks ?? []);
+            // Only the open thread's tasks: a slow answer for a thread the user left must not land on the next one.
+            if (openThreadId.current === tid) setLiveTasks(d.background_tasks ?? []);
         } catch (e) {
             notify((e as Error).message, 'error');
         }
@@ -148,6 +150,7 @@ export default function ProjectPage() {
     }, [load]);
 
     useEffect(() => {
+        openThreadId.current = threadId;
         setLiveTasks([]);
         if (threadId) void loadThread(threadId);
     }, [threadId, loadThread]);

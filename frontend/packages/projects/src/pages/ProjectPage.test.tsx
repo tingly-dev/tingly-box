@@ -189,3 +189,21 @@ it('hands a worker\'s running background tasks to its panel, and reads them agai
     act(() => onEvent({ type: 'thread_event', data: { thread_id: 'a', kind: 'task', payload: JSON.stringify({ event: 'background_tasks_changed', tasks: [] }) } } as never));
     await waitFor(() => expect(threadReads()).toBe(before + 1));
 });
+
+it('does not show the tasks of a thread the user already left', async () => {
+    const tasksOf = { a: [{ task_id: 'a1', task_type: 'local_bash', description: 'a task' }], b: [] as unknown[] };
+    let answerA!: () => void;
+    m.get.mockImplementation(async (url: string, options: { params?: { path: { id: string } } }) => {
+        if (url === '/api/v1/projects/{id}') return { data: { project: p, threads: [a, b], coordinator_busy: false }, response: new Response() };
+        if (url.endsWith('permission-modes')) return { data: { modes: ['auto'] }, response: new Response() };
+        const tid = options.params?.path.id as 'a' | 'b';
+        if (tid === 'a') await new Promise<void>((r) => { answerA = r; });
+        return { data: { thread: tid === 'a' ? a : b, running: true, background_tasks: tasksOf[tid] }, response: new Response() };
+    });
+    render(<MemoryRouter initialEntries={['/projects/p?thread=a']}><ProjectsHostProvider host={host}><Switch /><Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes></ProjectsHostProvider></MemoryRouter>);
+    await waitFor(() => expect(answerA).toBeDefined());
+    fireEvent.click(screen.getByRole('button', { name: 'switch' }));
+    await waitFor(() => expect(m.get.mock.calls.filter(([u, o]) => u === '/api/v1/threads/{id}' && o.params.path.id === 'b').length).toBeGreaterThan(0));
+    await act(async () => answerA());
+    await waitFor(() => expect(screen.getByTestId('thread')).toHaveAttribute('data-live-tasks', '0'));
+});
