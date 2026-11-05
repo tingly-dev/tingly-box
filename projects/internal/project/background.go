@@ -1,6 +1,7 @@
 package project
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
@@ -17,11 +18,22 @@ const (
 	DefaultHoldMax   = 10 * time.Minute
 )
 
-func (m *Threads) hasBackground(threadID string) bool {
+func (m *Threads) runningTasks(threadID string) int {
 	if m.backgroundCount != nil {
-		return m.backgroundCount(threadID) > 0
+		return m.backgroundCount(threadID)
 	}
-	return len(m.engine.BackgroundTasks(m.sessionOf(threadID))) > 0
+	return len(m.engine.BackgroundTasks(m.sessionOf(threadID)))
+}
+
+func (m *Threads) hasBackground(threadID string) bool { return m.runningTasks(threadID) > 0 }
+
+// Annotate fills in each thread's RunningTasks from the live processes.
+// Everything that sends threads out (the API, events, the coordinator's
+// view) goes through it, so a count means the same everywhere.
+func (m *Threads) Annotate(ts []db.Thread) {
+	for i := range ts {
+		ts[i].RunningTasks = m.runningTasks(ts[i].ID)
+	}
 }
 
 func (m *Threads) holdGrace() time.Duration {
@@ -125,4 +137,12 @@ func restingStatus(commitsAhead int) string {
 		return db.ThreadReady
 	}
 	return db.ThreadIdle
+}
+
+// tasksNote is the coordinator's marker for a thread that runs background tasks.
+func tasksNote(n int) string {
+	if n == 0 {
+		return ""
+	}
+	return fmt.Sprintf(" background_tasks=%d", n)
 }

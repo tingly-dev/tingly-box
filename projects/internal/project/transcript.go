@@ -140,6 +140,8 @@ func (m *Threads) syncBackground(t *db.Thread, e engine.Entry) {
 		if len(ev.Tasks) == 0 {
 			m.releaseSoon(t.ID, m.holdGrace())
 		}
+		// The set changed: the thread's card and rail show how many run.
+		_, _ = m.update(t.ID, func(*db.Thread) {})
 		return
 	}
 	m.mu.Lock()

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, IconButton, Link, MenuItem, Radio, RadioGroup, Select, Skeleton, Stack, Tooltip, Typography } from '@mui/material';
 import { Link as RouterLink, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { api, isFolder, type components, unwrap, type Project, type Thread, type ThreadEvent } from '../client';
+import { api, isFolder, type BackgroundTask, type components, unwrap, type Project, type Thread, type ThreadEvent } from '../client';
 import { ConversationPane } from '../components/project/ConversationPane';
 import { OverviewPane, type OverviewTab } from '../components/project/OverviewPane';
 import { ModelPicker } from '../components/ModelPicker';
@@ -27,6 +27,7 @@ import { usePlacement } from '../hooks/usePlacement';
 import { useProjectsHost } from '../host/ProjectsHost';
 import { readLocal, writeLocal } from '../utils/storage';
 import { needsUser } from '../components/project/threadStatus';
+import { changesLiveTasks } from '../components/workdir/backgroundTasks';
 import { composerPickerLabelSx, composerPickerMenuProps, composerPickerSx } from '../components/composerPicker';
 
 
@@ -57,6 +58,7 @@ export default function ProjectPage() {
     const [threads, setThreads] = useState<Thread[]>([]);
     // The project conversation: the main thread's events.
     const [busy, setBusy] = useState(false);
+    const [liveTasks, setLiveTasks] = useState<BackgroundTask[]>([]);
     // The coordinator's own status, for the Overview's Status tab.
     const [coordinator, setCoordinator] = useState<Thread | undefined>(undefined);
     const [queued, setQueued] = useState(0);
@@ -132,6 +134,7 @@ export default function ProjectPage() {
         try {
             const d = await unwrap(api.GET('/api/v1/threads/{id}', { params: { path: { id: tid } } }));
             setThreads((list) => upsert(list, d.thread));
+            setLiveTasks(d.background_tasks ?? []);
         } catch (e) {
             notify((e as Error).message, 'error');
         }
@@ -145,6 +148,7 @@ export default function ProjectPage() {
     }, [load]);
 
     useEffect(() => {
+        setLiveTasks([]);
         if (threadId) void loadThread(threadId);
     }, [threadId, loadThread]);
 
@@ -167,7 +171,11 @@ export default function ProjectPage() {
             case 'thread_event': {
                 const e = ev.data as ThreadEvent;
                 if (e.thread_id === mainThreadId) applyMain(e);
-                else if (e.thread_id === threadId) applyOpened(e);
+                else if (e.thread_id === threadId) {
+                    applyOpened(e);
+                    // The live tasks come with the thread, not its transcript.
+                    if (changesLiveTasks(e)) void loadThread(threadId);
+                }
                 break;
             }
             case 'coordinator':
@@ -181,7 +189,7 @@ export default function ProjectPage() {
                 break;
             }
         }
-    }, [threadId, mainThreadId, applyMain, editMain, applyOpened, load]);
+    }, [threadId, mainThreadId, applyMain, editMain, applyOpened, load, loadThread]);
 
     const resolveRecovery = async () => {
         if (!recovery || !recoveryAction) return;
@@ -288,6 +296,7 @@ export default function ProjectPage() {
             onLoadEarlier={opened.loadEarlier}
             subagents={opened.subagents}
             running={threadRunning}
+            liveTasks={liveTasks}
             disabled={blocked}
             settingsSaving={settings.saving}
             canSend={settings.canSend}

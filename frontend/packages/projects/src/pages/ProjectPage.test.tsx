@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 import ProjectPage from './ProjectPage';
+import { useProjectEvents } from '../hooks/useProjectEvents';
 import { ProjectsHostProvider } from '../host/ProjectsHost';
 
 const m = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), post: vi.fn(), patch: vi.fn(), placement: { overview: 'side', thread: 'side', overviewFloat: false, setThread: vi.fn() } }));
@@ -13,7 +14,7 @@ vi.mock('../components/project/ConversationPane', () => ({ ConversationPane: ({ 
 vi.mock('../components/project/OverviewPane', () => ({ OverviewPane: ({ onOpen, status }: { onOpen: (id: string) => void; status?: React.ReactNode }) => <><button onClick={() => onOpen('a')}>open thread</button><div data-testid="overview-status">{status}</div></> }));
 vi.mock('../components/workspace/WorkspaceLayout', () => ({ useWorkspacePane: () => ({ narrow: false, reveal: vi.fn() }), WorkspaceLayout: ({ main, side }: { main: React.ReactNode; side: React.ReactNode }) => <>{main}{side}</> }));
 vi.mock('../hooks/usePlacement', () => ({ usePlacement: () => m.placement }));
-vi.mock('../components/project/ThreadPanel', () => ({ ThreadPanel: ({ composerContext, modelControl, effortControl, belowComposer, settingsSaving, canSend, onBack }: { composerContext: React.ReactNode; modelControl: React.ReactNode; effortControl: React.ReactNode; belowComposer: React.ReactNode; settingsSaving: boolean; canSend: () => boolean; onBack: () => void }) => <div data-testid="thread" data-saving={settingsSaving} data-can-send={canSend()}><button onClick={onBack}>back</button>{modelControl}{effortControl}{composerContext}{belowComposer}</div> }));
+vi.mock('../components/project/ThreadPanel', () => ({ ThreadPanel: ({ composerContext, modelControl, effortControl, belowComposer, settingsSaving, canSend, onBack, liveTasks }: { liveTasks?: unknown[]; composerContext: React.ReactNode; modelControl: React.ReactNode; effortControl: React.ReactNode; belowComposer: React.ReactNode; settingsSaving: boolean; canSend: () => boolean; onBack: () => void }) => <div data-testid="thread" data-live-tasks={liveTasks?.length ?? 0} data-saving={settingsSaving} data-can-send={canSend()}><button onClick={onBack}>back</button>{modelControl}{effortControl}{composerContext}{belowComposer}</div> }));
 vi.mock('../components/ModelPicker', () => ({ ModelPicker: ({ value, defaultLabel, disabled, onChange }: { value: string; defaultLabel?: string; disabled?: boolean; onChange: (v: string) => void }) => <button disabled={disabled} onClick={() => onChange('worker-choice')}>{value || defaultLabel}</button> }));
 const host = { paths: { list: '/projects', project: (id: string) => `/projects/${id}`, folder: () => '/folders' } };
 const p = { id: 'p', type: 'project', main_thread_id: 'main', name: 'Project', thread_model: 'project-choice', thread_permission_mode: 'auto' };
@@ -168,4 +169,23 @@ it('does not send or dismiss the notice permanently when saving the chosen mode 
     await waitFor(() => expect(m.patch).toHaveBeenCalled());
     expect(m.post).not.toHaveBeenCalled();
     expect(localStorage.getItem('tingly-project.worktreeNoticeSeen')).toBeNull();
+});
+
+it('hands a worker\'s running background tasks to its panel, and reads them again when they change', async () => {
+    const running = { ...a, status: 'working', running_tasks: 2 };
+    const tasks = [{ task_id: 'b1', task_type: 'local_bash', description: 'pnpm test' }, { task_id: 'a1', task_type: 'local_agent', description: 'review' }];
+    m.get.mockImplementation(async (url: string) => ({ data:
+        url === '/api/v1/projects/{id}' ? { project: p, threads: [running], coordinator_busy: false }
+            : url.endsWith('permission-modes') ? { modes: ['auto'] } : { thread: running, running: true, background_tasks: tasks }, response: new Response() }));
+    render(<MemoryRouter initialEntries={['/projects/p?thread=a']}><ProjectsHostProvider host={host}><Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes></ProjectsHostProvider></MemoryRouter>);
+    await waitFor(() => expect(screen.getByTestId('thread')).toHaveAttribute('data-live-tasks', '2'));
+
+    const threadReads = () => m.get.mock.calls.filter(([url]) => url === '/api/v1/threads/{id}').length;
+    const before = threadReads();
+    const onEvent = vi.mocked(useProjectEvents).mock.calls.at(-1)![1];
+    // Progress is noise; a change in the set is read again.
+    act(() => onEvent({ type: 'thread_event', data: { thread_id: 'a', kind: 'task', payload: JSON.stringify({ event: 'task_progress' }) } } as never));
+    expect(threadReads()).toBe(before);
+    act(() => onEvent({ type: 'thread_event', data: { thread_id: 'a', kind: 'task', payload: JSON.stringify({ event: 'background_tasks_changed', tasks: [] }) } } as never));
+    await waitFor(() => expect(threadReads()).toBe(before + 1));
 });

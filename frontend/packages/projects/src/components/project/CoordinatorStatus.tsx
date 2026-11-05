@@ -21,6 +21,8 @@ interface Props {
 export function CoordinatorStatus({ project, coordinator, queued, threads }: Props) {
     const { t } = useTranslation('projects');
     const count = (...statuses: string[]) => threads.filter((x) => statuses.includes(x.status)).length;
+    const running = threads.reduce((n, x) => n + (x.running_tasks ?? 0), 0);
+    const withTasks = threads.filter((x) => x.running_tasks > 0).length;
     return (
         <Box sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.25, bgcolor: 'background.default', minHeight: '100%' }}>
             {coordinator && (
@@ -37,6 +39,7 @@ export function CoordinatorStatus({ project, coordinator, queued, threads }: Pro
                             <Fact label={t('thread.status.waiting')}>{count('waiting', 'failed')}</Fact>
                             <Fact label={t('thread.status.ready')}>{count('ready')}</Fact>
                             <Fact label={t('thread.status.resolved')}>{count('resolved')}</Fact>
+                            {running > 0 && <Fact label={t('rail.backgroundTasks')}>{t('rail.tasksInThreads', { tasks: running, count: withTasks })}</Fact>}
                         </>
                     )}
             </RailCard>

@@ -30,8 +30,16 @@ describe('ThreadInfoRail', () => {
         expect(screen.getByText('main → tb/fix')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'thread.review' }));
         expect(onReview).toHaveBeenCalled();
-        // Background tasks belong to a folder session only.
+        // A project thread with no background tasks has no card for them.
         expect(screen.queryByRole('region', { name: 'session.backgroundTasks' })).not.toBeInTheDocument();
+    });
+
+    it('shows the background tasks of a project thread too, not only a folder session', () => {
+        render(<ThreadInfoRail {...props} thread={thread({ status: 'working' })} folder={false} canReview={false} tasks={[task({}), task({ taskId: 'b', callId: 'c2', status: 'completed', description: 'old build' })]} />);
+        const card = screen.getByRole('region', { name: 'session.backgroundTasks' });
+        expect(within(card).getByText('pnpm test')).toBeInTheDocument();
+        expect(within(card).getByRole('button', { name: 'tasks.stopTask' })).toBeInTheDocument();
+        expect(within(card).getByText('session.tasksRunning:1')).toBeInTheDocument();
     });
 
     it('shows the same status and usage as the coordinator: state, context fill, turns, cache', () => {

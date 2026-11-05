@@ -59,7 +59,7 @@ function TaskLine({ threadId, task, onChanged, onReveal }: { threadId: string; t
 
 interface Props {
     thread: Thread;
-    /** A working folder's session: no worktree branch to review; background tasks live here. */
+    /** A working folder's session: no worktree branch to review; its background tasks always have a card (a project thread gets one while it has some). */
     folder: boolean;
     tasks: BackgroundTaskRow[];
     canReview: boolean;
@@ -117,7 +117,7 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
                     {canReview && <Button size="small" variant="outlined" startIcon={<DiffIcon />} onClick={onReview} sx={{ mt: 0.75 }}>{t('thread.review')}</Button>}
                 </RailCard>
             )}
-            {folder && (
+            {(folder || tasks.length > 0) && (
                 <RailCard id="tasks" title={t('session.backgroundTasks')} aside={running.length > 0 ? t('session.tasksRunning', { count: running.length }) : undefined}>
                     {tasks.length === 0 && <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{t('tasks.none')}</Typography>}
                     {running.map((x) => <TaskLine key={x.taskId} threadId={thread.id} task={x} onChanged={onChanged} onReveal={onReveal} />)}

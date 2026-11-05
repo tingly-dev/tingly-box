@@ -50,6 +50,31 @@ describe('a queued thread', () => {
     });
 });
 
+describe('a thread that runs background tasks', () => {
+    it('says so in the subtitle instead of repeating its last report', () => {
+        render(<ThreadSubtitle thread={thread({ status: 'working', running_tasks: 2, last_report: 'earlier report' })} />);
+        expect(screen.getByText('thread.tasksSubtitle:2')).toBeTruthy();
+        expect(screen.queryByText('earlier report')).toBeNull();
+    });
+
+    it('keeps what it waits on for the user when it also has tasks', () => {
+        render(<ThreadSubtitle thread={thread({ status: 'waiting', wait_reason: 'Which database?', running_tasks: 1 })} />);
+        expect(screen.getByText('Which database?')).toBeTruthy();
+    });
+
+    it('carries a count pill, with or without commits', () => {
+        const { rerender } = render(<ThreadBadges thread={thread({ status: 'working', running_tasks: 3 })} />);
+        expect(screen.getByText('thread.tasksBadge:3')).toBeTruthy();
+        rerender(<ThreadBadges thread={thread({ status: 'working', running_tasks: 1, branch: 'tb/fix', commits_ahead: 2 })} />);
+        expect(screen.getByText('thread.tasksBadge:1')).toBeTruthy();
+        expect(screen.getByText('thread.commits:2')).toBeTruthy();
+        rerender(<ThreadBadges thread={thread({ status: 'working', running_tasks: 3 })} tasks={false} />);
+        expect(screen.queryByText(/tasksBadge/)).toBeNull();
+        rerender(<ThreadBadges thread={thread({ status: 'working', running_tasks: 0 })} />);
+        expect(screen.queryByText(/tasksBadge/)).toBeNull();
+    });
+});
+
 describe('ThreadBadges', () => {
     it('carries the commits as a badge whose tooltip holds the branch and the files', () => {
         render(<ThreadBadges thread={thread({ branch: 'tb/fix', base_branch: 'main', commits_ahead: 2, files_changed: 3 })} />);

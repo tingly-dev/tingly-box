@@ -36,6 +36,17 @@ describe('CoordinatorStatus', () => {
         expect(screen.queryByText('rail.queued')).not.toBeInTheDocument();
     });
 
+    it('says how many background tasks run, and in how many threads', () => {
+        render(<CoordinatorStatus {...props} coordinator={coordinator()} threads={[{ ...worker('working'), id: 'w1', running_tasks: 2 } as Thread, { ...worker('working'), id: 'w2', running_tasks: 1 } as Thread, worker('ready')]} />);
+        const threads = screen.getByRole('region', { name: 'rail.threads' });
+        expect(within(threads).getByText('rail.backgroundTasks').nextSibling).toHaveTextContent('rail.tasksInThreads');
+    });
+
+    it('stays quiet about background tasks when none run', () => {
+        render(<CoordinatorStatus {...props} coordinator={coordinator()} threads={[worker('working')]} />);
+        expect(screen.queryByText('rail.backgroundTasks')).not.toBeInTheDocument();
+    });
+
     it('counts threads by what they need, and carries usage with the cache hit rate', () => {
         render(<CoordinatorStatus {...props} coordinator={coordinator()} threads={[worker('working'), worker('working'), worker('waiting'), worker('failed'), worker('ready')]} />);
         const threads = screen.getByRole('region', { name: 'rail.threads' });

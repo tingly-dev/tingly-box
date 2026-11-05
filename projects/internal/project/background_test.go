@@ -3,6 +3,7 @@ package project
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -158,4 +159,79 @@ func TestAnOlderHoldTimerDoesNotReleaseANewerReport(t *testing.T) {
 	f.threads.HoldMax = time.Hour
 	f.threads.hold(Report{Thread: *th, Kind: ReportFinished, Text: "new"})
 	f.noReport(t, 400*time.Millisecond)
+}
+
+// nextThreadEvent reads the hub until a thread event matches.
+func nextThreadEvent(t *testing.T, ch <-chan []byte, match func(db.Thread) bool) db.Thread {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case b := <-ch:
+			var ev struct {
+				Type string    `json:"type"`
+				Data db.Thread `json:"data"`
+			}
+			require.NoError(t, json.Unmarshal(b, &ev))
+			if ev.Type == string(EventThread) && match(ev.Data) {
+				return ev.Data
+			}
+		case <-deadline:
+			t.Fatal("no matching thread event")
+		}
+	}
+}
+
+// A project worker's cards and rail learn that background tasks run (and that
+// they ended) from its thread event; the transcript's task event alone never
+// reached a project thread's list.
+func TestWorkerThreadEventCarriesRunningTasks(t *testing.T) {
+	f, tasks := backgroundFixture(t, func(turn *enginetest.Turn) error {
+		turn.Say("Reviewers are running.", 1, 1)
+		return nil
+	})
+	f.threads.HoldMax = time.Hour
+	tasks.Store(1)
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "review it"})
+	require.NoError(t, err)
+	waitFirstTurn(t, f, th.ID)
+
+	ch, cancel := f.threads.hub.Subscribe(AllProjects)
+	defer cancel()
+	tasks.Store(2)
+	threadStore{f.threads}.Append(f.threads.sessionOf(th.ID), tasksChanged(
+		map[string]string{"task_id": "b1", "task_type": "local_bash", "description": "pnpm test"},
+		map[string]string{"task_id": "a1", "task_type": "local_agent", "description": "reviewer"},
+	))
+	got := nextThreadEvent(t, ch, func(x db.Thread) bool { return x.ID == th.ID && x.RunningTasks == 2 })
+	assert.Equal(t, db.ThreadWorking, got.Status)
+
+	tasks.Store(0)
+	threadStore{f.threads}.Append(f.threads.sessionOf(th.ID), tasksChanged())
+	nextThreadEvent(t, ch, func(x db.Thread) bool { return x.ID == th.ID && x.RunningTasks == 0 })
+}
+
+func TestAnnotateFillsRunningTasksFromTheLiveSet(t *testing.T) {
+	f, tasks := backgroundFixture(t, func(*enginetest.Turn) error { return nil })
+	tasks.Store(3)
+	list := []db.Thread{{ID: "a"}, {ID: "b"}}
+	f.threads.Annotate(list)
+	assert.Equal(t, 3, list[0].RunningTasks)
+	assert.Equal(t, 3, list[1].RunningTasks)
+	tasks.Store(0)
+	f.threads.Annotate(list)
+	assert.Zero(t, list[0].RunningTasks)
+}
+
+func TestCoordinatorSeesWhichThreadsRunBackgroundTasks(t *testing.T) {
+	p := &db.Project{ID: "p1", Name: "Demo"}
+	threads := []db.Thread{
+		{ID: "11111111-aaaa", Title: "Review", Status: db.ThreadWorking, RunningTasks: 2},
+		{ID: "22222222-bbbb", Title: "Docs", Status: db.ThreadWorking},
+	}
+	s := coordinatorSystemPrompt(Layout{Root: t.TempDir()}, p, threads, time.Now())
+	assert.Contains(t, s, "status=working background_tasks=2")
+	assert.Equal(t, 1, strings.Count(s, "background_tasks=2"), "only the thread that has some says so")
+	assert.NotContains(t, s, "background_tasks=0")
+	assert.Contains(t, s, "report comes when they end")
 }

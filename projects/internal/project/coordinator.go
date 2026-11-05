@@ -350,6 +350,7 @@ func (c *Coordinator) turn(ctx context.Context, projectID string, userTriggered,
 			return fmt.Errorf("coordinator unavailable: %w", err)
 		}
 		threads, _ := c.store.ListThreads(projectID)
+		c.threads.Annotate(threads)
 		system := coordinatorSystemPrompt(c.layout, p, threads, time.Now())
 		if older {
 			system += olderNote
@@ -590,6 +591,12 @@ Current date: %s
 		fmt.Fprintf(&b, "\n<project_memory_index>\n%s\n</project_memory_index>\n", mem)
 	}
 	b.WriteString("\n<threads>\n")
+	for _, t := range threads {
+		if t.RunningTasks > 0 {
+			b.WriteString("(background_tasks=N: N background commands or subagents are still running in that thread, which is why it reads as working; its report comes when they end, so do not ask it for one.)\n")
+			break
+		}
+	}
 	if len(threads) == 0 {
 		b.WriteString("(none yet)\n")
 	}
@@ -599,6 +606,7 @@ Current date: %s
 			break
 		}
 		fmt.Fprintf(&b, "- %s %q status=%s", short(t.ID), t.Title, t.Status)
+		b.WriteString(tasksNote(t.RunningTasks))
 		if t.Branch != "" {
 			fmt.Fprintf(&b, " branch=%s commits=%d", t.Branch, t.CommitsAhead)
 		}
@@ -796,8 +804,9 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, call llm.ToolC
 		}
 		lines, oldest, hidden := fit(entries, in.Full, func(id string) string { return "get_thread full for the whole" })
 		lines += footer(hidden, more, oldest, "get_thread")
-		return envelope(trustRelay, fmt.Sprintf("thread %s %q status=%s branch=%s base=%s commits_ahead=%d files_changed=%d waiting_on=%q\ntask: %s\nlast report: %s\nrecent transcript:\n%s",
-			short(t.ID), t.Title, t.Status, orNone(t.Branch), orNone(t.BaseBranch), t.CommitsAhead, t.FilesChanged, t.WaitReason,
+		t.RunningTasks = c.threads.runningTasks(t.ID)
+		return envelope(trustRelay, fmt.Sprintf("thread %s %q status=%s%s branch=%s base=%s commits_ahead=%d files_changed=%d waiting_on=%q\ntask: %s\nlast report: %s\nrecent transcript:\n%s",
+			short(t.ID), t.Title, t.Status, tasksNote(t.RunningTasks), orNone(t.Branch), orNone(t.BaseBranch), t.CommitsAhead, t.FilesChanged, t.WaitReason,
 			clip(t.Task, 1500), clip(t.LastReport, 2000), lines), "source", "thread", "kind", "get_thread"), false, nil
 	case "read_conversation":
 		out, err := c.readConversation(p, readArgs{Before: in.Before, Contains: in.Contains, ID: in.ID, Limit: in.Limit, Full: in.Full})

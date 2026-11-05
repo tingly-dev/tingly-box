@@ -109,6 +109,10 @@ type Thread struct {
 	Title  string `gorm:"size:300" json:"title"`
 	Task   string `gorm:"type:text" json:"task"`
 	Status string `gorm:"size:20;index" json:"status"`
+	// RunningTasks is how many background tasks (commands, subagents) the
+	// thread's process runs right now. It is read from the live process when a
+	// thread is sent out, never stored: the set dies with the process.
+	RunningTasks int `gorm:"-" json:"running_tasks"`
 	// WaitReason says why a waiting thread needs the user.
 	WaitReason string `gorm:"type:text" json:"wait_reason,omitempty"`
 	// Queued is true while a working thread's turn waits for a free slot under

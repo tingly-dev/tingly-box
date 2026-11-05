@@ -27,20 +27,15 @@ func (e *Engine) BackgroundTasks(id string) []TaskBrief {
 	return append([]TaskBrief(nil), e.live[id]...)
 }
 
-// noteTask keeps the live set current from a recorded "task" entry.
-func (e *Engine) noteTask(sessionID string, m Entry) {
+// trackTasks keeps the live set current from a "task" entry. It runs before
+// the entry is appended, so a store that reads BackgroundTasks when it sees a
+// background_tasks_changed event gets the set that event describes.
+func (e *Engine) trackTasks(sessionID string, m Entry) {
 	if m.Kind != KindTask {
 		return
 	}
 	var ev TaskEvent
-	if json.Unmarshal(m.Payload, &ev) != nil {
-		return
-	}
-	if ev.Event == "task_notification" || ev.Event == "task_completed" {
-		e.snapshotOutput(sessionID, m.RequestID, ev)
-		return
-	}
-	if ev.Event != "background_tasks_changed" {
+	if json.Unmarshal(m.Payload, &ev) != nil || ev.Event != "background_tasks_changed" {
 		return
 	}
 	live := make([]TaskBrief, 0, len(ev.Tasks))
@@ -54,6 +49,21 @@ func (e *Engine) noteTask(sessionID string, m Entry) {
 		e.live[sessionID] = live
 	}
 	e.mu.Unlock()
+}
+
+// noteTask keeps the end of a finished command's output once its entry is
+// recorded.
+func (e *Engine) noteTask(sessionID string, m Entry) {
+	if m.Kind != KindTask {
+		return
+	}
+	var ev TaskEvent
+	if json.Unmarshal(m.Payload, &ev) != nil {
+		return
+	}
+	if ev.Event == "task_notification" || ev.Event == "task_completed" {
+		e.snapshotOutput(sessionID, m.RequestID, ev)
+	}
 }
 
 // outputSnapshotSize is how much of a finished command's output is kept.
@@ -83,11 +93,18 @@ func ValidOutputPath(path, taskID string) bool {
 		filepath.Base(path) == taskID+".output" && filepath.Base(filepath.Dir(path)) == "tasks"
 }
 
-// clearTasks forgets id's live tasks once the process that ran them is gone.
+// clearTasks forgets id's live tasks once the process that ran them is gone,
+// and says so in the transcript: the process leaves no event of its own, and
+// a page that counts the running tasks would show them running until a reload.
 func (e *Engine) clearTasks(id string) {
 	e.mu.Lock()
+	had := len(e.live[id]) > 0
 	delete(e.live, id)
 	e.mu.Unlock()
+	if had {
+		payload, _ := json.Marshal(TaskEvent{Event: "background_tasks_changed", Tasks: []TaskRef{}})
+		e.store.Append(id, Entry{Kind: KindTask, Payload: payload, Timestamp: time.Now()})
+	}
 }
 
 // StopTask stops one of id's background tasks. Claude Code reports the
