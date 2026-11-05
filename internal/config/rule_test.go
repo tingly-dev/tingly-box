@@ -1,9 +1,11 @@
 package config
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -152,6 +154,9 @@ func TestAddRule_TeamSeedsCreateDefaults(t *testing.T) {
 	if !seeded.Flags.ClaudeCodeCompat || !seeded.Flags.CleanHeader {
 		t.Errorf("expected team defaults seeded, got %+v", seeded.Flags)
 	}
+	if seeded.Flags.SessionAffinity != 1800 || seeded.AffinityTTL() != 30*time.Minute {
+		t.Errorf("expected team rule affinity seeded to 30 minutes, got %d", seeded.Flags.SessionAffinity)
+	}
 
 	// An explicit flag set is left untouched — the defaults are not layered on.
 	if err := cfg.AddRule(typ.Rule{UUID: "team-2", Scenario: typ.ScenarioTeam, RequestModel: "m2", Flags: typ.RuleFlags{SkipUsage: true}}); err != nil {
@@ -161,7 +166,7 @@ func TestAddRule_TeamSeedsCreateDefaults(t *testing.T) {
 	if explicit == nil {
 		t.Fatal("explicit team rule not found after AddRule")
 	}
-	if !explicit.Flags.SkipUsage || explicit.Flags.ClaudeCodeCompat || explicit.Flags.CleanHeader {
+	if !explicit.Flags.SkipUsage || explicit.Flags.ClaudeCodeCompat || explicit.Flags.CleanHeader || explicit.Flags.SessionAffinity != 0 {
 		t.Errorf("explicit flags must not be overridden, got %+v", explicit.Flags)
 	}
 
@@ -175,6 +180,33 @@ func TestAddRule_TeamSeedsCreateDefaults(t *testing.T) {
 	}
 	if !other.Flags.IsZero() {
 		t.Errorf("non-team rule should keep empty flags, got %+v", other.Flags)
+	}
+}
+
+func TestAddRule_TeamScopesSeedAffinity(t *testing.T) {
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatalf("NewConfig error: %v", err)
+	}
+
+	// Non-default teams live under "team:<id>"; they get the same default.
+	scoped := typ.RuleScenario("team:t-123")
+	if err := cfg.AddRule(typ.Rule{UUID: "team-scoped", Scenario: scoped, RequestModel: "m"}); err != nil {
+		t.Fatalf("AddRule failed: %v", err)
+	}
+	if got := cfg.GetRuleByUUID("team-scoped"); got == nil || got.Flags.SessionAffinity != 1800 {
+		t.Errorf("team:<id> rule should default to 1800s affinity, got %+v", got)
+	}
+
+	// Other scenarios stay off, including ones that seed other defaults.
+	for i, sc := range []typ.RuleScenario{typ.ScenarioOpenAI, typ.ScenarioAnthropic, typ.ScenarioCursor, typ.ScenarioCustom} {
+		id := fmt.Sprintf("other-%d", i)
+		if err := cfg.AddRule(typ.Rule{UUID: id, Scenario: sc, RequestModel: id}); err != nil {
+			t.Fatalf("AddRule(%s) failed: %v", sc, err)
+		}
+		if got := cfg.GetRuleByUUID(id); got == nil || got.Flags.SessionAffinity != 0 || got.AffinityEnabled() {
+			t.Errorf("scenario %s must not get affinity by default, got %+v", sc, got)
+		}
 	}
 }
 

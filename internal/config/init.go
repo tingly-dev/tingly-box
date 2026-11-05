@@ -11,8 +11,8 @@ var DefaultRules []typ.Rule
 // the built-in Claude Code / Claude Desktop rules below, and applied to every
 // Claude Code / Claude Desktop / Codex rule (built-in or user-created) by
 // migrate20260610 (defaultBuiltinRuleFlagsOnce). session_affinity is rule-only
-// (no scenario-level inheritance); those are the sole sources of the default.
-// Other scenarios are off unless set per-rule.
+// (no scenario-level inheritance). New Team rules also get it at creation
+// (applyScenarioCreateDefaults). Other scenarios are off unless set per-rule.
 const defaultSessionAffinitySeconds = 1800
 
 func init() {

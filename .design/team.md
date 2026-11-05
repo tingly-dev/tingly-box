@@ -204,3 +204,25 @@ Primary regression coverage:
 - `internal/db/team_store_test.go`
 - `internal/server/module/team/handler_test.go`
 - `internal/server/module/sharing/team_handler_test.go`
+
+## 12. Team rule defaults: session affinity (30 min)
+
+新建 Team rule 默认开启 30 分钟会话亲和（`rule.Flags.SessionAffinity = 1800`）：同一 Team
+成员的会话持续落在同一上游，prompt cache 才能命中。
+
+- **种入点**：`config.applyScenarioCreateDefaults`（`AddRule` 唯一入口，HTTP / CLI / TUI /
+  agent / import 都经过）。与 `claude_code_compat`、`clean_header` 同一规则：仅当调用方没传任何
+  flag 时种入；显式传了 flag 的 payload 原样保留。`team` 与 `team:<id>` 两种 scope 都生效。
+- **存量 Team rule 不迁移**：`session_affinity` 是 `omitempty` 的 int，"从未设置"和"显式关闭"
+  落盘都是 0，无法区分；回填可能把用户主动关掉的开关重新打开，因此只对之后新建的 rule 生效。
+  需要的存量 rule 可在 rule 的 Flags 卡片里手动设置 Session affinity = 1800。
+  `migrate20260610` 只处理 built-in CC / Desktop / Codex，不涉及 Team。
+- **复制 Team**：`cloneScopeLocked` 深拷贝 rule，`SessionAffinity` 原值复制，不重新种默认——
+  复制品与源 Team 行为一致，包括源 rule 上的关闭或自定义窗口。
+- **UI**：无需改动。Flags 卡片由 flag registry 驱动，`AddRule` 返回已落盘的 rule，所以新建的
+  Team rule 直接显示 `session_affinity = 1800`；registry 描述已注明 Team 默认。
+- **非 Team rule** 不变：除 built-in CC / Desktop / Codex 外仍是 0（禁用）。
+
+回归覆盖：`internal/config/rule_test.go`（`TestAddRule_TeamSeedsCreateDefaults`、
+`TestAddRule_TeamScopesSeedAffinity`）、`internal/config/team_test.go`
+（`TestDuplicateTeam_CopiesAffinitySetting`、`TestMigrate_LeavesExistingTeamRuleAffinityAlone`）。
