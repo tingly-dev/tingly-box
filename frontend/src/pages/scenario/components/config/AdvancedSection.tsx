@@ -9,20 +9,12 @@ interface AdvancedSectionProps {
     children: React.ReactNode;
 }
 
-// Collapsed disclosure for the settings most users never touch. Opens itself
-// once when something non-default is already saved, so a customised value is
-// never hidden behind the fold.
+// Collapsed-by-default disclosure for the settings most users never touch.
+// Saved customisations stay visible through the "N customised" badge rather
+// than by forcing the section open.
 export const AdvancedSection: React.FC<AdvancedSectionProps> = ({ customizedCount = 0, children }) => {
     const { t } = useTranslation();
-    const [open, setOpen] = React.useState(customizedCount > 0);
-    const autoOpened = React.useRef(customizedCount > 0);
-
-    React.useEffect(() => {
-        if (customizedCount > 0 && !autoOpened.current) {
-            autoOpened.current = true;
-            setOpen(true);
-        }
-    }, [customizedCount]);
+    const [open, setOpen] = React.useState(false);
 
     return (
         <Box sx={{ mt: 2 }}>

@@ -290,13 +290,15 @@ export function useActivityItems(): ActivityItem[] {
                 icon: <IconPhoto sx={{ fontSize: 22 }} />,
                 label: t('layout.image', { defaultValue: 'Image' }),
                 defaultPath: '/image/playground',
-                // The work surface first (the same shape as Claude Code's
-                // profiles: the default Playground, one row per profile, "New
-                // profile"), then the occasional tools (Idea to Prompt, the
-                // more common of the two, and Image to Prompt), then
-                // what is shared: the Library and, last, the Image API, which
-                // only someone wiring up a client needs.
+                // The Image API entry leads, set off by a divider; Playground
+                // stays the default landing (defaultPath). Then the work
+                // surface (the same shape as Claude Code's profiles: the
+                // default Playground, one row per profile, "New profile"),
+                // the occasional tools (Idea to Prompt, the more common of
+                // the two, and Image to Prompt) and the shared Library.
                 children: [
+                    { path: '/image/api', label: t('layout.nav.useImageGen', { defaultValue: 'Image API' }), icon: <IconPlug sx={{ fontSize: 20 }} /> },
+                    { type: 'divider' },
                     { path: '/image/playground', label: t('layout.imagePlayground', { defaultValue: 'Playground' }), subtitle: t('layout.default'), icon: <IconPalette sx={{ fontSize: 20 }} /> },
                     ...imageProfiles.map((profile): NavItem => ({
                         path: `/image/profile/${profile.id}`,
@@ -312,7 +314,6 @@ export function useActivityItems(): ActivityItem[] {
                     { path: '/image/idea-to-prompt', label: t('ideaPrompt.title', { defaultValue: 'Idea to Prompt' }), icon: <IconWriting sx={{ fontSize: 20 }} /> },
                     { path: '/image/to-prompt', label: t('imagePrompt.title', { defaultValue: 'Image to Prompt' }), icon: <IconPhotoScan sx={{ fontSize: 20 }} /> },
                     { path: '/image/library', label: t('imageLibrary.title', { defaultValue: 'Library' }), icon: <IconLibraryPhoto sx={{ fontSize: 20 }} /> },
-                    { path: '/image/api', label: t('layout.nav.useImageGen', { defaultValue: 'Image API' }), icon: <IconPlug sx={{ fontSize: 20 }} /> },
                 ],
             }] as ActivityItem[] : []),
             // Projects — every place Claude Code works from the browser:
