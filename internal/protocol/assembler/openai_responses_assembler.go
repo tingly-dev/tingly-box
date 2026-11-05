@@ -36,10 +36,14 @@ type ResponsesAssembler struct {
 	images map[int]*pendingImageData
 }
 
-// pendingImageData tracks an image being assembled from stream chunks
+// pendingImageData tracks the image of one image_generation_call. Each
+// partial_image_b64 is a complete, standalone image (a progressive preview), not
+// a chunk of one, so data holds a single base64 image: the latest preview until
+// the done item delivers the final result, which then wins (final).
 type pendingImageData struct {
 	callID string
-	data   strings.Builder
+	data   string
+	final  bool
 }
 
 // pendingResponseToolCall tracks a tool call being assembled from stream chunks
@@ -133,14 +137,17 @@ func (a *ResponsesAssembler) Accumulate(event responses.ResponseStreamEventUnion
 		// Item is complete - check for image_generation_call result
 		doneItem := event.Item
 		if doneItem.Type == "image_generation_call" {
-			// Extract result from the done event if we haven't received partial images
+			// The done item's result is the final image and beats any preview,
+			// whatever its status says (upstream has left finished calls at
+			// "generating").
 			imgCall := doneItem.AsImageGenerationCall()
 			idx := int(event.OutputIndex)
 			if a.images[idx] == nil {
 				a.images[idx] = &pendingImageData{}
 			}
-			if a.images[idx].data.Len() == 0 && imgCall.Result != "" {
-				a.images[idx].data.WriteString(imgCall.Result)
+			if imgCall.Result != "" {
+				a.images[idx].data = imgCall.Result
+				a.images[idx].final = true
 			}
 			if a.images[idx].callID == "" {
 				a.images[idx].callID = imgCall.ID
@@ -177,12 +184,15 @@ func (a *ResponsesAssembler) Accumulate(event responses.ResponseStreamEventUnion
 		return true
 
 	case "response.image_generation_call.partial_image":
-		// Accumulate base64 image chunks for the specific output index
+		// A partial is a whole preview image: it replaces the previous one,
+		// unless the final result is already in.
 		idx := int(event.OutputIndex)
 		if a.images[idx] == nil {
 			a.images[idx] = &pendingImageData{}
 		}
-		a.images[idx].data.WriteString(event.PartialImageB64)
+		if !a.images[idx].final && event.PartialImageB64 != "" {
+			a.images[idx].data = event.PartialImageB64
+		}
 		if a.images[idx].callID == "" {
 			a.images[idx].callID = event.ItemID
 		}
@@ -459,14 +469,15 @@ func (a *ResponsesAssembler) SetItemID(id string) {
 	a.itemID = id
 }
 
-// Images returns all accumulated images as a map of output index to image data.
+// Images returns the current image of each image_generation_call as a map of
+// output index to base64 data (the final result, or the latest preview).
 func (a *ResponsesAssembler) Images() map[int]string {
 	if a == nil {
 		return nil
 	}
 	result := make(map[int]string, len(a.images))
 	for idx, img := range a.images {
-		result[idx] = img.data.String()
+		result[idx] = img.data
 	}
 	return result
 }
@@ -476,7 +487,7 @@ func (a *ResponsesAssembler) ImageDataAt(idx int) string {
 	if a == nil || a.images[idx] == nil {
 		return ""
 	}
-	return a.images[idx].data.String()
+	return a.images[idx].data
 }
 
 // ImageCallIDs returns all image generation call IDs as a map of output index to call ID.
@@ -514,5 +525,5 @@ func (a *ResponsesAssembler) HasImage() bool {
 
 // HasImageAt returns true if image data was accumulated at the specific output index.
 func (a *ResponsesAssembler) HasImageAt(idx int) bool {
-	return a != nil && a.images[idx] != nil && a.images[idx].data.Len() > 0
+	return a != nil && a.images[idx] != nil && a.images[idx].data != ""
 }
