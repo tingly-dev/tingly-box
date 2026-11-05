@@ -4,6 +4,7 @@
 // behaviour that is easiest to break silently is the behaviour under test
 // (imageGenSession.test.ts).
 
+import { resolveResultMime, sniffImageMime } from './imageOutput';
 import type {
     GalleryTile,
     GenerationRun,
@@ -24,12 +25,21 @@ export const formatBytes = (bytes: number): string => (bytes >= 1024 * 1024
 // with its cached string.
 const srcCache = new WeakMap<ImageResult, string>();
 
+// The type of a result's bytes. Records saved before formats existed carry
+// neither `mime` nor a typed blob and read as PNG.
+export const imageMime = (image: ImageResult): string => (
+    image.mime
+    || image.blob?.type
+    || sniffImageMime(image.b64_json)
+    || 'image/png'
+);
+
 // What an API result renders from: the URL when the provider returned one,
 // otherwise the inline base64 it sent instead.
 export const resultSrc = (image: ImageResult): string => {
     const cached = srcCache.get(image);
     if (cached !== undefined) return cached;
-    const src = image.url || (image.b64_json ? `data:image/png;base64,${image.b64_json}` : '');
+    const src = image.url || (image.b64_json ? `data:${imageMime(image)};base64,${image.b64_json}` : '');
     srcCache.set(image, src);
     return src;
 };
@@ -59,11 +69,12 @@ export const base64DataUrlToBlob = (dataUrl: string): Blob | null => {
 // string is not held in the heap per image, not cloned on every IndexedDB
 // read/write, and not re-hashed or re-flattened by every comparison. A result
 // that already came as a URL is left alone.
-export const toSessionImage = (image: ImageResult): ImageResult => {
+export const toSessionImage = (image: ImageResult, responseFormat?: unknown): ImageResult => {
     if (image.url || !image.b64_json) return image;
     try {
-        const blob = base64ToBlob(image.b64_json);
-        return { url: URL.createObjectURL(blob), blob };
+        const mime = image.mime || resolveResultMime(responseFormat, image.b64_json);
+        const blob = base64ToBlob(image.b64_json, mime);
+        return { url: URL.createObjectURL(blob), blob, mime };
     } catch {
         return image;
     }
@@ -98,6 +109,7 @@ export const runImage = (
     index: number,
     src: string,
 ): SelectedImage => ({
+    ...(kind === 'output' && run.images[index] ? { mime: imageMime(run.images[index]) } : {}),
     src,
     prompt: run.prompt,
     model: run.model,

@@ -5,6 +5,7 @@
 // over these shapes lives next door in imageGenSession.ts.
 
 import type { MaskLayers } from '@tingly/vision';
+import type { OutputOptions } from './imageOutput';
 
 // The region of a reference image the model may repaint, as the request needs
 // it and as the editor needs it back. `file` is the alpha PNG that goes on the
@@ -31,6 +32,10 @@ export interface ImageResult {
     // session (see toSessionImage). `url` is then a blob: URL onto it, rebuilt
     // on restore — the session never holds megabytes of base64 per image.
     blob?: Blob;
+    // What the bytes are (image/png, image/gif, ...): the response's
+    // `output_format`, else sniffed from the data. Unset on records saved
+    // before formats existed, which read as PNG (see imageMime).
+    mime?: string;
 }
 
 // An image the user brought in to work on rather than to generate from: it
@@ -61,6 +66,9 @@ export interface GenerationRun {
     model: string;
     size: string;
     quality: Quality;
+    // The output format the run asked for; unset = the default (PNG), which is
+    // also what every run saved before the option existed was.
+    output?: OutputOptions;
     images: ImageResult[];
     // Data URLs of the reference images a run was built from, kept for display
     // alongside the output — the "what did I ask for" half of the history card
@@ -97,6 +105,8 @@ export interface SelectedImage {
     // `reference` waiting in the request and an `import` brought in to work on
     // carry neither, so those two are titled by their file instead.
     kind: 'output' | 'source' | 'reference' | 'import';
+    // The type of the bytes behind `src`, when known (an output's own mime).
+    mime?: string;
     // Set for `reference` and `import`: what to call this image and what it is.
     label?: string;
     caption?: string;

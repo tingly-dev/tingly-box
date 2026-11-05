@@ -4,6 +4,7 @@ import { fetchBlob } from '@tingly/vision';
 import { getOpenAIClient } from '@/services/modelApi';
 import { loadPlaygroundSession, savePlaygroundSession } from '@/utils/playgroundSession';
 import { reviveSessionBlobs, toSessionImage } from './imageGenSession';
+import { buildGenerateParams, isDefaultOutput, normalizeOutputOptions, type OutputOptions } from './imageOutput';
 import { readImageSize } from './useImageGenRefs';
 import type { ReferenceImage } from './ImageGenReferenceImages';
 import type { Endpoint, GenerationRun, ImportedImage, Quality, ReferenceMask } from './ImageGenPlayground.types';
@@ -38,6 +39,8 @@ export interface GenerationRequest {
     size: string;
     quality: Quality;
     count: number;
+    // Unset = the default (PNG): nothing about the format is sent.
+    output?: OutputOptions;
     sources: { file: File; previewUrl: string; mask?: ReferenceMask }[];
     // Set when re-running a failed run: its card flips back to pending
     // instead of a second card appearing.
@@ -134,6 +137,11 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
         // providers can serve either is the gateway's concern, not this
         // panel's (see .design/image-edit.md).
         const endpoint: Endpoint = request.sources.length > 0 ? 'edits' : 'generations';
+        // images/edits is multipart and does not take the format fields yet,
+        // so a run with references is recorded (and retried) as the default.
+        const output = endpoint === 'generations' && request.output && !isDefaultOutput(request.output)
+            ? normalizeOutputOptions(request.output)
+            : undefined;
         const pendingRun: GenerationRun = {
             id: runId,
             ...(profileId ? { profileId } : {}),
@@ -143,6 +151,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
             model: request.model,
             size: request.size,
             quality: request.quality,
+            ...(output ? { output } : {}),
             count: request.count,
             images: [],
             sourceImages: endpoint === 'edits' ? request.sources.map((ref) => ref.previewUrl) : undefined,
@@ -171,14 +180,17 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
                     size: request.size as any,
                     quality: request.quality as any,
                 }, { signal: controller.signal })
-                : await client.images.generate({
+                : await client.images.generate(buildGenerateParams({
                     model: request.model,
                     prompt: request.prompt,
-                    n: request.count,
-                    size: request.size as any,
+                    count: request.count,
+                    size: request.size,
                     quality: request.quality,
-                }, { signal: controller.signal });
-            const images = (response.data ?? []).map(toSessionImage);
+                    output,
+                }) as any, { signal: controller.signal });
+            // The response's own `output_format` is the truth about the bytes.
+            const responseFormat = (response as { output_format?: unknown }).output_format;
+            const images = (response.data ?? []).map((image) => toSessionImage(image, responseFormat));
             updateRuns((currentRuns) => currentRuns.map((run) => (
                 run.id === runId ? { ...run, images, status: 'completed', error: undefined } : run
             )));
@@ -239,6 +251,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
                 model: run.model,
                 size: run.size,
                 quality: run.quality,
+                output: run.output,
                 count: run.count ?? 1,
                 sources,
                 runId: run.id,

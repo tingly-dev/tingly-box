@@ -12,6 +12,7 @@ import {
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { extensionForMime } from '@tingly/vision';
 import { Brush, Check, Close, ContentCopy, Create, Download, Edit, GridView, RestartAlt, tablerMui } from '@/components/icons';
 import { IconBookmarkPlus, IconPhotoScan } from '@tabler/icons-react';
 import { fullBleedDialogPaperSx, overlayPlateSx } from './ImageGenPlayground.chrome';
@@ -308,7 +309,7 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                                 <IconButton
                                     onClick={() => { void keepImage({
                                         src: selectedImage.src,
-                                        name: selectedImage.label ?? `${deriveLabel(selectedImage.prompt, 12) || 'image'}-${selectedImage.index + 1}.png`,
+                                        name: selectedImage.label ?? `${deriveLabel(selectedImage.prompt, 12) || 'image'}-${selectedImage.index + 1}.${extensionForMime(selectedImage.mime ?? 'image/png')}`,
                                     }); }}
                                     disabled={kept}
                                     aria-label={keepLabel}
@@ -326,7 +327,7 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                         <Tooltip title={t('imagePrompt.getPrompt', { defaultValue: 'Get a prompt from this image' })}>
                             <IconButton
                                 onClick={() => {
-                                    handOffPicture(selectedImage.src, selectedImage.label ?? `image-${selectedImage.index + 1}.png`);
+                                    handOffPicture(selectedImage.src, selectedImage.label ?? `image-${selectedImage.index + 1}.${extensionForMime(selectedImage.mime ?? 'image/png')}`);
                                     navigate('/image/to-prompt');
                                 }}
                                 aria-label={t('imagePrompt.getPrompt', { defaultValue: 'Get a prompt from this image' })}

@@ -1978,6 +1978,10 @@ let mockSharingKeys = [
     { token_id: 'tb-share-platform00000000000000000000000001', user_id: 'user-platform', team_id: '00000000-0000-0000-0000-000000000002', display_name: 'Platform CI', enabled: true, created_at: '2026-07-12T00:00:00Z' },
 ]
 
+// A 96x96 four-frame animated GIF (200 ms per frame) for the GIF output mock.
+const MOCK_GIF_B64 =
+    'R0lGODlhYABgAIEAAP///3w67QAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAFAAAACwAAAAAYABgAAAI7AADCBxIsKDBgwgTKlzIsKHDhxAjSpxIsaLFixgzatzIsaPHjyBDihxJsqTJkyhTqlzJsqXLlzBjypxJs6bNmzhz6tzJs6fPn0CDCh1KtKjRo0iTKl3KtKlThgCiSgXw9ODUq1OrBsDKNWvTrmCjLg1LVuzRsmjPoiVrdG3aoW7Xwo1bVihduUDvvv2pty7fvn57Ag7MczBbn4bD/k3MdTHjq44fS80reTLlylQvV7a7mbNkop+LMlZrGGlppXqd0tW6V6vAxq5jy55Nu7bt27hz697Nu7fv38CDCx9OvLjx48iTK1/OvLlzkgEBACH5BAEUAAIALAAAAABgAGAAgf///wa21AAAAAAAAAj/AAMIHEiwoMGDCBMqXMiwocOHECNKnEixosWLGDNq3Mixo8ePIEOKHEmypMmTKFOqXMmypcuXMGPKnEmzps2bOHPq3Mmzp8+fQIMKHUq0qNGjSJMqXcq0qVONAKJKBfD04NSrU6sGEMAVq1eqTbmK/Yp1qdizXclmPYq2rdq1RduifSvVqFy3dMEKvSs3r16gfPHS3RtY8NughQ2rRZz4rF/Ajefm/RlZ8mCflR1Pxpw57eWenT0f5tz5MenMpk83Tq06MWvQqDdDXi17tuvatvm+ZqwbN+Hen+Pe3S18rG+kxoM3Pf7Uq9bn0KNLn069uvXr2LNr3869u/fv4MOLDh9Pvrz58+jTq1/P3mZAACH5BAEUAAIALAAAAABgAGAAgf///xC5gQAAAAAAAAj/AAMIHEiwoMGDCBMqXMiwocOHECNKnEixosWLGDNq3Mixo8ePIEOKHEmypMmTKFOqXMmypcuXMGPKnEmzps2bOHPq3Mmzp8+fQIMKHUq0qNGjSJMqXcq0qVOUAKJKBfD04NSrU6sGEMAVq1eqTbmK/Yp1qdizXclmPYq2rdq1RduifSvVqFy3dMEKvSs3r16gfPHS3RtY8NughQ2rRZz4rF/Ajefm/RlZ8mCflR1Pxpw57eWenT0f5tz5MenMpk83Tq06MWvQqDdDXi17tuvatvm+ZqwbN+Hen+Pe3S18rG+kxoM3Pf7Uq9bn0KNLn069uvXr2LNr3869u/fv4MOLDh9Pvrz58+jTq1/PHmVAACH5BAEUAAIALAAAAABgAGAAgf////WeCwAAAAAAAAj/AAMIHEiwoMGDCBMqXMiwocOHECNKnEixosWLGDNq3Mixo8ePIEOKHEmypMmTKFOqXMmypcuXMGPKnEmzps2bOHPq3Mmzp8+fQIMKHUq0qNGjSJMqXcq0qVObAKJKBfD04NSrU6sGEMAVq1eqTbmK/Yp1qdizXclmPYq2rdq1RduifSvVqFy3dMEKvSs3r16gfPHS3RtY8NughQ2rRZz4rF/Ajefm/RlZ8mCflR1Pxpw57eWenT0f5tz5MenMpk83Tq06MWvQqDdDXi17tuvatvm+ZqwbN+Hen+Pe3S18rG+kxoM3Pf7Uq9bn0KNLn069uvXr2LNr3869u/fv4MOLDh9Pvrz58+jTq1/PXmNAADs='
+
 // Shared by the imagegen fixtures below: SVG source -> data URL.
 const svgDataUrl = (svg: string): string =>
     `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`
@@ -3052,6 +3056,18 @@ export const handlers = [
 
     http.post('*/tingly/imagegen/v1/images/generations', async ({ request }) => {
         const body = (await request.json()) as any
+
+        // `output_format: "gif"` gets a small animated GIF as inline base64
+        // plus the response's own `output_format`, the way the gateway answers.
+        if (body?.output_format === 'gif') {
+            await new Promise((r) => setTimeout(r, 600))
+            const n = Math.max(1, Math.min(10, Number(body?.n) || 1))
+            return HttpResponse.json({
+                created: Math.floor(Date.now() / 1000),
+                output_format: 'gif',
+                data: Array.from({ length: n }, () => ({ b64_json: MOCK_GIF_B64 })),
+            })
+        }
         const n = Math.max(1, Math.min(10, Number(body?.n) || 1))
         const size = typeof body?.size === 'string' ? body.size : '1024x1024'
         const [w, h] = size.split('x').map(Number)

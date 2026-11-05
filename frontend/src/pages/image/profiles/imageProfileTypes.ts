@@ -1,5 +1,6 @@
 import type { ReferenceImage } from '../components/ImageGenReferenceImages';
 import type { Quality } from '../components/ImageGenPlayground.types';
+import type { OutputOptions } from '../components/imageOutput';
 
 // One of a profile's saved prompts. The profile page has a single prompt
 // field; these are what it switches between.
@@ -29,6 +30,8 @@ export interface ImageProfile {
     model: string;
     size: string;
     quality: Quality;
+    // Unset in profiles saved before the option existed = the default (png).
+    output?: OutputOptions;
     count: number;
     updatedAt: number;
 }

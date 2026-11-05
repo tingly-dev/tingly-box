@@ -10,6 +10,8 @@ import {
     resultSrc,
     reviveSessionBlobs,
     toSessionImage,
+    imageMime,
+    base64DataUrlToBlob,
     runGridLayout,
     stripCardBasis,
     STRIP_CARD_HEIGHT,
@@ -317,5 +319,47 @@ describe('wrapCardSpanSx', () => {
             '@container (min-width: 532px)': { gridColumn: 'span 2' },
             '@container (min-width: 804px)': { gridColumn: 'span 3' },
         });
+    });
+});
+
+describe('result mime', () => {
+    const GIF_B64 = 'R0lGODlhAQABAAAAACw=';
+
+    it('renders inline base64 under the mime it carries', () => {
+        expect(resultSrc({ b64_json: GIF_B64, mime: 'image/gif' })).toBe(`data:image/gif;base64,${GIF_B64}`);
+    });
+
+    it('sniffs the bytes when no mime was recorded, and defaults to png', () => {
+        expect(resultSrc({ b64_json: GIF_B64 })).toBe(`data:image/gif;base64,${GIF_B64}`);
+        expect(resultSrc({ b64_json: 'aW1n' })).toBe('data:image/png;base64,aW1n');
+    });
+
+    it('keeps the mime on the blob and on the session image', () => {
+        const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock/gif');
+        const image = toSessionImage({ b64_json: GIF_B64 }, 'gif');
+        expect(image.mime).toBe('image/gif');
+        expect(image.blob?.type).toBe('image/gif');
+        expect(image.b64_json).toBeUndefined();
+        create.mockRestore();
+    });
+
+    it('sniffs when the response did not name a format', () => {
+        const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock/gif2');
+        expect(toSessionImage({ b64_json: GIF_B64 }).mime).toBe('image/gif');
+        expect(toSessionImage({ b64_json: 'aW1n' }).mime).toBe('image/png');
+        create.mockRestore();
+    });
+
+    it('reads the mime of an old record that stored only a blob, defaulting to png', () => {
+        expect(imageMime({ url: 'blob:x', blob: new Blob(['x'], { type: 'image/webp' }) })).toBe('image/webp');
+        expect(imageMime({ url: 'blob:x', blob: new Blob(['x']) })).toBe('image/png');
+        expect(imageMime({ url: 'https://cdn.example/a' })).toBe('image/png');
+        expect(imageMime({ url: 'blob:x', mime: 'image/gif' })).toBe('image/gif');
+    });
+});
+
+describe('base64DataUrlToBlob', () => {
+    it('keeps the mime of the data URL', () => {
+        expect(base64DataUrlToBlob('data:image/gif;base64,R0lGODlh')?.type).toBe('image/gif');
     });
 });

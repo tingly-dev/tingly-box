@@ -42,6 +42,8 @@ import { useImageGenRuns } from './useImageGenRuns';
 import { useImageGenLightbox } from './useImageGenLightbox';
 import { downloadStem, formatBytes, runImage } from './imageGenSession';
 import ImageModelPicker from './ImageModelPicker';
+import ImageOutputFormatFields from './ImageOutputFormatFields';
+import { normalizeOutputOptions, type OutputOptions } from './imageOutput';
 import { imageModelOptions } from './imageModelRules';
 import MaskEditorDialog from './MaskEditorDialog';
 import SketchCanvasDialog from './SketchCanvasDialog';
@@ -162,6 +164,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const [promptEditorOpen, setPromptEditorOpen] = useState(false);
     const [size, setSize] = useState(profile?.size ?? '1024x1024');
     const [quality, setQuality] = useState<Quality>(profile?.quality ?? 'auto');
+    const [output, setOutput] = useState<OutputOptions>(() => normalizeOutputOptions(profile?.output));
     const [count, setCount] = useState(profile?.count ?? 1);
     // Where generated images land on disk — read-only, shown so the user can
     // navigate there themselves; this page never opens it for them.
@@ -394,10 +397,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             model,
             size,
             quality,
+            output,
             count,
             sources: referenceImages,
         });
-    }, [canSubmit, count, getPrompt, model, quality, referenceImages, runGeneration, size]);
+    }, [canSubmit, count, getPrompt, model, output, quality, referenceImages, runGeneration, size]);
 
     // ⌘/Ctrl+Enter from the prompt — in the panel or in the larger editor —
     // is the keyboard's Generate button.
@@ -419,6 +423,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             setSelectedModel(run.model);
             setSize(run.size);
             setQuality(run.quality);
+            setOutput(normalizeOutputOptions(run.output));
             setCount(run.count ?? 1);
             setReferenceImages(sources.slice(0, MAX_EDIT_REFERENCE_IMAGES));
             controlsPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -563,9 +568,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             model: selectedModel,
             size,
             quality,
+            output,
             count,
         });
-    }, [activePromptId, count, profileId, profilePrompts, quality, referenceImages, selectedModel, size]);
+    }, [activePromptId, count, output, profileId, profilePrompts, quality, referenceImages, selectedModel, size]);
 
     // Stable identities (they read through `latest`), so the memoised tab row
     // is not re-rendered by every keystroke in the prompt field.
@@ -636,6 +642,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             model,
             size,
             quality,
+            output,
             count,
         });
         navigate(`/image/profile/${created.id}`, { state: { rename: true } });
@@ -655,6 +662,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 model: run.model,
                 size: run.size,
                 quality: run.quality,
+                output: normalizeOutputOptions(run.output),
                 count: run.count ?? 1,
             });
             copyRunToProfile(run, created.id);
@@ -999,6 +1007,12 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 sx={{ gridColumn: { xs: '1 / -1', sm: 'auto' } }}
                             />
                         </Box>
+
+                        <ImageOutputFormatFields
+                            value={output}
+                            onChange={setOutput}
+                            hasReferences={referenceImages.length > 0}
+                        />
 
                         <Tooltip title={t('playground.submitShortcut', { defaultValue: '⌘/Ctrl + Enter to generate' })} placement="top">
                         <span>
