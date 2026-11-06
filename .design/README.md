@@ -96,7 +96,7 @@
 | [afk.md](./afk.md) | AFK — Agent Framework Kit | 设计说明；局部实施状态见正文 |
 | [agentboot-refactor.md](./agentboot-refactor.md) | Agentboot Refactor | 已完成的重构记录；后续决定见附录 |
 | [agentboot-live-control.md](./agentboot-live-control.md) | AgentBoot 会话中途注入消息与在线改参数 | TEP #2114，已用真实 CLI 验证 |
-| [slash-commands.md](./slash-commands.md) | 经 AgentBoot 支持 `/compact`：web/IM 拦截并解析人输入的 `/xxx`，只放行白名单命令，`/clear` 等其余命令不下发；命令卡片、状态卡上下文数字、分阶段计划 | 设计，未实现；证据见 `.research/slash-commands-claude-code.md` |
+| [slash-commands.md](./slash-commands.md) | 会话控制 API（先做 `Compact` / `ContextUsage`）：agentboot 里与后端无关的小接口，Claude 实现映射 `/compact` 与 `get_context_usage`；web/IM 的斜杠命令只是它的前端，`/clear` 等不下发；列出已有同类调用与未来候选 | 设计，未实现；证据见 `.research/slash-commands-claude-code.md` |
 | [claude-code-session.md](./claude-code-session.md) | Claude Code: from one-shot processes to a persistent stream session | 已退役：Remote 的 `@cc` 执行路径已删除，聊天走 Projects（remote-into-projects.md） |
 | [claude-code-oauth-compat.md](./claude-code-oauth-compat.md) | Claude Code OAuth compatibility — wire identity and version profiles | 已实现 profile；限制见 §B7 |
 | [bot-arch.md](./bot-arch.md) | Bot Architecture — resource, channel, consumers (+ naming) | 设计说明；局部实施状态见正文 |
