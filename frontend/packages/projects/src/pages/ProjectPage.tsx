@@ -380,7 +380,8 @@ export default function ProjectPage() {
                                     <Box component="span" sx={{ color: 'text.disabled', mx: 0.75 }}>/</Box>
                                 </>
                             )}
-                            {project.name}
+                            {/* The name goes back to the project itself: the bare page, without the open thread. */}
+                            <Link component={RouterLink} to={routes.project(project.id)} color="inherit" underline="hover">{project.name}</Link>
                         </Typography>
                         {project.goal && <Typography variant="body2" color="text.secondary" noWrap title={project.goal} sx={{ minWidth: 0, display: { xs: 'none', md: 'block' } }}>{project.goal}</Typography>}
                     </Box>
