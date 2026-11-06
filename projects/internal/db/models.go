@@ -205,6 +205,9 @@ const (
 	// background tasks; project threads still show the plain transcript).
 	EvTask  = "task"  // a task event of a subagent or background command (payload: the event)
 	EvUsage = "usage" // one turn's token usage (payload: the usage)
+	// EvCommand is a slash command's outcome, one card updated in place
+	// (payload: name, state running|ok|failed, and the command's figures).
+	EvCommand = "command"
 )
 
 // ThreadEvent is one step of a thread's transcript.

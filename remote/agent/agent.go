@@ -92,6 +92,9 @@ const (
 	CommandStatus  = "status"
 	CommandVerbose = "verbose"
 	CommandYolo    = "yolo"
+	// CommandCompact compacts the session's conversation; the result comes
+	// back as the session's next reply.
+	CommandCompact = "compact"
 )
 
 var commands = []CommandSpec{
@@ -102,6 +105,7 @@ var commands = []CommandSpec{
 	{CommandStatus, "/status", "Where this chat is and how its session runs", 76},
 	{CommandVerbose, "/verbose on|off", "Also see each step, not only the reply", 75},
 	{CommandYolo, "/yolo", "Use every tool without asking, or back", 74},
+	{CommandCompact, "/compact [instructions]", "Shrink the conversation to free up context", 73},
 }
 
 // Commands are the session commands, in listing order.

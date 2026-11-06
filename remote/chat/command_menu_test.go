@@ -51,6 +51,7 @@ Chat ID: c1`
 		"/status (/stat): Where this chat is and how its session runs",
 		"/verbose on|off (/v): Also see each step, not only the reply",
 		"/yolo: Use every tool without asking, or back",
+		"/compact [instructions]: Shrink the conversation to free up context",
 	}, "\n")
 	intro := "Send a message to talk to Claude Code.\n/h: Shortcut for /help"
 
@@ -105,6 +106,7 @@ func TestBuiltinCommandMenu(t *testing.T) {
 		"status|session|76|hidden=false|Where this chat is and how its session runs",
 		"verbose|session|75|hidden=false|Also see each step, not only the reply",
 		"yolo|session|74|hidden=false|Use every tool without asking, or back",
+		"compact|session|73|hidden=false|Shrink the conversation to free up context",
 		"join|system|30|hidden=true|Add group to whitelist (Telegram only)",
 	}, got)
 }
