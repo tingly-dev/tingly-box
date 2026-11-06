@@ -34,6 +34,7 @@ export const ThreadComposer = forwardRef<ThreadComposerHandle, Props>(function T
             {...rest}
             keepUntilSent
             sendWhileStreaming
+            slashCommands
             text={draft}
             onTextChange={setDraft}
             // Clear only what was sent: typing may have gone on meanwhile.
