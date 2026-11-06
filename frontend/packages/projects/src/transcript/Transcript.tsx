@@ -9,7 +9,7 @@ import {Fragment, useCallback, useEffect, useMemo, useRef, useState} from 'react
 import {useTranslation} from 'react-i18next';
 import type {AttachmentsComponent, CodeBlockComponent, DraftStorage, SubagentSteps} from './context';
 import {TranscriptHostProvider, useDraft, useTranscriptHost} from './context';
-import type {ActivityStep, RequestBlock, RequestOutcome, TaskState, ThinkingStep, Todo, TodoGroup, ToolStep, TranscriptBlock, TranscriptEntry, WorkingVerb} from './model';
+import type {ActivityStep, CommandPayload, RequestBlock, RequestOutcome, TaskState, ThinkingStep, Todo, TodoGroup, ToolStep, TranscriptBlock, TranscriptEntry, WorkingVerb} from './model';
 import {CHECKLIST_TOOL, FOLD_MIN_CALLS, agentReport, agentStatus, approvalSubject, askQuestions, firstNewBlock, formatTokens, todoGroups, requestOutcome, summarizeRun, toolSummary, workingState} from './model';
 import Markdown from './Markdown';
 import QuestionCard from './QuestionCard';
@@ -571,6 +571,8 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anc
                             <Typography variant="body2" sx={{color: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{b.message.content}</Typography>
                         </Stack>
                     );
+                case 'command':
+                    return <Box key={i} {...anchor}><CommandCard message={b.message}/></Box>;
                 case 'system':
                     return (
                         <Typography key={i} {...anchor} variant="body2" sx={{color: 'text.secondary', textAlign: 'center'}}>
@@ -585,6 +587,45 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anc
                 ? <Fragment key={`new-${item.index}`}><NewDivider/>{render(item, at)}</Fragment>
                 : render(item, at))}
         </>
+    );
+};
+
+// CommandCard is a slash command's outcome as one line that settles in
+// place: working, done with the figures the agent reported, or why it could not.
+// A compaction's summary opens under it.
+const CommandCard = ({message}: {message: TranscriptEntry}) => {
+    const {t} = useTranslation();
+    const pl = (message.payload ?? {}) as CommandPayload;
+    const [open, setOpen] = useState(false);
+    const running = pl.state === 'running';
+    const failed = pl.state === 'failed';
+    const parts: string[] = [];
+    if (pl.state === 'ok') {
+        if (pl.tokens_reported) {
+            parts.push(t('projects.transcript.compactTokens', {defaultValue: '{{before}} → {{after}} tokens', before: formatTokens(pl.tokens_before ?? 0), after: formatTokens(pl.tokens_after ?? 0)}));
+        }
+        if (pl.trigger === 'auto') parts.push(t('projects.transcript.compactAuto', {defaultValue: 'automatic'}));
+        if (pl.duration_ms) parts.push(formatDuration(pl.duration_ms));
+    }
+    const title = running
+        ? t('projects.transcript.compacting', {defaultValue: 'Compacting conversation…'})
+        : failed
+            ? t('projects.transcript.compactFailed', {defaultValue: 'Could not compact: {{reason}}', reason: (pl.reason || t('projects.transcript.compactNoReason', {defaultValue: 'the agent declined'})).replace(/\.$/, '')})
+            : t('projects.transcript.compacted', {defaultValue: 'Conversation compacted'});
+    return (
+        <Box role="status" data-command={pl.name} sx={{border: 1, borderColor: 'divider', borderRadius: radius.row, px: 1.25, py: 0.75}}>
+            <Stack direction="row" spacing={0.75} sx={{alignItems: 'center', color: failed ? (theme) => getReadableAccent(theme, 'warning') : 'text.secondary'}}>
+                {running ? <CircularProgress size={14}/> : failed ? <ErrorOutline sx={{fontSize: 16}}/> : <CheckCircle sx={{fontSize: 16}}/>}
+                <Typography variant="body2" sx={{color: 'inherit', fontWeight: 500}}>{title}</Typography>
+                {parts.length > 0 && <Typography variant="caption" sx={{color: 'text.secondary'}}>{parts.join(' · ')}</Typography>}
+                {pl.summary && (
+                    <Button size="small" onClick={() => setOpen(!open)} sx={{ml: 'auto !important', minWidth: 0, textTransform: 'none'}} aria-expanded={open}>
+                        {t('projects.transcript.compactSummary', {defaultValue: 'Summary'})}
+                    </Button>
+                )}
+            </Stack>
+            {pl.summary && <Collapse in={open} unmountOnExit><Box component="pre" sx={{...preBox, mt: 1}}>{pl.summary}</Box></Collapse>}
+        </Box>
     );
 };
 

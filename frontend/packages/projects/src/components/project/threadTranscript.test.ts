@@ -11,6 +11,13 @@ const request = (state: string, extra: Record<string, unknown> = {}) => JSON.str
 const author = (e: ThreadEvent) => e.source === 'thread' ? 'Coordinator' : undefined;
 
 describe('threadTranscript', () => {
+    it('renders a command event as a command block with its payload, after the line the user typed', () => {
+        const payload = { name: 'compact', state: 'ok', trigger: 'manual', tokens_before: 120000, tokens_after: 18000, tokens_reported: true };
+        const { entries } = threadTranscript([ev('user', '/compact'), ev('command', 'compact', { payload: JSON.stringify(payload) })], false, author);
+        const blocks = buildTranscript(entries);
+        expect(blocks.map((b) => b.type)).toEqual(['user', 'command']);
+        expect(blocks[1]).toMatchObject({ type: 'command', message: { kind: 'command', payload } });
+    });
     it('renders a published file as an assistant message with its attachment', () => {
         const file = { name: 'diagram.png', path: 'uploads/diagram.png', type: 'image/png', size: 42 };
         const { entries } = threadTranscript([ev('file', 'Diagram', { payload: JSON.stringify({ attachments: [file] }) })], false, author);

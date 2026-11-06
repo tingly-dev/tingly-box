@@ -131,7 +131,25 @@ export type TranscriptBlock =
     // toolId is the call an approval was asked for (see ToolStep.request).
     | {type: 'request'; message: TranscriptEntry; response?: TranscriptEntry; toolId?: string}
     | {type: 'error'; message: TranscriptEntry}
+    // A slash command's outcome (a compaction): one card whose payload is a CommandPayload.
+    | {type: 'command'; message: TranscriptEntry}
     | {type: 'system'; message: TranscriptEntry};
+
+// CommandPayload is what a command card shows (projects/internal/project
+// commandPayload). The token figures are only meaningful when
+// tokens_reported is set: otherwise the agent did not say.
+export interface CommandPayload {
+    name: string;
+    args?: string;
+    state: 'running' | 'ok' | 'failed';
+    trigger?: 'manual' | 'auto';
+    tokens_before?: number;
+    tokens_after?: number;
+    tokens_reported?: boolean;
+    duration_ms?: number;
+    summary?: string;
+    reason?: string;
+}
 
 export type RequestBlock = Extract<TranscriptBlock, {type: 'request'}>;
 
@@ -313,6 +331,9 @@ const buildBlocks = (messages: TranscriptEntry[], byParent: Map<string, Transcri
             }
             case 'error':
                 blocks.push({type: 'error', message: m});
+                break;
+            case 'command':
+                blocks.push({type: 'command', message: m});
                 break;
             case 'system':
                 if (!m.content.startsWith(SESSION_INIT_PREFIX)) blocks.push({type: 'system', message: m});
