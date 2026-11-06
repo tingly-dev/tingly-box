@@ -9,6 +9,7 @@ interface GuideActionProps {
     title: string;
     description?: string;
     children: ReactNode;
+    width?: number;
     primaryAction?: {
         label: string;
         onClick: () => void;
@@ -24,6 +25,7 @@ const GuideAction = ({
     title,
     description,
     children,
+    width,
     primaryAction,
 }: GuideActionProps) => {
     const [open, setOpen] = useState(false);
@@ -43,6 +45,7 @@ const GuideAction = ({
                 open={open}
                 title={title}
                 description={description}
+                width={width}
                 onClose={() => setOpen(false)}
                 actionLabel={primaryAction?.label}
                 onAction={primaryAction?.onClick}

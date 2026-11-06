@@ -3787,7 +3787,7 @@ export const handlers = [
         return HttpResponse.json({
             chats: [
                 {
-                    chat: {id: 'direct-1', bot_uuid: 'mock-bot', platform: 'telegram', external_chat_id: 'telegram:123456789', peer_actor_id: 'actor-1', blocked: false},
+                    chat: {id: 'direct-1', bot_uuid: 'mock-bot', platform: 'telegram', external_chat_id: 'telegram:123456789', alias: 'Maya (phone)', peer_actor_id: 'actor-1', blocked: false},
                     permissions: [
                         {capability: 'notify', action: 'access', effect: 'allow'},
                         {capability: 'notify', action: 'notify.receive', effect: 'allow'},

@@ -396,19 +396,39 @@ export default {
     },
     "guide": {
       "action": "API guide",
-      "auth": {
-        "body": "Any integration can drive a bot’s chat. Auth reuses your existing operator user token (the same one this web UI uses) as a Bearer header — no new credential to mint. Interactive prompts (/interact) and one-way notifications (/notify) are separate URLs, so the request shape is the mode.",
-        "title": "1. Authenticate with your user token"
+      "back": "Back to bot",
+      "description": "Pick a target, copy a ready-to-run request, or send a test",
+      "enable": {
+        "noBots": "No bot is connected yet. Connect one on the Bots page first.",
+        "off": "Notify is off. Turn it on with the switch on the bot card, then come back to this guide.",
+        "on": "Notify is on for {{bots}}.",
+        "title": "Turn Notify on"
       },
-      "chatid": {
-        "body": "Each Chat node on this page shows the real platform Chat ID for recognition; its tooltip also shows the stable internal Target UUID required by the API. Use the copy action beside the node, or send a test directly from the probe bench.",
-        "title": "3. Copy the target UUID from Delivery targets"
+      "fields": {
+        "body": "The message text. Markdown is supported.",
+        "heading": "Request fields",
+        "id": "Internal id of the delivery target — filled in from the target you picked.",
+        "kind": "direct_chat or group — filled in from the target you picked.",
+        "level": "Severity hint: info, warn or error.",
+        "optional": "optional",
+        "required": "required",
+        "responses": "200 delivered · 400 invalid body · 404 bot not running or target not reachable · 500 delivery failed",
+        "title": "Short headline shown above the message."
       },
-      "description": "Authentication, request examples, and target IDs",
       "send": {
-        "body": "POST to /api/v1/bots/{bot}/notify with the bot UUID in the path. A 200 means delivered.",
-        "json": "Request body:",
-        "title": "2. Send a one-way notification"
+        "auth": "Authenticate with your user token — the one this web UI uses — as a Bearer header. The samples read it from ${{env}}.",
+        "delivered": "Delivered · {{latency}}",
+        "failed": "Failed: {{error}}",
+        "test": "Send test",
+        "testHint": "Sends exactly the request above, with this web UI’s token.",
+        "title": "Send it"
+      },
+      "target": {
+        "empty": "No chats yet. Send any message to the bot on its platform and it appears here.",
+        "label": "Delivery target",
+        "notAllowed": "not allowed yet",
+        "notAllowedHint": "This target can’t receive notifications yet. Use “Allow Notify & Test” on the bot card first.",
+        "title": "Pick where to deliver"
       },
       "title": "IM Notify API Guide"
     },

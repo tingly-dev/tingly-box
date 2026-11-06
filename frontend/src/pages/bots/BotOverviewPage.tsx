@@ -8,12 +8,11 @@ import { countBotsByPlatform } from '@/types/bot';
 import { useBotList } from '@/hooks/useBotList';
 import { useBotToggle } from '@/hooks/useBotToggle';
 import { useNotify } from '@/hooks/useNotify';
-import { Add, ListAlt } from '@/components/icons';
+import { Add, ArrowBack, HelpOutline, ListAlt } from '@/components/icons';
 import { Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, IconButton } from '@mui/material';
 import { Close } from '@/components/icons';
 import BotNotifyGroup from '@/components/notify/BotNotifyGroup';
 import NotifyGuide from '@/components/notify/NotifyGuide';
-import GuideAction from '@/components/GuideAction';
 import CCProfileDialog from '@/components/bot/CCProfileDialog';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { api } from '@/services/api';
@@ -41,6 +40,10 @@ const BotOverviewPage = () => {
     const [dialogEditUuid, setDialogEditUuid] = useState<string | null>(null);
     const [dialogPlatformId, setDialogPlatformId] = useState('telegram');
     const [capability, setCapability] = useState<{ uuid: string; name: 'remote_control' | 'notify' } | null>(null);
+    // The API guide replaces the capability dialog's body instead of opening a
+    // second layer over it, so only one surface is ever on top.
+    const [guideOpen, setGuideOpen] = useState(false);
+    const closeCapability = () => { setCapability(null); setGuideOpen(false); };
     const [capabilityBusy, setCapabilityBusy] = useState(false);
     const [profileOpen, setProfileOpen] = useState(false);
     const { getProfiles } = useProfileContext();
@@ -221,16 +224,28 @@ const BotOverviewPage = () => {
                 onSaved={loadBotSettings}
                 notify={showNotification}
             />
-            <Dialog open={!!capability && !!selectedBot} onClose={() => setCapability(null)} fullWidth maxWidth="lg">
-                <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    {capability?.name === 'notify' ? t('notify.title', { defaultValue: 'IM Notify' }) : t('remoteAgent.pageTitle', { defaultValue: 'Remote Control' })}
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        {capability?.name === 'notify' && <GuideAction label={t('notify.guide.action', { defaultValue: 'API guide' })} title={t('notify.guide.title', { defaultValue: 'IM Notify API Guide' })} description={t('notify.guide.description', { defaultValue: 'Authentication, request examples, and target IDs' })}><NotifyGuide /></GuideAction>}
-                        <IconButton aria-label={t('common.close', { defaultValue: 'Close' })} onClick={() => setCapability(null)}><Close /></IconButton>
+            <Dialog open={!!capability && !!selectedBot} onClose={closeCapability} fullWidth maxWidth="lg">
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                    {capability?.name === 'notify' && guideOpen ? (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                            <IconButton edge="start" aria-label={t('notify.guide.back', { defaultValue: 'Back to bot' })} onClick={() => setGuideOpen(false)}><ArrowBack /></IconButton>
+                            {t('notify.guide.title', { defaultValue: 'IM Notify API Guide' })}
+                        </Box>
+                    ) : (
+                        capability?.name === 'notify' ? t('notify.title', { defaultValue: 'IM Notify' }) : t('remoteAgent.pageTitle', { defaultValue: 'Remote Control' })
+                    )}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                        {capability?.name === 'notify' && !guideOpen && (
+                            <Button variant="outlined" size="small" startIcon={<HelpOutline />} onClick={() => setGuideOpen(true)} sx={{ whiteSpace: 'nowrap' }}>
+                                {t('notify.guide.action', { defaultValue: 'API guide' })}
+                            </Button>
+                        )}
+                        <IconButton aria-label={t('common.close', { defaultValue: 'Close' })} onClick={closeCapability}><Close /></IconButton>
                     </Box>
                 </DialogTitle>
                 <DialogContent>
-                    {selectedBot && capability?.name === 'notify' && <BotNotifyGroup bot={selectedBot} onToggle={(uuid, enabled) => void toggleCapability(uuid, 'notify', enabled)} isToggling={capabilityBusy} />}
+                    {selectedBot && capability?.name === 'notify' && guideOpen && <NotifyGuide bots={[selectedBot]} />}
+                    {selectedBot && capability?.name === 'notify' && !guideOpen && <BotNotifyGroup bot={selectedBot} onToggle={(uuid, enabled) => void toggleCapability(uuid, 'notify', enabled)} isToggling={capabilityBusy} />}
                     {selectedBot && capability?.name === 'remote_control' && <RemoteAgentBotCard bot={selectedBot} onMountToggle={(enabled) => void toggleCapability(selectedBot.uuid!, 'remote_control', enabled)} ccProfiles={profiles} onCCProfileClick={() => setProfileOpen(true)} onEdit={() => { setCapability(null); openEditDialog(selectedBot.uuid!, selectedBot.platform!); }} onRestart={() => handleBotRestart(selectedBot.uuid!)} onDelete={() => { setCapability(null); handleDeleteBot(selectedBot.uuid!); }} isToggling={capabilityBusy} isRestarting={isRestarting(selectedBot.uuid!)} />}
                 </DialogContent>
             </Dialog>

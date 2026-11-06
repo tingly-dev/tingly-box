@@ -48,6 +48,8 @@ export interface NotifyTarget {
     id: string;
     kind: 'direct_chat' | 'group';
     external_id: string;
+    /** Operator-set label; wins over the platform-provided name. */
+    alias?: string;
     name?: string;
     platform?: string;
     is_paired?: boolean;

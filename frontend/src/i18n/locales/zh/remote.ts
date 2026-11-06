@@ -431,22 +431,42 @@ export default {
       "statusReceivers": "{{count}} 个目标可接收"
     },
     "guide": {
-      "title": "IM 通知 API 指南",
       "action": "API 指南",
-      "description": "认证方式、请求示例与目标 ID",
-      "auth": {
-        "title": "1. 使用你的用户 Token 认证",
-        "body": "任何集成都可以驱动 Bot 的会话。认证复用你现有的操作员用户 Token（与本 Web 界面所用相同），作为 Bearer 头传入 —— 无需另外申请凭据。交互式提示（/interact）与单向通知（/notify）是不同的 URL，因此请求形态本身就决定了模式。"
+      "back": "返回 Bot",
+      "description": "选择目标，复制可直接运行的请求，或发送一条测试",
+      "enable": {
+        "noBots": "尚未连接任何 Bot。请先在 Bot 页面连接一个。",
+        "off": "通知已关闭。请在 Bot 卡片上打开开关，然后回到本指南。",
+        "on": "已为 {{bots}} 开启通知。",
+        "title": "开启通知"
+      },
+      "fields": {
+        "body": "消息正文，支持 Markdown。",
+        "heading": "请求字段",
+        "id": "投递目标的内部 ID —— 根据你选择的目标自动填入。",
+        "kind": "direct_chat 或 group —— 根据你选择的目标自动填入。",
+        "level": "严重程度提示：info、warn 或 error。",
+        "optional": "可选",
+        "required": "必填",
+        "responses": "200 已投递 · 400 请求体无效 · 404 Bot 未运行或目标不可达 · 500 投递失败",
+        "title": "显示在消息上方的简短标题。"
       },
       "send": {
-        "title": "2. 发送一条单向通知",
-        "body": "向 /api/v1/bots/{bot}/notify 发起 POST，路径中带上 Bot UUID。返回 200 即表示已投递。",
-        "json": "请求体："
+        "auth": "使用你的用户 Token（即本 Web 界面所用的 Token）作为 Bearer 头认证。示例从 ${{env}} 读取它。",
+        "delivered": "已投递 · {{latency}}",
+        "failed": "失败：{{error}}",
+        "test": "发送测试",
+        "testHint": "使用本 Web 界面的 Token，原样发送上方的请求。",
+        "title": "发送"
       },
-      "chatid": {
-        "title": "3. 从「投递目标」复制目标 UUID",
-        "body": "本页每个会话节点都会显示便于识别的真实平台 Chat ID；其提示浮层还会显示 API 所需的稳定内部目标 UUID。使用节点旁的复制操作，或直接从测试台发送一条测试。"
-      }
+      "target": {
+        "empty": "暂无会话。请在对应平台向 Bot 发送任意消息，它就会出现在这里。",
+        "label": "投递目标",
+        "notAllowed": "尚未授权",
+        "notAllowedHint": "该目标暂时无法接收通知。请先在 Bot 卡片上点击“允许通知并测试”。",
+        "title": "选择投递位置"
+      },
+      "title": "IM 通知 API 指南"
     },
     "test": {
       "title": "发送测试通知",
