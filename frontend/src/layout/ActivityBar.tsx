@@ -166,7 +166,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                     );
                 })}
 
-                <CoachMark open={!workspaceTipDismissed && powerUpsTipDismissed && !tipsBlocked && !!workspaceEl?.isConnected} anchorEl={workspaceEl} title={t('layout.workspaceTip.title', { defaultValue: 'Meet Workspace' })} text={t('layout.workspaceTip.text', { defaultValue: 'Organize projects, work in directories and connect IM chats in one place.' })} onDismiss={dismissWorkspaceTip} />
+                <CoachMark open={!workspaceTipDismissed && powerUpsTipDismissed && !tipsBlocked && !!workspaceEl?.isConnected} anchorEl={workspaceEl} title={t('layout.workspaceTip.title', { defaultValue: 'Meet Workspace' })} text={t('layout.workspaceTip.text', { defaultValue: 'Organize projects, work in directories and connect IM chats in one place.' })} gotItLabel={t('layout.coachMarks.gotIt')} onDismiss={dismissWorkspaceTip} />
                 <Divider sx={{ mx: 2, my: 1 }} />
 
                 {/* Help — the onboarding front door now (replaces the old
@@ -307,6 +307,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                     align="bottom"
                     title={t('layout.coachMarks.powerUps.title')}
                     text={t('layout.coachMarks.powerUps.text')}
+                    gotItLabel={t('layout.coachMarks.gotIt')}
                     onDismiss={dismissPowerUpsTip}
                 />
             </Box>

@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { Box, Button, Popover, Skeleton, Typography } from '@mui/material';
+import { Box, Button, Skeleton, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { PageHeader, Surface } from '@tingly/ui';
-import { radius } from '@tingly/ui/theme/radius';
+import { CoachMark, PageHeader, Surface } from '@tingly/ui';
 import type { ProjectSummary } from '../client';
 import { Add, ArrowForward, ChatBubble, FolderOpen, Stack } from '../components/icons';
 import { ImChatCard } from '../components/im/ImChatCard';
@@ -32,7 +31,7 @@ function Section({ icon, title, body, action, onAction, viewAll, onViewAll, head
     onAction: () => void;
     viewAll?: string;
     onViewAll?: () => void;
-    /** Where a pointing hint can anchor (the IM section's first-open hint). */
+    /** Where a pointing hint can anchor (the IM section's enablement hint). */
     headerRef?: RefObject<HTMLDivElement | null>;
     /** Shown instead of cards while the section is empty. */
     steps: string[] | null;
@@ -41,9 +40,10 @@ function Section({ icon, title, body, action, onAction, viewAll, onViewAll, head
 }) {
     return (
         <Box component="section" aria-label={title} sx={{ mb: 5 }}>
-            <Box ref={headerRef} sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 2, flexWrap: 'wrap' }}>
                 <Box sx={{ flex: 1, minWidth: 240 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.primary' }}>
+                    {/* fit-content keeps a small anchor: the coach mark sits beside this row, not beside the whole stretched block. */}
+                    <Box ref={headerRef} sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.primary', width: 'fit-content' }}>
                         {icon}
                         <Typography variant="h5" component="h2">{title}</Typography>
                     </Box>
@@ -109,7 +109,9 @@ export default function WorkspaceHomePage() {
             // Marked only once actually shown, so a strict double render still shows it.
             writeSession(IM_HINT_THIS_VISIT, '1');
             disarmWorkspaceImHint();
-            imHeader.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            // Jump the section into view first: the coach mark's position is
+            // computed from the anchor's rect, so it must be final before it opens.
+            imHeader.current?.scrollIntoView({ block: 'center' });
             setImHintAnchor(imHeader.current);
         }, 500);
         return () => window.clearTimeout(timer);
@@ -171,20 +173,14 @@ export default function WorkspaceHomePage() {
             </Box>
 
             {hasIm && (
-                <Popover
+                <CoachMark
                     open={!!imHintAnchor}
                     anchorEl={imHintAnchor}
-                    onClose={closeImHint}
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-                    transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                    slotProps={{ paper: { elevation: 8, sx: { maxWidth: 380, p: 2, borderRadius: radius.card } } }}
-                >
-                    <Typography sx={{ fontWeight: 600, mb: 0.5 }}>{t('workspace.imHintTitle')}</Typography>
-                    <Typography variant="body2" color="text.secondary">{t('workspace.imHintBody')}</Typography>
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1.5 }}>
-                        <Button size="small" onClick={closeImHint}>{t('workspace.imHintGotIt')}</Button>
-                    </Box>
-                </Popover>
+                    title={t('workspace.imHintTitle')}
+                    text={t('workspace.imHintBody')}
+                    gotItLabel={t('workspace.imHintGotIt')}
+                    onDismiss={closeImHint}
+                />
             )}
         </Box>
     );

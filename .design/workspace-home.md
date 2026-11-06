@@ -21,11 +21,11 @@ Projects list. It splits the entry in two and teaches each side:
 - **First-visit hint.** The hint is tied to the enablement of the Workspace power-up, not to page visits: enabling it
   (the gate's "Enable Workspace" dialog, or the Projects toggle in the experimental settings) calls
   `armWorkspaceImHint()` (`@tingly/projects/workspace-im-hint`), and the first render of the Workspace home after that
-  scrolls the section into view and opens a small popover (MUI `Popover`, anchored to the section header) saying what
-  it is. Showing it spends the arm, so it pops once per enablement. Any close — the "Got it" button, the backdrop,
-  Escape — is kept in localStorage (`workspace.imHintDone`): never again, not even when the feature is enabled again.
-  While a hint is up but not dismissed, the rest of the browser visit stays quiet (`sessionStorage` flag), so a
-  refresh does not nag. Only shown when the host has IM.
+  jumps the section into view and shows the shared `CoachMark` (`@tingly/ui`, the rail's own tip style) beside the
+  section title, its arrow pointing back at it. Showing it spends the arm, so it pops once per enablement. Any close of
+  its "Got it" button is kept in localStorage (`workspace.imHintDone`): never again, not even when the feature is
+  enabled again — enforced both when arming and on the page. While a hint is up but not dismissed, the rest of the
+  browser visit stays quiet (`sessionStorage` flag), so a refresh does not nag. Only shown when the host has IM.
 
 The two sections are independent: a user with projects but no folders sees cards on one side and the guide on the other.
 
