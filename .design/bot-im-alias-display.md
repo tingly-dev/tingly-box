@@ -14,8 +14,6 @@ Bots and IM chats have an ID *and* a human name, but the product showed them inc
 - Names were empty or wiped at the source: every inbound message overwrote the actor's `display_name`, even with an empty value (`internal/db/bot_access_store.go`), Feishu reported the raw sender id as a "name", and direct chats had no name column at all.
 - Where users need the id (paste into `/join`, the notify API, compare with the IM app) it was often hidden.
 
-Screenshots of the old state: `images/bot-im-alias-display/current-1…6`.
-
 ## 2. The display format (decided by the user)
 
 ```
@@ -54,30 +52,31 @@ The id is the only thing guaranteed to exist, so it is the universal fallback. A
 
 ## 3. Naming model (decided by the user)
 
-If the platform supplies a name for an entity it is stored as that entity's **default alias**; if it supplies none the alias stays empty and the id is shown until the user sets one. Applies to direct chats (the peer's display name), groups (the platform title) and actors.
+If the platform supplies a name for an entity it is shown as that entity's **default alias**; if it supplies none the id is shown until the user sets an alias. Applies to direct chats (the peer's display name), groups (the platform title) and actors.
+
+The simplest model that gives this: **the alias stays the operator's alone, the platform's name is kept beside it, and the display is `alias || name`.** No provenance flag, no backfill.
+
+| Entity | Operator's | Platform's | Shown |
+|---|---|---|---|
+| Group | `alias` | `name` (existing column) | `alias \|\| name` |
+| Direct chat | `alias` | `name` (new column) | `alias \|\| name` |
+| Actor | — | `display_name` | as today |
 
 Invariants, enforced in every write path and tested:
 
 | # | Invariant |
 |---|---|
-| N1 | An empty inbound name never overwrites an existing value. |
-| N2 | An inbound platform name never overwrites a user-set alias. |
-| N3 | A platform-sourced alias is refreshed by a later, different, non-empty platform name (a group renamed on the platform). |
-| N4 | A "name" that is just the entity's external id counts as no name (Feishu's adapter now returns none instead of the sender id). |
-| N5 | Clearing a user alias resets it to the latest platform name, or empty if there is none. |
-
-Storage: one display field plus a provenance marker — `alias_source` on `remote_direct_chats` and `remote_groups`, `display_name_source` on `remote_actors` (`user` / `platform` / empty). The raw platform name stays in the existing columns (`Group.name`, `Actor.display_name`). An alias of **unknown origin** (non-empty, no source) is protected like a user alias.
+| N1 | An empty inbound name never overwrites a stored name. |
+| N2 | An inbound platform name never touches the user's alias (they are different columns). |
+| N3 | A later, different platform name replaces the stored platform name (a renamed group). |
+| N4 | A "name" that is just the entity's external id counts as no name (`access.UsableName`; Feishu's adapter now returns none instead of the sender id). |
+| N5 | Clearing the alias falls back to the platform name, or the id, for free. |
 
 ### 3.1 Migration
 
-Three nullable columns, added and backfilled **once**, in one transaction per table (a failed backfill rolls its column back, so the next start retries instead of silently skipping it):
+One nullable column, `remote_direct_chats.name`, added with the existing optional-column idiom (`HasColumn` / `AddColumn`), **no backfill**: a direct chat gets its name from the next message its peer sends, until then it shows the id (or its alias). Groups already had `name`.
 
-- Existing non-empty aliases → `user`.
-- An empty group alias takes the group's platform name (`platform`).
-- An empty direct-chat alias takes its peer actor's name (`platform`).
-- Actor names equal to the external id (or its part after `platform:`) are cleared (plain string comparison, not `LIKE`).
-
-Additive and idempotent; older binaries ignore the new columns.
+Considered and dropped: provenance columns (`alias_source`, `display_name_source`) with a one-off, per-table transactional backfill (existing aliases → `user`, empty ones adopt the platform name, id-echo actor names cleared). It let a platform name become a *stored* alias that a rename could refresh, but the same result is a read-time `alias || name`, and the backfill was the riskiest part of the change. Not taken with it: existing Feishu actor names that echo the id are left as they are (the label already drops a name equal to the id).
 
 ## 4. Frontend
 
@@ -86,26 +85,27 @@ Additive and idempotent; older binaries ignore the new columns.
 - **Projects host**: `imHost` keeps every bot's latest listing, rebuilds a chat lookup from them (`chatInfo`), refreshes on a 60 s stale tick and after an access-dialog change (a refresh requested while one is running runs again), and reports `deleted` per §2.3.
 - Applied to the Bots table, Remote and Notify cards, the Access dialog (rename dialog names the chat), notify test picker / delete confirm / graph nodes, Projects tags, "From …" source lines, IM settings and the bind dialog; ~12 toasts name the entity. Binding a chat saves its alias as `chat_title` (the last-known name for when the chat is gone).
 
-The group marker follows §2 (merged into the platform). Screenshots of the result: `images/bot-im-alias-display/new-1…3` (mockup) and `ui-2`, `ui-7`, `ui-9`, `ui-10` (real UI, mock mode; `ui-10` is the Notify API guide picker, which now shares the same component instead of keeping its own formatter).
 
 ## 5. Decisions taken
 
 | Item | Decision |
 |---|---|
 | Display order | `平台 · alias · id`; group marker merged into the platform: `平台群 · alias · id` (user) |
-| Platform name = default alias; user alias never overwritten; empty name never wipes (user) | N1–N5 above |
+| Platform name = default alias; user alias never overwritten; empty name never wipes (user) | `alias \|\| name`, N1–N5 above; no provenance columns |
 | Bots default to their platform account name, else empty (user, D4) | separate PR, §7 |
 | Group marker is a localised pattern inside the platform segment (`{{platform}} group` / `{{platform}}群`); only the logo-only form draws a small `群` mark. No separate chip, no dedicated list-context flag (a list headed "Groups" keeps the marker) | user (merge) / decided |
 | Platform as a logo under a bot header | decided |
 | Feishu names without new scopes in v1 | separate PR, §7 |
 | Deleted entities shown by id + saved alias + `(deleted)`, no snapshot column, no cascade | decided |
-| Server-side `DisplayRef` / `*_ref` API fields | **not built**: once names are stored as default aliases the alias is already on `DirectChat` / `Group`, so the client resolves labels from lists it already loads |
+| Server-side `DisplayRef` / `*_ref` API fields | **not built**: once the platform name is stored beside the alias the name is already on `DirectChat` / `Group`, so the client resolves labels from lists it already loads |
 
 ## 6. Known limitations
 
 - A binding stores no chat kind, so once its chat is gone the label cannot show the group chip.
 - Weixin and WeCom do not provide sender names; those chats are shown by id.
 - Persisted audit events are still log-only.
+- A name typed for a group member (`AddGroupActor`) is stored as the actor's `display_name` and a later platform name for that actor replaces it, as before; actors carry no separate alias.
+- An existing direct chat shows its id until its peer next sends a message (no backfill).
 
 ## 7. Split out of this change
 

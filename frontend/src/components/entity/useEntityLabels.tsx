@@ -8,7 +8,7 @@ import type { NotifyTarget } from '@/types/bot';
 // convention `平台 · alias · id` (group chats: `平台群 · alias · id`) (.design/bot-im-alias-display.md §3).
 
 export interface BotRef { uuid?: string; name?: string; platform?: string }
-export interface ChatRef { platform: string; external_chat_id: string; alias?: string }
+export interface ChatRef { platform: string; external_chat_id: string; alias?: string; name?: string }
 export interface GroupRef { platform: string; external_group_id: string; alias?: string; name?: string }
 
 export type EntityProps = Pick<
@@ -67,12 +67,12 @@ export function useEntityLabels(): EntityLabels {
             kind: 'bot',
             platformIcon: icon(b.platform ?? ''),
         });
-        const chat: EntityLabels['chat'] = (c) => ref(c.platform, c.external_chat_id, { alias: c.alias });
+        const chat: EntityLabels['chat'] = (c) => ref(c.platform, c.external_chat_id, { alias: c.alias || c.name });
         const group: EntityLabels['group'] = (g) => ref(g.platform, g.external_group_id, { alias: g.alias || g.name, group: true });
         // A Notify target carries the operator's alias and, for groups, the platform's own name.
         const target: EntityLabels['target'] = (x) => (x.kind === 'group'
             ? group({ platform: x.platform ?? '', external_group_id: x.external_id, alias: x.alias, name: x.name })
-            : chat({ platform: x.platform ?? '', external_chat_id: x.external_id, alias: x.alias }));
+            : chat({ platform: x.platform ?? '', external_chat_id: x.external_id, alias: x.alias, name: x.name }));
         return { bot, chat, group, target, text, botText: (b) => text(bot(b)) };
     }, [t]);
 }

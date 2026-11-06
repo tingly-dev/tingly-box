@@ -3800,7 +3800,7 @@ export const handlers = [
         return HttpResponse.json({
             chats: [
                 {
-                    chat: {id: 'direct-1', bot_uuid: 'mock-bot', platform: 'telegram', external_chat_id: 'telegram:123456789', alias: 'Maya (phone)', alias_source: 'platform', peer_actor_id: 'actor-1', blocked: false},
+                    chat: {id: 'direct-1', bot_uuid: 'mock-bot', platform: 'telegram', external_chat_id: 'telegram:123456789', name: 'Maya (phone)', peer_actor_id: 'actor-1', blocked: false},
                     permissions: [
                         {capability: 'notify', action: 'access', effect: 'allow'},
                         {capability: 'notify', action: 'notify.receive', effect: 'allow'},
@@ -3828,14 +3828,14 @@ export const handlers = [
     http.get('/api/v1/bots/:bot/groups', ({ params }) => HttpResponse.json({groups: params.bot === 'mock-bot-002' ? [
         {id: 'group-f1', bot_uuid: 'mock-bot-002', platform: 'feishu', external_group_id: 'oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5', blocked: false},
     ] : params.bot !== 'mock-bot-003' && !String(params.bot).endsWith('-imbot') ? [
-        {id: 'group-1', bot_uuid: 'mock-bot', platform: 'telegram', external_group_id: 'telegram:-10024681012', alias: 'Release Crew', alias_source: 'platform', name: 'Release Crew', blocked: false},
+        {id: 'group-1', bot_uuid: 'mock-bot', platform: 'telegram', external_group_id: 'telegram:-10024681012', name: 'Release Crew', blocked: false},
     ] : []})),
     http.get('/api/v1/bots/:bot/groups/:group', ({ params }) => HttpResponse.json(params.group === 'group-f1' ? {
         group: {id: 'group-f1', bot_uuid: 'mock-bot-002', platform: 'feishu', external_group_id: 'oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5', blocked: false},
         capabilities: {notify: 'allow', remote_control: 'deny'},
         actors: [],
     } : {
-        group: {id: 'group-1', bot_uuid: 'mock-bot', platform: 'telegram', external_group_id: 'telegram:-10024681012', alias: 'Release Crew', alias_source: 'platform', name: 'Release Crew', blocked: false},
+        group: {id: 'group-1', bot_uuid: 'mock-bot', platform: 'telegram', external_group_id: 'telegram:-10024681012', name: 'Release Crew', blocked: false},
         capabilities: {notify: 'allow', remote_control: 'allow'},
         actors: [
             {actor: {id: 'actor-g1', external_actor_id: 'telegram:555', display_name: 'Maya'}, label: 'Controller', permissions: [

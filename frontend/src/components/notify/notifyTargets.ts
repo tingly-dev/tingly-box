@@ -17,6 +17,7 @@ export async function loadNotifyTargets(botUUID: string): Promise<NotifyTarget[]
         kind: 'direct_chat',
         external_id: detail.chat.external_chat_id,
         alias: detail.chat.alias,
+        name: detail.chat.name,
         platform: detail.chat.platform,
         is_paired: Boolean(detail.chat.peer_actor_id),
         blocked: detail.chat.blocked,

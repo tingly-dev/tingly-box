@@ -135,12 +135,13 @@ async function fetchChats(bot: ImBot): Promise<{ chats: ImChat[]; complete: bool
     const chats: ImChat[] = [];
     if (direct.status === 'fulfilled') {
         for (const { chat } of direct.value.chats ?? []) {
+            const shown = chat.alias?.trim() || chat.name?.trim();
             chats.push({
                 botUuid: bot.uuid,
                 platform: chat.platform,
                 chatId: chat.external_chat_id,
-                alias: chat.alias?.trim() || undefined,
-                title: entityText({ platform: platformLabel(chat.platform), alias: chat.alias, id: bareId(chat.platform, chat.external_chat_id) }),
+                alias: shown || undefined,
+                title: entityText({ platform: platformLabel(chat.platform), alias: shown, id: bareId(chat.platform, chat.external_chat_id) }),
                 kind: 'direct',
                 state: chat.blocked ? 'blocked' : chat.peer_actor_id ? 'ok' : 'unpaired',
             });

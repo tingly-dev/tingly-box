@@ -16,50 +16,42 @@ type BotCapability struct {
 }
 
 type Actor struct {
-	ID              string `json:"id"`
-	BotUUID         string `json:"bot_uuid"`
-	Platform        string `json:"platform"`
-	ExternalActorID string `json:"external_actor_id"`
-	DisplayName     string `json:"display_name,omitempty"`
-	// DisplayNameSource is "user" for a name typed by an operator and
-	// "platform" for one the platform reported. Empty when there is no name.
-	DisplayNameSource string    `json:"display_name_source,omitempty"`
-	LastSeenAt        time.Time `json:"last_seen_at,omitempty"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	ID              string    `json:"id"`
+	BotUUID         string    `json:"bot_uuid"`
+	Platform        string    `json:"platform"`
+	ExternalActorID string    `json:"external_actor_id"`
+	DisplayName     string    `json:"display_name,omitempty"`
+	LastSeenAt      time.Time `json:"last_seen_at,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type DirectChat struct {
-	ID             string `json:"id"`
-	BotUUID        string `json:"bot_uuid"`
-	Platform       string `json:"platform"`
-	ExternalChatID string `json:"external_chat_id"`
-	Alias          string `json:"alias,omitempty"`
-	// AliasSource is "user" when an operator set Alias, "platform" when it is
-	// the default taken from the platform's name for the peer.
-	AliasSource string     `json:"alias_source,omitempty"`
-	PeerActorID string     `json:"peer_actor_id,omitempty"`
-	Blocked     bool       `json:"blocked"`
-	PairedAt    *time.Time `json:"paired_at,omitempty"`
-	ProjectPath string     `json:"project_path,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID             string     `json:"id"`
+	BotUUID        string     `json:"bot_uuid"`
+	Platform       string     `json:"platform"`
+	ExternalChatID string     `json:"external_chat_id"`
+	Alias          string     `json:"alias,omitempty"`
+	Name           string     `json:"name,omitempty"`
+	PeerActorID    string     `json:"peer_actor_id,omitempty"`
+	Blocked        bool       `json:"blocked"`
+	PairedAt       *time.Time `json:"paired_at,omitempty"`
+	ProjectPath    string     `json:"project_path,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 type Group struct {
-	ID              string `json:"id"`
-	BotUUID         string `json:"bot_uuid"`
-	Platform        string `json:"platform"`
-	ExternalGroupID string `json:"external_group_id"`
-	Alias           string `json:"alias,omitempty"`
-	// AliasSource is "user" when an operator set Alias, "platform" when it is
-	// the default taken from Name (the platform's title for the group).
-	AliasSource string    `json:"alias_source,omitempty"`
-	Name        string    `json:"name,omitempty"`
-	Blocked     bool      `json:"blocked"`
-	ProjectPath string    `json:"project_path,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID              string    `json:"id"`
+	BotUUID         string    `json:"bot_uuid"`
+	Platform        string    `json:"platform"`
+	ExternalGroupID string    `json:"external_group_id"`
+	Alias           string    `json:"alias,omitempty"`
+	Name            string    `json:"name,omitempty"`
+	Blocked         bool      `json:"blocked"`
+	ProjectPath     string    `json:"project_path,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type Permission struct {

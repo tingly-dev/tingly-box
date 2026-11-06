@@ -11,6 +11,7 @@ vi.mock('@/services/botApi', () => ({
     listBotDirectChats: async () => ({ chats: [
         { chat: { platform: 'telegram', external_chat_id: 'telegram:123', alias: m.aliasOf123, peer_actor_id: 'actor' } },
         { chat: { platform: 'telegram', external_chat_id: 'telegram:456', alias: '  ', peer_actor_id: 'actor' } },
+        { chat: { platform: 'telegram', external_chat_id: 'telegram:555', name: 'Peer name', peer_actor_id: 'actor' } },
     ] }),
     listBotGroups: async () => {
         if (m.groupsFail) throw new Error('boom');
@@ -26,15 +27,16 @@ const bot = { uuid: 'bot', name: 'Bot', platform: 'telegram', online: true };
 describe('Projects IM host', () => {
     beforeEach(() => { m.groupsFail = false; });
 
-    it('titles chats as 平台 · alias · id (groups: 平台群), with the group name as default alias and the id when unnamed', async () => {
+    it('titles chats as 平台 · alias · id (groups: 平台群), with the platform name when there is no alias and the id when unnamed', async () => {
         const chats = await imHost.listChats(bot);
         expect(chats.map((chat) => chat.title)).toEqual([
             'Telegram · Alice · 123',
             'Telegram · 456',
+            'Telegram · Peer name · 555',
             'Telegram group · Team · 789',
             'Telegram group · Platform name · 987',
         ]);
-        expect(chats.map((chat) => chat.alias)).toEqual(['Alice', undefined, 'Team', 'Platform name']);
+        expect(chats.map((chat) => chat.alias)).toEqual(['Alice', undefined, 'Peer name', 'Team', 'Platform name']);
     });
 
     it('answers chat lookups for bindings and message sources after a listing', async () => {
