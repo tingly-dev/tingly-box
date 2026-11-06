@@ -277,13 +277,6 @@ func TestCompactFromAChat(t *testing.T) {
 	assert.Contains(t, reply, "Nothing to compact")
 }
 
-func TestCompactOfAConversationWithoutASessionIsNotAvailable(t *testing.T) {
-	ca := &commandAgent{}
-	f, svc, _, _ := commandFixture(t, ca)
-	_, err := svc.Send(context.Background(), f.project.MainThreadID, "/compact", nil, Source{})
-	assert.ErrorIs(t, err, ErrCompactUnavailable)
-}
-
 // An automatic compaction inside an ordinary turn gets the same card, marked
 // automatic, and leaves the turn's reply alone.
 func TestAutomaticCompactionGetsACard(t *testing.T) {

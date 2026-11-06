@@ -75,7 +75,7 @@ func newCoordinatorCompactFixture(t *testing.T) *coordinatorCompactFixture {
 		turn.Say("done", 30, 4)
 		return nil
 	}}
-	f.svc = NewService(store, Layout{Root: t.TempDir()}, Agents{Service: agent.Service()}, coordinatorSessionTestHost{fakeLLM: &fakeLLM{}})
+	f.svc = NewService(store, Layout{Root: t.TempDir()}, Agents{Service: agent.Service()}, testHost{})
 	f.svc.Coordinator.OnFinal = func(e db.ThreadEvent) {
 		f.mu.Lock()
 		f.finals = append(f.finals, e)

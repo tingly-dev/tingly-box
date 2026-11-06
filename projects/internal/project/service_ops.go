@@ -201,11 +201,8 @@ func (s *Service) runCommand(ctx context.Context, t *db.Thread, cmd command, src
 		return nil, &ErrCommandUnsupported{Name: cmd.name}
 	case cmdCompact:
 		if t.Agent == db.AgentLLM {
-			// The conversation is compacted by its own session, so only a
-			// coordinator that runs as one can.
-			if s.Coordinator == nil || s.Coordinator.sessions == nil {
-				return nil, ErrCompactUnavailable
-			}
+			// The conversation is compacted by its own session: the command is
+			// queued like any message and the coordinator runs it in its turn.
 			text := "/compact"
 			if cmd.args != "" {
 				text += " " + cmd.args
