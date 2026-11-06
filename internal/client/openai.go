@@ -95,7 +95,7 @@ func newOpenAIClientWithTransport(provider *typ.Provider, baseURL string, transp
 	}
 
 	httpClient := &http.Client{
-		Transport: transport,
+		Transport: wrapWithStringErrorEnvelope(transport),
 	}
 
 	options = append(options, option.WithHTTPClient(httpClient))

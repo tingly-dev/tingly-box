@@ -1,6 +1,7 @@
 package protocolserver
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -115,5 +116,62 @@ func TestLegacyScenarioAliasMiddleware_LeavesOthersUntouched(t *testing.T) {
 		if path != "/tingly/"+raw+"/v1/messages" {
 			t.Errorf("path for %q = %q, want unchanged", raw, path)
 		}
+	}
+}
+
+func invokeContextMiddleware(t *testing.T, ph *ProtocolHandler, rawScenario string) *httptest.ResponseRecorder {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/tingly/"+rawScenario+"/v1/chat/completions", nil)
+	c.Params = gin.Params{{Key: "scenario", Value: rawScenario}}
+	ph.contextMiddleware(c)
+	return w
+}
+
+// A team's routing scope is "team:<id>" (what the Team page probes and what
+// rules are stored under). It is not a profile, so it must not be validated as
+// one: the profile check used to answer it with 400 {"error":"unknown profile
+// ..."}, which the Test all dialog showed instead of a probe result.
+func TestContextMiddleware_AcceptsLiveTeamScope(t *testing.T) {
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	team, err := cfg.StoreManager().Team().Create("Research")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ph := NewHandler(ProtocolHandlerDeps{Config: cfg})
+
+	if w := invokeContextMiddleware(t, ph, "team:"+team.ID); w.Code != http.StatusOK {
+		t.Fatalf("live team scope rejected: %d %s", w.Code, w.Body.String())
+	}
+
+	w := invokeContextMiddleware(t, ph, "team:no-such-team")
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("unknown team scope should still be refused, got %d", w.Code)
+	}
+	var body struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil || body.Error.Message == "" {
+		t.Fatalf("gateway refusals must use the error envelope clients decode, got %s", w.Body.String())
+	}
+}
+
+func TestContextMiddleware_ProfileErrorsUseErrorEnvelope(t *testing.T) {
+	ph := newAliasTestServer()
+	w := invokeContextMiddleware(t, ph, "claude_code:nope")
+	var body struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if w.Code != http.StatusBadRequest || json.Unmarshal(w.Body.Bytes(), &body) != nil || body.Error.Message == "" {
+		t.Fatalf("got %d %s", w.Code, w.Body.String())
 	}
 }

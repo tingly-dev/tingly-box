@@ -142,3 +142,14 @@ func dropOrphanTeamScopesOnce(c *Config) bool {
 	}
 	return true
 }
+
+// HasTeam reports whether a team with this ID exists. An unreadable team store
+// counts as absent.
+func (c *Config) HasTeam(id string) bool {
+	teams, err := c.teamStore()
+	if err != nil {
+		return false
+	}
+	_, err = teams.Get(id)
+	return err == nil
+}
