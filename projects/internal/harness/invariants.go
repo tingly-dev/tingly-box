@@ -25,15 +25,14 @@ func (w *World) CheckInvariants() {
 
 	open := regexp.MustCompile(`<event[^>]*>`)
 	for _, req := range w.Requests() {
-		for _, m := range req.Messages {
-			opens := open.FindAllString(m.Content, -1)
-			if len(opens) != strings.Count(m.Content, "</event>") {
-				t.Errorf("trust.envelope-intact: an event envelope was opened or closed by text inside one:\n%s", m.Content)
-			}
-			for _, o := range opens {
-				if strings.Contains(o, `source="thread"`) && !strings.Contains(o, `trust="relay"`) {
-					t.Errorf("trust.report-labelled: a thread's report is not marked as relayed: %s", o)
-				}
+		events := withoutContext(req.Prompt)
+		opens := open.FindAllString(events, -1)
+		if len(opens) != strings.Count(events, "</event>") {
+			t.Errorf("trust.envelope-intact: an event envelope was opened or closed by text inside one:\n%s", events)
+		}
+		for _, o := range opens {
+			if strings.Contains(o, `source="thread"`) && !strings.Contains(o, `trust="relay"`) {
+				t.Errorf("trust.report-labelled: a thread's report is not marked as relayed: %s", o)
 			}
 		}
 	}
@@ -60,4 +59,19 @@ func (w *World) CheckInvariants() {
 			t.Errorf("memory.index-resolves: MEMORY.md links %s, which is missing", name)
 		}
 	}
+}
+
+// withoutContext drops the project context a turn's prompt may carry (the
+// coordinator's rules talk about <event> envelopes in prose), leaving the
+// conversation's events.
+func withoutContext(prompt string) string {
+	start := strings.Index(prompt, "\nCurrent project context:\n")
+	if start < 0 {
+		return prompt
+	}
+	end := strings.Index(prompt[start:], "</threads>\n")
+	if end < 0 {
+		return prompt[:start]
+	}
+	return prompt[:start] + prompt[start+end+len("</threads>\n"):]
 }

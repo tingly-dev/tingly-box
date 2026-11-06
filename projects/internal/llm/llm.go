@@ -1,12 +1,13 @@
-// Package llm talks to the model endpoint configured in settings. It hides the
-// two wire styles (Anthropic Messages, OpenAI Chat Completions) behind one
-// streaming interface so the chat module does not care which one is in use.
+// Package llm talks to the model endpoint configured in the standalone app's
+// settings. It hides the two wire styles (Anthropic Messages, OpenAI Chat
+// Completions) behind one streaming interface so the chat module does not care
+// which one is in use.
 //
 // The default connection points at a local Tingly Box gateway, which speaks
 // both styles and routes to whatever upstream the user configured there.
 //
-// It is public because a host embedding Projects (see package projects)
-// hands the coordinator its model client through these types.
+// The coordinator and threads do not use it: they run in Claude Code
+// sessions, which reach the model through the host's environment.
 package llm
 
 import (

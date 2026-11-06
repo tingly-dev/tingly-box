@@ -13,18 +13,27 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 )
 
-// Host is what the runtime needs from whoever runs it: a model client for
-// the coordinator, the models the project settings offer, and the
-// environment threads run Claude Code in. The standalone app implements it
-// with its own connection settings; an embedding host (Tingly Box) with its
-// gateway.
+// Host is what the runtime needs from whoever runs it: the models the project
+// settings offer and the environment the coordinator and threads run Claude
+// Code in. The standalone app implements it with its own connection settings;
+// an embedding host (Tingly Box) with its gateway.
 type Host interface {
-	LLMSource
 	ThreadEnv
-	Models(ctx context.Context) ([]llm.Model, error)
+	Models(ctx context.Context) ([]Model, error)
+}
+
+// Model is one model the project settings offer.
+type Model struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+	// ProviderModel / ProviderName are what the host routes ID to — the real
+	// model an alias stands for, and the provider that serves it. Set by an
+	// embedding host that can resolve its routing (Tingly Box does, the way
+	// its status line does); empty when the host says nothing.
+	ProviderModel string `json:"provider_model,omitempty"`
+	ProviderName  string `json:"provider_name,omitempty"`
 }
 
 // Service bundles the project runtime for the HTTP modules.
@@ -43,7 +52,7 @@ type Service struct {
 func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Service {
 	hub := NewHub()
 	threads := NewThreads(store, layout, hub, agents, host)
-	coord := NewCoordinator(store, layout, hub, threads, host)
+	coord := NewCoordinator(store, layout, hub, threads)
 	// The chats bound to a project hear the coordinator when the host can
 	// reach IM (Tingly Box); the standalone app has no sink.
 	sink, _ := host.(ChannelSink)
@@ -68,9 +77,7 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 	}
 	svc.sessionToolsMCP = &sessionToolsMCP{service: svc}
 	threads.SessionToolsConfig = svc.sessionToolsMCP.config
-	if agents.Service != nil {
-		coord.sessions = newCoordinatorSessions(coord, host, svc.sessionToolsMCP, agents)
-	}
+	coord.sessions = newCoordinatorSessions(coord, host, svc.sessionToolsMCP, agents)
 	return svc
 }
 
@@ -122,7 +129,9 @@ func (s *Service) Start(ctx context.Context) {
 
 // CloseTools stops the local MCP service after the thread processes stop.
 func (s *Service) CloseTools(ctx context.Context) error {
-	if s.Coordinator != nil { s.Coordinator.shutdown(ctx) }
+	if s.Coordinator != nil {
+		s.Coordinator.shutdown(ctx)
+	}
 	if s.sessionToolsMCP != nil {
 		return s.sessionToolsMCP.close(ctx)
 	}

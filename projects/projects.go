@@ -17,34 +17,37 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/projects/internal/config"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 	"github.com/tingly-dev/tingly-box/projects/internal/project"
 	"github.com/tingly-dev/tingly-box/projects/internal/server"
 	"github.com/tingly-dev/tingly-box/projects/internal/server/module"
 	projectmod "github.com/tingly-dev/tingly-box/projects/internal/server/module/project"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // DirectoryAuthenticatedKey may be set only after the host has authenticated the request.
 const DirectoryAuthenticatedKey = projectmod.DirectoryAuthenticatedKey
 
-// Host is what Projects needs from the server embedding it.
+// Host is what Projects needs from the server embedding it. The coordinator
+// and threads are Claude Code sessions; the host decides where they reach
+// the model.
 type Host interface {
-	// ClientFor returns the coordinator's model client and the model to
-	// call: model when set, else the host's default.
-	ClientFor(ctx context.Context, model string) (llm.Client, string, error)
 	// Models lists the models project settings offer for the coordinator
 	// and for threads.
-	Models(ctx context.Context) ([]llm.Model, error)
-	// ThreadEnv is the environment threads run Claude Code with (pointing
-	// it at the host's gateway) and the model to use when a project sets
-	// none. Empty values leave Claude Code on its own login and default.
+	Models(ctx context.Context) ([]Model, error)
+	// ThreadEnv is the environment the coordinator and threads run Claude
+	// Code with (pointing it at the host's gateway) and the model to use when
+	// a project sets none. Empty values leave Claude Code on its own login
+	// and default.
 	ThreadEnv(ctx context.Context) (env []string, defaultModel string)
 }
 
 var _ project.Host = Host(nil)
+
+// Model is one model the project settings offer.
+type Model = project.Model
 
 // Optional capabilities a Host can also implement for folder sessions.
 type (
@@ -83,8 +86,11 @@ type Options struct {
 	// thread worktrees. Empty keeps everything in memory and a temporary
 	// directory, which is what OpenAPI generation needs.
 	DataDir string
-	// Host provides model access. Required.
+	// Host provides the models and the Claude Code environment. Required.
 	Host Host
+	// Agents runs coordinator and thread turns; nil uses the Claude Code
+	// CLI. Tests pass a scripted stand-in (agentboot/engine/enginetest).
+	Agents *agentboot.AgentService
 }
 
 // App is Projects running inside a host.
@@ -110,7 +116,11 @@ func New(opts Options) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	mods, svc := server.ProjectModules(server.Deps{Store: store, Layout: project.Layout{Root: root}}, opts.Host)
+	deps := server.Deps{Store: store, Layout: project.Layout{Root: root}}
+	if opts.Agents != nil {
+		deps.Agents = &project.Agents{Service: opts.Agents}
+	}
+	mods, svc := server.ProjectModules(deps, opts.Host)
 	return &App{store: store, mods: mods, svc: svc}, nil
 }
 

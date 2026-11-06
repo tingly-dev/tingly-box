@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/projects/internal/coordtest"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 )
 
 // seedConversation puts n older exchanges into the main thread, one of them
@@ -26,25 +26,23 @@ func seedConversation(w *World, n int) {
 	}
 }
 
-// H1: when the conversation is longer than the window the coordinator sees,
-// it is told so and can read the part it cannot see, instead of asking the
-// user to repeat it.
+// H1: when the conversation is longer than what a new session is given, it
+// is told so and can read the part it cannot see, instead of asking the user
+// to repeat it.
 func TestCoordinatorReadsConversationBeyondItsWindow(t *testing.T) {
 	var told bool
 	var read string
 	w := New(t, Options{
 		Files: projectsRepo,
-		Brain: func(c *BrainCtx) llm.Result {
-			switch {
-			case c.AfterTools():
-				read = c.Req.Messages[len(c.Req.Messages)-1].ToolResults[0].Content
-				return llm.Result{Text: "Every Monday."}
-			case strings.Contains(c.Last(), "how often"):
-				told = strings.Contains(c.Req.System, "read_conversation")
-				return llm.Result{ToolCalls: []llm.ToolCall{Call("r", "read_conversation", map[string]any{"contains": "rotate"})}}
-			default:
-				return llm.Result{Text: "ok"}
+		Brain: func(c *coordtest.Turn) error {
+			if !strings.Contains(c.Input(), "how often") {
+				c.Reply("ok")
+				return nil
 			}
+			told = strings.Contains(c.Prompt, "earlier messages exist")
+			read, _ = c.Call("read_conversation", map[string]any{"contains": "rotate"})
+			c.Reply("Every Monday.")
+			return nil
 		},
 	})
 	seedConversation(w, 40)
@@ -61,18 +59,20 @@ func TestCoordinatorReadsConversationBeyondItsWindow(t *testing.T) {
 
 // H2: a short conversation is shown whole and carries no cut-off note.
 func TestShortConversationHasNoCutOffNote(t *testing.T) {
-	var system string
+	var prompt string
 	w := New(t, Options{
 		Files: projectsRepo,
-		Brain: func(c *BrainCtx) llm.Result {
-			system = c.Req.System
-			return llm.Result{Text: "ok"}
+		Brain: func(c *coordtest.Turn) error {
+			prompt = c.Prompt
+			c.Reply("ok")
+			return nil
 		},
 	})
 	seedConversation(w, 5)
 	w.Say("hello")
 	w.Quiet()
-	assert.NotContains(t, system, "earlier messages exist")
+	assert.Contains(t, prompt, "chatter 4", "the earlier conversation is given")
+	assert.NotContains(t, prompt, "earlier messages exist")
 }
 
 // H3: a long message shows cut in a search, with the way to read it whole,
@@ -81,22 +81,17 @@ func TestCoordinatorReadsACutMessageWhole(t *testing.T) {
 	var cut, whole string
 	w := New(t, Options{
 		Files: projectsRepo,
-		Brain: func(c *BrainCtx) llm.Result {
-			last := c.Req.Messages[len(c.Req.Messages)-1]
-			switch {
-			case c.AfterTools() && cut == "":
-				cut = last.ToolResults[0].Content
-				id := regexp.MustCompile(`read_conversation id=([0-9a-f]{8})`).FindStringSubmatch(cut)
-				require.NotNil(t, id, "the cut entry says how to read it whole")
-				return llm.Result{ToolCalls: []llm.ToolCall{Call("m", "read_conversation", map[string]any{"id": id[1]})}}
-			case c.AfterTools():
-				whole = last.ToolResults[0].Content
-				return llm.Result{Text: "Read it."}
-			case strings.Contains(c.Last(), "the brief"):
-				return llm.Result{ToolCalls: []llm.ToolCall{Call("r", "read_conversation", map[string]any{"contains": "brief-start"})}}
-			default:
-				return llm.Result{Text: "ok"}
+		Brain: func(c *coordtest.Turn) error {
+			if !strings.Contains(c.Input(), "the brief") {
+				c.Reply("ok")
+				return nil
 			}
+			cut, _ = c.Call("read_conversation", map[string]any{"contains": "brief-start"})
+			id := regexp.MustCompile(`read_conversation id=([0-9a-f]{8})`).FindStringSubmatch(cut)
+			require.NotNil(t, id, "the cut entry says how to read it whole")
+			whole, _ = c.Call("read_conversation", map[string]any{"id": id[1]})
+			c.Reply("Read it.")
+			return nil
 		},
 	})
 	require.NoError(t, w.Store.AddThreadEvent(&db.ThreadEvent{ThreadID: w.Project.MainThreadID, Kind: db.EvUser,

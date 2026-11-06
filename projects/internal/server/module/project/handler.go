@@ -21,7 +21,6 @@ import (
 	rt "github.com/tingly-dev/tingly-box/projects/internal/project"
 	"github.com/tingly-dev/tingly-box/projects/internal/server/module"
 	"github.com/tingly-dev/tingly-box/projects/internal/server/module/apierr"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
@@ -160,8 +159,8 @@ type InspectRepoResponse struct {
 // Models may be empty) when the list could not be fetched; a model ID can
 // still be typed by hand.
 type ProjectModelsResponse struct {
-	Models []llm.Model `json:"models"`
-	Error  string      `json:"error,omitempty"`
+	Models []rt.Model `json:"models"`
+	Error  string     `json:"error,omitempty"`
 }
 
 // ProjectRuntimeResponse is what threads run on.
@@ -343,7 +342,7 @@ func (h *Handler) models(c *gin.Context) {
 	models, err := h.svc.Host.Models(c.Request.Context())
 	resp := ProjectModelsResponse{Models: models}
 	if resp.Models == nil {
-		resp.Models = []llm.Model{}
+		resp.Models = []rt.Model{}
 	}
 	if err != nil {
 		resp.Error = err.Error()

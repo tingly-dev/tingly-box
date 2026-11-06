@@ -1,14 +1,14 @@
 package settings
 
 import (
-	"github.com/tingly-dev/tingly-box/projects/internal/project"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/projects/internal/llm"
+	"github.com/tingly-dev/tingly-box/projects/internal/project"
 	"github.com/tingly-dev/tingly-box/projects/internal/server/module"
 	"github.com/tingly-dev/tingly-box/projects/internal/server/module/apierr"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 

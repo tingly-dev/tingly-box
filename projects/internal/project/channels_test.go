@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
+	"github.com/tingly-dev/tingly-box/projects/internal/coordtest"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 )
 
 // sentText is one message the fake sink was asked to deliver.
@@ -83,28 +83,21 @@ func waitQuiet(t *testing.T, f *testFixture, svc *Service, threadID string) {
 
 func channelFixtureWith(t *testing.T, script func(turn *enginetest.Turn) error) (*testFixture, *Service, *fakeSink) {
 	t.Helper()
-	return channelFixtureReplying(t, script, func(req llm.Request) llm.Result {
-		return llm.Result{Text: "Echo: " + lastUserText(req)}
+	return channelFixtureReplying(t, script, func(c *coordtest.Turn) {
+		c.Reply("Echo: " + c.Input())
 	})
 }
 
-// channelFixtureReplying is channelFixtureWith with the coordinator's model
-// answering through reply.
-func channelFixtureReplying(t *testing.T, script func(turn *enginetest.Turn) error, reply func(llm.Request) llm.Result) (*testFixture, *Service, *fakeSink) {
+// channelFixtureReplying is channelFixtureWith with the coordinator's turns
+// answered by reply.
+func channelFixtureReplying(t *testing.T, script func(turn *enginetest.Turn) error, reply func(*coordtest.Turn)) (*testFixture, *Service, *fakeSink) {
 	t.Helper()
-	f := newFixture(t, script)
-	src := &fakeLLM{fn: reply}
-	coord := NewCoordinator(f.store, f.threads.layout, f.threads.hub, f.threads, src)
-	t.Cleanup(func() { settleCoordinator(coord) })
 	sink := newFakeSink()
-	relay := NewRelay(f.store, sink)
-	coord.OnFinal = relay.Message
-	coord.OnDecided = relay.Decided
-	f.threads.OnWait = relay.NeedsUser
-	f.threads.OnSettled = relay.Settled
-	f.threads.OnReply = relay.ThreadReply
-	f.threads.OnStep = relay.Step
-	return f, &Service{Store: f.store, Layout: f.threads.layout, Hub: f.threads.hub, Threads: f.threads, Coordinator: coord, Relay: relay}, sink
+	f, svc := newServiceFixture(t, sinkHost{fakeSink: sink}, script, func(c *coordtest.Turn) error {
+		reply(c)
+		return nil
+	})
+	return f, svc, sink
 }
 
 func TestChannelMessageReachesTheCoordinatorAndTheReplyComesBack(t *testing.T) {
