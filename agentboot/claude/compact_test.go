@@ -83,11 +83,11 @@ func TestTransport_AutoCompactionWithoutASummaryStillReports(t *testing.T) {
 	assert.False(t, got[0].Result.Reported.Summary)
 }
 
-func TestTransport_CompactPrompt(t *testing.T) {
-	tr := NewTransport()
-	assert.Equal(t, "/compact", tr.CompactPrompt(""))
-	assert.Equal(t, "/compact", tr.CompactPrompt("  "))
-	assert.Equal(t, "/compact keep the API notes", tr.CompactPrompt(" keep the API notes "))
+func TestAgent_CompactPrompt(t *testing.T) {
+	a := &Agent{}
+	assert.Equal(t, "/compact", a.CompactPrompt(""))
+	assert.Equal(t, "/compact", a.CompactPrompt("  "))
+	assert.Equal(t, "/compact keep the API notes", a.CompactPrompt(" keep the API notes "))
 }
 
 func TestTransport_ContextUsage(t *testing.T) {
@@ -111,7 +111,7 @@ func TestTransport_ContextUsage(t *testing.T) {
 }
 
 var (
-	_ agentboot.Compactor                  = (*Transport)(nil)
+	_ agentboot.Compactor                  = (*Agent)(nil)
 	_ agentboot.ContextUsageReader         = (*Transport)(nil)
 	_ agentboot.ControlResponseBodyDecoder = (*Transport)(nil)
 )
