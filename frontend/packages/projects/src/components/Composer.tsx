@@ -9,7 +9,12 @@ import { ModelPicker } from './ModelPicker';
 import { EffortPicker } from './EffortPicker';
 import type { ModelSource } from '../hooks/useModels';
 import { radius } from '@tingly/ui/theme/radius';
-import { fontSizes } from '@tingly/ui/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+
+/** The commands the slash menu offers; the host runs them (Projects intercepts the text). */
+const SLASH_COMMANDS = [
+    { name: 'compact', hint: 'composer.compactHint', description: 'composer.compactDescription' },
+];
 
 /** A file on its way into the message: uploading, ready, or refused. */
 interface Pending {
@@ -97,6 +102,8 @@ export interface ComposerProps {
     onAccepted?: (sent: string) => void;
     /** Show the send keys under the box (desktop only). */
     keysHint?: boolean;
+    /** Typing "/" at the start offers the slash commands the host runs (just /compact for now). */
+    slashCommands?: boolean;
 }
 
 /**
@@ -106,7 +113,7 @@ export interface ComposerProps {
  */
 export function Composer({
     onSend, attach, attachBlocked, streaming, onStop, sendWhileStreaming, sendModes, disabled, canSubmit = true, placeholder, autoFocus, model, onModelChange, modelLabel, effort, onEffortChange, effortLabel, modelSource,
-    context, contextCollapsible = false, contextLabel, leftSlot, compactToolbar = false, minRows = 1, seed, keepUntilSent, text: controlled, onTextChange, onAccepted, keysHint,
+    context, contextCollapsible = false, contextLabel, leftSlot, compactToolbar = false, minRows = 1, seed, keepUntilSent, text: controlled, onTextChange, onAccepted, keysHint, slashCommands,
 }: ComposerProps) {
     const { t } = useTranslation('projects');
     const mobile = useMediaQuery(useTheme().breakpoints.down('sm'));
@@ -181,6 +188,19 @@ export function Composer({
     const blockedByTurn = streaming && !sendWhileStreaming;
     const hasContent = text.trim() !== '' || ready.length > 0;
     const canSend = hasContent && !uploading && canSubmit && !blockedByTurn && !sending && !disabled;
+
+    // The "/" menu: while the first word is a strict prefix of a command's
+    // name. A complete name closes it, so Enter sends the command.
+    const slash = slashCommands ? SLASH_COMMANDS.filter((c) => /^\/[a-z-]*$/.test(text) && c.name.startsWith(text.slice(1)) && c.name !== text.slice(1)) : [];
+    const [slashPick, setSlashPick] = useState(0);
+    const [slashClosed, setSlashClosed] = useState('');
+    const slashOpen = slash.length > 0 && slashClosed !== text && !disabled;
+    const slashActive = Math.min(slashPick, slash.length - 1);
+    const pickSlash = (name: string) => {
+        setText(`/${name} `);
+        setSlashPick(0);
+        inputRef.current?.focus();
+    };
 
     const submit = async (mode?: SendMode) => {
         if (!canSend || sendingRef.current) return;
@@ -362,6 +382,23 @@ export function Composer({
                 }
             } : undefined}
             onKeyDown={(e) => {
+                if (slashOpen && !e.nativeEvent.isComposing) {
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        setSlashPick((slashActive + (e.key === 'ArrowDown' ? 1 : slash.length - 1)) % slash.length);
+                        return;
+                    }
+                    if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+                        e.preventDefault();
+                        pickSlash(slash[slashActive].name);
+                        return;
+                    }
+                    if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setSlashClosed(text);
+                        return;
+                    }
+                }
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && (!mobile || e.ctrlKey || e.metaKey)) {
                     e.preventDefault();
                     void submit(e.altKey && modesAvailable ? 'queue' : undefined);
@@ -371,7 +408,33 @@ export function Composer({
         />
     );
 
+    const slashMenu = slashOpen && (
+        <Paper
+            role="listbox"
+            aria-label={t('composer.commands')}
+            elevation={3}
+            sx={{ position: 'absolute', left: 0, right: 0, bottom: '100%', mb: 0.75, py: 0.5, borderRadius: radius.row, zIndex: 2, overflow: 'hidden' }}
+        >
+            {slash.map((c, i) => (
+                <Box
+                    key={c.name}
+                    role="option"
+                    aria-selected={i === slashActive}
+                    onMouseDown={(e) => { e.preventDefault(); pickSlash(c.name); }}
+                    onMouseEnter={() => setSlashPick(i)}
+                    sx={{ display: 'flex', alignItems: 'baseline', gap: 1, px: 1.5, py: 0.75, cursor: 'pointer', bgcolor: i === slashActive ? 'action.selected' : 'transparent' }}
+                >
+                    <Typography component="span" sx={{ fontFamily: fontMono, fontSize: fontSizes.base, fontWeight: 600 }}>/{c.name}</Typography>
+                    <Typography component="span" variant="caption" color="text.secondary">{t(c.hint)}</Typography>
+                    <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 'auto', textAlign: 'right' }}>{t(c.description)}</Typography>
+                </Box>
+            ))}
+        </Paper>
+    );
+
     return (
+        <Box sx={{ position: 'relative' }}>
+        {slashMenu}
         <Paper
             variant="outlined"
             sx={{
@@ -434,5 +497,6 @@ export function Composer({
                 </>
             )}
         </Paper>
+        </Box>
     );
 }

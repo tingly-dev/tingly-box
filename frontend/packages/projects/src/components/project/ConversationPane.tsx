@@ -18,6 +18,7 @@ import { LoadEarlier } from './LoadEarlier';
 import { ThreadStateMark, ThreadBadges, ThreadSubtitle } from './threadStatus';
 import { radius } from '@tingly/ui/theme/radius';
 import { conversationText, messageSpacing, userBubble, userMessageWidth } from '../../transcript/conversationStyles';
+import { CommandCard } from '../../transcript/Transcript';
 import { readLocal, writeLocal } from '../../utils/storage';
 
 function parse<T>(payload?: string): T | null {
@@ -383,6 +384,8 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                                 return <ThreadUpdateRow key={m.id} message={m} onOpen={onOpenThread} />;
                             case 'system':
                                 return <Typography key={m.id} variant="caption" color="text.secondary" sx={{ display: 'block', my: 1.5 }}>{parse<{ settings_changed?: boolean }>(m.payload)?.settings_changed ? t('conversation.settingsChanged') : m.content}</Typography>;
+                            case 'command':
+                                return <CommandCard key={m.id} message={{ kind: 'command', content: m.content, payload: parse(m.payload), timestamp: m.created_at }} />;
                             case 'error':
                                 return (
                                     <Stack key={m.id} role="alert" direction="row" spacing={0.75} sx={{ alignItems: 'flex-start', color: (theme) => getReadableAccent(theme, 'error') }}>

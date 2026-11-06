@@ -282,11 +282,35 @@ func TestCompactFromAChat(t *testing.T) {
 	assert.Contains(t, reply, "Nothing to compact")
 }
 
-func TestCompactOfTheProjectConversationIsNotAvailableYet(t *testing.T) {
-	ca := &commandAgent{}
-	f, svc, _, _ := commandFixture(t, ca)
-	_, err := svc.Send(context.Background(), f.project.MainThreadID, "/compact", nil, Source{})
-	assert.ErrorIs(t, err, ErrCompactUnavailable)
+// An automatic compaction inside an ordinary turn gets the same card, marked
+// automatic, and leaves the turn's reply alone.
+func TestAutomaticCompactionGetsACard(t *testing.T) {
+	var turns int
+	var mu sync.Mutex
+	f, svc, _ := channelFixtureWith(t, func(turn *enginetest.Turn) error {
+		mu.Lock()
+		turns++
+		n := turns
+		mu.Unlock()
+		turn.Say("ok", 1, 1)
+		if n == 2 {
+			// After the turn's last text, so the reply must not be replaced.
+			turn.Compacted(agentboot.CompactResult{Trigger: agentboot.CompactAuto, TokensBefore: 940000, TokensAfter: 31000, DurationMS: 12000,
+				Reported: agentboot.CompactReported{Tokens: true}})
+		}
+		return nil
+	})
+	th := folderChat(t, f, svc, FolderThreadSpec{})
+	_, err := svc.Send(context.Background(), th.ID, "keep going", nil, Source{})
+	require.NoError(t, err)
+	waitQuiet(t, f, svc, th.ID)
+
+	pl := commandCard(t, f, th.ID)
+	assert.Equal(t, commandPayload{Name: "compact", State: "ok", Trigger: "auto", TokensBefore: 940000, TokensAfter: 31000, TokensReported: true, DurationMS: 12000}, pl)
+	assert.Len(t, eventsOf(t, f, th.ID, db.EvAssistant), 2, "both turns' replies are there")
+	got, err := f.store.GetThread(th.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "ok", got.LastReport, "the compaction line did not replace the turn's reply")
 }
 
 func TestCompactNeedsAConversation(t *testing.T) {
