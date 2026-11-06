@@ -34,6 +34,28 @@ type Handler struct {
 	anthropicReg *anthropicvm.Registry
 	openaiReg    *openaivm.Registry
 	decisionReg  *decisionvm.Registry
+	scripts      *scriptStore // optional; see Service.SetScriptDir
+}
+
+// refreshScripts syncs script-backed models with their directory. Called at
+// the top of every entrypoint that reads a registry.
+func (h *Handler) refreshScripts() {
+	if h.scripts != nil {
+		h.scripts.Refresh()
+	}
+}
+
+// notFoundMessage is the 404 text for an unknown model; when a script failed
+// to load it says so, since that is the likeliest reason a script model is
+// missing.
+func (h *Handler) notFoundMessage(model string) string {
+	msg := fmt.Sprintf("Model not found: %s", model)
+	if h.scripts != nil {
+		if p := h.scripts.Problems(); len(p) > 0 {
+			msg += " (script load errors: " + strings.Join(p, "; ") + ")"
+		}
+	}
+	return msg
 }
 
 // NewHandler creates a new Handler backed by the given per-provider registries.
@@ -63,6 +85,7 @@ func (h *Handler) NotSupported(c *gin.Context) {
 // protocol-split entrypoints. Retained for the legacy mixed-protocol route
 // and for test fixtures that want both registries on one endpoint.
 func (h *Handler) ListModels(c *gin.Context) {
+	h.refreshScripts()
 	models := h.anthropicReg.ListModels()
 	models = append(models, h.openaiModels()...)
 	c.JSON(http.StatusOK, OpenAIModelsResponse{
@@ -75,6 +98,7 @@ func (h *Handler) ListModels(c *gin.Context) {
 // OpenAI-protocol registry so clients pointed at the OpenAI base URL don't
 // see Anthropic-only model IDs they cannot dispatch.
 func (h *Handler) ListOpenAIModels(c *gin.Context) {
+	h.refreshScripts()
 	c.JSON(http.StatusOK, OpenAIModelsResponse{
 		Object: "list",
 		Data:   h.openaiModels(),
@@ -92,6 +116,7 @@ func (h *Handler) openaiModels() []vmodel.Model {
 // only the Anthropic-protocol registry in Anthropic's native envelope shape
 // (data + first_id/last_id/has_more, no "object" field).
 func (h *Handler) ListAnthropicModels(c *gin.Context) {
+	h.refreshScripts()
 	models := h.anthropicReg.ListModels()
 	resp := AnthropicModelsResponse{Data: models, HasMore: false}
 	if len(models) > 0 {
@@ -103,6 +128,7 @@ func (h *Handler) ListAnthropicModels(c *gin.Context) {
 
 // ChatCompletions handles POST /virtual/v1/chat/completions.
 func (h *Handler) ChatCompletions(c *gin.Context) {
+	h.refreshScripts()
 	var req ChatCompletionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{
@@ -122,7 +148,7 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 	vm := h.openaiReg.Get(req.Model)
 	if vm == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{
-			"message": fmt.Sprintf("Model not found: %s", req.Model),
+			"message": h.notFoundMessage(req.Model),
 			"type":    "invalid_request_error",
 		}})
 		return
@@ -152,6 +178,7 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 // the beta superset struct so vmodel implementations only deal with one
 // request shape.
 func (h *Handler) Messages(c *gin.Context) {
+	h.refreshScripts()
 	var req AnthropicMessageRequest
 	if c.Query("beta") == "true" {
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -192,7 +219,7 @@ func (h *Handler) Messages(c *gin.Context) {
 	if vm == nil {
 		c.JSON(http.StatusNotFound, gin.H{"type": "error", "error": gin.H{
 			"type":    "not_found_error",
-			"message": fmt.Sprintf("Model not found: %s", req.Model),
+			"message": h.notFoundMessage(req.Model),
 		}})
 		return
 	}

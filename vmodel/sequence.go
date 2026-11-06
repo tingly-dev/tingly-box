@@ -2,27 +2,50 @@ package vmodel
 
 import (
 	"fmt"
+	"hash/fnv"
+	"strings"
 	"sync/atomic"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
-// SequenceStep is one entry in a SequenceModel's response program. A step is
-// either a success (Status 0 or 200 → a normal content response) or a
-// pre-content failure (any other status → the configured HTTP error envelope).
+// SequenceStep is one entry in a SequenceModel's response program: the full
+// outcome of ONE request. A step is a success (Status 0 or 200 → a normal
+// response built from Content / Tool / Usage), a pre-content failure (any
+// other status → the configured HTTP error envelope), or a success that is cut
+// off part-way through its stream (MidStream).
 //
-// This lets a single virtual model reproduce the real-world behaviour of a
-// flaky upstream — e.g. "200, 200, 429, 200" — so failover / retry / backoff
-// logic can be exercised deterministically without standing up a real or
-// ad-hoc test provider.
+// This lets a single virtual model reproduce a scripted interaction — "call a
+// tool, get the result, call another, then answer" — or the temporal behaviour
+// of a flaky upstream (200, 200, 429, 200) without standing up a real or
+// ad-hoc test provider. In a YAML script a step may be written as a bare
+// status number (`- 429`) or as a mapping (see UnmarshalYAML).
 type SequenceStep struct {
 	// Status is the HTTP status this step serves. 0 and 200 both mean
-	// "success" (return Content); anything else is served as a pre-content
-	// error with that status code.
-	Status int `json:"status" yaml:"status"`
+	// "success"; anything else is served as a pre-content error with that
+	// status code.
+	Status int `json:"status,omitempty" yaml:"status,omitempty"`
 
-	// Content is the response body for a success step. When empty the
-	// SequenceConfig.DefaultContent is used. Ignored for error steps.
-	Content string `json:"content,omitempty" yaml:"content,omitempty"`
+	// Content ("say" in YAML) is the response text for a success step. When
+	// empty the SequenceConfig.DefaultContent is used — except on a Tool
+	// step, where empty means "no lead-in text". Ignored for error steps.
+	Content string `json:"say,omitempty" yaml:"say,omitempty"`
+
+	// Tool, when set, makes a success step answer with a single tool call
+	// (after Content, if any).
+	Tool *ToolCallConfig `json:"tool,omitempty" yaml:"tool,omitempty"`
+
+	// StopReason overrides the finish/stop reason (default: "stop", or
+	// "tool_use"/"tool_calls" for a Tool step, in the protocol's own words).
+	StopReason string `json:"stop_reason,omitempty" yaml:"stop_reason,omitempty"`
+
+	// Usage is advertised on a streamed success step.
+	Usage *MockUsage `json:"usage,omitempty" yaml:"usage,omitempty"`
+
+	// MidStream cuts a success step's stream short instead of completing it.
+	// Mutually exclusive with a non-200 Status.
+	MidStream *MidStreamSpec `json:"midstream,omitempty" yaml:"midstream,omitempty"`
 
 	// ErrorMessage and ErrorType override the error envelope for an error
 	// step. When empty they are derived from Status (see defaultErrorMeta).
@@ -34,6 +57,65 @@ type SequenceStep struct {
 	// the next one. Values <= 0 are treated as 1. Useful for compact configs
 	// like "succeed 5×, then fail once".
 	Repeat int `json:"repeat,omitempty" yaml:"repeat,omitempty"`
+}
+
+// MidStreamSpec describes how a success step's stream is cut short.
+type MidStreamSpec struct {
+	// Mode is "close" (drop the TCP connection), "event" (emit one in-band
+	// error event) or "eof" (end the body cleanly with no terminal event).
+	Mode string `json:"mode" yaml:"mode"`
+	// AfterEvents is the number of stream events delivered before the cut
+	// (default 1).
+	AfterEvents int `json:"after_events,omitempty" yaml:"after_events,omitempty"`
+}
+
+func (m *MidStreamSpec) injection() (*ErrorInjection, error) {
+	inj := &ErrorInjection{Stage: ErrorStageMidStream, AfterEvents: m.AfterEvents}
+	switch m.Mode {
+	case "close", "":
+		inj.MidStreamMode = MidStreamModeConnectionClose
+	case "event":
+		inj.MidStreamMode = MidStreamModeErrorEvent
+	case "eof":
+		inj.MidStreamMode = MidStreamModeCleanEOF
+	default:
+		return nil, fmt.Errorf("unknown midstream mode %q (want close, event or eof)", m.Mode)
+	}
+	return inj, nil
+}
+
+// sequenceStepKeys are the mapping keys a YAML step may use.
+var sequenceStepKeys = []string{
+	"status", "say", "tool", "stop_reason", "usage", "midstream",
+	"error_message", "error_type", "repeat",
+}
+
+// UnmarshalYAML: strict about keys; see decodeStrict.
+func (m *MidStreamSpec) UnmarshalYAML(node *yaml.Node) error {
+	type plain MidStreamSpec
+	return decodeStrict(node, "midstream", []string{"mode", "after_events"}, (*plain)(m))
+}
+
+// UnmarshalYAML accepts a bare status number (`- 429`) or a mapping.
+func (s *SequenceStep) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind == yaml.ScalarNode {
+		if node.Tag != "!!int" { // not a null / empty item (`- ~`, a stray `-`) or a word
+			return fmt.Errorf("line %d: a bare step must be an HTTP status number, not %q", node.Line, node.Value)
+		}
+		var status int
+		if err := node.Decode(&status); err != nil {
+			return fmt.Errorf("line %d: a bare step must be an HTTP status number: %w", node.Line, err)
+		}
+		*s = SequenceStep{Status: status}
+		return nil
+	}
+	type plain SequenceStep // drops this method, avoiding recursion
+	var p plain
+	if err := decodeStrict(node, "step", sequenceStepKeys, &p); err != nil {
+		return err
+	}
+	*s = SequenceStep(p)
+	return nil
 }
 
 // FallbackSequenceContent is the module-level fallback body for a success step
@@ -142,16 +224,22 @@ type SequenceConfig struct {
 // ResolvedStep is the concrete outcome of advancing a Sequence: either a
 // success (Error == nil, use Content) or a pre-content failure (Error set).
 type ResolvedStep struct {
-	Content string
-	Error   *ErrorInjection // nil for success steps
+	Content    string
+	Tool       *ToolCallConfig
+	StopReason string
+	Usage      *MockUsage
+	// Error is nil for a plain success. A pre-content Error is a failure (no
+	// body); a mid-stream Error accompanies a success body that is cut short.
+	Error *ErrorInjection
 }
 
 // HTTPStatus reports the HTTP status this step serves: 200 for a success
-// step, or the configured status for an error step. Derived from Error
+// step (including one cut off mid-stream, whose status line is already sent),
+// or the configured status for a pre-content error step. Derived from Error
 // rather than stored separately, so there is exactly one source of truth for
 // an error step's status.
 func (r ResolvedStep) HTTPStatus() int {
-	if r.Error != nil {
+	if r.Error != nil && r.Error.Stage == ErrorStagePreContent {
 		return r.Error.Status
 	}
 	return 200
@@ -162,6 +250,7 @@ func (r ResolvedStep) HTTPStatus() int {
 // cursor so concurrent requests each grab a distinct, monotonically advancing
 // step without locking.
 type Sequence struct {
+	id             string
 	flat           []ResolvedStep
 	defaultContent string
 	onExhaust      ExhaustPolicy
@@ -175,6 +264,7 @@ type Sequence struct {
 // usable.
 func NewSequence(cfg SequenceConfig) *Sequence {
 	s := &Sequence{
+		id:             cfg.ID,
 		defaultContent: cfg.DefaultContent,
 		onExhaust:      cfg.OnExhaust,
 		exhausted:      exhaustedStep(),
@@ -200,16 +290,54 @@ func NewSequence(cfg SequenceConfig) *Sequence {
 // Behaviour past the end of the program is governed by OnExhaust.
 func (s *Sequence) Next() ResolvedStep {
 	n := s.cursor.Add(1) - 1
-	if n >= uint64(len(s.flat)) {
-		switch s.onExhaust {
-		case ExhaustClamp:
-			return s.flat[len(s.flat)-1]
-		case ExhaustFail:
-			return s.exhausted
-		}
-		// ExhaustLoop (default): fall through to modulo wrap-around.
+	var r ResolvedStep
+	switch {
+	case n < uint64(len(s.flat)):
+		r = s.flat[n]
+	case s.onExhaust == ExhaustClamp:
+		r = s.flat[len(s.flat)-1]
+	case s.onExhaust == ExhaustFail:
+		return s.exhausted
+	default: // ExhaustLoop: wrap around
+		r = s.flat[n%uint64(len(s.flat))]
 	}
-	return s.flat[int(n%uint64(len(s.flat)))]
+	if r.Tool != nil && r.Tool.ID == "" {
+		// A tool call without an explicit id gets one unique to this served
+		// request, so repeat:, looping and clamped programs never replay the
+		// same tool_use id into an agent's transcript.
+		tool := *r.Tool
+		tool.ID = toolID(s.id, n+1)
+		r.Tool = &tool
+	}
+	return r
+}
+
+// toolID builds a tool_use id of the shape real APIs accept (A-Za-z0-9_-, at
+// most 64 characters) from a script id and the served-request number. A name
+// that had to be sanitised or truncated gets a short hash of the original, so
+// two different scripts never share an id prefix; uniqueness within a script
+// comes from n.
+func toolID(script string, n uint64) string {
+	var b strings.Builder
+	for _, r := range script {
+		if b.Len() >= 24 {
+			break
+		}
+		if r < 128 && (r == '-' || r == '_' || (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')) {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	name := b.String()
+	if name == "" {
+		name = "vmodel"
+	} else if name != script {
+		h := fnv.New32a()
+		h.Write([]byte(script))
+		name += fmt.Sprintf("-%04x", h.Sum32()&0xffff)
+	}
+	return fmt.Sprintf("toolu_%s_%d", name, n)
 }
 
 // exhaustedStep is the terminal error served once an ExhaustFail program is
@@ -231,14 +359,29 @@ func (s *Sequence) Len() int { return len(s.flat) }
 
 func (s *Sequence) resolve(step SequenceStep) ResolvedStep {
 	if step.Status == 0 || step.Status == 200 {
-		content := step.Content
-		if content == "" {
-			content = s.defaultContent
+		r := ResolvedStep{Content: step.Content, StopReason: step.StopReason, Usage: step.Usage}
+		if step.Tool != nil {
+			// The id is assigned per served request, in Next. A tool call with
+			// no arguments carries {} (never null: clients read input as an object).
+			tool := *step.Tool
+			if tool.Arguments == nil {
+				tool.Arguments = map[string]interface{}{}
+			}
+			r.Tool = &tool
+		} else if r.Content == "" {
+			// Bare success steps fall back to default text. A tool step with
+			// no text is deliberate: it is just the tool call.
+			r.Content = s.defaultContent
+			if r.Content == "" {
+				r.Content = FallbackSequenceContent
+			}
 		}
-		if content == "" {
-			content = FallbackSequenceContent
+		if step.MidStream != nil {
+			// Validated by script parsing; an unknown mode degrades to close.
+			inj, _ := step.MidStream.injection()
+			r.Error = inj
 		}
-		return ResolvedStep{Content: content}
+		return r
 	}
 	typ, msg := step.ErrorType, step.ErrorMessage
 	dtyp, dmsg := defaultErrorMeta(step.Status)
