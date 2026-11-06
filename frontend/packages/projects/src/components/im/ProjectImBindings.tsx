@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactNode } from 'react';
-import { Box, Button, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
+import { Box, Button, IconButton, ListItemText, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -9,8 +9,7 @@ import { useProjectsHost, type ImChat } from '../../host/ProjectsHost';
 import { Add, Close } from '../icons';
 import { BindChatDialog } from './BindChatDialog';
 import { ImChatLabel, useImChatText } from './ImChatLabel';
-import { PlatformMark } from './PlatformMark';
-import { chatKey, useChannelBindings, useImChats, useProjectDirectory } from './useImBindings';
+import { useChannelBindings, useImChats, useProjectDirectory } from './useImBindings';
 import { radius } from '@tingly/ui/theme/radius';
 
 /**
