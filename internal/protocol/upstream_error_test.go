@@ -1,14 +1,17 @@
 package protocol
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
 )
 
 // newOpenAIError builds an *openai.Error as the SDK itself would: Request set
@@ -223,5 +226,40 @@ func TestClassifyUpstreamFailure_EmptyResponse(t *testing.T) {
 	sdk := &EmptyResponseError{Err: newOpenAIError(t, 429, `{"code":"rate_limit_exceeded","message":"slow down","param":"","type":"rate_limit_error"}`)}
 	if got := ClassifyUpstreamFailure(sdk, http.StatusInternalServerError); got.Status != 429 {
 		t.Errorf("empty response with provider status = %d, want 429", got.Status)
+	}
+}
+
+// Codex, gateways and TB's own bare-message writers answer with bodies that are
+// not the OpenAI {"error":{...}} envelope. The SDK must still surface the HTTP
+// status instead of "cannot unmarshal string into ... apierror.Error".
+func TestUpstreamMessage_OpenAINonEnvelopeBodies(t *testing.T) {
+	for name, body := range map[string]string{
+		"string error": `{"error":"model not supported"}`,
+		"detail":       `{"detail":"model not supported"}`,
+		"plain text":   `model not supported`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(body))
+			}))
+			defer srv.Close()
+
+			c := openai.NewClient(option.WithBaseURL(srv.URL), option.WithAPIKey("k"), option.WithMaxRetries(0))
+			_, err := c.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{
+				Model:    "m",
+				Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hi")},
+			})
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			if strings.Contains(err.Error(), "cannot unmarshal") {
+				t.Fatalf("decode error leaked instead of upstream error: %v", err)
+			}
+			f := ClassifyUpstreamFailure(err, 0)
+			if f.Status != http.StatusBadRequest || !strings.Contains(f.Message, "model not supported") {
+				t.Errorf("got status=%d message=%q", f.Status, f.Message)
+			}
+		})
 	}
 }
