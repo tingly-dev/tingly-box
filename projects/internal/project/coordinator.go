@@ -52,11 +52,11 @@ type Coordinator struct {
 	choosing sync.Mutex
 }
 
+// queue is a project's wake-up state. What to work on is the project's
+// pending coordinator inputs in the store; woken only says to look again.
 type queue struct {
 	running bool
-	user    bool
-	config  bool
-	reports []Report
+	woken   bool
 }
 
 // NewCoordinator wires the coordinator to the thread manager's reports.
@@ -109,7 +109,7 @@ func (c *Coordinator) Post(projectID, text string, atts []Attachment, src Source
 	}
 	c.publishEvent(projectID, m)
 	_ = c.store.TouchProject(projectID)
-	c.schedule(projectID, func(q *queue) { q.user = true })
+	c.wake(projectID)
 	return m, nil
 }
 
@@ -118,7 +118,21 @@ func (c *Coordinator) Busy(projectID string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	q, ok := c.queues[projectID]
-	return ok && (q.running || q.user || q.config || len(q.reports) > 0)
+	return ok && (q.running || q.woken)
+}
+
+// live reports whether the coordinator has sessions to run turns in (one
+// built by NewService); a bare one in a test does not.
+func (c *Coordinator) live() bool { return c != nil && c.sessions != nil }
+
+// stop ends the project's running coordinator turn, if any.
+func (c *Coordinator) stop(p *db.Project) {
+	if !c.live() {
+		return
+	}
+	if main, err := c.store.GetThread(p.MainThreadID); err == nil && main.SessionID != "" {
+		c.sessions.engine.Stop(main.SessionID)
+	}
 }
 
 func (c *Coordinator) shutdown(ctx context.Context) {
@@ -187,17 +201,19 @@ func (c *Coordinator) onReport(r Report) {
 	if down {
 		return
 	}
-	c.schedule(r.Thread.ProjectID, func(q *queue) { q.reports = append(q.reports, r) })
+	c.wake(r.Thread.ProjectID)
 }
 
-func (c *Coordinator) schedule(projectID string, add func(*queue)) {
+// wake makes the project's queue look at its pending inputs, starting the
+// worker if none runs.
+func (c *Coordinator) wake(projectID string) {
 	c.mu.Lock()
 	q, ok := c.queues[projectID]
 	if !ok {
 		q = &queue{}
 		c.queues[projectID] = q
 	}
-	add(q)
+	q.woken = true
 	start := !q.running
 	q.running = true
 	c.mu.Unlock()
@@ -212,14 +228,13 @@ func (c *Coordinator) work(projectID string, q *queue) {
 	c.hub.Publish(Event{Type: EventCoordinator, ProjectID: projectID, Data: map[string]bool{"busy": true}})
 	for {
 		c.mu.Lock()
-		user, config, reports := q.user, q.config, q.reports
-		q.user, q.config, q.reports = false, false, nil
-		if !user && !config && len(reports) == 0 {
+		if !q.woken {
 			q.running = false
 			c.mu.Unlock()
 			c.hub.Publish(Event{Type: EventCoordinator, ProjectID: projectID, Data: map[string]bool{"busy": false}})
 			return
 		}
+		q.woken = false
 		c.mu.Unlock()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		if err := c.drainSessionInputs(ctx, projectID); err != nil {
@@ -276,7 +291,7 @@ func (c *Coordinator) RecoverInput(projectID, inputID string, retry bool) error 
 	if err := c.store.ResolveCoordinatorInput(projectID, inputID, retry); err != nil {
 		return err
 	}
-	c.schedule(projectID, func(q *queue) { q.config = true })
+	c.wake(projectID)
 	return nil
 }
 

@@ -3,7 +3,6 @@ package project
 import (
 	"context"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -19,7 +18,6 @@ type promptSink struct {
 	*fakeSink
 	plain map[string]bool
 
-	mu       sync.Mutex
 	prompts  chan sentPromptMsg
 	restated chan sentText
 }

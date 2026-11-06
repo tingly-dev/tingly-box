@@ -85,15 +85,13 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 // then stops every thread's turn and process.
 func (s *Service) Start(ctx context.Context) {
 	s.Threads.Recover()
-	if s.Coordinator.sessions != nil {
-		if err := s.Store.RecoverCoordinatorInputs(); err != nil {
-			logrus.WithError(err).Error("recover coordinator inputs")
-		} else if ids, err := s.Store.CoordinatorProjectsWithInputs(); err != nil {
-			logrus.WithError(err).Error("list coordinator inputs")
-		} else {
-			for _, id := range ids {
-				s.Coordinator.schedule(id, func(q *queue) { q.config = true })
-			}
+	if err := s.Store.RecoverCoordinatorInputs(); err != nil {
+		logrus.WithError(err).Error("recover coordinator inputs")
+	} else if ids, err := s.Store.CoordinatorProjectsWithInputs(); err != nil {
+		logrus.WithError(err).Error("list coordinator inputs")
+	} else {
+		for _, id := range ids {
+			s.Coordinator.wake(id)
 		}
 	}
 	go func() {

@@ -6,7 +6,6 @@ package project
 import (
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"mime"
 	"mime/multipart"
@@ -279,18 +278,6 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.GET("/projects/:id/usage", h.usage, tag,
 		swagger.WithDescription("Token use by model and by thread"),
 		swagger.WithResponseModel(UsageResponse{}))
-}
-
-// storeErr maps runtime errors to statuses.
-func storeErr(c *gin.Context, err error, what string) {
-	switch {
-	case errors.Is(err, rt.ErrPaused), errors.Is(err, rt.ErrArchived), errors.Is(err, rt.ErrResolved):
-		apierr.Message(c, http.StatusConflict, err.Error())
-	case errors.Is(err, db.ErrNotFound):
-		apierr.Store(c, err, what)
-	default:
-		apierr.Message(c, http.StatusBadRequest, err.Error())
-	}
 }
 
 func (h *Handler) project(c *gin.Context) (*db.Project, bool) {
@@ -875,6 +862,3 @@ func (h *Handler) usage(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, resp)
 }
-
-// multipartFile is what a multipart file header opens.
-type multipartFile = io.ReadCloser
