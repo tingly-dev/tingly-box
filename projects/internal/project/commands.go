@@ -74,6 +74,16 @@ func parseCommand(text string) command {
 	return command{}
 }
 
+// personCommand reads a message as a slash command. Only a person's text
+// counts (see byPerson), and a message with files is never one.
+func personCommand(text string, src Source, attachments int) (command, bool) {
+	if !byPerson(src) || attachments > 0 {
+		return command{}, false
+	}
+	cmd := parseCommand(text)
+	return cmd, cmd.kind != notCommand
+}
+
 // byPerson reports whether a message was typed by a person on the web or in
 // a chat. Only such text is a command: a thread's report, the coordinator's
 // relay and system notes are never parsed.

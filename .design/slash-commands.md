@@ -250,7 +250,7 @@ Differences from the proposal above, and what was left out:
 
 **agentboot (`agentboot/session_control.go`, `claude/compact.go`, `engine/compact.go`)**
 
-- The compaction request is a plain prompt, not a wire value: `Compactor.CompactPrompt(instructions) string`. It is a method on the **Agent** (`claude.Agent`), reached through `AgentService.CompactPrompt`, because the engine needs it before any process exists. `claude.Transport` has the same method.
+- The compaction request is a plain prompt, not a wire value: `Compactor.CompactPrompt(instructions) string`. It is a method on the **Agent** (`claude.Agent`), reached through `AgentService.CompactPrompt`, because the engine needs it before any process exists.
 - There is no `DecodeCompact` interface. The Claude transport's `AccumulateMessage` turns the CLI's `status` / `compact_boundary` / synthetic summary events into `agentboot.CompactEvent` values and emits them as `MessageEvent.Raw`, like any other message; the engine's converter writes `KindCompact` entries from them. The boundary is held back until the summary message so the done event carries it.
 - Context usage: `ContextUsageReader.DecodeContextUsage(body)`; the query is the neutral `ContextUsageRequest` control request, encoded by the existing `ControlRequestEncoder`. The control answer's body is now returned (`ControlResponseBodyDecoder`, `persistentSession.controlBody`). `Conductor.ContextUsage` reaches it through the optional `ContextUsageProvider`.
 - `CompactResult` carries `DurationMS int64` (not `time.Duration`) and `Usage *TokenUsage`; `Reported{Tokens, Summary, Usage}` says which figures are real.

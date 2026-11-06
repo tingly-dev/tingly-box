@@ -195,6 +195,7 @@ export function Composer({
     const [slashPick, setSlashPick] = useState(0);
     const [slashClosed, setSlashClosed] = useState('');
     const slashOpen = slash.length > 0 && slashClosed !== text && !disabled;
+    const slashActive = Math.min(slashPick, slash.length - 1);
     const pickSlash = (name: string) => {
         setText(`/${name} `);
         setSlashPick(0);
@@ -382,15 +383,14 @@ export function Composer({
             } : undefined}
             onKeyDown={(e) => {
                 if (slashOpen && !e.nativeEvent.isComposing) {
-                    const at = Math.min(slashPick, slash.length - 1);
                     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                         e.preventDefault();
-                        setSlashPick((at + (e.key === 'ArrowDown' ? 1 : slash.length - 1)) % slash.length);
+                        setSlashPick((slashActive + (e.key === 'ArrowDown' ? 1 : slash.length - 1)) % slash.length);
                         return;
                     }
                     if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
                         e.preventDefault();
-                        pickSlash(slash[at].name);
+                        pickSlash(slash[slashActive].name);
                         return;
                     }
                     if (e.key === 'Escape') {
@@ -419,10 +419,10 @@ export function Composer({
                 <Box
                     key={c.name}
                     role="option"
-                    aria-selected={i === Math.min(slashPick, slash.length - 1)}
+                    aria-selected={i === slashActive}
                     onMouseDown={(e) => { e.preventDefault(); pickSlash(c.name); }}
                     onMouseEnter={() => setSlashPick(i)}
-                    sx={{ display: 'flex', alignItems: 'baseline', gap: 1, px: 1.5, py: 0.75, cursor: 'pointer', bgcolor: i === Math.min(slashPick, slash.length - 1) ? 'action.selected' : 'transparent' }}
+                    sx={{ display: 'flex', alignItems: 'baseline', gap: 1, px: 1.5, py: 0.75, cursor: 'pointer', bgcolor: i === slashActive ? 'action.selected' : 'transparent' }}
                 >
                     <Typography component="span" sx={{ fontFamily: fontMono, fontSize: fontSizes.base, fontWeight: 600 }}>/{c.name}</Typography>
                     <Typography component="span" variant="caption" color="text.secondary">{t(c.hint)}</Typography>
