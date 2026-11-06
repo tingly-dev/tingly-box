@@ -282,12 +282,8 @@ func (s *Service) verbose(b *db.ChannelBinding, arg string) (string, error) {
 // compact is /compact in a chat: the same request the web sends as
 // "/compact", for the chat's session or the project conversation.
 func (s *Service) compact(b *db.ChannelBinding, t *db.Thread, instructions string) (string, error) {
-	text := "/compact"
-	if instructions != "" {
-		text += " " + instructions
-	}
 	src := Source{Kind: db.SourceIM, Platform: b.Platform, ChatID: b.ChatID}
-	if _, err := s.Send(context.Background(), t.ID, text, nil, src); err != nil {
+	if _, err := s.Send(context.Background(), t.ID, compactText(instructions), nil, src); err != nil {
 		return "", err
 	}
 	if t.Agent == db.AgentLLM {

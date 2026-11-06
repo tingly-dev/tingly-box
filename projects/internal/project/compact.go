@@ -40,25 +40,26 @@ func (m *Threads) Compact(ctx context.Context, threadID, instructions string, sr
 	if err != nil {
 		return nil, err
 	}
-	if t.Turns == 0 && t.SessionID == "" {
+	// Before its first turn has ended a thread has no conversation to compact,
+	// unless that turn is still running: the request then waits behind it.
+	if t.Turns == 0 && !m.Running(threadID) {
 		return nil, ErrNothingToCompact
 	}
-	text := "/compact"
-	if instructions != "" {
-		text += " " + instructions
-	}
-	m.enqueue(threadID, queued{text: text, src: src, held: true, compact: &compactRequest{instructions: instructions}})
+	m.enqueue(threadID, queued{text: compactText(instructions), src: src, held: true, compact: &compactRequest{instructions: instructions}})
 	return m.store.GetThread(threadID)
 }
 
 // compactReturned finishes the begin of a compaction turn. When the turn ran,
-// turnEnded has already settled the thread; the context figures are refreshed
-// here. When it never started, the message is put back or dropped.
+// turnEnded has already settled the thread (and, for a turn the agent
+// started first, re-queued the request); the context figures are refreshed
+// here. When Engine.Compact never started a turn, the request is put back or
+// dropped.
 func (m *Threads) compactReturned(t *db.Thread, a *activeThread, slot *limiter, res agentboot.CompactResult, err error) {
 	switch {
 	case errors.Is(err, engine.ErrBusy):
-		// Claude started a turn of its own in the meantime: this waits for it.
+		// A turn of the agent's own holds the session: this waits for it.
 		m.mu.Lock()
+		delete(m.turns, t.ID)
 		a.queue = append([]queued{*a.current}, a.queue...)
 		a.current, a.slot = nil, nil
 		m.mu.Unlock()
@@ -67,6 +68,7 @@ func (m *Threads) compactReturned(t *db.Thread, a *activeThread, slot *limiter, 
 	case errors.Is(err, agentboot.ErrCompactUnsupported):
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "This agent cannot compact its conversation."})
 		m.mu.Lock()
+		delete(m.turns, t.ID)
 		a.slot = nil
 		m.mu.Unlock()
 		slot.release()
@@ -96,37 +98,17 @@ func (m *Threads) refreshContext(threadID string, res agentboot.CompactResult) {
 	})
 }
 
-// noteCompact turns a compaction entry from the engine into the thread's
-// card: one event, created when the compaction starts and updated in place
-// when it ends. A compaction nobody asked for (the agent's own) gets a card
-// the same way.
-func (m *Threads) noteCompact(t *db.Thread, e engine.Entry) {
-	var ce agentboot.CompactEvent
-	if json.Unmarshal(e.Payload, &ce) != nil {
-		return
+// openingPayload is the card of a compaction that has just started.
+func openingPayload(manual bool) commandPayload {
+	trigger := string(agentboot.CompactAuto)
+	if manual {
+		trigger = string(agentboot.CompactManual)
 	}
-	m.mu.Lock()
-	card := m.cards[t.ID]
-	tally := m.turns[t.ID]
-	manual := tally != nil && tally.compact
-	m.mu.Unlock()
+	return commandPayload{Name: "compact", State: "running", Trigger: trigger}
+}
 
-	if ce.Phase == agentboot.CompactStarted || card == nil {
-		trigger := string(agentboot.CompactAuto)
-		if manual {
-			trigger = string(agentboot.CompactManual)
-		}
-		card = &db.ThreadEvent{Kind: db.EvCommand, Content: "compact", Payload: jsonString(commandPayload{Name: "compact", State: "running", Trigger: trigger})}
-		m.addEvent(t, card)
-		m.mu.Lock()
-		m.cards[t.ID] = card
-		m.mu.Unlock()
-		if ce.Phase == agentboot.CompactStarted {
-			return
-		}
-	}
-	var pl commandPayload
-	_ = json.Unmarshal([]byte(card.Payload), &pl)
+// settled is the card after the agent reported how the compaction ended.
+func (pl commandPayload) settled(ce agentboot.CompactEvent) commandPayload {
 	switch ce.Phase {
 	case agentboot.CompactDone:
 		r := ce.Result
@@ -140,15 +122,59 @@ func (m *Threads) noteCompact(t *db.Thread, e engine.Entry) {
 	case agentboot.CompactFailed:
 		pl.State, pl.Reason = "failed", ce.Reason
 	}
-	card.Payload = jsonString(pl)
-	_ = m.store.UpdateThreadEvent(card)
-	m.hub.Publish(Event{Type: EventThreadEvent, ProjectID: t.ProjectID, Data: card})
-	m.mu.Lock()
-	delete(m.cards, t.ID)
-	if tally != nil {
-		tally.text = compactLine(pl)
+	return pl
+}
+
+// stepCard applies a compaction event to the compaction card: the compaction
+// starting (or an event with no card open, as for an automatic compaction)
+// opens a card through add, and its end settles it through update. open is the
+// card still open afterwards, and settled the final payload when ce ended it.
+func stepCard(card *db.ThreadEvent, ce agentboot.CompactEvent, manual bool, add, update func(*db.ThreadEvent)) (open *db.ThreadEvent, settled *commandPayload) {
+	if ce.Phase == agentboot.CompactStarted || card == nil {
+		card = &db.ThreadEvent{Kind: db.EvCommand, Content: "compact", Payload: jsonString(openingPayload(manual))}
+		add(card)
+		if ce.Phase == agentboot.CompactStarted {
+			return card, nil
+		}
 	}
+	var pl commandPayload
+	_ = json.Unmarshal([]byte(card.Payload), &pl)
+	pl = pl.settled(ce)
+	card.Payload = jsonString(pl)
+	update(card)
+	return nil, &pl
+}
+
+// noteCompact keeps the thread's compaction card: one event, created when the
+// compaction starts and updated in place when it ends. A compaction nobody
+// asked for (the agent's own) gets a card the same way. A requested one also
+// becomes the turn's text, which the chats bound to the thread hear.
+func (m *Threads) noteCompact(t *db.Thread, e engine.Entry) {
+	var ce agentboot.CompactEvent
+	if json.Unmarshal(e.Payload, &ce) != nil {
+		return
+	}
+	m.mu.Lock()
+	card, tally := m.cards[t.ID], m.turns[t.ID]
 	m.mu.Unlock()
+	manual := tally != nil && tally.compact
+
+	open, settled := stepCard(card, ce, manual,
+		func(c *db.ThreadEvent) { m.addEvent(t, c) },
+		func(c *db.ThreadEvent) {
+			_ = m.store.UpdateThreadEvent(c)
+			m.hub.Publish(Event{Type: EventThreadEvent, ProjectID: t.ProjectID, Data: c})
+		})
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if open != nil {
+		m.cards[t.ID] = open
+		return
+	}
+	delete(m.cards, t.ID)
+	if settled != nil && manual {
+		tally.text = compactLine(*settled)
+	}
 }
 
 // compactLine is the one-line outcome a chat hears.
