@@ -50,8 +50,9 @@ const (
 	KindApprovalResponse = "approval_response"
 	KindAskRequest       = "ask_request"
 	KindAskResponse      = "ask_response"
-	KindTask             = "task"  // payload: TaskEvent
-	KindUsage            = "usage" // payload: TurnUsage
+	KindTask             = "task"    // payload: TaskEvent
+	KindUsage            = "usage"   // payload: TurnUsage
+	KindCompact          = "compact" // payload: agentboot.CompactEvent
 	KindSystem           = "system"
 	KindError            = "error"
 )
@@ -148,6 +149,10 @@ type run struct {
 	// the process directly.
 	unsolicited bool
 	stopped     atomic.Bool // the user stopped it, so its error result is expected
+	// compact collects the compaction events of a turn started by Compact.
+	compact *compactCapture
+	// end is how the turn ended; set before done closes.
+	end TurnEnd
 }
 
 var (
@@ -155,6 +160,10 @@ var (
 	ErrNoTurn = errors.New("no turn in progress")
 	// ErrBusy: the session has a turn in flight.
 	ErrBusy = errors.New("a turn is in progress")
+	// ErrNotSent: Compact's request never reached the agent, because it had
+	// just started a turn of its own. The host's OnTurnEnd already saw this
+	// (TurnEnd.NotSent); a host that re-queues on that must not do so again.
+	ErrNotSent = errors.New("the agent started a turn of its own first")
 	// ErrUnknownRequest: no pending approval or question has that id.
 	ErrUnknownRequest = errors.New("no such pending request")
 	// ErrTaskNotRunning: the session has no live background task by that id.

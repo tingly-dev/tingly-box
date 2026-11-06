@@ -1,6 +1,7 @@
 package agentboot
 
 import (
+	"context"
 	"errors"
 
 	"github.com/tingly-dev/tingly-box/agentboot/protocol"
@@ -139,6 +140,22 @@ type ControlResponseDecoder interface {
 	// and, if so, which one (reqID) and whether the agent rejected it
 	// (non-nil err, a *[ControlRejectedError]).
 	DecodeControlResponse(ev protocol.Event) (reqID string, err error, ok bool)
+}
+
+// ControlResponseBodyDecoder is implemented by transports whose control
+// answers carry data (a context-usage query). Optional, alongside
+// [ControlResponseDecoder]: without it a success answer has no body.
+type ControlResponseBodyDecoder interface {
+	// ControlResponseBody returns the body of a success answer ev, nil if
+	// it has none.
+	ControlResponseBody(ev protocol.Event) map[string]any
+}
+
+// ContextUsageProvider is implemented by sessions that can report their
+// context size ([ContextUsageReader] on the transport does the decoding).
+// The persistent session returned by Runner.Open implements it.
+type ContextUsageProvider interface {
+	ContextUsage(ctx context.Context) (ContextUsage, error)
 }
 
 // TurnStartDetector is implemented by transports that can tell which event

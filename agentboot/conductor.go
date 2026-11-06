@@ -161,6 +161,16 @@ func (c *Conductor) ApplySettings(ctx context.Context, settings map[string]any) 
 	return c.session.ApplySettings(ctx, settings)
 }
 
+// ContextUsage asks the process for its context size; ErrContextUnsupported
+// when the session cannot say. See [ContextUsageProvider].
+func (c *Conductor) ContextUsage(ctx context.Context) (ContextUsage, error) {
+	p, ok := c.session.(ContextUsageProvider)
+	if !ok {
+		return ContextUsage{}, ErrContextUnsupported
+	}
+	return p.ContextUsage(ctx)
+}
+
 // StopTask stops one background task; see [PersistentSession.StopTask].
 func (c *Conductor) StopTask(ctx context.Context, taskID string) error {
 	return c.session.StopTask(ctx, taskID)
