@@ -127,21 +127,21 @@ func optionOfChoice(value string) (int, bool) {
 	return n, err == nil && strings.HasPrefix(value, "o") && n >= 0
 }
 
-// optionOfReply reads a chat's reply as one of the options: its number
-// ("2", "2.") or its label, in any case. Anything else is not an answer.
+// optionOfReply reads a chat's reply as one of the options: its label, in
+// any case, else its number ("2", "2."). Anything else is not an answer.
 func (d Decision) optionOfReply(text string) (int, bool) {
 	text = strings.ToLower(strings.TrimSpace(text))
 	if text == "" {
 		return 0, false
-	}
-	if n, err := strconv.Atoi(strings.TrimRight(text, ".。)）"+" ")); err == nil {
-		return n - 1, n >= 1 && n <= len(d.Options)
 	}
 	trimmed := strings.TrimRight(text, ".。!！ ")
 	for i, o := range d.Options {
 		if l := strings.ToLower(o.Label); l == text || l == trimmed {
 			return i, true
 		}
+	}
+	if n, err := strconv.Atoi(strings.TrimRight(text, ".。)） ")); err == nil && n >= 1 && n <= len(d.Options) {
+		return n - 1, true
 	}
 	return 0, false
 }

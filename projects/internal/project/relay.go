@@ -290,21 +290,6 @@ func (r *Relay) Settled(t db.Thread, request db.ThreadEvent) {
 	}
 }
 
-// Awaiting returns the oldest request a chat was asked that is not settled:
-// the chat's next message answers it.
-func (r *Relay) Awaiting(platform, chatID string) (threadID, requestID string, ok bool) {
-	if r == nil {
-		return "", "", false
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	reqs := r.awaiting[chatKey(platform, chatID)]
-	if len(reqs) == 0 {
-		return "", "", false
-	}
-	return reqs[0].threadID, reqs[0].requestID, true
-}
-
 // awaitingAll returns every request a chat was asked that is not settled,
 // oldest first.
 func (r *Relay) awaitingAll(platform, chatID string) []pendingRequest {
@@ -569,6 +554,9 @@ func (r *Relay) sendPrompt(ctx context.Context, b db.ChannelBinding, prefix stri
 // restate rewrites every prompt sent for a request with how it ended and
 // takes the buttons away.
 func (r *Relay) restate(requestID, outcome string) {
+	// The request may have been asked again after it was forgotten, by a
+	// delivery that was still queued; it is settled now.
+	r.forget(requestID)
 	r.mu.Lock()
 	sent := r.sent[requestID]
 	delete(r.sent, requestID)
@@ -578,9 +566,7 @@ func (r *Relay) restate(requestID, outcome string) {
 		if sp.ref == "" {
 			// The chat got the question as plain text: say which question
 			// this answers, since a bare number or label does not.
-			if err := r.sink.SendChannelText(withChannelBot(ctx, sp.bot), sp.platform, sp.chatID, sp.text+"\n"+outcome); err != nil {
-				logrus.WithError(err).WithFields(logrus.Fields{"platform": sp.platform, "chat_id": sp.chatID}).Warn("projects: confirm an answer in IM chat")
-			}
+			r.tell(sp.bot, sp.platform, sp.chatID, sp.text+"\n"+outcome)
 			cancel()
 			continue
 		}

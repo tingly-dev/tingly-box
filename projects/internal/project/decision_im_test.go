@@ -88,7 +88,7 @@ func TestDecisionCardReachesAPlainChatAsNumberedText(t *testing.T) {
 	assert.Contains(t, got.text, "2. Wait — one more review (recommended)")
 	assert.Contains(t, got.text, "Reply 1 or 2")
 	assert.True(t, strings.HasSuffix(got.text, "[Demo]"), "it says which project it is from")
-	_, _, waiting := svc.Relay.Awaiting("dingtalk", "dingtalk-chat")
+	_, _, waiting := awaitingOf(svc.Relay, "dingtalk", "dingtalk-chat")
 	assert.True(t, waiting, "the chat's next message may answer it")
 }
 
@@ -175,7 +175,7 @@ func TestRepliesChooseADecisionOptionInAPlainChat(t *testing.T) {
 	require.True(t, handled)
 	assert.Equal(t, "Echo: what do you think?\n\n[Demo]", sink.next(t).text, "an ordinary message")
 	assert.Nil(t, chosen(t, svc, card), "the card is still open")
-	_, _, waiting := svc.Relay.Awaiting("dingtalk", "dt")
+	_, _, waiting := awaitingOf(svc.Relay, "dingtalk", "dt")
 	assert.True(t, waiting)
 
 	handled, err = svc.PostFromChannel("dingtalk", "dt", " wait. ", nil)
@@ -184,7 +184,7 @@ func TestRepliesChooseADecisionOptionInAPlainChat(t *testing.T) {
 	require.NotNil(t, chosen(t, svc, card))
 	assert.Equal(t, 1, *chosen(t, svc, card), "the label, in any case")
 	assert.ElementsMatch(t, []string{"[Demo] Re: Ship it now?\nAnswered in a chat: Wait", "Echo: Wait\n\n[Demo]"}, []string{sink.next(t).text, sink.next(t).text}, "the answer is confirmed, and the coordinator replies")
-	_, _, waiting = svc.Relay.Awaiting("dingtalk", "dt")
+	_, _, waiting = awaitingOf(svc.Relay, "dingtalk", "dt")
 	assert.False(t, waiting, "answered: the next message is a message again")
 
 	card2 := askShip(t, svc, f.project.ID)
@@ -213,9 +213,9 @@ func TestADecisionAnsweredOnTheWebIsRestatedInChats(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, sink.nextRestate(t).text, "Answered on the web: Wait")
-	_, _, waiting := svc.Relay.Awaiting("telegram", "plain")
+	_, _, waiting := awaitingOf(svc.Relay, "telegram", "plain")
 	assert.False(t, waiting)
-	_, _, waiting = svc.Relay.Awaiting("telegram", "up")
+	_, _, waiting = awaitingOf(svc.Relay, "telegram", "up")
 	assert.False(t, waiting)
 }
 
@@ -256,9 +256,19 @@ func TestAReplyThatFitsTwoOpenDecisionsIsNotGuessed(t *testing.T) {
 	require.True(t, handled)
 	asked := sink.next(t).text
 	assert.Contains(t, asked, "which one")
-	assert.Contains(t, asked, "- Ship it now?")
-	assert.Contains(t, asked, "- Delete the branch?")
+	assert.Contains(t, asked, decisionCode(first.ID)+" · Ship it now?")
+	assert.Contains(t, asked, " · Delete the branch?")
 	assert.Nil(t, chosen(t, svc, first), "nothing was guessed")
+
+	// A reply that starts with a card's code names the card, so a text-only
+	// chat is never stuck when two questions are open.
+	handled, err = svc.PostFromChannel("dingtalk", "dt", strings.ToUpper(decisionCode(first.ID))+" 2", nil)
+	require.NoError(t, err)
+	require.True(t, handled)
+	require.NotNil(t, chosen(t, svc, first))
+	assert.Equal(t, 1, *chosen(t, svc, first))
+	sink.next(t)
+	sink.next(t)
 
 	handled, err = svc.PostFromChannel("dingtalk", "dt", "keep", nil)
 	require.NoError(t, err)
@@ -269,7 +279,7 @@ func TestAReplyThatFitsTwoOpenDecisionsIsNotGuessed(t *testing.T) {
 	}
 	assert.Contains(t, confirm, "Re: Delete the branch?", "the answer says which question it was for")
 	assert.Contains(t, confirm, "Answered in a chat: Keep")
-	assert.Nil(t, chosen(t, svc, first), "the other card is still open")
+	assert.Equal(t, 1, *chosen(t, svc, first), "the other card kept its own answer")
 }
 
 // A chat that answered a plain-text card is told which question it answered.
@@ -284,4 +294,48 @@ func TestAPlainChatIsToldWhichQuestionItAnswered(t *testing.T) {
 	_, err = svc.PostFromChannel("dingtalk", "dt", "2", nil)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"[Demo] Re: Ship it now?\nAnswered in a chat: Wait", "Echo: Wait\n\n[Demo]"}, []string{sink.next(t).text, sink.next(t).text})
+}
+
+// awaitingOf is the oldest request a chat was asked that is not settled.
+func awaitingOf(r *Relay, platform, chatID string) (threadID, requestID string, ok bool) {
+	if reqs := r.awaitingAll(platform, chatID); len(reqs) > 0 {
+		return reqs[0].threadID, reqs[0].requestID, true
+	}
+	return "", "", false
+}
+
+// A label that is itself a number is matched as a label before it is read as a
+// position.
+func TestAnOptionLabeledWithANumberIsMatchedByLabel(t *testing.T) {
+	d := Decision{Options: []DecisionOption{{Label: "2024"}, {Label: "2025"}, {Label: "Later"}}}
+	i, ok := d.optionOfReply("2025")
+	assert.True(t, ok)
+	assert.Equal(t, 1, i)
+	i, ok = d.optionOfReply("3")
+	assert.True(t, ok)
+	assert.Equal(t, 2, i, "a number that is no label is a position")
+	_, ok = d.optionOfReply("4")
+	assert.False(t, ok)
+}
+
+// A reply that loses the race with another answer is told so, not failed.
+func TestAReplyToACardAnsweredAMomentAgoIsToldSo(t *testing.T) {
+	f, svc, sink := promptFixture(t, approveScript)
+	sink.plain["dt"] = true
+	b, err := svc.BindChannel("dingtalk", "dt", "", "", f.project.ID)
+	require.NoError(t, err)
+	card := askShip(t, svc, f.project.ID)
+	sink.next(t)
+	_, err = svc.Coordinator.Choose(t.Context(), f.project.MainThreadID, card.ID, 1, Source{})
+	require.NoError(t, err)
+
+	done, err := svc.chooseFromText(b, pendingRequest{f.project.MainThreadID, card.ID}, shipDecision, "1", Source{})
+	require.NoError(t, err)
+	assert.True(t, done)
+	for range 2 {
+		if sink.next(t).text == "This was already answered." {
+			return
+		}
+	}
+	t.Fatal("the chat was not told the card was answered")
 }
