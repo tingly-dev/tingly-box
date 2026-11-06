@@ -39,9 +39,9 @@ When changing `.github/workflows/` or `.github/actions/`, read `.github/workflow
 # Pull Requests
 
 Follow `.github/PULL_REQUEST_TEMPLATE.md` for PR title and description. The
-description starts at `## Summary` with no header above it. Everything that is
-not about the change (requester, thread / session links, hidden markers) goes in
-a short, plain footer after a `---` rule.
+template is a bare body skeleton (`## Summary`, `## Key Changes`) — no header
+above `## Summary` and no footer after the body: no requester note, thread /
+session links, `---` rule, badge or hidden marker. Fill the skeleton directly.
 
 # Projects
 
