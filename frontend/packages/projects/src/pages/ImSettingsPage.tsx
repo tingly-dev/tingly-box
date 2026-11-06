@@ -6,8 +6,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { MoveChatDialog } from '../components/im/MoveChatDialog';
 import { PlatformMark, usePlatformLabel } from '../components/im/PlatformMark';
-import { isFolder } from '../client';
-import { chatKey, useChannelBindings, useImChats, useProjectDirectory } from '../components/im/useImBindings';
+import { chatKey, imDestination, useChannelBindings, useImChats, useProjectDirectory } from '../components/im/useImBindings';
 import { ChatBubble } from '../components/icons';
 import { useNotify } from '../hooks/useNotify';
 import { useProjectsHost, type ImBot, type ImChat } from '../host/ProjectsHost';
@@ -111,12 +110,7 @@ export default function ImSettingsPage({ setupPath }: { setupPath?: string } = {
                                                     {rows.map((c) => {
                                                         const b = byChat.get(chatKey(c.platform, c.chatId));
                                                         const place = b ? directory.get(b.project_id) : undefined;
-                                                        // A thread other than the project's main one is opened on its own.
-                                                        const thread = b && place && b.thread_id !== place.main_thread_id ? `?thread=${encodeURIComponent(b.thread_id)}` : '';
-                                                        const folderPath = place && isFolder(place) ? paths.folder(place.path) : '';
-                                                        const destination = folderPath
-                                                            ? `${folderPath}${b?.thread_id && !b.folder ? `${folderPath.includes('?') ? '&' : '?'}session=${encodeURIComponent(b.thread_id)}` : ''}`
-                                                            : `${paths.project(b?.project_id ?? '')}${thread}`;
+                                                        const destination = imDestination(b, place, paths);
                                                         return (
                                                             <TableRow key={chatKey(c.platform, c.chatId)}>
                                                                 <TableCell sx={{ pl: 2 }}>

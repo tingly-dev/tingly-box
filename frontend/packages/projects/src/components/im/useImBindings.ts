@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ProjectSummary } from '../../client';
+import { isFolder, type ProjectSummary } from '../../client';
 import { useProjectList } from '../../hooks/useProjectList';
 import { bindChannel, listChannelBindings, unbindChannel, type ChannelBinding } from '../../client/channelBindings';
-import { useProjectsHost, type ImBot, type ImChat } from '../../host/ProjectsHost';
+import { useProjectsHost, type ImBot, type ImChat, type ProjectsHost } from '../../host/ProjectsHost';
 
 /** Fired on window when a binding was added, moved or removed, so every view of them refreshes. */
 export const IM_BINDINGS_CHANGED = 'tingly-projects:im-bindings-changed';
@@ -11,6 +11,19 @@ const POLL_MS = 15_000;
 
 /** The key a chat is known by across bindings and the host's chat list. */
 export const chatKey = (platform: string, chatId: string) => `${platform}\u0000${chatId}`;
+
+/**
+ * Where opening a bound chat lands: the bound thread it talks to, or the
+ * place itself for a new session.
+ */
+export function imDestination(b: ChannelBinding | undefined, place: ProjectSummary | undefined, paths: ProjectsHost['paths']): string {
+    // A thread other than the project's main one is opened on its own.
+    const thread = b && place && b.thread_id !== place.main_thread_id ? `?thread=${encodeURIComponent(b.thread_id)}` : '';
+    const folderPath = place && isFolder(place) ? paths.folder(place.path) : '';
+    return folderPath
+        ? `${folderPath}${b?.thread_id && !b.folder ? `${folderPath.includes('?') ? '&' : '?'}session=${encodeURIComponent(b.thread_id)}` : ''}`
+        : `${paths.project(b?.project_id ?? '')}${thread}`;
+}
 
 /**
  * Where a chat is bound: a project, a folder, or one thread.

@@ -13,6 +13,16 @@ Projects list. It splits the entry in two and teaches each side:
   - their three most recently active project cards (the same `ProjectCard` as the list) and an "All projects" link.
 - **Workdirs**: the same shape: one line, "Add working folder", then a three-step guide when there are no working
   folders, or the three most recently active folders (`WorkdirCard`) and "All workdirs".
+- **IM binding** (host with IM, TEP #2143): a third section under the same shape — one line, "Bind a chat" (opens the
+  IM settings view), a three-step guide (connect → message & grant access → bind) until the first binding exists, then
+  the three newest bound chats (`ImChatCard`, newest `updated_at` first; opening one lands where the IM settings page's
+  chat link does, via the shared `imDestination`). Without a host IM capability the section is absent, like the
+  sidebar's IM row.
+- **First-visit hint.** The IM entry sits below the fold, so a first open scrolls the section into view and a small
+  popover (MUI `Popover`, anchored to the section header) says what it is. Any close — the "Got it" button, the
+  backdrop, Escape — counts as seen and is kept in localStorage (`workspace.imHintDone`): never again. Before it is
+  dismissed, the rest of the browser visit stays quiet (`sessionStorage` flag), so a refresh does not nag; a later
+  visit gets one more look until dismissed. Only shown when the host has IM.
 
 The two sections are independent: a user with projects but no folders sees cards on one side and the guide on the other.
 
