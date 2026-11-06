@@ -17,6 +17,7 @@ import (
 // runner drives the lifecycle.
 type Transport struct {
 	accumulator *MessageAccumulator
+	compact     compactTracker
 	execCtx     executionContext
 }
 
@@ -76,13 +77,10 @@ func (t *Transport) Classify(ev protocol.Event) (agentboot.EventKind, agentboot.
 // 0+ rich claude.Message values for the runner to wrap as MessageEvents.
 // Implements [agentboot.AgentTransport].
 func (t *Transport) AccumulateMessage(ev protocol.Event) []any {
+	out := t.compact.observe(ev)
 	msgs, _, _ := t.accumulator.AddEvent(ev)
-	if len(msgs) == 0 {
-		return nil
-	}
-	out := make([]any, len(msgs))
-	for i, m := range msgs {
-		out[i] = m
+	for _, m := range msgs {
+		out = append(out, m)
 	}
 	return out
 }
@@ -136,6 +134,8 @@ func (t *Transport) EncodeControlRequest(reqID string, req agentboot.ControlRequ
 		body = map[string]any{"subtype": ControlRequestSubtypeSetPermissionMode, "mode": r.Mode}
 	case agentboot.ApplySettingsRequest:
 		body = map[string]any{"subtype": ControlRequestSubtypeApplyFlagSettings, "settings": r.Settings}
+	case agentboot.ContextUsageRequest:
+		body = map[string]any{"subtype": ControlRequestSubtypeGetContextUsage}
 	default:
 		return nil
 	}

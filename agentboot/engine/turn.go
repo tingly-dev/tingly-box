@@ -53,6 +53,14 @@ func retryPause(ctx context.Context) bool {
 // flight: the claim is atomic, so of two requests for one session arriving
 // together exactly one wins.
 func (e *Engine) Start(id, dir, prompt string, resume bool, launch Launch) bool {
+	_, ok := e.begin(id, dir, prompt, resume, launch, nil)
+	return ok
+}
+
+// begin claims the session and starts its turn. A non-nil capture makes it a
+// compaction (Compact): the prompt is the backend's compaction request, which
+// is not recorded as the user's message and is not offered to Retry.
+func (e *Engine) begin(id, dir, prompt string, resume bool, launch Launch, capture *compactCapture) (*run, bool) {
 	turnCtx, cancel := context.WithTimeout(context.Background(), turnTimeout)
 	prompter := newWebPrompter(id, e.store)
 	done := make(chan struct{})
@@ -61,29 +69,37 @@ func (e *Engine) Start(id, dir, prompt string, resume bool, launch Launch) bool 
 	if _, busy := e.runs[id]; busy {
 		e.mu.Unlock()
 		cancel()
-		return false
+		return nil, false
 	}
-	e.runs[id] = &run{cancel: cancel, prompter: prompter, done: done}
+	r := &run{cancel: cancel, prompter: prompter, done: done, compact: capture}
+	e.runs[id] = r
 	e.mu.Unlock()
 
 	// Only the winner of the claim records the message, and the session
 	// reads as running before this returns: the caller re-reads it right
 	// away, and a status still showing the previous turn's outcome would
 	// tell the page there is nothing to poll for.
-	e.store.Append(id, Entry{Role: "user", Content: prompt, Timestamp: time.Now()})
+	if capture == nil {
+		e.store.Append(id, Entry{Role: "user", Content: prompt, Timestamp: time.Now()})
+	}
 	e.store.SetRunning(id)
-	e.mu.Lock()
-	e.lastTurn[id] = lastTurn{prompt: prompt}
-	e.mu.Unlock()
+	if capture == nil {
+		e.mu.Lock()
+		e.lastTurn[id] = lastTurn{prompt: prompt}
+		e.mu.Unlock()
+	}
 
 	go e.runTurn(turnCtx, id, dir, prompt, resume, launch, prompter, cancel, done)
-	return true
+	return r, true
 }
 
 func (e *Engine) runTurn(ctx context.Context, sessionID, projectPath, prompt string, resume bool, launch Launch, webPrompt *webPrompter, cancel context.CancelFunc, done chan struct{}) {
 	var end TurnEnd
 	defer func() {
 		e.mu.Lock()
+		if r := e.runs[sessionID]; r != nil && r.done == done {
+			r.end = end
+		}
 		delete(e.runs, sessionID)
 		e.mu.Unlock()
 		cancel()
