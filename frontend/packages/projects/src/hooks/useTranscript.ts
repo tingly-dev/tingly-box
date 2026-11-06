@@ -3,7 +3,7 @@ import { api, unwrap, type Subagent, type ThreadEvent } from '../client';
 import type { SubagentSteps } from '../transcript';
 
 /** How many of the latest events a thread opens with; older ones load on request. */
-export const TAIL = 200;
+export const TAIL = 100;
 /** Threads whose transcript is kept for going back to them. */
 const CACHE_MAX = 20;
 
@@ -111,6 +111,8 @@ export function useTranscript(threadId: string) {
     // Switching threads shows the cached transcript (or none) at once.
     if (state.threadId !== threadId) setState({ threadId, t: cache.get(threadId) ?? null });
     const current = useRef(threadId);
+    const read = useRef<{ threadId: string; pending?: Promise<void> }>({ threadId });
+    if (read.current.threadId !== threadId) read.current = { threadId };
     current.current = threadId;
     // Live entries that came before the first read landed, so it cannot miss them.
     const early = useRef<ThreadEvent[]>([]);
@@ -126,37 +128,49 @@ export function useTranscript(threadId: string) {
     }, []);
 
     /** Reads what was missed (everything recent when nothing is loaded yet). */
-    const catchUp = useCallback(async () => {
+    const catchUp = useCallback((): Promise<void> => {
         const id = current.current;
-        if (!id) return;
-        const have = cache.get(id);
-        const since = have && cursor(have.events);
-        if (since) {
-            const r = await fetchEvents(id, { since });
-            update(id, (t) => t && { ...t, events: mergeEvents(t.events, r.events) });
-        } else {
-            const r = await fetchEvents(id, { limit: TAIL });
-            const pending = early.current.filter((e) => e.thread_id === id);
-            early.current = [];
-            update(id, (t) => ({ events: mergeEvents(mergeEvents(r.events, t?.events ?? []), pending), more: r.more, agents: t?.agents ?? {} }));
-        }
+        if (!id) return Promise.resolve();
+        const reading = read.current;
+        if (reading.pending) return reading.pending;
+        const valid = () => read.current === reading;
+        const pending = (async () => {
+            const have = cache.get(id);
+            const since = have && cursor(have.events);
+            if (since) {
+                const r = await fetchEvents(id, { since });
+                if (!valid()) return;
+                update(id, (t) => valid() && t ? { ...t, events: mergeEvents(t.events, r.events) } : t);
+            } else {
+                const r = await fetchEvents(id, { limit: TAIL });
+                if (!valid()) return;
+                const entries = early.current.filter((e) => e.thread_id === id);
+                early.current = early.current.filter((e) => e.thread_id !== id);
+                update(id, (t) => valid() ? { events: mergeEvents(mergeEvents(r.events, t?.events ?? []), entries), more: r.more, agents: t?.agents ?? {} } : t);
+            }
+        })();
+        reading.pending = pending;
+        void pending.finally(() => { if (reading.pending === pending) delete reading.pending; }).catch(() => undefined);
+        return pending;
     }, [update]);
 
     /** Loads the page before the first loaded event. */
     const loadEarlier = useCallback(async () => {
         const id = current.current;
+        const reading = read.current;
         const first = windowFirst(cache.get(id)?.events ?? []);
         if (!first) return;
         const r = await fetchEvents(id, { limit: TAIL, before: first.id });
-        update(id, (t) => t && { ...t, events: prepend(t.events, r.events), more: r.more });
+        update(id, (t) => read.current === reading && t ? { ...t, events: prepend(t.events, r.events), more: r.more } : t);
     }, [update]);
 
     /** Reads a subagent's latest steps, or (earlier) the page before its first loaded one. */
     const loadAgent = useCallback(async (call: string, earlier = false) => {
         const id = current.current;
+        const reading = read.current;
         const firstStep = cache.get(id)?.events.find((e) => e.parent === call);
         const r = await fetchEvents(id, { parent: call, limit: TAIL, ...(earlier && firstStep && { before: firstStep.id }) });
-        update(id, (t) => t && { ...t, events: prepend(t.events, r.events), agents: { ...t.agents, [call]: { more: r.more } } });
+        update(id, (t) => read.current === reading && t ? { ...t, events: prepend(t.events, r.events), agents: { ...t.agents, [call]: { more: r.more } } } : t);
     }, [update]);
 
     const listAgents = useCallback(async () => (await unwrap(api.GET('/api/v1/threads/{id}/subagents', { params: { path: { id: current.current } } }))).subagents, []);
@@ -165,13 +179,14 @@ export function useTranscript(threadId: string) {
     /** Extends the loaded window back to a call (one read: the window stays contiguous). */
     const locate = useCallback(async (call: string, eventId?: string) => {
         const id = current.current;
+        const reading = read.current;
         const isCall = (e: ThreadEvent) => !e.parent && e.kind === 'tool_use' && e.request_id === call;
         if ((cache.get(id)?.events ?? []).some(isCall)) return;
         const from = eventId ?? (await fetchEvents(id, { call })).events.find(isCall)?.id;
-        if (!from) return;
+        if (!from || read.current !== reading) return;
         const first = windowFirst(cache.get(id)?.events ?? []);
         const r = await fetchEvents(id, { from, ...(first && { before: first.id }) });
-        update(id, (t) => t && { ...t, events: prepend(t.events, r.events), more: r.more });
+        update(id, (t) => read.current === reading && t ? { ...t, events: prepend(t.events, r.events), more: r.more } : t);
     }, [update]);
 
     /** A live entry from the event stream. */
