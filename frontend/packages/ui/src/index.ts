@@ -9,6 +9,7 @@ export { default as DialogHeader } from './components/DialogHeader';
 export { default as ConfirmDialog } from './components/ConfirmDialog';
 export { default as ConfirmPopover } from './components/ConfirmPopover';
 export type { ConfirmPopoverProps } from './components/ConfirmPopover';
+export { CoachMark } from './components/CoachMark';
 export { CopyIconButton } from './components/CopyIconButton';
 export { useCopyFeedback } from './hooks/useCopyFeedback';
 export { writeToClipboard } from './utils/clipboard';

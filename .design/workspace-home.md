@@ -13,6 +13,21 @@ Projects list. It splits the entry in two and teaches each side:
   - their three most recently active project cards (the same `ProjectCard` as the list) and an "All projects" link.
 - **Workdirs**: the same shape: one line, "Add working folder", then a three-step guide when there are no working
   folders, or the three most recently active folders (`WorkdirCard`) and "All workdirs".
+- **IM binding** (host with IM, TEP #2143): a third section under the same shape — one line, "Bind a chat" (opens the
+  IM settings view), a three-step guide (connect → message & grant access → bind) until the first binding exists, then
+  the three newest bound chats (`ImChatCard`, newest `updated_at` first; opening one lands where the IM settings page's
+  chat link does, via the shared `imDestination`). Without a host IM capability the section is absent, like the
+  sidebar's IM row.
+- **First-visit hint.** The hint is tied to the enablement of the Workspace power-up, not to page visits: enabling it
+  (the gate's "Enable Workspace" dialog, or the Projects toggle in the experimental settings) calls
+  `armWorkspaceImHint()` (`@tingly/projects/workspace-im-hint`), and the first render of the Workspace home after that
+  shows the shared `CoachMark` (`@tingly/ui`, the rail's own tip style) beside the layout's IM entry — the sticky IM
+  block at the sidebar's bottom (`IM_SIDEBAR_ANCHOR_ID` in `ProjectsSidebar`; the sidebar mounts lazily, so the page
+  waits briefly for it). A layout without that entry falls back to the page's own IM section, scrolled into view.
+  Showing it spends the arm, so it pops once per enablement. Any close of its "Got it" button is kept in localStorage
+  (`workspace.imHintDone`): never again, not even when the feature is enabled again — enforced both when arming and on
+  the page. While a hint is up but not dismissed, the rest of the browser visit stays quiet (`sessionStorage` flag),
+  so a refresh does not nag. Only shown when the host has IM.
 
 The two sections are independent: a user with projects but no folders sees cards on one side and the guide on the other.
 

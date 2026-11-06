@@ -268,6 +268,7 @@ const LayoutInner = ({ children }: LayoutProps) => {
             anchorEl={eyeEl}
             title={t('layout.coachMarks.agentVisibility.title')}
             text={t('layout.coachMarks.agentVisibility.text')}
+            gotItLabel={t('layout.coachMarks.gotIt')}
             onDismiss={dismissTip}
         />
     );
@@ -324,10 +325,10 @@ const LayoutInner = ({ children }: LayoutProps) => {
             {visibilityTip}
             <CoachMark open={!!disabledNotice} anchorEl={disabledNotice?.anchor ?? null} align="bottom"
                 title={t('layout.featureSwitch.disabledTitle', { name: disabledNotice?.name })}
-                text={t('layout.featureSwitch.disabledText')} onDismiss={() => setDisabledNotice(null)} />
+                text={t('layout.featureSwitch.disabledText')} gotItLabel={t('layout.coachMarks.gotIt')} onDismiss={() => setDisabledNotice(null)} />
             <CoachMark open={!teamTipDismissed && activeActivity === 'team' && !sidebarCollapsed && !!featureButton?.isConnected && !disabledNotice}
                 anchorEl={featureButton} title={t('layout.featureSwitch.teamTitle')}
-                text={t('layout.featureSwitch.teamText')} onDismiss={dismissTeamTip} />
+                text={t('layout.featureSwitch.teamText')} gotItLabel={t('layout.coachMarks.gotIt')} onDismiss={dismissTeamTip} />
             {!isHubPage && <FloatingStatusIndicators />}
 
             {!isHubPage && (

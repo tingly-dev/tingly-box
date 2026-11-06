@@ -7,6 +7,7 @@ import React, {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useNavigate} from 'react-router-dom';
 import {api} from '../services/api';
+import {armWorkspaceImHint} from '@tingly/projects/workspace-im-hint';
 
 const SKILL_FEATURES = [
     {
@@ -81,6 +82,8 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
             const result = await api.setScenarioFlag('_global', featureKey, newValue);
             if (!result.success) throw new Error('Feature update was rejected');
 
+            // First enablement of Workspace: its home's IM hint pops once, there.
+            if (featureKey === 'projects' && newValue) armWorkspaceImHint();
             updateLocalState();
             await refresh();
             if (newValue && requestedFeature === featureKey && returnTo) {

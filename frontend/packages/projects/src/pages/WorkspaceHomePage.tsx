@@ -1,28 +1,39 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Box, Button, Skeleton, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { PageHeader, Surface } from '@tingly/ui';
+import { CoachMark, PageHeader, Surface } from '@tingly/ui';
+import { IM_SIDEBAR_ANCHOR_ID } from '../components/ProjectsSidebar';
 import type { ProjectSummary } from '../client';
-import { Add, ArrowForward, FolderOpen, Stack } from '../components/icons';
+import { Add, ArrowForward, ChatBubble, FolderOpen, Stack } from '../components/icons';
+import { ImChatCard } from '../components/im/ImChatCard';
+import { useChannelBindings, useProjectDirectory } from '../components/im/useImBindings';
 import { ProjectCard } from '../components/project/ProjectCard';
 import { WorkdirCard } from '../components/workdir/WorkdirCard';
 import { useProjectList } from '../hooks/useProjectList';
 import { useProjectsHost } from '../host/ProjectsHost';
+import { readSession, writeSession } from '../utils/storage';
+import { disarmWorkspaceImHint, dismissWorkspaceImHint, imHintArmed, imHintDismissed } from '../utils/imHint';
 
 /** How many recent items each section shows before "View all". */
 export const RECENT = 3;
 
+// While the first-visit hint at the IM section is up but not dismissed, the
+// rest of this visit (the tab) stays quiet — a refresh included.
+const IM_HINT_THIS_VISIT = 'workspace.imHint.seen';
+
 const recent = (list: ProjectSummary[]) => [...list].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, RECENT);
 
-function Section({ icon, title, body, action, onAction, viewAll, onViewAll, steps, loading, children }: {
+function Section({ icon, title, body, action, onAction, viewAll, onViewAll, headerRef, steps, loading, children }: {
     icon: ReactNode;
     title: string;
     body: string;
     action: string;
     onAction: () => void;
-    viewAll: string;
-    onViewAll: () => void;
+    viewAll?: string;
+    onViewAll?: () => void;
+    /** Where a pointing hint can anchor (the IM section's enablement hint). */
+    headerRef?: RefObject<HTMLDivElement | null>;
     /** Shown instead of cards while the section is empty. */
     steps: string[] | null;
     loading: boolean;
@@ -32,14 +43,15 @@ function Section({ icon, title, body, action, onAction, viewAll, onViewAll, step
         <Box component="section" aria-label={title} sx={{ mb: 5 }}>
             <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 2, flexWrap: 'wrap' }}>
                 <Box sx={{ flex: 1, minWidth: 240 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.primary' }}>
+                    {/* fit-content keeps a small anchor: the coach mark sits beside this row, not beside the whole stretched block. */}
+                    <Box ref={headerRef} sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.primary', width: 'fit-content' }}>
                         {icon}
                         <Typography variant="h5" component="h2">{title}</Typography>
                     </Box>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{body}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {steps === null && !loading && (
+                    {steps === null && !loading && onViewAll && (
                         <Button size="small" color="inherit" endIcon={<ArrowForward />} onClick={onViewAll} sx={{ color: 'text.secondary' }}>{viewAll}</Button>
                     )}
                     <Button variant="contained" startIcon={<Add />} onClick={onAction}>{action}</Button>
@@ -68,16 +80,66 @@ function Section({ icon, title, body, action, onAction, viewAll, onViewAll, step
 }
 
 /**
- * Where Workspace opens: Projects and Workdir side by side as entry points.
- * Each shows its most recent items once the user has any, and a three-step
- * guide until then. The full pages stay as they are (.design/workspace-home.md).
+ * Where Workspace opens: Projects and Workdir side by side as entry points,
+ * with IM binding underneath when the host has it. Each shows its most recent
+ * items once the user has any, and a three-step guide until then. The full
+ * pages stay as they are (.design/workspace-home.md).
  */
 export default function WorkspaceHomePage() {
     const { t } = useTranslation('projects');
     const navigate = useNavigate();
-    const { paths: routes, embedded } = useProjectsHost();
+    const { paths: routes, embedded, im } = useProjectsHost();
+    const hasIm = !!(im && routes.im);
     const { projects, folders } = useProjectList();
-    const steps = (prefix: 'projects' | 'workdir') => [1, 2, 3].map((n) => t(`workspace.${prefix}Step${n}`));
+    const { bindings } = useChannelBindings(hasIm);
+    const directory = useProjectDirectory(hasIm);
+    const steps = (prefix: 'projects' | 'workdir' | 'im') => [1, 2, 3].map((n) => t(`workspace.${prefix}Step${n}`));
+
+    // The IM entry sits at the sidebar's bottom; when the Workspace power-up
+    // is turned on, the first render of this page points a coach mark at that
+    // layout entry. The enable action arms the hint; dismissed is remembered
+    // for good; while it is up but not dismissed, the rest of this visit
+    // stays quiet (a refresh included).
+    const [imHintAnchor, setImHintAnchor] = useState<HTMLElement | null>(null);
+    const imHeader = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!hasIm || imHintDismissed() || !imHintArmed() || readSession(IM_HINT_THIS_VISIT) === '1') return;
+        // The dismissed check here is belt and braces: armWorkspaceImHint
+        // already refuses to arm a dismissed hint.
+        let poll: number | undefined;
+        const show = (anchor: HTMLElement | null) => {
+            // Marked only once actually shown, so a strict double render still shows it.
+            writeSession(IM_HINT_THIS_VISIT, '1');
+            disarmWorkspaceImHint();
+            setImHintAnchor(anchor);
+        };
+        const look = (tries: number) => {
+            const sidebar = document.getElementById(IM_SIDEBAR_ANCHOR_ID);
+            if (sidebar) {
+                show(sidebar);
+                return;
+            }
+            // The sidebar is lazy-mounted; give it a moment. A layout without
+            // the IM entry gets the hint on the page's own IM section instead.
+            if (tries <= 0) {
+                imHeader.current?.scrollIntoView({ block: 'center' });
+                show(imHeader.current);
+                return;
+            }
+            poll = window.setTimeout(() => look(tries - 1), 150);
+        };
+        const timer = window.setTimeout(() => look(20), 500);
+        return () => {
+            window.clearTimeout(timer);
+            if (poll !== undefined) window.clearTimeout(poll);
+        };
+    }, [hasIm]);
+    const closeImHint = () => {
+        setImHintAnchor(null);
+        dismissWorkspaceImHint();
+    };
+
+    const recentBindings = [...(bindings ?? [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, RECENT);
 
     return (
         <Box sx={{ flex: 1, overflowY: 'auto' }}>
@@ -111,7 +173,33 @@ export default function WorkspaceHomePage() {
                 >
                     {recent(folders ?? []).map((f) => <WorkdirCard key={f.id} f={f} />)}
                 </Section>
+
+                {hasIm && (
+                    <Section
+                        icon={<ChatBubble sx={{ fontSize: 22 }} />}
+                        title={t('im.title')}
+                        body={t('workspace.imBody')}
+                        action={t('workspace.imAction')}
+                        onAction={() => navigate(routes.im!)}
+                        headerRef={imHeader}
+                        steps={bindings !== null && bindings.length === 0 ? steps('im') : null}
+                        loading={bindings === null}
+                    >
+                        {recentBindings.map((b) => <ImChatCard key={b.id} b={b} place={directory.get(b.project_id)} />)}
+                    </Section>
+                )}
             </Box>
+
+            {hasIm && (
+                <CoachMark
+                    open={!!imHintAnchor}
+                    anchorEl={imHintAnchor}
+                    title={t('workspace.imHintTitle')}
+                    text={t('workspace.imHintBody')}
+                    gotItLabel={t('workspace.imHintGotIt')}
+                    onDismiss={closeImHint}
+                />
+            )}
         </Box>
     );
 }

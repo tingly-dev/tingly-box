@@ -137,6 +137,9 @@ function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection;
     );
 }
 
+/** The sticky IM block at the sidebar's bottom; the Workspace home's enablement hint anchors here. */
+export const IM_SIDEBAR_ANCHOR_ID = 'projects-sidebar-im';
+
 /**
  * The Projects navigation: the user's projects and working folders, one flat
  * row each. Folders can expand to show their sessions, followed by
@@ -230,7 +233,7 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
                 ))}
             </Box>
             {imSection && (
-                <Box sx={{ position: 'sticky', bottom: 0, bgcolor: 'background.paper', mt: 1 }}>
+                <Box id={IM_SIDEBAR_ANCHOR_ID} sx={{ position: 'sticky', bottom: 0, bgcolor: 'background.paper', mt: 1 }}>
                     <Divider sx={{ mx: 2, mb: 1 }} />
                     <SectionView section={imSection} onNavigate={onNavigate} />
                 </Box>
