@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"errors"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -11,6 +13,25 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 )
+
+func TestRecoveryAbortsInterruptedStream(t *testing.T) {
+	engine := gin.New()
+	engine.Use(Recovery())
+	engine.GET("/audio", func(c *gin.Context) {
+		c.Header("Content-Type", "audio/mpeg")
+		_, _ = c.Writer.Write([]byte("partial"))
+		c.Writer.Flush()
+		panic(http.ErrAbortHandler)
+	})
+	server := httptest.NewServer(engine)
+	defer server.Close()
+	response, err := server.Client().Get(server.URL + "/audio")
+	require.NoError(t, err)
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	require.Error(t, err)
+	require.Equal(t, "partial", string(body))
+}
 
 func TestRecoveryRetainsAccessLogAndCorrelatedStack(t *testing.T) {
 	ml, err := obs.NewMultiLogger(obs.DefaultMultiLoggerConfig(t.TempDir()))
