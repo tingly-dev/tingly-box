@@ -185,7 +185,13 @@ M3 之前，需要审批的线程在 IM 里只有提示，靠 Web 处理，这�
   提问只有**一个单选问题、1 到 8 个选项**时每个选项一个按钮（选项说明列在正文里）。多问题、多选、没有选项的提问，
   以及没有按钮的平台（今天：微信、企业微信、Slack、钉钉、Discord、WhatsApp、QQ）仍发一行“Needs you: …，请到 Web 处理”，同一线程同一 chat 5 分钟一次。
 - **按下去**：按钮负载是 `pj, 线程 id, 请求 id, 选择`（Telegram 的 64 字节限制由平台的负载编码处理）。`remoteagent` 的回调分派把它交给
-  `ProjectRouter.RouteAnswer` → `Service.AnswerFromChannel`：chat 必须绑在该线程或它的祖先上，否则拒绝（`ErrNotThisChat`）；
+  `ProjectRouter.RouteAnswer` → `Service.AnswerFromChannel`：先过 `Service.mayAnswer`，否则拒绝（`ErrNotThisChat`）。能回答的是：
+  绑在该线程或它的祖先上的 chat；以及**绑在整个项目上**的 chat（`TargetProjectID` 等于线程所在项目、`TargetThreadID` 为空、没有待迁移的 `Folder`），
+  它一次只“跟”一个线程（`/session N` 改的是 `ThreadID`），但仍可回答同项目任何线程的审批和提问——否则 chat 切到别的线程后，
+  之前发给它的按钮会报 “Could not answer: this chat is not bound to that thread”。显式绑到某个文件夹会话的 chat（`TargetThreadID` 非空）
+  仍只回答自己这条线的请求；别的项目的 chat 一律拒绝。文字回答（`answerWaiting`）对 chat 记着的每个待答请求也走同一个检查，
+  所以 chat 换了项目后，旧项目遗留的请求不会被它的下一句话答掉。
+  （协调者项目里按 `thread_id` 绑到某个工作线程的 chat 也记作项目绑定，因为只有文件夹会话才写 `TargetThreadID`。）
   然后就是 Web 用的同一个 `Threads.Respond`，答案带 `Via = im`，事件载荷里记 `via`。授权上，`pj` 与 `@cc` 的 `perm` 一样要求
   `remote_control.approve`。
 - **先答为准**：请求结束（任一边回答、建议答案自动作答、回合被停掉）时 `Threads.OnSettled` 触发，Relay 把发出去的每条按钮消息**改写**为原文加结果

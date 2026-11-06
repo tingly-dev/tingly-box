@@ -102,6 +102,9 @@ for line in sys.stdin:
         if events and events[-1] == 'ask decision':
             reply = call_tool('request_decision', {'question': 'Ship it now?', 'options': [{'label': 'Ship', 'consequence': 'goes to prod'}, {'label': 'Wait', 'consequence': 'one more review'}], 'recommended': 1, 'reason': 'reviewers are still reading'})
             out = 'Decision asked' if 'asked the user' in reply else 'Decision failed: ' + reply
+        elif events and events[-1].startswith('start worker '):
+            reply = call_tool('start_thread', {'title': 'Worker thread', 'task': events[-1][len('start worker '):], 'repo': 'none'})
+            out = 'Worker started' if 'started thread' in reply else 'Worker failed: ' + reply
     else:
         out = 'Harness reply: ' + str(text)
     print(json.dumps({'type':'assistant','message':{'id':'msg','type':'message','role':'assistant','model':'harness','content':[{'type':'text','text':out}],'usage':{'input_tokens':1,'output_tokens':1}}}), flush=True)

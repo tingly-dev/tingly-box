@@ -16,7 +16,7 @@ import (
 var (
 	ErrBindingInvalid = errors.New("platform, chat_id and one of thread_id or project_id are required")
 	// ErrNotThisChat is for a chat answering a thread it is not bound to,
-	// directly or through an ancestor.
+	// directly, through an ancestor or through the thread's project.
 	ErrNotThisChat = errors.New("this chat is not bound to that thread")
 )
 
@@ -238,6 +238,9 @@ func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source) (
 	var cards []card
 	var others []pendingRequest
 	for _, q := range s.Relay.awaitingAll(b.Platform, b.ChatID) {
+		if s.mayAnswer(b, q.threadID) != nil {
+			continue
+		}
 		if _, d, ok := s.Coordinator.pendingDecision(q.threadID, q.requestID); ok {
 			cards = append(cards, card{q, d})
 			continue
@@ -356,9 +359,40 @@ func (s *Service) ChannelToFolder(platform, chatID, title, folder, profile strin
 	return s.Store.SetChannelBindingFolder(platform, chatID, title, path, strings.TrimSpace(profile), botUUID...)
 }
 
+// mayAnswer reports whether the chat of b may answer a request of a thread
+// (ErrNotThisChat when not): a chat bound to the thread or to one of its
+// ancestors, or a chat bound to the thread's project as a whole, which also
+// answers for threads it does not follow (it follows one at a time, /session).
+// A chat bound to one session of a folder (TargetThreadID) keeps to that
+// session's lineage, and a chat of another project never answers.
+func (s *Service) mayAnswer(b *db.ChannelBinding, threadID string) error {
+	lineage, err := s.Store.Lineage(threadID)
+	if err != nil {
+		return err
+	}
+	if len(lineage) == 0 {
+		return ErrNotThisChat
+	}
+	for _, t := range lineage {
+		if t.ID == b.ThreadID {
+			return nil
+		}
+	}
+	project := b.TargetProjectID
+	if project == "" && b.ThreadID != "" {
+		if t, err := s.Store.GetThread(b.ThreadID); err == nil {
+			project = t.ProjectID
+		}
+	}
+	if project != "" && project == lineage[0].ProjectID && b.TargetThreadID == "" && b.Folder == "" {
+		return nil
+	}
+	return ErrNotThisChat
+}
+
 // AnswerFromChannel answers a thread's pending approval with the button a
-// chat pressed (a ChannelChoice value). The chat must be bound to
-// the thread or to one of its ancestors, the chats the request was sent to.
+// chat pressed (a ChannelChoice value). The chat must be allowed to answer
+// the thread (mayAnswer).
 // reply is what to tell the chat when there is nothing to answer any more;
 // on success the prompt is restated through the Relay instead.
 func (s *Service) AnswerFromChannel(platform, chatID, threadID, requestID, value string) (reply string, err error) {
@@ -369,16 +403,8 @@ func (s *Service) AnswerFromChannel(platform, chatID, threadID, requestID, value
 		}
 		return "", err
 	}
-	lineage, err := s.Store.Lineage(threadID)
-	if err != nil {
+	if err := s.mayAnswer(b, threadID); err != nil {
 		return "", err
-	}
-	bound := false
-	for _, t := range lineage {
-		bound = bound || t.ID == b.ThreadID
-	}
-	if !bound {
-		return "", ErrNotThisChat
 	}
 	if _, _, isDecision := s.Coordinator.pendingDecision(threadID, requestID); isDecision {
 		i, ok := optionOfChoice(value)
