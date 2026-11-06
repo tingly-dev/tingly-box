@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -23,6 +24,15 @@ func newConfig(t *testing.T) *config.Config {
 	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 	return cfg
+}
+
+// realTempDir is t.TempDir with its symlinks resolved, the way Projects
+// stores a folder (on macOS /var is a link to /private/var).
+func realTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	return dir
 }
 
 // Models offers the default tier first, then every other request model the

@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,6 +15,15 @@ func mkProject(t *testing.T, store *db.Store, p *db.Project) *db.Project {
 	t.Helper()
 	require.NoError(t, store.CreateProjectWithMain(p, &db.Thread{Origin: "user"}, ""))
 	return p
+}
+
+// realTempDir is t.TempDir with its symlinks resolved, the way a folder is
+// stored (on macOS /var is a link to /private/var).
+func realTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	return dir
 }
 
 // mainThread is the id of a project's main thread.

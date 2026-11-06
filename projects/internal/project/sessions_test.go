@@ -23,7 +23,7 @@ func TestFolderThreadRunsInItsFolder(t *testing.T) {
 		turn.Say("Looked around.", 7, 3)
 		return nil
 	})
-	folder := t.TempDir()
+	folder := realTempDir(t)
 	s, err := f.startFolder(folder, FolderThreadSpec{Task: "what is here?", PermissionMode: "plan", Effort: "high"})
 	require.NoError(t, err)
 	folderProject, err := f.store.FindFolder(folder)
@@ -278,7 +278,7 @@ func TestSessionWithoutLauncherHasNoProfiles(t *testing.T) {
 	_, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "x", Profile: "work"})
 	assert.ErrorIs(t, err, ErrNoProfiles)
 
-	folder := t.TempDir()
+	folder := realTempDir(t)
 	s, err := f.startFolder(folder, FolderThreadSpec{Task: "x"})
 	require.NoError(t, err)
 	waitStatus(t, f.store, s.ID, db.ThreadIdle)

@@ -77,7 +77,7 @@ func newDirectSlashChat(t *testing.T, name string) (*tinglyProjectsHarness, *tes
 // the folder buttons and the menu's project button.
 func TestTinglyDirectChatPicksRegisteredFoldersAndProjectsWithoutPrivileged(t *testing.T) {
 	h, chat := newDirectSlashChat(t, "picker")
-	first, second := t.TempDir(), t.TempDir()
+	first, second := realTempDir(t), realTempDir(t)
 	h.call("POST", "/projects", map[string]any{"type": "folder", "path": first}, nil)
 	h.call("POST", "/projects", map[string]any{"type": "folder", "path": second}, nil)
 	h.call("POST", "/projects", map[string]any{"name": "Project Alpha"}, nil)
@@ -108,7 +108,7 @@ func TestTinglyDirectChatPicksRegisteredFoldersAndProjectsWithoutPrivileged(t *t
 // the permission is granted. /help follows the permission.
 func TestTinglyDirectChatFreePathNeedsPrivilegedGrant(t *testing.T) {
 	h, chat := newDirectSlashChat(t, "free-path")
-	free := t.TempDir()
+	free := realTempDir(t)
 	before := h.currentFolder(t, chat)
 
 	for _, text := range []string{"/cd " + free, "/dir " + free, "  /cd   " + free + "  ", "／cd " + free, "/dir 0", "/dir 1a", "/cd"} {
@@ -134,7 +134,7 @@ func TestTinglyDirectChatFreePathNeedsPrivilegedGrant(t *testing.T) {
 	chat.SendText("/cd " + free)
 	chat.WaitText(10*time.Second).AssertContains(t, free)
 	require.Equal(t, free, h.currentFolder(t, chat))
-	other := t.TempDir()
+	other := realTempDir(t)
 	chat.SendText("/dir   " + other)
 	chat.WaitText(10*time.Second).AssertContains(t, other)
 	require.Equal(t, other, h.currentFolder(t, chat))
@@ -211,7 +211,7 @@ func newGroupSlashChat(t *testing.T) (h *tinglyProjectsHarness, chat *testenv.Ch
 // the gate as ordinary text.
 func TestTinglyGroupDecoratedFolderCommandsNeedPrivileged(t *testing.T) {
 	h, chat, setPrivileged := newGroupSlashChat(t)
-	registered := t.TempDir()
+	registered := realTempDir(t)
 	h.call("POST", "/projects", map[string]any{"type": "folder", "path": registered}, nil)
 	h.call("POST", "/projects", map[string]any{"name": "Project Alpha"}, nil)
 	before := h.currentFolder(t, chat)

@@ -123,7 +123,7 @@ for line in sys.stdin:
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = app.Close() })
 	pairing := false
-	workdir := t.TempDir()
+	workdir := realTempDir(t)
 	reg := channel.NewRegistry()
 	stores, err := hostdb.NewStoreManager(t.TempDir())
 	require.NoError(t, err)
@@ -452,7 +452,7 @@ func TestTinglyRegisteredDirectories(t *testing.T) {
 	chat := h.env.NewUser("directory-user").OpenDM(h.chosenID)
 	chat.SendText("start")
 	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: start")
-	first, second := t.TempDir(), t.TempDir()
+	first, second := realTempDir(t), realTempDir(t)
 	var f1, f2 struct {
 		ID string `json:"id"`
 	}
@@ -482,7 +482,7 @@ func TestTinglyRegisteredDirectories(t *testing.T) {
 	require.NotContains(t, help.Text, "/cd")
 	// A free path needs the permission, and the chat is told which one
 	// instead of the command looking broken.
-	free := t.TempDir()
+	free := realTempDir(t)
 	for _, text := range []string{"/cd " + free, "\uff0fcd " + free, "/dir " + free} {
 		chat.SendText(text)
 		chat.WaitText(10*time.Second).AssertContains(t, "Any folder and files")
@@ -533,7 +533,7 @@ func TestTinglyProjectsAndFoldersAreDistinct(t *testing.T) {
 	h.call("POST", "/projects", map[string]any{"name": "Project Alpha"}, &project)
 	h.call("POST", "/projects", map[string]any{"name": "Archived Project"}, &archived)
 	h.call("PATCH", "/projects/"+archived.ID, map[string]any{"archived": true}, nil)
-	otherFolder := t.TempDir()
+	otherFolder := realTempDir(t)
 	h.call("POST", "/projects", map[string]any{"type": "folder", "path": otherFolder}, nil)
 	chat.SendText("/project")
 	listed := chat.WaitText(10 * time.Second)
