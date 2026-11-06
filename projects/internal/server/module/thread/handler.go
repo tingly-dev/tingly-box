@@ -864,5 +864,5 @@ func (h *Handler) downloadAttachment(c *gin.Context) {
 		return
 	}
 	defer f.Close()
-	module.ServeDownload(c, f, info)
+	module.ServeDownload(c, f, info, rt.DownloadName(rel))
 }

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { Library } from './Library';
+import { downloadName, Library } from './Library';
 
 const m = vi.hoisted(() => ({ fetch: vi.fn(), del: vi.fn(), notify: vi.fn() }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
@@ -118,4 +118,12 @@ it("shows the server's message as a toast when the folder is over the limit, and
     await waitFor(() => expect(m.notify).toHaveBeenCalledWith(msg, 'error'));
     expect(click).not.toHaveBeenCalled();
     anchor.mockRestore();
+});
+
+it('saves an upload under the name it was given, without the stored id', () => {
+    expect(downloadName('uploads/0123456789ab-report final.pdf')).toBe('report final.pdf');
+    expect(downloadName('uploads/0123456789ab-a-b.txt')).toBe('a-b.txt');
+    expect(downloadName('uploads/notes.md')).toBe('notes.md');
+    expect(downloadName('outputs/0123456789ab-x.txt')).toBe('0123456789ab-x.txt');
+    expect(downloadName('notes.md')).toBe('notes.md');
 });

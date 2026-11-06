@@ -800,7 +800,7 @@ func (h *Handler) downloadLibrary(c *gin.Context) {
 		return
 	}
 	defer f.Close()
-	module.ServeDownload(c, f, info)
+	module.ServeDownload(c, f, info, rt.DownloadName(c.Query("path")))
 }
 
 // archiveLibrary streams a library folder as a zip. The folder is counted

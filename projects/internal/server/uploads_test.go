@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -114,4 +115,30 @@ func TestAttachmentDownloadRefusesLinks(t *testing.T) {
 	code, body = get()
 	assert.Equal(t, 400, code)
 	assert.NotContains(t, body, "SECRET")
+}
+
+// An upload is stored as uploads/<id>-<name> so names stay unique, but the
+// file a person downloads carries the name they gave it, not the id.
+func TestUploadDownloadsKeepTheOriginalName(t *testing.T) {
+	a := &enginetest.Agent{Script: func(turn *enginetest.Turn) error { turn.Say("ok", 1, 1); return nil }}
+	_, c := newServerAt(t, &project.Agents{Service: a.Service()}, t.TempDir())
+	var f db.Project
+	require.Equal(t, 200, c.do("POST", "/projects", map[string]any{"type": "folder", "path": t.TempDir()}, &f))
+	code, atts := c.upload("/projects/"+f.ID+"/attachments", "报告 final.txt", "boom")
+	require.Equal(t, 201, code)
+	var s db.Thread
+	require.Equal(t, 201, c.do("POST", "/projects/"+f.ID+"/threads", map[string]any{"content": "look", "attachments": []string{atts[0].Path}}, &s))
+
+	for _, path := range []string{
+		"/projects/" + f.ID + "/library/file?path=" + url.QueryEscape(atts[0].Path),
+		"/threads/" + s.ID + "/attachments/file?path=" + url.QueryEscape(atts[0].Path),
+	} {
+		resp, err := http.Get(c.base + path)
+		require.NoError(t, err)
+		resp.Body.Close()
+		require.Equal(t, 200, resp.StatusCode, path)
+		_, params, err := mime.ParseMediaType(resp.Header.Get("Content-Disposition"))
+		require.NoError(t, err, path)
+		assert.Equal(t, "报告 final.txt", params["filename"], path)
+	}
 }
