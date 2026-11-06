@@ -86,7 +86,9 @@ Coordinator 按项目的 profile、model、effort 启动。使用 profile 时由
 
 模型与网关的缓存行为、TTL、断点、上下文压缩和成本仍由 Claude Code 及上游决定。这里保持 session 和历史连续，但首次请求、配置变化、压缩或缓存过期都可能产生 cache miss；不能以 session ID 判断是否命中。
 
-已有 Project 首次进入新实现时保留主线程、显示历史和工作线程，创建独立的 Coordinator session 并一次性导入有限近期上下文。早于导入窗口的对话仍保存在主线程，可通过 `read_conversation` 查询；旧实现丢弃的工具调用和工具结果无法恢复。回滚到旧实现时不会将 Claude Code transcript 自动转换回旧的 LLM 历史，输入表及 session 文件也不会自动清理。
+已有 Project 首次进入新实现时保留主线程、显示历史和工作线程，创建独立的 Coordinator session 并一次性导入有限近期上下文；更早的内容存在时，导入文本会提示用 `read_conversation` 查询。早于导入窗口的对话仍保存在主线程；旧实现丢弃的工具调用和工具结果无法恢复。旧的自驱模型循环（`Coordinator.turn` / `LLMSource`）已删除，session 是唯一路径，不再支持回滚。
+
+线程汇报和设置变更回合末尾附一个 system 信封（`kind="check-in"` / `kind="settings-changed"`），带 `replies_since_user` 和 `minutes_since_user`，即协调者提示词里的回复预算。
 
 ## 验证与已知边界
 

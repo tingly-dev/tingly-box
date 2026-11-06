@@ -4,13 +4,14 @@
 
 ## 0. 已实施的部分（阶段 0）
 
-- `projects/internal/harness`：`World` 用真实的协调者、线程管理、存储、事件流和临时 git 仓库，只有两个"脑子"是脚本：协调者的模型是 `Brain`，线程里的 Claude Code 是 `Actor`（`Diligent`、`Reply`、`ByPrompt`）。
+- `projects/internal/harness`：`World` 用真实的协调者、线程管理、存储、事件流和临时 git 仓库，只有两个"脑子"是脚本：协调者的 Claude Code session 是 `Brain`，线程里的 Claude Code 是 `Actor`（`Diligent`、`Reply`、`ByPrompt`）。两者都跑在 `agentboot/engine/enginetest` 上；`Brain` 通过 `internal/coordtest` 每回合拿到 session 的输入（事件信封），用 session 的 Projects MCP 服务真实调用工具，再给出回复。工具结果在同一回合内同步返回，所以一个回合就是一次脚本调用，不再按模型请求轮次拆分。
 - 场景用 Tingly Projects 自己的工作当内容（给协调者加显式收尾工具、线程改名工具等），不依赖外部真实数据。
 - 基线旅程（`journeys_test.go`）：新工作变成线程并汇报；跟进交给已有线程且带来源标注；需要输入时等待再继续；偏好写进记忆并传给下一个线程；越权的汇报被标成汇报。
 - 每个场景结束时自动检查三条不变量：`trust.report-labelled`、`wait.has-reason`、`memory.index-resolves`。
 - 随 `go test ./...`（`task projects:test`）运行，不需要额外配置。
 - 基线记录的是现在的行为。改变行为的 PR 必须在 diff 里改对应旅程。
-- 显式收尾工具是第一个在 harness 保护下做的改动：先写了静默、兼容旧哨兵、空回复被提醒一次三类场景，再改代码，原有五个旅程不变。
+- 显式收尾工具是第一个在 harness 保护下做的改动：先写了静默、兼容旧哨兵、空回复被提醒一次三类场景，再改代码，原有五个旅程不变。改为 session 后，"空回复被提醒一次"属于旧的自驱循环，已随之删除；对用户消息调用 `no_update` 由 MCP 拒绝，旧哨兵文本不会作为回复发布。空回复目前不会被追问，是已知缺口。
+- 模型失败（画像演练）在 session 下表现为回合失败：错误显示在对话里，该输入标为待恢复，跳过后下一条消息正常处理。
 - 阶段 2 的第一批画像演练：偷懒（说完成但没提交）、注入（汇报里夹带指令）、模型失败（报错后队列继续）、竞态（回答中途设置变化）、沉默（线程不报，记录为已知缺口）、一条消息多任务。新增不变量 `status.ready-has-commits`。`Quiet()` 要求空闲持续 150ms，因为线程变空闲到汇报送达协调者之间有一个空隙。
 - 事件信封与回复预算：场景检查信封的来源和信任标记、伪造信封被转义、`replies_since_user` 与 `minutes_since_user` 的数值；新增不变量 `trust.envelope-intact`。模型是否真的遵守这些规则，要等阶段 4 的真模型评测才能验证。
 - 下文 §1 起是完整设计，未标注"已实施"的都是后续阶段。
