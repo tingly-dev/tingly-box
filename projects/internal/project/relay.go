@@ -50,6 +50,9 @@ func chatKey(platform, chatID string) string { return platform + "\x00" + chatID
 // sentPrompt is a prompt a chat was sent, to restate when it settles.
 type sentPrompt struct {
 	platform, chatID, ref, text string
+	// bot is the bot the chat's binding names; a prompt sent as plain text
+	// (empty ref) is answered through it as a new line.
+	bot string
 }
 
 type relayJob struct {
@@ -66,6 +69,10 @@ type relayJob struct {
 	prompt  *ChannelPrompt
 	// verbose sends it only to the chats that asked for each step.
 	verbose bool
+	// quote, set on a decision card, names the question a chat that got it as
+	// plain text is told about again once it is settled, since the text has no
+	// message to rewrite.
+	quote string
 	// settle, when set, is a request id: the prompts sent for it are
 	// restated with text added, and nothing new is sent.
 	settle string
@@ -145,6 +152,7 @@ func (r *Relay) decision(e db.ThreadEvent) {
 	r.enqueueJob(relayJob{
 		threadIDs: []string{e.ThreadID},
 		text:      d.chatText() + "\n" + d.replyHint(),
+		quote:     "Re: " + oneLine(d.Question),
 		request:   &pendingRequest{threadID: e.ThreadID, requestID: e.ID},
 		prompt:    &ChannelPrompt{ThreadID: e.ThreadID, RequestID: e.ID, Text: d.chatText(), Choices: choices},
 	})
@@ -162,9 +170,6 @@ func (r *Relay) Decided(e db.ThreadEvent, src Source) {
 		return
 	}
 	r.forget(e.ID)
-	if r.prompter == nil {
-		return
-	}
 	where := " on the web"
 	if src.Kind == db.SourceIM {
 		where = " in a chat"
@@ -309,6 +314,18 @@ func (r *Relay) awaitingAll(platform, chatID string) []pendingRequest {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]pendingRequest(nil), r.awaiting[chatKey(platform, chatID)]...)
+}
+
+// tell sends text to one chat, as the bot its binding names.
+func (r *Relay) tell(botUUID, platform, chatID, text string) {
+	if r == nil || r.sink == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(withChannelBot(context.Background(), botUUID), relaySendTimeout)
+	defer cancel()
+	if err := r.sink.SendChannelText(ctx, platform, chatID, text); err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{"platform": platform, "chat_id": chatID}).Warn("projects: send to IM chat")
+	}
 }
 
 // forget drops a settled request from every chat that was asked it.
@@ -497,6 +514,10 @@ func (r *Relay) deliver(job relayJob) {
 		if job.prompt == nil || !r.sendPrompt(ctx, b, "["+tag+"] ", *job.prompt) {
 			if err := r.sink.SendChannelText(ctx, b.Platform, b.ChatID, text); err != nil {
 				logrus.WithError(err).WithFields(logrus.Fields{"platform": b.Platform, "chat_id": b.ChatID, "thread_id": b.ThreadID}).Warn("projects: send to IM chat")
+			} else if job.quote != "" && job.request != nil {
+				r.mu.Lock()
+				r.sent[job.request.requestID] = append(r.sent[job.request.requestID], sentPrompt{platform: b.Platform, chatID: b.ChatID, text: "[" + tag + "] " + job.quote, bot: b.BotUUID})
+				r.mu.Unlock()
 			}
 		}
 		cancel()
@@ -554,6 +575,15 @@ func (r *Relay) restate(requestID, outcome string) {
 	r.mu.Unlock()
 	for _, sp := range sent {
 		ctx, cancel := context.WithTimeout(context.Background(), relaySendTimeout)
+		if sp.ref == "" {
+			// The chat got the question as plain text: say which question
+			// this answers, since a bare number or label does not.
+			if err := r.sink.SendChannelText(withChannelBot(ctx, sp.bot), sp.platform, sp.chatID, sp.text+"\n"+outcome); err != nil {
+				logrus.WithError(err).WithFields(logrus.Fields{"platform": sp.platform, "chat_id": sp.chatID}).Warn("projects: confirm an answer in IM chat")
+			}
+			cancel()
+			continue
+		}
 		if err := r.prompter.RestateChannelPrompt(ctx, sp.platform, sp.chatID, sp.ref, sp.text+"\n\n"+outcome); err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{"platform": sp.platform, "chat_id": sp.chatID}).Warn("projects: restate a prompt in IM chat")
 		}

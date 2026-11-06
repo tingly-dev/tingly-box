@@ -2,6 +2,7 @@ package projects
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -111,7 +112,14 @@ func TestTinglyDecisionCardReachesButtonlessChatAsNumberedText(t *testing.T) {
 	require.Equal(t, -1, chosenOption(t, h, main))
 
 	chat.SendText("2")
-	chat.WaitText(10*time.Second).AssertContains(t, "You said: Wait")
+	// The chat is told which question the bare "2" answered, and the
+	// coordinator replies; the two may arrive in either order.
+	first, second := chat.WaitText(10*time.Second), chat.WaitText(10*time.Second)
+	if !strings.Contains(first.Text, "Re: Ship it now?") {
+		first, second = second, first
+	}
+	first.AssertContains(t, "Re: Ship it now?\nAnswered in a chat: Wait")
+	second.AssertContains(t, "You said: Wait")
 	require.Equal(t, 1, chosenOption(t, h, main))
 
 	// Answered: "1" is a plain message again.

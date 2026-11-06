@@ -124,14 +124,9 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 	}
 	// A chat that was asked something answers it with its next message
 	// (other than an @N one, or one with files).
-	// A decision card only takes an option's number or label, so a card the
-	// chat left open never keeps a later approval or question from being
-	// answered: the oldest request that takes the reply gets it.
 	if len(files) == 0 {
-		for _, q := range s.Relay.awaitingAll(platform, chatID) {
-			if done, err := s.answerFromText(q.threadID, q.requestID, text, src); done {
-				return true, err
-			}
+		if done, err := s.answerWaiting(b, text, src); done {
+			return true, err
 		}
 	}
 	if p.Type == db.ProjectFolder && (b.NewThread || t.Status == db.ThreadResolved || t.ArchivedAt != nil) {
@@ -225,6 +220,42 @@ func (s *Service) startFromChannel(b *db.ChannelBinding, prev *db.Thread, projec
 		nb := &db.ChannelBinding{Platform: b.Platform, ChatID: b.ChatID, ThreadID: t.ID, TargetProjectID: t.ProjectID, TargetThreadID: b.TargetThreadID}
 		return s.Store.UpsertChannelBinding(nb)
 	})
+}
+
+// answerWaiting gives a chat's message to the request it answers. A decision
+// card takes only an option's number or label, and the card comes first so a
+// bare "1" is never read as an approval's words. When the reply fits more than
+// one open card the chat is asked which it means instead of being guessed at:
+// "2" would answer the wrong question. Otherwise the oldest request that takes
+// the reply gets it, and an open card never keeps a later approval or question
+// from being answered.
+func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source) (done bool, err error) {
+	var named, others []pendingRequest
+	var questions []string
+	for _, q := range s.Relay.awaitingAll(b.Platform, b.ChatID) {
+		if _, d, ok := s.Coordinator.pendingDecision(q.threadID, q.requestID); ok {
+			if _, fits := d.optionOfReply(text); fits {
+				named = append(named, q)
+				questions = append(questions, oneLine(d.Question))
+			}
+			continue
+		}
+		others = append(others, q)
+	}
+	switch {
+	case len(named) > 1:
+		s.Relay.tell(b.BotUUID, b.Platform, b.ChatID, "More than one question is waiting here, so I can't tell which one that answers:\n- "+
+			strings.Join(questions, "\n- ")+"\nPress a button on the one you mean, or answer it on the web.")
+		return true, nil
+	case len(named) == 1:
+		return s.answerFromText(named[0].threadID, named[0].requestID, text, src)
+	}
+	for _, q := range others {
+		if done, err := s.answerFromText(q.threadID, q.requestID, text, src); done {
+			return true, err
+		}
+	}
+	return false, nil
 }
 
 // answerFromText answers a request a chat was asked with the chat's reply

@@ -183,7 +183,7 @@ func TestRepliesChooseADecisionOptionInAPlainChat(t *testing.T) {
 	require.True(t, handled)
 	require.NotNil(t, chosen(t, svc, card))
 	assert.Equal(t, 1, *chosen(t, svc, card), "the label, in any case")
-	assert.Equal(t, "Echo: Wait\n\n[Demo]", sink.next(t).text)
+	assert.ElementsMatch(t, []string{"[Demo] Re: Ship it now?\nAnswered in a chat: Wait", "Echo: Wait\n\n[Demo]"}, []string{sink.next(t).text, sink.next(t).text}, "the answer is confirmed, and the coordinator replies")
 	_, _, waiting = svc.Relay.Awaiting("dingtalk", "dt")
 	assert.False(t, waiting, "answered: the next message is a message again")
 
@@ -193,7 +193,7 @@ func TestRepliesChooseADecisionOptionInAPlainChat(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, chosen(t, svc, card2))
 	assert.Equal(t, 0, *chosen(t, svc, card2), "the number")
-	assert.Equal(t, "Echo: Ship\n\n[Demo]", sink.next(t).text)
+	assert.ElementsMatch(t, []string{"[Demo] Re: Ship it now?\nAnswered in a chat: Ship", "Echo: Ship\n\n[Demo]"}, []string{sink.next(t).text, sink.next(t).text})
 }
 
 // A card answered on the web is restated in the chats, and a later "1" in
@@ -237,4 +237,51 @@ func TestAnOpenDecisionDoesNotBlockALaterApprovalInTheSameChat(t *testing.T) {
 	require.True(t, handled)
 	waitStatus(t, f.store, th.ID, db.ThreadIdle)
 	assert.Nil(t, chosen(t, svc, card), "the card is still open")
+}
+
+// With two open cards a bare number could answer either: the chat is asked
+// which it means, nothing is chosen, and a label only one card has still works.
+func TestAReplyThatFitsTwoOpenDecisionsIsNotGuessed(t *testing.T) {
+	f, svc, sink := promptFixture(t, approveScript)
+	sink.plain["dt"] = true
+	_, err := svc.BindChannel("dingtalk", "dt", "", "", f.project.ID)
+	require.NoError(t, err)
+	first := askShip(t, svc, f.project.ID)
+	sink.next(t)
+	svc.Coordinator.ask(f.project.ID, Decision{Question: "Delete the branch?", Options: []DecisionOption{{Label: "Delete"}, {Label: "Keep"}}})
+	sink.next(t)
+
+	handled, err := svc.PostFromChannel("dingtalk", "dt", "1", nil)
+	require.NoError(t, err)
+	require.True(t, handled)
+	asked := sink.next(t).text
+	assert.Contains(t, asked, "which one")
+	assert.Contains(t, asked, "- Ship it now?")
+	assert.Contains(t, asked, "- Delete the branch?")
+	assert.Nil(t, chosen(t, svc, first), "nothing was guessed")
+
+	handled, err = svc.PostFromChannel("dingtalk", "dt", "keep", nil)
+	require.NoError(t, err)
+	require.True(t, handled)
+	confirm := sink.next(t).text
+	if strings.HasPrefix(confirm, "Echo") {
+		confirm = sink.next(t).text
+	}
+	assert.Contains(t, confirm, "Re: Delete the branch?", "the answer says which question it was for")
+	assert.Contains(t, confirm, "Answered in a chat: Keep")
+	assert.Nil(t, chosen(t, svc, first), "the other card is still open")
+}
+
+// A chat that answered a plain-text card is told which question it answered.
+func TestAPlainChatIsToldWhichQuestionItAnswered(t *testing.T) {
+	f, svc, sink := promptFixture(t, approveScript)
+	sink.plain["dt"] = true
+	_, err := svc.BindChannel("dingtalk", "dt", "", "", f.project.ID)
+	require.NoError(t, err)
+	askShip(t, svc, f.project.ID)
+	sink.next(t)
+
+	_, err = svc.PostFromChannel("dingtalk", "dt", "2", nil)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"[Demo] Re: Ship it now?\nAnswered in a chat: Wait", "Echo: Wait\n\n[Demo]"}, []string{sink.next(t).text, sink.next(t).text})
 }

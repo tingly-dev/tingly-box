@@ -276,4 +276,6 @@ P1 没有用真实 Claude Code 验证：规则是否真的在 auto 模式下保�
 - 答案作为**用户消息**（`source=im`，只有标签本身，不带 coordinator 措辞）交给 coordinator，与 Web 点击一致；`Coordinator.OnDecided → Relay.Decided` 把各 chat 里的卡片改写为 “Answered in a chat/on the web: <标签>”，并忘掉待答记录。Web 先答同样会改写 IM 里的卡片。
 - 信任：能答卡片的只有绑定了该会话的 chat（按钮路径在 `AnswerFromChannel` 校验，文字路径经 chat 的配对/白名单门）。已知缺口（未改，影响审批按钮同理）：按钮回调不经 `handleInboundGate`，在群里是“chat 已绑定”这一级，不区分群成员。
 
+- **用户怎么确认自己答的是哪一问**：① 按钮卡片的文字本身含问题，点后原地改写为 “Answered in a chat: X”，问题仍在上面；② 纯文字 chat 没有可改写的消息，答完后补一条 `[项目] Re: <问题>\nAnswered in a chat: X`；③ 一个 chat 里同时有多张未答卡片、而回复（如 “1”）同时符合多张时**不猜**，回一条列出这些问题的说明，请用户点按钮或到 Web 上答；回复的标签只符合一张时照常作答。卡片优先于审批/提问处理，所以裸数字不会被当成审批的拒绝理由。
+
 测试：`internal/project/decision_im_test.go`（按钮、纯文字、无 prompter 宿主、点按钮答复、越权、文字编号/标签、Web 先答、未答卡片不挡审批）；`internal/server/module/projects/tingly_decision_test.go`（`TestTinglyDecision*`：真实 MCP `request_decision` → bot → Tingly 传输；按钮、用 `buttonless` 包装模拟钉钉式无按钮平台、他人 chat 越权）；`imchannel` 里断言 dingtalk/weixin 的 `SendActions` 为 `ErrNoButtons`。
