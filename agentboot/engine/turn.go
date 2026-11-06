@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -431,6 +432,10 @@ type launchState struct {
 	// live is the permission rules of the settings file (liveSettings) the
 	// process has been given: read at its start, then pushed by applyLive.
 	live string
+	// refused is the mode and model ("mode\x00model") Claude Code said it
+	// cannot run, whose fallback mode the process is in meanwhile. It is
+	// asked for again only when the model changes.
+	refused string
 }
 
 // liveControlTimeout bounds applyLive; a process that does not answer in
@@ -476,13 +481,80 @@ func (e *Engine) applyLive(sessionID string, res liveController, have, want laun
 		if want.mode == "" {
 			return false
 		}
+		if have.refused == refusal(want) {
+			return true
+		}
 		if err := res.SetPermissionMode(ctx, want.mode); err != nil {
-			return false
+			// A mode this model cannot have is no reason to restart: the
+			// restart would come up in default mode, and end the process's
+			// background tasks.
+			if !modeUnavailable(err) || !e.fallBack(sessionID, res, have, want) {
+				return false
+			}
+			return true
 		}
 		have.mode = want.mode
 		e.setLaunch(sessionID, have)
 	}
 	return true
+}
+
+// modeFallback is the mode a thread runs in when the one it asked for cannot
+// be had. Claude Code's own answer to an auto mode the model does not have
+// is default mode, which asks for every edit; acceptEdits is the closest
+// mode that does not.
+var modeFallback = map[string]string{"auto": "acceptEdits"}
+
+func refusal(st launchState) string { return st.mode + "\x00" + st.model }
+
+// modeUnavailable reports whether err is Claude Code saying the mode cannot
+// be had on this process ("auto mode unavailable for this model").
+func modeUnavailable(err error) bool {
+	var rejected *agentboot.ControlRejectedError
+	return errors.As(err, &rejected) && strings.Contains(rejected.Message, "unavailable")
+}
+
+// fallBack moves res from the mode want asked for to its fallback and
+// remembers that, so the thread's transcript says why it prompts more than
+// its setting suggests. It reports false if there is no fallback or it could
+// not be set.
+func (e *Engine) fallBack(sessionID string, res liveController, have, want launchState) bool {
+	fb, ok := modeFallback[want.mode]
+	if !ok {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), liveControlTimeout)
+	defer cancel()
+	if err := res.SetPermissionMode(ctx, fb); err != nil {
+		return false
+	}
+	have.mode, have.refused = fb, refusal(want)
+	e.setLaunch(sessionID, have)
+	note := fmt.Sprintf("%s mode is not available for this session's model", want.mode)
+	if want.model != "" {
+		note = fmt.Sprintf("%s mode is not available for the model %s", want.mode, want.model)
+	}
+	e.appendSystem(sessionID, note+": running in "+fb+" instead")
+	return true
+}
+
+// checkInitMode compares the mode a turn's init message reports with the one
+// the process was asked for. Claude Code starts an auto mode it cannot have
+// in default mode without a word; it is moved to the fallback mode.
+func (e *Engine) checkInitMode(sessionID string, raw any) {
+	m, ok := raw.(*claude.SystemMessage)
+	if !ok || m.SubType != claude.SystemSubtypeInit {
+		return
+	}
+	got, _ := m.Raw["permissionMode"].(string)
+	e.mu.Lock()
+	have, r := e.launch[sessionID], e.residents[sessionID]
+	e.mu.Unlock()
+	if r == nil || got != "default" || have.refused != "" || modeFallback[have.mode] == "" {
+		return
+	}
+	// A control request waits for the reader this is called from.
+	go e.fallBack(sessionID, r.c, have, have)
 }
 
 func (e *Engine) setLaunch(sessionID string, st launchState) {

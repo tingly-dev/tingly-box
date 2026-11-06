@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -146,7 +147,9 @@ func TestEngine_ModelAndModeChangeLiveButSettingsRestart(t *testing.T) {
 		}
 	})
 	e, rec := p.engine(t)
-	launch := func(opts agentboot.ExecutionOptions) Launch { return func(context.Context) agentboot.ExecutionOptions { return opts } }
+	launch := func(opts agentboot.ExecutionOptions) Launch {
+		return func(context.Context) agentboot.ExecutionOptions { return opts }
+	}
 	turn := func(prompt string, resume bool, opts agentboot.ExecutionOptions) {
 		t.Helper()
 		if !e.Start("id", t.TempDir(), prompt, resume, launch(opts)) {
@@ -301,5 +304,177 @@ func TestEngine_PermissionRulesApplyLiveWithoutRestart(t *testing.T) {
 	turn("seven", true, "plan")
 	if starts() != 2 {
 		t.Fatalf("a changed env started %d processes in total, want 2", starts())
+	}
+}
+
+// Claude Code runs a requested mode it cannot have in default mode, with no
+// error and no sign but the init message's permissionMode (auto mode is
+// unavailable for some models), so a thread asking for auto prompted for
+// every edit. The engine lands such a process in the fallback mode (not in
+// default, which asks for edits too), says so, and neither restarts it nor
+// asks again each turn.
+func TestEngine_UnavailableAutoFallsBackLive(t *testing.T) {
+	var launchedAuto bool
+	p := newLiveProc(t, func(h *process.FakeHandle, dec *json.Decoder, in chan map[string]any) {
+		for {
+			v := read(dec, in)
+			if v == nil {
+				h.FinishOutput()
+				h.SignalExit(nil)
+				return
+			}
+			switch v["type"] {
+			case "control_request":
+				resp := map[string]any{"subtype": "success", "request_id": v["request_id"]}
+				if r := v["request"].(map[string]any); r["subtype"] == "set_permission_mode" && r["mode"] == "auto" {
+					resp = map[string]any{"subtype": "error", "request_id": v["request_id"], "error": "Cannot set permission mode to auto: auto mode unavailable for this model"}
+				}
+				send(t, h, map[string]any{"type": "control_response", "response": resp})
+			case "user":
+				mode := "default"
+				if !launchedAuto {
+					mode = "acceptEdits"
+				}
+				send(t, h, map[string]any{"type": "system", "subtype": "init", "session_id": "s1", "permissionMode": mode})
+				result(t, h)
+			}
+		}
+	})
+	e, rec := p.engine(t)
+	turn := func(prompt string, resume bool, opts agentboot.ExecutionOptions) {
+		t.Helper()
+		if !e.Start("id", t.TempDir(), prompt, resume, func(context.Context) agentboot.ExecutionOptions { return opts }) {
+			t.Fatal("Start refused")
+		}
+		rec.wait(t)
+	}
+	modes := func() (out []string) {
+		for {
+			select {
+			case v := <-p.in:
+				if v["type"] == "control_request" {
+					if r := v["request"].(map[string]any); r["subtype"] == "set_permission_mode" {
+						out = append(out, r["mode"].(string))
+					}
+				}
+			case <-time.After(300 * time.Millisecond):
+				return out
+			}
+		}
+	}
+	notes := func() (n int) {
+		p.store.mu.Lock()
+		defer p.store.mu.Unlock()
+		for _, en := range p.store.entries["id"] {
+			if en.Kind == KindSystem && strings.Contains(en.Content, "auto") && strings.Contains(en.Content, "acceptEdits") {
+				n++
+			}
+		}
+		return n
+	}
+	starts := func() int { return len(p.factory.Starts()) }
+
+	// Launched in auto, the process reports default: it is moved to acceptEdits.
+	launchedAuto = true
+	turn("one", false, agentboot.ExecutionOptions{Model: "m1", PermissionMode: "auto"})
+	if got := modes(); len(got) != 1 || got[0] != "acceptEdits" {
+		t.Fatalf("set_permission_mode after an unavailable launch = %v, want [acceptEdits]", got)
+	}
+	if notes() != 1 {
+		t.Fatalf("notes about the fallback = %d, want 1", notes())
+	}
+
+	// The next turn neither restarts it, nor asks again, nor repeats the note.
+	turn("two", true, agentboot.ExecutionOptions{Model: "m1", PermissionMode: "auto"})
+	if got := modes(); len(got) != 0 {
+		t.Fatalf("the next turn sent set_permission_mode %v, want none", got)
+	}
+	if starts() != 1 || notes() != 1 {
+		t.Fatalf("starts = %d, notes = %d, want 1 and 1", starts(), notes())
+	}
+
+	// Another model may have auto: it is asked for again (and refused here).
+	turn("three", true, agentboot.ExecutionOptions{Model: "m2", PermissionMode: "auto"})
+	if got := modes(); len(got) != 2 || got[0] != "auto" || got[1] != "acceptEdits" {
+		t.Fatalf("after a model change set_permission_mode = %v, want [auto acceptEdits]", got)
+	}
+	if starts() != 1 {
+		t.Fatalf("a refused auto started %d processes, want 1", starts())
+	}
+}
+
+// Switching a running thread to auto when the model cannot have it is
+// refused by Claude Code. That must not restart the process (the restart
+// brings it up in default mode, and ends its background tasks): it moves to
+// the fallback mode live.
+func TestEngine_RefusedAutoSwitchFallsBackWithoutRestart(t *testing.T) {
+	p := newLiveProc(t, func(h *process.FakeHandle, dec *json.Decoder, in chan map[string]any) {
+		for {
+			v := read(dec, in)
+			if v == nil {
+				h.FinishOutput()
+				h.SignalExit(nil)
+				return
+			}
+			switch v["type"] {
+			case "control_request":
+				resp := map[string]any{"subtype": "success", "request_id": v["request_id"]}
+				if r := v["request"].(map[string]any); r["subtype"] == "set_permission_mode" && r["mode"] == "auto" {
+					resp = map[string]any{"subtype": "error", "request_id": v["request_id"], "error": "Cannot set permission mode to auto: auto mode unavailable for this model"}
+				}
+				send(t, h, map[string]any{"type": "control_response", "response": resp})
+			case "user":
+				send(t, h, map[string]any{"type": "system", "subtype": "init", "session_id": "s1", "permissionMode": "acceptEdits"})
+				result(t, h)
+			}
+		}
+	})
+	e, rec := p.engine(t)
+	turn := func(prompt string, resume bool, mode string) {
+		t.Helper()
+		opts := agentboot.ExecutionOptions{Model: "m1", PermissionMode: mode}
+		if !e.Start("id", t.TempDir(), prompt, resume, func(context.Context) agentboot.ExecutionOptions { return opts }) {
+			t.Fatal("Start refused")
+		}
+		rec.wait(t)
+	}
+	modes := func() (out []string) {
+		for {
+			select {
+			case v := <-p.in:
+				if v["type"] == "control_request" {
+					if r := v["request"].(map[string]any); r["subtype"] == "set_permission_mode" {
+						out = append(out, r["mode"].(string))
+					}
+				}
+			case <-time.After(300 * time.Millisecond):
+				return out
+			}
+		}
+	}
+
+	turn("one", false, "acceptEdits")
+	modes()
+	turn("two", true, "auto")
+	if got := modes(); len(got) != 2 || got[0] != "auto" || got[1] != "acceptEdits" {
+		t.Fatalf("set_permission_mode = %v, want [auto acceptEdits]", got)
+	}
+	turn("three", true, "auto")
+	if got := modes(); len(got) != 0 {
+		t.Fatalf("a known-unavailable auto was asked for again: %v", got)
+	}
+	if n := len(p.factory.Starts()); n != 1 {
+		t.Fatalf("a refused auto switch started %d processes, want 1", n)
+	}
+	p.store.mu.Lock()
+	defer p.store.mu.Unlock()
+	var notes int
+	for _, en := range p.store.entries["id"] {
+		if en.Kind == KindSystem && strings.Contains(en.Content, "auto") && strings.Contains(en.Content, "acceptEdits") {
+			notes++
+		}
+	}
+	if notes != 1 {
+		t.Fatalf("notes about the fallback = %d, want 1", notes)
 	}
 }

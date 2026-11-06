@@ -59,6 +59,7 @@ func (e *Engine) newResident(sessionID string, ps agentboot.PersistentSession) *
 
 // record turns one agent message into transcript entries.
 func (e *Engine) record(sessionID string, conv *converter, raw any) {
+	e.checkInitMode(sessionID, raw)
 	if ev, ok := raw.(agentboot.ErrorEvent); ok {
 		if ev.Err != nil {
 			e.appendError(sessionID, ev.Err.Error())
