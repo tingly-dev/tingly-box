@@ -96,6 +96,33 @@ func (m *Threads) refreshContext(threadID string, res agentboot.CompactResult) {
 	})
 }
 
+// openingPayload is the card of a compaction that has just started.
+func openingPayload(manual bool) commandPayload {
+	trigger := string(agentboot.CompactAuto)
+	if manual {
+		trigger = string(agentboot.CompactManual)
+	}
+	return commandPayload{Name: "compact", State: "running", Trigger: trigger}
+}
+
+// settled is the card after the agent reported how the compaction ended.
+func (pl commandPayload) settled(ce agentboot.CompactEvent) commandPayload {
+	switch ce.Phase {
+	case agentboot.CompactDone:
+		r := ce.Result
+		pl.State, pl.DurationMS, pl.Summary = "ok", r.DurationMS, r.Summary
+		if r.Trigger != "" {
+			pl.Trigger = string(r.Trigger)
+		}
+		if r.Reported.Tokens {
+			pl.TokensBefore, pl.TokensAfter, pl.TokensReported = r.TokensBefore, r.TokensAfter, true
+		}
+	case agentboot.CompactFailed:
+		pl.State, pl.Reason = "failed", ce.Reason
+	}
+	return pl
+}
+
 // noteCompact turns a compaction entry from the engine into the thread's
 // card: one event, created when the compaction starts and updated in place
 // when it ends. A compaction nobody asked for (the agent's own) gets a card
@@ -112,11 +139,7 @@ func (m *Threads) noteCompact(t *db.Thread, e engine.Entry) {
 	m.mu.Unlock()
 
 	if ce.Phase == agentboot.CompactStarted || card == nil {
-		trigger := string(agentboot.CompactAuto)
-		if manual {
-			trigger = string(agentboot.CompactManual)
-		}
-		card = &db.ThreadEvent{Kind: db.EvCommand, Content: "compact", Payload: jsonString(commandPayload{Name: "compact", State: "running", Trigger: trigger})}
+		card = &db.ThreadEvent{Kind: db.EvCommand, Content: "compact", Payload: jsonString(openingPayload(manual))}
 		m.addEvent(t, card)
 		m.mu.Lock()
 		m.cards[t.ID] = card
@@ -127,19 +150,7 @@ func (m *Threads) noteCompact(t *db.Thread, e engine.Entry) {
 	}
 	var pl commandPayload
 	_ = json.Unmarshal([]byte(card.Payload), &pl)
-	switch ce.Phase {
-	case agentboot.CompactDone:
-		r := ce.Result
-		pl.State, pl.DurationMS, pl.Summary = "ok", r.DurationMS, r.Summary
-		if r.Trigger != "" {
-			pl.Trigger = string(r.Trigger)
-		}
-		if r.Reported.Tokens {
-			pl.TokensBefore, pl.TokensAfter, pl.TokensReported = r.TokensBefore, r.TokensAfter, true
-		}
-	case agentboot.CompactFailed:
-		pl.State, pl.Reason = "failed", ce.Reason
-	}
+	pl = pl.settled(ce)
 	card.Payload = jsonString(pl)
 	_ = m.store.UpdateThreadEvent(card)
 	m.hub.Publish(Event{Type: EventThreadEvent, ProjectID: t.ProjectID, Data: card})

@@ -201,7 +201,19 @@ func (s *Service) runCommand(ctx context.Context, t *db.Thread, cmd command, src
 		return nil, &ErrCommandUnsupported{Name: cmd.name}
 	case cmdCompact:
 		if t.Agent == db.AgentLLM {
-			return nil, ErrCompactUnavailable
+			// The conversation is compacted by its own session, so only a
+			// coordinator that runs as one can.
+			if s.Coordinator == nil || s.Coordinator.sessions == nil {
+				return nil, ErrCompactUnavailable
+			}
+			text := "/compact"
+			if cmd.args != "" {
+				text += " " + cmd.args
+			}
+			if _, err := s.Coordinator.Post(t.ProjectID, text, nil, src); err != nil {
+				return nil, err
+			}
+			return s.Store.GetThread(t.ID)
 		}
 		return s.Threads.Compact(ctx, t.ID, cmd.args, src)
 	}
