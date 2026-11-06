@@ -129,6 +129,16 @@ describe('conversation presentation', () => {
         expect(screen.getByText('Task report')).toBeInTheDocument();
     });
 
+    it('shows the compaction card of the project conversation: running, then done with figures', () => {
+        const card = (payload: object) => event('command', 'compact', { id: 'c', payload: JSON.stringify({ name: 'compact', ...payload }) });
+        const view = show(props([card({ state: 'running', trigger: 'manual' })]));
+        expect(screen.getByRole('status')).toHaveTextContent('projects.transcript.compacting');
+        view.unmount();
+        show(props([card({ state: 'ok', trigger: 'manual', tokens_reported: true, tokens_before: 120000, tokens_after: 18000 })]));
+        expect(screen.getByRole('status')).toHaveTextContent('projects.transcript.compacted');
+        expect(screen.getByRole('status')).toHaveAttribute('data-command', 'compact');
+    });
+
     it('offers a decision card once and keeps the pick after it is answered', async () => {
         const options = [{ label: 'Merge now', consequence: 'main gets it' }, { label: 'Wait for review' }];
         const open = props([event('decision', 'Merge?', { id: 'dec', payload: JSON.stringify({ question: 'Merge?', options, recommended: 1, reason: 'Cannot be undone' }) })]);

@@ -120,8 +120,10 @@ func commandCard(t *testing.T, f *testFixture, threadID string) commandPayload {
 func TestCompactRunsAsTheThreadsTurnAndLeavesOneCard(t *testing.T) {
 	ca := &commandAgent{}
 	f, svc, sink, th := commandFixture(t, ca)
+	before, err := f.store.GetThread(th.ID)
+	require.NoError(t, err)
 
-	_, err := svc.SendWith(context.Background(), th.ID, "/compact keep the API notes", nil, Source{}, SendNow)
+	_, err = svc.SendWith(context.Background(), th.ID, "/compact keep the API notes", nil, Source{}, SendNow)
 	require.NoError(t, err)
 	waitQuiet(t, f, svc, th.ID)
 
@@ -140,6 +142,9 @@ func TestCompactRunsAsTheThreadsTurnAndLeavesOneCard(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, db.ThreadIdle, got.Status)
 	assert.Equal(t, int64(18000), got.ContextTokens, "no live process to ask: the compaction's own figure")
+	assert.Equal(t, 1, got.Turns, "a compaction is not a conversation turn")
+	assert.Equal(t, before.ReportedModel, got.ReportedModel, "the model that answered is not blanked")
+	assert.Equal(t, before.InputTokens, got.InputTokens, "and no tokens are added")
 
 	assert.Contains(t, sink.next(t).text, "Compacted: 120k → 18k tokens.", "the chat bound to the thread hears the outcome")
 }
@@ -287,11 +292,12 @@ func TestAutomaticCompactionGetsACard(t *testing.T) {
 		turns++
 		n := turns
 		mu.Unlock()
+		turn.Say("ok", 1, 1)
 		if n == 2 {
+			// After the turn's last text, so the reply must not be replaced.
 			turn.Compacted(agentboot.CompactResult{Trigger: agentboot.CompactAuto, TokensBefore: 940000, TokensAfter: 31000, DurationMS: 12000,
 				Reported: agentboot.CompactReported{Tokens: true}})
 		}
-		turn.Say("ok", 1, 1)
 		return nil
 	})
 	th := folderChat(t, f, svc, FolderThreadSpec{})
@@ -302,4 +308,20 @@ func TestAutomaticCompactionGetsACard(t *testing.T) {
 	pl := commandCard(t, f, th.ID)
 	assert.Equal(t, commandPayload{Name: "compact", State: "ok", Trigger: "auto", TokensBefore: 940000, TokensAfter: 31000, TokensReported: true, DurationMS: 12000}, pl)
 	assert.Len(t, eventsOf(t, f, th.ID, db.EvAssistant), 2, "both turns' replies are there")
+	got, err := f.store.GetThread(th.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "ok", got.LastReport, "the compaction line did not replace the turn's reply")
+}
+
+func TestCompactNeedsAConversation(t *testing.T) {
+	ca := &commandAgent{}
+	f, svc, _, th := commandFixture(t, ca)
+	cur, err := f.store.GetThread(th.ID)
+	require.NoError(t, err)
+	cur.Turns = 0
+	require.NoError(t, f.store.SaveThread(cur))
+
+	_, err = svc.Send(context.Background(), th.ID, "/compact", nil, Source{})
+	assert.ErrorIs(t, err, ErrNothingToCompact)
+	assert.Equal(t, []string{"go"}, ca.sent(), "nothing was started")
 }

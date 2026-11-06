@@ -593,7 +593,7 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anc
 // CommandCard is a slash command's outcome as one line that settles in
 // place: working, done with the figures the agent reported, or why it could not.
 // A compaction's summary opens under it.
-const CommandCard = ({message}: {message: TranscriptEntry}) => {
+export const CommandCard = ({message}: {message: TranscriptEntry}) => {
     const {t} = useTranslation();
     const pl = (message.payload ?? {}) as CommandPayload;
     const [open, setOpen] = useState(false);

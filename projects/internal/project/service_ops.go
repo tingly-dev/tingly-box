@@ -203,11 +203,7 @@ func (s *Service) runCommand(ctx context.Context, t *db.Thread, cmd command, src
 		if t.Agent == db.AgentLLM {
 			// The conversation is compacted by its own session: the command is
 			// queued like any message and the coordinator runs it in its turn.
-			text := "/compact"
-			if cmd.args != "" {
-				text += " " + cmd.args
-			}
-			if _, err := s.Coordinator.Post(t.ProjectID, text, nil, src); err != nil {
+			if _, err := s.Coordinator.Post(t.ProjectID, compactText(cmd.args), nil, src); err != nil {
 				return nil, err
 			}
 			return s.Store.GetThread(t.ID)

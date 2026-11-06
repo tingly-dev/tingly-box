@@ -91,3 +91,12 @@ func literalPrompt(text string) string {
 	}
 	return text
 }
+
+// compactText is the message a person sends to compact: the one place the
+// command is spelled, for the web, a chat and the coordinator alike.
+func compactText(instructions string) string {
+	if instructions = strings.TrimSpace(instructions); instructions != "" {
+		return "/compact " + instructions
+	}
+	return "/compact"
+}

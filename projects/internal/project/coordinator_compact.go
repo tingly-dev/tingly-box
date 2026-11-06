@@ -109,32 +109,24 @@ func (s *coordinatorSessions) noteCompact(sessionID string, e engine.Entry) {
 	}
 	s.mu.Lock()
 	run := s.runs[sessionID]
+	var card *db.ThreadEvent
+	if run != nil {
+		card = run.card
+	}
 	s.mu.Unlock()
 	if run == nil {
 		return
 	}
+	open, settled := stepCard(card, ce, run.compact,
+		func(c *db.ThreadEvent) { s.c.addEvent(run.projectID, c) },
+		func(c *db.ThreadEvent) {
+			_ = s.c.store.UpdateThreadEvent(c)
+			s.c.publishEvent(run.projectID, c)
+		})
 	s.mu.Lock()
-	card := run.card
+	run.card = open
 	s.mu.Unlock()
-	if ce.Phase == agentboot.CompactStarted || card == nil {
-		card = s.c.addEvent(run.projectID, &db.ThreadEvent{Kind: db.EvCommand, Content: "compact", Payload: jsonString(openingPayload(run.compact))})
-		s.mu.Lock()
-		run.card = card
-		s.mu.Unlock()
-		if ce.Phase == agentboot.CompactStarted {
-			return
-		}
-	}
-	var pl commandPayload
-	_ = json.Unmarshal([]byte(card.Payload), &pl)
-	pl = pl.settled(ce)
-	card.Payload = jsonString(pl)
-	_ = s.c.store.UpdateThreadEvent(card)
-	s.c.publishEvent(run.projectID, card)
-	s.mu.Lock()
-	run.card = nil
-	s.mu.Unlock()
-	if run.compact {
-		s.c.final(&db.ThreadEvent{Kind: db.EvAssistant, ThreadID: card.ThreadID, Content: compactLine(pl)})
+	if settled != nil && run.compact {
+		s.c.final(&db.ThreadEvent{Kind: db.EvAssistant, ThreadID: run.threadID, Content: compactLine(*settled)})
 	}
 }

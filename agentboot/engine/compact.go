@@ -57,8 +57,9 @@ func (e *Engine) noteCompact(sessionID string, ev agentboot.CompactEvent) {
 // session must already have a conversation to resume.
 //
 // Errors: [agentboot.ErrCompactUnsupported] (the backend cannot compact),
-// *[agentboot.CompactFailedError] (it declined), the turn's own failure, or
-// ErrBusy.
+// *[agentboot.CompactFailedError] (it declined), the turn's own failure,
+// ErrBusy (a turn was running: nothing was started) or ErrNotSent (the agent
+// began a turn first; OnTurnEnd reported it with NotSent).
 func (e *Engine) Compact(ctx context.Context, id, dir, instructions string, launch Launch) (agentboot.CompactResult, error) {
 	prompt, err := e.agent.CompactPrompt("", instructions)
 	if err != nil {
@@ -82,7 +83,7 @@ func (e *Engine) Compact(ctx context.Context, id, dir, instructions string, laun
 	case end.Err != nil:
 		return agentboot.CompactResult{}, end.Err
 	case end.NotSent:
-		return agentboot.CompactResult{}, ErrBusy
+		return agentboot.CompactResult{}, ErrNotSent
 	case end.Stopped:
 		return agentboot.CompactResult{}, context.Canceled
 	}

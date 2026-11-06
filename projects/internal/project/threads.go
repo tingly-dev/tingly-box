@@ -1090,9 +1090,14 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 	report := Report{Kind: ReportFinished, Text: strings.TrimSpace(tally.text)}
 	held := false
 	t, _ = m.update(threadID, func(t *db.Thread) {
-		t.Turns++
-		t.ReportedModel = tally.model
-		t.AddUsage(tally.usage, time.Now().UTC())
+		// A compaction is not a conversation turn and makes no model call: it
+		// leaves the turn count, the model that answered and the last turn's
+		// figures as they were.
+		if !tally.compact {
+			t.Turns++
+			t.ReportedModel = tally.model
+			t.AddUsage(tally.usage, time.Now().UTC())
+		}
 		// A session's Model is the owner's pick; a project thread shows the
 		// model that answered.
 		switch {
