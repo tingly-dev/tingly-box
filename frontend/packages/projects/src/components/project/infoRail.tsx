@@ -190,22 +190,34 @@ function QuotaBar({ label, text, usedPct, resetsAt, exhausted }: { label: string
 export function QuotaCard({ thread, route }: { thread: Thread; route?: QuotaRoute }) {
     const { t } = useTranslation('projects');
     const slot = useProjectsHost().session?.quota;
-    const [reading, setReading] = useState<QuotaReading>();
     const profile = route?.profile;
     const tier = route?.tier;
     const model = thread.reported_model;
+    // A reading belongs to the thread and launch it was asked for: another
+    // thread (the panel stays mounted as the selection moves) never shows it.
+    const key = `${thread.id}|${profile}|${tier}`;
+    const [fetched, setFetched] = useState<{ key: string; reading?: QuotaReading }>();
     useEffect(() => {
         if (!slot || profile == null || tier == null) return;
         let live = true;
         slot({ profile, tier, model })
-            .then((r) => live && setReading(r))
-            .catch(() => live && setReading(undefined));
+            .then((r) => live && setFetched({ key, reading: r }))
+            .catch(() => live && setFetched({ key }));
         return () => {
             live = false;
         };
-    }, [slot, profile, tier, model, thread.turns, thread.last_turn_at]);
+    }, [slot, key, profile, tier, model, thread.turns, thread.last_turn_at]);
+    const reading = fetched?.key === key ? fetched.reading : undefined;
 
+    const [, setTick] = useState(0);
     const rows = subscriptionRows(thread.rate_limits, serverNow());
+    // A window that has reset says nothing about the new one: re-read the clock when the soonest one does.
+    const soonest = rows.length > 0 ? Math.min(...rows.map((r) => Date.parse(r.resetsAt))) : undefined;
+    useEffect(() => {
+        if (soonest == null) return;
+        const timer = setTimeout(() => setTick((n) => n + 1), Math.min(Math.max(soonest - serverNow(), 0) + 500, 2 ** 30));
+        return () => clearTimeout(timer);
+    }, [soonest]);
     const windows = reading?.windows ?? [];
     if (rows.length === 0 && windows.length === 0) return null;
     const routed = reading?.provider && (reading.model ? `${reading.model} @ ${reading.provider}` : reading.provider);
@@ -215,8 +227,8 @@ export function QuotaCard({ thread, route }: { thread: Thread; route?: QuotaRout
                 <QuotaBar key={r.key} label={t(`rail.quotaWindow.${r.key}`)} text={t('rail.quotaLeft', { pct: r.leftPct })} usedPct={r.usedPct} resetsAt={r.resetsAt} />
             ))}
             {windows.length > 0 && routed && <Fact label={t('rail.quotaProvider')} title={t('rail.quotaProviderTitle')}>{routed}</Fact>}
-            {windows.map((w) => (
-                <QuotaBar key={w.label} label={w.label} text={w.text} usedPct={w.usedPct} resetsAt={w.resetsAt} exhausted={w.limitReached} />
+            {windows.map((w, i) => (
+                <QuotaBar key={`${w.label}-${i}`} label={w.label} text={w.text} usedPct={w.usedPct} resetsAt={w.resetsAt} exhausted={w.limitReached} />
             ))}
         </RailCard>
     );

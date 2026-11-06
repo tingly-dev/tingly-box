@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Thread } from '../../client';
 import { ProjectsHostProvider, type ProjectsHost, type QuotaReading, type SessionSlots } from '../../host/ProjectsHost';
@@ -64,5 +64,28 @@ describe('QuotaCard', () => {
         show(thread(), host(quota), { profile: '', tier: '' });
         const bar = await screen.findByRole('progressbar', { name: 'daily' });
         expect(bar.className).toContain('MuiLinearProgress-colorError');
+    });
+
+    it("does not show another thread's provider quota once the open thread has no launch to look up", async () => {
+        const quota = vi.fn().mockResolvedValue({ provider: 'zai', windows: [{ label: 'weekly', text: '60% left', usedPct: 40 }] });
+        const h = host(quota);
+        const { rerender } = show(thread({ id: 'a' }), h, { profile: 'work', tier: 'sonnet' });
+        expect(await screen.findByText('60% left')).toBeTruthy();
+        rerender(<ProjectsHostProvider host={h}><QuotaCard thread={thread({ id: 'b' })} /></ProjectsHostProvider>);
+        expect(screen.queryByText('60% left')).toBeNull();
+    });
+
+    it('drops a subscription window the moment it resets, without waiting for the next turn', () => {
+        vi.useFakeTimers();
+        try {
+            vi.setSystemTime(new Date('2026-11-06T10:00:00Z'));
+            const resetsAt = Math.floor(Date.now() / 1000) + 60;
+            show(thread({ rate_limits: { status: 'allowed', updated_at: '', five_hour: { utilization: 0.88, resets_at: resetsAt } } }), host());
+            expect(screen.getByText('12% left')).toBeTruthy();
+            act(() => { vi.advanceTimersByTime(61_000); });
+            expect(screen.queryByText('12% left')).toBeNull();
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });

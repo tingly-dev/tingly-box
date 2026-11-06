@@ -372,8 +372,22 @@ func (t *Thread) AddUsage(u Usage, at time.Time) {
 	t.LastTurnMS = u.DurationMS
 	t.LastTurnAt = &at
 	if u.RateLimits != nil {
-		rl := *u.RateLimits
-		rl.UpdatedAt = at
-		t.RateLimits = &rl
+		t.RateLimits = u.RateLimits.MergedOver(t.RateLimits, at)
 	}
+}
+
+// MergedOver is r read at `at`, with any window it leaves out taken from the
+// earlier reading: an event may name only the window that is limiting.
+func (r *RateLimits) MergedOver(prev *RateLimits, at time.Time) *RateLimits {
+	out := *r
+	out.UpdatedAt = at
+	if prev != nil {
+		if out.FiveHour == nil {
+			out.FiveHour = prev.FiveHour
+		}
+		if out.SevenDay == nil {
+			out.SevenDay = prev.SevenDay
+		}
+	}
+	return &out
 }

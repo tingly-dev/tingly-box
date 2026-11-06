@@ -114,6 +114,9 @@ all live on `db.Thread`, set by `Thread.AddUsage` when a turn ends.
   running totals, so the converter takes only `contextWindow` and the model
   name from `modelUsage` and resets its per-call tally at every result (a
   resident process otherwise added turn one's calls into turn two).
+- A failed result's text becomes one transcript error entry (the converter's);
+  a turn Claude starts by itself no longer adds a second line for the same
+  failure (`Engine.resultErrorRecorded`).
 - Existing rows: the new columns default to 0 (migration is additive), so a
   thread shows context and cache only from its next turn on; its token totals
   are unchanged.
@@ -133,8 +136,9 @@ that either may be missing (no source, no card):
   Vertex sessions never get one, and neither does a session routed through the
   gateway unless the gateway relays those headers (not checked). The
   accumulator turns the event into a `RateLimitMessage`, the converter into a
-  "rate_limit" entry, the tally into `Thread.rate_limits` (latest reading wins;
-  a turn without one keeps the old reading). Rendered as "58% left" with a bar
+  "rate_limit" entry, the tally into `Thread.rate_limits` (latest reading wins
+  per window: an event may name only the limiting window, and the other keeps
+  its last reading; a turn without an event keeps the old reading). Rendered as "58% left" with a bar
   that shrinks as the window is spent (same remaining-not-used convention as
   `.design/quota-semantics.md`); a window past its `resets_at` is not shown.
 - **Provider quota, from the host.** A thread routed through Tingly Box's

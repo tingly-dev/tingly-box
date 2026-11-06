@@ -119,3 +119,20 @@ func TestThreadWithoutRateLimitsHasNone(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, got.RateLimits)
 }
+
+func TestRateLimitsMergeWindowByWindow(t *testing.T) {
+	at := time.Date(2026, 11, 4, 10, 0, 0, 0, time.UTC)
+	th := &Thread{}
+	th.AddUsage(Usage{RateLimits: &RateLimits{Status: "allowed",
+		FiveHour: &RateLimitWindow{Utilization: 0.4, ResetsAt: 100},
+		SevenDay: &RateLimitWindow{Utilization: 0.1, ResetsAt: 200}}}, at)
+	// A later event may name only the window that is limiting.
+	th.AddUsage(Usage{RateLimits: &RateLimits{Status: "allowed_warning",
+		FiveHour: &RateLimitWindow{Utilization: 0.9, ResetsAt: 100}}}, at.Add(time.Minute))
+	require.NotNil(t, th.RateLimits)
+	assert.Equal(t, "allowed_warning", th.RateLimits.Status)
+	assert.Equal(t, 0.9, th.RateLimits.FiveHour.Utilization)
+	if assert.NotNil(t, th.RateLimits.SevenDay, "a window the new reading does not mention keeps its last reading") {
+		assert.Equal(t, 0.1, th.RateLimits.SevenDay.Utilization)
+	}
+}

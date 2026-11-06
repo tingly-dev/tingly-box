@@ -255,7 +255,7 @@ func (t *turnTally) addRateLimits(r engine.RateLimits) {
 	if r.SevenDay != nil {
 		rl.SevenDay = &db.RateLimitWindow{Utilization: r.SevenDay.Utilization, ResetsAt: r.SevenDay.ResetsAt}
 	}
-	t.usage.RateLimits = rl
+	t.usage.RateLimits = rl.MergedOver(t.usage.RateLimits, time.Time{})
 }
 
 // NewThreads builds the thread manager.

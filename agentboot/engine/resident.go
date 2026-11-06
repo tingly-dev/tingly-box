@@ -15,15 +15,18 @@ import (
 // §3.7).
 type resident struct {
 	c *agentboot.Conductor
+	// conv is only touched from the Conductor's reader goroutine, which also
+	// runs its hooks.
+	conv *converter
 }
 
 // newResident starts conducting a freshly opened process. Call it right
 // after Open, before the first turn's events pile up.
 func (e *Engine) newResident(sessionID string, ps agentboot.PersistentSession) *resident {
-	r := &resident{}
 	// One converter for the process's life: its dedupe state spans turns
 	// and it resets its usage tally at each turn's result.
 	conv := newConverter()
+	r := &resident{conv: conv}
 	r.c = agentboot.NewConductor(ps, agentboot.ConductorHooks{
 		Sink: func(raw any) {
 			e.record(sessionID, conv, raw)
@@ -97,6 +100,15 @@ func (e *Engine) beginUnsolicitedTurn(sessionID string) (context.Context, agentb
 	return ctx, e.prompterFor(sessionID, wp, e.currentMode(sessionID))
 }
 
+// resultErrorRecorded: the failed result that ended a turn of Claude's own
+// is already a transcript entry (the converter wrote it).
+func (e *Engine) resultErrorRecorded(sessionID string, err error) bool {
+	e.mu.Lock()
+	r := e.residents[sessionID]
+	e.mu.Unlock()
+	return r != nil && r.conv.recorded(err)
+}
+
 func (e *Engine) currentMode(id string) string {
 	if e.permissionMode == nil {
 		return ""
@@ -132,7 +144,9 @@ func (e *Engine) endUnsolicitedTurn(sessionID string, err error) {
 		end.Stopped = true
 	case err != nil:
 		e.store.SetFailed(sessionID, err.Error())
-		e.appendError(sessionID, err.Error())
+		if !e.resultErrorRecorded(sessionID, err) {
+			e.appendError(sessionID, err.Error())
+		}
 		end.Err = err
 	default:
 		e.store.SetCompleted(sessionID, "")
