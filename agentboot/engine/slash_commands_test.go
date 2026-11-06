@@ -229,10 +229,26 @@ func TestEngine_CompactRefused(t *testing.T) {
 	}
 }
 
+// plainAgent is a backend that cannot compact: it has no CompactPrompt.
+type plainAgent struct{ a *enginetest.Agent }
+
+func (p plainAgent) Execute(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.ExecutionHandle, error) {
+	return p.a.Execute(ctx, prompt, opts)
+}
+func (p plainAgent) IsAvailable() bool         { return true }
+func (p plainAgent) Type() agentboot.AgentType { return agentboot.AgentTypeClaude }
+
 // A backend with no compaction says so, before anything is started.
 func TestEngine_CompactUnsupportedBackend(t *testing.T) {
-	e, store, _ := newScripted(t, func(*enginetest.Turn) error { return nil }, nil)
-	_, err := e.Compact(context.Background(), "id", t.TempDir(), "", nil)
+	svc, err := agentboot.NewAgentService(agentboot.DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.RegisterAgent(agentboot.AgentTypeClaude, plainAgent{&enginetest.Agent{Script: func(*enginetest.Turn) error { return nil }}})
+	store := newMemStore()
+	e := New(Config{Agent: svc, Store: store})
+	t.Cleanup(func() { e.Shutdown(context.Background()) })
+	_, err = e.Compact(context.Background(), "id", t.TempDir(), "", nil)
 	if !errors.Is(err, agentboot.ErrCompactUnsupported) {
 		t.Fatalf("err = %v, want ErrCompactUnsupported", err)
 	}

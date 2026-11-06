@@ -286,16 +286,16 @@ func (h *BotHandler) projectDirectory(hCtx HandlerContext, arg string) {
 	h.SendText(hCtx, "This chat now talks to the coordinator of "+chosen.Name+".")
 }
 
-// projectCommand reads a chat command that Projects runs: /new and /stop
-// (with an optional argument), /clear, /session [N], /status, /verbose
-// [on|off] and /yolo. ok is false for anything else.
+// projectCommand reads a chat command that Projects runs: /new, /stop and
+// /compact (with an optional argument), /clear, /session [N], /status,
+// /verbose [on|off] and /yolo. ok is false for anything else.
 func projectCommand(text string, group bool) (name, arg string, ok bool) {
 	cmd, ok := imbot.ParseSlashCommand(text, group)
 	if !ok {
 		return "", "", false
 	}
 	switch cmd.Name {
-	case "new", "stop", "session", "verbose":
+	case "new", "stop", "session", "verbose", "compact":
 		return cmd.Name, cmd.Args, true
 	case "clear", "status", "yolo":
 		if cmd.Args == "" {

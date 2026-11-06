@@ -80,6 +80,8 @@ func (s threadStore) Append(sid string, e engine.Entry) {
 		if note := taskNote(e); note != "" && !session {
 			ev = &db.ThreadEvent{Kind: db.EvSystem, Content: note}
 		}
+	case e.Kind == engine.KindCompact:
+		s.m.noteCompact(t, e)
 	case e.Kind == engine.KindError:
 		ev = &db.ThreadEvent{Kind: db.EvError, Content: e.Content}
 	case e.Kind == engine.KindSystem:
