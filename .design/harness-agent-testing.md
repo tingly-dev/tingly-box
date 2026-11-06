@@ -1,7 +1,7 @@
 # Runbook — tingly-box 阶段验收基线
 
-> 一个开发阶段结束后、发 PR 前的**真实补充测试**操作手册。
-> 入口：`scripts/harness-baseline.sh`；全量命令参考 [`cli/harness/README.md`](../cli/harness/README.md)。
+> 一个开发阶段结束后、发 PR 前的 **真实补充测试**操作手册。
+> 入口：`tests/harness-baseline.sh`；全量命令参考 [`cli/harness/README.md`](../cli/harness/README.md)。
 
 ## 这套测试是什么 / 不是什么
 
