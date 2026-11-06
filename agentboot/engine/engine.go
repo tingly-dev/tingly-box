@@ -160,6 +160,10 @@ var (
 	ErrNoTurn = errors.New("no turn in progress")
 	// ErrBusy: the session has a turn in flight.
 	ErrBusy = errors.New("a turn is in progress")
+	// ErrNotSent: Compact's request never reached the agent, because it had
+	// just started a turn of its own. The host's OnTurnEnd already saw this
+	// (TurnEnd.NotSent); a host that re-queues on that must not do so again.
+	ErrNotSent = errors.New("the agent started a turn of its own first")
 	// ErrUnknownRequest: no pending approval or question has that id.
 	ErrUnknownRequest = errors.New("no such pending request")
 	// ErrTaskNotRunning: the session has no live background task by that id.
