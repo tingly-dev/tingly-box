@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
 import type { ReactNode } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { armWorkspaceImHint } from '@tingly/projects/workspace-im-hint';
 
 export type ExperimentalFeature = 'skill_ide' | 'guardrails' | 'mcp' | 'bench' | 'projects';
 
@@ -63,6 +64,8 @@ const ExperimentalFeatureGate = ({ feature, children }: ExperimentalFeatureGateP
             try {
                 const result = await api.setScenarioFlag('_global', 'projects', true);
                 if (!result.success) throw new Error('Feature update rejected');
+                // First enablement: the Workspace home's IM hint pops once, there.
+                armWorkspaceImHint();
                 await flags.refresh();
             } catch { setError(true); } finally { setBusy(false); }
         };

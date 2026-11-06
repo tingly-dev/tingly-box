@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectsHostProvider, type ProjectsHost } from '../host/ProjectsHost';
+import { armWorkspaceImHint } from '../utils/imHint';
 import WorkspaceHomePage, { RECENT } from './WorkspaceHomePage';
 
 const m = vi.hoisted(() => ({ projects: null as unknown[] | null, folders: null as unknown[] | null, all: null as unknown[] | null, bindings: null as unknown[] | null }));
@@ -182,9 +183,12 @@ describe('WorkspaceHomePage IM section', () => {
 });
 
 describe('WorkspaceHomePage first-visit IM hint', () => {
+    // The hint is armed by enabling the Workspace power-up (the host calls
+    // armWorkspaceImHint); here the tests arm it the same way.
     beforeEach(() => {
         window.localStorage.clear();
         window.sessionStorage.clear();
+        armWorkspaceImHint();
         m.projects = [project(1)];
         m.folders = [folder(1)];
         m.all = [project(1), folder(1)];
@@ -197,14 +201,26 @@ describe('WorkspaceHomePage first-visit IM hint', () => {
         act(() => { vi.advanceTimersByTime(600); });
     };
 
-    it('points at IM once, and a dismissed hint stays away for good', () => {
+    it('stays quiet on visits that follow no fresh enablement', () => {
+        window.localStorage.clear();
+        vi.useFakeTimers();
+        show(hostWithIm);
+        act(() => { vi.advanceTimersByTime(600); });
+        expect(screen.queryByText('workspace.imHintTitle')).not.toBeInTheDocument();
+    });
+
+    it('points at IM once after enablement, and a dismissed hint stays away for good', () => {
         openHint();
         expect(screen.getByText('workspace.imHintTitle')).toBeInTheDocument();
         expect(screen.getByText('workspace.imHintBody')).toBeInTheDocument();
+        // Shown: the arm is spent.
+        expect(window.localStorage.getItem('tingly-project.workspace.imHintArmed')).toBeNull();
         fireEvent.click(screen.getByRole('button', { name: 'workspace.imHintGotIt' }));
         expect(window.localStorage.getItem('tingly-project.workspace.imHintDone')).toBe('1');
         cleanup();
 
+        // Enabling the power-up again does not bring it back.
+        armWorkspaceImHint();
         vi.useFakeTimers();
         show(hostWithIm);
         act(() => { vi.advanceTimersByTime(600); });

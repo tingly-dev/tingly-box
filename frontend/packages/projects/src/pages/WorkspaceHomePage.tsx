@@ -12,14 +12,14 @@ import { ProjectCard } from '../components/project/ProjectCard';
 import { WorkdirCard } from '../components/workdir/WorkdirCard';
 import { useProjectList } from '../hooks/useProjectList';
 import { useProjectsHost } from '../host/ProjectsHost';
-import { readLocal, readSession, writeLocal, writeSession } from '../utils/storage';
+import { readSession, writeSession } from '../utils/storage';
+import { disarmWorkspaceImHint, dismissWorkspaceImHint, imHintArmed, imHintDismissed } from '../utils/imHint';
 
 /** How many recent items each section shows before "View all". */
 export const RECENT = 3;
 
-// The first-run hint at the IM section: dismissed stays away for good, an
-// un-dismissed hint does not come back within the same visit (the tab).
-const IM_HINT_DONE = 'workspace.imHintDone';
+// While the first-visit hint at the IM section is up but not dismissed, the
+// rest of this visit (the tab) stays quiet — a refresh included.
 const IM_HINT_THIS_VISIT = 'workspace.imHint.seen';
 
 const recent = (list: ProjectSummary[]) => [...list].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, RECENT);
@@ -94,16 +94,21 @@ export default function WorkspaceHomePage() {
     const directory = useProjectDirectory(hasIm);
     const steps = (prefix: 'projects' | 'workdir' | 'im') => [1, 2, 3].map((n) => t(`workspace.${prefix}Step${n}`));
 
-    // The IM entry sits below the fold on first sight; on the first visit a
-    // small hint points at it. Dismissed is remembered for good; while it is
-    // not dismissed, the rest of this visit stays quiet (a refresh included).
+    // The IM entry sits below the fold; when the Workspace power-up is turned
+    // on, the first render of this page scrolls the section into view and a
+    // small hint points at it. The enable action arms the hint; dismissed is
+    // remembered for good; while it is up but not dismissed, the rest of this
+    // visit stays quiet (a refresh included).
     const [imHintAnchor, setImHintAnchor] = useState<HTMLElement | null>(null);
     const imHeader = useRef<HTMLDivElement>(null);
     useEffect(() => {
-        if (!hasIm || readLocal(IM_HINT_DONE) === '1' || readSession(IM_HINT_THIS_VISIT) === '1') return;
+        // The dismissed check here is belt and braces: armWorkspaceImHint
+        // already refuses to arm a dismissed hint.
+        if (!hasIm || imHintDismissed() || !imHintArmed() || readSession(IM_HINT_THIS_VISIT) === '1') return;
         const timer = window.setTimeout(() => {
             // Marked only once actually shown, so a strict double render still shows it.
             writeSession(IM_HINT_THIS_VISIT, '1');
+            disarmWorkspaceImHint();
             imHeader.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
             setImHintAnchor(imHeader.current);
         }, 500);
@@ -111,7 +116,7 @@ export default function WorkspaceHomePage() {
     }, [hasIm]);
     const closeImHint = () => {
         setImHintAnchor(null);
-        writeLocal(IM_HINT_DONE, '1');
+        dismissWorkspaceImHint();
     };
 
     const recentBindings = [...(bindings ?? [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, RECENT);

@@ -18,11 +18,14 @@ Projects list. It splits the entry in two and teaches each side:
   the three newest bound chats (`ImChatCard`, newest `updated_at` first; opening one lands where the IM settings page's
   chat link does, via the shared `imDestination`). Without a host IM capability the section is absent, like the
   sidebar's IM row.
-- **First-visit hint.** The IM entry sits below the fold, so a first open scrolls the section into view and a small
-  popover (MUI `Popover`, anchored to the section header) says what it is. Any close — the "Got it" button, the
-  backdrop, Escape — counts as seen and is kept in localStorage (`workspace.imHintDone`): never again. Before it is
-  dismissed, the rest of the browser visit stays quiet (`sessionStorage` flag), so a refresh does not nag; a later
-  visit gets one more look until dismissed. Only shown when the host has IM.
+- **First-visit hint.** The hint is tied to the enablement of the Workspace power-up, not to page visits: enabling it
+  (the gate's "Enable Workspace" dialog, or the Projects toggle in the experimental settings) calls
+  `armWorkspaceImHint()` (`@tingly/projects/workspace-im-hint`), and the first render of the Workspace home after that
+  scrolls the section into view and opens a small popover (MUI `Popover`, anchored to the section header) saying what
+  it is. Showing it spends the arm, so it pops once per enablement. Any close — the "Got it" button, the backdrop,
+  Escape — is kept in localStorage (`workspace.imHintDone`): never again, not even when the feature is enabled again.
+  While a hint is up but not dismissed, the rest of the browser visit stays quiet (`sessionStorage` flag), so a
+  refresh does not nag. Only shown when the host has IM.
 
 The two sections are independent: a user with projects but no folders sees cards on one side and the guide on the other.
 
