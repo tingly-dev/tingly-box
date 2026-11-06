@@ -4,7 +4,7 @@
 // Any empty or inapplicable segment is dropped together with its separator.
 // See .design/bot-im-alias-display.md §3.
 
-export type EntityKind = 'bot' | 'direct' | 'group' | 'actor';
+export type EntityKind = 'bot' | 'direct' | 'group';
 
 export interface EntityParts {
     /** Platform display name ("Telegram"), never the raw platform id. */
@@ -40,10 +40,14 @@ export function shortId(kind: EntityKind, id: string): ShortId {
             const core = id.slice(0, -BOT_SUFFIX.length);
             if (core.length > BOT_TAIL + 2) return { text: `…${core.slice(-BOT_TAIL)}`, shortened: true };
         }
-        if (id.length <= MAX_EXTERNAL_ID) return { text: id, shortened: false };
     }
     if (id.length <= MAX_EXTERNAL_ID) return { text: id, shortened: false };
     return { text: `${id.slice(0, 6)}…${id.slice(-4)}`, shortened: true };
+}
+
+/** The operator's alias, else the platform's own name; blank when neither is set. */
+export function aliasOrName(alias?: string, name?: string): string {
+    return alias?.trim() || name?.trim() || '';
 }
 
 /** External ids may carry a `platform:` prefix; the platform is its own segment, so display the bare id. */

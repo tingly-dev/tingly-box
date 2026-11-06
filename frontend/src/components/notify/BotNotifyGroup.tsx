@@ -28,7 +28,7 @@ import {useCallback, useEffect, useState} from 'react';
 import {PLATFORM_BRAND_ICONS} from '@/constants/platformGuides';
 import {writeToClipboard} from '@/utils/clipboard';
 import {useTranslation} from 'react-i18next';
-import {EntityLabel, bareId} from '@tingly/ui';
+import {EntityLabel, aliasOrName, bareId} from '@tingly/ui';
 import {useEntityLabels} from '@/components/entity/useEntityLabels';
 
 // BotNotifyGroup is one bot's panel on the IM Notify page: a header (name +
@@ -408,7 +408,7 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                                                     fullChatID={target.external_id}
                                                     targetID={target.id}
                                                     kind={target.kind}
-                                                    alias={target.alias || target.name}
+                                                    alias={aliasOrName(target.alias, target.name)}
                                                     labelText={targetText(target)}
                                                     isPaired={target.is_paired}
                                                     active={enabled}

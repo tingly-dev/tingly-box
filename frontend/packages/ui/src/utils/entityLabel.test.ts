@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bareId, entityText, groupMark, platformGroupText, shortId } from './entityLabel';
+import { aliasOrName, bareId, entityText, groupMark, platformGroupText, shortId } from './entityLabel';
 
 describe('shortId', () => {
     it('keeps short external ids whole', () => {
@@ -59,5 +59,14 @@ describe('entityText', () => {
 
     it('uses the bot shortening rule for bots', () => {
         expect(entityText({ platform: 'Telegram', alias: '@ops', id: '1730600000123456789-imbot' }, { kind: 'bot' })).toBe('Telegram · @ops · …456789');
+    });
+});
+
+describe('aliasOrName', () => {
+    it('prefers a non-blank alias, then the platform name, else blank', () => {
+        expect(aliasOrName('Boss', 'Alice')).toBe('Boss');
+        expect(aliasOrName('  ', 'Alice')).toBe('Alice');
+        expect(aliasOrName(undefined, ' Alice ')).toBe('Alice');
+        expect(aliasOrName('', '')).toBe('');
     });
 });

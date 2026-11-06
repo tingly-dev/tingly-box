@@ -4,7 +4,7 @@
 // Projects' own and do not pass through here.
 import { useState } from 'react';
 import type { ImBot, ImChat, ImChatInfo, ImHost } from '@tingly/projects';
-import { bareId, entityText, shortId } from '@tingly/ui';
+import { aliasOrName, bareId, entityText, shortId } from '@tingly/ui';
 import BotAccessDialog from '@/components/bot/BotAccessDialog';
 import { PLATFORM_BRAND_ICONS, platformDisplayName } from '@/constants/platformGuides';
 import i18n from '@/i18n';
@@ -16,7 +16,17 @@ import type { BotSettings } from '@/types/bot';
 // package only knows an ImBot).
 const knownBots = new Map<string, BotSettings>();
 
-const platformLabel = (platform: string) => platformDisplayName(platform, i18n.t.bind(i18n));
+// platformDisplayName rebuilds every platform guide per call: look each name up once per language.
+const platformNames = new Map<string, string>();
+const platformLabel = (platform: string) => {
+    const key = `${i18n.language}:${platform}`;
+    let name = platformNames.get(key);
+    if (name === undefined) {
+        name = platformDisplayName(platform, i18n.t.bind(i18n));
+        platformNames.set(key, name);
+    }
+    return name;
+};
 
 // What the host knows about each chat it has listed, so a binding or a message
 // that only holds a chat id can still be shown as `平台 · alias · id` (group chats: `平台群 · alias · id`).
@@ -135,7 +145,7 @@ async function fetchChats(bot: ImBot): Promise<{ chats: ImChat[]; complete: bool
     const chats: ImChat[] = [];
     if (direct.status === 'fulfilled') {
         for (const { chat } of direct.value.chats ?? []) {
-            const shown = chat.alias?.trim() || chat.name?.trim();
+            const shown = aliasOrName(chat.alias, chat.name);
             chats.push({
                 botUuid: bot.uuid,
                 platform: chat.platform,
@@ -148,14 +158,15 @@ async function fetchChats(bot: ImBot): Promise<{ chats: ImChat[]; complete: bool
         }
     }
     if (groups.status === 'fulfilled') {
+        const groupLabel = i18n.t('entity.group', { defaultValue: '{{platform}} group', platform: '{{platform}}', interpolation: { escapeValue: false } });
         for (const g of groups.value.groups ?? []) {
-            const alias = g.alias?.trim() || g.name?.trim() || undefined;
+            const alias = aliasOrName(g.alias, g.name) || undefined;
             chats.push({
                 botUuid: bot.uuid,
                 platform: g.platform,
                 chatId: g.external_group_id,
                 alias,
-                title: entityText({ platform: platformLabel(g.platform), group: true, alias, id: bareId(g.platform, g.external_group_id) }, { groupLabel: i18n.t('entity.group', { defaultValue: '{{platform}} group', platform: '{{platform}}', interpolation: { escapeValue: false } }) }),
+                title: entityText({ platform: platformLabel(g.platform), group: true, alias, id: bareId(g.platform, g.external_group_id) }, { groupLabel }),
                 kind: 'group',
                 state: g.blocked ? 'blocked' : 'ok',
             });

@@ -1101,7 +1101,7 @@ func withPeerNames(tx *gorm.DB, chats []access.DirectChat) error {
 		return nil
 	}
 	var actors []remoteActorRecord
-	if err := tx.Where("id IN ?", ids).Find(&actors).Error; err != nil {
+	if err := tx.Select("id", "display_name", "external_actor_id").Where("id IN ?", ids).Find(&actors).Error; err != nil {
 		return err
 	}
 	names := make(map[string]string, len(actors))

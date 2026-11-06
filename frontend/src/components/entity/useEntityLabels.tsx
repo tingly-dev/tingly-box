@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { bareId, entityText, type EntityKind, type EntityLabelProps } from '@tingly/ui';
+import { aliasOrName, bareId, entityText, type EntityLabelProps } from '@tingly/ui';
 import { PLATFORM_BRAND_ICONS, platformDisplayName } from '@/constants/platformGuides';
 import type { NotifyTarget } from '@/types/bot';
 
@@ -57,7 +57,7 @@ export function useEntityLabels(): EntityLabels {
         const text: EntityLabels['text'] = (props, opts) =>
             entityText(
                 { platform: props.platform, group: props.group, alias: props.alias, id: props.id },
-                { groupLabel, shorten: opts?.shorten ?? true, kind: props.kind as EntityKind | undefined },
+                { groupLabel, shorten: opts?.shorten ?? true, kind: props.kind },
             );
         const bot: EntityLabels['bot'] = (b) => ({
             ...common,
@@ -67,8 +67,8 @@ export function useEntityLabels(): EntityLabels {
             kind: 'bot',
             platformIcon: icon(b.platform ?? ''),
         });
-        const chat: EntityLabels['chat'] = (c) => ref(c.platform, c.external_chat_id, { alias: c.alias || c.name });
-        const group: EntityLabels['group'] = (g) => ref(g.platform, g.external_group_id, { alias: g.alias || g.name, group: true });
+        const chat: EntityLabels['chat'] = (c) => ref(c.platform, c.external_chat_id, { alias: aliasOrName(c.alias, c.name) });
+        const group: EntityLabels['group'] = (g) => ref(g.platform, g.external_group_id, { alias: aliasOrName(g.alias, g.name), group: true });
         // A Notify target carries the operator's alias and, for groups, the platform's own name.
         const target: EntityLabels['target'] = (x) => (x.kind === 'group'
             ? group({ platform: x.platform ?? '', external_group_id: x.external_id, alias: x.alias, name: x.name })
