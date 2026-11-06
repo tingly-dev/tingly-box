@@ -28,6 +28,7 @@ import { useProjectsHost } from '../host/ProjectsHost';
 import { readLocal, writeLocal } from '../utils/storage';
 import { needsUser } from '../components/project/threadStatus';
 import { changesLiveTasks } from '../components/workdir/backgroundTasks';
+import { ControlTooltip } from '../components/ControlTooltip';
 import { composerPickerLabelSx, composerPickerMenuProps, composerPickerSx } from '../components/composerPicker';
 
 
@@ -58,6 +59,7 @@ export default function ProjectPage() {
     const [threads, setThreads] = useState<Thread[]>([]);
     // The project conversation: the main thread's events.
     const [busy, setBusy] = useState(false);
+    const [worktreeMenuOpen, setWorktreeMenuOpen] = useState(false);
     const [liveTasks, setLiveTasks] = useState<BackgroundTask[]>([]);
     const openThreadId = useRef(threadId);
     // The coordinator's own status, for the Overview's Status tab.
@@ -441,7 +443,7 @@ export default function ProjectPage() {
                             // Defaults stay project-scoped; the selected worker's overrides are in its own panel.
                             <>
                                 <Typography variant="caption" color="text.secondary" title={t('threadSettings.defaultsHelp')}>{t('threadSettings.defaults')}</Typography>
-                                <Tooltip title={t('projectSettings.worktreeHelp')}>
+                                <ControlTooltip title={t('projectSettings.worktreeHelp')} suppressed={worktreeMenuOpen}>
                                     <Select
                                         size="small" variant="standard" disableUnderline IconComponent={ExpandMore}
                                         value={project.disable_worktree ? 'shared' : 'worktree'}
@@ -451,11 +453,14 @@ export default function ProjectPage() {
                                         renderValue={(value) => <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}><Folder /><Typography noWrap sx={composerPickerLabelSx}>{t(`threadSettings.workspace.${value}`)}</Typography></Stack>}
                                         sx={composerPickerSx}
                                         MenuProps={composerPickerMenuProps}
+                                        open={worktreeMenuOpen}
+                                        onOpen={() => setWorktreeMenuOpen(true)}
+                                        onClose={() => setWorktreeMenuOpen(false)}
                                     >
                                         <MenuItem value="worktree">{t('threadSettings.workspace.worktree')}</MenuItem>
                                         <MenuItem value="shared">{t('threadSettings.workspace.shared')}</MenuItem>
                                     </Select>
-                                </Tooltip>
+                                </ControlTooltip>
                                 <PermissionModeSelect
                                     value={project.thread_permission_mode || 'acceptEdits'}
                                     modes={THREAD_MODES}
