@@ -697,6 +697,10 @@ func (h *Handler) RefreshOAuthToken(c *gin.Context) {
 	if ai.IsKimiCodeIssuer(issuer) && provider.OAuthDetail.DeviceID != "" {
 		refreshOpts = append(refreshOpts, oauth.WithKimiDeviceID(provider.OAuthDetail.DeviceID))
 	}
+	if ai.IsQoderIssuer(issuer) {
+		id, _ := provider.OAuthDetail.ExtraFields[oauth.QoderMachineID].(string)
+		refreshOpts = append(refreshOpts, oauth.WithQoderMachineID(id))
+	}
 	if ai.IsWorkBuddyIssuer(issuer) {
 		uid, _ := provider.OAuthDetail.ExtraFields[oauth.WorkBuddyMetaUserID].(string)
 		refreshOpts = append(refreshOpts, oauth.WithWorkBuddyCredential(provider.OAuthDetail.AccessToken, uid))
@@ -1267,6 +1271,9 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 			// the dual URL below so OpenAI/Codex clients are served natively.
 			apiBase, _ = ai.ZCodeEndpoints(issuer)
 			apiStyle = protocol.APIStyleAnthropic
+		case ai.IssuerQoder, ai.IssuerQoderCN:
+			apiBase = ai.QoderInferenceBase(ai.Issuer(issuer))
+			apiStyle = "openai"
 		case ai.IssuerWorkBuddy, ai.IssuerWorkBuddyCN:
 			// OpenAI chat completions under /v2; Anthropic and Responses
 			// clients reach it through protocol conversion.

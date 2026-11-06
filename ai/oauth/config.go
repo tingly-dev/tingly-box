@@ -20,7 +20,7 @@ const DefaultSessionExpiry = 10 * time.Minute
 func ParseIssuer(i ai.Issuer) (ai.Issuer, error) {
 	// Validate by checking against known providers
 	switch i {
-	case ai.IssuerClaudeCode, ai.IssuerOpenAI, ai.IssuerGoogle, ai.IssuerGemini, ai.IssuerGitHub, ai.IssuerQwenCode, ai.IssuerAntigravity, ai.IssuerIFlow, ai.IssuerCodex, ai.IssuerMock, ai.IssuerKimiCode, ai.IssuerKimiCodeIntl, ai.IssuerCursor, ai.IssuerCopilot, ai.IssuerZCode, ai.IssuerZCodeCN, ai.IssuerXAI, ai.IssuerWorkBuddy, ai.IssuerWorkBuddyCN:
+	case ai.IssuerClaudeCode, ai.IssuerOpenAI, ai.IssuerGoogle, ai.IssuerGemini, ai.IssuerGitHub, ai.IssuerQwenCode, ai.IssuerAntigravity, ai.IssuerIFlow, ai.IssuerCodex, ai.IssuerMock, ai.IssuerKimiCode, ai.IssuerKimiCodeIntl, ai.IssuerCursor, ai.IssuerCopilot, ai.IssuerZCode, ai.IssuerZCodeCN, ai.IssuerXAI, ai.IssuerWorkBuddy, ai.IssuerWorkBuddyCN, ai.IssuerQoder, ai.IssuerQoderCN:
 		return i, nil
 	default:
 		return "", fmt.Errorf("unknown provider type: %s", i)

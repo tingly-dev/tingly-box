@@ -316,6 +316,10 @@ func (tr *OAuthRefresher) refreshProviderToken(provider *typ.Provider) {
 	if ai.IsKimiCodeIssuer(issuer) && provider.OAuthDetail.DeviceID != "" {
 		refreshOpts = append(refreshOpts, oauth.WithKimiDeviceID(provider.OAuthDetail.DeviceID))
 	}
+	if ai.IsQoderIssuer(issuer) {
+		id, _ := provider.OAuthDetail.ExtraFields[oauth.QoderMachineID].(string)
+		refreshOpts = append(refreshOpts, oauth.WithQoderMachineID(id))
+	}
 	if ai.IsWorkBuddyIssuer(issuer) {
 		uid, _ := provider.OAuthDetail.ExtraFields[oauth.WorkBuddyMetaUserID].(string)
 		refreshOpts = append(refreshOpts, oauth.WithWorkBuddyCredential(provider.OAuthDetail.AccessToken, uid))

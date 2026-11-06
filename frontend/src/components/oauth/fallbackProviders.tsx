@@ -125,6 +125,16 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         color: '#3859FF',
         enabled: true,
     },
+    {
+        id: 'qoder', name: 'Qoder', displayName: 'Qoder International',
+        description: 'Connect a Qoder international account.',
+        icon: <Box sx={{fontWeight: 700, fontSize: 26}}>Q</Box>, color: '#6657e8', enabled: true,
+    },
+    {
+        id: 'qoder_cn', name: 'Qoder CN', displayName: 'Qoder CN',
+        description: 'Connect a Qoder China account.',
+        icon: <Box sx={{fontWeight: 700, fontSize: 26}}>Q</Box>, color: '#6657e8', enabled: true,
+    },
     // WorkBuddy (Tencent). Same login-link flow as ZCode: the site owns the
     // sign-in, the backend polls for the tokens. One card per account region;
     // CodeBuddy accounts sign in through the CN card.
