@@ -50,6 +50,9 @@ func chatKey(platform, chatID string) string { return platform + "\x00" + chatID
 // sentPrompt is a prompt a chat was sent, to restate when it settles.
 type sentPrompt struct {
 	platform, chatID, ref, text string
+	// bot is the bot the chat's binding names; a prompt sent as plain text
+	// (empty ref) is answered through it as a new line.
+	bot string
 }
 
 type relayJob struct {
@@ -66,6 +69,10 @@ type relayJob struct {
 	prompt  *ChannelPrompt
 	// verbose sends it only to the chats that asked for each step.
 	verbose bool
+	// quote, set on a decision card, names the question a chat that got it as
+	// plain text is told about again once it is settled, since the text has no
+	// message to rewrite.
+	quote string
 	// settle, when set, is a request id: the prompts sent for it are
 	// restated with text added, and nothing new is sent.
 	settle string
@@ -115,10 +122,59 @@ func (r *Relay) Message(e db.ThreadEvent) {
 		}
 	case db.EvThreadUpdate:
 		tag, text = foldThreadUpdate(e)
+	case db.EvDecision:
+		r.decision(e)
+		return
 	}
 	if text != "" {
 		r.enqueue([]string{e.ThreadID}, tag, text)
 	}
+}
+
+// decision asks the chats bound to the conversation to pick an option of a
+// decision card: with a button per option where the chat can show them,
+// otherwise as numbered text to answer by replying. The card's id is the
+// request id, so the answer goes through AnswerFromChannel and the chat's
+// next message, like any request.
+func (r *Relay) decision(e db.ThreadEvent) {
+	var d Decision
+	if json.Unmarshal([]byte(e.Payload), &d) != nil || d.Chosen != nil || len(d.Options) == 0 {
+		return
+	}
+	choices := make([]ChannelChoice, len(d.Options))
+	for i, o := range d.Options {
+		label := o.Label
+		if i == d.Recommended {
+			label += " (recommended)"
+		}
+		choices[i] = ChannelChoice{Value: choiceValue(i), Label: label}
+	}
+	r.enqueueJob(relayJob{
+		threadIDs: []string{e.ThreadID},
+		text:      d.chatText() + "\n" + d.replyHint(),
+		quote:     "Re: " + oneLine(d.Question),
+		request:   &pendingRequest{threadID: e.ThreadID, requestID: e.ID},
+		prompt:    &ChannelPrompt{ThreadID: e.ThreadID, RequestID: e.ID, Text: d.chatText(), Choices: choices},
+	})
+}
+
+// Decided restates the decision card in the chats it was shown to, with the
+// option chosen and where, so none offers buttons for it any more, and stops
+// taking the chats' next message as its answer.
+func (r *Relay) Decided(e db.ThreadEvent, src Source) {
+	if r == nil || r.sink == nil {
+		return
+	}
+	var d Decision
+	if json.Unmarshal([]byte(e.Payload), &d) != nil || d.Chosen == nil || *d.Chosen >= len(d.Options) {
+		return
+	}
+	r.forget(e.ID)
+	where := " on the web"
+	if src.Kind == db.SourceIM {
+		where = " in a chat"
+	}
+	r.enqueueJob(relayJob{settle: e.ID, text: join("Answered"+where, d.Options[*d.Chosen].Label)})
 }
 
 // ThreadReply relays the end of a turn of a non-main thread (a worker or a
@@ -234,19 +290,27 @@ func (r *Relay) Settled(t db.Thread, request db.ThreadEvent) {
 	}
 }
 
-// Awaiting returns the oldest request a chat was asked that is not settled:
-// the chat's next message answers it.
-func (r *Relay) Awaiting(platform, chatID string) (threadID, requestID string, ok bool) {
+// awaitingAll returns every request a chat was asked that is not settled,
+// oldest first.
+func (r *Relay) awaitingAll(platform, chatID string) []pendingRequest {
 	if r == nil {
-		return "", "", false
+		return nil
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	reqs := r.awaiting[chatKey(platform, chatID)]
-	if len(reqs) == 0 {
-		return "", "", false
+	return append([]pendingRequest(nil), r.awaiting[chatKey(platform, chatID)]...)
+}
+
+// tell sends text to one chat, as the bot its binding names.
+func (r *Relay) tell(botUUID, platform, chatID, text string) {
+	if r == nil || r.sink == nil {
+		return
 	}
-	return reqs[0].threadID, reqs[0].requestID, true
+	ctx, cancel := context.WithTimeout(withChannelBot(context.Background(), botUUID), relaySendTimeout)
+	defer cancel()
+	if err := r.sink.SendChannelText(ctx, platform, chatID, text); err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{"platform": platform, "chat_id": chatID}).Warn("projects: send to IM chat")
+	}
 }
 
 // forget drops a settled request from every chat that was asked it.
@@ -435,6 +499,10 @@ func (r *Relay) deliver(job relayJob) {
 		if job.prompt == nil || !r.sendPrompt(ctx, b, "["+tag+"] ", *job.prompt) {
 			if err := r.sink.SendChannelText(ctx, b.Platform, b.ChatID, text); err != nil {
 				logrus.WithError(err).WithFields(logrus.Fields{"platform": b.Platform, "chat_id": b.ChatID, "thread_id": b.ThreadID}).Warn("projects: send to IM chat")
+			} else if job.quote != "" && job.request != nil {
+				r.mu.Lock()
+				r.sent[job.request.requestID] = append(r.sent[job.request.requestID], sentPrompt{platform: b.Platform, chatID: b.ChatID, text: "[" + tag + "] " + job.quote, bot: b.BotUUID})
+				r.mu.Unlock()
 			}
 		}
 		cancel()
@@ -486,12 +554,22 @@ func (r *Relay) sendPrompt(ctx context.Context, b db.ChannelBinding, prefix stri
 // restate rewrites every prompt sent for a request with how it ended and
 // takes the buttons away.
 func (r *Relay) restate(requestID, outcome string) {
+	// The request may have been asked again after it was forgotten, by a
+	// delivery that was still queued; it is settled now.
+	r.forget(requestID)
 	r.mu.Lock()
 	sent := r.sent[requestID]
 	delete(r.sent, requestID)
 	r.mu.Unlock()
 	for _, sp := range sent {
 		ctx, cancel := context.WithTimeout(context.Background(), relaySendTimeout)
+		if sp.ref == "" {
+			// The chat got the question as plain text: say which question
+			// this answers, since a bare number or label does not.
+			r.tell(sp.bot, sp.platform, sp.chatID, sp.text+"\n"+outcome)
+			cancel()
+			continue
+		}
 		if err := r.prompter.RestateChannelPrompt(ctx, sp.platform, sp.chatID, sp.ref, sp.text+"\n\n"+outcome); err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{"platform": sp.platform, "chat_id": sp.chatID}).Warn("projects: restate a prompt in IM chat")
 		}

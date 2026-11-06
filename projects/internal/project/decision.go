@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
@@ -97,7 +98,84 @@ func (c *Coordinator) Choose(ctx context.Context, mainThreadID, eventID string, 
 		return nil, err
 	}
 	c.publishEvent(main.ProjectID, m)
+	if c.OnDecided != nil {
+		c.OnDecided(*m, src)
+	}
 	return m, nil
+}
+
+// pendingDecision returns a decision card of a main thread that is still
+// waiting for its answer.
+func (c *Coordinator) pendingDecision(threadID, eventID string) (db.ThreadEvent, Decision, bool) {
+	m, err := c.store.GetThreadEvent(eventID)
+	if err != nil || m.ThreadID != threadID || m.Kind != db.EvDecision {
+		return db.ThreadEvent{}, Decision{}, false
+	}
+	var d Decision
+	if json.Unmarshal([]byte(m.Payload), &d) != nil || d.Chosen != nil {
+		return db.ThreadEvent{}, Decision{}, false
+	}
+	return *m, d, true
+}
+
+// choiceValue is the value of the button of option i of a decision.
+func choiceValue(i int) string { return "o" + strconv.Itoa(i) }
+
+// optionOfChoice reads a button value made by choiceValue.
+func optionOfChoice(value string) (int, bool) {
+	n, err := strconv.Atoi(strings.TrimPrefix(value, "o"))
+	return n, err == nil && strings.HasPrefix(value, "o") && n >= 0
+}
+
+// optionOfReply reads a chat's reply as one of the options: its label, in
+// any case, else its number ("2", "2."). Anything else is not an answer.
+func (d Decision) optionOfReply(text string) (int, bool) {
+	text = strings.ToLower(strings.TrimSpace(text))
+	if text == "" {
+		return 0, false
+	}
+	trimmed := strings.TrimRight(text, ".。!！ ")
+	for i, o := range d.Options {
+		if l := strings.ToLower(o.Label); l == text || l == trimmed {
+			return i, true
+		}
+	}
+	if n, err := strconv.Atoi(strings.TrimRight(text, ".。)） ")); err == nil && n >= 1 && n <= len(d.Options) {
+		return n - 1, true
+	}
+	return 0, false
+}
+
+// chatText is the card as a chat reads it: the question and what is known,
+// each option with what it costs, and the recommendation.
+func (d Decision) chatText() string {
+	var b strings.Builder
+	b.WriteString(d.Question)
+	if ctx := strings.TrimSpace(d.Context); ctx != "" {
+		b.WriteString("\n" + ctx)
+	}
+	for i, o := range d.Options {
+		fmt.Fprintf(&b, "\n%d. %s", i+1, o.Label)
+		if o.Consequence != "" {
+			b.WriteString(" — " + o.Consequence)
+		}
+		if i == d.Recommended {
+			b.WriteString(" (recommended)")
+		}
+	}
+	if reason := strings.TrimSpace(d.Reason); reason != "" {
+		b.WriteString("\nWhy " + fmt.Sprint(d.Recommended+1) + ": " + reason)
+	}
+	return b.String()
+}
+
+// replyHint tells a chat without buttons how to answer.
+func (d Decision) replyHint() string {
+	nums := make([]string, len(d.Options))
+	for i := range d.Options {
+		nums[i] = strconv.Itoa(i + 1)
+	}
+	return "Reply " + strings.Join(nums[:len(nums)-1], ", ") + " or " + nums[len(nums)-1] + " to choose."
 }
 
 // describe renders a decision for the coordinator's own history.

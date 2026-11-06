@@ -56,6 +56,7 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 		threads.addEvent(t, &db.ThreadEvent{Kind: db.EvError, Content: fmt.Sprintf("Could not send %s to %s (%s): %v", name, platform, chatID, err)})
 	}
 	coord.OnFinal = relay.Message
+	coord.OnDecided = relay.Decided
 	threads.OnWait = relay.NeedsUser
 	threads.OnSettled = relay.Settled
 	threads.OnReply = relay.ThreadReply

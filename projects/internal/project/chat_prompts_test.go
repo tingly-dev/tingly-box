@@ -78,6 +78,7 @@ func promptFixture(t *testing.T, script func(turn *enginetest.Turn) error) (*tes
 	sink := newPromptSink()
 	relay := NewRelay(f.store, sink)
 	svc.Coordinator.OnFinal = relay.Message
+	svc.Coordinator.OnDecided = relay.Decided
 	f.threads.OnWait = relay.NeedsUser
 	f.threads.OnSettled = relay.Settled
 	f.threads.OnReply = relay.ThreadReply
@@ -217,7 +218,7 @@ func TestAQuestionIsAnsweredByReplying(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, handled)
 	assert.Equal(t, "chose SQLite\n\n[#1 DB]", sink.next(t).text)
-	_, _, waiting := svc.Relay.Awaiting("telegram", "own")
+	_, _, waiting := awaitingOf(svc.Relay, "telegram", "own")
 	assert.False(t, waiting, "answered: the next message is a message again")
 }
 

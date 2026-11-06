@@ -99,6 +99,7 @@ func channelFixtureReplying(t *testing.T, script func(turn *enginetest.Turn) err
 	sink := newFakeSink()
 	relay := NewRelay(f.store, sink)
 	coord.OnFinal = relay.Message
+	coord.OnDecided = relay.Decided
 	f.threads.OnWait = relay.NeedsUser
 	f.threads.OnSettled = relay.Settled
 	f.threads.OnReply = relay.ThreadReply
@@ -259,7 +260,7 @@ func TestEveryApprovalIsAskedInTheChat(t *testing.T) {
 	assert.Equal(t, fmt.Sprintf("Approve: Run `ls`\nReply y to allow, always to allow it for this thread, n to deny, or say what to do instead.\n\n[#%d Fix login]", th.Seq), sink.next(t).text)
 	svc.Relay.NeedsUser(th, approvalEvent("r2")) // each one needs its answer
 	sink.next(t)
-	threadID, requestID, ok := svc.Relay.Awaiting("telegram", "1")
+	threadID, requestID, ok := awaitingOf(svc.Relay, "telegram", "1")
 	require.True(t, ok)
 	assert.Equal(t, [2]string{th.ID, "r1"}, [2]string{threadID, requestID}, "the oldest is answered first")
 
