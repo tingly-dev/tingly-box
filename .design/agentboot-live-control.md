@@ -74,6 +74,16 @@ or repeat the note; a different model asks for auto again. Only the two named
 conditions are handled: any other refusal still restarts, and a mode the
 process reports differently on its own (plan mode left through ExitPlanMode,
 the classifier's prompt fallback after repeated blocks) is left alone.
+`permissions.disableAutoMode: "disable"` in any settings layer (the user's
+`~/.claude/settings.json` included) has the same effect as an unsupported
+model, so the transcript note names both causes.
+
+Why Claude Code asks is on the prompt itself: `can_use_tool` carries
+`decision_reason` (the classifier's words, e.g. "3 consecutive actions were
+blocked") or `decision_reason_type: "rule"` (an ask rule matched); neither
+means the mode itself requires the prompt. `ApprovalRequestEvent.Reason`
+carries it, and Projects stores it in the approval event's `reason` (the web
+card does not show it yet).
 
 ## 3. Composer: steer and queue (proposal, not built)
 

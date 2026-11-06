@@ -223,6 +223,7 @@ func (t *Transport) parseControlRequest(ev protocol.Event) (agentboot.StreamEven
 			AgentType: agentboot.AgentTypeClaude,
 			ToolName:  toolName,
 			Input:     stamped,
+			Reason:    decisionReason(controlData),
 			SessionID: t.execCtx.sessionID,
 			ChatID:    t.execCtx.chatID,
 			Platform:  t.execCtx.platform,
@@ -232,6 +233,24 @@ func (t *Transport) parseControlRequest(ev protocol.Event) (agentboot.StreamEven
 	default:
 		logrus.Warnf("claude transport: unsupported control subtype %q", subtype)
 		return nil, nil
+	}
+}
+
+// decisionReason is why Claude Code asks about a tool call, as far as it says:
+// the classifier's own words when auto mode gives a call back to the user, or
+// the kind of rule that matched. Empty when it just asks (the mode requires
+// it).
+func decisionReason(req map[string]any) string {
+	if reason, _ := req["decision_reason"].(string); strings.TrimSpace(reason) != "" {
+		return strings.TrimSpace(reason)
+	}
+	switch kind, _ := req["decision_reason_type"].(string); kind {
+	case "":
+		return ""
+	case "rule":
+		return "matched an ask rule in the permission settings"
+	default:
+		return kind
 	}
 }
 

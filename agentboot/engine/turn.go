@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -530,9 +529,9 @@ func (e *Engine) fallBack(sessionID string, res liveController, have, want launc
 	}
 	have.mode, have.refused = fb, refusal(want)
 	e.setLaunch(sessionID, have)
-	note := fmt.Sprintf("%s mode is not available for this session's model", want.mode)
+	note := want.mode + " mode is not available here (the model does not support it, or settings turn it off)"
 	if want.model != "" {
-		note = fmt.Sprintf("%s mode is not available for the model %s", want.mode, want.model)
+		note = want.mode + " mode is not available here (model " + want.model + " does not support it, or settings turn it off)"
 	}
 	e.appendSystem(sessionID, note+": running in "+fb+" instead")
 	return true
