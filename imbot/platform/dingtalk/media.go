@@ -277,6 +277,10 @@ func (b *Bot) robotSend(ctx context.Context, conversationID string, conv convers
 	return out.ProcessQueryKey, nil
 }
 
+// linkTimeout bounds one download-link lookup: it runs inside the stream
+// callback, whose acknowledgement it must not hold up.
+const linkTimeout = 10 * time.Second
+
 // resolveMediaURLs trades each inbound attachment's download code for a link
 // the receiver can fetch (a stream callback carries only the code). A failure
 // leaves the URL empty: the message still arrives, and the receiver reports
@@ -294,7 +298,9 @@ func (b *Bot) resolveMediaURLs(ctx context.Context, robotCode string, msg *core.
 		if code == "" {
 			continue
 		}
-		link, err := b.downloadLink(ctx, robotCode, code)
+		lctx, cancel := context.WithTimeout(ctx, linkTimeout)
+		link, err := b.downloadLink(lctx, robotCode, code)
+		cancel()
 		if err != nil {
 			b.Logger().Error("Failed to get DingTalk download link: %v", err)
 			continue

@@ -87,7 +87,7 @@ each adapter uses it for the upload (DingTalk multipart name and `sampleFile`
 
 | Platform | Inbound name | Inbound delivery | Outbound name |
 | --- | --- | --- | --- |
-| DingTalk | file: payload `fileName`; picture/video/audio: none, so generated | files, pictures and rich-text pictures arrive (download code → `robot/messageFiles/download` link) | multipart name + `sampleFile` `fileName` (images are `sampleImageMsg`, which shows no name) |
+| DingTalk | file: payload `fileName`; picture: none, so generated | files, pictures and rich-text pictures arrive; video and audio do not (download code → `robot/messageFiles/download` link) | multipart name + `sampleFile` `fileName` (images are `sampleImageMsg`, which shows no name) |
 | Feishu / Lark | file: payload `file_name` kept; image: none, so generated | not downloadable yet: the adapter has only the `file_key`, and the resource API needs a tenant token | upload `FileName` |
 | WeChat / WeCom | file: SDK `FileName`; image/video: none, so generated | no URL (encrypted CDN), so the store cannot fetch it yet | upload `FileName` |
 | Telegram | document: `file_name`; photo: none, so generated (was the `file_id`) | yes (`getFile` link) | `InputFileUpload.Filename` (photos sent as images show no name) |

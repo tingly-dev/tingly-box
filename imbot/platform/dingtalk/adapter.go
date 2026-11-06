@@ -127,7 +127,8 @@ func (a *Adapter) getChatType(conversationType string) core.ChatType {
 // trades for a download link (see Bot.resolveMediaURLs).
 const downloadCodeKey = "download_code"
 
-// extractMedia reads the file, picture, video, audio and rich-text messages. A
+// extractMedia reads the file, picture and rich-text messages (video and audio
+// are not file types a chat can hand to a session). A
 // file carries its name in the payload; the others have none, which is left
 // empty for the receiver to name.
 func (a *Adapter) extractMedia(data *chatbot.BotCallbackDataModel) *core.MediaContent {
@@ -148,10 +149,6 @@ func (a *Adapter) extractMedia(data *chatbot.BotCallbackDataModel) *core.MediaCo
 		return core.NewMediaContent([]core.MediaAttachment{item("document", str(content, "downloadCode"), name, core.MimeTypeByFilename(name))}, "")
 	case "picture":
 		return core.NewMediaContent([]core.MediaAttachment{item("image", str(content, "downloadCode"), "", pictureType)}, "")
-	case "video":
-		return core.NewMediaContent([]core.MediaAttachment{item("video", str(content, "downloadCode"), "", "")}, "")
-	case "audio":
-		return core.NewMediaContent([]core.MediaAttachment{item("audio", str(content, "downloadCode"), "", "")}, str(content, "recognition"))
 	case "richText":
 		parts, _ := content["richText"].([]any)
 		var text strings.Builder

@@ -209,35 +209,42 @@ func (s *FileStore) DownloadFile(ctx context.Context, projectPath, url, mimeType
 		}
 	}
 
-	// Download into a scratch file first: the final name depends on the bytes
-	// (an extension for a name that has none).
+	// The name depends on the first bytes (an extension for a name that has
+	// none), so read them before creating the file.
+	head := make([]byte, 512)
+	n, err := io.ReadFull(resp.Body, head)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		return nil, fmt.Errorf("failed to download file: %w", err)
+	}
+	head = head[:n]
+
 	downloadDir := s.GetDownloadDir(projectPath)
 	if err := os.MkdirAll(downloadDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create download directory: %w", err)
 	}
-	file, err := os.CreateTemp(downloadDir, ".download-*")
+	file, filename, err := createExclusive(downloadDir, chooseFileName(name, resp.Header.Get("Content-Disposition"), mimeType, head, time.Now()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file: %w", err)
 	}
-	tmpPath := file.Name()
-	defer os.Remove(tmpPath) // a no-op once renamed
+	defer file.Close()
+	filePath := file.Name()
 
-	written, err := io.Copy(file, resp.Body)
-	if err != nil {
-		file.Close()
-		return nil, fmt.Errorf("failed to write file: %w", err)
+	written, err := file.Write(head)
+	if err == nil {
+		var rest int64
+		rest, err = io.Copy(file, resp.Body)
+		written += int(rest)
 	}
-	head := make([]byte, 512)
-	n, _ := file.ReadAt(head, 0)
-	head = head[:n]
-	if err := file.Close(); err != nil {
+	if err != nil {
+		os.Remove(filePath) // Clean up on error
 		return nil, fmt.Errorf("failed to write file: %w", err)
 	}
 
 	// Verify size after download
 	if size <= 0 {
 		// If content-length was unknown, check actual size
-		if !s.IsAllowedSize(mimeType, written) {
+		if !s.IsAllowedSize(mimeType, int64(written)) {
+			os.Remove(filePath) // Clean up on error
 			maxSize := s.maxImageSize
 			if fileType == "document" {
 				maxSize = s.maxDocSize
@@ -246,17 +253,12 @@ func (s *FileStore) DownloadFile(ctx context.Context, projectPath, url, mimeType
 		}
 	}
 
-	filename, filePath, err := placeDownload(downloadDir, tmpPath, chooseFileName(name, resp.Header.Get("Content-Disposition"), mimeType, head, time.Now()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create file: %w", err)
-	}
-
 	return &StoredFile{
 		Path:     filePath,
 		RelPath:  filepath.Join(".agent", filename),
 		URL:      url,
 		Filename: filename,
-		Size:     written,
+		Size:     int64(written),
 		MimeType: mimeType,
 	}, nil
 }
@@ -289,10 +291,10 @@ func (s *FileStore) GetDownloadDir(projectPath string) string {
 	return filepath.Join(projectPath, ".agent")
 }
 
-// placeDownload moves the scratch file to dir/name, adding " (2)", " (3)" ...
-// before the extension when the name is taken, so two files sent under one
-// name (or two unnamed images in the same second) never overwrite each other.
-func placeDownload(dir, tmpPath, name string) (string, string, error) {
+// createExclusive creates dir/name, adding " (2)", " (3)" ... before the
+// extension when the name is taken, so two files sent under one name (or two
+// unnamed images in the same second) never overwrite each other.
+func createExclusive(dir, name string) (*os.File, string, error) {
 	ext := filepath.Ext(name)
 	stem := strings.TrimSuffix(name, ext)
 	for i := 1; i < 1000; i++ {
@@ -300,16 +302,13 @@ func placeDownload(dir, tmpPath, name string) (string, string, error) {
 		if i > 1 {
 			candidate = fmt.Sprintf("%s (%d)%s", stem, i, ext)
 		}
-		dst := filepath.Join(dir, candidate)
-		// Link-then-remove fails if dst exists, unlike Rename, which would
-		// replace it.
-		if err := os.Link(tmpPath, dst); err != nil {
-			if os.IsExist(err) {
-				continue
-			}
-			return "", "", err
+		f, err := os.OpenFile(filepath.Join(dir, candidate), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
+		if err == nil {
+			return f, candidate, nil
 		}
-		return candidate, dst, nil
+		if !os.IsExist(err) {
+			return nil, "", err
+		}
 	}
-	return "", "", fmt.Errorf("too many files named %q", name)
+	return nil, "", fmt.Errorf("too many files named %q", name)
 }

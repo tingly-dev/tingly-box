@@ -63,6 +63,11 @@ func TestDownloadFile_SameNameDoesNotOverwrite(t *testing.T) {
 	assert.Equal(t, "notes (2).txt", b.Filename)
 	got, _ := os.ReadFile(a.Path)
 	assert.Equal(t, "/one", string(got))
+	info, _ := os.Stat(a.Path)
+	ref, _ := os.Create(filepath.Join(dir, "ref"))
+	ref.Close()
+	refInfo, _ := os.Stat(ref.Name())
+	assert.Equal(t, refInfo.Mode().Perm(), info.Mode().Perm(), "a download is as readable as any file the process creates")
 	entries, _ := os.ReadDir(filepath.Join(dir, ".agent"))
 	assert.Len(t, entries, 2, "no scratch file is left behind")
 }

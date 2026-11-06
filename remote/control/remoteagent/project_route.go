@@ -212,7 +212,11 @@ func (h *BotHandler) routeMediaToProject(hCtx HandlerContext, mc *imbot.MediaCon
 	files := make([]ProjectFile, 0, len(mc.Media))
 	for _, m := range mc.Media {
 		if !h.fileStore.IsAllowedType(m.MimeType) {
-			h.SendText(hCtx, fmt.Sprintf("File type not supported: %s", m.MimeType))
+			kind := m.MimeType
+			if kind == "" {
+				kind = m.Filename
+			}
+			h.SendText(hCtx, fmt.Sprintf("File type not supported: %s", kind))
 			return
 		}
 		stored, err := h.fileStore.DownloadFile(h.ctx, dir, m.URL, m.MimeType, m.Filename)

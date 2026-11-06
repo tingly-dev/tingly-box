@@ -129,3 +129,15 @@ func TestInbound_FileWithoutDownloadCodeStillArrives(t *testing.T) {
 		t.Errorf("content = %#v", msg.Content)
 	}
 }
+
+func TestInbound_VideoAndAudioAreNotMedia(t *testing.T) {
+	for _, typ := range []string{"video", "audio"} {
+		msg, downloads := dingTalkInbound(t, &chatbot.BotCallbackDataModel{
+			ConversationId: "cid", ConversationType: "1", RobotCode: "robot-key", Msgtype: typ,
+			Content: map[string]any{"downloadCode": "dc", "recognition": "hello"},
+		})
+		if _, ok := msg.Content.(*core.MediaContent); ok || len(downloads) != 0 {
+			t.Errorf("%s: content = %T, downloads = %v", typ, msg.Content, downloads)
+		}
+	}
+}
