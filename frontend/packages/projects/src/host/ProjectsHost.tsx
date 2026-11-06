@@ -90,26 +90,6 @@ export interface SessionLaunch {
     model: string;
 }
 
-/** One window of the quota a host reports for where a thread's requests go. */
-export interface QuotaWindow {
-    /** The window's type: "session", "daily", "weekly", "monthly", "balance"… (Projects translates the ones it knows and shows the rest as given). */
-    label: string;
-    /** The value as the host's own status line writes it: "60% left", "12K/100K left", "$12.40". */
-    text: string;
-    /** How much of the window is spent (0-100); unknown for a balance with no cap. */
-    usedPct?: number;
-    /** ISO time the window comes back. */
-    resetsAt?: string;
-    limitReached?: boolean;
-}
-
-/** Where a host routes a thread's requests and the quota it draws on there. */
-export interface QuotaReading {
-    provider?: string;
-    model?: string;
-    windows: QuotaWindow[];
-}
-
 /**
  * A host's own parts of a folder session. Projects knows a profile only as a
  * name; a host with profiles (Tingly Box) supplies the pickers and the status
@@ -122,11 +102,13 @@ export interface SessionSlots {
     /** Under an open session's message box. */
     statusLine?: (p: { session: Thread; events: ThreadEvent[] }) => ReactNode;
     /**
-     * The quota behind a thread's launch (`profile`, and `tier` or the model
-     * last used): what a host's status line shows beside the model. Asked
-     * again after each turn; undefined when the host has none to give.
+     * Extra cards for a thread's info rail and the coordinator's Status tab,
+     * shown after Usage; `launch` is the profile and model tier the thread's
+     * next turn runs with. Called while rendering, so it returns elements and
+     * keeps hooks and requests inside the component it returns; null for none.
+     * Tingly Box adds its quota card here.
      */
-    quota?: (p: { profile: string; tier: string; model?: string }) => Promise<QuotaReading | undefined>;
+    railCards?: (p: { thread: Thread; launch: SessionLaunch }) => ReactNode;
 }
 
 const Ctx = createContext<ProjectsHost | null>(null);

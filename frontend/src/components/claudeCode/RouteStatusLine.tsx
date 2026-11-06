@@ -32,7 +32,7 @@ const contextBar = (pct: number): string => {
     return '▓'.repeat(filled) + '░'.repeat(8 - filled);
 };
 
-const resetsIn = (iso: string | undefined, now = Date.now()): string | undefined => {
+export const resetsIn = (iso: string | undefined, now = Date.now()): string | undefined => {
     if (!iso) return undefined;
     const mins = Math.round((new Date(iso).getTime() - now) / 60_000);
     if (mins <= 0) return undefined;
@@ -42,7 +42,7 @@ const resetsIn = (iso: string | undefined, now = Date.now()): string | undefined
     return `${Math.round(h / 24)}d`;
 };
 
-const quotaColor = (theme: Theme, q: RouteQuota): string | undefined => {
+export const quotaColor = (theme: Theme, q: RouteQuota): string | undefined => {
     if (q.limit_reached || q.used_percent >= 90) return getReadableAccent(theme, 'error');
     if (q.used_percent >= 80) return getReadableAccent(theme, 'warning');
     return undefined;

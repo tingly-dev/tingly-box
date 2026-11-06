@@ -1,5 +1,5 @@
 // Claude Code session controls Tingly Box adds to Projects: profile and
-// model pickers, the route status line.
+// model pickers, the route status line and the rail's quota card.
 export default {
   "claudeSession": {
     "profile": "Configuration profile",
@@ -14,6 +14,18 @@ export default {
     "statusQuota": "quota",
     "statusResets": "resets in {{reset}}",
     "statusBalance": "Balance",
-    "statusExhausted": "quota exhausted — pick another profile above"
+    "statusExhausted": "quota exhausted — pick another profile above",
+    "quotaTitle": "Quota",
+    "quotaProvider": "Routed to",
+    "quotaProviderTitle": "The provider Tingly Box sends this thread's requests to, and its quota",
+    "quotaWindow": {
+      "session": "Session",
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "model": "Model",
+      "code_review": "Code review",
+      "custom": "Other"
+    }
   }
 };

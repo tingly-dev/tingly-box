@@ -9,7 +9,7 @@ import { ThreadStateMark } from './threadStatus';
 import { formatTokens, timeAgo } from '../../utils/format';
 import { cacheHitPct, contextFill, formatTurnDuration } from '../../utils/usage';
 import { readLocal, writeLocal } from '../../utils/storage';
-import { useProjectsHost, type QuotaReading } from '../../host/ProjectsHost';
+import { useProjectsHost, type SessionLaunch } from '../../host/ProjectsHost';
 
 /** How wide a thread panel must be to carry the rail beside the conversation. */
 export const RAIL_MIN_PANEL = 880;
@@ -156,66 +156,10 @@ export function UsageCard({ thread }: { thread: Thread }) {
     );
 }
 
-/** Where a thread's launch is routed, for the host to look its quota up by. */
-export interface QuotaRoute {
-    profile: string;
-    /** The model tier the launch asks for ("" for the default). */
-    tier: string;
-}
-
-/** One quota window: what is left as a bar that shrinks as it is spent, and when it comes back. */
-function QuotaBar({ label, text, usedPct, resetsAt, exhausted }: { label: string; text: string; usedPct?: number; resetsAt?: string; exhausted?: boolean }) {
-    const { t, i18n } = useTranslation('projects');
-    // The terminal status line turns amber at 80% spent and red at 90%.
-    const tone = exhausted || (usedPct ?? 0) >= 90 ? 'error' : (usedPct ?? 0) >= 80 ? 'warning' : 'primary';
-    return (
-        <Box sx={{ py: 0.25 }}>
-            <Fact label={label} title={resetsAt ? t('rail.quotaResets', { when: timeAgo(resetsAt, i18n.language) }) : undefined}>{text}</Fact>
-            {usedPct != null && (
-                <LinearProgress variant="determinate" value={Math.max(0, 100 - usedPct)} color={tone}
-                    aria-label={label} sx={{ height: 4, borderRadius: 2, mt: 0.25 }} />
-            )}
-        </Box>
-    );
-}
-
-/**
- * What is left of the quota a thread draws on, the numbers Claude Code's
- * status line carries next to the model. Tingly Box knows them per provider
- * (`ai/quota`); Projects knows only the thread's launch, so the host's `quota`
- * slot looks them up. Without a host, or without quota, there is no card.
- */
-export function QuotaCard({ thread, route }: { thread: Thread; route?: QuotaRoute }) {
-    const { t } = useTranslation('projects');
-    const slot = useProjectsHost().session?.quota;
-    const profile = route?.profile;
-    const tier = route?.tier;
-    const model = thread.reported_model;
-    // A reading belongs to the thread and launch it was asked for: another
-    // thread (the panel stays mounted as the selection moves) never shows it.
-    const key = `${thread.id}|${profile}|${tier}`;
-    const [fetched, setFetched] = useState<{ key: string; reading?: QuotaReading }>();
-    useEffect(() => {
-        if (!slot || profile == null || tier == null) return;
-        let live = true;
-        slot({ profile, tier, model })
-            .then((r) => live && setFetched({ key, reading: r }))
-            .catch(() => live && setFetched({ key }));
-        return () => {
-            live = false;
-        };
-    }, [slot, key, profile, tier, model, thread.last_turn_at]);
-    const reading = fetched?.key === key ? fetched.reading : undefined;
-    if (!reading || reading.windows.length === 0) return null;
-    const routed = reading.provider && (reading.model ? `${reading.model} @ ${reading.provider}` : reading.provider);
-    return (
-        <RailCard id="quota" title={t('rail.quota')}>
-            {routed && <Fact label={t('rail.quotaProvider')} title={t('rail.quotaProviderTitle')}>{routed}</Fact>}
-            {reading.windows.map((w, i) => (
-                <QuotaBar key={`${w.label}-${i}`} label={t(`rail.quotaWindow.${w.label}`, { defaultValue: w.label })} text={w.text} usedPct={w.usedPct} resetsAt={w.resetsAt} exhausted={w.limitReached} />
-            ))}
-        </RailCard>
-    );
+/** Cards the embedding host adds to the rail (`session.railCards`), after Usage. */
+export function HostRailCards({ thread, launch }: { thread: Thread; launch?: SessionLaunch }) {
+    const railCards = useProjectsHost().session?.railCards;
+    return <>{railCards && launch ? railCards({ thread, launch }) : null}</>;
 }
 
 /** A session id is a long uuid: its first eight characters tell sessions apart, the rest is in the tooltip. */

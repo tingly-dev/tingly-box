@@ -21,3 +21,5 @@ export { Composer, type ComposerProps } from './components/Composer';
 export { composerPickerLabelSx, composerPickerMenuProps, composerPickerSx } from './components/composerPicker';
 export { StatusGroups, StatusHeading, type StatusGroup, type StatusRow } from './components/workspace/StatusGroups';
 export { timeAgo } from './utils/format';
+// For the cards a host adds to the thread rail (`SessionSlots.railCards`).
+export { Fact, RailCard } from './components/project/infoRail';

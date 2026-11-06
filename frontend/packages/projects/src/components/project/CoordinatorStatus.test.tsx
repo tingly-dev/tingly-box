@@ -70,4 +70,15 @@ describe('CoordinatorStatus', () => {
         expect(screen.getByText('rail.contextEmpty')).toBeInTheDocument();
         expect(screen.queryByRole('region', { name: 'rail.usage' })).not.toBeInTheDocument();
     });
+
+    it("gives the host's rail cards the coordinator and its launch: profile and model tier", () => {
+        const railCards = vi.fn(({ launch }) => <section aria-label="host card">{launch.profile}|{launch.model}</section>);
+        renderBare(
+            <ProjectsHostProvider host={{ ...host, session: { railCards } }}>
+                <CoordinatorStatus {...props} project={{ ...project, coordinator_profile: 'work' } as Project} coordinator={coordinator()} />
+            </ProjectsHostProvider>,
+        );
+        expect(screen.getByRole('region', { name: 'host card' })).toHaveTextContent('work|sonnet');
+        expect(railCards).toHaveBeenCalledWith({ thread: expect.objectContaining({ id: 'main' }), launch: { profile: 'work', model: 'sonnet' } });
+    });
 });

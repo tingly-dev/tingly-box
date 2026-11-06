@@ -122,42 +122,48 @@ all live on `db.Thread`, set by `Thread.AddUsage` when a turn ends.
   thread shows context and cache only from its next turn on; its token totals
   are unchanged.
 
-## Quota card
+## Quota card: a Tingly Box extension
 
 What Claude Code's status line shows beside the model: how much of the quota
-the thread draws on is left. One `QuotaCard` (`infoRail.tsx`) in the thread rail
-and the coordinator's Status tab, after Usage; no source, no card.
+the thread draws on is left. Quota is a Tingly Box concept (`ai/quota`, the
+gateway's providers), so Projects does not know it: it offers a generic place
+for a host's own cards and the card lives in Tingly Box.
 
-- **Source: the host, not the stream.** A thread routed through Tingly Box's
-  gateway draws on a provider's quota, which Tingly Box already has
-  (`ai/quota`, shown by its terminal status line as `Quota: 60% left`).
-  Projects knows only profiles by name, so the host supplies a `session.quota`
-  slot (`ProjectsHost.tsx`: given `profile` + `tier` + the last model, returns
-  the routed provider and its windows). Tingly Box implements it with the same
-  `GET /scenario/claude_code/route` its folder-session status line uses
-  (`SessionStatusLine`), so the numbers and the "left" wording are identical.
-  The card asks again after each turn, and a reading is kept with the thread and
-  launch it was asked for (the panel stays mounted as the selection moves).
-- The launch it asks about is the thread's own: a folder session's profile and
-  tier, a project thread's profile override or the project's thread profile,
-  the coordinator's coordinator profile and model.
+- **Extension point.** `SessionSlots.railCards({ thread, launch })`
+  (`ProjectsHost.tsx`) returns extra cards for a thread's info rail and the
+  coordinator's Status tab, after Usage (`HostRailCards`). `launch` is how the
+  thread's next turn launches: `{ profile, model }`, the folder session's
+  own, a project thread's override or the project default, the coordinator's.
+  The package exports `RailCard` and `Fact` so a host's card looks and folds
+  like the rest. The slot is called while rendering: it returns elements and
+  keeps requests and hooks inside them.
+- **The card** is `frontend/src/pages/projects/session/QuotaCard.tsx`, wired in
+  `sessionSlots.tsx`; its strings are `claudeSession.quota*` in Tingly Box's
+  locales. It reads the route a folder session's status line already reads
+  (`GET /scenario/claude_code/route`, via `profileApi.getClaudeCodeRoute`):
+  the provider the launch routes to and its windows ("60% left", a bar that
+  shrinks as the window is spent, reset time in the tooltip, `$12.40` for a
+  balance), with the status line's own colour and reset helpers
+  (`RouteStatusLine`). It asks again after each turn and keeps a reading with
+  the thread and launch it was asked for (the panel stays mounted as the
+  selection moves). No route, or a provider without quota, is no card.
 - The folder session's status line under the message box still shows the same
-  provider quota; the rail card adds it to project threads and the coordinator,
-  which have no such line.
+  quota; the card adds it to project threads and the coordinator, which have no
+  such line.
 - **Considered and left out: Claude Code's own `rate_limit_event`.** On a
   Claude.ai login the CLI emits the 5-hour / weekly windows (from the
   `anthropic-ratelimit-unified-*` response headers) and a first version stored
   them as `Thread.rate_limits`. It was removed again: a thread Tingly Box runs
   always goes through the gateway, nothing in the repo relays those headers
   from the upstream account, so the event would not arrive; an OAuth provider's
-  5h / 7d already come from `ai/quota` through the slot above (both would have
-  been listed twice); and the shape was never seen from a real subscription
-  session. A standalone Projects on a direct Claude.ai login would be the one
-  place it helps; revisit there (the CLI's schema: `rate_limit_info.unifiedWindows.{five_hour,seven_day}`
+  5h / 7d already come from `ai/quota` through the route (both would have been
+  listed twice); and the shape was never seen from a real subscription session.
+  A standalone Projects on a direct Claude.ai login would be the one place it
+  helps; revisit there (the CLI's schema: `rate_limit_info.unifiedWindows.{five_hour,seven_day}`
   with `utilization` 0-1 and `resetsAt` epoch seconds).
 - Why not import `ai/quota` into Projects: it would link the whole `ai` module
   (openai-go, x/net, jwt) into the standalone `tingly-project` binary for one
-  struct; the host already depends on it and hands over rendered windows.
+  struct; and quota is not Projects' business.
 
 ## Sidebar status (`ProjectsSidebar`)
 

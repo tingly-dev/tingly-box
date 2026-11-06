@@ -79,4 +79,29 @@ describe('ThreadInfoRail', () => {
         expect(readLocal('thread.rail.env')).toBe('0');
         unmount();
     });
+
+    it("puts the host's own cards after Usage, given the thread and how it launches", () => {
+        const railCards = vi.fn(({ thread: t, launch }) => <section aria-label="host card">{t.id} · {launch.profile} · {launch.model}</section>);
+        renderBare(
+            <ProjectsHostProvider host={{ ...host, session: { railCards } }}>
+                <ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} launch={{ profile: 'work', model: 'sonnet' }} />
+            </ProjectsHostProvider>,
+        );
+        const usage = screen.getByRole('region', { name: 'rail.usage' });
+        const card = screen.getByRole('region', { name: 'host card' });
+        expect(card).toHaveTextContent('t · work · sonnet');
+        expect(usage.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('adds nothing without a host slot or without a launch to describe', () => {
+        const railCards = vi.fn(() => <section aria-label="host card" />);
+        renderBare(
+            <ProjectsHostProvider host={{ ...host, session: { railCards } }}>
+                <ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} />
+            </ProjectsHostProvider>,
+        );
+        expect(railCards).not.toHaveBeenCalled();
+        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} launch={{ profile: '', model: '' }} />);
+        expect(screen.queryByRole('region', { name: 'host card' })).toBeNull();
+    });
 });
