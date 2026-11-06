@@ -1,6 +1,6 @@
 # Session control API, starting with `/compact`
 
-> Status: **design, nothing built** (2026-11-06). Evidence: [`.research/slash-commands-claude-code.md`](../.research/slash-commands-claude-code.md)
+> Status: **built** (2026-11-06) on stacked branches `tp/slash-p0-agentboot` → `tp/slash-p1-projects` → `tp/slash-p3-coordinator`; see "As built" at the end for where the code differs from the proposal below. Evidence: [`.research/slash-commands-claude-code.md`](../.research/slash-commands-claude-code.md)
 > (real CLI 2.1.259, scripted model; probes in `.research/slash-command-*.py`) and
 > `agentboot/engine/slash_commands_test.go` (what happens today).
 > Builds on [agentboot-live-control.md](./agentboot-live-control.md) and [projects-im.md](./projects-im.md).
@@ -242,3 +242,40 @@ Tests with a fake `sessionControl`: parser table (every example above, leading s
 - No real-model capture now. Unverified until then: what `post_tokens` counts, the auto-compaction success events.
 
 Not covered: skills and custom commands, `/rewind`, `/btw`, PreCompact/PostCompact hooks, a user-facing auto-compact setting, any second backend.
+
+## As built
+
+Phases 0–4 are implemented on three stacked local branches (not pushed).
+Differences from the proposal above, and what was left out:
+
+**agentboot (`agentboot/session_control.go`, `claude/compact.go`, `engine/compact.go`)**
+
+- The compaction request is a plain prompt, not a wire value: `Compactor.CompactPrompt(instructions) string`. It is a method on the **Agent** (`claude.Agent`), reached through `AgentService.CompactPrompt`, because the engine needs it before any process exists. `claude.Transport` has the same method.
+- There is no `DecodeCompact` interface. The Claude transport's `AccumulateMessage` turns the CLI's `status` / `compact_boundary` / synthetic summary events into `agentboot.CompactEvent` values and emits them as `MessageEvent.Raw`, like any other message; the engine's converter writes `KindCompact` entries from them. The boundary is held back until the summary message so the done event carries it.
+- Context usage: `ContextUsageReader.DecodeContextUsage(body)`; the query is the neutral `ContextUsageRequest` control request, encoded by the existing `ControlRequestEncoder`. The control answer's body is now returned (`ControlResponseBodyDecoder`, `persistentSession.controlBody`). `Conductor.ContextUsage` reaches it through the optional `ContextUsageProvider`.
+- `CompactResult` carries `DurationMS int64` (not `time.Duration`) and `Usage *TokenUsage`; `Reported{Tokens, Summary, Usage}` says which figures are real.
+- `Engine.Compact(ctx, id, dir, instructions, launch)` runs as a turn through the same `begin` path as `Start` (`Start` is now a wrapper). The compaction request is not recorded as a user message and is not offered to `Retry`. `Engine.ContextUsage` returns `ErrNoProcess` when the session has no live process.
+- Converter: `compact` entries, replayed assistant messages dropped by uuid, the CLI's own text while compacting dropped (`<synthetic>` model), and no zero `usage` entry for a turn that made no call.
+- `enginetest.Agent` gained `CompactPrompt`, `Turn.Compacted` and `Turn.CompactRefused` for host tests.
+
+**Projects**
+
+- `commands.go`: `parseCommand`, `byPerson`, `literalPrompt`. The "known but unsupported" names are a fixed list of the commands people know from Claude Code (`unsupportedCommands`), not read from the backend; the design's idea of reading `init.slash_commands` was dropped as more machinery than one command needs. Anything else beginning with `/` is sent as text with a leading space (`queuedPrompt`).
+- `Service.Send` and `Service.SendWith` are the single interception point; `runCommand` returns `*ErrCommandUnsupported` (web: 400 with the message; IM: "Could not do that: …").
+- Threads and folder sessions: `Threads.Compact` queues a `queued{compact: …}` message through the normal queue, so a running turn holds it as an "after this turn" chip; `begin` calls `Engine.Compact`; `compactReturned` / `refreshContext` finish it. A compaction turn reports to the chats that hear the thread (`OnReply`) but not to the coordinator and leaves no report event.
+- Coordinator: the `/compact` text is queued as an ordinary durable coordinator input; `coordinatorSessions.turn` recognises it (`coordinatorCommand`: a person's text, no files) and calls `compact` instead of building the envelope prompt. Failures never leave the input needing recovery. The next turn re-sends the project context (`resend`, in memory: lost on a restart, which only costs a re-sent preamble that the next system event sends anyway). Only when the coordinator runs as a session; the older model-loop coordinator returns `ErrCompactUnavailable`.
+- Card: `db.EvCommand` with `commandPayload`; one event created at `started`, updated in place at `done` / `failed`; an automatic compaction gets the same card with trigger `auto`. Shown by `CommandCard` in the shared transcript (`transcript/Transcript.tsx`).
+- IM: `/compact [instructions]` is a Projects chat command (`ChatCompact`), listed in `/help`. A chat waiting to start a new session has nothing to compact.
+- Composer: a `/` menu with the one command, prefix-matched (`slashCommands`, on in `ThreadComposer`, so threads, folder sessions and the project conversation). It is a static list; **`GET /threads/{id}/commands` was not built** (one command does not need an endpoint, and it would have needed `task codegen`).
+
+**Not built**
+
+- `/context` and `/usage` (the read-only commands): `Engine.ContextUsage` exists, nothing calls it except the status refresh after a compaction.
+- The `e2e`-tagged live test against the real CLI (needs credentials). The stream fixture `claude-2.1.259-slash-commands.jsonl` is real; its numbers come from a scripted model.
+- A second backend, `/clear` (deliberately not offered), skills and custom commands.
+
+**Unverified (no real model run)**
+
+- What `post_tokens` counts (summary only, or summary plus preserved messages). The card and the status card use it only as a fallback when the live process cannot be asked for `get_context_usage`.
+- The success path of an automatic compaction (the failure path was seen).
+- Whether the compaction call's own tokens are visible anywhere: the Claude backend reports `Reported.Usage=false`, so they are not in the thread's totals.
