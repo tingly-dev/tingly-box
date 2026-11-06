@@ -200,6 +200,47 @@ data:{"choices":[{"delta":{},"finish_reason":null,"index":0}],"created":<TS>,"id
 
 data: [DONE]
 
+=== streaming_parallel_tool_use stream=false
+--- upstream request
+POST /v1/chat/completions
+{
+  "messages": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-streaming_parallel_tool_use"
+}
+--- client response (status 200)
+{"choices":[{"finish_reason":"tool_calls","index":0,"logprobs":{"content":null,"refusal":null},"message":{"annotations":null,"audio":{"data":"","expires_at":0,"id":"","transcript":""},"content":"","function_call":{"arguments":"","name":""},"refusal":"","role":"assistant","tool_calls":[{"custom":{"input":"","name":""},"function":{"arguments":"{\"location\":\"Paris\"}","name":"get_weather"},"id":"<ID1>","type":"function"},{"custom":{"input":"","name":""},"function":{"arguments":"{\"timezone\":\"Europe/Paris\"}","name":"get_time"},"id":"<ID2>","type":"function"}]}}],"created":<TS>,"id":"<ID3>","metadata":null,"model":"pv-openai_chat-to-openai_chat-streaming_parallel_tool_use","moderation":{"input":{"code":"","message":"","model":"","results":null,"type":""},"output":{"code":"","message":"","model":"","results":null,"type":""}},"object":"chat.completion","service_tier":"","system_fingerprint":"","usage":{"completion_tokens":30,"completion_tokens_details":{"accepted_prediction_tokens":0,"audio_tokens":0,"reasoning_tokens":0,"rejected_prediction_tokens":0,"text_tokens":0},"prompt_tokens":15,"prompt_tokens_details":{"audio_tokens":0,"cache_write_tokens":0,"cached_tokens":0,"image_tokens":0,"text_tokens":0},"total_tokens":45}}
+
+=== streaming_parallel_tool_use stream=true
+--- upstream request
+POST /v1/chat/completions
+{
+  "messages": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-streaming_parallel_tool_use",
+  "stream": true
+}
+--- client response (status 200)
+data: {"choices":[{"delta":{"content":null,"refusal":null,"role":"assistant","tool_calls":[{"function":{"name":"get_weather"},"id":"<ID1>","index":0,"type":"function"}]},"finish_reason":null,"index":0,"logprobs":{"content":null,"refusal":null}}],"created":<TS>,"id":"<ID2>","model":"pv-openai_chat-to-openai_chat-streaming_parallel_tool_use","obfuscation":"<RANDOM>","object":"chat.completion.chunk","service_tier":"default"}
+
+data: {"choices":[{"delta":{"content":null,"refusal":null,"tool_calls":[{"function":{"arguments":"{\"location\":\"Paris\"}"},"index":0}]},"finish_reason":null,"index":0,"logprobs":{"content":null,"refusal":null}}],"created":<TS>,"id":"<ID2>","model":"pv-openai_chat-to-openai_chat-streaming_parallel_tool_use","obfuscation":"<RANDOM>","object":"chat.completion.chunk","service_tier":"default"}
+
+data: {"choices":[{"delta":{"content":null,"refusal":null,"tool_calls":[{"function":{"name":"get_time"},"id":"<ID3>","index":1,"type":"function"}]},"finish_reason":null,"index":0,"logprobs":{"content":null,"refusal":null}}],"created":<TS>,"id":"<ID2>","model":"pv-openai_chat-to-openai_chat-streaming_parallel_tool_use","obfuscation":"<RANDOM>","object":"chat.completion.chunk","service_tier":"default"}
+
+data: {"choices":[{"delta":{"content":null,"refusal":null,"tool_calls":[{"function":{"arguments":"{\"timezone\":\"Europe/Paris\"}"},"index":1}]},"finish_reason":"tool_calls","index":0,"logprobs":{"content":null,"refusal":null}}],"created":<TS>,"id":"<ID2>","model":"pv-openai_chat-to-openai_chat-streaming_parallel_tool_use","obfuscation":"<RANDOM>","object":"chat.completion.chunk","service_tier":"default"}
+
+data:{"choices":[{"delta":{},"finish_reason":null,"index":0}],"created":<TS>,"id":"<ID2>","model":"pv-openai_chat-to-openai_chat-streaming_parallel_tool_use","object":"chat.completion.chunk","usage":{"completion_tokens":0,"prompt_tokens":11,"total_tokens":11}}
+
+data: [DONE]
+
 === streaming_text stream=false
 --- upstream request
 POST /v1/chat/completions

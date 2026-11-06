@@ -274,6 +274,61 @@ data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-
 
 data: [DONE]
 
+=== streaming_parallel_tool_use stream=false
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 4096,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-streaming_parallel_tool_use"
+}
+--- client response (status 200)
+{"choices":[{"finish_reason":"tool_calls","index":0,"logprobs":null,"message":{"content":null,"refusal":null,"role":"assistant","tool_calls":[{"function":{"arguments":"{\"location\":\"Paris\"}","name":"get_weather"},"id":"<ID1>","type":"function"},{"function":{"arguments":"{\"timezone\":\"Europe/Paris\"}","name":"get_time"},"id":"<ID2>","type":"function"}]}}],"created":<TS>,"id":"<ID3>","model":"pv-openai_chat-to-anthropic_beta-streaming_parallel_tool_use","moderation":null,"object":"chat.completion","service_tier":null,"usage":{"completion_tokens":30,"prompt_tokens":15,"total_tokens":45}}
+
+=== streaming_parallel_tool_use stream=true
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 4096,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-streaming_parallel_tool_use",
+  "stream": true
+}
+--- client response (status 200)
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-anthropic_beta-streaming_parallel_tool_use","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}],"service_tier":null}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-anthropic_beta-streaming_parallel_tool_use","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"<ID2>","type":"function","function":{"name":"get_weather","arguments":""}}]},"finish_reason":null}],"service_tier":null}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-anthropic_beta-streaming_parallel_tool_use","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"location\":\"Paris\"}"}}]},"finish_reason":null}],"service_tier":null}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-anthropic_beta-streaming_parallel_tool_use","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"<ID3>","type":"function","function":{"name":"get_time","arguments":""}}]},"finish_reason":null}],"service_tier":null}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-anthropic_beta-streaming_parallel_tool_use","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"{\"timezone\":\"Europe/Paris\"}"}}]},"finish_reason":null}],"service_tier":null}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-anthropic_beta-streaming_parallel_tool_use","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":15,"completion_tokens":30,"total_tokens":45},"service_tier":null}
+
+data: [DONE]
+
 === streaming_text stream=false
 --- upstream request
 POST /v1/messages

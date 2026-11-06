@@ -523,3 +523,39 @@ func str(v any) string {
 	s, _ := v.(string)
 	return s
 }
+
+// AssertResponsesMessageItemsHaveContent returns an Assertion that, in a
+// streamed Responses response synthesized by the gateway, every message item
+// in response.output_item.added carries a "content" array. Codex ignores a
+// message item announced without one and drops all following output_text
+// deltas, so streamed text only shows up at completion.
+//
+// It is a no-op for non-streaming results, Responses passthrough, and client
+// drivers that do not ship raw frames.
+func AssertResponsesMessageItemsHaveContent() Assertion {
+	return Assertion{
+		Name: "responses_message_items_have_content",
+		Check: func(r *RoundTripResult) error {
+			if !r.IsStreaming || r.SourceProtocol != protocol.TypeOpenAIResponses || r.TargetProtocol == protocol.TypeOpenAIResponses {
+				return nil
+			}
+			for _, line := range r.StreamEvents {
+				var ev map[string]any
+				if json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &ev) != nil {
+					continue
+				}
+				if ev["type"] != "response.output_item.added" {
+					continue
+				}
+				item, _ := ev["item"].(map[string]any)
+				if item["type"] != "message" {
+					continue
+				}
+				if _, ok := item["content"].([]any); !ok {
+					return fmt.Errorf("message item %v in response.output_item.added has no content array", item["id"])
+				}
+			}
+			return nil
+		},
+	}
+}

@@ -292,6 +292,77 @@ data: {"type":"response.output_text.done","response_id":"<ID1>","item_id":"<ID2>
 event: response.completed
 data: {"type":"response.completed","response":{"id":"<ID1>","object":"realtime.response","created_at":<TS>,"model":"pv-openai_responses-to-openai_responses-multi_turn","status":"completed","output":[{"id":"<ID2>","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"The capital of France is Paris.","annotations":[]}]}],"usage":{"input_tokens":10,"output_tokens":8,"total_tokens":18,"output_tokens_details":{"reasoning_tokens":0}}}}
 
+=== streaming_parallel_tool_use stream=false
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "input_text"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-streaming_parallel_tool_use"
+}
+--- client response (status 200)
+{"created_at":<TS>,"id":"<ID1>","model":"pv-openai_responses-to-openai_responses-streaming_parallel_tool_use","object":"realtime.response","output":[{"arguments":"{\"location\":\"Paris\"}","call_id":"<ID2>","id":"<ID3>","name":"get_weather","type":"function_call"},{"arguments":"{\"timezone\":\"Europe/Paris\"}","call_id":"<ID4>","id":"<ID5>","name":"get_time","type":"function_call"}],"status":"completed","usage":{"input_tokens":15,"output_tokens":30,"total_tokens":45}}
+
+=== streaming_parallel_tool_use stream=true
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "input_text"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-streaming_parallel_tool_use",
+  "stream": true
+}
+--- client response (status 200)
+event: response.created
+data: {"type":"response.created","response":{"id":"<ID1>","object":"realtime.response","created_at":<TS>,"model":"pv-openai_responses-to-openai_responses-streaming_parallel_tool_use","status":"in_progress","output":[]}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","response_id":"<ID1>","output_index":0,"item":{"id":"<ID2>","type":"function_call","call_id":"<ID3>","name":"get_weather","arguments":"","status":"in_progress"}}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","response_id":"<ID1>","item_id":"<ID2>","output_index":0,"delta":"{\"location\":\"Paris\"}"}
+
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","response_id":"<ID1>","item_id":"<ID2>","output_index":0,"arguments":"{\"location\":\"Paris\"}"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","response_id":"<ID1>","output_index":0,"item":{"id":"<ID2>","type":"function_call","call_id":"<ID3>","name":"get_weather","arguments":"{\"location\":\"Paris\"}","status":"completed"}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","response_id":"<ID1>","output_index":1,"item":{"id":"<ID4>","type":"function_call","call_id":"<ID5>","name":"get_time","arguments":"","status":"in_progress"}}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","response_id":"<ID1>","item_id":"<ID4>","output_index":1,"delta":"{\"timezone\":\"Europe/Paris\"}"}
+
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","response_id":"<ID1>","item_id":"<ID4>","output_index":1,"arguments":"{\"timezone\":\"Europe/Paris\"}"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","response_id":"<ID1>","output_index":1,"item":{"id":"<ID4>","type":"function_call","call_id":"<ID5>","name":"get_time","arguments":"{\"timezone\":\"Europe/Paris\"}","status":"completed"}}
+
+event: response.completed
+data: {"type":"response.completed","response":{"id":"<ID1>","object":"realtime.response","created_at":<TS>,"model":"pv-openai_responses-to-openai_responses-streaming_parallel_tool_use","status":"completed","output":[{"id":"<ID2>","type":"function_call","call_id":"<ID3>","name":"get_weather","arguments":"{\"location\":\"Paris\"}"},{"id":"<ID4>","type":"function_call","call_id":"<ID5>","name":"get_time","arguments":"{\"timezone\":\"Europe/Paris\"}"}],"usage":{"input_tokens":15,"output_tokens":30,"total_tokens":45,"output_tokens_details":{"reasoning_tokens":0}}}}
+
 === streaming_text stream=false
 --- upstream request
 POST /v1/responses
