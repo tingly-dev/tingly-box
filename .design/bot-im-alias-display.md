@@ -84,7 +84,7 @@ Additive and idempotent; older binaries ignore the new columns.
 - **Projects host**: `imHost` keeps every bot's latest listing, rebuilds a chat lookup from them (`chatInfo`), refreshes on a 60 s stale tick and after an access-dialog change (a refresh requested while one is running runs again), and reports `deleted` per §2.3.
 - Applied to the Bots table, Remote and Notify cards, the Access dialog (rename dialog names the chat), notify test picker / delete confirm / graph nodes, Projects tags, "From …" source lines, IM settings and the bind dialog; ~12 toasts name the entity. Binding a chat saves its alias as `chat_title` (the last-known name for when the chat is gone).
 
-Screenshots of the result: `images/bot-im-alias-display/new-1…3` (mockup) and `ui-2`, `ui-7`, `ui-9` (real UI, mock mode).
+Screenshots of the result: `images/bot-im-alias-display/new-1…3` (mockup) and `ui-2`, `ui-7`, `ui-9`, `ui-10` (real UI, mock mode; `ui-10` is the Notify API guide picker, which now shares the same component instead of keeping its own formatter).
 
 ## 5. Decisions taken
 
