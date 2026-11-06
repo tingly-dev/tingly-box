@@ -1,9 +1,10 @@
 import type { Ref } from 'react';
-import { Box } from '@mui/material';
+import { Box, IconButton, Tooltip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Thread } from '../../client';
 import { STATUS_ORDER, ThreadBadges, ThreadSubtitle } from '../project/threadStatus';
 import { ListRow } from '../ListRow';
+import { Star, StarBorder } from '../icons';
 import { StatusHeading } from './StatusGroups';
 import { timeAgo } from '../../utils/format';
 
@@ -19,11 +20,21 @@ interface Props {
 }
 
 /** One thread as an outlined card; the band's columns and the Overview's boards all draw it. */
-export function ThreadCard({ thread, selectedId, onOpen, stacked }: { thread: Thread; selectedId?: string; onOpen: (id: string) => void; stacked?: boolean }) {
-    const { i18n } = useTranslation('projects');
+export function ThreadCard({ thread, selectedId, onOpen, stacked, pinned, onTogglePin }: { thread: Thread; selectedId?: string; onOpen: (id: string) => void; stacked?: boolean; pinned?: boolean; /** Given only where a card can be pinned to the top: the Overview board. */ onTogglePin?: () => void }) {
+    const { t, i18n } = useTranslation('projects');
     return (
         <ListRow outlined stacked={stacked} selected={thread.id === selectedId} onClick={() => onOpen(thread.id)}
-            title={thread.title} subtitle={<ThreadSubtitle thread={thread} />} badges={<ThreadBadges thread={thread} />} meta={timeAgo(thread.updated_at, i18n.language)} />
+            title={thread.title} subtitle={<ThreadSubtitle thread={thread} />} badges={<ThreadBadges thread={thread} />} meta={timeAgo(thread.updated_at, i18n.language)}
+            // The star stays quiet: an unpinned card shows it on hover or keyboard focus only.
+            sx={{ '&:hover .pin-star, &:focus-within .pin-star': { opacity: 1, pointerEvents: 'auto' } }}
+            end={onTogglePin != null && (
+                <Tooltip title={pinned ? t('overview.unpin') : t('overview.pin')}>
+                    {/* The star must not open the thread. */}
+                    <IconButton className="pin-star" size="small" sx={{ p: 0.5, opacity: pinned ? 1 : 0, pointerEvents: pinned ? 'auto' : 'none' }} aria-label={pinned ? t('overview.unpin') : t('overview.pin')} onClick={(e) => { e.stopPropagation(); onTogglePin(); }}>
+                        {pinned ? <Star fontSize="small" color="primary" /> : <StarBorder fontSize="small" />}
+                    </IconButton>
+                </Tooltip>
+            )} />
     );
 }
 

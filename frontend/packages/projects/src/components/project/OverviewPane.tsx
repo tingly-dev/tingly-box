@@ -7,15 +7,16 @@ import { STATUS_ORDER, ThreadBadges, ThreadSubtitle, needsUser } from './threadS
 import { StatusGroups } from '../workspace/StatusGroups';
 import { StatusBoard } from '../workspace/StatusBoard';
 import { useThreadsView, ViewSwitch, type ThreadsView } from '../workspace/ViewSwitch';
+import { usePinnedThreads } from '../../hooks/usePinnedThreads';
 import { Library } from './Library';
 
-function ThreadGroups({ threads, selectedId, onOpen, view }: { threads: Thread[]; selectedId?: string; onOpen: (id: string) => void; view: ThreadsView }) {
+function ThreadGroups({ threads, selectedId, onOpen, view, pinnedIds, onTogglePin }: { threads: Thread[]; selectedId?: string; onOpen: (id: string) => void; view: ThreadsView; pinnedIds: string[]; onTogglePin: (id: string) => void }) {
     const { t, i18n } = useTranslation('projects');
     if (view !== 'list') {
         // The board takes the pane's width and grows downward: the pane scrolls vertically, never sideways.
         return threads.length === 0
             ? <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>{t('overview.noThreads')}</Typography>
-            : <StatusBoard threads={threads} selectedId={selectedId} onOpen={onOpen} orientation={view} />;
+            : <StatusBoard threads={threads} selectedId={selectedId} onOpen={onOpen} orientation={view} pinnedIds={pinnedIds} onTogglePin={onTogglePin} />;
     }
     const groups = STATUS_ORDER.map((status) => ({
         key: status, label: t(`overview.group.${status}`), collapsed: status === 'resolved',
@@ -34,6 +35,7 @@ export function OverviewPane({ projectId, threads, onOpen, libraryKey, selectedI
     const [tab, setTab] = useState<OverviewTab>(initialTab);
     const waiting = threads.filter((th) => needsUser(th.status)).length;
     const [view, setView] = useThreadsView();
+    const [pinnedIds, togglePin] = usePinnedThreads(projectId);
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', pr: 1.5, borderBottom: 1, borderColor: 'divider' }}>
@@ -45,7 +47,7 @@ export function OverviewPane({ projectId, threads, onOpen, libraryKey, selectedI
                 {tab === 'threads' && <ViewSwitch view={view} onChange={setView} />}
             </Box>
             <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
-                {tab === 'threads' ? <ThreadGroups threads={threads} selectedId={selectedId} onOpen={onOpen} view={view} /> : tab === 'status' && status != null ? status : <Library key={projectId} projectId={projectId} refreshKey={libraryKey} />}
+                {tab === 'threads' ? <ThreadGroups threads={threads} selectedId={selectedId} onOpen={onOpen} view={view} pinnedIds={pinnedIds} onTogglePin={togglePin} /> : tab === 'status' && status != null ? status : <Library key={projectId} projectId={projectId} refreshKey={libraryKey} />}
             </Box>
         </Box>
     );

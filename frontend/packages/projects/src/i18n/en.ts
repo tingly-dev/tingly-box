@@ -215,7 +215,7 @@ export const en = {
     band: { collapse: 'Collapse', expand: 'Expand' },
     overview: {
         view: { label: 'View', list: 'List', vertical: 'Vertical kanban', horizontal: 'Horizontal kanban' },
-        threads: 'Threads', threadsWaiting: 'Threads · {{count}} waiting', status: 'Status', library: 'Library',
+        threads: 'Threads', threadsWaiting: 'Threads · {{count}} waiting', status: 'Status', library: 'Library', pin: 'Pin to top', unpin: 'Unpin', pinned: 'Pinned',
         noThreads: 'No threads yet. Send work in the conversation and they will appear here.',
         group: { waiting: 'Waiting on you', failed: 'Failed', ready: 'Ready for review', working: 'Working', idle: 'Idle', resolved: 'Resolved' },
     },
