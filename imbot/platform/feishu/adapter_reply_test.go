@@ -55,3 +55,20 @@ func TestAdaptMessage_NoParentIDMeansNoThreadContext(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, got.ThreadContext, "a plain message must not get a synthesized ThreadContext")
 }
+
+// A Feishu file message names the file; the adapter must keep that name (the
+// key alone is not a name) and the type its extension implies.
+func TestAdaptMessage_FileKeepsItsName(t *testing.T) {
+	a := NewAdapter(&core.Config{Platform: core.PlatformFeishu})
+	got, err := a.AdaptMessage(context.Background(), MessageEventDetail{
+		MessageID: "om_file", CreateTime: "1700000000000", ChatType: "p2p", MsgType: "file", ChatID: "oc_chat_1",
+		Content: map[string]interface{}{"file_key": "file_v3_00abc", "file_name": "季度报告.docx"},
+		Sender:  SenderDetail{SenderID: "ou_sender"},
+	})
+	require.NoError(t, err)
+	mc, ok := got.Content.(*core.MediaContent)
+	require.True(t, ok)
+	assert.Equal(t, "季度报告.docx", mc.Media[0].Filename)
+	assert.Equal(t, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", mc.Media[0].MimeType)
+	assert.Equal(t, "file_v3_00abc", mc.Media[0].Raw["file_key"])
+}

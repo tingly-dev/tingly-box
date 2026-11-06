@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -571,7 +572,11 @@ func (b *Bot) sendMedia(ctx context.Context, chatID int64, opts *core.SendMessag
 			return nil, openErr
 		}
 		defer file.Close()
-		input = &models.InputFileUpload{Filename: media.Filename, Data: file}
+		name := media.Filename
+		if name == "" {
+			name = filepath.Base(parsed.Path)
+		}
+		input = &models.InputFileUpload{Filename: name, Data: file}
 	}
 
 	var sentMsg *models.Message

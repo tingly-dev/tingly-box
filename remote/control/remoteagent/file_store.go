@@ -157,8 +157,9 @@ func (s *FileStore) resolveTelegramFileURL(ctx context.Context, tgFileURL string
 }
 
 // DownloadFile downloads a file from a URL to the project's .download directory
-// Returns an error if file size exceeds limits
-func (s *FileStore) DownloadFile(ctx context.Context, projectPath, url, mimeType string) (*StoredFile, error) {
+// Returns an error if file size exceeds limits. name is the name the chat
+// message gave the file, if any; see chooseFileName for the rest.
+func (s *FileStore) DownloadFile(ctx context.Context, projectPath, url, mimeType, name string) (*StoredFile, error) {
 	// Validate MIME type first
 	if !s.IsAllowedType(mimeType) {
 		return nil, fmt.Errorf("unsupported file type: %s", mimeType)
@@ -208,28 +209,32 @@ func (s *FileStore) DownloadFile(ctx context.Context, projectPath, url, mimeType
 		}
 	}
 
-	// Generate filename
-	filename := s.generateFilename(url, mimeType)
-	if filename == "" {
-		filename = fmt.Sprintf("%d-%s", time.Now().Unix(), "download")
+	// The name depends on the first bytes (an extension for a name that has
+	// none), so read them before creating the file.
+	head := make([]byte, 512)
+	n, err := io.ReadFull(resp.Body, head)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		return nil, fmt.Errorf("failed to download file: %w", err)
 	}
+	head = head[:n]
 
-	// Get download directory
 	downloadDir := s.GetDownloadDir(projectPath)
 	if err := os.MkdirAll(downloadDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create download directory: %w", err)
 	}
-
-	// Create file
-	filePath := filepath.Join(downloadDir, filename)
-	file, err := os.Create(filePath)
+	file, filename, err := createExclusive(downloadDir, chooseFileName(name, resp.Header.Get("Content-Disposition"), mimeType, head, time.Now()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file: %w", err)
 	}
 	defer file.Close()
+	filePath := file.Name()
 
-	// Download and write file with size tracking
-	written, err := io.Copy(file, resp.Body)
+	written, err := file.Write(head)
+	if err == nil {
+		var rest int64
+		rest, err = io.Copy(file, resp.Body)
+		written += int(rest)
+	}
 	if err != nil {
 		os.Remove(filePath) // Clean up on error
 		return nil, fmt.Errorf("failed to write file: %w", err)
@@ -238,7 +243,7 @@ func (s *FileStore) DownloadFile(ctx context.Context, projectPath, url, mimeType
 	// Verify size after download
 	if size <= 0 {
 		// If content-length was unknown, check actual size
-		if !s.IsAllowedSize(mimeType, written) {
+		if !s.IsAllowedSize(mimeType, int64(written)) {
 			os.Remove(filePath) // Clean up on error
 			maxSize := s.maxImageSize
 			if fileType == "document" {
@@ -253,7 +258,7 @@ func (s *FileStore) DownloadFile(ctx context.Context, projectPath, url, mimeType
 		RelPath:  filepath.Join(".agent", filename),
 		URL:      url,
 		Filename: filename,
-		Size:     written,
+		Size:     int64(written),
 		MimeType: mimeType,
 	}, nil
 }
@@ -286,51 +291,24 @@ func (s *FileStore) GetDownloadDir(projectPath string) string {
 	return filepath.Join(projectPath, ".agent")
 }
 
-// generateFilename generates a filename from URL and MIME type
-func (s *FileStore) generateFilename(url, mimeType string) string {
-	// Try to extract filename from URL
-	parts := strings.Split(url, "/")
-	if len(parts) > 0 {
-		filename := parts[len(parts)-1]
-		// Remove query parameters
-		if idx := strings.Index(filename, "?"); idx > 0 {
-			filename = filename[:idx]
+// createExclusive creates dir/name, adding " (2)", " (3)" ... before the
+// extension when the name is taken, so two files sent under one name (or two
+// unnamed images in the same second) never overwrite each other.
+func createExclusive(dir, name string) (*os.File, string, error) {
+	ext := filepath.Ext(name)
+	stem := strings.TrimSuffix(name, ext)
+	for i := 1; i < 1000; i++ {
+		candidate := name
+		if i > 1 {
+			candidate = fmt.Sprintf("%s (%d)%s", stem, i, ext)
 		}
-		if filename != "" {
-			return filename
+		f, err := os.OpenFile(filepath.Join(dir, candidate), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
+		if err == nil {
+			return f, candidate, nil
+		}
+		if !os.IsExist(err) {
+			return nil, "", err
 		}
 	}
-
-	// Generate filename based on MIME type
-	ext := ""
-	switch mimeType {
-	case "image/jpeg":
-		ext = ".jpg"
-	case "image/png":
-		ext = ".png"
-	case "image/gif":
-		ext = ".gif"
-	case "image/webp":
-		ext = ".webp"
-	case "application/pdf":
-		ext = ".pdf"
-	case "text/plain":
-		ext = ".txt"
-	case "text/markdown":
-		ext = ".md"
-	case "text/csv":
-		ext = ".csv"
-	// Word
-	case "application/msword":
-		ext = ".doc"
-	case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-		ext = ".docx"
-	// Excel
-	case "application/vnd.ms-excel":
-		ext = ".xls"
-	case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
-		ext = ".xlsx"
-	}
-
-	return fmt.Sprintf("%d%s", time.Now().Unix(), ext)
+	return nil, "", fmt.Errorf("too many files named %q", name)
 }

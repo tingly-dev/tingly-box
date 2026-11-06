@@ -3,6 +3,7 @@ package dingtalk
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/open-dingtalk/dingtalk-stream-sdk-go/chatbot"
@@ -79,6 +80,10 @@ func (a *Adapter) extractSender(data *chatbot.BotCallbackDataModel) core.Sender 
 
 // extractContent extracts content from DingTalk callback data
 func (a *Adapter) extractContent(data *chatbot.BotCallbackDataModel) core.Content {
+	if mc := a.extractMedia(data); mc != nil {
+		return mc
+	}
+
 	// Check for text content in Text field
 	if data.Text.Content != "" {
 		return core.NewTextContent(data.Text.Content)
@@ -116,4 +121,50 @@ func (a *Adapter) getChatType(conversationType string) core.ChatType {
 	default:
 		return core.ChatTypeDirect
 	}
+}
+
+// downloadCodeKey is where a media attachment keeps the code the robot API
+// trades for a download link (see Bot.resolveMediaURLs).
+const downloadCodeKey = "download_code"
+
+// extractMedia reads the file, picture and rich-text messages (video and audio
+// are not file types a chat can hand to a session). A
+// file carries its name in the payload; the others have none, which is left
+// empty for the receiver to name.
+func (a *Adapter) extractMedia(data *chatbot.BotCallbackDataModel) *core.MediaContent {
+	content, _ := data.Content.(map[string]any)
+	str := func(m map[string]any, key string) string { s, _ := m[key].(string); return s }
+	item := func(typ, code, name, mimeType string) core.MediaAttachment {
+		return core.MediaAttachment{
+			Type: typ, Filename: name, MimeType: mimeType,
+			Raw: map[string]interface{}{downloadCodeKey: code, "platform": "dingtalk"},
+		}
+	}
+	// A picture's real type is only known once it is downloaded; the receiver
+	// names and types it from the bytes, so this only has to be an image type.
+	const pictureType = "image/jpeg"
+	switch data.Msgtype {
+	case "file":
+		name := str(content, "fileName")
+		return core.NewMediaContent([]core.MediaAttachment{item("document", str(content, "downloadCode"), name, core.MimeTypeByFilename(name))}, "")
+	case "picture":
+		return core.NewMediaContent([]core.MediaAttachment{item("image", str(content, "downloadCode"), "", pictureType)}, "")
+	case "richText":
+		parts, _ := content["richText"].([]any)
+		var text strings.Builder
+		var media []core.MediaAttachment
+		for _, p := range parts {
+			part, _ := p.(map[string]any)
+			if str(part, "type") == "picture" {
+				media = append(media, item("image", str(part, "downloadCode"), "", pictureType))
+			} else {
+				text.WriteString(str(part, "text"))
+			}
+		}
+		if len(media) == 0 {
+			return nil
+		}
+		return core.NewMediaContent(media, strings.TrimSpace(text.String()))
+	}
+	return nil
 }

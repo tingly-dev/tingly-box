@@ -276,3 +276,66 @@ func (b *Bot) robotSend(ctx context.Context, conversationID string, conv convers
 	}
 	return out.ProcessQueryKey, nil
 }
+
+// linkTimeout bounds one download-link lookup: it runs inside the stream
+// callback, whose acknowledgement it must not hold up.
+const linkTimeout = 10 * time.Second
+
+// resolveMediaURLs trades each inbound attachment's download code for a link
+// the receiver can fetch (a stream callback carries only the code). A failure
+// leaves the URL empty: the message still arrives, and the receiver reports
+// that the file could not be downloaded.
+func (b *Bot) resolveMediaURLs(ctx context.Context, robotCode string, msg *core.Message) {
+	mc, ok := msg.Content.(*core.MediaContent)
+	if !ok {
+		return
+	}
+	if robotCode == "" {
+		robotCode = b.Config().Auth.ClientID
+	}
+	for i := range mc.Media {
+		code, _ := mc.Media[i].Raw[downloadCodeKey].(string)
+		if code == "" {
+			continue
+		}
+		lctx, cancel := context.WithTimeout(ctx, linkTimeout)
+		link, err := b.downloadLink(lctx, robotCode, code)
+		cancel()
+		if err != nil {
+			b.Logger().Error("Failed to get DingTalk download link: %v", err)
+			continue
+		}
+		mc.Media[i].URL = link
+	}
+}
+
+// downloadLink calls robot/messageFiles/download for a download code.
+func (b *Bot) downloadLink(ctx context.Context, robotCode, downloadCode string) (string, error) {
+	token, err := b.getAccessToken(ctx)
+	if err != nil {
+		return "", err
+	}
+	raw, _ := json.Marshal(map[string]string{"downloadCode": downloadCode, "robotCode": robotCode})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.apiBase+"/v1.0/robot/messageFiles/download", bytes.NewReader(raw))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-acs-dingtalk-access-token", token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", scrubURLError(err)
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 300 {
+		return "", fmt.Errorf("status %d: %s", resp.StatusCode, data)
+	}
+	var out struct {
+		DownloadURL string `json:"downloadUrl"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil || out.DownloadURL == "" {
+		return "", fmt.Errorf("response has no downloadUrl: %s", data)
+	}
+	return out.DownloadURL, nil
+}

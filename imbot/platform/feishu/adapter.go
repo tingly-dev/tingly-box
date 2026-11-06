@@ -152,10 +152,13 @@ func (a *Adapter) extractContent(event MessageEventDetail) core.Content {
 
 		if fileContent, ok := e.Content.(map[string]interface{}); ok {
 			if fileKey, ok := fileContent["file_key"].(string); ok {
+				name, _ := fileContent["file_name"].(string)
 				return []core.MediaAttachment{{
-					Type: "document",
-					URL:  fileKey,
-					Raw:  make(map[string]interface{}),
+					Type:     "document",
+					URL:      fileKey,
+					Filename: name,
+					MimeType: core.MimeTypeByFilename(name),
+					Raw:      map[string]interface{}{"file_key": fileKey},
 				}}, "", true
 			}
 		}

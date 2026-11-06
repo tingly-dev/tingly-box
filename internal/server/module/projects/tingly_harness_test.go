@@ -18,6 +18,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly/testenv"
 	hostdb "github.com/tingly-dev/tingly-box/internal/db"
@@ -566,4 +567,61 @@ func TestTinglyProjectsAndFoldersAreDistinct(t *testing.T) {
 	require.Contains(t, dirs.Text, "This chat has not picked a folder.", "a project is not a folder binding")
 	chat.SendText("/project")
 	chat.WaitText(10*time.Second).AssertContains(t, "Project Alpha ✓")
+}
+
+// A file or image a chat sends is stored in the project's uploads as
+// `uploads/<id>-<name>` and recorded under the name the sender gave it; an
+// image with no name is named by when it came, never by a platform media id.
+func TestTinglyChatFilesKeepTheirNames(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/pic") {
+			_, _ = w.Write(append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 32)...))
+			return
+		}
+		_, _ = w.Write([]byte("%PDF-1.4 report"))
+	}))
+	defer srv.Close()
+	chat := h.env.NewUser("file-name-user").OpenDM(h.chosenID)
+	chat.SendText("start")
+	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: start")
+	var list struct {
+		Bindings []struct {
+			ThreadID string `json:"thread_id"`
+		} `json:"bindings"`
+	}
+	h.call("GET", "/projects/channel-bindings", nil, &list)
+	require.Len(t, list.Bindings, 1)
+	threadID := list.Bindings[0].ThreadID
+	h.setPrivileged(t, chat, true)
+
+	chat.SendMedia([]core.MediaAttachment{{Type: "document", URL: srv.URL + "/dl/AgACAgIAAxkDAAIB", MimeType: "application/pdf", Filename: "季度报告 final.pdf"}})
+	chat.WaitText(10 * time.Second)
+	chat.SendMedia([]core.MediaAttachment{{Type: "image", URL: srv.URL + "/dl/pic", MimeType: "image/png"}})
+	chat.WaitText(10 * time.Second)
+
+	var events struct {
+		Events []struct {
+			Payload string `json:"payload"`
+		} `json:"events"`
+	}
+	h.call("GET", "/threads/"+threadID+"/events", nil, &events)
+	var names, paths []string
+	for _, e := range events.Events {
+		var p struct {
+			Attachments []struct{ Name, Path string } `json:"attachments"`
+		}
+		if json.Unmarshal([]byte(e.Payload), &p) == nil {
+			for _, a := range p.Attachments {
+				names, paths = append(names, a.Name), append(paths, a.Path)
+			}
+		}
+	}
+	require.Len(t, names, 2)
+	require.Equal(t, "季度报告 final.pdf", names[0])
+	require.Regexp(t, `^image-\d{8}-\d{6}\.png$`, names[1])
+	require.Regexp(t, `^uploads/[0-9a-f]{12}-季度报告 final\.pdf$`, paths[0])
+	for _, p := range paths {
+		require.NotContains(t, p, "AgACAgIAAxkDAAIB")
+	}
 }
