@@ -220,3 +220,27 @@ func TestConverter_ResultWithUsageButNoCallsKeepsNoContext(t *testing.T) {
 		t.Fatalf("usage = %+v", u)
 	}
 }
+
+// After a compaction Claude Code emits the messages it kept again, with the
+// same uuid; the transcript must not repeat them.
+func TestConverter_DropsReplayedAssistantMessages(t *testing.T) {
+	c := newConverter()
+	reply := func(uuid, text string) *claude.AssistantMessage {
+		return &claude.AssistantMessage{UUID: uuid, Message: anthropic.Message{ID: "m-" + uuid, Content: []anthropic.ContentBlockUnion{{Type: "text", Text: text}}}}
+	}
+	if got := c.messages(reply("u1", "first")); len(got) != 1 {
+		t.Fatalf("first emission = %+v", got)
+	}
+	if got := c.messages(reply("u1", "first")); len(got) != 0 {
+		t.Errorf("replay recorded again: %+v", got)
+	}
+	if got := c.messages(reply("u2", "second")); len(got) != 1 {
+		t.Errorf("a new uuid was dropped: %+v", got)
+	}
+	if got := c.messages(reply("", "no uuid")); len(got) != 1 {
+		t.Errorf("a message without a uuid was dropped: %+v", got)
+	}
+	if got := c.messages(reply("", "no uuid")); len(got) != 1 {
+		t.Errorf("messages without a uuid are never duplicates: %+v", got)
+	}
+}
