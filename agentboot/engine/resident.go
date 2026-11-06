@@ -79,6 +79,12 @@ func (e *Engine) record(sessionID string, conv *converter, raw any) {
 // the session's run, so the page shows it working and its approvals, Stop
 // and the "busy" check all behave as for any turn.
 func (e *Engine) beginUnsolicitedTurn(sessionID string) (context.Context, agentboot.Prompter) {
+	if r, ok := e.residentFor(sessionID); ok {
+		// A failure an earlier turn left must not hide this one's: reset
+		// before anything below can return. The Conductor's reader runs this
+		// hook and the sink, so there is no race.
+		r.conv.failedResult = false
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), turnTimeout)
 	wp := newWebPrompter(sessionID, e.store)
 
@@ -94,11 +100,6 @@ func (e *Engine) beginUnsolicitedTurn(sessionID string) (context.Context, agentb
 	e.runs[sessionID] = &run{cancel: cancel, prompter: wp, done: make(chan struct{}), unsolicited: true}
 	e.mu.Unlock()
 
-	if r, ok := e.residentFor(sessionID); ok {
-		// The Conductor's reader runs this hook and the sink: no race, and a
-		// failure left by an earlier turn must not hide this one's.
-		r.conv.failedResult = false
-	}
 	e.appendSystem(sessionID, "a background task finished; Claude is following up")
 	e.store.SetRunning(sessionID)
 

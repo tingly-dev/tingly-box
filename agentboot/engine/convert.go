@@ -162,6 +162,9 @@ func (c *converter) usage(res *claude.ResultMessage) (TurnUsage, bool) {
 		u.InputTokens, u.OutputTokens = int64(total.InputTokens), int64(total.OutputTokens)
 		u.CacheReadTokens, u.CacheWriteTokens = int64(total.CacheReadInputTokens), int64(total.CacheCreationInputTokens)
 	} else {
+		// No usage on the result (an error result): the per-call figures are
+		// message_start snapshots, so input, cache and context are right but
+		// output is an undercount.
 		for _, call := range calls {
 			u.InputTokens += call.InputTokens
 			u.OutputTokens += call.OutputTokens

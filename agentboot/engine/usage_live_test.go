@@ -2,6 +2,7 @@ package engine
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -186,5 +187,21 @@ func TestEngine_FailedResultIsRecordedOnce(t *testing.T) {
 				t.Fatalf("recorded %d error entries for one failed turn, want 1: %+v", len(errs), errs)
 			}
 		})
+	}
+}
+
+// A failure an earlier turn left must not hide the next turn's error, even
+// when Claude's own turn finds the session already claimed (the host's message
+// won the race and the engine adopts it).
+func TestEngine_BeginUnsolicitedTurnClearsAStaleFailedResult(t *testing.T) {
+	e := New(Config{Store: newMemStore()})
+	t.Cleanup(func() { e.Shutdown(context.Background()) })
+	conv := newConverter()
+	conv.failedResult = true
+	e.residents["s"] = &resident{conv: conv}
+	e.runs["s"] = &run{cancel: func() {}, done: make(chan struct{})}
+	e.beginUnsolicitedTurn("s")
+	if conv.failedResult {
+		t.Fatal("the flag a previous failed result set survived into the next turn")
 	}
 }
