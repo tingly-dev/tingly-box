@@ -9,8 +9,6 @@ import { formatCacheBreakdown, formatNumber, getCacheHitRateColor, getErrorRateC
 import ServiceStatsTable, { type AggregatedStat } from './ServiceStatsTable';
 import StatCard from './StatCard';
 
-const REFRESH_MS = 30_000;
-
 /**
  * Today's usage for one agent, as the Usage tab of its Log: the Dashboard's
  * cards and per-model table, filtered to the agent. The full analysis (other
@@ -38,12 +36,9 @@ export default function AgentUsagePanel({ scenario }: { scenario: string }) {
         }
     }, [scenario]);
 
+    // Loads when the tab opens; no background polling (switching tabs reloads it).
     useEffect(() => {
         void load();
-        const timer = window.setInterval(() => {
-            if (document.visibilityState === 'visible') void load();
-        }, REFRESH_MS);
-        return () => window.clearInterval(timer);
     }, [load]);
 
     // Nothing until the first answer, so the cards don't flash zeros.

@@ -61,7 +61,8 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
     const [search, setSearch] = useState('');
     const [limit, setLimit] = useState(200);
-    const [autoRefresh, setAutoRefresh] = useState(true);
+    // Off by default: a log only refetches when asked (switch or refresh button).
+    const [autoRefresh, setAutoRefresh] = useState(false);
     const tableContainerRef = useRef<HTMLDivElement>(null);
     const listSequence = useRef(0);
     // Sorting is client-side only — never triggers a refetch.

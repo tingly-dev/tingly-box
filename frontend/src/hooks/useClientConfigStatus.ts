@@ -8,7 +8,6 @@ export type ClientConfigStatus = components['schemas']['ClientConfigStatusRespon
 // page changes something that feeds it (the caller's `deps`), when the
 // window regains focus (the user may have edited the file or run Auto
 // Config elsewhere), and on a slow interval while the page is open.
-const REFRESH_MS = 15_000;
 
 // Tools whose config file the gateway can read back and compare
 // (GET /api/v1/config/<tool>/status).
@@ -43,13 +42,7 @@ export function useClientConfigStatus(tool: ClientConfigTool | null, deps: unkno
         if (!tool) return;
         const onFocus = () => void refresh();
         window.addEventListener('focus', onFocus);
-        const timer = window.setInterval(() => {
-            if (document.visibilityState === 'visible') void refresh();
-        }, REFRESH_MS);
-        return () => {
-            window.removeEventListener('focus', onFocus);
-            window.clearInterval(timer);
-        };
+        return () => window.removeEventListener('focus', onFocus);
     }, [refresh, tool]);
 
     return { status, refresh };

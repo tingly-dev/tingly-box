@@ -164,14 +164,6 @@ const System = () => {
 
     useEffect(() => {
         loadAllData();
-
-        const statusInterval = setInterval(() => {
-            loadServerStatus();
-        }, 30000);
-
-        return () => {
-            clearInterval(statusInterval);
-        };
     }, []);
 
     const loadAllData = async () => {
