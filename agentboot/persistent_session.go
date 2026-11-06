@@ -151,7 +151,14 @@ type persistentSession struct {
 	controlSeq atomic.Uint64
 	// controlWaiters holds the callers of Control waiting for their answer,
 	// by request id; the pump delivers each answer.
-	controlWaiters map[string]chan error
+	controlWaiters map[string]chan controlAnswer
+}
+
+// controlAnswer is the agent's answer to a control request: the body of a
+// success, or the error of a refusal.
+type controlAnswer struct {
+	body map[string]any
+	err  error
 }
 
 func (s *persistentSession) Events() <-chan StreamEvent { return s.events }
@@ -299,25 +306,32 @@ func (s *persistentSession) sendControl(req ControlRequest) error {
 
 // control writes req and waits for the agent's answer.
 func (s *persistentSession) control(ctx context.Context, req ControlRequest) error {
+	_, err := s.controlBody(ctx, req)
+	return err
+}
+
+// controlBody is control that also returns the body of the agent's success
+// answer, for the requests that ask a question.
+func (s *persistentSession) controlBody(ctx context.Context, req ControlRequest) (map[string]any, error) {
 	if _, ok := s.transport.(ControlResponseDecoder); !ok {
-		return ErrControlUnsupported
+		return nil, ErrControlUnsupported
 	}
 	enc, ok := s.transport.(ControlRequestEncoder)
 	if !ok {
-		return ErrControlUnsupported
+		return nil, ErrControlUnsupported
 	}
 	if st := s.Status(); st == SessionStateClosing || st == SessionStateTerminated {
-		return ErrSessionClosed
+		return nil, ErrSessionClosed
 	}
 	reqID := fmt.Sprintf("agentboot_ctl_%d", s.controlSeq.Add(1))
 	wire := enc.EncodeControlRequest(reqID, req)
 	if wire == nil {
-		return ErrControlUnsupported
+		return nil, ErrControlUnsupported
 	}
-	answer := make(chan error, 1)
+	answer := make(chan controlAnswer, 1)
 	s.mu.Lock()
 	if s.controlWaiters == nil {
-		s.controlWaiters = make(map[string]chan error)
+		s.controlWaiters = make(map[string]chan controlAnswer)
 	}
 	s.controlWaiters[reqID] = answer
 	s.mu.Unlock()
@@ -328,34 +342,51 @@ func (s *persistentSession) control(ctx context.Context, req ControlRequest) err
 	}
 	if err := s.encoder.Encode(wire); err != nil {
 		forget()
-		return fmt.Errorf("agentboot: send control request: %w", err)
+		return nil, fmt.Errorf("agentboot: send control request: %w", err)
 	}
 	timer := time.NewTimer(ControlTimeout)
 	defer timer.Stop()
 	select {
-	case err := <-answer:
-		return err
+	case a := <-answer:
+		return a.body, a.err
 	case <-ctx.Done():
 		forget()
-		return ctx.Err()
+		return nil, ctx.Err()
 	case <-timer.C:
 		forget()
-		return fmt.Errorf("agentboot: no answer to control request within %s", ControlTimeout)
+		return nil, fmt.Errorf("agentboot: no answer to control request within %s", ControlTimeout)
 	case <-s.done:
 		forget()
-		return ErrSessionClosed
+		return nil, ErrSessionClosed
 	}
+}
+
+// ContextUsage asks the process for its context size. It is not part of
+// [PersistentSession]; hosts reach it through [ContextUsageProvider].
+func (s *persistentSession) ContextUsage(ctx context.Context) (ContextUsage, error) {
+	reader, ok := s.transport.(ContextUsageReader)
+	if !ok {
+		return ContextUsage{}, ErrContextUnsupported
+	}
+	body, err := s.controlBody(ctx, ContextUsageRequest{})
+	if err != nil {
+		if errors.Is(err, ErrControlUnsupported) {
+			return ContextUsage{}, ErrContextUnsupported
+		}
+		return ContextUsage{}, err
+	}
+	return reader.DecodeContextUsage(body)
 }
 
 // answerControl hands the agent's answer to the Control caller waiting for
 // it. Answers nobody waits for (Interrupt, StopTask) are dropped.
-func (s *persistentSession) answerControl(reqID string, err error) {
+func (s *persistentSession) answerControl(reqID string, body map[string]any, err error) {
 	s.mu.Lock()
 	ch := s.controlWaiters[reqID]
 	delete(s.controlWaiters, reqID)
 	s.mu.Unlock()
 	if ch != nil {
-		ch <- err
+		ch <- controlAnswer{body: body, err: err}
 	}
 }
 
@@ -464,10 +495,15 @@ func (s *persistentSession) emit(ev StreamEvent) {
 func (s *persistentSession) pump(decoderEvents <-chan protocol.Event, decoderErr func() error) {
 	detector, _ := s.transport.(TurnStartDetector)
 	responses, _ := s.transport.(ControlResponseDecoder)
+	bodies, _ := s.transport.(ControlResponseBodyDecoder)
 	for ev := range decoderEvents {
 		if responses != nil {
 			if reqID, err, ok := responses.DecodeControlResponse(ev); ok {
-				s.answerControl(reqID, err)
+				var body map[string]any
+				if bodies != nil && err == nil {
+					body = bodies.ControlResponseBody(ev)
+				}
+				s.answerControl(reqID, body, err)
 				continue
 			}
 		}

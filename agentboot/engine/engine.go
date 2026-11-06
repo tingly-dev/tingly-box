@@ -50,8 +50,9 @@ const (
 	KindApprovalResponse = "approval_response"
 	KindAskRequest       = "ask_request"
 	KindAskResponse      = "ask_response"
-	KindTask             = "task"  // payload: TaskEvent
-	KindUsage            = "usage" // payload: TurnUsage
+	KindTask             = "task"    // payload: TaskEvent
+	KindUsage            = "usage"   // payload: TurnUsage
+	KindCompact          = "compact" // payload: agentboot.CompactEvent
 	KindSystem           = "system"
 	KindError            = "error"
 )
@@ -148,6 +149,10 @@ type run struct {
 	// the process directly.
 	unsolicited bool
 	stopped     atomic.Bool // the user stopped it, so its error result is expected
+	// compact collects the compaction events of a turn started by Compact.
+	compact *compactCapture
+	// end is how the turn ended; set before done closes.
+	end TurnEnd
 }
 
 var (

@@ -66,6 +66,9 @@ func (e *Engine) record(sessionID string, conv *converter, raw any) {
 		}
 		return
 	}
+	if ev, ok := raw.(agentboot.CompactEvent); ok {
+		e.noteCompact(sessionID, ev)
+	}
 	for _, m := range conv.messages(raw) {
 		e.trackTasks(sessionID, m)
 		e.store.Append(sessionID, m)
