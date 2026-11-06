@@ -224,12 +224,20 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 				}
 
 			case EventKindTerminalSuccess:
+				// The result is the turn's usage and cost: hand it on as a
+				// message like the rest of the stream.
+				for _, m := range transport.AccumulateMessage(ev) {
+					handle.emit(runCtx, MessageEvent{Raw: m})
+				}
 				state.mu.Lock()
 				state.terminalSeen = true
 				state.mu.Unlock()
 				shutdownGracefully()
 
 			case EventKindTerminalError:
+				for _, m := range transport.AccumulateMessage(ev) {
+					handle.emit(runCtx, MessageEvent{Raw: m})
+				}
 				state.mu.Lock()
 				state.terminalSeen = true
 				state.terminalErr = resultErrorFromEvent(r.driver.Type(), ev)

@@ -245,6 +245,19 @@ func (t *turnTally) addUsage(u engine.TurnUsage, main bool) {
 	}
 }
 
+// addRateLimits folds in a "rate_limit" entry: the subscription windows
+// Claude Code last read. The latest reading of the turn wins.
+func (t *turnTally) addRateLimits(r engine.RateLimits) {
+	rl := &db.RateLimits{Status: r.Status}
+	if r.FiveHour != nil {
+		rl.FiveHour = &db.RateLimitWindow{Utilization: r.FiveHour.Utilization, ResetsAt: r.FiveHour.ResetsAt}
+	}
+	if r.SevenDay != nil {
+		rl.SevenDay = &db.RateLimitWindow{Utilization: r.SevenDay.Utilization, ResetsAt: r.SevenDay.ResetsAt}
+	}
+	t.usage.RateLimits = rl
+}
+
 // NewThreads builds the thread manager.
 func NewThreads(store *db.Store, layout Layout, hub *Hub, agents Agents, env ThreadEnv) *Threads {
 	m := &Threads{

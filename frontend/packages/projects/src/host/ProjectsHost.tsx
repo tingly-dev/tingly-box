@@ -90,6 +90,26 @@ export interface SessionLaunch {
     model: string;
 }
 
+/** One window of the quota a host reports for where a thread's requests go. */
+export interface QuotaWindow {
+    /** The window's kind as the host names it: "session", "weekly", "balance"… */
+    label: string;
+    /** The value as the host's own status line writes it: "60% left", "12K/100K left", "$12.40". */
+    text: string;
+    /** How much of the window is spent (0-100); unknown for a balance with no cap. */
+    usedPct?: number;
+    /** ISO time the window comes back. */
+    resetsAt?: string;
+    limitReached?: boolean;
+}
+
+/** Where a host routes a thread's requests and the quota it draws on there. */
+export interface QuotaReading {
+    provider?: string;
+    model?: string;
+    windows: QuotaWindow[];
+}
+
 /**
  * A host's own parts of a folder session. Projects knows a profile only as a
  * name; a host with profiles (Tingly Box) supplies the pickers and the status
@@ -101,6 +121,12 @@ export interface SessionSlots {
     launchPickers?: (p: { value: SessionLaunch; onChange: (next: SessionLaunch) => void; disabled?: boolean }) => ReactNode;
     /** Under an open session's message box. */
     statusLine?: (p: { session: Thread; events: ThreadEvent[] }) => ReactNode;
+    /**
+     * The quota behind a thread's launch (`profile`, and `tier` or the model
+     * last used): what a host's status line shows beside the model. Asked
+     * again after each turn; undefined when the host has none to give.
+     */
+    quota?: (p: { profile: string; tier: string; model?: string }) => Promise<QuotaReading | undefined>;
 }
 
 const Ctx = createContext<ProjectsHost | null>(null);

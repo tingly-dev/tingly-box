@@ -1,6 +1,7 @@
 package db
 
 import (
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -241,12 +242,21 @@ func (s *Store) SaveThread(t *Thread) error {
 // SaveThreadUsage writes only what a turn's usage changed. A caller holding an
 // older copy of the thread cannot clobber its other columns with it.
 func (s *Store) SaveThreadUsage(t *Thread) error {
-	return s.db.Model(&Thread{}).Where("id = ?", t.ID).UpdateColumns(map[string]any{
+	cols := map[string]any{
 		"input_tokens": t.InputTokens, "output_tokens": t.OutputTokens,
 		"cache_read_tokens": t.CacheReadTokens, "cache_write_tokens": t.CacheWriteTokens,
 		"context_tokens": t.ContextTokens, "context_window": t.ContextWindow,
 		"last_turn_ms": t.LastTurnMS, "last_turn_at": t.LastTurnAt, "reported_model": t.ReportedModel,
-	}).Error
+	}
+	if t.RateLimits != nil {
+		// A map update skips the field's JSON serializer, so write its text.
+		raw, err := json.Marshal(t.RateLimits)
+		if err != nil {
+			return err
+		}
+		cols["rate_limits"] = string(raw)
+	}
+	return s.db.Model(&Thread{}).Where("id = ?", t.ID).UpdateColumns(cols).Error
 }
 
 // SetThreadTitle renames a thread without bumping its UpdatedAt: a metadata

@@ -1,7 +1,12 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render as renderBare, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Project, Thread } from '../../client';
 import { CoordinatorStatus } from './CoordinatorStatus';
+import type { ReactElement } from 'react';
+import { ProjectsHostProvider, type ProjectsHost } from '../../host/ProjectsHost';
+
+const host: ProjectsHost = { paths: { list: '/p', project: (id) => `/p/${id}`, folder: () => '/f' } };
+const render = (ui: ReactElement) => renderBare(<ProjectsHostProvider host={host}>{ui}</ProjectsHostProvider>);
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
 

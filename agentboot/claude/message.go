@@ -260,6 +260,51 @@ type ModelUsage struct {
 	ContextWindow            int     `json:"contextWindow"`
 }
 
+// RateLimitMessage is a rate_limit_event: the CLI's reading of the
+// subscription windows (5-hour, weekly) from the response headers of its latest
+// call. It is sent when a window's rounded percentage or reset time moves, and
+// only for sessions on a Claude.ai login: API-key, Bedrock and Vertex sessions
+// never get one.
+type RateLimitMessage struct {
+	Type      string        `json:"type"`
+	Info      RateLimitInfo `json:"rate_limit_info"`
+	SessionID string        `json:"session_id,omitempty"`
+	Timestamp time.Time     `json:"timestamp,omitempty"`
+}
+
+// RateLimitInfo is the payload of a rate_limit_event. Utilization is the
+// fraction of a window used (0-1, above 1 once a window is run past); ResetsAt
+// is Unix epoch seconds. The top-level fields describe the window currently
+// limiting; UnifiedWindows carries every tracked window.
+type RateLimitInfo struct {
+	Status         string               `json:"status,omitempty"` // allowed, allowed_warning, rejected
+	ResetsAt       int64                `json:"resetsAt,omitempty"`
+	RateLimitType  string               `json:"rateLimitType,omitempty"` // five_hour, seven_day, seven_day_opus, ...
+	Utilization    *float64             `json:"utilization,omitempty"`
+	UnifiedWindows RateLimitWindowsInfo `json:"unifiedWindows,omitempty"`
+}
+
+// RateLimitWindowsInfo is the per-window readings of a rate_limit_event.
+type RateLimitWindowsInfo struct {
+	FiveHour *RateLimitWindowInfo `json:"five_hour,omitempty"`
+	SevenDay *RateLimitWindowInfo `json:"seven_day,omitempty"`
+}
+
+// RateLimitWindowInfo is one subscription window.
+type RateLimitWindowInfo struct {
+	Utilization float64 `json:"utilization"`
+	ResetsAt    int64   `json:"resetsAt"`
+}
+
+// GetType implements Message
+func (m *RateLimitMessage) GetType() string { return m.Type }
+
+// GetTimestamp implements Message
+func (m *RateLimitMessage) GetTimestamp() time.Time { return m.Timestamp }
+
+// GetRawData implements Message
+func (m *RateLimitMessage) GetRawData() map[string]interface{} { return marshalToMap(m) }
+
 // PermissionDenial represents a denied permission request
 type PermissionDenial struct {
 	RequestID string `json:"request_id"`

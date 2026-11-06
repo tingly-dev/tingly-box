@@ -303,6 +303,7 @@ export default function ProjectPage() {
             disabled={blocked}
             settingsSaving={settings.saving}
             canSend={settings.canSend}
+            quotaRoute={selected && { profile: selected.profile_override ?? project?.thread_profile ?? '', tier: selected.model_override || (selected.profile_override == null ? project?.thread_model : '') || '' }}
             configuredModel={selected?.model_override || `${t('threadSettings.projectDefault')} · ${project?.thread_model || t('threadSettings.defaultModel')}`}
             permissionLabel={selected?.permission_mode ? t(`session.mode.${selected.permission_mode}`, { defaultValue: selected.permission_mode }) : `${t('threadSettings.projectDefault')} · ${t(`session.mode.${project?.thread_permission_mode || 'acceptEdits'}`)}`}
             modelControl={selected && (

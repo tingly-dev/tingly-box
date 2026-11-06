@@ -18,6 +18,7 @@ import { formatTokens } from '../../utils/format';
 import { DiffDialog } from './DiffDialog';
 import { ComposerStrip } from './ComposerStrip';
 import { ThreadInfoRail } from './ThreadInfoRail';
+import type { QuotaRoute } from './infoRail';
 import { RAIL_MIN_PANEL, useInfoRail } from './infoRail';
 import { LoadEarlier } from './LoadEarlier';
 import { needsUser, ThreadBadges, ThreadState, ThreadStateMark } from './threadStatus';
@@ -91,6 +92,8 @@ interface Props {
     onRefresh?: () => void;
     /** A card the rail carries above its own (a folder's session list); the rail then stays on, from `railMinPanel` wide. */
     railTop?: React.ReactNode;
+    /** The launch (profile and model tier) the host looks the thread's quota up by. */
+    quotaRoute?: QuotaRoute;
     railMinPanel?: number;
 }
 
@@ -102,7 +105,7 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
     return `[data-block="${anchor.block}"]`;
 };
 
-export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railTop, railMinPanel = RAIL_MIN_PANEL }: Props) {
+export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railTop, quotaRoute, railMinPanel = RAIL_MIN_PANEL }: Props) {
     const { t } = useTranslation('projects');
     const { im } = useProjectsHost();
     const notify = useNotify();
@@ -580,6 +583,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 onChanged={() => onRefresh?.()}
                 onReveal={(call) => void openInChat({ call })}
                 top={railTop}
+                quotaRoute={quotaRoute}
                 configuredModel={configuredModel}
                 permission={permissionLabel || (session ? (thread.permission_mode || t('session.permissionDefault')) : undefined)}
             />

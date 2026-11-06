@@ -366,6 +366,7 @@ export default function WorkdirPage() {
                         onBack={() => openNew()}
                         liveTasks={liveTasks}
                         railTop={merged ? sessionList : undefined}
+                        quotaRoute={selected && { profile: selected.profile ?? '', tier: selected.model ?? '' }}
                         railMinPanel={merged ? 640 : undefined}
                         more={transcript.more}
                         onLoadEarlier={transcript.loadEarlier}

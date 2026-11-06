@@ -72,6 +72,11 @@ func (s threadStore) Append(sid string, e engine.Entry) {
 		if session {
 			ev = &db.ThreadEvent{Kind: db.EvUsage, Payload: string(e.Payload)}
 		}
+	case e.Kind == engine.KindRateLimit:
+		var r engine.RateLimits
+		if json.Unmarshal(e.Payload, &r) == nil {
+			s.tally(id, func(t *turnTally) { t.addRateLimits(r) })
+		}
 	case e.Kind == engine.KindTask:
 		// Every thread keeps task events: a subagent's card reads its state
 		// from them. A project thread also gets a line when one ends.

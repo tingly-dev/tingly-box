@@ -1788,6 +1788,29 @@ export interface components {
              */
             updated_at: string;
         };
+        RateLimitWindow: {
+            /**
+             * Format: int64
+             * @description Field resets_at
+             */
+            resets_at: number;
+            /**
+             * Format: double
+             * @description Field utilization
+             */
+            utilization: number;
+        };
+        RateLimits: {
+            five_hour?: components["schemas"]["RateLimitWindow"];
+            seven_day?: components["schemas"]["RateLimitWindow"];
+            /** @description Field status */
+            status?: string;
+            /**
+             * Format: date-time
+             * @description Field updated_at
+             */
+            updated_at: string;
+        };
         RecoverCoordinatorRequest: {
             /**
              * @description Field action
@@ -2041,6 +2064,7 @@ export interface components {
             project_id: string;
             /** @description Field queued */
             queued?: boolean;
+            rate_limits?: components["schemas"]["RateLimits"];
             /** @description Field repo_path */
             repo_path?: string;
             /** @description Field reported_model */

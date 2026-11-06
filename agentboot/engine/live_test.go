@@ -20,6 +20,7 @@ import (
 type liveProc struct {
 	factory *process.FakeFactory
 	in      chan map[string]any
+	store   *memStore
 }
 
 func newLiveProc(t *testing.T, script func(h *process.FakeHandle, dec *json.Decoder, in chan map[string]any)) *liveProc {
@@ -53,6 +54,7 @@ func result(t *testing.T, h *process.FakeHandle) {
 
 func (p *liveProc) engine(t *testing.T) (*Engine, recorder) {
 	store := newMemStore()
+	p.store = store
 	rec := recorder{ends: make(chan TurnEnd, 4)}
 	svc, err := agentboot.NewAgentService(agentboot.DefaultConfig())
 	if err != nil {
@@ -139,7 +141,9 @@ func TestEngine_ModelAndModeChangeLiveButSettingsRestart(t *testing.T) {
 		}
 	})
 	e, rec := p.engine(t)
-	launch := func(opts agentboot.ExecutionOptions) Launch { return func(context.Context) agentboot.ExecutionOptions { return opts } }
+	launch := func(opts agentboot.ExecutionOptions) Launch {
+		return func(context.Context) agentboot.ExecutionOptions { return opts }
+	}
 	turn := func(prompt string, resume bool, opts agentboot.ExecutionOptions) {
 		t.Helper()
 		if !e.Start("id", t.TempDir(), prompt, resume, launch(opts)) {

@@ -2,7 +2,7 @@ import { Box } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import type { Project, Thread } from '../../client';
-import { Fact, RailCard, StatusCard, UsageCard, shortSession } from './infoRail';
+import { Fact, QuotaCard, RailCard, StatusCard, UsageCard, shortSession } from './infoRail';
 
 interface Props {
     project: Project;
@@ -50,6 +50,7 @@ export function CoordinatorStatus({ project, coordinator, queued, threads }: Pro
                 {coordinator?.session_id && <Fact label={t('rail.session')} title={coordinator.session_id}>{shortSession(coordinator.session_id)}</Fact>}
             </RailCard>
             {coordinator && <UsageCard thread={coordinator} />}
+            {coordinator && <QuotaCard thread={coordinator} route={{ profile: project.coordinator_profile ?? '', tier: project.coordinator_model ?? '' }} />}
         </Box>
     );
 }

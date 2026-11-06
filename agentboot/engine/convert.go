@@ -106,6 +106,12 @@ func (c *converter) messages(raw any) []Entry {
 			out = append(out, c.msg("usage", "", "", payload))
 		}
 		return out
+	case *claude.RateLimitMessage:
+		if rl, ok := rateLimitsOf(m); ok {
+			payload, _ := json.Marshal(rl)
+			return []Entry{c.msg(KindRateLimit, "", "", payload)}
+		}
+		return nil
 	case *claude.SystemMessage:
 		if m.SubType == claude.SystemSubtypeInit {
 			if model, ok := m.Raw["model"].(string); ok {
@@ -136,16 +142,33 @@ func (c *converter) messages(raw any) []Entry {
 
 // usage totals the turn's API calls. It reports nothing for a turn that made
 // no call (one that failed before reaching the model).
+//
+// The result's own usage is the turn's total: the per-call figures on assistant
+// events are the message_start snapshot, so their output counts are not final.
+// The per-call tally is the fallback for a result without usage. The tally and
+// the context size are reset here, so a resident process's next turn counts
+// from zero; the result's modelUsage must not be summed, it is the process's
+// running total.
 func (c *converter) usage(res *claude.ResultMessage) (TurnUsage, bool) {
-	if len(c.calls) == 0 {
+	calls, contextTokens := c.calls, c.contextTokens
+	c.calls, c.contextTokens = map[string]anthropic.Usage{}, 0
+
+	total := res.Usage
+	reported := total.InputTokens+total.OutputTokens+total.CacheReadInputTokens+total.CacheCreationInputTokens > 0
+	if len(calls) == 0 && !reported {
 		return TurnUsage{}, false
 	}
-	u := TurnUsage{Model: c.model, ContextTokens: c.contextTokens, DurationMS: res.DurationMS}
-	for _, call := range c.calls {
-		u.InputTokens += call.InputTokens
-		u.OutputTokens += call.OutputTokens
-		u.CacheReadTokens += call.CacheReadInputTokens
-		u.CacheWriteTokens += call.CacheCreationInputTokens
+	u := TurnUsage{Model: c.model, ContextTokens: contextTokens, DurationMS: res.DurationMS}
+	if reported {
+		u.InputTokens, u.OutputTokens = int64(total.InputTokens), int64(total.OutputTokens)
+		u.CacheReadTokens, u.CacheWriteTokens = int64(total.CacheReadInputTokens), int64(total.CacheCreationInputTokens)
+	} else {
+		for _, call := range calls {
+			u.InputTokens += call.InputTokens
+			u.OutputTokens += call.OutputTokens
+			u.CacheReadTokens += call.CacheReadInputTokens
+			u.CacheWriteTokens += call.CacheCreationInputTokens
+		}
 	}
 	// A resident process sends its init once, so later turns name the main
 	// model only through modelUsage: take the one that did the most work,
@@ -160,6 +183,49 @@ func (c *converter) usage(res *claude.ResultMessage) (TurnUsage, bool) {
 	}
 	u.ContextWindow = res.ModelUsage[u.Model].ContextWindow
 	return u, true
+}
+
+// RateLimits is the payload of a "rate_limit" transcript entry: the
+// subscription windows Claude Code last read from its API responses, the
+// numbers its own status line shows as 5h / 7d. Only a Claude.ai login has
+// them.
+type RateLimits struct {
+	Status   string           `json:"status,omitempty"` // allowed, allowed_warning, rejected
+	FiveHour *RateLimitWindow `json:"five_hour,omitempty"`
+	SevenDay *RateLimitWindow `json:"seven_day,omitempty"`
+}
+
+// RateLimitWindow is one window: Utilization is the fraction used (0-1, more
+// once run past the cap) and ResetsAt Unix epoch seconds.
+type RateLimitWindow struct {
+	Utilization float64 `json:"utilization"`
+	ResetsAt    int64   `json:"resets_at"`
+}
+
+// rateLimitsOf reads the windows out of a rate_limit_event. An event that
+// names only the limiting window (no unifiedWindows) still fills that one.
+func rateLimitsOf(m *claude.RateLimitMessage) (RateLimits, bool) {
+	rl := RateLimits{Status: m.Info.Status}
+	if w := m.Info.UnifiedWindows.FiveHour; w != nil {
+		rl.FiveHour = &RateLimitWindow{Utilization: w.Utilization, ResetsAt: w.ResetsAt}
+	}
+	if w := m.Info.UnifiedWindows.SevenDay; w != nil {
+		rl.SevenDay = &RateLimitWindow{Utilization: w.Utilization, ResetsAt: w.ResetsAt}
+	}
+	if m.Info.Utilization != nil {
+		w := &RateLimitWindow{Utilization: *m.Info.Utilization, ResetsAt: m.Info.ResetsAt}
+		switch m.Info.RateLimitType {
+		case "five_hour":
+			if rl.FiveHour == nil {
+				rl.FiveHour = w
+			}
+		case "seven_day":
+			if rl.SevenDay == nil {
+				rl.SevenDay = w
+			}
+		}
+	}
+	return rl, rl.FiveHour != nil || rl.SevenDay != nil
 }
 
 func (c *converter) assistant(m *claude.AssistantMessage) []Entry {

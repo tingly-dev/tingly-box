@@ -74,11 +74,12 @@ all live on `db.Thread`, set by `Thread.AddUsage` when a turn ends.
 | --- | --- | --- |
 | `status` / `queued` | idle, working, waiting, ready, failed, resolved; waiting for a slot | thread store (threads, sessions); coordinator: derived from its queue and recovery state by the project detail handler |
 | `turns` | completed turns | existing |
-| `input_tokens`, `output_tokens` | summed over the turn's API calls; input includes cache reads and writes | `engine.TurnUsage` ("usage" entry, from Claude's `result` and its per-call assistant usage) |
+| `input_tokens`, `output_tokens` | summed over the turn's API calls; input includes cache reads and writes | `engine.TurnUsage` ("usage" entry), from the stream's `result.usage` (per turn, final) |
 | `cache_read_tokens`, `cache_write_tokens` | how much of the input the cache served / stored; hit rate = read / input | same |
-| `context_tokens` | prompt size of the turn's last main-thread call (latest turn, not summed) | `TurnUsage.ContextTokens` |
+| `context_tokens` | prompt size of the turn's last main-thread call (latest turn, not summed) | `TurnUsage.ContextTokens`, from the last main-thread `assistant` event's usage (input + cache read + cache write; those fields are final at message start) |
 | `context_window` | the model's window, 0 when Claude did not report it (then the meter shows tokens without a percentage) | `TurnUsage.ContextWindow` (from `modelUsage`) |
 | `last_turn_ms`, `last_turn_at` | duration and end of the last turn | `TurnUsage.DurationMS`, turn end time |
+| `rate_limits` | Claude Code's subscription windows (5-hour, weekly): utilization 0-1, reset time, and when the reading was taken; absent until a turn reports them | `rate_limit_event` in the stream, via a "rate_limit" entry; see "Quota card" |
 | `reported_model`, `model` | model that answered / configured launch model | existing |
 | `session_id` | Claude Code session (first 8 chars; full id in the tooltip) | existing |
 | `permission_mode`, effort | read-only facts | existing |
@@ -96,9 +97,65 @@ all live on `db.Thread`, set by `Thread.AddUsage` when a turn ends.
   message box (`sessionUsage`, read from "usage" events); the rail now carries
   the same numbers from the thread row, so they also work for project threads,
   whose "usage" events are not stored.
+- Where the numbers come from, and the trap in it: the usage entry is built
+  from the stream's `result` line, and the agentboot process layer
+  (`persistent_session.go` pump, `runner_execute.go` pump) used to treat that
+  line only as the turn boundary and never hand it on as a message. In real use
+  no turn therefore recorded any usage, context or cache, while every test
+  passed: the test agent (`enginetest`) sends a typed `ResultMessage` straight
+  to the sink. Both pumps now pass the terminal event through the transport's
+  accumulator before closing the turn. `engine/usage_live_test.go` replays a
+  real Claude Code 2.1.259 capture (`testdata/claude-2.1.259-two-turns-usage.jsonl`)
+  through a resident fake process to keep that wiring honest.
+- Real-stream facts the converter relies on (Claude Code 2.1.259): the
+  `usage` on `assistant` events is the `message_start` snapshot, so its output
+  count is not final (the CLI says so in its own schema); `result.usage` is the
+  turn's total; `result.modelUsage` and `total_cost_usd` are the process's
+  running totals, so the converter takes only `contextWindow` and the model
+  name from `modelUsage` and resets its per-call tally at every result (a
+  resident process otherwise added turn one's calls into turn two).
 - Existing rows: the new columns default to 0 (migration is additive), so a
   thread shows context and cache only from its next turn on; its token totals
   are unchanged.
+
+## Quota card
+
+What Claude Code's status line shows beside the model: how much of the
+subscription or provider quota is left. One `QuotaCard` (`infoRail.tsx`) in the
+thread rail and the coordinator's Status tab, after Usage, with two sources
+that either may be missing (no source, no card):
+
+- **Subscription windows, from the stream.** On a Claude.ai login the CLI emits
+  `rate_limit_event` messages with `unifiedWindows.five_hour` / `seven_day`
+  (`utilization` as a 0-1 fraction, `resetsAt` in epoch seconds), read from the
+  `anthropic-ratelimit-unified-*` response headers; this is what its status
+  line prints as `rate_limits.five_hour.used_percentage`. API-key, Bedrock and
+  Vertex sessions never get one, and neither does a session routed through the
+  gateway unless the gateway relays those headers (not checked). The
+  accumulator turns the event into a `RateLimitMessage`, the converter into a
+  "rate_limit" entry, the tally into `Thread.rate_limits` (latest reading wins;
+  a turn without one keeps the old reading). Rendered as "58% left" with a bar
+  that shrinks as the window is spent (same remaining-not-used convention as
+  `.design/quota-semantics.md`); a window past its `resets_at` is not shown.
+- **Provider quota, from the host.** A thread routed through Tingly Box's
+  gateway draws on a provider's quota, which Tingly Box already has
+  (`ai/quota`, shown by its terminal status line as `Quota: 60% left`). Projects
+  knows only profiles by name, so the host supplies a `session.quota` slot
+  (`ProjectsHost.tsx`: given `profile` + `tier` + the last model, returns the
+  routed provider and its windows). Tingly Box implements it with the same
+  `GET /scenario/claude_code/route` its folder-session status line uses
+  (`SessionStatusLine`), so the numbers and the "left" wording are identical.
+  The card asks again after each turn. The launch it asks about is the
+  thread's own: a folder session's profile and tier, a project thread's
+  profile override or the project's thread profile, the coordinator's
+  coordinator profile and model.
+- The folder session's status line under the message box still shows the same
+  provider quota; the rail card adds it to project threads and the coordinator,
+  which have no such line.
+- Not verified on a real account: the `rate_limit_event` shape comes from the
+  CLI's own schema (read out of the 2.1.259 binary) and the engine test's
+  hand-built line, because the capture used an API key. A real subscription
+  session is the first thing to check.
 
 ## Sidebar status (`ProjectsSidebar`)
 

@@ -9,6 +9,9 @@ import { ThreadStateMark } from './threadStatus';
 import { formatTokens, timeAgo } from '../../utils/format';
 import { cacheHitPct, contextFill, formatTurnDuration } from '../../utils/usage';
 import { readLocal, writeLocal } from '../../utils/storage';
+import { quotaTone, subscriptionRows } from '../../utils/quota';
+import { serverNow } from '../../utils/serverClock';
+import { useProjectsHost, type QuotaReading } from '../../host/ProjectsHost';
 
 /** How wide a thread panel must be to carry the rail beside the conversation. */
 export const RAIL_MIN_PANEL = 880;
@@ -151,6 +154,70 @@ export function UsageCard({ thread }: { thread: Thread }) {
                     {hit != null && <Fact label={t('rail.cacheHitLabel')} title={t('rail.cacheHitTitle')}>{hit}%</Fact>}
                 </>
             )}
+        </RailCard>
+    );
+}
+
+/** Where a thread's launch is routed, for the host to look its quota up by. */
+export interface QuotaRoute {
+    profile: string;
+    /** The model tier the launch asks for ("" for the default). */
+    tier: string;
+}
+
+/** One quota window: what is left as a bar that shrinks as it is spent, and when it comes back. */
+function QuotaBar({ label, text, usedPct, resetsAt, exhausted }: { label: string; text: string; usedPct?: number; resetsAt?: string; exhausted?: boolean }) {
+    const { t, i18n } = useTranslation('projects');
+    const tone = exhausted ? 'error' : usedPct == null ? 'primary' : quotaTone(usedPct);
+    return (
+        <Box sx={{ py: 0.25 }}>
+            <Fact label={label} title={resetsAt ? t('rail.quotaResets', { when: timeAgo(resetsAt, i18n.language) }) : undefined}>{text}</Fact>
+            {usedPct != null && (
+                <LinearProgress variant="determinate" value={Math.max(0, 100 - usedPct)} color={tone}
+                    aria-label={label} sx={{ height: 4, borderRadius: 2, mt: 0.25 }} />
+            )}
+        </Box>
+    );
+}
+
+/**
+ * What is left of the quota a thread draws on, the numbers Claude Code's
+ * status line carries. Two sources, either may be missing: the subscription
+ * windows (5-hour, weekly) the CLI read for a Claude.ai login, which the
+ * thread carries, and the quota of the provider the host routes the thread to,
+ * which the host's `quota` slot looks up. With neither there is no card.
+ */
+export function QuotaCard({ thread, route }: { thread: Thread; route?: QuotaRoute }) {
+    const { t } = useTranslation('projects');
+    const slot = useProjectsHost().session?.quota;
+    const [reading, setReading] = useState<QuotaReading>();
+    const profile = route?.profile;
+    const tier = route?.tier;
+    const model = thread.reported_model;
+    useEffect(() => {
+        if (!slot || profile == null || tier == null) return;
+        let live = true;
+        slot({ profile, tier, model })
+            .then((r) => live && setReading(r))
+            .catch(() => live && setReading(undefined));
+        return () => {
+            live = false;
+        };
+    }, [slot, profile, tier, model, thread.turns, thread.last_turn_at]);
+
+    const rows = subscriptionRows(thread.rate_limits, serverNow());
+    const windows = reading?.windows ?? [];
+    if (rows.length === 0 && windows.length === 0) return null;
+    const routed = reading?.provider && (reading.model ? `${reading.model} @ ${reading.provider}` : reading.provider);
+    return (
+        <RailCard id="quota" title={t('rail.quota')}>
+            {rows.map((r) => (
+                <QuotaBar key={r.key} label={t(`rail.quotaWindow.${r.key}`)} text={t('rail.quotaLeft', { pct: r.leftPct })} usedPct={r.usedPct} resetsAt={r.resetsAt} />
+            ))}
+            {windows.length > 0 && routed && <Fact label={t('rail.quotaProvider')} title={t('rail.quotaProviderTitle')}>{routed}</Fact>}
+            {windows.map((w) => (
+                <QuotaBar key={w.label} label={w.label} text={w.text} usedPct={w.usedPct} resetsAt={w.resetsAt} exhausted={w.limitReached} />
+            ))}
         </RailCard>
     );
 }

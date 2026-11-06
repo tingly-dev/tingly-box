@@ -4001,6 +4001,48 @@
           "threads"
         ]
       },
+      "RateLimitWindow": {
+        "type": "object",
+        "properties": {
+          "resets_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field resets_at"
+          },
+          "utilization": {
+            "type": "number",
+            "format": "double",
+            "description": "Field utilization"
+          }
+        },
+        "required": [
+          "utilization",
+          "resets_at"
+        ]
+      },
+      "RateLimits": {
+        "type": "object",
+        "properties": {
+          "five_hour": {
+            "$ref": "#/components/schemas/RateLimitWindow"
+          },
+          "seven_day": {
+            "$ref": "#/components/schemas/RateLimitWindow"
+          },
+          "status": {
+            "type": "string",
+            "description": "Field status"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field updated_at"
+          }
+        },
+        "required": [
+          "updated_at"
+        ]
+      },
       "RecoverCoordinatorRequest": {
         "type": "object",
         "properties": {
@@ -4480,6 +4522,9 @@
           "queued": {
             "type": "boolean",
             "description": "Field queued"
+          },
+          "rate_limits": {
+            "$ref": "#/components/schemas/RateLimits"
           },
           "repo_path": {
             "type": "string",

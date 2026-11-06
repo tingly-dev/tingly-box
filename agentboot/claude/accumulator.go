@@ -103,8 +103,16 @@ func (a *MessageAccumulator) AddEvent(event protocol.Event) ([]Message, bool, bo
 			newMessages = append(newMessages, msg)
 		}
 
-	case SDKRateLimitEvent,
-		SDKHookStartedMessage, SDKHookProgressMessage, SDKHookResponseMessage,
+	case SDKRateLimitEvent:
+		var msg RateLimitMessage
+		if err := unmarshalEvent(event, &msg); err == nil {
+			msg.Type = event.Type
+			msg.Timestamp = event.Timestamp
+			a.messages = append(a.messages, &msg)
+			newMessages = append(newMessages, &msg)
+		}
+
+	case SDKHookStartedMessage, SDKHookProgressMessage, SDKHookResponseMessage,
 		SDKPostTurnSummaryMessage,
 		SDKPartialAssistantMessage, SDKCompactBoundaryMessage,
 		SDKStatusMessage, SDKLocalCommandOutputMessage,

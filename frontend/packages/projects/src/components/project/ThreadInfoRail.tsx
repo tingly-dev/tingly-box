@@ -8,7 +8,7 @@ import { Cancel, CheckCircle, ChevronRight, DiffIcon, ExpandMore, PlayerStop, Ro
 import { useNotify } from '../../hooks/useNotify';
 import { formatDuration, useNow } from '../workdir/BackgroundTasksPanel';
 import type { BackgroundTaskRow } from '../workdir/backgroundTasks';
-import { Fact, InfoRailFrame, RailCard, StatusCard, UsageCard, shortSession } from './infoRail';
+import { Fact, InfoRailFrame, QuotaCard, RailCard, StatusCard, UsageCard, shortSession, type QuotaRoute } from './infoRail';
 
 const isRunning = (task: BackgroundTaskRow) => task.status === 'running' && !task.ended;
 
@@ -73,6 +73,8 @@ interface Props {
     configuredModel?: string;
     /** A card above the rest, folded into the rail from the page (a folder's sessions). */
     top?: ReactNode;
+    /** The launch the host looks the thread's quota up by. */
+    quotaRoute?: QuotaRoute;
 }
 
 /**
@@ -81,7 +83,7 @@ interface Props {
  * answers one question and folds; the numbers are the ones the thread
  * already carries.
  */
-export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onChanged, onReveal, permission, configuredModel, top }: Props) {
+export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onChanged, onReveal, permission, configuredModel, top, quotaRoute }: Props) {
     const { t } = useTranslation('projects');
     const [showFinished, setShowFinished] = useState(false);
     const running = tasks.filter(isRunning);
@@ -106,6 +108,7 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
                 {thread.session_id && <Fact label={t('rail.session')} title={thread.session_id}>{shortSession(thread.session_id)}</Fact>}
             </RailCard>
             <UsageCard thread={thread} />
+            <QuotaCard thread={thread} route={quotaRoute} />
             {hasChanges && (
                 <RailCard id="changes" title={t('rail.changes')}>
                     {thread.merged_at

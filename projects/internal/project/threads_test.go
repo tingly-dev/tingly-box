@@ -632,3 +632,35 @@ func TestSetTitle(t *testing.T) {
 	_, err = f.threads.SetTitle(th.ID, "   ")
 	assert.ErrorIs(t, err, ErrEmptyTitle)
 }
+
+// A thread on a Claude subscription keeps the 5-hour and weekly readings the
+// CLI reported; one on an API key or a gateway never gets any.
+func TestThreadKeepsTheSubscriptionWindowsClaudeReported(t *testing.T) {
+	five, seven := time.Now().Add(2*time.Hour).Unix(), time.Now().Add(100*time.Hour).Unix()
+	f := newFixture(t, func(turn *enginetest.Turn) error {
+		turn.Say("looking", 4, 2)
+		turn.RateLimit(0.42, five, 0.17, seven)
+		turn.Say("done", 6, 3)
+		return nil
+	})
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Windows", Task: "x", Origin: "coordinator"})
+	require.NoError(t, err)
+	f.report(t)
+	got := waitStatus(t, f.store, th.ID, db.ThreadIdle)
+	require.NotNil(t, got.RateLimits)
+	assert.Equal(t, "allowed", got.RateLimits.Status)
+	assert.Equal(t, db.RateLimitWindow{Utilization: 0.42, ResetsAt: five}, *got.RateLimits.FiveHour)
+	assert.Equal(t, db.RateLimitWindow{Utilization: 0.17, ResetsAt: seven}, *got.RateLimits.SevenDay)
+}
+
+func TestThreadWithoutSubscriptionWindowsHasNone(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error {
+		turn.Say("done", 6, 3)
+		return nil
+	})
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "None", Task: "x", Origin: "coordinator"})
+	require.NoError(t, err)
+	f.report(t)
+	got := waitStatus(t, f.store, th.ID, db.ThreadIdle)
+	assert.Nil(t, got.RateLimits)
+}

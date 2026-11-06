@@ -237,6 +237,14 @@ const coordinatorOf = (p: Proj) => {
         ...usageOf({ turns, input_tokens: input, updated_at }), agent: 'llm', project_id: p.id, parent_id: '', branch: '', repo_path: '', cwd: `/Users/me/.tingly-project/projects/${p.id}`,
         reported_model: 'claude-sonnet-4-5', session_id: '7d1f3a90-2c4e-4b7a-8e61-0a9b5c2d4f13',
         context_tokens: p.id === 'p-latency' ? 112_000 : 41_000,
+        // One project's coordinator runs on a Claude subscription login, which reports its 5-hour and weekly windows.
+        ...(p.id === 'p-latency' && {
+            rate_limits: {
+                status: 'allowed', updated_at,
+                five_hour: { utilization: 0.62, resets_at: Math.floor(Date.now() / 1000) + 3.4 * 3600 },
+                seven_day: { utilization: 0.31, resets_at: Math.floor(Date.now() / 1000) + 52 * 3600 },
+            },
+        }),
     }
 }
 
