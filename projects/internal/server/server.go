@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/projects/internal/project"
 	"github.com/tingly-dev/tingly-box/projects/internal/server/module"
 	"github.com/tingly-dev/tingly-box/projects/web"
 	"github.com/tingly-dev/tingly-box/swagger"
@@ -20,6 +21,13 @@ var Version = "dev"
 // New builds the engine with all routes and starts the project runtime's
 // background work, which stops when ctx ends.
 func New(ctx context.Context, d Deps) *gin.Engine {
+	engine, _ := start(ctx, d)
+	return engine
+}
+
+// start builds the server and starts its runtime, which stops once ctx ends;
+// Stop on the returned service waits for that.
+func start(ctx context.Context, d Deps) (*gin.Engine, *project.Service) {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
 	engine.Use(gin.Recovery())
@@ -29,7 +37,7 @@ func New(ctx context.Context, d Deps) *gin.Engine {
 	manager.RegisterOpenAPIEndpoint("/api/openapi.json", swagger.VersionV3)
 	serveUI(engine)
 	svc.Start(ctx)
-	return engine
+	return engine, svc
 }
 
 // OpenAPI renders the OpenAPI v3 document without starting a server.

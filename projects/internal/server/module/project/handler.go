@@ -6,7 +6,6 @@ package project
 import (
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"mime"
 	"mime/multipart"
@@ -21,7 +20,6 @@ import (
 	rt "github.com/tingly-dev/tingly-box/projects/internal/project"
 	"github.com/tingly-dev/tingly-box/projects/internal/server/module"
 	"github.com/tingly-dev/tingly-box/projects/internal/server/module/apierr"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
@@ -160,8 +158,8 @@ type InspectRepoResponse struct {
 // Models may be empty) when the list could not be fetched; a model ID can
 // still be typed by hand.
 type ProjectModelsResponse struct {
-	Models []llm.Model `json:"models"`
-	Error  string      `json:"error,omitempty"`
+	Models []rt.Model `json:"models"`
+	Error  string     `json:"error,omitempty"`
 }
 
 // ProjectRuntimeResponse is what threads run on.
@@ -282,18 +280,6 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithResponseModel(UsageResponse{}))
 }
 
-// storeErr maps runtime errors to statuses.
-func storeErr(c *gin.Context, err error, what string) {
-	switch {
-	case errors.Is(err, rt.ErrPaused), errors.Is(err, rt.ErrArchived), errors.Is(err, rt.ErrResolved):
-		apierr.Message(c, http.StatusConflict, err.Error())
-	case errors.Is(err, db.ErrNotFound):
-		apierr.Store(c, err, what)
-	default:
-		apierr.Message(c, http.StatusBadRequest, err.Error())
-	}
-}
-
 func (h *Handler) project(c *gin.Context) (*db.Project, bool) {
 	p, err := h.svc.Store.GetProject(c.Param("id"))
 	if err != nil {
@@ -343,7 +329,7 @@ func (h *Handler) models(c *gin.Context) {
 	models, err := h.svc.Host.Models(c.Request.Context())
 	resp := ProjectModelsResponse{Models: models}
 	if resp.Models == nil {
-		resp.Models = []llm.Model{}
+		resp.Models = []rt.Model{}
 	}
 	if err != nil {
 		resp.Error = err.Error()
@@ -876,6 +862,3 @@ func (h *Handler) usage(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, resp)
 }
-
-// multipartFile is what a multipart file header opens.
-type multipartFile = io.ReadCloser

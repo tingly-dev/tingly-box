@@ -66,7 +66,7 @@ Browser ──REST──▶ HTTP modules (project / thread / settings)
                             │
                  ┌──────────┴───────────┐
            Coordinator（每项目串行队列）   Thread Manager
-           llm.Client + 工具循环          agentboot/engine → claude CLI
+           Claude Code 会话 + Projects MCP   agentboot/engine → claude CLI
                  │                         git worktree / prompter / 汇报
                  └────── Store (SQLite) + 项目目录（memory/、library/、worktrees/）
 ```
@@ -199,10 +199,10 @@ MVP 已实现（§2 中标 ✅ 的部分）。验证：
 
 ### 9.2 后端边界
 
-依赖只朝一个方向：Tingly Box 根模块 → `projects` → `tingly-box/agentboot`、`tingly-box/swagger`。本模块绝不 import Tingly Box 根模块（`task projects:boundary` 用 `go list -deps` 按 module 检查，CI 的 `test-projects` 也跑）。同在一个 go.work 里时，根模块的包是解析得到的，所以这条检查比以前更要紧。对外只有两个公开包：门面 `projects` 和数据类型 `llm`，其余都在 `internal/` 下。
+依赖只朝一个方向：Tingly Box 根模块 → `projects` → `tingly-box/agentboot`、`tingly-box/swagger`。本模块绝不 import Tingly Box 根模块（`task projects:boundary` 用 `go list -deps` 按 module 检查，CI 的 `test-projects` 也跑）。同在一个 go.work 里时，根模块的包是解析得到的，所以这条检查比以前更要紧。对外只有一个公开包：门面 `projects`，其余都在 `internal/` 下（`internal/llm` 只给独立版的 Chats 和连接测试用）。
 
-- **门面**：`New(Options{DataDir, Host})`、`Register(api *swagger.RouteGroup)`（只挂路由，不启动任何东西）、`Start(ctx)`（恢复线程、跑后台任务；幂等，开关打开时再调用即可）、`Close()`。`DataDir` 为空时用内存库，供宿主生成 OpenAPI。
-- **Host**：宿主提供协调者的模型客户端（`ClientFor(ctx, model)`）、可选模型（`Models`）、线程里 Claude Code 的环境和默认模型（`ThreadEnv`）。独立版由设置模块实现；Tingly Box 用网关实现（`ThreadEnv` 复用它的 `tbclient.GetClaudeCodeEnv`）。
+- **门面**：`New(Options{DataDir, Host, Agents})`、`Register(api *swagger.RouteGroup)`（只挂路由，不启动任何东西）、`Start(ctx)`（恢复线程、跑后台任务；幂等，开关打开时再调用即可）、`Close()`。`DataDir` 为空时用内存库，供宿主生成 OpenAPI。`Agents` 为空时用 Claude Code CLI，测试传入脚本替身。
+- **Host**：宿主提供可选模型（`Models`）和协调者、线程里 Claude Code 的环境和默认模型（`ThreadEnv`）。协调者和线程都是 Claude Code 会话（见 [coordinator-session.md](coordinator-session.md)），Projects 本身不直接调用模型。独立版由设置模块实现；Tingly Box 用网关实现（`ThreadEnv` 复用它的 `tbclient.GetClaudeCodeEnv`）。
 
 ### 9.3 路由、鉴权、存储
 

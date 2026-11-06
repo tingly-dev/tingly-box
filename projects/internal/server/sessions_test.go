@@ -1,6 +1,7 @@
 package server
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -17,7 +18,9 @@ func TestFolderThreadEndToEnd(t *testing.T) {
 		return nil
 	}}
 	_, c := newServer(t, &project.Agents{Service: a.Service()})
-	folder := t.TempDir()
+	// Folders are stored with symlinks resolved (on macOS /var is a link).
+	folder, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
 
 	var e map[string]any
 	assert.Equal(t, 400, c.do("POST", "/projects", map[string]any{"type": "folder", "path": "/no/such/dir"}, &e))

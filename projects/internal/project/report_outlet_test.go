@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
-	"github.com/tingly-dev/tingly-box/projects/llm"
+	"github.com/tingly-dev/tingly-box/projects/internal/coordtest"
 )
 
 func finishedReport(th Report, kind, text string) Report {
@@ -32,7 +32,7 @@ func TestFinishedReportIsSilentWhenTheCoordinatorHasNothingToAdd(t *testing.T) {
 	f, svc, sink := channelFixtureReplying(t, func(turn *enginetest.Turn) error {
 		turn.Say("ok", 1, 1)
 		return nil
-	}, func(llm.Request) llm.Result { return llm.Result{Text: noUpdate} })
+	}, func(c *coordtest.Turn) { c.Reply(noUpdate) })
 	th := startWorker(t, f)
 	waitQuiet(t, f, svc, th.ID)
 	_, err := svc.BindChannel("telegram", "1", "", "", f.project.ID)

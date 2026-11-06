@@ -120,7 +120,12 @@ func TestLibraryFileRefusesEncodedAndOddPaths(t *testing.T) {
 	}
 	// Absolute paths stay inside the library, so there is nothing there.
 	assert.Equal(t, 404, get("%2Fetc%2Fpasswd"))
-	assert.Equal(t, 404, get("A.MD")) // not a.md on a case-sensitive file system
+	// A.MD is a.md only where the file system ignores case (macOS by default).
+	want := http.StatusNotFound
+	if _, err := os.Stat(filepath.Join(lib, "A.MD")); err == nil {
+		want = http.StatusOK
+	}
+	assert.Equal(t, want, get("A.MD"))
 }
 
 func TestLibraryDownloadServesTheOpenedFileAsAnAttachment(t *testing.T) {

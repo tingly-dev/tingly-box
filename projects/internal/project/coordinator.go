@@ -12,22 +12,12 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 )
 
-// LLMSource gives the coordinator a model client. model may be empty for
-// the connection's default; the resolved model is returned.
-type LLMSource interface {
-	ClientFor(ctx context.Context, model string) (llm.Client, string, error)
-}
-
 const (
-	// historyLimit is how many recent conversation entries a coordinator
-	// turn sees. Like the official coordinator, it works from recent
-	// messages, the thread table and memory rather than the full history.
+	// historyLimit is how many recent conversation entries a new coordinator
+	// session is given, once, as its earlier context.
 	historyLimit = 40
-	// maxToolRounds bounds tool use within one coordinator turn.
-	maxToolRounds = 8
 	// noUpdate is the text an older model answers with to stay quiet; the
 	// no_update tool is the way to say it now, and both end the turn silently.
 	noUpdate = "NO_UPDATE"
@@ -35,13 +25,17 @@ const (
 	toolNoUpdate = "no_update"
 )
 
-// Coordinator runs the project conversation: one serial queue per project.
+// errNoSessions is a coordinator built without NewService, which gives it no
+// session to run turns in.
+var errNoSessions = errors.New("coordinator sessions are unavailable")
+
+// Coordinator runs the project conversation: one serial queue per project,
+// each turn a turn of the project's coordinator Claude Code session.
 type Coordinator struct {
 	store    *db.Store
 	layout   Layout
 	hub      *Hub
 	threads  *Threads
-	llm      LLMSource
 	sessions *coordinatorSessions
 	stopping atomic.Bool
 	// OnFinal is called with each finished coordinator reply, thread report
@@ -58,16 +52,17 @@ type Coordinator struct {
 	choosing sync.Mutex
 }
 
+// queue is a project's wake-up state. What to work on is the project's
+// pending coordinator inputs in the store; woken only says to look again.
 type queue struct {
 	running bool
-	user    bool
-	config  bool
-	reports []Report
+	woken   bool
 }
 
 // NewCoordinator wires the coordinator to the thread manager's reports.
-func NewCoordinator(store *db.Store, layout Layout, hub *Hub, threads *Threads, src LLMSource) *Coordinator {
-	c := &Coordinator{store: store, layout: layout, hub: hub, threads: threads, llm: src, queues: map[string]*queue{}}
+// NewService gives it the sessions its turns run in.
+func NewCoordinator(store *db.Store, layout Layout, hub *Hub, threads *Threads) *Coordinator {
+	c := &Coordinator{store: store, layout: layout, hub: hub, threads: threads, queues: map[string]*queue{}}
 	threads.OnReport = c.onReport
 	return c
 }
@@ -108,17 +103,13 @@ func (c *Coordinator) Post(projectID, text string, atts []Attachment, src Source
 	}
 	m := &db.ThreadEvent{Kind: db.EvUser, Content: text, Payload: AttachmentsPayload(atts)}
 	src.stamp(m)
-	if c.sessions != nil {
-		m.ThreadID = p.MainThreadID
-		if err := c.store.AddCoordinatorInput(projectID, m); err != nil {
-			return nil, err
-		}
-		c.publishEvent(projectID, m)
-	} else {
-		c.addEvent(projectID, m)
+	m.ThreadID = p.MainThreadID
+	if err := c.store.AddCoordinatorInput(projectID, m); err != nil {
+		return nil, err
 	}
+	c.publishEvent(projectID, m)
 	_ = c.store.TouchProject(projectID)
-	c.schedule(projectID, func(q *queue) { q.user = true })
+	c.wake(projectID)
 	return m, nil
 }
 
@@ -127,7 +118,21 @@ func (c *Coordinator) Busy(projectID string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	q, ok := c.queues[projectID]
-	return ok && (q.running || q.user || q.config || len(q.reports) > 0)
+	return ok && (q.running || q.woken)
+}
+
+// live reports whether the coordinator has sessions to run turns in (one
+// built by NewService); a bare one in a test does not.
+func (c *Coordinator) live() bool { return c != nil && c.sessions != nil }
+
+// stop ends the project's running coordinator turn, if any.
+func (c *Coordinator) stop(p *db.Project) {
+	if !c.live() {
+		return
+	}
+	if main, err := c.store.GetThread(p.MainThreadID); err == nil && main.SessionID != "" {
+		c.sessions.engine.Stop(main.SessionID)
+	}
 }
 
 func (c *Coordinator) shutdown(ctx context.Context) {
@@ -174,7 +179,7 @@ func (c *Coordinator) onReport(r Report) {
 		Content: r.Text,
 		Payload: jsonString(map[string]any{"thread_id": r.Thread.ID, "seq": r.Thread.Seq, "title": r.Thread.Title, "kind": r.Kind, "status": r.Thread.Status}),
 	}
-	if c.sessions != nil && err == nil && !p.Paused && p.ArchivedAt == nil {
+	if err == nil && !p.Paused && p.ArchivedAt == nil {
 		ev.ThreadID = p.MainThreadID
 		if err := c.store.AddCoordinatorInput(p.ID, ev); err != nil {
 			logrus.WithError(err).Error("save coordinator report")
@@ -196,17 +201,19 @@ func (c *Coordinator) onReport(r Report) {
 	if down {
 		return
 	}
-	c.schedule(r.Thread.ProjectID, func(q *queue) { q.reports = append(q.reports, r) })
+	c.wake(r.Thread.ProjectID)
 }
 
-func (c *Coordinator) schedule(projectID string, add func(*queue)) {
+// wake makes the project's queue look at its pending inputs, starting the
+// worker if none runs.
+func (c *Coordinator) wake(projectID string) {
 	c.mu.Lock()
 	q, ok := c.queues[projectID]
 	if !ok {
 		q = &queue{}
 		c.queues[projectID] = q
 	}
-	add(q)
+	q.woken = true
 	start := !q.running
 	q.running = true
 	c.mu.Unlock()
@@ -215,29 +222,22 @@ func (c *Coordinator) schedule(projectID string, add func(*queue)) {
 	}
 }
 
-// work drains a project's queue. Reports that arrive while a turn runs are
-// coalesced into the next turn.
+// work drains a project's queue. Wake-ups that arrive while a turn runs are
+// coalesced: each drain takes every pending input in order.
 func (c *Coordinator) work(projectID string, q *queue) {
 	c.hub.Publish(Event{Type: EventCoordinator, ProjectID: projectID, Data: map[string]bool{"busy": true}})
 	for {
 		c.mu.Lock()
-		user, config, reports := q.user, q.config, q.reports
-		q.user, q.config, q.reports = false, false, nil
-		if !user && !config && len(reports) == 0 {
+		if !q.woken {
 			q.running = false
 			c.mu.Unlock()
 			c.hub.Publish(Event{Type: EventCoordinator, ProjectID: projectID, Data: map[string]bool{"busy": false}})
 			return
 		}
+		q.woken = false
 		c.mu.Unlock()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		var err error
-		if c.sessions != nil {
-			err = c.drainSessionInputs(ctx, projectID)
-		} else {
-			err = c.turn(ctx, projectID, user, config)
-		}
-		if err != nil {
+		if err := c.drainSessionInputs(ctx, projectID); err != nil {
 			c.final(c.addEvent(projectID, &db.ThreadEvent{Kind: db.EvError, Content: err.Error()}))
 		}
 		cancel()
@@ -245,6 +245,9 @@ func (c *Coordinator) work(projectID string, q *queue) {
 }
 
 func (c *Coordinator) drainSessionInputs(ctx context.Context, projectID string) error {
+	if c.sessions == nil {
+		return errNoSessions
+	}
 	for {
 		if c.stopping.Load() {
 			return nil
@@ -280,7 +283,7 @@ func (c *Coordinator) drainSessionInputs(ctx context.Context, projectID string) 
 // interrupted input. Retrying may repeat tools that already ran.
 func (c *Coordinator) RecoverInput(projectID, inputID string, retry bool) error {
 	if c.sessions == nil {
-		return fmt.Errorf("coordinator sessions are unavailable")
+		return errNoSessions
 	}
 	if c.Busy(projectID) {
 		return fmt.Errorf("coordinator is still running")
@@ -288,182 +291,21 @@ func (c *Coordinator) RecoverInput(projectID, inputID string, retry bool) error 
 	if err := c.store.ResolveCoordinatorInput(projectID, inputID, retry); err != nil {
 		return err
 	}
-	c.schedule(projectID, func(q *queue) { q.config = true })
+	c.wake(projectID)
 	return nil
 }
 
-// turn runs one coordinator turn: the model answers, calls tools, and the
-// loop continues until it stops calling tools.
-func (c *Coordinator) turn(ctx context.Context, projectID string, userTriggered, configChanged bool) error {
-	p, err := c.store.GetProject(projectID)
-	if err != nil {
-		return err
-	}
-	if p.Paused || p.ArchivedAt != nil {
-		return nil
-	}
-	history, err := c.store.ListRecentThreadEvents(p.MainThreadID, historyLimit+1)
-	if err != nil {
-		return err
-	}
-	older := len(history) > historyLimit
-	if older {
-		history = history[1:]
-	}
-	msgs := renderHistory(history, c.layout.LibraryDir(projectID))
-	if len(msgs) == 0 {
-		return nil
-	}
-	replies, away, known := repliesSinceUser(history, time.Now())
-	budget := []string{"replies_since_user", fmt.Sprint(replies)}
-	if known {
-		budget = append(budget, "minutes_since_user", roundMinutes(away))
-	}
-	if configChanged {
-		msgs = appendUser(msgs, envelope(trustSystem, "(Project settings changed. Re-evaluate pending work using the current settings. Continue previously requested work if the change unblocks it; do not start unrelated work or repeat completed work. Existing threads keep their working directories. If no action or useful update is needed, call "+toolNoUpdate+".)", append([]string{"source", "system", "kind", "settings-changed"}, budget...)...))
-	} else if !userTriggered {
-		// The thread updates are already in the history; nudge the model
-		// to stay quiet unless they matter.
-		msgs = appendUser(msgs, envelope(trustSystem, "(Coordinator check-in: the thread updates above just arrived. Post a brief update for the user only if it matters, otherwise call "+toolNoUpdate+".)", append([]string{"source", "system", "kind", "check-in"}, budget...)...))
-	}
-	tools := coordinatorTools()
-	asked := false
-
-	for round := 0; round < maxToolRounds; round++ {
-		p, err = c.store.GetProject(projectID)
-		if err != nil {
-			return err
-		}
-		if p.Paused || p.ArchivedAt != nil {
-			return nil
-		}
-		var client llm.Client
-		var model string
-		if p.CoordinatorProfile != "" {
-			if source, ok := c.llm.(interface {
-				ClientForProfile(context.Context, string, string) (llm.Client, string, error)
-			}); ok {
-				client, model, err = source.ClientForProfile(ctx, p.CoordinatorProfile, p.CoordinatorModel)
-			} else {
-				err = ErrNoProfiles
-			}
-		} else {
-			client, model, err = c.llm.ClientFor(ctx, p.CoordinatorModel)
-		}
-		if err != nil {
-			return fmt.Errorf("coordinator unavailable: %w", err)
-		}
-		threads, _ := c.store.ListThreads(projectID)
-		c.threads.Annotate(threads)
-		system := coordinatorSystemPrompt(c.layout, p, threads, time.Now())
-		if older {
-			system += olderNote
-		}
-
-		var live *db.ThreadEvent
-		var streamed strings.Builder
-		onDelta := func(d string) {
-			if !userTriggered {
-				return // report turns post only their final text (it may be NO_UPDATE)
-			}
-			streamed.WriteString(d)
-			// An older model's NO_UPDATE is not a reply: hold back text that
-			// may still turn into it.
-			if held := strings.TrimSpace(streamed.String()); live == nil && (held == "" || strings.HasPrefix(noUpdate, held) || strings.HasPrefix(held, noUpdate)) {
-				return
-			}
-			if live == nil {
-				live = c.addEvent(projectID, &db.ThreadEvent{Kind: db.EvAssistant, Content: streamed.String()})
-				return
-			}
-			c.hub.Publish(Event{Type: EventMessageDelta, ProjectID: projectID, Data: map[string]string{"id": live.ID, "text": d}})
-		}
-		res, err := client.Stream(ctx, llm.Request{Model: model, System: system, Messages: msgs, Tools: tools, MaxTokens: 4096}, onDelta)
-		text := strings.TrimSpace(res.Text)
-		if userTriggered && live == nil && strings.HasPrefix(text, noUpdate) {
-			text = "" // never posted; the empty-reply nudge below handles it
-		}
-		switch {
-		case live != nil:
-			live.Content = text
-			if text == "" {
-				live.Content = streamed.String()
-			}
-			_ = c.store.UpdateThreadEvent(live)
-			c.publishEvent(projectID, live)
-			c.final(live)
-		case text != "" && text != noUpdate && !strings.HasPrefix(text, noUpdate):
-			c.final(c.addEvent(projectID, &db.ThreadEvent{Kind: db.EvAssistant, Content: text}))
-		}
-		if err != nil {
-			return fmt.Errorf("coordinator (%s): %w", model, err)
-		}
-		if len(res.ToolCalls) == 0 {
-			// A message to the user must not end in silence: ask once more.
-			if userTriggered && !asked && round == 0 && text == "" && live == nil {
-				asked = true
-				msgs = appendUser(msgs, envelope(trustSystem, "(You ended your turn without replying. Reply to the user, or start or message a thread.)", "source", "system", "kind", "no-reply"))
-				continue
-			}
-			return nil
-		}
-		results := make([]llm.ToolResult, 0, len(res.ToolCalls))
-		var started []string
-		ended := false
-		for _, call := range res.ToolCalls {
-			current, err := c.store.GetProject(projectID)
-			if err != nil {
-				return err
-			}
-			if current.Paused || current.ArchivedAt != nil {
-				return nil
-			}
-			// An in-flight answer may still name a removed repository or use
-			// old instructions. Let the next round plan again before acting.
-			if len(configurationChanges(p, current)) > 0 {
-				results = append(results, llm.ToolResult{CallID: call.ID, IsError: true,
-					Content: "Project settings changed while this response was running. This tool was not executed. Re-evaluate it using the current project settings."})
-				continue
-			}
-			if call.Name == toolNoUpdate {
-				if userTriggered {
-					results = append(results, llm.ToolResult{CallID: call.ID, IsError: true,
-						Content: "A message from the user needs a reply. Answer it, or start or message a thread."})
-					continue
-				}
-				ended = true
-			}
-			out, isErr, ids := c.runTool(ctx, current, call)
-			started = append(started, ids...)
-			results = append(results, llm.ToolResult{CallID: call.ID, Content: out, IsError: isErr})
-		}
-		if len(started) > 0 {
-			c.addEvent(projectID, &db.ThreadEvent{Kind: db.EvThreadStarted,
-				Payload: jsonString(map[string]any{"thread_ids": started})})
-		}
-		if ended {
-			return nil
-		}
-		msgs = append(msgs,
-			llm.Message{Role: "assistant", Content: res.Text, ToolCalls: res.ToolCalls},
-			llm.Message{Role: "user", ToolResults: results},
-		)
-	}
-	return nil
+// historyMessage is one turn of the conversation as the coordinator session
+// is shown it.
+type historyMessage struct {
+	Role    string // "user" or "assistant"
+	Content string
 }
 
-// appendUser adds text as a user turn, merging with a trailing user turn.
-func appendUser(msgs []llm.Message, text string) []llm.Message {
-	if n := len(msgs); n > 0 && msgs[n-1].Role == "user" && len(msgs[n-1].ToolResults) == 0 {
-		msgs[n-1].Content += "\n\n" + text
-		return msgs
-	}
-	return append(msgs, llm.Message{Role: "user", Content: text})
-}
-
-// renderHistory turns the stored conversation into alternating model turns.
-func renderHistory(history []db.ThreadEvent, libraryDir string) []llm.Message {
-	var out []llm.Message
+// renderHistory turns the stored conversation into alternating turns, each
+// event in its trust envelope.
+func renderHistory(history []db.ThreadEvent, libraryDir string) []historyMessage {
+	var out []historyMessage
 	add := func(role, text string) {
 		text = strings.TrimSpace(text)
 		if text == "" {
@@ -473,7 +315,7 @@ func renderHistory(history []db.ThreadEvent, libraryDir string) []llm.Message {
 			out[n-1].Content += "\n\n" + text
 			return
 		}
-		out = append(out, llm.Message{Role: role, Content: text})
+		out = append(out, historyMessage{Role: role, Content: text})
 	}
 	for _, m := range history {
 		switch m.Kind {
@@ -626,14 +468,23 @@ Current date: %s
 	return b.String()
 }
 
-func coordinatorTools() []llm.Tool {
+// coordinatorTool is one tool the coordinator's MCP server offers.
+type coordinatorTool struct {
+	Name        string
+	Description string
+	// Properties is the JSON Schema "properties" object of the input.
+	Properties map[string]any
+	Required   []string
+}
+
+func coordinatorTools() []coordinatorTool {
 	str := func(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
 	threadSpec := map[string]any{
 		"title": str("Thread card title: starts with a verb that names the goal, three to six words, no ids or paths (for example \"Fix Safari export button\")."),
 		"task":  str("Self-contained instructions for the thread: goal, context, acceptance criteria, how to verify."),
 		"repo":  str("Optional. Path of the project repository to work in; \"none\" for no repository."),
 	}
-	return []llm.Tool{
+	return []coordinatorTool{
 		{Name: "start_thread", Description: "Start a new thread (a Claude Code session) for one task, using the project worktree setting.", Properties: threadSpec, Required: []string{"title", "task"}},
 		{Name: "propose_threads", Description: "Propose threads for the user to start, instead of starting them. Use when the user wants to review a plan first.",
 			Properties: map[string]any{"threads": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": threadSpec, "required": []string{"title", "task"}}}},
@@ -712,7 +563,7 @@ func (c *Coordinator) findThread(projectID, ref string) (*db.Thread, error) {
 
 // runTool executes one coordinator tool call. It returns the tool output,
 // whether it is an error, and any thread ids it started.
-func (c *Coordinator) runTool(ctx context.Context, p *db.Project, call llm.ToolCall) (string, bool, []string) {
+func (c *Coordinator) runTool(ctx context.Context, p *db.Project, name string, input json.RawMessage) (string, bool, []string) {
 	var in struct {
 		Title, Task, Repo string
 		Threads           []Suggestion
@@ -728,11 +579,11 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, call llm.ToolC
 		Full              bool
 		Decision
 	}
-	if err := json.Unmarshal(call.Input, &in); err != nil {
+	if err := json.Unmarshal(input, &in); err != nil {
 		return "invalid input: " + err.Error(), true, nil
 	}
 	fail := func(err error) (string, bool, []string) { return err.Error(), true, nil }
-	switch call.Name {
+	switch name {
 	case "start_thread":
 		if strings.TrimSpace(in.Task) == "" {
 			return "task is required", true, nil
@@ -868,7 +719,7 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, call llm.ToolC
 		c.hub.Publish(Event{Type: EventProject, ProjectID: p.ID, Data: p})
 		return "instructions updated", false, nil
 	}
-	return fail(errors.New("unknown tool " + call.Name))
+	return fail(errors.New("unknown tool " + name))
 }
 
 func orNone(s string) string {

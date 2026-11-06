@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -15,9 +16,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
 	"github.com/tingly-dev/tingly-box/internal/server/module"
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
 	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
@@ -123,41 +125,36 @@ func TestBridgeIsInertWithoutProjects(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// echoHost answers the coordinator with an echo and sends chat text through
-// the bridge, like Host does.
+// echoHost sends chat text through the bridge, like Host does.
 type echoHost struct {
 	nopHost
 	bridge *ChatBridge
-}
-
-func (echoHost) ClientFor(context.Context, string) (llm.Client, string, error) {
-	return echoClient{}, "echo", nil
 }
 
 func (h echoHost) SendChannelText(ctx context.Context, platform, chatID, text string) error {
 	return h.bridge.SendChannelText(ctx, platform, chatID, text)
 }
 
-type echoClient struct{}
+// lastEvent is the body of the last <event> envelope in a coordinator prompt.
+var lastEvent = regexp.MustCompile(`(?s)<event[^>]*>\n(.*?)\n</event>`)
 
-func (echoClient) Stream(_ context.Context, req llm.Request, onDelta func(string)) (llm.Result, error) {
-	last := ""
-	for _, m := range req.Messages {
-		if m.Role == "user" {
-			last = m.Content
+// echoAgents stands in for Claude Code: the coordinator's session answers
+// with an echo of the message that woke it. A real model reads the event's
+// content rather than repeating its envelope in the answer.
+func echoAgents() *agentboot.AgentService {
+	return (&enginetest.Agent{Script: func(turn *enginetest.Turn) error {
+		if !turn.Opts.StrictMcpConfig {
+			return nil // a thread
 		}
-	}
-	// The coordinator wraps user input with provenance. A real model reads
-	// the event's content rather than repeating its envelope in the answer.
-	if strings.HasPrefix(last, "<event ") && strings.HasSuffix(last, "\n</event>") {
-		_, body, _ := strings.Cut(last, "\n")
-		last = strings.TrimSuffix(body, "\n</event>")
-	}
-	text := "You said: " + last
-	onDelta(text)
-	return llm.Result{Text: text}, nil
+		turn.Init("echo")
+		last := ""
+		if m := lastEvent.FindAllStringSubmatch(turn.Prompt, -1); len(m) > 0 {
+			last = m[len(m)-1][1]
+		}
+		turn.Say("You said: "+last, 1, 1)
+		return nil
+	}}).Service()
 }
-func (echoClient) ListModels(context.Context) ([]llm.Model, error) { return nil, nil }
 
 // The whole path with a real Projects app: bind over HTTP, write from the chat,
 // the coordinator answers, and the reply arrives in the chat with the project's
@@ -165,7 +162,7 @@ func (echoClient) ListModels(context.Context) ([]llm.Model, error) { return nil,
 func TestChatToProjectAndBack(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	bridge := NewChatBridge()
-	app, err := projectsapp.New(projectsapp.Options{Host: echoHost{bridge: bridge}})
+	app, err := projectsapp.New(projectsapp.Options{Host: echoHost{bridge: bridge}, Agents: echoAgents()})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = app.Close() })
 

@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/tingly-dev/tingly-box/projects/internal/coordtest"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 )
 
 // R1: when a thread's goal changes, the coordinator renames its card; the
@@ -16,18 +16,18 @@ func TestRenameThreadWhenTheGoalChanges(t *testing.T) {
 	w := New(t, Options{
 		Files: projectsRepo,
 		Actor: Diligent("done"),
-		Brain: func(c *BrainCtx) llm.Result {
+		Brain: func(c *coordtest.Turn) error {
 			switch {
-			case c.AfterTools():
-				return llm.Result{Text: "Renamed."}
 			case c.CheckIn():
-				return llm.Result{ToolCalls: []llm.ToolCall{Call("n", "no_update", map[string]string{})}}
-			case strings.Contains(c.Last(), "rename tool too"):
-				return llm.Result{ToolCalls: []llm.ToolCall{Call("r", "rename_thread", map[string]string{
-					"thread_id": c.ThreadRef(endTool), "title": newTitle})}}
+				c.Call("no_update", map[string]string{})
+			case strings.Contains(c.Input(), "rename tool too"):
+				c.Call("rename_thread", map[string]string{"thread_id": c.ThreadRef(endTool), "title": newTitle})
+				c.Reply("Renamed.")
 			default:
-				return startThread(endTool, "Add the no_update tool.")
+				startThread(c, endTool, "Add the no_update tool.")
+				c.Reply("Started.")
 			}
+			return nil
 		},
 	})
 
@@ -52,19 +52,20 @@ func TestRenameThreadRejectsAnEmptyTitle(t *testing.T) {
 	w := New(t, Options{
 		Files: projectsRepo,
 		Actor: Diligent("done"),
-		Brain: func(c *BrainCtx) llm.Result {
+		Brain: func(c *coordtest.Turn) error {
 			switch {
-			case c.AfterTools():
-				refused = c.Req.Messages[len(c.Req.Messages)-1].ToolResults[0].Content
-				return llm.Result{Text: "Could not rename."}
 			case c.CheckIn():
-				return llm.Result{ToolCalls: []llm.ToolCall{Call("n", "no_update", map[string]string{})}}
-			case strings.Contains(c.Last(), "rename"):
-				return llm.Result{ToolCalls: []llm.ToolCall{Call("r", "rename_thread", map[string]string{
-					"thread_id": c.ThreadRef(endTool), "title": "  "})}}
+				c.Call("no_update", map[string]string{})
+			case strings.Contains(c.Input(), "rename"):
+				if out, isErr := c.Call("rename_thread", map[string]string{"thread_id": c.ThreadRef(endTool), "title": "  "}); isErr {
+					refused = out
+				}
+				c.Reply("Could not rename.")
 			default:
-				return startThread(endTool, "Add the no_update tool.")
+				startThread(c, endTool, "Add the no_update tool.")
+				c.Reply("Started.")
 			}
+			return nil
 		},
 	})
 

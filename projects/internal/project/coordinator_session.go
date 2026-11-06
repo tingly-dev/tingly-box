@@ -155,6 +155,13 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 				previous = append(previous, e)
 			}
 		}
+		if len(history) > historyLimit {
+			// More exists than is shown: say where to read it.
+			prompt.WriteString(strings.TrimSpace(olderNote) + "\n")
+		}
+		if len(previous) > historyLimit {
+			previous = previous[len(previous)-historyLimit:]
+		}
 		for _, m := range renderHistory(previous, s.c.layout.LibraryDir(p.ID)) {
 			fmt.Fprintf(&prompt, "%s: %s\n", m.Role, m.Content)
 		}
@@ -171,7 +178,11 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 		fmt.Fprintf(&prompt, "\n%s\n", m.Content)
 	}
 	if !user {
-		prompt.WriteString("\nIf no useful update is needed, call no_update.")
+		nudge, err := s.checkIn(main.ID, event)
+		if err != nil {
+			return err
+		}
+		prompt.WriteString("\n" + nudge)
 	}
 	model, env, settings := p.CoordinatorModel, []string(nil), ""
 	if p.CoordinatorProfile != "" {
@@ -257,6 +268,24 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 		}
 	}
 	return nil
+}
+
+// checkIn is the system note after a thread report or settings change: what
+// to do with it, and the reply budget the coordinator prompt refers to.
+func (s *coordinatorSessions) checkIn(mainThreadID string, event *db.ThreadEvent) (string, error) {
+	history, err := s.c.store.ListRecentThreadEvents(mainThreadID, historyLimit)
+	if err != nil {
+		return "", err
+	}
+	replies, away, known := repliesSinceUser(history, event.CreatedAt)
+	budget := []string{"replies_since_user", fmt.Sprint(replies)}
+	if known {
+		budget = append(budget, "minutes_since_user", roundMinutes(away))
+	}
+	if event.Kind == db.EvSystem {
+		return envelope(trustSystem, "(Project settings changed. Re-evaluate pending work using the current settings. Continue previously requested work if the change unblocks it; do not start unrelated work or repeat completed work. Existing threads keep their working directories. If no action or useful update is needed, call "+toolNoUpdate+".)", append([]string{"source", "system", "kind", "settings-changed"}, budget...)...), nil
+	}
+	return envelope(trustSystem, "(Coordinator check-in: the thread update above just arrived. Post a brief update for the user only if it matters, otherwise call "+toolNoUpdate+".)", append([]string{"source", "system", "kind", "check-in"}, budget...)...), nil
 }
 
 // recordUsage adds the turn's tokens to the main thread: the coordinator's

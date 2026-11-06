@@ -3,7 +3,6 @@ package projects_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,18 +12,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/projects"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 type fakeHost struct{}
 
-func (fakeHost) ClientFor(context.Context, string) (llm.Client, string, error) {
-	return nil, "", errors.New("no model in this test")
-}
-
-func (fakeHost) Models(context.Context) ([]llm.Model, error) {
-	return []llm.Model{{ID: "host-model"}}, nil
+func (fakeHost) Models(context.Context) ([]projects.Model, error) {
+	return []projects.Model{{ID: "host-model"}}, nil
 }
 
 func (fakeHost) ThreadEnv(context.Context) ([]string, string) {

@@ -12,7 +12,7 @@ import (
 
 func TestReadConversationPagesBackFromTheWindow(t *testing.T) {
 	f := newFixture(t, nil)
-	c := NewCoordinator(f.store, f.threads.layout, f.threads.hub, f.threads, nil)
+	c := NewCoordinator(f.store, f.threads.layout, f.threads.hub, f.threads)
 	t.Cleanup(func() { settleCoordinator(c) })
 	p := f.project
 	for i := 0; i < historyLimit+50; i++ {
@@ -51,7 +51,7 @@ func TestReadConversationPagesBackFromTheWindow(t *testing.T) {
 // entry can be read whole by id.
 func TestReadConversationIsCappedLikeGrep(t *testing.T) {
 	f := newFixture(t, nil)
-	c := NewCoordinator(f.store, f.threads.layout, f.threads.hub, f.threads, nil)
+	c := NewCoordinator(f.store, f.threads.layout, f.threads.hub, f.threads)
 	t.Cleanup(func() { settleCoordinator(c) })
 	p := f.project
 	add := func(text string) *db.ThreadEvent {
@@ -90,7 +90,7 @@ func TestReadConversationIsCappedLikeGrep(t *testing.T) {
 
 func TestListThreadsFiltersAndCaps(t *testing.T) {
 	f := newFixture(t, nil)
-	c := NewCoordinator(f.store, f.threads.layout, f.threads.hub, f.threads, nil)
+	c := NewCoordinator(f.store, f.threads.layout, f.threads.hub, f.threads)
 	t.Cleanup(func() { settleCoordinator(c) })
 	p := f.project
 	for i := 0; i < 50; i++ {

@@ -143,6 +143,9 @@ func types(events []map[string]any) []string {
 	return out
 }
 
+// newServer runs a server on agents; nil runs every turn on a stand-in that
+// just ends it, so no test starts the real Claude Code CLI (which would reach
+// whatever gateway the default connection points at).
 func newServer(t *testing.T, agents *project.Agents) (*db.Store, client) {
 	return newServerAt(t, agents, t.TempDir())
 }
@@ -150,12 +153,24 @@ func newServer(t *testing.T, agents *project.Agents) (*db.Store, client) {
 // newServerAt is newServer with the data root given, for a test that reads or
 // writes the files under it.
 func newServerAt(t *testing.T, agents *project.Agents, root string) (*db.Store, client) {
+	if agents == nil {
+		idle := &enginetest.Agent{Script: func(*enginetest.Turn) error { return nil }}
+		agents = &project.Agents{Service: idle.Service()}
+	}
 	store, err := db.Open(":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { store.Close() })
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	srv := httptest.NewServer(New(ctx, Deps{Store: store, Layout: project.Layout{Root: root}, Agents: agents}))
+	engine, svc := start(ctx, Deps{Store: store, Layout: project.Layout{Root: root}, Agents: agents})
+	// Stop and wait for the runtime before the store closes and the temp
+	// directories go: a turn still finishing would write into both.
+	t.Cleanup(func() {
+		cancel()
+		stop, done := context.WithTimeout(context.Background(), 10*time.Second)
+		defer done()
+		svc.Stop(stop)
+	})
+	srv := httptest.NewServer(engine)
 	t.Cleanup(srv.Close)
 	return store, client{t: t, base: srv.URL + "/api/v1"}
 }

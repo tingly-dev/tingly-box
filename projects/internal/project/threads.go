@@ -280,6 +280,26 @@ func NewThreads(store *db.Store, layout Layout, hub *Hub, agents Agents, env Thr
 // Shutdown stops every turn and closes every resident process.
 func (m *Threads) Shutdown(ctx context.Context) { m.engine.Shutdown(ctx) }
 
+// waitIdle waits until no thread has a turn in flight or queued, so nothing
+// still writes its events, stats or files, or until ctx ends.
+func (m *Threads) waitIdle(ctx context.Context) {
+	tick := time.NewTicker(5 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		m.mu.Lock()
+		idle := len(m.active) == 0
+		m.mu.Unlock()
+		if idle {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+	}
+}
+
 // sessionOf is the session id the engine knows threadID by.
 func (m *Threads) sessionOf(threadID string) string {
 	m.mu.Lock()

@@ -11,7 +11,7 @@ import (
 
 func citeFixture(t *testing.T) (*Coordinator, *db.Project) {
 	f := newFixture(t, nil)
-	c := NewCoordinator(f.store, f.threads.layout, f.threads.hub, f.threads, nil)
+	c := NewCoordinator(f.store, f.threads.layout, f.threads.hub, f.threads)
 	t.Cleanup(func() { settleCoordinator(c) })
 	return c, f.project
 }

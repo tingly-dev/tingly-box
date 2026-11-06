@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -13,7 +11,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -116,62 +113,17 @@ for line in sys.stdin:
 	_, otherID := env.AddTinglyBot()
 	_, chosenID := env.AddTinglyBot()
 	bridge := NewChatBridge()
-	// Exercise TB's real Projects host against an in-process Anthropic gateway.
-	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/tingly/claude_code/v1/messages" {
-			http.NotFound(w, r)
-			return
-		}
-		var body struct {
-			Messages []struct {
-				Role    string `json:"role"`
-				Content []struct {
-					Text string `json:"text"`
-				} `json:"content"`
-			} `json:"messages"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			http.Error(w, err.Error(), 400)
-			return
-		}
-		last := ""
-		for _, message := range body.Messages {
-			if message.Role == "user" {
-				for _, block := range message.Content {
-					last = block.Text
-				}
-			}
-		}
-		if strings.HasPrefix(last, "<event ") && strings.HasSuffix(last, "\n</event>") {
-			_, last, _ = strings.Cut(last, "\n")
-			last = strings.TrimSuffix(last, "\n</event>")
-		}
-		reply, _ := json.Marshal("You said: " + last)
-		w.Header().Set("Content-Type", "text/event-stream")
-		emit := func(kind, data string) { _, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", kind, data) }
-		emit("message_start", `{"type":"message_start","message":{"id":"m1","type":"message","role":"assistant","model":"harness","content":[],"stop_reason":null,"usage":{"input_tokens":1,"output_tokens":0}}}`)
-		emit("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`)
-		emit("content_block_delta", fmt.Sprintf(`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":%s}}`, reply))
-		emit("content_block_stop", `{"type":"content_block_stop","index":0}`)
-		emit("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":1}}`)
-		emit("message_stop", `{"type":"message_stop"}`)
-	}))
-	t.Cleanup(gateway.Close)
+	// TB's real Projects host: the scripted CLI above is its coordinator and
+	// threads, launched with the host's Claude Code environment.
 	cfg := newConfig(t)
 	t.Cleanup(func() { _ = cfg.CloseStores() })
-	host, port, err := net.SplitHostPort(strings.TrimPrefix(gateway.URL, "http://"))
-	require.NoError(t, err)
-	n, err := strconv.Atoi(port)
-	require.NoError(t, err)
-	require.NoError(t, cfg.SetServerHost(host))
-	require.NoError(t, cfg.SetServerPort(n))
 	tbHost := NewHost(cfg)
 	tbHost.SetChatBridge(bridge)
 	app, err := projectsapp.New(projectsapp.Options{Host: tbHost, DataDir: t.TempDir()})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = app.Close() })
 	pairing := false
-	workdir := t.TempDir()
+	workdir := realTempDir(t)
 	reg := channel.NewRegistry()
 	stores, err := hostdb.NewStoreManager(t.TempDir())
 	require.NoError(t, err)
@@ -500,7 +452,7 @@ func TestTinglyRegisteredDirectories(t *testing.T) {
 	chat := h.env.NewUser("directory-user").OpenDM(h.chosenID)
 	chat.SendText("start")
 	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: start")
-	first, second := t.TempDir(), t.TempDir()
+	first, second := realTempDir(t), realTempDir(t)
 	var f1, f2 struct {
 		ID string `json:"id"`
 	}
@@ -530,7 +482,7 @@ func TestTinglyRegisteredDirectories(t *testing.T) {
 	require.NotContains(t, help.Text, "/cd")
 	// A free path needs the permission, and the chat is told which one
 	// instead of the command looking broken.
-	free := t.TempDir()
+	free := realTempDir(t)
 	for _, text := range []string{"/cd " + free, "\uff0fcd " + free, "/dir " + free} {
 		chat.SendText(text)
 		chat.WaitText(10*time.Second).AssertContains(t, "Any folder and files")
@@ -581,7 +533,7 @@ func TestTinglyProjectsAndFoldersAreDistinct(t *testing.T) {
 	h.call("POST", "/projects", map[string]any{"name": "Project Alpha"}, &project)
 	h.call("POST", "/projects", map[string]any{"name": "Archived Project"}, &archived)
 	h.call("PATCH", "/projects/"+archived.ID, map[string]any{"archived": true}, nil)
-	otherFolder := t.TempDir()
+	otherFolder := realTempDir(t)
 	h.call("POST", "/projects", map[string]any{"type": "folder", "path": otherFolder}, nil)
 	chat.SendText("/project")
 	listed := chat.WaitText(10 * time.Second)

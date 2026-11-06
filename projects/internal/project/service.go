@@ -9,22 +9,32 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 )
 
-// Host is what the runtime needs from whoever runs it: a model client for
-// the coordinator, the models the project settings offer, and the
-// environment threads run Claude Code in. The standalone app implements it
-// with its own connection settings; an embedding host (Tingly Box) with its
-// gateway.
+// Host is what the runtime needs from whoever runs it: the models the project
+// settings offer and the environment the coordinator and threads run Claude
+// Code in. The standalone app implements it with its own connection settings;
+// an embedding host (Tingly Box) with its gateway.
 type Host interface {
-	LLMSource
 	ThreadEnv
-	Models(ctx context.Context) ([]llm.Model, error)
+	Models(ctx context.Context) ([]Model, error)
+}
+
+// Model is one model the project settings offer.
+type Model struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+	// ProviderModel / ProviderName are what the host routes ID to — the real
+	// model an alias stands for, and the provider that serves it. Set by an
+	// embedding host that can resolve its routing (Tingly Box does, the way
+	// its status line does); empty when the host says nothing.
+	ProviderModel string `json:"provider_model,omitempty"`
+	ProviderName  string `json:"provider_name,omitempty"`
 }
 
 // Service bundles the project runtime for the HTTP modules.
@@ -37,13 +47,14 @@ type Service struct {
 	Relay           *Relay
 	Host            Host
 	sessionToolsMCP *sessionToolsMCP
+	stopOnce        sync.Once
 }
 
 // NewService wires the runtime. Call Start once the server is up.
 func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Service {
 	hub := NewHub()
 	threads := NewThreads(store, layout, hub, agents, host)
-	coord := NewCoordinator(store, layout, hub, threads, host)
+	coord := NewCoordinator(store, layout, hub, threads)
 	// The chats bound to a project hear the coordinator when the host can
 	// reach IM (Tingly Box); the standalone app has no sink.
 	sink, _ := host.(ChannelSink)
@@ -68,9 +79,7 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 	}
 	svc.sessionToolsMCP = &sessionToolsMCP{service: svc}
 	threads.SessionToolsConfig = svc.sessionToolsMCP.config
-	if agents.Service != nil {
-		coord.sessions = newCoordinatorSessions(coord, host, svc.sessionToolsMCP, agents)
-	}
+	coord.sessions = newCoordinatorSessions(coord, host, svc.sessionToolsMCP, agents)
 	return svc
 }
 
@@ -78,15 +87,13 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 // then stops every thread's turn and process.
 func (s *Service) Start(ctx context.Context) {
 	s.Threads.Recover()
-	if s.Coordinator.sessions != nil {
-		if err := s.Store.RecoverCoordinatorInputs(); err != nil {
-			logrus.WithError(err).Error("recover coordinator inputs")
-		} else if ids, err := s.Store.CoordinatorProjectsWithInputs(); err != nil {
-			logrus.WithError(err).Error("list coordinator inputs")
-		} else {
-			for _, id := range ids {
-				s.Coordinator.schedule(id, func(q *queue) { q.config = true })
-			}
+	if err := s.Store.RecoverCoordinatorInputs(); err != nil {
+		logrus.WithError(err).Error("recover coordinator inputs")
+	} else if ids, err := s.Store.CoordinatorProjectsWithInputs(); err != nil {
+		logrus.WithError(err).Error("list coordinator inputs")
+	} else {
+		for _, id := range ids {
+			s.Coordinator.wake(id)
 		}
 	}
 	go func() {
@@ -109,9 +116,7 @@ func (s *Service) Start(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				s.Coordinator.shutdown(shutdown)
-				s.Threads.Shutdown(shutdown)
-				_ = s.CloseTools(shutdown)
+				s.Stop(shutdown)
 				cancel()
 				return
 			case <-tick.C:
@@ -120,9 +125,23 @@ func (s *Service) Start(ctx context.Context) {
 	}()
 }
 
+// Stop ends every coordinator and thread turn, waits until their bookkeeping
+// is done (or ctx ends) and closes the local tools. Start calls it once its
+// ctx ends; calling it again waits for that first stop to finish.
+func (s *Service) Stop(ctx context.Context) {
+	s.stopOnce.Do(func() {
+		s.Coordinator.shutdown(ctx)
+		s.Threads.Shutdown(ctx)
+		s.Threads.waitIdle(ctx)
+		_ = s.CloseTools(ctx)
+	})
+}
+
 // CloseTools stops the local MCP service after the thread processes stop.
 func (s *Service) CloseTools(ctx context.Context) error {
-	if s.Coordinator != nil { s.Coordinator.shutdown(ctx) }
+	if s.Coordinator != nil {
+		s.Coordinator.shutdown(ctx)
+	}
 	if s.sessionToolsMCP != nil {
 		return s.sessionToolsMCP.close(ctx)
 	}

@@ -60,7 +60,7 @@ func (s *Service) Save(p *db.Project) error {
 		}
 	}
 	var saveErr error
-	if s.Coordinator != nil && s.Coordinator.sessions != nil && notice != nil && !p.Paused && p.ArchivedAt == nil {
+	if s.Coordinator.live() && notice != nil && !p.Paused && p.ArchivedAt == nil {
 		saveErr = s.Store.SaveProjectWithCoordinatorInput(p, notice)
 	} else {
 		saveErr = s.Store.SaveProjectWithEvent(p, notice)
@@ -75,7 +75,7 @@ func (s *Service) Save(p *db.Project) error {
 	if notice != nil {
 		s.Coordinator.publishEvent(p.ID, notice)
 		if !p.Paused && p.ArchivedAt == nil {
-			s.Coordinator.schedule(p.ID, func(q *queue) { q.config = true })
+			s.Coordinator.wake(p.ID)
 		}
 	}
 	return nil
@@ -119,17 +119,13 @@ func (s *Service) SetPaused(p *db.Project, paused bool) error {
 	p.Paused = paused
 	if paused {
 		s.Threads.StopProject(p.ID)
-		if s.Coordinator != nil && s.Coordinator.sessions != nil {
-			if main, err := s.Store.GetThread(p.MainThreadID); err == nil && main.SessionID != "" {
-				s.Coordinator.sessions.engine.Stop(main.SessionID)
-			}
-		}
+		s.Coordinator.stop(p)
 	}
 	if err := s.Save(p); err != nil {
 		return err
 	}
-	if !paused && s.Coordinator != nil && s.Coordinator.sessions != nil && p.MainThreadID != "" {
-		s.Coordinator.schedule(p.ID, func(q *queue) { q.config = true })
+	if !paused && s.Coordinator.live() && p.MainThreadID != "" {
+		s.Coordinator.wake(p.ID)
 	}
 	return nil
 }
@@ -144,11 +140,7 @@ func (s *Service) SetArchived(p *db.Project, archived bool) error {
 		now := time.Now()
 		p.ArchivedAt = &now
 		s.Threads.StopProject(p.ID)
-		if s.Coordinator != nil && s.Coordinator.sessions != nil {
-			if main, err := s.Store.GetThread(p.MainThreadID); err == nil && main.SessionID != "" {
-				s.Coordinator.sessions.engine.Stop(main.SessionID)
-			}
-		}
+		s.Coordinator.stop(p)
 	} else {
 		p.ArchivedAt = nil
 	}
@@ -156,8 +148,8 @@ func (s *Service) SetArchived(p *db.Project, archived bool) error {
 		return err
 	}
 	if !archived {
-		if s.Coordinator != nil && s.Coordinator.sessions != nil && p.MainThreadID != "" {
-			s.Coordinator.schedule(p.ID, func(q *queue) { q.config = true })
+		if s.Coordinator.live() && p.MainThreadID != "" {
+			s.Coordinator.wake(p.ID)
 		}
 		return nil
 	}

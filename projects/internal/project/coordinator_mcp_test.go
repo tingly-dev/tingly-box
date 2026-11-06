@@ -17,7 +17,9 @@ func TestCoordinatorMCPValidatesAndScopesTools(t *testing.T) {
 	p := mkProject(t, store, &db.Project{Name: "One"})
 	other := mkProject(t, store, &db.Project{Name: "Other"})
 	coord := &Coordinator{store: store, layout: Layout{Root: t.TempDir()}, hub: NewHub()}
-	server, err := coord.coordinatorMCP(p, true)
+	turn := &coordinatorToolTurn{}
+	turn.begin(p, true)
+	server, err := coord.coordinatorMCPForTurn(turn)
 	require.NoError(t, err)
 	st, ct := mcp.NewInMemoryTransports()
 	ss, err := server.Connect(ctx, st, nil)

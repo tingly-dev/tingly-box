@@ -2,8 +2,6 @@ package project
 
 import (
 	"context"
-	"encoding/json"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -12,60 +10,63 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
+	"github.com/tingly-dev/tingly-box/projects/internal/coordtest"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 )
 
-// fakeLLM answers each request with a function of it.
-type fakeLLM struct {
+// testHost is the host a service fixture runs with.
+type testHost struct{ staticEnv }
+
+func (testHost) Models(context.Context) ([]Model, error) { return nil, nil }
+
+// sinkHost is a testHost whose chats are a fake sink.
+type sinkHost struct {
+	testHost
+	*fakeSink
+}
+
+// newServiceFixture is newFixture with the whole runtime: thread turns run
+// through thread and the coordinator's session turns through coord (see
+// coordtest), both stand-ins for Claude Code.
+func newServiceFixture(t *testing.T, host Host, thread func(*enginetest.Turn) error, coord func(*coordtest.Turn) error) (*testFixture, *Service) {
+	t.Helper()
+	store, err := db.Open(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { store.Close() })
+	layout := Layout{Root: t.TempDir()}
+	repo := newRepo(t)
+	p := &db.Project{Name: "Demo", Goal: "Ship it", Instructions: "Be careful.", Repos: []db.Repo{{Path: repo, BaseBranch: "main"}}}
+	mkProject(t, store, p)
+	require.NoError(t, layout.Ensure(p.ID))
+	a := &enginetest.Agent{Script: coordtest.Script(coord, thread)}
+	svc := NewService(store, layout, Agents{Service: a.Service()}, host)
+	t.Cleanup(func() {
+		shutdownAndSettle(svc.Threads)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = svc.CloseTools(ctx)
+	})
+	// Registered after the threads' cleanup, so it runs first.
+	t.Cleanup(func() { settleCoordinator(svc.Coordinator) })
+	return &testFixture{store: store, threads: svc.Threads, agent: a, project: p, repo: repo, reports: make(chan Report, 10)}, svc
+}
+
+// prompts records the prompt of each coordinator turn.
+type prompts struct {
 	mu   sync.Mutex
-	reqs []llm.Request
-	fn   func(req llm.Request) llm.Result
+	list []string
 }
 
-func (f *fakeLLM) ClientFor(context.Context, string) (llm.Client, string, error) {
-	return f, "coord-model", nil
+func (p *prompts) add(c *coordtest.Turn) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.list = append(p.list, c.Prompt)
 }
 
-func (f *fakeLLM) Stream(_ context.Context, req llm.Request, onDelta func(string)) (llm.Result, error) {
-	f.mu.Lock()
-	f.reqs = append(f.reqs, req)
-	f.mu.Unlock()
-	res := f.fn(req)
-	if res.Text != "" {
-		onDelta(res.Text)
-	}
-	return res, nil
-}
-
-func (f *fakeLLM) ListModels(context.Context) ([]llm.Model, error) { return nil, nil }
-
-func (f *fakeLLM) requests() []llm.Request {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return append([]llm.Request(nil), f.reqs...)
-}
-
-var envelopeTag = regexp.MustCompile(`<event[^>]*>\n|\n</event>`)
-
-// lastUserText is the last user message without its event envelopes.
-func lastUserText(req llm.Request) string {
-	for i := len(req.Messages) - 1; i >= 0; i-- {
-		if req.Messages[i].Role == "user" {
-			return envelopeTag.ReplaceAllString(req.Messages[i].Content, "")
-		}
-	}
-	return ""
-}
-
-func hasToolResults(req llm.Request) bool {
-	n := len(req.Messages)
-	return n > 0 && len(req.Messages[n-1].ToolResults) > 0
-}
-
-func call(id, name string, input any) llm.ToolCall {
-	b, _ := json.Marshal(input)
-	return llm.ToolCall{ID: id, Name: name, Input: b}
+func (p *prompts) all() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]string(nil), p.list...)
 }
 
 func waitMessages(t *testing.T, store *db.Store, projectID string, cond func([]db.ThreadEvent) bool) []db.ThreadEvent {
@@ -99,36 +100,35 @@ func countKind(msgs []db.ThreadEvent, kind string) int {
 }
 
 func TestCoordinatorRoutesWorkToThreadsAndRelaysReports(t *testing.T) {
-	f := newFixture(t, func(turn *enginetest.Turn) error {
+	var seen prompts
+	f, svc := newServiceFixture(t, testHost{}, func(turn *enginetest.Turn) error {
 		if strings.Contains(turn.Prompt, "bug") {
 			turn.Say("Found two causes.\nNEEDS_INPUT: Keep the legacy flag?", 1, 1)
 			return nil
 		}
 		turn.Say("Docs updated.", 1, 1)
 		return nil
-	})
-	ai := &fakeLLM{fn: func(req llm.Request) llm.Result {
-		last := lastUserText(req)
+	}, func(c *coordtest.Turn) error {
+		seen.add(c)
 		switch {
-		case hasToolResults(req):
-			return llm.Result{Text: "Started two threads: docs and the login bug."}
-		case strings.Contains(last, "Coordinator check-in"):
-			if strings.Contains(last, "Keep the legacy flag?") {
-				return llm.Result{Text: "The login bug thread asks: keep the legacy flag?"}
+		case c.CheckIn():
+			if strings.Contains(c.Input(), "Keep the legacy flag?") {
+				c.Reply("The login bug thread asks: keep the legacy flag?")
+				return nil
 			}
-			return llm.Result{Text: noUpdate}
-		case strings.Contains(last, "only two at a time"):
-			return llm.Result{ToolCalls: []llm.ToolCall{call("r1", "remember", map[string]string{
-				"topic": "Thread limit", "content": "Run at most two threads at a time.", "summary": "max 2 parallel threads"})}}
+			c.Reply(noUpdate)
+		case strings.Contains(c.Input(), "only two at a time"):
+			c.Call("remember", map[string]string{
+				"topic": "Thread limit", "content": "Run at most two threads at a time.", "summary": "max 2 parallel threads"})
+			c.Reply("Saved: at most two threads at a time.")
 		default:
-			return llm.Result{ToolCalls: []llm.ToolCall{
-				call("c1", "start_thread", map[string]string{"title": "Update docs", "task": "update the docs"}),
-				call("c2", "start_thread", map[string]string{"title": "Fix login bug", "task": "fix the login bug"}),
-			}}
+			c.Call("start_thread", map[string]string{"title": "Update docs", "task": "update the docs"})
+			c.Call("start_thread", map[string]string{"title": "Fix login bug", "task": "fix the login bug"})
+			c.Reply("Started two threads: docs and the login bug.")
 		}
-	}}
-	coord := NewCoordinator(f.store, f.threads.layout, f.threads.hub, f.threads, ai)
-	t.Cleanup(func() { settleCoordinator(coord) })
+		return nil
+	})
+	coord := svc.Coordinator
 
 	_, err := coord.Post(f.project.ID, "Update the docs, and fix the login bug.", nil, Source{})
 	require.NoError(t, err)
@@ -141,13 +141,13 @@ func TestCoordinatorRoutesWorkToThreadsAndRelaysReports(t *testing.T) {
 		}
 		return false
 	})
-	assert.Equal(t, 1, countKind(msgs, db.EvThreadStarted))
+	assert.Equal(t, 2, countKind(msgs, db.EvThreadStarted), "one marker per start_thread call")
 	assert.Equal(t, 2, countKind(msgs, db.EvThreadUpdate))
 	for _, m := range msgs {
 		assert.NotEqual(t, noUpdate, m.Content, "NO_UPDATE is never posted")
 	}
 
-	threads, _ := f.store.ListThreads(f.project.ID)
+	threads := threadsOf(t, f)
 	require.Len(t, threads, 2)
 	statuses := map[string]string{}
 	for _, th := range threads {
@@ -156,10 +156,10 @@ func TestCoordinatorRoutesWorkToThreadsAndRelaysReports(t *testing.T) {
 	assert.Equal(t, db.ThreadIdle, statuses["Update docs"])
 	assert.Equal(t, db.ThreadWaiting, statuses["Fix login bug"])
 
-	// The coordinator sees the thread table and the instructions.
-	first := ai.requests()[0]
-	assert.Contains(t, first.System, "Be careful.")
-	assert.Contains(t, first.System, "Ship it")
+	// The session starts with the project context: goal and instructions.
+	first := seen.all()[0]
+	assert.Contains(t, first, "Be careful.")
+	assert.Contains(t, first, "Ship it")
 
 	// Coordination preferences go to memory.
 	_, err = coord.Post(f.project.ID, "Please run only two at a time.", nil, Source{})
@@ -168,33 +168,36 @@ func TestCoordinatorRoutesWorkToThreadsAndRelaysReports(t *testing.T) {
 		return strings.Contains(f.threads.layout.memoryIndexText(f.project.ID), "max 2 parallel threads")
 	}, 5*time.Second, 10*time.Millisecond)
 	require.Eventually(t, func() bool { return !coord.Busy(f.project.ID) }, 5*time.Second, 10*time.Millisecond)
-	last := ai.requests()[len(ai.requests())-1]
-	assert.Contains(t, last.System, "max 2 parallel threads", "memory reaches later coordinator turns")
+}
+
+// threadsOf lists a fixture project's work threads.
+func threadsOf(t *testing.T, f *testFixture) []db.Thread {
+	t.Helper()
+	threads, err := f.store.ListThreads(f.project.ID)
+	require.NoError(t, err)
+	return threads
 }
 
 func TestProposeThenStartSuggestions(t *testing.T) {
-	f := newFixture(t, func(turn *enginetest.Turn) error {
+	f, svc := newServiceFixture(t, testHost{}, func(turn *enginetest.Turn) error {
 		turn.Say("ok", 1, 1)
 		return nil
-	})
-	ai := &fakeLLM{fn: func(req llm.Request) llm.Result {
-		if hasToolResults(req) {
-			return llm.Result{Text: "Here is the plan."}
+	}, func(c *coordtest.Turn) error {
+		if c.CheckIn() {
+			c.Reply(noUpdate)
+			return nil
 		}
-		if strings.Contains(lastUserText(req), "Coordinator check-in") {
-			return llm.Result{Text: noUpdate}
-		}
-		return llm.Result{ToolCalls: []llm.ToolCall{call("p1", "propose_threads", map[string]any{"threads": []map[string]string{
+		c.Call("propose_threads", map[string]any{"threads": []map[string]string{
 			{"title": "A", "task": "do a"}, {"title": "B", "task": "do b"},
-		}})}}
-	}}
-	coord := NewCoordinator(f.store, f.threads.layout, f.threads.hub, f.threads, ai)
-	t.Cleanup(func() { settleCoordinator(coord) })
+		}})
+		c.Reply("Here is the plan.")
+		return nil
+	})
+	coord := svc.Coordinator
 	_, err := coord.Post(f.project.ID, "Plan the migration first.", nil, Source{})
 	require.NoError(t, err)
 	msgs := waitMessages(t, f.store, f.project.ID, func(m []db.ThreadEvent) bool { return countKind(m, db.EvSuggestions) == 1 })
-	threads, _ := f.store.ListThreads(f.project.ID)
-	assert.Empty(t, threads, "proposals do not start threads")
+	assert.Empty(t, threadsOf(t, f), "proposals do not start threads")
 
 	var sug db.ThreadEvent
 	for _, m := range msgs {
@@ -205,14 +208,13 @@ func TestProposeThenStartSuggestions(t *testing.T) {
 	updated, err := coord.StartSuggestions(context.Background(), f.project.MainThreadID, sug.ID, []int{1})
 	require.NoError(t, err)
 	assert.Contains(t, updated.Payload, `"thread_id"`)
-	threads, _ = f.store.ListThreads(f.project.ID)
+	threads := threadsOf(t, f)
 	require.Len(t, threads, 1)
 	assert.Equal(t, "B", threads[0].Title)
 
 	_, err = coord.StartSuggestions(context.Background(), f.project.MainThreadID, sug.ID, nil)
 	require.NoError(t, err)
-	threads, _ = f.store.ListThreads(f.project.ID)
-	assert.Len(t, threads, 2, "start all starts only the remaining one")
+	assert.Len(t, threadsOf(t, f), 2, "start all starts only the remaining one")
 }
 
 func TestRenderHistoryAlternates(t *testing.T) {

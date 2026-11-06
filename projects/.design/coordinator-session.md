@@ -86,7 +86,9 @@ Coordinator 按项目的 profile、model、effort 启动。使用 profile 时由
 
 模型与网关的缓存行为、TTL、断点、上下文压缩和成本仍由 Claude Code 及上游决定。这里保持 session 和历史连续，但首次请求、配置变化、压缩或缓存过期都可能产生 cache miss；不能以 session ID 判断是否命中。
 
-已有 Project 首次进入新实现时保留主线程、显示历史和工作线程，创建独立的 Coordinator session 并一次性导入有限近期上下文。早于导入窗口的对话仍保存在主线程，可通过 `read_conversation` 查询；旧实现丢弃的工具调用和工具结果无法恢复。回滚到旧实现时不会将 Claude Code transcript 自动转换回旧的 LLM 历史，输入表及 session 文件也不会自动清理。
+已有 Project 首次进入新实现时保留主线程、显示历史和工作线程，创建独立的 Coordinator session 并一次性导入有限近期上下文；更早的内容存在时，导入文本会提示用 `read_conversation` 查询。早于导入窗口的对话仍保存在主线程；旧实现丢弃的工具调用和工具结果无法恢复。旧的自驱模型循环（`Coordinator.turn` / `LLMSource`）已删除，session 是唯一路径，不再支持回滚。
+
+线程汇报和设置变更回合末尾附一个 system 信封（`kind="check-in"` / `kind="settings-changed"`），带 `replies_since_user` 和 `minutes_since_user`，即协调者提示词里的回复预算。
 
 ## 验证与已知边界
 
@@ -98,3 +100,5 @@ Coordinator 按项目的 profile、model、effort 启动。使用 profile 时由
 - [coordinator_session_probe.py](../showcase/e2e-demo/coordinator_session_probe.py)：使用真实 Claude Code CLI 与本地脚本化 Anthropic 服务，验证 MCP 调用、共享记忆读取及第二轮保留上下文；不需要真实上游密钥。
 
 上述探针不能验证生产网关或供应商的缓存命中率。共享读取目前不支持 PDF 等二进制文档，也没有大文件分页；应交由工作线程处理。全面的崩溃点注入、不同上游的缓存 token 指标和自动去重仍是后续工作。
+
+留作以后：项目上下文（含记忆索引）只在首回合和设置变更回合注入，线程写入的新记忆要到下一次设置变更才会告诉 Coordinator（它可以随时用 `list_shared_files` 主动读）。将来补的话，只在索引变化时把增减的索引行追加在当回合输入末尾；不改系统提示词，也不改写历史，以免破坏前缀缓存。

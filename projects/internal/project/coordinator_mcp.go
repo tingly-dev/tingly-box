@@ -10,10 +10,9 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 )
 
-// coordinatorMCP registers the same tools used by the existing coordinator.
+// coordinatorToolTurn is the state of the coordinator's MCP tools for one turn.
 // The caller supplies the settings and trigger for the active turn; they must
 // not be reused for another turn. The project ID is never accepted from Claude.
 type coordinatorToolTurn struct {
@@ -36,12 +35,6 @@ func (t *coordinatorToolTurn) end() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.snapshot = nil
-}
-
-func (c *Coordinator) coordinatorMCP(snapshot *db.Project, userTriggered bool) (*mcp.Server, error) {
-	turn := &coordinatorToolTurn{}
-	turn.begin(snapshot, userTriggered)
-	return c.coordinatorMCPForTurn(turn)
 }
 
 func (c *Coordinator) coordinatorMCPForTurn(turn *coordinatorToolTurn) (*mcp.Server, error) {
@@ -103,7 +96,7 @@ func (c *Coordinator) coordinatorMCPForTurn(turn *coordinatorToolTurn) (*mcp.Ser
 			if name == toolNoUpdate && userTriggered {
 				return fail("A message from the user needs a reply. Answer it, or start or message a thread.")
 			}
-			out, isErr, started := c.runTool(ctx, current, llm.ToolCall{Name: name, Input: args})
+			out, isErr, started := c.runTool(ctx, current, name, args)
 			if name == toolNoUpdate && !isErr {
 				turn.quiet.Store(true)
 			}
