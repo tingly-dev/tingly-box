@@ -100,3 +100,5 @@ Coordinator 按项目的 profile、model、effort 启动。使用 profile 时由
 - [coordinator_session_probe.py](../showcase/e2e-demo/coordinator_session_probe.py)：使用真实 Claude Code CLI 与本地脚本化 Anthropic 服务，验证 MCP 调用、共享记忆读取及第二轮保留上下文；不需要真实上游密钥。
 
 上述探针不能验证生产网关或供应商的缓存命中率。共享读取目前不支持 PDF 等二进制文档，也没有大文件分页；应交由工作线程处理。全面的崩溃点注入、不同上游的缓存 token 指标和自动去重仍是后续工作。
+
+留作以后：项目上下文（含记忆索引）只在首回合和设置变更回合注入，线程写入的新记忆要到下一次设置变更才会告诉 Coordinator（它可以随时用 `list_shared_files` 主动读）。将来补的话，只在索引变化时把增减的索引行追加在当回合输入末尾；不改系统提示词，也不改写历史，以免破坏前缀缓存。
