@@ -39,16 +39,6 @@ func (c *compactCapture) outcome() (agentboot.CompactResult, error, bool) {
 	return agentboot.CompactResult{}, nil, false
 }
 
-// noteCompact hands a compaction event to the Compact call waiting for it.
-func (e *Engine) noteCompact(sessionID string, ev agentboot.CompactEvent) {
-	e.mu.Lock()
-	r := e.runs[sessionID]
-	e.mu.Unlock()
-	if r != nil && r.compact != nil {
-		r.compact.add(ev)
-	}
-}
-
 // Compact compacts session id's conversation and returns what the backend
 // reports of it. It claims the session like Start does (ErrBusy if a turn is
 // in flight), runs the compaction as one turn in dir through the same
