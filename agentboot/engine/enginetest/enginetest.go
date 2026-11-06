@@ -39,6 +39,13 @@ func (a *Agent) Service() *agentboot.AgentService {
 	return svc
 }
 
+// CompactPrompt makes the agent compactable: Engine.Compact runs a turn whose
+// prompt starts with "/compact", and the script answers it with Compacted or
+// CompactRefused.
+func (a *Agent) CompactPrompt(instructions string) string {
+	return (&claude.Agent{}).CompactPrompt(instructions)
+}
+
 // Launches returns the options of every turn started so far, in order.
 func (a *Agent) Launches() []agentboot.ExecutionOptions {
 	a.mu.Lock()
@@ -114,6 +121,18 @@ func (t *Turn) Say(text string, inputTokens, outputTokens int64) {
 		Content: []anthropic.ContentBlockUnion{{Type: claude.ContentBlockTypeText, Text: text}},
 		Usage:   anthropic.Usage{InputTokens: inputTokens, OutputTokens: outputTokens},
 	}})
+}
+
+// Compacted reports a finished compaction, as the CLI does for /compact.
+func (t *Turn) Compacted(res agentboot.CompactResult) {
+	t.send(agentboot.CompactEvent{Phase: agentboot.CompactStarted})
+	t.send(agentboot.CompactEvent{Phase: agentboot.CompactDone, Result: res})
+}
+
+// CompactRefused reports a compaction the agent declined.
+func (t *Turn) CompactRefused(reason string) {
+	t.send(agentboot.CompactEvent{Phase: agentboot.CompactStarted})
+	t.send(agentboot.CompactEvent{Phase: agentboot.CompactFailed, Reason: reason})
 }
 
 // Use emits a tool call, as Claude Code reports one it makes.

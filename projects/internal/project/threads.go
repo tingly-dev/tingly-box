@@ -147,6 +147,9 @@ type Threads struct {
 	threads         map[string]*sync.Mutex // serializes writes to one thread row
 	// allowed holds what the user allowed for the rest of a thread (allowKey).
 	allowed map[string]map[string]bool
+	// cards holds each thread's compaction card while one is running, so its
+	// outcome updates it in place.
+	cards map[string]*db.ThreadEvent
 }
 
 // activeThread is a thread with a message in flight: waiting for a slot,
@@ -170,7 +173,13 @@ type queued struct {
 	// the transcript yet, only the chip event eventID, until its turn comes.
 	held    bool
 	eventID string
+	// compact makes the message a compaction request: its turn asks the agent
+	// to compact instead of sending text (see Threads.Compact).
+	compact *compactRequest
 }
+
+// compactRequest is a /compact waiting for its turn.
+type compactRequest struct{ instructions string }
 
 // Source says where a message to a thread came from. The zero value is the
 // web. It is stored on the user event the message becomes.
@@ -195,7 +204,7 @@ func queuedPrompt(q queued, libraryDir string) string {
 	if q.relayed {
 		text = coordinatorNote + text
 	}
-	return withAttachments(text, libraryDir, q.atts)
+	return withAttachments(literalPrompt(text), libraryDir, q.atts)
 }
 
 // fromThread is the source of a message another thread sent.
@@ -229,6 +238,9 @@ type turnTally struct {
 	usage       db.Usage
 	model       string
 	launchModel string
+	// compact marks a turn that compacts the conversation: it reports to
+	// the chats that hear the thread, not to the coordinator.
+	compact bool
 }
 
 // addUsage folds a "usage" entry in; main is false for a subagent's.
@@ -252,7 +264,7 @@ func NewThreads(store *db.Store, layout Layout, hub *Hub, agents Agents, env Thr
 		active: map[string]*activeThread{}, turns: map[string]*turnTally{}, prompts: map[string]*threadPrompter{},
 		sessionOfThread: map[string]string{}, threadOfSession: map[string]string{},
 		slots: map[string]*limiter{}, threads: map[string]*sync.Mutex{},
-		allowed: map[string]map[string]bool{}, folders: map[string]bool{}, held: map[string]*heldReport{},
+		allowed: map[string]map[string]bool{}, folders: map[string]bool{}, held: map[string]*heldReport{}, cards: map[string]*db.ThreadEvent{},
 	}
 	m.engine = engine.New(engine.Config{
 		Agent:     agents.Service,
@@ -849,6 +861,15 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 		m.giveUp(threadID, a)
 		return
 	}
+	if req := a.current.compact; req != nil {
+		m.mu.Lock()
+		m.turns[threadID] = &turnTally{launchModel: model, compact: true}
+		m.mu.Unlock()
+		launch := func(context.Context) agentboot.ExecutionOptions { return opts }
+		res, err := m.engine.Compact(ctx, m.sessionOf(threadID), t.Cwd, req.instructions, launch)
+		m.compactReturned(t, a, slot, res, err)
+		return
+	}
 	m.mu.Lock()
 	m.turns[threadID] = &turnTally{launchModel: model}
 	m.mu.Unlock()
@@ -1069,9 +1090,14 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 	report := Report{Kind: ReportFinished, Text: strings.TrimSpace(tally.text)}
 	held := false
 	t, _ = m.update(threadID, func(t *db.Thread) {
-		t.Turns++
-		t.ReportedModel = tally.model
-		t.AddUsage(tally.usage, time.Now().UTC())
+		// A compaction is not a conversation turn and makes no model call: it
+		// leaves the turn count, the model that answered and the last turn's
+		// figures as they were.
+		if !tally.compact {
+			t.Turns++
+			t.ReportedModel = tally.model
+			t.AddUsage(tally.usage, time.Now().UTC())
+		}
 		// A session's Model is the owner's pick; a project thread shows the
 		// model that answered.
 		switch {
@@ -1111,7 +1137,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 				t.Status = restingStatus(stats.CommitsAhead)
 			}
 		}
-		if report.Text != "" {
+		if report.Text != "" && !tally.compact {
 			t.LastReport = report.Text
 		}
 	})
@@ -1123,8 +1149,9 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "Stopped."})
 	case end.Err != nil:
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvError, Content: end.Err.Error()})
-	case session:
-		// The report is for the coordinator; a session shows the turn itself.
+	case session, tally.compact:
+		// The report is for the coordinator; a session shows the turn itself,
+		// and a compaction shows its own card.
 	default:
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvReport, Content: report.Text, Payload: jsonString(map[string]any{
 			"status": t.Status, "commits_ahead": stats.CommitsAhead, "files_changed": stats.FilesChanged, "uncommitted": stats.Uncommitted,
@@ -1144,6 +1171,9 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		return
 	}
 	_ = m.store.TouchProject(t.ProjectID)
+	if tally.compact {
+		return
+	}
 	if report.Kind != "" && m.OnReport != nil {
 		report.Thread = *t
 		m.OnReport(report)

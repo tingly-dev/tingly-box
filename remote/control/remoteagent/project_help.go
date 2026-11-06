@@ -28,6 +28,7 @@ func helpText(senderID, chatID string, privileged, group bool) string {
 		"/new [message]: start a new session",
 		"/stop: stop the running session",
 		"/clear: stop, and start a new session with the next message",
+		"/compact [instructions]: shrink the conversation to free up context",
 		"/status: where this chat is and how its session runs",
 		"/verbose on|off: also see each step, not only the reply",
 		"/yolo: use every tool without asking, or back",
