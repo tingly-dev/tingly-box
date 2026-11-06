@@ -24,9 +24,6 @@ func (e *ErrCommandUnsupported) Error() string {
 // ErrNothingToCompact is /compact on a thread that has not run yet.
 var ErrNothingToCompact = errors.New("nothing to compact yet: this conversation has not started")
 
-// ErrCompactUnavailable is /compact where Projects does not run it (yet).
-var ErrCompactUnavailable = errors.New("/compact isn't available here yet")
-
 // commandKind says what a message beginning with "/" is.
 type commandKind int
 

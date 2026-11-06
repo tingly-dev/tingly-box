@@ -282,26 +282,6 @@ func TestCompactFromAChat(t *testing.T) {
 	assert.Contains(t, reply, "Nothing to compact")
 }
 
-func TestCompactOfAConversationWithoutASessionIsNotAvailable(t *testing.T) {
-	ca := &commandAgent{}
-	f, svc, _, _ := commandFixture(t, ca)
-	_, err := svc.Send(context.Background(), f.project.MainThreadID, "/compact", nil, Source{})
-	assert.ErrorIs(t, err, ErrCompactUnavailable)
-}
-
-func TestCompactNeedsAConversation(t *testing.T) {
-	ca := &commandAgent{}
-	f, svc, _, th := commandFixture(t, ca)
-	cur, err := f.store.GetThread(th.ID)
-	require.NoError(t, err)
-	cur.Turns = 0
-	require.NoError(t, f.store.SaveThread(cur))
-
-	_, err = svc.Send(context.Background(), th.ID, "/compact", nil, Source{})
-	assert.ErrorIs(t, err, ErrNothingToCompact)
-	assert.Equal(t, []string{"go"}, ca.sent(), "nothing was started")
-}
-
 // An automatic compaction inside an ordinary turn gets the same card, marked
 // automatic, and leaves the turn's reply alone.
 func TestAutomaticCompactionGetsACard(t *testing.T) {
