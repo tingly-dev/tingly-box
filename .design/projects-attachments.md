@@ -54,6 +54,11 @@ readable (the file route looks in the library first, then there). Routes:
 `POST /projects/:id/attachments`, `POST /threads/:id/attachments` and
 `GET /threads/:id/attachments/file` after.
 
+The `<id>-` prefix is a storage detail: both download routes (and the Library
+tab's download button) save an upload under the name it was given
+(`project.DownloadName`, `downloadName` in `Library.tsx`). Only direct children
+of `uploads/` are renamed; any other file keeps its stored name.
+
 ## What the model gets
 
 The message text is followed by a note listing each file's absolute path, type

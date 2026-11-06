@@ -84,6 +84,18 @@ const idLen = 12
 
 var uploadNameRe = regexp.MustCompile(`^[0-9a-f]{12}-.+$`)
 
+// DownloadName is the file name to save the library file at rel under: the
+// name a person gave an upload (the id in front is only there to keep stored
+// names unique), the stored name for anything else.
+func DownloadName(rel string) string {
+	rel = filepath.ToSlash(filepath.Clean(rel))
+	base := filepath.Base(rel)
+	if filepath.ToSlash(filepath.Dir(rel)) == UploadsDir && uploadNameRe.MatchString(base) {
+		return base[idLen+1:]
+	}
+	return base
+}
+
 // maxNameBytes keeps id and name within a file name limit.
 const maxNameBytes = 200
 

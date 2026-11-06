@@ -15,6 +15,12 @@ const mono = { fontFamily: fontMono } as const;
 
 type Node = LibraryEntry & { kind: 'dir' | 'file' };
 
+/** An upload is stored as uploads/<12 hex id>-<name>; it is saved under the name it was given. */
+export const downloadName = (path: string): string => {
+    const base = path.split('/').pop() || path;
+    return /^uploads\/[0-9a-f]{12}-[^/]+$/.test(path) ? base.slice(13) : base;
+};
+
 const toPreview = (n: Node): PreviewFile => ({ path: n.path, name: n.name, size: n.size });
 
 /** The folders left open in a project's library, kept in this browser. */
@@ -96,7 +102,7 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
             notify((e as Error).message, 'error');
         }
     };
-    const download = (path: string) => save(`/api/v1/projects/${projectId}/library/file?path=${encodeURIComponent(path)}`, path.split('/').pop() || path);
+    const download = (path: string) => save(`/api/v1/projects/${projectId}/library/file?path=${encodeURIComponent(path)}`, downloadName(path));
     const downloadZip = (n: Node) => save(`/api/v1/projects/${projectId}/library/archive?path=${encodeURIComponent(n.path)}`, `${n.name}.zip`);
 
     return (
