@@ -173,6 +173,12 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 		}()
 	}
 
+	emitMessages := func(ev protocol.Event) {
+		for _, m := range transport.AccumulateMessage(ev) {
+			handle.emit(runCtx, MessageEvent{Raw: m})
+		}
+	}
+
 	// Pump goroutine: classify decoded events, emit to handle, observe terminal.
 	var pumpWG sync.WaitGroup
 	pumpWG.Add(1)
@@ -194,10 +200,7 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 				// Drop.
 
 			case EventKindMessage:
-				msgs := transport.AccumulateMessage(ev)
-				for _, m := range msgs {
-					handle.emit(runCtx, MessageEvent{Raw: m})
-				}
+				emitMessages(ev)
 
 			case EventKindControl:
 				// Stash the original input so EncodeControlResponse can use
@@ -224,12 +227,16 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 				}
 
 			case EventKindTerminalSuccess:
+				// The result is the turn's usage and cost: hand it on as a
+				// message like the rest of the stream.
+				emitMessages(ev)
 				state.mu.Lock()
 				state.terminalSeen = true
 				state.mu.Unlock()
 				shutdownGracefully()
 
 			case EventKindTerminalError:
+				emitMessages(ev)
 				state.mu.Lock()
 				state.terminalSeen = true
 				state.terminalErr = resultErrorFromEvent(r.driver.Type(), ev)

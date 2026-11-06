@@ -65,4 +65,10 @@ describe('CoordinatorStatus', () => {
         expect(screen.getByText('rail.contextEmpty')).toBeInTheDocument();
         expect(screen.queryByRole('region', { name: 'rail.usage' })).not.toBeInTheDocument();
     });
+
+    it("shows the host's extra cards after Usage", () => {
+        render(<CoordinatorStatus {...props} coordinator={coordinator()} extra={<section aria-label="host card" />} />);
+        const usage = screen.getByRole('region', { name: 'rail.usage' });
+        expect(usage.compareDocumentPosition(screen.getByRole('region', { name: 'host card' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
 });

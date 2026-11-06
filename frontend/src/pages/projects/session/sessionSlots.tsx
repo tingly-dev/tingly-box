@@ -1,11 +1,12 @@
 // Tingly Box's parts of a folder session in @tingly/projects: the Claude
-// Code profile and model tier a session launches with, and the status line
-// that says where its requests go. Projects knows a profile only as a name.
-// A tier belongs to its profile, so picking another profile starts from the
-// profile's default.
+// Code profile and model tier a session launches with, the status line that
+// says where its requests go, and the quota card in the info rail. Projects
+// knows a profile only as a name. A tier belongs to its profile, so picking
+// another profile starts from the profile's default.
 import type {SessionSlots} from '@tingly/projects';
 import ModelSelect from '@/components/claudeCode/ModelSelect';
 import ProfileSelect from '@/components/claudeCode/ProfileSelect';
+import QuotaCard from './QuotaCard';
 import SessionStatusLine from './SessionStatusLine';
 
 export const sessionSlots: SessionSlots = {
@@ -22,4 +23,5 @@ export const sessionSlots: SessionSlots = {
         </>
     ),
     statusLine: ({session, events}) => <SessionStatusLine session={session} events={events}/>,
+    railCards: ({thread, launch}) => <QuotaCard thread={thread} launch={launch}/>,
 };

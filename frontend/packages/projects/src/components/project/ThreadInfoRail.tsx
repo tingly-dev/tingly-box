@@ -73,6 +73,8 @@ interface Props {
     configuredModel?: string;
     /** A card above the rest, folded into the rail from the page (a folder's sessions). */
     top?: ReactNode;
+    /** Cards the host adds (SessionSlots.railCards), after Usage. */
+    extra?: ReactNode;
 }
 
 /**
@@ -81,7 +83,7 @@ interface Props {
  * answers one question and folds; the numbers are the ones the thread
  * already carries.
  */
-export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onChanged, onReveal, permission, configuredModel, top }: Props) {
+export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onChanged, onReveal, permission, configuredModel, top, extra }: Props) {
     const { t } = useTranslation('projects');
     const [showFinished, setShowFinished] = useState(false);
     const running = tasks.filter(isRunning);
@@ -106,6 +108,7 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
                 {thread.session_id && <Fact label={t('rail.session')} title={thread.session_id}>{shortSession(thread.session_id)}</Fact>}
             </RailCard>
             <UsageCard thread={thread} />
+            {extra}
             {hasChanges && (
                 <RailCard id="changes" title={t('rail.changes')}>
                     {thread.merged_at

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -98,8 +99,10 @@ func (c *converter) messages(raw any) []Entry {
 		return entries
 	case *claude.ResultMessage:
 		var out []Entry
-		if m.IsError && m.Result != "" {
-			out = append(out, c.msg("error", m.Result, "", nil))
+		if m.IsError {
+			// Always recorded: a turn Claude starts itself relies on this line
+			// being there (see Engine.endUnsolicitedTurn).
+			out = append(out, c.msg("error", cmp.Or(m.Result, m.SubType, "the turn failed"), "", nil))
 		}
 		if u, ok := c.usage(m); ok {
 			payload, _ := json.Marshal(u)
@@ -136,16 +139,36 @@ func (c *converter) messages(raw any) []Entry {
 
 // usage totals the turn's API calls. It reports nothing for a turn that made
 // no call (one that failed before reaching the model).
+//
+// The result's own usage is the turn's total: the per-call figures on assistant
+// events are the message_start snapshot, so their output counts are not final.
+// The per-call tally is the fallback for a result without usage. The tally and
+// the context size are reset here, so a resident process's next turn counts
+// from zero; the result's modelUsage must not be summed, it is the process's
+// running total.
 func (c *converter) usage(res *claude.ResultMessage) (TurnUsage, bool) {
-	if len(c.calls) == 0 {
+	calls, contextTokens := c.calls, c.contextTokens
+	c.calls, c.contextTokens = map[string]anthropic.Usage{}, 0
+
+	total := res.Usage
+	reported := total.InputTokens+total.OutputTokens+total.CacheReadInputTokens+total.CacheCreationInputTokens > 0
+	if len(calls) == 0 && !reported {
 		return TurnUsage{}, false
 	}
-	u := TurnUsage{Model: c.model, ContextTokens: c.contextTokens, DurationMS: res.DurationMS}
-	for _, call := range c.calls {
-		u.InputTokens += call.InputTokens
-		u.OutputTokens += call.OutputTokens
-		u.CacheReadTokens += call.CacheReadInputTokens
-		u.CacheWriteTokens += call.CacheCreationInputTokens
+	u := TurnUsage{Model: c.model, ContextTokens: contextTokens, DurationMS: res.DurationMS}
+	if reported {
+		u.InputTokens, u.OutputTokens = int64(total.InputTokens), int64(total.OutputTokens)
+		u.CacheReadTokens, u.CacheWriteTokens = int64(total.CacheReadInputTokens), int64(total.CacheCreationInputTokens)
+	} else {
+		// No usage on the result (an error result): the per-call figures are
+		// message_start snapshots, so input, cache and context are right but
+		// output is an undercount.
+		for _, call := range calls {
+			u.InputTokens += call.InputTokens
+			u.OutputTokens += call.OutputTokens
+			u.CacheReadTokens += call.CacheReadInputTokens
+			u.CacheWriteTokens += call.CacheCreationInputTokens
+		}
 	}
 	// A resident process sends its init once, so later turns name the main
 	// model only through modelUsage: take the one that did the most work,

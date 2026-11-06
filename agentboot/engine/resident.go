@@ -35,8 +35,8 @@ func (e *Engine) newResident(sessionID string, ps agentboot.PersistentSession) *
 		OnUnsolicitedTurn: func() (context.Context, agentboot.Prompter) {
 			return e.beginUnsolicitedTurn(sessionID)
 		},
-		OnUnsolicitedTurnComplete: func(_ *agentboot.Result, err error) {
-			e.endUnsolicitedTurn(sessionID, err)
+		OnUnsolicitedTurnComplete: func(res *agentboot.Result, err error) {
+			e.endUnsolicitedTurn(sessionID, res, err)
 		},
 		OnTerminated: func(string) {
 			e.mu.Lock()
@@ -104,7 +104,7 @@ func (e *Engine) currentMode(id string) string {
 	return e.permissionMode(id)
 }
 
-func (e *Engine) endUnsolicitedTurn(sessionID string, err error) {
+func (e *Engine) endUnsolicitedTurn(sessionID string, res *agentboot.Result, err error) {
 	e.mu.Lock()
 	r, ok := e.runs[sessionID]
 	if ok && r.unsolicited {
@@ -132,7 +132,12 @@ func (e *Engine) endUnsolicitedTurn(sessionID string, err error) {
 		end.Stopped = true
 	case err != nil:
 		e.store.SetFailed(sessionID, err.Error())
-		e.appendError(sessionID, err.Error())
+		// A failed result line is already in the transcript: the converter
+		// wrote it as an error entry. Only a turn that ended without one (the
+		// process died) still needs its line here.
+		if res == nil || res.Error == "" {
+			e.appendError(sessionID, err.Error())
+		}
 		end.Err = err
 	default:
 		e.store.SetCompleted(sessionID, "")

@@ -196,3 +196,27 @@ func TestConverter_RecordsWhereABackgroundTaskWritesItsOutput(t *testing.T) {
 		}
 	}
 }
+
+func TestConverter_ResultUsageIsTheTurnsTotalAndEachTurnCountsFromZero(t *testing.T) {
+	c := newConverter()
+	c.messages(assistantCall("m1", nil, 100, 1000, 1)) // message_start snapshot: output not final
+	first := usageOf(t, c.messages(&claude.ResultMessage{Usage: claude.UsageInfo{InputTokens: 100, CacheReadInputTokens: 1000, OutputTokens: 55}}))
+	if first.OutputTokens != 55 || first.InputTokens != 100 || first.CacheReadTokens != 1000 {
+		t.Fatalf("first turn = %+v, want the result's own totals", first)
+	}
+	// The next turn of the same process: nothing of the first may carry over.
+	c.messages(assistantCall("m2", nil, 10, 2000, 1))
+	second := usageOf(t, c.messages(&claude.ResultMessage{Usage: claude.UsageInfo{InputTokens: 10, CacheReadInputTokens: 2000, OutputTokens: 7}}))
+	if second.InputTokens != 10 || second.OutputTokens != 7 || second.CacheReadTokens != 2000 || second.ContextTokens != 2010 {
+		t.Fatalf("second turn = %+v, want its own numbers only", second)
+	}
+}
+
+func TestConverter_ResultWithUsageButNoCallsKeepsNoContext(t *testing.T) {
+	// A turn Claude ran on its own may report spending with no main-thread call seen.
+	c := newConverter()
+	u := usageOf(t, c.messages(&claude.ResultMessage{Usage: claude.UsageInfo{InputTokens: 5, OutputTokens: 2}}))
+	if u.InputTokens != 5 || u.ContextTokens != 0 {
+		t.Fatalf("usage = %+v", u)
+	}
+}

@@ -74,4 +74,10 @@ describe('ThreadInfoRail', () => {
         expect(readLocal('thread.rail.env')).toBe('0');
         unmount();
     });
+
+    it("puts the host's extra cards after Usage", () => {
+        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} extra={<section aria-label="host card" />} />);
+        const usage = screen.getByRole('region', { name: 'rail.usage' });
+        expect(usage.compareDocumentPosition(screen.getByRole('region', { name: 'host card' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
 });

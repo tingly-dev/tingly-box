@@ -425,6 +425,16 @@ func (s *persistentSession) completeTurn(turnErr *ResultError) {
 	s.emit(TurnCompleteEvent{Result: result})
 }
 
+// emitMessages sends a turn's terminal event on as messages, ahead of the
+// TurnCompleteEvent: it is the turn's result, which carries the usage the
+// per-call events do not (output tokens, cache counts) and which a consumer
+// reading messages would otherwise never see.
+func (s *persistentSession) emitMessages(ev protocol.Event) {
+	for _, m := range s.transport.AccumulateMessage(ev) {
+		s.emit(MessageEvent{Raw: m})
+	}
+}
+
 // emit pushes a stream event, registering/cleaning up control-request
 // pending state exactly like runnerHandle.emit — see its doc comment.
 func (s *persistentSession) emit(ev StreamEvent) {
@@ -484,9 +494,7 @@ func (s *persistentSession) pump(decoderEvents <-chan protocol.Event, decoderErr
 			// Drop.
 
 		case EventKindMessage:
-			for _, m := range s.transport.AccumulateMessage(ev) {
-				s.emit(MessageEvent{Raw: m})
-			}
+			s.emitMessages(ev)
 
 		case EventKindControl:
 			if parsed != nil {
@@ -507,9 +515,11 @@ func (s *persistentSession) pump(decoderEvents <-chan protocol.Event, decoderErr
 			}
 
 		case EventKindTerminalSuccess:
+			s.emitMessages(ev)
 			s.completeTurn(nil)
 
 		case EventKindTerminalError:
+			s.emitMessages(ev)
 			s.completeTurn(resultErrorFromEvent(s.agentType, ev))
 		}
 	}

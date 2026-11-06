@@ -74,9 +74,9 @@ all live on `db.Thread`, set by `Thread.AddUsage` when a turn ends.
 | --- | --- | --- |
 | `status` / `queued` | idle, working, waiting, ready, failed, resolved; waiting for a slot | thread store (threads, sessions); coordinator: derived from its queue and recovery state by the project detail handler |
 | `turns` | completed turns | existing |
-| `input_tokens`, `output_tokens` | summed over the turn's API calls; input includes cache reads and writes | `engine.TurnUsage` ("usage" entry, from Claude's `result` and its per-call assistant usage) |
+| `input_tokens`, `output_tokens` | summed over the turn's API calls; input includes cache reads and writes | `engine.TurnUsage` ("usage" entry), from the stream's `result.usage` (per turn, final) |
 | `cache_read_tokens`, `cache_write_tokens` | how much of the input the cache served / stored; hit rate = read / input | same |
-| `context_tokens` | prompt size of the turn's last main-thread call (latest turn, not summed) | `TurnUsage.ContextTokens` |
+| `context_tokens` | prompt size of the turn's last main-thread call (latest turn, not summed) | `TurnUsage.ContextTokens`, from the last main-thread `assistant` event's usage (input + cache read + cache write; those fields are final at message start) |
 | `context_window` | the model's window, 0 when Claude did not report it (then the meter shows tokens without a percentage) | `TurnUsage.ContextWindow` (from `modelUsage`) |
 | `last_turn_ms`, `last_turn_at` | duration and end of the last turn | `TurnUsage.DurationMS`, turn end time |
 | `reported_model`, `model` | model that answered / configured launch model | existing |
@@ -96,9 +96,58 @@ all live on `db.Thread`, set by `Thread.AddUsage` when a turn ends.
   message box (`sessionUsage`, read from "usage" events); the rail now carries
   the same numbers from the thread row, so they also work for project threads,
   whose "usage" events are not stored.
+- Source of the numbers, and a trap: the usage entry is built from the stream's
+  `result` line, but the agentboot pumps (`persistent_session.go`,
+  `runner_execute.go`) used to treat it only as the turn boundary and never
+  hand it on, so in real use no turn recorded usage while every test passed
+  (`enginetest` sends a typed result straight to the sink). Both pumps now
+  pass it on; `engine/usage_live_test.go` replays a real Claude Code 2.1.259
+  capture through a fake resident process to keep that wired.
+- What the converter relies on in a real stream: `assistant` usage is the
+  `message_start` snapshot (output not final), `result.usage` is the turn's
+  total, `result.modelUsage` / `total_cost_usd` are process-lifetime totals
+  (only `contextWindow` and the model name are taken from them), and the
+  per-call tally resets at each result so a resident process counts turns
+  from zero.
+- A failed result is always one transcript error entry (the converter's); a
+  turn Claude starts by itself adds its own line only when it ended without a
+  result (the process died).
 - Existing rows: the new columns default to 0 (migration is additive), so a
   thread shows context and cache only from its next turn on; its token totals
   are unchanged.
+
+## Quota card: a Tingly Box extension
+
+What Claude Code's status line shows beside the model: how much quota is left.
+Quota is a Tingly Box concept (`ai/quota`), so Projects stays out of it and
+only offers a place for a host's own cards.
+
+- **Extension point:** `SessionSlots.railCards({ thread, launch })` returns
+  extra cards for a thread's rail and the coordinator's Status tab, after
+  Usage. The pages call it and pass the result down as `railExtra` / `extra`;
+  `launch` is `{ profile, model }`, how the thread's next turn launches (a
+  session's own, a project thread's override or default, the coordinator's).
+  `RailCard` and `Fact` are exported so the card folds and looks like the rest.
+  The slot runs during render: return an element, keep requests inside it.
+- **The card** is `frontend/src/pages/projects/session/QuotaCard.tsx`
+  (strings: `claudeSession.quota*`). It reads the route a folder session's
+  status line already reads (`GET /scenario/claude_code/route`; concurrent
+  identical requests share one fetch): the routed provider and its windows
+  ("60% left", a bar that shrinks as it is spent, reset time in the tooltip,
+  `$12.40` for a balance), reusing the status line's colour and reset helpers.
+  Refetched after each turn, kept with the thread it was asked for, and absent
+  when there is no route or no quota. A folder session's own status line is
+  unchanged; the card adds the same quota to project threads and the
+  coordinator.
+- **Left out on purpose:** Claude Code's `rate_limit_event` (5h / weekly on a
+  Claude.ai login). Threads run through the gateway and nothing relays those
+  headers, an OAuth provider's 5h / 7d already arrive through the route (they
+  would show twice), and the event was never seen from a real subscription.
+  Revisit for a standalone Projects on a direct login
+  (`rate_limit_info.unifiedWindows.{five_hour,seven_day}`: `utilization` 0-1,
+  `resetsAt` epoch seconds).
+- **Not imported:** `ai/quota` would pull the whole `ai` module (openai-go,
+  x/net, jwt) into the standalone `tingly-project` binary.
 
 ## Sidebar status (`ProjectsSidebar`)
 

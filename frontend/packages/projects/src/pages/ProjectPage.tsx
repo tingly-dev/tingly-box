@@ -303,6 +303,7 @@ export default function ProjectPage() {
             disabled={blocked}
             settingsSaving={settings.saving}
             canSend={settings.canSend}
+            railExtra={selected && session?.railCards?.({ thread: selected, launch: { profile: selected.profile_override ?? project?.thread_profile ?? '', model: selected.model_override || (selected.profile_override == null ? project?.thread_model : '') || '' } })}
             configuredModel={selected?.model_override || `${t('threadSettings.projectDefault')} · ${project?.thread_model || t('threadSettings.defaultModel')}`}
             permissionLabel={selected?.permission_mode ? t(`session.mode.${selected.permission_mode}`, { defaultValue: selected.permission_mode }) : `${t('threadSettings.projectDefault')} · ${t(`session.mode.${project?.thread_permission_mode || 'acceptEdits'}`)}`}
             modelControl={selected && (
@@ -347,7 +348,7 @@ export default function ProjectPage() {
     ) : null;
     const overviewEl = (initialTab?: OverviewTab) => (
         <OverviewPane key={initialTab} projectId={id} threads={threads} onOpen={openFromOverview} libraryKey={libraryKey} selectedId={threadId} initialTab={initialTab}
-            status={project && <CoordinatorStatus project={project} coordinator={coordinator} queued={queued} threads={threads} />} />
+            status={project && <CoordinatorStatus project={project} coordinator={coordinator} queued={queued} threads={threads} extra={coordinator && session?.railCards?.({ thread: coordinator, launch: { profile: project.coordinator_profile ?? '', model: project.coordinator_model ?? '' } })} />} />
     );
     const threadInSide = !!threadEl && threadAt === 'side';
     // The side pane holds the Overview, or the open thread in its place; with the

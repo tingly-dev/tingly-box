@@ -20,6 +20,7 @@ import (
 type liveProc struct {
 	factory *process.FakeFactory
 	in      chan map[string]any
+	store   *memStore
 }
 
 func newLiveProc(t *testing.T, script func(h *process.FakeHandle, dec *json.Decoder, in chan map[string]any)) *liveProc {
@@ -52,14 +53,20 @@ func result(t *testing.T, h *process.FakeHandle) {
 }
 
 func (p *liveProc) engine(t *testing.T) (*Engine, recorder) {
+	return p.engineWith(t, pool.New(pool.Config{}))
+}
+
+// engineWith is engine over pl: nil runs every turn one-shot.
+func (p *liveProc) engineWith(t *testing.T, pl *pool.Pool) (*Engine, recorder) {
 	store := newMemStore()
+	p.store = store
 	rec := recorder{ends: make(chan TurnEnd, 4)}
 	svc, err := agentboot.NewAgentService(agentboot.DefaultConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
 	svc.RegisterAgent(agentboot.AgentTypeClaude, claude.NewAgentWithFactory(claude.Config{}, p.factory))
-	e := New(Config{Agent: svc, Store: store, Pool: pool.New(pool.Config{}), OnTurnEnd: func(_ string, end TurnEnd) { rec.ends <- end }})
+	e := New(Config{Agent: svc, Store: store, Pool: pl, OnTurnEnd: func(_ string, end TurnEnd) { rec.ends <- end }})
 	t.Cleanup(func() { e.Shutdown(context.Background()) })
 	return e, rec
 }

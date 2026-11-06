@@ -101,6 +101,13 @@ export interface SessionSlots {
     launchPickers?: (p: { value: SessionLaunch; onChange: (next: SessionLaunch) => void; disabled?: boolean }) => ReactNode;
     /** Under an open session's message box. */
     statusLine?: (p: { session: Thread; events: ThreadEvent[] }) => ReactNode;
+    /**
+     * Extra cards for a thread's info rail and the coordinator's Status tab,
+     * shown after Usage. `launch` is the profile and model tier the thread's
+     * next turn runs with. Called while a page renders: return an element and
+     * keep any request or state inside the component it returns.
+     */
+    railCards?: (p: { thread: Thread; launch: SessionLaunch }) => ReactNode;
 }
 
 const Ctx = createContext<ProjectsHost | null>(null);
