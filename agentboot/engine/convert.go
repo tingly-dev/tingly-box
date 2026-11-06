@@ -35,15 +35,9 @@ type converter struct {
 	model         string                     // requested model id, from the session init
 	calls         map[string]anthropic.Usage // per API call (message id): one call arrives as several assistant events
 	contextTokens int64                      // prompt size of the latest main-thread call
-	// resultError is the error text the latest result put in the transcript
-	// ("" when it was not a failure).
-	resultError string
-}
-
-// recorded reports whether err is the failure the latest result already put
-// in the transcript, so the host need not add a second line for it.
-func (c *converter) recorded(err error) bool {
-	return c.resultError != "" && strings.Contains(err.Error(), c.resultError)
+	// failedResult: the latest result was a failure the converter already
+	// wrote to the transcript as an error entry.
+	failedResult bool
 }
 
 func newConverter() *converter {
@@ -107,9 +101,9 @@ func (c *converter) messages(raw any) []Entry {
 		return entries
 	case *claude.ResultMessage:
 		var out []Entry
-		c.resultError = ""
+		c.failedResult = false
 		if m.IsError && m.Result != "" {
-			c.resultError = m.Result
+			c.failedResult = true
 			out = append(out, c.msg("error", m.Result, "", nil))
 		}
 		if u, ok := c.usage(m); ok {

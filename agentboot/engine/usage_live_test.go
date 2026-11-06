@@ -141,42 +141,50 @@ func TestEngine_OneShotTurnRecordsUsage(t *testing.T) {
 
 // A failed result is recorded once: as the converter's error entry, whether
 // the host's message started the turn or Claude did by itself (a background
-// task finished). The unsolicited case also had the engine report the
-// turn's error, which would repeat it. The failing result line is
-// hand-built; its shape is the API-error result Claude Code reports.
+// task finished). The unsolicited case also had the engine report the turn's
+// error, which would repeat it; the error text differs when the result carries
+// an errors list, so the check cannot be by text. The failing result lines are
+// hand-built in the shape Claude Code reports an API error.
 func TestEngine_FailedResultIsRecordedOnce(t *testing.T) {
-	turns := fixtureTurns(t, "claude-2.1.259-two-turns-usage.jsonl")
-	failed := `{"type":"result","subtype":"success","is_error":true,"result":"API Error: 529 overloaded","session_id":"f80f40db-376d-4ab6-b5d4-a783b39f8b21","usage":{"input_tokens":6,"output_tokens":1,"cache_read_input_tokens":30000,"cache_creation_input_tokens":0},"modelUsage":{}}`
-	p := newLiveProc(t, func(h *process.FakeHandle, dec *json.Decoder, in chan map[string]any) {
-		if read(dec, in) == nil {
-			return
-		}
-		for _, line := range turns[1] {
-			if _, err := h.WriteOutput([]byte(line + "\n")); err != nil {
-				t.Error(err)
+	const tail = `"session_id":"f80f40db-376d-4ab6-b5d4-a783b39f8b21","usage":{"input_tokens":6,"output_tokens":1,"cache_read_input_tokens":30000,"cache_creation_input_tokens":0},"modelUsage":{}}`
+	for name, failed := range map[string]string{
+		"result text only":    `{"type":"result","subtype":"success","is_error":true,"result":"API Error: 529 overloaded",` + tail,
+		"with an errors list": `{"type":"result","subtype":"error_during_execution","is_error":true,"result":"API Error: 529 overloaded","errors":["overloaded_error"],` + tail,
+	} {
+		t.Run(name, func(t *testing.T) {
+			turns := fixtureTurns(t, "claude-2.1.259-two-turns-usage.jsonl")
+			p := newLiveProc(t, func(h *process.FakeHandle, dec *json.Decoder, in chan map[string]any) {
+				if read(dec, in) == nil {
+					return
+				}
+				for _, line := range turns[1] {
+					if _, err := h.WriteOutput([]byte(line + "\n")); err != nil {
+						t.Error(err)
+					}
+				}
+				// Now idle: the turn that opens with an init is Claude's own.
+				time.Sleep(200 * time.Millisecond)
+				for _, line := range append(append([]string(nil), turns[1][:len(turns[1])-1]...), failed) {
+					if _, err := h.WriteOutput([]byte(line + "\n")); err != nil {
+						t.Error(err)
+					}
+				}
+				read(dec, in)
+				h.FinishOutput()
+				h.SignalExit(nil)
+			})
+			e, rec := p.engine(t)
+			if !e.Start("id", t.TempDir(), "first", false, nil) {
+				t.Fatal("Start refused")
 			}
-		}
-		// Now idle: the turn that opens with an init is Claude's own.
-		time.Sleep(200 * time.Millisecond)
-		for _, line := range append(append([]string(nil), turns[1][:len(turns[1])-1]...), failed) {
-			if _, err := h.WriteOutput([]byte(line + "\n")); err != nil {
-				t.Error(err)
+			rec.wait(t)
+			end := rec.wait(t)
+			if !end.Unsolicited || end.Err == nil {
+				t.Fatalf("second turn end = %+v, want Claude's own turn, failed", end)
 			}
-		}
-		read(dec, in)
-		h.FinishOutput()
-		h.SignalExit(nil)
-	})
-	e, rec := p.engine(t)
-	if !e.Start("id", t.TempDir(), "first", false, nil) {
-		t.Fatal("Start refused")
-	}
-	rec.wait(t)
-	end := rec.wait(t)
-	if !end.Unsolicited || end.Err == nil {
-		t.Fatalf("second turn end = %+v, want Claude's own turn, failed", end)
-	}
-	if errs := entriesOf(p.store, "id", KindError); len(errs) != 1 {
-		t.Fatalf("recorded %d error entries for one failed turn, want 1: %+v", len(errs), errs)
+			if errs := entriesOf(p.store, "id", KindError); len(errs) != 1 {
+				t.Fatalf("recorded %d error entries for one failed turn, want 1: %+v", len(errs), errs)
+			}
+		})
 	}
 }

@@ -92,7 +92,7 @@ export interface SessionLaunch {
 
 /** One window of the quota a host reports for where a thread's requests go. */
 export interface QuotaWindow {
-    /** The window's kind as the host names it: "session", "weekly", "balance"… */
+    /** The window's type: "session", "daily", "weekly", "monthly", "balance"… (Projects translates the ones it knows and shows the rest as given). */
     label: string;
     /** The value as the host's own status line writes it: "60% left", "12K/100K left", "$12.40". */
     text: string;

@@ -113,9 +113,11 @@ all live on `db.Thread`, set by `Thread.AddUsage` when a turn ends.
   running totals, so the converter takes only `contextWindow` and the model
   name from `modelUsage` and resets its per-call tally at every result (a
   resident process otherwise added turn one's calls into turn two).
-- A failed result's text becomes one transcript error entry (the converter's);
-  a turn Claude starts by itself no longer adds a second line for the same
-  failure (`Engine.resultErrorRecorded`).
+- A failed result becomes one transcript error entry (the converter's, which
+  also remembers it did so); a turn Claude starts by itself no longer adds a
+  second line for the same failure (`Engine.resultErrorRecorded`). The flag,
+  not the error text, decides: the engine's text differs when the result
+  carries an `errors` list.
 - Existing rows: the new columns default to 0 (migration is additive), so a
   thread shows context and cache only from its next turn on; its token totals
   are unchanged.

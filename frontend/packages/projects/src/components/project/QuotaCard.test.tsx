@@ -6,7 +6,7 @@ import { QuotaCard } from './infoRail';
 
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({
-        t: (key: string) => key,
+        t: (key: string, o?: { defaultValue?: string }) => o?.defaultValue ?? key,
         i18n: { language: 'en' },
     }),
 }));
@@ -36,9 +36,9 @@ describe('QuotaCard', () => {
     it('asks again after each turn', async () => {
         const quota = vi.fn().mockResolvedValue({ windows: [{ label: 'weekly', text: '60% left', usedPct: 40 }] });
         const h = host(quota);
-        const { rerender } = show(thread({ turns: 1 }), h, { profile: '', tier: '' });
+        const { rerender } = show(thread({ last_turn_at: '2026-11-06T10:00:00Z' }), h, { profile: '', tier: '' });
         await waitFor(() => expect(quota).toHaveBeenCalledTimes(1));
-        rerender(<ProjectsHostProvider host={h}><QuotaCard thread={thread({ turns: 2 })} route={{ profile: '', tier: '' }} /></ProjectsHostProvider>);
+        rerender(<ProjectsHostProvider host={h}><QuotaCard thread={thread({ turns: 2, last_turn_at: '2026-11-06T10:05:00Z' })} route={{ profile: '', tier: '' }} /></ProjectsHostProvider>);
         await waitFor(() => expect(quota).toHaveBeenCalledTimes(2));
     });
 

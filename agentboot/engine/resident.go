@@ -94,6 +94,11 @@ func (e *Engine) beginUnsolicitedTurn(sessionID string) (context.Context, agentb
 	e.runs[sessionID] = &run{cancel: cancel, prompter: wp, done: make(chan struct{}), unsolicited: true}
 	e.mu.Unlock()
 
+	if r, ok := e.residentFor(sessionID); ok {
+		// The Conductor's reader runs this hook and the sink: no race, and a
+		// failure left by an earlier turn must not hide this one's.
+		r.conv.failedResult = false
+	}
 	e.appendSystem(sessionID, "a background task finished; Claude is following up")
 	e.store.SetRunning(sessionID)
 
@@ -102,11 +107,9 @@ func (e *Engine) beginUnsolicitedTurn(sessionID string) (context.Context, agentb
 
 // resultErrorRecorded: the failed result that ended a turn of Claude's own
 // is already a transcript entry (the converter wrote it).
-func (e *Engine) resultErrorRecorded(sessionID string, err error) bool {
-	e.mu.Lock()
-	r := e.residents[sessionID]
-	e.mu.Unlock()
-	return r != nil && r.conv.recorded(err)
+func (e *Engine) resultErrorRecorded(sessionID string) bool {
+	r, ok := e.residentFor(sessionID)
+	return ok && r.conv.failedResult
 }
 
 func (e *Engine) currentMode(id string) string {
@@ -144,7 +147,7 @@ func (e *Engine) endUnsolicitedTurn(sessionID string, err error) {
 		end.Stopped = true
 	case err != nil:
 		e.store.SetFailed(sessionID, err.Error())
-		if !e.resultErrorRecorded(sessionID, err) {
+		if !e.resultErrorRecorded(sessionID) {
 			e.appendError(sessionID, err.Error())
 		}
 		end.Err = err

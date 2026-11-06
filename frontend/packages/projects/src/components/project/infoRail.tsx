@@ -204,7 +204,7 @@ export function QuotaCard({ thread, route }: { thread: Thread; route?: QuotaRout
         return () => {
             live = false;
         };
-    }, [slot, key, profile, tier, model, thread.turns, thread.last_turn_at]);
+    }, [slot, key, profile, tier, model, thread.last_turn_at]);
     const reading = fetched?.key === key ? fetched.reading : undefined;
     if (!reading || reading.windows.length === 0) return null;
     const routed = reading.provider && (reading.model ? `${reading.model} @ ${reading.provider}` : reading.provider);
@@ -212,7 +212,7 @@ export function QuotaCard({ thread, route }: { thread: Thread; route?: QuotaRout
         <RailCard id="quota" title={t('rail.quota')}>
             {routed && <Fact label={t('rail.quotaProvider')} title={t('rail.quotaProviderTitle')}>{routed}</Fact>}
             {reading.windows.map((w, i) => (
-                <QuotaBar key={`${w.label}-${i}`} label={w.label} text={w.text} usedPct={w.usedPct} resetsAt={w.resetsAt} exhausted={w.limitReached} />
+                <QuotaBar key={`${w.label}-${i}`} label={t(`rail.quotaWindow.${w.label}`, { defaultValue: w.label })} text={w.text} usedPct={w.usedPct} resetsAt={w.resetsAt} exhausted={w.limitReached} />
             ))}
         </RailCard>
     );
