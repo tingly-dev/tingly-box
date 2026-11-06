@@ -137,32 +137,28 @@ func (ph *ProtocolHandler) contextMiddleware(c *gin.Context) {
 	if typ.IsProfiledScenario(typ.RuleScenario(rawScenario)) {
 		base, profileID := typ.ParseScenarioProfile(typ.RuleScenario(rawScenario))
 		if base == "" || profileID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   fmt.Sprintf("invalid scenario format: '%s'", rawScenario),
-			})
-			c.Abort()
+			abortScenarioError(c, fmt.Sprintf("invalid scenario format: '%s'", rawScenario))
 			return
 		}
 
 		// Check base scenario exists in registry
 		if _, ok := typ.GetScenarioDescriptor(typ.RuleScenario(rawScenario)); !ok {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   fmt.Sprintf("unknown scenario '%s'", base),
-			})
-			c.Abort()
+			abortScenarioError(c, fmt.Sprintf("unknown scenario '%s'", base))
 			return
 		}
 
-		// Check profile exists in config
-		if ph.deps.Config != nil {
+		// The suffix of "team:<id>" is a team, not a profile: it is the
+		// routing scope of that team's rules (db.TeamScenario), which the Team
+		// page's Test all probes directly.
+		if base == typ.ScenarioTeam {
+			if ph.deps.Config != nil && !ph.deps.Config.HasTeam(profileID) {
+				abortScenarioError(c, fmt.Sprintf("unknown team '%s'", profileID))
+				return
+			}
+		} else if ph.deps.Config != nil {
+			// Check profile exists in config
 			if _, ok := ph.deps.Config.GetProfile(typ.RuleScenario(base), profileID); !ok {
-				c.JSON(http.StatusBadRequest, gin.H{
-					"success": false,
-					"error":   fmt.Sprintf("unknown profile '%s' for scenario '%s'", profileID, base),
-				})
-				c.Abort()
+				abortScenarioError(c, fmt.Sprintf("unknown profile '%s' for scenario '%s'", profileID, base))
 				return
 			}
 		}
@@ -202,4 +198,18 @@ func (ph *ProtocolHandler) teamScopeMiddleware(c *gin.Context) {
 		}
 	}
 	c.Next()
+}
+
+// abortScenarioError refuses a request with a 400 in the error envelope every
+// OpenAI / Anthropic client decodes ({"error":{"message":...}}); a bare string
+// "error" would be unreadable to them.
+func abortScenarioError(c *gin.Context, message string) {
+	c.JSON(http.StatusBadRequest, gin.H{
+		"success": false,
+		"error": gin.H{
+			"message": message,
+			"type":    "invalid_request_error",
+		},
+	})
+	c.Abort()
 }

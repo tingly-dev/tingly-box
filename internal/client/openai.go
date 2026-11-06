@@ -95,7 +95,7 @@ func newOpenAIClientWithTransport(provider *typ.Provider, baseURL string, transp
 	}
 
 	httpClient := &http.Client{
-		Transport: transport,
+		Transport: wrapWithErrorEnvelope(transport, protocol.APIStyleOpenAI),
 	}
 
 	options = append(options, option.WithHTTPClient(httpClient))
