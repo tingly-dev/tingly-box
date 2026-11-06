@@ -184,7 +184,16 @@ describe('WorkspaceHomePage IM section', () => {
 
 describe('WorkspaceHomePage first-visit IM hint', () => {
     // The hint is armed by enabling the Workspace power-up (the host calls
-    // armWorkspaceImHint); here the tests arm it the same way.
+    // armWorkspaceImHint); here the tests arm it the same way. The host
+    // layout also renders the sidebar's sticky IM entry, which the hint
+    // anchors to — the tests stub it on the document.
+    let sidebarStub: HTMLElement | null = null;
+    const stubSidebar = () => {
+        sidebarStub = document.createElement('div');
+        sidebarStub.id = 'projects-sidebar-im';
+        document.body.appendChild(sidebarStub);
+    };
+
     beforeEach(() => {
         window.localStorage.clear();
         window.sessionStorage.clear();
@@ -195,10 +204,16 @@ describe('WorkspaceHomePage first-visit IM hint', () => {
         m.bindings = [];
     });
 
-    const openHint = () => {
+    afterEach(() => {
+        sidebarStub?.remove();
+        sidebarStub = null;
+    });
+
+    const openHint = (opts: { sidebar?: boolean } = {}) => {
+        if (opts.sidebar !== false) stubSidebar();
         vi.useFakeTimers();
         show(hostWithIm);
-        act(() => { vi.advanceTimersByTime(600); });
+        act(() => { vi.advanceTimersByTime(opts.sidebar === false ? 4200 : 600); });
     };
 
     it('stays quiet on visits that follow no fresh enablement', () => {
@@ -209,7 +224,7 @@ describe('WorkspaceHomePage first-visit IM hint', () => {
         expect(screen.queryByText('workspace.imHintTitle')).not.toBeInTheDocument();
     });
 
-    it('points at IM once after enablement, and a dismissed hint stays away for good', () => {
+    it('points at the layout IM entry once after enablement, and a dismissed hint stays away for good', () => {
         openHint();
         expect(screen.getByText('workspace.imHintTitle')).toBeInTheDocument();
         expect(screen.getByText('workspace.imHintBody')).toBeInTheDocument();
@@ -225,6 +240,11 @@ describe('WorkspaceHomePage first-visit IM hint', () => {
         show(hostWithIm);
         act(() => { vi.advanceTimersByTime(600); });
         expect(screen.queryByText('workspace.imHintTitle')).not.toBeInTheDocument();
+    });
+
+    it('falls back to the page IM section when the layout has no IM entry', () => {
+        openHint({ sidebar: false });
+        expect(screen.getByText('workspace.imHintTitle')).toBeInTheDocument();
     });
 
     it('leaves the rest of the visit quiet while it is not dismissed', () => {

@@ -3,6 +3,7 @@ import { Box, Button, Skeleton, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { CoachMark, PageHeader, Surface } from '@tingly/ui';
+import { IM_SIDEBAR_ANCHOR_ID } from '../components/ProjectsSidebar';
 import type { ProjectSummary } from '../client';
 import { Add, ArrowForward, ChatBubble, FolderOpen, Stack } from '../components/icons';
 import { ImChatCard } from '../components/im/ImChatCard';
@@ -94,27 +95,44 @@ export default function WorkspaceHomePage() {
     const directory = useProjectDirectory(hasIm);
     const steps = (prefix: 'projects' | 'workdir' | 'im') => [1, 2, 3].map((n) => t(`workspace.${prefix}Step${n}`));
 
-    // The IM entry sits below the fold; when the Workspace power-up is turned
-    // on, the first render of this page scrolls the section into view and a
-    // small hint points at it. The enable action arms the hint; dismissed is
-    // remembered for good; while it is up but not dismissed, the rest of this
-    // visit stays quiet (a refresh included).
+    // The IM entry sits at the sidebar's bottom; when the Workspace power-up
+    // is turned on, the first render of this page points a coach mark at that
+    // layout entry. The enable action arms the hint; dismissed is remembered
+    // for good; while it is up but not dismissed, the rest of this visit
+    // stays quiet (a refresh included).
     const [imHintAnchor, setImHintAnchor] = useState<HTMLElement | null>(null);
     const imHeader = useRef<HTMLDivElement>(null);
     useEffect(() => {
+        if (!hasIm || imHintDismissed() || !imHintArmed() || readSession(IM_HINT_THIS_VISIT) === '1') return;
         // The dismissed check here is belt and braces: armWorkspaceImHint
         // already refuses to arm a dismissed hint.
-        if (!hasIm || imHintDismissed() || !imHintArmed() || readSession(IM_HINT_THIS_VISIT) === '1') return;
-        const timer = window.setTimeout(() => {
+        let poll: number | undefined;
+        const show = (anchor: HTMLElement | null) => {
             // Marked only once actually shown, so a strict double render still shows it.
             writeSession(IM_HINT_THIS_VISIT, '1');
             disarmWorkspaceImHint();
-            // Jump the section into view first: the coach mark's position is
-            // computed from the anchor's rect, so it must be final before it opens.
-            imHeader.current?.scrollIntoView({ block: 'center' });
-            setImHintAnchor(imHeader.current);
-        }, 500);
-        return () => window.clearTimeout(timer);
+            setImHintAnchor(anchor);
+        };
+        const look = (tries: number) => {
+            const sidebar = document.getElementById(IM_SIDEBAR_ANCHOR_ID);
+            if (sidebar) {
+                show(sidebar);
+                return;
+            }
+            // The sidebar is lazy-mounted; give it a moment. A layout without
+            // the IM entry gets the hint on the page's own IM section instead.
+            if (tries <= 0) {
+                imHeader.current?.scrollIntoView({ block: 'center' });
+                show(imHeader.current);
+                return;
+            }
+            poll = window.setTimeout(() => look(tries - 1), 150);
+        };
+        const timer = window.setTimeout(() => look(20), 500);
+        return () => {
+            window.clearTimeout(timer);
+            if (poll !== undefined) window.clearTimeout(poll);
+        };
     }, [hasIm]);
     const closeImHint = () => {
         setImHintAnchor(null);
