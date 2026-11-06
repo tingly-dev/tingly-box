@@ -37,12 +37,6 @@ func (t *coordinatorToolTurn) end() {
 	t.snapshot = nil
 }
 
-func (c *Coordinator) coordinatorMCP(snapshot *db.Project, userTriggered bool) (*mcp.Server, error) {
-	turn := &coordinatorToolTurn{}
-	turn.begin(snapshot, userTriggered)
-	return c.coordinatorMCPForTurn(turn)
-}
-
 func (c *Coordinator) coordinatorMCPForTurn(turn *coordinatorToolTurn) (*mcp.Server, error) {
 	srv := mcp.NewServer(&mcp.Implementation{Name: "tingly-projects", Version: "1.0.0"}, nil)
 	for _, tool := range coordinatorTools() {
