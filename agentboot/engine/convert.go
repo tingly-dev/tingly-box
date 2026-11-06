@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -35,9 +36,6 @@ type converter struct {
 	model         string                     // requested model id, from the session init
 	calls         map[string]anthropic.Usage // per API call (message id): one call arrives as several assistant events
 	contextTokens int64                      // prompt size of the latest main-thread call
-	// failedResult: the latest result was a failure the converter already
-	// wrote to the transcript as an error entry.
-	failedResult bool
 }
 
 func newConverter() *converter {
@@ -101,10 +99,10 @@ func (c *converter) messages(raw any) []Entry {
 		return entries
 	case *claude.ResultMessage:
 		var out []Entry
-		c.failedResult = false
-		if m.IsError && m.Result != "" {
-			c.failedResult = true
-			out = append(out, c.msg("error", m.Result, "", nil))
+		if m.IsError {
+			// Always recorded: a turn Claude starts itself relies on this line
+			// being there (see Engine.endUnsolicitedTurn).
+			out = append(out, c.msg("error", cmp.Or(m.Result, m.SubType, "the turn failed"), "", nil))
 		}
 		if u, ok := c.usage(m); ok {
 			payload, _ := json.Marshal(u)

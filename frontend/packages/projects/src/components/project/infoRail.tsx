@@ -9,7 +9,6 @@ import { ThreadStateMark } from './threadStatus';
 import { formatTokens, timeAgo } from '../../utils/format';
 import { cacheHitPct, contextFill, formatTurnDuration } from '../../utils/usage';
 import { readLocal, writeLocal } from '../../utils/storage';
-import { useProjectsHost, type SessionLaunch } from '../../host/ProjectsHost';
 
 /** How wide a thread panel must be to carry the rail beside the conversation. */
 export const RAIL_MIN_PANEL = 880;
@@ -154,12 +153,6 @@ export function UsageCard({ thread }: { thread: Thread }) {
             )}
         </RailCard>
     );
-}
-
-/** Cards the embedding host adds to the rail (`session.railCards`), after Usage. */
-export function HostRailCards({ thread, launch }: { thread: Thread; launch?: SessionLaunch }) {
-    const railCards = useProjectsHost().session?.railCards;
-    return <>{railCards && launch ? railCards({ thread, launch }) : null}</>;
 }
 
 /** A session id is a long uuid: its first eight characters tell sessions apart, the rest is in the tooltip. */

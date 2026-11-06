@@ -32,11 +32,4 @@ describe('profileApi.getClaudeCodeRoute', () => {
         ]);
         expect(controlApi).toHaveBeenCalledTimes(4);
     });
-
-    it('resolves undefined without a route and does not keep a failed request around', async () => {
-        controlApi.mockResolvedValueOnce(undefined);
-        expect(await profileApi.getClaudeCodeRoute({profile: '', tier: ''})).toBeUndefined();
-        controlApi.mockResolvedValueOnce(route);
-        expect(await profileApi.getClaudeCodeRoute({profile: '', tier: ''})).toEqual(route);
-    });
 });

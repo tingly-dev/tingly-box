@@ -103,10 +103,9 @@ export interface SessionSlots {
     statusLine?: (p: { session: Thread; events: ThreadEvent[] }) => ReactNode;
     /**
      * Extra cards for a thread's info rail and the coordinator's Status tab,
-     * shown after Usage; `launch` is the profile and model tier the thread's
-     * next turn runs with. Called while rendering, so it returns elements and
-     * keeps hooks and requests inside the component it returns; null for none.
-     * Tingly Box adds its quota card here.
+     * shown after Usage. `launch` is the profile and model tier the thread's
+     * next turn runs with. Called while a page renders: return an element and
+     * keep any request or state inside the component it returns.
      */
     railCards?: (p: { thread: Thread; launch: SessionLaunch }) => ReactNode;
 }

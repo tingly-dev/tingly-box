@@ -18,7 +18,6 @@ import { formatTokens } from '../../utils/format';
 import { DiffDialog } from './DiffDialog';
 import { ComposerStrip } from './ComposerStrip';
 import { ThreadInfoRail } from './ThreadInfoRail';
-import type { SessionLaunch } from '../../host/ProjectsHost';
 import { RAIL_MIN_PANEL, useInfoRail } from './infoRail';
 import { LoadEarlier } from './LoadEarlier';
 import { needsUser, ThreadBadges, ThreadState, ThreadStateMark } from './threadStatus';
@@ -92,8 +91,8 @@ interface Props {
     onRefresh?: () => void;
     /** A card the rail carries above its own (a folder's session list); the rail then stays on, from `railMinPanel` wide. */
     railTop?: React.ReactNode;
-    /** How the thread's next turn launches (profile and model tier), for the host's own rail cards. */
-    launch?: SessionLaunch;
+    /** Cards the host adds to the info rail (SessionSlots.railCards). */
+    railExtra?: React.ReactNode;
     railMinPanel?: number;
 }
 
@@ -105,7 +104,7 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
     return `[data-block="${anchor.block}"]`;
 };
 
-export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railTop, launch, railMinPanel = RAIL_MIN_PANEL }: Props) {
+export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railTop, railExtra, railMinPanel = RAIL_MIN_PANEL }: Props) {
     const { t } = useTranslation('projects');
     const { im } = useProjectsHost();
     const notify = useNotify();
@@ -583,7 +582,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 onChanged={() => onRefresh?.()}
                 onReveal={(call) => void openInChat({ call })}
                 top={railTop}
-                launch={launch}
+                extra={railExtra}
                 configuredModel={configuredModel}
                 permission={permissionLabel || (session ? (thread.permission_mode || t('session.permissionDefault')) : undefined)}
             />

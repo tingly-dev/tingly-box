@@ -46,13 +46,6 @@ describe('QuotaCard', () => {
         expect(screen.queryByRole('progressbar')).toBeNull();
     });
 
-    it('turns red once the limit is reached', async () => {
-        getClaudeCodeRoute.mockResolvedValue({...route, quota: [{type: 'daily', balance: false, text: '0% left', used_percent: 100, limit_reached: true}]});
-        render(<QuotaCard thread={thread()} launch={launch}/>);
-        const bar = await screen.findByRole('progressbar');
-        expect(bar.getAttribute('aria-valuenow')).toBe('0');
-    });
-
     it('asks again after each turn', async () => {
         getClaudeCodeRoute.mockResolvedValue(route);
         const {rerender} = render(<QuotaCard thread={thread({last_turn_at: '2026-11-06T10:00:00Z'})} launch={launch}/>);

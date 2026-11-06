@@ -15,18 +15,15 @@ import (
 // §3.7).
 type resident struct {
 	c *agentboot.Conductor
-	// conv is only touched from the Conductor's reader goroutine, which also
-	// runs its hooks.
-	conv *converter
 }
 
 // newResident starts conducting a freshly opened process. Call it right
 // after Open, before the first turn's events pile up.
 func (e *Engine) newResident(sessionID string, ps agentboot.PersistentSession) *resident {
+	r := &resident{}
 	// One converter for the process's life: its dedupe state spans turns
 	// and it resets its usage tally at each turn's result.
 	conv := newConverter()
-	r := &resident{conv: conv}
 	r.c = agentboot.NewConductor(ps, agentboot.ConductorHooks{
 		Sink: func(raw any) {
 			e.record(sessionID, conv, raw)
@@ -38,8 +35,8 @@ func (e *Engine) newResident(sessionID string, ps agentboot.PersistentSession) *
 		OnUnsolicitedTurn: func() (context.Context, agentboot.Prompter) {
 			return e.beginUnsolicitedTurn(sessionID)
 		},
-		OnUnsolicitedTurnComplete: func(_ *agentboot.Result, err error) {
-			e.endUnsolicitedTurn(sessionID, err)
+		OnUnsolicitedTurnComplete: func(res *agentboot.Result, err error) {
+			e.endUnsolicitedTurn(sessionID, res, err)
 		},
 		OnTerminated: func(string) {
 			e.mu.Lock()
@@ -79,12 +76,6 @@ func (e *Engine) record(sessionID string, conv *converter, raw any) {
 // the session's run, so the page shows it working and its approvals, Stop
 // and the "busy" check all behave as for any turn.
 func (e *Engine) beginUnsolicitedTurn(sessionID string) (context.Context, agentboot.Prompter) {
-	if r, ok := e.residentFor(sessionID); ok {
-		// A failure an earlier turn left must not hide this one's: reset
-		// before anything below can return. The Conductor's reader runs this
-		// hook and the sink, so there is no race.
-		r.conv.failedResult = false
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), turnTimeout)
 	wp := newWebPrompter(sessionID, e.store)
 
@@ -106,13 +97,6 @@ func (e *Engine) beginUnsolicitedTurn(sessionID string) (context.Context, agentb
 	return ctx, e.prompterFor(sessionID, wp, e.currentMode(sessionID))
 }
 
-// resultErrorRecorded: the failed result that ended a turn of Claude's own
-// is already a transcript entry (the converter wrote it).
-func (e *Engine) resultErrorRecorded(sessionID string) bool {
-	r, ok := e.residentFor(sessionID)
-	return ok && r.conv.failedResult
-}
-
 func (e *Engine) currentMode(id string) string {
 	if e.permissionMode == nil {
 		return ""
@@ -120,7 +104,7 @@ func (e *Engine) currentMode(id string) string {
 	return e.permissionMode(id)
 }
 
-func (e *Engine) endUnsolicitedTurn(sessionID string, err error) {
+func (e *Engine) endUnsolicitedTurn(sessionID string, res *agentboot.Result, err error) {
 	e.mu.Lock()
 	r, ok := e.runs[sessionID]
 	if ok && r.unsolicited {
@@ -148,7 +132,10 @@ func (e *Engine) endUnsolicitedTurn(sessionID string, err error) {
 		end.Stopped = true
 	case err != nil:
 		e.store.SetFailed(sessionID, err.Error())
-		if !e.resultErrorRecorded(sessionID) {
+		// A failed result line is already in the transcript: the converter
+		// wrote it as an error entry. Only a turn that ended without one (the
+		// process died) still needs its line here.
+		if res == nil || res.Error == "" {
 			e.appendError(sessionID, err.Error())
 		}
 		end.Err = err

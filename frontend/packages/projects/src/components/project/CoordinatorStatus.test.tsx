@@ -1,12 +1,7 @@
-import { cleanup, render as renderBare, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Project, Thread } from '../../client';
 import { CoordinatorStatus } from './CoordinatorStatus';
-import type { ReactElement } from 'react';
-import { ProjectsHostProvider, type ProjectsHost } from '../../host/ProjectsHost';
-
-const host: ProjectsHost = { paths: { list: '/p', project: (id) => `/p/${id}`, folder: () => '/f' } };
-const render = (ui: ReactElement) => renderBare(<ProjectsHostProvider host={host}>{ui}</ProjectsHostProvider>);
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
 
@@ -71,14 +66,9 @@ describe('CoordinatorStatus', () => {
         expect(screen.queryByRole('region', { name: 'rail.usage' })).not.toBeInTheDocument();
     });
 
-    it("gives the host's rail cards the coordinator and its launch: profile and model tier", () => {
-        const railCards = vi.fn(({ launch }) => <section aria-label="host card">{launch.profile}|{launch.model}</section>);
-        renderBare(
-            <ProjectsHostProvider host={{ ...host, session: { railCards } }}>
-                <CoordinatorStatus {...props} project={{ ...project, coordinator_profile: 'work' } as Project} coordinator={coordinator()} />
-            </ProjectsHostProvider>,
-        );
-        expect(screen.getByRole('region', { name: 'host card' })).toHaveTextContent('work|sonnet');
-        expect(railCards).toHaveBeenCalledWith({ thread: expect.objectContaining({ id: 'main' }), launch: { profile: 'work', model: 'sonnet' } });
+    it("shows the host's extra cards after Usage", () => {
+        render(<CoordinatorStatus {...props} coordinator={coordinator()} extra={<section aria-label="host card" />} />);
+        const usage = screen.getByRole('region', { name: 'rail.usage' });
+        expect(usage.compareDocumentPosition(screen.getByRole('region', { name: 'host card' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 });

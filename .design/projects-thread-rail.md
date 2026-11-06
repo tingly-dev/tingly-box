@@ -96,74 +96,58 @@ all live on `db.Thread`, set by `Thread.AddUsage` when a turn ends.
   message box (`sessionUsage`, read from "usage" events); the rail now carries
   the same numbers from the thread row, so they also work for project threads,
   whose "usage" events are not stored.
-- Where the numbers come from, and the trap in it: the usage entry is built
-  from the stream's `result` line, and the agentboot process layer
-  (`persistent_session.go` pump, `runner_execute.go` pump) used to treat that
-  line only as the turn boundary and never hand it on as a message. In real use
-  no turn therefore recorded any usage, context or cache, while every test
-  passed: the test agent (`enginetest`) sends a typed `ResultMessage` straight
-  to the sink. Both pumps now pass the terminal event through the transport's
-  accumulator before closing the turn. `engine/usage_live_test.go` replays a
-  real Claude Code 2.1.259 capture (`testdata/claude-2.1.259-two-turns-usage.jsonl`)
-  through a resident fake process to keep that wiring honest.
-- Real-stream facts the converter relies on (Claude Code 2.1.259): the
-  `usage` on `assistant` events is the `message_start` snapshot, so its output
-  count is not final (the CLI says so in its own schema); `result.usage` is the
-  turn's total; `result.modelUsage` and `total_cost_usd` are the process's
-  running totals, so the converter takes only `contextWindow` and the model
-  name from `modelUsage` and resets its per-call tally at every result (a
-  resident process otherwise added turn one's calls into turn two).
-- A failed result becomes one transcript error entry (the converter's, which
-  also remembers it did so); a turn Claude starts by itself no longer adds a
-  second line for the same failure (`Engine.resultErrorRecorded`). The flag,
-  not the error text, decides: the engine's text differs when the result
-  carries an `errors` list.
+- Source of the numbers, and a trap: the usage entry is built from the stream's
+  `result` line, but the agentboot pumps (`persistent_session.go`,
+  `runner_execute.go`) used to treat it only as the turn boundary and never
+  hand it on, so in real use no turn recorded usage while every test passed
+  (`enginetest` sends a typed result straight to the sink). Both pumps now
+  pass it on; `engine/usage_live_test.go` replays a real Claude Code 2.1.259
+  capture through a fake resident process to keep that wired.
+- What the converter relies on in a real stream: `assistant` usage is the
+  `message_start` snapshot (output not final), `result.usage` is the turn's
+  total, `result.modelUsage` / `total_cost_usd` are process-lifetime totals
+  (only `contextWindow` and the model name are taken from them), and the
+  per-call tally resets at each result so a resident process counts turns
+  from zero.
+- A failed result is always one transcript error entry (the converter's); a
+  turn Claude starts by itself adds its own line only when it ended without a
+  result (the process died).
 - Existing rows: the new columns default to 0 (migration is additive), so a
   thread shows context and cache only from its next turn on; its token totals
   are unchanged.
 
 ## Quota card: a Tingly Box extension
 
-What Claude Code's status line shows beside the model: how much of the quota
-the thread draws on is left. Quota is a Tingly Box concept (`ai/quota`, the
-gateway's providers), so Projects does not know it: it offers a generic place
-for a host's own cards and the card lives in Tingly Box.
+What Claude Code's status line shows beside the model: how much quota is left.
+Quota is a Tingly Box concept (`ai/quota`), so Projects stays out of it and
+only offers a place for a host's own cards.
 
-- **Extension point.** `SessionSlots.railCards({ thread, launch })`
-  (`ProjectsHost.tsx`) returns extra cards for a thread's info rail and the
-  coordinator's Status tab, after Usage (`HostRailCards`). `launch` is how the
-  thread's next turn launches: `{ profile, model }`, the folder session's
-  own, a project thread's override or the project default, the coordinator's.
-  The package exports `RailCard` and `Fact` so a host's card looks and folds
-  like the rest. The slot is called while rendering: it returns elements and
-  keeps requests and hooks inside them.
-- **The card** is `frontend/src/pages/projects/session/QuotaCard.tsx`, wired in
-  `sessionSlots.tsx`; its strings are `claudeSession.quota*` in Tingly Box's
-  locales. It reads the route a folder session's status line already reads
-  (`GET /scenario/claude_code/route`, via `profileApi.getClaudeCodeRoute`):
-  the provider the launch routes to and its windows ("60% left", a bar that
-  shrinks as the window is spent, reset time in the tooltip, `$12.40` for a
-  balance), with the status line's own colour and reset helpers
-  (`RouteStatusLine`). It asks again after each turn and keeps a reading with
-  the thread and launch it was asked for (the panel stays mounted as the
-  selection moves). No route, or a provider without quota, is no card.
-- The folder session's status line under the message box still shows the same
-  quota; the card adds it to project threads and the coordinator, which have no
-  such line.
-- **Considered and left out: Claude Code's own `rate_limit_event`.** On a
-  Claude.ai login the CLI emits the 5-hour / weekly windows (from the
-  `anthropic-ratelimit-unified-*` response headers) and a first version stored
-  them as `Thread.rate_limits`. It was removed again: a thread Tingly Box runs
-  always goes through the gateway, nothing in the repo relays those headers
-  from the upstream account, so the event would not arrive; an OAuth provider's
-  5h / 7d already come from `ai/quota` through the route (both would have been
-  listed twice); and the shape was never seen from a real subscription session.
-  A standalone Projects on a direct Claude.ai login would be the one place it
-  helps; revisit there (the CLI's schema: `rate_limit_info.unifiedWindows.{five_hour,seven_day}`
-  with `utilization` 0-1 and `resetsAt` epoch seconds).
-- Why not import `ai/quota` into Projects: it would link the whole `ai` module
-  (openai-go, x/net, jwt) into the standalone `tingly-project` binary for one
-  struct; and quota is not Projects' business.
+- **Extension point:** `SessionSlots.railCards({ thread, launch })` returns
+  extra cards for a thread's rail and the coordinator's Status tab, after
+  Usage. The pages call it and pass the result down as `railExtra` / `extra`;
+  `launch` is `{ profile, model }`, how the thread's next turn launches (a
+  session's own, a project thread's override or default, the coordinator's).
+  `RailCard` and `Fact` are exported so the card folds and looks like the rest.
+  The slot runs during render: return an element, keep requests inside it.
+- **The card** is `frontend/src/pages/projects/session/QuotaCard.tsx`
+  (strings: `claudeSession.quota*`). It reads the route a folder session's
+  status line already reads (`GET /scenario/claude_code/route`; concurrent
+  identical requests share one fetch): the routed provider and its windows
+  ("60% left", a bar that shrinks as it is spent, reset time in the tooltip,
+  `$12.40` for a balance), reusing the status line's colour and reset helpers.
+  Refetched after each turn, kept with the thread it was asked for, and absent
+  when there is no route or no quota. A folder session's own status line is
+  unchanged; the card adds the same quota to project threads and the
+  coordinator.
+- **Left out on purpose:** Claude Code's `rate_limit_event` (5h / weekly on a
+  Claude.ai login). Threads run through the gateway and nothing relays those
+  headers, an OAuth provider's 5h / 7d already arrive through the route (they
+  would show twice), and the event was never seen from a real subscription.
+  Revisit for a standalone Projects on a direct login
+  (`rate_limit_info.unifiedWindows.{five_hour,seven_day}`: `utilization` 0-1,
+  `resetsAt` epoch seconds).
+- **Not imported:** `ai/quota` would pull the whole `ai` module (openai-go,
+  x/net, jwt) into the standalone `tingly-project` binary.
 
 ## Sidebar status (`ProjectsSidebar`)
 

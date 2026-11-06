@@ -1,8 +1,9 @@
+import type { ReactNode } from 'react';
 import { Box } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import type { Project, Thread } from '../../client';
-import { Fact, HostRailCards, RailCard, StatusCard, UsageCard, shortSession } from './infoRail';
+import { Fact, RailCard, StatusCard, UsageCard, shortSession } from './infoRail';
 
 interface Props {
     project: Project;
@@ -11,6 +12,8 @@ interface Props {
     /** Inputs waiting behind the running turn. */
     queued: number;
     threads: Thread[];
+    /** Cards the host adds (SessionSlots.railCards), after Usage. */
+    extra?: ReactNode;
 }
 
 /**
@@ -18,7 +21,7 @@ interface Props {
  * Usage cards a thread's rail has, plus what only the coordinator has (its
  * queue, its threads by state, its model).
  */
-export function CoordinatorStatus({ project, coordinator, queued, threads }: Props) {
+export function CoordinatorStatus({ project, coordinator, queued, threads, extra }: Props) {
     const { t } = useTranslation('projects');
     const count = (...statuses: string[]) => threads.filter((x) => statuses.includes(x.status)).length;
     const running = threads.reduce((n, x) => n + (x.running_tasks ?? 0), 0);
@@ -50,7 +53,7 @@ export function CoordinatorStatus({ project, coordinator, queued, threads }: Pro
                 {coordinator?.session_id && <Fact label={t('rail.session')} title={coordinator.session_id}>{shortSession(coordinator.session_id)}</Fact>}
             </RailCard>
             {coordinator && <UsageCard thread={coordinator} />}
-            {coordinator && <HostRailCards thread={coordinator} launch={{ profile: project.coordinator_profile ?? '', model: project.coordinator_model ?? '' }} />}
+            {extra}
         </Box>
     );
 }

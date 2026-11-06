@@ -1,14 +1,9 @@
-import { cleanup, fireEvent, render as renderBare, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Thread } from '../../client';
 import type { BackgroundTaskRow } from '../workdir/backgroundTasks';
 import { readLocal } from '../../utils/storage';
 import { ThreadInfoRail } from './ThreadInfoRail';
-import type { ReactElement } from 'react';
-import { ProjectsHostProvider, type ProjectsHost } from '../../host/ProjectsHost';
-
-const host: ProjectsHost = { paths: { list: '/p', project: (id) => `/p/${id}`, folder: () => '/f' } };
-const render = (ui: ReactElement) => renderBare(<ProjectsHostProvider host={host}>{ui}</ProjectsHostProvider>);
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, o?: { count?: number; pct?: number }) => (o?.count != null ? `${key}:${o.count}` : o?.pct != null ? `${key}:${o.pct}` : key), i18n: { language: 'en' } }) }));
 
@@ -80,28 +75,9 @@ describe('ThreadInfoRail', () => {
         unmount();
     });
 
-    it("puts the host's own cards after Usage, given the thread and how it launches", () => {
-        const railCards = vi.fn(({ thread: t, launch }) => <section aria-label="host card">{t.id} · {launch.profile} · {launch.model}</section>);
-        renderBare(
-            <ProjectsHostProvider host={{ ...host, session: { railCards } }}>
-                <ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} launch={{ profile: 'work', model: 'sonnet' }} />
-            </ProjectsHostProvider>,
-        );
+    it("puts the host's extra cards after Usage", () => {
+        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} extra={<section aria-label="host card" />} />);
         const usage = screen.getByRole('region', { name: 'rail.usage' });
-        const card = screen.getByRole('region', { name: 'host card' });
-        expect(card).toHaveTextContent('t · work · sonnet');
-        expect(usage.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    });
-
-    it('adds nothing without a host slot or without a launch to describe', () => {
-        const railCards = vi.fn(() => <section aria-label="host card" />);
-        renderBare(
-            <ProjectsHostProvider host={{ ...host, session: { railCards } }}>
-                <ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} />
-            </ProjectsHostProvider>,
-        );
-        expect(railCards).not.toHaveBeenCalled();
-        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} launch={{ profile: '', model: '' }} />);
-        expect(screen.queryByRole('region', { name: 'host card' })).toBeNull();
+        expect(usage.compareDocumentPosition(screen.getByRole('region', { name: 'host card' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 });
