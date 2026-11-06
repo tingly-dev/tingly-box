@@ -66,13 +66,17 @@ func (e *Engine) record(sessionID string, conv *converter, raw any) {
 		}
 		return
 	}
-	if ev, ok := raw.(agentboot.CompactEvent); ok {
-		e.noteCompact(sessionID, ev)
-	}
 	e.mu.Lock()
 	r := e.runs[sessionID]
 	e.mu.Unlock()
-	conv.localText = r != nil && r.compact != nil
+	var capture *compactCapture
+	if r != nil {
+		capture = r.compact
+	}
+	if ev, ok := raw.(agentboot.CompactEvent); ok && capture != nil {
+		capture.add(ev)
+	}
+	conv.localText = capture != nil
 	for _, m := range conv.messages(raw) {
 		e.trackTasks(sessionID, m)
 		e.store.Append(sessionID, m)

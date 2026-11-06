@@ -90,11 +90,11 @@ func (e *CompactFailedError) Error() string {
 	return fmt.Sprintf("agentboot: compaction failed: %s", e.Reason)
 }
 
-// Compactor is implemented by transports whose agent can compact its
-// conversation on request. Optional. The compaction itself is an ordinary
-// turn: the host sends CompactPrompt as the turn's prompt, and the transport
-// reports the outcome as [CompactEvent] messages (also for compactions the
-// agent starts on its own).
+// Compactor is implemented by an [Agent] that can compact its conversation on
+// request. Optional. The compaction itself is an ordinary turn: the host sends
+// CompactPrompt as the turn's prompt, and the agent's transport reports the
+// outcome as [CompactEvent] messages (also for compactions the agent starts on
+// its own).
 type Compactor interface {
 	// CompactPrompt is the user message that makes the agent compact; the
 	// optional instructions steer the summary.
