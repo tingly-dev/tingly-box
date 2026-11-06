@@ -2,7 +2,7 @@ import { Box } from '@mui/material';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { getReadableAccent } from '@tingly/ui/theme/status';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle, CircleDashed, GitCommit, Merge, Spinner, Stream } from '../icons';
+import { CheckCircle, CircleDashed, GitCommit, Merge, Spinner, Star, Stream } from '../icons';
 import type { Thread } from '../../client';
 import { radius } from '@tingly/ui/theme/radius';
 
@@ -46,6 +46,9 @@ export function ThreadStateMark({ status, queued }: { status: string; queued?: b
             break;
         case 'resolved':
             mark = <CheckCircle sx={sx} />;
+            break;
+        case 'pinned':
+            mark = <Star sx={sx} />;
             break;
         case 'waiting':
         case 'failed':

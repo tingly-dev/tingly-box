@@ -21,6 +21,8 @@ const threads = [
 
 const show = (onOpen = vi.fn(), selectedId?: string) => render(<OverviewPane projectId="p" threads={threads} onOpen={onOpen} libraryKey={0} selectedId={selectedId} />);
 const lane = (status: string) => screen.getByRole('group', { name: `overview.group.${status}` });
+// The card's own button carries no aria-label; the pin star on it does.
+const cards = (status: string) => within(lane(status)).getAllByRole('button').filter((b) => b.getAttribute('aria-label') == null);
 
 describe('OverviewPane view', () => {
     it('starts as the status list and switches to vertical kanban columns that follow the statuses', () => {
@@ -32,7 +34,7 @@ describe('OverviewPane view', () => {
         fireEvent.click(screen.getByRole('button', { name: 'overview.view.vertical' }));
         expect(localStorage.getItem('tingly-project.overview.view')).toBe('vertical');
         for (const [status, titles] of Object.entries({ waiting: ['Pick a backoff', 'Approve the plan'], failed: ['Broken build'], ready: ['Cache keys'], working: ['SDK retries'], resolved: ['Old tracing'] })) {
-            expect(within(lane(status)).getAllByRole('button').map((b) => b.textContent)).toEqual(titles.map((x) => expect.stringContaining(x)));
+            expect(cards(status).map((b) => b.textContent)).toEqual(titles.map((x) => expect.stringContaining(x)));
         }
         // A status with no threads has no column.
         expect(screen.queryByRole('group', { name: 'overview.group.idle' })).not.toBeInTheDocument();
@@ -46,7 +48,7 @@ describe('OverviewPane view', () => {
         expect(localStorage.getItem('tingly-project.overview.view')).toBe('horizontal');
         expect(screen.getByRole('button', { name: 'overview.view.horizontal' })).toHaveAttribute('aria-pressed', 'true');
         expect(document.querySelector('[data-orientation="horizontal"]')).not.toBeNull();
-        expect(within(lane('waiting')).getAllByRole('button').map((b) => b.textContent)).toEqual([expect.stringContaining('Pick a backoff'), expect.stringContaining('Approve the plan')]);
+        expect(cards('waiting').map((b) => b.textContent)).toEqual([expect.stringContaining('Pick a backoff'), expect.stringContaining('Approve the plan')]);
         expect(within(lane('resolved')).getByText('Old tracing')).toBeInTheDocument();
         expect(screen.queryByRole('group', { name: 'overview.group.idle' })).not.toBeInTheDocument();
         // Lanes follow the statuses, what needs the user first.
@@ -88,11 +90,61 @@ describe('OverviewPane view', () => {
         show(onOpen, 'k1');
         fireEvent.click(within(lane('working')).getByText('SDK retries'));
         expect(onOpen).toHaveBeenCalledWith('k1');
-        expect(within(lane('working')).getByRole('button')).toHaveAttribute('aria-current', 'page');
-        const other = within(lane('failed')).getByRole('button');
+        expect(cards('working')[0]).toHaveAttribute('aria-current', 'page');
+        const other = cards('failed')[0];
         fireEvent.keyDown(other, { key: 'Enter' });
         expect(onOpen).toHaveBeenLastCalledWith('f1');
         expect(other).not.toHaveAttribute('aria-current');
+    });
+
+    it('pins cards to the section above every status, newest first, without opening them', () => {
+        localStorage.setItem('tingly-project.overview.view', 'vertical');
+        const onOpen = vi.fn();
+        show(onOpen);
+        // The second waiting card's star: pin it.
+        fireEvent.click(within(lane('waiting')).getAllByRole('button', { name: 'overview.pin' })[1]);
+        expect(onOpen).not.toHaveBeenCalled();
+        expect(JSON.parse(localStorage.getItem('tingly-project.overview.pinned.p') ?? '[]')).toEqual(['w2']);
+        // It leaves its status for the pinned section, which sits above every group.
+        const pinnedLane = () => screen.getByRole('group', { name: 'overview.pinned' });
+        expect(within(pinnedLane()).getAllByRole('button').filter((b) => b.getAttribute('aria-label') == null).map((b) => b.textContent)).toEqual([expect.stringContaining('Approve the plan')]);
+        expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['overview.view.label', 'overview.pinned', 'overview.group.waiting', 'overview.group.failed', 'overview.group.ready', 'overview.group.working', 'overview.group.resolved']);
+        // A second pin, from another status, joins above it: newest pin first.
+        fireEvent.click(within(lane('failed')).getByRole('button', { name: 'overview.pin' }));
+        expect(JSON.parse(localStorage.getItem('tingly-project.overview.pinned.p') ?? '[]')).toEqual(['f1', 'w2']);
+        expect(within(pinnedLane()).getAllByRole('button').filter((b) => b.getAttribute('aria-label') == null).map((b) => b.textContent)).toEqual([expect.stringContaining('Broken build'), expect.stringContaining('Approve the plan')]);
+        // The status the pinned card left, now empty, disappears; the rest keep their order.
+        expect(cards('waiting').map((b) => b.textContent)).toEqual([expect.stringContaining('Pick a backoff')]);
+        expect(screen.queryByRole('group', { name: 'overview.group.failed' })).not.toBeInTheDocument();
+        // A fresh mount, as a browser reload, reads the stored pins back.
+        cleanup();
+        show();
+        expect(within(pinnedLane()).getByText('Broken build')).toBeInTheDocument();
+        expect(within(pinnedLane()).getAllByRole('button', { name: 'overview.unpin' })).toHaveLength(2);
+    });
+
+    it('unpins and the cards return to their statuses and order', () => {
+        localStorage.setItem('tingly-project.overview.view', 'vertical');
+        localStorage.setItem('tingly-project.overview.pinned.p', JSON.stringify(['w2']));
+        show();
+        const pinnedLane = screen.getByRole('group', { name: 'overview.pinned' });
+        expect(within(pinnedLane).getAllByRole('button').filter((b) => b.getAttribute('aria-label') == null).map((b) => b.textContent)).toEqual([expect.stringContaining('Approve the plan')]);
+        expect(cards('waiting').map((b) => b.textContent)).toEqual([expect.stringContaining('Pick a backoff')]);
+        fireEvent.click(within(pinnedLane).getByRole('button', { name: 'overview.unpin' }));
+        expect(JSON.parse(localStorage.getItem('tingly-project.overview.pinned.p') ?? '[]')).toEqual([]);
+        expect(screen.queryByRole('group', { name: 'overview.pinned' })).not.toBeInTheDocument();
+        expect(cards('waiting').map((b) => b.textContent)).toEqual([expect.stringContaining('Pick a backoff'), expect.stringContaining('Approve the plan')]);
+    });
+
+    it('keeps the star quiet: an unpinned card hides it until hover, a pinned one always shows it', () => {
+        localStorage.setItem('tingly-project.overview.view', 'vertical');
+        show();
+        const star = within(lane('working')).getByRole('button', { name: 'overview.pin' });
+        expect(getComputedStyle(star).opacity).toBe('0');
+        fireEvent.click(star);
+        // The pinned card now lives in the pinned section above every status.
+        const pinned = screen.getByRole('group', { name: 'overview.pinned' });
+        expect(getComputedStyle(within(pinned).getByRole('button', { name: 'overview.unpin' })).opacity).toBe('1');
     });
 });
 
