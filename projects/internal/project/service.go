@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -46,6 +47,7 @@ type Service struct {
 	Relay           *Relay
 	Host            Host
 	sessionToolsMCP *sessionToolsMCP
+	stopOnce        sync.Once
 }
 
 // NewService wires the runtime. Call Start once the server is up.
@@ -114,15 +116,25 @@ func (s *Service) Start(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				s.Coordinator.shutdown(shutdown)
-				s.Threads.Shutdown(shutdown)
-				_ = s.CloseTools(shutdown)
+				s.Stop(shutdown)
 				cancel()
 				return
 			case <-tick.C:
 			}
 		}
 	}()
+}
+
+// Stop ends every coordinator and thread turn, waits until their bookkeeping
+// is done (or ctx ends) and closes the local tools. Start calls it once its
+// ctx ends; calling it again waits for that first stop to finish.
+func (s *Service) Stop(ctx context.Context) {
+	s.stopOnce.Do(func() {
+		s.Coordinator.shutdown(ctx)
+		s.Threads.Shutdown(ctx)
+		s.Threads.waitIdle(ctx)
+		_ = s.CloseTools(ctx)
+	})
 }
 
 // CloseTools stops the local MCP service after the thread processes stop.
