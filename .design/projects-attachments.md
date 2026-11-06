@@ -57,7 +57,8 @@ readable (the file route looks in the library first, then there). Routes:
 The `<id>-` prefix is a storage detail: both download routes (and the Library
 tab's download button) save an upload under the name it was given
 (`project.DownloadName`, `downloadName` in `Library.tsx`). Only direct children
-of `uploads/` are renamed; any other file keeps its stored name.
+of `uploads/` are renamed; any other file keeps its stored name. Folder zips keep stored names: two uploads can share a
+name, and a zip entry has to stay unique.
 
 ## What the model gets
 
