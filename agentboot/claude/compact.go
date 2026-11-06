@@ -30,18 +30,14 @@ const (
 	ControlRequestSubtypeGetContextUsage = "get_context_usage"
 )
 
-// CompactPrompt implements [agentboot.Compactor].
-func (t *Transport) CompactPrompt(instructions string) string {
+// CompactPrompt implements [agentboot.Compactor]: the user message that makes
+// Claude Code compact, with optional instructions for the summary. It is on the
+// agent, which is where the engine looks before any process exists.
+func (a *Agent) CompactPrompt(instructions string) string {
 	if instructions = strings.TrimSpace(instructions); instructions != "" {
 		return "/compact " + instructions
 	}
 	return "/compact"
-}
-
-// CompactPrompt implements [agentboot.Compactor] for the agent, which is where
-// the engine looks before any process exists.
-func (a *Agent) CompactPrompt(instructions string) string {
-	return NewTransport().CompactPrompt(instructions)
 }
 
 // ControlResponseBody implements [agentboot.ControlResponseBodyDecoder].

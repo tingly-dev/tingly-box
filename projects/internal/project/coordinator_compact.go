@@ -19,11 +19,11 @@ import (
 // coordinatorCommand reads a queued input as a slash command: only a
 // person's text message, with no files.
 func coordinatorCommand(event *db.ThreadEvent) (command, bool) {
-	if event == nil || event.Kind != db.EvUser || !byPerson(Source{Kind: event.Source}) || len(ParseAttachments(event.Payload)) > 0 {
+	if event == nil || event.Kind != db.EvUser {
 		return command{}, false
 	}
-	cmd := parseCommand(event.Content)
-	return cmd, cmd.kind == cmdCompact
+	cmd, ok := personCommand(event.Content, Source{Kind: event.Source}, len(ParseAttachments(event.Payload)))
+	return cmd, ok && cmd.kind == cmdCompact
 }
 
 func (s *coordinatorSessions) takeResend(projectID string) bool {
@@ -34,9 +34,10 @@ func (s *coordinatorSessions) takeResend(projectID string) bool {
 	return was
 }
 
-// compact runs a /compact the user sent to the project conversation. Nothing
-// here fails the queue: a compaction is harmless to retry by hand, so a
-// problem is told to the user instead of leaving the input needing recovery.
+// compact runs a /compact the user sent to the project conversation. Only a
+// session that is busy fails the queue, as it does for any turn: a compaction
+// is harmless to retry by hand, so every other problem is told to the user
+// instead of leaving the input needing recovery.
 func (s *coordinatorSessions) compact(ctx context.Context, p *db.Project, main *db.Thread, instructions string) error {
 	tell := func(kind, text string) {
 		s.c.final(s.c.addEvent(p.ID, &db.ThreadEvent{Kind: kind, Content: text}))
@@ -73,7 +74,7 @@ func (s *coordinatorSessions) compact(ctx context.Context, p *db.Project, main *
 		// The card says why; nothing else to do.
 	case errors.Is(err, agentboot.ErrCompactUnsupported):
 		tell(db.EvError, "Could not compact: this agent cannot compact its conversation.")
-	case errors.Is(err, engine.ErrBusy):
+	case errors.Is(err, engine.ErrBusy), errors.Is(err, engine.ErrNotSent):
 		return fmt.Errorf("coordinator session is busy")
 	default:
 		tell(db.EvError, "Could not compact: "+err.Error())
@@ -84,12 +85,8 @@ func (s *coordinatorSessions) compact(ctx context.Context, p *db.Project, main *
 // refreshContext sets the coordinator's context figures after a compaction,
 // which makes no model call and so records no usage.
 func (s *coordinatorSessions) refreshContext(main *db.Thread, res agentboot.CompactResult) {
-	used, window := int64(0), int64(0)
-	if u, err := s.engine.ContextUsage(context.Background(), main.SessionID); err == nil {
-		used, window = u.Used, u.Max
-	} else if res.Reported.Tokens {
-		used = res.TokensAfter
-	} else {
+	used, window, ok := contextAfterCompact(s.engine, main.SessionID, res)
+	if !ok {
 		return
 	}
 	main.ContextTokens = used

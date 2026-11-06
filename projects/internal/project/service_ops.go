@@ -167,7 +167,7 @@ func (s *Service) Send(ctx context.Context, threadID, text string, atts []Attach
 	if err != nil {
 		return nil, err
 	}
-	if cmd := parseCommand(text); cmd.kind != notCommand && byPerson(src) && len(atts) == 0 {
+	if cmd, ok := personCommand(text, src, len(atts)); ok {
 		return s.runCommand(ctx, t, cmd, src)
 	}
 	if t.Agent == db.AgentLLM {
@@ -187,7 +187,7 @@ func (s *Service) SendWith(ctx context.Context, threadID, text string, atts []At
 	if err != nil {
 		return nil, err
 	}
-	if t.Agent == db.AgentLLM || (parseCommand(text).kind != notCommand && byPerson(src) && len(atts) == 0) {
+	if _, isCommand := personCommand(text, src, len(atts)); isCommand || t.Agent == db.AgentLLM {
 		return s.Send(ctx, threadID, text, atts, src)
 	}
 	return s.Threads.SendWith(ctx, threadID, text, atts, src, mode)
@@ -196,19 +196,16 @@ func (s *Service) SendWith(ctx context.Context, threadID, text string, atts []At
 // runCommand runs a slash command a person typed to thread t. Unsupported
 // ones are refused with a reason; none is ever sent on to the agent as text.
 func (s *Service) runCommand(ctx context.Context, t *db.Thread, cmd command, src Source) (*db.Thread, error) {
-	switch cmd.kind {
-	case cmdUnsupported:
+	if cmd.kind == cmdUnsupported {
 		return nil, &ErrCommandUnsupported{Name: cmd.name}
-	case cmdCompact:
-		if t.Agent == db.AgentLLM {
-			// The conversation is compacted by its own session: the command is
-			// queued like any message and the coordinator runs it in its turn.
-			if _, err := s.Coordinator.Post(t.ProjectID, compactText(cmd.args), nil, src); err != nil {
-				return nil, err
-			}
-			return s.Store.GetThread(t.ID)
-		}
-		return s.Threads.Compact(ctx, t.ID, cmd.args, src)
 	}
-	return nil, fmt.Errorf("unknown command /%s", cmd.name)
+	if t.Agent == db.AgentLLM {
+		// The conversation is compacted by its own session: the command is
+		// queued like any message and the coordinator runs it in its turn.
+		if _, err := s.Coordinator.Post(t.ProjectID, compactText(cmd.args), nil, src); err != nil {
+			return nil, err
+		}
+		return s.Store.GetThread(t.ID)
+	}
+	return s.Threads.Compact(ctx, t.ID, cmd.args, src)
 }
