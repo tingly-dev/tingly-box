@@ -2,8 +2,9 @@ import {ContentCopy as CopyIcon, Edit as CustomIcon, Close as CloseIcon, Code as
 import {api} from '@/services/api';
 import {notify} from '@/utils/notify';
 import {capabilityEnabled, isPairingRequired} from '@/types/bot';
-import type {BotGroupDetail, BotSettings, DirectChatDetail, NotifyTarget} from '@/types/bot';
+import type {BotSettings, NotifyTarget} from '@/types/bot';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import {loadNotifyTargets} from '@/components/notify/notifyTargets';
 import NotifyTestDialog from '@/components/notify/NotifyTestDialog';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import {CHAT_CAPABILITIES} from '@/components/notify/chatCapabilities';
@@ -127,36 +128,7 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
         setLoading(true);
         setError(null);
         try {
-            const [chatData, groupData] = await Promise.all([
-                api.listBotDirectChats(bot.uuid),
-                api.listBotGroups(bot.uuid),
-            ]);
-            const groupDetails: BotGroupDetail[] = await Promise.all(
-                (groupData.groups || []).map((group: {id: string}) => api.getBotGroup(bot.uuid!, group.id)),
-            );
-            const directTargets: NotifyTarget[] = (chatData.chats || []).map((detail: DirectChatDetail) => ({
-                id: detail.chat.id,
-                kind: 'direct_chat',
-                external_id: detail.chat.external_chat_id,
-                platform: detail.chat.platform,
-                is_paired: Boolean(detail.chat.peer_actor_id),
-                blocked: detail.chat.blocked,
-                can_notify: detail.permissions.some((permission) => permission.capability === 'notify' && permission.action === 'notify.receive' && permission.effect === 'allow'),
-                can_reply: detail.permissions.some((permission) => permission.capability === 'notify' && permission.action === 'notify.reply' && permission.effect === 'allow'),
-            }));
-            const groupTargets: NotifyTarget[] = groupDetails.map((detail) => ({
-                id: detail.group.id,
-                kind: 'group',
-                external_id: detail.group.external_group_id,
-                name: detail.group.name,
-                platform: detail.group.platform,
-                blocked: detail.group.blocked,
-                can_notify: detail.capabilities.notify === 'allow',
-                // Group replies are actor-scoped. Keep Confirm on Direct Chats
-                // until the UI can select and explain the replying Actor.
-                can_reply: false,
-            }));
-            setTargets([...directTargets, ...groupTargets]);
+            setTargets(await loadNotifyTargets(bot.uuid));
         } catch (loadError) {
             setError((loadError as Error).message);
         } finally {
@@ -430,7 +402,7 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                                                     chatID={target.external_id}
                                                     targetID={target.id}
                                                     kind={target.kind}
-                                                    name={target.name}
+                                                    name={target.alias || target.name}
                                                     isPaired={target.is_paired}
                                                     active={enabled}
                                                     blocked={target.blocked}
