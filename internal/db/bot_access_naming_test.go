@@ -9,8 +9,8 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/access"
 )
 
-// A platform-reported name is stored beside the alias, never in it: an empty or
-// id-echo name never wipes it and the operator's alias is untouched.
+// A platform-reported name is kept apart from the alias: an empty or id-echo
+// name never wipes it and the operator's alias is untouched.
 func TestBotAccessStorePlatformNamesNeverTouchAliases(t *testing.T) {
 	sm, err := NewStoreManager(t.TempDir())
 	require.NoError(t, err)
@@ -35,15 +35,20 @@ func TestBotAccessStorePlatformNamesNeverTouchAliases(t *testing.T) {
 
 	chat, err := store.DiscoverDirectChat(ctx, bot.UUID, "telegram", "telegram:42")
 	require.NoError(t, err)
-	require.NoError(t, store.SetDirectChatName(ctx, bot.UUID, chat.ID, "Alice"))
-	for _, name := range []string{"", "telegram:42", "42"} {
-		require.NoError(t, store.SetDirectChatName(ctx, bot.UUID, chat.ID, name))
-	}
-	got, ok, err := store.GetDirectChat(ctx, bot.UUID, chat.ID)
+	got, _, err := store.GetDirectChat(ctx, bot.UUID, chat.ID)
 	require.NoError(t, err)
-	require.True(t, ok)
+	require.Empty(t, got.Name, "an unpaired chat has no peer, so no name")
+	require.NoError(t, store.PairDirectChat(ctx, chat.ID, "42", "Alice"))
+	for _, name := range []string{"", "42"} {
+		require.NoError(t, store.PairDirectChat(ctx, chat.ID, "42", name))
+	}
+	chats, err := store.ListDirectChats(ctx, bot.UUID)
+	require.NoError(t, err)
+	require.Equal(t, "Alice", chats[0].Name)
+	require.Empty(t, chats[0].Alias)
+	got, _, err = store.GetDirectChat(ctx, bot.UUID, chat.ID)
+	require.NoError(t, err)
 	require.Equal(t, "Alice", got.Name)
-	require.Empty(t, got.Alias)
 
 	actor, err := store.UpsertActor(ctx, access.Actor{BotUUID: bot.UUID, Platform: "telegram", ExternalActorID: "ou_1", DisplayName: "Alice"})
 	require.NoError(t, err)
@@ -52,16 +57,4 @@ func TestBotAccessStorePlatformNamesNeverTouchAliases(t *testing.T) {
 		require.NoError(t, err)
 	}
 	require.Equal(t, "Alice", actor.DisplayName)
-}
-
-// A database from before the name column existed gains it on the next start.
-func TestMigrateBotAccessTablesAddsDirectChatName(t *testing.T) {
-	sm, err := NewStoreManager(t.TempDir())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = sm.Close() })
-	db := sm.BotAccess().db
-	require.NoError(t, db.Exec(`ALTER TABLE remote_direct_chats DROP COLUMN name`).Error)
-	require.False(t, db.Migrator().HasColumn(&remoteDirectChatRecord{}, "name"))
-	require.NoError(t, migrateBotAccessTables(db))
-	require.True(t, db.Migrator().HasColumn(&remoteDirectChatRecord{}, "name"))
 }

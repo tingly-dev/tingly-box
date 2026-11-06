@@ -330,3 +330,19 @@ func TestPrivilegeCheckerFollowsThePrivilegedPermission(t *testing.T) {
 	require.True(t, check(platform, setting.UUID, msg.Recipient.ID, msg.Sender.ID, false))
 	require.False(t, check(platform, setting.UUID, msg.Recipient.ID, "someone-else", false), "another actor in the chat is not the peer")
 }
+
+// A paired direct chat is labelled by its peer's platform name, read from the
+// actor; the chat's own alias stays empty.
+func TestAuthorizationGateLabelsPairedDirectChatByPeerName(t *testing.T) {
+	sm, setting, msg := directAuthorizationFixture(t)
+	gate := bot.AuthorizationGate(sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), sm.RemoteChats(), false, nil, nil)
+	gate(msg, imbot.Platform(setting.Platform), setting.UUID)
+	msg.Sender.DisplayName = ""
+	gate(msg, imbot.Platform(setting.Platform), setting.UUID)
+
+	chats, err := sm.BotAccess().ListDirectChats(context.Background(), setting.UUID)
+	require.NoError(t, err)
+	require.Len(t, chats, 1)
+	require.Equal(t, "Alice", chats[0].Name)
+	require.Empty(t, chats[0].Alias)
+}

@@ -52,31 +52,31 @@ The id is the only thing guaranteed to exist, so it is the universal fallback. A
 
 ## 3. Naming model (decided by the user)
 
-If the platform supplies a name for an entity it is shown as that entity's **default alias**; if it supplies none the id is shown until the user sets an alias. Applies to direct chats (the peer's display name), groups (the platform title) and actors.
+If the platform supplies a name for an entity it is shown as that entity's **default alias**; if it supplies none the id is the fallback until the user sets an alias. Applies to direct chats (the peer's display name), groups (the platform title) and actors.
 
-The simplest model that gives this: **the alias stays the operator's alone, the platform's name is kept beside it, and the display is `alias || name`.** No provenance flag, no backfill.
+The platform only reports names on inbound events (it cannot be asked at render time: the bot may be offline, Weixin/WeCom have no names, Feishu needs scopes), so a name has to be persisted somewhere. It already is, so **nothing new is stored**: the alias stays the operator's alone and the display is `alias || name || id`.
 
-| Entity | Operator's | Platform's | Shown |
+| Entity | Operator's | Platform's (already stored) | Shown |
 |---|---|---|---|
-| Group | `alias` | `name` (existing column) | `alias \|\| name` |
-| Direct chat | `alias` | `name` (new column) | `alias \|\| name` |
+| Group | `alias` | `remote_groups.name` | `alias \|\| name` |
+| Direct chat | `alias` | the paired peer's `remote_actors.display_name`, joined at read time into `DirectChat.name` | `alias \|\| name` |
 | Actor | — | `display_name` | as today |
 
 Invariants, enforced in every write path and tested:
 
 | # | Invariant |
 |---|---|
-| N1 | An empty inbound name never overwrites a stored name. |
-| N2 | An inbound platform name never touches the user's alias (they are different columns). |
-| N3 | A later, different platform name replaces the stored platform name (a renamed group). |
+| N1 | An empty inbound name never overwrites a stored name (this was the bug: every message wrote the actor's `display_name`, empty or not). |
+| N2 | An inbound platform name never touches the user's alias (different columns). |
+| N3 | A later, different platform name replaces the stored one (a renamed group). |
 | N4 | A "name" that is just the entity's external id counts as no name (`access.UsableName`; Feishu's adapter now returns none instead of the sender id). |
 | N5 | Clearing the alias falls back to the platform name, or the id, for free. |
 
-### 3.1 Migration
+### 3.1 No migration
 
-One nullable column, `remote_direct_chats.name`, added with the existing optional-column idiom (`HasColumn` / `AddColumn`), **no backfill**: a direct chat gets its name from the next message its peer sends, until then it shows the id (or its alias). Groups already had `name`.
+No column, no backfill. An unpaired direct chat has no peer actor, so it shows its id (or its alias) until it is paired; for Feishu this is also why the chat cannot be matched to an actor by id (`oc_…` vs `ou_…`), only through the pairing link.
 
-Considered and dropped: provenance columns (`alias_source`, `display_name_source`) with a one-off, per-table transactional backfill (existing aliases → `user`, empty ones adopt the platform name, id-echo actor names cleared). It let a platform name become a *stored* alias that a rename could refresh, but the same result is a read-time `alias || name`, and the backfill was the riskiest part of the change. Not taken with it: existing Feishu actor names that echo the id are left as they are (the label already drops a name equal to the id).
+Considered and dropped: provenance columns (`alias_source`, `display_name_source`) with a one-off per-table backfill, and then a `remote_direct_chats.name` column copied from the peer. Both stored a second copy of something that is already stored and is read at display time anyway.
 
 ## 4. Frontend
 
@@ -91,13 +91,13 @@ Considered and dropped: provenance columns (`alias_source`, `display_name_source
 | Item | Decision |
 |---|---|
 | Display order | `平台 · alias · id`; group marker merged into the platform: `平台群 · alias · id` (user) |
-| Platform name = default alias; user alias never overwritten; empty name never wipes (user) | `alias \|\| name`, N1–N5 above; no provenance columns |
+| Platform name = default alias; user alias never overwritten; empty name never wipes (user) | `alias \|\| name \|\| id`, N1–N5 above; nothing new stored |
 | Bots default to their platform account name, else empty (user, D4) | separate PR, §7 |
 | Group marker is a localised pattern inside the platform segment (`{{platform}} group` / `{{platform}}群`); only the logo-only form draws a small `群` mark. No separate chip, no dedicated list-context flag (a list headed "Groups" keeps the marker) | user (merge) / decided |
 | Platform as a logo under a bot header | decided |
 | Feishu names without new scopes in v1 | separate PR, §7 |
 | Deleted entities shown by id + saved alias + `(deleted)`, no snapshot column, no cascade | decided |
-| Server-side `DisplayRef` / `*_ref` API fields | **not built**: once the platform name is stored beside the alias the name is already on `DirectChat` / `Group`, so the client resolves labels from lists it already loads |
+| Server-side `DisplayRef` / `*_ref` API fields | **not built**: the name is already on `Group` and, joined from the peer actor, on `DirectChat`, so the client resolves labels from lists it already loads |
 
 ## 6. Known limitations
 
@@ -105,7 +105,7 @@ Considered and dropped: provenance columns (`alias_source`, `display_name_source
 - Weixin and WeCom do not provide sender names; those chats are shown by id.
 - Persisted audit events are still log-only.
 - A name typed for a group member (`AddGroupActor`) is stored as the actor's `display_name` and a later platform name for that actor replaces it, as before; actors carry no separate alias.
-- An existing direct chat shows its id until its peer next sends a message (no backfill).
+- A direct chat that is not paired yet has no peer, so it shows its id.
 
 ## 7. Split out of this change
 

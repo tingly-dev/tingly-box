@@ -27,18 +27,19 @@ type Actor struct {
 }
 
 type DirectChat struct {
-	ID             string     `json:"id"`
-	BotUUID        string     `json:"bot_uuid"`
-	Platform       string     `json:"platform"`
-	ExternalChatID string     `json:"external_chat_id"`
-	Alias          string     `json:"alias,omitempty"`
-	Name           string     `json:"name,omitempty"`
-	PeerActorID    string     `json:"peer_actor_id,omitempty"`
-	Blocked        bool       `json:"blocked"`
-	PairedAt       *time.Time `json:"paired_at,omitempty"`
-	ProjectPath    string     `json:"project_path,omitempty"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID             string `json:"id"`
+	BotUUID        string `json:"bot_uuid"`
+	Platform       string `json:"platform"`
+	ExternalChatID string `json:"external_chat_id"`
+	Alias          string `json:"alias,omitempty"`
+	// Name is the paired peer's platform-reported name (read from the actor, never stored here).
+	Name        string     `json:"name,omitempty"`
+	PeerActorID string     `json:"peer_actor_id,omitempty"`
+	Blocked     bool       `json:"blocked"`
+	PairedAt    *time.Time `json:"paired_at,omitempty"`
+	ProjectPath string     `json:"project_path,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 type Group struct {

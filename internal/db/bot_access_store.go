@@ -52,7 +52,6 @@ type remoteDirectChatRecord struct {
 	Platform       string     `gorm:"column:platform;not null"`
 	ExternalChatID string     `gorm:"column:external_chat_id;not null"`
 	Alias          string     `gorm:"column:alias"`
-	Name           string     `gorm:"column:name"`
 	PeerActorID    *string    `gorm:"column:peer_actor_id"`
 	Blocked        bool       `gorm:"column:blocked;not null"`
 	PairedAt       *time.Time `gorm:"column:paired_at"`
@@ -171,12 +170,6 @@ func migrateBotAccessTables(db *gorm.DB) error {
 			if err := db.Migrator().AddColumn(model, "Alias"); err != nil {
 				return err
 			}
-		}
-	}
-	// The peer's platform-reported name; filled from the next message on, no backfill.
-	if !db.Migrator().HasColumn(&remoteDirectChatRecord{}, "name") {
-		if err := db.Migrator().AddColumn(&remoteDirectChatRecord{}, "Name"); err != nil {
-			return err
 		}
 	}
 
@@ -334,7 +327,7 @@ func directFromRecord(r remoteDirectChatRecord) access.DirectChat {
 	if r.PeerActorID != nil {
 		peer = *r.PeerActorID
 	}
-	return access.DirectChat{ID: r.ID, BotUUID: r.BotUUID, Platform: r.Platform, ExternalChatID: r.ExternalChatID, Alias: r.Alias, Name: r.Name, PeerActorID: peer, Blocked: r.Blocked, PairedAt: r.PairedAt, ProjectPath: r.ProjectPath, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	return access.DirectChat{ID: r.ID, BotUUID: r.BotUUID, Platform: r.Platform, ExternalChatID: r.ExternalChatID, Alias: r.Alias, PeerActorID: peer, Blocked: r.Blocked, PairedAt: r.PairedAt, ProjectPath: r.ProjectPath, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 
 func (s *BotAccessStore) PairDirectChat(ctx context.Context, chatID, externalActorID, displayName string) error {
@@ -349,9 +342,6 @@ func (s *BotAccessStore) PairDirectChat(ctx context.Context, chatID, externalAct
 		}
 		now := time.Now().UTC()
 		if err := tx.Model(&chat).Updates(map[string]any{"peer_actor_id": actor.ID, "paired_at": now, "updated_at": now}).Error; err != nil {
-			return err
-		}
-		if err := setDirectChatName(tx, &chat, actor.DisplayName); err != nil {
 			return err
 		}
 		for _, a := range []access.ActionName{access.ActionAccess, access.ActionRemoteControlStart, access.ActionRemoteControlApprove} {
@@ -372,7 +362,7 @@ func (s *BotAccessStore) ListDirectChats(ctx context.Context, botUUID string) ([
 	for _, r := range rows {
 		out = append(out, directFromRecord(r))
 	}
-	return out, nil
+	return out, withPeerNames(s.db.WithContext(ctx), out)
 }
 
 func (s *BotAccessStore) GetDirectChat(ctx context.Context, botUUID, id string) (access.DirectChat, bool, error) {
@@ -384,7 +374,11 @@ func (s *BotAccessStore) GetDirectChat(ctx context.Context, botUUID, id string) 
 	if err != nil {
 		return access.DirectChat{}, false, err
 	}
-	return directFromRecord(row), true, nil
+	chats := []access.DirectChat{directFromRecord(row)}
+	if err := withPeerNames(s.db.WithContext(ctx), chats); err != nil {
+		return access.DirectChat{}, false, err
+	}
+	return chats[0], true, nil
 }
 
 func (s *BotAccessStore) ListDirectChatPermissions(ctx context.Context, botUUID, id string) ([]access.Permission, error) {
@@ -1093,24 +1087,29 @@ func (s *BotAccessStore) SetTargetAlias(ctx context.Context, botUUID, id, kind, 
 	return nil
 }
 
-// SetDirectChatName records the peer's platform-reported name on a Direct Chat.
-// It is display-only: the operator's Alias is separate and always wins, and an
-// empty name never wipes a stored one.
-func (s *BotAccessStore) SetDirectChatName(ctx context.Context, botUUID, chatID, name string) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var chat remoteDirectChatRecord
-		if err := tx.Where("id = ? AND bot_uuid = ?", chatID, botUUID).First(&chat).Error; err != nil {
-			return err
+// withPeerNames fills DirectChat.Name from the paired peer's display name, so
+// the name is read from the actor row rather than copied onto the chat. A chat
+// without a peer, or whose peer has no usable name, keeps an empty Name.
+func withPeerNames(tx *gorm.DB, chats []access.DirectChat) error {
+	var ids []string
+	for _, c := range chats {
+		if c.PeerActorID != "" {
+			ids = append(ids, c.PeerActorID)
 		}
-		return setDirectChatName(tx, &chat, name)
-	})
-}
-
-func setDirectChatName(tx *gorm.DB, chat *remoteDirectChatRecord, name string) error {
-	name = access.UsableName(name, chat.ExternalChatID)
-	if name == "" || name == chat.Name {
+	}
+	if len(ids) == 0 {
 		return nil
 	}
-	chat.Name = name
-	return tx.Model(&remoteDirectChatRecord{}).Where("id = ?", chat.ID).Updates(map[string]any{"name": name, "updated_at": time.Now().UTC()}).Error
+	var actors []remoteActorRecord
+	if err := tx.Where("id IN ?", ids).Find(&actors).Error; err != nil {
+		return err
+	}
+	names := make(map[string]string, len(actors))
+	for _, a := range actors {
+		names[a.ID] = access.UsableName(a.DisplayName, a.ExternalActorID)
+	}
+	for i := range chats {
+		chats[i].Name = names[chats[i].PeerActorID]
+	}
+	return nil
 }

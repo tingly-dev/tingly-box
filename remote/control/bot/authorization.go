@@ -16,7 +16,6 @@ type AccessStore interface {
 	DiscoverDirectChat(context.Context, string, string, string) (access.DirectChat, error)
 	GetDirectChat(context.Context, string, string) (access.DirectChat, bool, error)
 	PairDirectChat(context.Context, string, string, string) error
-	SetDirectChatName(ctx context.Context, botUUID, chatID, name string) error
 	DiscoverGroup(context.Context, string, string, string, string) (access.Group, error)
 	UpsertActor(context.Context, access.Actor) (access.Actor, error)
 }
@@ -175,10 +174,6 @@ func AuthorizationGate(store AccessStore, authorizer access.Authorizer, legacyCh
 				return true
 			}
 			target = access.TargetRef{Kind: access.TargetDirectChat, ID: chat.ID}
-			// In a direct chat the peer is the sender: their platform name labels the chat.
-			if err := store.SetDirectChatName(ctx, botUUID, chat.ID, actor.DisplayName); err != nil {
-				logrus.WithError(err).Warn("bot access: record direct chat name")
-			}
 			if isPairingBootstrap(msg) {
 				return false
 			}
