@@ -309,3 +309,44 @@ func TestEngine_ContextUsage(t *testing.T) {
 		t.Errorf("usage = %+v, want %+v", got, want)
 	}
 }
+
+// The agent turn that started in the instant before the compaction request
+// reached the session: the host's OnTurnEnd sees NotSent (and re-queues), so
+// Compact says so with its own error, not ErrBusy, which means nothing was
+// started and the caller must re-queue itself.
+func TestEngine_CompactReportsAnAgentTurnThatCameFirst(t *testing.T) {
+	turns := fixtureTurns(t, "claude-2.1.259-slash-commands.jsonl")
+	release := make(chan struct{})
+	p := newLiveProc(t, func(h *process.FakeHandle, dec *json.Decoder, in chan map[string]any) {
+		read(dec, in)
+		writeLines(t, h, turns[0])
+		read(dec, in) // the turn the test starts behind the engine's back
+		<-release
+		writeLines(t, h, turns[0])
+		h.FinishOutput()
+		h.SignalExit(nil)
+	})
+	e, rec := p.engine(t)
+	if !e.Start("id", t.TempDir(), "hello", false, nil) {
+		t.Fatal("Start refused")
+	}
+	rec.wait(t)
+	res, ok := e.residentFor("id")
+	if !ok {
+		t.Fatal("no resident process")
+	}
+	if err := res.c.Session().Send(context.Background(), "background"); err != nil {
+		t.Fatal(err)
+	}
+	next(t, p.in)
+	next(t, p.in)
+
+	_, err := e.Compact(context.Background(), "id", t.TempDir(), "", nil)
+	close(release)
+	if !errors.Is(err, ErrNotSent) {
+		t.Fatalf("err = %v, want ErrNotSent", err)
+	}
+	if end := rec.wait(t); !end.NotSent {
+		t.Errorf("the host's OnTurnEnd saw %+v, want NotSent", end)
+	}
+}
