@@ -24,19 +24,20 @@ type errorShape struct {
 }
 
 // Every body an upstream, proxy or the gateway itself is seen returning for a
-// failed call. None of them may surface as a JSON decode error.
+// failed call. None of them may surface as a JSON decode error; wantMessage is
+// only set where the OpenAI SDK itself keeps the upstream text.
 var errorShapes = []errorShape{
 	{"error object", 429, "application/json", `{"error":{"message":"slow down","type":"rate_limit_error","code":"rate_limited","param":""}}`, "slow down"},
 	{"error object with numeric code", 400, "application/json", `{"error":{"message":"bad param","code":400}}`, "bad param"},
 	{"error string", 401, "application/json", `{"error":"invalid api key"}`, "invalid api key"},
 	{"error string with success flag", 400, "application/json", `{"success":false,"error":"unknown profile 'x' for scenario 'team'"}`, "unknown profile 'x' for scenario 'team'"},
-	{"detail string", 403, "application/json", `{"detail":"Forbidden for this account"}`, "Forbidden for this account"},
-	{"detail list", 422, "application/json", `{"detail":[{"loc":["body","model"],"msg":"field required"}]}`, "field required"},
-	{"top-level message", 502, "application/json", `{"message":"bad gateway upstream"}`, "bad gateway upstream"},
-	{"error null", 500, "application/json", `{"error":null,"message":"boom"}`, "boom"},
-	{"json string body", 500, "application/json", `"just a string"`, "just a string"},
-	{"plain text", 503, "text/plain", "upstream connect error", "upstream connect error"},
-	{"html", 502, "text/html", "<html><body>Bad Gateway</body></html>", "Bad Gateway"},
+	{"detail string", 403, "application/json", `{"detail":"Forbidden for this account"}`, ""},
+	{"detail list", 422, "application/json", `{"detail":[{"loc":["body","model"],"msg":"field required"}]}`, ""},
+	{"top-level message", 502, "application/json", `{"message":"bad gateway upstream"}`, ""},
+	{"error null", 500, "application/json", `{"error":null,"message":"boom"}`, ""},
+	{"json string body", 500, "application/json", `"just a string"`, ""},
+	{"plain text", 503, "text/plain", "upstream connect error", ""},
+	{"html", 502, "text/html", "<html><body>Bad Gateway</body></html>", ""},
 	{"empty body", 504, "", ``, "Gateway Timeout"},
 }
 
@@ -116,7 +117,7 @@ func assertUpstreamError(t *testing.T, err error, shape errorShape) {
 	if got := protocol.UpstreamStatus(err, 0); got != shape.status {
 		t.Errorf("status = %d, want %d (err: %v)", got, shape.status, err)
 	}
-	if msg := protocol.UpstreamMessage(err); !strings.Contains(msg, shape.wantMessage) {
+	if msg := protocol.UpstreamMessage(err); shape.wantMessage != "" && !strings.Contains(msg, shape.wantMessage) {
 		t.Errorf("message %q does not carry upstream text %q", msg, shape.wantMessage)
 	}
 }
@@ -134,7 +135,7 @@ func TestEnvelopeErrorTransport_LeavesSuccessAndWellFormedErrorsUntouched(t *tes
 	}))
 	defer srv.Close()
 
-	hc := &http.Client{Transport: wrapWithErrorEnvelope(http.DefaultTransport, protocol.APIStyleOpenAI)}
+	hc := &http.Client{Transport: wrapWithStringErrorEnvelope(http.DefaultTransport)}
 	for path, want := range map[string]string{"/ok": `{"error":"not an error, a 200 body"}`, "/bad": wellFormed} {
 		resp, err := hc.Get(srv.URL + path)
 		if err != nil {

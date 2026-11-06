@@ -110,7 +110,7 @@ func newAnthropicClientWithTransport(provider *typ.Provider, baseURL string, tra
 	// it reaches both this generic client and ClaudeClient without a dedicated
 	// transport.
 	httpClient := &http.Client{
-		Transport: wrapWithErrorEnvelope(transport, protocol.APIStyleAnthropic),
+		Transport: transport,
 	}
 	options = append(options, anthropicOption.WithHTTPClient(httpClient))
 
