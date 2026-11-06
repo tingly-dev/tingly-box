@@ -97,6 +97,22 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 		return
 	}
 
+	if effort, err := imageReasoningEffortFromBody(bodyBytes); err != nil {
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	} else if effort != "" {
+		// The pinned SDK has no ReasoningEffort field on ImageGenerateParams;
+		// extra fields ride the marshaled body so OpenAI-compatible upstreams
+		// receive the documented reasoning_effort parameter, and the Codex
+		// client maps it onto the Responses API (see buildImageGenerationResponsesRequest).
+		req.SetExtraFields(map[string]any{"reasoning_effort": effort})
+	}
+
 	requestModel := req.Model
 	responseModel := requestModel
 
@@ -160,6 +176,36 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	ph.persistImageGeneration(&req, resp)
 
 	c.JSON(http.StatusOK, resp)
+}
+
+// imageReasoningEffortFromBody extracts the optional reasoning_effort field
+// from a raw JSON image request body. Empty means "not sent" — identical to
+// the pre-effort behavior. The value is forwarded as-is: the upstream, not the
+// gateway, is the authority on which efforts a model accepts. A non-string
+// value is a client bug worth a 400 rather than a silent drop.
+func imageReasoningEffortFromBody(bodyBytes []byte) (string, error) {
+	var extra struct {
+		ReasoningEffort json.RawMessage `json:"reasoning_effort"`
+	}
+	if err := json.Unmarshal(bodyBytes, &extra); err != nil {
+		return "", nil // body shape errors surface via the main unmarshal
+	}
+	if len(extra.ReasoningEffort) == 0 || string(extra.ReasoningEffort) == "null" {
+		return "", nil
+	}
+	var effort string
+	if err := json.Unmarshal(extra.ReasoningEffort, &effort); err != nil {
+		return "", fmt.Errorf("reasoning_effort must be a string")
+	}
+	return effort, nil
+}
+
+// applyImageReasoningEffort attaches a non-empty effort to an edit request as
+// an extra field; the value is forwarded as-is (see imageReasoningEffortFromBody).
+func applyImageReasoningEffort(req *openai.ImageEditParams, effort string) {
+	if effort != "" {
+		req.SetExtraFields(map[string]any{"reasoning_effort": effort})
+	}
 }
 
 // persistImageGeneration saves generated images and their prompts under the

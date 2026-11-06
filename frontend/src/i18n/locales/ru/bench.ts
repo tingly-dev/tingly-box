@@ -175,6 +175,8 @@ export default {
     "promptEditorDone": "Готово",
     "size": "Размер",
     "quality": "Качество",
+    "effort": "Усилие",
+    "effortDefault": "по умолчанию (не отправлять)",
     "count": "N",
     "generate": "Сгенерировать",
     "generateAnother": "Сгенерировать ещё · выполняется: {{count}}",
