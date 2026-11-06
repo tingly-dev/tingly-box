@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Box, Button, CircularProgress, IconButton, InputBase, ListItemText, Menu, MenuItem, Paper, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Button, CircularProgress, IconButton, InputBase, ListItemText, Menu, MenuItem, Paper, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Attachment } from '../client';
 import { isLongText, lineCount, pastedTextFile } from './attachments';
 import { ArrowUpward, Attach, Close, Description, ExpandMore, Stop } from './icons';
+import { ControlTooltip } from './ControlTooltip';
 import { ModelPicker } from './ModelPicker';
 import { EffortPicker } from './EffortPicker';
 import type { ModelSource } from '../hooks/useModels';
@@ -223,7 +224,7 @@ export function Composer({
     const showSend = !showStop || (sendWhileStreaming && hasContent);
 
     const sendButton = showSend && (
-        <Tooltip title={t('composer.send')}>
+        <ControlTooltip title={t('composer.send')}>
             <span>
                 <IconButton
                     onClick={() => void submit()}
@@ -240,12 +241,12 @@ export function Composer({
                     {sending ? <CircularProgress size={18} color="inherit" /> : <ArrowUpward fontSize="small" />}
                 </IconButton>
             </span>
-        </Tooltip>
+        </ControlTooltip>
     );
     const modesAvailable = sendModes && streaming && sendWhileStreaming && showSend;
     const modeButton = modesAvailable && (
         <>
-            <Tooltip title={t('composer.sendOptions')}>
+            <ControlTooltip title={t('composer.sendOptions')} suppressed={!!modeMenu}>
                 <span>
                     <IconButton
                         onClick={(e) => setModeMenu(e.currentTarget)}
@@ -258,7 +259,7 @@ export function Composer({
                         <ExpandMore fontSize="small" />
                     </IconButton>
                 </span>
-            </Tooltip>
+            </ControlTooltip>
             <Menu anchorEl={modeMenu} open={!!modeMenu} onClose={() => setModeMenu(null)} anchorOrigin={{ vertical: 'top', horizontal: 'right' }} transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
                 <MenuItem onClick={() => { setModeMenu(null); void submit('queue'); }}>
                     <ListItemText primary={t('composer.sendQueue')} secondary={t('composer.sendQueueHint')} slotProps={{ primary: { sx: { fontSize: fontSizes.base } }, secondary: { sx: { fontSize: fontSizes.sm } } }} />
@@ -270,7 +271,7 @@ export function Composer({
         </>
     );
     const stopButton = showStop && (
-        <Tooltip title={t('composer.stopTurn')}>
+        <ControlTooltip title={t('composer.stopTurn')}>
             <span>
                 <IconButton
                     onClick={() => void stop()}
@@ -282,7 +283,7 @@ export function Composer({
                     {stopping ? <CircularProgress size={18} color="inherit" /> : <Stop fontSize="small" />}
                 </IconButton>
             </span>
-        </Tooltip>
+        </ControlTooltip>
     );
     const hint = keysHint && !mobile && !leftSlot;
     // Nothing under the text: the buttons sit beside it and the box is one
@@ -290,7 +291,7 @@ export function Composer({
     const inline = !leftSlot && !onModelChange && !onEffortChange && !hint;
 
     const attachButton = attach && (
-        <Tooltip title={attachBlocked || t('composer.attach')}>
+        <ControlTooltip title={attachBlocked || t('composer.attach')}>
             <span>
                 <IconButton size="small" disabled={disabled || !!attachBlocked} onClick={() => fileInput.current?.click()} aria-label={t('composer.attach')} sx={{ color: 'text.secondary' }}>
                     <Attach fontSize="small" />
@@ -307,7 +308,7 @@ export function Composer({
                     }}
                 />
             </span>
-        </Tooltip>
+        </ControlTooltip>
     );
     const chips = (files.length > 0 || attachError !== '') && (
         <Box sx={{ mb: 1 }}>

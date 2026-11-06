@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { api, unwrap, type Attachment, type BackgroundTask, type Subagent, type Thread, type ThreadEvent } from '../../client';
 import { buildTranscript, todoGroups, ChecklistCard, SubagentFocus, Trajectory, Transcript, type Respond, type TrajectoryAnchor } from '../../transcript';
 import type { TranscriptSubagents } from '../../hooks/useTranscript';
+import { ControlTooltip } from '../ControlTooltip';
 import { ThreadComposer, type ThreadComposerHandle } from '../ThreadComposer';
 import { HeldMessages, heldMessages } from './HeldMessages';
 import { AttachmentChips, uploadAttachments, type AttachOwner } from '../attachments';
@@ -508,14 +509,14 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     ref={composer}
                     draftKey={threadId}
                     leftSlot={(modelControl || effortControl || composerContext) && (
-                        <Tooltip title={t('threadSettings.nextTurn')} disableHoverListener={!running} disableFocusListener={!running}>
+                        <ControlTooltip title={t('threadSettings.nextTurn')} disableHoverListener={!running} disableFocusListener={!running}>
                             <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, flexWrap: 'wrap' }}>
                                 {modelControl}
                                 {effortControl}
                                 {composerContext}
                                 {running && <Typography variant="caption" color="text.secondary">{t('threadSettings.modelNextTurn')}</Typography>}
                             </Box>
-                        </Tooltip>
+                        </ControlTooltip>
                     )}
                     streaming={running}
                     sendModes

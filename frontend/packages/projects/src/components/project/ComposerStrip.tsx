@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Box, ButtonBase, Collapse, ListItemText, Menu, MenuItem, Tooltip } from '@mui/material';
+import { Box, ButtonBase, Collapse, ListItemText, Menu, MenuItem } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Thread } from '../../client';
 import { CopyIconButton } from '@tingly/ui';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { AutoFixHigh, Branch, Check, ExpandLess, ExpandMore, FolderOpen } from '../icons';
+import { ControlTooltip } from '../ControlTooltip';
 import { folderName } from '../../utils/format';
 import { readLocal, writeLocal } from '../../utils/storage';
 import { radius } from '@tingly/ui/theme/radius';
@@ -123,13 +124,13 @@ export function ComposerStrip({ thread, folder = false, onAutoAnswer, autoAt }: 
                     )}
                     {showAuto && (
                         <Row icon={<AutoFixHigh sx={{ color: mode === 'off' ? undefined : 'primary.main' }} />} name={t('strip.autoAnswer.title')}>
-                            <Tooltip title={t(`strip.autoAnswer.${mode}Help`)}>
+                            <ControlTooltip title={t(`strip.autoAnswer.${mode}Help`)} suppressed={!!menu}>
                                 <ButtonBase onClick={(e) => setMenu(e.currentTarget)} aria-label={t('strip.autoAnswer.change')}
                                     sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25, px: 0.75, ml: -0.75, py: 0.25, borderRadius: radius.row, font: 'inherit', color: 'text.primary', '&:hover': { bgcolor: 'action.selected' } }}>
                                     {t(`strip.autoAnswer.${mode}`)}
                                     <ExpandMore sx={{ fontSize: 15, color: 'text.secondary' }} />
                                 </ButtonBase>
-                            </Tooltip>
+                            </ControlTooltip>
                         </Row>
                     )}
                 </Box>
