@@ -53,6 +53,38 @@ falls back to the old path: evict, then reopen with `--resume`, which picks
 the settings up at launch. A failed live change therefore costs a restart,
 never a stale setting.
 
+### A mode Claude Code cannot run (auto)
+
+Claude Code runs `--permission-mode auto` as **default** mode, silently, when
+the model has no auto mode (checked with CLI 2.1.259: `claude-sonnet-4-5`,
+`claude-haiku-4-5`, `claude-opus-4-5` and older; the aliases `sonnet` / `opus` /
+`haiku`, `claude-sonnet-4-6`, `claude-opus-4-6` and gateway names such as
+`tingly/cc` have it). The only sign is `permissionMode` in the turn's
+`system/init`. A live `set_permission_mode auto` is refused with
+"auto mode unavailable for this model". Default mode asks for every edit, so a
+thread set to auto looked as if its mode had no effect, and the refused switch
+cost a restart that came back in default mode again.
+
+The engine therefore treats this as a fallback, not a failure
+(`modeFallback`, `checkInitMode`, `fallBack`): an init that reports `default`
+for a launch in auto, or a refusal that says "unavailable", moves the process
+to `acceptEdits` live, adds a system note to the transcript, and remembers
+mode and model in `launchState.refused`. Later turns do not ask again, restart,
+or repeat the note; a different model asks for auto again. Only the two named
+conditions are handled: any other refusal still restarts, and a mode the
+process reports differently on its own (plan mode left through ExitPlanMode,
+the classifier's prompt fallback after repeated blocks) is left alone.
+`permissions.disableAutoMode: "disable"` in any settings layer (the user's
+`~/.claude/settings.json` included) has the same effect as an unsupported
+model, so the transcript note names both causes.
+
+Why Claude Code asks is on the prompt itself: `can_use_tool` carries
+`decision_reason` (the classifier's words, e.g. "3 consecutive actions were
+blocked") or `decision_reason_type: "rule"` (an ask rule matched); neither
+means the mode itself requires the prompt. `ApprovalRequestEvent.Reason`
+carries it, and Projects stores it in the approval event's `reason` (the web
+card does not show it yet).
+
 ## 3. Composer: steer and queue (proposal, not built)
 
 What the two tools do when a message is sent mid-turn:
