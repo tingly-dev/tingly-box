@@ -21,6 +21,10 @@ const maxToolOutput = 4 * 1024
 // (the text a local command prints), as opposed to ones the model produced.
 const syntheticModel = "<synthetic>"
 
+// maxSeenAssistant bounds the replay check: a compaction keeps the tail of the
+// conversation, so only recent messages can come back.
+const maxSeenAssistant = 2000
+
 // converter turns agentboot's Claude messages into transcript entries. It
 // dedupes tool_use blocks, which can arrive both inside an assistant
 // message and as a standalone message depending on the CLI version.
@@ -38,13 +42,15 @@ type converter struct {
 	// taskType remembers each task's type for its later events.
 	taskType map[string]string
 
-	// seenAssistant holds the uuids of assistant messages already recorded:
-	// after a compaction the CLI emits the messages it kept again, unchanged.
+	// seenAssistant holds the uuids of the latest assistant messages recorded
+	// (seenOrder, oldest first, bounds it): after a compaction the CLI emits
+	// the messages it kept again, unchanged.
 	seenAssistant map[string]bool
-	// compacting is set from a compaction's start to the turn's result: the
-	// command's own text ("Not enough messages to compact.") is the compact
-	// entry's business, not a reply.
-	compacting bool
+	seenOrder     []string
+	// localText is set while the turn is a compaction the host asked for: the
+	// text Claude Code writes itself for it ("Not enough messages to
+	// compact.") is the compact entry's business, not a reply.
+	localText bool
 
 	model         string                     // requested model id, from the session init
 	calls         map[string]anthropic.Usage // per API call (message id): one call arrives as several assistant events
@@ -111,12 +117,8 @@ func (c *converter) messages(raw any) []Entry {
 		}
 		return entries
 	case agentboot.CompactEvent:
-		if m.Phase == agentboot.CompactStarted {
-			c.compacting = true
-		}
 		return []Entry{compactEntry(m)}
 	case *claude.ResultMessage:
-		c.compacting = false
 		var out []Entry
 		if m.IsError {
 			// Always recorded: a turn Claude starts itself relies on this line
@@ -216,8 +218,12 @@ func (c *converter) assistant(m *claude.AssistantMessage) []Entry {
 			return nil
 		}
 		c.seenAssistant[m.UUID] = true
+		if c.seenOrder = append(c.seenOrder, m.UUID); len(c.seenOrder) > maxSeenAssistant {
+			delete(c.seenAssistant, c.seenOrder[0])
+			c.seenOrder = c.seenOrder[1:]
+		}
 	}
-	if c.compacting && string(m.Message.Model) == syntheticModel {
+	if c.localText && string(m.Message.Model) == syntheticModel {
 		return nil
 	}
 	if id := m.Message.ID; id != "" {
