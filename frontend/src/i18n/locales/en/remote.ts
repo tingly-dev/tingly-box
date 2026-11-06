@@ -367,7 +367,7 @@ export default {
     "copied": "Copied!",
     "copyId": "Copy ID",
     "deleted": "(deleted)",
-    "group": "Group",
+    "group": "{{platform}} group",
     "noAlias": "No alias set"
   },
   "notify": {

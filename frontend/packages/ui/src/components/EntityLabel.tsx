@@ -2,7 +2,7 @@ import { Box, Tooltip } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { Fragment, type ReactNode } from 'react';
 import { fontMono } from '../theme/fonts';
-import { entityText, shortId, type EntityKind, type EntityParts } from '../utils/entityLabel';
+import { DEFAULT_GROUP_LABEL, entityText, groupMark, platformGroupText, shortId, type EntityKind, type EntityParts } from '../utils/entityLabel';
 import { CopyIconButton } from './CopyIconButton';
 
 export interface EntityLabelProps extends EntityParts {
@@ -12,7 +12,7 @@ export interface EntityLabelProps extends EntityParts {
     platformIcon?: ReactNode;
     /** `icon` hides the platform text (kept in the tooltip / aria-label) for rows already under a bot header. */
     platformAs?: 'text' | 'icon';
-    /** Localised word for the group segment (`群` / `Group`). */
+    /** Localised pattern for a group chat's platform segment, with `{{platform}}` ("{{platform}} group", "{{platform}}群"). */
     groupLabel?: string;
     /** False when the referenced entity no longer exists: the stored id is shown with a muted marker. */
     resolved?: boolean;
@@ -40,7 +40,8 @@ const Sep = () => (
 );
 
 /**
- * `平台 · alias · 群 · id`. Presentational only: the caller resolves the
+ * `平台 · alias · id`, with a group chat's marker merged into the platform
+ * (`飞书群 · alias · id`) rather than a segment of its own. Presentational only: the caller resolves the
  * segments. Segments that are empty or do not apply are dropped with their
  * separator; the id takes the anchor position when there is no alias, so a
  * row never looks empty. The id may be shortened but the full id is always
@@ -54,7 +55,7 @@ export const EntityLabel = ({
     kind,
     platformIcon,
     platformAs = 'text',
-    groupLabel = 'Group',
+    groupLabel = DEFAULT_GROUP_LABEL,
     resolved = true,
     deletedLabel = '(deleted)',
     compact = false,
@@ -72,7 +73,7 @@ export const EntityLabel = ({
     const full = entityText({ platform, group, alias: aliasText, id }, { groupLabel, shorten: false, kind: entityKind });
     const idAnchor = aliasText === '';
     const showId = !(compact && !idAnchor);
-    // With the platform drawn as a logo alone, the first segment after it needs no separator.
+    // A logo alone flows straight into the next segment; a logo with the group mark is a segment like any other.
     const iconOnly = platformAs === 'icon' && Boolean(platformIcon);
 
     const idNode = (
@@ -95,33 +96,17 @@ export const EntityLabel = ({
     // Segments in display order. Empty ones are never built, so no separator is
     // ever drawn next to a missing segment; a platform drawn as a logo alone
     // flows straight into the next segment without one.
+    const platformText = group ? platformGroupText(platform, groupLabel) : platform;
     const platformNode = (
-        <Tooltip title={platformAs === 'icon' ? platform : ''}>
+        <Tooltip title={iconOnly ? platformText : ''}>
             <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: 'text.secondary', flexShrink: 0 }}>
                 {platformIcon}
-                {platformAs === 'text' || !platformIcon ? platform : null}
+                {iconOnly ? (group ? groupMark(groupLabel) : null) : platformText}
             </Box>
         </Tooltip>
     );
-    const groupNode = (
-        <Box
-            component="span"
-            sx={{
-                fontSize: '0.6875rem',
-                lineHeight: '17px',
-                px: 0.875,
-                color: 'text.secondary',
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 9,
-                flexShrink: 0,
-            }}
-        >
-            {groupLabel}
-        </Box>
-    );
     const segments: { key: string; node: ReactNode; joinsNext?: boolean }[] = [];
-    if (platform !== '' || platformIcon) segments.push({ key: 'platform', node: platformNode, joinsNext: iconOnly });
+    if (platform !== '' || platformIcon) segments.push({ key: 'platform', node: platformNode, joinsNext: iconOnly && !group });
     if (aliasText !== '') {
         segments.push({
             key: 'alias',
@@ -132,7 +117,6 @@ export const EntityLabel = ({
             ),
         });
     }
-    if (group) segments.push({ key: 'group', node: groupNode });
     if (showId) segments.push({ key: 'id', node: idTooltip ? <Tooltip title={idTooltip}>{idNode}</Tooltip> : idNode });
 
     return (

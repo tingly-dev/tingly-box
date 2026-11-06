@@ -19,7 +19,7 @@ const knownBots = new Map<string, BotSettings>();
 const platformLabel = (platform: string) => platformDisplayName(platform, i18n.t.bind(i18n));
 
 // What the host knows about each chat it has listed, so a binding or a message
-// that only holds a chat id can still be shown as `平台 · alias · 群 · id`.
+// that only holds a chat id can still be shown as `平台 · alias · id` (group chats: `平台群 · alias · id`).
 // Every bot's latest listing is kept; the lookup index is rebuilt from them, so
 // a cleared alias or a vanished chat is not kept alive by an older listing.
 const chatKeyOf = (platform: string, chatId: string) => `${platform}\u0000${chatId}`;
@@ -154,7 +154,7 @@ async function fetchChats(bot: ImBot): Promise<{ chats: ImChat[]; complete: bool
                 platform: g.platform,
                 chatId: g.external_group_id,
                 alias,
-                title: entityText({ platform: platformLabel(g.platform), group: true, alias, id: bareId(g.platform, g.external_group_id) }, { groupLabel: i18n.t('entity.group', { defaultValue: 'Group' }) }),
+                title: entityText({ platform: platformLabel(g.platform), group: true, alias, id: bareId(g.platform, g.external_group_id) }, { groupLabel: i18n.t('entity.group', { defaultValue: '{{platform}} group', platform: '{{platform}}', interpolation: { escapeValue: false } }) }),
                 kind: 'group',
                 state: g.blocked ? 'blocked' : 'ok',
             });

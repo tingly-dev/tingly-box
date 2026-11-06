@@ -3,16 +3,30 @@ import { describe, expect, it, vi } from 'vitest';
 import { EntityLabel } from './EntityLabel';
 
 describe('EntityLabel', () => {
-    it('renders platform · alias · id for a direct chat and omits the group segment', () => {
+    it('renders platform · alias · id for a direct chat with no group marker', () => {
         render(<EntityLabel platform="Telegram" alias="Alice" id="123456789" />);
         const el = screen.getByTestId('entity-label');
         expect(el.textContent).toBe('Telegram·Alice·123456789');
         expect(el.getAttribute('aria-label')).toBe('Telegram · Alice · 123456789');
     });
 
-    it('puts the group segment after the alias', () => {
-        render(<EntityLabel platform="Feishu" group groupLabel="群" alias="Dev team" id="oc_1" />);
-        expect(screen.getByTestId('entity-label').textContent).toBe('Feishu·Dev team·群·oc_1');
+    it('merges the group marker into the platform segment instead of a segment of its own', () => {
+        render(<EntityLabel platform="Feishu" group alias="Dev team" id="oc_1" />);
+        const el = screen.getByTestId('entity-label');
+        expect(el.textContent).toBe('Feishu group·Dev team·oc_1');
+        expect(el.getAttribute('aria-label')).toBe('Feishu group · Dev team · oc_1');
+    });
+
+    it('keeps a small group mark next to the logo when the platform is drawn as a logo alone', () => {
+        render(<EntityLabel platform="Feishu" group groupLabel="{{platform}}群" platformIcon={<i data-testid="icon" />} platformAs="icon" alias="Dev team" id="oc_1" />);
+        const el = screen.getByTestId('entity-label');
+        expect(el.textContent).toBe('群·Dev team·oc_1');
+        expect(el.getAttribute('aria-label')).toBe('Feishu群 · Dev team · oc_1');
+    });
+
+    it('localises the group marker per pattern', () => {
+        render(<EntityLabel platform="Feishu" group groupLabel="{{platform}}群" alias="Dev team" id="oc_1" />);
+        expect(screen.getByTestId('entity-label').textContent).toBe('Feishu群·Dev team·oc_1');
     });
 
     it('drops the alias segment and its separator when there is none, and never renders blank', () => {
@@ -26,7 +40,7 @@ describe('EntityLabel', () => {
         const writeText = vi.fn().mockResolvedValue(undefined);
         Object.assign(navigator, { clipboard: { writeText } });
         Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true });
-        render(<EntityLabel platform="Feishu" group groupLabel="群" alias="Dev" id={id} copy onCopied={onCopied} />);
+        render(<EntityLabel platform="Feishu" group groupLabel="{{platform}}群" alias="Dev" id={id} copy onCopied={onCopied} />);
         const el = screen.getByTestId('entity-label');
         expect(el.textContent).toContain('oc_a1b…d4e5');
         expect(el.textContent).not.toContain(id);
@@ -49,10 +63,10 @@ describe('EntityLabel', () => {
     });
 
     it('compact leaves the id out when there is an alias but keeps the full label reachable', () => {
-        render(<EntityLabel platform="Feishu" group groupLabel="群" alias="Dev team" id="oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5" compact />);
+        render(<EntityLabel platform="Feishu" group groupLabel="{{platform}}群" alias="Dev team" id="oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5" compact />);
         const el = screen.getByTestId('entity-label');
-        expect(el.textContent).toBe('Feishu·Dev team·群');
-        expect(el.getAttribute('title')).toBe('Feishu · Dev team · 群 · oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5');
+        expect(el.textContent).toBe('Feishu群·Dev team');
+        expect(el.getAttribute('title')).toBe('Feishu群 · Dev team · oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5');
         expect(el.getAttribute('aria-label')).toBe(el.getAttribute('title'));
     });
 

@@ -387,7 +387,7 @@ export default {
     "copied": "已复制",
     "copyId": "复制 ID",
     "deleted": "（已删除）",
-    "group": "群",
+    "group": "{{platform}}群",
     "noAlias": "未设置别名"
   },
   "notify": {

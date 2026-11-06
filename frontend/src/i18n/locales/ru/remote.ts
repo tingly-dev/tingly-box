@@ -396,7 +396,7 @@ export default {
     "copied": "Скопировано",
     "copyId": "Копировать ID",
     "deleted": "(удалено)",
-    "group": "Группа",
+    "group": "Группа {{platform}}",
     "noAlias": "Псевдоним не задан"
   },
   "notify": {

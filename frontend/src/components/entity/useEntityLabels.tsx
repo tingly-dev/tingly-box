@@ -5,7 +5,7 @@ import { PLATFORM_BRAND_ICONS, platformDisplayName } from '@/constants/platformG
 import type { NotifyTarget } from '@/types/bot';
 
 // Adapters from the bot / IM API shapes to the segments of the shared display
-// convention `平台 · alias · 群 · id` (.design/bot-im-alias-display.md §3).
+// convention `平台 · alias · id` (group chats: `平台群 · alias · id`) (.design/bot-im-alias-display.md §3).
 
 export interface BotRef { uuid?: string; name?: string; platform?: string }
 export interface ChatRef { platform: string; external_chat_id: string; alias?: string }
@@ -31,7 +31,7 @@ export interface EntityLabels {
 export function useEntityLabels(): EntityLabels {
     const { t } = useTranslation();
     return useMemo<EntityLabels>(() => {
-        const groupLabel = t('entity.group', { defaultValue: 'Group' });
+        const groupLabel = t('entity.group', { defaultValue: '{{platform}} group', platform: '{{platform}}', interpolation: { escapeValue: false } });
         const common = {
             groupLabel,
             copyLabel: t('entity.copyId', { defaultValue: 'Copy ID' }),

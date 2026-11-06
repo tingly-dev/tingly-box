@@ -1,4 +1,4 @@
-# Bot / IM display convention: `平台 · alias · 群 · id`
+# Bot / IM display convention: `平台 · alias · id` (groups: `平台群 · alias · id`)
 
 > Status: implemented for the UI and the naming model (this document describes what shipped).
 > Follow-ups that were split out are listed in §7.
@@ -19,19 +19,21 @@ Screenshots of the old state: `images/bot-im-alias-display/current-1…6`.
 ## 2. The display format (decided by the user)
 
 ```
-平台 · alias · 群 · id
+平台 · alias · id          direct chat, bot
+平台群 · alias · id        group chat: "Feishu group · Dev team · oc_a1b…d4e5", "飞书群 · Dev team · oc_a1b…d4e5"
 ```
 
 | Segment | Content | Rule |
 |---|---|---|
-| 平台 | platform **display name** ("Telegram", "Feishu"), never the raw id (`telegram`) | May be drawn as the platform logo alone under a bot header (`platformAs="icon"`). |
+| 平台 | platform **display name** ("Telegram", "Feishu"), never the raw id (`telegram`) | For a group chat the segment carries the marker: "Feishu group" / 飞书群 / Группа Feishu. Under a bot header the platform is a logo alone (`platformAs="icon"`); a group row then keeps a small `群` / `Group` mark right after the logo, with no separator. |
 | alias | the entity's alias | Omitted when empty; never replaced by a placeholder. |
-| 群 | marks a group chat (`群` / `Group`, a small chip) | Only for group chats; directly after the alias so it qualifies the name. |
 | id | the id the user can use next: external chat id, bot uuid | Always present, monospace. May be shortened; the **full id is always reachable** (tooltip, copy button). |
 
-Any empty or inapplicable segment is dropped with its separator. History: `平台 · alias · id [type]` → `平台 · 群 · alias · id` (the group chip in the middle read oddly) → this.
+Any empty or inapplicable segment is dropped with its separator. The group marker is **never a segment of its own**.
 
-Examples: `Telegram · Alice · 123456789`, `Feishu · Dev team · 群 · oc_a1b…d4e5`, `Telegram · …456789` (an unnamed bot).
+Why the marker lives in the platform segment (history: `平台 · alias · id [type]` → `平台 · 群 · alias · id` → `平台 · alias · 群 · id` → this): "group" says what *kind* of conversation it is, not a fact about it like the alias or id, so as a dot-separated peer it read oddly wherever it sat (end: too far from the name; before the alias: interrupts platform → name; after the alias: wedged between name and id). Joined to the platform it reads as one noun phrase ("Feishu group"), keeps the important information first, works as plain text for toasts and aria-labels without a chip, and costs the single-character-wide `群` only on group chats. Cost: the wording is a per-locale pattern (`entity.group` = `{{platform}} group` / `{{platform}}群` / `Группа {{platform}}`) rather than a fixed word, and the logo-only form needs the small mark.
+
+Examples: `Telegram · Alice · 123456789`, `Feishu group · Dev team · oc_a1b…d4e5`, `Telegram · …456789` (an unnamed bot).
 
 ### 2.1 Which entities
 
@@ -84,16 +86,16 @@ Additive and idempotent; older binaries ignore the new columns.
 - **Projects host**: `imHost` keeps every bot's latest listing, rebuilds a chat lookup from them (`chatInfo`), refreshes on a 60 s stale tick and after an access-dialog change (a refresh requested while one is running runs again), and reports `deleted` per §2.3.
 - Applied to the Bots table, Remote and Notify cards, the Access dialog (rename dialog names the chat), notify test picker / delete confirm / graph nodes, Projects tags, "From …" source lines, IM settings and the bind dialog; ~12 toasts name the entity. Binding a chat saves its alias as `chat_title` (the last-known name for when the chat is gone).
 
-Screenshots of the result: `images/bot-im-alias-display/new-1…3` (mockup) and `ui-2`, `ui-7`, `ui-9`, `ui-10` (real UI, mock mode; `ui-10` is the Notify API guide picker, which now shares the same component instead of keeping its own formatter).
+The group marker follows §2 (merged into the platform). Screenshots of the result: `images/bot-im-alias-display/new-1…3` (mockup) and `ui-2`, `ui-7`, `ui-9`, `ui-10` (real UI, mock mode; `ui-10` is the Notify API guide picker, which now shares the same component instead of keeping its own formatter).
 
 ## 5. Decisions taken
 
 | Item | Decision |
 |---|---|
-| Display order | `平台 · alias · 群 · id` (user) |
+| Display order | `平台 · alias · id`; group marker merged into the platform: `平台群 · alias · id` (user) |
 | Platform name = default alias; user alias never overwritten; empty name never wipes (user) | N1–N5 above |
 | Bots default to their platform account name, else empty (user, D4) | separate PR, §7 |
-| `群` renders as a localised word chip (`群` / `Group`) | decided |
+| Group marker is a localised pattern inside the platform segment (`{{platform}} group` / `{{platform}}群`); only the logo-only form draws a small `群` mark. No separate chip, no dedicated list-context flag (a list headed "Groups" keeps the marker) | user (merge) / decided |
 | Platform as a logo under a bot header | decided |
 | Feishu names without new scopes in v1 | separate PR, §7 |
 | Deleted entities shown by id + saved alias + `(deleted)`, no snapshot column, no cascade | decided |

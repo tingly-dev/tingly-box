@@ -99,7 +99,7 @@
 | [claude-code-session.md](./claude-code-session.md) | Claude Code: from one-shot processes to a persistent stream session | 已退役：Remote 的 `@cc` 执行路径已删除，聊天走 Projects（remote-into-projects.md） |
 | [claude-code-oauth-compat.md](./claude-code-oauth-compat.md) | Claude Code OAuth compatibility — wire identity and version profiles | 已实现 profile；限制见 §B7 |
 | [bot-arch.md](./bot-arch.md) | Bot Architecture — resource, channel, consumers (+ naming) | 设计说明；局部实施状态见正文 |
-| [bot-im-alias-display.md](./bot-im-alias-display.md) | Bot / IM 统一展示格式 `平台 · alias · 群 · id` 与命名模型（平台名即默认别名，不覆盖用户别名） | 已实现；拆出的后续项见正文 §7 |
+| [bot-im-alias-display.md](./bot-im-alias-display.md) | Bot / IM 统一展示格式 `平台 · alias · id`（群聊：`平台群 · alias · id`） 与命名模型（平台名即默认别名，不覆盖用户别名） | 已实现；拆出的后续项见正文 §7 |
 | [bot-capability-access-control.md](./bot-capability-access-control.md) | Bot Capability Access Control — Bot、Direct Chat、Group 与 Actor | 资源/授权核心已实现；验收项按正文核对 |
 | [bot-interaction-api.md](./bot-interaction-api.md) | Bot Interaction Interface — auth + open two-kind API (notify / interactive) | 通用 API 已实现；旧 hook HTTP 鉴权待迁移 |
 | [bot-panic-isolation.md](./bot-panic-isolation.md) | Bot Panic Isolation — recover at the trust boundary | 设计说明；局部实施状态见正文 |

@@ -73,7 +73,7 @@ export interface ImChat {
     chatId: string;
     /** The chat's alias (the user's, or the platform's name as default); empty when it has none. */
     alias?: string;
-    /** `平台 · alias · 群 · id` as plain text, for toasts and labels. */
+    /** `平台 · alias · id` (group chats: `平台群 · alias · id`) as plain text, for toasts and labels. */
     title: string;
     kind: 'direct' | 'group';
     /** Whether the bot may use the chat: `ok`, `blocked` in access control, or a private chat not yet `unpaired`. */

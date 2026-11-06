@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bareId, entityText, shortId } from './entityLabel';
+import { bareId, entityText, groupMark, platformGroupText, shortId } from './entityLabel';
 
 describe('shortId', () => {
     it('keeps short external ids whole', () => {
@@ -32,18 +32,29 @@ describe('bareId', () => {
     });
 });
 
+describe('groupMark / platformGroupText', () => {
+    it('fills the platform into the localised pattern and can drop it again', () => {
+        expect(platformGroupText('Feishu')).toBe('Feishu group');
+        expect(platformGroupText('飞书', '{{platform}}群')).toBe('飞书群');
+        expect(platformGroupText('Feishu', 'Группа {{platform}}')).toBe('Группа Feishu');
+        expect(platformGroupText('')).toBe('Group');
+        expect(groupMark()).toBe('Group');
+        expect(groupMark('{{platform}}群')).toBe('群');
+    });
+});
+
 describe('entityText', () => {
-    it('renders 平台 · alias · 群 · id and omits empty or inapplicable segments', () => {
+    it('renders 平台 · alias · id, merges the group marker into the platform and omits empty or inapplicable segments', () => {
         expect(entityText({ platform: 'Telegram', alias: 'Alice', id: '123456789' })).toBe('Telegram · Alice · 123456789');
         expect(entityText({ platform: 'Telegram', id: '123456789' })).toBe('Telegram · 123456789');
-        expect(entityText({ platform: 'Feishu', group: true, alias: 'Dev team', id: 'oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5' }, { groupLabel: '群' })).toBe('Feishu · Dev team · 群 · oc_a1b…d4e5');
-        expect(entityText({ platform: 'Feishu', group: true, id: 'oc_1' })).toBe('Feishu · Group · oc_1');
+        expect(entityText({ platform: 'Feishu', group: true, alias: 'Dev team', id: 'oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5' }, { groupLabel: '{{platform}}群' })).toBe('Feishu群 · Dev team · oc_a1b…d4e5');
+        expect(entityText({ platform: 'Feishu', group: true, id: 'oc_1' })).toBe('Feishu group · oc_1');
         expect(entityText({ platform: 'Telegram', alias: '  ', id: '42' })).toBe('Telegram · 42');
     });
 
     it('keeps the full id when shortening is off', () => {
         const id = 'oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5';
-        expect(entityText({ platform: 'Feishu', group: true, id }, { shorten: false, groupLabel: '群' })).toBe(`Feishu · 群 · ${id}`);
+        expect(entityText({ platform: 'Feishu', group: true, id }, { shorten: false, groupLabel: '{{platform}}群' })).toBe(`Feishu群 · ${id}`);
     });
 
     it('uses the bot shortening rule for bots', () => {

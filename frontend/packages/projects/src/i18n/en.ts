@@ -57,7 +57,7 @@ export const en = {
         },
         deleted: '(deleted)',
         sourceFrom: 'From',
-        group: 'Group',
+        group: '{{platform}} group',
         sourcePlatform: 'From {{platform}}',
         sourceBot: 'From bot',
     },

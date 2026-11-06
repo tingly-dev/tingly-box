@@ -23,7 +23,7 @@ export interface ChatNodeProps {
     kind?: 'direct_chat' | 'group';
     /** The chat's alias: primary text when present, the id then drops to a muted second line. */
     alias?: string;
-    /** `平台 · alias · 群 · id` as plain text, shown first in the tooltip. */
+    /** `平台 · alias · id` (group chats: `平台群 · alias · id`) as plain text, shown first in the tooltip. */
     labelText?: string;
     targetID?: string;
     isPaired?: boolean;

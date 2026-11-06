@@ -61,7 +61,7 @@ export const zh: Dict<typeof en> = {
         },
         deleted: '（已删除）',
         sourceFrom: '来自',
-        group: '群',
+        group: '{{platform}}群',
         sourcePlatform: '来自 {{platform}}',
         sourceBot: '来自 Bot',
     },
