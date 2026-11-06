@@ -116,18 +116,6 @@ func (t *Turn) Say(text string, inputTokens, outputTokens int64) {
 	}})
 }
 
-// RateLimit emits the subscription windows Claude Code read from its latest
-// call: utilization is a fraction of the window used, resets are epoch seconds.
-func (t *Turn) RateLimit(fiveHour float64, fiveReset int64, sevenDay float64, sevenReset int64) {
-	t.send(&claude.RateLimitMessage{Type: claude.SDKRateLimitEvent, Info: claude.RateLimitInfo{
-		Status: "allowed",
-		UnifiedWindows: claude.RateLimitWindowsInfo{
-			FiveHour: &claude.RateLimitWindowInfo{Utilization: fiveHour, ResetsAt: fiveReset},
-			SevenDay: &claude.RateLimitWindowInfo{Utilization: sevenDay, ResetsAt: sevenReset},
-		},
-	}})
-}
-
 // Use emits a tool call, as Claude Code reports one it makes.
 func (t *Turn) Use(id, tool string, input map[string]any) {
 	t.send(&claude.ToolUseMessage{Type: "tool_use", Name: tool, Input: input, ToolUseID: id})

@@ -50,9 +50,8 @@ const (
 	KindApprovalResponse = "approval_response"
 	KindAskRequest       = "ask_request"
 	KindAskResponse      = "ask_response"
-	KindTask             = "task"       // payload: TaskEvent
-	KindUsage            = "usage"      // payload: TurnUsage
-	KindRateLimit        = "rate_limit" // payload: RateLimits
+	KindTask             = "task"  // payload: TaskEvent
+	KindUsage            = "usage" // payload: TurnUsage
 	KindSystem           = "system"
 	KindError            = "error"
 )

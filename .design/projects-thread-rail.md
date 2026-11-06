@@ -79,7 +79,6 @@ all live on `db.Thread`, set by `Thread.AddUsage` when a turn ends.
 | `context_tokens` | prompt size of the turn's last main-thread call (latest turn, not summed) | `TurnUsage.ContextTokens`, from the last main-thread `assistant` event's usage (input + cache read + cache write; those fields are final at message start) |
 | `context_window` | the model's window, 0 when Claude did not report it (then the meter shows tokens without a percentage) | `TurnUsage.ContextWindow` (from `modelUsage`) |
 | `last_turn_ms`, `last_turn_at` | duration and end of the last turn | `TurnUsage.DurationMS`, turn end time |
-| `rate_limits` | Claude Code's subscription windows (5-hour, weekly): utilization 0-1, reset time, and when the reading was taken; absent until a turn reports them | `rate_limit_event` in the stream, via a "rate_limit" entry; see "Quota card" |
 | `reported_model`, `model` | model that answered / configured launch model | existing |
 | `session_id` | Claude Code session (first 8 chars; full id in the tooltip) | existing |
 | `permission_mode`, effort | read-only facts | existing |
@@ -123,43 +122,40 @@ all live on `db.Thread`, set by `Thread.AddUsage` when a turn ends.
 
 ## Quota card
 
-What Claude Code's status line shows beside the model: how much of the
-subscription or provider quota is left. One `QuotaCard` (`infoRail.tsx`) in the
-thread rail and the coordinator's Status tab, after Usage, with two sources
-that either may be missing (no source, no card):
+What Claude Code's status line shows beside the model: how much of the quota
+the thread draws on is left. One `QuotaCard` (`infoRail.tsx`) in the thread rail
+and the coordinator's Status tab, after Usage; no source, no card.
 
-- **Subscription windows, from the stream.** On a Claude.ai login the CLI emits
-  `rate_limit_event` messages with `unifiedWindows.five_hour` / `seven_day`
-  (`utilization` as a 0-1 fraction, `resetsAt` in epoch seconds), read from the
-  `anthropic-ratelimit-unified-*` response headers; this is what its status
-  line prints as `rate_limits.five_hour.used_percentage`. API-key, Bedrock and
-  Vertex sessions never get one, and neither does a session routed through the
-  gateway unless the gateway relays those headers (not checked). The
-  accumulator turns the event into a `RateLimitMessage`, the converter into a
-  "rate_limit" entry, the tally into `Thread.rate_limits` (latest reading wins
-  per window: an event may name only the limiting window, and the other keeps
-  its last reading; a turn without an event keeps the old reading). Rendered as "58% left" with a bar
-  that shrinks as the window is spent (same remaining-not-used convention as
-  `.design/quota-semantics.md`); a window past its `resets_at` is not shown.
-- **Provider quota, from the host.** A thread routed through Tingly Box's
+- **Source: the host, not the stream.** A thread routed through Tingly Box's
   gateway draws on a provider's quota, which Tingly Box already has
-  (`ai/quota`, shown by its terminal status line as `Quota: 60% left`). Projects
-  knows only profiles by name, so the host supplies a `session.quota` slot
-  (`ProjectsHost.tsx`: given `profile` + `tier` + the last model, returns the
-  routed provider and its windows). Tingly Box implements it with the same
+  (`ai/quota`, shown by its terminal status line as `Quota: 60% left`).
+  Projects knows only profiles by name, so the host supplies a `session.quota`
+  slot (`ProjectsHost.tsx`: given `profile` + `tier` + the last model, returns
+  the routed provider and its windows). Tingly Box implements it with the same
   `GET /scenario/claude_code/route` its folder-session status line uses
   (`SessionStatusLine`), so the numbers and the "left" wording are identical.
-  The card asks again after each turn. The launch it asks about is the
-  thread's own: a folder session's profile and tier, a project thread's
-  profile override or the project's thread profile, the coordinator's
-  coordinator profile and model.
+  The card asks again after each turn, and a reading is kept with the thread and
+  launch it was asked for (the panel stays mounted as the selection moves).
+- The launch it asks about is the thread's own: a folder session's profile and
+  tier, a project thread's profile override or the project's thread profile,
+  the coordinator's coordinator profile and model.
 - The folder session's status line under the message box still shows the same
   provider quota; the rail card adds it to project threads and the coordinator,
   which have no such line.
-- Not verified on a real account: the `rate_limit_event` shape comes from the
-  CLI's own schema (read out of the 2.1.259 binary) and the engine test's
-  hand-built line, because the capture used an API key. A real subscription
-  session is the first thing to check.
+- **Considered and left out: Claude Code's own `rate_limit_event`.** On a
+  Claude.ai login the CLI emits the 5-hour / weekly windows (from the
+  `anthropic-ratelimit-unified-*` response headers) and a first version stored
+  them as `Thread.rate_limits`. It was removed again: a thread Tingly Box runs
+  always goes through the gateway, nothing in the repo relays those headers
+  from the upstream account, so the event would not arrive; an OAuth provider's
+  5h / 7d already come from `ai/quota` through the slot above (both would have
+  been listed twice); and the shape was never seen from a real subscription
+  session. A standalone Projects on a direct Claude.ai login would be the one
+  place it helps; revisit there (the CLI's schema: `rate_limit_info.unifiedWindows.{five_hour,seven_day}`
+  with `utilization` 0-1 and `resetsAt` epoch seconds).
+- Why not import `ai/quota` into Projects: it would link the whole `ai` module
+  (openai-go, x/net, jwt) into the standalone `tingly-project` binary for one
+  struct; the host already depends on it and hands over rendered windows.
 
 ## Sidebar status (`ProjectsSidebar`)
 

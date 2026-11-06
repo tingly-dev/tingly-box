@@ -160,11 +160,6 @@ type Thread struct {
 	// LastTurnMS and LastTurnAt are how long the last turn took and when it ended.
 	LastTurnMS int64      `json:"last_turn_ms"`
 	LastTurnAt *time.Time `json:"last_turn_at,omitempty"`
-	// RateLimits are the subscription windows (5-hour, weekly) Claude Code
-	// last read for this thread's account, the numbers its own status line
-	// shows. Nil until a turn reports them: only a Claude.ai login does, not an
-	// API key or a gateway.
-	RateLimits *RateLimits `gorm:"serializer:json;type:text" json:"rate_limits,omitempty"`
 	// Profile is a folder thread's launch profile, named by the host
 	// (Tingly Box: a Claude Code profile); empty for the host's default.
 	Profile string `gorm:"size:100" json:"profile,omitempty"`
@@ -327,24 +322,6 @@ func EventRole(kind string) string {
 	return RoleAssistant
 }
 
-// RateLimits is one reading of an account's subscription windows.
-type RateLimits struct {
-	// Status is allowed, allowed_warning or rejected.
-	Status   string           `json:"status,omitempty"`
-	FiveHour *RateLimitWindow `json:"five_hour,omitempty"`
-	SevenDay *RateLimitWindow `json:"seven_day,omitempty"`
-	// UpdatedAt is when the reading was taken (the end of the turn that
-	// reported it); a window past its ResetsAt is stale.
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-// RateLimitWindow is one window: Utilization is the fraction used (0-1, more
-// once run past the cap) and ResetsAt is Unix epoch seconds.
-type RateLimitWindow struct {
-	Utilization float64 `json:"utilization"`
-	ResetsAt    int64   `json:"resets_at"`
-}
-
 // Usage is what one turn spent, as it lands on a thread.
 type Usage struct {
 	// Input counts every prompt token, cached ones included.
@@ -352,8 +329,6 @@ type Usage struct {
 	ContextTokens                        int64
 	ContextWindow                        int
 	DurationMS                           int64
-	// RateLimits is the latest reading the turn made, nil when it made none.
-	RateLimits *RateLimits
 }
 
 // AddUsage adds a finished turn's usage to the thread. The context figures
@@ -371,23 +346,4 @@ func (t *Thread) AddUsage(u Usage, at time.Time) {
 	}
 	t.LastTurnMS = u.DurationMS
 	t.LastTurnAt = &at
-	if u.RateLimits != nil {
-		t.RateLimits = u.RateLimits.MergedOver(t.RateLimits, at)
-	}
-}
-
-// MergedOver is r read at `at`, with any window it leaves out taken from the
-// earlier reading: an event may name only the window that is limiting.
-func (r *RateLimits) MergedOver(prev *RateLimits, at time.Time) *RateLimits {
-	out := *r
-	out.UpdatedAt = at
-	if prev != nil {
-		if out.FiveHour == nil {
-			out.FiveHour = prev.FiveHour
-		}
-		if out.SevenDay == nil {
-			out.SevenDay = prev.SevenDay
-		}
-	}
-	return &out
 }

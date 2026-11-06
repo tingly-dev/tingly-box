@@ -220,23 +220,3 @@ func TestConverter_ResultWithUsageButNoCallsKeepsNoContext(t *testing.T) {
 		t.Fatalf("usage = %+v", u)
 	}
 }
-
-func TestConverter_RateLimitEvents(t *testing.T) {
-	c := newConverter()
-	util := 0.7
-	only := c.messages(&claude.RateLimitMessage{Info: claude.RateLimitInfo{Status: "allowed_warning", ResetsAt: 900, RateLimitType: "five_hour", Utilization: &util}})
-	if len(only) != 1 || only[0].Kind != KindRateLimit {
-		t.Fatalf("entries = %+v", only)
-	}
-	var rl RateLimits
-	if err := json.Unmarshal(only[0].Payload, &rl); err != nil {
-		t.Fatal(err)
-	}
-	if rl.FiveHour == nil || rl.FiveHour.Utilization != 0.7 || rl.FiveHour.ResetsAt != 900 || rl.SevenDay != nil {
-		t.Fatalf("a top-level reading fills the window it names: %+v", rl)
-	}
-	// An event with nothing to show (an opus-only window, an overage notice) is dropped.
-	if got := c.messages(&claude.RateLimitMessage{Info: claude.RateLimitInfo{Status: "allowed", RateLimitType: "seven_day_opus", Utilization: &util}}); len(got) != 0 {
-		t.Fatalf("recorded %+v for a window the card does not show", got)
-	}
-}

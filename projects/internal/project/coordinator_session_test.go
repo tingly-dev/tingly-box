@@ -82,36 +82,3 @@ func TestCoordinatorTurnsAddUpOnTheMainThread(t *testing.T) {
 	require.NotNil(t, main.LastTurnAt)
 	require.Equal(t, "default-model", main.ReportedModel)
 }
-
-func TestCoordinatorKeepsTheSubscriptionWindowsClaudeReported(t *testing.T) {
-	store, err := db.Open(":memory:")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = store.Close() })
-	five := time.Now().Add(2 * time.Hour).Unix()
-	agent := &enginetest.Agent{Script: func(turn *enginetest.Turn) error {
-		turn.Init("default-model")
-		turn.Say("done", 30, 4)
-		turn.RateLimit(0.8, five, 0.3, five+3600)
-		return nil
-	}}
-	svc := NewService(store, Layout{Root: t.TempDir()}, Agents{Service: agent.Service()}, coordinatorSessionTestHost{fakeLLM: &fakeLLM{}})
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		svc.Threads.Shutdown(ctx)
-		_ = svc.CloseTools(ctx)
-	})
-	p, err := svc.Create(context.Background(), NewProjectSpec{Name: "Project"})
-	require.NoError(t, err)
-	_, err = svc.Coordinator.Post(p.ID, "hello", nil, Source{})
-	require.NoError(t, err)
-	require.Eventually(t, func() bool {
-		events, _ := store.ListThreadEvents(p.MainThreadID)
-		return countKind(events, db.EvAssistant) == 1 && !svc.Coordinator.Busy(p.ID)
-	}, 5*time.Second, 10*time.Millisecond)
-	main, err := store.GetThread(p.MainThreadID)
-	require.NoError(t, err)
-	require.NotNil(t, main.RateLimits)
-	require.Equal(t, 0.8, main.RateLimits.FiveHour.Utilization)
-	require.EqualValues(t, five+3600, main.RateLimits.SevenDay.ResetsAt)
-}

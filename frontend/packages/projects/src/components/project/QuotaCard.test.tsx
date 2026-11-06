@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Thread } from '../../client';
 import { ProjectsHostProvider, type ProjectsHost, type QuotaReading, type SessionSlots } from '../../host/ProjectsHost';
@@ -6,7 +6,7 @@ import { QuotaCard } from './infoRail';
 
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({
-        t: (key: string, o?: Record<string, unknown>) => (o?.pct != null ? `${o.pct}% left` : key),
+        t: (key: string) => key,
         i18n: { language: 'en' },
     }),
 }));
@@ -15,7 +15,6 @@ afterEach(() => {
     localStorage.clear();
 });
 
-const inHours = (h: number) => Math.floor(Date.now() / 1000) + h * 3600;
 const thread = (over: Partial<Thread> = {}): Thread => ({ id: 't1', turns: 1, reported_model: 'sonnet', ...over }) as Thread;
 const host = (quota?: SessionSlots['quota']): ProjectsHost => ({
     paths: { list: '/p', project: (id) => `/p/${id}`, folder: () => '/f' },
@@ -25,15 +24,6 @@ const show = (t: Thread, h: ProjectsHost, route?: { profile: string; tier: strin
     render(<ProjectsHostProvider host={h}><QuotaCard thread={t} route={route} /></ProjectsHostProvider>);
 
 describe('QuotaCard', () => {
-    it('shows the subscription windows Claude Code reported, as what is left', () => {
-        show(thread({ rate_limits: { status: 'allowed', updated_at: '', five_hour: { utilization: 0.42, resets_at: inHours(2) }, seven_day: { utilization: 0.17, resets_at: inHours(100) } } }), host());
-        expect(screen.getByRole('region', { name: 'rail.quota' })).toBeTruthy();
-        expect(screen.getByText('rail.quotaWindow.five_hour')).toBeTruthy();
-        expect(screen.getByText('58% left')).toBeTruthy();
-        expect(screen.getByText('83% left')).toBeTruthy();
-        expect(screen.getByRole('progressbar', { name: 'rail.quotaWindow.five_hour' }).getAttribute('aria-valuenow')).toBe('58');
-    });
-
     it("shows the quota of the provider the host routes to, looked up by the thread's launch", async () => {
         const reading: QuotaReading = { provider: 'zai', model: 'glm-4.6', windows: [{ label: 'weekly', text: '60% left', usedPct: 40, resetsAt: new Date(Date.now() + 3600_000).toISOString() }] };
         const quota = vi.fn().mockResolvedValue(reading);
@@ -73,19 +63,5 @@ describe('QuotaCard', () => {
         expect(await screen.findByText('60% left')).toBeTruthy();
         rerender(<ProjectsHostProvider host={h}><QuotaCard thread={thread({ id: 'b' })} /></ProjectsHostProvider>);
         expect(screen.queryByText('60% left')).toBeNull();
-    });
-
-    it('drops a subscription window the moment it resets, without waiting for the next turn', () => {
-        vi.useFakeTimers();
-        try {
-            vi.setSystemTime(new Date('2026-11-06T10:00:00Z'));
-            const resetsAt = Math.floor(Date.now() / 1000) + 60;
-            show(thread({ rate_limits: { status: 'allowed', updated_at: '', five_hour: { utilization: 0.88, resets_at: resetsAt } } }), host());
-            expect(screen.getByText('12% left')).toBeTruthy();
-            act(() => { vi.advanceTimersByTime(61_000); });
-            expect(screen.queryByText('12% left')).toBeNull();
-        } finally {
-            vi.useRealTimers();
-        }
     });
 });

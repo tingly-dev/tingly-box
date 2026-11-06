@@ -2,15 +2,12 @@ package engine
 
 import (
 	"bufio"
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/agentboot/process"
 )
 
@@ -52,12 +49,10 @@ func entriesOf(store *memStore, id, kind string) []Entry {
 
 // Captured from Claude Code 2.1.259 running as one resident process for two
 // turns (turn one: a Bash call and a closing answer; turn two: one answer).
-// The rate_limit_event line is hand-built from the CLI's own schema: an API-key
-// session such as the capture's never emits one. The fixture is replayed
-// through the real transport and a resident process, because the usage
-// numbers only exist if the result line reaches the converter: the process
-// layer used to swallow it as a turn boundary, so no turn ever recorded
-// usage in real use.
+// The fixture is replayed through the real transport and a resident process,
+// because the usage numbers only exist if the result line reaches the
+// converter: the process layer used to swallow it as a turn boundary, so no
+// turn ever recorded usage in real use.
 func TestEngine_ResidentProcessRecordsEachTurnsUsage(t *testing.T) {
 	turns := fixtureTurns(t, "claude-2.1.259-two-turns-usage.jsonl")
 	if len(turns) != 2 {
@@ -109,23 +104,6 @@ func TestEngine_ResidentProcessRecordsEachTurnsUsage(t *testing.T) {
 			t.Errorf("turn %d usage = %+v\nwant         %+v", i+1, got, want[i])
 		}
 	}
-
-	limits := entriesOf(p.store, "id", KindRateLimit)
-	if len(limits) != 1 {
-		t.Fatalf("recorded %d rate limit entries, want 1", len(limits))
-	}
-	var rl RateLimits
-	if err := json.Unmarshal(limits[0].Payload, &rl); err != nil {
-		t.Fatal(err)
-	}
-	wantRL := RateLimits{
-		Status:   "allowed",
-		FiveHour: &RateLimitWindow{Utilization: 0.42, ResetsAt: 1793958000},
-		SevenDay: &RateLimitWindow{Utilization: 0.17, ResetsAt: 1794354000},
-	}
-	if rl.Status != wantRL.Status || rl.FiveHour == nil || *rl.FiveHour != *wantRL.FiveHour || rl.SevenDay == nil || *rl.SevenDay != *wantRL.SevenDay {
-		t.Errorf("rate limits = %+v\nwant          %+v", rl, wantRL)
-	}
 }
 
 // The one-shot path (no pool) hands the result to the converter too.
@@ -141,22 +119,14 @@ func TestEngine_OneShotTurnRecordsUsage(t *testing.T) {
 		h.FinishOutput()
 		h.SignalExit(nil)
 	})
-	store := newMemStore()
-	rec := recorder{ends: make(chan TurnEnd, 4)}
-	svc, err := agentboot.NewAgentService(agentboot.DefaultConfig())
-	if err != nil {
-		t.Fatal(err)
-	}
-	svc.RegisterAgent(agentboot.AgentTypeClaude, claude.NewAgentWithFactory(claude.Config{}, p.factory))
-	e := New(Config{Agent: svc, Store: store, OnTurnEnd: func(_ string, end TurnEnd) { rec.ends <- end }})
-	t.Cleanup(func() { e.Shutdown(context.Background()) })
+	e, rec := p.engineWith(t, nil)
 	if !e.Start("id", t.TempDir(), "only", false, nil) {
 		t.Fatal("Start refused")
 	}
 	if end := rec.wait(t); end.Err != nil {
 		t.Fatalf("turn ended with %v", end.Err)
 	}
-	usage := entriesOf(store, "id", KindUsage)
+	usage := entriesOf(p.store, "id", KindUsage)
 	if len(usage) != 1 {
 		t.Fatalf("recorded %d usage entries, want 1", len(usage))
 	}

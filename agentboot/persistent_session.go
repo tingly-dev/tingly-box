@@ -494,9 +494,7 @@ func (s *persistentSession) pump(decoderEvents <-chan protocol.Event, decoderErr
 			// Drop.
 
 		case EventKindMessage:
-			for _, m := range s.transport.AccumulateMessage(ev) {
-				s.emit(MessageEvent{Raw: m})
-			}
+			s.emitMessages(ev)
 
 		case EventKindControl:
 			if parsed != nil {

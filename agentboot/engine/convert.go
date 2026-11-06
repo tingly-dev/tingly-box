@@ -117,12 +117,6 @@ func (c *converter) messages(raw any) []Entry {
 			out = append(out, c.msg("usage", "", "", payload))
 		}
 		return out
-	case *claude.RateLimitMessage:
-		if rl, ok := rateLimitsOf(m); ok {
-			payload, _ := json.Marshal(rl)
-			return []Entry{c.msg(KindRateLimit, "", "", payload)}
-		}
-		return nil
 	case *claude.SystemMessage:
 		if m.SubType == claude.SystemSubtypeInit {
 			if model, ok := m.Raw["model"].(string); ok {
@@ -194,49 +188,6 @@ func (c *converter) usage(res *claude.ResultMessage) (TurnUsage, bool) {
 	}
 	u.ContextWindow = res.ModelUsage[u.Model].ContextWindow
 	return u, true
-}
-
-// RateLimits is the payload of a "rate_limit" transcript entry: the
-// subscription windows Claude Code last read from its API responses, the
-// numbers its own status line shows as 5h / 7d. Only a Claude.ai login has
-// them.
-type RateLimits struct {
-	Status   string           `json:"status,omitempty"` // allowed, allowed_warning, rejected
-	FiveHour *RateLimitWindow `json:"five_hour,omitempty"`
-	SevenDay *RateLimitWindow `json:"seven_day,omitempty"`
-}
-
-// RateLimitWindow is one window: Utilization is the fraction used (0-1, more
-// once run past the cap) and ResetsAt Unix epoch seconds.
-type RateLimitWindow struct {
-	Utilization float64 `json:"utilization"`
-	ResetsAt    int64   `json:"resets_at"`
-}
-
-// rateLimitsOf reads the windows out of a rate_limit_event. An event that
-// names only the limiting window (no unifiedWindows) still fills that one.
-func rateLimitsOf(m *claude.RateLimitMessage) (RateLimits, bool) {
-	rl := RateLimits{Status: m.Info.Status}
-	if w := m.Info.UnifiedWindows.FiveHour; w != nil {
-		rl.FiveHour = &RateLimitWindow{Utilization: w.Utilization, ResetsAt: w.ResetsAt}
-	}
-	if w := m.Info.UnifiedWindows.SevenDay; w != nil {
-		rl.SevenDay = &RateLimitWindow{Utilization: w.Utilization, ResetsAt: w.ResetsAt}
-	}
-	if m.Info.Utilization != nil {
-		w := &RateLimitWindow{Utilization: *m.Info.Utilization, ResetsAt: m.Info.ResetsAt}
-		switch m.Info.RateLimitType {
-		case "five_hour":
-			if rl.FiveHour == nil {
-				rl.FiveHour = w
-			}
-		case "seven_day":
-			if rl.SevenDay == nil {
-				rl.SevenDay = w
-			}
-		}
-	}
-	return rl, rl.FiveHour != nil || rl.SevenDay != nil
 }
 
 func (c *converter) assistant(m *claude.AssistantMessage) []Entry {

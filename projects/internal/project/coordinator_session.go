@@ -78,17 +78,6 @@ func (s coordinatorSessionStore) Append(id string, entry engine.Entry) {
 		}
 		return
 	}
-	if entry.Kind == engine.KindRateLimit {
-		var r engine.RateLimits
-		if json.Unmarshal(entry.Payload, &r) == nil {
-			s.sessions.mu.Lock()
-			if run := s.sessions.runs[id]; run != nil {
-				run.tally.addRateLimits(r)
-			}
-			s.sessions.mu.Unlock()
-		}
-		return
-	}
 	if entry.Role != "assistant" || entry.Parent != "" || entry.Content == "" {
 		return
 	}
