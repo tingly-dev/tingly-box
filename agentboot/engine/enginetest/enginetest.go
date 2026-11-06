@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -44,10 +43,7 @@ func (a *Agent) Service() *agentboot.AgentService {
 // prompt starts with "/compact", and the script answers it with Compacted or
 // CompactRefused.
 func (a *Agent) CompactPrompt(instructions string) string {
-	if instructions = strings.TrimSpace(instructions); instructions != "" {
-		return "/compact " + instructions
-	}
-	return "/compact"
+	return (&claude.Agent{}).CompactPrompt(instructions)
 }
 
 // Launches returns the options of every turn started so far, in order.
