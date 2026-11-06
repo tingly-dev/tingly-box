@@ -164,6 +164,8 @@ func (b *Bot) onChatBotMessage(ctx context.Context, data *chatbot.BotCallbackDat
 		return []byte(""), nil
 	}
 
+	b.resolveMediaURLs(ctx, data.RobotCode, coreMessage)
+
 	// Emit message to handlers
 	b.EmitMessage(*coreMessage)
 

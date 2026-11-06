@@ -60,6 +60,40 @@ tab's download button) save an upload under the name it was given
 of `uploads/` are renamed; any other file keeps its stored name. Folder zips keep stored names: two uploads can share a
 name, and a zip entry has to stay unique.
 
+## Files from IM chats keep their names
+
+A chat's file reaches Projects through `remoteagent` (`routeMediaToProject` →
+`FileStore.DownloadFile`) and is then stored like any upload, so the name it is
+given there is the name the person sees in the thread, in Library and in a
+download. The rules (`remote/control/remoteagent/file_name.go`):
+
+1. the name the platform's message carried (`MediaAttachment.Filename`);
+2. else the download's `Content-Disposition` filename;
+3. else generated: `image-<yyyymmdd-hhmmss>.<ext>` for images, `file-<…>.<ext>`
+   for the rest. The URL is never a source: on most platforms its last part is
+   a media id (Telegram `file_id`, DingTalk/Feishu keys).
+
+The name is sanitized (`SanitizeFileName`: no directories, NUL or control
+characters, no leading dots, at most 120 bytes with the extension kept). A name
+with no extension gets one from the bytes (`http.DetectContentType`), then from
+the declared type. Two files with one name in a chat do not overwrite each other
+(`name (2).ext`). Projects then adds its `<id>-` prefix as above.
+
+Outbound (`send_file` → `imchannel.SendFile`) already passes the original
+`Attachment.Name` (not the `<id>-` stored name) as `MediaAttachment.Filename`;
+each adapter uses it for the upload (DingTalk multipart name and `sampleFile`
+`fileName`/`fileType`, Feishu `FileName`, WeChat/WeCom `FileName`, Telegram
+`InputFileUpload.Filename`, which falls back to the path's base name).
+
+| Platform | Inbound name | Inbound delivery | Outbound name |
+| --- | --- | --- | --- |
+| DingTalk | file: payload `fileName`; picture/video/audio: none, so generated | files, pictures and rich-text pictures arrive (download code → `robot/messageFiles/download` link) | multipart name + `sampleFile` `fileName` (images are `sampleImageMsg`, which shows no name) |
+| Feishu / Lark | file: payload `file_name` kept; image: none, so generated | not downloadable yet: the adapter has only the `file_key`, and the resource API needs a tenant token | upload `FileName` |
+| WeChat / WeCom | file: SDK `FileName`; image/video: none, so generated | no URL (encrypted CDN), so the store cannot fetch it yet | upload `FileName` |
+| Telegram | document: `file_name`; photo: none, so generated (was the `file_id`) | yes (`getFile` link) | `InputFileUpload.Filename` (photos sent as images show no name) |
+| Slack | `file.name` | the private URL needs a bearer token the store does not send | not supported (URL placeholder) |
+| Discord | `attachment.filename` | yes | not supported (URL placeholder) |
+
 ## What the model gets
 
 The message text is followed by a note listing each file's absolute path, type
