@@ -32,7 +32,8 @@ const platformLabel = (platform: string) => {
 // that only holds a chat id can still be shown as `平台 · alias · id` (group chats: `平台群 · alias · id`).
 // Every bot's latest listing is kept; the lookup index is rebuilt from them, so
 // a cleared alias or a vanished chat is not kept alive by an older listing.
-const chatKeyOf = (platform: string, chatId: string) => `${platform}\u0000${chatId}`;
+// A chat is indexed under its bot (aliases are per bot) and, for callers that hold no bot, under the chat alone.
+const chatKeyOf = (platform: string, chatId: string, botUuid = '') => `${botUuid}\u0000${platform}\u0000${chatId}`;
 const listeners = new Set<() => void>();
 let infoVersion = 0;
 let perBot = new Map<string, ImChat[]>();
@@ -56,13 +57,14 @@ const publish = () => {
     listeners.forEach((fn) => fn());
 };
 
-/** Rebuilds the lookup from every bot's latest listing. Two bots can see one chat: the entry with a name wins. */
+/** Rebuilds the lookup from every bot's latest listing. Without a bot, two bots seeing one chat resolve to the entry with a name. */
 const rebuild = () => {
     chatIndex.clear();
     for (const chats of perBot.values()) {
         for (const c of chats) {
-            const key = chatKeyOf(c.platform, c.chatId);
             const info = infoOf(c);
+            chatIndex.set(chatKeyOf(c.platform, c.chatId, c.botUuid), info);
+            const key = chatKeyOf(c.platform, c.chatId);
             if (!chatIndex.has(key) || (info.alias && !chatIndex.get(key)?.alias)) chatIndex.set(key, info);
         }
     }
@@ -109,10 +111,13 @@ const chatInfo = (platform: string, chatId: string, botUuid?: string): ImChatInf
         requestedAt = Date.now();
         void refreshChatIndex();
     }
-    const key = chatKeyOf(platform, chatId);
+    const key = chatKeyOf(platform, chatId, botUuid);
+    // A binding whose bot is gone is deleted whatever the other bots still list.
+    if (botUuid && indexComplete && !indexedBots.has(botUuid)) {
+        return { ...(chatIndex.get(chatKeyOf(platform, chatId)) ?? { displayId: bareId(platform, chatId), group: false }), deleted: true };
+    }
     const info = chatIndex.get(key);
-    const botGone = Boolean(botUuid) && indexComplete && !indexedBots.has(botUuid!);
-    if (info) return botGone ? { ...info, deleted: true } : info;
+    if (info) return info;
     if (!indexComplete) return undefined;
     // Missing from a complete listing. A chat that appeared since that listing
     // must not be called deleted, so confirm with a later complete listing.

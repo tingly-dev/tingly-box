@@ -402,7 +402,7 @@ export default {
     "loadFailed": "加载通知目标失败",
     "toggleFailed": "更新通知设置失败",
     "chat": {
-      "copied": "已复制 Chat ID：{{chat}}",
+      "copied": "目标 UUID 已复制：{{chat}}",
       "copyFailed": "复制失败 —— 请检查剪贴板权限",
       "deleted": "已删除 {{chat}}",
       "internalUuid": "内部目标 UUID"
@@ -418,7 +418,7 @@ export default {
     },
     "group": {
       "allowAndTest": "允许通知并测试",
-      "copyChatId": "复制 Chat ID",
+      "copyChatId": "复制内部目标 UUID",
       "custom": "自定义",
       "customHint": "编写自定义消息（自由格式）",
       "deleteChat": "删除这条私聊记录",

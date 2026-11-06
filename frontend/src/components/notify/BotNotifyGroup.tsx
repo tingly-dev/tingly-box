@@ -157,8 +157,8 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
 
     const handleCopy = useCallback(async (target: NotifyTarget) => {
         try {
-            await writeToClipboard(target.external_id);
-            notify.success(t('notify.chat.copied', {defaultValue: 'Chat ID copied: {{chat}}', chat: targetText(target)}));
+            await writeToClipboard(target.id);
+            notify.success(t('notify.chat.copied', {defaultValue: 'Target UUID copied: {{chat}}', chat: targetText(target)}));
         } catch {
             notify.error(t('notify.chat.copyFailed', {defaultValue: 'Copy failed — check clipboard permissions'}));
         }
@@ -488,7 +488,7 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                                                     </Box>
 
                                                     {/* Lifecycle zone: copy · disable · delete. */}
-                                                    <Tooltip title={t('notify.group.copyChatId', {defaultValue: 'Copy chat ID'})}>
+                                                    <Tooltip title={t('notify.group.copyChatId', {defaultValue: 'Copy internal target UUID'})}>
                                                         <IconButton size="small" onClick={() => handleCopy(target)}>
                                                             <CopyIcon fontSize="small" />
                                                         </IconButton>

@@ -411,7 +411,7 @@ export default {
     "loadFailed": "Не удалось загрузить цели уведомлений",
     "toggleFailed": "Не удалось обновить настройки уведомлений",
     "chat": {
-      "copied": "Chat ID скопирован: {{chat}}",
+      "copied": "UUID цели скопирован: {{chat}}",
       "copyFailed": "Не удалось скопировать — проверьте разрешения буфера обмена",
       "deleted": "Удалён {{chat}}",
       "internalUuid": "Внутренний UUID цели"
@@ -427,7 +427,7 @@ export default {
     },
     "group": {
       "allowAndTest": "Разрешить уведомления и проверить",
-      "copyChatId": "Копировать Chat ID",
+      "copyChatId": "Копировать внутренний UUID цели",
       "custom": "Своё сообщение",
       "customHint": "Составьте произвольное сообщение",
       "deleteChat": "Удалить эту запись личного чата",

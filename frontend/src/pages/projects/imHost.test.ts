@@ -8,7 +8,7 @@ vi.mock('@/constants/platformGuides', () => ({ PLATFORM_BRAND_ICONS: {}, platfor
 vi.mock('@/i18n', () => ({ default: { t: (_key: string, options: { defaultValue: string }) => options.defaultValue } }));
 vi.mock('@/services/imbotApi', () => ({ imbotApi: { getImBotSettingsList: async () => ({ success: true, settings: m.bots }) } }));
 vi.mock('@/services/botApi', () => ({
-    listBotDirectChats: async () => ({ chats: [
+    listBotDirectChats: async (botUuid: string) => botUuid === 'other' ? { chats: [{ chat: { platform: 'telegram', external_chat_id: 'telegram:123', peer_actor_id: 'actor' } }] } : ({ chats: [
         { chat: { platform: 'telegram', external_chat_id: 'telegram:123', alias: m.aliasOf123, peer_actor_id: 'actor' } },
         { chat: { platform: 'telegram', external_chat_id: 'telegram:456', alias: '  ', peer_actor_id: 'actor' } },
         { chat: { platform: 'telegram', external_chat_id: 'telegram:555', name: 'Peer name', peer_actor_id: 'actor' } },
@@ -52,6 +52,15 @@ describe('Projects IM host', () => {
         await vi.waitFor(() => expect(imHost.chatInfo?.('telegram', 'telegram:gone')).toEqual({ displayId: 'gone', group: false, deleted: true }));
         expect(imHost.chatInfo?.('telegram', 'telegram:123', 'bot')?.deleted).toBeUndefined();
         expect(imHost.chatInfo?.('telegram', 'telegram:123', 'deleted-bot')?.deleted).toBe(true);
+    });
+
+    it('keeps one bot\'s alias from leaking onto another bot\'s chat', async () => {
+        m.bots = [...m.bots, { uuid: 'other', name: 'Other', platform: 'telegram', enabled: true }];
+        await refreshChatIndex();
+        m.bots = m.bots.filter((b) => b.uuid !== 'other');
+        expect(imHost.chatInfo?.('telegram', 'telegram:123', 'bot')?.alias).toBe('Alice');
+        expect(imHost.chatInfo?.('telegram', 'telegram:123', 'other')?.alias).toBeUndefined();
+        expect(imHost.chatInfo?.('telegram', 'telegram:123')?.alias).toBe('Alice');
     });
 
     it('shows an unnamed bot by its short id, not just the platform', async () => {

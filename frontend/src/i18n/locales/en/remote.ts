@@ -372,7 +372,7 @@ export default {
   },
   "notify": {
     "chat": {
-      "copied": "Chat ID copied: {{chat}}",
+      "copied": "Target UUID copied: {{chat}}",
       "copyFailed": "Copy failed — check clipboard permissions",
       "deleted": "Deleted {{chat}}",
       "internalUuid": "Internal target UUID"
@@ -381,7 +381,7 @@ export default {
     "emptyTitle": "No bots connected yet",
     "group": {
       "allowAndTest": "Allow Notify & Test",
-      "copyChatId": "Copy chat ID",
+      "copyChatId": "Copy internal target UUID",
       "custom": "Custom",
       "customHint": "Compose a custom message (free-form)",
       "deleteChat": "Delete this Direct Chat record",

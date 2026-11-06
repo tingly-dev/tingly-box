@@ -12,7 +12,7 @@ Bots and IM chats have an ID *and* a human name, but the product showed them inc
 - The same chat had up to five different labels across surfaces; Projects showed the raw platform chat id even after the user named the chat.
 - Wrong fields: the Notify delete confirm printed an **internal uuid**; the test-send picker showed a name in the input and a raw id in its options; the Notify graph dropped chat aliases.
 - Names were empty or wiped at the source: every inbound message overwrote the actor's `display_name`, even with an empty value (`internal/db/bot_access_store.go`), Feishu reported the raw sender id as a "name", and direct chats had no name column at all.
-- Where users need the id (paste into `/join`, the notify API, compare with the IM app) it was often hidden.
+- Where users need the id (paste into `/join`, compare with the IM app) it was often hidden.
 
 ## 2. The display format (decided by the user)
 
@@ -44,7 +44,7 @@ Display shortening is width-driven and done in one helper (`shortId`):
 - **Bot ids** are generated as `<unixnano>-imbot`; the head digits are nearly identical for bots created close together and the suffix is constant, so only the tail is shown: `1730600000123456789-imbot` → `…456789`.
 - **External chat / actor ids**: up to 20 characters whole, longer as `first 6 … last 4`.
 
-The copy value is always the id the user can use next: the **external** chat id (what `/join` and the notify API take) or the bot uuid — never the internal access uuid, which only appears as a labelled "Internal target UUID" line in tooltips. Plain-text uses (toasts, confirms, aria-labels) use the same order; the accessible name always carries the full id.
+The copy button next to a displayed id copies that id: the **external** chat id (what `/join` takes) or the bot uuid. The one exception is the Notify card's own copy button, which keeps copying the **internal target UUID** (labelled so), because the Notify / Interact API takes `target.id` as that UUID; it is also shown as a labelled "Internal target UUID" line in tooltips. Plain-text uses (toasts, confirms, aria-labels) use the same order; the accessible name always carries the full id.
 
 ### 2.3 Unresolved and deleted entities
 
@@ -101,7 +101,7 @@ Considered and dropped: provenance columns (`alias_source`, `display_name_source
 
 ## 6. Known limitations
 
-- A binding stores no chat kind, so once its chat is gone the label cannot show the group chip.
+- A binding stores no chat kind, so once its chat is gone the label cannot show the group marker.
 - Weixin and WeCom do not provide sender names; those chats are shown by id.
 - Persisted audit events are still log-only.
 - A name typed for a group member (`AddGroupActor`) is stored as the actor's `display_name` and a later platform name for that actor replaces it, as before; actors carry no separate alias.
