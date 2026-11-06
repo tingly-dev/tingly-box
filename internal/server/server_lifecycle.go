@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/internal/peertransport"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver"
 
 	"github.com/gin-gonic/gin"
@@ -68,7 +69,7 @@ func (s *Server) Start(port int) error {
 	addr := fmt.Sprintf("%s:%d", s.host, port)
 	s.httpServer = &http.Server{
 		Addr:              addr,
-		Handler:           s.engine,
+		Handler:           peertransport.ProbeHandler(s.engine),
 		ReadHeaderTimeout: cmp.Or(s.httpTimeouts.ReadHeaderTimeout, 10*time.Second),
 		ReadTimeout:       cmp.Or(s.httpTimeouts.ReadTimeout, 30*time.Second),
 		WriteTimeout:      cmp.Or(s.httpTimeouts.WriteTimeout, 10*time.Minute),

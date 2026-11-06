@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -13,6 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/ai"
 	"golang.org/x/net/proxy"
 
+	"github.com/tingly-dev/tingly-box/internal/peertransport"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -54,8 +56,43 @@ const (
 // upgrading to a full write lock.
 type pooledTransport struct {
 	transport  *http.Transport
+	peer       *peertransport.Transport
 	refCount   int32 // active in-flight requests (atomic)
 	lastAccess int64 // UnixNano of last access (atomic)
+}
+
+// GetPeerTransport shares opportunistic HTTP/3 at the existing provider/session
+// boundary. Explicit proxies always retain their configured path.
+func (tp *TransportPool) GetPeerTransport(providerUUID, model, proxyURL string, issuer ai.Issuer, sessionID typ.SessionID) http.RoundTripper {
+	base := tp.GetTransport(providerUUID, model, proxyURL, issuer, sessionID)
+	if os.Getenv("TINGLY_HTTP3") == "off" || (proxyURL != "" && proxyURL != ProxyURLNone) {
+		return base
+	}
+	key := NewTransportKey(providerUUID, "", issuer, sessionID).String()
+	tp.mutex.Lock()
+	defer tp.mutex.Unlock()
+	pooled := tp.transports[key]
+	if pooled == nil || pooled.transport != base {
+		return base
+	}
+	if pooled.peer == nil {
+		pooled.peer = peertransport.New(base)
+	}
+	return pooled.peer
+}
+
+func (pt *pooledTransport) closeIdle() {
+	pt.transport.CloseIdleConnections()
+	if pt.peer != nil {
+		pt.peer.CloseIdleConnections()
+	}
+}
+
+func (pt *pooledTransport) retire() {
+	pt.transport.CloseIdleConnections()
+	if pt.peer != nil {
+		_ = pt.peer.Close()
+	}
 }
 
 // incrementRefCount atomically increments and returns the new value.
@@ -360,11 +397,11 @@ func (tp *TransportPool) Stats() map[string]interface{} {
 func (tp *TransportPool) clearLocked() (removed, deferred int) {
 	for key, pooled := range tp.transports {
 		if pooled.getRefCount() > 0 {
-			pooled.transport.CloseIdleConnections()
+			pooled.closeIdle()
 			atomic.StoreInt64(&pooled.lastAccess, 0) // mark for deferred removal
 			deferred++
 		} else {
-			pooled.transport.CloseIdleConnections()
+			pooled.retire()
 			delete(tp.transports, key)
 			removed++
 		}
@@ -401,11 +438,11 @@ func (tp *TransportPool) InvalidateProvider(providerUUID string) {
 	for key, pooled := range tp.transports {
 		if strings.Contains(key, uuidToken) {
 			if pooled.getRefCount() > 0 {
-				pooled.transport.CloseIdleConnections()
+				pooled.closeIdle()
 				atomic.StoreInt64(&pooled.lastAccess, 0) // mark for deferred removal
 				deferredCount++
 			} else {
-				pooled.transport.CloseIdleConnections()
+				pooled.retire()
 				delete(tp.transports, key)
 				removedCount++
 			}
@@ -437,11 +474,11 @@ func (tp *TransportPool) InvalidateSession(providerUUID, sessionID string) {
 	for key, pooled := range tp.transports {
 		if strings.Contains(key, uuidToken) && strings.Contains(key, sessionToken) {
 			if pooled.getRefCount() > 0 {
-				pooled.transport.CloseIdleConnections()
+				pooled.closeIdle()
 				atomic.StoreInt64(&pooled.lastAccess, 0) // mark for deferred removal
 				deferredCount++
 			} else {
-				pooled.transport.CloseIdleConnections()
+				pooled.retire()
 				delete(tp.transports, key)
 				removedCount++
 			}
@@ -475,7 +512,7 @@ func (tp *TransportPool) cleanupExpiredTransports(ttl time.Duration) {
 			continue
 		}
 		if pooled.getLastAccess().Before(expirationThreshold) {
-			pooled.transport.CloseIdleConnections()
+			pooled.retire()
 			delete(tp.transports, key)
 			removedCount++
 		}
