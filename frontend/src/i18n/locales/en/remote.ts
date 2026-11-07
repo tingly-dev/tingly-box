@@ -168,16 +168,16 @@ export default {
     },
     "notify": {
       "botCreated": "Bot created successfully.",
-      "botDeleted": "Bot deleted successfully",
-      "botRestarted": "Bot restarted",
+      "botDeleted": "Deleted {{bot}}",
+      "botRestarted": "Restarted {{bot}}",
       "botUpdated": "Bot updated successfully.",
       "deleteFailed": "Failed to delete bot: {{error}}",
       "deleteFailedGeneric": "Failed to delete bot",
       "loadFailed": "Failed to load bot settings",
       "missingFields": "Missing required fields: {{fields}}",
       "qrBindRequired": "Please complete WeChat QR binding before saving",
-      "remoteAgentOff": "Remote Control disabled",
-      "remoteAgentOn": "Remote Control enabled",
+      "remoteAgentOff": "Remote Control disabled for {{bot}}",
+      "remoteAgentOn": "Remote Control enabled for {{bot}}",
       "restartFailed": "Failed to restart bot: {{error}}",
       "restartFailedGeneric": "Failed to restart bot",
       "saveFailed": "Failed to save bot settings",
@@ -186,7 +186,7 @@ export default {
       "unknownPlatform": "Unknown platform: {{platform}}"
     },
     "pairing": {
-      "copied": "Pairing command copied",
+      "copied": "Pairing command copied for {{bot}}",
       "copy": "Copy",
       "copyFailed": "Copy failed — check clipboard permissions",
       "expired": "expired",
@@ -197,7 +197,7 @@ export default {
       "reveal": "Reveal",
       "rotateFailed": "Rotate failed",
       "rotateTooltip": "Rotate (invalidates current code)",
-      "rotated": "Pairing code rotated"
+      "rotated": "Pairing code rotated for {{bot}}"
     },
     "platformSelector": {
       "empty": "No platforms available. Make sure the remote-control service is running.",
@@ -255,7 +255,7 @@ export default {
     },
     "notify": {
       "ccProfileUpdateFailed": "Failed to update Claude Code profile",
-      "ccProfileUpdated": "Claude Code profile updated",
+      "ccProfileUpdated": "{{bot}}: Claude Code profile updated",
     },
     "pageTitle": "Remote Control",
     "emptyTitle": "No bots yet",
@@ -283,6 +283,7 @@ export default {
     "table": {
       "access": "Access",
       "actions": "Actions",
+      "bot": "Bot",
       "botId": "Bot UUID",
       "capabilities": "Capabilities",
       "chatIdCopied": "Chat ID copied",
@@ -303,13 +304,15 @@ export default {
       "uuidCopyFailed": "Copy failed — check clipboard permissions"
     },
     "toggle": {
-      "disabled": "Bot disabled",
-      "enabled": "Bot enabled",
+      "disabled": "Disabled {{bot}}",
+      "enabled": "Enabled {{bot}}",
       "failed": "Failed to toggle bot: {{error}}",
       "failedGeneric": "Failed to toggle bot"
     }
   },
   "botAccess": {
+    "alias": "Alias",
+    "aliasHint": "Leave empty to use the platform name or ID.",
     "actorId": "Platform actor ID",
     "actorIdHint": "Use the concrete user ID reported by the IM platform.",
     "actors_one": "{{count}} authorized actor",
@@ -356,14 +359,23 @@ export default {
     "remoteControl": "Remote Control",
     "titleAll": "{{name}} access",
     "titleRemote": "Who can control {{name}}",
+    "rename": "Rename",
     "unpairedChat": "Unpaired chat",
     "unpairedHint": "Pair first — an unpaired chat can't be given control."
   },
+  "entity": {
+    "copied": "Copied!",
+    "copyId": "Copy ID",
+    "deleted": "(deleted)",
+    "group": "{{platform}} group",
+    "noAlias": "No alias set"
+  },
   "notify": {
     "chat": {
-      "copied": "Target UUID copied",
+      "copied": "Target UUID copied: {{chat}}",
       "copyFailed": "Copy failed — check clipboard permissions",
-      "deleted": "Chat deleted"
+      "deleted": "Deleted {{chat}}",
+      "internalUuid": "Internal target UUID"
     },
     "emptyDescription": "Connect a bot on the Bots page first, then come back here to send it notifications.",
     "emptyTitle": "No bots connected yet",
@@ -438,10 +450,10 @@ export default {
     },
     "subtitle": "Authorize a target, send through the production path, and see whether delivery worked.",
     "target": {
-      "blocked": "Target blocked",
+      "blocked": "Blocked {{chat}}",
       "direct": "Direct",
       "group": "Group",
-      "unblocked": "Target unblocked"
+      "unblocked": "Unblocked {{chat}}"
     },
     "test": {
       "bodyField": "Body (markdown)",
@@ -450,8 +462,8 @@ export default {
       "pickKnownChat": "Select a discovered chat first",
       "resetMarkdown": "Reset to markdown sample",
       "send": "Send",
-      "sendFailed": "Send failed: {{error}}",
-      "sent": "Notification sent",
+      "sendFailed": "Send to {{chat}} failed: {{error}}",
+      "sent": "Notification sent to {{chat}}",
       "target": "Target",
       "targetPlaceholder": "No authorized targets yet",
       "title": "Send a test notification",

@@ -242,8 +242,14 @@ func upsertActor(tx *gorm.DB, botUUID, platform, externalID, displayName string)
 		return remoteActorRecord{}, fmt.Errorf("actor identity is required")
 	}
 	now := time.Now().UTC()
-	row := remoteActorRecord{ID: uuid.NewString(), BotUUID: botUUID, Platform: platform, ExternalActorID: externalID, DisplayName: displayName, LastSeenAt: now, CreatedAt: now, UpdatedAt: now}
-	err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "bot_uuid"}, {Name: "platform"}, {Name: "external_actor_id"}}, DoUpdates: clause.Assignments(map[string]any{"display_name": displayName, "last_seen_at": now, "updated_at": now})}).Create(&row).Error
+	// An empty name (or one that just echoes the id) is "no name": it never wipes a stored one.
+	name := access.UsableName(displayName, externalID)
+	row := remoteActorRecord{ID: uuid.NewString(), BotUUID: botUUID, Platform: platform, ExternalActorID: externalID, DisplayName: name, LastSeenAt: now, CreatedAt: now, UpdatedAt: now}
+	update := map[string]any{"last_seen_at": now, "updated_at": now}
+	if name != "" {
+		update["display_name"] = name
+	}
+	err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "bot_uuid"}, {Name: "platform"}, {Name: "external_actor_id"}}, DoUpdates: clause.Assignments(update)}).Create(&row).Error
 	if err != nil {
 		return remoteActorRecord{}, err
 	}
@@ -356,7 +362,7 @@ func (s *BotAccessStore) ListDirectChats(ctx context.Context, botUUID string) ([
 	for _, r := range rows {
 		out = append(out, directFromRecord(r))
 	}
-	return out, nil
+	return out, withPeerNames(s.db.WithContext(ctx), out)
 }
 
 func (s *BotAccessStore) GetDirectChat(ctx context.Context, botUUID, id string) (access.DirectChat, bool, error) {
@@ -368,7 +374,11 @@ func (s *BotAccessStore) GetDirectChat(ctx context.Context, botUUID, id string) 
 	if err != nil {
 		return access.DirectChat{}, false, err
 	}
-	return directFromRecord(row), true, nil
+	chats := []access.DirectChat{directFromRecord(row)}
+	if err := withPeerNames(s.db.WithContext(ctx), chats); err != nil {
+		return access.DirectChat{}, false, err
+	}
+	return chats[0], true, nil
 }
 
 func (s *BotAccessStore) ListDirectChatPermissions(ctx context.Context, botUUID, id string) ([]access.Permission, error) {
@@ -477,8 +487,14 @@ func (s *BotAccessStore) UnpairDirectChat(ctx context.Context, botUUID, id strin
 func (s *BotAccessStore) DiscoverGroup(ctx context.Context, botUUID, platform, externalGroupID, name string) (access.Group, error) {
 	var row remoteGroupRecord
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		name = access.UsableName(name, externalGroupID)
 		err := tx.Where("bot_uuid = ? AND platform = ? AND external_group_id = ?", botUUID, platform, externalGroupID).First(&row).Error
 		if err == nil {
+			// Keep the platform title current (a renamed group); an empty one never wipes it.
+			if name != "" && name != row.Name {
+				row.Name = name
+				return tx.Model(&remoteGroupRecord{}).Where("id = ?", row.ID).Updates(map[string]any{"name": name, "updated_at": time.Now().UTC()}).Error
+			}
 			return nil
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -1067,6 +1083,33 @@ func (s *BotAccessStore) SetTargetAlias(ctx context.Context, botUUID, id, kind, 
 	}
 	if result.RowsAffected == 0 {
 		return ErrAccessTargetNotFound
+	}
+	return nil
+}
+
+// withPeerNames fills DirectChat.Name from the paired peer's display name, so
+// the name is read from the actor row rather than copied onto the chat. A chat
+// without a peer, or whose peer has no usable name, keeps an empty Name.
+func withPeerNames(tx *gorm.DB, chats []access.DirectChat) error {
+	var ids []string
+	for _, c := range chats {
+		if c.PeerActorID != "" {
+			ids = append(ids, c.PeerActorID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	var actors []remoteActorRecord
+	if err := tx.Select("id", "display_name", "external_actor_id").Where("id IN ?", ids).Find(&actors).Error; err != nil {
+		return err
+	}
+	names := make(map[string]string, len(actors))
+	for _, a := range actors {
+		names[a.ID] = access.UsableName(a.DisplayName, a.ExternalActorID)
+	}
+	for i := range chats {
+		chats[i].Name = names[chats[i].PeerActorID]
 	}
 	return nil
 }

@@ -1,3 +1,4 @@
+import { useEntityLabels } from '@/components/entity/useEntityLabels';
 import { BotConfigDialog, RemoteAgentBotCard } from '@/components/bot';
 import CCProfileDialog from '@/components/bot/CCProfileDialog';
 import EmptyState from '@/components/EmptyState';
@@ -24,6 +25,7 @@ import { useTranslation } from 'react-i18next';
 // Connect dialog (which also carries that platform's setup guide).
 const RemoteAgentPage = () => {
     const { t } = useTranslation();
+    const entities = useEntityLabels();
 
     // The SHARED bot-resource dialog, opened in place — no bouncing to the
     // Bots section. mode 'add' from the Add button / empty state; mode 'edit'
@@ -82,8 +84,8 @@ const RemoteAgentPage = () => {
             if (result?.capability) {
                 showNotification(
                     enabled
-                        ? t('remoteControl.notify.remoteAgentOn', { defaultValue: 'Remote Control enabled' })
-                        : t('remoteControl.notify.remoteAgentOff', { defaultValue: 'Remote Control disabled' }),
+                        ? t('remoteControl.notify.remoteAgentOn', { defaultValue: 'Remote Control enabled for {{bot}}', bot: entities.botText(bot) })
+                        : t('remoteControl.notify.remoteAgentOff', { defaultValue: 'Remote Control disabled for {{bot}}', bot: entities.botText(bot) }),
                     'success'
                 );
                 await loadBots();
@@ -101,7 +103,7 @@ const RemoteAgentPage = () => {
         } finally {
             setTogglingBotUuid(null);
         }
-    }, [loadBots, showNotification, t]);
+    }, [loadBots, showNotification, t, entities]);
 
     // Claude Code profiles — the selected one is what a chat's first session
     // runs under.
@@ -114,14 +116,15 @@ const RemoteAgentPage = () => {
             default_agent: defaultAgentForCCProfile(profileId),
         });
         if (response?.success) {
-            showNotification(t('remoteAgent.notify.ccProfileUpdated', { defaultValue: 'Claude Code profile updated' }), 'success');
+            const updated = bots.find((b) => b.uuid === uuid);
+            showNotification(t('remoteAgent.notify.ccProfileUpdated', { defaultValue: '{{bot}}: Claude Code profile updated', bot: updated ? entities.botText(updated) : uuid }), 'success');
             await loadBots();
         } else {
             const message = response?.error || t('remoteAgent.notify.ccProfileUpdateFailed', { defaultValue: 'Failed to update Claude Code profile' });
             showNotification(message, 'error');
             throw new Error(message);
         }
-    }, [loadBots, showNotification, t]);
+    }, [loadBots, showNotification, t, bots, entities]);
 
     return (
         <PageLayout

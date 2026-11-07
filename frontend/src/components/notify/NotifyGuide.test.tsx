@@ -14,6 +14,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@/constants/platformGuides', () => ({
+    PLATFORM_BRAND_ICONS: {},
     platformDisplayName: (id: string) => id.charAt(0).toUpperCase() + id.slice(1),
 }));
 
@@ -73,7 +74,7 @@ describe('NotifyGuide', () => {
     it('defaults to the first target that can receive and shows its friendly label', async () => {
         const {container} = render(<NotifyGuide bots={[bot()]} />);
         const input = await screen.findByRole('combobox');
-        await waitFor(() => expect((input as HTMLInputElement).value).toBe('Telegram · Maya · Direct · telegram:111'));
+        await waitFor(() => expect((input as HTMLInputElement).value).toBe('Telegram · Maya · 111'));
         expect(codeText(container)).toContain('"id": "chat-uuid-1"');
         expect(codeText(container)).toContain('http://gw.test/api/v1/bots/bot-1/notify');
         expect(codeText(container)).toContain('Bearer $TINGLY_TOKEN');

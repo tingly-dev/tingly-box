@@ -7,7 +7,7 @@ export interface Choice {
     key: string;
     /** The row's leading mark (a platform logo). */
     lead: ReactNode;
-    title: string;
+    title: ReactNode;
     subtitle?: string;
     /** A quiet tag at the end of the row, e.g. "Will move". */
     chip?: string;
@@ -43,7 +43,7 @@ export function ChoiceList({ items, value, onChange, label }: { items: Choice[];
                         </Box>
                         {c.lead}
                         <Box sx={{ minWidth: 0, flex: 1 }}>
-                            <Typography noWrap sx={{ fontWeight: 600, fontSize: fontSizes.base, lineHeight: 1.35 }}>{c.title}</Typography>
+                            <Typography component="div" noWrap sx={{ fontWeight: 600, fontSize: fontSizes.base, lineHeight: 1.35 }}>{c.title}</Typography>
                             {c.subtitle && <Typography noWrap color="text.secondary" sx={{ fontSize: fontSizes.sm, lineHeight: 1.4 }}>{c.subtitle}</Typography>}
                         </Box>
                         {c.chip && (

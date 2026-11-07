@@ -29,7 +29,6 @@ export const en = {
     im: {
         title: 'Bind',
         bots_one: '{{count}} bot', bots_other: '{{count}} bots',
-        chatKind: { direct: 'Private chat', group: 'Group' },
         tags: { label: 'Bound IM chats', bind: 'Bind chat', unbind: 'Unbind {{chat}}', more: '+{{count}}', manage: 'IM chats' },
         place: { none: 'Not bound right now', at: 'Bound to {{place}}', atFolder: 'Bound to folder {{place}}', elsewhere: 'another project' },
         focus: { project: 'Project', folder: 'Folder', coordinator: 'Talking to coordinator', nextSession: 'Waiting for a new session', thread: 'Talking to #{{number}} · {{title}}', boundSession: 'Bound to session #{{number}} · {{title}}' },
@@ -56,7 +55,9 @@ export const en = {
             pickProject: 'Move {{chat}} to', pickPlaceholder: 'Choose a project or folder', noProjects: 'Create a project or folder first.',
             moveDone: '{{chat}} moved to {{project}}',
         },
-        source: 'From {{platform}} · {{chat}}',
+        deleted: '(deleted)',
+        sourceFrom: 'From',
+        group: '{{platform}} group',
         sourcePlatform: 'From {{platform}}',
         sourceBot: 'From bot',
     },

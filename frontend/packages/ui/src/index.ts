@@ -13,3 +13,7 @@ export { CoachMark } from './components/CoachMark';
 export { CopyIconButton } from './components/CopyIconButton';
 export { useCopyFeedback } from './hooks/useCopyFeedback';
 export { writeToClipboard } from './utils/clipboard';
+export { EntityLabel } from './components/EntityLabel';
+export type { EntityLabelProps } from './components/EntityLabel';
+export { entityText, shortId, bareId, aliasOrName } from './utils/entityLabel';
+export type { EntityKind, EntityParts, ShortId, EntityTextOptions } from './utils/entityLabel';

@@ -55,15 +55,15 @@ export default {
       "botDisabled": "Бот отключён",
       "toggleFailed": "Не удалось переключить состояние бота: {{error}}",
       "toggleFailedGeneric": "Не удалось переключить состояние бота",
-      "botRestarted": "Бот перезапущен",
+      "botRestarted": "Перезапущен {{bot}}",
       "restartFailed": "Не удалось перезапустить бота: {{error}}",
       "restartFailedGeneric": "Не удалось перезапустить бота",
-      "botDeleted": "Бот удалён",
+      "botDeleted": "Удалён {{bot}}",
       "deleteFailed": "Не удалось удалить бота: {{error}}",
       "deleteFailedGeneric": "Не удалось удалить бота",
       "cwdUpdateFailed": "Не удалось обновить рабочий каталог",
-      "remoteAgentOff": "Удалённое управление отключено",
-      "remoteAgentOn": "Удалённое управление включено"
+      "remoteAgentOff": "Удалённое управление отключено для {{bot}}",
+      "remoteAgentOn": "Удалённое управление включено для {{bot}}"
     },
     "guide": {
       "title": "Руководство по настройке {{platform}}",
@@ -104,9 +104,9 @@ export default {
       "copy": "Копировать",
       "rotateTooltip": "Обновить (текущий код перестанет действовать)",
       "noActiveCode": "Активного кода нет — возможно, бот остановлен или код уже использован. Нажмите «Обновить», чтобы выпустить новый.",
-      "copied": "Команда сопряжения скопирована",
+      "copied": "Команда сопряжения для {{bot}} скопирована",
       "copyFailed": "Не удалось скопировать — проверьте разрешения буфера обмена",
-      "rotated": "Код сопряжения обновлён",
+      "rotated": "Код сопряжения для {{bot}} обновлён",
       "rotateFailed": "Не удалось обновить код",
       "fetchFailed": "Не удалось получить код сопряжения"
     },
@@ -266,7 +266,7 @@ export default {
     "subtitle": "Подключите бота {{platform}} к удалённому управлению, чтобы работать с Claude Code / SmartGuide из чата и настраивать поведение агента. Само подключение бота настраивается на странице «Боты».",
     "notify": {
       "agentSettingsSaved": "Настройки агента сохранены",
-      "ccProfileUpdated": "Профиль Claude Code обновлён",
+      "ccProfileUpdated": "{{bot}}: профиль Claude Code обновлён",
       "ccProfileUpdateFailed": "Не удалось обновить профиль Claude Code",
     },
     "pageTitle": "Удалённое управление",
@@ -310,6 +310,7 @@ export default {
     "table": {
       "access": "Доступ",
       "actions": "Действия",
+      "bot": "Бот",
       "botId": "Bot UUID",
       "capabilities": "Возможности",
       "chatIdCopied": "Chat ID скопирован",
@@ -330,13 +331,15 @@ export default {
       "uuidCopyFailed": "Не удалось скопировать — проверьте разрешения буфера обмена"
     },
     "toggle": {
-      "disabled": "Бот отключён",
-      "enabled": "Бот включён",
+      "disabled": "Отключён {{bot}}",
+      "enabled": "Включён {{bot}}",
       "failed": "Не удалось переключить состояние бота: {{error}}",
       "failedGeneric": "Не удалось переключить состояние бота"
     }
   },
   "botAccess": {
+    "alias": "Псевдоним",
+    "aliasHint": "Оставьте пустым, чтобы использовать имя на платформе или ID.",
     "actorId": "ID участника на платформе",
     "actorIdHint": "Укажите реальный ID пользователя, который сообщает IM-платформа.",
     "actors_one": "{{count}} авторизованный участник",
@@ -385,8 +388,16 @@ export default {
     "remoteControl": "Удалённое управление",
     "titleAll": "Доступ к {{name}}",
     "titleRemote": "Кто может управлять {{name}}",
+    "rename": "Переименовать",
     "unpairedChat": "Несопряжённый чат",
     "unpairedHint": "Сначала выполните сопряжение — несопряжённому чату нельзя выдать управление."
+  },
+  "entity": {
+    "copied": "Скопировано",
+    "copyId": "Копировать ID",
+    "deleted": "(удалено)",
+    "group": "Группа {{platform}}",
+    "noAlias": "Псевдоним не задан"
   },
   "notify": {
     "title": "Уведомления IM",
@@ -400,15 +411,16 @@ export default {
     "loadFailed": "Не удалось загрузить цели уведомлений",
     "toggleFailed": "Не удалось обновить настройки уведомлений",
     "chat": {
-      "copied": "UUID цели скопирован",
+      "copied": "UUID цели скопирован: {{chat}}",
       "copyFailed": "Не удалось скопировать — проверьте разрешения буфера обмена",
-      "deleted": "Чат удалён"
+      "deleted": "Удалён {{chat}}",
+      "internalUuid": "Внутренний UUID цели"
     },
     "target": {
       "direct": "Личный",
       "group": "Группа",
-      "blocked": "Цель заблокирована",
-      "unblocked": "Цель разблокирована"
+      "blocked": "Заблокирован {{chat}}",
+      "unblocked": "Разблокирован {{chat}}"
     },
     "probe": {
       "showRaw": "Показать исходные данные"
@@ -490,8 +502,8 @@ export default {
       "bodyField": "Текст (markdown)",
       "resetMarkdown": "Вернуть пример markdown",
       "send": "Отправить",
-      "sent": "Уведомление отправлено",
-      "sendFailed": "Не удалось отправить: {{error}}",
+      "sent": "Уведомление отправлено в {{chat}}",
+      "sendFailed": "Не удалось отправить в {{chat}}: {{error}}",
       "paired": "сопряжён"
     }
   },

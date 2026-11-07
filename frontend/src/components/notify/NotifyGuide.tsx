@@ -12,7 +12,9 @@ import {
     type NotifyPayload,
     type SampleLang,
 } from '@/components/notify/notifySamples';
-import {loadNotifyTargets, notifyTargetLabel, notifyTargetParts} from '@/components/notify/notifyTargets';
+import {loadNotifyTargets} from '@/components/notify/notifyTargets';
+import {EntityLabel} from '@tingly/ui';
+import {useEntityLabels} from '@/components/entity/useEntityLabels';
 import {api} from '@/services/api';
 import {fontMono, fontSizes} from '@/theme/fonts';
 import type {BotSettings, NotifyTarget} from '@/types/bot';
@@ -21,6 +23,7 @@ import {getApiBaseUrl} from '@/utils/protocol';
 import {
     Alert,
     Autocomplete,
+    createFilterOptions,
     Box,
     Button,
     CircularProgress,
@@ -91,6 +94,7 @@ const Step: React.FC<{n: number; title: string; area: string; children: ReactNod
 
 const NotifyGuide: React.FC<NotifyGuideProps> = ({bots}) => {
     const {t} = useTranslation();
+    const entities = useEntityLabels();
 
     // The gateway's own URL — in the desktop window the page origin is
     // wails://, which curl can't reach.
@@ -235,27 +239,23 @@ const NotifyGuide: React.FC<NotifyGuideProps> = ({bots}) => {
                         value={selected as TargetOption}
                         groupBy={multiBot ? (option) => option.bot.name || option.bot.platform || '' : undefined}
                         getOptionKey={(option) => option.key}
-                        getOptionLabel={(option) => (option ? notifyTargetLabel(option.target, t) : '')}
+                        getOptionLabel={(option) => (option ? entities.text(entities.target(option.target)) : '')}
+                        // Search the full label: the shown id may be shortened.
+                        filterOptions={createFilterOptions<TargetOption>({stringify: (option) => entities.text(entities.target(option.target), {shorten: false})})}
                         isOptionEqualToValue={(a, b) => a.key === b.key}
                         onChange={(_event, option) => setSelectedKey(option.key)}
                         noOptionsText={emptyText}
                         renderOption={(props, option) => {
                             const {key, ...optionProps} = props as typeof props & {key: string};
-                            const parts = notifyTargetParts(option.target, t);
                             return (
                                 <li key={key} {...optionProps}>
-                                    <Box sx={{minWidth: 0}}>
-                                        <Typography variant="body2" sx={{fontWeight: 600, color: 'text.primary', overflowWrap: 'anywhere'}}>
-                                            {[parts.platform, parts.name || parts.id].filter(Boolean).join(' · ')}
-                                        </Typography>
-                                        <Typography variant="caption" sx={{color: 'text.secondary', display: 'block', fontFamily: fontMono, overflowWrap: 'anywhere'}}>
-                                            {[parts.kind, parts.name ? parts.id : ''].filter(Boolean).join(' · ')}
-                                            {!option.target.can_notify && (
-                                                <Box component="span" sx={{color: 'warning.main', fontFamily: 'inherit'}}>
-                                                    {' · '}{t('notify.guide.target.notAllowed', {defaultValue: 'not allowed yet'})}
-                                                </Box>
-                                            )}
-                                        </Typography>
+                                    <Box sx={{display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flexWrap: 'wrap'}}>
+                                        <EntityLabel {...entities.target(option.target)} platformAs="text" />
+                                        {!option.target.can_notify && (
+                                            <Typography component="span" variant="caption" sx={{color: 'warning.main'}}>
+                                                {t('notify.guide.target.notAllowed', {defaultValue: 'not allowed yet'})}
+                                            </Typography>
+                                        )}
                                     </Box>
                                 </li>
                             );

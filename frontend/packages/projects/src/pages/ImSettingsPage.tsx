@@ -1,3 +1,4 @@
+import { ImChatLabel } from '../components/im/ImChatLabel';
 import { useCallback, useMemo, useState } from 'react';
 import { Box, Button, Link, Skeleton, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
 import { EmptyState, PageHeader, Surface } from '@tingly/ui';
@@ -100,10 +101,10 @@ export default function ImSettingsPage({ setupPath }: { setupPath?: string } = {
                                             <Table size="small" sx={{ tableLayout: 'fixed', minWidth: 560, '& td, & th': { borderColor: 'divider' }, '& tbody tr:last-of-type td': { borderBottom: 0 } }}>
                                                 <TableHead>
                                                     <TableRow sx={{ '& th': { color: 'text.secondary', fontSize: fontSizes.sm, fontWeight: 500, py: 0.75 } }}>
-                                                        <TableCell sx={{ pl: 2, width: '34%' }}>{t('im.settings.chat')}</TableCell>
-                                                        <TableCell sx={{ width: '32%' }}>{t('im.settings.boundTo')}</TableCell>
-                                                        <TableCell sx={{ width: '18%' }}>{t('im.settings.status')}</TableCell>
-                                                        <TableCell align="right" sx={{ pr: 2, width: '16%' }}><Box component="span" sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>{t('im.settings.action')}</Box></TableCell>
+                                                        <TableCell sx={{ pl: 2, width: '42%' }}>{t('im.settings.chat')}</TableCell>
+                                                        <TableCell sx={{ width: '28%' }}>{t('im.settings.boundTo')}</TableCell>
+                                                        <TableCell sx={{ width: '16%' }}>{t('im.settings.status')}</TableCell>
+                                                        <TableCell align="right" sx={{ pr: 2, width: '14%' }}><Box component="span" sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>{t('im.settings.action')}</Box></TableCell>
                                                     </TableRow>
                                                 </TableHead>
                                                 <TableBody>
@@ -114,8 +115,7 @@ export default function ImSettingsPage({ setupPath }: { setupPath?: string } = {
                                                         return (
                                                             <TableRow key={chatKey(c.platform, c.chatId)}>
                                                                 <TableCell sx={{ pl: 2 }}>
-                                                                    <Typography noWrap sx={{ fontWeight: 500, fontSize: fontSizes.base }}>{c.title}</Typography>
-                                                                    <Typography noWrap sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{t(`im.chatKind.${c.kind}`)}</Typography>
+                                                                    <ImChatLabel platform={c.platform} chatId={c.chatId} kind={c.kind} alias={c.alias} copy />
                                                                 </TableCell>
                                                                 <TableCell>
                                                                     {b?.project_id ? (

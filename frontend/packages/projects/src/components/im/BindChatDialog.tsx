@@ -9,7 +9,8 @@ import { folderName } from '../../utils/format';
 import type { ImBot, ImChat } from '../../host/ProjectsHost';
 import { Info } from '../icons';
 import { ChoiceList, type Choice } from './ChoiceList';
-import { PlatformMark, usePlatformLabel } from './PlatformMark';
+import { ImChatLabel } from './ImChatLabel';
+import { PlatformMark } from './PlatformMark';
 import { chatKey } from './useImBindings';
 
 interface Props {
@@ -36,7 +37,6 @@ interface Props {
 /** Bind a known IM chat to this thread (the project side of "bind from either side"). */
 export function BindChatDialog({ open, threadId, folderId, projectId, targetName, chats, hasBots, bots = [], byChat, directory, onClose, onBind, onOpenSettings }: Props) {
     const { t } = useTranslation('projects');
-    const platformLabel = usePlatformLabel();
     const [picked, setPicked] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
 
@@ -64,8 +64,8 @@ export function BindChatDialog({ open, threadId, folderId, projectId, targetName
         return {
             key: `${chatKey(c.platform, c.chatId)}\0${c.botUuid}`,
             lead: <PlatformMark platform={c.platform} size={28} colored={!!bound} />,
-            title: c.title,
-            subtitle: [platformLabel(c.platform), bots.find((bot) => bot.uuid === c.botUuid)?.name, t(`im.chatKind.${c.kind}`), c.state === 'blocked' ? t('im.bind.blocked') : where].filter(Boolean).join(' · '),
+            title: <ImChatLabel platform={c.platform} chatId={c.chatId} kind={c.kind} alias={c.alias} platformAs="text" />,
+            subtitle: [bots.find((bot) => bot.uuid === c.botUuid)?.name, c.state === 'blocked' ? t('im.bind.blocked') : where].filter(Boolean).join(' · '),
             chip: bound && c.state !== 'blocked' ? t('im.bind.rebind') : undefined,
             disabled: c.state === 'blocked',
         };

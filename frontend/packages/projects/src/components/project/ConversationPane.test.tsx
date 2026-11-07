@@ -12,7 +12,7 @@ import type { TranscriptBlock } from '../../transcript/model';
 import { ConversationPane } from './ConversationPane';
 import { ProjectsHostProvider } from '../../host/ProjectsHost';
 
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, options?: Record<string, unknown>) => key === 'im.source' ? `${options?.platform} · ${options?.chat}` : key }) }));
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 const composer = vi.hoisted(() => vi.fn());
 vi.mock('../ThreadComposer', () => ({ ThreadComposer: (props: unknown) => { composer(props); return <div data-testid="composer" />; } }));
 
@@ -93,9 +93,9 @@ describe('conversation presentation', () => {
         show({ ...props([
             event('user', '', { source: 'im', source_platform: 'telegram', source_chat_id: 'chat', payload: JSON.stringify({ attachments: [{ name: 'log.txt', path: 'uploads/log.txt', type: 'text/plain', size: 32 }] }) }),
             event('error', 'Connection failed'),
-        ]), busy: true, chatTitle: () => 'Team chat' });
+        ]), busy: true });
         expect(screen.getByText('log.txt')).toBeInTheDocument();
-        expect(screen.getByText(/Team chat/)).toBeInTheDocument();
+        expect(screen.getByTestId('entity-label')).toHaveTextContent('Telegram·chat');
         expect(screen.getByRole('status')).toHaveTextContent('chat.thinking');
         expect(within(screen.getByRole('status')).getByRole('progressbar')).toBeInTheDocument();
         expect(screen.getByRole('alert')).toHaveTextContent('Connection failed');

@@ -3696,6 +3696,18 @@ export const handlers = [
                     created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
                     auth: {},
                 },
+                // A bot named after its platform account (the default), and one
+                // whose platform gave no name: it shows by its id.
+                {
+                    uuid: '1730600000123456789-imbot', name: '@ops_claude_bot', platform: 'telegram', enabled: true, auth_type: 'token',
+                    default_cwd: '/home/user/ops', default_agent: 'claude_code', chat_id_lock: '',
+                    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), auth: { token: 'mock-bot-token-****' },
+                },
+                {
+                    uuid: '1730600044998877665-imbot', name: '', platform: 'telegram', enabled: true, auth_type: 'token',
+                    default_cwd: '/home/user/lab', default_agent: 'claude_code', chat_id_lock: '',
+                    created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), auth: { token: 'mock-bot-token-****' },
+                },
                 {
                     uuid: 'mock-bot-003',
                     name: 'Dev DingTalk Bot',
@@ -3773,10 +3785,11 @@ export const handlers = [
         // The Feishu bot has its own chat and the DingTalk bot has seen none.
         if (params.bot === 'mock-bot-002') {
             return HttpResponse.json({chats: [
+                // Feishu gave no sender name: no alias, so the chat shows by its id.
                 {chat: {id: 'direct-f1', bot_uuid: 'mock-bot-002', platform: 'feishu', external_chat_id: 'feishu:oc_mock_chat_0001', peer_actor_id: 'actor-f1', blocked: false}, permissions: []},
             ]})
         }
-        if (params.bot === 'mock-bot-003') return HttpResponse.json({chats: []})
+        if (params.bot === 'mock-bot-003' || String(params.bot).endsWith('-imbot')) return HttpResponse.json({chats: []})
         // mock-bot-001 has one chat with full Remote Control so the Remote
         // page shows a ready bot next to ones that nobody can control yet.
         const remote = params.bot === 'mock-bot-001' ? [
@@ -3787,7 +3800,7 @@ export const handlers = [
         return HttpResponse.json({
             chats: [
                 {
-                    chat: {id: 'direct-1', bot_uuid: 'mock-bot', platform: 'telegram', external_chat_id: 'telegram:123456789', alias: 'Maya (phone)', peer_actor_id: 'actor-1', blocked: false},
+                    chat: {id: 'direct-1', bot_uuid: 'mock-bot', platform: 'telegram', external_chat_id: 'telegram:123456789', name: 'Maya (phone)', peer_actor_id: 'actor-1', blocked: false},
                     permissions: [
                         {capability: 'notify', action: 'access', effect: 'allow'},
                         {capability: 'notify', action: 'notify.receive', effect: 'allow'},
@@ -3810,10 +3823,18 @@ export const handlers = [
     http.put('/api/v1/bots/:bot/chats/:chat/blocked', () => HttpResponse.json({ok: true})),
     http.delete('/api/v1/bots/:bot/chats/:chat', () => HttpResponse.json({ok: true})),
 
-    http.get('/api/v1/bots/:bot/groups', ({ params }) => HttpResponse.json({groups: params.bot !== 'mock-bot-002' && params.bot !== 'mock-bot-003' ? [
+    // The Telegram group's title became its default alias; the Feishu group has
+    // a long platform id and the platform gave no title.
+    http.get('/api/v1/bots/:bot/groups', ({ params }) => HttpResponse.json({groups: params.bot === 'mock-bot-002' ? [
+        {id: 'group-f1', bot_uuid: 'mock-bot-002', platform: 'feishu', external_group_id: 'oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5', blocked: false},
+    ] : params.bot !== 'mock-bot-003' && !String(params.bot).endsWith('-imbot') ? [
         {id: 'group-1', bot_uuid: 'mock-bot', platform: 'telegram', external_group_id: 'telegram:-10024681012', name: 'Release Crew', blocked: false},
     ] : []})),
-    http.get('/api/v1/bots/:bot/groups/:group', () => HttpResponse.json({
+    http.get('/api/v1/bots/:bot/groups/:group', ({ params }) => HttpResponse.json(params.group === 'group-f1' ? {
+        group: {id: 'group-f1', bot_uuid: 'mock-bot-002', platform: 'feishu', external_group_id: 'oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5', blocked: false},
+        capabilities: {notify: 'allow', remote_control: 'deny'},
+        actors: [],
+    } : {
         group: {id: 'group-1', bot_uuid: 'mock-bot', platform: 'telegram', external_group_id: 'telegram:-10024681012', name: 'Release Crew', blocked: false},
         capabilities: {notify: 'allow', remote_control: 'allow'},
         actors: [
