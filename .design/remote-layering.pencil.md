@@ -4,7 +4,7 @@ date: 2026-11-08
 
 # Remote layering: Remote as its own module (option B)
 
-> Status: **decided direction, not started.** Decision (YZ, 2026-11-08): Remote is a library that connects IM and
+> Status: **L1–L5 done** (one commit per step, see git log for `remote`), L6 open. Original status: decided direction. Decision (YZ, 2026-11-08): Remote is a library that connects IM and
 > Agent, embedded in two ways, by Tingly Box and by Projects; it becomes its **own Go module**. Follows
 > [remote-refactor.md](./remote-refactor.md) (R0–R5, done). Analysis and the options that were compared are in the
 > conversation that produced this file; only the chosen one is kept here.
@@ -72,6 +72,17 @@ date: 2026-11-08
 - L4 touches build wiring (`go.work`, `replace`, CI, `Taskfile`); verify `go list -deps` of `remote` has no root module.
 - `remote/scenario/claudecode`, `remote/ask`, `imchannel` import `agentboot` (already its own module): fine, no change.
 - Any rename must not change user-visible text: chat commands, `/help`, replies stay as in remote-refactor.md.
+
+## As built
+
+- `remote/` is its own module (`remote/go.mod`: imbot and agentboot only); `task remote:boundary` and the `test-remote`
+  CI job fail if it imports the root module or Projects.
+- `remote/agent` is the port (`Chat`, `ChatRef`, `ChatPlace`, `File`, `ProjectChoice`) plus the session command set;
+  `remote/interaction` holds the approval words; `bot.MemoryChatStore` lets Remote run without a database.
+- Projects imports `remote/agent` and `remote/interaction` (its types are aliases, `*App` implements `agent.Chat`).
+- The host (`internal/server/module/projects`) owns the bridge: it passes the port straight through to `projects.App`
+  and sends Projects' replies out through Remote's channels. `internal/remotehost` holds the db-backed glue.
+- Tests that need the host's database (authorization gate, store persistence) live in the host.
 
 ## Open
 
