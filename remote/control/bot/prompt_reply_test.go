@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/remote/control/ask"
+	"github.com/tingly-dev/tingly-box/remote/ask"
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
 )
 
