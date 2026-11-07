@@ -101,7 +101,7 @@ func (b *ChatBridge) Bound(platform, chatID string) bool {
 	if app == nil {
 		return false
 	}
-	place, err := app.Place(projectsapp.ChatRef{Platform: platform, ChatID: chatID})
+	place, err := app.Place(agent.ChatRef{Platform: platform, ChatID: chatID})
 	return err == nil && place.Bound
 }
 
@@ -118,7 +118,7 @@ func (b *ChatBridge) ToFolder(ref agent.ChatRef, folder string, ifNew bool) erro
 	if app == nil {
 		return errOff
 	}
-	return app.ToFolder(projectsapp.ChatRef(ref), folder, ifNew)
+	return app.ToFolder(ref, folder, ifNew)
 }
 
 // Folders implements agent.Chat: Projects' current, existing working
@@ -138,8 +138,7 @@ func (b *ChatBridge) Place(ref agent.ChatRef) (agent.ChatPlace, error) {
 	if app == nil {
 		return agent.ChatPlace{}, errOff
 	}
-	place, err := app.Place(projectsapp.ChatRef(ref))
-	return agent.ChatPlace(place), err
+	return app.Place(ref)
 }
 
 // Projects implements agent.Chat: project coordinators, separately from
@@ -149,15 +148,7 @@ func (b *ChatBridge) Projects() ([]agent.ProjectChoice, error) {
 	if app == nil {
 		return nil, errOff
 	}
-	projects, err := app.Projects()
-	if err != nil {
-		return nil, err
-	}
-	out := make([]agent.ProjectChoice, len(projects))
-	for i, p := range projects {
-		out[i] = agent.ProjectChoice(p)
-	}
-	return out, nil
+	return app.Projects()
 }
 
 // ToProject implements agent.Chat: it binds the chat to the project's
@@ -167,7 +158,7 @@ func (b *ChatBridge) ToProject(ref agent.ChatRef, projectID string) error {
 	if app == nil {
 		return errOff
 	}
-	return app.ToProject(projectsapp.ChatRef(ref), projectID)
+	return app.ToProject(ref, projectID)
 }
 
 // touch remembers the bot a chat wrote through, so replies go back through it,
@@ -224,11 +215,7 @@ func (b *ChatBridge) Post(ref agent.ChatRef, text string, files []agent.File) (b
 		return false, nil
 	}
 	b.touch(ref, true)
-	converted := make([]projectsapp.ChannelFile, len(files))
-	for i, f := range files {
-		converted[i] = projectsapp.ChannelFile(f)
-	}
-	return app.Post(projectsapp.ChatRef(ref), text, converted)
+	return app.Post(ref, text, files)
 }
 
 // Command implements agent.Chat.
@@ -238,7 +225,7 @@ func (b *ChatBridge) Command(ref agent.ChatRef, name, arg string) (bool, string,
 		return false, "", nil
 	}
 	b.touch(ref, true)
-	return app.Command(projectsapp.ChatRef(ref), name, arg)
+	return app.Command(ref, name, arg)
 }
 
 // Answer implements agent.Chat.
@@ -248,7 +235,7 @@ func (b *ChatBridge) Answer(ref agent.ChatRef, threadID, requestID, value string
 		return "Projects is switched off.", nil
 	}
 	b.touch(ref, false)
-	return app.Answer(projectsapp.ChatRef(ref), threadID, requestID, value)
+	return app.Answer(ref, threadID, requestID, value)
 }
 
 var (
