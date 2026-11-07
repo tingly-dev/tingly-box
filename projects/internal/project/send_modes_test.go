@@ -153,7 +153,7 @@ func TestStopAndSendReplacesTheTurnAndStopDropsChips(t *testing.T) {
 		_, err = g.threads.SendWith(context.Background(), th.ID, "later", nil, Source{}, SendQueue)
 		require.NoError(t, err)
 		require.Len(t, chips(t, g, th.ID, "held"), 1)
-		g.threads.Stop(th.ID)
+		g.threads.Stop(th.ID, Source{})
 		close(release)
 		assert.Eventually(t, func() bool { return len(chips(t, g, th.ID, "removed")) == 1 }, 5*time.Second, 10*time.Millisecond)
 	})

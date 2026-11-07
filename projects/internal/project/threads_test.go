@@ -238,7 +238,7 @@ func TestStopAndPausedProject(t *testing.T) {
 	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "long"})
 	require.NoError(t, err)
 	<-started
-	f.threads.Stop(th.ID)
+	f.threads.Stop(th.ID, Source{})
 	waitStatus(t, f.store, th.ID, db.ThreadIdle)
 	select {
 	case r := <-f.reports:
@@ -362,7 +362,7 @@ func TestMessageSentAfterStopRuns(t *testing.T) {
 	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "long"})
 	require.NoError(t, err)
 	<-started
-	f.threads.Stop(th.ID)
+	f.threads.Stop(th.ID, Source{})
 	<-stopping
 	_, err = f.threads.Send(context.Background(), th.ID, "instead", Source{}, nil)
 	require.NoError(t, err)

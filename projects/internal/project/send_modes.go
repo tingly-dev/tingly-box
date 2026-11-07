@@ -47,7 +47,7 @@ func (m *Threads) SendWith(ctx context.Context, threadID, text string, atts []At
 	case SendQueue:
 		q.held = true
 	case SendStopAndSend:
-		if done := m.stop(threadID); done != nil {
+		if done, _ := m.stop(threadID, src); done != nil {
 			select {
 			case <-done:
 			case <-time.After(agentboot.SessionCloseTimeout):
