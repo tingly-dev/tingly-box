@@ -69,10 +69,11 @@ func TestClaudeCodePrefs_ToEnv_EmptyOnlyInjectsServerKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ToEnv: %v", err)
 	}
-	// ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, and NO_PROXY are always
-	// injected (NO_PROXY bypasses any system proxy for the loopback gateway).
-	if len(env) != 3 {
-		t.Errorf("expected exactly 3 server-injected keys, got %d: %v", len(env), env)
+	// ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, NO_PROXY and the auto-mode
+	// server default are always injected (NO_PROXY bypasses any system proxy
+	// for the loopback gateway).
+	if len(env) != 4 {
+		t.Errorf("expected exactly 4 server-injected keys, got %d: %v", len(env), env)
 	}
 	mustEq(t, env, "ANTHROPIC_BASE_URL", "http://localhost:12580/tingly/claude_code")
 	mustEq(t, env, "ANTHROPIC_AUTH_TOKEN", "tok")
@@ -144,6 +145,7 @@ func TestClaudeCodePrefs_ToEnv_FullForm(t *testing.T) {
 		"NO_PROXY",
 		"ANTHROPIC_BASE_URL",
 		"ANTHROPIC_AUTH_TOKEN",
+		"CLAUDE_CODE_AUTO_MODE_SERVER", // server-injected default
 	}
 	for _, k := range wantKeys {
 		if _, ok := env[k]; !ok {
@@ -320,6 +322,7 @@ func TestDefaultClaudeCodePrefs(t *testing.T) {
 		"ANTHROPIC_BASE_URL":                       "http://localhost:12580/tingly/claude_code",
 		"ANTHROPIC_AUTH_TOKEN":                     "test-token",
 		"NO_PROXY":                                 "localhost,127.0.0.1,::1",
+		"CLAUDE_CODE_AUTO_MODE_SERVER":             "0",
 	}
 	assertEnvMapsEqual(t, want, env)
 }
@@ -338,6 +341,20 @@ func TestClaudeCodePrefs_JSONShapeUsesEnvNames(t *testing.T) {
 	if _, ok := m["AnthropicDefaultHaikuModel"]; ok {
 		t.Error("Go field name leaked into JSON output")
 	}
+}
+
+func TestClaudeCodePrefs_ToEnv_AutoModeServerDefaultAndOverride(t *testing.T) {
+	env, err := ClaudeCodePrefs{}.ToEnv("http://localhost:12580", "tok")
+	if err != nil {
+		t.Fatalf("ToEnv: %v", err)
+	}
+	mustEq(t, env, "CLAUDE_CODE_AUTO_MODE_SERVER", "0")
+
+	env, err = ClaudeCodePrefs{Extra: map[string]string{"CLAUDE_CODE_AUTO_MODE_SERVER": "1"}}.ToEnv("http://localhost:12580", "tok")
+	if err != nil {
+		t.Fatalf("ToEnv: %v", err)
+	}
+	mustEq(t, env, "CLAUDE_CODE_AUTO_MODE_SERVER", "1")
 }
 
 func mustEq(t *testing.T, env map[string]string, key, want string) {
