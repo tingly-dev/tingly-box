@@ -330,6 +330,16 @@ func (s *RemoteChatStore) BindProject(chatID, platform, projectPath, ownerID str
 	})
 }
 
+// RememberFolder pushes a folder onto the chat's MRU history, creating the
+// chat if needed, and leaves ProjectPath as it was.
+func (s *RemoteChatStore) RememberFolder(chatID, platform, folder, ownerID string) error {
+	return s.mutate(chatID, platform, func(chat *bot.Chat) {
+		chat.Platform = platform
+		chat.OwnerID = ownerID
+		chat.RememberFolder(folder)
+	})
+}
+
 // ListChatProjectPaths returns the per-chat MRU list of project paths (newest
 // first), falling back to [ProjectPath] for chats with no history yet.
 func (s *RemoteChatStore) ListChatProjectPaths(chatID string) ([]string, error) {

@@ -42,6 +42,24 @@ func TestPushProjectHistory_SeedsLegacyProjectPath(t *testing.T) {
 	}
 }
 
+func TestRememberFolder_LeavesProjectPathAlone(t *testing.T) {
+	chat := &bot.Chat{ProjectPath: "/legacy"}
+	chat.RememberFolder("/a")
+	chat.RememberFolder("/b")
+	want := []string{"/b", "/a", "/legacy"}
+	if len(chat.ProjectHistory) != len(want) {
+		t.Fatalf("history = %v, want %v", chat.ProjectHistory, want)
+	}
+	for i, w := range want {
+		if chat.ProjectHistory[i] != w {
+			t.Errorf("history[%d] = %q, want %q (%v)", i, chat.ProjectHistory[i], w, chat.ProjectHistory)
+		}
+	}
+	if chat.ProjectPath != "/legacy" {
+		t.Errorf("ProjectPath = %q, want it untouched (/legacy)", chat.ProjectPath)
+	}
+}
+
 func TestPushProjectHistory_EmptyPathIsNoOp(t *testing.T) {
 	chat := &bot.Chat{ProjectPath: "/x", ProjectHistory: []string{"/x"}}
 	chat.PushProjectHistory("")

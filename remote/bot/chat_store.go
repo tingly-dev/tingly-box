@@ -108,6 +108,18 @@ type Chat struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// RememberFolder prepends path to ProjectHistory (the order /dir lists a
+// chat's folders in) without touching ProjectPath: where a chat works now is
+// Projects' to say, ProjectPath only seeds a chat that has no place there yet.
+func (c *Chat) RememberFolder(path string) {
+	if c == nil {
+		return
+	}
+	legacy := c.ProjectPath
+	c.PushProjectHistory(path)
+	c.ProjectPath = legacy
+}
+
 // PushProjectHistory sets chat.ProjectPath and prepends it to ProjectHistory
 // (deduped, capped). When the chat already had a ProjectPath that wasn't in
 // the history yet, it is preserved one slot below so a fresh upgrade keeps
@@ -153,6 +165,11 @@ type ChatStoreInterface interface {
 
 	// BindProject binds a project to a chat
 	BindProject(chatID, platform, projectPath, ownerID string) error
+
+	// RememberFolder records a folder the chat used in its MRU history,
+	// creating the chat if needed; unlike BindProject it leaves ProjectPath
+	// alone.
+	RememberFolder(chatID, platform, folder, ownerID string) error
 
 	// GetProjectPath retrieves the project path for a chat
 	GetProjectPath(chatID string) (string, bool, error)
