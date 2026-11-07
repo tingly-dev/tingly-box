@@ -85,6 +85,7 @@ export default {
     "clear": "Clear selection",
     "dismiss": "Dismiss",
     "moveDown": "Move down",
+    "pinToTop": "Pin to top",
     "moveUp": "Move up",
     "saved": "Saved"
   },

@@ -639,3 +639,108 @@ func TestDeleteRule_Success(t *testing.T) {
 		t.Error("Rule should have been deleted")
 	}
 }
+
+func TestReorderRules_Success(t *testing.T) {
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	router := setupTestRouter(cfg)
+	handler := NewHandler(cfg)
+	router.POST("/rules/reorder", handler.ReorderRules)
+	router.GET("/rules", handler.GetRules)
+
+	for _, name := range []string{"m-a", "m-b", "m-c"} {
+		rule := typ.Rule{UUID: "u-" + name, Scenario: "test_scenario", RequestModel: name}
+		if err := cfg.AddRule(rule); err != nil {
+			t.Fatalf("AddRule(%s) error: %v", name, err)
+		}
+	}
+
+	// Pin m-c to the top: only the target is named, the rest follow.
+	body, _ := json.Marshal(map[string]interface{}{
+		"scenario":      "test_scenario",
+		"ordered_uuids": []string{"u-m-c"},
+	})
+	req, _ := http.NewRequest(http.MethodPost, "/rules/reorder", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var response struct {
+		Success bool `json:"success"`
+		Data    []struct {
+			UUID string `json:"uuid"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if !response.Success || len(response.Data) != 3 {
+		t.Fatalf("expected success with 3 rules, got %v / %d", response.Success, len(response.Data))
+	}
+	got := []string{response.Data[0].UUID, response.Data[1].UUID, response.Data[2].UUID}
+	want := []string{"u-m-c", "u-m-a", "u-m-b"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("reorder response = %v, want %v", got, want)
+		}
+	}
+
+	// GET /rules serves the new order (relative order is what every list
+	// consumer sees).
+	req, _ = http.NewRequest(http.MethodGet, "/rules?scenario=test_scenario", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	var list struct {
+		Data []struct {
+			UUID string `json:"uuid"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
+		t.Fatalf("failed to parse list response: %v", err)
+	}
+	for i := range want {
+		if list.Data[i].UUID != want[i] {
+			t.Fatalf("GET /rules order = %v %v %v, want %v", list.Data[0].UUID, list.Data[1].UUID, list.Data[2].UUID, want)
+		}
+	}
+}
+
+func TestReorderRules_BadRequests(t *testing.T) {
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	router := setupTestRouter(cfg)
+	handler := NewHandler(cfg)
+	router.POST("/rules/reorder", handler.ReorderRules)
+
+	if err := cfg.AddRule(typ.Rule{UUID: "keep", Scenario: "test_scenario", RequestModel: "m"}); err != nil {
+		t.Fatalf("AddRule error: %v", err)
+	}
+
+	cases := []struct {
+		name string
+		body map[string]interface{}
+	}{
+		{"missing scenario", map[string]interface{}{"ordered_uuids": []string{"keep"}}},
+		{"empty uuids", map[string]interface{}{"scenario": "test_scenario"}},
+		{"unknown uuid", map[string]interface{}{"scenario": "test_scenario", "ordered_uuids": []string{"ghost"}}},
+		{"foreign scenario uuid", func() map[string]interface{} {
+			_ = cfg.AddRule(typ.Rule{UUID: "other", Scenario: "other_scenario", RequestModel: "x"})
+			return map[string]interface{}{"scenario": "test_scenario", "ordered_uuids": []string{"other"}}
+		}()},
+	}
+	for _, tc := range cases {
+		body, _ := json.Marshal(tc.body)
+		req, _ := http.NewRequest(http.MethodPost, "/rules/reorder", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: expected status %d, got %d: %s", tc.name, http.StatusBadRequest, w.Code, w.Body.String())
+		}
+	}
+	if r := cfg.GetRuleByUUID("keep"); r == nil {
+		t.Error("rejected reorders must not drop rules")
+	}
+}

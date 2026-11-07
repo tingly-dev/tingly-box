@@ -281,7 +281,7 @@ const UseTeamPageContent: React.FC = () => {
                     </AgentAccessSection>
 
                     <CardGrid>
-                    <TemplatePage key={scenario} scenario={scenario} collapsible allowDeleteRule hideTroubleshoot />
+                    <TemplatePage key={scenario} scenario={scenario} collapsible allowDeleteRule allowReorder hideTroubleshoot />
                     </CardGrid>
                 </Stack>
             )}

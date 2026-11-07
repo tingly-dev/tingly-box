@@ -2819,6 +2819,38 @@ export const handlers = [
         return HttpResponse.json({ success: false, error: 'Rule not found' }, { status: 404 })
     }),
 
+    // Hard ordering: apply a new list order to one scenario's rules, mirroring
+    // the backend's tolerant merge (unnamed scenario rules follow the named
+    // ones; foreign/unknown uuids are rejected).
+    http.post('/api/v1/rules/reorder', async ({ request }) => {
+        const body = await request.json() as { scenario?: string; ordered_uuids?: string[] }
+        const scenario = body.scenario?.trim()
+        const ordered = body.ordered_uuids ?? []
+        if (!scenario) {
+            return HttpResponse.json({ success: false, error: 'Scenario is required' }, { status: 400 })
+        }
+        if (ordered.length === 0) {
+            return HttpResponse.json({ success: false, error: 'ordered_uuids is required' }, { status: 400 })
+        }
+        const rules = mockV1Rules[scenario] ?? []
+        const seen = new Set<string>()
+        for (const uuid of ordered) {
+            if (seen.has(uuid)) {
+                return HttpResponse.json({ success: false, error: `uuid ${uuid} appears more than once` }, { status: 400 })
+            }
+            seen.add(uuid)
+            if (!rules.some(r => r.uuid === uuid)) {
+                return HttpResponse.json({ success: false, error: `rule with UUID ${uuid} not found in scenario ${scenario}` }, { status: 400 })
+            }
+        }
+        const named = ordered.map(uuid => rules.find(r => r.uuid === uuid)!)
+        const rest = rules.filter(r => !seen.has(r.uuid))
+        const next = [...named, ...rest]
+        rules.length = 0
+        rules.push(...next)
+        return HttpResponse.json({ success: true, data: next })
+    }),
+
     // ============================================
     // Rule Flag Registry
     // ============================================

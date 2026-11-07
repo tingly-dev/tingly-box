@@ -6714,6 +6714,39 @@
         }
       }
     },
+    "/api/v1/rules/reorder": {
+      "post": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Apply a new list order to one scenario's rules. The order is hard state: it drives /v1/models listing, same-tier match priority and the model order written into client configs",
+        "description": "Apply a new list order to one scenario's rules. The order is hard state: it drives /v1/models listing, same-tier match priority and the model order written into client configs",
+        "operationId": "apiV1RulesReorderPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderRulesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RulesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/scenario-descriptors": {
       "get": {
         "tags": [
@@ -19183,6 +19216,27 @@
         "required": [
           "success",
           "message"
+        ]
+      },
+      "ReorderRulesRequest": {
+        "type": "object",
+        "properties": {
+          "ordered_uuids": {
+            "type": "array",
+            "description": "Field ordered_uuids",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Field scenario",
+            "example": "openai"
+          }
+        },
+        "required": [
+          "scenario",
+          "ordered_uuids"
         ]
       },
       "Repo": {

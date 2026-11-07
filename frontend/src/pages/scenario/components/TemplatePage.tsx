@@ -7,6 +7,7 @@ import { KeyboardArrowUp as KeyboardArrowUpIcon } from '@/components/icons';
 import {useNavigate} from 'react-router-dom';
 import EmptyState from '@/components/EmptyState';
 import RuleCard from '@/components/RuleCard.tsx';
+import {api} from '@/services/api';
 import ConnectAIDialogs from '@/components/ConnectAIDialogs';
 import UnifiedCard from '@/components/UnifiedCard';
 import { EntryGuideDialog } from '@/components/tier/EntryGuideDialog';
@@ -62,6 +63,7 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
         allowDeleteRule = false,
         allowToggleRule = true,
         allowAddRule = true,
+        allowReorder = false,
         scenario,
         showAddApiKeyButton = true,
         showCreateRuleButton = true,
@@ -155,6 +157,34 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
     // itself, so match priority (if any) and the scroll-to-new-rule logic
     // above stay anchored to the real, backend-ordered array.
     const {sortMode, toggleSortMode, sortedRules} = useRuleSort(rules);
+
+    // Hard ordering: move one rule (pin = jump to top, up/down = nudge one
+    // slot) and persist the whole new order. Optimistic locally, then the
+    // server round-trip; on failure the list reloads to the server truth.
+    // Only offered in the original order view — the name-sorted view is a
+    // lens, not the list, so moving within it would mislead.
+    const handleReorder = useCallback(async (ruleUuid: string, direction: 'top' | 'up' | 'down') => {
+        if (!scenario || !allowReorder || sortMode !== 'original') return;
+        const from = rules.findIndex(r => r.uuid === ruleUuid);
+        if (from < 0) return;
+        const next = [...rules];
+        const [moved] = next.splice(from, 1);
+        const to = direction === 'top' ? 0 : direction === 'up' ? Math.max(0, from - 1) : Math.min(next.length, from + 1);
+        next.splice(to, 0, moved);
+        if (direction === 'up' && to === from) return;
+
+        onRulesChange(next);
+        try {
+            const result = await api.reorderRules(scenario, next.map(r => r.uuid));
+            if (!result?.success) {
+                throw new Error(result?.error || 'Unknown error');
+            }
+        } catch (error) {
+            console.error('Error reordering rules:', error);
+            showNotification(`Failed to reorder rules: ${(error as Error).message}`, 'error');
+            await loadRules?.(scenario);
+        }
+    }, [rules, scenario, allowReorder, sortMode, onRulesChange, loadRules, showNotification]);
 
     // Routed through a ref so onCreateFromModels doesn't capture a stale createRules.
     const createRulesRef = useRef(createRules);
@@ -408,6 +438,9 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                             // so only attach it in the original, insertion-ordered view.
                             const isLastRule = sortMode === 'original' && index === sortedRules.length - 1;
                             const shouldAttachRef = isNewRule || (isLastRule && !newRuleUuid);
+                            // Edge rules have nothing to move toward; a single-rule
+                            // list has no ordering to change at all.
+                            const reorderEnabled = allowReorder && sortMode === 'original' && sortedRules.length > 1;
 
                             return (
                                 <div key={rule.uuid} ref={shouldAttachRef ? lastRuleRef : null}>
@@ -428,6 +461,10 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                                             allowDeleteRule={allowDeleteRule}
                                             onRuleDelete={onRuleDelete}
                                             allowToggleRule={allowToggleRule}
+                                            allowReorder={reorderEnabled}
+                                            onMoveRule={handleReorder}
+                                            canMoveUp={reorderEnabled && index > 0}
+                                            canMoveDown={reorderEnabled && index < sortedRules.length - 1}
                                             onToggleExpanded={() => handleRuleExpandToggle(rule.uuid)}
                                             onContext1MToggle={onContext1MToggle}
                                             quickProbeSignal={probeAllSignal}
