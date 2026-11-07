@@ -201,17 +201,17 @@ func countCacheMarkers(t flagTB, value any, markerKey, discriminator, wantValue 
 // cacheSurvivesPath reports whether explicit/implicit prompt-cache fields can
 // survive every hop in a request's path. Every virtual provider this suite
 // dispatches to is a generic httptest URL, never api.openai.com, so it is
-// never on ApplyProviderTransforms's explicit-prompt-cache allowlist:
-// whichever hop's outbound wire shape is OpenAI Chat gets its
-// prompt_cache_options / prompt_cache_breakpoint stripped by
-// ops.stripOpenAIPromptCacheFields before it leaves the gateway — including,
+// never on the explicit-prompt-cache allowlist: whichever hop's outbound wire
+// shape is OpenAI Chat or Responses gets its prompt_cache_options /
+// prompt_cache_breakpoint stripped (ops.stripOpenAIPromptCacheFields /
+// stripResponsesPromptCacheFields) before it leaves the gateway — including,
 // for an ABA path, at the intermediate hop, so nothing survives to be
-// re-added downstream even if the tail hop's own shape isn't Chat. That's
+// re-added downstream even if the tail hop's own shape is Anthropic. That's
 // the intended default-deny behavior (see supportsExplicitPromptCache), not
 // a bug this suite should paper over — a dedicated vendor-transform suite
 // (protocoltest vendor category) exercises the allowlisted case.
 func cacheSurvivesPath(hops ...protocol.APIType) bool {
-	return !slices.Contains(hops, protocol.TypeOpenAIChat)
+	return !slices.Contains(hops, protocol.TypeOpenAIChat) && !slices.Contains(hops, protocol.TypeOpenAIResponses)
 }
 
 // requireLastRequest returns the request the final provider received on the
@@ -323,7 +323,7 @@ func assertCapturedAutomaticCacheState(t flagTB, env *TestEnv, target protocol.A
 	}
 
 	// See cacheSurvivesPath: whichever hop's outbound wire shape is OpenAI
-	// Chat has prompt_cache_options stripped entirely — including the
+	// Chat or Responses has prompt_cache_options stripped entirely — including the
 	// automatic/implicit mode — before it leaves the gateway.
 	wantMode := ""
 	if wantImplicit {
