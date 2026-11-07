@@ -18,7 +18,8 @@ const mono = { fontFamily: fontMono } as const;
 /**
  * Adds local repositories by path. Each path is checked right away and shown
  * as what threads will actually use: the repository root and the branch they
- * branch from.
+ * branch from. Picking a directory in the browser is the decision to add it;
+ * a typed path keeps the Add button.
  */
 export function RepoField({ value, onChange }: { value: RepoEntry[]; onChange: (v: RepoEntry[]) => void }) {
     const { t } = useTranslation('projects');
@@ -27,15 +28,16 @@ export function RepoField({ value, onChange }: { value: RepoEntry[]; onChange: (
     const [busy, setBusy] = useState(false);
     const [browsing, setBrowsing] = useState(false);
 
-    const add = async () => {
-        const p = path.trim();
-        if (!p) return;
+    const add = async (p: string) => {
+        const target = p.trim();
+        if (!target) return;
         setBusy(true);
         setError(null);
         try {
-            const r = await unwrap(api.POST('/api/v1/projects/repos/inspect', { body: { path: p } }));
+            const r = await unwrap(api.POST('/api/v1/projects/repos/inspect', { body: { path: target } }));
             if (!r.ok || !r.root) {
                 setError(r.error ?? t('repo.invalid'));
+                setPath(target);
                 return;
             }
             if (!value.some((v) => v.root === r.root)) {
@@ -44,6 +46,7 @@ export function RepoField({ value, onChange }: { value: RepoEntry[]; onChange: (
             setPath('');
         } catch (e) {
             setError((e as Error).message);
+            setPath(target);
         } finally {
             setBusy(false);
         }
@@ -78,7 +81,7 @@ export function RepoField({ value, onChange }: { value: RepoEntry[]; onChange: (
                     onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                             e.preventDefault();
-                            void add();
+                            void add(path);
                         }
                     }}
                     placeholder={t('repo.placeholder')}
@@ -87,11 +90,12 @@ export function RepoField({ value, onChange }: { value: RepoEntry[]; onChange: (
                     slotProps={{ htmlInput: { style: { ...mono, fontSize: fontSizes.base }, spellCheck: false } }}
                 />
                 <Button variant="outlined" onClick={() => setBrowsing(true)} sx={{ flexShrink: 0, height: 40 }}>{t('directory.browse')}</Button>
-                <Button variant="outlined" onClick={() => void add()} disabled={!path.trim() || busy} sx={{ flexShrink: 0, height: 40 }}>
+                <Button variant="outlined" onClick={() => void add(path)} disabled={!path.trim() || busy} sx={{ flexShrink: 0, height: 40 }}>
                     {t('repo.add')}
                 </Button>
             </Box>
-            {browsing && <DirectoryPicker onClose={() => setBrowsing(false)} onSelect={(selected) => { setPath(selected); setError(null); setBrowsing(false); }} />}
+            {/* Picking a folder is the decision to add it, as in AddWorkdirDialog. */}
+            {browsing && <DirectoryPicker onClose={() => setBrowsing(false)} onSelect={(selected) => { setError(null); setBrowsing(false); void add(selected); }} />}
         </Box>
     );
 }
