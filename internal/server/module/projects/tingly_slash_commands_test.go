@@ -10,8 +10,8 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly/testenv"
-	projectsapp "github.com/tingly-dev/tingly-box/projects"
 	"github.com/tingly-dev/tingly-box/remote/access"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 )
 
 // Platform mention formats are simulated by sending that text through the
@@ -45,7 +45,7 @@ func (h *tinglyProjectsHarness) setPrivileged(t *testing.T, chat *testenv.Chat, 
 
 func (h *tinglyProjectsHarness) currentFolder(t *testing.T, chat *testenv.Chat) string {
 	t.Helper()
-	place, err := h.bridge.Place(projectsapp.ChatRef{Platform: "tingly", ChatID: chat.ChatID})
+	place, err := h.bridge.Place(agent.ChatRef{Platform: "tingly", ChatID: chat.ChatID})
 	require.NoError(t, err)
 	return place.Folder
 }

@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/tingly-dev/tingly-box/imbot"
-	projectsapp "github.com/tingly-dev/tingly-box/projects"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 	bot2 "github.com/tingly-dev/tingly-box/remote/bot"
 	"github.com/tingly-dev/tingly-box/remote/chat/feature"
 )
@@ -38,7 +38,7 @@ type BotHandler struct {
 	// when the host has no access policy.
 	privileged     bot2.PrivilegeChecker
 	projectListsMu sync.Mutex
-	projectLists   map[string][]projectsapp.ProjectChoice
+	projectLists   map[string][]agent.ProjectChoice
 	folderLists    map[string][]string
 }
 

@@ -238,6 +238,25 @@ func TestParseTextResponse_MatchesPermissionOptions(t *testing.T) {
 
 	_, _, ok = ParseTextResponse("maybe")
 	assert.False(t, ok)
+
+	// The words are Projects': codes, not numbers.
+	approved, _, ok = ParseTextResponse("同意")
+	assert.True(t, ok)
+	assert.True(t, approved)
+	for _, number := range []string{"0", "1", "2", "3"} {
+		_, _, ok = ParseTextResponse(number)
+		assert.False(t, ok, number)
+	}
+}
+
+func TestParseDefaultResponse_UsesTheSharedWords(t *testing.T) {
+	req := Request{ID: "req-3"}
+	res, err := ParseDefaultResponse(req, Response{Data: "ok"})
+	require.NoError(t, err)
+	assert.True(t, res.Approved)
+	res, err = ParseDefaultResponse(req, Response{Data: "1"})
+	require.NoError(t, err)
+	assert.False(t, res.Approved, "numbers are not approval words")
 }
 
 func TestFindPermissionByAction(t *testing.T) {

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 )
 
 // Errors for channel bindings.
@@ -146,13 +147,8 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 }
 
 // ChannelFile is a file a chat sent with a message, on local disk until
-// PostFromChannel returns.
-type ChannelFile struct {
-	// Name is the file's name as the chat gave it.
-	Name string
-	// Path is where the host saved it.
-	Path string
-}
+// Post returns.
+type ChannelFile = agent.File
 
 // maxChannelFile caps one file a chat sends, as the web caps an upload.
 const maxChannelFile = 200 << 20

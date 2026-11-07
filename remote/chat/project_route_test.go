@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -17,7 +18,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly/testenv"
-	projectsapp "github.com/tingly-dev/tingly-box/projects"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 	"github.com/tingly-dev/tingly-box/remote/bot"
 	"github.com/tingly-dev/tingly-box/remote/chat"
 )
@@ -38,9 +39,9 @@ func bootHelperNotStarted(t *testing.T) (*testenv.TestEnv, *chat.TestHarness, *t
 
 // inbound is a message the fake router was handed.
 type inbound struct {
-	projectsapp.ChatRef
+	agent.ChatRef
 	Text  string
-	Files []projectsapp.ChannelFile
+	Files []agent.File
 }
 
 // fakeRouter binds the chats in bound and records what it was handed.
@@ -57,6 +58,10 @@ type fakeRouter struct {
 	off, adopts bool
 	folders     []string
 	profiles    []string
+	// at is the folder each chat was moved to; registered is every folder
+	// Projects knows (moving a chat to a folder registers it, as OpenFolder does).
+	at         map[string]string
+	registered []string
 }
 
 func (f *fakeRouter) Enabled() bool {
@@ -65,7 +70,7 @@ func (f *fakeRouter) Enabled() bool {
 	return !f.off
 }
 
-func (f *fakeRouter) ToFolder(in projectsapp.ChatRef, folder string, ifNew bool) error {
+func (f *fakeRouter) ToFolder(in agent.ChatRef, folder string, ifNew bool) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if ifNew && f.bound[in.ChatID] {
@@ -73,23 +78,34 @@ func (f *fakeRouter) ToFolder(in projectsapp.ChatRef, folder string, ifNew bool)
 	}
 	f.folders = append(f.folders, fmt.Sprintf("%s:%v", folder, ifNew))
 	f.profiles = append(f.profiles, in.Profile)
+	if f.at == nil {
+		f.at = map[string]string{}
+	}
+	f.at[in.ChatID] = folder
+	if !slices.Contains(f.registered, folder) {
+		f.registered = append(f.registered, folder)
+	}
 	if f.adopts {
 		f.bound[in.ChatID] = true
 	}
 	return nil
 }
 
-func (f *fakeRouter) Place(in projectsapp.ChatRef) (projectsapp.ChatPlace, error) {
+func (f *fakeRouter) Place(in agent.ChatRef) (agent.ChatPlace, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return projectsapp.ChatPlace{Bound: f.bound[in.ChatID]}, nil
+	return agent.ChatPlace{Bound: f.bound[in.ChatID], Folder: f.at[in.ChatID]}, nil
 }
 
-func (f *fakeRouter) Folders() ([]string, error) { return nil, nil }
+func (f *fakeRouter) Folders() ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.registered), nil
+}
 
-func (f *fakeRouter) Projects() ([]projectsapp.ProjectChoice, error) { return nil, nil }
+func (f *fakeRouter) Projects() ([]agent.ProjectChoice, error) { return nil, nil }
 
-func (f *fakeRouter) ToProject(projectsapp.ChatRef, string) error { return nil }
+func (f *fakeRouter) ToProject(agent.ChatRef, string) error { return nil }
 
 func (f *fakeRouter) movedTo() []string {
 	f.mu.Lock()
@@ -109,7 +125,7 @@ func (f *fakeRouter) setErr(err error) {
 	f.err = err
 }
 
-func (f *fakeRouter) Post(ref projectsapp.ChatRef, text string, files []projectsapp.ChannelFile) (bool, error) {
+func (f *fakeRouter) Post(ref agent.ChatRef, text string, files []agent.File) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if !f.bound[ref.ChatID] {
@@ -127,7 +143,7 @@ func (f *fakeRouter) Post(ref projectsapp.ChatRef, text string, files []projects
 	return true, f.err
 }
 
-func (f *fakeRouter) Command(ref projectsapp.ChatRef, name, arg string) (bool, string, error) {
+func (f *fakeRouter) Command(ref agent.ChatRef, name, arg string) (bool, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if !f.bound[ref.ChatID] {
@@ -137,7 +153,7 @@ func (f *fakeRouter) Command(ref projectsapp.ChatRef, name, arg string) (bool, s
 	return true, "project did " + name, nil
 }
 
-func (f *fakeRouter) Answer(ref projectsapp.ChatRef, threadID, requestID, choice string) (string, error) {
+func (f *fakeRouter) Answer(ref agent.ChatRef, threadID, requestID, choice string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.answers = append(f.answers, ref.ChatID+":"+threadID+":"+requestID+":"+choice)
@@ -346,12 +362,12 @@ func Test_EveryChatGetsAFolderInProjects(t *testing.T) {
 // A chat moves to a folder under its bot's Claude Code profile, so its first
 // session there runs under it.
 func Test_ChatsMoveUnderTheBotsProfile(t *testing.T) {
-	for agent, want := range map[string]string{"": "", "claude_code": "", "claude_code:p1": "p1"} {
+	for defaultAgent, want := range map[string]string{"": "", "claude_code": "", "claude_code:p1": "p1"} {
 		env := testenv.NewTestEnv(t)
 		rp := false
 		harness := chat.BootForTest(t, env.Manager(), bot.BotSetting{
 			UUID: env.BotUUID(), Name: "tingly-test", Platform: "tingly", AuthType: "none",
-			Auth: map[string]string{}, Enabled: true, RequirePairing: &rp, DefaultAgent: agent,
+			Auth: map[string]string{}, Enabled: true, RequirePairing: &rp, DefaultAgent: defaultAgent,
 		})
 		router := &fakeRouter{bound: map[string]bool{}, adopts: true}
 		harness.Handler.SetProjectRouter(router)
@@ -360,7 +376,7 @@ func Test_ChatsMoveUnderTheBotsProfile(t *testing.T) {
 		env.NewUser("alice").OpenDM(harness.Setting.UUID).SendText("hello")
 		require.Eventually(t, func() bool { return len(router.inbound()) == 1 }, 3*time.Second, 10*time.Millisecond)
 		router.mu.Lock()
-		assert.Equal(t, []string{want}, router.profiles, "default agent %q", agent)
+		assert.Equal(t, []string{want}, router.profiles, "default agent %q", defaultAgent)
 		router.mu.Unlock()
 	}
 }

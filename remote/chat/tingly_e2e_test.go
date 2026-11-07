@@ -162,7 +162,8 @@ func Test_DirPick(t *testing.T) {
 	chat := alice.OpenDM(harness.Setting.UUID)
 
 	tmp := t.TempDir()
-	require.NoError(t, harness.ChatStore.BindProject(chat.ChatID, "tingly", tmp, alice.ID))
+	chat.SendText("/cd " + tmp)
+	chat.WaitText(3*time.Second).AssertContains(t, tmp)
 
 	chat.SendText("/dir")
 	evt := chat.WaitText(3 * time.Second)

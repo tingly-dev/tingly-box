@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 )
 
 var shipDecision = Decision{
@@ -66,8 +67,8 @@ func TestDecisionCardReachesAChatWithButtons(t *testing.T) {
 	assert.Contains(t, m.p.Text, "2. Wait — one more review (recommended)")
 	assert.Contains(t, m.p.Text, "reviewers are still reading")
 	require.Len(t, m.p.Choices, 2)
-	assert.Equal(t, ChannelChoice{Value: "o0", Label: "Ship"}, m.p.Choices[0])
-	assert.Equal(t, ChannelChoice{Value: "o1", Label: "Wait (recommended)"}, m.p.Choices[1])
+	assert.Equal(t, agent.Choice{Value: "o0", Label: "Ship"}, m.p.Choices[0])
+	assert.Equal(t, agent.Choice{Value: "o1", Label: "Wait (recommended)"}, m.p.Choices[1])
 }
 
 // A chat without buttons gets the card as text with numbered options and a
@@ -92,7 +93,7 @@ func TestDecisionCardReachesAPlainChatAsNumberedText(t *testing.T) {
 	assert.True(t, waiting, "the chat's next message may answer it")
 }
 
-// A host that cannot show buttons at all (a bare ChannelSink) still gets it.
+// A host that cannot show buttons at all (a bare outbox) still gets it.
 func TestDecisionCardReachesAHostWithoutPrompts(t *testing.T) {
 	f, svc, sink := channelFixture(t)
 	_, err := svc.BindChannel("telegram", "42", "", "", f.project.ID)

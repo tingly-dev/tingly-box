@@ -1,4 +1,4 @@
-package bot_test
+package db_test
 
 import (
 	"testing"

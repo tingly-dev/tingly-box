@@ -21,7 +21,6 @@ import (
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
 	virtualmodelmodule "github.com/tingly-dev/tingly-box/internal/server/module/virtualmodel"
 	"github.com/tingly-dev/tingly-box/remote/access"
-	"github.com/tingly-dev/tingly-box/remote/bridge"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/chat"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
@@ -101,7 +100,7 @@ func (s *Server) apiModules(ctx context.Context, schema bool) []module.Module {
 	//
 	// Chats bound to a Projects project talk to its coordinator instead of
 	// @cc / @tb; the bridge is created now and bound to Projects below.
-	chatBridge := bridge.NewChatBridge()
+	chatBridge := projectsmodule.NewChatBridge()
 	imbotHandler, err := imbot.NewHandler(ctx, s.config, s.channelRegistry, chat.WithProjectRouter(chatBridge))
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to create imbotsettings handler, imbot settings APIs will not be available")

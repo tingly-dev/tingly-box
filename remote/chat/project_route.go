@@ -7,18 +7,18 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot"
-	projectsapp "github.com/tingly-dev/tingly-box/projects"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 	bot2 "github.com/tingly-dev/tingly-box/remote/bot"
 )
 
 // ProjectRouter is how a chat talks to Claude Code: through Projects, where
 // every chat has a folder or a session (.design/remote-into-projects.md). It
-// is the Projects facade (projectsapp.Chat) plus the host's switch; the host
+// is the agent port (agent.Chat) plus the host's switch; the host
 // implements it (see internal/server/module/projects). A BotHandler without
 // one, or with Projects switched off, gives chats access and notifications
 // only.
 type ProjectRouter interface {
-	projectsapp.Chat
+	agent.Chat
 	// Enabled reports whether chats are handled by Projects at all (its
 	// switch). When it is off a chat gets no Claude Code, only pairing and
 	// notifications.
@@ -26,7 +26,7 @@ type ProjectRouter interface {
 }
 
 // ProjectAnswerPayload names the callbacks of a Projects prompt's buttons.
-const ProjectAnswerPayload = "pj"
+const ProjectAnswerPayload = agent.AnswerPayload
 
 // SetProjectRouter plugs in the router; nil turns chat control off.
 func (h *BotHandler) SetProjectRouter(r ProjectRouter) { h.projectRouter = r }
@@ -74,8 +74,8 @@ func (h *BotHandler) moveChatToFolder(hCtx HandlerContext, folder string) bool {
 	return true
 }
 
-func (h *BotHandler) chatRef(hCtx HandlerContext) projectsapp.ChatRef {
-	return projectsapp.ChatRef{
+func (h *BotHandler) chatRef(hCtx HandlerContext) agent.ChatRef {
+	return agent.ChatRef{
 		Platform: string(hCtx.Platform),
 		BotUUID:  hCtx.BotUUID,
 		ChatID:   hCtx.ChatID,
@@ -83,7 +83,7 @@ func (h *BotHandler) chatRef(hCtx HandlerContext) projectsapp.ChatRef {
 }
 
 // folderRef is the chat moving to a folder, with the bot's profile.
-func (h *BotHandler) folderRef(hCtx HandlerContext) projectsapp.ChatRef {
+func (h *BotHandler) folderRef(hCtx HandlerContext) agent.ChatRef {
 	ref := h.chatRef(hCtx)
 	ref.Profile = botProfile(h.currentSetting().DefaultAgent)
 	return ref
@@ -125,7 +125,7 @@ func (h *BotHandler) routeToProject(hCtx HandlerContext, text string) {
 
 // deliverToProject hands a message to the chat's session and says why when
 // it could not be delivered.
-func (h *BotHandler) deliverToProject(hCtx HandlerContext, text string, files []projectsapp.ChannelFile) {
+func (h *BotHandler) deliverToProject(hCtx HandlerContext, text string, files []agent.File) {
 	handled, err := h.projectRouter.Post(h.chatRef(hCtx), text, files)
 	switch {
 	case !handled:
@@ -155,7 +155,7 @@ func (h *BotHandler) routeMediaToProject(hCtx HandlerContext, mc *imbot.MediaCon
 		return
 	}
 	defer os.RemoveAll(dir)
-	files := make([]projectsapp.ChannelFile, 0, len(mc.Media))
+	files := make([]agent.File, 0, len(mc.Media))
 	for _, m := range mc.Media {
 		if !h.fileStore.IsAllowedType(m.MimeType) {
 			kind := m.MimeType
@@ -170,7 +170,7 @@ func (h *BotHandler) routeMediaToProject(hCtx HandlerContext, mc *imbot.MediaCon
 			h.SendText(hCtx, fmt.Sprintf("Failed to download file: %v", err))
 			return
 		}
-		files = append(files, projectsapp.ChannelFile{Name: stored.Filename, Path: stored.Path})
+		files = append(files, agent.File{Name: stored.Filename, Path: stored.Path})
 	}
 	h.reactReceived(hCtx)
 	h.deliverToProject(hCtx, strings.TrimSpace(mc.Caption), files)
@@ -200,9 +200,9 @@ func (h *BotHandler) projectDirectory(hCtx HandlerContext, arg string) {
 		current := place.ProjectID
 		h.projectListsMu.Lock()
 		if h.projectLists == nil {
-			h.projectLists = map[string][]projectsapp.ProjectChoice{}
+			h.projectLists = map[string][]agent.ProjectChoice{}
 		}
-		h.projectLists[hCtx.ChatID] = append([]projectsapp.ProjectChoice(nil), choices...)
+		h.projectLists[hCtx.ChatID] = append([]agent.ProjectChoice(nil), choices...)
 		h.projectListsMu.Unlock()
 		if len(choices) == 0 {
 			h.SendText(hCtx, "No projects are available.")
@@ -223,7 +223,7 @@ func (h *BotHandler) projectDirectory(hCtx HandlerContext, arg string) {
 	}
 	n, valid := bot2.ParseListNumber(arg)
 	h.projectListsMu.Lock()
-	list := append([]projectsapp.ProjectChoice(nil), h.projectLists[hCtx.ChatID]...)
+	list := append([]agent.ProjectChoice(nil), h.projectLists[hCtx.ChatID]...)
 	h.projectListsMu.Unlock()
 	if !valid || n > len(list) {
 		h.SendText(hCtx, "Use /project to list projects, then /project <number> to switch.")
@@ -238,7 +238,7 @@ func (h *BotHandler) projectDirectory(hCtx HandlerContext, arg string) {
 }
 
 // projectCommand reads a chat command that Projects runs (see
-// projectsapp.ChatCommands); the text after it is the argument. ok is false
+// agent.Commands); the text after it is the argument. ok is false
 // for anything else.
 func projectCommand(text string, group bool) (name, arg string, ok bool) {
 	cmd, ok := imbot.ParseSlashCommand(text, group)

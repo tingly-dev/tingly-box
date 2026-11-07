@@ -55,24 +55,14 @@ type (
 	Launcher = project.Launcher
 	// Handoffer names the program that continues a session in a terminal.
 	Handoffer = project.Handoffer
-	// ChannelSink delivers text to an IM chat. Projects sends the
-	// coordinator's replies and thread reports through it to the chats bound
-	// to a project; a host without IM (the standalone binary) has none.
-	ChannelSink = project.ChannelSink
-	// ChannelPrompter is a ChannelSink that can also send a thread's
-	// approvals and questions with buttons and restate them once settled.
-	ChannelPrompter = project.ChannelPrompter
-	// ChannelPrompt is an approval or a question as a chat shows it.
-	ChannelPrompt = project.ChannelPrompt
+	// OutboxHost lets a host that reaches IM (Tingly Box) give Projects the
+	// agent.Outbox it speaks through: the coordinator's replies, thread
+	// reports and approvals go to the chats bound to a project. The
+	// standalone binary has none.
+	OutboxHost = project.OutboxHost
 	// ChannelFile is a file a chat sent with a message.
 	ChannelFile = project.ChannelFile
-	// ChannelChoice is one button of a ChannelPrompt.
-	ChannelChoice = project.ChannelChoice
 )
-
-// ErrNoButtons is what a ChannelPrompter returns for a chat that cannot show
-// buttons; the chat gets a line of text instead.
-var ErrNoButtons = project.ErrNoButtons
 
 // DefaultDataDir is where Projects keeps its data when the host does not say
 // otherwise: $TINGLY_PROJECT_HOME, else ~/.tingly-project. It is deliberately
@@ -158,6 +148,3 @@ func (a *App) Close() error {
 	_ = a.svc.CloseTools(ctx)
 	return a.store.Close()
 }
-
-// ChannelBot returns the bot selected by a channel binding for this delivery.
-func ChannelBot(ctx context.Context) string { return project.ChannelBot(ctx) }

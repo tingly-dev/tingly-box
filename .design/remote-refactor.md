@@ -4,7 +4,7 @@ date: 2026-11-07
 
 # Remote refactor
 
-> Status: **R0–R4 done (one commit per step); R5 checked and deliberately not done (see below).** Proposal revised after review (R6 dropped; facade decision, R3 compat and R4 detail added).
+> Status: **R0–R4 done (one commit per step); R5 shares the approval vocabulary only (see below).** Proposal revised after review (R6 dropped; facade decision, R3 compat and R4 detail added).
 > Evidence and overlap list: [`.research/remote-refactor.md`](../.research/remote-refactor.md) (S1–S7).
 > Builds on [remote-into-projects.md](./remote-into-projects.md) (chat execution already moved) and
 > [bot-arch.md](./bot-arch.md) / [bot-capability-access-control.md](./bot-capability-access-control.md).
@@ -169,11 +169,14 @@ what a user can type on one surface:
 | Prompt text | Markdown, "Option N", button hint | plain text, numbered, reply hint |
 | State | blocking `Prompt` with pending map and timeout | thread request id; the thread already waits |
 
-Only the vocabulary overlaps (`y/n/always`), and even there the sets differ. Merging means picking one set and one fall-through
-rule, which silently changes either hook prompts or the Projects behavior decided on 2026-10-21
-(`remote-into-projects.md`, "聊天式回答"). That is a product decision, not a refactor, so R5 stops here: no code change.
-If you want it later, the smallest honest step is a shared `approvalWords` table both parsers read, with the Projects
-fall-through rule kept as an explicit per-caller option.
+**Follow-up (decided 2026-11-08): share the vocabulary only.** Projects' word list is the one: codes, not numbers. It lives in
+`projects` (`ApprovalChoice`, `ApprovalWords`) and the hook path reads it (`remote/ask`: `ParseTextResponse`, `ParseDefaultResponse`,
+the reply instructions, which show the first two words). Consequences:
+- Hook prompts now accept `ok allow approve`, `是 好 允许 同意`, `否 不 拒绝`, `总是`, and **no longer accept `0 1 2 3`** as approval
+  answers. Option numbers for *questions* are unchanged.
+- Unchanged on purpose: what other text means (hook: not an answer; Projects: deny + instruction) and what "always" covers
+  (hook: the tool; Projects: the thread).
+- Not done: positional single-line answers (`1 2 1`) for several questions in Projects.
 
 ## R4 in detail
 

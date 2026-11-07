@@ -1,8 +1,8 @@
-// Package adapter is the host↔remote glue layer. It is the only place
+// Package remotehost is the host↔remote glue layer. It is the only place
 // where main-module persistence types (internal/data/db) meet the pure
 // remote library interfaces, keeping the db.Settings type on the host
 // side of the boundary.
-package adapter
+package remotehost
 
 import (
 	"github.com/tingly-dev/tingly-box/internal/db"

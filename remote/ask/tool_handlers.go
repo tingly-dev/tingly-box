@@ -3,10 +3,11 @@ package ask
 import (
 	"fmt"
 	"maps"
-	"slices"
 	"strings"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/remote/interaction"
 )
 
 // AskUserQuestionHandler handles the AskUserQuestion tool which presents
@@ -267,15 +268,16 @@ func BuildDefaultPrompt(req Request, supportsKeyboard bool) string {
 
 // ParseDefaultResponse parses standard allow/deny responses
 func ParseDefaultResponse(req Request, response Response) (Result, error) {
-	switch response.Data {
-	case "allow", "yes", "y", "1":
+	choice, _ := interaction.ApprovalChoice(response.Data)
+	switch choice {
+	case interaction.ChoiceAllow:
 		return Result{
 			ID:           req.ID,
 			Approved:     true,
 			UpdatedInput: req.Input,
 			Reason:       "User approved",
 		}, nil
-	case "always":
+	case interaction.ChoiceAllowThread:
 		return Result{
 			ID:           req.ID,
 			Approved:     true,
@@ -283,7 +285,7 @@ func ParseDefaultResponse(req Request, response Response) (Result, error) {
 			Remember:     true,
 			Reason:       "User approved (always)",
 		}, nil
-	case "deny", "no", "n", "0":
+	case interaction.ChoiceDeny:
 		return Result{
 			ID:       req.ID,
 			Approved: false,
@@ -299,26 +301,26 @@ func ParseDefaultResponse(req Request, response Response) (Result, error) {
 }
 
 // PermissionOption defines a single permission response option.
-// This is the single source of truth for both keyboard buttons and text-based responses.
-//   - Action: callback action identifier (used in keyboard callback data)
-//   - Inputs: accepted text inputs for non-keyboard platforms (number | letter | word)
+// It is the single source of truth for the keyboard buttons; the words that
+// answer by text belong to projects.ApprovalWords, shared with Projects.
+//   - Action: callback action identifier (used in keyboard callback data);
+//     the same value as the projects.Choice* constants
 //   - Label: display label for both keyboard button text and text instructions
 //   - Icon: emoji prefix for keyboard button
 type PermissionOption struct {
-	Action   string   // callback action (e.g. "allow", "deny", "always")
-	Inputs   []string // accepted text inputs (e.g. ["1", "y", "yes"])
-	Label    string   // display label (e.g. "Allow")
-	Icon     string   // emoji for keyboard button (e.g. "✅")
+	Action   string // callback action (e.g. "allow", "deny", "always")
+	Label    string // display label (e.g. "Allow")
+	Icon     string // emoji for keyboard button (e.g. "✅")
 	Approved bool
 	Remember bool
 }
 
-// PermissionOptions is the configurable list of permission response options.
-// Modify this slice to change inputs, display text, and keyboard buttons for all platforms.
+// PermissionOptions is the list of permission response options.
+// Modify this slice to change display text and keyboard buttons for all platforms.
 var PermissionOptions = []PermissionOption{
-	{Action: "allow", Inputs: []string{"1", "y", "yes"}, Label: "Allow", Icon: "✅", Approved: true, Remember: false},
-	{Action: "deny", Inputs: []string{"2", "n", "no", "0"}, Label: "Deny", Icon: "❌", Approved: false, Remember: false},
-	{Action: "always", Inputs: []string{"3", "a", "always"}, Label: "Always Allow", Icon: "🔄", Approved: true, Remember: true},
+	{Action: interaction.ChoiceAllow, Label: "Allow", Icon: "✅", Approved: true, Remember: false},
+	{Action: interaction.ChoiceDeny, Label: "Deny", Icon: "❌", Approved: false, Remember: false},
+	{Action: interaction.ChoiceAllowThread, Label: "Always Allow", Icon: "🔄", Approved: true, Remember: true},
 }
 
 // FindPermissionByAction finds a PermissionOption by its callback action string.
@@ -335,14 +337,12 @@ func FindPermissionByAction(action string) *PermissionOption {
 // ParseTextResponse parses user text input as a permission response
 // Returns: (approved, remember, isValid)
 func ParseTextResponse(text string) (approved bool, remember bool, isValid bool) {
-	text = normalizeText(text)
-
-	for _, opt := range PermissionOptions {
-		if slices.Contains(opt.Inputs, text) {
-			return opt.Approved, opt.Remember, true
-		}
+	choice, ok := interaction.ApprovalChoice(text)
+	if !ok {
+		return false, false, false
 	}
-	return false, false, false
+	opt := FindPermissionByAction(choice)
+	return opt.Approved, opt.Remember, true
 }
 
 // FormatPermissionInstructions returns formatted text instructions for text-based approval.
@@ -351,9 +351,9 @@ func FormatPermissionInstructions() string {
 	var b strings.Builder
 	b.WriteString("*Reply to approve or deny:*\n\n")
 	for _, opt := range PermissionOptions {
-		// Format: • `1` | `y` - Allow
+		// Format: • `y` | `yes` - Allow (the first two words; more are accepted)
 		b.WriteString("• ")
-		for i, input := range opt.Inputs {
+		for i, input := range interaction.ApprovalWords(opt.Action)[:2] {
 			if i > 0 {
 				b.WriteString(" | ")
 			}
@@ -366,11 +366,4 @@ func FormatPermissionInstructions() string {
 		b.WriteString("\n")
 	}
 	return b.String()
-}
-
-// normalizeText normalizes user input for comparison
-func normalizeText(text string) string {
-	text = strings.TrimSpace(text)
-	text = strings.ToLower(text)
-	return text
 }

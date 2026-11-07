@@ -50,6 +50,12 @@ marker. The template's HTML comments are guidance for filling it in, not output.
 module (`task projects:boundary`); Tingly Box reaches it only through its
 `projects` facade.
 
+# Remote
+
+`remote/` is the IM-to-agent library (bot lifecycle, pairing, access control, chat commands, agent
+notifications). It is its own Go module (`remote/CLAUDE.md`) that imports only `imbot` and `agentboot`; Tingly Box and
+Projects import it, never the reverse (`task remote:boundary`). What a chat is handed to is the port in `remote/agent`.
+
 # Build
 
 ## Submodules

@@ -1,0 +1,23 @@
+version: '3'
+
+tasks:
+  default:
+    cmds:
+      - task --list
+
+  boundary:
+    desc: Fail if this module depends on Tingly Box's root module or on Projects (they import Remote, never the other way)
+    cmds:
+      - |
+        deps=$(go list -deps -f '{{"{{"}}with .Module{{"}}"}}{{"{{"}}.Path{{"}}"}}{{"{{"}}end{{"}}"}}' ./... | sort -u)
+        if echo "$deps" | grep -qxE 'github.com/tingly-dev/tingly-box|github.com/tingly-dev/tingly-box/projects'; then
+          echo "remote must not import github.com/tingly-dev/tingly-box (the root module) or .../projects; define a port in remote/agent instead" >&2
+          exit 1
+        fi
+
+  test:
+    desc: Vet, test and the boundary check of Remote
+    cmds:
+      - task: boundary
+      - go vet ./...
+      - go test ./...

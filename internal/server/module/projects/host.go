@@ -12,7 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
-	"github.com/tingly-dev/tingly-box/remote/bridge"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 )
 
 // Host gives Projects model access through Tingly Box's own gateway. The
@@ -25,8 +25,8 @@ type Host struct {
 	// routes resolves each listed model to the real model behind it via the
 	// status line's own PreviewRoute; nil leaves the list as the bare ids.
 	routes *statusline.Handler
-	// bridge carries Projects messages to IM chats; see hostchannel.go.
-	bridge *bridge.ChatBridge
+	// out carries Projects messages to IM chats; see hostchannel.go.
+	out agent.Outbox
 }
 
 var _ projectsapp.Host = (*Host)(nil)

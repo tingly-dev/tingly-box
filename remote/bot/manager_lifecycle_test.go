@@ -15,7 +15,6 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
-	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
 )
 
@@ -87,12 +86,7 @@ func newLifecycleManager(t *testing.T) (*bot.Manager, string, *tingly.InProcessT
 
 	consumer := chat.NewConsumer(store)
 	m := bot.NewManager(store, consumer)
-	sm, err := db.NewStoreManager(t.TempDir())
-	if err != nil {
-		t.Fatalf("open store manager: %v", err)
-	}
-	t.Cleanup(func() { _ = sm.Close() })
-	chatStore := sm.RemoteChats()
+	chatStore := bot.NewMemoryChatStore()
 	m.SetChatStore(chatStore)
 
 	return m, uuid, tr
@@ -170,12 +164,7 @@ func TestManager_StopOneBotDoesNotAffectOthers(t *testing.T) {
 
 	consumer := chat.NewConsumer(store)
 	m := bot.NewManager(store, consumer)
-	sm, err := db.NewStoreManager(t.TempDir())
-	if err != nil {
-		t.Fatalf("open store manager: %v", err)
-	}
-	t.Cleanup(func() { _ = sm.Close() })
-	chatStore := sm.RemoteChats()
+	chatStore := bot.NewMemoryChatStore()
 	m.SetChatStore(chatStore)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -231,12 +220,7 @@ func TestManager_MountGate_Tingly(t *testing.T) {
 
 	consumer := chat.NewConsumer(store)
 	m := bot.NewManager(store, consumer)
-	sm, err := db.NewStoreManager(t.TempDir())
-	if err != nil {
-		t.Fatalf("open store manager: %v", err)
-	}
-	t.Cleanup(func() { _ = sm.Close() })
-	chatStore := sm.RemoteChats()
+	chatStore := bot.NewMemoryChatStore()
 	m.SetChatStore(chatStore)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -302,10 +286,7 @@ func TestManager_LoopPanicClosesBotAndReconcileRestarts(t *testing.T) {
 
 	capture := &captureConsumer{}
 	m := bot.NewManager(store, capture)
-	sm, err := db.NewStoreManager(t.TempDir())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = sm.Close() })
-	m.SetChatStore(sm.RemoteChats())
+	m.SetChatStore(bot.NewMemoryChatStore())
 
 	parentCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -12,7 +12,6 @@ import (
 
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
-	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 )
@@ -46,12 +45,7 @@ func newChannelTestManager(t *testing.T, uuid, scenarios string) (*bot2.Manager,
 	m := bot2.NewManager(store,
 		bot2.NewNotifyConsumer(),
 		chat.NewConsumer(store))
-	sm, err := db.NewStoreManager(t.TempDir())
-	if err != nil {
-		t.Fatalf("open store manager: %v", err)
-	}
-	t.Cleanup(func() { _ = sm.Close() })
-	chatStore := sm.RemoteChats()
+	chatStore := bot2.NewMemoryChatStore()
 	m.SetChatStore(chatStore)
 	m.SetChannelRegistry(registry)
 

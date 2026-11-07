@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/tingly-dev/tingly-box/imbot"
-	projectsapp "github.com/tingly-dev/tingly-box/projects"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 )
 
 // botHandlerAdapter implements command.BotHandlerAdapter by delegating to BotHandler.
@@ -41,7 +41,7 @@ func (a *botHandlerAdapter) SendText(chatID, text string) error {
 // GetProjectPath gets the folder of a chat.
 func (a *botHandlerAdapter) GetProjectPath(chatID string) (string, error) {
 	if a.handler.projectsOn() {
-		place, err := a.handler.projectRouter.Place(projectsapp.ChatRef{Platform: a.handler.botSetting.Platform, ChatID: chatID})
+		place, err := a.handler.projectRouter.Place(agent.ChatRef{Platform: a.handler.botSetting.Platform, ChatID: chatID})
 		if err != nil {
 			return "", err
 		}

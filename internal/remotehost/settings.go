@@ -1,4 +1,4 @@
-package adapter
+package remotehost
 
 import (
 	"github.com/tingly-dev/tingly-box/internal/db"

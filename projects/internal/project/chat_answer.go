@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/remote/interaction"
 )
 
 // Answering in a chat (.design/remote-into-projects.md, "要补的能力" ①): a
@@ -104,14 +105,14 @@ func approvalBody(e db.ThreadEvent, p requestPayload) string {
 // other words deny it and tell the thread what to do instead.
 func approvalReply(text string) Answer {
 	ans := Answer{Via: db.SourceIM}
-	switch strings.ToLower(strings.TrimSpace(text)) {
-	case "y", "yes", "ok", "allow", "approve", "是", "好", "允许", "同意":
-		ans.Allow = true
-	case "a", "always", "总是", "总是允许":
-		ans.Allow, ans.Scope = true, "thread"
-	case "n", "no", "deny", "reject", "否", "不", "拒绝":
-	default:
+	choice, ok := interaction.ApprovalChoice(text)
+	switch {
+	case !ok:
 		ans.Answer = strings.TrimSpace(text)
+	case choice == ChoiceAllow:
+		ans.Allow = true
+	case choice == ChoiceAllowThread:
+		ans.Allow, ans.Scope = true, "thread"
 	}
 	return ans
 }

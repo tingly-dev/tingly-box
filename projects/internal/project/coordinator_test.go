@@ -12,6 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
 	"github.com/tingly-dev/tingly-box/projects/internal/coordtest"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 )
 
 // testHost is the host a service fixture runs with.
@@ -24,6 +25,8 @@ type sinkHost struct {
 	testHost
 	*fakeSink
 }
+
+func (h sinkHost) Outbox() agent.Outbox { return h.fakeSink }
 
 // newServiceFixture is newFixture with the whole runtime: thread turns run
 // through thread and the coordinator's session turns through coord (see

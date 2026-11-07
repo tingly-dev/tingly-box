@@ -2,9 +2,7 @@ package projects
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -20,59 +18,18 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
 	"github.com/tingly-dev/tingly-box/internal/server/module"
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
-	"github.com/tingly-dev/tingly-box/remote/bridge"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 	"github.com/tingly-dev/tingly-box/remote/channel"
-	"github.com/tingly-dev/tingly-box/remote/interaction"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
-// fakeChannel is a bot's channel that records what it was asked to send.
-type fakeChannel struct {
-	id, platform string
-	err          error
-	sent         chan sent
-}
-
-type sent struct{ chatID, body string }
-
-func newFakeChannel(id, platform string) *fakeChannel {
-	return &fakeChannel{id: id, platform: platform, sent: make(chan sent, 16)}
-}
-
-func (c *fakeChannel) ID() string                         { return c.id }
-func (c *fakeChannel) Platform() string                   { return c.platform }
-func (c *fakeChannel) Capabilities() channel.Capabilities { return channel.Capabilities{} }
-func (c *fakeChannel) Send(_ context.Context, t channel.Target, n interaction.Notification) error {
-	if c.err != nil {
-		return c.err
-	}
-	c.sent <- sent{t.ChatID, n.Body}
-	return nil
-}
-func (c *fakeChannel) Prompt(context.Context, channel.Target, interaction.Interaction) (interaction.Reply, error) {
-	return interaction.Reply{}, errors.New("not used")
-}
-
-func (c *fakeChannel) next(t *testing.T) sent {
-	t.Helper()
-	select {
-	case s := <-c.sent:
-		return s
-	case <-time.After(5 * time.Second):
-		t.Fatal("nothing sent through the channel")
-		return sent{}
-	}
-}
-
-// echoHost sends chat text through the bridge, like Host does.
+// echoHost sends chat text through the bridge's outbox, like Host does.
 type echoHost struct {
 	nopHost
-	bridge *bridge.ChatBridge
+	bridge *ChatBridge
 }
 
-func (h echoHost) SendChannelText(ctx context.Context, platform, chatID, text string) error {
-	return h.bridge.SendChannelText(ctx, platform, chatID, text)
-}
+func (h echoHost) Outbox() agent.Outbox { return h.bridge.Outbox() }
 
 // lastEvent is the body of the last <event> envelope in a coordinator prompt.
 var lastEvent = regexp.MustCompile(`(?s)<event[^>]*>\n(.*?)\n</event>`)
@@ -100,7 +57,7 @@ func echoAgents() *agentboot.AgentService {
 // name; a chat nobody bound is left alone; the flag off turns it all off.
 func TestChatToProjectAndBack(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	bridge := bridge.NewChatBridge()
+	bridge := NewChatBridge()
 	app, err := projectsapp.New(projectsapp.Options{Host: echoHost{bridge: bridge}, Agents: echoAgents()})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = app.Close() })
@@ -137,7 +94,7 @@ func TestChatToProjectAndBack(t *testing.T) {
 	}
 	require.Equal(t, http.StatusCreated, call("POST", "/projects", map[string]any{"name": "Atlas"}, &p))
 	post := func(chatID, text string) (bool, error) {
-		return bridge.Post(projectsapp.ChatRef{Platform: "telegram", BotUUID: "bot-1", ChatID: chatID}, text, nil)
+		return bridge.Post(agent.ChatRef{Platform: "telegram", BotUUID: "bot-1", ChatID: chatID}, text, nil)
 	}
 
 	// Not bound yet: not handled, nothing sent.
