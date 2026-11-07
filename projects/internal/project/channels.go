@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/remote/interaction"
 )
 
 // ChannelSink is an optional Host capability: the host can deliver text to an
@@ -56,9 +58,9 @@ type ChannelChoice struct {
 
 // Values of the buttons of an approval (questions are answered by replying).
 const (
-	ChoiceAllow       = "allow"
-	ChoiceAllowThread = "always"
-	ChoiceDeny        = "deny"
+	ChoiceAllow       = interaction.ChoiceAllow
+	ChoiceAllowThread = interaction.ChoiceAllowThread
+	ChoiceDeny        = interaction.ChoiceDeny
 )
 
 // Limits for what the relay says in a chat.

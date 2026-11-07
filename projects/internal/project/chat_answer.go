@@ -2,11 +2,11 @@ package project
 
 import (
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/remote/interaction"
 )
 
 // Answering in a chat (.design/remote-into-projects.md, "要补的能力" ①): a
@@ -101,47 +101,11 @@ func approvalBody(e db.ThreadEvent, p requestPayload) string {
 	return body
 }
 
-// approvalWords are the words a chat answers an approval with: the one
-// vocabulary, here, for Projects and for every host that asks for approvals in
-// chat. The first two words of a choice are the ones shown to users; the
-// others are accepted. Numbers are not used: they are for picking an option
-// of a question.
-var approvalWords = []struct {
-	choice string
-	words  []string
-}{
-	{ChoiceAllow, []string{"y", "yes", "ok", "allow", "approve", "是", "好", "允许", "同意"}},
-	{ChoiceAllowThread, []string{"a", "always", "总是", "总是允许"}},
-	{ChoiceDeny, []string{"n", "no", "deny", "reject", "否", "不", "拒绝"}},
-}
-
-// ApprovalChoice reads a chat's words as an approval answer: ChoiceAllow,
-// ChoiceAllowThread or ChoiceDeny. ok is false for anything else.
-func ApprovalChoice(text string) (choice string, ok bool) {
-	text = strings.ToLower(strings.TrimSpace(text))
-	for _, a := range approvalWords {
-		if slices.Contains(a.words, text) {
-			return a.choice, true
-		}
-	}
-	return "", false
-}
-
-// ApprovalWords are the words that answer with the choice, shown first.
-func ApprovalWords(choice string) []string {
-	for _, a := range approvalWords {
-		if a.choice == choice {
-			return slices.Clone(a.words)
-		}
-	}
-	return nil
-}
-
 // approvalReply reads a chat's reply to an approval: y, always or n; any
 // other words deny it and tell the thread what to do instead.
 func approvalReply(text string) Answer {
 	ans := Answer{Via: db.SourceIM}
-	choice, ok := ApprovalChoice(text)
+	choice, ok := interaction.ApprovalChoice(text)
 	switch {
 	case !ok:
 		ans.Answer = strings.TrimSpace(text)

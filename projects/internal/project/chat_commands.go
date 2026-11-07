@@ -6,76 +6,44 @@ import (
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 )
 
-// The commands a chat has (.design/remote-into-projects.md, "命令精简"): what
-// is not here is not a command. /cd and /dir (which folder) are the host's,
+// The commands a chat has (.design/remote-into-projects.md, "命令精简"): the
+// set, with usage and help, is Remote's (agent.Commands); what is not there is
+// not a command. /cd and /dir (which folder) are the host's,
 // which moves the chat with ChannelToFolder.
 const (
 	// ChatNew starts a new session in the chat's folder: now with a task,
 	// else with the next message. What is running keeps running.
-	ChatNew = "new"
+	ChatNew = agent.CommandNew
 	// ChatStop interrupts the turn of the chat's thread, or of "#N".
-	ChatStop = "stop"
+	ChatStop = agent.CommandStop
 	// ChatClear stops the chat's session, and its next message starts a new
 	// one.
-	ChatClear = "clear"
+	ChatClear = agent.CommandClear
 	// ChatSession lists the sessions of the chat's folder or project, or
 	// with "N" moves the chat to #N (#0 is a project's conversation).
-	ChatSession = "session"
+	ChatSession = agent.CommandSession
 	// ChatStatus says where the chat is and how its session runs.
-	ChatStatus = "status"
+	ChatStatus = agent.CommandStatus
 	// ChatVerbose turns on ("on") or off ("off") hearing each step of the
 	// thread's turns; with no arg it says which.
-	ChatVerbose = "verbose"
+	ChatVerbose = agent.CommandVerbose
 	// ChatYolo switches the chat's session between running every tool
 	// without asking and its usual permission mode.
-	ChatYolo = "yolo"
+	ChatYolo = agent.CommandYolo
 )
 
 // yoloMode is the permission mode /yolo turns on.
 const yoloMode = "bypassPermissions"
-
-// ChatCommand describes one chat command for the host that shows it: the
-// platform command menu and /help are built from these, so a command is
-// described once, here.
-type ChatCommand struct {
-	// Name is the command word, without the slash.
-	Name string
-	// Usage is how it is typed, e.g. "/verbose on|off".
-	Usage string
-	// Help is the one-sentence description, capitalised, no final period.
-	Help string
-	// Order places it among all commands; higher is listed first.
-	Order int
-}
-
-// ChatCommands are the session commands, in listing order.
-var ChatCommands = []ChatCommand{
-	{ChatSession, "/session [N]", "List the sessions here, or switch to #N", 80},
-	{ChatNew, "/new [message]", "Start a new session", 79},
-	{ChatStop, "/stop [#N]", "Stop the running session", 78},
-	{ChatClear, "/clear", "Stop, and start a new session with the next message", 77},
-	{ChatStatus, "/status", "Where this chat is and how its session runs", 76},
-	{ChatVerbose, "/verbose on|off", "Also see each step, not only the reply", 75},
-	{ChatYolo, "/yolo", "Use every tool without asking, or back", 74},
-}
-
-func isChatCommand(name string) bool {
-	for _, c := range ChatCommands {
-		if c.Name == name {
-			return true
-		}
-	}
-	return false
-}
 
 // ChannelCommand runs a chat command (ChatNew and the rest) for a chat with a
 // binding; arg is the text after it. handled is false when the chat has no
 // binding or the command is not one of these, and the caller carries on as
 // before. reply is what to tell the chat.
 func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bool, reply string, err error) {
-	if !isChatCommand(name) {
+	if !agent.IsCommand(name) {
 		return false, "", nil
 	}
 	b, err := s.Store.GetChannelBinding(platform, chatID)
