@@ -173,7 +173,7 @@ func (m *Threads) SetEffort(id, effort string) (*db.Thread, error) {
 		return nil, err
 	}
 	if t.Agent == db.AgentLLM {
-		return nil, errors.New("not available on a project's main thread")
+		return nil, ErrNotWorker
 	}
 	return m.update(id, func(t *db.Thread) { t.EffortOverride = effort })
 }

@@ -118,7 +118,7 @@ func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bo
 			return true, fmt.Sprintf("/clear works in a chat bound to a folder; this chat is on [%s] of %s. Use /stop to stop it.", tag, p.Name), nil
 		}
 		stopped := s.Threads.Running(t.ID)
-		s.Threads.Stop(t.ID)
+		s.Threads.Stop(t.ID, Source{Kind: db.SourceIM})
 		if err := s.Store.SetChannelBindingNewThread(b.ID, true); err != nil {
 			return true, "", err
 		}
@@ -133,7 +133,7 @@ func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bo
 		if !s.Threads.Running(t.ID) {
 			return true, fmt.Sprintf("[%s] is not running.", tag), nil
 		}
-		s.Threads.Stop(t.ID)
+		s.Threads.Stop(t.ID, Source{Kind: db.SourceIM})
 		return true, fmt.Sprintf("Stopped [%s].", tag), nil
 	}
 }
@@ -178,7 +178,7 @@ func (s *Service) folderCommand(b *db.ChannelBinding, name, arg string) (handled
 		return true, fmt.Sprintf("Started [%s] in %s.", threadTag(t.Seq, t.Title), where), nil
 	case ChatStop, ChatClear:
 		if b.ThreadID != "" && arg == "" && s.Threads.Running(b.ThreadID) {
-			s.Threads.Stop(b.ThreadID)
+			s.Threads.Stop(b.ThreadID, Source{Kind: db.SourceIM})
 			if t, err := s.Store.GetThread(b.ThreadID); err == nil {
 				return true, fmt.Sprintf("Stopped [%s]. %s", threadTag(t.Seq, t.Title), next), nil
 			}

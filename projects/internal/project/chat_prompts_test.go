@@ -287,7 +287,7 @@ func TestAStoppedTurnRestatesItsPrompts(t *testing.T) {
 	th := startDeploy(t, f, svc)
 	sink.nextPrompt(t)
 	sink.nextPrompt(t)
-	f.threads.Stop(th.ID)
+	f.threads.Stop(th.ID, Source{})
 	for range 2 {
 		assert.True(t, strings.HasSuffix(sink.nextRestate(t).text, "No longer waiting: the turn ended."))
 	}

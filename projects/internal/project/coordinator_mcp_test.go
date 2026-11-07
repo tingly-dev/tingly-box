@@ -16,22 +16,13 @@ func TestCoordinatorMCPValidatesAndScopesTools(t *testing.T) {
 	t.Cleanup(func() { _ = store.Close() })
 	p := mkProject(t, store, &db.Project{Name: "One"})
 	other := mkProject(t, store, &db.Project{Name: "Other"})
-	coord := &Coordinator{store: store, layout: Layout{Root: t.TempDir()}, hub: NewHub()}
-	turn := &coordinatorToolTurn{}
-	turn.begin(p, true)
-	server, err := coord.coordinatorMCPForTurn(turn)
-	require.NoError(t, err)
-	st, ct := mcp.NewInMemoryTransports()
-	ss, err := server.Connect(ctx, st, nil)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = ss.Close() })
-	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
-	cs, err := client.Connect(ctx, ct, nil)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = cs.Close() })
+	svc := &Service{Store: store, Layout: Layout{Root: t.TempDir()}, Hub: NewHub()}
+	coord := &Coordinator{store: store, layout: svc.Layout, hub: svc.Hub}
+	svc.Coordinator = coord
+	cs, _ := connectTools(t, svc, p.MainThreadID, true)
 	listed, err := cs.ListTools(ctx, nil)
 	require.NoError(t, err)
-	require.Len(t, listed.Tools, len(coordinatorTools())+2)
+	require.Len(t, listed.Tools, len(coord.coordinatorTools())+3, "coordinator tools, two shared-file readers and send_file")
 	call := func(name string, args any) *mcp.CallToolResult {
 		result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
 		require.NoError(t, err)

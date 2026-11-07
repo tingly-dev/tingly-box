@@ -129,7 +129,7 @@ func TestSessionApprovalsMessagesAndModeChange(t *testing.T) {
 	assert.Equal(t, db.ThreadResolved, archived.Status)
 	_, err = f.threads.Send(context.Background(), s.ID, "late", Source{}, nil)
 	assert.ErrorIs(t, err, ErrResolved)
-	reopened, err := f.threads.Reopen(s.ID)
+	reopened, err := f.threads.Reopen(s.ID, Source{})
 	require.NoError(t, err)
 	assert.Equal(t, db.ThreadIdle, reopened.Status)
 }
@@ -164,7 +164,7 @@ func TestFolderIsArchivedNotRemoved(t *testing.T) {
 	again, err := f.startFolder(folder, FolderThreadSpec{Task: "again"})
 	require.NoError(t, err, "opening the folder again brings it back")
 	waitStatus(t, f.store, again.ID, db.ThreadWaiting)
-	f.threads.Stop(again.ID)
+	f.threads.Stop(again.ID, Source{})
 	waitStatus(t, f.store, again.ID, db.ThreadIdle)
 	back, _ := f.store.GetProject(p.ID)
 	assert.Nil(t, back.ArchivedAt)

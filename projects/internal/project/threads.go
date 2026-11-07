@@ -29,6 +29,8 @@ var (
 	ErrNoPrompt       = errors.New("no pending request with that id")
 	// ErrNotProject is for starting a worker in a project that is a folder.
 	ErrNotProject = errors.New("only a project's main thread starts threads in it")
+	// ErrNoOwnBranch is for choosing a base or branch where the thread gets none.
+	ErrNoOwnBranch = errors.New("base and branch need a repository and its own worktree: this project has no repository, or its threads share the checkout")
 	// ErrMainThread is for running a main thread as an agent session.
 	ErrMainThread = errors.New("a main thread is the project conversation; send to it through the coordinator")
 	// ErrEmptyTitle is for renaming a thread to nothing.
@@ -157,6 +159,8 @@ type activeThread struct {
 	slot    *limiter           // held while current runs
 	queue   []queued
 	stopped bool
+	// stoppedBy is who stopped the turn, for the "Stopped" note.
+	stoppedBy Source
 }
 
 type queued struct {
@@ -200,6 +204,18 @@ func queuedPrompt(q queued, libraryDir string) string {
 
 // fromThread is the source of a message another thread sent.
 func fromThread(id string) Source { return Source{Kind: db.SourceThread, Ref: id} }
+
+// actor says who acted, for a note in the thread ("Stopped by the
+// coordinator."). The web is the default and says nothing.
+func (s Source) actor() string {
+	switch s.Kind {
+	case db.SourceIM:
+		return " from a chat"
+	case db.SourceThread:
+		return " by the coordinator"
+	}
+	return ""
+}
 
 func (s Source) stamp(e *db.ThreadEvent) {
 	e.Source, e.SourceRef, e.SourcePlatform, e.SourceChatID = s.Kind, s.Ref, s.Platform, s.ChatID
@@ -459,8 +475,12 @@ type StartSpec struct {
 	Task  string
 	// Repo is the path of one of the project's repos; empty picks the first,
 	// "none" works without a repository.
-	Repo   string
-	Origin string
+	Repo string
+	// Base is the local branch the thread's branch starts from; empty uses
+	// the repository's base branch. Branch names the new branch; empty
+	// generates one. Both need a worktree.
+	Base, Branch string
+	Origin       string
 }
 
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
@@ -505,6 +525,10 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 	if err != nil {
 		return nil, err
 	}
+	base, branch, err := chooseBranch(ctx, p, repo, spec)
+	if err != nil {
+		return nil, err
+	}
 	if err := m.store.CreateThread(t); err != nil {
 		return nil, err
 	}
@@ -512,23 +536,29 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 	var note string
 	if repo != nil {
 		t.RepoPath, t.BaseBranch = repo.Path, repo.BaseBranch
+		if base != "" {
+			t.BaseBranch = base
+		}
 		if p.DisableWorktree {
 			t.Cwd = repo.Path
 		} else {
-			t.Branch = fmt.Sprintf("tp/%s-%s", slugify(title), t.ID[:6])
+			t.Branch = branch
+			if t.Branch == "" {
+				t.Branch = fmt.Sprintf("tp/%s-%s", slugify(title), t.ID[:6])
+			}
 			// In the repository's own .claude/worktrees; if that cannot be used
 			// (read-only repository, ...) fall back to the data directory, where
 			// threads used to live, and say so.
 			inRepo := RepoWorktreeDir(repo.Path, slugify(title), t.ID)
 			err := excludeWorktrees(ctx, repo.Path)
 			if err == nil {
-				err = AddWorktree(ctx, repo.Path, inRepo, t.Branch, repo.BaseBranch)
+				err = AddWorktree(ctx, repo.Path, inRepo, t.Branch, t.BaseBranch)
 			}
 			if err == nil {
 				t.Cwd = inRepo
 			} else {
 				note = fmt.Sprintf("Could not create the worktree in %s (%v); using %s instead.", filepath.Join(repo.Path, ".claude", "worktrees"), err, t.Cwd)
-				if err := AddWorktree(ctx, repo.Path, t.Cwd, t.Branch, repo.BaseBranch); err != nil {
+				if err := AddWorktree(ctx, repo.Path, t.Cwd, t.Branch, t.BaseBranch); err != nil {
 					t.Status, t.WaitReason = db.ThreadWaiting, "Could not create the worktree: "+err.Error()
 					_ = m.store.SaveThread(t)
 					m.publish(t)
@@ -555,6 +585,27 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 	}
 	m.enqueue(t.ID, queued{text: t.Task, src: src})
 	return t, nil
+}
+
+// chooseBranch checks the base and branch name a caller asked for, before
+// anything is created. Both empty means the defaults.
+func chooseBranch(ctx context.Context, p *db.Project, repo *db.Repo, spec StartSpec) (base, branch string, err error) {
+	base, branch = strings.TrimSpace(spec.Base), strings.TrimSpace(spec.Branch)
+	if base == "" && branch == "" {
+		return "", "", nil
+	}
+	if repo == nil || p.DisableWorktree {
+		return "", "", ErrNoOwnBranch
+	}
+	if base != "" && !BranchExists(ctx, repo.Path, base) {
+		return "", "", fmt.Errorf("base %q is not a local branch of %s", base, repo.Path)
+	}
+	if branch != "" {
+		if err := checkNewBranch(ctx, repo.Path, branch); err != nil {
+			return "", "", err
+		}
+	}
+	return base, branch, nil
 }
 
 func pickRepo(p *db.Project, want string) (*db.Repo, error) {
@@ -1120,7 +1171,13 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 	}
 	switch {
 	case report.Kind == "":
-		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "Stopped."})
+		m.mu.Lock()
+		var by Source
+		if a := m.active[threadID]; a != nil {
+			by = a.stoppedBy
+		}
+		m.mu.Unlock()
+		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "Stopped" + by.actor() + "."})
 	case end.Err != nil:
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvError, Content: end.Err.Error()})
 	case session:
@@ -1151,8 +1208,10 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 }
 
 // Stop interrupts a thread's running turn and drops its queued messages.
-// Its resident process, and the background work in it, survive.
-func (m *Threads) Stop(threadID string) { m.stop(threadID) }
+// Its resident process, and the background work in it, survive. by is who
+// asked, for the note in the thread; stopping a thread with nothing running
+// does nothing.
+func (m *Threads) Stop(threadID string, by Source) { m.stop(threadID, by) }
 
 // Retry re-runs a failed turn without adding anything to the transcript.
 // A turn that crashed mid-turn (with staged output) resumes the interrupted
@@ -1190,10 +1249,10 @@ func (m *Threads) Retry(ctx context.Context, threadID string) (*db.Thread, error
 
 // stop is Stop, returning a channel closed once the stopped turn has
 // exited (nil when no turn was running).
-func (m *Threads) stop(threadID string) <-chan struct{} {
+func (m *Threads) stop(threadID string, by Source) <-chan struct{} {
 	m.mu.Lock()
 	if a, ok := m.active[threadID]; ok {
-		a.stopped = true
+		a.stopped, a.stoppedBy = true, by
 		m.dropHeld(threadID, a.queue)
 		a.queue = nil
 		if a.cancel != nil {
@@ -1221,7 +1280,7 @@ func (m *Threads) StopProject(projectID string) {
 		return
 	}
 	for _, t := range threads {
-		m.Stop(t.ID)
+		m.Stop(t.ID, Source{Kind: db.SourceSystem})
 	}
 }
 
@@ -1238,7 +1297,7 @@ func (m *Threads) Respond(threadID, requestID string, ans Answer) error {
 
 // Resolve marks a thread done (it stays readable and can be reopened).
 func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
-	if done := m.stop(threadID); done != nil {
+	if done := m.stop(threadID, Source{}); done != nil {
 		// Let the turn take its interrupt before its process is closed.
 		select {
 		case <-done:
@@ -1261,7 +1320,7 @@ func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
 // ArchiveSession stores an independent archive flag. A stopped waiting or
 // working session becomes idle: there is no longer a live request to answer.
 func (m *Threads) ArchiveSession(threadID string) (*db.Thread, error) {
-	if done := m.stop(threadID); done != nil {
+	if done := m.stop(threadID, Source{}); done != nil {
 		select {
 		case <-done:
 		case <-time.After(agentboot.SessionCloseTimeout):
@@ -1296,15 +1355,42 @@ func (m *Threads) releaseChats(t *db.Thread) {
 	}
 }
 
-// Reopen brings a resolved thread back.
-func (m *Threads) Reopen(threadID string) (*db.Thread, error) {
-	return m.update(threadID, func(t *db.Thread) {
+// ErrNotWorker is for an action that only makes sense on a worker or session,
+// asked of a project's main thread (its conversation with the coordinator).
+var ErrNotWorker = errors.New("not available on a project's main thread")
+
+// Reopen brings a resolved thread back; by is who asked. A thread that is not
+// resolved is returned as it is: there is nothing to reopen, and its status
+// belongs to the turn that may be running.
+func (m *Threads) Reopen(threadID string, by Source) (*db.Thread, error) {
+	t, err := m.store.GetThread(threadID)
+	if err != nil {
+		return nil, err
+	}
+	if t.Agent == db.AgentLLM {
+		return nil, ErrNotWorker
+	}
+	if t.Status != db.ThreadResolved {
+		return t, nil
+	}
+	// update reads the row again under its lock, so check again there: a
+	// Reopen or Resolve may have got in between.
+	reopened := false
+	t, err = m.update(threadID, func(t *db.Thread) {
+		if t.Status != db.ThreadResolved {
+			return
+		}
+		reopened = true
 		t.ResolvedAt = nil
 		t.Status = db.ThreadIdle
 		if t.CommitsAhead > 0 && t.MergedAt == nil {
 			t.Status = db.ThreadReady
 		}
 	})
+	if err == nil && reopened {
+		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "Reopened" + by.actor() + "."})
+	}
+	return t, err
 }
 
 // MaxTitleLength caps a thread's title, like the column that stores it.
