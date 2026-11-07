@@ -1,4 +1,5 @@
-package projects
+// Package projectbridge joins Remote's IM chats to Projects.
+package projectbridge
 
 import (
 	"context"
@@ -22,7 +23,7 @@ import (
 //     project's coordinator instead of @cc / @tb (chat.ProjectRouter);
 //   - outbound: the coordinator's replies and thread reports reach the bound
 //     chats through the bot's channel, the same send path notifications use
-//     (projectsapp.ChannelSink, implemented by Host).
+//     (projectsapp.ChannelSink, which the host forwards to).
 //
 // The bridge exists before Projects does (the IM handler is built first), so
 // it is created empty and bound to the app and the channel registry later.
@@ -40,11 +41,6 @@ type ChatBridge struct {
 	// go back through the same one when several bots share a platform.
 	bots map[string]string
 }
-
-var (
-	_ chat.ProjectRouter = (*ChatBridge)(nil)
-	_ projectsapp.ChannelSink   = (*ChatBridge)(nil)
-)
 
 // NewChatBridge returns a bridge that does nothing until Bind.
 func NewChatBridge() *ChatBridge {
@@ -168,14 +164,39 @@ func (b *ChatBridge) ToProject(ref projectsapp.ChatRef, projectID string) error 
 // touch remembers the bot a chat wrote through, so replies go back through it,
 // and brings the Projects runtime up on first use.
 func (b *ChatBridge) touch(ref projectsapp.ChatRef, startRuntime bool) {
-	b.mu.Lock()
-	b.bots[chatKey(ref.Platform, ref.ChatID)] = ref.BotUUID
+	b.RememberBot(ref.Platform, ref.ChatID, ref.BotUUID)
+	b.mu.RLock()
 	start := b.start
-	b.mu.Unlock()
+	b.mu.RUnlock()
 	if startRuntime && start != nil {
 		start()
 	}
 }
+
+// RememberBot records the bot a chat wrote through; replies to the chat go
+// back through it.
+func (b *ChatBridge) RememberBot(platform, chatID, botUUID string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.bots[chatKey(platform, chatID)] = botUUID
+}
+
+// BotFor is the bot a chat last wrote through, or "" when none is remembered.
+func (b *ChatBridge) BotFor(platform, chatID string) string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.bots[chatKey(platform, chatID)]
+}
+
+// ForgetBots drops every remembered bot, as a restart does.
+func (b *ChatBridge) ForgetBots() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.bots = map[string]string{}
+}
+
+// App returns the Projects app while it is switched on, else nil.
+func (b *ChatBridge) App() *projectsapp.App { return b.live() }
 
 // Post implements projectsapp.Chat.
 func (b *ChatBridge) Post(ref projectsapp.ChatRef, text string, files []projectsapp.ChannelFile) (bool, error) {
@@ -208,39 +229,10 @@ func (b *ChatBridge) Answer(ref projectsapp.ChatRef, threadID, requestID, value 
 }
 
 var (
-	_ projectsapp.ChannelSink     = (*Host)(nil)
-	_ projectsapp.ChannelPrompter = (*Host)(nil)
+	_ chat.ProjectRouter          = (*ChatBridge)(nil)
+	_ projectsapp.ChannelSink     = (*ChatBridge)(nil)
 	_ projectsapp.ChannelPrompter = (*ChatBridge)(nil)
 )
-
-// SetChatBridge gives the host the bridge it sends chat messages through.
-func (h *Host) SetChatBridge(b *ChatBridge) { h.bridge = b }
-
-// SendChannelText is the host's half of Projects' optional ChannelSink: the
-// coordinator's replies reach the IM chats bound to a project.
-func (h *Host) SendChannelText(ctx context.Context, platform, chatID, text string) error {
-	if h.bridge == nil {
-		return ErrNoChannel
-	}
-	return h.bridge.SendChannelText(ctx, platform, chatID, text)
-}
-
-// SendChannelPrompt is the host's half of Projects' optional ChannelPrompter:
-// a thread's approvals and questions reach bound chats with buttons.
-func (h *Host) SendChannelPrompt(ctx context.Context, platform, chatID string, p projectsapp.ChannelPrompt) (string, error) {
-	if h.bridge == nil {
-		return "", ErrNoChannel
-	}
-	return h.bridge.SendChannelPrompt(ctx, platform, chatID, p)
-}
-
-// RestateChannelPrompt restates a prompt once it is settled.
-func (h *Host) RestateChannelPrompt(ctx context.Context, platform, chatID, ref, text string) error {
-	if h.bridge == nil {
-		return ErrNoChannel
-	}
-	return h.bridge.RestateChannelPrompt(ctx, platform, chatID, ref, text)
-}
 
 // ErrNoChannel means no running bot can reach the chat.
 var ErrNoChannel = errors.New("no running bot for this chat")
@@ -260,13 +252,6 @@ func (b *ChatBridge) SendChannelText(ctx context.Context, platform, chatID, text
 }
 
 // SendChannelFile delivers a published file through the bound bot.
-func (h *Host) SendChannelFile(ctx context.Context, platform, chatID, path, name, mediaType, caption string) error {
-	if h.bridge == nil {
-		return ErrNoChannel
-	}
-	return h.bridge.SendChannelFile(ctx, platform, chatID, path, name, mediaType, caption)
-}
-
 func (b *ChatBridge) SendChannelFile(ctx context.Context, platform, chatID, path, name, mediaType, caption string) error {
 	_, err := b.through(ctx, platform, chatID, projectsapp.ChannelBot(ctx), func(ch channel.Channel) error {
 		sender, ok := ch.(interface {
