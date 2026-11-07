@@ -3,7 +3,7 @@
 > Status: **in progress**: steps 1–3 (creation with base and branch, the state API, the tool table and boundaries) are built; step 4 (new tools) is proposed. Narrowed on 2026-11-07. Tracking issue: [TEP-2462](https://github.com/tingly-dev/tingly-box/issues/2462).
 > Builds on [coordinator-session.md](./coordinator-session.md) (how the coordinator's MCP server is scoped and serialised) and [message-channel.md](./message-channel.md).
 > Related, not on `main` yet: `.design/slash-commands.md` (session control API; PRs #2454–#2456), `pr-issue-awareness.md`, `branch-tracking.md`.
-> `file:line` references are on `main` at `d7b849ccc`.
+> `file:line` references were taken on `main` at `d7b849ccc`, before steps 1–3 moved some code; search by name when a line number is off.
 
 ## Approach
 
