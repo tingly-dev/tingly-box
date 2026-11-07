@@ -163,7 +163,7 @@ func Test_DirPick(t *testing.T) {
 
 	tmp := t.TempDir()
 	chat.SendText("/cd " + tmp)
-	chat.WaitText(3 * time.Second).AssertContains(t, tmp)
+	chat.WaitText(3*time.Second).AssertContains(t, tmp)
 
 	chat.SendText("/dir")
 	evt := chat.WaitText(3 * time.Second)
