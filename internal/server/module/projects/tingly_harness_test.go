@@ -25,7 +25,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module"
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
 	"github.com/tingly-dev/tingly-box/remote/access"
-	"github.com/tingly-dev/tingly-box/remote/adapter"
+	"github.com/tingly-dev/tingly-box/internal/remotehost"
 	"github.com/tingly-dev/tingly-box/remote/bot"
 	"github.com/tingly-dev/tingly-box/remote/bridge"
 	"github.com/tingly-dev/tingly-box/remote/channel"
@@ -139,7 +139,7 @@ for line in sys.stdin:
 		require.NoError(t, stores.BotAccess().PutCapability(context.Background(), access.BotCapability{BotUUID: id, Name: access.CapabilityRemoteControl, Enabled: true}))
 	}
 	stores.BotAccess().SetTransportFactsSource(harnessTransportFacts{registry: reg})
-	settings := adapter.NewSettingsStore(stores.ImBotSettings())
+	settings := remotehost.NewSettingsStore(stores.ImBotSettings())
 	manager := bot.NewManager(settings, bot.NewNotifyConsumer(), chat.NewConsumer(settings, chat.WithProjectRouter(bridge)))
 	manager.SetChatStore(stores.RemoteChats())
 	manager.SetAccessStore(stores.BotAccess())

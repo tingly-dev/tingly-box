@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/remote/adapter"
+	"github.com/tingly-dev/tingly-box/internal/remotehost"
 	"github.com/tingly-dev/tingly-box/remote/bot"
 	"github.com/tingly-dev/tingly-box/remote/chat"
 
@@ -80,9 +80,9 @@ func NewBotManager(ctx context.Context, cfg *config.Config, channelRegistry *cha
 	notifyConsumer := bot.NewNotifyConsumer()
 	// settingsStore adapts the db-backed store to bot.SettingsStore,
 	// mapping db.Settings → bot.BotSetting at the boundary (see
-	// remote/adapter). The raw *db.ImBotSettingsStore is kept for
+	// internal/remotehost). The raw *db.ImBotSettingsStore is kept for
 	// host-side reads that still want db.Settings.
-	settingsStore := adapter.NewSettingsStore(store)
+	settingsStore := remotehost.NewSettingsStore(store)
 	remoteAgentConsumer := chat.NewConsumer(settingsStore, consumerOpts...)
 
 	// Create internal bot manager
