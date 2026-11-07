@@ -5,7 +5,10 @@ import {
     Delete as DeleteIcon,
     Edit as EditIcon,
     Extension as PluginsIcon,
+    KeyboardArrowDown as MoveDownIcon,
+    KeyboardArrowUp as MoveUpIcon,
     MoreHoriz as MoreIcon,
+    Pin as PinToTopIcon,
     PlayArrow as ProbeIcon,
     Decisions as SmartIcon,
 } from '@/components/icons';
@@ -30,6 +33,12 @@ export interface GraphSettingsMenuProps {
     pluginsCount?: number;
     /** Smart conditions on/off/add item; hidden when omitted. */
     smartCondition?: { state: 'none' | 'on' | 'off'; onToggle: () => void };
+    /** Hard-ordering items (pin to top / move up / move down); hidden when omitted. */
+    reorder?: {
+        onMove: (direction: 'top' | 'up' | 'down') => void;
+        canMoveUp: boolean;
+        canMoveDown: boolean;
+    };
     // Probe props
     ruleUuid?: string;
     ruleName?: string;
@@ -50,6 +59,7 @@ export const GraphSettingsMenu = ({
     onOpenPlugins,
     pluginsCount = 0,
     smartCondition,
+    reorder,
     ruleUuid,
     ruleName,
     scenario,
@@ -140,6 +150,31 @@ export const GraphSettingsMenu = ({
                 {onEditFlags && (
                     <MenuItem onClick={() => { closeMenu(); onEditFlags(); }}>
                         <EditIcon fontSize="small" sx={{ mr: 1 }} />Edit flag
+                    </MenuItem>
+                )}
+
+                {reorder && (
+                    <MenuItem
+                        onClick={() => { closeMenu(); reorder.onMove('top'); }}
+                        disabled={!reorder.canMoveUp}
+                    >
+                        <PinToTopIcon fontSize="small" sx={{ mr: 1 }} />{t('common.pinToTop')}
+                    </MenuItem>
+                )}
+                {reorder && (
+                    <MenuItem
+                        onClick={() => { closeMenu(); reorder.onMove('up'); }}
+                        disabled={!reorder.canMoveUp}
+                    >
+                        <MoveUpIcon fontSize="small" sx={{ mr: 1 }} />{t('common.moveUp')}
+                    </MenuItem>
+                )}
+                {reorder && (
+                    <MenuItem
+                        onClick={() => { closeMenu(); reorder.onMove('down'); }}
+                        disabled={!reorder.canMoveDown}
+                    >
+                        <MoveDownIcon fontSize="small" sx={{ mr: 1 }} />{t('common.moveDown')}
                     </MenuItem>
                 )}
 

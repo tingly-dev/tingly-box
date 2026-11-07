@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
 import type { Provider, ProviderModelsDataByUuid, ProviderModelData } from '@/types/provider';
 import type { ConfigRecord, FlagSpec, Rule, RuleFlags } from '@/components/RoutingGraphTypes';
@@ -15,8 +14,7 @@ import UnifiedRoutingGraph from '@/components/UnifiedRoutingGraph';
 import SmartRuleCatalogDialog from '@/components/rule-card/SmartRuleCatalogDialog';
 import GraphSettingsMenu from '@/components/GraphSettingsMenu';
 import { QuickProbeButton } from '@/components/probe';
-import { Box, IconButton, Tooltip } from '@mui/material';
-import { KeyboardArrowDown, KeyboardArrowUp, Pin } from '@/components/icons';
+import { Box } from '@mui/material';
 import RulePluginsPopover from '@/components/rule-card/RulePluginsPopover';
 import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
 import { formatRuleFlags, parseRuleFlags } from '@/components/rule-card/utils';
@@ -64,10 +62,15 @@ export interface RuleCardProps {
     allowDeleteRule?: boolean;
     onRuleDelete?: (ruleUuid: string) => void;
     allowToggleRule?: boolean;
-    /** Hard ordering: show pin/move controls; the page submits the new order via onMoveRule. */
+    /**
+     * Hard ordering: offer 置顶 / move up / move down inside the "⋯" menu and
+     * hand moves to onMoveRule. The order is persisted via POST
+     * /rules/reorder and drives /v1/models listing, match priority and
+     * client config generation.
+     */
     allowReorder?: boolean;
     onMoveRule?: (ruleUuid: string, direction: 'top' | 'up' | 'down') => void;
-    /** Edge state of the rule in the list: a first rule can't move up or pin, a last one can't move down. */
+    /** Edge state of the rule in the list: disables pin/up at the top, down at the bottom. */
     canMoveUp?: boolean;
     canMoveDown?: boolean;
     onToggleExpanded?: () => void;
@@ -100,8 +103,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     onContext1MToggle,
     quickProbeSignal,
 }) => {
-    const { t } = useTranslation();
-
     // Expansion state management
     const { expanded, handleToggleExpanded } = useRuleCardExpanded({
         collapsible,
@@ -321,38 +322,8 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     // Extra actions - quick streaming test + the "⋯" menu, shared between
     // RoutingGraph and SmartRoutingGraph
-    // Hard-ordering controls: pin jumps to the top in one click, arrows nudge
-    // one slot. Each submits the whole new order through onMoveRule (the page
-    // owns the optimistic update); hidden at the edges.
-    const reorderControls = allowReorder && onMoveRule ? (
-        <>
-            {canMoveUp && (
-                <>
-                    <Tooltip title={t('common.pinToTop')}>
-                        <IconButton size="small" aria-label={t('common.pinToTop')} onClick={() => onMoveRule(rule.uuid, 'top')}>
-                            <Pin fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('common.moveUp')}>
-                        <IconButton size="small" aria-label={t('common.moveUp')} onClick={() => onMoveRule(rule.uuid, 'up')}>
-                            <KeyboardArrowUp fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
-                </>
-            )}
-            {canMoveDown && (
-                <Tooltip title={t('common.moveDown')}>
-                    <IconButton size="small" aria-label={t('common.moveDown')} onClick={() => onMoveRule(rule.uuid, 'down')}>
-                        <KeyboardArrowDown fontSize="small" />
-                    </IconButton>
-                </Tooltip>
-            )}
-        </>
-    ) : null;
-
     const extraActions = (
         <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
-            {reorderControls}
             {rule.uuid && (
                 <QuickProbeButton
                     ruleUuid={rule.uuid}
@@ -376,6 +347,11 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onEditFlags={handleOpenFlagEditor}
                 onOpenPlugins={() => openCatalog()}
                 pluginsCount={enabledPlugins.length}
+                reorder={allowReorder && onMoveRule ? {
+                    onMove: (direction) => onMoveRule(rule.uuid, direction),
+                    canMoveUp,
+                    canMoveDown,
+                } : undefined}
                 smartCondition={{
                     state: (configRecord.smartRouting?.length ?? 0) === 0 ? 'none' : configRecord.smartEnabled ? 'on' : 'off',
                     onToggle: () => ((configRecord.smartRouting?.length ?? 0) > 0 && !configRecord.smartEnabled) || configRecord.smartEnabled

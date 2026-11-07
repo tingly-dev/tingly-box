@@ -5,7 +5,7 @@
 应用（`/v1/models` 模型列表顺序、路由匹配优先级、客户端配置生成的模型顺序），
 而不只是显示效果。
 
-结论先行：**推荐方案 A ——「scenario 级整段顺序提交」端点 + RuleCard 置顶/上移/下移按钮**。
+结论先行：**推荐方案 A ——「scenario 级整段顺序提交」端点 + RuleCard「⋯」菜单里的置顶/上移/下移项**。
 存储层（`position` 列）、写穿（`SyncAll`）、内存数组序到四个应用面的贯通**已经全部存在**，
 缺的只是「一个改顺序的写入口」和「UI 控件」。零 schema 变更、零迁移、零应用侧改动。
 
@@ -73,11 +73,12 @@ i18n key `common.moveUp`/`common.moveDown` 已存在于 frontend/src/i18n/locale
 
 ### 方案 A（推荐）：scenario 级整段顺序提交 + 上移/下移按钮
 
-**交互**：RuleCard 头部加三个操作：**置顶**（用 `@tingly/ui` 已预定义的 `Pin`/`PinFilled`
-图标，frontend/packages/ui/src/icons/index.tsx:242-243；已是首条时隐藏）、**上移/下移**
-↑/↓（同 SmartOpNode 先例；首条隐藏 ↑、末条隐藏 ↓）。置顶一步到位，服务长列表的快速
-操作；↑/↓ 负责逐位微调。拖拽（如 @dnd-kit）可作为后续增强——端点形状不变，交互可
-独立演进。不引入拖拽库，改造成本最低、键盘可达。
+**交互**（2026-11-07 评审后定稿：不新增内联按钮，全部收进卡片「⋯」菜单，保持卡片
+头部只显示 ⚡ 与 ⋯）：`GraphSettingsMenu` 加**置顶 / 上移 / 下移**三项（`Pin`、
+`KeyboardArrowUp`、`KeyboardArrowDown` 图标，`@tingly/ui` 已预定义）。置顶一步到位，
+服务长列表的快速操作；上移/下移逐位微调；边界禁用（首条置灰置顶/上移，末条置灰下移）。
+拖拽（如 @dnd-kit）可作为后续增强——端点形状不变，交互可独立演进。不引入拖拽库，
+改造成本最低、键盘可达。
 
 **API**（新增一个端点）：
 
@@ -148,11 +149,11 @@ func (c *Config) ReorderRules(scenario typ.RuleScenario, orderedUUIDs []string) 
    （模型列表 / 匹配 / 客户端配置 / CLI·TUI）的贯通已全部在位，且因为所有消费者
    读同一个数组，硬排序对它们**自动全部生效**，应用侧零改动。
 2. **改动面最小**：一个 Config 方法 + 一个 handler + 一条路由 + swagger；
-   前端一个 api 函数 + RuleCard 两个按钮 + TemplatePage 一段处理。
+   前端一个 api 函数 + 「⋯」菜单三项 + TemplatePage 一段处理。
 3. **与现有架构同一套语义**：Save() 收口、last-writer-wins、全量 diff-sync，
    零新概念、零迁移。
-4. **交互可演进**：端点收整段顺序，将来换拖拽不动后端；先置顶/上移/下移按钮最快见效
-   （置顶图标已预定义、moveUp/moveDown i18n key 已有、SmartOpNode 先例已有）。
+4. **交互可演进**：端点收整段顺序，将来换拖拽不动后端；先「⋯」菜单项最快见效
+   （图标已预定义、moveUp/moveDown/pinToTop i18n key 已有、菜单模式已有先例）。
 
 方案 B 是为「万条规则、高频增量写」预设计的形态，与 rule-storage.md §8 的
 演进方向冲突（那个方向留给未来需要时再做）；方案 C 直接不满足需求。
@@ -178,7 +179,7 @@ func (c *Config) ReorderRules(scenario typ.RuleScenario, orderedUUIDs []string) 
 | # | 文件 | 改动 |
 |---|---|---|
 | 8 | `frontend/src/services/rulesApi.ts` | `reorderRules(scenario, orderedUuids)`（SDK 就绪前占位） |
-| 9 | `frontend/src/pages/scenario/components/RuleCard.tsx` | 卡片头部 ↑/↓ + 置顶按钮（新 `allowReorder` prop；默认 false；首条隐藏 ↑/置顶、末条隐藏 ↓；置顶用已预定义的 `Pin`/`PinFilled` 图标） |
+| 9 | `frontend/src/components/GraphSettingsMenu.tsx` | 「⋯」菜单加 置顶/上移/下移 三项（`reorder` prop；边界禁用；`Pin`/箭头图标已预定义） |
 | 10 | `frontend/src/pages/scenario/components/TemplatePage.tsx` + `TemplatePage.types.ts` | 透传 `allowReorder`；`handleReorder`：乐观本地重排（`onRulesChange`）→ 调 API → 失败 toast + `loadRules` 回滚；**name 排序视图下隐藏移动按钮**（该视图是 view-only，避免"移了没保存"误解） |
 | 11 | slot 页不开启：`AgentPage.tsx`（slotRouting 分支）、`UseClaudeCodePage.tsx`、`ClaudeCodeProfilePage.tsx` | 不传 `allowReorder`（槽位顺序是产品定义的固定优先级，见 1.1） |
 | 12 | 直连页开启：`AgentPage.tsx` 直连分支、`UseTeamPage.tsx`、`ImageApiPage.tsx` | 传 `allowReorder` |
@@ -212,9 +213,10 @@ func (c *Config) ReorderRules(scenario typ.RuleScenario, orderedUUIDs []string) 
 4. **前端 API 封装**：`frontend/src/services/rulesApi.ts` 加 `reorderRules(scenario, orderedUuids)`
    （codegen 未跑前先按 CLAUDE.md 留占位函数）。
    验证：`pnpm typecheck`。
-5. **UI 控件**：`RuleCard.tsx` 头部 ↑/↓ + 置顶（`Pin`/`PinFilled` 图标；新 `allowReorder` prop，
-   首条隐藏 ↑/置顶、末条隐藏 ↓）；`TemplatePage.tsx` 的 `handleReorder`（乐观本地重排 → 调 API →
-   失败 toast + `loadRules` 回滚，name 排序视图下隐藏按钮；置顶 = 把目标 uuid 排到首位走同一提交）；
+5. **UI 控件**：`GraphSettingsMenu.tsx`「⋯」菜单加 置顶/上移/下移 三项（`reorder` prop，
+   边界置灰）；`RuleCard.tsx` 透传 `allowReorder`；`TemplatePage.tsx` 的 `handleReorder`
+   （乐观本地重排 → 调 API → 失败 toast + `loadRules` 回滚，name 排序视图下不出现菜单项；
+   置顶 = 把目标 uuid 排到首位走同一提交）；
    直连页/Team/ImageApi 开启，slot 页（claude_code/profile）不传。
    验证：`pnpm typecheck && pnpm lint && pnpm test`。
 6. **mock 与 i18n**：`frontend/src/mocks/handlers.ts` 加 `POST /api/v1/rules/reorder` mock；
