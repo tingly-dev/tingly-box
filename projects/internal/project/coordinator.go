@@ -531,6 +531,7 @@ func (c *Coordinator) StartSuggestions(ctx context.Context, mainThreadID, eventI
 	for _, i := range indexes {
 		want[i] = true
 	}
+	var startErr error
 	for i := range pl.Suggestions {
 		s := &pl.Suggestions[i]
 		if s.ThreadID != "" || (len(want) > 0 && !want[i]) {
@@ -538,14 +539,20 @@ func (c *Coordinator) StartSuggestions(ctx context.Context, mainThreadID, eventI
 		}
 		t, err := c.threads.Start(ctx, p, StartSpec{Title: s.Title, Task: s.Task, Repo: s.Repo, Base: s.Base, Branch: s.Branch, Origin: "suggestion"})
 		if err != nil {
-			return nil, err
+			startErr = err
+			break
 		}
 		s.ThreadID = t.ID
 	}
+	// Record what started even when a later one failed, or the next click
+	// starts it again.
 	m.Payload = jsonString(pl)
 	if err := c.store.UpdateThreadEvent(m); err != nil {
 		return nil, err
 	}
 	c.publishEvent(projectID, m)
+	if startErr != nil {
+		return nil, startErr
+	}
 	return m, nil
 }

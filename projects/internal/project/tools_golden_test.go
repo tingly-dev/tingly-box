@@ -54,6 +54,11 @@ func TestToolListGolden(t *testing.T) {
 				desc = regexp.MustCompile(`(?s)Publish a file to this conversation so the user can see it\..*`).ReplaceAllString(desc, "Publish a file to this conversation so the user can see it. <guidance>")
 			}
 			fmt.Fprintf(&b, "[%s] %s\n  description: %s\n  schema: %s\n", c.name, tool.Name, desc, schema)
+			if tool.OutputSchema != nil {
+				output, err := json.Marshal(tool.OutputSchema)
+				require.NoError(t, err)
+				fmt.Fprintf(&b, "  output: %s\n", output)
+			}
 		}
 	}
 	checkGolden(t, "tool_list.golden", b.String())

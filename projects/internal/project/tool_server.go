@@ -42,11 +42,13 @@ func (f *sessionToolsMCP) tools(threadID string) []Tool {
 				}})
 		}
 	}
-	out = append(out, Tool{Name: "send_file", Description: f.sendFileDescription(threadID), Scopes: ScopeAll, Risk: RiskWrite,
+	out = append(out, Tool{Name: "send_file", Description: f.sendFileDescription(threadID), Scopes: ScopeAll, Risk: RiskWrite, Strict: true,
 		Properties: map[string]any{
 			"path":    str("Path to the file to publish in this conversation"),
 			"caption": str("Optional description shown with the file"),
 		}, Required: []string{"path"},
+		Output: map[string]any{"type": "object", "additionalProperties": false, "required": []string{"message_id"},
+			"properties": map[string]any{"message_id": map[string]any{"type": "string"}}},
 		Handle: func(ctx context.Context, call ToolCall) (*mcp.CallToolResult, error) {
 			var in struct{ Path, Caption string }
 			if err := json.Unmarshal(call.Input, &in); err != nil {
@@ -59,8 +61,11 @@ func (f *sessionToolsMCP) tools(threadID string) []Tool {
 			if err != nil {
 				return nil, err
 			}
-			b, _ := json.Marshal(sendFileResult{MessageID: e.ID})
-			return textResult(string(b), false), nil
+			res := sendFileResult{MessageID: e.ID}
+			b, _ := json.Marshal(res)
+			out := textResult(string(b), false)
+			out.StructuredContent = res
+			return out, nil
 		}})
 	return out
 }
@@ -102,6 +107,9 @@ func (f *sessionToolsMCP) register(srv *mcp.Server, tool Tool, threadID string, 
 	if len(required) != 0 {
 		schema["required"] = required
 	}
+	if tool.Strict {
+		schema["additionalProperties"] = false
+	}
 	data, err := json.Marshal(schema)
 	if err != nil {
 		return err
@@ -114,7 +122,11 @@ func (f *sessionToolsMCP) register(srv *mcp.Server, tool Tool, threadID string, 
 	if err != nil {
 		return fmt.Errorf("%s schema: %w", tool.Name, err)
 	}
-	srv.AddTool(&mcp.Tool{Name: tool.Name, Description: tool.Description, InputSchema: schema}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	mt := &mcp.Tool{Name: tool.Name, Description: tool.Description, InputSchema: schema}
+	if tool.Output != nil {
+		mt.OutputSchema = tool.Output
+	}
+	srv.AddTool(mt, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		args := req.Params.Arguments
 		if len(args) == 0 {
 			args = json.RawMessage(`{}`)
@@ -138,8 +150,9 @@ func (f *sessionToolsMCP) register(srv *mcp.Server, tool Tool, threadID string, 
 					ApprovedBy []string `json:"approved_by"`
 				}
 				_ = json.Unmarshal(args, &ids)
-				if quote, err = f.service.Coordinator.quoteUser(current, ids.ApprovedBy); err != nil {
-					return textResult(tool.Name+" needs the user's approval: "+err.Error(), true), nil
+				var qerr error
+				if quote, qerr = f.service.Coordinator.quoteUser(current, ids.ApprovedBy); qerr != nil {
+					return textResult(tool.Name+" needs the user's approval: "+qerr.Error(), true), nil
 				}
 			}
 			res, err := finish(tool.Handle(ctx, call))

@@ -63,6 +63,11 @@ type Tool struct {
 	Required   []string
 	Scopes     Scope
 	Risk       Risk
+	// Strict refuses input properties the schema does not list.
+	Strict bool
+	// Output is the JSON Schema of the structured result, for a tool whose
+	// handler returns one (StructuredContent).
+	Output map[string]any
 	// EditsProject is set on a coordinator tool that changes the project's
 	// settings: the turn adopts the result as its own (see coordinatorToolTurn.run).
 	EditsProject bool

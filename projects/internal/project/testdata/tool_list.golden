@@ -39,7 +39,8 @@
   schema: {"properties":{"thread_id":{"description":"Thread id or prefix.","type":"string"}},"required":["thread_id"],"type":"object"}
 [coordinator] send_file
   description: Publish a file to this conversation so the user can see it. <guidance>
-  schema: {"properties":{"caption":{"description":"Optional description shown with the file","type":"string"},"path":{"description":"Path to the file to publish in this conversation","type":"string"}},"required":["path"],"type":"object"}
+  schema: {"additionalProperties":false,"properties":{"caption":{"description":"Optional description shown with the file","type":"string"},"path":{"description":"Path to the file to publish in this conversation","type":"string"}},"required":["path"],"type":"object"}
+  output: {"additionalProperties":false,"properties":{"message_id":{"type":"string"}},"required":["message_id"],"type":"object"}
 [coordinator] start_thread
   description: Start a new thread (a Claude Code session) for one task, using the project worktree setting.
   schema: {"properties":{"base":{"description":"Optional. Existing local branch the thread's branch starts from, and that its work is merged back into. Default: the repository's base branch. Use it for work that builds on a release or feature branch.","type":"string"},"branch":{"description":"Optional. Name for the thread's new branch; it must not exist yet. Default: generated from the title.","type":"string"},"repo":{"description":"Optional. Path of the project repository to work in; \"none\" for no repository.","type":"string"},"task":{"description":"Self-contained instructions for the thread: goal, context, acceptance criteria, how to verify.","type":"string"},"title":{"description":"Thread card title: starts with a verb that names the goal, three to six words, no ids or paths (for example \"Fix Safari export button\").","type":"string"}},"required":["title","task"],"type":"object"}
@@ -48,7 +49,9 @@
   schema: {"properties":{"instructions":{"description":"The full new instructions (max 16000 characters).","type":"string"}},"required":["instructions"],"type":"object"}
 [worker] send_file
   description: Publish a file to this conversation so the user can see it. <guidance>
-  schema: {"properties":{"caption":{"description":"Optional description shown with the file","type":"string"},"path":{"description":"Path to the file to publish in this conversation","type":"string"}},"required":["path"],"type":"object"}
+  schema: {"additionalProperties":false,"properties":{"caption":{"description":"Optional description shown with the file","type":"string"},"path":{"description":"Path to the file to publish in this conversation","type":"string"}},"required":["path"],"type":"object"}
+  output: {"additionalProperties":false,"properties":{"message_id":{"type":"string"}},"required":["message_id"],"type":"object"}
 [folder] send_file
   description: Publish a file to this conversation so the user can see it. <guidance>
-  schema: {"properties":{"caption":{"description":"Optional description shown with the file","type":"string"},"path":{"description":"Path to the file to publish in this conversation","type":"string"}},"required":["path"],"type":"object"}
+  schema: {"additionalProperties":false,"properties":{"caption":{"description":"Optional description shown with the file","type":"string"},"path":{"description":"Path to the file to publish in this conversation","type":"string"}},"required":["path"],"type":"object"}
+  output: {"additionalProperties":false,"properties":{"message_id":{"type":"string"}},"required":["message_id"],"type":"object"}
