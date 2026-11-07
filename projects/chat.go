@@ -2,6 +2,7 @@ package projects
 
 import (
 	"errors"
+	"slices"
 
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 	"github.com/tingly-dev/tingly-box/projects/internal/project"
@@ -62,6 +63,14 @@ type Chat interface {
 }
 
 var _ Chat = (*App)(nil)
+
+// CommandSpec describes a chat command for the host that lists it; see
+// ChatCommands.
+type CommandSpec = project.ChatCommand
+
+// ChatCommands are the session commands Command runs, in listing order. The
+// host builds its command menu and /help from them and adds its own.
+func ChatCommands() []CommandSpec { return slices.Clone(project.ChatCommands) }
 
 // ProjectChoice is a non-archived project offered to an IM chat.
 type ProjectChoice struct {
