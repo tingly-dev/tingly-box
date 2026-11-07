@@ -198,20 +198,12 @@ func promptForPlatform(reader *bufio.Reader) (string, error) {
 // promptForBotName prompts the user for a bot name
 func promptForBotName(reader *bufio.Reader) (string, error) {
 	fmt.Println()
-	for {
-		fmt.Print("Bot name: ")
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return "", fmt.Errorf("failed to read input: %w", err)
-		}
-
-		name := strings.TrimSpace(input)
-		if name == "" {
-			fmt.Println("Bot name cannot be empty. Please try again.")
-			continue
-		}
-		return name, nil
+	fmt.Print("Bot name (optional, Enter to use the platform account name): ")
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("failed to read input: %w", err)
 	}
+	return strings.TrimSpace(input), nil
 }
 
 // promptForTokenAuth prompts for token-based authentication

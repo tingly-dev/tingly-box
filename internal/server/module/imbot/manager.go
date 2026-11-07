@@ -89,6 +89,15 @@ func NewBotManager(ctx context.Context, cfg *config.Config, channelRegistry *cha
 	internalMgr := bot.NewManager(settingsStore, notifyConsumer, remoteAgentConsumer)
 	internalMgr.SetChatStore(chatStore)
 	internalMgr.SetAccessStore(sm.BotAccess())
+	// An unnamed bot takes its platform account name (e.g. a Telegram
+	// @username) as its default name; a name the user set is never replaced.
+	internalMgr.SetAccountNameSink(func(uuid, name string) {
+		if wrote, err := store.SetNameIfEmpty(uuid, name); err != nil {
+			logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to store the bot's platform account name")
+		} else if wrote {
+			logrus.WithFields(logrus.Fields{"uuid": uuid, "name": name}).Info("Bot named after its platform account")
+		}
+	})
 	// Wire the channel registry BEFORE periodicBotSync's goroutine gets a
 	// chance to Start() any bot — see the constructor doc comment.
 	internalMgr.SetChannelRegistry(channelRegistry)

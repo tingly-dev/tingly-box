@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -105,6 +106,17 @@ func (b *BaseBot) UpdateConnected(connected bool) {
 		b.status.Connection.ConnectedAt = time.Now().Unix()
 		b.status.Connection.ReconnectAttempts = 0
 	}
+}
+
+// SetAccountName records the bot's own platform identity (empty is ignored).
+func (b *BaseBot) SetAccountName(name string) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.status.AccountName = name
 }
 
 // UpdateAuthenticated updates the authenticated state

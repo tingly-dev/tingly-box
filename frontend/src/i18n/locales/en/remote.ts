@@ -38,7 +38,7 @@ export default {
       "addSubtitle": "Choose a messaging platform and provide the credentials needed to connect it.",
       "addTitle": "Connect a bot",
       "alias": "Alias",
-      "aliasHelper": "Optional: a friendly name for this bot configuration.",
+      "aliasHelper": "Optional. Leave empty to use the bot's platform account name.",
       "cancel": "Cancel",
       "connect": "Connect bot",
       "editSubtitle": "Update this connection. Capabilities and people are managed from Access.",

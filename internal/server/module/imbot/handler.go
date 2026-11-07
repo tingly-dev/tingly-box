@@ -292,8 +292,9 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 	}
 
 	// Only set fields if they are provided in the request
-	if req.Name != "" {
-		settings.Name = strings.TrimSpace(req.Name)
+	if req.Name != nil {
+		settings.Name = strings.TrimSpace(*req.Name)
+		settings.ClearName = settings.Name == ""
 	}
 
 	settings.Platform = platform

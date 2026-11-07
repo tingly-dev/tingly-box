@@ -14,7 +14,7 @@ export default {
       "editTitle": "编辑 Bot 配置",
       "platform": "平台",
       "alias": "别名",
-      "aliasHelper": "可选：为此 Bot 配置设置一个便于识别的名称。",
+      "aliasHelper": "可选。留空则使用该 Bot 在平台上的账号名称。",
       "proxyUrl": "代理地址",
       "proxyUrlHelper": "可选的 HTTP/HTTPS 代理，用于 Bot 的 API 请求。",
       "chatIdLock": "Chat ID 锁定",
