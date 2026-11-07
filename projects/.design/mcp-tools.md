@@ -22,8 +22,8 @@ The rule that carries over every step: **an action is a method on `Threads` or `
 
 ## What exists
 
-Tools today (registered per turn by `coordinatorMCPForTurn`, `coordinator_mcp.go:40`; defined in `coordinatorTools()`, `coordinator.go:480`; run by one `switch`, `Coordinator.runTool`, `coordinator.go:566`):
-`start_thread` (`:488`), `propose_threads`, `request_decision`, `message_thread`, `get_thread`, `read_conversation`, `list_threads`, `resolve_thread`, `rename_thread`, `no_update`, `remember`, `forget`, `update_instructions`, plus `read_shared_file` / `list_shared_files` (`coordinator_mcp.go:109`) and `send_file` for every thread (`session_tools_mcp.go:84`). A worker's server comes from `sessionToolsMCP.config` (`session_tools_mcp.go:39`): one loopback listener, a random capability URL per thread; the thread id is bound to the URL and the project id is never taken from the model.
+Tools today (one table, `Coordinator.coordinatorTools()` in `coordinator_tools.go`, plus the shared-file readers and `send_file` in `tool_server.go`; built per session by `sessionToolsMCP.buildServer`):
+`start_thread`, `propose_threads`, `request_decision`, `message_thread`, `get_thread`, `read_conversation`, `list_threads`, `resolve_thread`, `rename_thread`, `no_update`, `remember`, `forget`, `update_instructions`, plus `read_shared_file` / `list_shared_files` (`coordinator_mcp.go:109`) and `send_file` for every thread (`session_tools_mcp.go:84`). A worker's server comes from `sessionToolsMCP.config` (`session_tools_mcp.go:39`): one loopback listener, a random capability URL per thread; the thread id is bound to the URL and the project id is never taken from the model.
 
 Gates every coordinator call passes (`coordinator_mcp.go:62-99`): schema validation, an active turn, project not paused or archived, project settings unchanged since the turn began, `no_update` refused on a user-triggered turn. Trust: text from others is wrapped in `envelope(trustRelay, …)` (`envelope.go:24`); `message_thread` takes `cite` (ids of the user's own messages) checked by `quoteUser` (`cite.go:25`).
 
@@ -93,12 +93,19 @@ One table replaces three separate registrations (the coordinator's list, the two
 
 - **Building a server** (`tool_server.go`): `sessionToolsMCP.buildServer(threadID, scope, turn, tools)` registers the tools whose scope includes the session's. The scope comes from the thread and its project (`scopeOf`), never from the model; a worker server cannot contain a coordinator tool.
 - **One gate** (`coordinatorToolTurn.run`): active turn, not ended with `no_update`, project not paused or archived, settings unchanged, `no_update` refused on a user turn. Every coordinator-scope tool passes it, `send_file` included.
-- **Strangler**: the 13 coordinator tools keep their logic in `Coordinator.runTool`; the table gives them a handler that calls it (`legacyHandle`). A tool is moved out of the `switch` when someone touches it. New tools are written as handlers.
+- **All tools are in the table.** The 13 coordinator tools used to run in one `switch` (`Coordinator.runTool`); each is now a method with a typed input struct (`coordinator_tools.go`: `startThread`, `messageThread`, ...) bound to its definition with `textTool`, which decodes the input, calls the method and turns an error into a failed result. `runTool` is gone. A new tool is one definition and one method.
+- **Migration was checked, not trusted.** Before moving anything, two golden files pinned the current behaviour (`testdata/tool_list.golden`: every tool's name, description and schema in each scope; `testdata/tool_calls.golden`: the exact answer of all 16 tools on a fixed script of about 60 calls, with ids, paths and times normalised). They are byte-identical after the move. Mutation check: changing one answer or one description fails the matching golden test. Regenerate on purpose with `UPDATE_GOLDEN=1` and read the diff.
 - **Risk**: `RiskRead`, `RiskWrite` (reversible, leaves a note) and `RiskConfirm`.
   - A `RiskConfirm` tool automatically gets a required `approved_by` input: ids of the user's own messages. They are checked with the same rule as `cite` (`quoteUser`): a user message from the web or a chat, never a thread report, the coordinator's own reply or a system event. After the tool succeeds, a system event in the conversation records "`<tool>` ran on the user's word" with the quoted messages.
   - Only the coordinator scope may have such a tool; registering one for a worker is an error.
   - No product tool uses it yet. It is tested with an injected tool. Whether approval should instead be bound to an answered decision card stays open (TEP-2462, question 1).
 - **Tests** (`tools_test.go`): the exact tool list of each scope (a tool added to a scope has to be added to the test, so it cannot reach a worker by accident); no tool takes `project_id`, and no worker tool takes `thread_id`; the coordinator's tool list stays under 12000 bytes (10.7 KB now, 8.2 KB for the 13 business tools before `base`/`branch` and the shared tools; each tool costs tokens on every turn); the confirm gate refuses a missing, empty or unknown approval, a thread report and the coordinator's own reply, runs with a real user message and writes the audit note (mutation-checked: skipping the check fails three cases).
+
+Findings while pinning the behaviour (recorded, deliberately not changed here):
+
+- `update_instructions` changes the project's own settings, so the turn's "settings changed" guard refuses every later tool call of that turn. A settings tool must refresh the turn snapshot after its own change (already noted for `set_project_settings`).
+- `list_shared_files` lists a directory in file-system order, not sorted. The golden test sorts the lines; sorting in the tool would give the model a stable order.
+- `remember` with an empty topic saves `note-<unix time>.md`.
 
 Not changed: the tools' names, schemas (apart from `base` / `branch`) and behaviour; the real-CLI probe is not rerun.
 
@@ -149,5 +156,5 @@ Push and PR creation are out of scope: Projects has no such code, and credential
 
 - **Service methods, not "MCP calls the local HTTP API".** An extra hop, an auth path and a second error mapping, and the standalone and embedded hosts mount routes differently. The `Threads` methods are already the implementation.
 - **Three verbs, not a state picker** (above).
-- **Strangler plumbing:** add the handler field and migrate tools as they are touched, instead of rewriting registration and moving 13 tools at once.
+- **Move all tools at once, with golden files as the safety net** (Step 3), instead of a piecemeal migration: the model sees the same schemas and answers, which two golden files prove.
 - **Leave the two creation methods apart:** in-place folder sessions and branch-based worker threads are different enough that one entry point would hide the difference.

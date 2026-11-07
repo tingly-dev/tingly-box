@@ -34,13 +34,15 @@ func TestStopNamesWhoStoppedAndCountsDroppedMessages(t *testing.T) {
 		{fromThread("main"), "Stopped by the coordinator."},
 	} {
 		t.Run(c.want, func(t *testing.T) {
+			started := make(chan struct{})
 			f := newFixture(t, func(turn *enginetest.Turn) error {
+				close(started)
 				<-turn.Ctx.Done()
 				return turn.Ctx.Err()
 			})
 			th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "long", Repo: "none"})
 			require.NoError(t, err)
-			waitStatus(t, f.store, th.ID, db.ThreadWorking)
+			<-started
 			_, err = f.threads.SendWith(context.Background(), th.ID, "later", nil, Source{}, SendQueue)
 			require.NoError(t, err)
 
