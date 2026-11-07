@@ -118,6 +118,17 @@ enabled flag, per-chat bot choice (`bots` map), blocked-target check, and the ou
 `internal/server/module/projects` is left with the Projects `Host` (models, launch env). Implement `Chat` on `*App` by
 delegating to existing methods first (no behavior change), then retire the old `Channel*` entry points that `Chat` replaces.
 
+**Blast radius (checked).** R2 stays at the facade layer (`projects/projects.go`) and does not touch the coordinator or thread engine:
+- The `App.Channel*` / `PostFromChannel` / `AnswerFromChannel` / `RegisteredFolders` methods have exactly one caller, `ChatBridge`
+  (`chatbridge.go`), plus `remote/chat` through an interface. Renaming them into `Chat` affects those two only.
+- The `Service` methods behind them (`bind.go`, `relay.go`, `chat_commands.go`, `threads.go`) are also used by the coordinator, thread
+  reports and the web binding module (`module/channel`). R2 does **not** change their signatures; `Chat` delegates to them.
+- `ChannelBot(ctx)` stays as the internal plumbing in R2 (bind and relay read the bot from `ctx`); `ChatRef` is turned into that `ctx`
+  at the facade. Making it explicit inside `Service` is a separate, optional step, not part of R2.
+- No schema change in R2. Outbound (`ChannelSink`, relay, decision cards) is unchanged.
+- Existing internal tests (`send`, `report_outlet`, `decision_im`, `chat_*`, `channels`) call `Service` directly and stay valid; only
+  App-level tests and the Tingly IM harness move.
+
 ### R3 — "Where the chat works": compat, no cutover
 Findings (this changes the earlier plan): the live path is already Projects-first. `GetProjectPath` reads Projects'
 `CurrentFolder`; `/dir` already filters by Projects' registered folders. `remote_chats.project_path` is read only to
