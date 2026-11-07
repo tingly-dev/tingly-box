@@ -63,8 +63,7 @@ type Tool struct {
 	Required   []string
 	Scopes     Scope
 	Risk       Risk
-	// Handle runs the tool. Nil only for the coordinator tools that still live
-	// in Coordinator.runTool; they are given a handler that calls it.
+	// Handle runs the tool. Every tool has one.
 	Handle func(ctx context.Context, call ToolCall) (*mcp.CallToolResult, error)
 }
 

@@ -18,12 +18,7 @@ func (f *sessionToolsMCP) tools(threadID string) []Tool {
 	str := func(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
 	var out []Tool
 	if c := f.service.Coordinator; c != nil {
-		for _, tool := range coordinatorTools() {
-			if tool.Handle == nil {
-				tool.Handle = c.legacyHandle(tool.Name)
-			}
-			out = append(out, tool)
-		}
+		out = append(out, c.coordinatorTools()...)
 		for _, item := range []struct {
 			name, description string
 			list              bool
@@ -68,17 +63,6 @@ func (f *sessionToolsMCP) tools(threadID string) []Tool {
 			return textResult(string(b), false), nil
 		}})
 	return out
-}
-
-// legacyHandle runs a coordinator tool that still lives in Coordinator.runTool.
-func (c *Coordinator) legacyHandle(name string) func(context.Context, ToolCall) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, call ToolCall) (*mcp.CallToolResult, error) {
-		out, isErr, started := c.runTool(ctx, call.Project, name, call.Input)
-		if len(started) > 0 {
-			c.addEvent(call.Project.ID, &db.ThreadEvent{Kind: db.EvThreadStarted, Payload: jsonString(map[string]any{"thread_ids": started})})
-		}
-		return textResult(out, isErr), nil
-	}
 }
 
 // buildServer makes the MCP server for the session of thread threadID: the

@@ -97,7 +97,9 @@ func (g *goldenIDs) clean(s string) string {
 }
 
 func TestCoordinatorToolOutputsGolden(t *testing.T) {
+	started := make(chan struct{}, 2)
 	f, svc := newServiceFixture(t, testHost{}, func(turn *enginetest.Turn) error {
+		started <- struct{}{}
 		<-turn.Ctx.Done()
 		return turn.Ctx.Err()
 	}, nil)
@@ -204,6 +206,8 @@ func TestCoordinatorToolOutputsGolden(t *testing.T) {
 	}
 	require.NotEmpty(t, first)
 	require.NotEmpty(t, second)
+	<-started
+	<-started
 	// Its turn blocks until stopped; stop it before the fixture shuts down, or
 	// the shutdown waits for it.
 	t.Cleanup(func() { svc.Threads.Stop(first, Source{}) })

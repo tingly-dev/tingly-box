@@ -34,7 +34,7 @@ func TestCoordinatorMCPValidatesAndScopesTools(t *testing.T) {
 	t.Cleanup(func() { _ = cs.Close() })
 	listed, err := cs.ListTools(ctx, nil)
 	require.NoError(t, err)
-	require.Len(t, listed.Tools, len(coordinatorTools())+3, "coordinator tools, two shared-file readers and send_file")
+	require.Len(t, listed.Tools, len(coord.coordinatorTools())+3, "coordinator tools, two shared-file readers and send_file")
 	call := func(name string, args any) *mcp.CallToolResult {
 		result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
 		require.NoError(t, err)
