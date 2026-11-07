@@ -15,6 +15,9 @@ includes:
   projects:
     taskfile: ./projects/Taskfile.yml
     dir: ./projects
+  remote:
+    taskfile: ./remote/Taskfile.yml
+    dir: ./remote
 
 vars:
   VERSION: ""
