@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/imbot"
+	projectsapp "github.com/tingly-dev/tingly-box/projects"
 	"github.com/tingly-dev/tingly-box/remote/bot"
 )
 
@@ -26,7 +27,7 @@ func RegisterBuiltinCommands(registry *imbot.CommandRegistry, botHandler BotHand
 		newPairBindCommand(botHandler),
 		newJoinCommand(botHandler),
 	}
-	for _, c := range sessionCommands {
+	for _, c := range projectsapp.ChatCommands() {
 		commands = append(commands, newSessionCommand(botHandler, c))
 	}
 	for _, cmd := range commands {
@@ -65,7 +66,7 @@ type BotHandlerAdapter interface {
 	// matching audit events (success / failure).
 	VerifyAndPair(botUUID, chatID, senderID, platform, code string) error
 
-	// RunSessionCommand runs one of sessionCommands in Projects and tells the
+	// RunSessionCommand runs one of projectsapp.ChatCommands in Projects and tells the
 	// chat the result.
 	RunSessionCommand(ctx *imbot.HandlerContext, name, arg string)
 	RunProjectDirectory(ctx *imbot.HandlerContext, arg string)
@@ -109,32 +110,15 @@ func parsePairBindCode(args []string) (string, bool) {
 	return code, true
 }
 
-// sessionCommand is a command Projects runs (see projectCommand).
-type sessionCommand struct {
-	name, description string
-	priority          int
-}
-
-// sessionCommands are the commands Projects runs, in /help order.
-var sessionCommands = []sessionCommand{
-	{"session", "List the sessions here, or switch to #N", 80},
-	{"new", "Start a new session (with this message, or the next one)", 79},
-	{"stop", "Stop the running session (or #N)", 78},
-	{"clear", "Stop the session; the next message starts a new one", 77},
-	{"status", "Where this chat is and how its session runs", 76},
-	{"verbose", "Also see each step a session takes (on|off)", 75},
-	{"yolo", "Let the session use every tool without asking (toggle)", 74},
-}
-
-func newSessionCommand(adapter BotHandlerAdapter, c sessionCommand) imbot.Command {
-	return imbot.NewCommand("cmd-"+c.name, c.name, c.description).
+func newSessionCommand(adapter BotHandlerAdapter, c projectsapp.CommandSpec) imbot.Command {
+	return imbot.NewCommand("cmd-"+c.Name, c.Name, c.Help).
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			arg, _ := joinedArgs(args)
-			adapter.RunSessionCommand(ctx, c.name, arg)
+			adapter.RunSessionCommand(ctx, c.Name, arg)
 			return nil
 		}).
 		WithCategory("session").
-		WithPriority(c.priority).
+		WithPriority(c.Order).
 		MustBuild()
 }
 
@@ -150,17 +134,17 @@ func newHelpCommand(adapter BotHandlerAdapter) imbot.Command {
 }
 
 func newProjectCommand(adapter BotHandlerAdapter) imbot.Command {
-	return imbot.NewCommand("cmd-project", "project", "List projects, or switch to a project coordinator").
+	return imbot.NewCommand("cmd-project", "project", specHelp("project")).
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			arg, _ := joinedArgs(args)
 			adapter.RunProjectDirectory(ctx, arg)
 			return nil
 		}).
-		WithCategory("project").WithPriority(84).MustBuild()
+		WithCategory("project").WithPriority(specOrder("project")).MustBuild()
 }
 
 func newCdCommand(adapter BotHandlerAdapter) imbot.Command {
-	return imbot.NewCommand("cmd-cd", "cd", "Work in another folder").
+	return imbot.NewCommand("cmd-cd", "cd", specHelp("cd")).
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			input, ok := joinedArgs(args)
 			if !ok {
@@ -169,7 +153,7 @@ func newCdCommand(adapter BotHandlerAdapter) imbot.Command {
 			return changeDir(adapter, ctx, input)
 		}).
 		WithCategory("project").
-		WithPriority(90).
+		WithPriority(specOrder("cd")).
 		MustBuild()
 }
 
@@ -207,7 +191,7 @@ func changeDir(adapter BotHandlerAdapter, ctx *imbot.HandlerContext, input strin
 }
 
 func newDirCommand(adapter BotHandlerAdapter) imbot.Command {
-	return imbot.NewCommand("cmd-dir", "dir", "List registered folders, or switch to one").
+	return imbot.NewCommand("cmd-dir", "dir", specHelp("dir")).
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			if input, ok := joinedArgs(args); ok {
 				return changeDir(adapter, ctx, input)
@@ -235,7 +219,7 @@ func newDirCommand(adapter BotHandlerAdapter) imbot.Command {
 			return sendCommandText(adapter, ctx, text)
 		}).
 		WithCategory("project").
-		WithPriority(85).
+		WithPriority(specOrder("dir")).
 		MustBuild()
 }
 

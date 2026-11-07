@@ -17,13 +17,13 @@ func TestHelpText(t *testing.T) {
 Your ID: u1
 Chat ID: c1`
 	session := strings.Join([]string{
-		"/session [N]: list the sessions here, or switch to #N",
-		"/new [message]: start a new session",
-		"/stop: stop the running session",
-		"/clear: stop, and start a new session with the next message",
-		"/status: where this chat is and how its session runs",
-		"/verbose on|off: also see each step, not only the reply",
-		"/yolo: use every tool without asking, or back",
+		"/session [N]: List the sessions here, or switch to #N",
+		"/new [message]: Start a new session",
+		"/stop [#N]: Stop the running session",
+		"/clear: Stop, and start a new session with the next message",
+		"/status: Where this chat is and how its session runs",
+		"/verbose on|off: Also see each step, not only the reply",
+		"/yolo: Use every tool without asking, or back",
 	}, "\n")
 	intro := "Send a message to talk to Claude Code."
 
@@ -34,18 +34,18 @@ Chat ID: c1`
 		want       string
 	}{
 		{"privileged direct", true, false, strings.Join([]string{intro,
-			"/cd <path>: work in another folder",
-			"/dir [N|path]: list registered folders, or switch to one",
-			"/project [N]: list projects, or switch to a project's coordinator",
+			"/cd <path>: Work in another folder",
+			"/dir [N|path]: List registered folders, or switch to one",
+			"/project [N]: List projects, or switch to a project's coordinator",
 			session, tail}, "\n")},
 		{"privileged group", true, true, strings.Join([]string{intro,
-			"/cd <path>: work in another folder",
-			"/dir [N|path]: list registered folders, or switch to one",
-			"/project [N]: list projects, or switch to a project's coordinator",
+			"/cd <path>: Work in another folder",
+			"/dir [N|path]: List registered folders, or switch to one",
+			"/project [N]: List projects, or switch to a project's coordinator",
 			session, tail}, "\n")},
 		{"direct picker only", false, false, strings.Join([]string{intro,
-			"/dir [N]: list registered folders, or switch to one",
-			"/project [N]: list projects, or switch to a project's coordinator",
+			"/dir [N]: List registered folders, or switch to one",
+			"/project [N]: List projects, or switch to a project's coordinator",
 			session, tail}, "\n")},
 		{"group without permission", false, true, strings.Join([]string{intro, session, tail}, "\n")},
 	}
@@ -70,14 +70,30 @@ func TestBuiltinCommandMenu(t *testing.T) {
 		"pair|system|95|hidden=true|Pair this chat with the bot using the operator's pairing code",
 		"cd|project|90|hidden=false|Work in another folder",
 		"dir|project|85|hidden=false|List registered folders, or switch to one",
-		"project|project|84|hidden=false|List projects, or switch to a project coordinator",
+		"project|project|84|hidden=false|List projects, or switch to a project's coordinator",
 		"session|session|80|hidden=false|List the sessions here, or switch to #N",
-		"new|session|79|hidden=false|Start a new session (with this message, or the next one)",
-		"stop|session|78|hidden=false|Stop the running session (or #N)",
-		"clear|session|77|hidden=false|Stop the session; the next message starts a new one",
+		"new|session|79|hidden=false|Start a new session",
+		"stop|session|78|hidden=false|Stop the running session",
+		"clear|session|77|hidden=false|Stop, and start a new session with the next message",
 		"status|session|76|hidden=false|Where this chat is and how its session runs",
-		"verbose|session|75|hidden=false|Also see each step a session takes (on|off)",
-		"yolo|session|74|hidden=false|Let the session use every tool without asking (toggle)",
+		"verbose|session|75|hidden=false|Also see each step, not only the reply",
+		"yolo|session|74|hidden=false|Use every tool without asking, or back",
 		"join|system|30|hidden=true|Add group to whitelist (Telegram only)",
 	}, got)
+}
+
+// The menu and /help cannot disagree: every listed command is registered with
+// the description /help shows, at the position /help lists it.
+func TestMenuAndHelpListTheSameCommands(t *testing.T) {
+	registry := imbot.NewCommandRegistry()
+	require.NoError(t, RegisterBuiltinCommands(registry, nil))
+
+	help := helpText("u1", "c1", true, false)
+	for _, spec := range commandSpecs() {
+		cmd, ok := registry.Get(spec.Name)
+		require.True(t, ok, "%s is registered", spec.Name)
+		assert.Equal(t, spec.Help, cmd.Description, spec.Name)
+		assert.Equal(t, spec.Order, cmd.Priority, spec.Name)
+		assert.Contains(t, help, spec.Usage+": "+spec.Help, spec.Name)
+	}
 }
