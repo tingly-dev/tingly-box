@@ -235,6 +235,16 @@ func TestClaudeCodeConfig_Restore_AfterApplyTwice(t *testing.T) {
 	}
 }
 
+func TestBuildEnv_AutoModeServerDefaultAndOverride(t *testing.T) {
+	if got := (&ClaudeCodeParams{}).BuildEnv()["CLAUDE_CODE_AUTO_MODE_SERVER"]; got != "0" {
+		t.Errorf("CLAUDE_CODE_AUTO_MODE_SERVER = %q, want 0", got)
+	}
+	over := (&ClaudeCodeParams{ExtraEnv: map[string]string{"CLAUDE_CODE_AUTO_MODE_SERVER": "1"}}).BuildEnv()
+	if over["CLAUDE_CODE_AUTO_MODE_SERVER"] != "1" {
+		t.Errorf("ExtraEnv did not override: %q", over["CLAUDE_CODE_AUTO_MODE_SERVER"])
+	}
+}
+
 func TestBuildEnv_DefaultModelOnlyWhenSonnetIsSplit(t *testing.T) {
 	following := (&ClaudeCodeParams{ModelConfig: ClaudeCodeModelConfig{Default: "cc", SubAgent: "sub"}}).BuildEnv()
 	if v, ok := following["ANTHROPIC_MODEL"]; ok {

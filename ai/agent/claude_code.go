@@ -70,6 +70,9 @@ func (p *ClaudeCodeParams) BuildEnv() map[string]string {
 		"API_TIMEOUT_MS":                           "3000000",
 		"ANTHROPIC_BASE_URL":                       p.BaseURL,
 		"ANTHROPIC_AUTH_TOKEN":                     p.APIKey,
+		// The gateway can't pass auto mode's server-side review through, so
+		// Claude Code makes its own classifier calls; ExtraEnv may override.
+		"CLAUDE_CODE_AUTO_MODE_SERVER": "0",
 	}
 
 	// Model configuration
