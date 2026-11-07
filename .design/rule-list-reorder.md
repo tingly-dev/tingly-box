@@ -192,3 +192,28 @@ func (c *Config) ReorderRules(scenario typ.RuleScenario, orderedUUIDs []string) 
 - 顺带发现（不在本任务范围，建议另行处理）：`internal/usecase/rule.go:55`
   的 `List()` 直接读 `uc.cfg.Rules` 未持 `c.mu`，与并发写存在 data race
   （其他读路径都走 `GetRequestConfigs` 的 RLock）。
+
+## 5. 实施步骤（精简版）
+
+按顺序执行，每步可独立验证；1–3 是后端，4–6 是前端，7 是端到端确认：
+
+1. **Config 方法**：`internal/config/rule.go` 新增 `ReorderRules(scenario, orderedUUIDs)`
+   （稳定分区重排 + `saveLocked()`），同文件测试补重排/容忍追加/跨 scenario 拒绝/无 store 四个用例。
+   验证：`go test ./internal/config -run Reorder`。
+2. **HTTP 端点**：`internal/server/module/rule/` 的 `types.go`（请求/响应结构）、
+   `handler.go`（handler）、`routes.go`（`POST /rules/reorder` + swagger 注解）+ handler 测试。
+   验证：`go test ./internal/server/module/rule`；起服务后 `curl -X POST .../api/v1/rules/reorder` 重排一次。
+3. **代码生成**：`task codegen`（openapi.json + `pnpm gen:api` 前端 SDK）。
+   验证：`git diff openapi.json` 只含 reorder 一个端点；生成的 client 里出现 reorder 调用。
+4. **前端 API 封装**：`frontend/src/services/rulesApi.ts` 加 `reorderRules(scenario, orderedUuids)`
+   （codegen 未跑前先按 CLAUDE.md 留占位函数）。
+   验证：`pnpm typecheck`。
+5. **UI 控件**：`RuleCard.tsx` 头部 ↑/↓（新 `allowReorder` prop，首/末条隐藏对应按钮）；
+   `TemplatePage.tsx` 的 `handleReorder`（乐观本地重排 → 调 API → 失败 toast + `loadRules` 回滚，
+   name 排序视图下隐藏按钮）；直连页/Team/ImageApi 开启，slot 页（claude_code/profile）不传。
+   验证：`pnpm typecheck && pnpm lint && pnpm test`。
+6. **mock 与 i18n**：`frontend/src/mocks/handlers.ts` 加 `POST /api/v1/rules/reorder` mock；
+   en/zh/ru 三份 locale 补 tooltip key（`common.moveUp/moveDown` 已存在，直接复用）。
+   验证：`pnpm test`（`localeParity.test.ts` 把关三语言齐全）。
+7. **端到端确认**：`pnpm dev:mock` 截图核对交互；真机验证三件事——重排后刷新/重启顺序保持、
+   `/v1/models` 返回顺序跟随新序、CLI `rule list` 顺序一致。
