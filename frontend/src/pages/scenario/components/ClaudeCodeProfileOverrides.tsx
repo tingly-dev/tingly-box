@@ -397,7 +397,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                 <Switch
                     size="small"
                     checked={value === '1'}
-                    onChange={(_, checked) => updatePreference(key, checked ? '1' : '')}
+                    onChange={(_, checked) => updatePreference(key, checked ? '1' : (field.offValue ?? ''))}
                 />
             );
         }

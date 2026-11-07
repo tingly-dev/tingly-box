@@ -61,8 +61,8 @@ func NormalizeClaudeCodeCoAuthoredBy(v *bool) bool {
 // auto-mode actions inside its own model requests. tb's gateway can't pass
 // that review through (see .design/claude-code.md), so "0" is the default:
 // classifier calls then go through the gateway like any other request and the
-// "session isn't eligible" notice stays away. A value the user sets (Extra, a
-// profile) wins; "1" turns the review back on.
+// "session isn't eligible" notice stays away. The user's choice (the
+// ClaudeCodePrefs field, Extra, a profile) wins; "1" turns the review back on.
 const (
 	EnvClaudeCodeAutoModeServer     = "CLAUDE_CODE_AUTO_MODE_SERVER"
 	DefaultClaudeCodeAutoModeServer = "0"
@@ -120,6 +120,10 @@ type ClaudeCodePrefs struct {
 	DisableAutoupdater                   string `json:"DISABLE_AUTOUPDATER,omitempty"`
 	UseBuiltinRipgrep                    string `json:"USE_BUILTIN_RIPGREP,omitempty"`
 
+	// Auto mode's server-side classifier review — "1" to ask the server,
+	// "0" (tb's default, see EnvClaudeCodeAutoModeServer) to keep it off.
+	// Empty is filled with the default by ToEnv, not omitted.
+	ClaudeCodeAutoModeServer string `json:"CLAUDE_CODE_AUTO_MODE_SERVER,omitempty"`
 	// Network proxy. Backend accepts these; the current UI does not surface
 	// them (too niche for the form, and they overlap with system-level proxy
 	// settings managed elsewhere). Wire them up if/when a user asks.
@@ -224,6 +228,7 @@ func DefaultClaudeCodePrefs() ClaudeCodePrefs {
 	p.AnthropicDefaultOpusModel = "cc"
 	p.AnthropicDefaultFableModel = "cc"
 	p.ClaudeCodeSubagentModel = "cc"
+	p.ClaudeCodeAutoModeServer = DefaultClaudeCodeAutoModeServer
 	return p
 }
 

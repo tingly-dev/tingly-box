@@ -355,6 +355,21 @@ func TestClaudeCodePrefs_ToEnv_AutoModeServerDefaultAndOverride(t *testing.T) {
 		t.Fatalf("ToEnv: %v", err)
 	}
 	mustEq(t, env, "CLAUDE_CODE_AUTO_MODE_SERVER", "1")
+
+	// The typed pref (the Quick Config switch) is the user's choice too.
+	for _, v := range []string{"0", "1"} {
+		env, err = ClaudeCodePrefs{ClaudeCodeAutoModeServer: v}.ToEnv("http://localhost:12580", "tok")
+		if err != nil {
+			t.Fatalf("ToEnv: %v", err)
+		}
+		mustEq(t, env, "CLAUDE_CODE_AUTO_MODE_SERVER", v)
+	}
+
+	// The round trip through a settings env map keeps the typed value.
+	prefs, err := ClaudeCodePrefsFromEnv(map[string]string{"CLAUDE_CODE_AUTO_MODE_SERVER": "1"})
+	if err != nil || prefs.ClaudeCodeAutoModeServer != "1" {
+		t.Fatalf("ClaudeCodePrefsFromEnv = %q, %v; want 1", prefs.ClaudeCodeAutoModeServer, err)
+	}
 }
 
 func mustEq(t *testing.T, env map[string]string, key, want string) {
