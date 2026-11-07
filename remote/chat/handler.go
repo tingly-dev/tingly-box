@@ -7,7 +7,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/imbot"
 	bot2 "github.com/tingly-dev/tingly-box/remote/bot"
-	"github.com/tingly-dev/tingly-box/remote/control/feature"
+	"github.com/tingly-dev/tingly-box/remote/chat/feature"
 )
 
 // BotHandler handles what a chat sends a bot: access (pairing, group

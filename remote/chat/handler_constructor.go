@@ -6,7 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	bot2 "github.com/tingly-dev/tingly-box/remote/bot"
-	"github.com/tingly-dev/tingly-box/remote/control/feature"
+	"github.com/tingly-dev/tingly-box/remote/chat/feature"
 
 	"github.com/tingly-dev/tingly-box/imbot"
 )

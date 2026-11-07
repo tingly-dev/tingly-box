@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/sirupsen/logrus"
-	feature2 "github.com/tingly-dev/tingly-box/remote/control/feature"
+	feature2 "github.com/tingly-dev/tingly-box/remote/chat/feature"
 
 	"github.com/tingly-dev/tingly-box/imbot"
 )
