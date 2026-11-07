@@ -7,7 +7,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	projectsapp "github.com/tingly-dev/tingly-box/projects"
+	"github.com/tingly-dev/tingly-box/remote/interaction"
 )
 
 // AskUserQuestionHandler handles the AskUserQuestion tool which presents
@@ -268,16 +268,16 @@ func BuildDefaultPrompt(req Request, supportsKeyboard bool) string {
 
 // ParseDefaultResponse parses standard allow/deny responses
 func ParseDefaultResponse(req Request, response Response) (Result, error) {
-	choice, _ := projectsapp.ApprovalChoice(response.Data)
+	choice, _ := interaction.ApprovalChoice(response.Data)
 	switch choice {
-	case projectsapp.ChoiceAllow:
+	case interaction.ChoiceAllow:
 		return Result{
 			ID:           req.ID,
 			Approved:     true,
 			UpdatedInput: req.Input,
 			Reason:       "User approved",
 		}, nil
-	case projectsapp.ChoiceAllowThread:
+	case interaction.ChoiceAllowThread:
 		return Result{
 			ID:           req.ID,
 			Approved:     true,
@@ -285,7 +285,7 @@ func ParseDefaultResponse(req Request, response Response) (Result, error) {
 			Remember:     true,
 			Reason:       "User approved (always)",
 		}, nil
-	case projectsapp.ChoiceDeny:
+	case interaction.ChoiceDeny:
 		return Result{
 			ID:       req.ID,
 			Approved: false,
@@ -318,9 +318,9 @@ type PermissionOption struct {
 // PermissionOptions is the list of permission response options.
 // Modify this slice to change display text and keyboard buttons for all platforms.
 var PermissionOptions = []PermissionOption{
-	{Action: projectsapp.ChoiceAllow, Label: "Allow", Icon: "✅", Approved: true, Remember: false},
-	{Action: projectsapp.ChoiceDeny, Label: "Deny", Icon: "❌", Approved: false, Remember: false},
-	{Action: projectsapp.ChoiceAllowThread, Label: "Always Allow", Icon: "🔄", Approved: true, Remember: true},
+	{Action: interaction.ChoiceAllow, Label: "Allow", Icon: "✅", Approved: true, Remember: false},
+	{Action: interaction.ChoiceDeny, Label: "Deny", Icon: "❌", Approved: false, Remember: false},
+	{Action: interaction.ChoiceAllowThread, Label: "Always Allow", Icon: "🔄", Approved: true, Remember: true},
 }
 
 // FindPermissionByAction finds a PermissionOption by its callback action string.
@@ -337,7 +337,7 @@ func FindPermissionByAction(action string) *PermissionOption {
 // ParseTextResponse parses user text input as a permission response
 // Returns: (approved, remember, isValid)
 func ParseTextResponse(text string) (approved bool, remember bool, isValid bool) {
-	choice, ok := projectsapp.ApprovalChoice(text)
+	choice, ok := interaction.ApprovalChoice(text)
 	if !ok {
 		return false, false, false
 	}
@@ -353,7 +353,7 @@ func FormatPermissionInstructions() string {
 	for _, opt := range PermissionOptions {
 		// Format: • `y` | `yes` - Allow (the first two words; more are accepted)
 		b.WriteString("• ")
-		for i, input := range projectsapp.ApprovalWords(opt.Action)[:2] {
+		for i, input := range interaction.ApprovalWords(opt.Action)[:2] {
 			if i > 0 {
 				b.WriteString(" | ")
 			}
