@@ -1,11 +1,11 @@
 package chat
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 
 	"github.com/tingly-dev/tingly-box/imbot"
+	projectsapp "github.com/tingly-dev/tingly-box/projects"
 )
 
 // botHandlerAdapter implements command.BotHandlerAdapter by delegating to BotHandler.
@@ -40,14 +40,12 @@ func (a *botHandlerAdapter) SendText(chatID, text string) error {
 
 // GetProjectPath gets the folder of a chat.
 func (a *botHandlerAdapter) GetProjectPath(chatID string) (string, error) {
-	if source, ok := a.handler.projectRouter.(interface {
-		CurrentFolder(context.Context, string, string) (string, error)
-	}); ok && a.handler.projectsOn() {
-		path, err := source.CurrentFolder(a.handler.ctx, a.handler.botSetting.Platform, chatID)
+	if a.handler.projectsOn() {
+		place, err := a.handler.projectRouter.Place(projectsapp.ChatRef{Platform: a.handler.botSetting.Platform, ChatID: chatID})
 		if err != nil {
 			return "", err
 		}
-		return path, nil
+		return place.Folder, nil
 	}
 	projectPath, _, err := a.handler.chatStore.GetProjectPath(chatID)
 	return projectPath, err
@@ -79,13 +77,10 @@ func (a *botHandlerAdapter) ListChatProjectPaths(chatID string) ([]string, error
 	if err != nil {
 		return nil, err
 	}
-	source, ok := a.handler.projectRouter.(interface {
-		RegisteredFolders(context.Context) ([]string, error)
-	})
-	if !ok || !a.handler.projectsOn() {
+	if !a.handler.projectsOn() {
 		return history, nil
 	}
-	registered, err := source.RegisteredFolders(a.handler.ctx)
+	registered, err := a.handler.projectRouter.Folders()
 	if err != nil {
 		return nil, err
 	}

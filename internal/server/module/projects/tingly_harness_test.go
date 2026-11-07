@@ -493,8 +493,7 @@ func TestTinglyRegisteredDirectories(t *testing.T) {
 	}
 	chat.SendCallback("old-message", "action:bind")
 	chat.WaitText(10*time.Second).AssertContains(t, "Any folder and files")
-	current, err := h.bridge.CurrentFolder(context.Background(), "tingly", chat.ChatID)
-	require.NoError(t, err)
+	current := h.currentFolder(t, chat)
 	require.Equal(t, h.workdir, current, "a free path did not move the chat")
 	// A newly registered folder must not change an already displayed number.
 	h.call("POST", "/projects", map[string]any{"type": "folder", "path": t.TempDir()}, nil)
@@ -502,8 +501,7 @@ func TestTinglyRegisteredDirectories(t *testing.T) {
 	chat.WaitText(10*time.Second).AssertContains(t, first)
 	chat.SendText("new directory message")
 	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: new directory message")
-	current, err = h.bridge.CurrentFolder(context.Background(), "tingly", chat.ChatID)
-	require.NoError(t, err)
+	current = h.currentFolder(t, chat)
 	require.Equal(t, first, current, "the registered folder was picked without the permission")
 
 	// With the permission a free path works too.
@@ -515,8 +513,7 @@ func TestTinglyRegisteredDirectories(t *testing.T) {
 	chat.WaitText(10*time.Second).AssertContains(t, "/cd <path>")
 	chat.SendText("/cd " + free)
 	chat.WaitText(10*time.Second).AssertContains(t, free)
-	current, err = h.bridge.CurrentFolder(context.Background(), "tingly", chat.ChatID)
-	require.NoError(t, err)
+	current = h.currentFolder(t, chat)
 	require.Equal(t, free, current)
 
 	// A button on an old list must not switch to a folder after it is archived.

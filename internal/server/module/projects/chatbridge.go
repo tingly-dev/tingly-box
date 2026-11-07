@@ -99,119 +99,112 @@ func (b *ChatBridge) live() *projectsapp.App {
 	return b.app
 }
 
-// Bound implements chat.ProjectRouter.
+// Bound reports whether the chat has a place in Projects.
 func (b *ChatBridge) Bound(platform, chatID string) bool {
 	app := b.live()
-	return app != nil && app.ChannelBound(platform, chatID)
+	if app == nil {
+		return false
+	}
+	place, err := app.Place(projectsapp.ChatRef{Platform: platform, ChatID: chatID})
+	return err == nil && place.Bound
 }
 
 // Enabled implements chat.ProjectRouter: chats follow the Projects
 // switch.
 func (b *ChatBridge) Enabled() bool { return b.live() != nil }
 
-// ToFolder implements chat.ProjectRouter.
-func (b *ChatBridge) ToFolder(_ context.Context, in chat.ProjectInbound, folder string, ifNew bool) error {
+// errOff is what a chat call gets while Projects is switched off.
+var errOff = errors.New("Projects is switched off")
+
+// ToFolder implements projectsapp.Chat.
+func (b *ChatBridge) ToFolder(ref projectsapp.ChatRef, folder string, ifNew bool) error {
 	app := b.live()
 	if app == nil {
-		return errors.New("Projects is switched off")
+		return errOff
 	}
-	return app.ChannelToFolder(in.Platform, in.ChatID, "", folder, in.Profile, ifNew, in.BotUUID)
+	return app.ToFolder(ref, folder, ifNew)
 }
 
-// RegisteredFolders returns Projects' current, existing working folders.
-func (b *ChatBridge) RegisteredFolders(_ context.Context) ([]string, error) {
+// Folders implements projectsapp.Chat: Projects' current, existing working
+// folders.
+func (b *ChatBridge) Folders() ([]string, error) {
 	app := b.live()
 	if app == nil {
-		return nil, errors.New("Projects is switched off")
+		return nil, errOff
 	}
-	return app.RegisteredFolders()
+	return app.Folders()
 }
 
-// CurrentFolder resolves the folder from the actual Projects binding.
-func (b *ChatBridge) CurrentFolder(_ context.Context, platform, chatID string) (string, error) {
+// Place implements projectsapp.Chat: where the chat is, from the actual
+// Projects binding.
+func (b *ChatBridge) Place(ref projectsapp.ChatRef) (projectsapp.ChatPlace, error) {
 	app := b.live()
 	if app == nil {
-		return "", errors.New("Projects is switched off")
+		return projectsapp.ChatPlace{}, errOff
 	}
-	return app.ChannelFolder(platform, chatID)
+	return app.Place(ref)
 }
 
-// ProjectChoices lists project coordinators separately from working folders.
-func (b *ChatBridge) ProjectChoices(_ context.Context, in chat.ProjectInbound) ([]chat.ProjectChoice, string, error) {
+// Projects implements projectsapp.Chat: project coordinators, separately from
+// working folders.
+func (b *ChatBridge) Projects() ([]projectsapp.ProjectChoice, error) {
 	app := b.live()
 	if app == nil {
-		return nil, "", errors.New("Projects is switched off")
+		return nil, errOff
 	}
-	projects, err := app.RegisteredProjects()
-	if err != nil {
-		return nil, "", err
-	}
-	current, err := app.ChannelProject(in.Platform, in.ChatID)
-	if err != nil {
-		return nil, "", err
-	}
-	choices := make([]chat.ProjectChoice, 0, len(projects))
-	for _, p := range projects {
-		choices = append(choices, chat.ProjectChoice{ID: p.ID, Name: p.Name})
-	}
-	return choices, current, nil
+	return app.Projects()
 }
 
-// SelectProject binds the chat to the chosen project's coordinator.
-func (b *ChatBridge) SelectProject(_ context.Context, in chat.ProjectInbound, id string) error {
+// ToProject implements projectsapp.Chat: it binds the chat to the project's
+// coordinator.
+func (b *ChatBridge) ToProject(ref projectsapp.ChatRef, projectID string) error {
 	app := b.live()
 	if app == nil {
-		return errors.New("Projects is switched off")
+		return errOff
 	}
-	return app.ChannelToProject(in.Platform, in.ChatID, in.BotUUID, id)
+	return app.ToProject(ref, projectID)
 }
 
-// RouteInbound implements chat.ProjectRouter.
-func (b *ChatBridge) RouteInbound(_ context.Context, in chat.ProjectInbound) (bool, error) {
+// touch remembers the bot a chat wrote through, so replies go back through it,
+// and brings the Projects runtime up on first use.
+func (b *ChatBridge) touch(ref projectsapp.ChatRef, startRuntime bool) {
+	b.mu.Lock()
+	b.bots[chatKey(ref.Platform, ref.ChatID)] = ref.BotUUID
+	start := b.start
+	b.mu.Unlock()
+	if startRuntime && start != nil {
+		start()
+	}
+}
+
+// Post implements projectsapp.Chat.
+func (b *ChatBridge) Post(ref projectsapp.ChatRef, text string, files []projectsapp.ChannelFile) (bool, error) {
 	app := b.live()
-	if app == nil || !app.ChannelBound(in.Platform, in.ChatID) {
+	if app == nil || !b.Bound(ref.Platform, ref.ChatID) {
 		return false, nil
 	}
-	b.mu.Lock()
-	b.bots[chatKey(in.Platform, in.ChatID)] = in.BotUUID
-	start := b.start
-	b.mu.Unlock()
-	if start != nil {
-		start()
-	}
-	files := make([]projectsapp.ChannelFile, 0, len(in.Files))
-	for _, f := range in.Files {
-		files = append(files, projectsapp.ChannelFile{Name: f.Name, Path: f.Path})
-	}
-	return app.PostFromChannel(in.Platform, in.ChatID, in.Text, files)
+	b.touch(ref, true)
+	return app.Post(ref, text, files)
 }
 
-// RouteCommand implements chat.ProjectRouter.
-func (b *ChatBridge) RouteCommand(_ context.Context, name string, in chat.ProjectInbound) (bool, string, error) {
+// Command implements projectsapp.Chat.
+func (b *ChatBridge) Command(ref projectsapp.ChatRef, name, arg string) (bool, string, error) {
 	app := b.live()
-	if app == nil || !app.ChannelBound(in.Platform, in.ChatID) {
+	if app == nil || !b.Bound(ref.Platform, ref.ChatID) {
 		return false, "", nil
 	}
-	b.mu.Lock()
-	b.bots[chatKey(in.Platform, in.ChatID)] = in.BotUUID
-	start := b.start
-	b.mu.Unlock()
-	if start != nil {
-		start()
-	}
-	return app.ChannelCommand(in.Platform, in.ChatID, name, in.Text)
+	b.touch(ref, true)
+	return app.Command(ref, name, arg)
 }
 
-// RouteAnswer implements chat.ProjectRouter.
-func (b *ChatBridge) RouteAnswer(_ context.Context, in chat.ProjectInbound, threadID, requestID, choice string) (string, error) {
+// Answer implements projectsapp.Chat.
+func (b *ChatBridge) Answer(ref projectsapp.ChatRef, threadID, requestID, value string) (string, error) {
 	app := b.live()
 	if app == nil {
 		return "Projects is switched off.", nil
 	}
-	b.mu.Lock()
-	b.bots[chatKey(in.Platform, in.ChatID)] = in.BotUUID
-	b.mu.Unlock()
-	return app.AnswerFromChannel(in.Platform, in.ChatID, threadID, requestID, choice)
+	b.touch(ref, false)
+	return app.Answer(ref, threadID, requestID, value)
 }
 
 var (

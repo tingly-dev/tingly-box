@@ -120,7 +120,7 @@ func TestBridgeNeverSendsToABlockedChat(t *testing.T) {
 func TestBridgeIsInertWithoutProjects(t *testing.T) {
 	b := NewChatBridge()
 	assert.False(t, b.Bound("telegram", "1"))
-	handled, err := b.RouteInbound(context.Background(), chat.ProjectInbound{Platform: "telegram", ChatID: "1", Text: "hi"})
+	handled, err := b.Post(projectsapp.ChatRef{Platform: "telegram", ChatID: "1"}, "hi", nil)
 	assert.False(t, handled)
 	assert.NoError(t, err)
 }
@@ -197,13 +197,12 @@ func TestChatToProjectAndBack(t *testing.T) {
 		MainThreadID string `json:"main_thread_id"`
 	}
 	require.Equal(t, http.StatusCreated, call("POST", "/projects", map[string]any{"name": "Atlas"}, &p))
-	ctx := context.Background()
-	in := func(chatID, text string) chat.ProjectInbound {
-		return chat.ProjectInbound{Platform: "telegram", BotUUID: "bot-1", ChatID: chatID, Text: text}
+	post := func(chatID, text string) (bool, error) {
+		return bridge.Post(projectsapp.ChatRef{Platform: "telegram", BotUUID: "bot-1", ChatID: chatID}, text, nil)
 	}
 
 	// Not bound yet: not handled, nothing sent.
-	handled, err := bridge.RouteInbound(ctx, in("42", "hello"))
+	handled, err := post("42", "hello")
 	require.NoError(t, err)
 	assert.False(t, handled)
 	assert.False(t, bridge.Bound("telegram", "42"))
@@ -212,7 +211,7 @@ func TestChatToProjectAndBack(t *testing.T) {
 	assert.True(t, bridge.Bound("telegram", "42"))
 	assert.False(t, bridge.Bound("telegram", "43"), "another chat is not bound")
 
-	handled, err = bridge.RouteInbound(ctx, in("42", "status?"))
+	handled, err = post("42", "status?")
 	require.NoError(t, err)
 	require.True(t, handled)
 	got := bot.next(t)
@@ -246,13 +245,13 @@ func TestChatToProjectAndBack(t *testing.T) {
 	call("GET", "/projects/channel-bindings", nil, &list)
 	require.Len(t, list.Bindings, 1)
 	require.Equal(t, http.StatusOK, call("DELETE", "/projects/channel-bindings/"+list.Bindings[0].ID, nil, nil))
-	handled, _ = bridge.RouteInbound(ctx, in("42", "again"))
+	handled, _ = post("42", "again")
 	assert.False(t, handled)
 
 	// With Projects switched off a bound chat is also left alone.
 	require.Equal(t, http.StatusOK, call("PUT", "/projects/channel-bindings", map[string]any{"platform": "telegram", "chat_id": "42", "project_id": p.ID}, nil))
 	on = false
-	handled, _ = bridge.RouteInbound(ctx, in("42", "off"))
+	handled, _ = post("42", "off")
 	assert.False(t, handled)
 	assert.False(t, bridge.Bound("telegram", "42"))
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly/testenv"
+	projectsapp "github.com/tingly-dev/tingly-box/projects"
 	"github.com/tingly-dev/tingly-box/remote/access"
 )
 
@@ -44,9 +45,9 @@ func (h *tinglyProjectsHarness) setPrivileged(t *testing.T, chat *testenv.Chat, 
 
 func (h *tinglyProjectsHarness) currentFolder(t *testing.T, chat *testenv.Chat) string {
 	t.Helper()
-	folder, err := h.bridge.CurrentFolder(context.Background(), "tingly", chat.ChatID)
+	place, err := h.bridge.Place(projectsapp.ChatRef{Platform: "tingly", ChatID: chat.ChatID})
 	require.NoError(t, err)
-	return folder
+	return place.Folder
 }
 
 // listNumber is the number a /dir or /project reply gave to the entry that

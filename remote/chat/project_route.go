@@ -1,82 +1,32 @@
 package chat
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot"
+	projectsapp "github.com/tingly-dev/tingly-box/projects"
 	bot2 "github.com/tingly-dev/tingly-box/remote/bot"
 )
 
 // ProjectRouter is how a chat talks to Claude Code: through Projects, where
-// every chat has a folder or a session (.design/remote-into-projects.md). The
-// host implements it (see internal/server/module/projects); a BotHandler
-// without one, or with Projects switched off, gives chats access and
-// notifications only.
+// every chat has a folder or a session (.design/remote-into-projects.md). It
+// is the Projects facade (projectsapp.Chat) plus the host's switch; the host
+// implements it (see internal/server/module/projects). A BotHandler without
+// one, or with Projects switched off, gives chats access and notifications
+// only.
 type ProjectRouter interface {
-	// RouteInbound hands a chat's text to its session. handled is false when
-	// the chat has no place in Projects. When handled is true Projects owns the message:
-	// its reply comes back through the host's outbound path, and err, if set,
-	// is why the message could not be delivered (for example a paused
-	// project) and is shown to the chat.
-	RouteInbound(ctx context.Context, in ProjectInbound) (handled bool, err error)
-	// RouteCommand runs a session command (see projectCommand); in.Text is
-	// the text after the command. handled is false when the chat has no
-	// place in Projects. reply is
-	// what to tell the chat; err, if set, is why the command failed.
-	RouteCommand(ctx context.Context, name string, in ProjectInbound) (handled bool, reply string, err error)
-	// RouteAnswer answers a Projects thread's approval or question with the
-	// button a chat pressed (payload ProjectAnswerPayload, thread id, request
-	// id, choice). reply, when set, is what to tell the chat; the prompt
-	// itself is restated by the project.
-	RouteAnswer(ctx context.Context, in ProjectInbound, threadID, requestID, choice string) (reply string, err error)
+	projectsapp.Chat
 	// Enabled reports whether chats are handled by Projects at all (its
 	// switch). When it is off a chat gets no Claude Code, only pairing and
 	// notifications.
 	Enabled() bool
-	// ToFolder moves the chat to a folder: its next message starts a new
-	// session there. With ifNew a chat that already has a place is left alone.
-	ToFolder(ctx context.Context, in ProjectInbound, folder string, ifNew bool) error
-}
-
-// ProjectChoice is one project coordinator offered by an embedding host.
-type ProjectChoice struct {
-	ID   string
-	Name string
-}
-
-// ProjectDirectory is an optional router capability for listing and selecting projects.
-type ProjectDirectory interface {
-	ProjectChoices(context.Context, ProjectInbound) ([]ProjectChoice, string, error)
-	SelectProject(context.Context, ProjectInbound, string) error
 }
 
 // ProjectAnswerPayload names the callbacks of a Projects prompt's buttons.
 const ProjectAnswerPayload = "pj"
-
-// ProjectInbound is one message from a chat.
-type ProjectInbound struct {
-	Platform string
-	BotUUID  string
-	ChatID   string
-	SenderID string
-	Text     string
-	// Files are what the chat sent with the message, saved on local disk;
-	// they are removed once RouteInbound returns.
-	Files []ProjectFile
-	// Profile is the bot's Claude Code profile (its default agent), which a
-	// chat's first session in Projects runs under; empty for the default.
-	Profile string
-}
-
-// ProjectFile is a file a chat sent, saved at Path under its own Name.
-type ProjectFile struct {
-	Name string
-	Path string
-}
 
 // SetProjectRouter plugs in the router; nil turns chat control off.
 func (h *BotHandler) SetProjectRouter(r ProjectRouter) { h.projectRouter = r }
@@ -96,15 +46,15 @@ func (h *BotHandler) projectsOn() bool {
 // adoptChat gives a chat that has no place in Projects yet one: its folder
 // (/cd) or the bot's default folder.
 func (h *BotHandler) adoptChat(hCtx HandlerContext) {
-	in := h.folderInbound(hCtx)
+	ref := h.folderRef(hCtx)
 	if folder, ok := h.getProjectPath(hCtx); ok {
-		err := h.projectRouter.ToFolder(h.ctx, in, folder, true)
+		err := h.projectRouter.ToFolder(ref, folder, true)
 		if err == nil {
 			return
 		}
 		logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("The chat's folder cannot be used; trying the default")
 	}
-	if err := h.projectRouter.ToFolder(h.ctx, in, h.defaultProjectPath(), true); err != nil {
+	if err := h.projectRouter.ToFolder(ref, h.defaultProjectPath(), true); err != nil {
 		logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to give the chat a folder in Projects")
 	}
 }
@@ -117,28 +67,26 @@ func (h *BotHandler) moveChatToFolder(hCtx HandlerContext, folder string) bool {
 		h.SendText(hCtx, chatControlOff)
 		return false
 	}
-	if err := h.projectRouter.ToFolder(h.ctx, h.folderInbound(hCtx), folder, false); err != nil {
+	if err := h.projectRouter.ToFolder(h.folderRef(hCtx), folder, false); err != nil {
 		h.SendText(hCtx, fmt.Sprintf("Could not move this chat to %s: %v", folder, err))
 		return false
 	}
 	return true
 }
 
-func (h *BotHandler) projectInbound(hCtx HandlerContext, text string) ProjectInbound {
-	return ProjectInbound{
+func (h *BotHandler) chatRef(hCtx HandlerContext) projectsapp.ChatRef {
+	return projectsapp.ChatRef{
 		Platform: string(hCtx.Platform),
 		BotUUID:  hCtx.BotUUID,
 		ChatID:   hCtx.ChatID,
-		SenderID: hCtx.SenderID,
-		Text:     text,
 	}
 }
 
-// folderInbound is the chat moving to a folder, with the bot's profile.
-func (h *BotHandler) folderInbound(hCtx HandlerContext) ProjectInbound {
-	in := h.projectInbound(hCtx, "")
-	in.Profile = botProfile(h.currentSetting().DefaultAgent)
-	return in
+// folderRef is the chat moving to a folder, with the bot's profile.
+func (h *BotHandler) folderRef(hCtx HandlerContext) projectsapp.ChatRef {
+	ref := h.chatRef(hCtx)
+	ref.Profile = botProfile(h.currentSetting().DefaultAgent)
+	return ref
 }
 
 // botProfile is the Claude Code profile a bot's default agent names:
@@ -177,10 +125,8 @@ func (h *BotHandler) routeToProject(hCtx HandlerContext, text string) {
 
 // deliverToProject hands a message to the chat's session and says why when
 // it could not be delivered.
-func (h *BotHandler) deliverToProject(hCtx HandlerContext, text string, files []ProjectFile) {
-	in := h.projectInbound(hCtx, text)
-	in.Files = files
-	handled, err := h.projectRouter.RouteInbound(h.ctx, in)
+func (h *BotHandler) deliverToProject(hCtx HandlerContext, text string, files []projectsapp.ChannelFile) {
+	handled, err := h.projectRouter.Post(h.chatRef(hCtx), text, files)
 	switch {
 	case !handled:
 		h.SendText(hCtx, noPlace)
@@ -209,7 +155,7 @@ func (h *BotHandler) routeMediaToProject(hCtx HandlerContext, mc *imbot.MediaCon
 		return
 	}
 	defer os.RemoveAll(dir)
-	files := make([]ProjectFile, 0, len(mc.Media))
+	files := make([]projectsapp.ChannelFile, 0, len(mc.Media))
 	for _, m := range mc.Media {
 		if !h.fileStore.IsAllowedType(m.MimeType) {
 			kind := m.MimeType
@@ -224,7 +170,7 @@ func (h *BotHandler) routeMediaToProject(hCtx HandlerContext, mc *imbot.MediaCon
 			h.SendText(hCtx, fmt.Sprintf("Failed to download file: %v", err))
 			return
 		}
-		files = append(files, ProjectFile{Name: stored.Filename, Path: stored.Path})
+		files = append(files, projectsapp.ChannelFile{Name: stored.Filename, Path: stored.Path})
 	}
 	h.reactReceived(hCtx)
 	h.deliverToProject(hCtx, strings.TrimSpace(mc.Caption), files)
@@ -234,24 +180,29 @@ func (h *BotHandler) routeMediaToProject(hCtx HandlerContext, mc *imbot.MediaCon
 // last list. Snapshotting the IDs prevents concurrent list reorder from
 // selecting a different project than the user saw.
 func (h *BotHandler) projectDirectory(hCtx HandlerContext, arg string) {
-	source, ok := h.projectRouter.(ProjectDirectory)
-	if !ok || !h.projectsOn() {
+	if !h.projectsOn() {
 		h.SendText(hCtx, "Project selection is not available.")
 		return
 	}
-	in := h.projectInbound(hCtx, "")
+	ref := h.chatRef(hCtx)
 	arg = strings.TrimSpace(arg)
 	if arg == "" {
-		choices, current, err := source.ProjectChoices(h.ctx, in)
+		choices, err := h.projectRouter.Projects()
 		if err != nil {
 			h.SendText(hCtx, "Could not list projects: "+err.Error())
 			return
 		}
+		place, err := h.projectRouter.Place(ref)
+		if err != nil {
+			h.SendText(hCtx, "Could not list projects: "+err.Error())
+			return
+		}
+		current := place.ProjectID
 		h.projectListsMu.Lock()
 		if h.projectLists == nil {
-			h.projectLists = map[string][]ProjectChoice{}
+			h.projectLists = map[string][]projectsapp.ProjectChoice{}
 		}
-		h.projectLists[hCtx.ChatID] = append([]ProjectChoice(nil), choices...)
+		h.projectLists[hCtx.ChatID] = append([]projectsapp.ProjectChoice(nil), choices...)
 		h.projectListsMu.Unlock()
 		if len(choices) == 0 {
 			h.SendText(hCtx, "No projects are available.")
@@ -272,14 +223,14 @@ func (h *BotHandler) projectDirectory(hCtx HandlerContext, arg string) {
 	}
 	n, valid := bot2.ParseListNumber(arg)
 	h.projectListsMu.Lock()
-	list := append([]ProjectChoice(nil), h.projectLists[hCtx.ChatID]...)
+	list := append([]projectsapp.ProjectChoice(nil), h.projectLists[hCtx.ChatID]...)
 	h.projectListsMu.Unlock()
 	if !valid || n > len(list) {
 		h.SendText(hCtx, "Use /project to list projects, then /project <number> to switch.")
 		return
 	}
 	chosen := list[n-1]
-	if err := source.SelectProject(h.ctx, in, chosen.ID); err != nil {
+	if err := h.projectRouter.ToProject(ref, chosen.ID); err != nil {
 		h.SendText(hCtx, "Could not switch project: "+err.Error())
 		return
 	}
@@ -312,7 +263,7 @@ func (h *BotHandler) runProjectCommand(hCtx HandlerContext, name, arg string) {
 		h.SendText(hCtx, chatControlOff)
 		return
 	}
-	handled, reply, err := h.projectRouter.RouteCommand(h.ctx, name, h.projectInbound(hCtx, arg))
+	handled, reply, err := h.projectRouter.Command(h.chatRef(hCtx), name, arg)
 	switch {
 	case !handled:
 		h.SendText(hCtx, noPlace)
@@ -329,12 +280,7 @@ func (h *BotHandler) routeProjectAnswer(hCtx HandlerContext, threadID, requestID
 	if h.projectRouter == nil || threadID == "" || requestID == "" || choice == "" {
 		return
 	}
-	reply, err := h.projectRouter.RouteAnswer(h.ctx, ProjectInbound{
-		Platform: string(hCtx.Platform),
-		BotUUID:  hCtx.BotUUID,
-		ChatID:   hCtx.ChatID,
-		SenderID: hCtx.SenderID,
-	}, threadID, requestID, choice)
+	reply, err := h.projectRouter.Answer(h.chatRef(hCtx), threadID, requestID, choice)
 	if err != nil {
 		logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to answer a project's request")
 		h.SendText(hCtx, "Could not answer: "+err.Error())

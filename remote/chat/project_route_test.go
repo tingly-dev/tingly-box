@@ -1,7 +1,6 @@
 package chat_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -18,6 +17,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly/testenv"
+	projectsapp "github.com/tingly-dev/tingly-box/projects"
 	"github.com/tingly-dev/tingly-box/remote/bot"
 	"github.com/tingly-dev/tingly-box/remote/chat"
 )
@@ -36,12 +36,19 @@ func bootHelperNotStarted(t *testing.T) (*testenv.TestEnv, *chat.TestHarness, *t
 	return env, harness, env.NewUser("alice")
 }
 
+// inbound is a message the fake router was handed.
+type inbound struct {
+	projectsapp.ChatRef
+	Text  string
+	Files []projectsapp.ChannelFile
+}
+
 // fakeRouter binds the chats in bound and records what it was handed.
 type fakeRouter struct {
 	mu      sync.Mutex
 	bound   map[string]bool
 	err     error
-	got     []chat.ProjectInbound
+	got     []inbound
 	cmds    []string
 	answers []string
 	// files are the bodies of the files handed over, read while they exist.
@@ -58,7 +65,7 @@ func (f *fakeRouter) Enabled() bool {
 	return !f.off
 }
 
-func (f *fakeRouter) ToFolder(_ context.Context, in chat.ProjectInbound, folder string, ifNew bool) error {
+func (f *fakeRouter) ToFolder(in projectsapp.ChatRef, folder string, ifNew bool) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if ifNew && f.bound[in.ChatID] {
@@ -71,6 +78,18 @@ func (f *fakeRouter) ToFolder(_ context.Context, in chat.ProjectInbound, folder 
 	}
 	return nil
 }
+
+func (f *fakeRouter) Place(in projectsapp.ChatRef) (projectsapp.ChatPlace, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return projectsapp.ChatPlace{Bound: f.bound[in.ChatID]}, nil
+}
+
+func (f *fakeRouter) Folders() ([]string, error) { return nil, nil }
+
+func (f *fakeRouter) Projects() ([]projectsapp.ProjectChoice, error) { return nil, nil }
+
+func (f *fakeRouter) ToProject(projectsapp.ChatRef, string) error { return nil }
 
 func (f *fakeRouter) movedTo() []string {
 	f.mu.Lock()
@@ -90,12 +109,13 @@ func (f *fakeRouter) setErr(err error) {
 	f.err = err
 }
 
-func (f *fakeRouter) RouteInbound(_ context.Context, in chat.ProjectInbound) (bool, error) {
+func (f *fakeRouter) Post(ref projectsapp.ChatRef, text string, files []projectsapp.ChannelFile) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if !f.bound[in.ChatID] {
+	if !f.bound[ref.ChatID] {
 		return false, nil
 	}
+	in := inbound{ChatRef: ref, Text: text, Files: files}
 	f.got = append(f.got, in)
 	for _, file := range in.Files {
 		if f.files == nil {
@@ -107,20 +127,20 @@ func (f *fakeRouter) RouteInbound(_ context.Context, in chat.ProjectInbound) (bo
 	return true, f.err
 }
 
-func (f *fakeRouter) RouteCommand(_ context.Context, name string, in chat.ProjectInbound) (bool, string, error) {
+func (f *fakeRouter) Command(ref projectsapp.ChatRef, name, arg string) (bool, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if !f.bound[in.ChatID] {
+	if !f.bound[ref.ChatID] {
 		return false, "", nil
 	}
-	f.cmds = append(f.cmds, name+":"+in.Text)
+	f.cmds = append(f.cmds, name+":"+arg)
 	return true, "project did " + name, nil
 }
 
-func (f *fakeRouter) RouteAnswer(_ context.Context, in chat.ProjectInbound, threadID, requestID, choice string) (string, error) {
+func (f *fakeRouter) Answer(ref projectsapp.ChatRef, threadID, requestID, choice string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.answers = append(f.answers, in.ChatID+":"+threadID+":"+requestID+":"+choice)
+	f.answers = append(f.answers, ref.ChatID+":"+threadID+":"+requestID+":"+choice)
 	if choice == "late" {
 		return "This was already answered.", nil
 	}
@@ -139,10 +159,10 @@ func (f *fakeRouter) commands() []string {
 	return append([]string(nil), f.cmds...)
 }
 
-func (f *fakeRouter) inbound() []chat.ProjectInbound {
+func (f *fakeRouter) inbound() []inbound {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return append([]chat.ProjectInbound(nil), f.got...)
+	return append([]inbound(nil), f.got...)
 }
 
 // A chat bound to a project talks to the project: the text (even "@cc ...")
@@ -279,17 +299,18 @@ func Test_ProjectPromptButtonsGoToTheProject(t *testing.T) {
 	harness.Handler.SetProjectRouter(router)
 	require.NoError(t, env.Manager().Start(env.Context()))
 
+	payload := chat.ProjectAnswerPayload
 	chat := alice.OpenDM(harness.Setting.UUID)
-	chat.SendCallback("m1", chat.ProjectAnswerPayload+":t1:r1:allow")
+	chat.SendCallback("m1", payload+":t1:r1:allow")
 	require.Eventually(t, func() bool { return len(router.answered()) == 1 }, 3*time.Second, 10*time.Millisecond)
 	assert.Equal(t, chat.ChatID+":t1:r1:allow", router.answered()[0])
 	chat.ExpectNoEvent(500*time.Millisecond, tingly.EventSend)
 
-	chat.SendCallback("m1", chat.ProjectAnswerPayload+":t1:r1:late")
+	chat.SendCallback("m1", payload+":t1:r1:late")
 	chat.WaitText(3*time.Second).AssertContains(t, "already answered")
 
 	router.setErr(errors.New("this chat is not bound to that thread"))
-	chat.SendCallback("m1", chat.ProjectAnswerPayload+":t2:r2:deny")
+	chat.SendCallback("m1", payload+":t2:r2:deny")
 	chat.WaitText(3*time.Second).AssertContains(t, "Could not answer").AssertContains(t, "not bound")
 }
 
