@@ -217,7 +217,7 @@ func TestStoppingAQueuedThreadClearsItsQueuedMark(t *testing.T) {
 	g.expectStarted(t, "a")
 	g.waitQueued(t, b, true)
 
-	g.threads.Stop(b.ID)
+	g.threads.Stop(b.ID, Source{})
 	g.waitQueued(t, b, false)
 	g.finish("a")
 	g.expectNoStart(t) // the stopped turn never starts
