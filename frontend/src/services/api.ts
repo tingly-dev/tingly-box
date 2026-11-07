@@ -87,6 +87,7 @@ export const api = {
 
     // Model gateway API (OpenAI/Anthropic-compatible) — see modelApi.ts.
     listOpenAIModels: modelApi.listOpenAIModels,
+    listScenarioModels: modelApi.listScenarioModels,
     listAnthropicModels: modelApi.listAnthropicModels,
 
     // IM bot capabilities/chats/groups/permissions + notify/interact/wait —
