@@ -158,12 +158,6 @@ func TestCoordinatorToolOutputsGolden(t *testing.T) {
 			}
 		}
 		out := strings.Join(text, "\n")
-		if name == "list_shared_files" {
-			// The directory is listed in the file system's order.
-			lines := strings.Split(out, "\n")
-			sort.Strings(lines)
-			out = strings.Join(lines, "\n")
-		}
 		refresh()
 		a, _ := json.Marshal(args)
 		shown := g.clean(string(a))
@@ -180,6 +174,8 @@ func TestCoordinatorToolOutputsGolden(t *testing.T) {
 	call("forget", map[string]any{"file": "release-date.md"})
 	call("update_instructions", map[string]any{"instructions": strings.Repeat("x", MaxInstructions+1)})
 	call("remember", map[string]any{"topic": "Keep", "content": "kept", "summary": "kept note"})
+	call("remember", map[string]any{"topic": "发布日期", "content": "周五发布。", "summary": "发布日期是周五"})
+	call("remember", map[string]any{"topic": "发布日期", "content": "改到周一发布。", "summary": "发布日期是周一"})
 
 	// Decisions and proposals.
 	call("request_decision", map[string]any{"question": "Ship now?", "options": []map[string]string{{"label": "Yes", "consequence": "ships"}, {"label": "No"}}, "recommended": 1, "reason": "safer"})

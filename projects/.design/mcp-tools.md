@@ -101,11 +101,13 @@ One table replaces three separate registrations (the coordinator's list, the two
   - No product tool uses it yet. It is tested with an injected tool. Whether approval should instead be bound to an answered decision card stays open (TEP-2462, question 1).
 - **Tests** (`tools_test.go`): the exact tool list of each scope (a tool added to a scope has to be added to the test, so it cannot reach a worker by accident); no tool takes `project_id`, and no worker tool takes `thread_id`; the coordinator's tool list stays under 12000 bytes (10.7 KB now, 8.2 KB for the 13 business tools before `base`/`branch` and the shared tools; each tool costs tokens on every turn); the confirm gate refuses a missing, empty or unknown approval, a thread report and the coordinator's own reply, runs with a real user message and writes the audit note (mutation-checked: skipping the check fails three cases).
 
-Findings while pinning the behaviour (recorded, deliberately not changed here):
+Three problems found while pinning the behaviour, all fixed afterwards (the golden file diff was exactly these):
 
-- `update_instructions` changes the project's own settings, so the turn's "settings changed" guard refuses every later tool call of that turn. A settings tool must refresh the turn snapshot after its own change (already noted for `set_project_settings`).
-- `list_shared_files` lists a directory in file-system order, not sorted. The golden test sorts the lines; sorting in the tool would give the model a stable order.
-- `remember` with an empty topic saves `note-<unix time>.md`.
+- **`update_instructions` locked its own turn.** It changes the project's settings, so the "settings changed" guard refused every later tool call of that turn. A tool now declares `EditsProject`; after it succeeds the turn adopts the project as the tool left it (it must apply the change to the project it is given and save that value). A change made anywhere else still stops the turn, and a refused edit adopts nothing. Every future settings tool (`set_project_settings`) needs this.
+- **`list_shared_files` was in file-system order**, and cut the first 200 of that order. It now reads all names, sorts them, then caps, so the same listing is the same every time.
+- **A memory topic with no ASCII letters or digits got a time-based file name** (`note-<unix time>.md`). That is any Chinese topic, not only an empty one: the same topic written twice made two files, so "reuse the topic to update it" did not work. The name is now `note-` plus eight hex digits of a hash of the topic, stable across calls. A blank topic is refused (`topic is required`) instead of saved under a time stamp.
+
+Tests: `tools_fixes_test.go` (each fix has a direct test; reversing the sort, making the name vary with time, or skipping the snapshot refresh each fails one) and the two golden files.
 
 Not changed: the tools' names, schemas (apart from `base` / `branch`) and behaviour; the real-CLI probe is not rerun.
 

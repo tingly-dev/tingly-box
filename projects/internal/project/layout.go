@@ -1,6 +1,8 @@
 package project
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -100,9 +102,13 @@ type MemoryFile struct {
 
 var memoryNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,80}\.md$`)
 
-// MemoryFileName turns a topic into a safe memory file name.
+// MemoryFileName turns a topic into a safe memory file name. The same topic
+// always gives the same name, so writing it again updates the file. A topic
+// with no ASCII letters or digits (a Chinese one, say) is named after a hash
+// of its text.
 func MemoryFileName(topic string) string {
 	topic = strings.TrimSuffix(strings.TrimSpace(topic), ".md")
+	raw := topic
 	var b strings.Builder
 	for _, r := range strings.ToLower(topic) {
 		switch {
@@ -116,7 +122,8 @@ func MemoryFileName(topic string) string {
 	}
 	name := strings.Trim(b.String(), "-")
 	if name == "" {
-		name = fmt.Sprintf("note-%d", time.Now().Unix())
+		sum := sha256.Sum256([]byte(raw))
+		name = "note-" + hex.EncodeToString(sum[:4])
 	}
 	if len(name) > 60 {
 		name = name[:60]
@@ -201,6 +208,9 @@ func (l Layout) ListMemory(projectID string) ([]MemoryFile, error) {
 // Remember writes a memory file for topic and indexes it in MEMORY.md with
 // a one-line summary. It returns the file name.
 func (l Layout) Remember(projectID, topic, content, summary string) (string, error) {
+	if strings.TrimSpace(topic) == "" {
+		return "", errors.New("topic is required: it names the memory file")
+	}
 	name := MemoryFileName(topic)
 	if err := l.WriteMemory(projectID, name, strings.TrimSpace(content)+"\n"); err != nil {
 		return "", err

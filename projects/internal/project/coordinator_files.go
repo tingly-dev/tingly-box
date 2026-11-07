@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -50,10 +51,13 @@ func (c *Coordinator) sharedFile(projectID, path string, list bool) ([]mcp.Conte
 		if !info.IsDir() {
 			return nil, fmt.Errorf("path is not a directory")
 		}
-		entries, err := f.ReadDir(201)
-		if err != nil && err != io.EOF {
+		// All names, sorted, then capped: the file system's order would make
+		// the same listing differ from call to call and cut a different 200.
+		entries, err := f.ReadDir(-1)
+		if err != nil {
 			return nil, err
 		}
+		sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 		var lines []string
 		for i, entry := range entries {
 			if i == 200 {
