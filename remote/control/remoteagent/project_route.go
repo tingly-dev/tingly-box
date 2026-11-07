@@ -8,7 +8,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot"
-	bot2 "github.com/tingly-dev/tingly-box/remote/control/bot"
+	bot2 "github.com/tingly-dev/tingly-box/remote/bot"
 )
 
 // ProjectRouter is how a chat talks to Claude Code: through Projects, where

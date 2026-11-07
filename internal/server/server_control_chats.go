@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/remote/control/bot"
+	"github.com/tingly-dev/tingly-box/remote/bot"
 
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
 	"github.com/tingly-dev/tingly-box/remote/channel"

@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/remote/control/bot"
+	"github.com/tingly-dev/tingly-box/remote/bot"
 )
 
 func newIncomingMessage(chatID, text string) imbot.Message {

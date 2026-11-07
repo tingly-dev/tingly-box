@@ -2,7 +2,7 @@ package adapter
 
 import (
 	"github.com/tingly-dev/tingly-box/internal/db"
-	"github.com/tingly-dev/tingly-box/remote/control/bot"
+	"github.com/tingly-dev/tingly-box/remote/bot"
 )
 
 // SettingsReader is the read surface the bridge needs from the imbot

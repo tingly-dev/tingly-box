@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/remote/control/bot"
+	"github.com/tingly-dev/tingly-box/remote/bot"
 )
 
 func newTestChatStore(t *testing.T) bot.ChatStoreInterface {

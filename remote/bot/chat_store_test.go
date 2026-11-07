@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/db"
-	"github.com/tingly-dev/tingly-box/remote/control/bot"
+	"github.com/tingly-dev/tingly-box/remote/bot"
 )
 
 // openStore returns a chat store over a temp directory, plus a reopen helper.

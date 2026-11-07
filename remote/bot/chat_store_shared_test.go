@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/tingly-dev/tingly-box/remote/control/bot"
+	"github.com/tingly-dev/tingly-box/remote/bot"
 )
 
 // TestManagerChatStoreIsShared pins the invariant that every bot a manager

@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/tingly-dev/tingly-box/remote/control/bot"
+	"github.com/tingly-dev/tingly-box/remote/bot"
 )
 
 // TestSetPaired_RoundTrip verifies SetPaired persists across reload and that

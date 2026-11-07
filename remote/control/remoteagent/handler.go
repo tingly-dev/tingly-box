@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/tingly-dev/tingly-box/imbot"
-	bot2 "github.com/tingly-dev/tingly-box/remote/control/bot"
+	bot2 "github.com/tingly-dev/tingly-box/remote/bot"
 	"github.com/tingly-dev/tingly-box/remote/control/feature"
 )
 

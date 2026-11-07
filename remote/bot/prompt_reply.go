@@ -8,8 +8,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
 	"github.com/tingly-dev/tingly-box/remote/ask"
+	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
 )
 
 // disabledChatGate builds the bot-host-level inbound handler that drops all

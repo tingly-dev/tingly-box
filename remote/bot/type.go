@@ -4,7 +4,7 @@ import "context"
 
 // SettingsStore is the read surface the bot lifecycle needs from the settings
 // store. It returns remote-owned BotSetting values; the host bridges its own
-// persistence type onto this interface (see remote/control/adapter).
+// persistence type onto this interface (see remote/adapter).
 type SettingsStore interface {
 	// GetSettingsByUUID returns the settings record for a bot.
 	GetSettingsByUUID(uuid string) (BotSetting, error)

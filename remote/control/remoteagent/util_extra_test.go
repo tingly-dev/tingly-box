@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tingly-dev/tingly-box/remote/control/bot"
+	"github.com/tingly-dev/tingly-box/remote/bot"
 )
 
 func TestExpandPathFrom_Absolute(t *testing.T) {
