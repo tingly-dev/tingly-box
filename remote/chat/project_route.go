@@ -26,7 +26,7 @@ type ProjectRouter interface {
 }
 
 // ProjectAnswerPayload names the callbacks of a Projects prompt's buttons.
-const ProjectAnswerPayload = "pj"
+const ProjectAnswerPayload = agent.AnswerPayload
 
 // SetProjectRouter plugs in the router; nil turns chat control off.
 func (h *BotHandler) SetProjectRouter(r ProjectRouter) { h.projectRouter = r }
