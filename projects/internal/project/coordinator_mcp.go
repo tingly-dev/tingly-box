@@ -1,13 +1,9 @@
 package project
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
 	"sync"
 	"sync/atomic"
 
-	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
@@ -37,105 +33,37 @@ func (t *coordinatorToolTurn) end() {
 	t.snapshot = nil
 }
 
-func (c *Coordinator) coordinatorMCPForTurn(turn *coordinatorToolTurn) (*mcp.Server, error) {
-	srv := mcp.NewServer(&mcp.Implementation{Name: "tingly-projects", Version: "1.0.0"}, nil)
-	for _, tool := range coordinatorTools() {
-		schema := map[string]any{"type": "object", "properties": tool.Properties}
-		if len(tool.Required) != 0 {
-			schema["required"] = tool.Required
-		}
-		data, err := json.Marshal(schema)
-		if err != nil {
-			return nil, err
-		}
-		var parsed jsonschema.Schema
-		if err := json.Unmarshal(data, &parsed); err != nil {
-			return nil, err
-		}
-		resolved, err := parsed.Resolve(nil)
-		if err != nil {
-			return nil, fmt.Errorf("%s schema: %w", tool.Name, err)
-		}
-		name := tool.Name
-		srv.AddTool(&mcp.Tool{Name: name, Description: tool.Description, InputSchema: schema}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			fail := func(message string) (*mcp.CallToolResult, error) {
-				return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: message}}}, nil
-			}
-			args := req.Params.Arguments
-			if len(args) == 0 {
-				args = json.RawMessage(`{}`)
-			}
-			var input any
-			if err := json.Unmarshal(args, &input); err != nil {
-				return fail("invalid input: " + err.Error())
-			}
-			if err := resolved.Validate(input); err != nil {
-				return fail("invalid input: " + err.Error())
-			}
-			// Serialize tool effects with turn completion and no_update. Claude
-			// may submit multiple MCP calls concurrently.
-			turn.mu.Lock()
-			defer turn.mu.Unlock()
-			snapshot, userTriggered := turn.snapshot, turn.userTriggered
-			if snapshot == nil {
-				return fail("No coordinator turn is active.")
-			}
-			if turn.quiet.Load() {
-				return fail("This coordinator turn has already ended with no_update.")
-			}
-			current, err := c.store.GetProject(snapshot.ID)
-			if err != nil {
-				return fail(err.Error())
-			}
-			if current.Paused || current.ArchivedAt != nil {
-				return fail("project is paused or archived")
-			}
-			if len(configurationChanges(snapshot, current)) > 0 {
-				return fail("Project settings changed while this response was running. Re-evaluate using the current settings.")
-			}
-			if name == toolNoUpdate && userTriggered {
-				return fail("A message from the user needs a reply. Answer it, or start or message a thread.")
-			}
-			out, isErr, started := c.runTool(ctx, current, name, args)
-			if name == toolNoUpdate && !isErr {
-				turn.quiet.Store(true)
-			}
-			if len(started) > 0 {
-				c.addEvent(current.ID, &db.ThreadEvent{Kind: db.EvThreadStarted, Payload: jsonString(map[string]any{"thread_ids": started})})
-			}
-			return &mcp.CallToolResult{IsError: isErr, Content: []mcp.Content{&mcp.TextContent{Text: out}}}, nil
-		})
+// run is the gate every coordinator-scope tool call passes. Calls are
+// serialised with turn completion and no_update, because Claude may submit
+// several at once. fn gets the project as it is now and runs only while the
+// turn is active, not ended with no_update, the project is neither paused nor
+// archived, and its settings are what the turn began with.
+func (t *coordinatorToolTurn) run(store *db.Store, tool string, fn func(current *db.Project) (*mcp.CallToolResult, error)) (*mcp.CallToolResult, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	snapshot, userTriggered := t.snapshot, t.userTriggered
+	if snapshot == nil {
+		return textResult("No coordinator turn is active.", true), nil
 	}
-	for _, item := range []struct {
-		name, description string
-		list              bool
-	}{
-		{"read_shared_file", "Read a UTF-8 text file or image in this project's library or memory. Accepts the absolute path shown for an attachment, or a path beginning library/ or memory/.", false},
-		{"list_shared_files", "List a directory in this project's library or memory. Use library or memory as the root path.", true},
-	} {
-		item := item
-		type pathArgs struct {
-			Path string `json:"path" jsonschema:"Path in the project's library or memory"`
-		}
-		mcp.AddTool(srv, &mcp.Tool{Name: item.name, Description: item.description}, func(ctx context.Context, _ *mcp.CallToolRequest, args pathArgs) (*mcp.CallToolResult, any, error) {
-			turn.mu.Lock()
-			defer turn.mu.Unlock()
-			if turn.snapshot == nil || turn.quiet.Load() {
-				return nil, nil, fmt.Errorf("no coordinator turn is active")
-			}
-			current, err := c.store.GetProject(turn.snapshot.ID)
-			if err != nil {
-				return nil, nil, err
-			}
-			if current.Paused || current.ArchivedAt != nil || len(configurationChanges(turn.snapshot, current)) > 0 {
-				return nil, nil, fmt.Errorf("project settings changed or the project is paused")
-			}
-			content, err := c.sharedFile(current.ID, args.Path, item.list)
-			if err != nil {
-				return nil, nil, err
-			}
-			return &mcp.CallToolResult{Content: content}, nil, nil
-		})
+	if t.quiet.Load() {
+		return textResult("This coordinator turn has already ended with no_update.", true), nil
 	}
-	return srv, nil
+	current, err := store.GetProject(snapshot.ID)
+	if err != nil {
+		return textResult(err.Error(), true), nil
+	}
+	if current.Paused || current.ArchivedAt != nil {
+		return textResult("project is paused or archived", true), nil
+	}
+	if len(configurationChanges(snapshot, current)) > 0 {
+		return textResult("Project settings changed while this response was running. Re-evaluate using the current settings.", true), nil
+	}
+	if tool == toolNoUpdate && userTriggered {
+		return textResult("A message from the user needs a reply. Answer it, or start or message a thread.", true), nil
+	}
+	res, err := fn(current)
+	if tool == toolNoUpdate && err == nil && res != nil && !res.IsError {
+		t.quiet.Store(true)
+	}
+	return res, err
 }

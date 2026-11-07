@@ -1,6 +1,6 @@
 # Projects MCP tools: grow the surface one action at a time
 
-> Status: **in progress**: step 1 (creation with base and branch) is built; the rest is proposed. Narrowed on 2026-11-07. Tracking issue: [TEP-2462](https://github.com/tingly-dev/tingly-box/issues/2462).
+> Status: **in progress**: steps 1–3 (creation with base and branch, the state API, the tool table and boundaries) are built; step 4 (new tools) is proposed. Narrowed on 2026-11-07. Tracking issue: [TEP-2462](https://github.com/tingly-dev/tingly-box/issues/2462).
 > Builds on [coordinator-session.md](./coordinator-session.md) (how the coordinator's MCP server is scoped and serialised) and [message-channel.md](./message-channel.md).
 > Related, not on `main` yet: `.design/slash-commands.md` (session control API; PRs #2454–#2456), `pr-issue-awareness.md`, `branch-tracking.md`.
 > `file:line` references are on `main` at `d7b849ccc`.
@@ -12,8 +12,8 @@ The coordinator and every thread are Claude Code sessions, so MCP tools are the 
 We do **not** design the whole surface up front. The order, each step small and shipped before the next:
 
 1. **Creation, done well** (built): `start_thread` can choose the base and the branch name.
-2. **A thread state-management API** in the service layer (stop, reopen, resolve alike), guarded and with an actor.
-3. **Tool boundaries**: who may call what, and what needs the user's word, decided when the first tool needs it.
+2. **A thread state-management API** in the service layer (stop, reopen), guarded and with an actor (built).
+3. **Tool table and boundaries**: one table of tools with scopes and risk, and the rule for what needs the user's word (built; no new tool).
 4. **The tools** on top (`stop_thread`, `reopen_thread`, then the rest).
 
  Each step moves one small group of actions behind a proper service method and exposes it as a tool. The architecture changes only as far as that group needs, and every step leaves HTTP, IM and MCP calling the same code. A step is done when it has shipped, not when the catalogue is complete.
@@ -70,25 +70,47 @@ Decisions, small on purpose:
 
 Tests (`thread_branch_test.go`): the worktree starts at the chosen base's commit and not at `main`; the default is unchanged; a missing base, a taken, invalid or option-like branch name are refused and leave no thread; `DisableWorktree` and `repo: "none"` refuse; `AddWorktree` keeps an existing branch (mutation-checked: removing the guard fails the test); through the real MCP tool and through a proposal card.
 
-## Step 2: the thread state-management API (next)
+## Step 2: the thread state-management API (built)
 
-The service-layer part of "Step 3" below, done first and without any new tool: a guarded `Reopen`, an actor on `Stop` and `Reopen`, and handlers that only bind, call and map. It stands on its own: it fixes a latent bug (`Reopen` on a thread that is not resolved corrupts its status) and makes the later tools thin.
+The service-layer part of stop and reopen, without any new tool.
 
-## Step 3: tool boundaries (when the first new tool needs it)
+- `Reopen(threadID, by Source)` acts only on a resolved thread. Before, it set `ResolvedAt = nil` and `Status = idle/ready` whatever the status, so calling it on a running thread flipped it to idle while a turn ran (reproduced; the new test fails when the guard is removed). On a thread that is not resolved it returns the thread as it is and writes nothing. A main thread is refused with `ErrNotWorker`.
+- `Stop(threadID, by Source) StopResult` returns whether it interrupted a turn and how many queued messages it dropped. Stopping a thread with nothing running does nothing.
+- `by` is the existing `Source`. The thread's note names it: "Stopped." (web), "Stopped from a chat." (IM), "Stopped by the coordinator." (a thread source, which today is only the coordinator); the same for "Reopened". Pause and archive stop every thread with a system source.
+- The HTTP handlers and the IM `/stop` / `/clear` pass their own source and are otherwise unchanged. `findThread` already excludes the main thread (checked by a test), so the coordinator's thread tools cannot reach it.
 
-Decide only what stop and reopen need: coordinator-only, reversible, recorded in the thread, no approval. The approval rule for irreversible actions (merge) and per-scope tool lists for worker tools are designed when those tools come, not before.
+## Step 3: the tool table and boundaries (built)
 
-## Step 4: stop + reopen tools (the original first slice)
+One table replaces three separate registrations (the coordinator's list, the two shared-file readers, `send_file`) and the gate code that was copied into each of them.
 
-### Service changes (this is Step 2; one small PR, no new tool yet)
+`tools.go`: `Tool{Name, Description, Properties, Required, Scopes, Risk, Handle}`.
 
-- `Reopen` gets a guard: it acts only on a resolved thread. Today it sets `ResolvedAt = nil` and `Status = idle/ready` unconditionally (`threads.go:1300`), so calling it on a working thread would flip its status while a turn runs. The button never offers that; a model can. On an open thread it is a no-op that says so.
-- `Stop` and `Reopen` take who is acting (the existing `Source`; a coordinator call is `fromThread(mainThreadID)`, as `message_thread` already uses) and write one system event that names it: "Stopped by the coordinator." A web stop keeps its current wording. `Stop` also reports how many queued messages it dropped, so the coordinator and the user can see if a message was lost.
-- Both return the thread as it is now. The HTTP handlers (`thread/handler.go:530`, `:620`) shrink to bind, call, map, with no behaviour change.
+| Scope | Session | Tools today |
+| --- | --- | --- |
+| `ScopeCoordinator` | a project's main thread | the 13 business tools, `read_shared_file`, `list_shared_files`, `send_file` |
+| `ScopeWorker` | a thread in a project | `send_file` |
+| `ScopeFolder` | a thread in a folder project | `send_file` |
 
-### Tool plumbing (small, only what these tools need)
+- **Building a server** (`tool_server.go`): `sessionToolsMCP.buildServer(threadID, scope, turn, tools)` registers the tools whose scope includes the session's. The scope comes from the thread and its project (`scopeOf`), never from the model; a worker server cannot contain a coordinator tool.
+- **One gate** (`coordinatorToolTurn.run`): active turn, not ended with `no_update`, project not paused or archived, settings unchanged, `no_update` refused on a user turn. Every coordinator-scope tool passes it, `send_file` included.
+- **Strangler**: the 13 coordinator tools keep their logic in `Coordinator.runTool`; the table gives them a handler that calls it (`legacyHandle`). A tool is moved out of the `switch` when someone touches it. New tools are written as handlers.
+- **Risk**: `RiskRead`, `RiskWrite` (reversible, leaves a note) and `RiskConfirm`.
+  - A `RiskConfirm` tool automatically gets a required `approved_by` input: ids of the user's own messages. They are checked with the same rule as `cite` (`quoteUser`): a user message from the web or a chat, never a thread report, the coordinator's own reply or a system event. After the tool succeeds, a system event in the conversation records "`<tool>` ran on the user's word" with the quoted messages.
+  - Only the coordinator scope may have such a tool; registering one for a worker is an error.
+  - No product tool uses it yet. It is tested with an injected tool. Whether approval should instead be bound to an answered decision card stays open (TEP-2462, question 1).
+- **Tests** (`tools_test.go`): the exact tool list of each scope (a tool added to a scope has to be added to the test, so it cannot reach a worker by accident); no tool takes `project_id`, and no worker tool takes `thread_id`; the coordinator's tool list stays under 12000 bytes (10.7 KB now, 8.2 KB for the 13 business tools before `base`/`branch` and the shared tools; each tool costs tokens on every turn); the confirm gate refuses a missing, empty or unknown approval, a thread report and the coordinator's own reply, runs with a real user message and writes the audit note (mutation-checked: skipping the check fails three cases).
 
-Give `coordinatorTool` an optional `Handle func(ctx, p *db.Project, in json.RawMessage) (string, error)`. A tool with a handler skips the `switch`. The two new tools use it; `start_thread` moves onto it as the worked example of migrating an old tool (zero behaviour change, existing tests as the safety net). The other tools stay in the `switch` until someone touches them. There are no scopes, risk classes or generated schemas yet: those are added when the first tool needs them (see Later).
+Not changed: the tools' names, schemas (apart from `base` / `branch`) and behaviour; the real-CLI probe is not rerun.
+
+## Step 4: stop + reopen tools (next)
+
+### Service changes (done in Step 2)
+
+See Step 2: guarded `Reopen`, an actor on `Stop` and `Reopen`, and the dropped-message count.
+
+### Tool plumbing (done in Step 3)
+
+The two tools are written as handlers in the table with `Scopes: ScopeCoordinator`, `Risk: RiskWrite`.
 
 ### The two tools
 
