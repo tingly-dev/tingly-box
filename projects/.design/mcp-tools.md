@@ -1,6 +1,6 @@
 # Projects MCP tools: one action layer, three callers
 
-> Status: **proposed** (2026-11-07). Tracking issue: the TEP "Projects: move more actions into MCP tools" (link in the issue body, which links back here).
+> Status: **proposed** (2026-11-07). Tracking issue: [TEP-2462](https://github.com/tingly-dev/tingly-box/issues/2462), which summarises this design and holds the acceptance criteria and open questions.
 > Builds on [coordinator-session.md](./coordinator-session.md) (how the coordinator's MCP server is scoped and serialised), [projects-published-files.md](../../.design/projects-published-files.md) (`send_file`) and [message-channel.md](./message-channel.md) (`set_progress`).
 > Related, not yet on `main`: `.design/slash-commands.md` (session control API: `Compact`, `ContextUsage`; PRs #2454–#2456), `pr-issue-awareness.md` and `branch-tracking.md` (`link`, `set_branch`; branches `tp/design-branch-pr-and-issue-aware-5b169f`, `tp/design-branch-and-base-tracking-4a5e55`).
 > Nothing here is implemented yet. Every `file:line` below is on `main` at `d7b849ccc`.
