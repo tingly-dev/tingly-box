@@ -187,21 +187,6 @@ func (s *RemoteChatStore) UpsertChat(chat *bot.Chat) error {
 	return upsertChatRecord(s.db, chat)
 }
 
-// ImportChat stores a chat exactly as given, without restamping UpdatedAt.
-//
-// Migration needs this for the same reason sessions do: UpdatedAt orders
-// ListChats, so stamping it on import would make every migrated chat look
-// equally and freshly active in the bot's chat list.
-func (s *RemoteChatStore) ImportChat(chat *bot.Chat) error {
-	if !s.ready() {
-		return ErrStoreClosed
-	}
-	if chat == nil || chat.ChatID == "" {
-		return ErrChatIDRequired
-	}
-	return upsertChatRecord(s.db, chat)
-}
-
 // upsertChatRecord writes a chat as a whole row.
 //
 // Upsert rather than GORM's Updates: struct-based Updates skips zero values, so
