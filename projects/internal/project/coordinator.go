@@ -468,16 +468,8 @@ Current date: %s
 	return b.String()
 }
 
-// coordinatorTool is one tool the coordinator's MCP server offers.
-type coordinatorTool struct {
-	Name        string
-	Description string
-	// Properties is the JSON Schema "properties" object of the input.
-	Properties map[string]any
-	Required   []string
-}
-
-func coordinatorTools() []coordinatorTool {
+// coordinatorTools are the coordinator's tools that run in Coordinator.runTool.
+func coordinatorTools() []Tool {
 	str := func(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
 	threadSpec := map[string]any{
 		"title":  str("Thread card title: starts with a verb that names the goal, three to six words, no ids or paths (for example \"Fix Safari export button\")."),
@@ -486,12 +478,12 @@ func coordinatorTools() []coordinatorTool {
 		"base":   str("Optional. Existing local branch the thread's branch starts from, and that its work is merged back into. Default: the repository's base branch. Use it for work that builds on a release or feature branch."),
 		"branch": str("Optional. Name for the thread's new branch; it must not exist yet. Default: generated from the title."),
 	}
-	return []coordinatorTool{
-		{Name: "start_thread", Description: "Start a new thread (a Claude Code session) for one task, using the project worktree setting.", Properties: threadSpec, Required: []string{"title", "task"}},
-		{Name: "propose_threads", Description: "Propose threads for the user to start, instead of starting them. Use when the user wants to review a plan first.",
+	return []Tool{
+		{Name: "start_thread", Scopes: ScopeCoordinator, Risk: RiskWrite, Description: "Start a new thread (a Claude Code session) for one task, using the project worktree setting.", Properties: threadSpec, Required: []string{"title", "task"}},
+		{Name: "propose_threads", Scopes: ScopeCoordinator, Risk: RiskWrite, Description: "Propose threads for the user to start, instead of starting them. Use when the user wants to review a plan first.",
 			Properties: map[string]any{"threads": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": threadSpec, "required": []string{"title", "task"}}}},
 			Required:   []string{"threads"}},
-		{Name: "request_decision", Description: "Ask the user to pick one option on a card, when a choice changes their goal or a step cannot be undone. Ask once, with two to four options and one recommended; do not repeat the question in text. Keep working on the recommended option while you wait, unless that step cannot be undone.",
+		{Name: "request_decision", Scopes: ScopeCoordinator, Risk: RiskWrite, Description: "Ask the user to pick one option on a card, when a choice changes their goal or a step cannot be undone. Ask once, with two to four options and one recommended; do not repeat the question in text. Keep working on the recommended option while you wait, unless that step cannot be undone.",
 			Properties: map[string]any{
 				"question": str("The question, verb first, in about twelve words."),
 				"context":  str("Background the user needs to choose. Optional."),
@@ -503,35 +495,35 @@ func coordinatorTools() []coordinatorTool {
 				"reason":      str("Why you recommend it, one sentence."),
 			},
 			Required: []string{"question", "options", "recommended"}},
-		{Name: "message_thread", Description: "Send a message to an existing thread (follow-up work, an answer to its question). It runs after the thread's current turn.",
+		{Name: "message_thread", Scopes: ScopeCoordinator, Risk: RiskWrite, Description: "Send a message to an existing thread (follow-up work, an answer to its question). It runs after the thread's current turn.",
 			Properties: map[string]any{"thread_id": str("Thread id (the 8-character prefix is enough)."), "message": str("What to tell the thread."),
 				"cite": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Ids (the msg attribute of the user's event) of the user's own messages that approve or decide what you are telling the thread. The system quotes them to the thread word for word; without a citation the thread treats your message as not approved."}},
 			Required: []string{"thread_id", "message"}},
-		{Name: "get_thread", Description: "Read a thread's status, branch, last report and recent transcript. Entries are cut and the result capped like read_conversation; page back with before, read entries whole with full.",
+		{Name: "get_thread", Scopes: ScopeCoordinator, Risk: RiskRead, Description: "Read a thread's status, branch, last report and recent transcript. Entries are cut and the result capped like read_conversation; page back with before, read entries whole with full.",
 			Properties: map[string]any{"thread_id": str("Thread id or its 8-character prefix."),
 				"before": str("Optional. 8-character id of a transcript entry to read back from."),
 				"limit":  map[string]any{"type": "integer", "description": "How many entries, up to 40. Default 15."},
 				"full":   map[string]any{"type": "boolean", "description": "Show each entry up to 4000 characters instead of 300."}}, Required: []string{"thread_id"}},
-		{Name: "read_conversation", Description: "Read earlier messages of this conversation that are no longer shown to you: the user's words, your replies and thread reports. Newest first, back from the window you see or from a message id; or search by text. Results are capped like grep output: long messages are cut, and when the result is too big the oldest entries are hidden and you are told how to reach them. Use it when the user refers to something you cannot see; do not ask them to repeat.",
+		{Name: "read_conversation", Scopes: ScopeCoordinator, Risk: RiskRead, Description: "Read earlier messages of this conversation that are no longer shown to you: the user's words, your replies and thread reports. Newest first, back from the window you see or from a message id; or search by text. Results are capped like grep output: long messages are cut, and when the result is too big the oldest entries are hidden and you are told how to reach them. Use it when the user refers to something you cannot see; do not ask them to repeat.",
 			Properties: map[string]any{"before": str("Optional. 8-character id of a message (shown in the results) to read back from; default is the oldest message you can see."),
 				"contains": str("Optional. Only messages containing this text (case-insensitive)."),
 				"id":       str("Optional. Read this one message whole instead (use the id of a cut-short entry)."),
 				"limit":    map[string]any{"type": "integer", "description": "How many messages, up to 40. Default 20."},
 				"full":     map[string]any{"type": "boolean", "description": "Show each message up to 4000 characters instead of 600 (fewer fit in one result)."}}},
-		{Name: "list_threads", Description: "List the project's threads, including old and archived ones the thread table in your prompt leaves out. Capped like ls output: when too many match, the oldest are hidden and you are told to narrow it.",
+		{Name: "list_threads", Scopes: ScopeCoordinator, Risk: RiskRead, Description: "List the project's threads, including old and archived ones the thread table in your prompt leaves out. Capped like ls output: when too many match, the oldest are hidden and you are told to narrow it.",
 			Properties: map[string]any{"status": str("Optional. Only threads with this status, e.g. working, waiting, ready, resolved."),
 				"contains": str("Optional. Only threads whose title, task or last report contains this text."),
 				"limit":    map[string]any{"type": "integer", "description": "How many threads, up to 40. Default 20."}}},
-		{Name: "resolve_thread", Description: "Mark a thread resolved (done). Only when the user says so or its work is merged.",
+		{Name: "resolve_thread", Scopes: ScopeCoordinator, Risk: RiskWrite, Description: "Mark a thread resolved (done). Only when the user says so or its work is merged.",
 			Properties: map[string]any{"thread_id": str("Thread id or prefix.")}, Required: []string{"thread_id"}},
-		{Name: "rename_thread", Description: "Change a thread's card title when its goal has changed. Does not touch its branch or history. Same title rules as start_thread.",
+		{Name: "rename_thread", Scopes: ScopeCoordinator, Risk: RiskWrite, Description: "Change a thread's card title when its goal has changed. Does not touch its branch or history. Same title rules as start_thread.",
 			Properties: map[string]any{"thread_id": str("Thread id or its 8-character prefix."), "title": str("New title: starts with a verb that names the goal, three to six words, no ids or paths.")}, Required: []string{"thread_id", "title"}},
-		{Name: "no_update", Description: "End this turn without posting anything to the user. Use it when a thread update or settings change needs no message. Call it instead of replying with text.",
+		{Name: "no_update", Scopes: ScopeCoordinator, Risk: RiskWrite, Description: "End this turn without posting anything to the user. Use it when a thread update or settings change needs no message. Call it instead of replying with text.",
 			Properties: map[string]any{"reason": str("Optional. Why nothing needs saying.")}},
-		{Name: "remember", Description: "Save a requirement, decision, pitfall or coordination preference to project memory. Every new thread and coordinator turn sees the memory index. Reuse the topic of an existing file to update it instead of adding a duplicate; one fact per file; skip what the repository already shows.",
+		{Name: "remember", Scopes: ScopeCoordinator, Risk: RiskWrite, Description: "Save a requirement, decision, pitfall or coordination preference to project memory. Every new thread and coordinator turn sees the memory index. Reuse the topic of an existing file to update it instead of adding a duplicate; one fact per file; skip what the repository already shows.",
 			Properties: map[string]any{"topic": str("Short topic; becomes the file name."), "content": str("The note."), "summary": str("One line for the MEMORY.md index.")}, Required: []string{"topic", "content", "summary"}},
-		{Name: "forget", Description: "Delete a memory file.", Properties: map[string]any{"file": str("Memory file name, e.g. release-date.md.")}, Required: []string{"file"}},
-		{Name: "update_instructions", Description: "Replace the project instructions (only when the user asks).",
+		{Name: "forget", Scopes: ScopeCoordinator, Risk: RiskWrite, Description: "Delete a memory file.", Properties: map[string]any{"file": str("Memory file name, e.g. release-date.md.")}, Required: []string{"file"}},
+		{Name: "update_instructions", Scopes: ScopeCoordinator, Risk: RiskWrite, Description: "Replace the project instructions (only when the user asks).",
 			Properties: map[string]any{"instructions": str("The full new instructions (max 16000 characters).")}, Required: []string{"instructions"}},
 	}
 }

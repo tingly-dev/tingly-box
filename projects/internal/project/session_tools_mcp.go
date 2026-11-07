@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -27,13 +26,26 @@ type sessionToolsMCP struct {
 	coordinators map[string]*coordinatorToolTurn
 }
 
-type sendFileArgs struct {
-	Path    string `json:"path" jsonschema:"Path to the file to publish in this conversation"`
-	Caption string `json:"caption,omitempty" jsonschema:"Optional description shown with the file"`
-}
-
 type sendFileResult struct {
 	MessageID string `json:"message_id"`
+}
+
+// scopeOf is the scope of the session of thread threadID. A thread that cannot
+// be found, or a service without a coordinator, gets the worker scope: the
+// tools every thread has.
+func (f *sessionToolsMCP) scopeOf(threadID string) Scope {
+	if f.service.Coordinator == nil {
+		return ScopeWorker
+	}
+	t, err := f.service.Store.GetThread(threadID)
+	if err != nil {
+		return ScopeWorker
+	}
+	p, err := f.service.Store.GetProject(t.ProjectID)
+	if err != nil {
+		return ScopeWorker
+	}
+	return scopeOf(p, t)
 }
 
 func (f *sessionToolsMCP) config(threadID string) (string, error) {
@@ -60,52 +72,18 @@ func (f *sessionToolsMCP) config(threadID string) (string, error) {
 		return "", err
 	}
 	path := "/" + hex.EncodeToString(token[:])
-	srv := mcp.NewServer(&mcp.Implementation{Name: "tingly-projects", Version: "1.0.0"}, nil)
-	var coordinatorTurn *coordinatorToolTurn
-	if f.service.Coordinator != nil {
-		thread, err := f.service.Store.GetThread(threadID)
-		if err != nil {
-			return "", err
-		}
-		p, err := f.service.Store.GetProject(thread.ProjectID)
-		if err != nil {
-			return "", err
-		}
-		if p.MainThreadID == threadID {
-			turn := &coordinatorToolTurn{}
-			srv, err = f.service.Coordinator.coordinatorMCPForTurn(turn)
-			if err != nil {
-				return "", err
-			}
-			f.coordinators[threadID] = turn
-			coordinatorTurn = turn
-		}
+	scope := f.scopeOf(threadID)
+	var turn *coordinatorToolTurn
+	if scope == ScopeCoordinator {
+		turn = &coordinatorToolTurn{}
 	}
-	mcp.AddTool(srv, &mcp.Tool{Name: "send_file", Description: f.sendFileDescription(threadID)}, func(ctx context.Context, _ *mcp.CallToolRequest, args sendFileArgs) (*mcp.CallToolResult, sendFileResult, error) {
-		if coordinatorTurn != nil {
-			coordinatorTurn.mu.Lock()
-			defer coordinatorTurn.mu.Unlock()
-			snapshot := coordinatorTurn.snapshot
-			if snapshot == nil || coordinatorTurn.quiet.Load() {
-				return nil, sendFileResult{}, fmt.Errorf("no coordinator turn is active")
-			}
-			current, err := f.service.Store.GetProject(snapshot.ID)
-			if err != nil {
-				return nil, sendFileResult{}, err
-			}
-			if current.Paused || current.ArchivedAt != nil || len(configurationChanges(snapshot, current)) > 0 {
-				return nil, sendFileResult{}, fmt.Errorf("project settings changed or the project is paused")
-			}
-		}
-		if args.Path == "" {
-			return nil, sendFileResult{}, fmt.Errorf("path is required")
-		}
-		e, err := f.service.PublishFile(ctx, threadID, args.Path, args.Caption)
-		if err != nil {
-			return nil, sendFileResult{}, err
-		}
-		return nil, sendFileResult{MessageID: e.ID}, nil
-	})
+	srv, err := f.buildServer(threadID, scope, turn, f.tools(threadID))
+	if err != nil {
+		return "", err
+	}
+	if turn != nil {
+		f.coordinators[threadID] = turn
+	}
 	f.handlers[path] = mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, nil)
 	f.urls[threadID] = f.base + path
 	file, err := os.CreateTemp("", "tingly-projects-mcp-*.json")
