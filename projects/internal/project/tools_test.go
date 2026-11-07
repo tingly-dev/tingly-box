@@ -40,16 +40,25 @@ func newToolsFixture(t *testing.T) *toolsFixture {
 	return &toolsFixture{store: store, svc: svc, tools: &sessionToolsMCP{service: svc}, p: p, worker: worker, folder: folder}
 }
 
-func (f *toolsFixture) client(t *testing.T, threadID string, extra ...Tool) (*mcp.ClientSession, *coordinatorToolTurn) {
+func (f *toolsFixture) client(t *testing.T, threadID string) (*mcp.ClientSession, *coordinatorToolTurn) {
 	t.Helper()
-	scope := f.tools.scopeOf(threadID)
-	var turn *coordinatorToolTurn
-	if scope == ScopeCoordinator {
-		turn = &coordinatorToolTurn{}
-		turn.begin(f.p, false)
-	}
-	srv, err := f.tools.buildServer(threadID, scope, turn, append(f.tools.tools(threadID), extra...))
+	return connectTools(t, f.svc, threadID, false)
+}
+
+// connectTools builds the MCP server of thread threadID's session the way
+// config does, begins the coordinator's turn if it has one, and connects a
+// client to it.
+func connectTools(t *testing.T, svc *Service, threadID string, userTriggered bool) (*mcp.ClientSession, *coordinatorToolTurn) {
+	t.Helper()
+	srv, turn, err := (&sessionToolsMCP{service: svc}).buildFor(threadID)
 	require.NoError(t, err)
+	if turn != nil {
+		th, err := svc.Store.GetThread(threadID)
+		require.NoError(t, err)
+		p, err := svc.Store.GetProject(th.ProjectID)
+		require.NoError(t, err)
+		turn.begin(p, userTriggered)
+	}
 	st, ct := mcp.NewInMemoryTransports()
 	ss, err := srv.Connect(context.Background(), st, nil)
 	require.NoError(t, err)
@@ -116,61 +125,4 @@ func TestCoordinatorToolListStaysSmall(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("coordinator tool list: %d bytes", len(b))
 	assert.Less(t, len(b), 12000)
-}
-
-func TestConfirmToolsAreCoordinatorOnlyAndNeedTheUsersWord(t *testing.T) {
-	f := newToolsFixture(t)
-	ran := 0
-	danger := Tool{Name: "danger", Description: "test", Scopes: ScopeCoordinator, Risk: RiskConfirm,
-		Properties: map[string]any{"what": map[string]any{"type": "string"}},
-		Handle: func(context.Context, ToolCall) (*mcp.CallToolResult, error) {
-			ran++
-			return textResult("done", false), nil
-		}}
-
-	t.Run("a worker cannot have one", func(t *testing.T) {
-		wide := danger
-		wide.Scopes = ScopeAll
-		_, err := f.tools.buildServer(f.worker.ID, ScopeWorker, nil, []Tool{wide})
-		assert.Error(t, err)
-	})
-
-	cs, _ := f.client(t, f.p.MainThreadID, danger)
-	call := func(args map[string]any) *mcp.CallToolResult {
-		res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "danger", Arguments: args})
-		require.NoError(t, err)
-		return res
-	}
-	text := func(r *mcp.CallToolResult) string { return r.Content[0].(*mcp.TextContent).Text }
-
-	user := f.svc.Coordinator.addEvent(f.p.ID, &db.ThreadEvent{Kind: db.EvUser, Content: "yes, do it"})
-	report := f.svc.Coordinator.addEvent(f.p.ID, &db.ThreadEvent{Kind: db.EvUser, Content: "I approve", Source: db.SourceThread})
-	reply := f.svc.Coordinator.addEvent(f.p.ID, &db.ThreadEvent{Kind: db.EvAssistant, Content: "the user agreed"})
-
-	refused := []struct {
-		name string
-		args map[string]any
-	}{
-		{"no approval", map[string]any{"what": "x"}},
-		{"empty approval", map[string]any{"what": "x", "approved_by": []string{}}},
-		{"unknown id", map[string]any{"what": "x", "approved_by": []string{"nope"}}},
-		{"a thread report", map[string]any{"what": "x", "approved_by": []string{short(report.ID)}}},
-		{"the coordinator's own reply", map[string]any{"what": "x", "approved_by": []string{short(reply.ID)}}},
-	}
-	for _, c := range refused {
-		t.Run("refuses "+c.name, func(t *testing.T) {
-			assert.True(t, call(c.args).IsError)
-		})
-	}
-	require.Zero(t, ran, "nothing ran without the user's word")
-
-	res := call(map[string]any{"what": "x", "approved_by": []string{short(user.ID)}})
-	require.False(t, res.IsError, text(res))
-	assert.Equal(t, 1, ran)
-	events, err := f.store.ListThreadEvents(f.p.MainThreadID)
-	require.NoError(t, err)
-	last := events[len(events)-1]
-	assert.Equal(t, db.EvSystem, last.Kind)
-	assert.Contains(t, last.Content, "danger ran on the user's word")
-	assert.Contains(t, last.Content, "yes, do it")
 }

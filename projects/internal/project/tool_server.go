@@ -5,17 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
 
-// tools is every tool a session of thread threadID could be offered; buildServer
-// keeps the ones its scope allows.
-func (f *sessionToolsMCP) tools(threadID string) []Tool {
-	str := func(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
+// tools is every tool a session of thread t, in project p, could be offered;
+// buildServer keeps the ones that session may have.
+func (f *sessionToolsMCP) tools(t *db.Thread, p *db.Project) []Tool {
 	var out []Tool
 	if c := f.service.Coordinator; c != nil {
 		out = append(out, c.coordinatorTools()...)
@@ -26,9 +24,8 @@ func (f *sessionToolsMCP) tools(threadID string) []Tool {
 			{"read_shared_file", "Read a UTF-8 text file or image in this project's library or memory. Accepts the absolute path shown for an attachment, or a path beginning library/ or memory/.", false},
 			{"list_shared_files", "List a directory in this project's library or memory. Use library or memory as the root path.", true},
 		} {
-			item := item
-			out = append(out, Tool{Name: item.name, Description: item.description, Scopes: ScopeCoordinator, Risk: RiskRead,
-				Properties: map[string]any{"path": str("Path in the project's library or memory")}, Required: []string{"path"},
+			out = append(out, Tool{Name: item.name, Description: item.description, CoordinatorOnly: true,
+				Properties: map[string]any{"path": strProp("Path in the project's library or memory")}, Required: []string{"path"},
 				Handle: func(_ context.Context, call ToolCall) (*mcp.CallToolResult, error) {
 					var in struct{ Path string }
 					if err := json.Unmarshal(call.Input, &in); err != nil {
@@ -42,10 +39,10 @@ func (f *sessionToolsMCP) tools(threadID string) []Tool {
 				}})
 		}
 	}
-	out = append(out, Tool{Name: "send_file", Description: f.sendFileDescription(threadID), Scopes: ScopeAll, Risk: RiskWrite, Strict: true,
+	return append(out, Tool{Name: "send_file", Description: f.sendFileDescription(t, p), Strict: true,
 		Properties: map[string]any{
-			"path":    str("Path to the file to publish in this conversation"),
-			"caption": str("Optional description shown with the file"),
+			"path":    strProp("Path to the file to publish in this conversation"),
+			"caption": strProp("Optional description shown with the file"),
 		}, Required: []string{"path"},
 		Output: map[string]any{"type": "object", "additionalProperties": false, "required": []string{"message_id"},
 			"properties": map[string]any{"message_id": map[string]any{"type": "string"}}},
@@ -67,60 +64,70 @@ func (f *sessionToolsMCP) tools(threadID string) []Tool {
 			out.StructuredContent = res
 			return out, nil
 		}})
-	return out
 }
 
-// buildServer makes the MCP server for the session of thread threadID: the
-// given tools whose scopes include scope. A coordinator-scope server needs the
-// turn its calls are gated on.
-func (f *sessionToolsMCP) buildServer(threadID string, scope Scope, turn *coordinatorToolTurn, tools []Tool) (*mcp.Server, error) {
+// buildFor makes the MCP server for the session of thread threadID. A project's
+// main thread gets the coordinator's tools and the turn its calls are gated on
+// (nil for any other thread).
+func (f *sessionToolsMCP) buildFor(threadID string) (*mcp.Server, *coordinatorToolTurn, error) {
+	t, err := f.service.Store.GetThread(threadID)
+	if err != nil {
+		return nil, nil, err
+	}
+	p, err := f.service.Store.GetProject(t.ProjectID)
+	if err != nil {
+		return nil, nil, err
+	}
+	var turn *coordinatorToolTurn
+	if f.service.Coordinator != nil && p.MainThreadID == t.ID {
+		turn = &coordinatorToolTurn{}
+	}
 	srv := mcp.NewServer(&mcp.Implementation{Name: "tingly-projects", Version: "1.0.0"}, nil)
-	for _, tool := range tools {
-		if !tool.Scopes.has(scope) {
+	for _, tool := range f.tools(t, p) {
+		if tool.CoordinatorOnly && turn == nil {
 			continue
 		}
-		if err := f.register(srv, tool, threadID, scope, turn); err != nil {
-			return nil, err
+		if err := f.register(srv, tool, t.ID, turn); err != nil {
+			return nil, nil, err
 		}
 	}
-	return srv, nil
+	return srv, turn, nil
 }
 
-func (f *sessionToolsMCP) register(srv *mcp.Server, tool Tool, threadID string, scope Scope, turn *coordinatorToolTurn) error {
-	if tool.Handle == nil {
-		return fmt.Errorf("tool %s has no handler", tool.Name)
-	}
-	props, required := tool.Properties, tool.Required
-	if tool.Risk == RiskConfirm {
-		if tool.Scopes != ScopeCoordinator {
-			return fmt.Errorf("tool %s needs the user's approval, so only the coordinator may have it", tool.Name)
-		}
-		props = map[string]any{}
-		for k, v := range tool.Properties {
-			props[k] = v
-		}
-		props[approvedBy] = map[string]any{"type": "array", "minItems": 1, "items": map[string]any{"type": "string"},
-			"description": "Ids (the msg attribute of the user's event) of the user's own messages that approve this action. Without them it is refused."}
-		required = append(append([]string(nil), required...), approvedBy)
-	}
-	schema := map[string]any{"type": "object", "properties": props}
-	if len(required) != 0 {
-		schema["required"] = required
+// inputSchema is the schema the model sees for tool, and its resolved form for
+// validating a call.
+func inputSchema(tool Tool) (map[string]any, *jsonschema.Resolved, error) {
+	schema := map[string]any{"type": "object", "properties": tool.Properties}
+	if len(tool.Required) != 0 {
+		schema["required"] = tool.Required
 	}
 	if tool.Strict {
 		schema["additionalProperties"] = false
 	}
 	data, err := json.Marshal(schema)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	var parsed jsonschema.Schema
 	if err := json.Unmarshal(data, &parsed); err != nil {
-		return err
+		return nil, nil, err
 	}
 	resolved, err := parsed.Resolve(nil)
 	if err != nil {
-		return fmt.Errorf("%s schema: %w", tool.Name, err)
+		return nil, nil, fmt.Errorf("%s schema: %w", tool.Name, err)
+	}
+	return schema, resolved, nil
+}
+
+// register adds tool to srv. A call is validated against the schema, then run
+// through the turn's gate when there is one (the coordinator).
+func (f *sessionToolsMCP) register(srv *mcp.Server, tool Tool, threadID string, turn *coordinatorToolTurn) error {
+	if tool.Handle == nil {
+		return fmt.Errorf("tool %s has no handler", tool.Name)
+	}
+	schema, resolved, err := inputSchema(tool)
+	if err != nil {
+		return err
 	}
 	mt := &mcp.Tool{Name: tool.Name, Description: tool.Description, InputSchema: schema}
 	if tool.Output != nil {
@@ -139,28 +146,12 @@ func (f *sessionToolsMCP) register(srv *mcp.Server, tool Tool, threadID string, 
 			return textResult("invalid input: "+err.Error(), true), nil
 		}
 		call := ToolCall{ThreadID: threadID, Input: args}
-		if scope != ScopeCoordinator {
+		if turn == nil {
 			return finish(tool.Handle(ctx, call))
 		}
 		return turn.run(f.service.Store, tool.Name, tool.EditsProject, func(current *db.Project) (*mcp.CallToolResult, error) {
 			call.Project = current
-			var quote string
-			if tool.Risk == RiskConfirm {
-				var ids struct {
-					ApprovedBy []string `json:"approved_by"`
-				}
-				_ = json.Unmarshal(args, &ids)
-				var qerr error
-				if quote, qerr = f.service.Coordinator.quoteUser(current, ids.ApprovedBy); qerr != nil {
-					return textResult(tool.Name+" needs the user's approval: "+qerr.Error(), true), nil
-				}
-			}
-			res, err := finish(tool.Handle(ctx, call))
-			if quote != "" && err == nil && !res.IsError {
-				f.service.Coordinator.addEvent(current.ID, &db.ThreadEvent{Kind: db.EvSystem,
-					Content: strings.TrimSpace(tool.Name + " ran on the user's word." + quote)})
-			}
-			return res, err
+			return finish(tool.Handle(ctx, call))
 		})
 	})
 	return nil

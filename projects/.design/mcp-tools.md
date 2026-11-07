@@ -13,7 +13,7 @@ We do **not** design the whole surface up front. The order, each step small and 
 
 1. **Creation, done well** (built): `start_thread` can choose the base and the branch name.
 2. **A thread state-management API** in the service layer (stop, reopen), guarded and with an actor (built).
-3. **Tool table and boundaries**: one table of tools with scopes and risk, and the rule for what needs the user's word (built; no new tool).
+3. **One table of tools**, with the one boundary that exists today (the coordinator's tools go to the coordinator only), `send_file` unchanged for every thread, and typed handlers (built; no new tool).
 4. **The tools** on top (`stop_thread`, `reopen_thread`, then the rest).
 
  Each step moves one small group of actions behind a proper service method and exposes it as a tool. The architecture changes only as far as that group needs, and every step leaves HTTP, IM and MCP calling the same code. A step is done when it has shipped, not when the catalogue is complete.
@@ -22,10 +22,9 @@ The rule that carries over every step: **an action is a method on `Threads` or `
 
 ## What exists
 
-Tools today (one table, `Coordinator.coordinatorTools()` in `coordinator_tools.go`, plus the shared-file readers and `send_file` in `tool_server.go`; built per session by `sessionToolsMCP.buildServer`):
-`start_thread`, `propose_threads`, `request_decision`, `message_thread`, `get_thread`, `read_conversation`, `list_threads`, `resolve_thread`, `rename_thread`, `no_update`, `remember`, `forget`, `update_instructions`, plus `read_shared_file` / `list_shared_files` (`coordinator_mcp.go:109`) and `send_file` for every thread (`session_tools_mcp.go:84`). A worker's server comes from `sessionToolsMCP.config` (`session_tools_mcp.go:39`): one loopback listener, a random capability URL per thread; the thread id is bound to the URL and the project id is never taken from the model.
+Tools today: one table. The coordinator's 13 tools are `Coordinator.coordinatorTools()` (`coordinator_tools.go`); `read_shared_file`, `list_shared_files` and `send_file` are added in `sessionToolsMCP.tools` (`tool_server.go`); `sessionToolsMCP.buildFor` makes the server of one session. They are `start_thread`, `propose_threads`, `request_decision`, `message_thread`, `get_thread`, `read_conversation`, `list_threads`, `resolve_thread`, `rename_thread`, `no_update`, `remember`, `forget`, `update_instructions`, `read_shared_file`, `list_shared_files`, and `send_file` (every thread). `sessionToolsMCP.config` starts one loopback listener and gives each thread a random capability URL; the thread id is bound to the URL and the project id is never taken from the model.
 
-Gates every coordinator call passes (`coordinator_mcp.go:62-99`): schema validation, an active turn, project not paused or archived, project settings unchanged since the turn began, `no_update` refused on a user-triggered turn. Trust: text from others is wrapped in `envelope(trustRelay, …)` (`envelope.go:24`); `message_thread` takes `cite` (ids of the user's own messages) checked by `quoteUser` (`cite.go:25`).
+Gates every coordinator call passes (`coordinatorToolTurn.run`): schema validation, an active turn, project not paused or archived, project settings unchanged since the turn began, `no_update` refused on a user-triggered turn. Trust: text from others is wrapped in `envelope(trustRelay, …)`; `message_thread` takes `cite` (ids of the user's own messages) checked by `quoteUser`.
 
 Actions only the web UI or HTTP can do (a selection, with the method they end in): stop (`Threads.Stop`), retry (`Retry`), reopen (`Reopen`), permission mode / model / effort / auto-answer (`sessions.go:166`, `launch.go`), diff (`Diff`), merge (`Merge`, `threads.go:1340`), project settings such as the concurrency limit (inline in `project/handler.go:448`, no service method), library delete (`Layout.RemoveLibraryFile`), channel bindings, usage. Not in Projects at all: push and PR. Most thread actions are already clean `Threads` methods; the project `PATCH` handler is the exception.
 
@@ -75,31 +74,24 @@ Tests (`thread_branch_test.go`): the worktree starts at the chosen base's commit
 The service-layer part of stop and reopen, without any new tool.
 
 - `Reopen(threadID, by Source)` acts only on a resolved thread. Before, it set `ResolvedAt = nil` and `Status = idle/ready` whatever the status, so calling it on a running thread flipped it to idle while a turn ran (reproduced; the new test fails when the guard is removed). On a thread that is not resolved it returns the thread as it is and writes nothing. A main thread is refused with `ErrNotWorker`.
-- `Stop(threadID, by Source) StopResult` returns whether it interrupted a turn and how many queued messages it dropped. Stopping a thread with nothing running does nothing.
+- `Stop(threadID, by Source)` interrupts the running turn and drops the queued messages; with nothing running it does nothing. It returns nothing: no caller needed a result yet, and a tool that wants to say how many messages it dropped can add that when it exists.
 - `by` is the existing `Source`. The thread's note names it: "Stopped." (web), "Stopped from a chat." (IM), "Stopped by the coordinator." (a thread source, which today is only the coordinator); the same for "Reopened". Pause and archive stop every thread with a system source.
 - The HTTP handlers and the IM `/stop` / `/clear` pass their own source and are otherwise unchanged. `findThread` already excludes the main thread (checked by a test), so the coordinator's thread tools cannot reach it.
 
-## Step 3: the tool table and boundaries (built)
+## Step 3: the tool table (built)
 
 One table replaces three separate registrations (the coordinator's list, the two shared-file readers, `send_file`) and the gate code that was copied into each of them.
 
-`tools.go`: `Tool{Name, Description, Properties, Required, Scopes, Risk, Handle}`.
+`tools.go`: `Tool{Name, Description, Properties, Required, CoordinatorOnly, Strict, Output, EditsProject, Handle}`.
 
-| Scope | Session | Tools today |
-| --- | --- | --- |
-| `ScopeCoordinator` | a project's main thread | the 13 business tools, `read_shared_file`, `list_shared_files`, `send_file` |
-| `ScopeWorker` | a thread in a project | `send_file` |
-| `ScopeFolder` | a thread in a folder project | `send_file` |
-
-- **Building a server** (`tool_server.go`): `sessionToolsMCP.buildServer(threadID, scope, turn, tools)` registers the tools whose scope includes the session's. The scope comes from the thread and its project (`scopeOf`), never from the model; a worker server cannot contain a coordinator tool.
-- **One gate** (`coordinatorToolTurn.run`): active turn, not ended with `no_update`, project not paused or archived, settings unchanged, `no_update` refused on a user turn. Every coordinator-scope tool passes it, `send_file` included.
+- **Who is offered a tool**: `CoordinatorOnly` tools (the 13 business tools and the two shared-file readers) go to a project's main thread; every other thread gets the rest, today `send_file`. `sessionToolsMCP.buildFor` decides from the thread and its project, never from the model, and fails if either cannot be read; a worker's server cannot contain a coordinator tool.
+- **One gate** (`coordinatorToolTurn.run`): active turn, not ended with `no_update`, project not paused or archived, settings unchanged, `no_update` refused on a user turn. Every tool on the coordinator's server passes it, `send_file` included.
 - **All tools are in the table.** The 13 coordinator tools used to run in one `switch` (`Coordinator.runTool`); each is now a method with a typed input struct (`coordinator_tools.go`: `startThread`, `messageThread`, ...) bound to its definition with `textTool`, which decodes the input, calls the method and turns an error into a failed result. `runTool` is gone. A new tool is one definition and one method.
 - **Migration was checked, not trusted.** Before moving anything, two golden files pinned the current behaviour (`testdata/tool_list.golden`: every tool's name, description and schema in each scope; `testdata/tool_calls.golden`: the exact answer of all 16 tools on a fixed script of about 60 calls, with ids, paths and times normalised). They are byte-identical after the move. Mutation check: changing one answer or one description fails the matching golden test. Regenerate on purpose with `UPDATE_GOLDEN=1` and read the diff.
-- **Risk**: `RiskRead`, `RiskWrite` (reversible, leaves a note) and `RiskConfirm`.
-  - A `RiskConfirm` tool automatically gets a required `approved_by` input: ids of the user's own messages. They are checked with the same rule as `cite` (`quoteUser`): a user message from the web or a chat, never a thread report, the coordinator's own reply or a system event. After the tool succeeds, a system event in the conversation records "`<tool>` ran on the user's word" with the quoted messages.
-  - Only the coordinator scope may have such a tool; registering one for a worker is an error.
-  - No product tool uses it yet. It is tested with an injected tool. Whether approval should instead be bound to an answered decision card stays open (TEP-2462, question 1).
-- **Tests** (`tools_test.go`): the exact tool list of each scope (a tool added to a scope has to be added to the test, so it cannot reach a worker by accident); no tool takes `project_id`, and no worker tool takes `thread_id`; the coordinator's tool list stays under 12000 bytes (10.7 KB now, 8.2 KB for the 13 business tools before `base`/`branch` and the shared tools; each tool costs tokens on every turn); the confirm gate refuses a missing, empty or unknown approval, a thread report and the coordinator's own reply, runs with a real user message and writes the audit note (mutation-checked: skipping the check fails three cases).
+- **Tests** (`tools_test.go`): the exact tool list of each kind of session (a tool added to the coordinator's server has to be added to the test, so it cannot reach a worker by accident); no tool takes `project_id`, and no worker tool takes `thread_id`; the coordinator's tool list stays under 12000 bytes (10.7 KB now, 8.2 KB for the 13 business tools before `base`/`branch` and the shared tools; each tool costs tokens on every turn).
+- **`send_file` keeps its old contract**: a strict input schema (`additionalProperties: false`), an output schema (`message_id`) and a structured result next to the text. These were checked against the pre-table implementation, not assumed (`Strict` and `Output` on `Tool`).
+
+Cut after a code review, because nothing used them yet and unused machinery rots: a risk class on every tool, the `approved_by` approval gate for irreversible tools, and a three-way scope (coordinator / worker / folder session; the last two were never different). The approval rule is designed when the first irreversible tool exists (see Later). Also from the review: a stop-and-send keeps its plain "Stopped." note, `Reopen` re-checks the status under the row lock, and a suggestion card keeps the threads it started when a later one fails to start.
 
 Three problems found while pinning the behaviour, all fixed afterwards (the golden file diff was exactly these):
 
@@ -113,22 +105,16 @@ Not changed: the tools' names, schemas (apart from `base` / `branch`) and behavi
 
 ## Step 4: stop + reopen tools (next)
 
-### Service changes (done in Step 2)
-
-See Step 2: guarded `Reopen`, an actor on `Stop` and `Reopen`, and the dropped-message count.
-
-### Tool plumbing (done in Step 3)
-
-The two tools are written as handlers in the table with `Scopes: ScopeCoordinator`, `Risk: RiskWrite`.
+The service side is Step 2, the table is Step 3. Each tool is one entry in `coordinatorTools()` and one method.
 
 ### The two tools
 
 | Tool | Input | Does | Result |
 | --- | --- | --- | --- |
-| `stop_thread` | `thread_id` | interrupt the thread's running turn, drop its queued messages | one line: status now, number of dropped messages, or "not running" (not an error) |
+| `stop_thread` | `thread_id` | interrupt the thread's running turn, drop its queued messages | one line: status now, or "not running" (not an error) |
 | `reopen_thread` | `thread_id` | undo `resolve_thread`: the thread accepts messages again | one line: status now, or "already open" (not an error) |
 
-Both are coordinator-only, reversible and recorded in the thread, so they need no approval step. `message_thread` to a resolved thread keeps returning `ErrResolved`, and its text now names `reopen_thread`.
+Both are `CoordinatorOnly`, reversible and recorded in the thread, so they need no approval step. `message_thread` to a resolved thread keeps returning `ErrResolved`, and its text now names `reopen_thread`.
 
 To verify while implementing, not assumed here: what happens to a pending approval card of a `waiting` thread when it is stopped.
 
@@ -144,9 +130,9 @@ To verify while implementing, not assumed here: what happens to a pending approv
 Listed so the direction is visible, not as a commitment. Each needs its own small decision first.
 
 - **More thread actions:** `retry_thread`, `get_thread_diff`, `set_thread_settings` (permission mode, model, effort, auto-answer). Widening a session's permissions should not be silent; that is the first case where an approval rule is needed.
-- **Merge** (`merge_thread`): irreversible. This is when to add an approval rule: the call must carry the ids of the user's own messages, checked like `cite`, and quoted into an audit event. A stronger form binds approval to an answered decision card. Decide then, not now.
-- **Project settings** (`set_project_settings` for the concurrency limit and similar): needs `Service.UpdateProject` extracted from the handler, and the tool must refresh the turn's settings snapshot after its own change or it trips the "settings changed" guard.
-- **Worker and folder-session tools** (`set_branch`, `link`, `set_progress`, from the awareness and message-channel designs): the first tools a thread calls on itself. That is when scopes (coordinator vs worker) appear in the plumbing, with a test that no worker tool takes a thread id.
+- **Merge** (`merge_thread`): irreversible. This is when to add an approval rule: the call carries the ids of the user's own messages, checked with `quoteUser` like `cite`, and an audit event quotes them (an earlier version of the table had this gate; it was cut as unused). A stronger form binds approval to an answered decision card. Decide then, not now.
+- **Project settings** (`set_project_settings` for the concurrency limit and similar): needs `Service.UpdateProject` extracted from the handler, and the tool sets `EditsProject` so the turn adopts its own change.
+- **Worker and folder-session tools** (`set_branch`, `link`, `set_progress`, from the awareness and message-channel designs): the first tools a thread calls on itself. `CoordinatorOnly` already keeps the coordinator's tools away from them; a tool only a worker should have is a new field then, with the existing test that no worker tool takes a thread id.
 - **Resources:** library delete, channel bindings (read-only first), usage.
 - **Session control:** `compact_thread` after the slash-command PRs land.
 

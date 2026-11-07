@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
 
 // sessionToolsMCP hosts thread-scoped tools on a loopback listener. Each
@@ -28,24 +29,6 @@ type sessionToolsMCP struct {
 
 type sendFileResult struct {
 	MessageID string `json:"message_id"`
-}
-
-// scopeOf is the scope of the session of thread threadID. A thread that cannot
-// be found, or a service without a coordinator, gets the worker scope: the
-// tools every thread has.
-func (f *sessionToolsMCP) scopeOf(threadID string) Scope {
-	if f.service.Coordinator == nil {
-		return ScopeWorker
-	}
-	t, err := f.service.Store.GetThread(threadID)
-	if err != nil {
-		return ScopeWorker
-	}
-	p, err := f.service.Store.GetProject(t.ProjectID)
-	if err != nil {
-		return ScopeWorker
-	}
-	return scopeOf(p, t)
 }
 
 func (f *sessionToolsMCP) config(threadID string) (string, error) {
@@ -72,12 +55,7 @@ func (f *sessionToolsMCP) config(threadID string) (string, error) {
 		return "", err
 	}
 	path := "/" + hex.EncodeToString(token[:])
-	scope := f.scopeOf(threadID)
-	var turn *coordinatorToolTurn
-	if scope == ScopeCoordinator {
-		turn = &coordinatorToolTurn{}
-	}
-	srv, err := f.buildServer(threadID, scope, turn, f.tools(threadID))
+	srv, turn, err := f.buildFor(threadID)
 	if err != nil {
 		return "", err
 	}
@@ -112,18 +90,9 @@ func (f *sessionToolsMCP) config(threadID string) (string, error) {
 // sendFileDescription is what the model reads about send_file, including where
 // it may save the file; the output directory is created so a write into it
 // needs no mkdir.
-func (f *sessionToolsMCP) sendFileDescription(threadID string) string {
-	desc := "Publish a file to this conversation so the user can see it."
-	t, err := f.service.Store.GetThread(threadID)
-	if err != nil {
-		return desc
-	}
-	p, err := f.service.Store.GetProject(t.ProjectID)
-	if err != nil {
-		return desc
-	}
+func (f *sessionToolsMCP) sendFileDescription(t *db.Thread, p *db.Project) string {
 	_ = os.MkdirAll(threadOutputDir(f.service.Layout, p, t), 0o755)
-	return desc + " " + ArtifactGuidance(f.service.Layout, p, t)
+	return "Publish a file to this conversation so the user can see it. " + ArtifactGuidance(f.service.Layout, p, t)
 }
 
 // coordinatorTurn returns the state shared with the main thread's MCP server.
