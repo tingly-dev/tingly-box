@@ -1509,14 +1509,21 @@ func (m *Threads) Reopen(threadID string, by Source) (*db.Thread, error) {
 	if t.Status != db.ThreadResolved {
 		return t, nil
 	}
+	// update reads the row again under its lock, so check again there: a
+	// Reopen or Resolve may have got in between.
+	reopened := false
 	t, err = m.update(threadID, func(t *db.Thread) {
+		if t.Status != db.ThreadResolved {
+			return
+		}
+		reopened = true
 		t.ResolvedAt = nil
 		t.Status = db.ThreadIdle
 		if t.CommitsAhead > 0 && t.MergedAt == nil {
 			t.Status = db.ThreadReady
 		}
 	})
-	if err == nil {
+	if err == nil && reopened {
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "Reopened" + by.actor() + "."})
 	}
 	return t, err
