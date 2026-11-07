@@ -63,6 +63,8 @@ Coordinator 通过 `read_shared_file` 和 `list_shared_files` 读取本 Project 
 
 工具定义与原 Coordinator 共用，包括 `start_thread`、`message_thread`、`get_thread`、`list_threads`、`read_conversation`、决策、记忆、指令更新和静默工具；MCP 层不接受模型传入的 Project ID。工作线程的 capability 不获得 Coordinator 工具。实现入口分别在 [coordinator_session.go](../internal/project/coordinator_session.go)、[coordinator.go](../internal/project/coordinator.go)、[coordinator_mcp.go](../internal/project/coordinator_mcp.go) 和 [session_tools_mcp.go](../internal/project/session_tools_mcp.go)。
 
+更多 Projects 动作（停止/重开线程、设置、合并、diff 等）改为 MCP 工具的方案、统一的动作层、范围与风险分级见 [mcp-tools.md](./mcp-tools.md)（提案，未实现）。
+
 ## 投递、故障与恢复
 
 ```mermaid
