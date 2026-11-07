@@ -1,10 +1,6 @@
-// testharness.go is TEST INFRASTRUCTURE, not runtime code: it stands up a real
-// db-backed environment (chat store, pairing) so the
-// chat tests can drive the production BotHandler end-to-end. The
-// internal/data/db import is intentional here — building a real store manager
-// is host-side wiring that does not belong on the runtime path, and this file
-// is only linked into test binaries. The runtime packages (bot, chat
-// non-test code) remain free of db.* imports.
+// testharness.go is TEST INFRASTRUCTURE, not runtime code: it stands up an
+// in-memory environment (chat store, pairing) so the chat tests can drive the
+// production BotHandler end-to-end without a database.
 
 package chat
 
@@ -14,7 +10,6 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/remote/bot"
 	"github.com/tingly-dev/tingly-box/remote/chat/feature"
 )
@@ -41,7 +36,6 @@ type TestHarness struct {
 	Handler   *BotHandler
 	ChatStore bot.ChatStoreInterface
 	Pairing   *bot.PairingManager
-	DataDir   string
 	Manager   *imbot.Manager
 
 	cleanup func()
@@ -49,9 +43,6 @@ type TestHarness struct {
 
 // TestBootOptions tweaks BootForTest defaults. All fields are optional.
 type TestBootOptions struct {
-	// DataDir overrides the chat-store directory (default: t.TempDir()).
-	DataDir string
-
 	// Router hands chats to Projects (see ProjectRouter); nil leaves chat
 	// control off. A test may also set it later with SetProjectRouter,
 	// before messages flow.
@@ -73,16 +64,7 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting bot.BotSetting, o
 	if len(opts) > 0 {
 		opt = opts[0]
 	}
-	if opt.DataDir == "" {
-		opt.DataDir = t.TempDir()
-	}
-
-	sm, err := db.NewStoreManager(opt.DataDir)
-	if err != nil {
-		t.Fatalf("BootForTest: store manager: %v", err)
-	}
-	t.Cleanup(func() { _ = sm.Close() })
-	chatStore := sm.RemoteChats()
+	chatStore := bot.NewMemoryChatStore()
 
 	pairing := bot.NewPairingManager()
 	dirBrowser := feature.NewDirectoryBrowser()
@@ -100,7 +82,6 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting bot.BotSetting, o
 		Handler:   handler,
 		ChatStore: chatStore,
 		Pairing:   pairing,
-		DataDir:   opt.DataDir,
 		Manager:   manager,
 	}
 	if h.cleanup != nil {
