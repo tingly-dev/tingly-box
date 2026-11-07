@@ -4,7 +4,7 @@ date: 2026-11-07
 
 # Remote refactor
 
-> Status: **R0, R1 and R2 done (one commit per step); R3–R5 pending.** Proposal revised after review (R6 dropped; facade decision, R3 compat and R4 detail added).
+> Status: **R0, R1, R2 and R3 done (one commit per step); R4–R5 pending.** Proposal revised after review (R6 dropped; facade decision, R3 compat and R4 detail added).
 > Evidence and overlap list: [`.research/remote-refactor.md`](../.research/remote-refactor.md) (S1–S7).
 > Builds on [remote-into-projects.md](./remote-into-projects.md) (chat execution already moved) and
 > [bot-arch.md](./bot-arch.md) / [bot-capability-access-control.md](./bot-capability-access-control.md).
@@ -136,19 +136,20 @@ seed a chat's *first* folder (`adoptChat`), and `project_history` only to order 
 `access.DirectChat/Group.ProjectPath`, is carried in the access tables with no reader I could find in
 `internal/server/module` (**verify** before touching).
 
-Plan, deliberately low-risk, no data copying:
-1. **Stop writing** the legacy fields (`PushProjectHistory` in `completeBind`). The binding is written already.
-2. **Order `/dir` from Projects**: `Chat.Folders(ref)` returns registered folders ordered by this chat's recent
-   activity, derived from the sessions whose source is this chat (threads carry the IM source) plus the current binding.
-   No new table.
-3. **Read-only fallback** to the legacy values while they exist: seed for `adoptChat` (as today); in `Folders`, folders
-   from legacy `project_history` rank after Projects-derived ones. A chat that never used Projects keeps its old order;
-   one that did, converges on the new order on its own.
-4. **No migration job, no column drop.** Columns stay, unwritten. Rollback = revert the code; old values are untouched.
-5. Remove the fallback in a later release once it is empty in practice (decide then).
+**As built (two commits, no migration, no schema change).** Deriving `/dir` order from Projects would scan
+`thread_events` by an unindexed `source_chat_id` on every `/dir`, so I did not: the chat's recent-folder list stays in
+`remote_chats.project_history` as a display-order preference of the access layer. What changed is who answers "where is
+this chat now":
+1. **Read from Projects.** The directory browser's start path and `GET /bots/:bot/chats` (`project_path`) ask Projects
+   first (`Chat.Place`, via `bridge.Folder`) and fall back to the stored path only when Projects has none. Before, both
+   showed whatever `/cd` last wrote, which goes stale when the chat is moved from the web.
+2. **Stop writing `ProjectPath`.** `/cd` now calls `RememberFolder`, which only prepends to the MRU history.
+   `ProjectPath` remains as the read-only seed for a chat with no place in Projects yet (`adoptChat`).
+3. Columns stay; nothing is converted or dropped. Rollback = revert the commits.
 
-Residual risk: a chat's `/dir` ordering may change once (legacy order → activity order). Number-to-folder mapping is
-unaffected (`RememberFolderList` snapshots the list a chat was shown).
+Behavior: `/dir` order is unchanged. The one visible difference is the `project_path` in the chat listing now follows
+web-side moves. The `access.DirectChat/Group.ProjectPath` copy is still unreferenced in the server modules and was left
+alone.
 
 ### R4 — One command table
 Details below. Short form: every command, Remote's and Projects', is one `CommandSpec`; the platform menu, `/help` and the
