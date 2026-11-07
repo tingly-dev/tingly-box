@@ -26,7 +26,7 @@ import (
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
 	"github.com/tingly-dev/tingly-box/remote/access"
 	"github.com/tingly-dev/tingly-box/remote/channel"
-	"github.com/tingly-dev/tingly-box/remote/control/adapter"
+	"github.com/tingly-dev/tingly-box/remote/adapter"
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
 	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
 	"github.com/tingly-dev/tingly-box/swagger"
