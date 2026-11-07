@@ -91,6 +91,7 @@ export default {
     "clear": "Сбросить выбор",
     "dismiss": "Скрыть",
     "moveDown": "Вниз",
+    "pinToTop": "Закрепить вверху",
     "moveUp": "Вверх",
     "saved": "Сохранено"
   },

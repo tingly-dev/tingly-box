@@ -5704,6 +5704,48 @@
         }
       }
     },
+    "/api/v1/projects/{id}/library/archive": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Download a library folder as a zip (at most 100 files and 10 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.",
+        "description": "Download a library folder as a zip (at most 100 files and 10 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.",
+        "operationId": "apiV1ProjectsIdLibraryArchiveGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Library-relative folder; empty is the library root",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/library/file": {
       "get": {
         "tags": [
@@ -5779,6 +5821,48 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/library/tree": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "List one directory level of the library (folders first); expand a folder by asking for its path",
+        "description": "List one directory level of the library (folders first); expand a folder by asking for its path",
+        "operationId": "apiV1ProjectsIdLibraryTreeGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Library-relative directory; empty is the library root",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryTreeResponse"
                 }
               }
             }
@@ -6616,6 +6700,39 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RulesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rules/reorder": {
+      "post": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Apply a new list order to one scenario's rules. The order is hard state: it drives /v1/models listing, same-tier match priority and the model order written into client configs",
+        "description": "Apply a new list order to one scenario's rules. The order is hard state: it drives /v1/models listing, same-tier match priority and the model order written into client configs",
+        "operationId": "apiV1RulesReorderPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderRulesRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
@@ -15468,6 +15585,45 @@
           "success"
         ]
       },
+      "LibraryEntry": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "origin": {
+            "type": "string",
+            "description": "Field origin"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field size"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field updated_at"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "kind",
+          "size",
+          "updated_at",
+          "origin"
+        ]
+      },
       "LibraryFile": {
         "type": "object",
         "properties": {
@@ -15515,6 +15671,31 @@
         "required": [
           "dir",
           "files"
+        ]
+      },
+      "LibraryTreeResponse": {
+        "type": "object",
+        "properties": {
+          "dir": {
+            "type": "string",
+            "description": "Field dir"
+          },
+          "entries": {
+            "type": "array",
+            "description": "Field entries",
+            "items": {
+              "$ref": "#/components/schemas/LibraryEntry"
+            }
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "dir",
+          "path",
+          "entries"
         ]
       },
       "LightweightProbeRequest": {
@@ -18093,6 +18274,11 @@
             "type": "string",
             "description": "Field main_thread_id"
           },
+          "max_running_threads": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads"
+          },
           "name": {
             "type": "string",
             "description": "Field name"
@@ -18156,6 +18342,7 @@
           "coordinator_effort",
           "thread_effort",
           "thread_permission_mode",
+          "max_running_threads",
           "paused",
           "starred",
           "created_at",
@@ -18165,9 +18352,17 @@
       "ProjectDetailResponse": {
         "type": "object",
         "properties": {
+          "coordinator": {
+            "$ref": "#/components/schemas/Thread"
+          },
           "coordinator_busy": {
             "type": "boolean",
             "description": "Field coordinator_busy"
+          },
+          "coordinator_queued": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field coordinator_queued"
           },
           "coordinator_recovery": {
             "type": "string",
@@ -18191,7 +18386,8 @@
           "project",
           "threads",
           "counts",
-          "coordinator_busy"
+          "coordinator_busy",
+          "coordinator_queued"
         ]
       },
       "ProjectListResponse": {
@@ -18238,11 +18434,17 @@
           "cli_path": {
             "type": "string",
             "description": "Field cli_path"
+          },
+          "max_running_threads_limit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads_limit"
           }
         },
         "required": [
           "cli_path",
-          "base_url"
+          "base_url",
+          "max_running_threads_limit"
         ]
       },
       "ProjectSummary": {
@@ -18290,6 +18492,11 @@
             "type": "string",
             "description": "Field main_thread_id"
           },
+          "max_running_threads": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads"
+          },
           "name": {
             "type": "string",
             "description": "Field name"
@@ -18356,6 +18563,7 @@
           "coordinator_effort",
           "thread_effort",
           "thread_permission_mode",
+          "max_running_threads",
           "paused",
           "starred",
           "created_at",
@@ -19004,6 +19212,27 @@
         "required": [
           "success",
           "message"
+        ]
+      },
+      "ReorderRulesRequest": {
+        "type": "object",
+        "properties": {
+          "ordered_uuids": {
+            "type": "array",
+            "description": "Field ordered_uuids",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Field scenario",
+            "example": "openai"
+          }
+        },
+        "required": [
+          "scenario",
+          "ordered_uuids"
         ]
       },
       "Repo": {
@@ -20998,10 +21227,30 @@
             "type": "string",
             "description": "Field branch"
           },
+          "cache_read_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field cache_read_tokens"
+          },
+          "cache_write_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field cache_write_tokens"
+          },
           "commits_ahead": {
             "type": "integer",
             "format": "int64",
             "description": "Field commits_ahead"
+          },
+          "context_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field context_tokens"
+          },
+          "context_window": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field context_window"
           },
           "created_at": {
             "type": "string",
@@ -21037,6 +21286,16 @@
           "last_report": {
             "type": "string",
             "description": "Field last_report"
+          },
+          "last_turn_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field last_turn_at"
+          },
+          "last_turn_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field last_turn_ms"
           },
           "merged_at": {
             "type": "string",
@@ -21080,6 +21339,10 @@
             "type": "string",
             "description": "Field project_id"
           },
+          "queued": {
+            "type": "boolean",
+            "description": "Field queued"
+          },
           "repo_path": {
             "type": "string",
             "description": "Field repo_path"
@@ -21092,6 +21355,11 @@
             "type": "string",
             "format": "date-time",
             "description": "Field resolved_at"
+          },
+          "running_tasks": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field running_tasks"
           },
           "seq": {
             "type": "integer",
@@ -21141,6 +21409,7 @@
           "title",
           "task",
           "status",
+          "running_tasks",
           "origin",
           "cwd",
           "profile_override",
@@ -21150,6 +21419,11 @@
           "turns",
           "input_tokens",
           "output_tokens",
+          "cache_read_tokens",
+          "cache_write_tokens",
+          "context_tokens",
+          "context_window",
+          "last_turn_ms",
           "created_at",
           "updated_at"
         ]
@@ -22015,6 +22289,11 @@
           "instructions": {
             "type": "string",
             "description": "Field instructions"
+          },
+          "max_running_threads": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads"
           },
           "name": {
             "type": "string",

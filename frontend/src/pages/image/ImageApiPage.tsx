@@ -109,6 +109,7 @@ const ImageApiPageContent: React.FC = () => {
                         title={t('scenarioPage.imageGenModelRules')}
                         collapsible={true}
                         allowDeleteRule={true}
+                        allowReorder={true}
                         // The header's Log is the way into this scenario's logs.
                         hideTroubleshoot
                         rules={rules}

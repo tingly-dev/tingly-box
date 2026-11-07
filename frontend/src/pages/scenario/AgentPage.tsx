@@ -358,7 +358,8 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                     // and the setup dialog (slot.rules) read the same state.
                     rules={rules}
                     {...(slotRouting
-                        // Each slot rule backs a model slot: it can't be added, removed or switched off.
+                        // Each slot rule backs a model slot: it can't be added, removed,
+                        // switched off or reordered — the slot precedence is product-defined.
                         ? { onRulesChange: slots.setRules, allowAddRule: false, allowToggleRule: false, allowDeleteRule: false }
                         : {
                             loadRules,
@@ -366,6 +367,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                             onRuleDelete: internal.handleRuleDelete,
                             newlyCreatedRuleUuids: internal.newlyCreatedRuleUuids,
                             allowDeleteRule: true,
+                            allowReorder: true,
                         })}
                     {...(agent.rulesTitleKey ? { title: t(agent.rulesTitleKey) } : {})}
                     collapsible={true}

@@ -56,6 +56,16 @@ type DeleteRuleResponse struct {
 	Message string `json:"message" example:"Rule deleted successfully"`
 }
 
+// ReorderRulesRequest represents the request to apply a new list order to one
+// scenario's rules. ordered_uuids names that scenario's rules in their new
+// order; rules of the scenario missing from the list keep their current
+// relative order and follow the named ones. The order is hard state: it drives
+// /v1/models listing, same-tier match priority and client config generation.
+type ReorderRulesRequest struct {
+	Scenario     string   `json:"scenario" example:"openai"`
+	OrderedUUIDs []string `json:"ordered_uuids"`
+}
+
 // FlagRegistryResponse exposes the catalog of supported rule-level flags so the
 // UI can render an extension catalog without hard-coding the list.
 type FlagRegistryResponse struct {

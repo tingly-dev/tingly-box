@@ -82,6 +82,7 @@ export default {
     "clear": "清除选择",
     "dismiss": "忽略",
     "moveDown": "下移",
+    "pinToTop": "置顶",
     "moveUp": "上移",
     "saved": "已保存"
   },

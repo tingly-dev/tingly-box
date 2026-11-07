@@ -311,3 +311,94 @@ func TestAddRule_ExtraHeadersValidation(t *testing.T) {
 		t.Fatal("expected UpdateRule to reject case-insensitive duplicate, got nil")
 	}
 }
+
+func TestReorderRules_BasicPinAndTolerantAppend(t *testing.T) {
+	c := &Config{
+		ConfigFile: filepath.Join(t.TempDir(), "config.json"),
+		Rules: []typ.Rule{
+			{UUID: "a", Scenario: typ.ScenarioOpenAI, RequestModel: "m-a"},
+			{UUID: "b", Scenario: typ.ScenarioOpenAI, RequestModel: "m-b"},
+			{UUID: "c", Scenario: typ.ScenarioOpenAI, RequestModel: "m-c"},
+		},
+	}
+
+	// Pin: naming only the target moves it to the front; the unnamed rules
+	// keep their relative order behind it.
+	got, err := c.ReorderRules(typ.ScenarioOpenAI, []string{"c"})
+	if err != nil {
+		t.Fatalf("ReorderRules error: %v", err)
+	}
+	if len(got) != 3 || got[0].UUID != "c" || got[1].UUID != "a" || got[2].UUID != "b" {
+		t.Errorf("pin should reorder to [c a b], got %v", uuids(got))
+	}
+	if uuids(c.Rules) != "c,a,b" {
+		t.Errorf("in-memory list not reordered: %v", uuids(c.Rules))
+	}
+
+	// Full permutation.
+	if _, err := c.ReorderRules(typ.ScenarioOpenAI, []string{"b", "a", "c"}); err != nil {
+		t.Fatalf("ReorderRules error: %v", err)
+	}
+	if uuids(c.Rules) != "b,a,c" {
+		t.Errorf("full permutation not applied: %v", uuids(c.Rules))
+	}
+}
+
+func TestReorderRules_OtherScenarioRulesKeepPositions(t *testing.T) {
+	c := &Config{
+		ConfigFile: filepath.Join(t.TempDir(), "config.json"),
+		Rules: []typ.Rule{
+			{UUID: "o1", Scenario: typ.ScenarioOpenAI, RequestModel: "m-o1"},
+			{UUID: "x1", Scenario: typ.ScenarioCursor, RequestModel: "m-x1"},
+			{UUID: "o2", Scenario: typ.ScenarioOpenAI, RequestModel: "m-o2"},
+			{UUID: "x2", Scenario: typ.ScenarioCursor, RequestModel: "m-x2"},
+		},
+	}
+
+	if _, err := c.ReorderRules(typ.ScenarioOpenAI, []string{"o2", "o1"}); err != nil {
+		t.Fatalf("ReorderRules error: %v", err)
+	}
+	// The openai rules swap among their own slots; the cursor rules keep
+	// their exact positions.
+	if uuids(c.Rules) != "o2,x1,o1,x2" {
+		t.Errorf("foreign scenario rules must not move: %v", uuids(c.Rules))
+	}
+}
+
+func TestReorderRules_Rejections(t *testing.T) {
+	c := &Config{
+		ConfigFile: filepath.Join(t.TempDir(), "config.json"),
+		Rules: []typ.Rule{
+			{UUID: "a", Scenario: typ.ScenarioOpenAI, RequestModel: "m-a"},
+			{UUID: "x", Scenario: typ.ScenarioCursor, RequestModel: "m-x"},
+		},
+	}
+	before := uuids(c.Rules)
+
+	for name, tc := range map[string]struct {
+		scenario typ.RuleScenario
+		uuids    []string
+	}{
+		"empty":          {typ.ScenarioOpenAI, nil},
+		"unknown uuid":   {typ.ScenarioOpenAI, []string{"nope"}},
+		"foreign uuid":   {typ.ScenarioOpenAI, []string{"x"}},
+		"duplicate":      {typ.ScenarioOpenAI, []string{"a", "a"}},
+		"empty scenario": {"", []string{"a"}},
+	} {
+		if _, err := c.ReorderRules(tc.scenario, tc.uuids); err == nil {
+			t.Errorf("%s: expected rejection, got nil", name)
+		}
+	}
+	if uuids(c.Rules) != before {
+		t.Errorf("rejected calls must not mutate: %v", uuids(c.Rules))
+	}
+}
+
+// uuids renders a rule list's UUIDs for compact assertions.
+func uuids(rules []typ.Rule) string {
+	parts := make([]string, len(rules))
+	for i := range rules {
+		parts[i] = rules[i].UUID
+	}
+	return strings.Join(parts, ",")
+}

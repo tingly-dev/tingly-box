@@ -240,3 +240,48 @@ func (h *Handler) GetFlagRegistry(c *gin.Context) {
 		Data:    typ.RuleFlagRegistry(),
 	})
 }
+
+// ReorderRules applies a new list order to one scenario's rules. The order is
+// hard state — it reaches /v1/models, match priority and client config
+// generation — and is persisted through the same Save() choke point as every
+// other rule mutation. Unknown UUIDs and UUIDs from another scenario are
+// rejected; rules the caller has not named keep their relative order and
+// follow the named ones, so a stale client never drops a concurrent creation.
+func (h *Handler) ReorderRules(c *gin.Context) {
+	var req ReorderRulesRequest
+	if !bind.JSON(c, &req, apierr.Failure) {
+		return
+	}
+
+	if h.config == nil {
+		apierr.Failure(c, http.StatusInternalServerError, "Global config not available")
+		return
+	}
+	if req.Scenario == "" {
+		apierr.Failure(c, http.StatusBadRequest, "Scenario is required")
+		return
+	}
+	if len(req.OrderedUUIDs) == 0 {
+		apierr.Failure(c, http.StatusBadRequest, "ordered_uuids is required")
+		return
+	}
+
+	rules, err := h.config.ReorderRules(typ.RuleScenario(req.Scenario), req.OrderedUUIDs)
+	if err != nil {
+		apierr.Failure(c, http.StatusBadRequest, "Failed to reorder rules: "+err.Error())
+		return
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"action":   "reorder_rules",
+		"scenario": req.Scenario,
+		"count":    len(rules),
+	}).Info(fmt.Sprintf("Reordered %d rule(s) in scenario %s", len(rules), req.Scenario))
+
+	// Echo the reordered subset so the client can replace its local state
+	// with what actually persisted, mirroring Create/UpdateRule.
+	c.JSON(http.StatusOK, RulesResponse{
+		Success: true,
+		Data:    rules,
+	})
+}
