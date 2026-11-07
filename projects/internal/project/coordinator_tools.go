@@ -83,7 +83,7 @@ func (c *Coordinator) coordinatorTools() []Tool {
 		{Name: "remember", Scopes: ScopeCoordinator, Risk: RiskWrite, Description: "Save a requirement, decision, pitfall or coordination preference to project memory. Every new thread and coordinator turn sees the memory index. Reuse the topic of an existing file to update it instead of adding a duplicate; one fact per file; skip what the repository already shows.",
 			Properties: map[string]any{"topic": str("Short topic; becomes the file name."), "content": str("The note."), "summary": str("One line for the MEMORY.md index.")}, Required: []string{"topic", "content", "summary"}, Handle: textTool(c.remember)},
 		{Name: "forget", Scopes: ScopeCoordinator, Risk: RiskWrite, Description: "Delete a memory file.", Properties: map[string]any{"file": str("Memory file name, e.g. release-date.md.")}, Required: []string{"file"}, Handle: textTool(c.forget)},
-		{Name: "update_instructions", Scopes: ScopeCoordinator, Risk: RiskWrite, Description: "Replace the project instructions (only when the user asks).",
+		{Name: "update_instructions", Scopes: ScopeCoordinator, Risk: RiskWrite, EditsProject: true, Description: "Replace the project instructions (only when the user asks).",
 			Properties: map[string]any{"instructions": str("The full new instructions (max 16000 characters).")}, Required: []string{"instructions"}, Handle: textTool(c.updateInstructions)},
 	}
 }

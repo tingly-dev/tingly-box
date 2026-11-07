@@ -18,12 +18,16 @@ type coordinatorToolTurn struct {
 	quiet         atomic.Bool
 }
 
+func cloneProject(p *db.Project) *db.Project {
+	c := *p
+	c.Repos = append([]db.Repo(nil), p.Repos...)
+	return &c
+}
+
 func (t *coordinatorToolTurn) begin(p *db.Project, userTriggered bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	copy := *p
-	copy.Repos = append([]db.Repo(nil), p.Repos...)
-	t.snapshot, t.userTriggered = &copy, userTriggered
+	t.snapshot, t.userTriggered = cloneProject(p), userTriggered
 	t.quiet.Store(false)
 }
 
@@ -38,7 +42,13 @@ func (t *coordinatorToolTurn) end() {
 // several at once. fn gets the project as it is now and runs only while the
 // turn is active, not ended with no_update, the project is neither paused nor
 // archived, and its settings are what the turn began with.
-func (t *coordinatorToolTurn) run(store *db.Store, tool string, fn func(current *db.Project) (*mcp.CallToolResult, error)) (*mcp.CallToolResult, error) {
+//
+// A tool that edits the project (editsProject) has changed the settings the turn
+// began with itself, so after it succeeds the turn adopts the project as the tool
+// left it. Without that, the guard would refuse every later call of the turn. A
+// change from anywhere else still trips it. The tool must apply its change to the
+// project it is given and save that same value.
+func (t *coordinatorToolTurn) run(store *db.Store, tool string, editsProject bool, fn func(current *db.Project) (*mcp.CallToolResult, error)) (*mcp.CallToolResult, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	snapshot, userTriggered := t.snapshot, t.userTriggered
@@ -62,6 +72,9 @@ func (t *coordinatorToolTurn) run(store *db.Store, tool string, fn func(current 
 		return textResult("A message from the user needs a reply. Answer it, or start or message a thread.", true), nil
 	}
 	res, err := fn(current)
+	if editsProject && err == nil && res != nil && !res.IsError {
+		t.snapshot = cloneProject(current)
+	}
 	if tool == toolNoUpdate && err == nil && res != nil && !res.IsError {
 		t.quiet.Store(true)
 	}

@@ -16,6 +16,12 @@ instructions exceed 16000 characters
 == remember {"content":"kept","summary":"kept note","topic":"Keep"}
 error=false
 saved to memory as keep.md
+== remember {"content":"周五发布。","summary":"发布日期是周五","topic":"发布日期"}
+error=false
+saved to memory as note-87d080e7.md
+== remember {"content":"改到周一发布。","summary":"发布日期是周一","topic":"发布日期"}
+error=false
+saved to memory as note-87d080e7.md
 == request_decision {"options":[{"consequence":"ships","label":"Yes"},{"label":"No"}],"question":"Ship now?","reason":"safer","recommended":1}
 error=false
 asked the user. Keep working on "No" as long as it can be undone; stop before any step that cannot be. The answer arrives as the user's next message.
@@ -149,6 +155,7 @@ no message "zzzz" in this conversation
 error=false
 MEMORY.md
 keep.md
+note-87d080e7.md
 == list_shared_files {"path":"library"}
 error=false
 .tmp/
@@ -167,8 +174,8 @@ openat missing.md: no such file or directory
 error=true
 path must be inside project library or memory
 == remember {"content":"x","summary":"y","topic":""}
-error=false
-saved to memory as note-<unix>.md
+error=true
+topic is required: it names the memory file
 == send_file {"caption":"Here","path":"<data>/<uuid>/library/report.txt"}
 error=false
 {"message_id":"E25"}
@@ -191,5 +198,8 @@ This coordinator turn has already ended with no_update.
 error=false
 instructions updated
 == list_threads {}
-error=true
-Project settings changed while this response was running. Re-evaluate using the current settings.
+error=false
+<event source="history" kind="list_threads" trust="relay">
+- T15(short) "Renamed second" status=resolved updated=<time>
+- T9(short) "First task" status=working updated=<time>
+</event>

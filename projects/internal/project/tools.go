@@ -63,6 +63,9 @@ type Tool struct {
 	Required   []string
 	Scopes     Scope
 	Risk       Risk
+	// EditsProject is set on a coordinator tool that changes the project's
+	// settings: the turn adopts the result as its own (see coordinatorToolTurn.run).
+	EditsProject bool
 	// Handle runs the tool. Every tool has one.
 	Handle func(ctx context.Context, call ToolCall) (*mcp.CallToolResult, error)
 }

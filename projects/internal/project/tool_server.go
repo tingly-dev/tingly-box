@@ -130,7 +130,7 @@ func (f *sessionToolsMCP) register(srv *mcp.Server, tool Tool, threadID string, 
 		if scope != ScopeCoordinator {
 			return finish(tool.Handle(ctx, call))
 		}
-		return turn.run(f.service.Store, tool.Name, func(current *db.Project) (*mcp.CallToolResult, error) {
+		return turn.run(f.service.Store, tool.Name, tool.EditsProject, func(current *db.Project) (*mcp.CallToolResult, error) {
 			call.Project = current
 			var quote string
 			if tool.Risk == RiskConfirm {
