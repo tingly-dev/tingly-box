@@ -4,7 +4,7 @@ date: 2026-11-07
 
 # Remote refactor
 
-> Status: **R0–R4 done (one commit per step); R5 pending (gated on verification).** Proposal revised after review (R6 dropped; facade decision, R3 compat and R4 detail added).
+> Status: **R0–R4 done (one commit per step); R5 checked and deliberately not done (see below).** Proposal revised after review (R6 dropped; facade decision, R3 compat and R4 detail added).
 > Evidence and overlap list: [`.research/remote-refactor.md`](../.research/remote-refactor.md) (S1–S7).
 > Builds on [remote-into-projects.md](./remote-into-projects.md) (chat execution already moved) and
 > [bot-arch.md](./bot-arch.md) / [bot-capability-access-control.md](./bot-capability-access-control.md).
@@ -155,10 +155,25 @@ alone.
 Details below. Short form: every command, Remote's and Projects', is one `CommandSpec`; the platform menu, `/help` and the
 permission gate are all computed from the merged list, so the three hand-kept copies disappear.
 
-### R5 — One approval/question renderer — gated on verification
-Read `chat_answer.go` against `ask`/`imchannel` first. If the logic is duplicated, convert `ChannelPrompt` →
-`interaction.Interaction` in `bridge`, render in `imchannel`, and keep `y/n/always` + numbered-option parsing in
-one place. If the two differ on purpose (thread semantics vs hook semantics), document why and stop.
+### R5 — One approval/question renderer — checked, not done
+Compared `projects/internal/project/chat_answer.go` with `remote/ask` + `remote/channel/imchannel` (+ `remote/bot/prompt_reply.go`).
+The two do the same job for different callers, and they differ in what a reply *means*, so unifying them would change
+what a user can type on one surface:
+
+| | Flow A (hook-driven `ask` / `IMPrompter`) | Projects (`chat_answer.go`) |
+|---|---|---|
+| Approval words | `1 y yes` allow, `2 n no 0` deny, `3 a always` allow+remember | `y yes ok allow approve` + 是/好/允许/同意; `a always` + 总是; `n no deny reject` + 否/不/拒绝 |
+| Other text | not an answer, passed on to other handlers | **deny**, and the words go to the thread as instructions |
+| "Always" scope | per tool, global whitelist | this thread only |
+| Question answers | positional tokens (`1 2 1`) | one line per question, `1,3` for multi-select, free text allowed |
+| Prompt text | Markdown, "Option N", button hint | plain text, numbered, reply hint |
+| State | blocking `Prompt` with pending map and timeout | thread request id; the thread already waits |
+
+Only the vocabulary overlaps (`y/n/always`), and even there the sets differ. Merging means picking one set and one fall-through
+rule, which silently changes either hook prompts or the Projects behavior decided on 2026-10-21
+(`remote-into-projects.md`, "聊天式回答"). That is a product decision, not a refactor, so R5 stops here: no code change.
+If you want it later, the smallest honest step is a shared `approvalWords` table both parsers read, with the Projects
+fall-through rule kept as an explicit per-caller option.
 
 ## R4 in detail
 
