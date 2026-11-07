@@ -11,6 +11,7 @@ name: Verify Compile
 #   - compile-frontend : pnpm build of frontend/ and its lint (vitest DISABLED),
 #                        plus typecheck, vitest and build of @tingly/projects
 #   - test-projects    : go vet, go test and the boundary check of projects/
+#   - test-remote      : go vet, go test and the boundary check of remote/
 #                        (Projects, its own go.work module; enabled: it was
 #                        tested on every change before it moved here)
 # Unit tests are commented out for now (all passed when added); uncomment to enable.
@@ -69,6 +70,7 @@ jobs:
       gui: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.self == 'true' || steps.filter.outputs.gui == 'true' }}
       frontend: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.self == 'true' || steps.filter.outputs.frontend == 'true' || steps.filter.outputs.openapi == 'true' }}
       projects: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.self == 'true' || steps.filter.outputs.projects == 'true' }}
+      remote: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.self == 'true' || steps.filter.outputs.remote == 'true' }}
       # gotest: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.self == 'true' || steps.filter.outputs.cli == 'true' || steps.filter.outputs.gotest == 'true' }}
     steps:
       - name: Filter paths
@@ -139,6 +141,9 @@ jobs:
             projects:
               - 'projects/**'
               - '!projects/**/*.md'
+            remote:
+              - 'remote/**'
+              - '!remote/**/*.md'
             # gotest:
             #   - '**/*_test.go'
 
@@ -277,6 +282,59 @@ jobs:
         run: |
           if go list -deps -f '{{with .Module}}{{.Path}}{{end}}' ./... | grep -qx 'github.com/tingly-dev/tingly-box'; then
             echo "::error::projects imports github.com/tingly-dev/tingly-box (the root module)"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race ./...
+
+  test-remote:
+    name: Test remote
+    needs: changes
+    if: needs.changes.outputs.remote == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./remote
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+          cache: false
+
+      - name: Locate Go caches
+        id: gocache
+        shell: bash
+        run: |
+          echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+          echo "mod=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Go build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ steps.gocache.outputs.build }}
+            ${{ steps.gocache.outputs.mod }}
+          key: go-test-remote-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-test-remote-
+
+      # Remote is a library: the root module and Projects import it, never the
+      # other way round. Its ports live in remote/agent.
+      - name: Boundary
+        run: |
+          deps=$(go list -deps -f '{{with .Module}}{{.Path}}{{end}}' ./... | sort -u)
+          if echo "$deps" | grep -qxE 'github.com/tingly-dev/tingly-box|github.com/tingly-dev/tingly-box/projects'; then
+            echo "::error::remote imports the root module or projects"
             exit 1
           fi
 
