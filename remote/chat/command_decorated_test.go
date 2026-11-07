@@ -1,4 +1,4 @@
-package remoteagent_test
+package chat_test
 
 import (
 	"testing"

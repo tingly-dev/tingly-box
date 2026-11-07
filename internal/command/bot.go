@@ -10,7 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	builtinserver "github.com/tingly-dev/tingly-box/internal/mcp/builtin_server"
-	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
+	"github.com/tingly-dev/tingly-box/remote/chat"
 )
 
 // ============== Kong Command Structures ==============
@@ -155,7 +155,7 @@ func runBotConfig(appManager *app.AppManager, r *BotConfigCmdKong) error {
 		setting.Name, changed = r.Name, true
 	}
 	if r.DefaultCwd != "" {
-		dir, err := remoteagent.ExpandPath(r.DefaultCwd)
+		dir, err := chat.ExpandPath(r.DefaultCwd)
 		if err != nil {
 			return err
 		}

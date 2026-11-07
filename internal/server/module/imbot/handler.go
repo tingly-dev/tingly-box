@@ -11,7 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 	"github.com/tingly-dev/tingly-box/remote/bot"
-	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
+	"github.com/tingly-dev/tingly-box/remote/chat"
 
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/config"
@@ -48,7 +48,7 @@ type Handler struct {
 // straight through to NewBotManager — see its doc comment for why this must
 // happen at construction time rather than via a later SetChannelRegistry
 // call.
-func NewHandler(ctx context.Context, cfg *config.Config, channelRegistry *channel.Registry, consumerOpts ...remoteagent.ConsumerOption) (*Handler, error) {
+func NewHandler(ctx context.Context, cfg *config.Config, channelRegistry *channel.Registry, consumerOpts ...chat.ConsumerOption) (*Handler, error) {
 	sm := cfg.StoreManager()
 	botMgr, err := NewBotManager(ctx, cfg, channelRegistry, consumerOpts...)
 	if err != nil {

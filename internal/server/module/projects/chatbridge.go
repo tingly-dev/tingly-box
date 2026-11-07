@@ -12,14 +12,14 @@ import (
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
-	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
+	"github.com/tingly-dev/tingly-box/remote/chat"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 )
 
 // ChatBridge joins Remote's IM chats to Projects (.design/projects-im.md):
 //
 //   - inbound: a chat that is bound to a project hands its messages to that
-//     project's coordinator instead of @cc / @tb (remoteagent.ProjectRouter);
+//     project's coordinator instead of @cc / @tb (chat.ProjectRouter);
 //   - outbound: the coordinator's replies and thread reports reach the bound
 //     chats through the bot's channel, the same send path notifications use
 //     (projectsapp.ChannelSink, implemented by Host).
@@ -42,7 +42,7 @@ type ChatBridge struct {
 }
 
 var (
-	_ remoteagent.ProjectRouter = (*ChatBridge)(nil)
+	_ chat.ProjectRouter = (*ChatBridge)(nil)
 	_ projectsapp.ChannelSink   = (*ChatBridge)(nil)
 )
 
@@ -99,18 +99,18 @@ func (b *ChatBridge) live() *projectsapp.App {
 	return b.app
 }
 
-// Bound implements remoteagent.ProjectRouter.
+// Bound implements chat.ProjectRouter.
 func (b *ChatBridge) Bound(platform, chatID string) bool {
 	app := b.live()
 	return app != nil && app.ChannelBound(platform, chatID)
 }
 
-// Enabled implements remoteagent.ProjectRouter: chats follow the Projects
+// Enabled implements chat.ProjectRouter: chats follow the Projects
 // switch.
 func (b *ChatBridge) Enabled() bool { return b.live() != nil }
 
-// ToFolder implements remoteagent.ProjectRouter.
-func (b *ChatBridge) ToFolder(_ context.Context, in remoteagent.ProjectInbound, folder string, ifNew bool) error {
+// ToFolder implements chat.ProjectRouter.
+func (b *ChatBridge) ToFolder(_ context.Context, in chat.ProjectInbound, folder string, ifNew bool) error {
 	app := b.live()
 	if app == nil {
 		return errors.New("Projects is switched off")
@@ -137,7 +137,7 @@ func (b *ChatBridge) CurrentFolder(_ context.Context, platform, chatID string) (
 }
 
 // ProjectChoices lists project coordinators separately from working folders.
-func (b *ChatBridge) ProjectChoices(_ context.Context, in remoteagent.ProjectInbound) ([]remoteagent.ProjectChoice, string, error) {
+func (b *ChatBridge) ProjectChoices(_ context.Context, in chat.ProjectInbound) ([]chat.ProjectChoice, string, error) {
 	app := b.live()
 	if app == nil {
 		return nil, "", errors.New("Projects is switched off")
@@ -150,15 +150,15 @@ func (b *ChatBridge) ProjectChoices(_ context.Context, in remoteagent.ProjectInb
 	if err != nil {
 		return nil, "", err
 	}
-	choices := make([]remoteagent.ProjectChoice, 0, len(projects))
+	choices := make([]chat.ProjectChoice, 0, len(projects))
 	for _, p := range projects {
-		choices = append(choices, remoteagent.ProjectChoice{ID: p.ID, Name: p.Name})
+		choices = append(choices, chat.ProjectChoice{ID: p.ID, Name: p.Name})
 	}
 	return choices, current, nil
 }
 
 // SelectProject binds the chat to the chosen project's coordinator.
-func (b *ChatBridge) SelectProject(_ context.Context, in remoteagent.ProjectInbound, id string) error {
+func (b *ChatBridge) SelectProject(_ context.Context, in chat.ProjectInbound, id string) error {
 	app := b.live()
 	if app == nil {
 		return errors.New("Projects is switched off")
@@ -166,8 +166,8 @@ func (b *ChatBridge) SelectProject(_ context.Context, in remoteagent.ProjectInbo
 	return app.ChannelToProject(in.Platform, in.ChatID, in.BotUUID, id)
 }
 
-// RouteInbound implements remoteagent.ProjectRouter.
-func (b *ChatBridge) RouteInbound(_ context.Context, in remoteagent.ProjectInbound) (bool, error) {
+// RouteInbound implements chat.ProjectRouter.
+func (b *ChatBridge) RouteInbound(_ context.Context, in chat.ProjectInbound) (bool, error) {
 	app := b.live()
 	if app == nil || !app.ChannelBound(in.Platform, in.ChatID) {
 		return false, nil
@@ -186,8 +186,8 @@ func (b *ChatBridge) RouteInbound(_ context.Context, in remoteagent.ProjectInbou
 	return app.PostFromChannel(in.Platform, in.ChatID, in.Text, files)
 }
 
-// RouteCommand implements remoteagent.ProjectRouter.
-func (b *ChatBridge) RouteCommand(_ context.Context, name string, in remoteagent.ProjectInbound) (bool, string, error) {
+// RouteCommand implements chat.ProjectRouter.
+func (b *ChatBridge) RouteCommand(_ context.Context, name string, in chat.ProjectInbound) (bool, string, error) {
 	app := b.live()
 	if app == nil || !app.ChannelBound(in.Platform, in.ChatID) {
 		return false, "", nil
@@ -202,8 +202,8 @@ func (b *ChatBridge) RouteCommand(_ context.Context, name string, in remoteagent
 	return app.ChannelCommand(in.Platform, in.ChatID, name, in.Text)
 }
 
-// RouteAnswer implements remoteagent.ProjectRouter.
-func (b *ChatBridge) RouteAnswer(_ context.Context, in remoteagent.ProjectInbound, threadID, requestID, choice string) (string, error) {
+// RouteAnswer implements chat.ProjectRouter.
+func (b *ChatBridge) RouteAnswer(_ context.Context, in chat.ProjectInbound, threadID, requestID, choice string) (string, error) {
 	app := b.live()
 	if app == nil {
 		return "Projects is switched off.", nil
@@ -299,7 +299,7 @@ type actionChannel interface {
 func (b *ChatBridge) SendChannelPrompt(ctx context.Context, platform, chatID string, p projectsapp.ChannelPrompt) (string, error) {
 	buttons := make([]imchannel.Button, len(p.Choices))
 	for i, c := range p.Choices {
-		buttons[i] = imchannel.Button{Label: c.Label, Payload: []string{remoteagent.ProjectAnswerPayload, p.ThreadID, p.RequestID, c.Value}}
+		buttons[i] = imchannel.Button{Label: c.Label, Payload: []string{chat.ProjectAnswerPayload, p.ThreadID, p.RequestID, c.Value}}
 	}
 	var messageID string
 	botUUID, err := b.through(ctx, platform, chatID, projectsapp.ChannelBot(ctx), func(ch channel.Channel) error {

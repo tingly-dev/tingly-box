@@ -1,4 +1,4 @@
-package remoteagent_test
+package chat_test
 
 import (
 	"context"
@@ -19,12 +19,12 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly/testenv"
 	"github.com/tingly-dev/tingly-box/remote/bot"
-	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
+	"github.com/tingly-dev/tingly-box/remote/chat"
 )
 
 // bootHelperNotStarted is bootHelper without starting the manager, so a test
 // can plug in a router before messages flow.
-func bootHelperNotStarted(t *testing.T) (*testenv.TestEnv, *remoteagent.TestHarness, *testenv.User) {
+func bootHelperNotStarted(t *testing.T) (*testenv.TestEnv, *chat.TestHarness, *testenv.User) {
 	t.Helper()
 	env := testenv.NewTestEnv(t)
 	rp := false
@@ -32,7 +32,7 @@ func bootHelperNotStarted(t *testing.T) (*testenv.TestEnv, *remoteagent.TestHarn
 		UUID: env.BotUUID(), Name: "tingly-test", Platform: "tingly", AuthType: "none",
 		Auth: map[string]string{}, Enabled: true, RequirePairing: &rp,
 	}
-	harness := remoteagent.BootForTest(t, env.Manager(), setting)
+	harness := chat.BootForTest(t, env.Manager(), setting)
 	return env, harness, env.NewUser("alice")
 }
 
@@ -41,7 +41,7 @@ type fakeRouter struct {
 	mu      sync.Mutex
 	bound   map[string]bool
 	err     error
-	got     []remoteagent.ProjectInbound
+	got     []chat.ProjectInbound
 	cmds    []string
 	answers []string
 	// files are the bodies of the files handed over, read while they exist.
@@ -58,7 +58,7 @@ func (f *fakeRouter) Enabled() bool {
 	return !f.off
 }
 
-func (f *fakeRouter) ToFolder(_ context.Context, in remoteagent.ProjectInbound, folder string, ifNew bool) error {
+func (f *fakeRouter) ToFolder(_ context.Context, in chat.ProjectInbound, folder string, ifNew bool) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if ifNew && f.bound[in.ChatID] {
@@ -90,7 +90,7 @@ func (f *fakeRouter) setErr(err error) {
 	f.err = err
 }
 
-func (f *fakeRouter) RouteInbound(_ context.Context, in remoteagent.ProjectInbound) (bool, error) {
+func (f *fakeRouter) RouteInbound(_ context.Context, in chat.ProjectInbound) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if !f.bound[in.ChatID] {
@@ -107,7 +107,7 @@ func (f *fakeRouter) RouteInbound(_ context.Context, in remoteagent.ProjectInbou
 	return true, f.err
 }
 
-func (f *fakeRouter) RouteCommand(_ context.Context, name string, in remoteagent.ProjectInbound) (bool, string, error) {
+func (f *fakeRouter) RouteCommand(_ context.Context, name string, in chat.ProjectInbound) (bool, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if !f.bound[in.ChatID] {
@@ -117,7 +117,7 @@ func (f *fakeRouter) RouteCommand(_ context.Context, name string, in remoteagent
 	return true, "project did " + name, nil
 }
 
-func (f *fakeRouter) RouteAnswer(_ context.Context, in remoteagent.ProjectInbound, threadID, requestID, choice string) (string, error) {
+func (f *fakeRouter) RouteAnswer(_ context.Context, in chat.ProjectInbound, threadID, requestID, choice string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.answers = append(f.answers, in.ChatID+":"+threadID+":"+requestID+":"+choice)
@@ -139,10 +139,10 @@ func (f *fakeRouter) commands() []string {
 	return append([]string(nil), f.cmds...)
 }
 
-func (f *fakeRouter) inbound() []remoteagent.ProjectInbound {
+func (f *fakeRouter) inbound() []chat.ProjectInbound {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return append([]remoteagent.ProjectInbound(nil), f.got...)
+	return append([]chat.ProjectInbound(nil), f.got...)
 }
 
 // A chat bound to a project talks to the project: the text (even "@cc ...")
@@ -280,16 +280,16 @@ func Test_ProjectPromptButtonsGoToTheProject(t *testing.T) {
 	require.NoError(t, env.Manager().Start(env.Context()))
 
 	chat := alice.OpenDM(harness.Setting.UUID)
-	chat.SendCallback("m1", remoteagent.ProjectAnswerPayload+":t1:r1:allow")
+	chat.SendCallback("m1", chat.ProjectAnswerPayload+":t1:r1:allow")
 	require.Eventually(t, func() bool { return len(router.answered()) == 1 }, 3*time.Second, 10*time.Millisecond)
 	assert.Equal(t, chat.ChatID+":t1:r1:allow", router.answered()[0])
 	chat.ExpectNoEvent(500*time.Millisecond, tingly.EventSend)
 
-	chat.SendCallback("m1", remoteagent.ProjectAnswerPayload+":t1:r1:late")
+	chat.SendCallback("m1", chat.ProjectAnswerPayload+":t1:r1:late")
 	chat.WaitText(3*time.Second).AssertContains(t, "already answered")
 
 	router.setErr(errors.New("this chat is not bound to that thread"))
-	chat.SendCallback("m1", remoteagent.ProjectAnswerPayload+":t2:r2:deny")
+	chat.SendCallback("m1", chat.ProjectAnswerPayload+":t2:r2:deny")
 	chat.WaitText(3*time.Second).AssertContains(t, "Could not answer").AssertContains(t, "not bound")
 }
 
@@ -328,7 +328,7 @@ func Test_ChatsMoveUnderTheBotsProfile(t *testing.T) {
 	for agent, want := range map[string]string{"": "", "claude_code": "", "claude_code:p1": "p1"} {
 		env := testenv.NewTestEnv(t)
 		rp := false
-		harness := remoteagent.BootForTest(t, env.Manager(), bot.BotSetting{
+		harness := chat.BootForTest(t, env.Manager(), bot.BotSetting{
 			UUID: env.BotUUID(), Name: "tingly-test", Platform: "tingly", AuthType: "none",
 			Auth: map[string]string{}, Enabled: true, RequirePairing: &rp, DefaultAgent: agent,
 		})

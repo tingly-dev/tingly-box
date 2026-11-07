@@ -1,4 +1,4 @@
-package remoteagent_test
+package chat_test
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/remote/bot"
-	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
+	"github.com/tingly-dev/tingly-box/remote/chat"
 
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly/testenv"
@@ -16,7 +16,7 @@ import (
 // bootHelper wires a fresh testenv.TestEnv together with a BotHandler in a
 // known-good configuration: Projects on, and every chat given a folder
 // (fakeRouter). Most subtests start with it.
-func bootHelper(t *testing.T, requirePairing bool) (*testenv.TestEnv, *remoteagent.TestHarness, *testenv.User) {
+func bootHelper(t *testing.T, requirePairing bool) (*testenv.TestEnv, *chat.TestHarness, *testenv.User) {
 	t.Helper()
 
 	env := testenv.NewTestEnv(t)
@@ -32,7 +32,7 @@ func bootHelper(t *testing.T, requirePairing bool) (*testenv.TestEnv, *remoteage
 		Enabled:        true,
 		RequirePairing: &rp,
 	}
-	harness := remoteagent.BootForTest(t, env.Manager(), setting, remoteagent.TestBootOptions{
+	harness := chat.BootForTest(t, env.Manager(), setting, chat.TestBootOptions{
 		Router: &fakeRouter{bound: map[string]bool{}, adopts: true},
 	})
 

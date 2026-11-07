@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/remote/bot"
-	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
+	"github.com/tingly-dev/tingly-box/remote/chat"
 
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/imbot/core"
@@ -85,7 +85,7 @@ func newLifecycleManager(t *testing.T) (*bot.Manager, string, *tingly.InProcessT
 		},
 	}
 
-	consumer := remoteagent.NewConsumer(store)
+	consumer := chat.NewConsumer(store)
 	m := bot.NewManager(store, consumer)
 	sm, err := db.NewStoreManager(t.TempDir())
 	if err != nil {
@@ -168,7 +168,7 @@ func TestManager_StopOneBotDoesNotAffectOthers(t *testing.T) {
 		},
 	}
 
-	consumer := remoteagent.NewConsumer(store)
+	consumer := chat.NewConsumer(store)
 	m := bot.NewManager(store, consumer)
 	sm, err := db.NewStoreManager(t.TempDir())
 	if err != nil {
@@ -229,7 +229,7 @@ func TestManager_MountGate_Tingly(t *testing.T) {
 		},
 	}
 
-	consumer := remoteagent.NewConsumer(store)
+	consumer := chat.NewConsumer(store)
 	m := bot.NewManager(store, consumer)
 	sm, err := db.NewStoreManager(t.TempDir())
 	if err != nil {

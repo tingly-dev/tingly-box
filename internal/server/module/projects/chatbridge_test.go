@@ -22,7 +22,7 @@ import (
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
-	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
+	"github.com/tingly-dev/tingly-box/remote/chat"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
@@ -120,7 +120,7 @@ func TestBridgeNeverSendsToABlockedChat(t *testing.T) {
 func TestBridgeIsInertWithoutProjects(t *testing.T) {
 	b := NewChatBridge()
 	assert.False(t, b.Bound("telegram", "1"))
-	handled, err := b.RouteInbound(context.Background(), remoteagent.ProjectInbound{Platform: "telegram", ChatID: "1", Text: "hi"})
+	handled, err := b.RouteInbound(context.Background(), chat.ProjectInbound{Platform: "telegram", ChatID: "1", Text: "hi"})
 	assert.False(t, handled)
 	assert.NoError(t, err)
 }
@@ -198,8 +198,8 @@ func TestChatToProjectAndBack(t *testing.T) {
 	}
 	require.Equal(t, http.StatusCreated, call("POST", "/projects", map[string]any{"name": "Atlas"}, &p))
 	ctx := context.Background()
-	in := func(chatID, text string) remoteagent.ProjectInbound {
-		return remoteagent.ProjectInbound{Platform: "telegram", BotUUID: "bot-1", ChatID: chatID, Text: text}
+	in := func(chatID, text string) chat.ProjectInbound {
+		return chat.ProjectInbound{Platform: "telegram", BotUUID: "bot-1", ChatID: chatID, Text: text}
 	}
 
 	// Not bound yet: not handled, nothing sent.
@@ -296,7 +296,7 @@ func TestBridgeSendsPromptsWithButtonsAndRestatesThroughTheSameBot(t *testing.T)
 	got := <-rich.actions
 	require.Len(t, got, 2)
 	assert.Equal(t, "Allow", got[0].Label)
-	assert.Equal(t, []string{remoteagent.ProjectAnswerPayload, "t1", "r1", "allow"}, got[0].Payload)
+	assert.Equal(t, []string{chat.ProjectAnswerPayload, "t1", "r1", "allow"}, got[0].Payload)
 
 	require.NoError(t, b.RestateChannelPrompt(context.Background(), "telegram", "42", ref, "Approve: ls\n\nAllowed."))
 	assert.Equal(t, sent{"42/m-42", "Approve: ls\n\nAllowed."}, <-rich.restated)

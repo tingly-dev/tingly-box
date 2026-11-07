@@ -1,4 +1,4 @@
-package remoteagent_test
+package chat_test
 
 import (
 	"testing"
@@ -6,14 +6,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/remote/bot"
-	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
+	"github.com/tingly-dev/tingly-box/remote/chat"
 
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly/testenv"
 )
 
 // gateBoot wires a TestEnv + harness with no fixture agent — the gate drops
 // traffic before any executor runs, so none is needed.
-func gateBoot(t *testing.T) (*testenv.TestEnv, *remoteagent.TestHarness, *testenv.Chat) {
+func gateBoot(t *testing.T) (*testenv.TestEnv, *chat.TestHarness, *testenv.Chat) {
 	t.Helper()
 
 	env := testenv.NewTestEnv(t)
@@ -29,7 +29,7 @@ func gateBoot(t *testing.T) (*testenv.TestEnv, *remoteagent.TestHarness, *testen
 		Enabled:        true,
 		RequirePairing: &rp,
 	}
-	harness := remoteagent.BootForTest(t, env.Manager(), setting)
+	harness := chat.BootForTest(t, env.Manager(), setting)
 	require.NoError(t, env.Manager().Start(env.Context()))
 
 	alice := env.NewUser("alice")

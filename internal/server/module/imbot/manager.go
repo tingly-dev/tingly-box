@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/remote/adapter"
 	"github.com/tingly-dev/tingly-box/remote/bot"
-	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
+	"github.com/tingly-dev/tingly-box/remote/chat"
 
 	"github.com/tingly-dev/tingly-box/remote/channel"
 
@@ -48,7 +48,7 @@ type BotStatus struct {
 // interaction API would then find "bot not running" for a bot that was, in
 // fact, running). channelRegistry may be nil (e.g. swagger doc generation,
 // which never drives real chats).
-func NewBotManager(ctx context.Context, cfg *config.Config, channelRegistry *channel.Registry, consumerOpts ...remoteagent.ConsumerOption) (*BotManager, error) {
+func NewBotManager(ctx context.Context, cfg *config.Config, channelRegistry *channel.Registry, consumerOpts ...chat.ConsumerOption) (*BotManager, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
@@ -83,7 +83,7 @@ func NewBotManager(ctx context.Context, cfg *config.Config, channelRegistry *cha
 	// remote/adapter). The raw *db.ImBotSettingsStore is kept for
 	// host-side reads that still want db.Settings.
 	settingsStore := adapter.NewSettingsStore(store)
-	remoteAgentConsumer := remoteagent.NewConsumer(settingsStore, consumerOpts...)
+	remoteAgentConsumer := chat.NewConsumer(settingsStore, consumerOpts...)
 
 	// Create internal bot manager
 	internalMgr := bot.NewManager(settingsStore, notifyConsumer, remoteAgentConsumer)

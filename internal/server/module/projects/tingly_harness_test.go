@@ -28,7 +28,7 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/adapter"
 	"github.com/tingly-dev/tingly-box/remote/bot"
-	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
+	"github.com/tingly-dev/tingly-box/remote/chat"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
@@ -139,7 +139,7 @@ for line in sys.stdin:
 	}
 	stores.BotAccess().SetTransportFactsSource(harnessTransportFacts{registry: reg})
 	settings := adapter.NewSettingsStore(stores.ImBotSettings())
-	manager := bot.NewManager(settings, bot.NewNotifyConsumer(), remoteagent.NewConsumer(settings, remoteagent.WithProjectRouter(bridge)))
+	manager := bot.NewManager(settings, bot.NewNotifyConsumer(), chat.NewConsumer(settings, chat.WithProjectRouter(bridge)))
 	manager.SetChatStore(stores.RemoteChats())
 	manager.SetAccessStore(stores.BotAccess())
 	manager.SetChannelRegistry(reg)

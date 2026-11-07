@@ -1,4 +1,4 @@
-package remoteagent
+package chat
 
 import (
 	"context"
@@ -29,7 +29,7 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	// (including promptReplyRouter), and is what stops a disabled chat with a
 	// pending permission prompt from being answered in managed mode. This
 	// copy is the host-less path (the test harness — see
-	// remoteagent.BootForTest), which never enters manager.go's dispatch
+	// chat.BootForTest), which never enters manager.go's dispatch
 	// chain. Two paths into the handler → two gates; see the spec
 	// (bot-chat-lifecycle-collapse §3b).
 	if h.chatStore.IsChatDisabled(chatID) {

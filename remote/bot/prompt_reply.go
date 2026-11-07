@@ -17,11 +17,11 @@ import (
 // promptReplyRouter — gets a chance to claim it. It must run first: a
 // disabled chat with an outstanding permission prompt would otherwise have
 // its "perm" callback or text answer claimed by promptReplyRouter, which sits
-// ahead of the per-consumer blocklist check in remoteagent.HandleMessage and
+// ahead of the per-consumer blocklist check in chat.HandleMessage and
 // would generate exactly the outbound reply disable exists to suppress.
 // Silently: replying would give a blocked party a probe signal.
 //
-// This is the managed-mode gate. remoteagent.HandleMessage keeps its own copy
+// This is the managed-mode gate. chat.HandleMessage keeps its own copy
 // of the IsChatDisabled check for the standalone / host-less path (CLI + test
 // harness), which never enters this dispatch chain — two paths into the
 // handler, two gates. See the spec (bot-chat-lifecycle-collapse §3b).

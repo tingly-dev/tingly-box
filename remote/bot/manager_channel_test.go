@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	bot2 "github.com/tingly-dev/tingly-box/remote/bot"
-	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
+	"github.com/tingly-dev/tingly-box/remote/chat"
 
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
@@ -45,7 +45,7 @@ func newChannelTestManager(t *testing.T, uuid, scenarios string) (*bot2.Manager,
 	registry := channel.NewRegistry()
 	m := bot2.NewManager(store,
 		bot2.NewNotifyConsumer(),
-		remoteagent.NewConsumer(store))
+		chat.NewConsumer(store))
 	sm, err := db.NewStoreManager(t.TempDir())
 	if err != nil {
 		t.Fatalf("open store manager: %v", err)
