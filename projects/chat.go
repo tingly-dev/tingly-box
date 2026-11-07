@@ -1,5 +1,12 @@
 package projects
 
+import (
+	"errors"
+
+	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/projects/internal/project"
+)
+
 // ChatRef identifies the IM chat an inbound call comes from, and the bot it
 // came through.
 type ChatRef struct {
@@ -56,41 +63,112 @@ type Chat interface {
 
 var _ Chat = (*App)(nil)
 
+// ProjectChoice is a non-archived project offered to an IM chat.
+type ProjectChoice struct {
+	ID   string
+	Name string
+}
+
+// Post hands a message typed in an IM chat to the thread the chat is bound to
+// (a project's main thread is its coordinator), as Send does; replies come
+// back through the host's ChannelSink. handled is false when the chat is not
+// bound. files, which the host saved, go with the message as its attachments;
+// the host may remove them once this returns.
 func (a *App) Post(ref ChatRef, text string, files []ChannelFile) (bool, error) {
-	return a.PostFromChannel(ref.Platform, ref.ChatID, text, files)
+	return a.svc.PostFromChannel(ref.Platform, ref.ChatID, text, files)
 }
 
+// Command runs a chat command for a bound IM chat; handled is false when the
+// chat has no binding or the command is not one of the session commands.
 func (a *App) Command(ref ChatRef, name, arg string) (bool, string, error) {
-	return a.ChannelCommand(ref.Platform, ref.ChatID, name, arg)
+	return a.svc.ChannelCommand(ref.Platform, ref.ChatID, name, arg)
 }
 
+// Answer answers a thread's approval or question with the button an IM chat
+// pressed (see ChannelPrompter). reply, when set, is what to tell the chat;
+// otherwise the prompt is restated with the outcome.
 func (a *App) Answer(ref ChatRef, threadID, requestID, value string) (string, error) {
-	return a.AnswerFromChannel(ref.Platform, ref.ChatID, threadID, requestID, value)
+	return a.svc.AnswerFromChannel(ref.Platform, ref.ChatID, threadID, requestID, value)
 }
 
+// Place says where a chat is: on a project, or on a folder (the one it is on,
+// or has picked for its next session).
 func (a *App) Place(ref ChatRef) (ChatPlace, error) {
-	if !a.ChannelBound(ref.Platform, ref.ChatID) {
-		return ChatPlace{}, nil
+	b, err := a.store.GetChannelBinding(ref.Platform, ref.ChatID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return ChatPlace{}, nil
+		}
+		return ChatPlace{}, err
 	}
-	folder, err := a.ChannelFolder(ref.Platform, ref.ChatID)
+	place := ChatPlace{Bound: true}
+	if b.Folder != "" {
+		place.Folder = b.Folder
+		return place, nil
+	}
+	if b.ThreadID == "" {
+		return place, nil
+	}
+	t, err := a.store.GetThread(b.ThreadID)
 	if err != nil {
 		return ChatPlace{}, err
 	}
-	projectID, err := a.ChannelProject(ref.Platform, ref.ChatID)
+	p, err := a.store.GetProject(t.ProjectID)
 	if err != nil {
 		return ChatPlace{}, err
 	}
-	return ChatPlace{Bound: true, Folder: folder, ProjectID: projectID}, nil
+	switch p.Type {
+	case db.ProjectFolder:
+		place.Folder = p.Path
+	case db.ProjectProject:
+		place.ProjectID = p.ID
+	}
+	return place, nil
 }
 
+// ToFolder moves a chat to a folder on this machine; the chat's first folder
+// is how a chat gets a place at all (ifNew).
 func (a *App) ToFolder(ref ChatRef, folder string, ifNew bool) error {
-	return a.ChannelToFolder(ref.Platform, ref.ChatID, "", folder, ref.Profile, ifNew, ref.BotUUID)
+	return a.svc.ChannelToFolder(ref.Platform, ref.ChatID, "", folder, ref.Profile, ifNew, ref.BotUUID)
 }
 
+// ToProject moves a chat to a project's coordinator.
 func (a *App) ToProject(ref ChatRef, projectID string) error {
-	return a.ChannelToProject(ref.Platform, ref.ChatID, ref.BotUUID, projectID)
+	_, err := a.svc.BindChannel(ref.Platform, ref.ChatID, "", "", projectID, ref.BotUUID)
+	return err
 }
 
-func (a *App) Folders() ([]string, error) { return a.RegisteredFolders() }
+// Folders lists existing, non-archived working folders. Projects'
+// repositories are not independent folder registrations.
+func (a *App) Folders() ([]string, error) {
+	projects, err := a.store.ListProjects("", false)
+	if err != nil {
+		return nil, err
+	}
+	folders := make([]string, 0)
+	for _, p := range projects {
+		if p.Type != db.ProjectFolder {
+			continue
+		}
+		path, err := project.CleanFolder(p.Path)
+		if err == nil {
+			folders = append(folders, path)
+		}
+	}
+	return folders, nil
+}
 
-func (a *App) Projects() ([]ProjectChoice, error) { return a.RegisteredProjects() }
+// Projects lists project coordinators, excluding working folders.
+func (a *App) Projects() ([]ProjectChoice, error) {
+	projects, err := a.store.ListProjects("", false)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ProjectChoice, 0)
+	for _, p := range projects {
+		if p.Type == db.ProjectProject {
+			out = append(out, ProjectChoice{ID: p.ID, Name: p.Name})
+		}
+	}
+	return out, nil
+}
