@@ -19,19 +19,7 @@ func TestCoordinatorMCPValidatesAndScopesTools(t *testing.T) {
 	svc := &Service{Store: store, Layout: Layout{Root: t.TempDir()}, Hub: NewHub()}
 	coord := &Coordinator{store: store, layout: svc.Layout, hub: svc.Hub}
 	svc.Coordinator = coord
-	turn := &coordinatorToolTurn{}
-	turn.begin(p, true)
-	tools := &sessionToolsMCP{service: svc}
-	server, err := tools.buildServer(p.MainThreadID, ScopeCoordinator, turn, tools.tools(p.MainThreadID))
-	require.NoError(t, err)
-	st, ct := mcp.NewInMemoryTransports()
-	ss, err := server.Connect(ctx, st, nil)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = ss.Close() })
-	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
-	cs, err := client.Connect(ctx, ct, nil)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = cs.Close() })
+	cs, _ := connectTools(t, svc, p.MainThreadID, true)
 	listed, err := cs.ListTools(ctx, nil)
 	require.NoError(t, err)
 	require.Len(t, listed.Tools, len(coord.coordinatorTools())+3, "coordinator tools, two shared-file readers and send_file")

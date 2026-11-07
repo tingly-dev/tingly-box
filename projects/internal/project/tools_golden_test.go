@@ -108,19 +108,7 @@ func TestCoordinatorToolOutputsGolden(t *testing.T) {
 		<-turn.Ctx.Done()
 		return turn.Ctx.Err()
 	}, nil)
-	tools := &sessionToolsMCP{service: svc}
-	t.Cleanup(func() { _ = tools.close(context.Background()) })
-	turn := &coordinatorToolTurn{}
-	turn.begin(f.project, false)
-	srv, err := tools.buildServer(f.project.MainThreadID, ScopeCoordinator, turn, tools.tools(f.project.MainThreadID))
-	require.NoError(t, err)
-	st, ct := mcp.NewInMemoryTransports()
-	ss, err := srv.Connect(context.Background(), st, nil)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = ss.Close() })
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil).Connect(context.Background(), ct, nil)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = cs.Close() })
+	cs, turn := connectTools(t, svc, f.project.MainThreadID, false)
 
 	g := &goldenIDs{ids: map[string]string{}, roots: map[string]string{
 		svc.Layout.Root: "<data>", f.repo: "<repo>",

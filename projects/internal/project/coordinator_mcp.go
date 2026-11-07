@@ -72,11 +72,13 @@ func (t *coordinatorToolTurn) run(store *db.Store, tool string, editsProject boo
 		return textResult("A message from the user needs a reply. Answer it, or start or message a thread.", true), nil
 	}
 	res, err := fn(current)
-	if editsProject && err == nil && res != nil && !res.IsError {
-		t.snapshot = cloneProject(current)
-	}
-	if tool == toolNoUpdate && err == nil && res != nil && !res.IsError {
-		t.quiet.Store(true)
+	if ok := err == nil && res != nil && !res.IsError; ok {
+		if editsProject {
+			t.snapshot = cloneProject(current)
+		}
+		if tool == toolNoUpdate {
+			t.quiet.Store(true)
+		}
 	}
 	return res, err
 }

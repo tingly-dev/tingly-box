@@ -525,22 +525,9 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 	if err != nil {
 		return nil, err
 	}
-	base, branch := "", strings.TrimSpace(spec.Branch)
-	if b := strings.TrimSpace(spec.Base); b != "" || branch != "" {
-		if repo == nil || p.DisableWorktree {
-			return nil, ErrNoOwnBranch
-		}
-		if b != "" {
-			if !BranchExists(ctx, repo.Path, b) {
-				return nil, fmt.Errorf("base %q is not a local branch of %s", b, repo.Path)
-			}
-			base = b
-		}
-		if branch != "" {
-			if err := checkNewBranch(ctx, repo.Path, branch); err != nil {
-				return nil, err
-			}
-		}
+	base, branch, err := chooseBranch(ctx, p, repo, spec)
+	if err != nil {
+		return nil, err
 	}
 	if err := m.store.CreateThread(t); err != nil {
 		return nil, err
@@ -598,6 +585,27 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 	}
 	m.enqueue(t.ID, queued{text: t.Task, src: src})
 	return t, nil
+}
+
+// chooseBranch checks the base and branch name a caller asked for, before
+// anything is created. Both empty means the defaults.
+func chooseBranch(ctx context.Context, p *db.Project, repo *db.Repo, spec StartSpec) (base, branch string, err error) {
+	base, branch = strings.TrimSpace(spec.Base), strings.TrimSpace(spec.Branch)
+	if base == "" && branch == "" {
+		return "", "", nil
+	}
+	if repo == nil || p.DisableWorktree {
+		return "", "", ErrNoOwnBranch
+	}
+	if base != "" && !BranchExists(ctx, repo.Path, base) {
+		return "", "", fmt.Errorf("base %q is not a local branch of %s", base, repo.Path)
+	}
+	if branch != "" {
+		if err := checkNewBranch(ctx, repo.Path, branch); err != nil {
+			return "", "", err
+		}
+	}
+	return base, branch, nil
 }
 
 func pickRepo(p *db.Project, want string) (*db.Repo, error) {
@@ -1199,23 +1207,11 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 	}
 }
 
-// StopResult says what a Stop did.
-type StopResult struct {
-	// Interrupted is true when a turn was running or waiting for a slot.
-	Interrupted bool
-	// Dropped is how many queued messages the stop discarded.
-	Dropped int
-}
-
 // Stop interrupts a thread's running turn and drops its queued messages.
 // Its resident process, and the background work in it, survive. by is who
 // asked, for the note in the thread; stopping a thread with nothing running
 // does nothing.
-func (m *Threads) Stop(threadID string, by Source) StopResult {
-	done, res := m.stop(threadID, by)
-	res.Interrupted = res.Interrupted || done != nil
-	return res
-}
+func (m *Threads) Stop(threadID string, by Source) { m.stop(threadID, by) }
 
 // Retry re-runs a failed turn without adding anything to the transcript.
 // A turn that crashed mid-turn (with staged output) resumes the interrupted
@@ -1253,11 +1249,9 @@ func (m *Threads) Retry(ctx context.Context, threadID string) (*db.Thread, error
 
 // stop is Stop, returning a channel closed once the stopped turn has
 // exited (nil when no turn was running).
-func (m *Threads) stop(threadID string, by Source) (<-chan struct{}, StopResult) {
-	var res StopResult
+func (m *Threads) stop(threadID string, by Source) <-chan struct{} {
 	m.mu.Lock()
 	if a, ok := m.active[threadID]; ok {
-		res.Interrupted, res.Dropped = true, len(a.queue)
 		a.stopped, a.stoppedBy = true, by
 		m.dropHeld(threadID, a.queue)
 		a.queue = nil
@@ -1267,7 +1261,7 @@ func (m *Threads) stop(threadID string, by Source) (<-chan struct{}, StopResult)
 	}
 	m.mu.Unlock()
 	done, _ := m.engine.Stop(m.sessionOf(threadID))
-	return done, res
+	return done
 }
 
 // Running reports whether a thread has a turn in flight or waiting.
@@ -1303,7 +1297,7 @@ func (m *Threads) Respond(threadID, requestID string, ans Answer) error {
 
 // Resolve marks a thread done (it stays readable and can be reopened).
 func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
-	if done, _ := m.stop(threadID, Source{}); done != nil {
+	if done := m.stop(threadID, Source{}); done != nil {
 		// Let the turn take its interrupt before its process is closed.
 		select {
 		case <-done:
@@ -1326,7 +1320,7 @@ func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
 // ArchiveSession stores an independent archive flag. A stopped waiting or
 // working session becomes idle: there is no longer a live request to answer.
 func (m *Threads) ArchiveSession(threadID string) (*db.Thread, error) {
-	if done, _ := m.stop(threadID, Source{}); done != nil {
+	if done := m.stop(threadID, Source{}); done != nil {
 		select {
 		case <-done:
 		case <-time.After(agentboot.SessionCloseTimeout):

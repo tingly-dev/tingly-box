@@ -24,7 +24,7 @@ func systemNotes(t *testing.T, store *db.Store, threadID string) []string {
 	return out
 }
 
-func TestStopNamesWhoStoppedAndCountsDroppedMessages(t *testing.T) {
+func TestStopNamesWhoStoppedAndDropsQueuedMessages(t *testing.T) {
 	for _, c := range []struct {
 		by   Source
 		want string
@@ -46,9 +46,8 @@ func TestStopNamesWhoStoppedAndCountsDroppedMessages(t *testing.T) {
 			_, err = f.threads.SendWith(context.Background(), th.ID, "later", nil, Source{}, SendQueue)
 			require.NoError(t, err)
 
-			res := f.threads.Stop(th.ID, c.by)
-			assert.True(t, res.Interrupted)
-			assert.Equal(t, 1, res.Dropped)
+			require.Len(t, chips(t, f, th.ID, "held"), 1)
+			f.threads.Stop(th.ID, c.by)
 			waitStatus(t, f.store, th.ID, db.ThreadIdle)
 			assert.Eventually(t, func() bool {
 				for _, n := range systemNotes(t, f.store, th.ID) {
@@ -59,9 +58,10 @@ func TestStopNamesWhoStoppedAndCountsDroppedMessages(t *testing.T) {
 				return false
 			}, 5*time.Second, 10*time.Millisecond, "notes: %v", systemNotes(t, f.store, th.ID))
 
-			again := f.threads.Stop(th.ID, c.by)
-			assert.False(t, again.Interrupted, "stopping a thread with nothing running does nothing")
-			assert.Zero(t, again.Dropped)
+			assert.Len(t, chips(t, f, th.ID, "removed"), 1, "the queued message was dropped")
+
+			f.threads.Stop(th.ID, c.by)
+			assert.False(t, f.threads.Running(th.ID), "stopping a thread with nothing running does nothing")
 		})
 	}
 }
