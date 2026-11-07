@@ -21,7 +21,7 @@ type (
 	ProjectChoice = agent.ProjectChoice
 	// Chat is how an IM host hands a chat to Projects: its messages, commands and
 	// answers go in, and it is told where the chat is. The outbound half
-	// (replies, reports, approvals) is the optional ChannelSink family.
+	// (replies, reports, approvals) is the agent.Outbox the host offers (OutboxHost).
 	Chat = agent.Chat
 )
 
@@ -29,7 +29,7 @@ var _ Chat = (*App)(nil)
 
 // Post hands a message typed in an IM chat to the thread the chat is bound to
 // (a project's main thread is its coordinator), as Send does; replies come
-// back through the host's ChannelSink. handled is false when the chat is not
+// back through the host's outbox. handled is false when the chat is not
 // bound. files, which the host saved, go with the message as its attachments;
 // the host may remove them once this returns.
 func (a *App) Post(ref ChatRef, text string, files []ChannelFile) (bool, error) {
@@ -43,7 +43,7 @@ func (a *App) Command(ref ChatRef, name, arg string) (bool, string, error) {
 }
 
 // Answer answers a thread's approval or question with the button an IM chat
-// pressed (see ChannelPrompter). reply, when set, is what to tell the chat;
+// pressed (see agent.Prompt). reply, when set, is what to tell the chat;
 // otherwise the prompt is restated with the outcome.
 func (a *App) Answer(ref ChatRef, threadID, requestID, value string) (string, error) {
 	return a.svc.AnswerFromChannel(ref.Platform, ref.ChatID, threadID, requestID, value)

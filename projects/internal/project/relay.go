@@ -10,6 +10,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 )
 
 // Relay sends a thread's finished replies and folded thread reports to the
@@ -23,8 +24,7 @@ import (
 // on /verbose also hears each step of its own thread's turns (Step).
 type Relay struct {
 	store       *db.Store
-	sink        ChannelSink
-	prompter    ChannelPrompter
+	sink        agent.Outbox
 	OnFileError func(threadID, platform, chatID, name string, err error)
 
 	mu      sync.Mutex
@@ -66,7 +66,7 @@ type relayJob struct {
 	// replying. prompt, when set, is that request with buttons, for the
 	// chats that can show them.
 	request *pendingRequest
-	prompt  *ChannelPrompt
+	prompt  *agent.Prompt
 	// verbose sends it only to the chats that asked for each step.
 	verbose bool
 	// quote, set on a decision card, names the question a chat that got it as
@@ -86,9 +86,6 @@ func (r *Relay) File(t db.Thread, path string, a Attachment, caption string) {
 	if r == nil || r.sink == nil {
 		return
 	}
-	if _, ok := r.sink.(ChannelFileSender); !ok {
-		return
-	}
 	lineage, err := r.store.Lineage(t.ID)
 	if err != nil {
 		return
@@ -101,9 +98,8 @@ func (r *Relay) File(t db.Thread, path string, a Attachment, caption string) {
 }
 
 // NewRelay builds the relay; sink may be nil, which makes every call a no-op.
-func NewRelay(store *db.Store, sink ChannelSink) *Relay {
-	prompter, _ := sink.(ChannelPrompter)
-	return &Relay{store: store, sink: sink, prompter: prompter, sent: map[string][]sentPrompt{}, awaiting: map[string][]pendingRequest{}, steps: map[string]string{}}
+func NewRelay(store *db.Store, sink agent.Outbox) *Relay {
+	return &Relay{store: store, sink: sink, sent: map[string][]sentPrompt{}, awaiting: map[string][]pendingRequest{}, steps: map[string]string{}}
 }
 
 // Message relays a finished event of a main thread. User events, which the
@@ -141,20 +137,20 @@ func (r *Relay) decision(e db.ThreadEvent) {
 	if json.Unmarshal([]byte(e.Payload), &d) != nil || d.Chosen != nil || len(d.Options) == 0 {
 		return
 	}
-	choices := make([]ChannelChoice, len(d.Options))
+	choices := make([]agent.Choice, len(d.Options))
 	for i, o := range d.Options {
 		label := o.Label
 		if i == d.Recommended {
 			label += " (recommended)"
 		}
-		choices[i] = ChannelChoice{Value: choiceValue(i), Label: label}
+		choices[i] = agent.Choice{Value: choiceValue(i), Label: label}
 	}
 	r.enqueueJob(relayJob{
 		threadIDs: []string{e.ThreadID},
 		text:      d.chatText() + "\n" + d.replyHint(),
 		quote:     "Re: " + oneLine(d.Question),
 		request:   &pendingRequest{threadID: e.ThreadID, requestID: e.ID},
-		prompt:    &ChannelPrompt{ThreadID: e.ThreadID, RequestID: e.ID, Text: d.chatText(), Choices: choices},
+		prompt:    &agent.Prompt{ThreadID: e.ThreadID, RequestID: e.ID, Text: d.chatText(), Choices: choices},
 	})
 }
 
@@ -254,7 +250,7 @@ func (r *Relay) NeedsUser(t db.Thread, request db.ThreadEvent) {
 	job.text = requestText(request, p)
 	job.request = &pendingRequest{threadID: t.ID, requestID: p.RequestID}
 	if request.Kind == db.EvApproval {
-		job.prompt = &ChannelPrompt{ThreadID: t.ID, RequestID: p.RequestID, Text: approvalBody(request, p), Choices: []ChannelChoice{
+		job.prompt = &agent.Prompt{ThreadID: t.ID, RequestID: p.RequestID, Text: approvalBody(request, p), Choices: []agent.Choice{
 			{Value: ChoiceAllow, Label: "Allow"},
 			{Value: ChoiceAllowThread, Label: allowThreadLabel(p.Tool)},
 			{Value: ChoiceDeny, Label: "Deny"},
@@ -285,9 +281,7 @@ func (r *Relay) Settled(t db.Thread, request db.ThreadEvent) {
 		return
 	}
 	r.forget(p.RequestID)
-	if r.prompter != nil {
-		r.enqueueJob(relayJob{settle: p.RequestID, text: settledLine(p)})
-	}
+	r.enqueueJob(relayJob{settle: p.RequestID, text: settledLine(p)})
 }
 
 // awaitingAll returns every request a chat was asked that is not settled,
@@ -306,9 +300,9 @@ func (r *Relay) tell(botUUID, platform, chatID, text string) {
 	if r == nil || r.sink == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(withChannelBot(context.Background(), botUUID), relaySendTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), relaySendTimeout)
 	defer cancel()
-	if err := r.sink.SendChannelText(ctx, platform, chatID, text); err != nil {
+	if err := r.sink.Text(ctx, agent.ChatRef{Platform: platform, ChatID: chatID, BotUUID: botUUID}, text); err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{"platform": platform, "chat_id": chatID}).Warn("projects: send to IM chat")
 	}
 }
@@ -481,9 +475,10 @@ func (r *Relay) deliver(job relayJob) {
 	}
 	for _, b := range bindings {
 		text := job.text + "\n\n[" + tag + "]"
-		ctx, cancel := context.WithTimeout(withChannelBot(context.Background(), b.BotUUID), relaySendTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), relaySendTimeout)
+		to := agent.ChatRef{Platform: b.Platform, ChatID: b.ChatID, BotUUID: b.BotUUID}
 		if job.file != nil {
-			err := r.sink.(ChannelFileSender).SendChannelFile(ctx, b.Platform, b.ChatID, job.file.path, job.file.name, job.file.mediaType, text)
+			err := r.sink.File(ctx, to, agent.OutFile{Path: job.file.path, Name: job.file.name, MediaType: job.file.mediaType, Caption: text})
 			if err != nil {
 				logrus.WithError(err).WithFields(logrus.Fields{"platform": b.Platform, "chat_id": b.ChatID}).Warn("projects: send file to IM chat")
 				if r.OnFileError != nil {
@@ -497,7 +492,7 @@ func (r *Relay) deliver(job relayJob) {
 			r.await(b, *job.request)
 		}
 		if job.prompt == nil || !r.sendPrompt(ctx, b, "["+tag+"] ", *job.prompt) {
-			if err := r.sink.SendChannelText(ctx, b.Platform, b.ChatID, text); err != nil {
+			if err := r.sink.Text(ctx, to, text); err != nil {
 				logrus.WithError(err).WithFields(logrus.Fields{"platform": b.Platform, "chat_id": b.ChatID, "thread_id": b.ThreadID}).Warn("projects: send to IM chat")
 			} else if job.quote != "" && job.request != nil {
 				r.mu.Lock()
@@ -531,14 +526,11 @@ func (r *Relay) await(b db.ChannelBinding, q pendingRequest) {
 // sendPrompt sends a request's buttons to a chat and remembers the message
 // for restate. It reports false when the chat should get the request as text
 // instead: no prompter, or no buttons on its platform.
-func (r *Relay) sendPrompt(ctx context.Context, b db.ChannelBinding, prefix string, p ChannelPrompt) bool {
-	if r.prompter == nil {
-		return false
-	}
+func (r *Relay) sendPrompt(ctx context.Context, b db.ChannelBinding, prefix string, p agent.Prompt) bool {
 	p.Text = prefix + p.Text
-	ref, err := r.prompter.SendChannelPrompt(ctx, b.Platform, b.ChatID, p)
+	ref, err := r.sink.Prompt(ctx, agent.ChatRef{Platform: b.Platform, ChatID: b.ChatID, BotUUID: b.BotUUID}, p)
 	if err != nil {
-		if errors.Is(err, ErrNoButtons) {
+		if errors.Is(err, agent.ErrNoButtons) {
 			return false
 		}
 		// The chat is unreachable now; the text line would fail as well.
@@ -570,7 +562,7 @@ func (r *Relay) restate(requestID, outcome string) {
 			cancel()
 			continue
 		}
-		if err := r.prompter.RestateChannelPrompt(ctx, sp.platform, sp.chatID, sp.ref, sp.text+"\n\n"+outcome); err != nil {
+		if err := r.sink.Restate(ctx, agent.ChatRef{Platform: sp.platform, ChatID: sp.chatID}, sp.ref, sp.text+"\n\n"+outcome); err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{"platform": sp.platform, "chat_id": sp.chatID}).Warn("projects: restate a prompt in IM chat")
 		}
 		cancel()

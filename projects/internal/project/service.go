@@ -14,6 +14,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 )
 
 // Host is what the runtime needs from whoever runs it: the models the project
@@ -57,7 +58,10 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 	coord := NewCoordinator(store, layout, hub, threads)
 	// The chats bound to a project hear the coordinator when the host can
 	// reach IM (Tingly Box); the standalone app has no sink.
-	sink, _ := host.(ChannelSink)
+	var sink agent.Outbox
+	if h, ok := host.(OutboxHost); ok {
+		sink = h.Outbox()
+	}
 	relay := NewRelay(store, sink)
 	relay.OnFileError = func(threadID, platform, chatID, name string, err error) {
 		t, getErr := store.GetThread(threadID)

@@ -16,6 +16,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
 	"github.com/tingly-dev/tingly-box/projects/internal/coordtest"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 )
 
 // sentText is one message the fake sink was asked to deliver.
@@ -30,14 +31,25 @@ type fakeSink struct {
 
 func newFakeSink() *fakeSink { return &fakeSink{ch: make(chan sentText, 32)} }
 
-func (f *fakeSink) SendChannelText(_ context.Context, platform, chatID, text string) error {
-	m := sentText{platform, chatID, text}
+// fakeSink is a bare outbox: it records text and cannot show buttons.
+var _ agent.Outbox = (*fakeSink)(nil)
+
+func (f *fakeSink) Text(_ context.Context, to agent.ChatRef, text string) error {
+	m := sentText{to.Platform, to.ChatID, text}
 	f.mu.Lock()
 	f.sent = append(f.sent, m)
 	f.mu.Unlock()
 	f.ch <- m
 	return f.err
 }
+
+func (f *fakeSink) File(context.Context, agent.ChatRef, agent.OutFile) error { return nil }
+
+func (f *fakeSink) Prompt(context.Context, agent.ChatRef, agent.Prompt) (string, error) {
+	return "", agent.ErrNoButtons
+}
+
+func (f *fakeSink) Restate(context.Context, agent.ChatRef, string, string) error { return nil }
 
 func (f *fakeSink) next(t *testing.T) sentText {
 	t.Helper()
@@ -598,10 +610,13 @@ func TestMovingAChatToAnotherFolderStartsThereNext(t *testing.T) {
 	waitQuiet(t, f, svc, th.ID)
 }
 
-type botAwareSink struct{ bots chan string }
+type botAwareSink struct {
+	agent.Outbox
+	bots chan string
+}
 
-func (s botAwareSink) SendChannelText(ctx context.Context, _, _, _ string) error {
-	s.bots <- ChannelBot(ctx)
+func (s botAwareSink) Text(_ context.Context, to agent.ChatRef, _ string) error {
+	s.bots <- to.BotUUID
 	return nil
 }
 

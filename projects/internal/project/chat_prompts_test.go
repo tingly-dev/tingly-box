@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 )
 
 // promptSink is a fakeSink that can also show buttons, except in the chats
@@ -24,26 +25,26 @@ type promptSink struct {
 
 type sentPromptMsg struct {
 	chatID string
-	p      ChannelPrompt
+	p      agent.Prompt
 }
 
 func newPromptSink() *promptSink {
 	return &promptSink{fakeSink: newFakeSink(), plain: map[string]bool{}, prompts: make(chan sentPromptMsg, 32), restated: make(chan sentText, 32)}
 }
 
-func (f *promptSink) SendChannelPrompt(_ context.Context, platform, chatID string, p ChannelPrompt) (string, error) {
-	if f.plain[chatID] {
-		return "", ErrNoButtons
+func (f *promptSink) Prompt(_ context.Context, to agent.ChatRef, p agent.Prompt) (string, error) {
+	if f.plain[to.ChatID] {
+		return "", agent.ErrNoButtons
 	}
-	f.prompts <- sentPromptMsg{chatID, p}
-	return "msg-" + chatID, nil
+	f.prompts <- sentPromptMsg{to.ChatID, p}
+	return "msg-" + to.ChatID, nil
 }
 
-func (f *promptSink) RestateChannelPrompt(_ context.Context, platform, chatID, ref, text string) error {
-	if ref != "msg-"+chatID {
+func (f *promptSink) Restate(_ context.Context, to agent.ChatRef, ref, text string) error {
+	if ref != "msg-"+to.ChatID {
 		return nil
 	}
-	f.restated <- sentText{platform, chatID, text}
+	f.restated <- sentText{to.Platform, to.ChatID, text}
 	return nil
 }
 
@@ -114,7 +115,7 @@ func TestApprovalIsAnsweredFromAChat(t *testing.T) {
 	f, svc, sink := promptFixture(t, approveScript)
 	th := startDeploy(t, f, svc)
 
-	got := map[string]ChannelPrompt{}
+	got := map[string]agent.Prompt{}
 	for range 2 {
 		m := sink.nextPrompt(t)
 		got[m.chatID] = m.p

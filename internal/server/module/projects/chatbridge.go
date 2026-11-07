@@ -196,44 +196,8 @@ func (b *ChatBridge) Answer(ref agent.ChatRef, threadID, requestID, value string
 	return app.Answer(ref, threadID, requestID, value)
 }
 
-var (
-	_ chat.ProjectRouter          = (*ChatBridge)(nil)
-	_ projectsapp.ChannelSink     = (*ChatBridge)(nil)
-	_ projectsapp.ChannelPrompter = (*ChatBridge)(nil)
-)
+var _ chat.ProjectRouter = (*ChatBridge)(nil)
 
-// ErrNoChannel means no running bot can reach the chat.
-var ErrNoChannel = agent.ErrNoChannel
-
-func to(ctx context.Context, platform, chatID string) agent.ChatRef {
-	return agent.ChatRef{Platform: platform, ChatID: chatID, BotUUID: projectsapp.ChannelBot(ctx)}
-}
-
-// SendChannelText implements projectsapp.ChannelSink.
-func (b *ChatBridge) SendChannelText(ctx context.Context, platform, chatID, text string) error {
-	return b.out.Text(ctx, to(ctx, platform, chatID), text)
-}
-
-// SendChannelFile delivers a published file through the bound bot.
-func (b *ChatBridge) SendChannelFile(ctx context.Context, platform, chatID, path, name, mediaType, caption string) error {
-	return b.out.File(ctx, to(ctx, platform, chatID), agent.OutFile{Path: path, Name: name, MediaType: mediaType, Caption: caption})
-}
-
-// SendChannelPrompt implements projectsapp.ChannelPrompter. The returned ref
-// names the bot that sent it, so the prompt is restated through the same one.
-func (b *ChatBridge) SendChannelPrompt(ctx context.Context, platform, chatID string, p projectsapp.ChannelPrompt) (string, error) {
-	choices := make([]agent.Choice, len(p.Choices))
-	for i, c := range p.Choices {
-		choices[i] = agent.Choice{Value: c.Value, Label: c.Label}
-	}
-	ref, err := b.out.Prompt(ctx, to(ctx, platform, chatID), agent.Prompt{ThreadID: p.ThreadID, RequestID: p.RequestID, Text: p.Text, Choices: choices})
-	if errors.Is(err, agent.ErrNoButtons) {
-		return "", projectsapp.ErrNoButtons
-	}
-	return ref, err
-}
-
-// RestateChannelPrompt implements projectsapp.ChannelPrompter.
-func (b *ChatBridge) RestateChannelPrompt(ctx context.Context, platform, chatID, ref, text string) error {
-	return b.out.Restate(ctx, to(ctx, platform, chatID), ref, text)
-}
+// Outbox is how Projects reaches the bridge's chats: Remote's outbox, which
+// remembers the bot each chat wrote through (see Post, Command, Answer).
+func (b *ChatBridge) Outbox() agent.Outbox { return b.out }

@@ -2,7 +2,6 @@ package projects
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -24,15 +23,13 @@ import (
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
-// echoHost sends chat text through the bridge, like Host does.
+// echoHost sends chat text through the bridge's outbox, like Host does.
 type echoHost struct {
 	nopHost
 	bridge *ChatBridge
 }
 
-func (h echoHost) SendChannelText(ctx context.Context, platform, chatID, text string) error {
-	return h.bridge.SendChannelText(ctx, platform, chatID, text)
-}
+func (h echoHost) Outbox() agent.Outbox { return h.bridge.Outbox() }
 
 // lastEvent is the body of the last <event> envelope in a coordinator prompt.
 var lastEvent = regexp.MustCompile(`(?s)<event[^>]*>\n(.*?)\n</event>`)

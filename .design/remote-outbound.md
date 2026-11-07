@@ -4,7 +4,7 @@ date: 2026-11-08
 
 # Remote outbound: one agent-facing port for "tell this chat"
 
-> Status: **proposal.** Stacks on [remote-layering.pencil.md](./remote-layering.pencil.md) (L1–L5 done). Goal
+> Status: **O1–O5 done** (see git log); behavior unchanged. Was: proposal. Stacks on [remote-layering.pencil.md](./remote-layering.pencil.md) (L1–L5 done). Goal
 > (YZ, 2026-11-08): unify the two outbound vocabularies if it gives cleaner decoupling and layering **with identical
 > behavior**; design first.
 
@@ -123,6 +123,14 @@ type Button struct{ Label string; Payload []string }   // moved from imchannel; 
 Tests that already cover most of this: the six bridge unit tests (move with the code), `channels_test.go`,
 `chat_prompts_test.go`, `decision_im_test.go` (Projects fakes), and the Tingly IM harness. Missing: a unit test for
 "file not supported" and for "restate through a stopped bot"; add before moving.
+
+## As built
+
+`agent.Outbox` (Text, File, Prompt, Restate) is implemented by `remote/outbox` over `channel.Channel` plus the optional
+`channel.FileSender`/`ActionSender`. Projects' `Relay` speaks to an `agent.Outbox` the host offers through the optional
+`OutboxHost.Outbox()`; its own `Channel*` family and the context-carried bot are gone (the bound bot rides in
+`ChatRef.BotUUID`). The host bridge keeps only the inbound side and owns one outbox, which also remembers the bot each
+chat wrote through. Open items below stayed at their defaults (`Outbox`, bot in `ChatRef`, Flow A untouched).
 
 ## Phases (one reviewable commit or small group each, behavior unchanged)
 
