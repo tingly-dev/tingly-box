@@ -4,7 +4,7 @@ date: 2026-11-07
 
 # Remote refactor
 
-> Status: **R0 (legacy import) and R1 (package moves) done, one commit each; R2–R5 pending.** Proposal revised after review (R6 dropped; facade decision, R3 compat and R4 detail added).
+> Status: **R0, R1 and R2 done (one commit per step); R3–R5 pending.** Proposal revised after review (R6 dropped; facade decision, R3 compat and R4 detail added).
 > Evidence and overlap list: [`.research/remote-refactor.md`](../.research/remote-refactor.md) (S1–S7).
 > Builds on [remote-into-projects.md](./remote-into-projects.md) (chat execution already moved) and
 > [bot-arch.md](./bot-arch.md) / [bot-capability-access-control.md](./bot-capability-access-control.md).
