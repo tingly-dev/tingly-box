@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -57,6 +58,10 @@ type fakeRouter struct {
 	off, adopts bool
 	folders     []string
 	profiles    []string
+	// at is the folder each chat was moved to; registered is every folder
+	// Projects knows (moving a chat to a folder registers it, as OpenFolder does).
+	at         map[string]string
+	registered []string
 }
 
 func (f *fakeRouter) Enabled() bool {
@@ -73,6 +78,13 @@ func (f *fakeRouter) ToFolder(in projectsapp.ChatRef, folder string, ifNew bool)
 	}
 	f.folders = append(f.folders, fmt.Sprintf("%s:%v", folder, ifNew))
 	f.profiles = append(f.profiles, in.Profile)
+	if f.at == nil {
+		f.at = map[string]string{}
+	}
+	f.at[in.ChatID] = folder
+	if !slices.Contains(f.registered, folder) {
+		f.registered = append(f.registered, folder)
+	}
 	if f.adopts {
 		f.bound[in.ChatID] = true
 	}
@@ -82,10 +94,14 @@ func (f *fakeRouter) ToFolder(in projectsapp.ChatRef, folder string, ifNew bool)
 func (f *fakeRouter) Place(in projectsapp.ChatRef) (projectsapp.ChatPlace, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return projectsapp.ChatPlace{Bound: f.bound[in.ChatID]}, nil
+	return projectsapp.ChatPlace{Bound: f.bound[in.ChatID], Folder: f.at[in.ChatID]}, nil
 }
 
-func (f *fakeRouter) Folders() ([]string, error) { return nil, nil }
+func (f *fakeRouter) Folders() ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.registered), nil
+}
 
 func (f *fakeRouter) Projects() ([]projectsapp.ProjectChoice, error) { return nil, nil }
 
