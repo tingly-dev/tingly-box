@@ -3,7 +3,7 @@ package db
 import (
 	"testing"
 
-	"github.com/tingly-dev/tingly-box/remote/control/bot"
+	"github.com/tingly-dev/tingly-box/remote/bot"
 )
 
 func newChatStore(t *testing.T) *RemoteChatStore {
@@ -222,6 +222,6 @@ func TestContextTokenRoundTrip(t *testing.T) {
 // ---------- project-history MRU ----------
 //
 // PushProjectHistory is now a method on *bot.Chat; its unit tests moved to
-// remote/control/bot/chat_test.go alongside the type. BindProject (below in
+// remote/bot/chat_test.go alongside the type. BindProject (below in
 // remote_chat_store.go) is the store-level caller exercised by the import
 // and binding tests above.

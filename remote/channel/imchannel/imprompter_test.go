@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/remote/control/ask"
+	"github.com/tingly-dev/tingly-box/remote/ask"
 )
 
 // Test_AskUserQuestionKeyboard_AcceptsHeterogeneousShapes verifies that the

@@ -25,10 +25,11 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module"
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
 	"github.com/tingly-dev/tingly-box/remote/access"
+	"github.com/tingly-dev/tingly-box/remote/adapter"
+	"github.com/tingly-dev/tingly-box/remote/bot"
+	"github.com/tingly-dev/tingly-box/remote/bridge"
 	"github.com/tingly-dev/tingly-box/remote/channel"
-	"github.com/tingly-dev/tingly-box/remote/control/adapter"
-	"github.com/tingly-dev/tingly-box/remote/control/bot"
-	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
+	"github.com/tingly-dev/tingly-box/remote/chat"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
@@ -47,7 +48,7 @@ func (h harnessTransportFacts) TransportFacts(id string, _ access.CapabilityName
 // A scripted Claude CLI speaks stream-json; no external IM or model is needed.
 type tinglyProjectsHarness struct {
 	env               *testenv.TestEnv
-	bridge            *ChatBridge
+	bridge            *bridge.ChatBridge
 	stores            *hostdb.StoreManager
 	otherID, chosenID string
 	workdir           string
@@ -116,7 +117,7 @@ for line in sys.stdin:
 	env := testenv.NewTestEnv(t)
 	_, otherID := env.AddTinglyBot()
 	_, chosenID := env.AddTinglyBot()
-	bridge := NewChatBridge()
+	bridge := bridge.NewChatBridge()
 	// TB's real Projects host: the scripted CLI above is its coordinator and
 	// threads, launched with the host's Claude Code environment.
 	cfg := newConfig(t)
@@ -139,7 +140,7 @@ for line in sys.stdin:
 	}
 	stores.BotAccess().SetTransportFactsSource(harnessTransportFacts{registry: reg})
 	settings := adapter.NewSettingsStore(stores.ImBotSettings())
-	manager := bot.NewManager(settings, bot.NewNotifyConsumer(), remoteagent.NewConsumer(settings, remoteagent.WithProjectRouter(bridge)))
+	manager := bot.NewManager(settings, bot.NewNotifyConsumer(), chat.NewConsumer(settings, chat.WithProjectRouter(bridge)))
 	manager.SetChatStore(stores.RemoteChats())
 	manager.SetAccessStore(stores.BotAccess())
 	manager.SetChannelRegistry(reg)
@@ -204,9 +205,7 @@ func TestTinglySessionIMRoundTrip(t *testing.T) {
 	other := alice.OpenDM(otherID)
 	call("PUT", "/projects/channel-bindings", map[string]any{"platform": "tingly", "chat_id": selected.ChatID, "bot_uuid": chosenID, "thread_id": thread.ID}, nil)
 	// A stale remembered bot must not override the explicit web binding.
-	bridge.mu.Lock()
-	bridge.bots[chatKey("tingly", selected.ChatID)] = otherID
-	bridge.mu.Unlock()
+	bridge.RememberBot("tingly", selected.ChatID, otherID)
 	call("POST", "/threads/"+thread.ID+"/messages", map[string]any{"content": "from web"}, nil)
 	selected.WaitText(10*time.Second).AssertContains(t, "Harness reply: from web")
 	other.ExpectNoEvent(200*time.Millisecond, tingly.EventSend)
@@ -295,9 +294,7 @@ func TestTinglyNewChatAndSessionCommands(t *testing.T) {
 	first := list.Bindings[0].ThreadID
 	require.NotEmpty(t, first)
 	require.Equal(t, h.chosenID, list.Bindings[0].BotUUID)
-	h.bridge.mu.Lock()
-	h.bridge.bots = map[string]string{}
-	h.bridge.mu.Unlock()
+	h.bridge.ForgetBots()
 	h.call("POST", "/threads/"+first+"/messages", map[string]any{"content": "after restart"}, nil)
 	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: after restart")
 	chat.SendText("/new")
@@ -327,7 +324,7 @@ func TestTinglyPublishedFileReachesBoundChat(t *testing.T) {
 	require.Len(t, list.Bindings, 1)
 	file := filepath.Join(h.workdir, "result.txt")
 	require.NoError(t, os.WriteFile(file, []byte("file contents"), 0o600))
-	_, err := h.bridge.live().PublishFile(context.Background(), list.Bindings[0].ThreadID, file, "Result")
+	_, err := h.bridge.App().PublishFile(context.Background(), list.Bindings[0].ThreadID, file, "Result")
 	require.NoError(t, err)
 	message := chat.WaitMedia(10 * time.Second)
 	require.Len(t, message.Media, 1)
@@ -342,7 +339,7 @@ func TestTinglyPublishedFileReachesBoundChat(t *testing.T) {
 	other := h.env.NewUser("new-file-user").OpenDM(h.chosenID)
 	h.call("DELETE", "/projects/channel-bindings/"+list.Bindings[0].ID, nil, nil)
 	h.call("PUT", "/projects/channel-bindings", map[string]any{"platform": "tingly", "chat_id": other.ChatID, "bot_uuid": h.chosenID, "thread_id": list.Bindings[0].ThreadID}, nil)
-	_, err = h.bridge.live().PublishFile(context.Background(), list.Bindings[0].ThreadID, file, "Moved")
+	_, err = h.bridge.App().PublishFile(context.Background(), list.Bindings[0].ThreadID, file, "Moved")
 	require.NoError(t, err)
 	other.WaitMedia(10*time.Second).AssertContains(t, "Moved")
 	chat.ExpectNoEvent(300*time.Millisecond, tingly.EventSend, tingly.EventMedia)
@@ -493,8 +490,7 @@ func TestTinglyRegisteredDirectories(t *testing.T) {
 	}
 	chat.SendCallback("old-message", "action:bind")
 	chat.WaitText(10*time.Second).AssertContains(t, "Any folder and files")
-	current, err := h.bridge.CurrentFolder(context.Background(), "tingly", chat.ChatID)
-	require.NoError(t, err)
+	current := h.currentFolder(t, chat)
 	require.Equal(t, h.workdir, current, "a free path did not move the chat")
 	// A newly registered folder must not change an already displayed number.
 	h.call("POST", "/projects", map[string]any{"type": "folder", "path": t.TempDir()}, nil)
@@ -502,8 +498,7 @@ func TestTinglyRegisteredDirectories(t *testing.T) {
 	chat.WaitText(10*time.Second).AssertContains(t, first)
 	chat.SendText("new directory message")
 	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: new directory message")
-	current, err = h.bridge.CurrentFolder(context.Background(), "tingly", chat.ChatID)
-	require.NoError(t, err)
+	current = h.currentFolder(t, chat)
 	require.Equal(t, first, current, "the registered folder was picked without the permission")
 
 	// With the permission a free path works too.
@@ -515,8 +510,7 @@ func TestTinglyRegisteredDirectories(t *testing.T) {
 	chat.WaitText(10*time.Second).AssertContains(t, "/cd <path>")
 	chat.SendText("/cd " + free)
 	chat.WaitText(10*time.Second).AssertContains(t, free)
-	current, err = h.bridge.CurrentFolder(context.Background(), "tingly", chat.ChatID)
-	require.NoError(t, err)
+	current = h.currentFolder(t, chat)
 	require.Equal(t, free, current)
 
 	// A button on an old list must not switch to a folder after it is archived.

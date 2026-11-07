@@ -193,14 +193,6 @@ func (sm *StoreManager) initRemoteStores() error {
 	}
 	sm.remoteChatStore = NewRemoteChatStore(sm.db)
 	sm.botAccessStore = NewBotAccessStore(sm.db)
-
-	// Migrating here, rather than from whichever feature happens to construct
-	// a store first, is what makes every entry point — server, standalone CLI
-	// bot, `bot pair revoke` — see the same migrated data.
-	if err := importLegacyRemoteJSON(sm.baseDir, sm.remoteChatStore); err != nil {
-		// Best effort: the legacy files are left in place for the next start.
-		logrus.WithError(err).Error("Failed to import legacy remote JSON stores; leaving files in place")
-	}
 	return nil
 }
 

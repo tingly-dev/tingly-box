@@ -10,7 +10,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/tingly-dev/tingly-box/remote/control/bot"
+	"github.com/tingly-dev/tingly-box/remote/bot"
 )
 
 // Compile-time proof that this store backs the remote bot runtime's chat
@@ -187,21 +187,6 @@ func (s *RemoteChatStore) UpsertChat(chat *bot.Chat) error {
 	return upsertChatRecord(s.db, chat)
 }
 
-// ImportChat stores a chat exactly as given, without restamping UpdatedAt.
-//
-// Migration needs this for the same reason sessions do: UpdatedAt orders
-// ListChats, so stamping it on import would make every migrated chat look
-// equally and freshly active in the bot's chat list.
-func (s *RemoteChatStore) ImportChat(chat *bot.Chat) error {
-	if !s.ready() {
-		return ErrStoreClosed
-	}
-	if chat == nil || chat.ChatID == "" {
-		return ErrChatIDRequired
-	}
-	return upsertChatRecord(s.db, chat)
-}
-
 // upsertChatRecord writes a chat as a whole row.
 //
 // Upsert rather than GORM's Updates: struct-based Updates skips zero values, so
@@ -342,6 +327,16 @@ func (s *RemoteChatStore) BindProject(chatID, platform, projectPath, ownerID str
 		chat.Platform = platform
 		chat.OwnerID = ownerID
 		chat.PushProjectHistory(projectPath)
+	})
+}
+
+// RememberFolder pushes a folder onto the chat's MRU history, creating the
+// chat if needed, and leaves ProjectPath as it was.
+func (s *RemoteChatStore) RememberFolder(chatID, platform, folder, ownerID string) error {
+	return s.mutate(chatID, platform, func(chat *bot.Chat) {
+		chat.Platform = platform
+		chat.OwnerID = ownerID
+		chat.RememberFolder(folder)
 	})
 }
 

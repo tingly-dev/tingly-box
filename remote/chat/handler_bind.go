@@ -1,0 +1,141 @@
+package chat
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+
+	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/remote/chat/feature"
+)
+
+// handleProjectSwitch moves the chat to a folder it picked from /dir.
+func (h *BotHandler) handleProjectSwitch(hCtx HandlerContext, projectPath string) {
+	paths, err := NewBotHandlerAdapter(h).ListChatProjectPaths(hCtx.ChatID)
+	if err != nil {
+		h.SendText(hCtx, fmt.Sprintf("Failed to list folders: %v", err))
+		return
+	}
+	if !slices.Contains(paths, projectPath) {
+		h.SendText(hCtx, "That folder is no longer available. Use /dir to refresh the list.")
+		return
+	}
+	h.completeBind(hCtx, projectPath)
+}
+
+// handleBindInteractive starts an interactive directory browser for binding
+func (h *BotHandler) handleBindInteractive(hCtx HandlerContext) {
+	// Start from the currently-bound project path so the user lands in a
+	// familiar spot; falls back to home when nothing is bound yet.
+	currentPath, _ := NewBotHandlerAdapter(h).GetProjectPath(hCtx.ChatID)
+	_, err := h.directoryBrowser.StartAt(hCtx.ChatID, currentPath)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to start directory browser")
+		h.SendText(hCtx, fmt.Sprintf("Failed to start directory browser: %v", err))
+		return
+
+	}
+
+	logrus.Infof("Bind flow started for chat %s", hCtx.ChatID)
+
+	// Send directory browser
+	_, err = feature.SendDirectoryBrowser(h.ctx, hCtx.Bot, h.directoryBrowser, hCtx.ChatID, "")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to send directory browser")
+		h.SendText(hCtx, fmt.Sprintf("Failed to send directory browser: %v", err))
+		return
+
+	}
+}
+
+// completeBind moves the chat to a folder (/cd, /dir, the directory browser)
+func (h *BotHandler) completeBind(hCtx HandlerContext, projectPath string) {
+	// Expand path (handles ~, etc.)
+	expandedPath, err := ExpandPath(projectPath)
+	if err != nil {
+		h.SendText(hCtx, fmt.Sprintf("Invalid path: %v", err))
+		return
+
+	}
+
+	// Only validate if the path should already exist
+	if _, err := os.Stat(expandedPath); err == nil {
+		if err := ValidateProjectPath(expandedPath); err != nil {
+			h.SendText(hCtx, fmt.Sprintf("Path validation failed: %v", err))
+			return
+		}
+	}
+
+	if !h.moveChatToFolder(hCtx, expandedPath) {
+		return
+	}
+	// Remember it for /dir's order; where the chat is now is Projects' to say.
+	if err := h.chatStore.RememberFolder(hCtx.ChatID, string(hCtx.Platform), expandedPath, hCtx.SenderID); err != nil {
+		logrus.WithError(err).WithField("chatID", hCtx.ChatID).Warn("Failed to remember the chat's folder")
+	}
+	logrus.Infof("Chat moved to a folder: chat=%s path=%s", hCtx.ChatID, expandedPath)
+	h.SendText(hCtx, fmt.Sprintf("📁 %s\nYour next message starts a new session here.", expandedPath))
+}
+
+// handleCustomPathInput handles the user's custom path input
+func (h *BotHandler) handleCustomPathInput(hCtx HandlerContext) {
+	// Get current path from browser state
+	state := h.directoryBrowser.GetState(hCtx.ChatID)
+	currentPath := ""
+	if state != nil {
+		currentPath = state.CurrentPath
+	}
+
+	// Expand path relative to current directory
+	var expandedPath string
+	input := hCtx.Text()
+	if filepath.IsAbs(hCtx.Text()) || strings.HasPrefix(input, "~") {
+		// Absolute path or home-relative path
+		var err error
+		expandedPath, err = ExpandPath(input)
+		if err != nil {
+			h.SendText(hCtx, fmt.Sprintf("Invalid path: %v", err))
+			return
+
+		}
+	} else if currentPath != "" {
+		// Relative path - expand relative to current directory
+		expandedPath = filepath.Join(currentPath, input)
+	} else {
+		// No current path, use ExpandPath
+		var err error
+		expandedPath, err = ExpandPath(hCtx.Text())
+		if err != nil {
+			h.SendText(hCtx, fmt.Sprintf("Invalid path: %v", err))
+			return
+
+		}
+	}
+
+	// Clean the path
+	expandedPath = filepath.Clean(expandedPath)
+
+	// Check if path exists
+	info, err := os.Stat(expandedPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Path doesn't exist, ask for confirmation to create
+			h.handleCreateConfirm(hCtx, expandedPath)
+			return
+
+		}
+		h.SendText(hCtx, fmt.Sprintf("Cannot access path: %v", err))
+		return
+	}
+
+	if !info.IsDir() {
+		h.SendText(hCtx, "The path is not a directory. Please provide a directory path.")
+		return
+	}
+
+	// Path exists and is a directory, complete the bind
+	h.completeBind(hCtx, expandedPath)
+	h.directoryBrowser.Clear(hCtx.ChatID)
+}

@@ -1,0 +1,305 @@
+package chat
+
+import (
+	"context"
+	"fmt"
+	"slices"
+	"strings"
+
+	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/imbot"
+	projectsapp "github.com/tingly-dev/tingly-box/projects"
+	"github.com/tingly-dev/tingly-box/remote/bot"
+)
+
+// RegisterBuiltinCommands registers the chat commands
+// (.design/remote-into-projects.md, "命令精简"): which folder (/cd, /dir),
+// the session commands Projects runs, /help, and access (/pair, /join, which
+// /help does not list). The registry is also what a platform shows as its
+// command menu.
+func RegisterBuiltinCommands(registry *imbot.CommandRegistry, botHandler BotHandlerAdapter) error {
+	commands := []imbot.Command{
+		newHelpCommand(botHandler),
+		newCdCommand(botHandler),
+		newDirCommand(botHandler),
+		newProjectCommand(botHandler),
+		newPairBindCommand(botHandler),
+		newJoinCommand(botHandler),
+	}
+	for _, c := range projectsapp.ChatCommands() {
+		commands = append(commands, newSessionCommand(botHandler, c))
+	}
+	for _, cmd := range commands {
+		if err := registry.Register(cmd); err != nil {
+			return fmt.Errorf("failed to register command %s: %w", cmd.ID, err)
+		}
+	}
+	return nil
+}
+
+// BotHandlerAdapter provides methods needed by command handlers.
+// This allows commands to interact with the bot without direct coupling.
+type BotHandlerAdapter interface {
+	// SendText sends a text message to a chat
+	SendText(chatID, text string) error
+
+	// GetProjectPath gets the folder of a chat
+	GetProjectPath(chatID string) (string, error)
+
+	// SetProjectPath moves a chat to a folder, and says so in the chat
+	SetProjectPath(chatID, path string) error
+
+	// ListChatProjectPaths lists the folders a chat used, most recent first.
+	ListChatProjectPaths(chatID string) ([]string, error)
+	RememberFolderList(chatID string, paths []string)
+	FolderList(chatID string) []string
+
+	// IsWhitelisted checks if a group is whitelisted
+	IsWhitelisted(groupID string) bool
+
+	// AddToWhitelist adds a group to whitelist
+	AddToWhitelist(groupID, platform, userID string) error
+
+	// VerifyAndPair verifies a one-time pairing code and, on success, records
+	// the chat as paired with the bot. Implementations should also emit the
+	// matching audit events (success / failure).
+	VerifyAndPair(botUUID, chatID, senderID, platform, code string) error
+
+	// RunSessionCommand runs one of projectsapp.ChatCommands in Projects and tells the
+	// chat the result.
+	RunSessionCommand(ctx *imbot.HandlerContext, name, arg string)
+	RunProjectDirectory(ctx *imbot.HandlerContext, arg string)
+
+	// HasPrivilegedAccess reports whether the chat's sender may use privileged
+	// actions (the "Any folder and files" permission); true when the host has
+	// no access policy.
+	HasPrivilegedAccess(ctx *imbot.HandlerContext) bool
+}
+
+const (
+	usageCd       = "Usage: /cd <path|number>"
+	usageJoin     = "Usage: /join <group_id|@username|invite_link>"
+	usagePairBind = "Usage: /pair <code>"
+)
+
+func sendCommandText(adapter BotHandlerAdapter, ctx *imbot.HandlerContext, text string) error {
+	return adapter.SendText(ctx.ChatID, text)
+}
+
+func sendCommandTextf(adapter BotHandlerAdapter, ctx *imbot.HandlerContext, format string, args ...interface{}) error {
+	return sendCommandText(adapter, ctx, fmt.Sprintf(format, args...))
+}
+
+func joinedArgs(args []string) (string, bool) {
+	if len(args) == 0 {
+		return "", false
+	}
+	value := strings.TrimSpace(strings.Join(args, " "))
+	return value, value != ""
+}
+
+func parsePairBindCode(args []string) (string, bool) {
+	if len(args) < 1 {
+		return "", false
+	}
+	code := strings.TrimSpace(args[0])
+	if code == "" {
+		return "", false
+	}
+	return code, true
+}
+
+func newSessionCommand(adapter BotHandlerAdapter, c projectsapp.CommandSpec) imbot.Command {
+	return imbot.NewCommand("cmd-"+c.Name, c.Name, c.Help).
+		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
+			arg, _ := joinedArgs(args)
+			adapter.RunSessionCommand(ctx, c.Name, arg)
+			return nil
+		}).
+		WithCategory("session").
+		WithPriority(c.Order).
+		MustBuild()
+}
+
+func newHelpCommand(adapter BotHandlerAdapter) imbot.Command {
+	return imbot.NewCommand("cmd-help", "help", "Show what this chat can do").
+		WithAliases("start").
+		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
+			return sendCommandText(adapter, ctx, helpText(ctx.SenderID, ctx.ChatID, adapter.HasPrivilegedAccess(ctx), !ctx.IsDirectMessage))
+		}).
+		WithCategory("system").
+		WithPriority(100).
+		MustBuild()
+}
+
+func newProjectCommand(adapter BotHandlerAdapter) imbot.Command {
+	return imbot.NewCommand("cmd-project", "project", specHelp("project")).
+		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
+			arg, _ := joinedArgs(args)
+			adapter.RunProjectDirectory(ctx, arg)
+			return nil
+		}).
+		WithCategory("project").WithPriority(specOrder("project")).MustBuild()
+}
+
+func newCdCommand(adapter BotHandlerAdapter) imbot.Command {
+	return imbot.NewCommand("cmd-cd", "cd", specHelp("cd")).
+		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
+			input, ok := joinedArgs(args)
+			if !ok {
+				return sendCommandText(adapter, ctx, usageCd)
+			}
+			return changeDir(adapter, ctx, input)
+		}).
+		WithCategory("project").
+		WithPriority(specOrder("cd")).
+		MustBuild()
+}
+
+// changeDir moves the chat to a folder: input is a path (relative to the
+// current one) or the number of a folder /dir listed. SetProjectPath says
+// where the chat is now.
+func changeDir(adapter BotHandlerAdapter, ctx *imbot.HandlerContext, input string) error {
+	if idx, ok := bot.ParseListNumber(input); ok {
+		paths := adapter.FolderList(ctx.ChatID)
+		if len(paths) == 0 {
+			return sendCommandText(adapter, ctx, "Use /dir to list folders first.")
+		}
+		if idx < 1 || idx > len(paths) {
+			return sendCommandTextf(adapter, ctx, "No folder %d (there are %d). /dir lists them.", idx, len(paths))
+		}
+		current, err := adapter.ListChatProjectPaths(ctx.ChatID)
+		if err != nil {
+			return sendCommandTextf(adapter, ctx, "Failed to list folders: %v", err)
+		}
+		if !slices.Contains(current, paths[idx-1]) {
+			return sendCommandText(adapter, ctx, "That folder is no longer available. Use /dir to refresh the list.")
+		}
+		return adapter.SetProjectPath(ctx.ChatID, paths[idx-1])
+	}
+
+	currentPath, _ := adapter.GetProjectPath(ctx.ChatID)
+	expandedPath, err := ExpandPathFrom(input, currentPath)
+	if err != nil {
+		return sendCommandTextf(adapter, ctx, "Invalid path: %v", err)
+	}
+	if err := ValidateProjectPath(expandedPath); err != nil {
+		return sendCommandTextf(adapter, ctx, "Path validation failed: %v", err)
+	}
+	return adapter.SetProjectPath(ctx.ChatID, expandedPath)
+}
+
+func newDirCommand(adapter BotHandlerAdapter) imbot.Command {
+	return imbot.NewCommand("cmd-dir", "dir", specHelp("dir")).
+		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
+			if input, ok := joinedArgs(args); ok {
+				return changeDir(adapter, ctx, input)
+			}
+			currentPath, _ := adapter.GetProjectPath(ctx.ChatID)
+			paths, err := adapter.ListChatProjectPaths(ctx.ChatID)
+			if err != nil {
+				return sendCommandTextf(adapter, ctx, "Failed to list folders: %v", err)
+			}
+			adapter.RememberFolderList(ctx.ChatID, paths)
+			text := buildDirText(currentPath, paths)
+
+			caps := imbot.GetPlatformCapabilities(string(ctx.Platform))
+			if ctx.IsDirectMessage && caps != nil && caps.SupportsInteraction() && len(paths) > 0 {
+				keyboard := buildDirKeyboard(currentPath, paths)
+				_, err := ctx.Bot.SendMessage(context.Background(), ctx.ChatID, &imbot.SendMessageOptions{
+					Text:    text,
+					Actions: keyboard.ToActionSet(),
+				})
+				if err != nil {
+					logrus.WithError(err).Error("Failed to send folder list")
+				}
+				return nil
+			}
+			return sendCommandText(adapter, ctx, text)
+		}).
+		WithCategory("project").
+		WithPriority(specOrder("dir")).
+		MustBuild()
+}
+
+func newJoinCommand(adapter BotHandlerAdapter) imbot.Command {
+	return imbot.NewCommand("cmd-join", "join", "Add group to whitelist (Telegram only)").
+		WithPlatforms(imbot.PlatformTelegram).
+		Hidden().
+		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
+			if !ctx.IsDirectMessage {
+				return sendCommandText(adapter, ctx, "/join can only be used in general chat.")
+			}
+
+			if !ctx.IsPlatform(imbot.PlatformTelegram) {
+				return sendCommandText(adapter, ctx, "Join command is only supported for Telegram bot.")
+			}
+
+			input, ok := joinedArgs(args)
+			if !ok {
+				return sendCommandText(adapter, ctx, usageJoin)
+			}
+
+			// Resolve the chat ID via Telegram bot
+			tgBot, ok := imbot.AsTelegramBot(ctx.Bot)
+			if !ok {
+				return sendCommandText(adapter, ctx, "Join command is only supported for Telegram bot.")
+			}
+
+			groupID, err := tgBot.ResolveChatID(input)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to resolve chat ID")
+				return sendCommandTextf(adapter, ctx, "Failed to resolve chat ID: %v\n\nNote: Bot must already be a member of the group to add it to whitelist.", err)
+			}
+
+			// Check if already whitelisted
+			if adapter.IsWhitelisted(groupID) {
+				return sendCommandTextf(adapter, ctx, "Group %s is already in whitelist.", groupID)
+			}
+
+			// Add group to whitelist
+			if err := adapter.AddToWhitelist(groupID, string(ctx.Platform), ctx.SenderID); err != nil {
+				logrus.WithError(err).Error("Failed to add group to whitelist")
+				return sendCommandTextf(adapter, ctx, "Failed to add group to whitelist: %v", err)
+			}
+
+			logrus.Infof("Group %s added to whitelist by %s", groupID, ctx.SenderID)
+			return sendCommandTextf(adapter, ctx, "Successfully added group to whitelist.\nGroup ID: %s", groupID)
+		}).
+		WithCategory("system").
+		WithPriority(30).
+		MustBuild()
+}
+
+// newPairBindCommand registers the `/pair <code>` command used by an end-user
+// to pair their direct chat with the bot. It is the only command an unpaired
+// chat is allowed to invoke when RequirePairing is on.
+func newPairBindCommand(adapter BotHandlerAdapter) imbot.Command {
+	return imbot.NewCommand("cmd-pair-bind", "pair",
+		"Pair this chat with the bot using the operator's pairing code").
+		WithAliases("bind").
+		Hidden().
+		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
+			if !ctx.IsDirectMessage {
+				return sendCommandText(adapter, ctx, "/pair only works in a direct message.")
+			}
+			code, ok := parsePairBindCode(args)
+			if !ok {
+				return sendCommandText(adapter, ctx, usagePairBind)
+			}
+			botUUID := ""
+			if ctx.Bot != nil {
+				botUUID = ctx.Bot.UUID()
+			}
+			if err := adapter.VerifyAndPair(botUUID, ctx.ChatID, ctx.SenderID,
+				string(ctx.Platform), code); err != nil {
+				return sendCommandText(adapter, ctx, "❌ "+err.Error())
+			}
+			return sendCommandText(adapter, ctx,
+				"✅ Paired. You can now send commands to this bot.")
+		}).
+		WithCategory("system").
+		WithPriority(95).
+		MustBuild()
+}
