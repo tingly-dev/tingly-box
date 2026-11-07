@@ -422,7 +422,7 @@ Current date: %s
 		if p.DisableWorktree {
 			b.WriteString("Threads share the selected checkout and its current branch; coordinate concurrent work.\n")
 		} else {
-			b.WriteString("Each thread gets its own branch and worktree.\n")
+			b.WriteString("Each thread gets its own branch and worktree; pass base to start from a branch other than the base branch, and branch to name the new one.\n")
 		}
 		for _, r := range p.Repos {
 			fmt.Fprintf(&b, "- %s (base branch %s)\n", r.Path, r.BaseBranch)
@@ -480,9 +480,11 @@ type coordinatorTool struct {
 func coordinatorTools() []coordinatorTool {
 	str := func(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
 	threadSpec := map[string]any{
-		"title": str("Thread card title: starts with a verb that names the goal, three to six words, no ids or paths (for example \"Fix Safari export button\")."),
-		"task":  str("Self-contained instructions for the thread: goal, context, acceptance criteria, how to verify."),
-		"repo":  str("Optional. Path of the project repository to work in; \"none\" for no repository."),
+		"title":  str("Thread card title: starts with a verb that names the goal, three to six words, no ids or paths (for example \"Fix Safari export button\")."),
+		"task":   str("Self-contained instructions for the thread: goal, context, acceptance criteria, how to verify."),
+		"repo":   str("Optional. Path of the project repository to work in; \"none\" for no repository."),
+		"base":   str("Optional. Existing local branch the thread's branch starts from, and that its work is merged back into. Default: the repository's base branch. Use it for work that builds on a release or feature branch."),
+		"branch": str("Optional. Name for the thread's new branch; it must not exist yet. Default: generated from the title."),
 	}
 	return []coordinatorTool{
 		{Name: "start_thread", Description: "Start a new thread (a Claude Code session) for one task, using the project worktree setting.", Properties: threadSpec, Required: []string{"title", "task"}},
@@ -544,6 +546,8 @@ type Suggestion struct {
 	Title    string `json:"title"`
 	Task     string `json:"task"`
 	Repo     string `json:"repo,omitempty"`
+	Base     string `json:"base,omitempty"`
+	Branch   string `json:"branch,omitempty"`
 	ThreadID string `json:"thread_id,omitempty"`
 }
 
@@ -566,6 +570,7 @@ func (c *Coordinator) findThread(projectID, ref string) (*db.Thread, error) {
 func (c *Coordinator) runTool(ctx context.Context, p *db.Project, name string, input json.RawMessage) (string, bool, []string) {
 	var in struct {
 		Title, Task, Repo string
+		Base, Branch      string
 		Threads           []Suggestion
 		ThreadID          string `json:"thread_id"`
 		Message           string
@@ -588,11 +593,11 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, name string, i
 		if strings.TrimSpace(in.Task) == "" {
 			return "task is required", true, nil
 		}
-		t, err := c.threads.Start(ctx, p, StartSpec{Title: in.Title, Task: in.Task, Repo: in.Repo, Origin: "coordinator"})
+		t, err := c.threads.Start(ctx, p, StartSpec{Title: in.Title, Task: in.Task, Repo: in.Repo, Base: in.Base, Branch: in.Branch, Origin: "coordinator"})
 		if err != nil {
 			return fail(err)
 		}
-		return fmt.Sprintf("started thread %s %q (branch %s)", short(t.ID), t.Title, orNone(t.Branch)), false, []string{t.ID}
+		return fmt.Sprintf("started thread %s %q (branch %s, base %s)", short(t.ID), t.Title, orNone(t.Branch), orNone(t.BaseBranch)), false, []string{t.ID}
 	case "propose_threads":
 		if len(in.Threads) == 0 {
 			return "threads is empty", true, nil
@@ -761,7 +766,7 @@ func (c *Coordinator) StartSuggestions(ctx context.Context, mainThreadID, eventI
 		if s.ThreadID != "" || (len(want) > 0 && !want[i]) {
 			continue
 		}
-		t, err := c.threads.Start(ctx, p, StartSpec{Title: s.Title, Task: s.Task, Repo: s.Repo, Origin: "suggestion"})
+		t, err := c.threads.Start(ctx, p, StartSpec{Title: s.Title, Task: s.Task, Repo: s.Repo, Base: s.Base, Branch: s.Branch, Origin: "suggestion"})
 		if err != nil {
 			return nil, err
 		}

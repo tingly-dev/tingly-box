@@ -66,13 +66,37 @@ func HeadBranch(ctx context.Context, dir string) string {
 
 // AddWorktree creates branch from base in a new worktree at dir.
 func AddWorktree(ctx context.Context, repo, dir, branch, base string) error {
+	if BranchExists(ctx, repo, branch) {
+		return fmt.Errorf("branch %q already exists", branch)
+	}
 	_, err := git(ctx, repo, "worktree", "add", "-b", branch, dir, base)
 	if err != nil {
 		// git may have made the branch before failing to make the directory;
-		// leave no stray branch, so the caller can try another place.
+		// leave no stray branch, so the caller can try another place. The
+		// branch did not exist before, so this never deletes the user's.
 		_, _ = git(ctx, repo, "branch", "-D", branch)
 	}
 	return err
+}
+
+// BranchExists reports whether repo has a local branch of that name.
+func BranchExists(ctx context.Context, repo, name string) bool {
+	_, err := git(ctx, repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+name)
+	return err == nil
+}
+
+// checkNewBranch refuses a branch name git cannot use or that is taken.
+func checkNewBranch(ctx context.Context, repo, name string) error {
+	if strings.HasPrefix(name, "-") {
+		return fmt.Errorf("%q is not a valid branch name", name)
+	}
+	if _, err := git(ctx, repo, "check-ref-format", "refs/heads/"+name); err != nil {
+		return fmt.Errorf("%q is not a valid branch name", name)
+	}
+	if BranchExists(ctx, repo, name) {
+		return fmt.Errorf("branch %q already exists in %s; choose another name", name, repo)
+	}
+	return nil
 }
 
 // excludeWorktrees keeps <repo>/.claude/worktrees out of `git status` for

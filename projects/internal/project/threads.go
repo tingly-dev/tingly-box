@@ -29,6 +29,8 @@ var (
 	ErrNoPrompt       = errors.New("no pending request with that id")
 	// ErrNotProject is for starting a worker in a project that is a folder.
 	ErrNotProject = errors.New("only a project's main thread starts threads in it")
+	// ErrNoOwnBranch is for choosing a base or branch where the thread gets none.
+	ErrNoOwnBranch = errors.New("base and branch need a repository and its own worktree: this project has no repository, or its threads share the checkout")
 	// ErrMainThread is for running a main thread as an agent session.
 	ErrMainThread = errors.New("a main thread is the project conversation; send to it through the coordinator")
 	// ErrEmptyTitle is for renaming a thread to nothing.
@@ -459,8 +461,12 @@ type StartSpec struct {
 	Task  string
 	// Repo is the path of one of the project's repos; empty picks the first,
 	// "none" works without a repository.
-	Repo   string
-	Origin string
+	Repo string
+	// Base is the local branch the thread's branch starts from; empty uses
+	// the repository's base branch. Branch names the new branch; empty
+	// generates one. Both need a worktree.
+	Base, Branch string
+	Origin       string
 }
 
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
@@ -505,6 +511,23 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 	if err != nil {
 		return nil, err
 	}
+	base, branch := "", strings.TrimSpace(spec.Branch)
+	if b := strings.TrimSpace(spec.Base); b != "" || branch != "" {
+		if repo == nil || p.DisableWorktree {
+			return nil, ErrNoOwnBranch
+		}
+		if b != "" {
+			if !BranchExists(ctx, repo.Path, b) {
+				return nil, fmt.Errorf("base %q is not a local branch of %s", b, repo.Path)
+			}
+			base = b
+		}
+		if branch != "" {
+			if err := checkNewBranch(ctx, repo.Path, branch); err != nil {
+				return nil, err
+			}
+		}
+	}
 	if err := m.store.CreateThread(t); err != nil {
 		return nil, err
 	}
@@ -512,23 +535,29 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 	var note string
 	if repo != nil {
 		t.RepoPath, t.BaseBranch = repo.Path, repo.BaseBranch
+		if base != "" {
+			t.BaseBranch = base
+		}
 		if p.DisableWorktree {
 			t.Cwd = repo.Path
 		} else {
-			t.Branch = fmt.Sprintf("tp/%s-%s", slugify(title), t.ID[:6])
+			t.Branch = branch
+			if t.Branch == "" {
+				t.Branch = fmt.Sprintf("tp/%s-%s", slugify(title), t.ID[:6])
+			}
 			// In the repository's own .claude/worktrees; if that cannot be used
 			// (read-only repository, ...) fall back to the data directory, where
 			// threads used to live, and say so.
 			inRepo := RepoWorktreeDir(repo.Path, slugify(title), t.ID)
 			err := excludeWorktrees(ctx, repo.Path)
 			if err == nil {
-				err = AddWorktree(ctx, repo.Path, inRepo, t.Branch, repo.BaseBranch)
+				err = AddWorktree(ctx, repo.Path, inRepo, t.Branch, t.BaseBranch)
 			}
 			if err == nil {
 				t.Cwd = inRepo
 			} else {
 				note = fmt.Sprintf("Could not create the worktree in %s (%v); using %s instead.", filepath.Join(repo.Path, ".claude", "worktrees"), err, t.Cwd)
-				if err := AddWorktree(ctx, repo.Path, t.Cwd, t.Branch, repo.BaseBranch); err != nil {
+				if err := AddWorktree(ctx, repo.Path, t.Cwd, t.Branch, t.BaseBranch); err != nil {
 					t.Status, t.WaitReason = db.ThreadWaiting, "Could not create the worktree: "+err.Error()
 					_ = m.store.SaveThread(t)
 					m.publish(t)
