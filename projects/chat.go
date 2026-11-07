@@ -64,6 +64,22 @@ type Chat interface {
 
 var _ Chat = (*App)(nil)
 
+// Values an approval is answered with, by button or by ApprovalChoice.
+const (
+	ChoiceAllow       = project.ChoiceAllow
+	ChoiceAllowThread = project.ChoiceAllowThread
+	ChoiceDeny        = project.ChoiceDeny
+)
+
+// ApprovalChoice reads a chat's words as an approval answer: ChoiceAllow,
+// ChoiceAllowThread or ChoiceDeny; ok is false for anything else. It is the
+// one vocabulary for answering approvals in chat.
+func ApprovalChoice(text string) (choice string, ok bool) { return project.ApprovalChoice(text) }
+
+// ApprovalWords are the words that answer with the choice; the first two are
+// the ones to show.
+func ApprovalWords(choice string) []string { return project.ApprovalWords(choice) }
+
 // CommandSpec describes a chat command for the host that lists it; see
 // ChatCommands.
 type CommandSpec = project.ChatCommand
