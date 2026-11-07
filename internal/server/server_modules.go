@@ -130,7 +130,7 @@ func (s *Server) apiModules(ctx context.Context, schema bool) []module.Module {
 		// endpoints report unavailable.
 		var chatManager notifymodule.BotChatManager
 		if imbotHandler != nil {
-			chatManager = newBotChatManager(s.channelRegistry, imbotHandler)
+			chatManager = newBotChatManager(s.channelRegistry, imbotHandler, chatBridge.Folder)
 		}
 		mods = append(mods, notifymodule.NewBotAPIHandler(s.channelRegistry, s.interactionRegistry, chatManager, s.config.StoreManager().BotAccess()))
 	}

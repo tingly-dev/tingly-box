@@ -181,6 +181,16 @@ func (b *ChatBridge) RememberBot(platform, chatID, botUUID string) {
 	b.bots[chatKey(platform, chatID)] = botUUID
 }
 
+// Folder is the folder a chat is on in Projects, or "" when it is on a
+// project, has no place yet, or Projects is off.
+func (b *ChatBridge) Folder(platform, chatID string) string {
+	place, err := b.Place(projectsapp.ChatRef{Platform: platform, ChatID: chatID})
+	if err != nil {
+		return ""
+	}
+	return place.Folder
+}
+
 // BotFor is the bot a chat last wrote through, or "" when none is remembered.
 func (b *ChatBridge) BotFor(platform, chatID string) string {
 	b.mu.RLock()

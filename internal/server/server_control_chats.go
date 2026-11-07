@@ -28,17 +28,21 @@ func formatChatTime(t time.Time) string {
 type botChatManager struct {
 	reg      *channel.Registry
 	provider botChatProvider
+	// folderOf returns the folder a chat is on in Projects, "" when it has
+	// none; nil leaves the stored path. Projects, not the chat record, knows
+	// where a chat works.
+	folderOf func(platform, chatID string) string
 }
 
 // newBotChatManager wires BotChatManager to the shared chat store. Returns
 // nil when no provider is available, in which case the bot interaction API's
 // chat lifecycle endpoints report unavailable (same behavior as before this
 // refactor: stock setups without an IM handler have no chat store to drive).
-func newBotChatManager(reg *channel.Registry, provider botChatProvider) notifymodule.BotChatManager {
+func newBotChatManager(reg *channel.Registry, provider botChatProvider, folderOf func(platform, chatID string) string) notifymodule.BotChatManager {
 	if provider == nil {
 		return nil
 	}
-	return &botChatManager{reg: reg, provider: provider}
+	return &botChatManager{reg: reg, provider: provider, folderOf: folderOf}
 }
 
 // resolveReachableChat centralizes the "does this chat belong to this bot"
@@ -106,12 +110,18 @@ func (m *botChatManager) ListChats(botUUID string, includeDisabled bool) ([]noti
 			// by, and hiding them would make fresh chats undiscoverable.
 			continue
 		}
+		projectPath := c.ProjectPath
+		if m.folderOf != nil {
+			if folder := m.folderOf(c.Platform, c.ChatID); folder != "" {
+				projectPath = folder
+			}
+		}
 		out = append(out, notifymodule.ChatSummary{
 			ChatID:        c.ChatID,
 			Platform:      c.Platform,
 			IsPaired:      c.IsPaired,
 			IsWhitelisted: c.IsWhitelisted,
-			ProjectPath:   c.ProjectPath,
+			ProjectPath:   projectPath,
 			Disabled:      c.Disabled,
 			DisabledAt:    formatChatTime(c.DisabledAt),
 			UpdatedAt:     formatChatTime(c.UpdatedAt),

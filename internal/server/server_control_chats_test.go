@@ -68,7 +68,7 @@ func TestChatLister_ExcludesPairedElsewhere(t *testing.T) {
 		t.Fatalf("pair theirs: %v", err)
 	}
 
-	mgr := newBotChatManager(reg, provider)
+	mgr := newBotChatManager(reg, provider, nil)
 	chats, err := mgr.ListChats("bot-1", false)
 	if err != nil {
 		t.Fatalf("list: %v", err)
@@ -97,7 +97,7 @@ func TestChatLister_DisabledHiddenUnlessAsked(t *testing.T) {
 		t.Fatalf("disable: %v", err)
 	}
 
-	mgr := newBotChatManager(reg, provider)
+	mgr := newBotChatManager(reg, provider, nil)
 	chats, err := mgr.ListChats("bot-1", false)
 	if err != nil {
 		t.Fatalf("list: %v", err)
@@ -135,7 +135,7 @@ func TestChatDeleter_AllowsReachableAndRefusesForeign(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 
-	mgr := newBotChatManager(reg, provider)
+	mgr := newBotChatManager(reg, provider, nil)
 
 	if err := mgr.DeleteChat("bot-1", "locked-chat"); err != nil {
 		t.Errorf("deleting a formerly locked chat: %v", err)
@@ -170,7 +170,7 @@ func TestChatDisabler_ScopedToReachable(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 
-	mgr := newBotChatManager(reg, provider)
+	mgr := newBotChatManager(reg, provider, nil)
 	if err := mgr.SetChatDisabled("bot-1", "theirs", true); !errors.Is(err, notifymodule.ErrChatNotFound) {
 		t.Errorf("disabling a foreign chat: err = %v, want ErrChatNotFound", err)
 	}
