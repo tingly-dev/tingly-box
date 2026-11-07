@@ -20,9 +20,9 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
 	"github.com/tingly-dev/tingly-box/internal/server/module"
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
+	"github.com/tingly-dev/tingly-box/remote/bridge"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
-	"github.com/tingly-dev/tingly-box/remote/projectbridge"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
@@ -67,7 +67,7 @@ func (c *fakeChannel) next(t *testing.T) sent {
 // echoHost sends chat text through the bridge, like Host does.
 type echoHost struct {
 	nopHost
-	bridge *projectbridge.ChatBridge
+	bridge *bridge.ChatBridge
 }
 
 func (h echoHost) SendChannelText(ctx context.Context, platform, chatID, text string) error {
@@ -100,7 +100,7 @@ func echoAgents() *agentboot.AgentService {
 // name; a chat nobody bound is left alone; the flag off turns it all off.
 func TestChatToProjectAndBack(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	bridge := projectbridge.NewChatBridge()
+	bridge := bridge.NewChatBridge()
 	app, err := projectsapp.New(projectsapp.Options{Host: echoHost{bridge: bridge}, Agents: echoAgents()})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = app.Close() })

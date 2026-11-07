@@ -1,5 +1,5 @@
-// Package projectbridge joins Remote's IM chats to Projects.
-package projectbridge
+// Package bridge joins Remote's IM chats to Projects.
+package bridge
 
 import (
 	"context"

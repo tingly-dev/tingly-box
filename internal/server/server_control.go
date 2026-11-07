@@ -17,7 +17,7 @@ import (
 	projectsmodule "github.com/tingly-dev/tingly-box/internal/server/module/projects"
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
-	"github.com/tingly-dev/tingly-box/remote/projectbridge"
+	"github.com/tingly-dev/tingly-box/remote/bridge"
 	remotescenario "github.com/tingly-dev/tingly-box/remote/scenario"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
@@ -127,7 +127,7 @@ func RuntimeAuditSink() remotescenario.AuditFunc {
 // dataDir (--projects-dir, default "<config dir>-project"), never inside the
 // config dir, so a thread's working directory does not sit next to Tingly
 // Box's credentials.
-func newProjectsApp(cfg *config.Config, dataDir string, schema bool, chats *projectbridge.ChatBridge, routes *statusline.Handler) *projectsapp.App {
+func newProjectsApp(cfg *config.Config, dataDir string, schema bool, chats *bridge.ChatBridge, routes *statusline.Handler) *projectsapp.App {
 	host := projectsmodule.NewHost(cfg).WithRoutePreview(routes)
 	host.SetChatBridge(chats)
 	opts := projectsapp.Options{Host: host}

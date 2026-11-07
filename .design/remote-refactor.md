@@ -55,7 +55,7 @@ no shared "neutral" module (it would only add a package to keep in sync). From R
 - **Data-only, string-keyed types.** No `imbot` types, no `context`-smuggled values: the origin of a message is an
   explicit `ChatRef`, not `ChannelBot(ctx)`.
 - **Remote's `interaction.*` stays the renderer-side format** (Flow A). Where Projects' `ChannelPrompt` needs the same
-  buttons/text-fallback, `projectbridge` converts it to `interaction.Interaction` once (R5); Projects never learns about it.
+  buttons/text-fallback, `bridge` converts it to `interaction.Interaction` once (R5); Projects never learns about it.
 
 Proposed facade (in `projects/`), implemented by `*App`; inbound side:
 
@@ -95,7 +95,7 @@ remote/
   ask/               IM prompter for the hook path                (was control/ask)
   adapter/           host persistence glue                        (was control/adapter)
   channel/ interaction/ scenario/ binding/                        (notification layer, unchanged)
-  projectbridge/     ChatBridge (was internal/server/module/projects/chatbridge.go)
+  bridge/     ChatBridge (was internal/server/module/projects/chatbridge.go)
 ```
 
 ## Phases
@@ -113,7 +113,7 @@ Mechanical `tingly-go move`, one reviewed dry-run (`-n --json`) per move, leaf f
 
 ### R2 — One facade
 Add `projects.Chat` and `ChatRef` as above. `chat.BotHandler` depends on it directly; delete the mirror types in
-`project_route.go`. `ChatBridge` moves to `remote/projectbridge` and keeps only what the host alone knows: the
+`project_route.go`. `ChatBridge` moves to `remote/bridge` and keeps only what the host alone knows: the
 enabled flag, per-chat bot choice (`bots` map), blocked-target check, and the outbound sink over `channel.Registry`.
 `internal/server/module/projects` is left with the Projects `Host` (models, launch env). Implement `Chat` on `*App` by
 delegating to existing methods first (no behavior change), then retire the old `Channel*` entry points that `Chat` replaces.
@@ -156,7 +156,7 @@ permission gate are all computed from the merged list, so the three hand-kept co
 
 ### R5 — One approval/question renderer — gated on verification
 Read `chat_answer.go` against `ask`/`imchannel` first. If the logic is duplicated, convert `ChannelPrompt` →
-`interaction.Interaction` in `projectbridge`, render in `imchannel`, and keep `y/n/always` + numbered-option parsing in
+`interaction.Interaction` in `bridge`, render in `imchannel`, and keep `y/n/always` + numbered-option parsing in
 one place. If the two differ on purpose (thread semantics vs hook semantics), document why and stop.
 
 ## R4 in detail

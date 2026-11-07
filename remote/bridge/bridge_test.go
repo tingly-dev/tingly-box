@@ -1,4 +1,4 @@
-package projectbridge
+package bridge
 
 import (
 	"context"
