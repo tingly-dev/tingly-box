@@ -27,7 +27,6 @@ import (
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
 	"github.com/tingly-dev/tingly-box/remote/access"
 	"github.com/tingly-dev/tingly-box/remote/bot"
-	"github.com/tingly-dev/tingly-box/remote/bridge"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/chat"
 	"github.com/tingly-dev/tingly-box/swagger"
@@ -48,7 +47,7 @@ func (h harnessTransportFacts) TransportFacts(id string, _ access.CapabilityName
 // A scripted Claude CLI speaks stream-json; no external IM or model is needed.
 type tinglyProjectsHarness struct {
 	env               *testenv.TestEnv
-	bridge            *bridge.ChatBridge
+	bridge            *ChatBridge
 	stores            *hostdb.StoreManager
 	otherID, chosenID string
 	workdir           string
@@ -117,7 +116,7 @@ for line in sys.stdin:
 	env := testenv.NewTestEnv(t)
 	_, otherID := env.AddTinglyBot()
 	_, chosenID := env.AddTinglyBot()
-	bridge := bridge.NewChatBridge()
+	bridge := NewChatBridge()
 	// TB's real Projects host: the scripted CLI above is its coordinator and
 	// threads, launched with the host's Claude Code environment.
 	cfg := newConfig(t)

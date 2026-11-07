@@ -3,7 +3,7 @@ package chat
 import (
 	"slices"
 
-	projectsapp "github.com/tingly-dev/tingly-box/projects"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 )
 
 // accessTier says who is offered a command in /help (and may run it).
@@ -21,7 +21,7 @@ const (
 
 // commandSpec is a command as /help and the platform menu list it. Remote's
 // own commands are declared below; the session commands come from Projects
-// (projectsapp.ChatCommands). Both feed commandSpecs, which is the one list
+// (agent.Commands). Both feed commandSpecs, which is the one list
 // the menu, /help and the session-command dispatch are built from.
 type commandSpec struct {
 	Name string
@@ -47,7 +47,7 @@ var ownCommands = []commandSpec{
 // commandSpecs is every listed command, first listed first.
 func commandSpecs() []commandSpec {
 	specs := slices.Clone(ownCommands)
-	for _, c := range projectsapp.ChatCommands() {
+	for _, c := range agent.Commands() {
 		specs = append(specs, commandSpec{Name: c.Name, Usage: c.Usage, Help: c.Help, Order: c.Order})
 	}
 	slices.SortStableFunc(specs, func(a, b commandSpec) int { return b.Order - a.Order })
@@ -95,12 +95,5 @@ func (c commandSpec) usageFor(privileged, group bool) (usage string, ok bool) {
 	return c.Usage, true
 }
 
-// isSessionCommand reports whether Projects runs the command.
-func isSessionCommand(name string) bool {
-	for _, c := range projectsapp.ChatCommands() {
-		if c.Name == name {
-			return true
-		}
-	}
-	return false
-}
+// isSessionCommand reports whether the agent runs the command.
+func isSessionCommand(name string) bool { return agent.IsCommand(name) }

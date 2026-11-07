@@ -1,5 +1,4 @@
-// Package bridge joins Remote's IM chats to Projects.
-package bridge
+package projects
 
 import (
 	"context"
@@ -11,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
 	"github.com/tingly-dev/tingly-box/remote/chat"
@@ -112,16 +112,16 @@ func (b *ChatBridge) Enabled() bool { return b.live() != nil }
 // errOff is what a chat call gets while Projects is switched off.
 var errOff = errors.New("Projects is switched off")
 
-// ToFolder implements projectsapp.Chat.
-func (b *ChatBridge) ToFolder(ref projectsapp.ChatRef, folder string, ifNew bool) error {
+// ToFolder implements agent.Chat.
+func (b *ChatBridge) ToFolder(ref agent.ChatRef, folder string, ifNew bool) error {
 	app := b.live()
 	if app == nil {
 		return errOff
 	}
-	return app.ToFolder(ref, folder, ifNew)
+	return app.ToFolder(projectsapp.ChatRef(ref), folder, ifNew)
 }
 
-// Folders implements projectsapp.Chat: Projects' current, existing working
+// Folders implements agent.Chat: Projects' current, existing working
 // folders.
 func (b *ChatBridge) Folders() ([]string, error) {
 	app := b.live()
@@ -131,39 +131,48 @@ func (b *ChatBridge) Folders() ([]string, error) {
 	return app.Folders()
 }
 
-// Place implements projectsapp.Chat: where the chat is, from the actual
+// Place implements agent.Chat: where the chat is, from the actual
 // Projects binding.
-func (b *ChatBridge) Place(ref projectsapp.ChatRef) (projectsapp.ChatPlace, error) {
+func (b *ChatBridge) Place(ref agent.ChatRef) (agent.ChatPlace, error) {
 	app := b.live()
 	if app == nil {
-		return projectsapp.ChatPlace{}, errOff
+		return agent.ChatPlace{}, errOff
 	}
-	return app.Place(ref)
+	place, err := app.Place(projectsapp.ChatRef(ref))
+	return agent.ChatPlace(place), err
 }
 
-// Projects implements projectsapp.Chat: project coordinators, separately from
+// Projects implements agent.Chat: project coordinators, separately from
 // working folders.
-func (b *ChatBridge) Projects() ([]projectsapp.ProjectChoice, error) {
+func (b *ChatBridge) Projects() ([]agent.ProjectChoice, error) {
 	app := b.live()
 	if app == nil {
 		return nil, errOff
 	}
-	return app.Projects()
+	projects, err := app.Projects()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]agent.ProjectChoice, len(projects))
+	for i, p := range projects {
+		out[i] = agent.ProjectChoice(p)
+	}
+	return out, nil
 }
 
-// ToProject implements projectsapp.Chat: it binds the chat to the project's
+// ToProject implements agent.Chat: it binds the chat to the project's
 // coordinator.
-func (b *ChatBridge) ToProject(ref projectsapp.ChatRef, projectID string) error {
+func (b *ChatBridge) ToProject(ref agent.ChatRef, projectID string) error {
 	app := b.live()
 	if app == nil {
 		return errOff
 	}
-	return app.ToProject(ref, projectID)
+	return app.ToProject(projectsapp.ChatRef(ref), projectID)
 }
 
 // touch remembers the bot a chat wrote through, so replies go back through it,
 // and brings the Projects runtime up on first use.
-func (b *ChatBridge) touch(ref projectsapp.ChatRef, startRuntime bool) {
+func (b *ChatBridge) touch(ref agent.ChatRef, startRuntime bool) {
 	b.RememberBot(ref.Platform, ref.ChatID, ref.BotUUID)
 	b.mu.RLock()
 	start := b.start
@@ -184,7 +193,7 @@ func (b *ChatBridge) RememberBot(platform, chatID, botUUID string) {
 // Folder is the folder a chat is on in Projects, or "" when it is on a
 // project, has no place yet, or Projects is off.
 func (b *ChatBridge) Folder(platform, chatID string) string {
-	place, err := b.Place(projectsapp.ChatRef{Platform: platform, ChatID: chatID})
+	place, err := b.Place(agent.ChatRef{Platform: platform, ChatID: chatID})
 	if err != nil {
 		return ""
 	}
@@ -208,34 +217,38 @@ func (b *ChatBridge) ForgetBots() {
 // App returns the Projects app while it is switched on, else nil.
 func (b *ChatBridge) App() *projectsapp.App { return b.live() }
 
-// Post implements projectsapp.Chat.
-func (b *ChatBridge) Post(ref projectsapp.ChatRef, text string, files []projectsapp.ChannelFile) (bool, error) {
+// Post implements agent.Chat.
+func (b *ChatBridge) Post(ref agent.ChatRef, text string, files []agent.File) (bool, error) {
 	app := b.live()
 	if app == nil || !b.Bound(ref.Platform, ref.ChatID) {
 		return false, nil
 	}
 	b.touch(ref, true)
-	return app.Post(ref, text, files)
+	converted := make([]projectsapp.ChannelFile, len(files))
+	for i, f := range files {
+		converted[i] = projectsapp.ChannelFile(f)
+	}
+	return app.Post(projectsapp.ChatRef(ref), text, converted)
 }
 
-// Command implements projectsapp.Chat.
-func (b *ChatBridge) Command(ref projectsapp.ChatRef, name, arg string) (bool, string, error) {
+// Command implements agent.Chat.
+func (b *ChatBridge) Command(ref agent.ChatRef, name, arg string) (bool, string, error) {
 	app := b.live()
 	if app == nil || !b.Bound(ref.Platform, ref.ChatID) {
 		return false, "", nil
 	}
 	b.touch(ref, true)
-	return app.Command(ref, name, arg)
+	return app.Command(projectsapp.ChatRef(ref), name, arg)
 }
 
-// Answer implements projectsapp.Chat.
-func (b *ChatBridge) Answer(ref projectsapp.ChatRef, threadID, requestID, value string) (string, error) {
+// Answer implements agent.Chat.
+func (b *ChatBridge) Answer(ref agent.ChatRef, threadID, requestID, value string) (string, error) {
 	app := b.live()
 	if app == nil {
 		return "Projects is switched off.", nil
 	}
 	b.touch(ref, false)
-	return app.Answer(ref, threadID, requestID, value)
+	return app.Answer(projectsapp.ChatRef(ref), threadID, requestID, value)
 }
 
 var (

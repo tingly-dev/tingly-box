@@ -6,8 +6,23 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 )
+
+// Remote owns the session command set and Projects keeps a copy until it can
+// import Remote; the two must list the same commands.
+func TestSessionCommandsMatchRemote(t *testing.T) {
+	remote, projects := agent.Commands(), projectsapp.ChatCommands()
+	if assert.Len(t, projects, len(remote)) {
+		for i, c := range remote {
+			assert.Equal(t, c.Name, projects[i].Name)
+			assert.Equal(t, c.Usage, projects[i].Usage, c.Name)
+			assert.Equal(t, c.Help, projects[i].Help, c.Name)
+			assert.Equal(t, c.Order, projects[i].Order, c.Name)
+		}
+	}
+}
 
 // Remote owns the approval vocabulary and Projects keeps a copy until it can
 // import Remote; the two must answer every word the same way.

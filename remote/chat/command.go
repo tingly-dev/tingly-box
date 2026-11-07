@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/imbot"
-	projectsapp "github.com/tingly-dev/tingly-box/projects"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 	"github.com/tingly-dev/tingly-box/remote/bot"
 )
 
@@ -27,7 +27,7 @@ func RegisterBuiltinCommands(registry *imbot.CommandRegistry, botHandler BotHand
 		newPairBindCommand(botHandler),
 		newJoinCommand(botHandler),
 	}
-	for _, c := range projectsapp.ChatCommands() {
+	for _, c := range agent.Commands() {
 		commands = append(commands, newSessionCommand(botHandler, c))
 	}
 	for _, cmd := range commands {
@@ -66,7 +66,7 @@ type BotHandlerAdapter interface {
 	// matching audit events (success / failure).
 	VerifyAndPair(botUUID, chatID, senderID, platform, code string) error
 
-	// RunSessionCommand runs one of projectsapp.ChatCommands in Projects and tells the
+	// RunSessionCommand runs one of agent.Commands in Projects and tells the
 	// chat the result.
 	RunSessionCommand(ctx *imbot.HandlerContext, name, arg string)
 	RunProjectDirectory(ctx *imbot.HandlerContext, arg string)
@@ -110,7 +110,7 @@ func parsePairBindCode(args []string) (string, bool) {
 	return code, true
 }
 
-func newSessionCommand(adapter BotHandlerAdapter, c projectsapp.CommandSpec) imbot.Command {
+func newSessionCommand(adapter BotHandlerAdapter, c agent.CommandSpec) imbot.Command {
 	return imbot.NewCommand("cmd-"+c.Name, c.Name, c.Help).
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			arg, _ := joinedArgs(args)

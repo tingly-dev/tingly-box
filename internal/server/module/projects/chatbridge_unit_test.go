@@ -1,4 +1,4 @@
-package bridge
+package projects
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
 	"github.com/tingly-dev/tingly-box/remote/chat"
@@ -109,7 +110,7 @@ func TestBridgeNeverSendsToABlockedChat(t *testing.T) {
 func TestBridgeIsInertWithoutProjects(t *testing.T) {
 	b := NewChatBridge()
 	assert.False(t, b.Bound("telegram", "1"))
-	handled, err := b.Post(projectsapp.ChatRef{Platform: "telegram", ChatID: "1"}, "hi", nil)
+	handled, err := b.Post(agent.ChatRef{Platform: "telegram", ChatID: "1"}, "hi", nil)
 	assert.False(t, handled)
 	assert.NoError(t, err)
 }
