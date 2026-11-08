@@ -516,7 +516,7 @@ export const projectsHandlers = [
     // A folder zip: `uploads` is "too big", to show the server's message as a toast; the rest is an empty zip.
     http.get('/api/v1/projects/:id/library/archive', ({ request }) => {
         const path = new URL(request.url).searchParams.get('path') ?? ''
-        if (path === 'uploads') return HttpResponse.json({ error: 'this folder is larger than 10 MB (a zip download is limited to 100 files and 10 MB)' }, { status: 413 })
+        if (path === 'uploads') return HttpResponse.json({ error: 'this folder is larger than 40 MB (a zip download is limited to 200 files and 40 MB)' }, { status: 413 })
         const emptyZip = Uint8Array.from([0x50, 0x4b, 0x05, 0x06, ...new Array(18).fill(0)])
         return new HttpResponse(emptyZip, { headers: { 'Content-Type': 'application/zip' } })
     }),

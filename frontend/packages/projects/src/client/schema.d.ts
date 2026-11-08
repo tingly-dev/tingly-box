@@ -424,8 +424,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Download a library folder as a zip (at most 100 files and 10 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.
-         * @description Download a library folder as a zip (at most 100 files and 10 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.
+         * Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.
+         * @description Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.
          */
         get: operations["apiV1ProjectsIdLibraryArchiveGet"];
         put?: never;

@@ -183,11 +183,11 @@ func TestLibraryArchiveFileCountLimit(t *testing.T) {
 	require.True(t, errors.As(err, &lim), "one over is refused")
 	assert.Equal(t, "files", lim.Kind)
 	assert.Equal(t, int64(MaxArchiveFiles), lim.Limit)
-	assert.Contains(t, err.Error(), "100 files")
+	assert.Contains(t, err.Error(), "200 files")
 
 	// Files in nested folders count; dot entries and links do not.
-	fillFiles(t, filepath.Join(lib, "nested", "a"), 60)
-	fillFiles(t, filepath.Join(lib, "nested", "b"), 41)
+	fillFiles(t, filepath.Join(lib, "nested", "a"), 120)
+	fillFiles(t, filepath.Join(lib, "nested", "b"), 81)
 	_, err = l.OpenLibraryArchive("p", "nested")
 	assert.True(t, errors.As(err, &lim))
 	fillFiles(t, filepath.Join(lib, "ignored", "a"), 100)
@@ -221,7 +221,7 @@ func TestLibraryArchiveByteLimit(t *testing.T) {
 	require.True(t, errors.As(err, &lim), "one byte over is refused")
 	assert.Equal(t, "bytes", lim.Kind)
 	assert.Equal(t, int64(MaxArchiveBytes), lim.Limit)
-	assert.Contains(t, err.Error(), "10 MB")
+	assert.Contains(t, err.Error(), "40 MB")
 
 	// The total over several files counts, not each file.
 	big("sum/a.bin", MaxArchiveBytes/2)
