@@ -9,7 +9,7 @@ import { useNotify } from '../../hooks/useNotify';
 import { readLocal, writeLocal } from '../../utils/storage';
 import { formatBytes, timeAgo } from '../../utils/format';
 import { LazyTree } from '../common/LazyTree';
-import { LibraryPreview, previewKind, type PreviewFile } from './LibraryPreview';
+import { LibraryPreview, previewKind, saveFile, type PreviewFile } from './LibraryPreview';
 
 const mono = { fontFamily: fontMono } as const;
 
@@ -85,23 +85,10 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
         }
     };
 
-    // Through apiFetch rather than a plain link, so the host's
+    // Through the shared save (apiFetch rather than a plain link) so the host's
     // authentication applies to downloads too, and a refusal (a folder over
     // the zip limits, say) is shown as the server's own message.
-    const save = async (url: string, filename: string) => {
-        try {
-            const res = await apiFetch(url);
-            if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? res.statusText);
-            const blobUrl = URL.createObjectURL(await res.blob());
-            const a = document.createElement('a');
-            a.href = blobUrl;
-            a.download = filename;
-            a.click();
-            setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
-        } catch (e) {
-            notify((e as Error).message, 'error');
-        }
-    };
+    const save = (url: string, filename: string) => saveFile(url, filename, (m) => notify(m, 'error'));
     const download = (path: string) => save(`/api/v1/projects/${projectId}/library/file?path=${encodeURIComponent(path)}`, downloadName(path));
     const downloadZip = (n: Node) => save(`/api/v1/projects/${projectId}/library/archive?path=${encodeURIComponent(n.path)}`, `${n.name}.zip`);
 
